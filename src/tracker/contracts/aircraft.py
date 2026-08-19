@@ -8,12 +8,15 @@ availability in that sample is worth knowing before you mark anything required: 
 """
 
 from enum import StrEnum
-from typing import Literal
+from typing import Final, Literal
 
-from pydantic import Field, computed_field
+from pydantic import Field
 
 from tracker.contracts.base import Bearing, StrictModel, UtcDatetime
 from tracker.contracts.geo import Point
+
+_EMERGENCY_SQUAWKS: Final = frozenset({"7500", "7600", "7700"})
+"""Squawk codes that mean distress by convention: hijack, radio failure, general emergency."""
 
 
 class EmergencyState(StrEnum):
@@ -154,13 +157,20 @@ class Aircraft(StrictModel):
         description="Which adapter produced this record, e.g. adsb.lol. Shown as attribution.",
     )
 
-    @computed_field  # type: ignore[prop-decorator]
+    # Plain properties, NOT pydantic computed fields, so they stay off the wire.
+    #
+    # A computed field is serialised but rejected on the way back in by extra="forbid", so
+    # an entity could not survive its own round-trip: nothing could re-validate our
+    # published wire format. The obvious patch, a before-validator that strips them, breaks
+    # JSON-mode validation for every contract (see contracts/base.py). Both values are
+    # trivially derivable, so the frontend derives them instead and the contract stays
+    # round-trippable.
+
     @property
     def in_emergency(self) -> bool:
         """True when either the emergency field or the squawk indicates distress."""
-        return self.emergency is not EmergencyState.NONE or self.squawk in {"7500", "7600", "7700"}
+        return self.emergency is not EmergencyState.NONE or self.squawk in _EMERGENCY_SQUAWKS
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def label(self) -> str:
         """Best available human label, preferring what a controller would say."""

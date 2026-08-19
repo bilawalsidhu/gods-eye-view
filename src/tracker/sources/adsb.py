@@ -10,13 +10,14 @@ Every provider quirk is confined to this file. Downstream code sees only
 :class:`~tracker.contracts.aircraft.Aircraft`.
 """
 
+import json
 import logging
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from typing import Final, Literal
 
 import httpx
-from pydantic import Field, TypeAdapter
+from pydantic import AliasChoices, Field, TypeAdapter
 
 from tracker.contracts.aircraft import Aircraft, AircraftClass, EmergencyState
 from tracker.contracts.base import ContractViolationError, WireModel, validate_payload
@@ -48,6 +49,19 @@ DB_FLAG_LADD: Final = 8
 _ROTORCRAFT_CATEGORY: Final = "A7"
 
 NAUTICAL_MILE_M: Final = 1852.0
+
+MAX_RADIUS_NM: Final = 250
+"""Provider-enforced ceiling on a radius query. Larger values are rejected outright."""
+
+VIEWPORT_PATH_TEMPLATE: Final = "/v2/lat/{lat:.4f}/lon/{lon:.4f}/dist/{radius}"
+"""Radius-query path, chosen because every provider we use accepts this exact shape.
+
+The obvious alternative, adsb.lol's ``/v2/point/{lat}/{lon}/{radius}``, is adsb.lol only:
+adsb.fi answers it with HTTP 400. Since failover replays the same path against the
+secondary provider, a provider-specific path silently disables failover for that call.
+That is exactly what happened here, and only ``/v2/mil`` survived because it happens to be
+path-identical across both. Verified 2026-08-19: both providers return 200 for this shape.
+"""
 
 ICAO_ADDRESS_HEX_DIGITS: Final = 6
 """An ICAO 24-bit address is exactly six hex digits."""
@@ -93,17 +107,35 @@ class AdsbAircraftWire(WireModel):
     messages: int | None = None
 
 
+AIRCRAFT_LIST_KEYS: Final = ("ac", "aircraft")
+"""Every key a supported provider uses for the aircraft list.
+
+adsb.lol and ADSBExchange send ``ac``; adsb.fi sends ``aircraft``. This difference is not
+documented anywhere and is invisible in testing against a single provider, because an
+unrecognised key simply yields an empty list. That is exactly what happened here: failover
+to adsb.fi "succeeded", returned zero aircraft, and reported the feed healthy while the
+layer sat empty. A silent zero is worse than an error, so
+:func:`_require_known_envelope` now rejects a payload carrying none of these.
+"""
+
+
 class AdsbResponseWire(WireModel):
     """The envelope around a readsb ``/v2`` aircraft list.
 
     ``now`` is milliseconds since the Unix epoch, and it is the authoritative timestamp
     for the whole batch: individual records carry only an age in seconds relative to it.
+
+    Field names vary between providers, so the aliases carry the differences rather than
+    the parser: adsb.lol uses ``ac`` and ``total``, adsb.fi uses ``aircraft`` and
+    ``resultCount``.
     """
 
-    ac: tuple[AdsbAircraftWire, ...] = ()
+    ac: tuple[AdsbAircraftWire, ...] = Field(
+        default=(), validation_alias=AliasChoices(*AIRCRAFT_LIST_KEYS)
+    )
     now: float | int | None = None
     msg: str | None = None
-    total: int | None = None
+    total: int | None = Field(default=None, validation_alias=AliasChoices("total", "resultCount"))
 
 
 _RESPONSE_ADAPTER: Final = TypeAdapter(AdsbResponseWire)
@@ -178,7 +210,9 @@ def _to_domain(wire: AdsbAircraftWire, *, observed_at: datetime, source: str) ->
 
     on_ground = wire.alt_baro == "ground"
     baro_m = (
-        None if on_ground or wire.alt_baro is None else float(wire.alt_baro) * FEET_TO_METRES  # type: ignore[arg-type]
+        None
+        if on_ground or wire.alt_baro is None or isinstance(wire.alt_baro, str)
+        else float(wire.alt_baro) * FEET_TO_METRES
     )
     geom_m = None if wire.alt_geom is None else float(wire.alt_geom) * FEET_TO_METRES
 
@@ -232,6 +266,47 @@ def _to_domain(wire: AdsbAircraftWire, *, observed_at: datetime, source: str) ->
     )
 
 
+def _require_known_envelope(payload: bytes | str, *, source: str) -> None:
+    """Reject a payload that carries none of the known aircraft-list keys.
+
+    Without this, a provider whose envelope we do not recognise parses cleanly to zero
+    aircraft. The poller then records a healthy feed with an entity count of zero, the
+    layer empties, and nothing anywhere says why. Raising instead turns that into a
+    contract violation, which the client treats as provider failure and fails over.
+
+    An empty list under a *known* key is left alone: a viewport with no aircraft in it is
+    a legitimate answer.
+    """
+    try:
+        raw = json.loads(payload)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ContractViolationError(source, f"payload is not JSON: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise ContractViolationError(source, f"expected a JSON object, got {type(raw).__name__}")
+    if not any(key in raw for key in AIRCRAFT_LIST_KEYS):
+        raise ContractViolationError(
+            source,
+            f"envelope has no aircraft list; expected one of {list(AIRCRAFT_LIST_KEYS)}, "
+            f"got keys {sorted(raw)[:8]}",
+        )
+
+
+def _envelope_time(now_ms: float | int | None, *, source: str) -> datetime:
+    """Convert the envelope's millisecond epoch to a UTC datetime.
+
+    A nonsense value has to become a :class:`ContractViolationError` rather than an
+    ``OverflowError`` from the platform's time functions. Callers catch contract
+    violations to trigger provider failover; an ``OverflowError`` escapes that handling
+    and kills the poll instead of moving to the secondary provider.
+    """
+    if now_ms is None:
+        return datetime.now(UTC)
+    try:
+        return datetime.fromtimestamp(now_ms / 1000.0, tz=UTC)
+    except (OverflowError, OSError, ValueError, ZeroDivisionError) as exc:
+        raise ContractViolationError(source, f"unusable envelope timestamp {now_ms!r}") from exc
+
+
 def parse_response(payload: bytes | str, *, source: str) -> tuple[Aircraft, ...]:
     """Parse a readsb ``/v2`` response into domain aircraft.
 
@@ -240,13 +315,9 @@ def parse_response(payload: bytes | str, *, source: str) -> tuple[Aircraft, ...]
     that cannot be mapped are skipped and counted, because one aircraft with a corrupt
     field must not blank the entire globe.
     """
+    _require_known_envelope(payload, source=source)
     wire = validate_payload(_RESPONSE_ADAPTER, payload, source=source)
-
-    observed_at = (
-        datetime.fromtimestamp(wire.now / 1000.0, tz=UTC)
-        if wire.now is not None
-        else datetime.now(UTC)
-    )
+    observed_at = _envelope_time(wire.now, source=source)
 
     aircraft: list[Aircraft] = []
     skipped = 0
@@ -301,8 +372,8 @@ class AdsbClient:
         The provider caps radius at 250 nautical miles and rejects anything larger, so
         callers covering a wider area must tile.
         """
-        capped = max(1, min(radius_nm, 250))
-        return await self._get(f"/v2/point/{lat:.4f}/{lon:.4f}/{capped}")
+        capped = max(1, min(radius_nm, MAX_RADIUS_NM))
+        return await self._get(VIEWPORT_PATH_TEMPLATE.format(lat=lat, lon=lon, radius=capped))
 
     async def aircraft_in_box(self, box: BoundingBox) -> tuple[Aircraft, ...]:
         """All aircraft within a bounding box.

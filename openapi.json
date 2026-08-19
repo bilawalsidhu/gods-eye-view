@@ -85,12 +85,6 @@
             "title": "Icao24",
             "type": "string"
           },
-          "in_emergency": {
-            "description": "True when either the emergency field or the squawk indicates distress.",
-            "readOnly": true,
-            "title": "In Emergency",
-            "type": "boolean"
-          },
           "is_military": {
             "default": false,
             "title": "Is Military",
@@ -100,12 +94,6 @@
             "const": "aircraft",
             "default": "aircraft",
             "title": "Kind",
-            "type": "string"
-          },
-          "label": {
-            "description": "Best available human label, preferring what a controller would say.",
-            "readOnly": true,
-            "title": "Label",
             "type": "string"
           },
           "message_source": {
@@ -269,9 +257,7 @@
           "point",
           "observed_at",
           "position_age_s",
-          "source",
-          "in_emergency",
-          "label"
+          "source"
         ],
         "title": "Aircraft",
         "type": "object"

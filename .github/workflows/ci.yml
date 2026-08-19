@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Every phase 1 feed is keyless and live tests are deselected, so no job needs a secret
+# and CI passes unchanged on a fork.
+permissions:
+  contents: read
+
+# A new push supersedes the run it interrupted; nothing here is worth finishing twice.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v8
+        with:
+          enable-cache: true
+
+      # --locked, not --frozen: a lockfile that no longer matches pyproject.toml is a
+      # failed build, never a silent re-resolve.
+      - name: Install
+        run: uv sync --locked
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format
+        run: uv run ruff format --check .
+
+      - name: Mypy
+        run: uv run mypy
+
+      - name: Tests
+        run: uv run pytest -m "not live" --cov --cov-report=term-missing
+
+      # Contract-drift gate: the committed openapi.json is what the frontend generates its
+      # types from, so a backend response-shape change cannot merge without it.
+      - name: OpenAPI schema is current
+        run: uv run python scripts/dump_openapi.py --check
+
+      - name: Prune cache
+        run: uv cache prune --ci
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+
+      # Must precede setup-node, which needs pnpm on PATH to resolve the cache directory.
+      # The version is explicit because there is no repository-root package.json and no
+      # packageManager field for the action to read, so without it the action aborts with
+      # "No pnpm version is specified" and this job never reaches its first real step.
+      # Pin 11: frontend/pnpm-workspace.yaml uses the pnpm 11 `allowBuilds` key rather than
+      # pnpm 10's `onlyBuiltDependencies`, and esbuild's postinstall depends on it.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+          package_json_file: frontend/package.json
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      # The other half of the contract-drift gate: regenerate from ../openapi.json and
+      # fail if the committed types differ.
+      - name: Generated API types are current
+        run: |
+          pnpm codegen
+          # `git diff` ignores untracked paths, so it silently returned 0 and this gate
+          # could never fire. `git add -N` registers the intent to add, which makes an
+          # untracked or newly-differing file visible to diff.
+          git add -N src/types/api.d.ts
+          git diff --exit-code -- src/types/api.d.ts
+
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [backend, frontend]
+    steps:
+      # Single required check for branch protection to point at, so adding a job later
+      # does not mean editing the protection rule.
+      - run: echo "Backend and frontend both green."

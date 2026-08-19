@@ -1,0 +1,19 @@
+version: 2
+
+updates:
+  # uv reads pyproject.toml and writes uv.lock; the pip ecosystem is what Dependabot
+  # calls that pairing.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

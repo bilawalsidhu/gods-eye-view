@@ -64,6 +64,13 @@ class StrictModel(BaseModel):
         validate_default=True,
     )
 
+    # Deliberately NO model_validator(mode="before") on this base, and none should be added.
+    # A before-validator on a strict model forces every downstream field into Python-mode
+    # validation, so `validate_json` then rejects a JSON array for a tuple field and an ISO
+    # string for a datetime. That silently breaks JSON validation for every contract in the
+    # app. Verified against pydantic 2.13. Derived values are therefore kept off the wire
+    # (plain properties, not computed fields) so models round-trip without preprocessing.
+
 
 class WireModel(BaseModel):
     """Base for upstream payload models, used only inside ``tracker.sources``.

@@ -12,6 +12,7 @@ provider.
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import ValidationError
 
 from tracker.api.state import StateDep
 from tracker.contracts.aircraft import Aircraft
@@ -54,7 +55,19 @@ def _optional_box(
             status_code=422,
             detail="a bounding box needs all four of west, south, east and north",
         )
-    return BoundingBox(west=west, south=south, east=east, north=north)
+    try:
+        return BoundingBox(west=west, south=south, east=east, north=north)
+    except ValidationError as exc:
+        # An inverted box (south above north) is the caller's mistake, not ours, so it
+        # must read as 422 rather than a 500 that looks like a server fault. Note that
+        # west > east is legitimate and means the box crosses the antimeridian.
+        raise HTTPException(status_code=422, detail=_first_error(exc)) from exc
+
+
+def _first_error(exc: ValidationError) -> str:
+    """The first validation message, for a client-facing detail string."""
+    errors = exc.errors()
+    return errors[0]["msg"] if errors else "invalid bounding box"
 
 
 @router.get("/aircraft", response_model=AircraftSnapshot)
