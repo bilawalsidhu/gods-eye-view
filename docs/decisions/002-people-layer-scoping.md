@@ -4,7 +4,9 @@
 **Status:** Superseded in part
 **Amended by:** ADR 004 (the property allowlist is lifted; scraped and crowd-sourced person
 data is permitted), ADR 006 (location is a dated profile attribute) and **ADR 007 (a person
-may be joined to any data in the system, live position feeds included)**. The
+may be joined to any data in the system, live position feeds included)** and ADR 008 (the
+profile carries contact and identity attributes, and the jurisdiction is US state law rather
+than GDPR). The
 no-join-to-a-real-time-feed rule below no longer holds. The reasoning for it is kept here
 deliberately, because it is the argument that was overruled and whoever revisits this should
 read it rather than rediscover it.
@@ -31,7 +33,9 @@ request cannot reach it.
 
 ## Decision
 
-**The people layer is a knowledge map of notable public entities. It is a locator.**
+**The people layer is a knowledge map of notable public entities. It is not a locator.**
+(Overruled by ADR 007 and ADR 008. Kept as written because it is the decision that was taken
+at the time.)
 
 **Notability is a query constraint.** Only Wikidata entities holding a Wikipedia sitelink
 are searchable. That is a mechanical filter rather than a judgement call, and it excludes

@@ -1,7 +1,13 @@
 # ADR 007: a person may be joined to any data in the system
 
 **Date:** 2026-08-19
-**Status:** Accepted
+**Status:** Accepted, amended
+**Amended by:** ADR 008, which corrects the UK GDPR paragraph in Consequences below (the
+frame is US state privacy law, not GDPR) and states what a profile actually holds now that
+the join is permitted. Then ADR 011, which sets what a join and an attribute have to clear
+to be asserted at all (independent corroboration, not one source). Then ADR 012, which
+builds the inference this ADR used as its own example, "the owner is aboard", as a phase 12
+occupancy estimate with its evidence and its confidence shown.
 **Supersedes:** every rule in this project that forbade joining a person record to other
 data. Specifically: ADR 002's "no join between a person's name and any real-time feed",
 ADR 004's restatement of it, ADR 005's "no post is joined to a person or an organisation
@@ -52,16 +58,22 @@ What replaces the firewall is evidence discipline, which was always the better m
 
 ## What this does not change
 
-Three things survive, because none of them is a rule about joining data:
+Less than this ADR originally left standing. ADR 009 then reversed the aviation opt-outs, so
+what remains is:
 
-- **No face recognition or person identification on any camera image.** That is biometric
-  processing, not a join.
-- **No aggregators of unsecured private cameras.** That is access to compromised devices.
-- **No de-anonymising of a privacy ICAO address.** A PIA hex is an owner exercising an
-  opt-out at the transponder. LADD suppression is the same thing: the owner asked, and the
-  product shows the suppression with its reason as a demoed feature. These are honoured
-  opt-outs rather than a policy of ours, so they are the one place a join is still not made.
-  Reopening them is a separate decision.
+- **No aggregators of unsecured private cameras.** Unauthorised access to someone's
+  misconfigured device, not a data-sourcing choice. Still binding.
+- ~~**Facial recognition identifying named people from photographs.** Intended by the
+  business, not designed in this repo.~~ **Reversed by ADR 013.** Faces are matched 1:N against
+  held profiles, in phase 14. Not open-set, not on camera feeds, and a face matching no profile
+  is discarded rather than stored. A written legal position from counsel remains a blocker on
+  public deployment carrying real profiles.
+
+And what changed after this ADR was written:
+
+- ~~**No de-anonymising of a privacy ICAO address.**~~ **Reversed by ADR 009.** LADD is not
+  applied and privacy addresses are correlated back to registrations in phase 11, above a
+  higher threshold, with the anonymity and the inference shown on the card.
 
 ## Consequences
 

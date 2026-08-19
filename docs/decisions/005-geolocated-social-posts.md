@@ -65,8 +65,10 @@ would be inventing the bit in the middle.
 **Media is proxied, cached and licence-checked.** An image whose licence cannot be
 determined is dropped and counted, not shown. Licences here are per item, not per source.
 
-**No face recognition, no person identification, on any image.** Already the rule for
-cameras under ADR 004, restated here because an image layer invites it.
+~~**No facial recognition in this layer.**~~ **Reversed by ADR 013.** Faces in post images
+are matched 1:N against held profiles as an inference, in phase 14, and what a post is read
+for otherwise is ADR 014. A written legal position from counsel remains a blocker on public
+deployment.
 
 ## Consequences
 

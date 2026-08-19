@@ -92,11 +92,16 @@ removal request removes the record, suppresses it, or both:
 
 ## What this does not change
 
-- **No face recognition or person identification on any camera image.**
-- **No aggregators of unsecured private cameras.**
-- **No de-anonymising of a privacy ICAO address, and LADD suppression is honoured.** These
-  are opt-outs the individual has already exercised, which is exactly what this ADR is
-  building on the person side.
+- **No aggregators of unsecured private cameras.** Unauthorised access to someone's
+  misconfigured device, not a data-sourcing choice. Still binding.
+- ~~**Facial recognition identifying named people from photographs.** Intended by the
+  business, not designed in this repo.~~ **Reversed by ADR 013.** Faces are matched 1:N against
+  held profiles, in phase 14. Not open-set, not on camera feeds, and a face matching no profile
+  is discarded rather than stored. A written legal position from counsel remains a blocker on
+  public deployment carrying real profiles.
+- ~~**No de-anonymising of a privacy ICAO address.**~~ **Reversed by ADR 009.** LADD is not
+  applied and privacy addresses are correlated back to registrations in phase 11, above a
+  higher threshold, with the anonymity and the inference shown on the card.
 - **No wealth tier, net worth figure or wealth signal inferred from a feed, a position or a
   track.** A tier comes from a profile or it does not exist. Unchanged since ADR 002.
 - **Sourcing obligations under ADR 004.** Every source recorded in `docs/data-sources.md`

@@ -7,7 +7,11 @@
 official-sources rule and property allowlist lifted), ADR 005 (the social post layer and its
 upstream-versus-derived location split), ADR 006 (location is a dated profile attribute) and
 **ADR 007 (a person may be joined to any data in the system, live position feeds included,
-so section 8's no-join rule and its structural test are gone)**. The authoritative list of
+so section 8's no-join rule and its structural test are gone)**, ADR 011 (enrichment is
+cross-source corroboration, so no single online source is trusted alone and confidence is a
+function of independent origins agreeing) and ADR 012 (occupancy of an aircraft or vessel is
+estimated as a labelled inference, in a new phase 12, replacing section 8's aggregate-only
+pattern intelligence). The authoritative list of
 entity classes is the table in `docs/plan/implementation-plan.md`; this spec predates the
 city and social post layers.
 
@@ -51,8 +55,14 @@ running product, no mock feeds, no sample data, no placeholder cards.
   system including live feeds (ADR 007), and every join carries its source, confidence and
   as-of date. Location stays a dated series with provenance rather than a single current
   value, per ADR 006. What is out is the unsourced assertion, not the join.
-- No de-anonymising of aircraft that use privacy-ICAO-address (PIA) hex codes.
-- No face recognition or person identification on any camera image.
+- ~~No de-anonymising of aircraft that use privacy-ICAO-address (PIA) hex codes.~~
+  **Reversed by ADR 009.** PIA correlation is phase 11 and FAA LADD is not applied at all.
+- ~~Facial recognition identifying named people from photographs is intended by the business
+  but is not designed in this repo.~~ **Reversed by ADR 013.** Faces are matched 1:N against
+  held profiles as an inference, in phase 14. Not open-set, not on camera feeds, and a written
+  legal position from counsel is still a blocker on public deployment.
+- No aggregators of unsecured private cameras. Unauthorised access to a misconfigured
+  private device, not a data-sourcing choice.
 - No horizontal scaling in the first release: one poller process owns the upstream
   connections. Multi-worker deployment needs a lock first, and that is deliberately
   deferred.
@@ -222,15 +232,29 @@ story is about, not where anyone is.
 > Everything below claiming a join cannot happen is superseded. Read
 > `docs/decisions/007-persons-may-be-joined-to-any-data.md`.
 
+> **Amended by ADR 008 (2026-08-19).** The profile carries the production attribute set:
+> identity fields (name and alternate names, date of birth, age, gender, nationality,
+> deceased date, hometown), contact fields (personal and business email, personal and
+> business phone, postal addresses including home addresses, social handles), plus wealth
+> tier, roles and dated locations. Contact attributes are match keys as much as display
+> fields and are marked PII in the contract so a suppressed view can be served, mirroring the
+> `NoContactData` and `NoPII` packages the business sells. This project is public sources
+> only, so most contact fields are empty and nothing fills them by inference. ADR 008 also
+> settles the jurisdiction question that this section and ADR 004 kept getting wrong: **this
+> is not GDPR territory.** The population and the customers are in the United States, the
+> frame is the US state patchwork with CCPA and CPRA first, and the right to be forgotten is
+> honoured here as policy through a removal control that deletes and suppresses.
+>
 > **Amended by ADR 006 (2026-08-19).** Location is now a first-class profile attribute:
 > residence city or region, public-record business address, work and education location, and
 > publicly reported past appearances, each dated and sourced, held as a series rather than a
 > single value. Removal requests remove and suppress a record, and suppression survives
 > re-ingest. The jurisdiction framing below is also corrected: the population and the
 > customers are in the United States, so the UK GDPR wording in the last paragraph of this
-> section is superseded by the US state privacy position in ADR 006. What ADR 006 keeps: no
-> current location on a person, no "last seen", and no presence inferred by correlating a
-> named individual against a live feed, camera or post.
+> section is superseded by the US state privacy position in ADR 006, and ADR 008 finishes the
+> correction: no GDPR jurisdiction at all here. ~~What ADR 006 keeps: no current location on
+> a person, no "last seen", and no presence inferred by correlating a named individual
+> against a live feed, camera or post.~~ Overruled by ADR 007.
 >
 > **Amended by ADR 004 (2026-08-19).** Scraped and crowd-sourced sources are now permitted
 > across the project, the people layer included, so person records are no longer limited to
@@ -243,8 +267,11 @@ story is about, not where anyone is.
 > rest of this section is the original design and the reasoning behind it, kept for that
 > reasoning.
 >
-> One consequence to hold on to: the GDPR paperwork in the last paragraph of this section is
-> now load-bearing rather than a formality.
+> One consequence to hold on to: ~~the GDPR paperwork in the last paragraph of this section
+> is now load-bearing rather than a formality.~~ **Corrected by ADR 006 and ADR 008.** The
+> written US privacy position is the load-bearing item, and it is enlarged by both ADR 007
+> (joins to live feeds) and ADR 008 (contact attributes on the profile). It is a phase 6
+> deliverable and a hard gate on any public deployment carrying real profiles.
 
 This is the highest-risk feature in the brief and it gets designed defensively.
 
@@ -258,9 +285,13 @@ a feature request.
   historical association properties: birthplace (P19), place of death (P20),
   headquarters (P159), work location (P937), educated at (P69), significant place
   (P7153), resolved via coordinate location (P625).
-- Residence (P551) and raw coordinates on any living human (a `Q5` instance with no
+- ~~Residence (P551) and raw coordinates on any living human (a `Q5` instance with no
   `P570` date of death) are excluded inside the SPARQL query itself. A home address
-  cannot render even if a later bug lets something through, because it is never fetched.
+  cannot render even if a later bug lets something through, because it is never fetched.~~
+  **Overruled by ADR 006 and ADR 008.** Residence is a dated profile attribute and a profile
+  carries postal addresses, home addresses included. Every entry carries a date and a source,
+  an undated one is dropped at the adapter and counted, and an entry produced by joining
+  sources is labelled derived.
 - ~~No join between a person's name and any real-time feed.~~ **Overruled by ADR 007.** A
   person may be joined to any data in the system, live feeds included, and the structural
   separation test is deleted. Each join carries a source, a confidence and an as-of date;
@@ -294,10 +325,13 @@ customers. It lives in `docs/` and is a phase 6 deliverable. See ADR 006.
    community tier is non-commercial and flips to paid past $50k organisation revenue.
 4. **CesTrak permanently firewalls abusive clients.** The once-per-two-hour fetch guard
    is enforced in code and asserted in a test, never left to configuration.
-5. **The people layer is the reputational exposure.** Any drift towards present-tense
-   location flips the GDPR balancing test and enters Protection from Harassment Act
-   territory. The property allowlist and the structural separation from live feeds are
-   load-bearing and are not relaxed for a feature request.
+5. **The people layer is the reputational exposure, and it is now unmitigated by
+   architecture.** ADR 007 removed the structural separation from live feeds and ADR 008 put
+   contact attributes on the profile, so a home address or phone number can sit next to a
+   live asset position on a named UHNW individual. What limits the exposure is entirely
+   operational: the confidence threshold, the provenance display, the derived label, the PII
+   suppression and the removal control. None of the five is relaxed for a feature request,
+   and a wrong join is a false statement about a named person published in our name.
 6. **Frontend performance is the product.** The primitive-collection discipline is not
    optional and cannot be retrofitted.
 7. **Multiple uvicorn workers each run lifespan**, duplicating every poller and doubling

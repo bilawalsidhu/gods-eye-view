@@ -1,7 +1,11 @@
 # ADR 003: every upstream sits behind a provider-swap adapter
 
 **Date:** 2026-08-19
-**Status:** Accepted
+**Status:** Accepted, extended
+**Extended by:** ADR 010. The adapter and the shared-schema argument below both stand, and
+they are what makes the extension cheap. What changed: the aircraft layer now runs several
+providers at once and merges them on the ICAO 24-bit address, so coverage is additive.
+Failover is the within-provider behaviour rather than the whole story.
 
 ## Context
 

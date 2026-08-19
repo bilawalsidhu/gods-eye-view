@@ -82,8 +82,44 @@ Each of these has already cost time or would break something silently.
   type designator is `t`, and the registration is `r`.
 - Heading resolution order: `track`, then `true_heading`, then `mag_heading`, then `dir`.
   Only about half of live records carry `track`.
-- `dbFlags` bit 1 (value 1) is military; bit 4 is a privacy ICAO address. PIA aircraft are
-  displayed anonymised and never unmasked.
+- `dbFlags` bit 1 (value 1) is military; bit 4 is a privacy ICAO address. A PIA aircraft is
+  displayed anonymised until phase 11 correlates it to a registration, per ADR 009. The PIA
+  flag stays on the record after correlation and the card says the identification is
+  inferred, never observed. LADD is not applied at all: it binds FAA-provided feeds and our
+  positions come from volunteer receivers.
+- **Live-mover layers are a union of providers, not one with a failover** (ADR 010). Merge
+  key is the existing identity: ICAO 24-bit address for aircraft, MMSI for vessels. Every
+  record carries which provider supplied it and how old
+  that report is. Conflicts resolve by recency, never by provider precedence, and two
+  positions are never averaged into a third no receiver reported. One record per hex is
+  asserted by a test: the obvious bug here is one aircraft counted three times.
+- ADS-B Exchange does not filter aircraft on FAA blocking programmes, which is why it is in
+  the union. Access is a paid RapidAPI key (`adsbexchange-com1.p.rapidapi.com`, verified 401
+  without one) or a free feeder key. Its terms **prohibit redistribution**, and serving
+  positions to a browser is redistribution, so that is a licence blocker on the layer.
+- **Never touch the ADS-B Exchange globe map endpoints.** `/data/aircraft.json` and `/re-api/`
+  answer 403 "Request forbidden by administrative rules", and `robots.txt` disallows `/api/`,
+  `/mapproxy/`, `/re-api/` and `/globe_history/` by name. The API is the only way in.
+- airplanes.live answers 403 until you email them a project description; adsb.one was
+  Cloudflare-blocked from our network on 2026-08-19. Both serve the same readsb v2 schema, so
+  neither needs parser work once access lands.
+- Per-provider cadence floors, not one global floor. adsb.lol tolerates a short cycle; a
+  metered ADS-B Exchange key does not, so its calls are demand-driven rather than a sweep.
+- **AISHub only grants API access to members running a physical AIS receiver**: at least 10
+  vessels averaged over 7 days, 90% uptime, downsampling no coarser than 60s, delay under 10s,
+  streamed as raw NMEA to a UDP port they allocate. Feeding them synthesized NMEA, scraped
+  data or data from other public AIS services is prohibited by name, so there is no software
+  route in. No username means the layer reports itself unavailable, like any missing key.
+- **AISHub signals failure with HTTP 200 and an empty body**, both for a bad username and for
+  a call more often than its documented once per minute. An empty 200 is an error, counted,
+  and it must never empty the vessel store. Asserted by a test.
+- AISHub `output` defaults to XML, so pass `output=json` explicitly, same trap as CelesTrak's
+  `FORMAT`. Use `format=1` for degrees, knots and metres; `format=0` scales longitude and
+  latitude by 600000, course and speed by 10, draught by 10.
+- AISHub sentinels are not nulls: course 3600 (or 360.0), speed 1024 (or 102.4), heading 511
+  and `IMO` 0 all mean "not available" and map to `None`. Its timestamp is `TIME` in JSON but
+  `TSTAMP` in XML and CSV, and the human-readable form is naive with a `GMT` suffix, so attach
+  UTC in the adapter.
 - CelesTrak permanently firewalls abusive clients. Never fetch a group more than once per
   two-hour window. The guard is in code and asserted by a test, not left to config.
 - CelesTrak `EPOCH` is naive but is UTC by specification. Attach UTC in the adapter.
@@ -97,6 +133,23 @@ Each of these has already cost time or would break something silently.
   cannot be retrofitted; it is a rewrite.
 - Multiple uvicorn workers each run lifespan and so duplicate every poller. Pollers run
   in a single process until a lock exists.
+- Sentinel-2 scenes come from earth-search STAC, keyless, `POST /v1/search` with `collections`,
+  `bbox` and `datetime`. **Filter on `eo:cloud_cover`**: both London scenes on 2026-08-18 came
+  back at essentially 100% cloud, and an unfiltered search returns white rectangles that look
+  like a broken layer. Revisit is about five days, so imagery for a requested date usually does
+  not exist. Carry the scene's own timestamp, never the requested one. `visual` is a
+  Cloud-Optimised GeoTIFF and cannot go straight to a browser.
+- **NASA Worldview snapshot `BBOX` is `south,west,north,east`, latitude first**, the opposite of
+  this project's `[longitude, latitude]` rule. Flip it in the adapter. Getting it wrong returns
+  a valid image of the wrong place, which nobody notices.
+- TfL JamCams need **no key**. `lat` and `lon` are top-level but `available`, `imageUrl`,
+  `videoUrl` and `view` are key-value pairs inside `additionalProperties`. A camera can be
+  listed and dark, so honour `available` or the layer ships a stale frame presented as live.
+  The inventory is 1.1MB: fetch daily, never per view.
+- New York 511 is keyless and is **video, not stills**: `VideoUrl` is an HLS `.m3u8` and there is
+  no image field at all. 1,066 of 2,931 cameras are `Disabled` and a second flag, `Blocked`, is
+  set by the operator during an incident. Honour both, and remove a blocked camera rather than
+  greying it out. Other states are not the same API: WSDOT answered 401 without a key.
 - Nominatim and Overpass require a descriptive User-Agent with contact details and are
   rate-limited to roughly one request per second. Cache server-side; never call from the
   browser.
@@ -109,6 +162,9 @@ Each of these has already cost time or would break something silently.
 - `mastodon.social` answers HTTP 422 "requires an authenticated user" on its public
   timeline; `mas.to` answers 200 for the identical request. Instances are configuration and
   a 401, 403 or 422 drops that instance for the cycle rather than failing the feed.
+- GDELT's DOC 2.0 article API states its own cap in the body of its 429: one request every
+  five seconds. It answers 429 with a plain-text notice rather than JSON, so a parser that
+  assumes JSON on any 2xx-or-not will throw. Cache per profile and back off.
 - Wikidata WDQS has a 60-second query timeout and blocks generic User-Agents. Every query
   ships with a `LIMIT`.
 - Wikimedia Commons, Mastodon and Flickr license each record separately. The item's own
@@ -202,10 +258,68 @@ must carry, asserted by a test:
 - A join to a live feed produces a dated location entry like any other, sourced to the feed
   and dated to the observation. It does not become a current-location field.
 
-What has not changed, and is not up for a feature request:
+**Enrichment is cross-source corroboration, not single-source assertion** (ADR 011). No
+single online source is trusted on its own, because there is no researcher here to check it.
+The rules, all asserted by tests:
 
-- No face recognition or person identification on any camera image.
-- No aggregators of unsecured private cameras.
+- Every enriched attribute carries the **set** of sources supporting it, and its confidence
+  is a function of how many independent origins agree.
+- **Independence is judged at the origin.** Two aggregators carrying the same wire story are
+  one source, and a Wikidata statement referencing the Wikipedia article that cites the same
+  press release is one source. Where independence cannot be shown it is treated as absent.
+- A single scraped or crowd-sourced source **never** crosses the assertion threshold alone.
+  Primary records (a filing, a registry extract) may, because the source is the record.
+- Corroboration raises confidence, never precision. Three sources saying London is a city.
+- Conflicting dated values both stay, with the disagreement shown. Nothing is silently
+  overwritten, and a combined value is labelled derived.
+- Corroboration is its own service over domain contracts, not logic inside an adapter.
+
+**Three enrichment paths produce a location, all dated and all corroborated.** A post's own
+upstream coordinate; a location resolved from a post's words against the city gazetteer,
+labelled derived (ADR 005); and a **person mentioned in a news or online report** that
+resolves to a place, which is a report about a person rather than an observation of one, so
+it is derived, city-level, sourced to the article and dated to its publication. GDELT DOC 2.0
+is the news source, keyless, capped by the provider at one request per five seconds.
+
+**Occupancy of an aircraft or vessel is estimated, and always labelled an inference**
+(ADR 012, phase 12). It draws on registry ownership, movement history we recorded ourselves,
+the live track and route pair, the associate graph from public filings, and each candidate's
+dated locations from every other layer. Non-negotiable: contradiction beats corroboration, so
+a corroborated location elsewhere in the window removes a candidate outright; below the
+threshold nothing is named and the card reads "occupants not established"; the estimate is
+excluded from every aggregate, never writes a location entry onto a profile, and never touches
+a wealth tier; suppressed people are excluded from candidate generation, not filtered
+afterwards. This is the highest-harm output in the system.
+
+**FAA LADD and privacy ICAO addresses are worked through, not honoured** (ADR 009). A
+LADD-listed aircraft resolves and displays like any other and LADD membership is an attribute
+on the profile. A privacy address is correlated back to a registration in phase 11, above a
+threshold set higher than for an ordinary registry join, with the anonymity and the inference
+both shown on the card.
+
+**People are identified in photographs, against the profiles we already hold** (ADR 013,
+phase 14). It is 1:N against the profile list, never open-set identification of the public.
+The reference face is Wikidata P18 resolved to Commons, so no P18 means no match and none is
+asserted. A face detected in a photograph that matches no profile is discarded rather than
+stored: we do not accumulate face data on people we hold no profile for. The threshold sits
+above an ordinary registry join, a face match alone never crosses the assertion threshold
+under ADR 011, the card says the identification is inferred from a named photograph, and a
+suppressed person is out of the candidate set rather than filtered from the output. **It is
+not applied to camera feeds.** A written legal position from counsel naming the jurisdictions
+and the consent basis is a blocker on public deployment carrying real profiles, alongside the
+phase 6 US privacy position. ADR 013 records that this reverses every prior exclusion in the
+repo and that the decision was Alexander Fanthome's.
+
+One thing is still out, and it is not a policy preference about joins:
+
+- **Aggregators of unsecured private cameras.** Those index cameras whose owners
+  misconfigured them, so using them is unauthorised access to a private system: Computer
+  Misuse Act 1990 in the UK, state computer-access statutes and the CFAA in the US.
+  Owner-published and official feeds cover the camera layer: TfL JamCams and New York 511 are
+  both keyless and verified, Windy needs a key.
+
+What has not changed:
+
 - No wealth tier, net worth figure or wealth signal inferred from a live feed, a position
   or a track. A tier comes from a profile or it does not exist. Owning a jet is not an
   estimated net worth.
@@ -222,8 +336,9 @@ What has not changed, and is not up for a feature request:
 removal request both remove **and suppress** a person record. Suppression is keyed
 independently of ingest so the next crawl does not resurrect it, the key holds no more
 personal data than the flag needs, and the suppression shows in the product with its reason.
-Same mechanism as FAA LADD suppression. There is no queue and no human step here, so the
-control takes effect immediately.
+Since ADR 009 stopped the product applying FAA LADD, this is the only suppression path
+there is, and it is ours. There is no queue and no human step, so it takes effect
+immediately.
 
 We honour it as policy, not because a regulator compels it. **This project is not in GDPR
 jurisdiction**: the profiles and the customers are in the United States, which has no single
@@ -255,7 +370,78 @@ position. Joining a post to a person is permitted.
   joined to a profile form a dated series like any other location evidence, and the globe
   shows them as dated points rather than drawing a route between them, because the route is
   not something any source reported.
-- Media is proxied and cached, never hot-linked. No face recognition on any image.
+- One post is one weak source. A location entry resting on a single post stays unconfirmed
+  until an independent origin agrees, per ADR 011, and it is a candidate contradiction or
+  corroboration for the phase 12 occupancy estimate.
+- Media is proxied and cached, never hot-linked.
+
+**Post content is analysed for four things, and they are not the same claim** (ADR 014).
+Sentiment is an attribute of the post and never of a person, so there is no sentiment field on
+a profile and no mood, disposition or risk score anywhere. Co-presence, two named people in one
+post resolving to two profiles, is a dated, sourced, confidence-scored inference that they were
+together, never proof, and it feeds the associate graph and the phase 12 candidate set. An
+image is read for what and where, always derived and city-level at best, with who governed by
+ADR 013. Why is not asserted at all: a stated reason is carried as an attributed quote and
+anything else stays empty. A model output is not an independent source, so two models agreeing
+is still one origin.
+
+## Entity resolution and multimodal evidence
+
+Read ADR 015. It does not decide **whether** to read a face, a landmark or a sentiment:
+ADR 013 and ADR 014 decided that. It decides **how any of it runs**. Everything runs locally
+on one laptop with an internet connection: no cloud inference, no paid model API. That is a
+licensing position as much as a deployment one, because posting scraped or licensed media to
+a third party to be described is redistribution, and shipping a reference portrait out to be
+embedded hands a biometric identifier to someone with no basis to hold it.
+
+**One evidence contract, one resolver, whatever the modality.** A claim carries its value,
+its date, its source, its **origin key** and the modality it arrived in. Modality-specific
+code lives in `sources/` adapters. Nothing under `services/` branches on modality.
+
+- **Video is not a fourth modality.** It is frames plus an audio track, handled by the image
+  path and the audio path, sharing one origin key.
+- **The origin key is the whole game.** A video, a still pulled from it and its own
+  transcript are **one** source, not three. Three re-uploads of one photograph are one
+  source, and near-duplicate detection is what proves it. This is ADR 011's wire-story rule
+  applied across modalities and it is the easiest thing here to get wrong.
+- **Modality is not a trust level, origin is.** A company's own webcast is a primary record
+  and may cross the assertion threshold alone. A caption on a crowd-uploaded photo never
+  does.
+- **Timestamps come from the media, not the run.** A transcript segment is dated to the
+  call. A photo is dated to its EXIF capture time where present, otherwise its publication
+  date, and which one was used is recorded. Undatable media is dropped and counted.
+- **The resolver is deterministic and classical**: blocking, per-field comparators, additive
+  log-odds scoring, two thresholds (assert above, possible match between, nothing below). A
+  score decomposes into the fields that produced it. **No model scores a match.** Embeddings
+  propose candidates and nothing else.
+- **Local models are four small ONNX on CPU**: a sentence embedder, a CLIP-family image and
+  text embedder, a face embedder of the ArcFace class (used only as ADR 013 permits), and
+  Whisper-small. Weights pinned by hash, not committed, fetched on first use, and the model
+  version stored on every embedding, because a silent mixed-version index looks like poor
+  recall rather than a bug, and because a removal under ADR 008 has to delete every version
+  of a reference face embedding. With the weights absent the product runs text-only and
+  reports the media layers unavailable, like any missing key. The test suite must pass
+  without them.
+- **A model output is not a source** (ADR 014), and the origin key is what enforces it. A
+  face match, a landmark reading, a registration read off the tail and a caption all taken
+  from the same photograph are **one** origin between them. Running a second model over the
+  same picture does not create a second source.
+- **Image content reading is closed-set, not open-vocabulary description.** The image
+  embedding is scored against a candidate label set built from records the system already
+  holds: the phase 4 gazetteer, the phase 5 registries, the phase 6 organisations and assets.
+  The model ranks things we can already name and cite, so there is nothing to hallucinate.
+- **Vectors are blobs in the existing SQLite file, scanned with numpy.** No vector database
+  and no vector server until a brute-force scan is measurably too slow.
+- **Audio is demand-driven and cached by content hash, never a poller.** Hours of earnings
+  calls on a laptop CPU is not a sweep.
+- **Face matching is a candidate generator, not a decision.** ADR 013 decided that faces are
+  matched; ADR 015 only says the embedder runs locally and its output is scored, thresholded
+  and corroborated like any other claim. Running it on this machine is what keeps ADR 013
+  inside its own limits: reference portraits never leave the laptop, a face matching no
+  profile is discarded rather than stored, and a removal deletes the embedding with the
+  record.
+- **Media never asserts a person's location on its own.** A geotag says where the camera
+  was. Joining that to a person needs corroboration like any other join.
 
 ## Documentation rules
 

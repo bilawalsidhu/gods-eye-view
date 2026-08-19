@@ -51,8 +51,11 @@ Every source, however it was obtained, still carries the same obligations:
 Three lines survive untouched, because they are about harm rather than about sourcing:
 
 - **No aggregators of unsecured private cameras.** That is access to other people's
-  compromised devices, not scraping a public page.
-- **No face recognition or person identification on any camera image, ever.**
+  compromised devices, not scraping a public page.  Still binding.
+- ~~**No face recognition or person identification on any camera image, ever.**~~ **Reversed
+  in part by ADR 013.** Faces in photographs are matched 1:N against held profiles, in phase
+  14. The camera half of this line survives: face matching is not applied to camera feeds.
+  A written legal position from counsel remains a blocker on public deployment.
 - ~~**No present tense on people.** No "last seen", no movement lines, no code path joining
   a person record to a live position feed.~~ **Overruled by ADR 007.** A person may now be
   joined to any data in the system, live position feeds included, and the structural test
@@ -61,16 +64,25 @@ Three lines survive untouched, because they are about harm rather than about sou
 
 ## Consequences
 
-**The GDPR position is reopened.** ADR 002's safety argument rested on the allowlist doing
+**The privacy position is reopened.** ADR 002's safety argument rested on the allowlist doing
 the work in the query rather than in policy. Person data from scraped and crowd-sourced
-sources cannot lean on that, so the legitimate-interests assessment under UK GDPR Article
-6(1)(f), the data protection impact assessment and the privacy notice become load-bearing
-rather than a tidy-up. They are still a phase 6 deliverable and are now a blocker for any
-public deployment carrying person data.
+sources cannot lean on that, so the written privacy position becomes load-bearing rather than
+a tidy-up. It is still a phase 6 deliverable and is now a blocker for any public deployment
+carrying person data.
+
+~~Specifically: the legitimate-interests assessment under UK GDPR Article 6(1)(f), the data
+protection impact assessment and the privacy notice.~~ **Corrected by ADR 006 and settled by
+ADR 008.** UK GDPR is the wrong instrument: the profiles and the customers are in the United
+States, so the frame is the US state patchwork, CCPA and CPRA first, with the California
+Delete Act reaching data brokers directly. What is owed is a written US position naming which
+state laws reach the population, how access and deletion requests are served inside the
+statutory windows, and whether data broker registration applies.
 
 **Erasure needs its own mechanism.** Scheduled re-sync from Wikidata propagated upstream
 deletion for free. A scraped or user-submitted record has no upstream to delete from, so
-the report control has to be able to remove and suppress a record directly.
+the report control has to be able to remove and suppress a record directly. ADR 006 made that
+a feature and ADR 008 specified it: removal deletes, suppression survives re-ingest, and the
+suppression is visible in the product with its reason.
 
 **Accuracy risk moves to us.** A crowd-sourced or scraped record that is wrong is wrong in
 our name. Provenance display and the report control are the mitigation, not a claim of

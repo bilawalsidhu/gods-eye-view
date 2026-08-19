@@ -6,9 +6,21 @@ Companion documents: `docs/business-context.md` for why the product exists comme
 and the wealth tiers it serves, `docs/data-sources.md` for feed facts, `docs/status.md`
 for what is actually running, `docs/decisions/` for the choices behind all of this.
 
-The commercial shape in one line: a wealth profile joins to the assets linked to it, and
-those assets are what moves on the globe. The pipeline below is how an asset gets there.
-Wealth tiers ride on the profile and are never derived from a position.
+The commercial shape in one line: a wealth profile joins to everything else the system
+knows, assets and live feeds included, and those assets are what moves on the globe. The
+claim being demonstrated is recency, so every attribute carries its own age and the
+architecture below exists to make a seconds-old fact and a quarters-old fact sit on the same
+card honestly. The
+pipeline below is how an asset gets there. Wealth tiers ride on the profile and are never
+derived from a position.
+
+The join is the product, so there is no prohibited join and no structural separation between
+the people layer and anything else (ADR 007). The profile itself carries the production
+attribute set, contact and identity fields included (ADR 008). What holds the whole thing
+together is evidence rather than architecture: a source, a confidence and an as-of date on
+every join and every attribute, sub-threshold joins shown as possible matches and excluded
+from aggregates, derived entries labelled derived, contact fields marked PII so a suppressed
+view can be served, and a removal control that deletes and suppresses.
 
 ## The short version
 
@@ -47,6 +59,15 @@ search off the network entirely.
 lookups, camera images) are pulled on demand or on a slow cycle, cached server-side with
 their own expiry, and are not part of the WebSocket delta stream. A social post is a fixed
 event with a timestamp: it never updates, it never moves, and it is never dead-reckoned.
+
+**Media and its embeddings** (ADR 015) are a fetched-and-cached record with two extra
+properties. They are keyed by **content hash**, because the same photograph arrives from
+several places and the hash is what proves it is one origin rather than several. And they
+carry embeddings as blobs in the same SQLite file, scanned with numpy rather than served by
+a vector database, which keeps a removal request under ADR 008 a single delete with no
+second store to forget to purge. Transcription is the expensive step, so audio is fetched
+and transcribed on demand and served from the hash cache on a repeat, never swept on a
+cycle.
 
 ## Data flow, in order
 
@@ -99,6 +120,25 @@ appeal, and Overpass has a fair-use ceiling of roughly ten thousand queries a da
 naive timestamps to tz-aware UTC, provider quirks to one shape. All of it sits in the
 adapter. The frontend never learns that adsb.lol space-pads `flight` or that `alt_baro`
 is sometimes the string `"ground"`.
+
+## Providers: union, not failover
+
+The aircraft layer polls every configured provider at once and merges the results on the ICAO
+24-bit address (ADR 010). Failover still exists inside a provider; coverage across providers
+is additive.
+
+The reason is coverage rather than resilience. Aggregators do not see the same aircraft,
+partly because each is the union of its own volunteers' receivers, and mostly because most of
+them drop or fuzz aircraft on FAA blocking programmes while ADS-B Exchange, airplanes.live
+and adsb.one do not. Since ADR 009 decided this product works through those opt-outs, an
+unfiltered provider is the only way the layer covers the population the profiles are about.
+Every provider serves the identical readsb `/v2` schema, so the union costs no parser work.
+
+Three consequences that shape the code. Each record carries the provider that supplied it and
+the age of that report, so a merged store stays auditable. Conflicts resolve by recency, never
+by provider precedence, and two disagreeing positions are never averaged into a third that no
+receiver reported. And cadence is per provider: a metered key cannot be swept on the same
+cycle as a keyless feed, so its calls are demand-driven.
 
 ## The deliberate exception: satellites
 
@@ -203,6 +243,47 @@ is therefore currently broken by path shape. See `docs/status.md` for the detail
 
 Jitter (`services/poller.py:34`) spreads every sleep by 15%, so pollers started together
 do not synchronise into a burst against one provider.
+
+## Enrichment: a fourth shape, and where inference sits
+
+Enrichment is neither a live mover nor static reference data, and it is the one part of the
+system where two records combine into a third. It has its own place in the layout and
+getting it wrong is how a demo starts asserting things nobody sourced.
+
+**Corroboration runs over domain contracts, after the adapters** (ADR 011). An adapter maps
+one upstream payload to one domain record and stops there. The corroboration service in
+`services/` then holds, per attribute, the set of sources supporting it, counts how many
+independent origins those sources represent, and scores the claim on that count. A new
+source therefore strengthens or weakens the claims already held instead of writing a
+parallel truth into its own adapter. Two consequences that are structural rather than
+stylistic: no adapter may reach across to another source, and a claim's confidence is not
+a field the adapter sets.
+
+**Inference is a separate contract, never a field on an observation.** The phase 12
+occupancy estimate (ADR 012) reads ownership, recorded route history, the live track, the
+associate graph and each candidate's dated locations, and emits an `OccupancyEstimate` that
+carries its own inference marker, its evidence list and its confidence. It never mutates an
+aircraft record and it never writes a location entry onto a profile. An inference that can
+write into the evidence store would corroborate the next inference with itself, which is
+the specific failure the separation prevents.
+
+**A model output is not a source** (ADR 014, made structural by ADR 015). Every claim drawn
+from one media item shares that item's origin key, so a face match, a landmark reading, a
+registration read off a tail and a caption from one photograph count once between them.
+Running a second model over the same picture does not create a second source. Without this
+the enrichment layer inflates its own confidence, which is the same failure as corroborating
+an inference with itself.
+
+**Resolution is deterministic and lives in `services/`, models live in `sources/`** (ADR
+015). Embeddings propose candidates; per-field comparators and additive log-odds scoring
+decide, so a confidence number traces back to named fields and named origins. Nothing under
+`services/` inspects a pixel or a waveform, which is what lets one resolver serve text,
+image, audio and video without branching on modality.
+
+**News and article records are fetched-and-cached, per profile, not polled.** A GDELT
+article search is a query about one person on demand with a server-side cache and a
+five-second floor between requests, so it belongs with the other fetched-and-cached records
+above rather than in the TTL store and never in the WebSocket delta stream.
 
 ## Frontend render policy
 

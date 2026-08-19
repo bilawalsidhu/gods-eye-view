@@ -23,6 +23,41 @@ The distinctive asset is the join, not any single field. Net worth on its own is
 Net worth plus a board seat plus a shared alma mater plus a foundation trusteeship is a
 warm introduction, and that is the product.
 
+## What this demo actually proves: recency
+
+Customers buy profile data and profile enrichment. They already get the fields. What they do
+not get is the fields being current, and that is the gap this demo exists to show.
+
+The production pipelines run on cycles measured in weeks and quarters. The Leadership
+Extractor rescans the organisation universe weekly. The Annual Report Extractor moves at the
+speed of filings. A bought contact file is as fresh as the vendor's last delivery. A
+researcher-verified board seat carries an 18-month validation window, which means a fact can
+be sold while being over a year old and still be inside policy.
+
+This project puts genuinely live data against the same profile. An aircraft position is
+seconds old. A vessel position is seconds old. A geolocated post is minutes old. A registry
+join is days old. Put those on one card next to a fact that is quarters old and the
+commercial argument makes itself: same profile, same schema, radically less stale.
+
+So the deliverable is not "a globe". It is:
+
+1. **Per-attribute recency**, not one "last updated" on the profile. Averaging an aircraft
+   position with a board seat destroys the only number that matters.
+2. **A staleness delta** against the age of the equivalent value in what the business sells
+   today. That delta is the pitch.
+3. **A change feed.** When a value moves, the change is a record with a before, an after, a
+   source and a timestamp, so a customer subscribes instead of re-downloading.
+4. **Enrichment out**, over the same API shape the business already sells, so nothing about
+   the demo requires imagining an integration.
+
+Phase 10 of the implementation plan builds exactly this and its acceptance criteria are
+written against real measured ages, not claims.
+
+Two things this does not become. Fresher is not truer: a live position with a weak ownership
+join is still a weak join, and the confidence threshold governs regardless of how new the
+data is. And recency is not a wealth signal, so nothing about how often an asset moves feeds
+a tier.
+
 ## The wealth tiers
 
 This vocabulary is fixed and shared across the business. Use these exact terms in code,
@@ -193,6 +228,39 @@ being a target is a real security concern for them and their families. So:
 - A wrong contact attribute is worse than a wrong location. It attaches a real stranger to a
   named profile and hands someone a way to contact them, so the confidence threshold and the
   "possible match" display carry more weight here than anywhere else in the product.
+- **Corroboration does the job the researcher does in production** (ADR 011). The business
+  puts a machine on the fetch, a model on the extract and a person on the verify. There is no
+  person here, so the verify step becomes cross-source agreement: an attribute carries the set
+  of sources behind it, independence is counted at the origin so a syndicated story counts
+  once, and a single scraped or crowd-sourced source is displayed unconfirmed and counts
+  towards nothing. That is what stops this building the chimera profiles the production
+  pipeline already fights.
+- **Occupancy of an aircraft or vessel is estimated, as an inference** (ADR 012, phase 12).
+  It answers the question customers actually ask, which is whether the principal is travelling
+  and with whom, from ownership, recorded route history, the live track, the associate graph
+  and each candidate's dated locations elsewhere. Contradiction beats corroboration, nothing
+  is named below the threshold, and it counts towards no aggregate and writes no location onto
+  a profile. It is the most sensitive thing the product emits and ADR 012 is explicit about
+  that.
+- **FAA LADD and privacy ICAO addresses are worked through, not honoured** (ADR 009). The
+  population that uses those opt-outs is almost exactly the population the product profiles,
+  so honouring them removed the join where it mattered most. A LADD aircraft resolves like
+  any other and LADD membership becomes a profile attribute; a privacy address is correlated
+  back to a registration in phase 11 above a higher threshold, with the anonymity and the
+  inference both shown. ADR 009 states the exposure: unsettled law, US state privacy and
+  data-broker regimes rather than aviation law, and real reputational risk given the
+  population.
+- **Faces in photographs are matched to profiles** (ADR 013, phase 14), 1:N against the
+  profiles already held, never open-set identification of the public, and never on camera
+  feeds. A face matching no profile is discarded rather than stored, so no biometric record of
+  the general public accumulates. A written legal position from counsel naming the
+  jurisdictions and the consent basis remains a blocker on public deployment carrying real
+  profiles, sitting alongside the US privacy position. ADR 013 records the exposure in full:
+  Illinois BIPA and Texas CUBI are the sharpest US edges, and match accuracy is not uniform
+  across demographic groups.
+- **Aggregators of unsecured private cameras** stay out. That is unauthorised access to
+  someone's misconfigured device, not a data-sourcing choice. Owner-published and official
+  cameras cover the layer.
 - No net worth figure, wealth tier or wealth signal is ever inferred from a live feed.
   Owning a Gulfstream is not an estimated net worth, and the code never treats it as one.
 - Wealth tiers in this project come from a profile, never from a position, a track or an
@@ -206,8 +274,8 @@ keeps a flag that stops the record being re-ingested or displayed, and the suppr
 holds no more personal data than the flag needs. The business targets completion inside
 thirty days. In this project there is no request queue and no human step, so the control is
 exposed directly and takes effect immediately, and the suppression shows in the product with
-its reason. It is the same mechanism already demoed for FAA LADD opt-outs and privacy ICAO
-addresses.
+its reason. Since ADR 009 stopped the product applying FAA LADD, this removal control is the
+only suppression path in the system, and it is ours rather than a regulator's or the FAA's.
 
 We do that as policy, not because a regulator compels it. **This is not GDPR territory.** The
 profiles and the customers are in the United States, which has no single federal privacy law

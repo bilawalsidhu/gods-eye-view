@@ -127,6 +127,42 @@ posts (phase 8) have no code behind them, and nor do events, cameras, POIs or bu
 `/api/capabilities` already reports them as unavailable with the reason, which is the
 honest degradation path working.
 
+**Five more sources were called and verified on 2026-08-19, and none of them has code behind
+it.** Satellite imagery as a queryable source rather than a basemap: Element 84 earth-search
+STAC returned two real Sentinel-2 scenes over London (both at essentially 100% cloud, which is
+the gotcha the adapter has to handle), the Copernicus Data Space catalogue returned a real
+product record keyless, and the NASA Worldview snapshot API returned an `image/jpeg`. Cameras:
+TfL JamCams returned 889 London cameras with **no key at all**, correcting this repo's earlier
+claim that an app key was needed, and one still was pulled live from S3. New York 511 returned
+2,931 cameras keyless, of which 1,561 are enabled with an HLS stream and 1,066 are `Disabled`.
+Windy answered 403 without a key, so its gate is confirmed and its payload shape is not. All
+of it is in the verified table with its shape and its traps; none of it is built.
+
+**Post content analysis and face matching are decided and unbuilt.** ADR 014 settles what a
+post is read for: sentiment on the post and never on a profile, co-presence as a scored
+inference, image content as derived, and motive not asserted at all. ADR 013 settles face
+matching, 1:N against held profiles only, and records that the decision was Alexander
+Fanthome's taken with the legal exposure in front of him. They are phases 8 and 14. Nothing is
+written, no model weights are downloaded, and the written legal position from counsel that
+gates public deployment does not exist.
+
+**The ADS-B Exchange access position was checked and recorded.** On 2026-08-19 the RapidAPI
+host `adsbexchange-com1.p.rapidapi.com/v2/mil/` answered HTTP 401 with a RapidAPI key error,
+confirming the host, the path shape and the gate; nobody has a key, so no data has been seen.
+The globe map's own endpoints are closed: `/data/aircraft.json` and `/re-api/` both answered
+HTTP 403 "Request forbidden by administrative rules", and `robots.txt` disallows `/api/`,
+`/mapproxy/`, `/re-api/` and `/globe_history/` by name. airplanes.live answered 403 asking for
+a project description by email, which nobody has sent. adsb.one was Cloudflare-blocked from
+this network. The provider union in ADR 010 is therefore designed and unbuilt, and the
+aircraft layer still runs on adsb.lol alone.
+
+**AISHub is documented and gated behind hardware.** Checked on 2026-08-19: the webservice
+host `data.aishub.net/ws.php` answers and its full parameter contract is published, but a call
+with an invalid username returns **HTTP 200 with an empty body**, so no payload has been seen
+and the source stays NOT YET VERIFIED. Access requires running a physical AIS receiver meeting
+their published quality bar, and their terms prohibit feeding them data from other public AIS
+services, so the blocker is an antenna rather than code.
+
 **Six new sources were called and recorded but nothing consumes them yet.** On 2026-08-19
 the GeoNames city file, Wikidata WDQS, Wikimedia Commons geosearch, the OpenStreetMap
 notes API and a Mastodon public timeline all answered successfully and are now in the
@@ -139,10 +175,43 @@ exists for any of them.
 duplicate every upstream request. `__main__.py:27` pins `workers=1`. Horizontal scaling
 needs a cross-process lock first.
 
-**The commercial join does not exist yet.** No profile, no wealth tier, no ownership link.
-What runs is raw aircraft positions. The profile-to-asset join that carries the commercial
-story (`docs/business-context.md`) starts at phase 5, so nothing here demonstrates the
-product yet.
+**The commercial join does not exist yet.** No profile, no wealth tier, no ownership link,
+no contact or identity attributes. What runs is raw aircraft positions. The profile-to-asset
+join that carries the commercial story (`docs/business-context.md`) starts at phase 5, so
+nothing here demonstrates the product yet. The join scope widened on 2026-08-19: ADR 007
+permits a person to be joined to any data in the system including live feeds, and ADR 008
+puts the production profile attributes in, contact data included. Neither is built.
+
+**Cross-source corroboration and occupancy estimation are decided and unbuilt.** ADR 011
+makes enrichment a corroboration problem: an attribute carries the set of sources supporting
+it, independence is counted at the origin, and one scraped source never crosses the assertion
+threshold alone. ADR 012 adds an occupancy estimate for an aircraft or vessel as a labelled
+inference over ownership, recorded route history, the live track, the associate graph and
+each candidate's dated locations elsewhere. The corroboration service is a phase 6
+deliverable and occupancy is the new phase 12. There is no profile record yet, so neither has
+anything to run against. One thing did get verified for it: GDELT's DOC 2.0 article API
+answered 200 with real articles on 2026-08-19 and is in the verified table, along with the
+one-request-per-five-seconds cap it states in its own 429.
+
+**Local multimodal evidence and the resolver are decided and unbuilt.** ADR 015, taken on
+2026-08-19, settles how images, audio and video become claims: one evidence contract and one
+deterministic resolver, modality-specific code confined to `sources/`, and an origin key so
+that a video, a frame from it and its own transcript count once rather than three times. The
+resolver is blocking plus per-field comparators plus additive log-odds scoring with two
+thresholds, and no model scores a match. Local inference is four small ONNX models on CPU (a
+sentence embedder, a CLIP-family image and text embedder, a face embedder for ADR 013, and
+Whisper-small) used only for candidate generation, near-duplicate detection and
+transcription. Nothing is written. The
+evidence contract, the resolver and the model boundary are phase 6 deliverables; the image,
+audio and video adapters are the new phase 13, and face matching on top of them is phase 14
+(ADR 013). No model weights have been downloaded and no
+transcription has been run on this machine, so none of the CPU cost claims in ADR 015 has a
+measured number behind it yet.
+
+**The removal and suppression control does not exist yet.** ADR 008 makes the right to be
+forgotten a product feature, deleting the record and keeping a suppression key that survives
+re-ingest. There is no person record to remove yet, so there is nothing to build against
+until phase 6.
 
 **Not licensed for commercial deployment.** adsb.fi is non-commercial and is the aircraft
 failover. Full audit in `docs/data-sources.md`.
@@ -171,3 +240,11 @@ In order.
    `docs/plan/implementation-plan.md`. Then cities in phase 4, organisations and people in
    phase 6, social posts in phase 8. All seven entity classes are now planned, sourced and
    documented; five of them have nothing written yet.
+7. **Then the commercial half:** phase 10 makes recency measurable (per-attribute ages, a
+   staleness delta against the incumbent value, a change feed, an enrichment API), which is
+   the thing the demo is actually arguing. Phase 11 correlates privacy ICAO addresses back to
+   registrations, per ADR 009. Phase 12 estimates who is aboard, per ADR 012, and it is last
+   because it needs ownership, profiles, the corroboration service, the associate graph and
+   accumulated route history before it has anything to reason over. Phase 13 turns images, audio
+   and video into claims per ADR 015, and phase 14 matches faces to held profiles per ADR 013.
+   Unsecured-camera aggregators are the one thing not designed here, and the plan says why.

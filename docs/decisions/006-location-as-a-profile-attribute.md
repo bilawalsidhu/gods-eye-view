@@ -40,8 +40,9 @@ request process. That is the mechanism, and it belongs in the design as a featur
 **Person profiles carry location attributes.** Each one is dated and carries its source:
 
 - Residence city, region or country, at whatever granularity the source supports.
-- Address, where the source is a public record and the address is the profile's own
-  business or registered address.
+- Address. **Widened by ADR 008:** originally limited to a public-record business or
+  registered address, a profile now carries postal addresses generally, home addresses
+  included, as a dated series.
 - Work location and education location.
 - Publicly reported past appearances and affiliations that resolve to a place: a board
   seat, a keynote, a named building, an event on a date that has passed.
@@ -65,24 +66,32 @@ replaces, not an absent one.
 
 ## What this does not change
 
-One line survives, and it is the line between this product and a different product:
+One line survived when this ADR was written, and it did not survive long. **It is overruled
+by ADR 007** and is kept here because it is the argument that was overruled:
 
-**A person never carries a live position, and presence is never inferred.** No current
-location on a person. No "last seen". No correlating a named individual against a live
-aircraft, vessel, camera or geotagged post to place them somewhere now. Asset movement stays
-on the asset: an owned jet's live ADS-B position is shown on the aircraft, the ownership
-link to the person is shown, and neither card claims the owner is aboard.
+> ~~**A person never carries a live position, and presence is never inferred.** No current
+> location on a person. No "last seen". No correlating a named individual against a live
+> aircraft, vessel, camera or geotagged post to place them somewhere now. Asset movement
+> stays on the asset: an owned jet's live ADS-B position is shown on the aircraft, the
+> ownership link to the person is shown, and neither card claims the owner is aboard.~~
+>
+> ~~The reason is not the jurisdiction and does not change with it. The population is UHNW
+> and VHNW individuals, and a real-time or inferred location on a named wealthy private
+> individual is the input to extortion, burglary and worse. That risk sits with the
+> individual, and the reputational and legal exposure sits with whoever published the
+> location, whichever country's law is being read. Dated history does not carry that risk,
+> which is why it is permitted above and why the present tense is not.~~
 
-The reason is not the jurisdiction and does not change with it. The population is UHNW and
-VHNW individuals, and a real-time or inferred location on a named wealthy private individual
-is the input to extortion, burglary and worse. That risk sits with the individual, and the
-reputational and legal exposure sits with whoever published the location, whichever
-country's law is being read. Dated history does not carry that risk, which is why it is
-permitted above and why the present tense is not.
+What holds now: a person may be joined to any data in the system, live position feeds
+included, and a join to a live feed produces a dated entry like any other with the feed named
+as its source. An inference is labelled as an inference: an owned jet being airborne is a
+fact about the aircraft, "the owner is aboard" is an inference, and the card says which it is
+making. Read ADR 007 in full.
 
-Also unchanged: no face recognition or person identification on any camera image, no
-de-anonymising a privacy ICAO address, and no wealth tier inferred from an asset or a
-position.
+Also unchanged: no wealth tier inferred from an asset or a position, and no aggregators of
+unsecured private cameras. Two lines that were here have moved on: privacy ICAO addresses are
+correlated in phase 11 per ADR 009, and face matching against held profiles is now designed
+here too, in phase 14 per ADR 013.
 
 ## Consequences
 
