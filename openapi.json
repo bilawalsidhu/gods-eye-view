@@ -1,0 +1,906 @@
+{
+  "components": {
+    "schemas": {
+      "Aircraft": {
+        "additionalProperties": false,
+        "description": "One aircraft as last reported by an ADS-B feed.\n\nImmutable. The store replaces the whole object on each update rather than mutating,\nso a snapshot handed to the API or the WebSocket hub can never change underneath its\nreader.",
+        "properties": {
+          "aircraft_class": {
+            "$ref": "#/components/schemas/AircraftClass",
+            "default": "unknown"
+          },
+          "barometric_altitude_m": {
+            "anyOf": [
+              {
+                "maximum": 30000.0,
+                "minimum": -500.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barometric Altitude M"
+          },
+          "callsign": {
+            "anyOf": [
+              {
+                "maxLength": 8,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Flight identifier as broadcast, whitespace stripped.",
+            "title": "Callsign"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "pattern": "^[A-D][0-7]$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADS-B emitter category, e.g. A3 for a large aeroplane.",
+            "title": "Category"
+          },
+          "emergency": {
+            "$ref": "#/components/schemas/EmergencyState",
+            "default": "none"
+          },
+          "geometric_altitude_m": {
+            "anyOf": [
+              {
+                "maximum": 30000.0,
+                "minimum": -500.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geometric Altitude M"
+          },
+          "ground_speed_mps": {
+            "anyOf": [
+              {
+                "maximum": 1500.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ground Speed Mps"
+          },
+          "icao24": {
+            "description": "24-bit ICAO address, lowercase hex. The stable identity of the transponder.",
+            "pattern": "^[0-9a-f]{6}$",
+            "title": "Icao24",
+            "type": "string"
+          },
+          "in_emergency": {
+            "description": "True when either the emergency field or the squawk indicates distress.",
+            "readOnly": true,
+            "title": "In Emergency",
+            "type": "boolean"
+          },
+          "is_military": {
+            "default": false,
+            "title": "Is Military",
+            "type": "boolean"
+          },
+          "kind": {
+            "const": "aircraft",
+            "default": "aircraft",
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "description": "Best available human label, preferring what a controller would say.",
+            "readOnly": true,
+            "title": "Label",
+            "type": "string"
+          },
+          "message_source": {
+            "default": "unknown",
+            "description": "How the position was derived, verbatim from the feed: adsb_icao is a direct broadcast, mlat is multilaterated and less accurate, tisb_icao is rebroadcast ground data. Surfaced so the UI can be honest about accuracy.",
+            "maxLength": 20,
+            "title": "Message Source",
+            "type": "string"
+          },
+          "messages_received": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Messages Received",
+            "type": "integer"
+          },
+          "non_icao_address": {
+            "default": false,
+            "description": "The feed marked this address with a '~' prefix, meaning it is not a real ICAO allocation (typically a TIS-B ground vehicle or an ADS-R relay). The address is still a usable identity but should not be treated as an aircraft registration key.",
+            "title": "Non Icao Address",
+            "type": "boolean"
+          },
+          "observed_at": {
+            "description": "When the feed generated the response carrying this record.",
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "on_ground": {
+            "default": false,
+            "description": "True when the feed reported altitude as 'ground' rather than a number.",
+            "title": "On Ground",
+            "type": "boolean"
+          },
+          "operator": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operator"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          },
+          "point": {
+            "$ref": "#/components/schemas/Point"
+          },
+          "position_age_s": {
+            "description": "Seconds between the position fix and observed_at, as reported by the feed's seen_pos. Drives the stale badge in the UI.",
+            "minimum": 0.0,
+            "title": "Position Age S",
+            "type": "number"
+          },
+          "registered_country": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registered Country"
+          },
+          "registration": {
+            "anyOf": [
+              {
+                "maxLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Tail number, from the feed's aircraft database rather than the air.",
+            "title": "Registration"
+          },
+          "source": {
+            "description": "Which adapter produced this record, e.g. adsb.lol. Shown as attribution.",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "squawk": {
+            "anyOf": [
+              {
+                "pattern": "^[0-7]{4}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Squawk"
+          },
+          "track_deg": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 360.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "True track over ground. Resolved from track, true_heading, mag_heading or dir, in that order of preference.",
+            "title": "Track Deg"
+          },
+          "type_designator": {
+            "anyOf": [
+              {
+                "maxLength": 4,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ICAO type designator, e.g. B38M, GLF6, H60.",
+            "title": "Type Designator"
+          },
+          "uses_privacy_address": {
+            "default": false,
+            "description": "Aircraft is broadcasting a privacy ICAO address. Not resolvable to an owner by design; we do not attempt to unmask it.",
+            "title": "Uses Privacy Address",
+            "type": "boolean"
+          },
+          "vertical_rate_mps": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": -200.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bounds are deliberately wider than any real aircraft. Live feeds emit glitch values (a -32,640 ft/min record appeared in the 2026-08-19 military sample); those must validate and be visible, not silently drop the aircraft.",
+            "title": "Vertical Rate Mps"
+          }
+        },
+        "required": [
+          "icao24",
+          "point",
+          "observed_at",
+          "position_age_s",
+          "source",
+          "in_emergency",
+          "label"
+        ],
+        "title": "Aircraft",
+        "type": "object"
+      },
+      "AircraftClass": {
+        "description": "How we classify an aircraft for display purposes.\n\nDerived, not broadcast. ``MILITARY`` comes from the feed's own database flag;\n``BUSINESS_JET`` from the type designator; ``ANONYMOUS`` marks an aircraft using a\nprivacy ICAO address, which we display as anonymous by design and never attempt to\nresolve to an owner.",
+        "enum": [
+          "unknown",
+          "commercial",
+          "business_jet",
+          "general_aviation",
+          "military",
+          "helicopter",
+          "anonymous"
+        ],
+        "title": "AircraftClass",
+        "type": "string"
+      },
+      "AircraftSnapshot": {
+        "additionalProperties": false,
+        "description": "Every aircraft currently held, optionally filtered to a viewport.",
+        "properties": {
+          "aircraft": {
+            "items": {
+              "$ref": "#/components/schemas/Aircraft"
+            },
+            "title": "Aircraft",
+            "type": "array"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "aircraft"
+        ],
+        "title": "AircraftSnapshot",
+        "type": "object"
+      },
+      "AttributionEntry": {
+        "additionalProperties": false,
+        "description": "One licence credit the UI is required to display.",
+        "properties": {
+          "licence": {
+            "title": "Licence",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "text",
+          "url",
+          "licence"
+        ],
+        "title": "AttributionEntry",
+        "type": "object"
+      },
+      "Capabilities": {
+        "additionalProperties": false,
+        "description": "What this deployment can actually do, given its configuration.",
+        "properties": {
+          "attribution": {
+            "items": {
+              "$ref": "#/components/schemas/AttributionEntry"
+            },
+            "title": "Attribution",
+            "type": "array"
+          },
+          "cesium_ion_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cesium Ion Token"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/LayerCapability"
+            },
+            "title": "Layers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "layers",
+          "attribution"
+        ],
+        "title": "Capabilities",
+        "type": "object"
+      },
+      "EmergencyState": {
+        "description": "ADS-B emergency/priority status, as broadcast.\n\nThe squawk codes carry the same meaning by convention: 7500 hijack, 7600 radio\nfailure, 7700 general emergency. Both are surfaced because an aircraft may set one\nwithout the other.",
+        "enum": [
+          "none",
+          "general",
+          "lifeguard",
+          "minfuel",
+          "nordo",
+          "unlawful",
+          "downed",
+          "reserved"
+        ],
+        "title": "EmergencyState",
+        "type": "string"
+      },
+      "FeedHealth": {
+        "additionalProperties": false,
+        "description": "Whether one upstream feed is currently working.\n\nSent to clients so the UI can show a per-source degraded banner instead of silently\ndisplaying a frozen layer as if it were live. ``consecutive_failures`` is included\nbecause one failed poll is noise and five is an outage.",
+        "properties": {
+          "consecutive_failures": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Consecutive Failures",
+            "type": "integer"
+          },
+          "entity_count": {
+            "minimum": 0.0,
+            "title": "Entity Count",
+            "type": "integer"
+          },
+          "healthy": {
+            "title": "Healthy",
+            "type": "boolean"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "layer": {
+            "$ref": "#/components/schemas/LayerName"
+          },
+          "poll_interval_seconds": {
+            "exclusiveMinimum": 0.0,
+            "title": "Poll Interval Seconds",
+            "type": "number"
+          },
+          "rate_limited_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the upstream returned a throttling response. The UI says 'rate limited until X' rather than 'feed down', which is a materially different message: the data is fine, we are being asked to wait.",
+            "title": "Rate Limited Until"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "layer",
+          "healthy",
+          "entity_count",
+          "poll_interval_seconds"
+        ],
+        "title": "FeedHealth",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "Health": {
+        "additionalProperties": false,
+        "description": "Liveness plus per-feed health.",
+        "properties": {
+          "connected_clients": {
+            "title": "Connected Clients",
+            "type": "integer"
+          },
+          "feeds": {
+            "items": {
+              "$ref": "#/components/schemas/FeedHealth"
+            },
+            "title": "Feeds",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "feeds",
+          "connected_clients"
+        ],
+        "title": "Health",
+        "type": "object"
+      },
+      "LayerCapability": {
+        "additionalProperties": false,
+        "description": "Whether one layer can run, and why not when it cannot.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "layer": {
+            "title": "Layer",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "layer",
+          "available"
+        ],
+        "title": "LayerCapability",
+        "type": "object"
+      },
+      "LayerName": {
+        "enum": [
+          "aircraft",
+          "military",
+          "vessels",
+          "satellites",
+          "events",
+          "cameras"
+        ],
+        "type": "string"
+      },
+      "LayerSummary": {
+        "additionalProperties": false,
+        "description": "Counts and health per layer, for the layer rail and the degraded banners.",
+        "properties": {
+          "feeds": {
+            "items": {
+              "$ref": "#/components/schemas/FeedHealth"
+            },
+            "title": "Feeds",
+            "type": "array"
+          },
+          "layers": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Layers",
+            "type": "object"
+          }
+        },
+        "required": [
+          "layers",
+          "feeds"
+        ],
+        "title": "LayerSummary",
+        "type": "object"
+      },
+      "Point": {
+        "additionalProperties": false,
+        "description": "A position on the WGS84 ellipsoid.\n\n``altitude_m`` is metres above the ellipsoid, not above ground and not above mean sea\nlevel. It is ``None`` when the source does not report altitude, and ``0.0`` only when\nthe source actively says the object is at the surface.",
+        "properties": {
+          "altitude_m": {
+            "anyOf": [
+              {
+                "maximum": 40000000.0,
+                "minimum": -500.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Altitude M"
+          },
+          "lat": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Lat",
+            "type": "number"
+          },
+          "lon": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Lon",
+            "type": "number"
+          }
+        },
+        "required": [
+          "lon",
+          "lat"
+        ],
+        "title": "Point",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Live aircraft, ships, satellites, public cameras and geolocated events, served from real public feeds. Every response names its source and licence.",
+    "summary": "Real public data on an interactive globe",
+    "title": "Tracker",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/aircraft": {
+      "get": {
+        "description": "Aircraft currently known to the server.\n\nMilitary aircraft are held in their own store because they come from a separate\nworldwide endpoint rather than the viewport query, and merging them into one store\nwould let a global feed evict the local one every poll.",
+        "operationId": "list_aircraft_api_aircraft_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "west",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180.0,
+                  "minimum": -180.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "West"
+            }
+          },
+          {
+            "in": "query",
+            "name": "south",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90.0,
+                  "minimum": -90.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "South"
+            }
+          },
+          {
+            "in": "query",
+            "name": "east",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180.0,
+                  "minimum": -180.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "East"
+            }
+          },
+          {
+            "in": "query",
+            "name": "north",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90.0,
+                  "minimum": -90.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "North"
+            }
+          },
+          {
+            "in": "query",
+            "name": "military_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Military Only",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AircraftSnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Aircraft",
+        "tags": [
+          "entities"
+        ]
+      }
+    },
+    "/api/aircraft/{icao24}": {
+      "get": {
+        "description": "One aircraft by ICAO address, from either store. ``null`` when not currently seen.",
+        "operationId": "get_aircraft_api_aircraft__icao24__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "icao24",
+            "required": true,
+            "schema": {
+              "title": "Icao24",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Aircraft"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Aircraft Api Aircraft  Icao24  Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Aircraft",
+        "tags": [
+          "entities"
+        ]
+      }
+    },
+    "/api/capabilities": {
+      "get": {
+        "description": "Which layers this deployment can serve, and the attributions it must display.\n\nThe Cesium ion token is returned to the browser deliberately: it is a client-side\ntoken by design, scoped to the assets it can stream, unlike the feed keys which never\nleave the server.",
+        "operationId": "capabilities_api_capabilities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Capabilities"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Capabilities",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
+    "/api/health": {
+      "get": {
+        "description": "Liveness and upstream feed health.\n\nReports ``ok`` whenever the process is serving, even with every feed down, because\nthis is a liveness probe rather than a data-quality judgement. Feed trouble is\nvisible in ``feeds`` and is what the UI banners read.",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
+    "/api/layers": {
+      "get": {
+        "description": "Entity counts per layer plus upstream health, for the layer rail.",
+        "operationId": "layer_summary_api_layers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LayerSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Layer Summary",
+        "tags": [
+          "entities"
+        ]
+      }
+    }
+  }
+}

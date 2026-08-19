@@ -1,0 +1,129 @@
+[project]
+name = "tracker"
+version = "0.1.0"
+description = "Real-time geospatial situational-awareness globe fed by public data"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "fastapi>=0.118",
+    "pydantic>=2.11",
+    "pydantic-settings>=2.7",
+    "httpx>=0.28",
+    "uvicorn[standard]>=0.34",
+    "websockets>=14.0",
+    "orjson>=3.10",
+]
+
+[project.scripts]
+tracker = "tracker.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "pytest-cov>=6.0",
+    "respx>=0.22",
+    "hypothesis>=6.125",
+    "mypy>=1.14",
+    "ruff>=0.9",
+    "types-orjson>=3.6",
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "tracker"
+module-root = "src"
+
+# ---------------------------------------------------------------- ruff
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "UP",        # pyupgrade
+    "B",         # bugbear
+    "ASYNC",     # async correctness
+    "SIM",       # simplify
+    "C4",        # comprehensions
+    "PT",        # pytest style
+    "DTZ",       # naive-datetime bans
+    "RUF",       # ruff-specific
+    "TID",       # tidy imports
+    "PL",        # pylint subset
+    "TRY",       # exception antipatterns
+    "N",         # naming
+    "ANN",       # annotations
+    "RET",       # return simplification
+    "PTH",       # use pathlib
+]
+ignore = [
+    "ANN401",    # allow typing.Any where a boundary genuinely needs it
+    "TRY003",    # long messages in raises are fine and more useful
+    "PLR0913",   # constructor arg counts are governed by review, not a linter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR2004", "ANN201", "ANN001", "S101"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.format]
+quote-style = "double"
+
+# ---------------------------------------------------------------- mypy
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+warn_unreachable = true
+warn_unused_ignores = true
+disallow_any_generics = true
+no_implicit_reexport = true
+files = ["src", "tests", "scripts"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+# ---------------------------------------------------------------- pytest
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+    "--cov=tracker",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-branch",
+    "--cov-fail-under=85",
+]
+filterwarnings = ["error"]
+markers = [
+    "live: hits a real upstream API; deselected by default with -m 'not live'",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src/tracker"]
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@overload",
+]

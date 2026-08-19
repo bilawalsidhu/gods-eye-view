@@ -1,0 +1,935 @@
+{
+	"type": "FeatureCollection",
+	"features": [
+				                                	
+                		{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22798",
+				"title": "Wildfire Picture Rock, Lake, Oregon",
+            	"description": "3 Miles N from Summer Lake, OR",
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22798/geojson",
+                "closed": null,
+				"date": "2026-08-16T15:55:00Z",
+				"magnitudeValue": 1625.00,
+				"magnitudeUnit": "acres",
+            	"categories": [
+            					        		                {
+		                    "id": "wildfires",
+		                    "title": "Wildfires"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "IRWIN",
+			                "url": "https://irwin.doi.gov/observer/incidents/2026-ORLAD-260313"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -120.774487, 43.00919 ]
+		                	}
+		},
+
+			    	    				                                	
+                		{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-12T18:00:00Z",
+				"magnitudeValue": 35.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -142.2, 14.7 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-13T00:00:00Z",
+				"magnitudeValue": 35.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -143.1, 14.7 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-13T06:00:00Z",
+				"magnitudeValue": 35.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -144.1, 14.7 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-13T12:00:00Z",
+				"magnitudeValue": 35.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -145, 14.9 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-13T18:00:00Z",
+				"magnitudeValue": 35.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -145.7, 15.2 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-14T00:00:00Z",
+				"magnitudeValue": 45.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -147, 16 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-14T06:00:00Z",
+				"magnitudeValue": 50.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -147.9, 16.2 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-14T12:00:00Z",
+				"magnitudeValue": 50.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -149, 16.5 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-14T18:00:00Z",
+				"magnitudeValue": 50.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -150.3, 17 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-15T00:00:00Z",
+				"magnitudeValue": 55.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -151.9, 17.4 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-15T06:00:00Z",
+				"magnitudeValue": 55.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -153, 17.6 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-15T12:00:00Z",
+				"magnitudeValue": 55.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -154.1, 17.8 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-15T18:00:00Z",
+				"magnitudeValue": 65.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -155, 17.9 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-16T00:00:00Z",
+				"magnitudeValue": 65.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -155.7, 18.3 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-16T06:00:00Z",
+				"magnitudeValue": 65.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -156.5, 19.1 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-16T12:00:00Z",
+				"magnitudeValue": 60.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -157.6, 19.9 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-16T18:00:00Z",
+				"magnitudeValue": 55.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -158.8, 20.8 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-17T00:00:00Z",
+				"magnitudeValue": 55.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -160.9, 20.8 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-17T06:00:00Z",
+				"magnitudeValue": 50.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -162, 20.7 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-17T12:00:00Z",
+				"magnitudeValue": 50.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -162.9, 20.5 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-17T18:00:00Z",
+				"magnitudeValue": 55.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -163.9, 20.4 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-18T00:00:00Z",
+				"magnitudeValue": 60.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -165, 20.3 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-18T06:00:00Z",
+				"magnitudeValue": 65.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -165.8, 20.4 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-18T12:00:00Z",
+				"magnitudeValue": 70.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -166.6, 20.4 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-18T18:00:00Z",
+				"magnitudeValue": 85.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -167.7, 20.3 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-19T00:00:00Z",
+				"magnitudeValue": 100.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -168.5, 20.5 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-19T06:00:00Z",
+				"magnitudeValue": 115.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -169.3, 20.7 ]
+		                	}
+		},
+
+			    			{
+			"type": "Feature",
+			"properties": {
+				"id": "EONET_22563",
+				"title": "Tropical Storm Lala",
+            	"description": null,
+            	"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563/geojson",
+                "closed": null,
+				"date": "2026-08-19T12:00:00Z",
+				"magnitudeValue": 110.00,
+				"magnitudeUnit": "kts",
+            	"categories": [
+            					        		                {
+		                    "id": "severeStorms",
+		                    "title": "Severe Storms"
+		                }
+
+			            			                    	],
+            	"sources": [
+            					        			            {
+			                "id": "JTWC",
+			                "url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+			            }
+
+			            			                    	]
+            },
+        	"geometry": {
+        				            "type": "Point",
+		        		            "coordinates": [ -169.9, 21 ]
+		                	}
+		}
+
+			    	    			]
+}
