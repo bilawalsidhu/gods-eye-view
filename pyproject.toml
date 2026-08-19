@@ -25,7 +25,10 @@ dev = [
     "respx>=0.22",
     "hypothesis>=6.125",
     "mypy>=1.14",
-    "ruff>=0.9",
+    # ruff and ty are both pre-1.0. A range would let a patch release turn a green branch
+    # red on a Friday, so both are pinned exactly and bumped in their own commit.
+    "ruff==0.16.3",
+    "ty==0.0.73",
     "types-orjson>=3.6",
 ]
 
@@ -42,7 +45,7 @@ module-root = "src"
 [tool.ruff]
 line-length = 100
 target-version = "py313"
-src = ["src", "tests"]
+src = ["src", "tests", "scripts"]
 
 [tool.ruff.lint]
 select = [
@@ -56,7 +59,7 @@ select = [
     "C4",        # comprehensions
     "PT",        # pytest style
     "DTZ",       # naive-datetime bans
-    "RUF",       # ruff-specific
+    "RUF",       # ruff-specific, includes RUF100 unused-noqa
     "TID",       # tidy imports
     "PL",        # pylint subset
     "TRY",       # exception antipatterns
@@ -64,21 +67,130 @@ select = [
     "ANN",       # annotations
     "RET",       # return simplification
     "PTH",       # use pathlib
+    "S",         # bandit: ssl verify off, hardcoded creds, missing timeouts
+    "A",         # builtin shadowing
+    "BLE",       # blind except, so every supervised handler is annotated on purpose
+    "FBT",       # boolean trap in function signatures
+    "EM",        # exception message assigned before raise, keeps tracebacks clean
+    "G",         # logging format: no f-strings in log calls
+    "LOG",       # logging misuse
+    "INP",       # missing __init__.py, an implicit namespace package is a packaging risk
+    "PIE",       # dead code
+    "T20",       # print bans in src
+    "RSE",       # raise X() not raise X
+    "SLF",       # private member access across objects
+    "SLOT",      # __slots__ on str/tuple/NamedTuple subclasses
+    "ARG",       # unused arguments, usually a signature that silently drifted
+    "ERA",       # commented-out code
+    "PGH",       # blanket type: ignore and blanket noqa are both banned
+    "FLY",       # static join to f-string
+    "PERF",      # loop and comprehension performance
+    "FURB",      # modernisation ruff can prove safe at py313
+    "C90",       # mccabe complexity
+    "TC",        # type-checking-only imports
+    "YTT",       # sys.version misuse
+    "EXE",       # shebang and exec-bit consistency
+    "D",         # docstrings, google convention
+    "ISC",       # implicit string concat, catches the missing comma in a list
+    "COM818",    # trailing comma on a bare tuple; the rest of COM fights the formatter
+    "FAST",      # FastAPI-specific rules
 ]
 ignore = [
     "ANN401",    # allow typing.Any where a boundary genuinely needs it
     "TRY003",    # long messages in raises are fine and more useful
     "PLR0913",   # constructor arg counts are governed by review, not a linter
+    "COM812",    # conflicts with ruff-format, the known pair with ISC001
+    "ISC001",    # conflicts with ruff-format
+    "D100",      # module docstring not required on every internal module
+    "D104",      # package docstring not required in __init__.py
+    "D105",      # magic methods do not need docstrings
+    "D107",      # __init__ is documented on the class docstring instead
+    "FBT003",    # a positional bool in a third-party call is not ours to fix
 ]
 
+# Deliberately not selected:
+#   COM  - COM812 and COM819 conflict with ruff-format; only COM818 earns its place.
+#   Q    - the formatter owns quotes and quote-style is already set to double.
+#   ICN  - import conventions for numpy and pandas, neither of which this repo has.
+#   FA   - `from __future__ import annotations` buys nothing at py313 and breaks
+#          pydantic and FastAPI runtime annotation resolution.
+#   preview - preview rules move between releases and this is a merge gate.
+
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["PLR2004", "ANN201", "ANN001", "S101"]
+"tests/**" = [
+    "PLR2004",   # magic numbers are the point of an assertion
+    "ANN",       # mypy strict already covers tests
+    "S101",      # assert
+    "S105",      # fake tokens in fixtures
+    "S106",      # fake passwords passed as args
+    "SLF001",    # tests poke private state deliberately
+    "ARG",       # pytest fixtures arrive as unused arguments
+    "D",         # test names are the documentation
+    "INP001",    # no __init__.py requirement on test packages
+    "PLR0915",   # long table-driven tests are fine
+    "PLC0415",   # local imports inside tests are fine
+    "FBT001",    # parametrised bool args
+    "TC",        # never rewrite imports in tests
+    "EM",        # a test double's raise reads better with the message inline
+]
+"scripts/**" = [
+    "T20",       # scripts print, that is their job
+    "INP001",    # scripts are not a package
+    "D",
+    "ANN",
+    "EXE001",    # not every script carries the exec bit
+]
+# FastAPI evaluates route annotations at runtime, and ruff's runtime-evaluated-decorators
+# still does not cover route decorators or Depends (astral-sh/ruff#6137, #9312). A TC
+# autofix here moves an import into TYPE_CHECKING and the app fails at import in prod.
+"src/tracker/api/**" = ["TC001", "TC002", "TC003"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 
+[tool.ruff.lint.flake8-annotations]
+mypy-init-return = true      # no -> None spam on __init__ with annotated args
+suppress-dummy-args = true   # _ and _unused need no annotation
+allow-star-arg-any = false   # *args: Any and **kwargs: Any stay banned
+ignore-fully-untyped = false # an unannotated function is still a finding
+
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = [
+    "pydantic.BaseModel",
+    "pydantic_settings.BaseSettings",
+]
+runtime-evaluated-decorators = ["pydantic.validate_call"]
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+mark-parentheses = false
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"        # also auto-disables D203, D213 and the rest of the clash set
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 6
+max-branches = 12
+max-returns = 6
+max-statements = 40
+max-bool-expr = 4
+max-nested-blocks = 4
+allow-magic-value-types = ["str", "bytes"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["tracker"]
+split-on-trailing-comma = false   # required when the formatter owns trailing commas
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = false
+
 [tool.ruff.format]
 quote-style = "double"
+docstring-code-format = true
+skip-magic-trailing-comma = false
 
 # ---------------------------------------------------------------- mypy
 
@@ -96,6 +208,75 @@ files = ["src", "tests", "scripts"]
 init_forbid_extra = true
 init_typed = true
 warn_required_dynamic_aliases = true
+
+# ---------------------------------------------------------------- ty
+#
+# ty runs alongside mypy, it does not replace it. Two reasons, both measured on this repo.
+#
+# 1. False negative, not false positive. ty reports nothing on src/, but it also fails to
+#    check constructor arguments on a PEP 695 generic pydantic model: given
+#    `class Env[T](BaseModel)`, the call `Env[int](payload="x")` passes clean. mypy with
+#    the pydantic plugin catches it. Generics plus pydantic is the pattern this codebase
+#    leans on hardest, so dropping mypy would quietly lower the bar exactly where it
+#    matters. mypy stays the correctness gate.
+# 2. ty is 0.0.x. A new rule switched on in a patch release can redden CI with no code
+#    change, which is fine for fast feedback and not fine as the only gate.
+#
+# ty earns its place as the quick loop and the editor language server, and it is right
+# about `@computed_field` over `@property`, where mypy false-positives with prop-decorator.
+#
+# ty does not honour mypy's coded `# type: ignore[...]`, so lines needing both carry both
+# comments, mypy first: `# type: ignore[arg-type]  # ty: ignore[invalid-argument-type]`.
+# Reversing that order stops mypy honouring its own ignore.
+
+[tool.ty.environment]
+python-version = "3.13"
+python-platform = "linux"   # match CI, not the macOS dev box
+extra-paths = []
+# `root` is deliberately unset. Setting root = ["src", "tests"] breaks
+# `from tests.conftest import ...` in tests/test_openapi.py. ty infers it correctly alone.
+
+[tool.ty.src]
+include = ["src", "tests", "scripts"]
+exclude = ["**/__pycache__/**", "**/.venv/**", "**/node_modules/**"]
+respect-ignore-files = true
+exclude-scripts = false
+
+[tool.ty.analysis]
+respect-type-ignore-comments = true
+strict-equality-semantics = true
+strict-generic-narrowing = true
+allowed-unresolved-imports = []
+replace-imports-with-any = []
+
+[tool.ty.rules]
+# Off by default in 0.0.73, turned on for strictness.
+division-by-zero = "error"
+dynamic-function-decorator-return = "error"
+blanket-ignore-comment = "error"            # every ignore must name its rule
+# Warn by default, raised to error.
+deprecated = "error"
+ambiguous-protocol-member = "error"
+ineffective-final = "error"
+invalid-enum-member-annotation = "error"
+invalid-legacy-positional-parameter = "error"
+experimental-syntax = "error"
+ignore-comment-unknown-rule = "error"
+invalid-ignore-comment = "error"
+unused-ignore-comment = "error"
+unused-type-ignore-comment = "error"
+# Already error by default, pinned so a future release cannot quietly relax them.
+possibly-unresolved-reference = "error"
+possibly-missing-attribute = "error"
+possibly-missing-import = "error"
+possibly-missing-submodule = "error"
+possibly-missing-implicit-call = "error"
+redundant-cast = "error"
+pydantic-discarded-extra-argument = "error"
+
+[tool.ty.terminal]
+output-format = "concise"
+error-on-warning = true
 
 # ---------------------------------------------------------------- pytest
 

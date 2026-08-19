@@ -18,7 +18,10 @@ fix:
 	uv run ruff check --fix .
 	uv run ruff format .
 
+# ty first because it is the fast one, so an obvious mistake surfaces in under a second.
+# mypy is the gate: it catches constructor errors on generic pydantic models that ty misses.
 typecheck:
+	uv run ty check
 	uv run mypy
 
 # The full gate, same checks CI runs.

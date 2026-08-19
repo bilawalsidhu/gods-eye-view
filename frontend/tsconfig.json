@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    // ES2023 is exactly Vite's default `build.target` of `baseline-widely-available`
+    // (chrome111 / edge111 / firefox114 / safari16.4 / ios16.4). Vite transpiles with Oxc
+    // and ignores `target` entirely, so this only governs which lib types are in scope.
+    // It is set explicitly because TypeScript 6 otherwise floats it to the current year's
+    // ES version, which would type-check against APIs the shipped bundle does not have.
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    // Every file is a module. Without this a file with no import or export is a script,
+    // and its top-level names leak into the global scope.
+    "moduleDetection": "force",
+    "useDefineForClassFields": true,
+
+    // "preserve" implies `moduleResolution: bundler`, which is what Vite does.
+    "module": "preserve",
+    "types": ["vite/client", "node"],
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
+    // Vite requires this: it transpiles file by file with no type information, so any
+    // construct needing cross-file types would be silently miscompiled.
+    "isolatedModules": true,
+    // Bans runtime-emitting syntax (enums, parameter properties, namespaces) that a
+    // type-stripping transpiler cannot handle.
+    "erasableSyntaxOnly": true,
+    "noUncheckedSideEffectImports": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src", "e2e", "vite.config.ts", "playwright.config.ts"]
+}

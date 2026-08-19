@@ -46,7 +46,7 @@ async def http() -> AsyncIterator[httpx.AsyncClient]:
 
 
 def _settings(**overrides: object) -> Settings:
-    return Settings(adsb_base_url=PRIMARY, adsb_failover_base_url="", **overrides)  # type: ignore[arg-type]
+    return Settings(adsb_base_url=PRIMARY, adsb_failover_base_url="", **overrides)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
 
 
 # ---------------------------------------------------------------- build_state

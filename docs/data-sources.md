@@ -28,6 +28,11 @@ Called live on 2026-08-19 with a real 200 response.
 | USGS | `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson` | None | No hard limit published. Planned cadence 2 minutes | GeoJSON | Public domain (US Government work) | Free | 2026-08-19 |
 | NASA EONET | `https://eonet.gsfc.nasa.gov/api/v3/events/geojson` | None | No hard limit published. Planned cadence hourly | GeoJSON | NASA open data, attribution requested | Free | 2026-08-19 |
 | NASA GIBS | `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/` | None | Tile service, no key. Respect normal tile-client behaviour | WMTS (XML capabilities, raster tiles) | NASA open data, acknowledgement requested | Free | 2026-08-19 |
+| GeoNames | `https://download.geonames.org/export/dump/cities15000.zip` | None | Bulk file, not an API. Download at most once a week | Tab-separated text in a zip | CC BY 4.0 | Free | 2026-08-19 |
+| Wikidata WDQS | `https://query.wikidata.org/sparql` | None, descriptive User-Agent required | One query per user action, never per keystroke. Server-side cache | SPARQL JSON results | CC0 | Free | 2026-08-19 |
+| Wikimedia Commons | `https://commons.wikimedia.org/w/api.php?action=query&list=geosearch` | None, descriptive User-Agent required | Wikimedia API etiquette, roughly 1 request per second | JSON | Per-file, mostly CC BY-SA or public domain | Free | 2026-08-19 |
+| OpenStreetMap notes | `https://api.openstreetmap.org/api/0.6/notes.json?bbox={w},{s},{e},{n}` | None, descriptive User-Agent required | Treat as roughly 1 request per second, cache per tile | JSON | ODbL 1.0 | Free | 2026-08-19 |
+| Mastodon (`mas.to`) | `https://{instance}/api/v1/timelines/public` | None on instances that still allow it | 300 requests per 5 minutes per IP on default Mastodon config | JSON | Per-post, author's own; instance terms apply | Free | 2026-08-19 |
 
 ### adsb.lol `/v2/point/{lat}/{lon}/{radius_nm}`
 
@@ -128,6 +133,69 @@ real. WMTS in EPSG:3857, verified via
 2026-08-19. Daily true-colour layers are date-addressable, which is what phase 7 wires to
 the timeline.
 
+### GeoNames `cities15000`
+
+The city layer. Every populated place above 15,000 people, roughly 26,000 rows, with name,
+country, admin division, population, timezone and coordinates. Verified on 2026-08-19 with
+a ranged request that returned HTTP 206, so the file is there and is byte-servable.
+
+It is a bulk file, not an API, which is the point: cities do not move, so this is a weekly
+download into a local index rather than a poller. `cities1000` exists if a denser set is
+ever wanted, at roughly 140,000 rows. Licence is CC BY 4.0, confirmed in
+`https://download.geonames.org/export/dump/readme.txt` on the same date, so the credit line
+is a licence condition and not a courtesy.
+
+The file is latin-1-tolerant tab-separated text with no header row and a fixed 19-column
+layout. Column 6 is latitude and column 7 is longitude, in that order, which is the
+opposite of our contract order and gets flipped in the adapter.
+
+### Wikidata WDQS
+
+The person and organisation layer. Verified on 2026-08-19 with a live SPARQL query for
+instances of city (`wd:Q515`), which returned HTTP 200 and JSON results.
+
+Two operational facts. WDQS enforces a 60-second query timeout and will drop a query that
+exceeds it, so an unbounded property scan is not an option and every query ships with a
+`LIMIT`. And it requires a descriptive User-Agent with contact details; a generic client
+string gets blocked rather than throttled.
+
+### Wikimedia Commons geosearch
+
+Reference imagery for a place, and the one image source whose coordinates come from the
+upstream rather than from parsing text. Verified on 2026-08-19 against London
+(`51.5074|-0.1278`, 1,000m radius), HTTP 200.
+
+Licences are per file, not per source, so the file's own licence and author have to be
+fetched with it and rendered on the card. There is no blanket credit string that covers
+this source.
+
+### OpenStreetMap notes
+
+Crowd-sourced text at a real coordinate: a note is a free-text comment a mapper left at a
+location. Verified on 2026-08-19 over a London bounding box, HTTP 200.
+
+This is the honest half of the social layer. The coordinate is the subject of the note
+rather than a guess derived from its words, and it carries no claim about where the author
+was. Notes are user-submitted text, so they are the least trustworthy input in the system
+and get the treatment in `AGENTS.md` under Data sourcing.
+
+### Mastodon public timeline
+
+Geolocated social posts, with the caveat that makes the layer what it is: **a Mastodon
+status object carries no coordinates.** Verified on 2026-08-19 against `mas.to`, HTTP 200,
+and the returned status keys are `account`, `card`, `content`, `created_at`, `tags`,
+`media_attachments`, `language`, `visibility` and the counts. There is no latitude, no
+longitude and no place object anywhere in the shape.
+
+So any position on a post is derived from its text and its hashtags, and the card says so
+in those words. See ADR 005.
+
+**`mastodon.social` no longer serves this endpoint anonymously.** It answered HTTP 422
+`{"error":"This method requires an authenticated user"}` on 2026-08-19, with and without
+`local=true`. `mas.to` answered 200 for the identical request. Instance policy is per
+instance and changes without notice, so the instance list is configuration and a 401, 403
+or 422 from one instance drops it for the cycle rather than failing the feed.
+
 ---
 
 ## Planned, NOT YET VERIFIED
@@ -148,6 +216,14 @@ be called and moved into the verified table before any code depends on its shape
 | Overpass | OSM points of interest by tile | 7 | None, but requires descriptive User-Agent with contact | Fair use roughly 10,000 queries per day per IP. Never called from the browser. Persistent cache required | ODbL (OSM data) | NOT YET VERIFIED |
 | Cesium ion | OSM Buildings 3D Tiles, optional terrain | 7 | Client-side ion token | Community tier quota. Token is client-side by design | **Non-commercial community tier, paid past $50k organisation revenue** | NOT YET VERIFIED |
 | EOX Sentinel-2 cloudless | Static high-resolution basemap option | 7 | None expected | Check which mosaic year you are pointing at | **CC BY-NC on newer mosaics** | NOT YET VERIFIED |
+| FAA Releasable Aircraft Database | Aircraft ownership, owner name only | 5 | None | Weekly bulk zip. Owner address columns are dropped at the adapter | Public domain (US Government work) | NOT YET VERIFIED |
+| ITU MARS | Vessel registry, MMSI to name and flag | 5 | None expected | Registration may be needed for bulk access | ITU terms | NOT YET VERIFIED |
+| SEC EDGAR | Officers, directors, insider holdings | 6 | None | 10 requests per second, declared User-Agent with contact mandatory | Public domain | NOT YET VERIFIED |
+| Companies House | Officers, persons with significant control, registered office | 6 | Free key | 600 requests per 5 minutes. Key never reaches the browser | Open Government Licence 3.0 | NOT YET VERIFIED |
+| FEC OpenFEC | Donor name, employer, occupation | 6 | Free key | 1,000 requests per hour on the standard key | Public domain | NOT YET VERIFIED |
+| ProPublica Nonprofit Explorer | Foundation trustees and assets | 6 | None expected | Attribution required | ProPublica terms | NOT YET VERIFIED |
+| Flickr | Geotagged photographs with author text | 8 | Free key | `has_geo=1` with a bbox. Endpoint reached on 2026-08-19 and correctly rejected a null key, so the shape is unconfirmed. Per-photo licence must be read; commercial use needs a CC filter | Per-photo | NOT YET VERIFIED |
+| Bluesky (`public.api.bsky.app`) | Social posts, text only | 8 | None documented | **Answered HTTP 403 from this network on 2026-08-19** for `app.bsky.feed.searchPosts` while `app.bsky.actor.getProfile` answered 200, so search is gated. Posts carry no coordinates | Per-post | NOT YET VERIFIED |
 
 ---
 
@@ -176,8 +252,19 @@ adsb.lol (ODbL 1.0), USGS (public domain), NASA GIBS and EONET, Wikidata (CC0), 
 that redistributes an aggregated store of adsb.lol data needs a licence read of its own,
 not just an attribution line.
 
+Also clean, with their credit conditions honoured: GeoNames (CC BY 4.0), OpenStreetMap
+notes (ODbL, same share-alike caveat as any OSM data).
+
 Unresolved and needing a read before they ship: aisstream.io (beta, terms may change),
-adsbdb, Windy (tier-dependent), GDELT.
+adsbdb, Windy (tier-dependent), GDELT, ITU MARS, ProPublica.
+
+**Per-item licensing is its own category.** Wikimedia Commons, Mastodon and Flickr license
+each record separately, so there is no source-level answer. A Commons file may be public
+domain or CC BY-SA; a Flickr photo may be all rights reserved. The rule is that the item's
+own licence and author travel with the record through the domain contract and are rendered
+on the card, and any item whose licence cannot be determined is dropped rather than shown.
+Flickr in particular needs its licence filter set before a commercial deployment, not
+after.
 
 ## Attribution
 
@@ -208,7 +295,14 @@ Required for the planned sources, to be added with the code that uses them:
 | GDELT | `News coverage data from the GDELT Project` |
 | Cesium ion | Cesium ion and the underlying OSM Buildings credit, rendered by Cesium's own credit display |
 | EOX | `Sentinel-2 cloudless by EOX IT Services GmbH` with the mosaic year and its CC licence |
+| GeoNames | `City data from GeoNames, CC BY 4.0` |
+| OpenStreetMap notes | `Map notes © OpenStreetMap contributors` under ODbL |
+| Wikimedia Commons | Per file: the file's own licence, its author and a link to the file page |
+| Mastodon | Per post: the instance domain, the author handle and a link to the original post |
+| Flickr | Per photo: the photographer, the photo's own licence and a link to the photo page |
 
-Two rules that sit alongside the strings. Wikipedia's CC BY-SA needs a link to the source
+Four rules that sit alongside the strings. Wikipedia's CC BY-SA needs a link to the source
 article, not just the word "Wikipedia". TfL's wording is fixed by their terms and must not
-be paraphrased.
+be paraphrased. Commons, Mastodon and Flickr are licensed per item rather than per source,
+so their credit is assembled from the record and a card cannot render without it. GeoNames
+is CC BY, so its credit is a condition and not a courtesy.

@@ -4,10 +4,22 @@
 > `docs/superpowers/plans/`, written immediately before that phase starts.
 > Use `superpowers:subagent-driven-development` to execute a phase task-by-task.
 
-**Goal:** a web app that renders an interactive 3D globe and shows real, live public data
-on it (aircraft, ships, satellites, cameras, geo-events, imagery, POIs, 3D buildings,
-notable public figures) with search, camera fly-to, information cards and
-cross-referenced enrichment.
+**Goal:** an interactive 3D globe showing real public data live (aircraft, ships,
+satellites, cities, organisations, public figures, geolocated social posts, plus cameras,
+geo-events, imagery and 3D buildings), with free-text search across people, organisations,
+assets and places, and cross-referenced enrichment linking a profile to the assets it
+owns.
+
+**Context:** this is a demo of profile enrichment for Altrata. The business sells wealth
+and executive intelligence: data collected on people and organisations, resolved to one
+profile, joined up, and sold to private banks, wealth managers, advancement teams and
+fundraisers. The population is the wealth tiers, UHNW over $30m, VHNW $5m to $30m, HNW
+over $1m, with Likely UHNW and Likely VHNW covering partial valuations. Altrata already
+licenses global private aircraft ownership (JetNet), luxury vehicle ownership, US real
+estate (CoreLogic) and profiles on 100M+ individuals. This project rebuilds that join from
+**public sources only**, shaped to Altrata's real data model, so it can be demoed without
+touching licensed data or production systems. Full framing in
+`docs/business-context.md`.
 
 **Architecture:** one FastAPI process owns every upstream feed, validates each payload
 against a strict Pydantic contract at the boundary, holds live state in a TTL store, and
@@ -15,322 +27,426 @@ fans batched updates out to browsers over a single WebSocket. A Vite + TypeScrip
 frontend renders with CesiumJS using one primitive collection per layer and in-place
 position mutation. Satellites are propagated in the browser from cached orbital elements.
 
-**Tech stack:** Python 3.13, uv, FastAPI, Pydantic v2, httpx, ruff, mypy --strict,
-pytest + pytest-asyncio + respx + hypothesis. TypeScript, Vite, CesiumJS, satellite.js,
-vitest, Playwright, eslint. GitHub Actions CI.
+**Tech stack:** Python 3.13, uv, FastAPI, Pydantic v2, httpx, ruff, ty, mypy --strict,
+pytest + respx + hypothesis. TypeScript, Vite, CesiumJS, satellite.js, vitest, Playwright.
+GitHub Actions CI.
 
 **Spec:** `docs/superpowers/specs/2026-08-19-tracker-design.md`
+
+## Entity classes
+
+Everything the globe can put a pin on. Seven classes, each with its own contract module,
+its own layer and its own phase. Nothing renders that is not on this list.
+
+| Class | Contract | Position comes from | Moves? | Phase |
+| --- | --- | --- | --- | --- |
+| Aircraft | `contracts/aircraft.py` | ADS-B transponder position in the feed | Yes, live | 1 (done) |
+| Vessel | `contracts/vessel.py` | AIS position report | Yes, live | 2 |
+| Satellite | `contracts/satellite.py` | SGP4 propagation of cached orbital elements, in the browser | Yes, computed | 2 |
+| City | `contracts/city.py` | GeoNames coordinates for the populated place | No | 4 |
+| Organisation | `contracts/organisation.py` | Registered or headquarters site, one pin per site | No | 6 |
+| Person | `contracts/person.py` | Dated location attributes and owned assets. Never a live position | No | 6 |
+| Social post | `contracts/post.py` | Either an upstream coordinate or a location derived from the text, and the two are different things the card states plainly | No, a post is a fixed event in time | 8 |
+
+Any of these may be joined to any other. **There is no prohibited join**, live position
+feeds included, and no structural test asserting a separation. ADR 007 took that firewall
+out and named what replaces it.
+
+What every join carries instead, asserted by tests:
+
+**A source, a confidence and an as-of date**, rendered on the card. A join below the
+confidence threshold is displayed as a possible match with its score and is excluded from
+every aggregate count.
+
+**An inference labelled as an inference.** An owned aircraft being airborne is a fact about
+the aircraft. "The owner is aboard" is an inference, and the product says which it is
+saying.
+
+**No fabricated precision.** A city-level match stays city-level. A location derived from
+text says derived and shows the phrase it matched. Person locations are dated attributes
+with provenance per ADR 006, and a join to a live feed produces a dated entry like any
+other with the feed named as its source.
 
 ---
 
 ## Global constraints
 
-These apply to every task in every phase. No task may violate them.
+These apply to every task in every phase.
 
 - **Real data only.** No mock feeds, no sample data, no placeholder entities in the
   running product. Recorded real payloads are used *only* as test fixtures.
-- **No placeholders in code.** No `TODO`, no `pass  # later`, no `NotImplementedError`
-  left in a shipped path, no `test.skip`, no stub returning a hardcoded value.
-- **Python 3.13**, pinned in `.python-version`. `uv.lock` committed. CI uses
-  `uv sync --locked` so a stale lockfile fails the build.
+- **No placeholders in code.** No `TODO`, no `pass  # later`, no stub returning a
+  hardcoded value, no skipped tests.
+- **No human verification, anywhere.** This is a proof of concept and a demo. No reviewer,
+  no review queue, no QA step, no pending-approval state, no accept/reject screen. Nothing
+  may be designed on the assumption a person will check it. The machine carries it: strict
+  contracts, unmappable records dropped and counted, confidence thresholds asserting no
+  link below the bar, unconfirmed matches labelled and excluded from aggregates, provenance
+  on every card. See `docs/business-context.md`.
+- **Python 3.13**, pinned. `uv.lock` committed. CI uses `uv sync --locked`.
 - **Every contract is a strict Pydantic model** deriving from `StrictModel`
-  (`strict=True, extra="forbid", frozen=True`).
-- **Coordinates are `[longitude, latitude]`** in every contract, WGS84 / EPSG:4326,
-  degrees. Altitude in metres above the WGS84 ellipsoid.
-- **Times are timezone-aware UTC**, ISO 8601 in contracts. A naive datetime is a
-  validation error.
-- **Never rebuild a Cesium layer per tick.** One primitive collection per layer,
-  positions mutated in place.
-- **Never call an upstream faster than its documented cadence.** Each poller's cadence
-  guard is enforced in code and asserted by a test.
-- **No API key reaches the browser.** All keyed feeds are proxied by the backend.
+  (`strict=True, extra="forbid", frozen=True`). Upstream payloads get permissive
+  `WireModel` shapes inside the source adapter, never in the domain.
+- **Coordinates are `[longitude, latitude]`**, WGS84, degrees. Altitude in metres.
+- **Times are timezone-aware UTC.** A naive datetime is a validation error.
+- **Never rebuild a Cesium layer per tick.** One primitive collection per layer.
+- **Never call an upstream faster than its documented cadence.** Enforced in code and
+  asserted by a test, not left to configuration.
+- **No API key reaches the browser**, except the Cesium ion token, which is a
+  client-side token by design.
 - **Every visible data layer renders its attribution.**
-- **Every source added to the app gets a row in `docs/data-sources.md`** in the same
-  commit, with a last-verified date. No endpoint is written into that file unverified.
-- **`ruff check`, `ruff format --check`, `mypy --strict`, `pytest --cov` (branch,
-  `fail_under=85`), `tsc --noEmit`, `eslint`, `vitest` all pass** before a phase is
-  called complete.
-- **Person data is constrained by the property allowlist** in the spec section 8. That
-  allowlist is load-bearing and is never widened.
+- **Every source gets a row in `docs/data-sources.md`** in the same commit, with a
+  last-verified date. No endpoint is written there unverified.
+- **`ruff`, `ty`, `mypy --strict`, `pytest` (branch coverage ≥ 85%), and the full
+  frontend gate all pass** before a phase is complete.
 
-## File structure
+### Person data: what a join has to carry
 
-### Backend, `src/tracker/`
+The product joins a person to everything else that is known about them, live feeds
+included. ADR 007 removed the firewall that used to sit here and this section is what
+replaces it. Every rule below is a schema and UI constraint, not a policy note, and each is
+asserted by a test.
 
-| Path | Responsibility |
-| --- | --- |
-| `app.py` | `create_app()` factory, lifespan wiring, CORS, static mount |
-| `config.py` | `Settings` via pydantic-settings, all keys and cadences |
-| `contracts/base.py` | `StrictModel`, shared validators, `UtcDatetime` |
-| `contracts/geo.py` | `Position`, `BoundingBox`, `Coordinate` |
-| `contracts/aircraft.py` | `Aircraft`, `AircraftCategory`, `EmitterFlags` |
-| `contracts/vessel.py` | `Vessel`, `VesselStatic`, `VesselType` |
-| `contracts/satellite.py` | `SatelliteElement`, `SatelliteGroup` |
-| `contracts/event.py` | `GeoEvent`, `EventSource`, `EventSeverity` |
-| `contracts/camera.py` | `Camera`, `CameraImage` |
-| `contracts/place.py` | `Place`, `PointOfInterest` |
-| `contracts/person.py` | `Person`, `PersonPlace`, `PlaceRelation` |
-| `contracts/entity.py` | `Entity` discriminated union on `kind` |
-| `contracts/messages.py` | WebSocket envelope: `Snapshot`, `Delta`, `Removal`, `FeedStatus` |
-| `sources/base.py` | `PollingSource` / `StreamingSource` protocols, `SourceHealth` |
-| `sources/adsb.py` | readsb v2 wire models and parser, adsb.lol / adsb.fi / mil |
-| `sources/adsbdb.py` | aircraft registry lookup for owner and operator |
-| `sources/aisstream.py` | AIS WebSocket client, reconnect and resubscribe |
-| `sources/celestrak.py` | OMM/GP fetch with the two-hour guard |
-| `sources/usgs.py` `sources/eonet.py` `sources/gdelt.py` | event feeds |
-| `sources/windy.py` `sources/tfl.py` | camera inventories and image proxy |
-| `sources/overpass.py` `sources/nominatim.py` | OSM POIs and geocoding |
-| `sources/wikidata.py` `sources/wikipedia.py` | people and place knowledge |
-| `services/store.py` | TTL entity store, change-set emission |
-| `services/hub.py` | WebSocket connection registry and batched fan-out |
-| `services/poller.py` | generic supervised poller task with jittered backoff |
-| `services/registry.py` | enrichment cache keyed by entity identity |
-| `services/classify.py` | military and business-jet classification |
-| `services/search.py` | in-memory search index across live entities |
-| `api/routes_entities.py` | REST snapshots per layer |
-| `api/routes_search.py` | unified search |
-| `api/routes_ws.py` | the single `/ws` multiplex |
-| `api/routes_meta.py` | health, feed status, attribution manifest |
-
-### Frontend, `frontend/src/`
-
-| Path | Responsibility |
-| --- | --- |
-| `main.ts` | bootstrap, wiring only |
-| `globe/viewer.ts` | Cesium viewer construction and render policy |
-| `globe/layers/*.ts` | one module per layer, each owning its primitive collection |
-| `globe/camera.ts` | `flyTo`, follow mode, reduced-motion handling |
-| `net/ws.ts` | WebSocket client, per-frame batching |
-| `net/api.ts` | typed REST client over generated types |
-| `types/api.d.ts` | generated from the committed OpenAPI schema |
-| `ui/search.ts` `ui/card.ts` `ui/layerRail.ts` `ui/attribution.ts` | UI panels |
-| `state/store.ts` `state/url.ts` | selection and layer state, URL sync |
-
-### Contract sharing
-
-`scripts/dump_openapi.py` writes `openapi.json` from the app without starting a server.
-`pnpm codegen` turns it into `frontend/src/types/api.d.ts` via `openapi-typescript`. CI
-regenerates both and fails if they differ from what is committed, so the wire contract
-cannot drift between backend and frontend.
+- A person or organisation resolves to the **assets linked to them**, to social posts, to
+  events and to any other entity class. The globe flies to the join. Every link states its
+  source, its confidence and its as-of date on the card.
+- A profile carries **location as a dated attribute**: residence city or region, business
+  or registered address from a public record, work and education location, and publicly
+  reported appearances that resolve to a place. Every entry states its date and its
+  source, and an entry produced by joining sources is labelled derived rather than
+  reported. Location is a dated series, not a single current value. An undated location
+  fails the contract and is dropped at the adapter and counted. See ADR 006.
+- **A join to a live feed is permitted and produces a dated entry like any other**, with
+  the feed named as its source and the observation time as its date. What it may not do is
+  present an inference as an observation: an owned jet being airborne is a fact about the
+  aircraft, "the owner is aboard" is an inference, and the card says which one it is making
+  and what it rests on.
+- **A join below the confidence threshold is never asserted.** It shows as a possible match
+  with its score and is excluded from every aggregate count. This is the only thing standing
+  between a demo and a false statement about a named person, so it is not tuned down for a
+  better-looking demo.
+- A **wealth tier** is carried on the profile, one per profile, higher tier winning where
+  two apply. It is never inferred from an asset, a position or a track. The tiers are the
+  business vocabulary and the exact terms are in `docs/business-context.md`.
+- Where an owner has opted out via **FAA LADD** or is broadcasting a **privacy ICAO
+  address**, the asset renders as **suppressed with the reason**. Suppression is a
+  demoed feature, not a gap.
+- **A removal request removes and suppresses the record.** Suppression is keyed
+  independently of ingest so the next crawl does not resurrect it, and it is visible in the
+  product with its reason. Same mechanism as LADD suppression above.
+- Owner **addresses** from the FAA registry are not ingested. The join needs the owner
+  *name*; the address is personal data we have no use for, so it is dropped at the
+  adapter. That is data minimisation, which Altrata's own privacy standard calls for.
 
 ---
 
-## Phase 1: vertical slice
+## Chosen sources
 
-**Goal:** prove the whole pipeline end to end with one real feed.
+Verified live on 2026-08-19 unless marked otherwise. Full detail in
+`docs/data-sources.md`.
 
-**Deliverables**
-- uv project, Python 3.13 pinned, `src/tracker` layout, `uv.lock`, ruff, mypy strict.
-- Vite + TypeScript frontend workspace, eslint, vitest.
-- Pre-commit hooks and GitHub Actions CI covering backend and frontend.
-- `StrictModel` base and the `Aircraft` contract, validated against real adsb.lol
-  `/v2/point` responses.
-- Lifespan-managed shared `httpx.AsyncClient`; supervised poller; `/api/aircraft`
-  snapshot; `/ws` fanning out batched deltas.
-- CesiumJS globe on NASA GIBS imagery (no ion token needed), aircraft in a
-  `PointPrimitiveCollection` mutated in place, click-to-select opening a docked card
-  with live fields and last-fix age.
-- `AGENTS.md`, one-line `CLAUDE.md`, `docs/architecture.md`, `docs/data-sources.md`
-  seeded with the verified adsb.lol and GIBS rows, `docs/status.md`, ADR 001.
+| Data class | Source | Auth | Phase |
+| --- | --- | --- | --- |
+| Aircraft live | adsb.lol, failover adsb.fi | none | 1 (done) |
+| Aircraft live (optional) | ADSBExchange | paid key | 3 |
+| Aircraft ownership | FAA Releasable Aircraft Database | none | 5 |
+| Aircraft ownership (lookup) | adsbdb | none | 3 |
+| Vessels live | Fintraffic Digitraffic; aisstream.io for global | none / free key | 2 |
+| Vessel registry | ITU MARS | none | 5 |
+| Satellites | CelesTrak GP + supplemental | none | 2 |
+| Basemap imagery | NASA GIBS WMTS | none | 1 (done) |
+| On-demand imagery | Terrascope WMTS (VITO) | none | 7 |
+| Companies and officers | SEC EDGAR, Companies House | none / free key | 6 |
+| Political donations | FEC OpenFEC | free key | 6 |
+| Nonprofits and foundations | ProPublica Nonprofit Explorer | none | 6 |
+| Places and POIs | Nominatim, Overpass | none | 4, 7 |
+| Cities | GeoNames `cities15000` bulk file | none | 4 |
+| People and organisations (static places) | Wikidata WDQS, Wikipedia REST | none | 6 |
+| Social posts (text) | Mastodon public timelines, OpenStreetMap notes | none | 8 |
+| Social posts (image) | Wikimedia Commons geosearch, Flickr `has_geo` | none / free key | 8 |
+| Geo events | USGS, NASA EONET, GDELT | none | 8 |
+| Cameras | TfL JamCams, US 511, Windy | none / free key | 8 |
+| Reference media | Wikimedia Commons geosearch | none | 8 |
 
-**Sources:** adsb.lol, NASA GIBS.
+### On the four sources you named
 
-**Acceptance**
-1. `uv run pytest` passes, branch coverage ≥ 85% on the backend; CI green on a clean clone.
-2. The app shows real aircraft moving over real imagery within ten seconds, positions
-   updating with no page refresh.
-3. Clicking an aircraft opens a card with callsign, registration, type, altitude, speed.
-4. Stale-data badge logic is proven by a test.
-5. `mypy --strict` and `ruff` clean. No placeholder data anywhere.
-6. The feed parser is hypothesis-tested and tested against recorded real payloads.
-7. ODbL attribution for adsb.lol is visible on screen.
+- **globe.adsbexchange.com** serves the identical readsb `/v2` schema, so it is a
+  drop-in third provider needing no parser work. Two caveats. It has no free tier: the
+  cheapest self-serve plan is $10/month for 10,000 requests, which continuous polling
+  exhausts in about a day. And its terms prohibit publishing or redistributing the data,
+  so serving it to end users needs written permission. It is therefore wired as an
+  **optional, user-supplied-key provider**, with adsb.lol remaining the default.
+  Worth knowing: **ADSBExchange has been owned by JETNET since 2023**, and Altrata
+  already licenses JetNet aircraft ownership data, so a commercial route may already
+  exist internally. Never scrape the globe map itself; its tile endpoints return 403 and
+  scraping is explicitly prohibited.
+- **open-ais.org** turns out to publish **no data feed at all**. It is open-source
+  software for storing and serving AIS you have collected yourself. The live vessel data
+  therefore comes from **Fintraffic Digitraffic**, which is better for our purposes:
+  keyless, no registration, and CC BY 4.0 which explicitly permits commercial use.
+  Global coverage comes from aisstream.io on a free key, with Norwegian Kystverket's
+  raw NMEA stream as a third option.
+- **terrascope.be** works and is keyless. One verified trap: the RESTful tile templates
+  advertised in its own capabilities document return HTTP 400, so it must be consumed in
+  key-value form, which is what Cesium's `WebMapTileServiceImageryProvider` does by
+  default. The tile matrix set is the literal string `EPSG:3857`.
+- **platform.leolabs.space** is entirely commercial, in the region of $2,500 per month
+  per satellite, and its licence would not permit re-serving positions to browsers.
+  Satellite positions come from **CelesTrak** instead, propagated client-side.
+
+---
+
+## Phase 1: vertical slice — COMPLETE
+
+Repo scaffold, strict contracts, live aircraft from adsb.lol with failover, CesiumJS
+globe on NASA GIBS imagery, docked info card, WebSocket fan-out, CI, docs.
+
+**Proven:** 469 backend tests at 98.9% branch coverage, 51 frontend tests, ruff and
+`mypy --strict` clean, the globe renders several hundred real aircraft over real imagery
+and updates without refresh, and provider failover works against both live providers.
 
 ## Phase 2: ships and satellites
 
-**Goal:** add the other two core moving-asset classes.
+**Goal:** the other two moving-asset classes, live.
 
 **Deliverables**
-- aisstream.io WebSocket ingest with auto-reconnect and resubscribe; `Vessel` contract
-  joining `PositionReport` to `ShipStaticData` on MMSI; viewport bounding-box
-  subscription driven by camera idle.
-- CelesTrak poller on a four-to-six hour cadence caching OMM JSON by NORAD ID;
-  `/api/satellites/elements` serving the cache.
+- Fintraffic Digitraffic vessel ingest (keyless, CC BY 4.0) plus aisstream.io WebSocket
+  for global coverage behind the same provider interface; `Vessel` contract joining
+  position reports to static data on MMSI.
+- CelesTrak poller on a four-to-six hour cadence with the two-hour floor enforced in
+  code; `/api/satellites/elements` serving cached OMM.
 - Frontend satellite layer: `satellite.js` SGP4 in a Web Worker, TEME to ECEF via GMST,
-  guard against decayed element sets, orbit trail for the selected satellite.
-- Layer rail with per-layer toggles and live entity counts; ship and satellite cards.
-
-**Sources:** aisstream.io, CelesTrak, adsb.lol.
+  decayed-element guard, orbit trail for the selection.
+- Layer rail with per-layer toggles and live counts; vessel and satellite cards.
 
 **Acceptance**
-1. Ships appear in a coastal viewport within 30 seconds of panning there, with name,
-   type, speed and heading on the card.
-2. The ISS (NORAD 25544) renders within visual tolerance of its published position and
-   moves smoothly at 60fps with 1,000+ satellites loaded.
-3. Killing the aisstream connection triggers reconnect and resubscribe within 15
-   seconds, covered by a test.
-4. CelesTrak is fetched at most once per group per two-hour window, asserted by a test.
-5. All three feeds hold 30fps or better with 5,000 combined live entities.
+1. Ships appear in a coastal viewport within 30 seconds, with name, type, speed, flag.
+2. The ISS renders within visual tolerance of its published position and 1,000+
+   satellites hold 60fps.
+3. Killing the AIS connection reconnects and resubscribes within 15 seconds, tested.
+4. CelesTrak is fetched at most once per group per two hours, asserted by a test.
+5. 5,000 combined live entities hold 30fps or better.
 
-## Phase 3: military, private jets, cross-referencing
+## Phase 3: classification and registry enrichment
 
-**Goal:** classify and enrich, and build the enrichment machinery every later layer reuses.
+**Goal:** classify aircraft and attach ownership, building the enrichment machinery every
+later layer reuses.
 
 **Deliverables**
-- Military layer from adsb.lol `/v2/mil` with automatic failover to adsb.fi `/v2/mil`
-  through the same parser; `dbFlags` bit 1 classification.
-- Business-jet classifier: type-designator allowlist on the `t` field, then cached
-  adsbdb owner and operator lookup separating charter operators from private owners.
-  PIA aircraft (`dbFlags` bit 4) are shown as anonymised by design and never unmasked.
-- Cross-reference service: one enrichment interface keyed on entity identity
-  (hex, MMSI, NORAD ID) merging feed data with registry metadata, per-source cache TTLs.
-- Enriched cards: owner, operator, country, aircraft photo where adsbdb provides one.
-
-**Sources:** adsb.lol, adsb.fi, adsbdb.
+- Military layer from `/v2/mil` with failover; business-jet classification by ICAO type
+  designator; PIA and LADD aircraft rendered as suppressed with the reason.
+- adsbdb lookup keyed on hex or registration, giving owner, operator, type and photo,
+  cached per entity with a TTL.
+- ADSBExchange wired as an optional provider behind a user-supplied key, with its licence
+  constraint recorded in config and docs.
+- Enrichment service: one interface keyed on entity identity, merging feed data with
+  registry metadata. Failure degrades the card to feed-only data, never an error state.
 
 **Acceptance**
-1. The military toggle shows live military aircraft with visual distinction; failover to
-   adsb.fi is proven by a test that kills the primary.
-2. A live business jet is classified and its registered owner shown from a real adsbdb
-   response.
-3. adsbdb lookups are cached; no repeat call for the same hex within a session, asserted.
-4. Enrichment failure degrades the card to feed data with "registry unavailable", never
-   an error state.
-5. The classifier is unit-tested against recorded real payloads covering military,
-   business jet, airline and PIA cases.
+1. A live business jet is classified and shows its registered owner from a real response.
+2. A PIA aircraft renders as suppressed and no code path attempts to resolve it.
+3. Registry lookups are cached; no repeat call for the same hex in a session, asserted.
+4. Failover is proven by a test that kills the primary provider.
 
-## Phase 4: search, fly-to, place geocoding
+## Phase 4: cities, free-text search and fly-to
 
-**Goal:** one search box that finds anything on the globe, plus places.
+**Goal:** the city layer, and one search box that resolves anything, with the camera
+flying to it.
 
 **Deliverables**
-- `/api/search`: fuzzy match across live entity indices (callsign, registration, hex,
-  MMSI, ship name, satellite name, NORAD ID) plus Nominatim place geocoding with a
-  server-side cache and a one-request-per-second throttle.
-- Persistent search box, `Ctrl+K` and `/` focus, results grouped by asset type, `Enter`
-  flies the camera (eased, reduced-motion aware) and opens the card.
-- Follow mode: camera locks to the selected entity, broken by any manual camera input.
-- Keyboard shortcuts (`Esc` deselect, `F` follow, `+`/`-` zoom, `?` overlay) and URL
-  state for camera and layers so views are shareable.
-
-**Sources:** Nominatim, plus all live feeds.
+- **City layer** from the GeoNames `cities15000` bulk file: roughly 26,000 populated
+  places above 15,000 people, with name, country, admin division, population and
+  timezone. A weekly download into a local index, not a poller, because cities do not
+  move. `City` contract keyed on the GeoNames ID. Rendered as labels in a
+  `LabelCollection` with population-banded `distanceDisplayCondition` tiers, so a world
+  view shows capitals and a city view shows towns. This is also the layer that makes an
+  empty ocean view legible, so it ships before search rather than after.
+- `/api/search` resolving, in one query: aircraft (callsign, registration, hex), vessels
+  (name, MMSI, IMO), satellites (name, NORAD ID), cities (name and country, from the
+  local GeoNames index, ranked by population so "London" means the English one), other
+  places (Nominatim, cached and throttled), and later phases' organisations and profiles.
+  Results grouped by type and ranked, served from in-memory indices for live entities.
+  The city index is what keeps Nominatim off the hot path: a city hit never leaves the
+  process.
+- Search box with `Ctrl+K` and `/` focus, grouped typeahead, `Enter` to fly and open the
+  card, reduced-motion aware.
+- Follow mode locking the camera to a moving entity, broken by manual camera input.
+- Keyboard shortcuts and URL state for camera and layers, so any view is shareable.
 
 **Acceptance**
-1. Typing a live callsign, an MMSI or "ISS" returns the entity in under 300ms from local
-   indices, and `Enter` lands the camera on it with the card open.
-2. Searching "Rotterdam" flies to the port; Nominatim is called at most once per unique
-   query thanks to the cache, asserted by a test.
-3. Follow mode tracks a moving aircraft and disengages on user drag.
-4. Copying the URL and opening it in a fresh tab reproduces camera position and layers.
-5. `prefers-reduced-motion` skips the fly-to animation, verified in Playwright.
+1. A live callsign, an MMSI or "ISS" resolves in under 300ms from local indices.
+2. "Rotterdam" flies to the port; Nominatim is called at most once per unique query.
+3. "London" resolves from the local GeoNames index with **zero network calls**, returns
+   the United Kingdom city first, and offers London, Ontario below it. Asserted by a test
+   that fails if any HTTP client is touched.
+4. City labels are readable at country zoom and do not overdraw at street zoom, with the
+   whole 26,000-row layer costing nothing when it is toggled off.
+5. Follow mode tracks a moving aircraft and disengages on drag.
+6. Copying the URL into a fresh tab reproduces camera and layers.
 
-## Phase 5: geo-events and public cameras
+## Phase 5: asset ownership spine
 
-**Goal:** the "what is happening here" layers.
+**Goal:** the ownership dataset that makes profile enrichment possible.
 
 **Deliverables**
-- Unified `GeoEvent` contract (source, timestamp, point, title, url, licence) with
-  pollers: USGS every two minutes, EONET hourly, GDELT every fifteen minutes with 429
-  backoff.
-- Camera layer: Windy Webcams v3 by viewport bounding box plus a TfL JamCams inventory
-  refreshed daily; camera card shows the still or video proxied through the backend with
-  a short cache.
-- Event styling: magnitude-scaled earthquake markers, EONET category icons, GDELT
-  density labelled "news coverage locations".
-- Attribution updated for GDELT, USGS, NASA EONET, TfL ("Powered by TfL Open Data"),
-  Windy.
-
-**Sources:** USGS, NASA EONET, GDELT GEO 2.0, Windy Webcams, TfL JamCams.
+- FAA Releasable Aircraft Database ingest: nightly download, `MASTER.txt` keyed on the
+  **Mode S hex code column**, which joins directly to ADS-B with no derivation, left
+  joined to `ACFTREF.txt` for make and model. Roughly 316,000 US aircraft, public domain.
+  Owner **name** and type only; owner addresses are dropped at the adapter.
+- Canadian CCARCS and Australian CASA registers as secondary registries, both carrying
+  Mode S codes.
+- ITU MARS vessel registry lookup from MMSI to name, flag and tonnage.
+- `AssetOwnership` contract linking an owner (person or organisation) to an asset, with
+  the source, the confidence and the as-of date on every link.
 
 **Acceptance**
-1. A real earthquake from the last hour renders within one poll cycle with magnitude,
-   depth and the USGS link on its card.
-2. A London viewport shows JamCams whose stills refresh and whose availability flag is
-   respected. No frozen JPEG is ever presented as live.
-3. Windy image URLs are fetched fresh, respecting the ten-minute token expiry, never
-   cached beyond validity, asserted by a test.
-4. The GDELT layer is visibly labelled as coverage geography and has no code path that
-   accepts a person name as input.
-5. Each poller honours its cadence under test.
+1. A live aircraft in view resolves to its FAA-registered owner with no network call at
+   request time (the registry is local).
+2. No owner address is present anywhere in the store, the API or the database, asserted
+   by a test that scans the contract fields.
+3. LADD-suppressed and PIA aircraft are excluded from ownership resolution by design.
 
-## Phase 6: people knowledge layer
+## Phase 6: profiles, organisations and the join
 
-**Goal:** search notable public figures and organisations and fly to their static public
-association places, scoped so private-individual tracking is impossible by construction.
+**Goal:** the enrichment demo. Search a name, get the profile and its linked assets.
 
 **Deliverables**
-- Search via `wbsearchentities` filtered to entities holding a Wikipedia sitelink;
-  server-side SPARQL hydration restricted to the property allowlist (P19, P20, P159,
-  P937, P69, P7153 resolved via P625), excluding P551 and raw coordinates on living
-  humans, cached with scheduled re-sync.
-- Person card: Wikipedia REST summary (image, extract, article link),
-  relationship-labelled pins ("Born in Ulm"), provenance and licence lines
-  (Wikidata CC0, Wikipedia CC BY-SA 4.0), report control.
-- Rate limiting on repeated same-name searches with abuse-monitoring logs only. No
-  per-person history view exists.
-- Privacy notice page, written legitimate-interests assessment and DPIA under `docs/`.
-
-**Sources:** Wikidata, Wikipedia REST.
+- `Profile` and `Organisation` contracts shaped to Altrata's unified model: persistent
+  IDs, employment and board history, education, philanthropy, and a **wealth tier**. The
+  tier is an enum with exactly the business values (Confirmed UHNW, Likely UHNW, Confirmed
+  VHNW, Likely VHNW, HNW), one per profile, higher tier winning where two apply, matching
+  how the platform derives it from the Wealth-X dossier category. Definitions and
+  thresholds in `docs/business-context.md`. A public source that does not support a tier
+  leaves it unset; no tier is estimated from an asset.
+- Public profile sources: SEC EDGAR (officers, directors, insider holdings from Form 4
+  and DEF 14A), Companies House (officers and persons with significant control), FEC
+  Schedule A (donor name, employer, occupation), ProPublica Nonprofit Explorer
+  (trustees, foundation assets).
+- **Entity resolution** joining an FAA owner name to a profile or organisation. Fuzzy by
+  necessity, so: blocked candidate generation, scored matching, and a confidence
+  threshold below which **no link is asserted**. Low-confidence candidates are shown as
+  "possible match" with the score, never merged. Altrata's own Jira documents chimera
+  profiles (attributes of several people wrongly merged) as a live production problem,
+  so this is deliberately conservative.
+- **Organisation locations.** One pin per site, from Wikidata `P159` (headquarters
+  location) and the Companies House registered office, snapped to the phase 4 city index
+  for the label. An organisation with three offices draws three pins, each with the source
+  and the as-of date on it. A registered office is a public filing about a company, which
+  is why it is in and a person's address is not.
+- **Person locations.** Static public associations only: place of birth, place of death,
+  place of education, place of work. Each pin states the relationship in words ("Born in
+  Ulm, per Wikidata") with a link to the source and a report control beside it. ADR 004
+  lifted ADR 002's seven-property allowlist and permits scraped and crowd-sourced person
+  data, and ADR 006 makes location a dated profile attribute, so the constraint is now the
+  tense rather than the source: a dated public association or residence can produce a pin,
+  a present-tense whereabouts cannot, whatever the source. Every other pin a person gets comes from an asset they own, and that
+  pin is the asset's position, labelled as the asset.
+- Profile card: identity, wealth tier, roles, linked assets with live status, dated
+  location entries with derived ones labelled as such, and a provenance line per fact
+  naming its source and date.
+- **The US privacy position**, per ADR 006: which state laws reach the population, how
+  access and deletion requests are served inside the statutory windows, and whether data
+  broker registration applies. Replaces the UK GDPR paperwork previously listed here, which
+  was the wrong instrument for a US population and US customers. Still a blocker on any
+  public deployment carrying real profiles.
+- **Removal and suppression**, per ADR 006: a removal request drops the record and keeps a
+  suppression key that survives re-ingest, shown in the product with its reason.
 
 **Acceptance**
-1. Searching a Wikipedia-notable figure returns allowlisted place pins, each labelled
-   with its relationship. Searching a random private name returns no map result.
-2. A test proves P551 and living-human raw coordinates can never reach the renderer even
-   if present in a SPARQL response.
-3. No person card shows a timestamp, a current location or any live-feed data. Person
-   search and GDELT share no code path, asserted structurally by a test.
-4. Upstream Wikidata deletion propagates on the next sync, covered by a test.
-5. WDQS etiquette enforced: descriptive User-Agent, server-side caching, no SPARQL per
-   keystroke.
+1. Searching an organisation returns its registered aircraft, and the globe flies to one
+   that is currently airborne.
+2. Every asset-to-owner link displays its confidence and its source.
+3. A link below the confidence threshold is displayed as unconfirmed and is excluded
+   from any aggregate count, asserted by a test.
+4. A profile joined to a live feed shows the join with the feed as its source and the
+   observation time as its date, and any inference drawn from it is labelled as an
+   inference. Asserted by a test, per ADR 007.
+5. Every location entry on a profile carries a date. An undated one is dropped at the
+   adapter and counted, asserted by a test.
 
-## Phase 7: imagery, POIs, 3D buildings
+## Phase 7: imagery, POIs and 3D buildings
 
 **Goal:** depth for the globe itself.
 
 **Deliverables**
-- Imagery picker: GIBS daily true-colour wired to the timeline date, EOX Sentinel-2
-  cloudless as a static base option, defaulting to yesterday's GIBS layer.
-- Cesium OSM Buildings via an ion token, loaded past a zoom threshold with tuned
-  `maximumScreenSpaceError` and a tile cache cap.
-- POI layer: backend Overpass queries by tile with a persistent cache, category-filtered
-  (airports, ports, stations, landmarks), POI cards with OSM attribution.
+- Imagery picker: NASA GIBS daily true colour wired to the timeline date, Terrascope
+  WMTS layers (key-value form, `EPSG:3857` matrix set), EOX Sentinel-2 cloudless as a
+  static option.
+- Cesium OSM Buildings past a zoom threshold, with tuned screen-space error, degrading
+  cleanly when no ion token is configured.
+- Overpass POI layer by tile with a persistent backend cache, category filtered.
 - Wikipedia geosearch "nearby" panel for the current view.
 
-**Sources:** NASA GIBS, EOX Sentinel-2 cloudless, Cesium ion OSM Buildings, Overpass,
-Wikipedia geosearch.
-
 **Acceptance**
-1. Scrubbing the timeline date swaps GIBS imagery to that day's tiles.
-2. Zooming into London streams 3D buildings without dropping below 30fps, with screen
-   space error tunable in settings.
-3. Overpass is never called from the browser, and repeated views of the same tile hit the
-   backend cache, asserted by a test.
-4. All attributions render: GIBS acknowledgement, EOX CC-BY, OSM contributors, Cesium ion.
-5. The app still works with the buildings layer off and no ion token configured.
+1. Scrubbing the timeline date swaps imagery to that day's tiles.
+2. London streams 3D buildings without dropping below 30fps.
+3. Overpass is never called from the browser and repeat views hit the cache, asserted.
+4. Every attribution renders. The app works fully with no ion token.
 
-## Phase 8: scale, replay, polish
+## Phase 8: events, social posts, cameras and pattern intelligence
 
-**Goal:** hold frame rate at full load, add history replay, finish accessibility.
+**Goal:** context layers, and the aggregate signal that is the commercial story.
 
 **Deliverables**
-- Performance pass: all feed parsing in Web Workers with transferable typed arrays,
-  batched per-frame updates, clustering at low zoom, `distanceDisplayCondition` LOD
-  tiers, `requestRenderMode` audit, optional high-DPI toggle.
-- Track history: backend retains a rolling window of positions per entity; timeline
-  scrubbing replays recorded tracks via `SampledPositionProperty`; satellite replay via
-  clock multiplier.
-- Accessibility completion: entity list panel as the canvas alternative, focus
-  management, contrast audit, shortcut overlay, reduced-motion coverage.
-- Ops polish: per-layer loading counts rather than a global spinner, per-source
-  stale-feed banners, dark theme consistency pass, Playwright suite covering search,
-  fly-to, cards, replay and layer toggles.
+- **Social post layer.** One `SocialPost` contract covering text and image posts, with a
+  `location_basis` field that is the point of the whole layer: `upstream` where the source
+  gave us a coordinate, `derived` where we resolved it from the words. Sources, all
+  server-side and cached: OpenStreetMap notes (crowd-sourced text at a real coordinate,
+  keyless, `upstream`), Wikimedia Commons geosearch (images with coordinates and a
+  per-file licence, `upstream`), Mastodon public timelines (text and attached media, no
+  coordinate in the payload at all, so `derived` by gazetteer match against the phase 4
+  city index, never a general geocode per post), and Flickr `has_geo` on a free key with a
+  licence filter (`upstream`). Media is proxied and cached, never hot-linked, and an image
+  without a determinable licence is dropped rather than shown.
+- **The rules the layer ships with**, each asserted by a test: a `derived` post renders as
+  "location mentioned in the text" with the phrase it matched, and is never presented as an
+  observed position; a post is a fixed event with a timestamp, so two posts by one handle
+  are never drawn as a path; and a post joined to a person or organisation record carries
+  the join's source, confidence and date like any other join. Joining is permitted, per
+  ADR 007. Full reasoning on the derived-versus-upstream split in ADR 005.
+- Unified `GeoEvent` contract with pollers: USGS every two minutes, EONET hourly, GDELT
+  every fifteen minutes with backoff. GDELT is labelled "news coverage location".
+- Camera layer from TfL JamCams and US 511 programmes (both keyless and
+  coordinate-complete) plus Windy on a free key, images proxied and cached, availability
+  flags respected so no frozen frame is presented as live.
+- Wikimedia Commons geosearch for reference imagery of a location.
+- **Pattern intelligence**: rolling track history per asset, frequented airfields and
+  marinas, wealth-hub corridors, and event-window correlation such as inbound traffic to
+  a hub during a known event. Aggregated across assets, never pinpointing a person.
 
 **Acceptance**
-1. 30fps or better with 20,000 combined live entities and all layers on, measured and
-   recorded in `docs/status.md`.
-2. Scrubbing 30 minutes back replays real recorded aircraft and ship tracks; a LIVE
-   button snaps back to now.
-3. Playwright suite green in CI including a WebGL smoke test; axe-core reports no
-   critical violations on the UI shell.
-4. A hidden tab means zero render loop activity; idle scene GPU usage near zero.
-5. Every feed shows a visible degraded-state banner within twice its poll interval when
-   its upstream is down, covered by a test.
+1. A real earthquake from the last hour renders within one poll cycle.
+2. London cameras refresh and unavailable cameras are marked, not frozen.
+3. Each poller honours its documented cadence under test.
+4. A portfolio of assets produces a corridor ranking from real recorded tracks.
+5. A real OpenStreetMap note and a real Commons image both render with their own
+   attribution, and a Mastodon post from a real public timeline renders with
+   `location_basis: derived` and the words "location mentioned in the text" on the card.
+6. A post joined to a profile displays the join's source, confidence and date, and a
+   sub-threshold join shows as a possible match and is absent from every count. Asserted by
+   a test.
+7. An image record with no determinable licence is dropped and counted, asserted against a
+   recorded payload.
+8. A Mastodon instance answering 401, 403 or 422 is dropped for the cycle and the feed
+   stays healthy, asserted. `mastodon.social` already behaves this way.
+
+## Phase 9: scale, replay and polish
+
+**Goal:** hold frame rate at full load, add replay, finish accessibility.
+
+**Deliverables**
+- Feed parsing in Web Workers with transferable typed arrays, clustering at low zoom,
+  level-of-detail tiers, `requestRenderMode` audit.
+- Track replay via the timeline, with a LIVE snap-back.
+- Accessibility completion: entity list as the canvas alternative, focus management,
+  contrast audit, shortcut overlay, reduced-motion coverage, axe-core in CI.
+- Per-source degraded banners, and a Playwright suite covering search, fly-to, cards,
+  replay and layer toggles.
+
+**Acceptance**
+1. 30fps or better with 20,000 combined live entities, measured and recorded.
+2. Scrubbing back replays real recorded tracks.
+3. Playwright green in CI including a WebGL smoke test; no critical axe violations.
+4. A hidden tab does zero render work.
+5. Every feed shows a degraded banner within twice its poll interval when upstream is
+   down, covered by a test.

@@ -14,6 +14,7 @@ from tracker.config import get_settings
 
 
 def main() -> None:
+    """Run the server with the host, port and log level taken from settings."""
     settings = get_settings()
     logging.basicConfig(
         level=logging.INFO,

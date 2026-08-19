@@ -38,6 +38,7 @@ class StoreChanges[T]:
 
     @property
     def is_empty(self) -> bool:
+        """Whether nothing at all changed since the last take."""
         return not self.upserted and not self.removed
 
 
@@ -67,10 +68,12 @@ class EntityStore[T]:
         self._pending_removals.discard(key)
 
     def upsert_many(self, items: Iterable[tuple[str, T]]) -> None:
+        """Insert or update several entities in one pass."""
         for key, value in items:
             self.upsert(key, value)
 
     def get(self, key: str) -> T | None:
+        """One entity by key, or ``None`` when the store does not hold it."""
         tracked = self._entities.get(key)
         return None if tracked is None else tracked.value
 
@@ -79,6 +82,7 @@ class EntityStore[T]:
         return tuple(tracked.value for tracked in self._entities.values())
 
     def keys(self) -> frozenset[str]:
+        """The keys of every entity currently held."""
         return frozenset(self._entities)
 
     def __len__(self) -> int:

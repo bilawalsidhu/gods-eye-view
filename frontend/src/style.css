@@ -1,0 +1,211 @@
+/*
+ * Dark operational theme.
+ *
+ * Chrome is greyscale. Every saturated colour in here belongs to an entity class or an
+ * alert, so a red thing on screen always means something. Text pairs are checked against
+ * the panel background at 4.5:1 or better, and focus is always visible: both are gates
+ * for this project rather than polish.
+ */
+
+:root {
+  --bg: #05080c;
+  --panel: #0e141b;
+  --panel-edge: #1e2833;
+  --text: #e6edf3;
+  --text-muted: #a8b6c4;
+  --accent: #7cc4ff;
+  --live: #7ee081;
+  --warning: #ffc65c;
+  --error: #ff8a8a;
+  --panel-shadow: 0 2px 18px rgb(0 0 0 / 55%);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+  overflow: hidden;
+}
+
+#globe {
+  position: fixed;
+  inset: 0;
+  display: block;
+}
+
+/* Cesium's own credit line sits bottom left; ours sits above it rather than over it. */
+.cesium-widget-credits {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: #17202b;
+  border: 1px solid var(--panel-edge);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #1f2a37;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ status */
+
+.status {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  max-width: 22rem;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  box-shadow: var(--panel-shadow);
+}
+
+.status-line {
+  margin: 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.status-line[data-level="live"] {
+  color: var(--live);
+}
+
+.status-line[data-level="warning"] {
+  color: var(--warning);
+}
+
+.status-line[data-level="error"] {
+  color: var(--error);
+}
+
+/* ------------------------------------------------------------------ card */
+
+.card {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  width: min(23rem, calc(100vw - 24px));
+  overflow-y: auto;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  box-shadow: var(--panel-shadow);
+}
+
+.card[hidden] {
+  display: none;
+}
+
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.card-title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.card-subtitle {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* Alerts get the only red on screen, plus a bar so the state is not colour alone. */
+.card-alert {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  color: var(--error);
+  font-weight: 600;
+  background: #2a0f12;
+  border-left: 4px solid var(--error);
+  border-radius: 3px;
+}
+
+.card-age {
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.card-age[data-severity="amber"] {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.card-age[data-severity="red"] {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.card-fields {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  gap: 6px 10px;
+  margin: 14px 0 0;
+}
+
+.card-fields dt {
+  color: var(--text-muted);
+}
+
+.card-fields dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.card-credit {
+  margin-top: 16px;
+  padding-top: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  border-top: 1px solid var(--panel-edge);
+}
+
+/* ------------------------------------------------------------------ attribution */
+
+.attribution {
+  position: fixed;
+  bottom: 26px;
+  left: 12px;
+  margin: 0;
+  padding: 6px 10px;
+  list-style: none;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+}
+
+.attribution-licence {
+  color: var(--text-muted);
+}

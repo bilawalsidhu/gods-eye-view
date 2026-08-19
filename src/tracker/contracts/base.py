@@ -12,14 +12,7 @@ domain. That mapping is the only place provider quirks are allowed to exist.
 from datetime import UTC, datetime
 from typing import Annotated, Any, TypeVar
 
-from pydantic import (
-    AfterValidator,
-    BaseModel,
-    ConfigDict,
-    Field,
-    TypeAdapter,
-    ValidationError,
-)
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 
 def _require_utc(value: datetime) -> datetime:
@@ -30,7 +23,8 @@ def _require_utc(value: datetime) -> datetime:
     a fix an hour in the future. Every timestamp in the domain carries an offset.
     """
     if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
-        raise ValueError("timestamp must be timezone-aware; naive datetimes are ambiguous")
+        msg = "timestamp must be timezone-aware; naive datetimes are ambiguous"
+        raise ValueError(msg)
     return value.astimezone(UTC)
 
 

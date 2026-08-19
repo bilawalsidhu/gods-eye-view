@@ -121,14 +121,28 @@ contracts exist and `/ws` is mounted (`src/tracker/api/routes_ws.py:31`), but no
 test has been observed driving it, so the fan-out path is unproven end to end. That covers
 snapshot-on-connect, per-interval batching and slow-client dropping.
 
-**Only the aircraft layers exist.** Vessels, satellites, events, cameras, places, POIs,
-buildings and the people layer are all later phases. `/api/capabilities` already reports
-them as unavailable with the reason, which is the honest degradation path working, but
-there is no code behind them.
+**Only the aircraft layers exist.** One of the seven entity classes out of seven. Vessels
+and satellites (phase 2), cities (phase 4), organisations and people (phase 6) and social
+posts (phase 8) have no code behind them, and nor do events, cameras, POIs or buildings.
+`/api/capabilities` already reports them as unavailable with the reason, which is the
+honest degradation path working.
+
+**Six new sources were called and recorded but nothing consumes them yet.** On 2026-08-19
+the GeoNames city file, Wikidata WDQS, Wikimedia Commons geosearch, the OpenStreetMap
+notes API and a Mastodon public timeline all answered successfully and are now in the
+verified table in `docs/data-sources.md`. Two negatives worth the same weight:
+`mastodon.social` no longer serves its public timeline anonymously (HTTP 422) while
+`mas.to` does, and Bluesky's `searchPosts` answered HTTP 403 from this network. No adapter
+exists for any of them.
 
 **Single worker only.** Pollers start in the lifespan, so a second uvicorn worker would
 duplicate every upstream request. `__main__.py:27` pins `workers=1`. Horizontal scaling
 needs a cross-process lock first.
+
+**The commercial join does not exist yet.** No profile, no wealth tier, no ownership link.
+What runs is raw aircraft positions. The profile-to-asset join that carries the commercial
+story (`docs/business-context.md`) starts at phase 5, so nothing here demonstrates the
+product yet.
 
 **Not licensed for commercial deployment.** adsb.fi is non-commercial and is the aircraft
 failover. Full audit in `docs/data-sources.md`.
@@ -154,4 +168,6 @@ In order.
 5. **Get CI green** on both halves plus the OpenAPI drift check, so the claims in this
    document stop depending on one laptop.
 6. **Then phase 2:** aisstream ships and CelesTrak satellites, per
-   `docs/plan/implementation-plan.md`.
+   `docs/plan/implementation-plan.md`. Then cities in phase 4, organisations and people in
+   phase 6, social posts in phase 8. All seven entity classes are now planned, sourced and
+   documented; five of them have nothing written yet.

@@ -47,7 +47,7 @@ def test_icao24_pattern_accepts_lowercase_six_hex_digits(good: str) -> None:
 
 def test_icao24_is_required() -> None:
     with pytest.raises(ValidationError):
-        Aircraft(  # type: ignore[call-arg]
+        Aircraft(  # type: ignore[call-arg]  # ty: ignore[missing-argument]
             point=Point(lon=0.0, lat=0.0),
             observed_at=REFERENCE_TIME,
             position_age_s=0.0,
@@ -132,7 +132,7 @@ def test_aircraft_is_frozen() -> None:
     aircraft = make_aircraft()
 
     with pytest.raises(ValidationError) as caught:
-        aircraft.callsign = "OTHER"  # type: ignore[misc]
+        aircraft.callsign = "OTHER"  # type: ignore[misc]  # ty: ignore[invalid-assignment]
 
     assert caught.value.errors()[0]["type"] == "frozen_instance"
 
@@ -141,7 +141,7 @@ def test_aircraft_point_is_frozen_too() -> None:
     aircraft = make_aircraft()
 
     with pytest.raises(ValidationError):
-        aircraft.point.lon = 12.0  # type: ignore[misc]
+        aircraft.point.lon = 12.0  # type: ignore[misc]  # ty: ignore[invalid-assignment]
 
 
 def test_aircraft_forbids_an_unknown_field() -> None:
@@ -152,7 +152,7 @@ def test_aircraft_forbids_an_unknown_field() -> None:
             observed_at=REFERENCE_TIME,
             position_age_s=0.0,
             source="adsb.lol",
-            wake_category="M",
+            wake_category="M",  # ty: ignore[unknown-argument]
         )
 
     assert caught.value.errors()[0]["type"] == "extra_forbidden"
@@ -290,7 +290,7 @@ def test_numeric_bounds_are_enforced(field: str, value: float) -> None:
     kwargs[field] = value
 
     with pytest.raises(ValidationError) as caught:
-        Aircraft(**kwargs)  # type: ignore[arg-type]
+        Aircraft(**kwargs)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
 
     assert any(error["loc"] == (field,) for error in caught.value.errors())
 

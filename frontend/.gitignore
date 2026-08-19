@@ -1,0 +1,6 @@
+# Frontend build and test output. Kept here rather than in the repository root .gitignore
+# so the backend and the frontend do not have to edit the same file.
+coverage/
+playwright-report/
+test-results/
+.playwright/

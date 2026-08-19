@@ -63,11 +63,13 @@ class Attribution:
 
 
 def get_state(request: Request) -> AppState:
+    """The application state attached at startup, as a FastAPI dependency."""
     state: AppState = request.app.state.tracker
     return state
 
 
 def get_settings_dep(request: Request) -> Settings:
+    """Settings read off the application state, as a FastAPI dependency."""
     return get_state(request).settings
 
 

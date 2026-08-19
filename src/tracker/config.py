@@ -107,14 +107,17 @@ class Settings(BaseSettings):
 
     @property
     def ship_layer_available(self) -> bool:
+        """Whether the aisstream key is set, which the ship layer needs."""
         return bool(self.aisstream_api_key)
 
     @property
     def camera_layer_available(self) -> bool:
+        """Whether at least one camera provider key is set."""
         return bool(self.windy_api_key or self.tfl_app_key)
 
     @property
     def buildings_layer_available(self) -> bool:
+        """Whether the Cesium ion token is set, which the buildings tileset needs."""
         return bool(self.cesium_ion_token)
 
     @property

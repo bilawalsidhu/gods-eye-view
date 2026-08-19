@@ -65,7 +65,7 @@ def test_point_is_frozen() -> None:
     point = Point(lon=1.0, lat=2.0)
 
     with pytest.raises(ValidationError):
-        point.lon = 3.0  # type: ignore[misc]
+        point.lon = 3.0  # type: ignore[misc]  # ty: ignore[invalid-assignment]
 
 
 # ---------------------------------------------------------------- distance

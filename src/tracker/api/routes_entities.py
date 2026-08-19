@@ -70,7 +70,7 @@ def _first_error(exc: ValidationError) -> str:
     return errors[0]["msg"] if errors else "invalid bounding box"
 
 
-@router.get("/aircraft", response_model=AircraftSnapshot)
+@router.get("/aircraft")
 async def list_aircraft(
     state: StateDep,
     *,
@@ -100,7 +100,7 @@ async def get_aircraft(state: StateDep, icao24: str) -> Aircraft | None:
     return state.aircraft.get(key) or state.military.get(key)
 
 
-@router.get("/layers", response_model=LayerSummary)
+@router.get("/layers")
 async def layer_summary(state: StateDep) -> LayerSummary:
     """Entity counts per layer plus upstream health, for the layer rail."""
     return LayerSummary(

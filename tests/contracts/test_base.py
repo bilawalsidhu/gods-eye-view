@@ -89,7 +89,7 @@ def test_utc_datetime_accepts_an_iso_string_in_json_mode() -> None:
 
 def test_strict_model_forbids_extra_fields() -> None:
     with pytest.raises(ValidationError) as caught:
-        _Numbers(value=1.0, surprise=2)  # type: ignore[call-arg]
+        _Numbers(value=1.0, surprise=2)  # type: ignore[call-arg]  # ty: ignore[unknown-argument]
 
     assert caught.value.errors()[0]["type"] == "extra_forbidden"
 
@@ -98,7 +98,7 @@ def test_strict_model_is_frozen() -> None:
     model = _Numbers(value=1.0)
 
     with pytest.raises(ValidationError) as caught:
-        model.value = 2.0  # type: ignore[misc]
+        model.value = 2.0  # type: ignore[misc]  # ty: ignore[invalid-assignment]
 
     assert caught.value.errors()[0]["type"] == "frozen_instance"
 
@@ -120,7 +120,7 @@ def test_strict_model_rejects_bool_for_int() -> None:
 
 def test_strict_model_rejects_a_numeric_string() -> None:
     with pytest.raises(ValidationError):
-        _Numbers(value="1.0")  # type: ignore[arg-type]
+        _Numbers(value="1.0")  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
 
 
 def test_strict_model_accepts_an_int_for_a_float() -> None:
@@ -183,7 +183,7 @@ def test_wire_model_is_frozen() -> None:
     model = _Loose(known="x")
 
     with pytest.raises(ValidationError):
-        model.known = "y"  # type: ignore[misc]
+        model.known = "y"  # type: ignore[misc]  # ty: ignore[invalid-assignment]
 
 
 def test_wire_model_still_requires_its_declared_fields() -> None:

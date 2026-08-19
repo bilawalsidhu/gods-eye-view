@@ -49,7 +49,7 @@ class Health(StrictModel):
 router = APIRouter(prefix="/api", tags=["meta"])
 
 
-@router.get("/health", response_model=Health)
+@router.get("/health")
 async def health(state: StateDep) -> Health:
     """Liveness and upstream feed health.
 
@@ -64,7 +64,7 @@ async def health(state: StateDep) -> Health:
     )
 
 
-@router.get("/capabilities", response_model=Capabilities)
+@router.get("/capabilities")
 async def capabilities(state: StateDep) -> Capabilities:
     """Which layers this deployment can serve, and the attributions it must display.
 

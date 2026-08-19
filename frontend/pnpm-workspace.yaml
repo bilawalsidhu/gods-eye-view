@@ -1,0 +1,9 @@
+# Two packages ship a platform binary through a postinstall script, so both are allowed
+# to run theirs. Everything else stays blocked.
+#
+# esbuild: Vite's dev server and build both need it.
+# unrs-resolver: the native module behind eslint-import-resolver-typescript. Without its
+# binary, `import-x/no-cycle` cannot resolve a single import and every import rule fails.
+allowBuilds:
+  esbuild: true
+  unrs-resolver: true

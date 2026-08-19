@@ -86,14 +86,17 @@ class BoundingBox(StrictModel):
     @model_validator(mode="after")
     def _check_latitudes(self) -> Self:
         if self.south > self.north:
-            raise ValueError(f"south ({self.south}) must not exceed north ({self.north})")
+            msg = f"south ({self.south}) must not exceed north ({self.north})"
+            raise ValueError(msg)
         return self
 
     @property
     def crosses_antimeridian(self) -> bool:
+        """Whether the box wraps past 180 degrees, leaving west numerically east of east."""
         return self.west > self.east
 
     def contains(self, point: Point) -> bool:
+        """Whether a point falls inside the box, wrap across the antimeridian included."""
         if not (self.south <= point.lat <= self.north):
             return False
         if self.crosses_antimeridian:

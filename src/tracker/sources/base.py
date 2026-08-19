@@ -88,7 +88,11 @@ class PollingSource(Protocol):
     """
 
     @property
-    def name(self) -> str: ...
+    def name(self) -> str:
+        """Short identifier for this feed, used in health output and logs."""
+        ...
 
     @property
-    def min_interval_seconds(self) -> float: ...
+    def min_interval_seconds(self) -> float:
+        """The provider's documented polling floor, in seconds."""
+        ...

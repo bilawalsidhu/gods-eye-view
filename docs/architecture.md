@@ -2,8 +2,13 @@
 
 How a byte gets from a public feed to a pixel on the globe, and why each hop exists.
 
-Companion documents: `docs/data-sources.md` for feed facts, `docs/status.md` for what is
-actually running, `docs/decisions/` for the choices behind all of this.
+Companion documents: `docs/business-context.md` for why the product exists commercially
+and the wealth tiers it serves, `docs/data-sources.md` for feed facts, `docs/status.md`
+for what is actually running, `docs/decisions/` for the choices behind all of this.
+
+The commercial shape in one line: a wealth profile joins to the assets linked to it, and
+those assets are what moves on the globe. The pipeline below is how an asset gets there.
+Wealth tiers ride on the profile and are never derived from a position.
 
 ## The short version
 
@@ -12,6 +17,36 @@ boundary, keeps live entities in an in-memory store with a time to live, and pus
 batched changes to browsers over a single WebSocket. The browser renders with CesiumJS
 using one primitive collection per layer and mutates positions in place. Satellites are
 the one thing propagated in the browser rather than fetched.
+
+## What the globe can put a pin on
+
+Seven entity classes: aircraft, vessels, satellites, cities, organisations, people and
+social posts. One contract module and one layer each. The table in
+`docs/plan/implementation-plan.md` gives the contract, the position source and the phase
+for each one, and nothing renders that is not on it.
+
+Three of them move and four do not, and that split matters more than it sounds, because
+only the movers belong in the flow described below.
+
+## Three storage shapes, not one
+
+The TTL store and the poller are for live movers. Two other shapes exist and using the
+wrong one is a design error rather than an inefficiency.
+
+**Live movers** (aircraft, vessels) go through a poller into an `EntityStore` with a time
+to live, and expire when the feed stops reporting them. Satellites are the same class of
+thing with the propagation moved to the browser, described below.
+
+**Static reference data** (cities, and the orbital element sets behind satellites) is a
+periodic bulk load into a local index that is read in-process and never expires. Cities do
+not stop existing between polls, so a TTL would be a bug. The GeoNames city file is
+downloaded weekly and 26,000 rows are held in memory, which is also what keeps place
+search off the network entirely.
+
+**Fetched-and-cached records** (social posts, organisation and person records, registry
+lookups, camera images) are pulled on demand or on a slow cycle, cached server-side with
+their own expiry, and are not part of the WebSocket delta stream. A social post is a fixed
+event with a timestamp: it never updates, it never moves, and it is never dead-reckoned.
 
 ## Data flow, in order
 

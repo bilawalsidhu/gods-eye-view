@@ -53,6 +53,7 @@ class PollerHealth:
     rate_limited_until: datetime | None = None
 
     def to_contract(self) -> FeedHealth:
+        """This record as the public :class:`FeedHealth` contract."""
         return FeedHealth(
             source=self.source,
             layer=self.layer,
@@ -87,7 +88,8 @@ class Poller:
 
     def __post_init__(self) -> None:
         if self.min_interval_seconds <= 0:
-            raise ValueError("min_interval_seconds must be positive")
+            msg = "min_interval_seconds must be positive"
+            raise ValueError(msg)
         self.health = PollerHealth(
             source=self.name,
             layer=self.layer,
@@ -104,8 +106,10 @@ class Poller:
         return max(self.interval_seconds, self.min_interval_seconds)
 
     def start(self) -> None:
+        """Start the poll loop, raising if this poller is already running."""
         if self._task is not None and not self._task.done():
-            raise RuntimeError(f"poller {self.name} is already running")
+            msg = f"poller {self.name} is already running"
+            raise RuntimeError(msg)
         self._stopping.clear()
         self._task = asyncio.create_task(self._run(), name=f"poller:{self.name}")
 
@@ -153,7 +157,7 @@ class Poller:
             self.health.rate_limited_until = self._not_before
             _log.warning("%s: %s", self.name, exc)
             return True
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - supervised loop must survive any upstream fault
             self.health.healthy = False
             self.health.consecutive_failures += 1
             self.health.total_failures += 1
@@ -191,7 +195,10 @@ class Poller:
         if self._not_before is not None:
             remaining = (self._not_before - datetime.now(UTC)).total_seconds()
             base = max(base, remaining)
-        return max(0.0, base) * (1.0 + random.uniform(-JITTER_FRACTION, JITTER_FRACTION))
+        # Jitter spreads poller wake-ups apart. It is not a security decision, so the
+        # standard generator is the right tool.
+        jitter = random.uniform(-JITTER_FRACTION, JITTER_FRACTION)  # noqa: S311
+        return max(0.0, base) * (1.0 + jitter)
 
     async def _run(self) -> None:
         """The supervised loop.
@@ -220,17 +227,21 @@ class PollerGroup:
         self._pollers: list[Poller] = pollers or []
 
     def add(self, poller: Poller) -> Poller:
+        """Register a poller and hand it straight back, so wiring can chain."""
         self._pollers.append(poller)
         return poller
 
     def start_all(self) -> None:
+        """Start every registered poller."""
         for poller in self._pollers:
             poller.start()
 
     async def stop_all(self) -> None:
+        """Stop every poller at once, ignoring an individual failure to stop."""
         await asyncio.gather(*(p.stop() for p in self._pollers), return_exceptions=True)
 
     def health(self) -> tuple[FeedHealth, ...]:
+        """One health record per registered poller."""
         return tuple(p.health.to_contract() for p in self._pollers)
 
     def __len__(self) -> int:

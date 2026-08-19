@@ -3,10 +3,23 @@
 **Date:** 2026-08-19
 **Status:** approved for implementation
 **Type:** architectural (new project)
+**Amended by:** ADR 004 (scraped and crowd-sourced data permitted, section 8's
+official-sources rule and property allowlist lifted), ADR 005 (the social post layer and its
+upstream-versus-derived location split), ADR 006 (location is a dated profile attribute) and
+**ADR 007 (a person may be joined to any data in the system, live position feeds included,
+so section 8's no-join rule and its structural test are gone)**. The authoritative list of
+entity classes is the table in `docs/plan/implementation-plan.md`; this spec predates the
+city and social post layers.
 
 ## 1. What this is
 
-A web application that renders an interactive 3D globe and shows real public data on
+Commercially, a demo of wealth profile enrichment for Altrata: a profile joined to the
+assets linked to it, on a live globe, built on public data only. The business sells wealth
+and executive intelligence on the UHNW, VHNW and HNW tiers, and the value is in the join
+rather than any single field. Read `docs/business-context.md` for the tier definitions and
+the boundaries.
+
+Technically, a web application that renders an interactive 3D globe and shows real public data on
 it in near real time: aircraft, ships, satellites, public cameras, geolocated news and
 natural events, map points of interest, 3D buildings, satellite imagery, and a knowledge
 layer of notable public figures and organisations.
@@ -34,10 +47,12 @@ running product, no mock feeds, no sample data, no placeholder cards.
 
 ## 3. Non-goals
 
-- No tracking of private individuals. See section 8.
+- No un-evidenced claim about an individual. A profile may be joined to any data in the
+  system including live feeds (ADR 007), and every join carries its source, confidence and
+  as-of date. Location stays a dated series with provenance rather than a single current
+  value, per ADR 006. What is out is the unsourced assertion, not the join.
 - No de-anonymising of aircraft that use privacy-ICAO-address (PIA) hex codes.
 - No face recognition or person identification on any camera image.
-- No user-contributed entity records.
 - No horizontal scaling in the first release: one poller process owns the upstream
   connections. Multi-worker deployment needs a lock first, and that is deliberately
   deferred.
@@ -198,6 +213,39 @@ story is about, not where anyone is.
 
 ## 8. The people layer, and why it is safe
 
+> **Amended by ADR 007 (2026-08-19).** The title of this section no longer holds. A person
+> may be joined to any data in the system, live position feeds included, and the structural
+> separation test is deleted. The safety argument in this section was made, considered and
+> overruled: what limits exposure now is a source, a confidence and an as-of date on every
+> join, sub-threshold joins shown as possible matches and counted nowhere, inferences
+> labelled as inferences, and a removal request that removes and suppresses the record.
+> Everything below claiming a join cannot happen is superseded. Read
+> `docs/decisions/007-persons-may-be-joined-to-any-data.md`.
+
+> **Amended by ADR 006 (2026-08-19).** Location is now a first-class profile attribute:
+> residence city or region, public-record business address, work and education location, and
+> publicly reported past appearances, each dated and sourced, held as a series rather than a
+> single value. Removal requests remove and suppress a record, and suppression survives
+> re-ingest. The jurisdiction framing below is also corrected: the population and the
+> customers are in the United States, so the UK GDPR wording in the last paragraph of this
+> section is superseded by the US state privacy position in ADR 006. What ADR 006 keeps: no
+> current location on a person, no "last seen", and no presence inferred by correlating a
+> named individual against a live feed, camera or post.
+>
+> **Amended by ADR 004 (2026-08-19).** Scraped and crowd-sourced sources are now permitted
+> across the project, the people layer included, so person records are no longer limited to
+> Wikidata entities reached through the property allowlist described below, and cameras no
+> longer have to be official or owner-consented. Read
+> `docs/decisions/004-permitting-scraped-and-crowd-sourced-data.md` for what still binds:
+> provenance display, hard validation at the domain layer, robots and rate limits honoured,
+> no scraping of sources that prohibit it, no unsecured private camera aggregators and no
+> face recognition. Its "no present tense on any person" line is overruled by ADR 007. The
+> rest of this section is the original design and the reasoning behind it, kept for that
+> reasoning.
+>
+> One consequence to hold on to: the GDPR paperwork in the last paragraph of this section is
+> now load-bearing rather than a formality.
+
 This is the highest-risk feature in the brief and it gets designed defensively.
 
 The feature is a knowledge map of notable public entities. It is not a locator. The
@@ -213,10 +261,13 @@ a feature request.
 - Residence (P551) and raw coordinates on any living human (a `Q5` instance with no
   `P570` date of death) are excluded inside the SPARQL query itself. A home address
   cannot render even if a later bug lets something through, because it is never fetched.
-- No present tense. No "last seen". No movement lines. No join between a person's name
-  and any real-time feed. Person search and the GDELT event layer share no code path,
-  and a test asserts that structurally.
-- No geocoding of arbitrary names, and no user-contributed person records.
+- ~~No join between a person's name and any real-time feed.~~ **Overruled by ADR 007.** A
+  person may be joined to any data in the system, live feeds included, and the structural
+  separation test is deleted. Each join carries a source, a confidence and an as-of date;
+  a sub-threshold join is a possible match and counts towards nothing; an inference is
+  labelled as one.
+- No geocoding of arbitrary names into a present-tense position for a person. Dated
+  location attributes are geocoded and labelled derived where they were produced by a join.
 - Every card shows provenance: the relationship in words, links to Wikidata and
   Wikipedia, and both licences. There is a report control, and scheduled re-sync from
   Wikidata propagates upstream deletion, which is the erasure mechanism.
@@ -226,9 +277,11 @@ owner-consented sources only. Transport for London JamCams under TfL open data t
 and the Windy webcam directory, which is owner-submitted. Aggregators of unsecured
 private cameras are excluded outright.
 
-Before any public deployment: a written legitimate-interests assessment under UK GDPR
-Article 6(1)(f), a data protection impact assessment, and a public privacy notice
-relying on Article 14(5)(b). Those live in `docs/` and are a phase 6 deliverable.
+Before any public deployment carrying real profiles: a written US privacy position naming
+which state laws reach the population, how access and deletion requests are served inside
+the statutory windows, and whether data broker registration applies. That supersedes the UK
+GDPR wording previously here, which was the wrong instrument for a US population and US
+customers. It lives in `docs/` and is a phase 6 deliverable. See ADR 006.
 
 ## 9. Known risks
 

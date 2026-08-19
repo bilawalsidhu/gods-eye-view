@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tracker: live aircraft</title>
+    <!-- Inline so there is no favicon request to 404 on. -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%230e141b'/%3E%3Ccircle cx='8' cy='8' r='3' fill='%234da3ff'/%3E%3C/svg%3E"
+    />
+    <meta
+      name="description"
+      content="Real public flight data on a 3D globe, from adsb.lol over NASA GIBS imagery."
+    />
+  </head>
+  <body>
+    <main id="globe" aria-label="Interactive globe"></main>
+    <div id="status"></div>
+    <aside id="card" hidden></aside>
+    <!--
+      The credits are licence conditions: ODbL 1.0 requires attribution for adsb.lol data
+      and NASA asks for a credit on GIBS imagery. Present in the markup so they are on
+      screen from the first frame, then replaced with the list the API serves.
+    -->
+    <ul id="attribution">
+      <li>
+        <a href="https://adsb.lol" rel="noreferrer" target="_blank">Aircraft data from adsb.lol</a>
+        <span class="attribution-licence"> (ODbL 1.0)</span>
+      </li>
+      <li>
+        <a href="https://gibs.earthdata.nasa.gov" rel="noreferrer" target="_blank"
+          >Imagery courtesy of NASA EOSDIS GIBS</a
+        >
+        <span class="attribution-licence"> (Public domain, attribution requested)</span>
+      </li>
+    </ul>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

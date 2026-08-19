@@ -14,6 +14,7 @@ cross-process lock exists, this app runs with a single worker, and
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING
 
 import httpx
 from fastapi import FastAPI
@@ -22,11 +23,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from tracker.api import routes_entities, routes_meta, routes_ws
 from tracker.api.state import AppState, Attribution
 from tracker.config import Settings, get_settings
-from tracker.contracts.aircraft import Aircraft
 from tracker.services.hub import Hub
 from tracker.services.poller import Poller, PollerGroup
 from tracker.services.store import EntityStore
 from tracker.sources.adsb import AdsbClient
+
+if TYPE_CHECKING:
+    from tracker.contracts.aircraft import Aircraft
 
 _log = logging.getLogger(__name__)
 

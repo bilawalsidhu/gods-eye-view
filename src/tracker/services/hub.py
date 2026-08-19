@@ -48,9 +48,13 @@ class SocketLike(Protocol):
     loop plumbing, and it documents exactly what a transport must provide.
     """
 
-    async def send_text(self, data: str) -> None: ...
+    async def send_text(self, data: str) -> None:
+        """Send one text frame to the client."""
+        ...
 
-    async def close(self, code: int = 1000) -> None: ...
+    async def close(self, code: int = 1000) -> None:
+        """Close the connection with a WebSocket status code."""
+        ...
 
 
 class Connection:
@@ -63,6 +67,7 @@ class Connection:
         self.layers = layers
 
     def wants(self, layer: LayerName) -> bool:
+        """Whether this client has subscribed to the given layer."""
         return layer in self.layers
 
 
@@ -98,10 +103,12 @@ class Hub:
 
     @property
     def layers(self) -> tuple[LayerName, ...]:
+        """The registered layer names, in registration order."""
         return tuple(self._layers)
 
     @property
     def connection_count(self) -> int:
+        """How many clients are connected right now."""
         return len(self._connections)
 
     # ------------------------------------------------------------------ connections
@@ -130,20 +137,25 @@ class Hub:
         return connection
 
     def disconnect(self, connection: Connection) -> None:
+        """Forget a client. Safe to call for one that has already gone."""
         self._connections.discard(connection)
 
     def set_layers(self, connection: Connection, layers: frozenset[LayerName]) -> None:
+        """Replace what a connected client is subscribed to."""
         connection.layers = layers
 
     # ------------------------------------------------------------------ broadcasting
 
     def start(self) -> None:
+        """Start the broadcast loop, raising if it is already running."""
         if self._task is not None and not self._task.done():
-            raise RuntimeError("hub broadcast loop is already running")
+            msg = "hub broadcast loop is already running"
+            raise RuntimeError(msg)
         self._stopping.clear()
         self._task = asyncio.create_task(self._run(), name="hub:broadcast")
 
     async def stop(self) -> None:
+        """Stop the broadcast loop and close every connected client."""
         self._stopping.set()
         task = self._task
         if task is not None:
@@ -210,7 +222,7 @@ class Hub:
                 await connection.socket.send_text(payload)
         except asyncio.CancelledError:
             raise
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - one bad socket must not stop the broadcast
             _log.debug("dropping client after send failure: %s", exc)
             self._connections.discard(connection)
             return False
@@ -232,5 +244,5 @@ class Hub:
                 await self.flush()
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception:  # noqa: BLE001 - supervised loop must survive any upstream fault
                 _log.exception("broadcast flush failed")
