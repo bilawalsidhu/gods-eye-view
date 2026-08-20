@@ -16,9 +16,12 @@ from pydantic import ValidationError
 
 from tracker.api.state import StateDep
 from tracker.contracts.aircraft import Aircraft
-from tracker.contracts.base import StrictModel
+from tracker.contracts.base import StrictModel, UtcDatetime
 from tracker.contracts.geo import BoundingBox
 from tracker.contracts.messages import FeedHealth
+from tracker.contracts.satellite import Satellite
+from tracker.contracts.vessel import Vessel
+from tracker.services.union import UnionResult
 
 router = APIRouter(prefix="/api", tags=["entities"])
 
@@ -30,11 +33,65 @@ class AircraftSnapshot(StrictModel):
     aircraft: tuple[Aircraft, ...]
 
 
+class VesselSnapshot(StrictModel):
+    """Every vessel currently held, optionally filtered to a viewport."""
+
+    count: int
+    vessels: tuple[Vessel, ...]
+
+
+class SatelliteSnapshot(StrictModel):
+    """Every satellite currently held.
+
+    No bounding box, and there is nothing to filter on: a satellite record carries orbital
+    elements rather than a position, and the browser propagates it. Filtering here would
+    mean running SGP4 on the server for every object on every request.
+    """
+
+    count: int
+    satellites: tuple[Satellite, ...]
+
+
+class SatelliteElements(StrictModel):
+    """Cached OMM element sets, with when each group was last fetched.
+
+    ``fetched`` is the evidence for the two-hour floor: it is the instant of the fetch,
+    which is a different thing from an element set's epoch. One record per catalogue number,
+    freshest epoch winning, because CelesTrak groups overlap.
+    """
+
+    count: int
+    fetched: dict[str, UtcDatetime]
+    satellites: tuple[Satellite, ...]
+
+
+class ProviderCoverage(StrictModel):
+    """One provider's contribution to a merged layer, for the last cycle.
+
+    ADR 010 asks for two things this carries. ``exclusive`` is the provider-attributable
+    count, so "ships only this network can see" is measured rather than asserted. ``error``
+    names a provider that dropped out, which is how the layer reports itself degraded
+    instead of quietly covering less.
+
+    This is coverage, not corroboration, and the two must not be confused: under R1 in
+    ``docs/pending-decisions.md`` three providers reporting one ship are still one origin,
+    because they are repeating one AIS broadcast. Nothing here may be counted as
+    independent sources.
+    """
+
+    layer: str
+    provider: str
+    records: int
+    exclusive: int
+    error: str | None = None
+
+
 class LayerSummary(StrictModel):
     """Counts and health per layer, for the layer rail and the degraded banners."""
 
     layers: dict[str, int]
     feeds: tuple[FeedHealth, ...]
+    providers: tuple[ProviderCoverage, ...] = ()
 
 
 def _optional_box(
@@ -100,10 +157,99 @@ async def get_aircraft(state: StateDep, icao24: str) -> Aircraft | None:
     return state.aircraft.get(key) or state.military.get(key)
 
 
+# ---------------------------------------------------------------- vessels
+
+
+@router.get("/vessels")
+async def list_vessels(
+    state: StateDep,
+    *,
+    west: Annotated[float | None, Query(ge=-180.0, le=180.0)] = None,
+    south: Annotated[float | None, Query(ge=-90.0, le=90.0)] = None,
+    east: Annotated[float | None, Query(ge=-180.0, le=180.0)] = None,
+    north: Annotated[float | None, Query(ge=-90.0, le=90.0)] = None,
+) -> VesselSnapshot:
+    """Vessels currently known to the server, merged across every reporting provider.
+
+    One record per MMSI whatever the provider count, per ADR 010, and each record names the
+    provider whose report supplied it and how old that report was.
+    """
+    box = _optional_box(west, south, east, north)
+    records = state.vessels.snapshot()
+    if box is not None:
+        records = tuple(v for v in records if box.contains(v.point))
+    return VesselSnapshot(count=len(records), vessels=records)
+
+
+@router.get("/vessels/{mmsi}", response_model=Vessel | None)
+async def get_vessel(state: StateDep, mmsi: str) -> Vessel | None:
+    """One vessel by MMSI. ``null`` when not currently seen."""
+    return state.vessels.get(mmsi.strip())
+
+
+# ---------------------------------------------------------------- satellites
+
+
+@router.get("/satellites")
+async def list_satellites(state: StateDep) -> SatelliteSnapshot:
+    """Satellites currently held, one record per NORAD catalogue number."""
+    records = state.satellites.snapshot()
+    return SatelliteSnapshot(count=len(records), satellites=records)
+
+
+@router.get("/satellites/elements")
+async def satellite_elements(state: StateDep) -> SatelliteElements:
+    """Cached orbital element sets, served without touching CelesTrak.
+
+    Declared before nothing else on this prefix by design: the store read above answers
+    ``/api/satellites`` and this answers the element cache, which is what a client
+    propagating orbits itself needs.
+    """
+    records = state.celestrak.cached_elements()
+    fetched = {
+        group: at
+        for group in state.settings.celestrak_groups
+        if (at := state.celestrak.cached_at(group)) is not None
+    }
+    return SatelliteElements(count=len(records), fetched=fetched, satellites=records)
+
+
+# ---------------------------------------------------------------- layers
+
+
+def _provider_coverage(
+    layer: str, union: UnionResult[Vessel] | None
+) -> tuple[ProviderCoverage, ...]:
+    """Turn the last merge of one layer into per-provider coverage, or nothing yet.
+
+    Derived from the merge result rather than kept alongside it, so the numbers cannot drift
+    from what actually came back.
+    """
+    if union is None:
+        return ()
+    exclusive = union.attributable_counts()
+    return tuple(
+        ProviderCoverage(
+            layer=layer,
+            provider=result.provider,
+            records=len(result.records),
+            exclusive=exclusive.get(result.provider, 0),
+            error=result.error,
+        )
+        for result in union.provider_results
+    )
+
+
 @router.get("/layers")
 async def layer_summary(state: StateDep) -> LayerSummary:
     """Entity counts per layer plus upstream health, for the layer rail."""
     return LayerSummary(
-        layers={"aircraft": len(state.aircraft), "military": len(state.military)},
+        layers={
+            "aircraft": len(state.aircraft),
+            "military": len(state.military),
+            "vessels": len(state.vessels),
+            "satellites": len(state.satellites),
+        },
         feeds=state.pollers.health(),
+        providers=_provider_coverage("vessels", state.vessel_union),
     )

@@ -19,7 +19,12 @@ import { aircraftLabel, inEmergency } from '../domain/derive';
 export const DEFAULT_FEED_INTERVAL_SECONDS = 8;
 
 const METRES_TO_FEET = 3.28084;
-const MPS_TO_KNOTS = 1.94384;
+
+/** Shared with the vessel card, which leads with knots rather than showing them second. */
+export const MPS_TO_KNOTS = 1.94384;
+
+/** What both cards print for a field the feed did not report. Never a zero, never a dash. */
+export const ABSENT = 'not reported';
 
 export type AgeSeverity = 'fresh' | 'amber' | 'red';
 
@@ -188,7 +193,7 @@ export class InfoCard {
     this.fields.replaceChildren(
       ...rows([
         ['Registration', record.registration ?? 'not in registry'],
-        ['Type', record.type_designator ?? 'not reported'],
+        ['Type', record.type_designator ?? ABSENT],
         ['Class', CLASS_LABELS[record.aircraft_class]],
         [
           'Altitude',
@@ -198,14 +203,14 @@ export class InfoCard {
           ),
         ],
         ['Ground speed', speedText(record.ground_speed_mps)],
-        ['Track', trackText(record.track_deg)],
-        ['Squawk', record.squawk ?? 'not reported'],
+        ['Track', bearingText(record.track_deg)],
+        ['Squawk', record.squawk ?? ABSENT],
         ['Message source', record.message_source],
         ['Position', `${record.point.lon.toFixed(4)}, ${record.point.lat.toFixed(4)}`],
       ]),
     );
 
-    this.credit.textContent = this.creditText(record.source);
+    this.credit.textContent = creditFor(this.attribution, record.source);
     this.refreshAge();
     // Once a second: the age is the one thing on the card that changes while nothing
     // else does, and it has to be seen to change or it is not doing its job.
@@ -251,14 +256,18 @@ export class InfoCard {
     const feed = store.feeds.find((candidate) => candidate.layer === layer);
     return feed?.poll_interval_seconds ?? DEFAULT_FEED_INTERVAL_SECONDS;
   }
+}
 
-  private creditText(source: string): string {
-    const entry = this.attribution.find((candidate) => candidate.source === source);
-    if (entry === undefined) {
-      return `Source: ${source}`;
-    }
-    return `${entry.text} (${entry.licence})`;
+/**
+ * The licence credit for one record's source, or a bare naming of the source when the API
+ * credited nothing against it. A record is never shown with its source unnamed.
+ */
+export function creditFor(attribution: readonly AttributionEntry[], source: string): string {
+  const entry = attribution.find((candidate) => candidate.source === source);
+  if (entry === undefined) {
+    return `Source: ${source}`;
   }
+  return `${entry.text} (${entry.licence})`;
 }
 
 function altitudeText(metres: number | null | undefined, onGround: boolean): string {
@@ -266,7 +275,7 @@ function altitudeText(metres: number | null | undefined, onGround: boolean): str
     return 'On ground';
   }
   if (metres === null || metres === undefined) {
-    return 'not reported';
+    return ABSENT;
   }
   const feet = Math.round(metres * METRES_TO_FEET);
   return `${Math.round(metres).toLocaleString('en-GB')} m (${feet.toLocaleString('en-GB')} ft)`;
@@ -274,19 +283,25 @@ function altitudeText(metres: number | null | undefined, onGround: boolean): str
 
 function speedText(mps: number | null | undefined): string {
   if (mps === null || mps === undefined) {
-    return 'not reported';
+    return ABSENT;
   }
   return `${Math.round(mps).toLocaleString('en-GB')} m/s (${String(Math.round(mps * MPS_TO_KNOTS))} kt)`;
 }
 
-function trackText(degrees: number | null | undefined): string {
+/**
+ * A bearing in whole degrees clockwise from true north, which is the only bearing
+ * convention in this project. One function for an aircraft's track and a vessel's course:
+ * they are the same measurement of the same thing.
+ */
+export function bearingText(degrees: number | null | undefined): string {
   if (degrees === null || degrees === undefined) {
-    return 'not reported';
+    return ABSENT;
   }
   return `${String(Math.round(degrees))}° true`;
 }
 
-function rows(pairs: readonly [string, string][]): HTMLElement[] {
+/** A definition list body, shared by both cards. */
+export function rows(pairs: readonly [string, string][]): HTMLElement[] {
   return pairs.flatMap(([name, value]) => {
     const term = document.createElement('dt');
     term.textContent = name;
@@ -296,7 +311,13 @@ function rows(pairs: readonly [string, string][]): HTMLElement[] {
   });
 }
 
-function mustFind(root: HTMLElement, selector: string): HTMLElement {
+/**
+ * A node the card's own template just wrote, or a thrown error.
+ *
+ * Shared by both cards: each builds its markup in its own constructor, so a miss here is a
+ * mistake in that template and the selector is what names it.
+ */
+export function mustFind(root: HTMLElement, selector: string): HTMLElement {
   const found = root.querySelector<HTMLElement>(selector);
   if (found === null) {
     throw new Error(`card template is missing ${selector}`);

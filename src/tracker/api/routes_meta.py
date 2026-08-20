@@ -11,6 +11,7 @@ from fastapi import APIRouter
 from tracker.api.state import StateDep
 from tracker.contracts.base import StrictModel
 from tracker.contracts.messages import FeedHealth
+from tracker.sources import aishub, aisstream
 
 
 class AttributionEntry(StrictModel):
@@ -23,7 +24,13 @@ class AttributionEntry(StrictModel):
 
 
 class LayerCapability(StrictModel):
-    """Whether one layer can run, and why not when it cannot."""
+    """Whether one layer can run, and why not when it cannot.
+
+    A merged layer also names its gated providers, as ``vessels/aishub`` and
+    ``vessels/aisstream``. The layer itself stays available because its keyless providers
+    carry it, and the entry for the gated provider says what is missing. Without that split
+    a vessel layer serving Baltic ships would read as entirely off.
+    """
 
     layer: str
     available: bool
@@ -76,12 +83,27 @@ async def capabilities(state: StateDep) -> Capabilities:
     layers = (
         LayerCapability(layer="aircraft", available=True),
         LayerCapability(layer="military", available=True),
+        # Available with no credential at all: Fintraffic Digitraffic is keyless. The two
+        # gated providers add coverage and are reported separately, so an unconfigured one
+        # never reads as an empty layer. Plan phase 2 acceptance 9.
+        LayerCapability(layer="vessels", available=True),
         LayerCapability(
-            layer="vessels",
-            available=settings.ship_layer_available,
-            reason=None
-            if settings.ship_layer_available
-            else "Set TRACKER_AISSTREAM_API_KEY (free key from aisstream.io) to enable ships.",
+            layer="vessels/aisstream",
+            available=settings.aisstream_available,
+            reason=None if settings.aisstream_available else aisstream.UNAVAILABLE_REASON,
+        ),
+        LayerCapability(
+            layer="vessels/aishub",
+            available=settings.aishub_available,
+            reason=None if settings.aishub_available else aishub.NO_USERNAME_REASON,
+        ),
+        # Keyless, so availability is a runtime fact from the client rather than a
+        # credential check: a feed that has never served an element set is unavailable with
+        # the reason, not healthy and empty.
+        LayerCapability(
+            layer="satellites",
+            available=state.celestrak.unavailable_reason is None,
+            reason=state.celestrak.unavailable_reason,
         ),
         LayerCapability(
             layer="cameras",

@@ -71,6 +71,47 @@ and no test files present, `uv run ruff check .` reported `All checks passed!` a
 `uv run python scripts/dump_openapi.py --check` reports `openapi.json is up to date`. The
 committed schema has five paths, which matches the five endpoints above.
 
+**adsb.fi's batch timestamp is read in the right unit.** Found on 2026-08-20 while putting
+the two recorded captures through the real parser for the provider-union tests. adsb.fi
+sends the envelope's `now` in seconds and adsb.lol sends it in milliseconds, so the shared
+divide-by-a-thousand dated every adsb.fi batch to 1970-01-21 and the recency merge could
+never let adsb.fi win a shared aircraft. Before and after, straight out of the parser:
+
+```
+before:  lol 2026-08-19 18:53:31.001+00:00   fi 1970-01-21 16:26:10.658+00:00
+after:   lol 2026-08-19 18:53:31.001+00:00   fi 2026-08-19 20:17:38.001+00:00
+```
+
+The unit is now decided on magnitude at `src/tracker/sources/adsb.py:66` and asserted
+against both captures in `tests/sources/test_adsb_parser.py:809` and
+`tests/services/test_union.py:417`.
+
+**The satellite layer propagates real recorded elements to a published position.** Proven on
+2026-08-20 in the frontend suite. The recorded CelesTrak element set for the ISS
+(`tests/fixtures/celestrak_iss_omm.json`, epoch 2026-08-19T12:48:46.640160Z) goes through
+`satellite.js`'s `json2satrec` and SGP4 in a Web Worker, and the result is checked against a
+position published by wheretheiss.at, which runs its own propagator on its own element source:
+
+```
+2026-08-19T18:00:00Z  ours 39.10260 -112.37794 418.987 km
+                       ref 39.11029 -112.39227 418.991 km   ground 1.50 km, altitude 3 m
+2026-08-20T00:00:00Z  ours 51.10661   93.30228 419.047 km
+                       ref 51.10333   93.27107 419.089 km   ground 2.21 km, altitude 42 m
+```
+
+The tolerance in the test is 5 km on the ground and 1 km of altitude, chosen so it still
+catches the failure it exists for: rotating TEME to earth-fixed with a GMST from 60 seconds
+later moves the answer 21 km, and the same test asserts that. Reference source and the
+reasoning for the tolerance are recorded at
+`frontend/src/globe/satellites/orbit.test.ts:54`.
+
+CelesTrak itself was unreachable throughout, so the layer has not been driven off a live
+fetch. It renders whatever elements the backend has cached, drops any element set older than
+CelesTrak's own 3.5-day threshold, and reports what it is not drawing and why
+(`frontend/src/globe/satellites/feed.ts:74`). Frame rate at 1,000-plus objects needs a real
+browser and is Playwright's job in phase 9; the propagation cost is asserted here at 1,000
+satellites inside a 16.7 ms budget.
+
 ## Broken or not yet built
 
 **`mypy --strict` does not pass.** `uv run mypy src scripts` reports one error in shipped

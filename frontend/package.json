@@ -19,7 +19,8 @@
     "verify": "pnpm format:check && pnpm lint && pnpm lint:html && pnpm typecheck && pnpm test"
   },
   "dependencies": {
-    "cesium": "^1.135.0"
+    "cesium": "^1.135.0",
+    "satellite.js": "^7.1.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

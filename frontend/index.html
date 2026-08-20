@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Tracker: live aircraft</title>
+    <title>Tracker: live aircraft, ships and satellites</title>
     <!-- Inline so there is no favicon request to 404 on. -->
     <link
       rel="icon"
@@ -11,13 +11,26 @@
     />
     <meta
       name="description"
-      content="Real public flight data on a 3D globe, from adsb.lol over NASA GIBS imagery."
+      content="Real public aircraft, ship and satellite positions on a 3D globe, over NASA GIBS imagery."
     />
   </head>
   <body>
     <main id="globe" aria-label="Interactive globe"></main>
-    <div id="status"></div>
-    <aside id="card" hidden></aside>
+    <!--
+      The left dock: feed health above, the layer rail below it. One column so the two
+      panels cannot overlap as either grows, which fixed positioning on both would allow.
+    -->
+    <div class="dock">
+      <div id="status"></div>
+      <div id="layers"></div>
+    </div>
+    <!--
+      Two cards, one root each. Each class owns the markup inside its own root, so sharing
+      one element would leave the first holding detached nodes. Only one is ever open: a
+      selection is one thing, and the store deselects the other kind when it changes.
+    -->
+    <aside id="card" aria-label="Selected aircraft" hidden></aside>
+    <aside id="vessel-card" aria-label="Selected vessel" hidden></aside>
     <!--
       The credits are licence conditions: ODbL 1.0 requires attribution for adsb.lol data
       and NASA asks for a credit on GIBS imagery. Present in the markup so they are on

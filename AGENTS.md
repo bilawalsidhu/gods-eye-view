@@ -75,11 +75,19 @@ junk reach the renderer.
 
 ## Gotchas
 
-Each of these has already cost time or would break something silently.
+Each of these has already cost time or would break something silently. Grouped by data class so
+the section stays navigable.
+
+### Aircraft and ADS-B
 
 - `adsb.lol` `alt_baro` is a number **or** the string `"ground"`. `flight` is
   space-padded (`"RAM801F "`). `type` is the message source (`adsb_icao`), the aircraft
   type designator is `t`, and the registration is `r`.
+- **The readsb envelope's `now` is milliseconds on adsb.lol and seconds on adsb.fi.** Same
+  field name, same schema, different unit, and nothing in the payload declares it. Dividing
+  adsb.fi's value by a thousand dates the whole batch to 1970 and the aircraft then lose every
+  recency contest in the provider union, which is provider precedence arriving by accident.
+  Decided on magnitude in the adapter, not assumed. Verified 2026-08-19 against both captures.
 - Heading resolution order: `track`, then `true_heading`, then `mag_heading`, then `dir`.
   Only about half of live records carry `track`.
 - `dbFlags` bit 1 (value 1) is military; bit 4 is a privacy ICAO address. A PIA aircraft is
@@ -87,12 +95,6 @@ Each of these has already cost time or would break something silently.
   flag stays on the record after correlation and the card says the identification is
   inferred, never observed. LADD is not applied at all: it binds FAA-provided feeds and our
   positions come from volunteer receivers.
-- **Live-mover layers are a union of providers, not one with a failover** (ADR 010). Merge
-  key is the existing identity: ICAO 24-bit address for aircraft, MMSI for vessels. Every
-  record carries which provider supplied it and how old
-  that report is. Conflicts resolve by recency, never by provider precedence, and two
-  positions are never averaged into a third no receiver reported. One record per hex is
-  asserted by a test: the obvious bug here is one aircraft counted three times.
 - ADS-B Exchange does not filter aircraft on FAA blocking programmes, which is why it is in
   the union. Access is a paid RapidAPI key (`adsbexchange-com1.p.rapidapi.com`, verified 401
   without one) or a free feeder key. Its terms **prohibit redistribution**, and serving
@@ -105,14 +107,95 @@ Each of these has already cost time or would break something silently.
   neither needs parser work once access lands.
 - Per-provider cadence floors, not one global floor. adsb.lol tolerates a short cycle; a
   metered ADS-B Exchange key does not, so its calls are demand-driven rather than a sweep.
+- **The FAA and CASA registry hosts both refuse the descriptive User-Agent this file mandates.**
+  FAA answers HTTP 403 host-wide from Akamai, `robots.txt` included, while permitting the
+  download path in the robots file it will not serve. CASA hangs until timeout with zero bytes,
+  and a bare Chrome string is not enough: only the full browser header set gets a reply. So on
+  CASA a block looks like a network fault rather than a refusal and the difference has to be
+  logged. This is a direct conflict with our own sourcing rule and it needs Alexander's
+  decision rather than a quiet workaround. Open as U3 in `docs/pending-decisions.md`.
+  Verified 2026-08-20.
+
+### Vessels and AIS
+
+- **Digitraffic `timestamp` means two different things on two endpoints of the same API
+  version.** On `/api/ais/v1/locations` it is the AIS UTC second-of-minute, 0 to 63, where 60
+  means not available, 61 manual input, 62 dead reckoning and 63 inoperative. On
+  `/api/ais/v1/vessels` the identically named field is a 13-digit millisecond epoch. The
+  provider says so itself. Parsing the locations field as a time produces 1970 and every vessel
+  loses every recency contest in the union. The real time on `/locations` is `timestampExternal`.
+  On the MQTT `location` topic it is `time` and it is a 10-digit epoch in seconds, while MQTT
+  `metadata` uses `timestamp` in milliseconds. Four names, three units, one API.
+- **Digitraffic's default response is 24 hours of history, not a live snapshot.** The OpenAPI
+  document says `from` "Default value is 24 hours in the past", and the oldest record in a bare
+  call was 23 hours 42 minutes stale. A poller that calls the bare endpoint and renders
+  everything shows a day of ghost ships parked where they were yesterday. Pass `from`
+  explicitly, or filter on `timestampExternal` in the adapter. The same default applies to
+  `/api/ais/v1/vessels`.
+- **Digitraffic silently ignores `bbox`.** `?bbox=17,57,32,66` answered HTTP 200 with 1,059
+  features, which is the whole world set, not a filtered one. There is no `bbox` parameter in
+  the OpenAPI document and unknown query parameters are dropped rather than rejected with a 400.
+  The real spatial filter is `radius` in kilometres with `latitude` and `longitude`, verified at
+  70 features for a 50km circle on Helsinki.
+- **The Digitraffic vessel feed contains aircraft.** Two records carried MMSI 111265583 and
+  111265584, named LIFEGUARD 003 and LIFEGUARD 004 with Swedish aircraft registrations, one
+  doing 36 knots. The ITU allocates the `111` prefix to SAR aircraft. Filter on the prefix or
+  the ship layer gets helicopters in it. Other reserved prefixes to expect: `00` coast station,
+  `0` group, `99` aid to navigation, `98` auxiliary craft, `970`/`972`/`974` SART, MOB and EPIRB.
+- **MMSI 999999999 is a placeholder, not an allocation, and it defeats ADR 010's own test.**
+  `/api/ais/v1/vessels/999999999` returns a real record named NATO WARSHIP. Two warships
+  broadcasting it collide into one record, and because ADR 010 makes MMSI the vessel merge key
+  the one-record-per-MMSI test passes while silently swallowing ships. A clean snapshot had zero
+  MMSI duplicates across 1,058 records, so it is intermittent rather than constant, which makes
+  it worse. Validate the MID against the ITU table and drop-and-count a non-conformant MMSI
+  rather than merging on it.
+- **Digitraffic's own documentation gives the wrong MQTT topic.** It documents
+  `vessels-v2/<mmsi>/locations`. Subscribing to `vessels-v2/+/locations` is **accepted with
+  granted QoS 0** and delivers zero position messages, while `vessels-v2/status` works fine. The
+  real leaf is **`location`, singular**, read off the wire from `vessels-v2/#`. The broker grants
+  a subscription to a topic that will never publish, so the failure mode is a layer that
+  connects, reports healthy and renders nothing. The provider also writes `vessels/status` where
+  the live topic is `vessels-v2/status`.
+- **The Digitraffic MQTT payload is not the REST payload.** `lat` and `lon` are separate scalar
+  fields rather than a GeoJSON array, so the `[longitude, latitude]` rule does not apply and a
+  shared REST/MQTT parser gets one direction wrong. There is **no `mmsi` field at all**: the
+  MMSI exists only in the topic string. `refA` to `refD` replace `referencePointA` to `D`, and
+  `type` replaces `shipType`, so `type` means three different things across this one API.
+- **`draught` is decimetres on `/api/ais/v1/vessels` and metres on
+  `/api/port-call/v1/vessel-details`.** Same word, two units, two endpoints, one host. 49 means
+  4.9m on the first and 8.15 means 8.15m on the second. 255 means "25.5m or greater" and 0 means
+  not available, so a saturated reading is not a measurement.
+- **Digitraffic sentinels, and nothing is ever null or absent.** Out of 1,058 records: `cog`
+  360.0 on 110, `sog` 102.3 on 9, `heading` 511 on 184, `rot` -128 on 184, `navStat` 15 on 47.
+  `rot` of 127 or -127 mean turning faster than 5 degrees per 30 seconds, not a rate. `cog`
+  legitimately reads 0.0, so 360.0 is the only not-available value and a naive `0 <= x < 360`
+  bearing check rejects 110 real records rather than mapping them to `None`. On the metadata
+  endpoint, missing text is an **empty string**: `destination` is empty on 91 of 950, so a
+  `min_length=1` strict field drops 91 real ships. `eta == 1596` is the AIS not-available value
+  and is the single most common value in the body, 198 of 950.
+- **Kystverket's talker ID is `BSVDM`, not `AIVDM`.** 1,690 `BSVDM`, 27 `B2VDM`, 25 `B1VDM` and
+  **zero `AIVDM`** across a real 1,742-sentence capture, despite Kystverket's own documentation
+  calling them AIVDM sentences. Any parser keyed on the literal `!AIVDM` matches nothing at all.
+  A third of the traffic is multipart type 5 static data and that is where the vessel names, IMO
+  numbers and destinations live, so a decoder that skips multipart sees positions and never a
+  single ship name. The IEC 62320-1 TAG block has its own checksum and must be stripped before
+  the sentence checksum is validated, and its `c:` field is a 10-digit epoch in seconds against
+  Digitraffic's 13-digit milliseconds.
 - **AISHub only grants API access to members running a physical AIS receiver**: at least 10
   vessels averaged over 7 days, 90% uptime, downsampling no coarser than 60s, delay under 10s,
   streamed as raw NMEA to a UDP port they allocate. Feeding them synthesized NMEA, scraped
   data or data from other public AIS services is prohibited by name, so there is no software
   route in. No username means the layer reports itself unavailable, like any missing key.
-- **AISHub signals failure with HTTP 200 and an empty body**, both for a bad username and for
-  a call more often than its documented once per minute. An empty 200 is an error, counted,
-  and it must never empty the vessel store. Asserted by a test.
+- **AISHub signals a bad username with HTTP 200 and a 115-byte JSON error envelope, not an empty
+  body**:
+  `[{"ERROR":true,"USERNAME":"...","FORMAT":"HUMAN","ERROR_MESSAGE":"Invalid username or password!"}]`.
+  The check is `body[0]["ERROR"] is True`, with `ERROR_MESSAGE` carrying the reason. The response is an array whose element 0 is a status envelope either way, so a success
+  body is an envelope followed by the vessel data and `for vessel in response` iterates the
+  metadata as if it were a ship. Corrected 2026-08-20: an earlier version of this line claimed
+  the failure body was empty, which is verified wrong for a bad username. The
+  empty-body-on-over-frequent-calls half of that claim is untested, not disproved. Either way an
+  empty or error 200 is a failed poll, counted, and it never empties the vessel store. Asserted
+  by a test.
 - AISHub `output` defaults to XML, so pass `output=json` explicitly, same trap as CelesTrak's
   `FORMAT`. Use `format=1` for degrees, knots and metres; `format=0` scales longitude and
   latitude by 600000, course and speed by 10, draught by 10.
@@ -120,12 +203,187 @@ Each of these has already cost time or would break something silently.
   and `IMO` 0 all mean "not available" and map to `None`. Its timestamp is `TIME` in JSON but
   `TSTAMP` in XML and CSV, and the human-readable form is naive with a `GMT` suffix, so attach
   UTC in the adapter.
+
+### Satellites
+
 - CelesTrak permanently firewalls abusive clients. Never fetch a group more than once per
   two-hour window. The guard is in code and asserted by a test, not left to config.
 - CelesTrak `EPOCH` is naive but is UTC by specification. Attach UTC in the adapter.
 - Always pass `FORMAT` explicitly to CelesTrak; the default changed to CSV in May 2026.
+- **CelesTrak OMM breaks on our own timestamp format and it does not throw.** `json2satrec`
+  appends a `Z` when the string lacks one, so a Pydantic-serialised `+00:00` becomes `+00:00Z`,
+  `new Date()` rejects it and the satrec comes back full of `NaN`. Measured: the naive CelesTrak
+  string and the `Z` form both give `jdsatepoch=2461272.03387`; `+00:00` gives `NaN`. Every
+  satellite lands at NaN and renders as an empty layer, with no error anywhere. Attach UTC in
+  the adapter, serialise as `Z`, and assert it with a test. Also: `json2satrec` consumes
+  CelesTrak OMM directly, so do not synthesise TLE lines, and a TLE path silently misses every
+  object catalogued since 2026-07-11 because catalogue numbers are now 6 digits and the format
+  has 5 columns.
 - Satellite positions come out of SGP4 in TEME. Convert to ECEF via GMST at the *same*
   timestamp or the whole constellation smears diagonally.
+
+### Places, imagery and events
+
+- **The USGS third coordinate is depth in kilometres, positive downward, and it is not an
+  altitude.** Fixture range is -0.85 to 165.5. Under this project's metres-above-the-ellipsoid
+  rule the conversion is `altitude_m = -depth_km * 1000`. Straight assignment puts a 165km-deep
+  earthquake 165 metres above the ground. A negative depth is legal and means above sea level.
+  Its `bbox` is six elements with depth interleaved,
+  `[minlon, minlat, mindepth, maxlon, maxlat, maxdepth]`, so `bbox[2]` is not a latitude and must
+  never be fed to `BoundingBox`.
+- Sentinel-2 scenes come from earth-search STAC, keyless, `POST /v1/search` with `collections`,
+  `bbox` and `datetime`. **Filter on `eo:cloud_cover`, and do it with the legacy STAC `query`
+  extension**: earth-search's `conformsTo` list carries no CQL2 class and it **silently discards
+  a `filter-lang: cql2-json` filter and answers HTTP 200**. A cloud-cover filter sent as CQL2
+  returned 174 matches with the first five at 100% cloud, where
+  `{"query": {"eo:cloud_cover": {"lt": 20}}}` with
+  `"sortby": [{"field": "properties.eo:cloud_cover", ...}]` returned 36. Both London scenes on
+  2026-08-18 came back at essentially 100% cloud, and an unfiltered search returns white
+  rectangles that look like a broken layer. `eo:cloud_cover` arrives as an `int` or a `float` in
+  the same response, which a `strict=True` float field rejects, and `proj:centroid` is
+  `{lat, lon}` while everything else in the payload is longitude first. Revisit is about five
+  days, so imagery for a requested date usually does not exist. Carry the scene's own timestamp,
+  never the requested one. `visual` is a Cloud-Optimised GeoTIFF and cannot go straight to a
+  browser.
+- GeoNames `cities15000` is a tab-separated bulk file with no header and 19 fixed columns,
+  UTF-8 with no BOM, and **34,099 rows**, not the ~26,000 this repo used to claim (GeoNames'
+  own readme says "ca 25.000" and is wrong too). Reading it as latin-1 silently mangles every
+  non-ASCII place name rather than raising. **Latitude is field 5 and longitude is field 6**
+  one-based, index 4 and index 5 zero-based, so latitude comes first and that is the opposite
+  of our contract order. An earlier version of this line said column 6 was latitude and
+  column 7 longitude, which is wrong under either counting: corrected 2026-08-20 against the
+  real file and the provider's own readme. `Last-Modified` and `ETag` are both served, so the
+  weekly refresh is a conditional request that normally costs nothing. Cities do not move, so
+  this is a weekly download into a local index, never a poller and never a TTL store.
+- Nominatim and Overpass require a descriptive User-Agent with contact details. **Nominatim's cap
+  is an absolute maximum of one request per second, caching is mandatory rather than advised, and
+  systematic queries are named as unacceptable use by the OSMF**, so the city list comes from the
+  GeoNames dump and never from Nominatim. Corrected 2026-08-20: an earlier version of this line
+  said "roughly one request per second" for both. Cache server-side; never call from the browser.
+
+### People, registries and filings
+
+- **SEC and Companies House both serve a service address that looks like a home address.** SEC's
+  `rptOwnerStreet1` and `addresses.mailing` are the **issuer's** address, because insiders file
+  at the company. The Companies House PSC `address` is the statutory service address, with the
+  residential address suppressed upstream. Ingesting either as a dated home address under ADR 008
+  attaches a corporate HQ to a named individual as their residence, and no test catches it.
+- **FEC `sort=-contribution_receipt_date` returns undated rows, not the newest rows.** The field
+  is nullable, descending sort puts nulls first, and `pagination.last_indexes` confirms it with
+  `sort_null_only: true`. Since ADR 008 drops and counts an undated entry, the whole first page is
+  silently discarded. Exclude nulls explicitly. The name filter is full text, not exact, so a
+  `contributor_name` filter is never an identity match, and the same earmarked contribution
+  appears twice under two `committee_id` values, so a naive aggregate double-counts.
+- Wikidata WDQS has a 60-second query timeout and blocks generic User-Agents. Every query
+  ships with a `LIMIT`. **`wdt:` throws date precision away silently**: a year-only date of birth
+  comes out of `wdt:P569` as `1971-01-01T00:00:00Z` and reads as 1 January, so a date used as a
+  match key comes through `p:P569/psv:P569` with `wikibase:timePrecision` (11 day, 10 month, 9
+  year) or the resolver scores a false match on a fabricated date.
+
+### Social posts, media and cameras
+
+- A Mastodon status object has **no coordinates**, no place object, nothing positional. Any
+  location on a post is derived from its text and is labelled as derived. See ADR 005.
+- `mastodon.social` answers HTTP 422 "requires an authenticated user" on its public
+  timeline; `mas.to` answers 200 for the identical request. Instances are configuration and
+  a 401, 403 or 422 drops that instance for the cycle rather than failing the feed.
+- **A Commons File page can report `missing: true` and still serve a complete licence.** Querying
+  a File against a local wiki rather than Commons returns `"missing": true`,
+  `"imagerepository": "shared"` and a full `imageinfo` block, because the file lives on Commons.
+  **The drop condition is the absence of an `imageinfo` key, never the presence of `missing`.**
+  Dropping on `missing` throws away every Commons-hosted file reached through a local wiki and
+  reports it as unlicensable.
+- **`thumbwidth` and `thumbheight` never describe the bytes at `thumburl`.** Requesting
+  `iiurlwidth=512` returned `thumbwidth: 512` against a URL whose decoded JPEG is 960 wide.
+  Wikimedia renders to its own standard widths only (20, 40, 60, 120, 250, 330, 500, 960, 1280,
+  1920, 3840) and a direct request for anything else is HTTP 400 with an HTML body. Any face
+  bounding box or crop computed against `thumbwidth` is misaligned rather than erroring, which in
+  phase 14 reads as poor match rates rather than a bug. Read the dimensions off the decoded image.
+- **Flickr signals total authentication failure with HTTP 200.** No key, an empty key and a bogus
+  key all return 200 with `{"stat":"fail","code":100,...}`. `raise_for_status()` passes and
+  `response.json()` parses, so the adapter either throws a `KeyError` or treats it as "no photos
+  here". Check `stat == "ok"` first, count the failure, and never let it empty a store. Pass
+  `nojsoncallback=1` or the body is wrapped in `jsonFlickrApi(...)` and is not JSON. Omitting the
+  `license` parameter returns All Rights Reserved items, so the filter is mandatory under our own
+  drop-unlicensed rule.
+- TfL JamCams need **no key**. `lat` and `lon` are top-level but `available`, `imageUrl`,
+  `videoUrl` and `view` are key-value pairs inside `additionalProperties`. **`available` is the
+  string `"true"` or `"false"`, so `if ap["available"]:` is true for both**, and it is not a
+  liveness signal either: the inventory is CDN-cached up to 24 hours (`age: 28798` observed), so
+  the flags lag the real cameras by hours. Compare the string, then take liveness from the
+  still's own `Last-Modified`. Corrected 2026-08-20: an earlier version of this line said
+  honouring `available` was enough to stop a stale frame being served as live. The inventory is
+  1.1MB, so fetch daily, never per view. The mandatory credit is three strings, not one, and the
+  published cap is 500 calls per minute per feed.
+- New York 511 is keyless and is **video, not stills**: `VideoUrl` is an HLS `.m3u8` and there is
+  no image field at all. 1,066 of 2,931 cameras are `Disabled` and a second flag, `Blocked`, is
+  set by the operator during an incident. Honour both, and remove a blocked camera rather than
+  greying it out. **`Disabled == false` is still not enough to render one**: four enabled records
+  have impossible coordinates, three at `0.0, 0.0` and one in China with the longitude sign
+  dropped, all carrying live HLS, so a New York State plausibility box is required. Nine
+  `VideoUrl` values are `.mjpg` rather than HLS, and **eleven records ship plaintext basic-auth
+  credentials to a directly addressable camera over plain HTTP**. Accept
+  `https://*.nysdot.skyvdn.com` only, drop and count everything else, and never store or log
+  those values. The provider documents a required key and a 10-calls-per-60-seconds throttle
+  while ignoring the key parameter entirely. Other states are not the same API: WSDOT answered
+  401 without a key.
+
+### Cross-cutting
+
+- **Live-mover layers are a union of providers, not one with a failover** (ADR 010). Merge
+  key is the existing identity: ICAO 24-bit address for aircraft, MMSI for vessels. Every
+  record carries which provider supplied it and how old
+  that report is. Conflicts resolve by recency, never by provider precedence, and two
+  positions are never averaged into a third no receiver reported. One record per hex is
+  asserted by a test: the obvious bug here is one aircraft counted three times.
+- **Four bounding-box conventions now live in this project and six sources disagree with ours in
+  four different ways.** Our contracts and the STAC `bbox` are `[west, south, east, north]`; OSM
+  notes is `bbox={w},{s},{e},{n}`; Nominatim returns `[south, north, west, east]` as four
+  **strings**; Overpass queries take `(south, west, north, east)`; NASA Worldview snapshot takes
+  `south,west,north,east`, latitude first; aisstream.io wants `[latitude, longitude]` pairs. Flip
+  in the adapter, never downstream. Getting one wrong returns a valid answer about the wrong
+  place, which nobody notices. Nominatim returns `lat` and `lon` as strings while Overpass
+  returns floats for the same values, so the two OSM adapters cannot share a coordinate parser.
+- **Year 9999 is a "never" sentinel on two unrelated sources and it parses cleanly.** Companies
+  House PSC `appointment_verification_end_on` and Copernicus OData `EvictionDate` both use
+  `9999-12-31`. Nothing errors, because `datetime.max` is year 9999: it just renders as a date in
+  the year 9999 on a card. Map it to `None`.
+- **The MediaWiki action API's error contract is an `error` key inside a 200 body.**
+  `gsradius=50000` answered HTTP 200 with `{"error":{"code":"outofrange",...}}`, so a client that
+  branches on status and reaches for `query.geosearch` gets a `KeyError` rather than a clean
+  error. Check for `error` on every action API call: `wbsearchentities`, geosearch and
+  `imageinfo`. `gsradius` is capped at 10 to 10,000 metres, so a wide-area geosearch has to be
+  tiled. `formatversion=2` is mandatory in practice, because without it booleans come back as
+  empty strings and page collections are keyed by pageid instead of being an array.
+- **Overpass, GDELT and WDQS all return non-JSON error bodies, including when `[out:json]` or an
+  `Accept: application/sparql-results+json` was asked for.** GDELT's DOC 2.0 article API states
+  its own cap in the body of its 429, one request every five seconds, as plain text with no
+  content-type at all. Overpass errors are HTML or plain text on 429 and 504. A malformed WDQS
+  query answers a plain-text HTTP 504 reading `upstream request timeout`. Never assume JSON on a
+  non-2xx from any of the three. Cache per profile and back off. Overpass also queues a request
+  for 15 seconds before discarding it, so a client timeout under about 20 seconds looks like a
+  network fault when the queue is simply full.
+- Wikimedia Commons, Mastodon and Flickr license each record separately. The item's own
+  licence and author travel with it into the domain contract, and an item whose licence
+  cannot be determined is dropped and counted rather than shown.
+- `download.geonames.org/robots.txt` is `Disallow: /` for every path and every robot, and
+  `meri.digitraffic.fi/robots.txt` contains `Disallow: /api/`. Both sit behind the rule above
+  that says honour `robots.txt` in code, and both are sources the plan depends on. The
+  provisional reading, unratified, is that `robots.txt` binds crawling rather than a weekly
+  conditional fetch of a published licensed data file. It is recorded with its reasoning and
+  its consequences in `docs/pending-decisions.md` as R4, not in an ADR, because it has not been
+  decided. Anyone relying on it should get it ratified first.
+- **ADR 015's "four small ONNX" is six graphs, and none of the embedders normalises its own
+  output.** CLIP is two towers and Whisper-small is two graphs, so six, and seven once the face
+  detector ArcFace needs is counted (ADR 015 names no detector; YuNet closes it at 233KB, MIT).
+  Measured L2 norms: CLIP text 10.98, CLIP image 11.29, ArcFace 4.91, and MiniLM emits token
+  states rather than a sentence embedding. Mean pooling and L2 normalisation happen in the
+  adapter or every cosine in the store is wrong and nothing errors. Pass
+  `providers=["CPUExecutionProvider"]` explicitly, because CoreML is present by default and a
+  silently different provider produces different vectors. The ADR 015 origin key is a perceptual
+  hash, not CLIP: pHash separates same-photograph from different-photograph by 16 bits while
+  CLIP's margin is 0.03 and inverted, so a CLIP origin key would merge unrelated photographs and
+  split identical ones in the same index. Measured 2026-08-20.
 - Never expose the aisstream, Windy or TfL key to the browser. Keyed feeds are proxied.
 - Windy image tokens expire after ten minutes. Never cache an image URL beyond validity.
 - Cesium's `Entity` API collapses in the low thousands of movers. Use
@@ -133,43 +391,6 @@ Each of these has already cost time or would break something silently.
   cannot be retrofitted; it is a rewrite.
 - Multiple uvicorn workers each run lifespan and so duplicate every poller. Pollers run
   in a single process until a lock exists.
-- Sentinel-2 scenes come from earth-search STAC, keyless, `POST /v1/search` with `collections`,
-  `bbox` and `datetime`. **Filter on `eo:cloud_cover`**: both London scenes on 2026-08-18 came
-  back at essentially 100% cloud, and an unfiltered search returns white rectangles that look
-  like a broken layer. Revisit is about five days, so imagery for a requested date usually does
-  not exist. Carry the scene's own timestamp, never the requested one. `visual` is a
-  Cloud-Optimised GeoTIFF and cannot go straight to a browser.
-- **NASA Worldview snapshot `BBOX` is `south,west,north,east`, latitude first**, the opposite of
-  this project's `[longitude, latitude]` rule. Flip it in the adapter. Getting it wrong returns
-  a valid image of the wrong place, which nobody notices.
-- TfL JamCams need **no key**. `lat` and `lon` are top-level but `available`, `imageUrl`,
-  `videoUrl` and `view` are key-value pairs inside `additionalProperties`. A camera can be
-  listed and dark, so honour `available` or the layer ships a stale frame presented as live.
-  The inventory is 1.1MB: fetch daily, never per view.
-- New York 511 is keyless and is **video, not stills**: `VideoUrl` is an HLS `.m3u8` and there is
-  no image field at all. 1,066 of 2,931 cameras are `Disabled` and a second flag, `Blocked`, is
-  set by the operator during an incident. Honour both, and remove a blocked camera rather than
-  greying it out. Other states are not the same API: WSDOT answered 401 without a key.
-- Nominatim and Overpass require a descriptive User-Agent with contact details and are
-  rate-limited to roughly one request per second. Cache server-side; never call from the
-  browser.
-- GeoNames `cities15000` is a tab-separated bulk file with no header and 19 fixed columns.
-  Column 6 is latitude and column 7 is longitude, the opposite of our contract order.
-  Cities do not move, so this is a weekly download into a local index, never a poller and
-  never a TTL store.
-- A Mastodon status object has **no coordinates**, no place object, nothing positional. Any
-  location on a post is derived from its text and is labelled as derived. See ADR 005.
-- `mastodon.social` answers HTTP 422 "requires an authenticated user" on its public
-  timeline; `mas.to` answers 200 for the identical request. Instances are configuration and
-  a 401, 403 or 422 drops that instance for the cycle rather than failing the feed.
-- GDELT's DOC 2.0 article API states its own cap in the body of its 429: one request every
-  five seconds. It answers 429 with a plain-text notice rather than JSON, so a parser that
-  assumes JSON on any 2xx-or-not will throw. Cache per profile and back off.
-- Wikidata WDQS has a 60-second query timeout and blocks generic User-Agents. Every query
-  ships with a `LIMIT`.
-- Wikimedia Commons, Mastodon and Flickr license each record separately. The item's own
-  licence and author travel with it into the domain contract, and an item whose licence
-  cannot be determined is dropped and counted rather than shown.
 
 ## Data sourcing
 
@@ -416,7 +637,9 @@ code lives in `sources/` adapters. Nothing under `services/` branches on modalit
   propose candidates and nothing else.
 - **Local models are four small ONNX on CPU**: a sentence embedder, a CLIP-family image and
   text embedder, a face embedder of the ArcFace class (used only as ADR 013 permits), and
-  Whisper-small. Weights pinned by hash, not committed, fetched on first use, and the model
+  Whisper-small. Corrected 2026-08-20 against measured runs: that is four models but **six ONNX
+  graphs**, seven counting the face detector ArcFace will not run without, and none of the
+  embedders normalises its own output. See Gotchas. Weights pinned by hash, not committed, fetched on first use, and the model
   version stored on every embedding, because a silent mixed-version index looks like poor
   recall rather than a bug, and because a removal under ADR 008 has to delete every version
   of a reference face embedding. With the weights absent the product runs text-only and
@@ -455,4 +678,13 @@ code lives in `sources/` adapters. Nothing under `services/` branches on modalit
 Docs index: [business context](docs/business-context.md) ·
 [architecture](docs/architecture.md) ·
 [data sources](docs/data-sources.md) · [status](docs/status.md) ·
-[plan](docs/plan/implementation-plan.md) · [decisions](docs/decisions/)
+[plan](docs/plan/implementation-plan.md) · [decisions](docs/decisions/) ·
+[pending decisions](docs/pending-decisions.md)
+
+**Read [pending decisions](docs/pending-decisions.md) before you rely on an ADR.** Eight places
+where two documents in this repo cannot both be true, found by a sweep across all fifteen ADRs on
+2026-08-19, plus three questions nobody has answered yet. Each conflict has a provisional reading
+that the code already assumes, and every one of those readings is unratified. The sharpest is that
+ADR 010 claims a union of ADS-B providers satisfies ADR 011's corroboration test when it does not,
+because two aggregators are repeating one transponder broadcast. Taking ADR 010 at its word would
+inflate every confidence number that rests on a position.

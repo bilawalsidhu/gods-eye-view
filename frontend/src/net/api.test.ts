@@ -7,7 +7,15 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError, fetchAircraft, fetchCapabilities, fetchHealth } from './api';
+import {
+  ApiError,
+  LAYER_SUMMARY_POLL_MS,
+  fetchAircraft,
+  fetchCapabilities,
+  fetchHealth,
+  fetchLayers,
+  fetchVessels,
+} from './api';
 
 /** Records every call and answers with one canned response. */
 function stubFetch(response: { ok: boolean; status: number; body?: unknown }) {
@@ -72,6 +80,39 @@ describe('fetchAircraft', () => {
 
     expect(calls[0]?.path).toBe('/api/aircraft?military_only=true');
     expect(calls[1]?.path).toBe('/api/aircraft');
+  });
+});
+
+describe('fetchVessels', () => {
+  it('asks for the vessel path, which is one merged layer and takes no filter', async () => {
+    const calls = stubFetch({ ok: true, status: 200, body: { count: 0, vessels: [] } });
+
+    await expect(fetchVessels()).resolves.toEqual({ count: 0, vessels: [] });
+    expect(calls[0]?.path).toBe('/api/vessels');
+  });
+});
+
+describe('fetchLayers', () => {
+  it('asks for the layer summary, which is the only place per-provider coverage lives', async () => {
+    // ADR 010 wants two things off these rows: which provider dropped out, and the count
+    // only that provider saw. Neither is on /api/capabilities.
+    const body = {
+      feeds: [],
+      layers: { vessels: 109 },
+      providers: [
+        { layer: 'vessels', provider: 'aishub', records: 0, exclusive: 0, error: 'HTTP 500' },
+      ],
+    };
+    const calls = stubFetch({ ok: true, status: 200, body });
+
+    await expect(fetchLayers()).resolves.toEqual(body);
+    expect(calls[0]?.path).toBe('/api/layers');
+  });
+
+  it('polls no faster than the slowest layer cycles, so a dead provider shows in one cycle', () => {
+    // VESSEL_UNION_MIN_INTERVAL_SECONDS in src/tracker/app.py is 60 seconds and is the
+    // slowest layer here. Polling faster would ask the same question twice per cycle.
+    expect(LAYER_SUMMARY_POLL_MS).toBe(60_000);
   });
 });
 

@@ -147,7 +147,7 @@ describe('LiveFeed message handling', () => {
     runFrame();
 
     expect(applied).toHaveLength(1);
-    expect(applied[0]?.removals.get('aaaaaa')).toBe('aircraft');
+    expect(applied[0]?.aircraft.removals.get('aaaaaa')).toBe('aircraft');
   });
 
   it('coalesces a burst of messages into one application', () => {
@@ -164,7 +164,7 @@ describe('LiveFeed message handling', () => {
 
     // Three messages, one frame, one application. This is what stops the jank.
     expect(applied).toHaveLength(1);
-    expect(applied[0]?.removals.size).toBe(3);
+    expect(applied[0]?.aircraft.removals.size).toBe(3);
   });
 
   it('drops a frame that is not text, because the server only ever sends JSON', () => {

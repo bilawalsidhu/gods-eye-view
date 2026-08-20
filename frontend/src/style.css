@@ -70,13 +70,29 @@ a {
   color: var(--accent);
 }
 
-/* ------------------------------------------------------------------ status */
+/* ------------------------------------------------------------------ dock */
 
-.status {
+/*
+ * The left column: status above, layer rail below. Both were fixed to the top left, which
+ * put them on top of each other as soon as either grew a line, so they share one scrolling
+ * column instead.
+ */
+.dock {
   position: fixed;
   top: 12px;
   left: 12px;
-  max-width: 22rem;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(22rem, calc(100vw - 24px));
+  /* Clears the credit list in the bottom left rather than sliding under it. */
+  max-height: calc(100vh - 190px);
+  overflow-y: auto;
+}
+
+/* ------------------------------------------------------------------ status */
+
+.status {
   padding: 8px 12px;
   background: color-mix(in srgb, var(--panel) 92%, transparent);
   border: 1px solid var(--panel-edge);
@@ -99,6 +115,107 @@ a {
 
 .status-line[data-level="error"] {
   color: var(--error);
+}
+
+/* ------------------------------------------------------------------ layer rail */
+
+.rail {
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  box-shadow: var(--panel-shadow);
+}
+
+.rail-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rail-row {
+  padding: 3px 0;
+}
+
+.rail-row + .rail-row {
+  border-top: 1px solid color-mix(in srgb, var(--panel-edge) 60%, transparent);
+}
+
+.rail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A switch, so the row reads as a control. Only rows this build can draw have one. */
+.rail-switch {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.rail-name {
+  flex: 1;
+}
+
+.rail-count {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* State is never colour alone: the row also carries its reason in words. */
+.rail-row[data-state="degraded"] .rail-count,
+.rail-row[data-state="degraded"] .rail-detail {
+  color: var(--warning);
+}
+
+.rail-row[data-state="unavailable"] .rail-name {
+  color: var(--text-muted);
+}
+
+.rail-row[data-state="unavailable"] .rail-detail {
+  color: var(--error);
+}
+
+.rail-detail,
+.rail-coverage,
+.rail-credit,
+.rail-other {
+  margin: 0;
+  font-size: 12px;
+}
+
+.rail-coverage,
+.rail-credit,
+.rail-other {
+  color: var(--text-muted);
+}
+
+.rail-other {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--panel-edge);
+}
+
+.rail-detail[hidden],
+.rail-coverage[hidden],
+.rail-credit[hidden],
+.rail-other[hidden] {
+  display: none;
+}
+
+/*
+ * Motion is opt-in. The only animated thing in the rail is the row tint on hover, and it
+ * exists solely inside this query, so a reduced-motion setting gets no transition at all
+ * rather than a shorter one.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .rail-row {
+    transition: background-color 120ms ease-out;
+  }
+}
+
+.rail-head:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 /* ------------------------------------------------------------------ card */

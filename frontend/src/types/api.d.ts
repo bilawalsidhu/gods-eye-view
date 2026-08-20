@@ -116,6 +116,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/satellites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Satellites
+         * @description Satellites currently held, one record per NORAD catalogue number.
+         */
+        get: operations["list_satellites_api_satellites_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/satellites/elements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Satellite Elements
+         * @description Cached orbital element sets, served without touching CelesTrak.
+         *
+         *     Declared before nothing else on this prefix by design: the store read above answers
+         *     ``/api/satellites`` and this answers the element cache, which is what a client
+         *     propagating orbits itself needs.
+         */
+        get: operations["satellite_elements_api_satellites_elements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vessels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Vessels
+         * @description Vessels currently known to the server, merged across every reporting provider.
+         *
+         *     One record per MMSI whatever the provider count, per ADR 010, and each record names the
+         *     provider whose report supplied it and how old that report was.
+         */
+        get: operations["list_vessels_api_vessels_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vessels/{mmsi}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Vessel
+         * @description One vessel by MMSI. ``null`` when not currently seen.
+         */
+        get: operations["get_vessel_api_vessels__mmsi__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -350,6 +437,11 @@ export interface components {
         /**
          * LayerCapability
          * @description Whether one layer can run, and why not when it cannot.
+         *
+         *     A merged layer also names its gated providers, as ``vessels/aishub`` and
+         *     ``vessels/aisstream``. The layer itself stays available because its keyless providers
+         *     carry it, and the entry for the gated provider says what is missing. Without that split
+         *     a vessel layer serving Baltic ships would read as entirely off.
          */
         LayerCapability: {
             /** Available */
@@ -372,7 +464,21 @@ export interface components {
             layers: {
                 [key: string]: number;
             };
+            /**
+             * Providers
+             * @default []
+             */
+            providers: components["schemas"]["ProviderCoverage"][];
         };
+        /**
+         * NavigationalStatus
+         * @description AIS navigational status, as broadcast, per ITU-R M.1371.
+         *
+         *     What the master set on the transponder, so it disagrees with the vessel's actual
+         *     behaviour often enough that the card shows both this and the speed.
+         * @enum {string}
+         */
+        NavigationalStatus: "under_way_using_engine" | "at_anchor" | "not_under_command" | "restricted_manoeuvrability" | "constrained_by_draught" | "moored" | "aground" | "engaged_in_fishing" | "under_way_sailing" | "towing_astern" | "pushing_ahead" | "ais_sart_active";
         /**
          * Point
          * @description A position on the WGS84 ellipsoid.
@@ -389,6 +495,181 @@ export interface components {
             /** Lon */
             lon: number;
         };
+        /**
+         * ProviderCoverage
+         * @description One provider's contribution to a merged layer, for the last cycle.
+         *
+         *     ADR 010 asks for two things this carries. ``exclusive`` is the provider-attributable
+         *     count, so "ships only this network can see" is measured rather than asserted. ``error``
+         *     names a provider that dropped out, which is how the layer reports itself degraded
+         *     instead of quietly covering less.
+         *
+         *     This is coverage, not corroboration, and the two must not be confused: under R1 in
+         *     ``docs/pending-decisions.md`` three providers reporting one ship are still one origin,
+         *     because they are repeating one AIS broadcast. Nothing here may be counted as
+         *     independent sources.
+         */
+        ProviderCoverage: {
+            /** Error */
+            error?: string | null;
+            /** Exclusive */
+            exclusive: number;
+            /** Layer */
+            layer: string;
+            /** Provider */
+            provider: string;
+            /** Records */
+            records: number;
+        };
+        /**
+         * Satellite
+         * @description One GP element set, keyed on the NORAD catalogue number.
+         *
+         *     Immutable, like every entity here. Field names are ours; the mapping from the OMM
+         *     keyword to each one is in the adapter and only there.
+         */
+        Satellite: {
+            /**
+             * Arg Of Pericenter Deg
+             * @description Degrees.
+             */
+            arg_of_pericenter_deg: number;
+            /**
+             * Bstar
+             * @description B* drag term, inverse earth radii. Zero on the recorded TDRS 3 record, which is a real value for a geostationary object and not a missing one.
+             */
+            bstar: number;
+            /**
+             * Classification Type
+             * @description U unclassified, C classified, S secret. Both sampled records read U.
+             */
+            classification_type: string;
+            /**
+             * Eccentricity
+             * @description Dimensionless. Outside 0 to 1 is SatRecError 1, an element set SGP4 cannot propagate, so it is refused here.
+             */
+            eccentricity: number;
+            /**
+             * Element Set No
+             * @description Element set number. Both recorded records read 999.
+             */
+            element_set_no: number;
+            /**
+             * Ephemeris Type
+             * @description Always 0 on CelesTrak GP data, which means SGP4. Carried because it is part of the element set the propagator is handed.
+             */
+            ephemeris_type: number;
+            /**
+             * Epoch
+             * Format: date-time
+             * @description The instant these elements describe, UTC, serialised with a Z suffix.
+             */
+            epoch: string;
+            /**
+             * Fetched At
+             * Format: date-time
+             * @description When we fetched this element set. Distinct from epoch, which is when the elements were fitted: the fetch says how current our copy is, the epoch says how current the orbit determination is, and only the second one decides whether a propagated position is worth drawing.
+             */
+            fetched_at: string;
+            /**
+             * Group
+             * @description The CelesTrak group this element set was fetched from, e.g. stations. Provenance, and the reason two overlapping groups cannot double-count an object: the store is keyed on the catalogue number, not on the group.
+             */
+            group: string;
+            /**
+             * Inclination Deg
+             * @description Degrees.
+             */
+            inclination_deg: number;
+            /**
+             * Kind
+             * @default satellite
+             * @constant
+             */
+            kind: "satellite";
+            /**
+             * Mean Anomaly Deg
+             * @description Degrees.
+             */
+            mean_anomaly_deg: number;
+            /**
+             * Mean Motion
+             * @description Revolutions per day, no conversion from the wire. At or below zero is SatRecError 2 and cannot be propagated, so it is refused rather than stored.
+             */
+            mean_motion: number;
+            /**
+             * Mean Motion Ddot
+             * @description Second derivative, already sixthed by the provider. Zero on both recorded records.
+             */
+            mean_motion_ddot: number;
+            /**
+             * Mean Motion Dot
+             * @description First derivative of mean motion, already halved by the provider. Negative on the recorded TDRS 3 record. Goes to satellite.js verbatim.
+             */
+            mean_motion_dot: number;
+            /**
+             * Norad Cat Id
+             * @description NORAD catalogue number, the identity of the object. 1 to 9 digits, never zero-padded to a fixed width.
+             */
+            norad_cat_id: number;
+            /**
+             * Object Id
+             * @description International designator, e.g. 1998-067A. Also absent for analyst objects.
+             */
+            object_id?: string | null;
+            /**
+             * Object Name
+             * @description Name as published, e.g. 'ISS (ZARYA)'. Absent for analyst objects in the 80000 series, which carry no name at all.
+             */
+            object_name?: string | null;
+            /**
+             * Ra Of Asc Node Deg
+             * @description Right ascension of the ascending node, degrees. Not a compass bearing, so it is bounded explicitly rather than typed as one.
+             */
+            ra_of_asc_node_deg: number;
+            /**
+             * Rev At Epoch
+             * @description Revolution number at epoch. 58157 on the recorded ISS record, so the 5-digit TLE column is already at its limit here too.
+             */
+            rev_at_epoch: number;
+            /**
+             * Source
+             * @description Which adapter produced this record, e.g. celestrak. Shown as attribution.
+             */
+            source: string;
+        };
+        /**
+         * SatelliteElements
+         * @description Cached OMM element sets, with when each group was last fetched.
+         *
+         *     ``fetched`` is the evidence for the two-hour floor: it is the instant of the fetch,
+         *     which is a different thing from an element set's epoch. One record per catalogue number,
+         *     freshest epoch winning, because CelesTrak groups overlap.
+         */
+        SatelliteElements: {
+            /** Count */
+            count: number;
+            /** Fetched */
+            fetched: {
+                [key: string]: string;
+            };
+            /** Satellites */
+            satellites: components["schemas"]["Satellite"][];
+        };
+        /**
+         * SatelliteSnapshot
+         * @description Every satellite currently held.
+         *
+         *     No bounding box, and there is nothing to filter on: a satellite record carries orbital
+         *     elements rather than a position, and the browser propagates it. Filtering here would
+         *     mean running SGP4 on the server for every object on every request.
+         */
+        SatelliteSnapshot: {
+            /** Count */
+            count: number;
+            /** Satellites */
+            satellites: components["schemas"]["Satellite"][];
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -401,6 +682,139 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * Vessel
+         * @description One vessel as last reported by an AIS feed.
+         *
+         *     Immutable, like every entity here: the store replaces the whole object on update, so a
+         *     snapshot handed to the API or the WebSocket hub cannot change underneath its reader.
+         *
+         *     ``point.altitude_m`` is always ``None``. AIS reports no altitude, and 0.0 would be this
+         *     contract asserting the source said "at the surface" when it said nothing at all.
+         */
+        Vessel: {
+            /**
+             * Beam M
+             * @description Overall beam, summed in the adapter from reference points C and D.
+             */
+            beam_m?: number | null;
+            /**
+             * Call Sign
+             * @description Radio call sign. The feed sends an empty string when it has none, which the adapter maps to None.
+             */
+            call_sign?: string | null;
+            /**
+             * Course Over Ground Deg
+             * @description Course over ground, the direction the vessel is actually moving. 0.0 is a real course due north; 360.0 on the wire means not available and is mapped to None before this bound is applied.
+             */
+            course_over_ground_deg?: number | null;
+            /**
+             * Destination
+             * @description Destination as typed by the crew, free text and often a route like FIHEL<>FIMHQ<>SESTO. Empty on 91 of 950 live records, mapped to None.
+             */
+            destination?: string | null;
+            /**
+             * Draught M
+             * @description Maximum present static draught in metres. Decimetres on the AIS endpoint and metres on the port-call endpoint, so the conversion is per endpoint in the adapter. 0 means not available.
+             */
+            draught_m?: number | null;
+            /** @description Estimated time of arrival, decoded from the packed AIS field. Carries no year, because the wire field has none. */
+            eta?: components["schemas"]["VesselEta"] | null;
+            /**
+             * Imo
+             * @description IMO ship identification number, seven digits. 0 means not available on the wire and so does anything outside the seven-digit range: the live feed carried values up to 912974400, which is not an IMO number. Both map to None in the adapter, because dropping a real ship over one junk optional field would be worse than not knowing its IMO.
+             */
+            imo?: number | null;
+            /**
+             * Kind
+             * @default vessel
+             * @constant
+             */
+            kind: "vessel";
+            /**
+             * Length M
+             * @description Overall length, summed in the adapter from the AIS reference points A and B. The bound is what those two 9-bit fields can hold, not what a real ship is, so a junk dimension does not drop a real vessel.
+             */
+            length_m?: number | null;
+            /**
+             * Mmsi
+             * @description Maritime Mobile Service Identity, nine digits, zero-padded. The vessel merge key under ADR 010, and only ever a ship-station MMSI: the first three digits are the ITU MID, which gives the flag state in phase 5 with no registry call.
+             */
+            mmsi: string;
+            /**
+             * Name
+             * @description Vessel name as broadcast, capped at 20 characters upstream. None when no static record joined to the position, which was 108 of 1,058 on 2026-08-19.
+             */
+            name?: string | null;
+            /** @description What the master set on the transponder. None for the undefined code and the reserved ones. */
+            navigational_status?: components["schemas"]["NavigationalStatus"] | null;
+            /**
+             * Observed At
+             * Format: date-time
+             * @description When the provider generated the response carrying this record.
+             */
+            observed_at: string;
+            point: components["schemas"]["Point"];
+            /**
+             * Position Age S
+             * @description Seconds between the position fix and observed_at. Per ADR 010 every record carries how old its report is, because recency is what resolves a conflict between two providers and the card has to be able to show why. Digitraffic's default query window is 24 hours, so an age of tens of thousands of seconds is a real answer and not a fault.
+             */
+            position_age_s: number;
+            /**
+             * Rate Of Turn Deg Per Min
+             * @description Rate of turn, decoded from the signed ROT_AIS wire value where ROT_AIS is 4.733 times the square root of the rate. Negative is to port. None when the feed said not available (-128) and also at +/-127, where the feed says the vessel is turning faster than 5 degrees per 30 seconds without giving a rate.
+             */
+            rate_of_turn_deg_per_min?: number | null;
+            /**
+             * Ship Type
+             * @description AIS ship and cargo type code, 1 to 99. 0 means not available.
+             */
+            ship_type?: number | null;
+            /**
+             * Source
+             * @description Which provider supplied this record, e.g. digitraffic. Per ADR 010 this is per record and never per layer: a merged store that cannot say which network saw a given ship is unauditable. The full list of providers that saw it rides on the merge result in services/union.py, and under R1 in docs/pending-decisions.md that list is still one origin for corroboration.
+             */
+            source: string;
+            /**
+             * Speed Over Ground Mps
+             * @description Speed over ground, converted from knots in the adapter.
+             */
+            speed_over_ground_mps?: number | null;
+            /**
+             * True Heading Deg
+             * @description Where the bow points, which is not the course over ground: a vessel in a tideway carries a heading well off its track. 511 means not available.
+             */
+            true_heading_deg?: number | null;
+        };
+        /**
+         * VesselEta
+         * @description A decoded AIS estimated time of arrival.
+         *
+         *     **Not a datetime, and it must never be turned into one.** The wire field is a 20-bit
+         *     packed integer holding month, day, hour and minute, and it carries no year at all, so
+         *     any year is a guess. Storing the raw integer as though it were an epoch dates every
+         *     vessel to 1970.
+         */
+        VesselEta: {
+            /** Day */
+            day: number;
+            /** Hour */
+            hour: number;
+            /** Minute */
+            minute: number;
+            /** Month */
+            month: number;
+        };
+        /**
+         * VesselSnapshot
+         * @description Every vessel currently held, optionally filtered to a viewport.
+         */
+        VesselSnapshot: {
+            /** Count */
+            count: number;
+            /** Vessels */
+            vessels: components["schemas"]["Vessel"][];
         };
     };
     responses: never;
@@ -533,6 +947,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LayerSummary"];
+                };
+            };
+        };
+    };
+    list_satellites_api_satellites_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SatelliteSnapshot"];
+                };
+            };
+        };
+    };
+    satellite_elements_api_satellites_elements_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SatelliteElements"];
+                };
+            };
+        };
+    };
+    list_vessels_api_vessels_get: {
+        parameters: {
+            query?: {
+                west?: number | null;
+                south?: number | null;
+                east?: number | null;
+                north?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VesselSnapshot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_vessel_api_vessels__mmsi__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mmsi: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vessel"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

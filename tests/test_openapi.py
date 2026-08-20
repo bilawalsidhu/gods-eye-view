@@ -25,6 +25,10 @@ EXPECTED_PATHS = {
     "/api/capabilities",
     "/api/aircraft",
     "/api/aircraft/{icao24}",
+    "/api/vessels",
+    "/api/vessels/{mmsi}",
+    "/api/satellites",
+    "/api/satellites/elements",
     "/api/layers",
 }
 
@@ -65,9 +69,9 @@ def test_the_committed_schema_matches_the_app(built_schema: dict[str, Any]) -> N
     )
 
 
-def test_the_schema_declares_the_five_expected_paths(built_schema: dict[str, Any]) -> None:
+def test_the_schema_declares_every_expected_path(built_schema: dict[str, Any]) -> None:
     assert set(built_schema["paths"]) == EXPECTED_PATHS
-    assert len(built_schema["paths"]) == 5
+    assert len(built_schema["paths"]) == len(EXPECTED_PATHS)
 
 
 def test_the_websocket_route_is_absent_from_the_schema(built_schema: dict[str, Any]) -> None:
@@ -139,5 +143,5 @@ def test_write_mode_produces_the_committed_content(
     monkeypatch.setattr(sys, "argv", ["dump_openapi.py"])
 
     assert dump_module.main() == 0
-    assert "(5 paths)" in capsys.readouterr().out
+    assert f"({len(EXPECTED_PATHS)} paths)" in capsys.readouterr().out
     assert target.read_text() == COMMITTED.read_text()

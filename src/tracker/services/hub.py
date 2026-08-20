@@ -17,7 +17,7 @@ import contextlib
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Any, Protocol
 
 from pydantic import TypeAdapter
 
@@ -87,17 +87,23 @@ class Hub:
         self._interval = broadcast_interval_seconds
         self._health_provider = health_provider
         self._connections: set[Connection] = set()
-        self._layers: dict[LayerName, EntityStore[Entity]] = {}
+        self._layers: dict[LayerName, EntityStore[Any]] = {}
         self._task: asyncio.Task[None] | None = None
         self._stopping = asyncio.Event()
 
     # ------------------------------------------------------------------ layers
 
-    def register_layer(self, layer: LayerName, store: EntityStore[Entity]) -> None:
+    def register_layer[T: Entity](self, layer: LayerName, store: EntityStore[T]) -> None:
         """Attach a store to a layer name.
 
         The hub never needs to derive an entity's identity itself: the store already
         tracks keys, and hands them back in :attr:`StoreChanges.removed`.
+
+        Generic in the entity type, and it has to be. ``EntityStore[T]`` is invariant
+        because ``upsert_many`` takes a ``T``, so once ``Entity`` became a union in phase 2
+        an ``EntityStore[Aircraft]`` stopped satisfying ``EntityStore[Entity]``. The hub
+        only ever reads out of a store, so the bound keeps the call site checked while the
+        registry holds them read-only.
         """
         self._layers[layer] = store
 

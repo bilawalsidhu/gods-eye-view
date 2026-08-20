@@ -7,23 +7,34 @@
  *
  * The envelope types are written here rather than generated. `openapi.json` describes the
  * REST surface only, so the WebSocket contract is expressed in terms of the generated
- * entity schemas: `Aircraft` and `FeedHealth` still come from the backend contract, and a
- * change to either is a compile error here.
+ * entity schemas: `Aircraft`, `Vessel`, `Satellite` and `FeedHealth` all come from the
+ * backend contract, and a change to any of them is a compile error here.
+ *
+ * **One socket carries every layer, so this is where they are separated.** The hub
+ * subscribes a new connection to every layer it holds, and the backend entity union is
+ * discriminated on `kind`. Each frame is routed by its layer name to the change set for
+ * that kind, and an entity whose `kind` does not match the layer it arrived on is dropped.
+ * A layer this build has no renderer for is counted and ignored: never thrown, because a
+ * newer server adding a layer must not break an older tab, and never rendered, because a
+ * vessel keyed as an aircraft is a garbage pin and a satellite carries no position at all.
  */
 
-import type { Aircraft, FeedHealth, LayerName } from '../types/entities';
+import type { Aircraft, FeedHealth, LayerName, Satellite, Vessel } from '../types/entities';
+
+/** The entity union, exactly as `contracts/messages.py` declares it. */
+export type Entity = Aircraft | Vessel | Satellite;
 
 export interface SnapshotMessage {
   type: 'snapshot';
   layer: LayerName;
-  entities: Aircraft[];
+  entities: Entity[];
   server_time: string;
 }
 
 export interface UpsertMessage {
   type: 'upsert';
   layer: LayerName;
-  entities: Aircraft[];
+  entities: Entity[];
   server_time: string;
 }
 
@@ -42,26 +53,78 @@ export interface FeedStatusMessage {
 
 export type ServerMessage = SnapshotMessage | UpsertMessage | RemoveMessage | FeedStatusMessage;
 
-/** One frame's worth of changes, already reduced to the latest value per aircraft. */
-export interface Batch {
+/** The three frame types that carry entities, as opposed to feed health. */
+type EntityMessage = SnapshotMessage | UpsertMessage | RemoveMessage;
+
+/** One frame's worth of changes for one kind of entity, reduced to the latest per key. */
+export interface Changes<T> {
   /** A full layer state, which replaces whatever that layer held. */
-  snapshots: Map<LayerName, Aircraft[]>;
-  upserts: Map<string, { aircraft: Aircraft; layer: LayerName }>;
+  snapshots: Map<LayerName, T[]>;
+  upserts: Map<string, { entity: T; layer: LayerName }>;
   removals: Map<string, LayerName>;
-  feeds: FeedHealth[] | null;
 }
 
-function emptyBatch(): Batch {
-  return { snapshots: new Map(), upserts: new Map(), removals: new Map(), feeds: null };
+/**
+ * One frame's worth of changes, split by the kind of thing that changed.
+ *
+ * Split rather than merged because the three kinds share no identity and no renderer: an
+ * aircraft is keyed on its ICAO address, a vessel on its MMSI, and a satellite carries
+ * orbital elements and no position whatsoever.
+ */
+export interface Batch {
+  aircraft: Changes<Aircraft>;
+  vessels: Changes<Vessel>;
+  satellites: Changes<Satellite>;
+  feeds: FeedHealth[] | null;
+  /**
+   * Frames and entities this build could not route, counted rather than dropped silently.
+   *
+   * Two causes, both meaning the browser was sent something it cannot draw: a frame for a
+   * layer with no renderer here, and an entity whose `kind` is not the one its layer
+   * carries. Counted so a mismatch between server and browser is visible instead of
+   * looking like a quiet layer.
+   */
+  ignored: number;
+}
+
+export function emptyChanges<T>(): Changes<T> {
+  return { snapshots: new Map(), upserts: new Map(), removals: new Map() };
+}
+
+export function emptyBatch(): Batch {
+  return {
+    aircraft: emptyChanges(),
+    vessels: emptyChanges(),
+    satellites: emptyChanges(),
+    feeds: null,
+    ignored: 0,
+  };
+}
+
+function changesEmpty<T>(changes: Changes<T>): boolean {
+  return changes.snapshots.size === 0 && changes.upserts.size === 0 && changes.removals.size === 0;
 }
 
 function isEmpty(batch: Batch): boolean {
   return (
-    batch.snapshots.size === 0 &&
-    batch.upserts.size === 0 &&
-    batch.removals.size === 0 &&
-    batch.feeds === null
+    changesEmpty(batch.aircraft) &&
+    changesEmpty(batch.vessels) &&
+    changesEmpty(batch.satellites) &&
+    batch.feeds === null &&
+    batch.ignored === 0
   );
+}
+
+function isAircraft(entity: Entity): entity is Aircraft {
+  return entity.kind === 'aircraft';
+}
+
+function isVessel(entity: Entity): entity is Vessel {
+  return entity.kind === 'vessel';
+}
+
+function isSatellite(entity: Entity): entity is Satellite {
+  return entity.kind === 'satellite';
 }
 
 /** Schedules the flush. Swapped in tests so no test has to wait for a real frame. */
@@ -78,7 +141,7 @@ const nextFrame: FlushScheduler = (flush) => {
  * batches on its own interval, but a snapshot of several thousand aircraft still arrives
  * as one message while deltas arrive as many. Applying each one as it lands means
  * touching Cesium several times between frames for no visible benefit, which is where
- * the jank comes from. Only the last value for an aircraft in a frame is ever drawn.
+ * the jank comes from. Only the last value for an entity in a frame is ever drawn.
  */
 export class MessageBatcher {
   private batch = emptyBatch();
@@ -92,44 +155,81 @@ export class MessageBatcher {
   }
 
   push(message: ServerMessage): void {
-    switch (message.type) {
-      case 'snapshot': {
-        this.batch.snapshots.set(message.layer, message.entities);
-        // A snapshot supersedes anything still pending for that layer.
-        for (const [id, pending] of this.batch.upserts) {
-          if (pending.layer === message.layer) {
-            this.batch.upserts.delete(id);
-          }
-        }
-        for (const [id, layer] of this.batch.removals) {
-          if (layer === message.layer) {
-            this.batch.removals.delete(id);
-          }
-        }
-        break;
-      }
-      case 'upsert': {
-        for (const entity of message.entities) {
-          this.batch.upserts.set(entity.icao24, { aircraft: entity, layer: message.layer });
-          this.batch.removals.delete(entity.icao24);
-        }
-        break;
-      }
-      case 'remove': {
-        for (const id of message.ids) {
-          this.batch.removals.set(id, message.layer);
-          if (this.batch.upserts.get(id)?.layer === message.layer) {
-            this.batch.upserts.delete(id);
-          }
-        }
-        break;
-      }
-      case 'feed_status': {
-        this.batch.feeds = message.feeds;
-        break;
-      }
+    if (message.type === 'feed_status') {
+      this.batch.feeds = message.feeds;
+    } else {
+      this.route(message);
     }
     this.request();
+  }
+
+  /**
+   * Send one frame to the change set for its layer.
+   *
+   * By layer, not by the kind of the entities in it, because an empty snapshot has no
+   * entities to read a kind off and still has to clear its layer: after a reconnect an
+   * empty vessel snapshot is the only thing that takes yesterday's ships off the globe.
+   */
+  private route(message: EntityMessage): void {
+    switch (message.layer) {
+      case 'aircraft':
+      case 'military': {
+        this.fold(this.batch.aircraft, message, isAircraft, (record) => record.icao24);
+        break;
+      }
+      case 'vessels': {
+        this.fold(this.batch.vessels, message, isVessel, (record) => record.mmsi);
+        break;
+      }
+      case 'satellites': {
+        this.fold(this.batch.satellites, message, isSatellite, (record) =>
+          String(record.norad_cat_id),
+        );
+        break;
+      }
+      default: {
+        // `events` and `cameras` are on the contract and have no renderer in this build.
+        this.batch.ignored += 1;
+      }
+    }
+  }
+
+  private fold<T extends Entity>(
+    changes: Changes<T>,
+    message: EntityMessage,
+    belongs: (entity: Entity) => entity is T,
+    key: (record: T) => string,
+  ): void {
+    if (message.type === 'remove') {
+      for (const id of message.ids) {
+        changes.removals.set(id, message.layer);
+        if (changes.upserts.get(id)?.layer === message.layer) {
+          changes.upserts.delete(id);
+        }
+      }
+      return;
+    }
+    const wanted = message.entities.filter((entity) => belongs(entity));
+    this.batch.ignored += message.entities.length - wanted.length;
+    if (message.type === 'snapshot') {
+      changes.snapshots.set(message.layer, wanted);
+      // A snapshot supersedes anything still pending for that layer.
+      for (const [id, pending] of changes.upserts) {
+        if (pending.layer === message.layer) {
+          changes.upserts.delete(id);
+        }
+      }
+      for (const [id, layer] of changes.removals) {
+        if (layer === message.layer) {
+          changes.removals.delete(id);
+        }
+      }
+      return;
+    }
+    for (const entity of wanted) {
+      changes.upserts.set(key(entity), { entity, layer: message.layer });
+      changes.removals.delete(key(entity));
+    }
   }
 
   private request(): void {

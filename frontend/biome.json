@@ -21,6 +21,7 @@
       "!coverage",
       "!playwright-report",
       "!test-results",
+      "!.omc",
       "!src/types/api.d.ts",
       "!pnpm-lock.yaml"
     ]

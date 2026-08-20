@@ -11,6 +11,9 @@ importers:
       cesium:
         specifier: ^1.135.0
         version: 1.144.0
+      satellite.js:
+        specifier: ^7.1.0
+        version: 7.1.0
     devDependencies:
       '@axe-core/playwright':
         specifier: ^4.13.0
@@ -1583,6 +1586,9 @@ packages:
     resolution: {integrity: sha512-rSr7irW0K7QRWzjdJXqZowkcRdDtjRduh43rBltnVKd0VFq839l1lJoDvGJb6gl7+4rTTCrPWu+YfujUL8Ug7w==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
+
+  satellite.js@7.1.0:
+    resolution: {integrity: sha512-U6nRml9Nb7dV9LJPiMNPyna7U7ry+1nXYkOeCEG7K/YbojQQLHHmcjPisp03VNY+HLcbQHqbt7t4t1vQMaKCLQ==}
 
   saxes@6.0.0:
     resolution: {integrity: sha512-xAg7SOnEhrm5zI3puOOKyy1OMcMlIJZYNJY7xLBwSze0UjhPLnWfj2GF2EpT0jmzaJKIWKHLsaSSajf35bcYnA==}
@@ -3339,6 +3345,8 @@ snapshots:
       '@rolldown/binding-openharmony-arm64': 1.2.4
       '@rolldown/binding-win32-arm64-msvc': 1.2.4
       '@rolldown/binding-win32-x64-msvc': 1.2.4
+
+  satellite.js@7.1.0: {}
 
   saxes@6.0.0:
     dependencies:

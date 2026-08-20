@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ credentials
 
     aisstream_api_key: str = ""
+    aishub_username: str = Field(
+        default="",
+        description="AISHub grants API access only to members streaming raw NMEA from a "
+        "physical AIS receiver, so this is empty until an antenna is sited and accepted. "
+        "Blank means the provider is left out of the vessel union entirely and reports "
+        "itself unavailable, rather than being called and failing every cycle.",
+    )
     windy_api_key: str = ""
     tfl_app_key: str = ""
     cesium_ion_token: str = ""
@@ -79,6 +86,73 @@ class Settings(BaseSettings):
     adsb_default_lat: float = Field(default=51.5, ge=-90.0, le=90.0)
     adsb_default_lon: float = Field(default=-0.12, ge=-180.0, le=180.0)
 
+    # ------------------------------------------------------------------ vessel feeds
+
+    fintraffic_base_url: str = "https://meri.digitraffic.fi"
+    digitraffic_user: str = Field(
+        default="",
+        description="Value for the Digitraffic-User header the provider asks every API "
+        "user to send. Blank omits the header rather than sending an empty one, and the "
+        "provider then caps the IP at 60 requests a minute. The wiring falls back to the "
+        "User-Agent so a deployment that sets contact_email identifies itself anyway.",
+    )
+    fintraffic_poll_seconds: Seconds = Field(
+        default=60.0,
+        description="The provider caches for 60 seconds, so a shorter cycle returns the "
+        "same body. The floor is MIN_INTERVAL_SECONDS in sources/fintraffic.py and this "
+        "value can only ever slow the feed down.",
+    )
+    fintraffic_window_seconds: Seconds = Field(
+        default=600.0,
+        description="How far back the positions query reaches. Ten minutes keeps a ship "
+        "that reports slowly on the globe between polls. Clamped up to the cadence floor "
+        "in the client, so it can be widened and never narrowed.",
+    )
+    aishub_poll_seconds: Seconds = Field(
+        default=60.0,
+        description="AISHub answers an over-frequent call with an empty body, and states "
+        "once a minute. The floor is MIN_INTERVAL_SECONDS in sources/aishub.py.",
+    )
+    aishub_interval_minutes: int = Field(
+        default=10,
+        ge=1,
+        description="Caps the age of the positions AISHub returns, which is what keeps a "
+        "worldwide poll cheap.",
+    )
+    aisstream_bbox_west: float = Field(
+        default=1.0,
+        ge=-180.0,
+        le=180.0,
+        description="West edge of the aisstream.io subscription. The four edges default "
+        "to the southern North Sea and Channel approaches, which is dense real shipping. "
+        "The provider rejects a subscription with no box and warns that a global box "
+        "averages 300 messages a second.",
+    )
+    aisstream_bbox_south: float = Field(default=51.0, ge=-90.0, le=90.0)
+    aisstream_bbox_east: float = Field(default=8.0, ge=-180.0, le=180.0)
+    aisstream_bbox_north: float = Field(default=58.0, ge=-90.0, le=90.0)
+    aisstream_reconnect_seconds: Seconds = Field(
+        default=1.0,
+        description="Base reconnect delay. Floored at MIN_RECONNECT_DELAY_SECONDS in "
+        "sources/aisstream.py, because a reconnect sends a subscribe frame and the "
+        "provider caps subscription updates at one a second.",
+    )
+
+    # ------------------------------------------------------------------ satellite feed
+
+    celestrak_poll_seconds: Seconds = Field(
+        default=21600.0,
+        description="Six hours. CelesTrak updates GP data every two, so this fetches a "
+        "fresh element set without approaching the floor. The floor is MIN_GROUP_INTERVAL_S "
+        "in sources/celestrak.py and is not configurable.",
+    )
+    celestrak_groups: tuple[str, ...] = Field(
+        default=("stations",),
+        description="Which GP groups to poll, each on its own two-hour floor. The active "
+        "list is 4 to 6 MB per refresh and CelesTrak names it as specifically rate "
+        "enforced, so stations is the default.",
+    )
+
     # ------------------------------------------------------------------ store and fan-out
 
     entity_ttl_seconds: Seconds = Field(
@@ -99,16 +173,25 @@ class Settings(BaseSettings):
     http_max_connections: int = Field(default=32, ge=1)
     http_max_keepalive: int = Field(default=16, ge=1)
 
-    @field_validator("adsb_base_url", "adsb_failover_base_url")
+    @field_validator("adsb_base_url", "adsb_failover_base_url", "fintraffic_base_url")
     @classmethod
     def _no_trailing_slash(cls, value: str) -> str:
         """Adapters join paths with an f-string, so a trailing slash would double up."""
         return value.rstrip("/")
 
     @property
-    def ship_layer_available(self) -> bool:
-        """Whether the aisstream key is set, which the ship layer needs."""
+    def aisstream_available(self) -> bool:
+        """Whether the aisstream.io key is set, which global vessel coverage needs.
+
+        Not the same question as whether the vessel layer runs. Fintraffic Digitraffic is
+        keyless, so the layer serves without this and covers the Baltic only.
+        """
         return bool(self.aisstream_api_key)
+
+    @property
+    def aishub_available(self) -> bool:
+        """Whether an AISHub username is set. False until a physical receiver is accepted."""
+        return bool(self.aishub_username)
 
     @property
     def camera_layer_available(self) -> bool:

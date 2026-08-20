@@ -15,9 +15,14 @@ from fastapi import Depends, Request
 from tracker.config import Settings
 from tracker.contracts.aircraft import Aircraft
 from tracker.contracts.geo import BoundingBox
+from tracker.contracts.satellite import Satellite
+from tracker.contracts.vessel import Vessel
 from tracker.services.hub import Hub
 from tracker.services.poller import PollerGroup
 from tracker.services.store import EntityStore
+from tracker.services.union import UnionResult
+from tracker.sources.aisstream import AisStreamClient
+from tracker.sources.celestrak import CelestrakClient
 
 
 @dataclass(slots=True)
@@ -35,6 +40,16 @@ class AppState:
     pollers: PollerGroup
     aircraft: EntityStore[Aircraft]
     military: EntityStore[Aircraft]
+    vessels: EntityStore[Vessel]
+    satellites: EntityStore[Satellite]
+    celestrak: CelestrakClient
+    """The satellite feed, held rather than rebuilt because it owns the two-hour floor.
+
+    ``/api/satellites/elements`` reads its cache and ``/api/capabilities`` reads its
+    unavailable reason, so the layer's availability is a runtime fact from the client
+    rather than a credential check: CelesTrak is keyless and there is nothing to check.
+    """
+
     attribution: tuple["Attribution", ...] = field(default_factory=tuple)
     viewport: BoundingBox | None = None
     """The area the most recent client asked for.
@@ -44,6 +59,22 @@ class AppState:
     than once per browser, which is what keeps us inside a free provider's tolerance. If
     this ever serves many simultaneous users it becomes a merged set of boxes, and the
     poller reading it is the only thing that changes.
+    """
+
+    aisstream: AisStreamClient | None = None
+    """The global vessel subscription, or ``None`` when no aisstream.io key is configured.
+
+    A supervised WebSocket rather than a poller, so the lifespan starts and stops it
+    directly. Absent it, the vessel layer runs on the keyless providers and reports
+    aisstream unavailable, exactly like any other missing key.
+    """
+
+    vessel_union: UnionResult[Vessel] | None = None
+    """What the last vessel cycle merged, kept for reporting rather than for rendering.
+
+    ADR 010 asks for a provider-attributable count and for a degraded layer to name which
+    provider is missing. Both are derived from this, so ``/api/layers`` reports what
+    actually came back instead of a summary somebody has to remember to update.
     """
 
 

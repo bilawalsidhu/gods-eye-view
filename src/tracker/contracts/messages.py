@@ -13,14 +13,16 @@ from pydantic import Field
 from tracker.contracts.aircraft import Aircraft
 from tracker.contracts.base import StrictModel, UtcDatetime
 from tracker.contracts.geo import BoundingBox
+from tracker.contracts.satellite import Satellite
+from tracker.contracts.vessel import Vessel
 
-type Entity = Aircraft
-"""The entity union.
+type Entity = Annotated[Aircraft | Vessel | Satellite, Field(discriminator="kind")]
+"""The entity union, discriminated on ``kind``.
 
-One member today. Phase 2 widens this to
-``Annotated[Aircraft | Vessel | Satellite, Field(discriminator="kind")]``; every domain
-contract already carries the ``kind`` literal that discrimination needs, so widening it
-is additive and touches no consumer.
+Widened in phase 2 and the claim that it would touch no consumer held: every domain
+contract already carries the ``kind`` literal, so nothing downstream changed. Pydantic
+picks the member off ``kind`` rather than trying each in turn, which is why a vessel that
+fails validation reports a vessel error instead of three unrelated ones.
 """
 
 type LayerName = Literal["aircraft", "military", "vessels", "satellites", "events", "cameras"]

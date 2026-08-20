@@ -23,9 +23,10 @@ import {
 import type { Label, PointPrimitive, Scene } from 'cesium';
 
 import { aircraftLabel, inEmergency } from '../../domain/derive';
+import { cesiumColour } from '../colour';
 import { advanceGreatCircle } from '../project';
 import { EMERGENCY_COLOUR, SELECTION_COLOUR, colourFor, pixelSizeFor } from '../palette';
-import type { Batch } from '../../net/ws';
+import type { Changes } from '../../net/ws';
 import type { Aircraft, AircraftClass, LayerName } from '../../types/entities';
 
 /** Labels are the most expensive tier, so they only exist within this range in metres. */
@@ -35,26 +36,6 @@ const LABEL_FONT = '500 12px system-ui, -apple-system, "Segoe UI", sans-serif';
 
 /** Same near-white as the panel text, so a label reads as chrome and not as an entity. */
 const LABEL_COLOUR = '#e6edf3';
-
-/**
- * One Cesium colour per CSS colour string, built once.
- *
- * `Color.fromCssColorString` parses; doing that per aircraft per update would be the
- * single hottest thing in the loop. Filled on first use rather than warmed at module
- * load: the palette is nine colours, so the eager version bought one parse each and cost
- * a top-level side effect in an imported module.
- */
-const COLOUR_CACHE = new Map<string, Color>();
-
-function cesiumColour(css: string): Color {
-  const cached = COLOUR_CACHE.get(css);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const made = Color.fromCssColorString(css);
-  COLOUR_CACHE.set(css, made);
-  return made;
-}
 
 /** What the layer holds for one aircraft. Kept flat: this is touched every frame. */
 interface Slot {
@@ -88,6 +69,14 @@ export class AircraftLayer {
   private readonly freePoints: PointPrimitive[] = [];
   private readonly freeLabels: Label[] = [];
   private selectedId: string | null = null;
+  /**
+   * Layers the rail has switched off.
+   *
+   * Per layer rather than per collection: the civil feed and the military feed share one
+   * `PointPrimitiveCollection`, so `collection.show` would hide both and a rail switch for
+   * one of them would be a lie.
+   */
+  private readonly hiddenLayers = new Set<LayerName>();
 
   constructor(scene: Scene) {
     this.points = new PointPrimitiveCollection({
@@ -109,15 +98,15 @@ export class AircraftLayer {
    * Snapshots first, then deltas: a snapshot is the authoritative state of its layer at
    * the moment it was taken, and any delta batched alongside it is newer.
    */
-  apply(batch: Batch, nowMs: number = Date.now()): void {
-    for (const [layer, entities] of batch.snapshots) {
+  apply(changes: Changes<Aircraft>, nowMs: number = Date.now()): void {
+    for (const [layer, entities] of changes.snapshots) {
       this.replace(entities, layer, nowMs);
     }
-    for (const [id, layer] of batch.removals) {
+    for (const [id, layer] of changes.removals) {
       this.removeOne(id, layer);
     }
-    for (const entry of batch.upserts.values()) {
-      this.upsertOne(entry.aircraft, entry.layer, nowMs);
+    for (const entry of changes.upserts.values()) {
+      this.upsertOne(entry.entity, entry.layer, nowMs);
     }
   }
 
@@ -190,8 +179,9 @@ export class AircraftLayer {
    */
   advance(nowMs: number = Date.now()): boolean {
     let moved = false;
+    const anyHidden = this.hiddenLayers.size > 0;
     for (const slot of this.slots.values()) {
-      if (!slot.moving) {
+      if (!slot.moving || (anyHidden && this.hiddenLayers.has(slot.layer))) {
         continue;
       }
       const elapsed = (nowMs - slot.anchorMs) / 1000;
@@ -206,6 +196,29 @@ export class AircraftLayer {
       moved = true;
     }
     return moved;
+  }
+
+  /**
+   * Show or hide one layer's aircraft, for the rail switch.
+   *
+   * Hidden, never dropped: the records stay tracked, so switching a layer back on draws the
+   * picture the store has kept rather than waiting on a refetch. Hidden aircraft are also
+   * skipped by `advance`, which is where the per-frame cost of a layer actually is, so a
+   * switched-off layer costs one walk at the moment it is switched and nothing after that.
+   */
+  setVisible(layer: LayerName, visible: boolean): void {
+    if (visible) {
+      this.hiddenLayers.delete(layer);
+    } else {
+      this.hiddenLayers.add(layer);
+    }
+    for (const slot of this.slots.values()) {
+      if (slot.layer !== layer) {
+        continue;
+      }
+      slot.point.show = visible;
+      slot.label.show = visible;
+    }
   }
 
   /** Highlight one aircraft, or none. Selection is an outline, never a hue change. */
@@ -267,14 +280,15 @@ export class AircraftLayer {
     // somewhere to start.
     const point = this.freePoints.pop() ?? this.points.add({ position: Cartesian3.ZERO });
     const label = this.freeLabels.pop() ?? this.labels.add({ position: Cartesian3.ZERO });
-    point.show = true;
+    const shown = !this.hiddenLayers.has(layer);
+    point.show = shown;
     point.id = id;
     // The label needs the same id as its point. Cesium copies a label's id onto the glyph
     // billboards it renders, so a click on the callsign text picks those billboards. Left
     // unset, picking a label returned undefined and read as a click on empty space, which
     // deselected the aircraft and closed the card the user was trying to open.
     label.id = id;
-    label.show = true;
+    label.show = shown;
     label.font = LABEL_FONT;
     label.style = LabelStyle.FILL_AND_OUTLINE;
     label.outlineColor = Color.BLACK;

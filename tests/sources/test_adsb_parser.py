@@ -806,6 +806,32 @@ def test_the_adsb_fi_envelope_parses(adsbfi_point_payload: bytes) -> None:
     assert sum(a.on_ground for a in aircraft) == ADSBFI_POINT_ON_GROUND
 
 
+def test_the_adsb_fi_envelope_sends_now_in_seconds_not_milliseconds(
+    adsbfi_point_payload: bytes,
+) -> None:
+    """Two providers, one field name, two units. Reading it wrong dates a batch to 1970.
+
+    Both captures were taken on 2026-08-19. adsb.lol sent ``now: 1787165611001`` and
+    mirrored it in ``ctime``; adsb.fi sent ``now: 1787170658.001`` next to a fractional
+    ``ptime`` of 0.067, so its value is seconds. Dividing it by a thousand put the whole
+    adsb.fi batch at 1970-01-21, which meant every adsb.fi aircraft reached the domain 56
+    years stale and could never win a recency contest in
+    :mod:`tracker.services.union`. That is provider precedence by accident, which is the
+    one thing ADR 010 says the merge must never do.
+    """
+    aircraft = parse_response(adsbfi_point_payload, source="adsb.fi")
+
+    assert {a.observed_at for a in aircraft} == {
+        datetime(2026, 8, 19, 20, 17, 38, 1_000, tzinfo=UTC)
+    }
+
+
+def test_a_nonsense_envelope_timestamp_is_a_contract_violation_not_an_overflow() -> None:
+    """Callers catch contract violations to fail over. An ``OverflowError`` kills the poll."""
+    with pytest.raises(ContractViolationError, match="unusable envelope timestamp"):
+        parse_response(_envelope(_record(), now=1e300), source="adsb.lol")
+
+
 def test_both_provider_envelopes_produce_the_same_shape(
     adsb_point_payload: bytes, adsbfi_point_payload: bytes
 ) -> None:

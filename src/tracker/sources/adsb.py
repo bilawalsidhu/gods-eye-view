@@ -63,6 +63,23 @@ That is exactly what happened here, and only ``/v2/mil`` survived because it hap
 path-identical across both. Verified 2026-08-19: both providers return 200 for this shape.
 """
 
+MILLISECOND_EPOCH_FLOOR: Final = 1e11
+"""At or above this, the envelope's ``now`` is milliseconds; below it, seconds.
+
+readsb providers do not agree on the unit of their own batch timestamp. Verified against
+the two captures taken on 2026-08-19: adsb.lol sent ``now: 1787165611001`` and mirrored it
+in ``ctime``, both milliseconds; adsb.fi sent ``now: 1787170658.001`` alongside a
+fractional ``ptime`` of 0.067, both seconds. Dividing adsb.fi's value by a thousand dated
+its entire batch to 1970-01-21, so every adsb.fi aircraft reached the domain 56 years
+stale, and the recency merge in :mod:`tracker.services.union` could never let it win a
+shared aircraft. That is provider precedence arriving by accident, which is the one thing
+ADR 010 says the merge must not do.
+
+The boundary is unambiguous by orders of magnitude rather than by luck: 1e11 milliseconds
+is 1973 and 1e11 seconds is the year 5138, so no epoch a feed could plausibly send falls
+near it.
+"""
+
 ICAO_ADDRESS_HEX_DIGITS: Final = 6
 """An ICAO 24-bit address is exactly six hex digits."""
 _HEX_DIGITS: Final = frozenset("0123456789abcdef")
@@ -122,8 +139,10 @@ layer sat empty. A silent zero is worse than an error, so
 class AdsbResponseWire(WireModel):
     """The envelope around a readsb ``/v2`` aircraft list.
 
-    ``now`` is milliseconds since the Unix epoch, and it is the authoritative timestamp
-    for the whole batch: individual records carry only an age in seconds relative to it.
+    ``now`` is the authoritative timestamp for the whole batch, since individual records
+    carry only an age in seconds relative to it. Its unit varies by provider, milliseconds
+    on adsb.lol and seconds on adsb.fi, so :data:`MILLISECOND_EPOCH_FLOOR` decides which
+    it is rather than the field's type.
 
     Field names vary between providers, so the aliases carry the differences rather than
     the parser: adsb.lol uses ``ac`` and ``total``, adsb.fi uses ``aircraft`` and
@@ -291,20 +310,24 @@ def _require_known_envelope(payload: bytes | str, *, source: str) -> None:
         )
 
 
-def _envelope_time(now_ms: float | int | None, *, source: str) -> datetime:
-    """Convert the envelope's millisecond epoch to a UTC datetime.
+def _envelope_time(now: float | int | None, *, source: str) -> datetime:
+    """Convert the envelope's epoch to a UTC datetime, in whichever unit it arrived.
+
+    The unit is per provider, not per schema, so it is decided here rather than assumed:
+    see :data:`MILLISECOND_EPOCH_FLOOR` for the two captures that settled it.
 
     A nonsense value has to become a :class:`ContractViolationError` rather than an
     ``OverflowError`` from the platform's time functions. Callers catch contract
     violations to trigger provider failover; an ``OverflowError`` escapes that handling
     and kills the poll instead of moving to the secondary provider.
     """
-    if now_ms is None:
+    if now is None:
         return datetime.now(UTC)
+    seconds = now / 1000.0 if now >= MILLISECOND_EPOCH_FLOOR else float(now)
     try:
-        return datetime.fromtimestamp(now_ms / 1000.0, tz=UTC)
-    except (OverflowError, OSError, ValueError, ZeroDivisionError) as exc:
-        raise ContractViolationError(source, f"unusable envelope timestamp {now_ms!r}") from exc
+        return datetime.fromtimestamp(seconds, tz=UTC)
+    except (OverflowError, OSError, ValueError) as exc:
+        raise ContractViolationError(source, f"unusable envelope timestamp {now!r}") from exc
 
 
 def parse_response(payload: bytes | str, *, source: str) -> tuple[Aircraft, ...]:

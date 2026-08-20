@@ -620,9 +620,8 @@ describe('AircraftLayer.apply', () => {
         ]),
         removals: new Map([['bbb222', 'aircraft']]),
         upserts: new Map([
-          ['ccc333', { aircraft: makeAircraft({ icao24: 'ccc333' }), layer: 'aircraft' }],
+          ['ccc333', { entity: makeAircraft({ icao24: 'ccc333' }), layer: 'aircraft' }],
         ]),
-        feeds: null,
       },
       1000,
     );
@@ -643,13 +642,76 @@ describe('AircraftLayer.apply', () => {
         snapshots: new Map(),
         removals: new Map([['aaa111', 'aircraft']]),
         upserts: new Map([
-          ['aaa111', { aircraft: makeAircraft({ icao24: 'aaa111' }), layer: 'aircraft' }],
+          ['aaa111', { entity: makeAircraft({ icao24: 'aaa111' }), layer: 'aircraft' }],
         ]),
-        feeds: null,
       },
       1000,
     );
 
     expect(layer.count).toBe(1);
+  });
+});
+
+describe('AircraftLayer.setVisible', () => {
+  it('hides one layer and leaves the other drawn', () => {
+    const { layer, points, labels } = build();
+    layer.upsert([makeAircraft({ icao24: 'abc123' })], 'aircraft', 1000);
+    layer.upsert([makeAircraft({ icao24: 'def456', is_military: true })], 'military', 1000);
+
+    layer.setVisible('military', false);
+
+    // Both feeds share one collection, so this has to be per layer. `collection.show`
+    // would take the civil aircraft down with the military ones.
+    expect(pointFor(points, 'abc123')?.show).toBe(true);
+    expect(pointFor(points, 'def456')?.show).toBe(false);
+    expect(labels.items.find((item) => item.id === 'def456')?.show).toBe(false);
+  });
+
+  it('keeps a hidden aircraft tracked, so switching back on needs no refetch', () => {
+    const { layer, points } = build();
+    layer.upsert([makeAircraft({ icao24: 'abc123' })], 'aircraft', 1000);
+    const removedBefore = points.timesRemoved;
+
+    layer.setVisible('aircraft', false);
+
+    expect(layer.count).toBe(1);
+    // Nothing removed and nothing rebuilt: a switch is not a teardown.
+    expect(points.timesRemoved).toBe(removedBefore);
+
+    layer.setVisible('aircraft', true);
+    expect(pointFor(points, 'abc123')?.show).toBe(true);
+  });
+
+  it('costs nothing per frame while a layer is off', () => {
+    const { layer, points } = build();
+    layer.upsert(
+      [
+        makeAircraft({
+          icao24: 'abc123',
+          point: { lon: 0, lat: 0, altitude_m: 0 },
+          track_deg: 90,
+          ground_speed_mps: 200,
+        }),
+      ],
+      'aircraft',
+      1000,
+    );
+    layer.setVisible('aircraft', false);
+
+    const moved = layer.advance(11_000);
+
+    // No dead reckoning, no position written, and no frame requested for something the
+    // user cannot see.
+    expect(moved).toBe(false);
+    expect(pointFor(points, 'abc123')?.position.x).toBe(0);
+  });
+
+  it('does not show an aircraft that arrives on a layer that is switched off', () => {
+    const { layer, points } = build();
+    layer.setVisible('military', false);
+
+    layer.upsert([makeAircraft({ icao24: 'def456', is_military: true })], 'military', 1000);
+
+    expect(pointFor(points, 'def456')?.show).toBe(false);
   });
 });

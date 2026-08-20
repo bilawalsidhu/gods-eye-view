@@ -23,6 +23,8 @@ from tracker.app import create_app
 from tracker.config import Settings
 from tracker.contracts.aircraft import Aircraft, AircraftClass, EmergencyState
 from tracker.contracts.geo import Point
+from tracker.contracts.satellite import Satellite
+from tracker.contracts.vessel import NavigationalStatus, Vessel, VesselEta
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -134,6 +136,105 @@ def make_aircraft(
     )
 
 
+def make_vessel(
+    mmsi: str = "230992610",
+    *,
+    lon: float = 22.216732,
+    lat: float = 60.432413,
+    name: str | None = "TEST VESSEL",
+    call_sign: str | None = None,
+    imo: int | None = None,
+    ship_type: int | None = None,
+    course_over_ground_deg: float | None = 143.0,
+    speed_over_ground_mps: float | None = 5.0,
+    true_heading_deg: float | None = 143.0,
+    rate_of_turn_deg_per_min: float | None = None,
+    navigational_status: NavigationalStatus | None = NavigationalStatus.MOORED,
+    draught_m: float | None = None,
+    length_m: float | None = None,
+    beam_m: float | None = None,
+    destination: str | None = None,
+    eta: VesselEta | None = None,
+    observed_at: datetime | None = None,
+    position_age_s: float = 12.0,
+    source: str = "digitraffic",
+) -> Vessel:
+    """Build a valid :class:`Vessel` with only the fields a test cares about spelled out.
+
+    The MMSI default is a real ship-station number from the 2026-08-19 Digitraffic capture,
+    so it passes the ITU category check without a test having to know the prefix rules.
+    """
+    return Vessel(
+        mmsi=mmsi,
+        name=name,
+        call_sign=call_sign,
+        imo=imo,
+        ship_type=ship_type,
+        point=Point(lon=lon, lat=lat),
+        course_over_ground_deg=course_over_ground_deg,
+        speed_over_ground_mps=speed_over_ground_mps,
+        true_heading_deg=true_heading_deg,
+        rate_of_turn_deg_per_min=rate_of_turn_deg_per_min,
+        navigational_status=navigational_status,
+        draught_m=draught_m,
+        length_m=length_m,
+        beam_m=beam_m,
+        destination=destination,
+        eta=eta,
+        observed_at=observed_at if observed_at is not None else REFERENCE_TIME,
+        position_age_s=position_age_s,
+        source=source,
+    )
+
+
+def make_satellite(
+    norad_cat_id: int = 25544,
+    *,
+    object_name: str | None = "ISS (ZARYA)",
+    object_id: str | None = "1998-067A",
+    classification_type: str = "U",
+    epoch: datetime | None = None,
+    mean_motion: float = 15.4951252,
+    eccentricity: float = 0.00076648,
+    inclination_deg: float = 51.6332,
+    ra_of_asc_node_deg: float = 346.5707,
+    arg_of_pericenter_deg: float = 63.0282,
+    mean_anomaly_deg: float = 297.1489,
+    bstar: float = 0.00020501314,
+    mean_motion_dot: float = 0.00011071,
+    mean_motion_ddot: float = 0.0,
+    ephemeris_type: int = 0,
+    element_set_no: int = 999,
+    rev_at_epoch: int = 58157,
+    group: str = "stations",
+    fetched_at: datetime | None = None,
+    source: str = "celestrak",
+) -> Satellite:
+    """Build a valid :class:`Satellite`, defaulted to the recorded real ISS element set."""
+    return Satellite(
+        norad_cat_id=norad_cat_id,
+        object_name=object_name,
+        object_id=object_id,
+        classification_type=classification_type,
+        epoch=epoch if epoch is not None else REFERENCE_TIME,
+        mean_motion=mean_motion,
+        eccentricity=eccentricity,
+        inclination_deg=inclination_deg,
+        ra_of_asc_node_deg=ra_of_asc_node_deg,
+        arg_of_pericenter_deg=arg_of_pericenter_deg,
+        mean_anomaly_deg=mean_anomaly_deg,
+        bstar=bstar,
+        mean_motion_dot=mean_motion_dot,
+        mean_motion_ddot=mean_motion_ddot,
+        ephemeris_type=ephemeris_type,
+        element_set_no=element_set_no,
+        rev_at_epoch=rev_at_epoch,
+        group=group,
+        fetched_at=fetched_at if fetched_at is not None else REFERENCE_TIME,
+        source=source,
+    )
+
+
 # ---------------------------------------------------------------- application
 
 
@@ -146,6 +247,8 @@ def keyless_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     for name in (
         "TRACKER_AISSTREAM_API_KEY",
+        "TRACKER_AISHUB_USERNAME",
+        "TRACKER_DIGITRAFFIC_USER",
         "TRACKER_WINDY_API_KEY",
         "TRACKER_TFL_APP_KEY",
         "TRACKER_CESIUM_ION_TOKEN",

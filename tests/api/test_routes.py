@@ -14,10 +14,13 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from tests.conftest import make_aircraft
+from tests.conftest import REFERENCE_TIME, make_aircraft, make_satellite, make_vessel
 from tracker.api.state import AppState
 from tracker.app import create_app
 from tracker.config import Settings
+from tracker.services.union import ProviderResult, merge_providers
+from tracker.sources.aishub import NO_USERNAME_REASON
+from tracker.sources.celestrak import _CachedGroup
 
 
 async def _capabilities(settings: Settings) -> dict[str, Any]:
@@ -47,11 +50,21 @@ async def test_health_returns_ok(app_client: httpx.AsyncClient) -> None:
 
 
 async def test_health_lists_the_registered_feeds(app_client: httpx.AsyncClient) -> None:
-    """Two pollers are wired at startup, so health should name both."""
+    """Every poller wired at startup should name itself, one per feed."""
     body = (await app_client.get("/api/health")).json()
 
-    assert {feed["source"] for feed in body["feeds"]} == {"adsb.lol/point", "adsb.lol/mil"}
-    assert {feed["layer"] for feed in body["feeds"]} == {"aircraft", "military"}
+    assert {feed["source"] for feed in body["feeds"]} == {
+        "adsb.lol/point",
+        "adsb.lol/mil",
+        "vessels/union",
+        "celestrak/gp",
+    }
+    assert {feed["layer"] for feed in body["feeds"]} == {
+        "aircraft",
+        "military",
+        "vessels",
+        "satellites",
+    }
     assert all(feed["healthy"] is False for feed in body["feeds"])
 
 
@@ -79,7 +92,7 @@ async def test_capabilities_reports_aircraft_available_without_any_key(
     assert layers["military"]["available"] is True
 
 
-@pytest.mark.parametrize("layer", ["vessels", "cameras", "buildings", "places"])
+@pytest.mark.parametrize("layer", ["vessels/aisstream", "cameras", "buildings", "places"])
 async def test_capabilities_reports_keyed_layers_unavailable_with_a_reason(
     app_client: httpx.AsyncClient, layer: str
 ) -> None:
@@ -131,7 +144,7 @@ async def test_capabilities_reports_keyed_layers_available_when_keys_are_set(
     body = await _capabilities(settings)
 
     layers = {entry["layer"]: entry for entry in body["layers"]}
-    for name in ("vessels", "cameras", "buildings", "places"):
+    for name in ("vessels/aisstream", "cameras", "buildings", "places"):
         assert layers[name]["available"] is True, name
         assert layers[name]["reason"] is None, name
     assert body["cesium_ion_token"] == "ion-token"
@@ -143,7 +156,8 @@ async def test_a_tfl_key_alone_enables_the_camera_layer(keyless_env: None) -> No
 
     layers = {entry["layer"]: entry for entry in body["layers"]}
     assert layers["cameras"]["available"] is True
-    assert layers["vessels"]["available"] is False
+    assert layers["vessels/aisstream"]["available"] is False
+    assert layers["vessels"]["available"] is True, "the keyless providers carry the layer"
 
 
 # ---------------------------------------------------------------- /api/aircraft
@@ -368,8 +382,8 @@ async def test_layers_reports_per_layer_counts(
 
     body = (await app_client.get("/api/layers")).json()
 
-    assert body["layers"] == {"aircraft": 2, "military": 1}
-    assert {feed["source"] for feed in body["feeds"]} == {"adsb.lol/point", "adsb.lol/mil"}
+    assert body["layers"] == {"aircraft": 2, "military": 1, "vessels": 0, "satellites": 0}
+    assert {"adsb.lol/point", "adsb.lol/mil"} <= {feed["source"] for feed in body["feeds"]}
 
 
 async def test_layers_reports_zero_counts_on_a_cold_start(
@@ -377,7 +391,8 @@ async def test_layers_reports_zero_counts_on_a_cold_start(
 ) -> None:
     body = (await app_client.get("/api/layers")).json()
 
-    assert body["layers"] == {"aircraft": 0, "military": 0}
+    assert body["layers"] == {"aircraft": 0, "military": 0, "vessels": 0, "satellites": 0}
+    assert body["providers"] == [], "no cycle has run, so no provider has reported"
 
 
 # ---------------------------------------------------------------- wiring
@@ -391,6 +406,10 @@ async def test_the_openapi_schema_is_served(app_client: httpx.AsyncClient) -> No
         "/api/capabilities",
         "/api/aircraft",
         "/api/aircraft/{icao24}",
+        "/api/vessels",
+        "/api/vessels/{mmsi}",
+        "/api/satellites",
+        "/api/satellites/elements",
         "/api/layers",
     }
 
@@ -405,3 +424,236 @@ async def test_cors_allows_the_configured_dev_origin(app_client: httpx.AsyncClie
 def test_the_app_carries_its_published_identity(tracker_app: FastAPI) -> None:
     assert tracker_app.title == "Tracker"
     assert tracker_app.version == "0.1.0"
+
+
+# ---------------------------------------------------------------- /api/vessels
+
+
+async def test_vessels_returns_what_is_in_the_store(
+    app_client: httpx.AsyncClient, app_state: AppState
+) -> None:
+    app_state.vessels.upsert("230992610", make_vessel(name="AURORA"))
+
+    body = (await app_client.get("/api/vessels")).json()
+
+    assert body["count"] == 1
+    assert body["vessels"][0]["mmsi"] == "230992610"
+    assert body["vessels"][0]["name"] == "AURORA"
+    assert body["vessels"][0]["source"] == "digitraffic"
+
+
+async def test_vessels_is_empty_when_nothing_has_been_polled(
+    app_client: httpx.AsyncClient,
+) -> None:
+    body = (await app_client.get("/api/vessels")).json()
+
+    assert body == {"count": 0, "vessels": []}
+
+
+async def test_vessels_filters_by_bounding_box(
+    app_client: httpx.AsyncClient, app_state: AppState
+) -> None:
+    app_state.vessels.upsert("230992610", make_vessel(lon=22.2, lat=60.4))
+    app_state.vessels.upsert("265513460", make_vessel(mmsi="265513460", lon=-0.1, lat=51.5))
+
+    body = (
+        await app_client.get(
+            "/api/vessels", params={"west": 20.0, "south": 59.0, "east": 24.0, "north": 62.0}
+        )
+    ).json()
+
+    assert body["count"] == 1
+    assert body["vessels"][0]["mmsi"] == "230992610"
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        pytest.param({"west": 20.0}, id="west-only"),
+        pytest.param({"south": 59.0, "east": 24.0, "north": 62.0}, id="missing-west"),
+    ],
+)
+async def test_a_partial_vessel_bounding_box_is_a_422(
+    app_client: httpx.AsyncClient, params: dict[str, float]
+) -> None:
+    """Same rule as the aircraft route: a missing edge is rejected, never defaulted."""
+    response = await app_client.get("/api/vessels", params=params)
+
+    assert response.status_code == 422
+    assert "all four" in response.json()["detail"]
+
+
+async def test_one_vessel_by_mmsi(app_client: httpx.AsyncClient, app_state: AppState) -> None:
+    app_state.vessels.upsert("230992610", make_vessel(call_sign="OJKL"))
+
+    body = (await app_client.get("/api/vessels/230992610")).json()
+
+    assert body["mmsi"] == "230992610"
+    assert body["call_sign"] == "OJKL"
+
+
+async def test_an_unknown_vessel_returns_200_with_a_null_body(
+    app_client: httpx.AsyncClient,
+) -> None:
+    """A 404 would make a normal "not currently seen" look like a broken URL."""
+    response = await app_client.get("/api/vessels/999999999")
+
+    assert response.status_code == 200
+    assert response.json() is None
+
+
+# ---------------------------------------------------------------- /api/satellites
+
+
+async def test_satellites_returns_what_is_in_the_store(
+    app_client: httpx.AsyncClient, app_state: AppState
+) -> None:
+    app_state.satellites.upsert("25544", make_satellite())
+
+    body = (await app_client.get("/api/satellites")).json()
+
+    assert body["count"] == 1
+    assert body["satellites"][0]["norad_cat_id"] == 25544
+    assert body["satellites"][0]["object_name"] == "ISS (ZARYA)"
+
+
+async def test_satellites_is_empty_when_nothing_has_been_fetched(
+    app_client: httpx.AsyncClient,
+) -> None:
+    assert (await app_client.get("/api/satellites")).json() == {"count": 0, "satellites": []}
+
+
+async def test_satellite_elements_is_empty_before_the_first_fetch(
+    app_client: httpx.AsyncClient,
+) -> None:
+    body = (await app_client.get("/api/satellites/elements")).json()
+
+    assert body == {"count": 0, "fetched": {}, "satellites": []}
+
+
+async def test_satellite_elements_serves_the_cache_and_says_when_it_was_fetched(
+    app_client: httpx.AsyncClient, app_state: AppState
+) -> None:
+    """The cache is filled directly because this file installs no HTTP mock by design.
+
+    ``fetched`` is the fetch instant and not an element set's epoch, which is the
+    distinction the two-hour floor is measured against.
+    """
+    app_state.celestrak._cache["stations"] = _CachedGroup(
+        fetched_at=REFERENCE_TIME, satellites=(make_satellite(),)
+    )
+
+    body = (await app_client.get("/api/satellites/elements")).json()
+
+    assert body["count"] == 1
+    assert body["satellites"][0]["norad_cat_id"] == 25544
+    assert body["fetched"]["stations"].startswith("2026-08-19T12:00:00")
+
+
+# ---------------------------------------------------------------- provider coverage
+
+
+async def test_layers_reports_per_provider_coverage_after_a_merge(
+    app_client: httpx.AsyncClient, app_state: AppState
+) -> None:
+    """ADR 010: the provider-attributable count is measured and exposed, not asserted."""
+    baltic = make_vessel(mmsi="230992610", source="digitraffic")
+    both = make_vessel(mmsi="265513460", source="digitraffic")
+    app_state.vessel_union = merge_providers(
+        [
+            ProviderResult(provider="digitraffic", records=(baltic, both)),
+            ProviderResult(provider="aishub", records=(both,)),
+            ProviderResult(provider="aisstream", error="SourceError: connection closed"),
+        ],
+        key=lambda vessel: vessel.mmsi,
+        reported_at=lambda vessel: vessel.observed_at,
+    )
+
+    providers = {
+        entry["provider"]: entry
+        for entry in (await app_client.get("/api/layers")).json()["providers"]
+    }
+
+    assert providers["digitraffic"] == {
+        "layer": "vessels",
+        "provider": "digitraffic",
+        "records": 2,
+        "exclusive": 1,
+        "error": None,
+    }
+    assert providers["aishub"]["records"] == 1
+    assert providers["aishub"]["exclusive"] == 0
+    assert providers["aisstream"]["error"] == "SourceError: connection closed"
+    assert providers["aisstream"]["records"] == 0
+
+
+# ---------------------------------------------------------------- vessel provider capability
+
+
+async def test_capabilities_reports_aishub_unavailable_with_the_receiver_reason(
+    app_client: httpx.AsyncClient,
+) -> None:
+    """Acceptance 9. There is no key to paste, so the reason names the hardware instead."""
+    layers = {
+        entry["layer"]: entry
+        for entry in (await app_client.get("/api/capabilities")).json()["layers"]
+    }
+
+    assert layers["vessels"]["available"] is True
+    assert layers["vessels/aishub"]["available"] is False
+    assert layers["vessels/aishub"]["reason"] == NO_USERNAME_REASON
+    assert "AIS receiver" in layers["vessels/aishub"]["reason"]
+    assert "TRACKER_" not in layers["vessels/aishub"]["reason"]
+
+
+async def test_an_aishub_username_makes_that_provider_available(keyless_env: None) -> None:
+    body = await _capabilities(Settings(aishub_username="tracker-test-user"))
+
+    layers = {entry["layer"]: entry for entry in body["layers"]}
+    assert layers["vessels/aishub"]["available"] is True
+    assert layers["vessels/aishub"]["reason"] is None
+
+
+async def test_capabilities_reports_satellites_unavailable_until_celestrak_answers(
+    app_client: httpx.AsyncClient,
+) -> None:
+    """Keyless, so availability is a runtime fact rather than a credential check."""
+    layers = {
+        entry["layer"]: entry
+        for entry in (await app_client.get("/api/capabilities")).json()["layers"]
+    }
+
+    assert layers["satellites"]["available"] is False
+    assert layers["satellites"]["reason"] == "CelesTrak has not been queried yet"
+
+
+async def test_capabilities_reports_satellites_available_once_elements_are_cached(
+    app_client: httpx.AsyncClient, app_state: AppState
+) -> None:
+    app_state.celestrak._cache["stations"] = _CachedGroup(
+        fetched_at=REFERENCE_TIME, satellites=(make_satellite(),)
+    )
+
+    layers = {
+        entry["layer"]: entry
+        for entry in (await app_client.get("/api/capabilities")).json()["layers"]
+    }
+
+    assert layers["satellites"]["available"] is True
+    assert layers["satellites"]["reason"] is None
+
+
+async def test_the_fintraffic_attribution_is_the_wording_the_provider_specifies(
+    app_client: httpx.AsyncClient,
+) -> None:
+    """CC BY 4.0 makes the credit a condition of use and the provider gives the exact string."""
+    attribution = (await app_client.get("/api/capabilities")).json()["attribution"]
+    by_source = {entry["source"]: entry for entry in attribution}
+
+    assert (
+        by_source["Fintraffic"]["text"] == "Source: Fintraffic / digitraffic.fi, license CC 4.0 BY"
+    )
+    assert by_source["Fintraffic"]["licence"] == "CC BY 4.0"
+    assert "CelesTrak" in by_source
+    assert "AISHub" in by_source
+    assert "aisstream.io" in by_source

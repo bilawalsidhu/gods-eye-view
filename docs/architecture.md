@@ -152,6 +152,19 @@ data the client can derive; time-scrubbing becomes free, because changing the cl
 re-propagates; and there are zero runtime API calls, which matters most for the one
 provider that bans clients permanently.
 
+Propagation runs in a Web Worker (`frontend/src/globe/satellites/worker.ts:31`), not on the
+render thread, because the target is the whole active catalogue at 60fps and SGP4 for ten
+thousand objects costs 14 ms a tick. Positions cross back as transferred typed arrays and the
+layer mutates one `PointPrimitiveCollection` in place.
+
+Two details in `frontend/src/globe/satellites/orbit.ts` are load-bearing. SGP4 returns TEME, and
+turning that into an earth-fixed position is one rotation by Greenwich Mean Sidereal Time at
+**the same instant**: a 60-second mismatch moves every satellite 0.25 degrees of longitude, about
+28 km at the equator, with no error and no NaN. One function does both steps from one `Date`, so
+there is no separate rotation step to get wrong. And nothing on an OMM record says an element set
+is decayed, so a satellite is dropped from the collection when SGP4 refuses it or when its epoch
+is more than 3.5 days old, and the count next to the layer is the count actually drawn.
+
 This is the only place the browser does its own physics. Everything else it draws was
 validated server-side.
 

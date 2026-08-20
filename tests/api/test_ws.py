@@ -12,6 +12,7 @@ import json
 import time
 import warnings
 from collections.abc import Callable, Iterator
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -43,6 +44,20 @@ def _state(client: TestClient) -> AppState:
     return state
 
 
+SNAPSHOT_LAYERS = ("aircraft", "military", "vessels", "satellites")
+"""The layers the hub registers, and therefore the snapshots a new client receives."""
+
+
+def _drain_snapshots(socket: Any) -> dict[str, Any]:
+    """Read the connect-time snapshot for every registered layer, keyed by layer.
+
+    One snapshot per layer arrives before anything else, so a test that reads fewer leaves
+    the rest queued and then mistakes a snapshot for the reply it was waiting for.
+    """
+    messages = [socket.receive_json() for _ in SNAPSHOT_LAYERS]
+    return {message["layer"]: message for message in messages}
+
+
 def _wait_for(predicate: Callable[[], bool], *, timeout: float = 2.0) -> bool:
     """Wait for the server thread to have applied a client message.
 
@@ -62,12 +77,10 @@ def _wait_for(predicate: Callable[[], bool], *, timeout: float = 2.0) -> bool:
 
 def test_connecting_receives_a_snapshot_per_layer(ws_client: TestClient) -> None:
     with ws_client.websocket_connect("/ws") as socket:
-        first = socket.receive_json()
-        second = socket.receive_json()
+        snapshots = _drain_snapshots(socket)
 
-    assert first["type"] == "snapshot"
-    assert second["type"] == "snapshot"
-    assert {first["layer"], second["layer"]} == {"aircraft", "military"}
+    assert set(snapshots) == set(SNAPSHOT_LAYERS)
+    assert all(message["type"] == "snapshot" for message in snapshots.values())
 
 
 def test_a_snapshot_carries_the_entities_already_in_the_store(ws_client: TestClient) -> None:
@@ -75,12 +88,13 @@ def test_a_snapshot_carries_the_entities_already_in_the_store(ws_client: TestCli
     state.aircraft.upsert("3c6444", make_aircraft("3c6444", callsign="BAW123"))
 
     with ws_client.websocket_connect("/ws") as socket:
-        messages = [socket.receive_json(), socket.receive_json()]
+        by_layer = _drain_snapshots(socket)
 
-    by_layer = {m["layer"]: m for m in messages}
     assert [e["icao24"] for e in by_layer["aircraft"]["entities"]] == ["3c6444"]
     assert by_layer["aircraft"]["entities"][0]["callsign"] == "BAW123"
     assert by_layer["military"]["entities"] == []
+    assert by_layer["vessels"]["entities"] == []
+    assert by_layer["satellites"]["entities"] == []
 
 
 def test_a_snapshot_carries_a_server_time(ws_client: TestClient) -> None:
@@ -94,8 +108,7 @@ def test_connecting_registers_the_client_with_the_hub(ws_client: TestClient) -> 
     state = _state(ws_client)
 
     with ws_client.websocket_connect("/ws") as socket:
-        socket.receive_json()
-        socket.receive_json()
+        _drain_snapshots(socket)
         assert state.hub.connection_count == 1
 
     assert _wait_for(lambda: state.hub.connection_count == 0)
@@ -106,8 +119,7 @@ def test_two_clients_are_both_registered(ws_client: TestClient) -> None:
 
     with ws_client.websocket_connect("/ws") as first, ws_client.websocket_connect("/ws") as second:
         for socket in (first, second):
-            socket.receive_json()
-            socket.receive_json()
+            _drain_snapshots(socket)
         assert state.hub.connection_count == 2
 
 
@@ -120,8 +132,7 @@ def test_set_layers_is_accepted_and_narrows_what_the_client_receives(
     state = _state(ws_client)
 
     with ws_client.websocket_connect("/ws") as socket:
-        socket.receive_json()
-        socket.receive_json()
+        _drain_snapshots(socket)
 
         socket.send_json({"type": "set_layers", "layers": ["military"]})
 
@@ -137,8 +148,7 @@ def test_set_layers_to_an_empty_list_silences_the_client(ws_client: TestClient) 
     state = _state(ws_client)
 
     with ws_client.websocket_connect("/ws") as socket:
-        socket.receive_json()
-        socket.receive_json()
+        _drain_snapshots(socket)
 
         socket.send_json({"type": "set_layers", "layers": []})
 
@@ -146,12 +156,11 @@ def test_set_layers_to_an_empty_list_silences_the_client(ws_client: TestClient) 
 
 
 def test_set_layers_can_name_a_layer_that_is_not_registered_yet(ws_client: TestClient) -> None:
-    """Phase 2 adds vessels and satellites; a client asking early is not an error."""
+    """A layer name the hub has not registered is a valid subscription, not an error."""
     state = _state(ws_client)
 
     with ws_client.websocket_connect("/ws") as socket:
-        socket.receive_json()
-        socket.receive_json()
+        _drain_snapshots(socket)
 
         socket.send_json({"type": "set_layers", "layers": ["aircraft", "satellites"]})
 
@@ -166,8 +175,7 @@ def test_set_viewport_updates_the_application_state(ws_client: TestClient) -> No
     assert _state(ws_client).viewport is None
 
     with ws_client.websocket_connect("/ws") as socket:
-        socket.receive_json()
-        socket.receive_json()
+        _drain_snapshots(socket)
 
         socket.send_json(
             {
@@ -187,8 +195,7 @@ def test_a_later_viewport_replaces_an_earlier_one(ws_client: TestClient) -> None
     state = _state(ws_client)
 
     with ws_client.websocket_connect("/ws") as socket:
-        socket.receive_json()
-        socket.receive_json()
+        _drain_snapshots(socket)
 
         socket.send_json(
             {
@@ -211,8 +218,7 @@ def test_a_viewport_across_the_antimeridian_is_accepted(ws_client: TestClient) -
     state = _state(ws_client)
 
     with ws_client.websocket_connect("/ws") as socket:
-        socket.receive_json()
-        socket.receive_json()
+        _drain_snapshots(socket)
 
         socket.send_json(
             {
@@ -253,8 +259,7 @@ def test_a_malformed_message_closes_the_socket_with_a_policy_violation(
     ws_client: TestClient, raw: str
 ) -> None:
     with ws_client.websocket_connect("/ws") as socket:
-        socket.receive_json()
-        socket.receive_json()
+        _drain_snapshots(socket)
 
         socket.send_text(raw)
 
@@ -269,8 +274,7 @@ def test_a_malformed_message_disconnects_the_client_from_the_hub(ws_client: Test
     state = _state(ws_client)
 
     with ws_client.websocket_connect("/ws") as socket:
-        socket.receive_json()
-        socket.receive_json()
+        _drain_snapshots(socket)
         socket.send_text("{")
         with pytest.raises(WebSocketDisconnect):
             socket.receive_text()
@@ -282,8 +286,7 @@ def test_a_valid_message_after_a_valid_one_keeps_the_socket_open(ws_client: Test
     state = _state(ws_client)
 
     with ws_client.websocket_connect("/ws") as socket:
-        socket.receive_json()
-        socket.receive_json()
+        _drain_snapshots(socket)
 
         socket.send_json({"type": "set_layers", "layers": ["aircraft"]})
         socket.send_json(
