@@ -23,3 +23,4 @@ frontend/.vite/
 .omc/
 .remember/
 .codegraph/
+.DS_Store
