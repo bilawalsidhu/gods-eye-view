@@ -1,0 +1,243 @@
+{
+  "head" : {
+    "vars" : [ "item", "itemLabel", "residenceLabel", "start", "end", "refUrl", "refStatedLabel", "rank", "dobValue", "dobPrecision", "dobCal" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "rank" : {
+        "type" : "uri",
+        "value" : "http://wikiba.se/ontology#NormalRank"
+      },
+      "start" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1990-01-01T00:00:00Z"
+      },
+      "end" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1992-01-01T00:00:00Z"
+      },
+      "dobValue" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "dobPrecision" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "type" : "literal",
+        "value" : "11"
+      },
+      "dobCal" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1985727"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Kingston"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "rank" : {
+        "type" : "uri",
+        "value" : "http://wikiba.se/ontology#NormalRank"
+      },
+      "start" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2021-06-10T00:00:00Z"
+      },
+      "dobValue" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "dobPrecision" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "type" : "literal",
+        "value" : "11"
+      },
+      "dobCal" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1985727"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Boca Chica"
+      },
+      "refStatedLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "tweet"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "rank" : {
+        "type" : "uri",
+        "value" : "http://wikiba.se/ontology#NormalRank"
+      },
+      "start" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2021-06-10T00:00:00Z"
+      },
+      "dobValue" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "dobPrecision" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "type" : "literal",
+        "value" : "11"
+      },
+      "dobCal" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1985727"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Boca Chica"
+      },
+      "refUrl" : {
+        "type" : "uri",
+        "value" : "https://example.invalid/2021/07/05/synthetic-fixture-residence-report/"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "rank" : {
+        "type" : "uri",
+        "value" : "http://wikiba.se/ontology#NormalRank"
+      },
+      "dobValue" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "dobPrecision" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "type" : "literal",
+        "value" : "11"
+      },
+      "dobCal" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1985727"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Saskatchewan"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "rank" : {
+        "type" : "uri",
+        "value" : "http://wikiba.se/ontology#NormalRank"
+      },
+      "dobValue" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "dobPrecision" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "type" : "literal",
+        "value" : "11"
+      },
+      "dobCal" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1985727"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bel Air"
+      },
+      "refUrl" : {
+        "type" : "uri",
+        "value" : "https://example.invalid/2013/11/01/synthetic-fixture-property-report/"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999005284"
+      },
+      "rank" : {
+        "type" : "uri",
+        "value" : "http://wikiba.se/ontology#NormalRank"
+      },
+      "dobValue" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1955-10-28T00:00:00Z"
+      },
+      "dobPrecision" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "type" : "literal",
+        "value" : "11"
+      },
+      "dobCal" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1985727"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Hesper Brackhollow"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Hesper Brackhollow's house"
+      },
+      "refUrl" : {
+        "type" : "uri",
+        "value" : "https://example.invalid/profile/synthetic-fixture-person/?list=billionaires"
+      }
+    } ]
+  }
+}

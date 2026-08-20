@@ -1,0 +1,1005 @@
+{
+ "source": "https://www.itu.int/gladapp/Allocation/MIDs",
+ "note": "Verbatim two-column ITU GLAD MID allocation table, scraped 2026-08-19. mid_cell may hold several space-separated MIDs for one administration.",
+ "retrieved_utc": "2026-08-19T22:47:00Z",
+ "row_count": 249,
+ "distinct_mid_count": 292,
+ "rows": [
+  {
+   "mid_cell": "201",
+   "allocated_to": "Albania (Republic of)"
+  },
+  {
+   "mid_cell": "202",
+   "allocated_to": "Andorra (Principality of)"
+  },
+  {
+   "mid_cell": "203",
+   "allocated_to": "Austria"
+  },
+  {
+   "mid_cell": "204",
+   "allocated_to": "Portugal - Azores"
+  },
+  {
+   "mid_cell": "205",
+   "allocated_to": "Belgium"
+  },
+  {
+   "mid_cell": "206",
+   "allocated_to": "Belarus (Republic of)"
+  },
+  {
+   "mid_cell": "207",
+   "allocated_to": "Bulgaria (Republic of)"
+  },
+  {
+   "mid_cell": "208",
+   "allocated_to": "Vatican City State"
+  },
+  {
+   "mid_cell": "209 210",
+   "allocated_to": "Cyprus (Republic of)"
+  },
+  {
+   "mid_cell": "211",
+   "allocated_to": "Germany (Federal Republic of)"
+  },
+  {
+   "mid_cell": "212",
+   "allocated_to": "Cyprus (Republic of)"
+  },
+  {
+   "mid_cell": "213",
+   "allocated_to": "Georgia"
+  },
+  {
+   "mid_cell": "214",
+   "allocated_to": "Moldova (Republic of)"
+  },
+  {
+   "mid_cell": "215",
+   "allocated_to": "Malta"
+  },
+  {
+   "mid_cell": "216",
+   "allocated_to": "Armenia (Republic of)"
+  },
+  {
+   "mid_cell": "218",
+   "allocated_to": "Germany (Federal Republic of)"
+  },
+  {
+   "mid_cell": "219 220",
+   "allocated_to": "Denmark"
+  },
+  {
+   "mid_cell": "224 225",
+   "allocated_to": "Spain"
+  },
+  {
+   "mid_cell": "226 227 228",
+   "allocated_to": "France"
+  },
+  {
+   "mid_cell": "229",
+   "allocated_to": "Malta"
+  },
+  {
+   "mid_cell": "230",
+   "allocated_to": "Finland"
+  },
+  {
+   "mid_cell": "231",
+   "allocated_to": "Denmark - Faroe Islands"
+  },
+  {
+   "mid_cell": "232 233 234 235",
+   "allocated_to": "United Kingdom of Great Britain and Northern Ireland"
+  },
+  {
+   "mid_cell": "236",
+   "allocated_to": "United Kingdom of Great Britain and Northern Ireland - Gibraltar"
+  },
+  {
+   "mid_cell": "237",
+   "allocated_to": "Greece"
+  },
+  {
+   "mid_cell": "238",
+   "allocated_to": "Croatia (Republic of)"
+  },
+  {
+   "mid_cell": "239 240 241",
+   "allocated_to": "Greece"
+  },
+  {
+   "mid_cell": "242",
+   "allocated_to": "Morocco (Kingdom of)"
+  },
+  {
+   "mid_cell": "243",
+   "allocated_to": "Hungary"
+  },
+  {
+   "mid_cell": "244 245 246",
+   "allocated_to": "Netherlands (Kingdom of the)"
+  },
+  {
+   "mid_cell": "247",
+   "allocated_to": "Italy"
+  },
+  {
+   "mid_cell": "248 249",
+   "allocated_to": "Malta"
+  },
+  {
+   "mid_cell": "250",
+   "allocated_to": "Ireland"
+  },
+  {
+   "mid_cell": "251",
+   "allocated_to": "Iceland"
+  },
+  {
+   "mid_cell": "252",
+   "allocated_to": "Liechtenstein (Principality of)"
+  },
+  {
+   "mid_cell": "253",
+   "allocated_to": "Luxembourg"
+  },
+  {
+   "mid_cell": "254",
+   "allocated_to": "Monaco (Principality of)"
+  },
+  {
+   "mid_cell": "255",
+   "allocated_to": "Portugal - Madeira"
+  },
+  {
+   "mid_cell": "256",
+   "allocated_to": "Malta"
+  },
+  {
+   "mid_cell": "257 258 259",
+   "allocated_to": "Norway"
+  },
+  {
+   "mid_cell": "261",
+   "allocated_to": "Poland (Republic of)"
+  },
+  {
+   "mid_cell": "262",
+   "allocated_to": "Montenegro"
+  },
+  {
+   "mid_cell": "263",
+   "allocated_to": "Portugal"
+  },
+  {
+   "mid_cell": "264",
+   "allocated_to": "Romania"
+  },
+  {
+   "mid_cell": "265 266",
+   "allocated_to": "Sweden"
+  },
+  {
+   "mid_cell": "267",
+   "allocated_to": "Slovak Republic"
+  },
+  {
+   "mid_cell": "268",
+   "allocated_to": "San Marino (Republic of)"
+  },
+  {
+   "mid_cell": "269",
+   "allocated_to": "Switzerland (Confederation of)"
+  },
+  {
+   "mid_cell": "270",
+   "allocated_to": "Czech Republic"
+  },
+  {
+   "mid_cell": "271",
+   "allocated_to": "Republic of Türkiye"
+  },
+  {
+   "mid_cell": "272",
+   "allocated_to": "Ukraine"
+  },
+  {
+   "mid_cell": "273",
+   "allocated_to": "Russian Federation"
+  },
+  {
+   "mid_cell": "274",
+   "allocated_to": "North Macedonia (Republic of)"
+  },
+  {
+   "mid_cell": "275",
+   "allocated_to": "Latvia (Republic of)"
+  },
+  {
+   "mid_cell": "276",
+   "allocated_to": "Estonia (Republic of)"
+  },
+  {
+   "mid_cell": "277",
+   "allocated_to": "Lithuania (Republic of)"
+  },
+  {
+   "mid_cell": "278",
+   "allocated_to": "Slovenia (Republic of)"
+  },
+  {
+   "mid_cell": "279",
+   "allocated_to": "Serbia (Republic of)"
+  },
+  {
+   "mid_cell": "301",
+   "allocated_to": "United Kingdom of Great Britain and Northern Ireland - Anguilla"
+  },
+  {
+   "mid_cell": "303",
+   "allocated_to": "United States of America - Alaska (State of)"
+  },
+  {
+   "mid_cell": "304 305",
+   "allocated_to": "Antigua and Barbuda"
+  },
+  {
+   "mid_cell": "306",
+   "allocated_to": "Netherlands (Kingdom of the) - Bonaire, Sint Eustatius and Saba"
+  },
+  {
+   "mid_cell": "306",
+   "allocated_to": "Netherlands (Kingdom of the) - Curaçao"
+  },
+  {
+   "mid_cell": "306",
+   "allocated_to": "Netherlands (Kingdom of the) - Sint Maarten (Dutch part)"
+  },
+  {
+   "mid_cell": "307",
+   "allocated_to": "Netherlands (Kingdom of the) - Aruba"
+  },
+  {
+   "mid_cell": "308 309",
+   "allocated_to": "Bahamas (Commonwealth of the)"
+  },
+  {
+   "mid_cell": "310",
+   "allocated_to": "United Kingdom of Great Britain and Northern Ireland - Bermuda"
+  },
+  {
+   "mid_cell": "311",
+   "allocated_to": "Bahamas (Commonwealth of the)"
+  },
+  {
+   "mid_cell": "312",
+   "allocated_to": "Belize"
+  },
+  {
+   "mid_cell": "314",
+   "allocated_to": "Barbados"
+  },
+  {
+   "mid_cell": "316",
+   "allocated_to": "Canada"
+  },
+  {
+   "mid_cell": "319",
+   "allocated_to": "United Kingdom of Great Britain and Northern Ireland - Cayman Islands"
+  },
+  {
+   "mid_cell": "321",
+   "allocated_to": "Costa Rica"
+  },
+  {
+   "mid_cell": "323",
+   "allocated_to": "Cuba"
+  },
+  {
+   "mid_cell": "325",
+   "allocated_to": "Dominica (Commonwealth of)"
+  },
+  {
+   "mid_cell": "327",
+   "allocated_to": "Dominican Republic"
+  },
+  {
+   "mid_cell": "329",
+   "allocated_to": "France - Guadeloupe (French Department of)"
+  },
+  {
+   "mid_cell": "330",
+   "allocated_to": "Grenada"
+  },
+  {
+   "mid_cell": "331",
+   "allocated_to": "Denmark - Greenland"
+  },
+  {
+   "mid_cell": "332",
+   "allocated_to": "Guatemala (Republic of)"
+  },
+  {
+   "mid_cell": "334",
+   "allocated_to": "Honduras (Republic of)"
+  },
+  {
+   "mid_cell": "336",
+   "allocated_to": "Haiti (Republic of)"
+  },
+  {
+   "mid_cell": "338",
+   "allocated_to": "United States of America"
+  },
+  {
+   "mid_cell": "339",
+   "allocated_to": "Jamaica"
+  },
+  {
+   "mid_cell": "341",
+   "allocated_to": "Saint Kitts and Nevis (Federation of)"
+  },
+  {
+   "mid_cell": "343",
+   "allocated_to": "Saint Lucia"
+  },
+  {
+   "mid_cell": "345",
+   "allocated_to": "Mexico"
+  },
+  {
+   "mid_cell": "347",
+   "allocated_to": "France - Martinique (French Department of)"
+  },
+  {
+   "mid_cell": "348",
+   "allocated_to": "United Kingdom of Great Britain and Northern Ireland - Montserrat"
+  },
+  {
+   "mid_cell": "350",
+   "allocated_to": "Nicaragua"
+  },
+  {
+   "mid_cell": "351 352 353 354 355 356 357",
+   "allocated_to": "Panama (Republic of)"
+  },
+  {
+   "mid_cell": "358",
+   "allocated_to": "United States of America - Puerto Rico"
+  },
+  {
+   "mid_cell": "359",
+   "allocated_to": "El Salvador (Republic of)"
+  },
+  {
+   "mid_cell": "361",
+   "allocated_to": "France - Saint Pierre and Miquelon (Territorial Collectivity of)"
+  },
+  {
+   "mid_cell": "362",
+   "allocated_to": "Trinidad and Tobago"
+  },
+  {
+   "mid_cell": "364",
+   "allocated_to": "United Kingdom of Great Britain and Northern Ireland - Turks and Caicos Islands"
+  },
+  {
+   "mid_cell": "366 367 368 369",
+   "allocated_to": "United States of America"
+  },
+  {
+   "mid_cell": "370 371 372 373 374",
+   "allocated_to": "Panama (Republic of)"
+  },
+  {
+   "mid_cell": "375 376 377",
+   "allocated_to": "Saint Vincent and the Grenadines"
+  },
+  {
+   "mid_cell": "378",
+   "allocated_to": "United Kingdom of Great Britain and Northern Ireland - British Virgin Islands"
+  },
+  {
+   "mid_cell": "379",
+   "allocated_to": "United States of America - United States Virgin Islands"
+  },
+  {
+   "mid_cell": "401",
+   "allocated_to": "Afghanistan"
+  },
+  {
+   "mid_cell": "403",
+   "allocated_to": "Saudi Arabia (Kingdom of)"
+  },
+  {
+   "mid_cell": "405",
+   "allocated_to": "Bangladesh (People's Republic of)"
+  },
+  {
+   "mid_cell": "408",
+   "allocated_to": "Bahrain (Kingdom of)"
+  },
+  {
+   "mid_cell": "410",
+   "allocated_to": "Bhutan (Kingdom of)"
+  },
+  {
+   "mid_cell": "412 413 414",
+   "allocated_to": "China (People's Republic of)"
+  },
+  {
+   "mid_cell": "416",
+   "allocated_to": "China (People's Republic of) - Taiwan (Province of China)"
+  },
+  {
+   "mid_cell": "417",
+   "allocated_to": "Sri Lanka (Democratic Socialist Republic of)"
+  },
+  {
+   "mid_cell": "419",
+   "allocated_to": "India (Republic of)"
+  },
+  {
+   "mid_cell": "422",
+   "allocated_to": "Iran (Islamic Republic of)"
+  },
+  {
+   "mid_cell": "423",
+   "allocated_to": "Azerbaijan (Republic of)"
+  },
+  {
+   "mid_cell": "425",
+   "allocated_to": "Iraq (Republic of)"
+  },
+  {
+   "mid_cell": "428",
+   "allocated_to": "Israel (State of)"
+  },
+  {
+   "mid_cell": "431 432",
+   "allocated_to": "Japan"
+  },
+  {
+   "mid_cell": "434",
+   "allocated_to": "Turkmenistan"
+  },
+  {
+   "mid_cell": "436",
+   "allocated_to": "Kazakhstan (Republic of)"
+  },
+  {
+   "mid_cell": "437",
+   "allocated_to": "Uzbekistan (Republic of)"
+  },
+  {
+   "mid_cell": "438",
+   "allocated_to": "Jordan (Hashemite Kingdom of)"
+  },
+  {
+   "mid_cell": "440 441",
+   "allocated_to": "Korea (Republic of)"
+  },
+  {
+   "mid_cell": "443",
+   "allocated_to": "State of Palestine (In accordance with Resolution 99 Rev. Dubai, 2018)"
+  },
+  {
+   "mid_cell": "445",
+   "allocated_to": "Democratic People's Republic of Korea"
+  },
+  {
+   "mid_cell": "447",
+   "allocated_to": "Kuwait (State of)"
+  },
+  {
+   "mid_cell": "450",
+   "allocated_to": "Lebanon"
+  },
+  {
+   "mid_cell": "451",
+   "allocated_to": "Kyrgyz Republic"
+  },
+  {
+   "mid_cell": "453",
+   "allocated_to": "China (People's Republic of) - Macao (Special Administrative Region of China)"
+  },
+  {
+   "mid_cell": "455",
+   "allocated_to": "Maldives (Republic of)"
+  },
+  {
+   "mid_cell": "457",
+   "allocated_to": "Mongolia"
+  },
+  {
+   "mid_cell": "459",
+   "allocated_to": "Nepal (Federal Democratic Republic of)"
+  },
+  {
+   "mid_cell": "461",
+   "allocated_to": "Oman (Sultanate of)"
+  },
+  {
+   "mid_cell": "463",
+   "allocated_to": "Pakistan (Islamic Republic of)"
+  },
+  {
+   "mid_cell": "466",
+   "allocated_to": "Qatar (State of)"
+  },
+  {
+   "mid_cell": "468",
+   "allocated_to": "Syrian Arab Republic"
+  },
+  {
+   "mid_cell": "470 471",
+   "allocated_to": "United Arab Emirates"
+  },
+  {
+   "mid_cell": "472",
+   "allocated_to": "Tajikistan (Republic of)"
+  },
+  {
+   "mid_cell": "473 475",
+   "allocated_to": "Yemen (Republic of)"
+  },
+  {
+   "mid_cell": "477",
+   "allocated_to": "China (People's Republic of) - Hong Kong (Special Administrative Region of China)"
+  },
+  {
+   "mid_cell": "478",
+   "allocated_to": "Bosnia and Herzegovina"
+  },
+  {
+   "mid_cell": "501",
+   "allocated_to": "France - Adelie Land"
+  },
+  {
+   "mid_cell": "503",
+   "allocated_to": "Australia"
+  },
+  {
+   "mid_cell": "506",
+   "allocated_to": "Myanmar (Union of)"
+  },
+  {
+   "mid_cell": "508",
+   "allocated_to": "Brunei Darussalam"
+  },
+  {
+   "mid_cell": "510",
+   "allocated_to": "Micronesia (Federated States of)"
+  },
+  {
+   "mid_cell": "511",
+   "allocated_to": "Palau (Republic of)"
+  },
+  {
+   "mid_cell": "512",
+   "allocated_to": "New Zealand"
+  },
+  {
+   "mid_cell": "514 515",
+   "allocated_to": "Cambodia (Kingdom of)"
+  },
+  {
+   "mid_cell": "516",
+   "allocated_to": "Australia - Christmas Island (Indian Ocean)"
+  },
+  {
+   "mid_cell": "518",
+   "allocated_to": "New Zealand - Cook Islands"
+  },
+  {
+   "mid_cell": "520",
+   "allocated_to": "Fiji (Republic of)"
+  },
+  {
+   "mid_cell": "523",
+   "allocated_to": "Australia - Cocos (Keeling) Islands"
+  },
+  {
+   "mid_cell": "525",
+   "allocated_to": "Indonesia (Republic of)"
+  },
+  {
+   "mid_cell": "529",
+   "allocated_to": "Kiribati (Republic of)"
+  },
+  {
+   "mid_cell": "531",
+   "allocated_to": "Lao People's Democratic Republic"
+  },
+  {
+   "mid_cell": "533",
+   "allocated_to": "Malaysia"
+  },
+  {
+   "mid_cell": "536",
+   "allocated_to": "United States of America - Northern Mariana Islands (Commonwealth of the)"
+  },
+  {
+   "mid_cell": "538",
+   "allocated_to": "Marshall Islands (Republic of the)"
+  },
+  {
+   "mid_cell": "540",
+   "allocated_to": "France - New Caledonia"
+  },
+  {
+   "mid_cell": "542",
+   "allocated_to": "New Zealand - Niue"
+  },
+  {
+   "mid_cell": "544",
+   "allocated_to": "Nauru (Republic of)"
+  },
+  {
+   "mid_cell": "546",
+   "allocated_to": "France - French Polynesia"
+  },
+  {
+   "mid_cell": "548",
+   "allocated_to": "Philippines (Republic of the)"
+  },
+  {
+   "mid_cell": "550",
+   "allocated_to": "Timor-Leste (Democratic Republic of)"
+  },
+  {
+   "mid_cell": "553",
+   "allocated_to": "Papua New Guinea"
+  },
+  {
+   "mid_cell": "555",
+   "allocated_to": "United Kingdom of Great Britain and Northern Ireland - Pitcairn Island"
+  },
+  {
+   "mid_cell": "557",
+   "allocated_to": "Solomon Islands"
+  },
+  {
+   "mid_cell": "559",
+   "allocated_to": "United States of America - American Samoa"
+  },
+  {
+   "mid_cell": "561",
+   "allocated_to": "Samoa (Independent State of)"
+  },
+  {
+   "mid_cell": "563 564 565 566",
+   "allocated_to": "Singapore (Republic of)"
+  },
+  {
+   "mid_cell": "567",
+   "allocated_to": "Thailand"
+  },
+  {
+   "mid_cell": "570",
+   "allocated_to": "Tonga (Kingdom of)"
+  },
+  {
+   "mid_cell": "572",
+   "allocated_to": "Tuvalu"
+  },
+  {
+   "mid_cell": "574",
+   "allocated_to": "Viet Nam (Socialist Republic of)"
+  },
+  {
+   "mid_cell": "576 577",
+   "allocated_to": "Vanuatu (Republic of)"
+  },
+  {
+   "mid_cell": "578",
+   "allocated_to": "France - Wallis and Futuna Islands"
+  },
+  {
+   "mid_cell": "601",
+   "allocated_to": "South Africa (Republic of)"
+  },
+  {
+   "mid_cell": "603",
+   "allocated_to": "Angola (Republic of)"
+  },
+  {
+   "mid_cell": "605",
+   "allocated_to": "Algeria (People's Democratic Republic of)"
+  },
+  {
+   "mid_cell": "607",
+   "allocated_to": "France - Saint Paul and Amsterdam Islands"
+  },
+  {
+   "mid_cell": "608",
+   "allocated_to": "United Kingdom of Great Britain and Northern Ireland - Ascension Island"
+  },
+  {
+   "mid_cell": "609",
+   "allocated_to": "Burundi (Republic of)"
+  },
+  {
+   "mid_cell": "610",
+   "allocated_to": "Benin (Republic of)"
+  },
+  {
+   "mid_cell": "611",
+   "allocated_to": "Botswana (Republic of)"
+  },
+  {
+   "mid_cell": "612",
+   "allocated_to": "Central African Republic"
+  },
+  {
+   "mid_cell": "613",
+   "allocated_to": "Cameroon (Republic of)"
+  },
+  {
+   "mid_cell": "615",
+   "allocated_to": "Congo (Republic of the)"
+  },
+  {
+   "mid_cell": "616",
+   "allocated_to": "Comoros (Union of the)"
+  },
+  {
+   "mid_cell": "617",
+   "allocated_to": "Cabo Verde (Republic of)"
+  },
+  {
+   "mid_cell": "618",
+   "allocated_to": "France - Crozet Archipelago"
+  },
+  {
+   "mid_cell": "619",
+   "allocated_to": "Côte d'Ivoire (Republic of)"
+  },
+  {
+   "mid_cell": "620",
+   "allocated_to": "Comoros (Union of the)"
+  },
+  {
+   "mid_cell": "621",
+   "allocated_to": "Djibouti (Republic of)"
+  },
+  {
+   "mid_cell": "622",
+   "allocated_to": "Egypt (Arab Republic of)"
+  },
+  {
+   "mid_cell": "624",
+   "allocated_to": "Ethiopia (Federal Democratic Republic of)"
+  },
+  {
+   "mid_cell": "625",
+   "allocated_to": "Eritrea"
+  },
+  {
+   "mid_cell": "626",
+   "allocated_to": "Gabonese Republic"
+  },
+  {
+   "mid_cell": "627",
+   "allocated_to": "Ghana"
+  },
+  {
+   "mid_cell": "629",
+   "allocated_to": "Gambia (Republic of the)"
+  },
+  {
+   "mid_cell": "630",
+   "allocated_to": "Guinea-Bissau (Republic of)"
+  },
+  {
+   "mid_cell": "631",
+   "allocated_to": "Equatorial Guinea (Republic of)"
+  },
+  {
+   "mid_cell": "632",
+   "allocated_to": "Guinea (Republic of)"
+  },
+  {
+   "mid_cell": "633",
+   "allocated_to": "Burkina Faso"
+  },
+  {
+   "mid_cell": "634",
+   "allocated_to": "Kenya (Republic of)"
+  },
+  {
+   "mid_cell": "635",
+   "allocated_to": "France - Kerguelen Islands"
+  },
+  {
+   "mid_cell": "636 637",
+   "allocated_to": "Liberia (Republic of)"
+  },
+  {
+   "mid_cell": "638",
+   "allocated_to": "South Sudan (Republic of)"
+  },
+  {
+   "mid_cell": "642",
+   "allocated_to": "Libya (State of)"
+  },
+  {
+   "mid_cell": "644",
+   "allocated_to": "Lesotho (Kingdom of)"
+  },
+  {
+   "mid_cell": "645",
+   "allocated_to": "Mauritius (Republic of)"
+  },
+  {
+   "mid_cell": "647",
+   "allocated_to": "Madagascar (Republic of)"
+  },
+  {
+   "mid_cell": "649",
+   "allocated_to": "Mali (Republic of)"
+  },
+  {
+   "mid_cell": "650",
+   "allocated_to": "Mozambique (Republic of)"
+  },
+  {
+   "mid_cell": "654",
+   "allocated_to": "Mauritania (Islamic Republic of)"
+  },
+  {
+   "mid_cell": "655",
+   "allocated_to": "Malawi"
+  },
+  {
+   "mid_cell": "656",
+   "allocated_to": "Niger (Republic of the)"
+  },
+  {
+   "mid_cell": "657",
+   "allocated_to": "Nigeria (Federal Republic of)"
+  },
+  {
+   "mid_cell": "659",
+   "allocated_to": "Namibia (Republic of)"
+  },
+  {
+   "mid_cell": "660",
+   "allocated_to": "France - Reunion (French Department of)"
+  },
+  {
+   "mid_cell": "661",
+   "allocated_to": "Rwanda (Republic of)"
+  },
+  {
+   "mid_cell": "662",
+   "allocated_to": "Sudan (Republic of the)"
+  },
+  {
+   "mid_cell": "663",
+   "allocated_to": "Senegal (Republic of)"
+  },
+  {
+   "mid_cell": "664",
+   "allocated_to": "Seychelles (Republic of)"
+  },
+  {
+   "mid_cell": "665",
+   "allocated_to": "United Kingdom of Great Britain and Northern Ireland - Saint Helena"
+  },
+  {
+   "mid_cell": "666",
+   "allocated_to": "Somalia (Federal Republic of)"
+  },
+  {
+   "mid_cell": "667",
+   "allocated_to": "Sierra Leone"
+  },
+  {
+   "mid_cell": "668",
+   "allocated_to": "Sao Tome and Principe (Democratic Republic of)"
+  },
+  {
+   "mid_cell": "669",
+   "allocated_to": "Eswatini (Kingdom of)"
+  },
+  {
+   "mid_cell": "670",
+   "allocated_to": "Chad (Republic of)"
+  },
+  {
+   "mid_cell": "671",
+   "allocated_to": "Togolese Republic"
+  },
+  {
+   "mid_cell": "672",
+   "allocated_to": "Tunisia"
+  },
+  {
+   "mid_cell": "674",
+   "allocated_to": "Tanzania (United Republic of)"
+  },
+  {
+   "mid_cell": "675",
+   "allocated_to": "Uganda (Republic of)"
+  },
+  {
+   "mid_cell": "676",
+   "allocated_to": "Democratic Republic of the Congo"
+  },
+  {
+   "mid_cell": "677",
+   "allocated_to": "Tanzania (United Republic of)"
+  },
+  {
+   "mid_cell": "678",
+   "allocated_to": "Zambia (Republic of)"
+  },
+  {
+   "mid_cell": "679",
+   "allocated_to": "Zimbabwe (Republic of)"
+  },
+  {
+   "mid_cell": "701",
+   "allocated_to": "Argentine Republic"
+  },
+  {
+   "mid_cell": "710",
+   "allocated_to": "Brazil (Federative Republic of)"
+  },
+  {
+   "mid_cell": "720",
+   "allocated_to": "Bolivia (Plurinational State of)"
+  },
+  {
+   "mid_cell": "725",
+   "allocated_to": "Chile"
+  },
+  {
+   "mid_cell": "730",
+   "allocated_to": "Colombia (Republic of)"
+  },
+  {
+   "mid_cell": "735",
+   "allocated_to": "Ecuador"
+  },
+  {
+   "mid_cell": "740",
+   "allocated_to": "United Kingdom of Great Britain and Northern Ireland - Falkland Islands (Malvinas)"
+  },
+  {
+   "mid_cell": "745",
+   "allocated_to": "France - Guiana (French Department of)"
+  },
+  {
+   "mid_cell": "750",
+   "allocated_to": "Guyana"
+  },
+  {
+   "mid_cell": "755",
+   "allocated_to": "Paraguay (Republic of)"
+  },
+  {
+   "mid_cell": "760",
+   "allocated_to": "Peru"
+  },
+  {
+   "mid_cell": "765",
+   "allocated_to": "Suriname (Republic of)"
+  },
+  {
+   "mid_cell": "770",
+   "allocated_to": "Uruguay (Eastern Republic of)"
+  },
+  {
+   "mid_cell": "775",
+   "allocated_to": "Venezuela (Bolivarian Republic of)"
+  }
+ ]
+}

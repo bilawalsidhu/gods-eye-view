@@ -1,0 +1,17 @@
+{
+    "response": {
+        "aircraft": {
+            "type": "G650 ER",
+            "icao_type": "G650",
+            "manufacturer": "Gulfstream Aerospace",
+            "mode_s": "A835AF",
+            "registration": "N628TS",
+            "registered_owner_country_iso_name": "US",
+            "registered_owner_country_name": "United States",
+            "registered_owner_operator_flag_code": "G650",
+            "registered_owner": "Falcon Landing LLC",
+            "url_photo": "https://airport-data.com/images/aircraft/001/598/001598299.jpg",
+            "url_photo_thumbnail": "https://airport-data.com/images/aircraft/thumbnails/001/598/001598299.jpg"
+        }
+    }
+}

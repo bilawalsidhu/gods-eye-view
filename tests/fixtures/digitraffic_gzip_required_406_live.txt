@@ -1,0 +1,1 @@
+Use of gzip compression is required with Accept-Encoding: gzip header.

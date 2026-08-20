@@ -1,0 +1,584 @@
+{
+  "head" : {
+    "vars" : [ "v", "vLabel", "mmsi", "imo", "flagLabel", "ownerLabel" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q10404288"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "230992950"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Albanus"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Finland"
+      },
+      "ownerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Skeppsföreningen Albanus"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034332"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "229961000"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Arabella"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Malta"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9700122"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034353"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "229698000"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Zeyno"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Malta"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9700421"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034359"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "248575000"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Amadeus"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Malta"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9700469"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034361"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "249011000"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Titus"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Malta"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9700512"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034384"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "210930000"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Osprey"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Cyprus"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9700859"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034401"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "248349000"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Outrider"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Malta"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9701061"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034712"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "249476000"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Gortynia"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Malta"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9702584"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034756"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "238002000"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Krk"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Croatia"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9703722"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034789"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "244830399"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Kroonborg"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Netherlands"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9704867"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034796"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "212972000"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Andromeda"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Cyprus"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9705110"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034827"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "215499000"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Akadimos"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Malta"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9706308"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034847"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "247388800"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Rosa Dei Venti"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Italy"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9706592"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034896"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "249325000"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Serena R"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Malta"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9707699"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034932"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "219359000"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Flora K"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Denmark"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9708538"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034939"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "219180000"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Maersk Tampa"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Denmark"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9708629"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034951"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "248860000"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Fram Prince"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Malta"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9709049"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034953"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "241396000"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Antigone"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Greece"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9709075"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034959"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "228369700"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "CMA CGM Cayenne"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "France"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9709192"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034977"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "235111759"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Berge K2"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "United Kingdom"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9709506"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034979"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "235111764"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Berge Makalu"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "United Kingdom"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9709518"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034980"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "232005278"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Berge Cho Oyu"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "United Kingdom"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9709520"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034981"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "232007479"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Berge Annapurna"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "United Kingdom"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9709532"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104034999"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "235114345"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Grampian Freedom"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "United Kingdom"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9709960"
+      }
+    }, {
+      "v" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q104035018"
+      },
+      "mmsi" : {
+        "type" : "literal",
+        "value" : "212715000"
+      },
+      "vLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Nowowiejski"
+      },
+      "flagLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Cyprus"
+      },
+      "imo" : {
+        "type" : "literal",
+        "value" : "9710189"
+      }
+    } ]
+  }
+}

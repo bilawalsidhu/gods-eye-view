@@ -1,0 +1,766 @@
+[ {
+  "vesselId" : 1241,
+  "mmsi" : 230916000,
+  "name" : "Tali",
+  "namePrefix" : "ms",
+  "imoLloyds" : 9173692,
+  "radioCallSign" : "OJIH",
+  "radioCallSignType" : "REAL",
+  "updateTimestamp" : "2026-08-03T05:16:04.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 70,
+    "vesselTypeName" : "Dry cargo vessel",
+    "iceClassCode" : "IAS",
+    "iceClassIssueDate" : "2026-05-24T21:00:00.000Z",
+    "iceClassIssuePlace" : "Istanbul",
+    "iceClassEndDate" : "2031-07-16T21:00:00.000Z",
+    "doubleBottom" : false,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "Helsinki",
+    "dateOfIssue" : "2011-01-17T22:00:00.000Z",
+    "grossTonnage" : 10098,
+    "netTonnage" : 4642,
+    "deathWeight" : 13340,
+    "length" : 130.05,
+    "overallLength" : 137.1,
+    "height" : 11.01,
+    "breadth" : 21.6,
+    "draught" : 8.15,
+    "maxSpeed" : null,
+    "enginePower" : "6250"
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : "Helsinki"
+  },
+  "vesselSystem" : {
+    "shipOwner" : "ESL Shipping Oy",
+    "shipTelephone1" : "0400-142311",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+}, {
+  "vesselId" : 99990834,
+  "mmsi" : 0,
+  "name" : "Kikka",
+  "namePrefix" : " ",
+  "imoLloyds" : null,
+  "radioCallSign" : "KIKKAX",
+  "radioCallSignType" : "FAKE",
+  "updateTimestamp" : "2026-08-10T13:03:04.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 93,
+    "vesselTypeName" : "Barge",
+    "iceClassCode" : "UNKNOWN",
+    "iceClassIssueDate" : "2026-04-28T21:00:00.000Z",
+    "iceClassIssuePlace" : "Pori",
+    "iceClassEndDate" : "2027-03-13T22:00:00.000Z",
+    "doubleBottom" : false,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "Helsinki",
+    "dateOfIssue" : "2017-01-25T22:00:00.000Z",
+    "grossTonnage" : 2308,
+    "netTonnage" : 693,
+    "deathWeight" : 0,
+    "length" : 73.15,
+    "overallLength" : 0.0,
+    "height" : 4.88,
+    "breadth" : 24.38,
+    "draught" : 0.0,
+    "maxSpeed" : null,
+    "enginePower" : " "
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : "Rauma"
+  },
+  "vesselSystem" : {
+    "shipOwner" : " ",
+    "shipTelephone1" : " ",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+}, {
+  "vesselId" : 99995695,
+  "mmsi" : 230961000,
+  "name" : "Polaris",
+  "namePrefix" : "ms",
+  "imoLloyds" : 6411421,
+  "radioCallSign" : "OJLC",
+  "radioCallSignType" : "REAL",
+  "updateTimestamp" : "2026-08-10T11:51:24.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 91,
+    "vesselTypeName" : "Tug",
+    "iceClassCode" : "UNKNOWN",
+    "iceClassIssueDate" : "2026-06-24T21:00:00.000Z",
+    "iceClassIssuePlace" : "Rauma",
+    "iceClassEndDate" : "2027-06-10T21:00:00.000Z",
+    "doubleBottom" : false,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "Helsinki",
+    "dateOfIssue" : "2012-03-26T21:00:00.000Z",
+    "grossTonnage" : 256,
+    "netTonnage" : 77,
+    "deathWeight" : 0,
+    "length" : 27.74,
+    "overallLength" : 32.92,
+    "height" : 0.0,
+    "breadth" : 8.61,
+    "draught" : 4.46,
+    "maxSpeed" : null,
+    "enginePower" : "2*770"
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : "Rauma"
+  },
+  "vesselSystem" : {
+    "shipOwner" : " ",
+    "shipTelephone1" : " ",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+}, {
+  "vesselId" : 99999979,
+  "mmsi" : 230693000,
+  "name" : "Prima Lady",
+  "namePrefix" : "ms",
+  "imoLloyds" : 9195652,
+  "radioCallSign" : "OJTT",
+  "radioCallSignType" : "REAL",
+  "updateTimestamp" : "2026-08-11T05:16:43.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 70,
+    "vesselTypeName" : "Dry cargo vessel",
+    "iceClassCode" : "IB",
+    "iceClassIssueDate" : "2024-10-30T22:00:00.000Z",
+    "iceClassIssuePlace" : "Pori",
+    "iceClassEndDate" : "2029-12-22T22:00:00.000Z",
+    "doubleBottom" : false,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "Helsinki",
+    "dateOfIssue" : "2021-02-14T22:00:00.000Z",
+    "grossTonnage" : 2548,
+    "netTonnage" : 1282,
+    "deathWeight" : 3630,
+    "length" : 84.95,
+    "overallLength" : 87.75,
+    "height" : 7.6,
+    "breadth" : 12.5,
+    "draught" : 5.41,
+    "maxSpeed" : null,
+    "enginePower" : "1855"
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : "Helsinki"
+  },
+  "vesselSystem" : {
+    "shipOwner" : " ",
+    "shipTelephone1" : " ",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+}, {
+  "vesselId" : 99990799,
+  "mmsi" : 0,
+  "name" : "Niina 2",
+  "namePrefix" : "pr",
+  "imoLloyds" : null,
+  "radioCallSign" : "NIINA2",
+  "radioCallSignType" : "FAKE",
+  "updateTimestamp" : "2026-08-18T04:48:49.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 99,
+    "vesselTypeName" : "Other vessel",
+    "iceClassCode" : "III",
+    "iceClassIssueDate" : "2026-08-09T21:00:00.000Z",
+    "iceClassIssuePlace" : "Naantali",
+    "iceClassEndDate" : "2027-07-10T21:00:00.000Z",
+    "doubleBottom" : false,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "Helsinki",
+    "dateOfIssue" : "2017-04-02T21:00:00.000Z",
+    "grossTonnage" : 739,
+    "netTonnage" : 222,
+    "deathWeight" : 0,
+    "length" : 48.0,
+    "overallLength" : 0.0,
+    "height" : 0.0,
+    "breadth" : 0.0,
+    "draught" : 0.0,
+    "maxSpeed" : null,
+    "enginePower" : " "
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : "Helsinki"
+  },
+  "vesselSystem" : {
+    "shipOwner" : " ",
+    "shipTelephone1" : " ",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+}, {
+  "vesselId" : 31,
+  "mmsi" : 0,
+  "name" : "Botnia",
+  "namePrefix" : "tpr",
+  "imoLloyds" : 8636764,
+  "radioCallSign" : "BOTNIA",
+  "radioCallSignType" : "FAKE",
+  "updateTimestamp" : "2026-08-05T09:56:43.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 95,
+    "vesselTypeName" : "Pusher barge",
+    "iceClassCode" : "III",
+    "iceClassIssueDate" : "2026-05-06T21:00:00.000Z",
+    "iceClassIssuePlace" : "Naantali",
+    "iceClassEndDate" : "2031-07-30T21:00:00.000Z",
+    "doubleBottom" : false,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "Helsinki",
+    "dateOfIssue" : "2012-07-09T21:00:00.000Z",
+    "grossTonnage" : 9066,
+    "netTonnage" : 2720,
+    "deathWeight" : 14000,
+    "length" : 151.19,
+    "overallLength" : 159.1,
+    "height" : 10.0,
+    "breadth" : 27.2,
+    "draught" : 6.7,
+    "maxSpeed" : null,
+    "enginePower" : " "
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : "Helsinki"
+  },
+  "vesselSystem" : {
+    "shipOwner" : " ",
+    "shipTelephone1" : " ",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+}, {
+  "vesselId" : 99991942,
+  "mmsi" : 0,
+  "name" : "Leonardo",
+  "namePrefix" : "ms",
+  "imoLloyds" : 8521464,
+  "radioCallSign" : "OJQI",
+  "radioCallSignType" : "REAL",
+  "updateTimestamp" : "2026-08-10T12:42:58.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 91,
+    "vesselTypeName" : "Tug",
+    "iceClassCode" : "II",
+    "iceClassIssueDate" : "2026-07-24T21:00:00.000Z",
+    "iceClassIssuePlace" : "Sillamae",
+    "iceClassEndDate" : "2031-09-04T21:00:00.000Z",
+    "doubleBottom" : false,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "Helsinki",
+    "dateOfIssue" : "2013-12-10T22:00:00.000Z",
+    "grossTonnage" : 236,
+    "netTonnage" : 71,
+    "deathWeight" : 120,
+    "length" : 25.0,
+    "overallLength" : 28.6,
+    "height" : 0.0,
+    "breadth" : 8.7,
+    "draught" : 3.4,
+    "maxSpeed" : null,
+    "enginePower" : "1766"
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : "Rauma"
+  },
+  "vesselSystem" : {
+    "shipOwner" : " ",
+    "shipTelephone1" : " ",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+}, {
+  "vesselId" : 144,
+  "mmsi" : 230145000,
+  "name" : "Aranda",
+  "namePrefix" : "ms",
+  "imoLloyds" : 8802076,
+  "radioCallSign" : "OIRY",
+  "radioCallSignType" : "REAL",
+  "updateTimestamp" : "2026-08-10T08:51:38.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 90,
+    "vesselTypeName" : "Other vessel",
+    "iceClassCode" : "IA",
+    "iceClassIssueDate" : "2026-08-06T21:00:00.000Z",
+    "iceClassIssuePlace" : "Hamburg",
+    "iceClassEndDate" : "2028-08-15T21:00:00.000Z",
+    "doubleBottom" : false,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "Helsinki",
+    "dateOfIssue" : "2018-03-25T21:00:00.000Z",
+    "grossTonnage" : 1969,
+    "netTonnage" : 591,
+    "deathWeight" : 0,
+    "length" : 52.46,
+    "overallLength" : 59.24,
+    "height" : 6.7,
+    "breadth" : 13.8,
+    "draught" : 5.0,
+    "maxSpeed" : null,
+    "enginePower" : "2*1500"
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : "Helsinki"
+  },
+  "vesselSystem" : {
+    "shipOwner" : " ",
+    "shipTelephone1" : " ",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+}, {
+  "vesselId" : 99990790,
+  "mmsi" : 230093590,
+  "name" : "Eija",
+  "namePrefix" : " ",
+  "imoLloyds" : 9147605,
+  "radioCallSign" : "PGFM",
+  "radioCallSignType" : "REAL",
+  "updateTimestamp" : "2026-08-10T13:03:27.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 91,
+    "vesselTypeName" : "Tug",
+    "iceClassCode" : "II",
+    "iceClassIssueDate" : "2026-03-29T21:00:00.000Z",
+    "iceClassIssuePlace" : "Loviisa",
+    "iceClassEndDate" : "2027-05-15T21:00:00.000Z",
+    "doubleBottom" : false,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "Helsinki",
+    "dateOfIssue" : "2017-03-28T21:00:00.000Z",
+    "grossTonnage" : 154,
+    "netTonnage" : 47,
+    "deathWeight" : 0,
+    "length" : 0.0,
+    "overallLength" : 22.69,
+    "height" : 0.0,
+    "breadth" : 0.0,
+    "draught" : 0.0,
+    "maxSpeed" : null,
+    "enginePower" : " "
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : "9147605"
+  },
+  "vesselSystem" : {
+    "shipOwner" : "Stemat B.V.",
+    "shipTelephone1" : " ",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+}, {
+  "vesselId" : 780,
+  "mmsi" : 0,
+  "name" : "Nina",
+  "namePrefix" : "ms",
+  "imoLloyds" : null,
+  "radioCallSign" : "-",
+  "radioCallSignType" : "REAL",
+  "updateTimestamp" : "2026-08-17T11:49:03.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 90,
+    "vesselTypeName" : "Other vessel",
+    "iceClassCode" : "UNKNOWN",
+    "iceClassIssueDate" : null,
+    "iceClassIssuePlace" : "0",
+    "iceClassEndDate" : "9999-12-30T22:00:00.000Z",
+    "doubleBottom" : false,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "merenkulkuhallitus",
+    "dateOfIssue" : "1994-10-26T22:00:00.000Z",
+    "grossTonnage" : 106,
+    "netTonnage" : 32,
+    "deathWeight" : 0,
+    "length" : 23.04,
+    "overallLength" : 0.0,
+    "height" : 3.0,
+    "breadth" : 6.62,
+    "draught" : 3.3,
+    "maxSpeed" : null,
+    "enginePower" : "379"
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : " "
+  },
+  "vesselSystem" : {
+    "shipOwner" : " ",
+    "shipTelephone1" : " ",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+}, {
+  "vesselId" : 99989286,
+  "mmsi" : 230040000,
+  "name" : "Aurora Botnia",
+  "namePrefix" : "ms",
+  "imoLloyds" : 9878319,
+  "radioCallSign" : "OJTR",
+  "radioCallSignType" : "REAL",
+  "updateTimestamp" : "2026-08-11T10:27:55.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 20,
+    "vesselTypeName" : "Passenger-car ferry",
+    "iceClassCode" : "IAS",
+    "iceClassIssueDate" : "2022-10-13T21:00:00.000Z",
+    "iceClassIssuePlace" : "Hamburg",
+    "iceClassEndDate" : "2026-08-26T21:00:00.000Z",
+    "doubleBottom" : true,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "Helsinki",
+    "dateOfIssue" : "2021-06-21T21:00:00.000Z",
+    "grossTonnage" : 24036,
+    "netTonnage" : 7264,
+    "deathWeight" : 0,
+    "length" : 140.16,
+    "overallLength" : 0.0,
+    "height" : 0.0,
+    "breadth" : 26.0,
+    "draught" : 5.95,
+    "maxSpeed" : null,
+    "enginePower" : "17600"
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : "Vasa"
+  },
+  "vesselSystem" : {
+    "shipOwner" : "Kvarken Link Ab Oy",
+    "shipTelephone1" : "+358405556240",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+}, {
+  "vesselId" : 99995862,
+  "mmsi" : 0,
+  "name" : "SCG 4",
+  "namePrefix" : " ",
+  "imoLloyds" : null,
+  "radioCallSign" : "SCG4",
+  "radioCallSignType" : "FAKE",
+  "updateTimestamp" : "2026-08-18T11:28:36.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 93,
+    "vesselTypeName" : "Barge",
+    "iceClassCode" : "UNKNOWN",
+    "iceClassIssueDate" : "2023-01-17T22:00:00.000Z",
+    "iceClassIssuePlace" : "Tallinn/TraFi",
+    "iceClassEndDate" : "2028-03-11T22:00:00.000Z",
+    "doubleBottom" : false,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "Helsinki",
+    "dateOfIssue" : "2012-06-19T21:00:00.000Z",
+    "grossTonnage" : 497,
+    "netTonnage" : 150,
+    "deathWeight" : 0,
+    "length" : 53.74,
+    "overallLength" : 55.06,
+    "height" : 3.5,
+    "breadth" : 10.0,
+    "draught" : 3.1,
+    "maxSpeed" : null,
+    "enginePower" : " "
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : "Helsinki"
+  },
+  "vesselSystem" : {
+    "shipOwner" : " ",
+    "shipTelephone1" : " ",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+}, {
+  "vesselId" : 1502,
+  "mmsi" : 230358000,
+  "name" : "Rautaruukki",
+  "namePrefix" : "ms",
+  "imoLloyds" : 8418174,
+  "radioCallSign" : "OJHM",
+  "radioCallSignType" : "REAL",
+  "updateTimestamp" : "2026-08-03T09:21:12.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 94,
+    "vesselTypeName" : "Pusher",
+    "iceClassCode" : "IAS",
+    "iceClassIssueDate" : "2026-05-06T21:00:00.000Z",
+    "iceClassIssuePlace" : "Naantali",
+    "iceClassEndDate" : "2031-07-30T21:00:00.000Z",
+    "doubleBottom" : false,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "Helsinki",
+    "dateOfIssue" : "2012-07-09T21:00:00.000Z",
+    "grossTonnage" : 1554,
+    "netTonnage" : 467,
+    "deathWeight" : 445,
+    "length" : 40.03,
+    "overallLength" : 41.7,
+    "height" : 10.01,
+    "breadth" : 14.36,
+    "draught" : 6.7,
+    "maxSpeed" : null,
+    "enginePower" : "2*3840"
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : "Helsinki"
+  },
+  "vesselSystem" : {
+    "shipOwner" : "ESL Shipping Oy",
+    "shipTelephone1" : " ",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+}, {
+  "vesselId" : 50,
+  "mmsi" : 230938490,
+  "name" : "Kuokka-Pekka 2",
+  "namePrefix" : "pr",
+  "imoLloyds" : null,
+  "radioCallSign" : "10563",
+  "radioCallSignType" : "REAL",
+  "updateTimestamp" : "2026-08-10T13:08:58.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 97,
+    "vesselTypeName" : "Other vessel without propulsion machinery",
+    "iceClassCode" : "UNKNOWN",
+    "iceClassIssueDate" : "0999-12-26T22:21:00.000Z",
+    "iceClassIssuePlace" : " ",
+    "iceClassEndDate" : "9999-12-30T22:00:00.000Z",
+    "doubleBottom" : false,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "Helsinki",
+    "dateOfIssue" : "2012-06-19T21:00:00.000Z",
+    "grossTonnage" : 202,
+    "netTonnage" : 61,
+    "deathWeight" : 0,
+    "length" : 29.76,
+    "overallLength" : 31.0,
+    "height" : 2.25,
+    "breadth" : 11.0,
+    "draught" : 1.69,
+    "maxSpeed" : null,
+    "enginePower" : " "
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : "Helsinki"
+  },
+  "vesselSystem" : {
+    "shipOwner" : " ",
+    "shipTelephone1" : " ",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+}, {
+  "vesselId" : 99988090,
+  "mmsi" : 0,
+  "name" : "Nordic Titan",
+  "namePrefix" : " ",
+  "imoLloyds" : null,
+  "radioCallSign" : "OHA5310",
+  "radioCallSignType" : "REAL",
+  "updateTimestamp" : "2026-08-17T07:54:34.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 93,
+    "vesselTypeName" : "Barge",
+    "iceClassCode" : "UNKNOWN",
+    "iceClassIssueDate" : "2026-08-10T21:00:00.000Z",
+    "iceClassIssuePlace" : " ",
+    "iceClassEndDate" : "2026-11-29T22:00:00.000Z",
+    "doubleBottom" : false,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "Naantali",
+    "dateOfIssue" : "2023-11-28T22:00:00.000Z",
+    "grossTonnage" : 989,
+    "netTonnage" : 297,
+    "deathWeight" : 0,
+    "length" : 0.0,
+    "overallLength" : 0.0,
+    "height" : 0.0,
+    "breadth" : 0.0,
+    "draught" : 0.0,
+    "maxSpeed" : null,
+    "enginePower" : " "
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : "Helsinki"
+  },
+  "vesselSystem" : {
+    "shipOwner" : "Terramare Oy",
+    "shipTelephone1" : " ",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+}, {
+  "vesselId" : 99994843,
+  "mmsi" : 230982000,
+  "name" : "Finnmaid",
+  "namePrefix" : "ms",
+  "imoLloyds" : 9319466,
+  "radioCallSign" : "OJMI",
+  "radioCallSignType" : "REAL",
+  "updateTimestamp" : "2026-08-10T08:03:38.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 20,
+    "vesselTypeName" : "Passenger-car ferry",
+    "iceClassCode" : "IAS",
+    "iceClassIssueDate" : "2026-08-05T21:00:00.000Z",
+    "iceClassIssuePlace" : "Vuosaari",
+    "iceClassEndDate" : "2031-08-06T21:00:00.000Z",
+    "doubleBottom" : false,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "Helsinki",
+    "dateOfIssue" : "2014-09-25T21:00:00.000Z",
+    "grossTonnage" : 45923,
+    "netTonnage" : 15013,
+    "deathWeight" : 9300,
+    "length" : 199.86,
+    "overallLength" : 217.6,
+    "height" : 9.9,
+    "breadth" : 30.5,
+    "draught" : 7.1,
+    "maxSpeed" : null,
+    "enginePower" : "4*10395"
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : "Helsinki"
+  },
+  "vesselSystem" : {
+    "shipOwner" : "Finnlines Plc, Ship Management",
+    "shipTelephone1" : " ",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+}, {
+  "vesselId" : 99987665,
+  "mmsi" : 0,
+  "name" : "Pekka",
+  "namePrefix" : " ",
+  "imoLloyds" : null,
+  "radioCallSign" : "0",
+  "radioCallSignType" : "REAL",
+  "updateTimestamp" : "2026-08-17T08:16:32.000Z",
+  "dataSource" : "Portnet",
+  "vesselConstruction" : {
+    "vesselTypeCode" : 93,
+    "vesselTypeName" : "Barge",
+    "iceClassCode" : "UNKNOWN",
+    "iceClassIssueDate" : null,
+    "iceClassIssuePlace" : " ",
+    "iceClassEndDate" : null,
+    "doubleBottom" : false,
+    "inertGasSystem" : false,
+    "ballastTank" : false
+  },
+  "vesselDimensions" : {
+    "tonnageCertificateIssuer" : "Helsinki",
+    "dateOfIssue" : "2012-08-16T21:00:00.000Z",
+    "grossTonnage" : 234,
+    "netTonnage" : 71,
+    "deathWeight" : 0,
+    "length" : 27.45,
+    "overallLength" : 0.0,
+    "height" : 2.61,
+    "breadth" : 12.1,
+    "draught" : 0.0,
+    "maxSpeed" : null,
+    "enginePower" : " "
+  },
+  "vesselRegistration" : {
+    "nationality" : "FI",
+    "portOfRegistry" : "kalajoki"
+  },
+  "vesselSystem" : {
+    "shipOwner" : "R-Towing Oy",
+    "shipTelephone1" : " ",
+    "shipEmail" : " ",
+    "shipVerifier" : "LIVI"
+  }
+} ]

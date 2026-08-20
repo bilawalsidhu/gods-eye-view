@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "API_KEY_MISSING",
+    "message": "No api_key was supplied. Get one at https://api.data.gov/signup/ Contact us at https://github.com/fecgov/openFEC/issues/ for assistance."
+  }
+}

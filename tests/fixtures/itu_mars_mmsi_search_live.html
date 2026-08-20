@@ -1,0 +1,1059 @@
+
+
+
+<!DOCTYPE html>
+<html>
+<head>
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ship Station List</title>
+    <link href="/appstatic/css?v=rs_YLfKq7940zX_t8HLEc7hhjKILtcVS_XiGKUOaODU1" rel="stylesheet"/>
+
+    <link href="/appstatic/itu-layout-styles?v=nH9ANFA_nW2rbCGYdlR63fD2gLjIs6561YO7tgNlE4M1" rel="stylesheet"/>
+
+    <script src="https://cdn.jsdelivr.net/gh/openlayers/openlayers.github.io@master/en/v6.4.3/build/ol.js"></script>
+
+</head>
+
+<body class="stretched" data-speed-in="5" data-speed-out="5">
+    <script src="/appstatic/jquery?v=ZzFaSIsQuBjdT5u2ozxLI70QPmfltyP9ei1twAWmxmA1"></script>
+
+
+    <!-- Document Wrapper
+    ============================================= -->
+    <div id="wrapper" class="clearfix">
+
+        <!-- Top Bar
+        ============================================= -->
+        <div id="top-bar">
+
+            <div class="container clearfix">
+
+                <div class="col_half nobottommargin">
+
+                    <div id="top-social">
+                        <ul>
+                            <li><a href="http://www.itu.int/facebook" target="_blank" class="si-facebook" data-hover-width="109" style="width: 40px;"><span class="ts-icon"><i class="icon-facebook"></i></span><span class="ts-text">Facebook</span></a></li>
+                            <li><a href="https://twitter.com/itu" target="_blank" class="si-twitter" data-hover-width="95" style="width: 40px;"><span class="ts-icon"><i class="icon-twitter"></i></span><span class="ts-text">Twitter</span></a></li>
+                            <li><a href="http://www.itu.int/youtube" target="_blank" class="si-youtube" data-hover-width="104" style="width: 40px;"><span class="ts-icon"><i class="icon-youtube"></i></span><span class="ts-text">Youtube</span></a></li>
+                            <li><a href="http://www.itu.int/flickr" target="_blank" class="si-flickr" data-hover-width="92" style="width: 40px;"><span class="ts-icon"><i class="icon-flickr"></i></span><span class="ts-text">Flickr</span></a></li>
+                            <li><a href="https://www.linkedin.com/company/international-telecommunication-union" target="_blank" class="si-linkedin" data-hover-width="106" style="width: 40px;"><span class="ts-icon"><i class="icon-linkedin"></i></span><span class="ts-text">LinkedIn</span></a></li>
+                            <li><a href="https://plus.google.com/+ITU" target="_blank" class="si-gplus" data-hover-width="111" style="width: 40px;"><span class="ts-icon"><i class="icon-gplus"></i></span><span class="ts-text">Google plus</span></a></li>
+                            <li><a href="tel:+41 22 730 5111" class="si-call" data-hover-width="156" style="width: 40px;"><span class="ts-icon"><i class="icon-call"></i></span><span class="ts-text">+41 22 730 5111</span></a></li>
+                            <li><a href="mailto:itumail@itu.int" class="si-email3" data-hover-width="152" style="width: 40px;"><span class="ts-icon"><i class="icon-email3"></i></span><span class="ts-text">itumail@itu.int</span></a></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="col_half fright col_last nobottommargin">
+
+                    <div class="top-links">
+
+                        <ul class="sf-js-enabled clearfix" style="touch-action: pan-y;">
+                                                            <li class=""><a href="http://www.itu.int/en/ITU-R/terrestrial/mars/Pages/default.aspx" data-scrollto="#booking-appointment-form" data-offset="100" data-easing="easeInOutExpo" data-speed="1200" style="color:#000000;background-color:#00FFFF;">MARS</a></li>
+                                                            <li class="" style="width:10px;"></li>
+                                <li class=""><a href="http://www.itu.int/" data-scrollto="#booking-appointment-form" data-offset="100" data-easing="easeInOutExpo" data-speed="1200" class="bgcolor" style="color:#fff;">Back to ITU Main</a></li>
+                        </ul>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div><!-- #top-bar end -->
+
+        <div class="container">
+            
+
+
+<form action="/mmsapp/ShipStation/list" id="form-main" method="post"><input id="Breadcrumb" name="Breadcrumb" type="hidden" value="bzs2RCadTUz44b98w9OBVzbRjCCRHqtQkfL1/UlvIZeITok8J5m3I497+MckDoVLl/fcbHXgUOV6Didsoa93irjyCuyKDI+c+CU7sDzWXP4H9Sf9lEjaJN4st28bRWXR7X2c5rvEcsH72PB952RKVRebYEr4m8hyjaThnkkX9BqQH9zXCWItYGQ3QkZVPv0emvPwLPLJ2CjFNNb0aJKdoQ==" /><input class="scrollTopValue" id="ScrollTopValue" name="ScrollTopValue" type="hidden" value="" />    <button type="button" style="height:0px;width:0px;border:none;background-color:transparent;"></button>
+
+
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="panel panel-primary">
+            <div class="panel-heading">
+                <span class="glyphicon glyphicon-search" aria-hidden="true"></span> Ship Station - Search
+            </div>
+            <div class="panel-body">
+                <div class="row">
+                    <div class="col-xs-12 col-sm-4 col-md-4">
+                        <div>Ship Name</div>
+<input class="form-control" id="Search_Name" maxlength="50" name="Search.Name" style="text-transform:uppercase" type="text" value="" />                    </div>
+                    <div class="col-xs-12 col-sm-4 col-md-8">
+                        <div>MMSI (Including for craft associated with a parent ship) or handheld VHF DSC identity</div>
+                        <input class="form-control" data-val="true" data-val-regex="MMSI only accepts numbers" data-val-regex-pattern="^[0-9+\s]+$" id="Search_MaritimeMobileServiceIdentity" maxlength="9" name="Search.MaritimeMobileServiceIdentity" style="text-transform:uppercase" type="text" value="310627000" />
+
+                        <span class="field-validation-valid text-danger" data-valmsg-for="Search.MaritimeMobileServiceIdentity" data-valmsg-replace="true"></span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-xs-12 col-sm-4 col-md-4">
+                        <div>Call Sign</div>
+                        <input class="form-control" data-val="true" data-val-regex="Call Sign only accepts numbers and letters" data-val-regex-pattern="^[a-zA-Z0-9+\s]+$" id="Search_CallSign" maxlength="7" name="Search.CallSign" style="text-transform:uppercase" type="text" value="" />
+
+                        <span class="field-validation-valid text-danger" data-valmsg-for="Search.CallSign" data-valmsg-replace="true"></span>
+                    </div>
+                    <div class="col-xs-12 col-sm-4 col-md-4">
+                        <div>Ship (Vessel) Identification Number</div>
+                        <input class="form-control" id="Search_VesselIdentificationNumber" maxlength="15" name="Search.VesselIdentificationNumber" style="text-transform:uppercase" type="text" value="" />
+                    </div>
+                    <div class="col-xs-12 col-sm-4 col-md-2">
+                        <div>EPIRB Hex Id Code</div>
+                        <input class="form-control" id="Search_EmergencyPositionIndicatingRadioBeaconHexadecimalIdentifier" maxlength="15" name="Search.EmergencyPositionIndicatingRadioBeaconHexadecimalIdentifier" style="text-transform:uppercase" type="text" value="" />
+                    </div>
+                    <div class="col-xs-12 col-sm-4 col-md-2">
+                        <div>Satellite Number</div>
+                        <input class="form-control" id="Search_SatelliteNumber" maxlength="30" name="Search.SatelliteNumber" style="text-transform:uppercase" type="text" value="" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-xs-12 col-sm-4 col-md-4">
+                        <div>Administration</div>
+                        <select class="btn btn-default dropdown-toggle form-control select-administration" data-val="true" data-val-number="The field SelectedId must be a number." id="Search_Administration_SelectedId" name="Search.Administration.SelectedId"><option value="">&lt;select one&gt;</option>
+<option value="2">AFG - Afghanistan</option>
+<option value="3">AFS - South Africa (Republic of)</option>
+<option value="4">AGL - Angola (Republic of)</option>
+<option value="5">ALB - Albania (Republic of)</option>
+<option value="6">ALG - Algeria (People&#39;s Democratic Republic of)</option>
+<option value="7">AND - Andorra (Principality of)</option>
+<option value="8">ARG - Argentine Republic</option>
+<option value="9">ARM - Armenia (Republic of)</option>
+<option value="10">ARS - Saudi Arabia (Kingdom of)</option>
+<option value="11">ATG - Antigua and Barbuda</option>
+<option value="12">AUS - Australia</option>
+<option value="13">AUT - Austria</option>
+<option value="14">AZE - Azerbaijan (Republic of)</option>
+<option value="15">B - Brazil (Federative Republic of)</option>
+<option value="16">BAH - Bahamas (Commonwealth of the)</option>
+<option value="17">BDI - Burundi (Republic of)</option>
+<option value="18">BEL - Belgium</option>
+<option value="19">BEN - Benin (Republic of)</option>
+<option value="20">BFA - Burkina Faso</option>
+<option value="21">BGD - Bangladesh (People&#39;s Republic of)</option>
+<option value="22">BHR - Bahrain (Kingdom of)</option>
+<option value="179">BIH - Bosnia and Herzegovina</option>
+<option value="23">BLR - Belarus (Republic of)</option>
+<option value="24">BLZ - Belize</option>
+<option value="25">BOL - Bolivia (Plurinational State of)</option>
+<option value="26">BOT - Botswana (Republic of)</option>
+<option value="27">BRB - Barbados</option>
+<option value="28">BRM - Myanmar (Union of)</option>
+<option value="29">BRU - Brunei Darussalam</option>
+<option value="30">BTN - Bhutan (Kingdom of)</option>
+<option value="31">BUL - Bulgaria (Republic of)</option>
+<option value="32">CAF - Central African Republic</option>
+<option value="33">CAN - Canada</option>
+<option value="34">CBG - Cambodia (Kingdom of)</option>
+<option value="35">CHL - Chile</option>
+<option value="36">CHN - China (People&#39;s Republic of)</option>
+<option value="37">CLM - Colombia (Republic of)</option>
+<option value="38">CLN - Sri Lanka (Democratic Socialist Republic of)</option>
+<option value="39">CME - Cameroon (Republic of)</option>
+<option value="175">COD - Democratic Republic of the Congo</option>
+<option value="40">COG - Congo (Republic of the)</option>
+<option value="41">COM - Comoros (Union of the)</option>
+<option value="42">CPV - Cabo Verde (Republic of)</option>
+<option value="43">CTI - C&#244;te d&#39;Ivoire (Republic of)</option>
+<option value="44">CTR - Costa Rica</option>
+<option value="45">CUB - Cuba</option>
+<option value="46">CVA - Vatican City State</option>
+<option value="47">CYP - Cyprus (Republic of)</option>
+<option value="154">CZE - Czech Republic</option>
+<option value="48">D - Germany (Federal Republic of)</option>
+<option value="49">DJI - Djibouti (Republic of)</option>
+<option value="50">DMA - Dominica (Commonwealth of)</option>
+<option value="51">DNK - Denmark</option>
+<option value="52">DOM - Dominican Republic</option>
+<option value="53">E - Spain</option>
+<option value="54">EGY - Egypt (Arab Republic of)</option>
+<option value="55">EQA - Ecuador</option>
+<option value="187">ERI - Eritrea</option>
+<option value="56">EST - Estonia (Republic of)</option>
+<option value="57">ETH - Ethiopia (Federal Democratic Republic of)</option>
+<option value="58">F - France</option>
+<option value="60">FIN - Finland</option>
+<option value="59">FJI - Fiji (Republic of)</option>
+<option value="61">FSM - Micronesia (Federated States of)</option>
+<option value="62">G - United Kingdom of Great Britain and Northern Ireland</option>
+<option value="63">GAB - Gabonese Republic</option>
+<option value="180">GEO - Georgia</option>
+<option value="64">GHA - Ghana</option>
+<option value="65">GMB - Gambia (Republic of the)</option>
+<option value="66">GNB - Guinea-Bissau (Republic of)</option>
+<option value="67">GNE - Equatorial Guinea (Republic of)</option>
+<option value="68">GRC - Greece</option>
+<option value="69">GRD - Grenada</option>
+<option value="70">GTM - Guatemala (Republic of)</option>
+<option value="71">GUI - Guinea (Republic of)</option>
+<option value="72">GUY - Guyana</option>
+<option value="73">HND - Honduras (Republic of)</option>
+<option value="74">HNG - Hungary</option>
+<option value="75">HOL - Netherlands (Kingdom of the)</option>
+<option value="76">HRV - Croatia (Republic of)</option>
+<option value="77">HTI - Haiti (Republic of)</option>
+<option value="78">I - Italy</option>
+<option value="79">IND - India (Republic of)</option>
+<option value="80">INS - Indonesia (Republic of)</option>
+<option value="81">IRL - Ireland</option>
+<option value="82">IRN - Iran (Islamic Republic of)</option>
+<option value="83">IRQ - Iraq (Republic of)</option>
+<option value="84">ISL - Iceland</option>
+<option value="85">ISR - Israel (State of)</option>
+<option value="86">J - Japan</option>
+<option value="87">JMC - Jamaica</option>
+<option value="88">JOR - Jordan (Hashemite Kingdom of)</option>
+<option value="181">KAZ - Kazakhstan (Republic of)</option>
+<option value="89">KEN - Kenya (Republic of)</option>
+<option value="184">KGZ - Kyrgyz Republic</option>
+<option value="90">KIR - Kiribati (Republic of)</option>
+<option value="191">KNA - Saint Kitts and Nevis (Federation of)</option>
+<option value="91">KOR - Korea (Republic of)</option>
+<option value="92">KRE - Democratic People&#39;s Republic of Korea</option>
+<option value="93">KWT - Kuwait (State of)</option>
+<option value="94">LAO - Lao People&#39;s Democratic Republic</option>
+<option value="95">LBN - Lebanon</option>
+<option value="96">LBR - Liberia (Republic of)</option>
+<option value="97">LBY - Libya (State of)</option>
+<option value="190">LCA - Saint Lucia</option>
+<option value="98">LIE - Liechtenstein (Principality of)</option>
+<option value="99">LSO - Lesotho (Kingdom of)</option>
+<option value="100">LTU - Lithuania (Republic of)</option>
+<option value="101">LUX - Luxembourg</option>
+<option value="102">LVA - Latvia (Republic of)</option>
+<option value="103">MAU - Mauritius (Republic of)</option>
+<option value="104">MCO - Monaco (Principality of)</option>
+<option value="178">MDA - Moldova (Republic of)</option>
+<option value="105">MDG - Madagascar (Republic of)</option>
+<option value="106">MEX - Mexico</option>
+<option value="114">MHL - Marshall Islands (Republic of the)</option>
+<option value="186">MKD - North Macedonia (Republic of)</option>
+<option value="107">MLA - Malaysia</option>
+<option value="108">MLD - Maldives (Republic of)</option>
+<option value="109">MLI - Mali (Republic of)</option>
+<option value="110">MLT - Malta</option>
+<option value="208">MNE - Montenegro</option>
+<option value="111">MNG - Mongolia</option>
+<option value="112">MOZ - Mozambique (Republic of)</option>
+<option value="113">MRC - Morocco (Kingdom of)</option>
+<option value="115">MTN - Mauritania (Islamic Republic of)</option>
+<option value="116">MWI - Malawi</option>
+<option value="117">NCG - Nicaragua</option>
+<option value="118">NGR - Niger (Republic of the)</option>
+<option value="119">NIG - Nigeria (Federal Republic of)</option>
+<option value="120">NMB - Namibia (Republic of)</option>
+<option value="121">NOR - Norway</option>
+<option value="122">NPL - Nepal (Federal Democratic Republic of)</option>
+<option value="123">NRU - Republic of Naoero</option>
+<option value="124">NZL - New Zealand</option>
+<option value="125">OMA - Oman (Sultanate of)</option>
+<option value="126">PAK - Pakistan (Islamic Republic of)</option>
+<option value="127">PHL - Philippines (Republic of the)</option>
+<option value="188">PLW - Palau (Republic of)</option>
+<option value="128">PNG - Papua New Guinea</option>
+<option value="129">PNR - Panama (Republic of)</option>
+<option value="130">POL - Poland (Republic of)</option>
+<option value="131">POR - Portugal</option>
+<option value="132">PRG - Paraguay (Republic of)</option>
+<option value="133">PRU - Peru</option>
+<option value="134">QAT - Qatar (State of)</option>
+<option value="135">ROU - Romania</option>
+<option value="136">RRW - Rwanda (Republic of)</option>
+<option value="137">RUS - Russian Federation</option>
+<option value="138">S - Sweden</option>
+<option value="139">SDN - Sudan (Republic of the)</option>
+<option value="140">SEN - Senegal (Republic of)</option>
+<option value="189">SEY - Seychelles (Republic of)</option>
+<option value="141">SLM - Solomon Islands</option>
+<option value="142">SLV - El Salvador (Republic of)</option>
+<option value="143">SMO - Samoa (Independent State of)</option>
+<option value="144">SMR - San Marino (Republic of)</option>
+<option value="145">SNG - Singapore (Republic of)</option>
+<option value="213">SOM - Somalia (Federal Republic of)</option>
+<option value="206">SRB - Serbia (Republic of)</option>
+<option value="146">SRL - Sierra Leone</option>
+<option value="211">SSD - South Sudan (Republic of)</option>
+<option value="147">STP - Sao Tome and Principe (Democratic Republic of)</option>
+<option value="148">SUI - Switzerland (Confederation of)</option>
+<option value="149">SUR - Suriname (Republic of)</option>
+<option value="185">SVK - Slovak Republic</option>
+<option value="150">SVN - Slovenia (Republic of)</option>
+<option value="151">SWZ - Eswatini (Kingdom of)</option>
+<option value="152">SYR - Syrian Arab Republic</option>
+<option value="153">TCD - Chad (Republic of)</option>
+<option value="155">TGO - Togolese Republic</option>
+<option value="156">THA - Thailand</option>
+<option value="182">TJK - Tajikistan (Republic of)</option>
+<option value="183">TKM - Turkmenistan</option>
+<option value="204">TLS - Timor-Leste (Democratic Republic of)</option>
+<option value="157">TON - Tonga (Kingdom of)</option>
+<option value="158">TRD - Trinidad and Tobago</option>
+<option value="159">TUN - Tunisia</option>
+<option value="160">TUR - Republic of T&#252;rkiye</option>
+<option value="161">TUV - Tuvalu</option>
+<option value="162">TZA - Tanzania (United Republic of)</option>
+<option value="163">UAE - United Arab Emirates</option>
+<option value="164">UGA - Uganda (Republic of)</option>
+<option value="165">UKR - Ukraine</option>
+<option value="166">URG - Uruguay (Eastern Republic of)</option>
+<option value="167">USA - United States of America</option>
+<option value="168">UZB - Uzbekistan (Republic of)</option>
+<option value="169">VCT - Saint Vincent and the Grenadines</option>
+<option value="170">VEN - Venezuela (Bolivarian Republic of)</option>
+<option value="171">VTN - Viet Nam (Socialist Republic of)</option>
+<option value="172">VUT - Vanuatu (Republic of)</option>
+<option value="212">XSD - In Column B only against assignments notified by the Administration of ex Sudan before 14 July 2011</option>
+<option value="173">YEM - Yemen (Republic of)</option>
+<option value="176">ZMB - Zambia (Republic of)</option>
+<option value="177">ZWE - Zimbabwe (Republic of)</option>
+</select>
+                    </div>
+                    <div class="col-xs-12 col-sm-4 col-md-4">
+                        <div>Geographical Area</div>
+                        <select class="btn btn-default dropdown-toggle form-control select-geographical-area" data-val="true" data-val-number="The field SelectedId must be a number." id="Search_GeographicalArea_SelectedId" name="Search.GeographicalArea.SelectedId"><option value="">&lt;select one&gt;</option>
+<option value="2">ABW - Aruba</option>
+<option value="3">AFG - Afghanistan</option>
+<option value="4">AFS - South Africa (Republic of)</option>
+<option value="5">AGL - Angola (Republic of)</option>
+<option value="6">AIA - Anguilla</option>
+<option value="7">ALB - Albania (Republic of)</option>
+<option value="8">ALG - Algeria (People&#39;s Democratic Republic of)</option>
+<option value="9">ALS - Alaska (State of)</option>
+<option value="10">AMS - Saint Paul and Amsterdam Islands</option>
+<option value="11">AND - Andorra (Principality of)</option>
+<option value="12">AOE - Western Sahara</option>
+<option value="13">ARG - Argentine Republic</option>
+<option value="14">ARM - Armenia (Republic of)</option>
+<option value="15">ARS - Saudi Arabia (Kingdom of)</option>
+<option value="16">ASC - Ascension Island</option>
+<option value="259">ATA - Antarctic</option>
+<option value="17">ATG - Antigua and Barbuda</option>
+<option value="18">ATL - Ocean-station vessels: Atlantic Region</option>
+<option value="20">AUS - Australia</option>
+<option value="21">AUT - Austria</option>
+<option value="22">AZE - Azerbaijan (Republic of)</option>
+<option value="23">AZR - Azores</option>
+<option value="24">B - Brazil (Federative Republic of)</option>
+<option value="25">BAH - Bahamas (Commonwealth of the)</option>
+<option value="26">BDI - Burundi (Republic of)</option>
+<option value="27">BEL - Belgium</option>
+<option value="28">BEN - Benin (Republic of)</option>
+<option value="29">BER - Bermuda</option>
+<option value="286">BES - Bonaire, Sint Eustatius and Saba</option>
+<option value="30">BFA - Burkina Faso</option>
+<option value="31">BGD - Bangladesh (People&#39;s Republic of)</option>
+<option value="32">BHR - Bahrain (Kingdom of)</option>
+<option value="251">BIH - Bosnia and Herzegovina</option>
+<option value="33">BIO - Chagos Islands (Indian Ocean)</option>
+<option value="282">BLM - Saint Barth&#233;lemy (French Department of)</option>
+<option value="34">BLR - Belarus (Republic of)</option>
+<option value="35">BLZ - Belize</option>
+<option value="36">BOL - Bolivia (Plurinational State of)</option>
+<option value="37">BOT - Botswana (Republic of)</option>
+<option value="38">BRB - Barbados</option>
+<option value="39">BRM - Myanmar (Union of)</option>
+<option value="40">BRU - Brunei Darussalam</option>
+<option value="41">BTN - Bhutan (Kingdom of)</option>
+<option value="42">BUL - Bulgaria (Republic of)</option>
+<option value="274">BVT - Bouvet Island</option>
+<option value="43">CAF - Central African Republic</option>
+<option value="44">CAN - Canada</option>
+<option value="45">CBG - Cambodia (Kingdom of)</option>
+<option value="267">CG7 - CUB(Guantanamo) (7), as defined in Appendix 26 to the Radio Regulations, Geneva, 1959; (7) means &quot;USA stations&quot;.</option>
+<option value="46">CHL - Chile</option>
+<option value="47">CHN - China (People&#39;s Republic of)</option>
+<option value="48">CHR - Christmas Island (Indian Ocean)</option>
+<option value="49">CKH - Cook Islands</option>
+<option value="50">CLM - Colombia (Republic of)</option>
+<option value="51">CLN - Sri Lanka (Democratic Socialist Republic of)</option>
+<option value="52">CME - Cameroon (Republic of)</option>
+<option value="53">CNR - Canary Islands</option>
+<option value="247">COD - Democratic Republic of the Congo</option>
+<option value="54">COG - Congo (Republic of the)</option>
+<option value="55">COM - Comoros (Union of the)</option>
+<option value="275">CPT - Clipperton Island</option>
+<option value="56">CPV - Cabo Verde (Republic of)</option>
+<option value="57">CRO - Crozet Archipelago</option>
+<option value="58">CTI - C&#244;te d&#39;Ivoire (Republic of)</option>
+<option value="59">CTR - Costa Rica</option>
+<option value="60">CUB - Cuba</option>
+<option value="283">CUW - Cura&#231;ao</option>
+<option value="61">CVA - Vatican City State</option>
+<option value="62">CYM - Cayman Islands</option>
+<option value="63">CYP - Cyprus (Republic of)</option>
+<option value="219">CZE - Czech Republic</option>
+<option value="64">D - Germany (Federal Republic of)</option>
+<option value="65">DGA - Diego Garcia</option>
+<option value="66">DJI - Djibouti (Republic of)</option>
+<option value="67">DMA - Dominica (Commonwealth of)</option>
+<option value="68">DNK - Denmark</option>
+<option value="69">DOM - Dominican Republic</option>
+<option value="70">E - Spain</option>
+<option value="71">EGY - Egypt (Arab Republic of)</option>
+<option value="72">EQA - Ecuador</option>
+<option value="260">ERI - Eritrea</option>
+<option value="73">EST - Estonia (Republic of)</option>
+<option value="74">ETH - Ethiopia (Federal Democratic Republic of)</option>
+<option value="75">F - France</option>
+<option value="78">FIN - Finland</option>
+<option value="76">FJI - Fiji (Republic of)</option>
+<option value="77">FLK - Falkland Islands (Malvinas)</option>
+<option value="79">FRO - Faroe Islands</option>
+<option value="80">FSM - Micronesia (Federated States of)</option>
+<option value="81">G - United Kingdom of Great Britain and Northern Ireland</option>
+<option value="82">GAB - Gabonese Republic</option>
+<option value="83">GCA - United Kingdom (Non-metropolitan) - Region 1</option>
+<option value="84">GCC - United Kingdom - Region 3</option>
+<option value="252">GEO - Georgia</option>
+<option value="86">GHA - Ghana</option>
+<option value="87">GIB - Gibraltar</option>
+<option value="85">GLP - Guadeloupe (French Department of)</option>
+<option value="88">GMB - Gambia (Republic of the)</option>
+<option value="89">GNB - Guinea-Bissau (Republic of)</option>
+<option value="90">GNE - Equatorial Guinea (Republic of)</option>
+<option value="91">GRC - Greece</option>
+<option value="92">GRD - Grenada</option>
+<option value="93">GRL - Greenland</option>
+<option value="94">GTM - Guatemala (Republic of)</option>
+<option value="95">GUF - Guiana (French Department of)</option>
+<option value="96">GUI - Guinea (Republic of)</option>
+<option value="97">GUM - Guam</option>
+<option value="98">GUY - Guyana</option>
+<option value="99">HKG - Hong Kong (Special Administrative Region of China)</option>
+<option value="273">HMD - Heard and McDonald Islands</option>
+<option value="100">HND - Honduras (Republic of)</option>
+<option value="101">HNG - Hungary</option>
+<option value="102">HOL - Netherlands (Kingdom of the)</option>
+<option value="103">HRV - Croatia (Republic of)</option>
+<option value="104">HTI - Haiti (Republic of)</option>
+<option value="105">HWA - Hawaii (State of)</option>
+<option value="106">HWL - Howland Island</option>
+<option value="107">I - Italy</option>
+<option value="108">ICO - Cocos (Keeling) Islands</option>
+<option value="109">IND - India (Republic of)</option>
+<option value="110">INS - Indonesia (Republic of)</option>
+<option value="111">IRL - Ireland</option>
+<option value="112">IRN - Iran (Islamic Republic of)</option>
+<option value="113">IRQ - Iraq (Republic of)</option>
+<option value="114">ISL - Iceland</option>
+<option value="115">ISR - Israel (State of)</option>
+<option value="116">J - Japan</option>
+<option value="117">JAR - Jarvis Island</option>
+<option value="118">JMC - Jamaica</option>
+<option value="119">JON - Johnston Island</option>
+<option value="120">JOR - Jordan (Hashemite Kingdom of)</option>
+<option value="253">KAZ - Kazakhstan (Republic of)</option>
+<option value="121">KEN - Kenya (Republic of)</option>
+<option value="122">KER - Kerguelen Islands</option>
+<option value="256">KGZ - Kyrgyz Republic</option>
+<option value="123">KIR - Kiribati (Republic of)</option>
+<option value="197">KNA - Saint Kitts and Nevis (Federation of)</option>
+<option value="124">KOR - Korea (Republic of)</option>
+<option value="125">KRE - Democratic People&#39;s Republic of Korea</option>
+<option value="126">KWT - Kuwait (State of)</option>
+<option value="127">LAO - Lao People&#39;s Democratic Republic</option>
+<option value="128">LBN - Lebanon</option>
+<option value="129">LBR - Liberia (Republic of)</option>
+<option value="130">LBY - Libya (State of)</option>
+<option value="131">LCA - Saint Lucia</option>
+<option value="132">LIE - Liechtenstein (Principality of)</option>
+<option value="133">LSO - Lesotho (Kingdom of)</option>
+<option value="134">LTU - Lithuania (Republic of)</option>
+<option value="135">LUX - Luxembourg</option>
+<option value="136">LVA - Latvia (Republic of)</option>
+<option value="137">MAC - Macao (Special Administrative Region of China)</option>
+<option value="281">MAF - Saint Martin (French Department of)</option>
+<option value="138">MAU - Mauritius (Republic of)</option>
+<option value="139">MCO - Monaco (Principality of)</option>
+<option value="250">MDA - Moldova (Republic of)</option>
+<option value="140">MDG - Madagascar (Republic of)</option>
+<option value="141">MDR - Madeira</option>
+<option value="142">MDW - Midway Islands</option>
+<option value="143">MEX - Mexico</option>
+<option value="152">MHL - Marshall Islands (Republic of the)</option>
+<option value="258">MKD - North Macedonia (Republic of)</option>
+<option value="144">MLA - Malaysia</option>
+<option value="145">MLD - Maldives (Republic of)</option>
+<option value="146">MLI - Mali (Republic of)</option>
+<option value="147">MLT - Malta</option>
+<option value="280">MNE - Montenegro</option>
+<option value="148">MNG - Mongolia</option>
+<option value="149">MOZ - Mozambique (Republic of)</option>
+<option value="150">MRA - Northern Mariana Islands (Commonwealth of the)</option>
+<option value="151">MRC - Morocco (Kingdom of)</option>
+<option value="153">MRN - Marion Island</option>
+<option value="154">MRT - Martinique (French Department of)</option>
+<option value="155">MSR - Montserrat</option>
+<option value="156">MTN - Mauritania (Islamic Republic of)</option>
+<option value="157">MWI - Malawi</option>
+<option value="158">MYT - Mayotte (Territorial Collectivity of)</option>
+<option value="159">NCG - Nicaragua</option>
+<option value="160">NCL - New Caledonia</option>
+<option value="161">NFK - Norfolk Island</option>
+<option value="162">NGR - Niger (Republic of the)</option>
+<option value="163">NIG - Nigeria (Federal Republic of)</option>
+<option value="164">NIU - Niue</option>
+<option value="165">NMB - Namibia (Republic of)</option>
+<option value="166">NOR - Norway</option>
+<option value="167">NPL - Nepal (Federal Democratic Republic of)</option>
+<option value="168">NRU - Nauru (Republic of)</option>
+<option value="169">NZL - New Zealand</option>
+<option value="171">OCE - French Polynesia</option>
+<option value="172">OMA - Oman (Sultanate of)</option>
+<option value="175">PAC - Ocean-station vessels: Pacific Region</option>
+<option value="176">PAK - Pakistan (Islamic Republic of)</option>
+<option value="177">PAQ - Easter Island</option>
+<option value="178">PHL - Philippines (Republic of the)</option>
+<option value="179">PHX - Phoenix Islands</option>
+<option value="180">PLM - Palmyra Island</option>
+<option value="181">PLW - Palau (Republic of)</option>
+<option value="182">PNG - Papua New Guinea</option>
+<option value="183">PNR - Panama (Republic of)</option>
+<option value="184">POL - Poland (Republic of)</option>
+<option value="185">POR - Portugal</option>
+<option value="186">PRG - Paraguay (Republic of)</option>
+<option value="187">PRU - Peru</option>
+<option value="272">PSE - State of Palestine (In accordance with Resolution 99 Rev. Dubai, 2018)</option>
+<option value="188">PTC - Pitcairn Island</option>
+<option value="189">PTR - Puerto Rico</option>
+<option value="190">QAT - Qatar (State of)</option>
+<option value="191">REU - Reunion (French Department of)</option>
+<option value="192">ROD - Rodrigues</option>
+<option value="193">ROU - Romania</option>
+<option value="194">RRW - Rwanda (Republic of)</option>
+<option value="195">RUS - Russian Federation</option>
+<option value="196">S - Sweden</option>
+<option value="246">SCG - Ex. Serbia and Montenegro</option>
+<option value="198">SDN - Sudan (Republic of the)</option>
+<option value="199">SEN - Senegal (Republic of)</option>
+<option value="200">SEY - Seychelles (Republic of)</option>
+<option value="201">SHN - Saint Helena</option>
+<option value="202">SLM - Solomon Islands</option>
+<option value="203">SLV - El Salvador (Republic of)</option>
+<option value="204">SMA - American Samoa</option>
+<option value="205">SMO - Samoa (Independent State of)</option>
+<option value="206">SMR - San Marino (Republic of)</option>
+<option value="207">SNG - Singapore (Republic of)</option>
+<option value="289">SOM - Somalia (Federal Republic of)</option>
+<option value="208">SPM - Saint Pierre and Miquelon (Territorial Collectivity of)</option>
+<option value="279">SRB - Serbia (Republic of)</option>
+<option value="209">SRL - Sierra Leone</option>
+<option value="284">SSD - South Sudan (Republic of)</option>
+<option value="210">STP - Sao Tome and Principe (Democratic Republic of)</option>
+<option value="211">SUI - Switzerland (Confederation of)</option>
+<option value="212">SUR - Suriname (Republic of)</option>
+<option value="257">SVK - Slovak Republic</option>
+<option value="213">SVN - Slovenia (Republic of)</option>
+<option value="214">SWN - Swan Islands</option>
+<option value="215">SWZ - Eswatini (Kingdom of)</option>
+<option value="287">SXM - Sint Maarten (Dutch part)</option>
+<option value="216">SYR - Syrian Arab Republic</option>
+<option value="217">TCA - Turks and Caicos Islands</option>
+<option value="218">TCD - Chad (Republic of)</option>
+<option value="291">TCH - TCH</option>
+<option value="220">TGO - Togolese Republic</option>
+<option value="221">THA - Thailand</option>
+<option value="254">TJK - Tajikistan (Republic of)</option>
+<option value="222">TKL - Tokelau</option>
+<option value="255">TKM - Turkmenistan</option>
+<option value="223">TLS - Timor-Leste (Democratic Republic of)</option>
+<option value="224">TON - Tonga (Kingdom of)</option>
+<option value="225">TRC - Tristan da Cunha</option>
+<option value="226">TRD - Trinidad and Tobago</option>
+<option value="227">TUN - Tunisia</option>
+<option value="228">TUR - Republic of T&#252;rkiye</option>
+<option value="229">TUV - Tuvalu</option>
+<option value="230">TZA - Tanzania (United Republic of)</option>
+<option value="231">UAE - United Arab Emirates</option>
+<option value="232">UGA - Uganda (Republic of)</option>
+<option value="233">UKR - Ukraine</option>
+<option value="234">URG - Uruguay (Eastern Republic of)</option>
+<option value="292">URS - URS</option>
+<option value="235">USA - United States of America</option>
+<option value="236">UZB - Uzbekistan (Republic of)</option>
+<option value="237">VCT - Saint Vincent and the Grenadines</option>
+<option value="238">VEN - Venezuela (Bolivarian Republic of)</option>
+<option value="239">VIR - United States Virgin Islands</option>
+<option value="240">VRG - British Virgin Islands</option>
+<option value="241">VTN - Viet Nam (Socialist Republic of)</option>
+<option value="242">VUT - Vanuatu (Republic of)</option>
+<option value="243">WAK - Wake Island</option>
+<option value="244">WAL - Wallis and Futuna Islands</option>
+<option value="265">XAA - Shared throughout the world</option>
+<option value="19">XAN - The Former Territory of Netherlands Antilles</option>
+<option value="264">XAX - Shared by several countries, but in a restricted area of the world</option>
+<option value="261">XBR - International Telecommunication Union</option>
+<option value="288">XBY - Abyei area</option>
+<option value="262">XCN - Taiwan (Province of China)</option>
+<option value="263">XFR - Adelie Land</option>
+<option value="277">XGZ - Gaza Strip</option>
+<option value="266">XMM - This symbol is used in Column 4B to indicate the use of the frequency assignment for inter-ship communications, by the notifying administration indicated in Column B</option>
+<option value="170">XOA - International Civil Aviation Organization</option>
+<option value="268">XR1 - Region 1 (RR 5.3)</option>
+<option value="269">XR2 - Region 2 (RR 5.4)</option>
+<option value="270">XR3 - Region 3 (RR 5.5)</option>
+<option value="271">XRY - Antarctic Region (RR AP 26/5.2)</option>
+<option value="285">XSD - Territory of the former Republic of the Sudan (prior to 14 July 2011)</option>
+<option value="278">XSP - Spratly Islands</option>
+<option value="174">XUN - United Nations</option>
+<option value="276">XWB - West Bank</option>
+<option value="173">XWM - World Meteorological Organization</option>
+<option value="245">YEM - Yemen (Republic of)</option>
+<option value="290">ZAI - ZAI</option>
+<option value="248">ZMB - Zambia (Republic of)</option>
+<option value="249">ZWE - Zimbabwe (Republic of)</option>
+</select>
+                    </div>
+                    <div class="col-xs-12 col-sm-4 col-md-4">
+                        <div>General Classification</div>
+                        <select class="btn btn-default dropdown-toggle form-control select-general-classification" data-val="true" data-val-number="The field SelectedId must be a number." id="Search_GeneralClassification_SelectedId" name="Search.GeneralClassification.SelectedId"><option value="">&lt;select one&gt;</option>
+<option value="4">FV (Fishing industry)</option>
+<option value="6">GV (Service vessels)</option>
+<option value="5">MM (Merchant)</option>
+<option value="2">NF (Inland waterways)</option>
+<option value="7">NS (Naval)</option>
+<option value="11">OF (Offshore)</option>
+<option value="3">PL (Pleasure / Leisure)</option>
+<option value="8">SV (Rescue)</option>
+<option value="9">XX (All other activities)</option>
+</select>
+                    </div>
+                </div>
+                <div class="row" style="padding-top:15px;">
+                    <div class="col-md-12">
+                        <div class="btn-toolbar btn-group-xs pull-right">
+                            <button type="submit" class="btn btn-xs" name="viewCommand" value="Search" title="Submit Query">
+                                <span class="glyphicon glyphicon-search color-icon" aria-hidden="true"></span> Submit Query
+                            </button>
+                            <button type="submit" class="btn btn-xs" name="viewCommand" value="ClearSearchPanel" title="Clear Query">
+                                <span class="glyphicon glyphicon-remove color-icon" aria-hidden="true"></span> Clear Query
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+
+    $('.select-administration').change(function () {
+        $.ajax({
+            url: '/mmsapp/shipstation/GetGeographicalAreasByAdministration',
+            data: { "id": $(".select-administration").val() },
+            dataType: "html",
+            type: "post",
+            success: function (data) {
+                var geographicalAreas = $('.select-geographical-area');
+                geographicalAreas.empty();
+                geographicalAreas.append($('<option>').text("<select one>").val(null));
+                let options = JSON.parse(data);
+                for (var index = 0; index < options.length; index++) {
+                    var option = options[index];
+                    geographicalAreas.append($('<option>').text(option.text).val(option.value));
+                }
+            }
+        });
+    });
+
+    $('.select-geographical-area').click(function () {
+        var administrations = $('.select-administration');
+        var geographicalAreas = $('.select-geographical-area');
+        if (administrations.val() == "" && geographicalAreas.val() != "") {
+            $.ajax({
+                url: '/mmsapp/shipstation/GetAdministrationIdByGeographicalAreaId',
+                data: { "id": geographicalAreas.val() },
+                dataType: "html",
+                type: "post",
+                success: function (data) {
+                    let administration = JSON.parse(data);
+                    if (administration.id != "") {
+                        $('.select-administration').val(administration.id);
+                        var selectedGeographicalArea = geographicalAreas.val();
+                        // Refresh geographical areas (filtered)
+                        $.ajax({
+                            url: '/mmsapp/shipstation/GetGeographicalAreasByAdministration',
+                            data: { "id": $(".select-administration").val() },
+                            dataType: "html",
+                            type: "post",
+                            success: function (data) {
+                                var geographicalAreas = $('.select-geographical-area');
+                                geographicalAreas.empty();
+                                geographicalAreas.append($('<option>').text("<select one>").val(null));
+                                let options = JSON.parse(data);
+                                for (var index = 0; index < options.length; index++) {
+                                    var option = options[index];
+                                    geographicalAreas.append($('<option>').text(option.text).val(option.value));
+                                }
+                                geographicalAreas.val(selectedGeographicalArea);
+                            }
+                        });
+                    }
+                }
+            });
+        }
+    });
+
+</script>
+
+
+<div class="modal fade" id="md-no-query-criteria" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="myModalLabel"><span class="glyphicon glyphicon-exclamation-sign text-success"></span> No query criteria provided</h4>
+            </div>
+            <div class="modal-body">
+                Please enter at least one search criteria
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-xs" data-dismiss="modal">
+                    <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> OK
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+
+    $('button[title="Submit Query"]').click(function (e) {
+        if (isCriteriaProvided() == false) {
+            $("#md-no-query-criteria").modal('show');
+            return false;
+        }
+    });
+
+    function isCriteriaProvided() {
+        var isCriteriaProvided = false;
+        $('.form-control').each(function (index) {
+            if ($(this).val() != '') {
+                isCriteriaProvided = true;
+            }
+        });
+        $('input[type=checkbox]').each(function (index) {
+            if ($(this)[0].checked == true) {
+                isCriteriaProvided = true;
+            }
+        });
+        return isCriteriaProvided;
+    }
+
+</script>
+
+        <div class="row">
+            <div class="col-sm-3 col-md-3 col-lg-3 hidden-xs">
+                    <button type="submit" class="btn btn-lg btn-xs" disabled name="onFirstPage" value="true" title="First page">
+                        <span class="glyphicon glyphicon-step-backward color-icon-disabled" aria-hidden="true"></span>
+                    </button>
+                    <button type="submit" class="btn btn-lg btn-xs" disabled name="onPreviousPage" value="true" title="PreviousPage">
+                        <span class="glyphicon glyphicon-backward color-icon-disabled" aria-hidden="true"></span>
+                    </button>
+                                    <button type="submit" class="btn btn-lg btn-xs" disabled name="onNextPage" value="true" title="Next page">
+                        <span class="glyphicon glyphicon-forward color-icon-disabled" aria-hidden="true"></span>
+                    </button>
+            </div>
+            <div class="col-xs-6 visble-xs hidden-sm hidden-md hidden-lg">
+                    <button type="submit" class="btn btn-lg btn-xs" disabled name="onFirstPage" value="true" title="First page">
+                        <span class="glyphicon glyphicon-step-backward color-icon-disabled" aria-hidden="true"></span>
+                    </button>
+                    <button type="submit" class="btn btn-lg btn-xs" disabled name="onPreviousPage" value="true" title="PreviousPage">
+                        <span class="glyphicon glyphicon-backward color-icon-disabled" aria-hidden="true"></span>
+                    </button>
+                                    <button type="submit" class="btn btn-lg btn-xs" disabled name="onNextPage" value="true" title="Next page">
+                        <span class="glyphicon glyphicon-forward color-icon-disabled" aria-hidden="true"></span>
+                    </button>
+            </div>
+        </div>
+    <!-- list -->
+    <div class="row">
+        <div class="col-md-12" style="padding-top:5px;">
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Ship Station List
+                                    <span class="badge" style="margin-left:4px">1 record(s)</span>
+                                <span class="badge pull-right">1/1</span>
+                </div>
+                <div class="panel-body">
+                    <!-- Table -->
+                    <div class="table-responsive">
+                        <table class="table table-striped table-condensed table-hover">
+                            <thead>
+                                <tr>
+                                    <th width="45px;">&nbsp;</th>
+                                    <th>
+                                        <button type="submit" style="border:none; background-color:transparent; padding-left:0;" value="OrderByNameDescending" name="viewCommand" title="Change Ordering">
+                                            Ship Name
+                                                <span class="glyphicon glyphicon-sort-by-alphabet" aria-hidden="true" />
+                                        </button>
+                                    </th>
+                                    <th>
+                                        <button type="submit" style="border:none; background-color:transparent; padding-left:0;" value="OrderByCallSignAscending" name="viewCommand" title="Change Ordering">
+                                            Call Sign
+                                        </button>
+                                    </th>
+                                    <th>
+                                        <button type="submit" style="border:none; background-color:transparent; padding-left:0;" value="OrderByMaritimeMobileServiceIdentityAscending" name="viewCommand" title="Change Ordering">
+                                            MMSI
+                                        </button>
+                                    </th>
+                                    <th style="min-width:140px;">
+                                        <button type="submit" style="border:none; background-color:transparent; padding-left:0;" value="OrderByAdministrationSymbolAscending" name="viewCommand" title="Change Ordering">
+                                            Administration
+                                        </button>
+                                    </th>
+                                    <th style="min-width:160px;">
+                                        <button type="submit" style="border:none; background-color:transparent; padding-left:0;" value="OrderByGeographicalAreaSymbolAscending" name="viewCommand" title="Change Ordering">
+                                            Geographical Area
+                                        </button>
+                                    </th>
+                                    <th class="hidden-xs hidden-sm">
+                                        <button type="submit" style="border:none; background-color:transparent; padding-left:0;" value="OrderByVesselIdentificationNumberAscending" name="viewCommand" title="Change Ordering">
+                                            Ship (Vessel) ID Number
+                                        </button>
+                                    </th>
+                                    <th class="hidden-xs hidden-sm">Update Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <button type="submit" class="btn btn-xs" aria-label="Left Align" name="onview" value="1638288" title="View Ship Station">
+                                            <span class="glyphicon glyphicon-eye-open color-icon" aria-hidden="true"></span>
+                                        </button>
+                                    </td>
+                                    <td data-target="1638288">
+QUEEN MARY 2                                    </td>
+                                    <td data-target="1638288">ZCEF6</td>
+                                    <td data-target="1638288">310627000</td>
+                                    <td data-target="1638288">G</td>
+                                    <td data-target="1638288">BER</td>
+                                    <td data-target="1638288" class="hidden-xs hidden-sm"></td>
+                                    <td data-target="1638288" class="hidden-xs hidden-sm">20/12/2022</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+        </div>
+
+
+        <!-- Footer
+    ============================================= -->
+        <footer id="footer" class="dark">
+
+            <div class="container">
+
+                <!-- Footer Widgets
+            ============================================= -->
+                <div class="footer-widgets-wrap clearfix">
+
+                    <div class="col_two_third">
+
+                        <div class="col_one_third">
+
+                            <div class="widget clearfix">
+
+                                <img src="/appstatic/itu-layout/logo/itu_logo.png" style="height:64px;" alt="" class="footer-logo">
+
+                                <p>International Telecommunication Union (ITU)</p>
+
+                                <div >
+                                    <address>
+                                        <strong>Headquarters:</strong><br>
+                                        Place des Nations 1211 <br>
+                                        Geneva 20 Switzerland<br>
+                                    </address>
+                                    <abbr title="Phone Number"><strong>Phone:</strong></abbr> +41 22 730 5111<br>
+                                    <abbr title="Fax"><strong>Fax:</strong></abbr> +41 22 733 7256 <br>
+                                    <abbr title="Email Address"><strong>Email:</strong></abbr> itumail[at]itu.int
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <div class="col_one_third">
+
+                            <div class="widget widget_links clearfix">
+
+                                <h4>Useful links</h4>
+
+                                <ul>
+                                    <li><a target='_blank' href="https://www.itu.int/council">ITU Council</a></li>
+                                    <li><a target='_blank' href="https://www.itu.int/en/events/Pages/conferences.aspx">Conferences</a></li>
+
+
+                                </ul>
+
+                            </div>
+
+                        </div>
+
+                        <div class="col_one_third col_last">
+
+                            <div class="widget widget_links clearfix">
+
+                                <h4>Events</h4>
+
+                                <ul>
+
+                                    <li><a target='_blank' href="https://www.itu.int/en/ITU-D">ITU-D</a></li>
+                                    <li><a target='_blank' href="https://www.itu.int/en/ITU-R">ITU-R</a></li>
+                                    <li><a target='_blank' href="https://www.itu.int/en/ITU-T/Pages/default.aspx">ITU-T</a></li>
+                                    <li><a target='_blank' href="https://www.itu.int/en/general-secretariat/Pages/default.aspx">General Secretariat</a></li>
+
+                                </ul>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col_one_third col_last">
+
+                        <div class="widget clearfix" style="margin-bottom: -20px;">
+
+                            <div class="row">
+
+
+                            </div>
+
+                        </div>
+
+
+
+                        <div class="widget clearfix" style="margin-bottom: -20px;">
+
+                            <div class="row">
+
+                                <div class="col-md-6 clearfix bottommargin-sm">
+                                    <a target='_blank' href="https://www.itu.int/facebook" class="social-icon si-dark si-colored si-facebook nobottommargin" style="margin-right: 10px;">
+                                        <i class="icon-facebook"></i>
+                                        <i class="icon-facebook"></i>
+                                    </a>
+                                    <a target='_blank' href="https://www.itu.int/facebook"><small style="display: block; margin-top: 3px;"><strong>Like us</strong><br>on Facebook</small></a>
+                                </div>
+                                <div class="col-md-6 clearfix">
+                                    <a target='_blank' href="https://www.itu.int/twitter" class="social-icon si-dark si-colored si-twitter nobottommargin" style="margin-right: 10px;">
+                                        <i class="icon-twitter"></i>
+                                        <i class="icon-twitter"></i>
+                                    </a>
+                                    <a target='_blank' href="https://www.itu.int/twitter"><small style="display: block; margin-top: 3px;"><strong>Follow on</strong><br>Twitter</small></a>
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div><!-- .footer-widgets-wrap end -->
+
+            </div>
+
+            <!-- Copyrights
+        ============================================= -->
+            <div id="copyrights">
+
+                <div class="container clearfix">
+
+                    <div class="col_half">
+                        Copyrights &copy; 2022 All Rights Reserved by ITU.<br>
+                        <div class="copyright-links"> <a href="https://www.itu.int/en/about/Pages/privacy-notice.aspx">Privacy Policy</a></div>
+                    </div>
+
+                    <div class="col_half col_last tright">
+                        <div class="fright clearfix">
+                            <a href="https://www.facebook.com/ITU/" target='_blank' class="social-icon si-small si-borderless si-facebook">
+                                <i class="icon-facebook"></i>
+                                <i class="icon-facebook"></i>
+                            </a>
+
+                            <a href="https://twitter.com/itu" target='_blank' class="social-icon si-small si-borderless si-twitter">
+                                <i class="icon-twitter"></i>
+                                <i class="icon-twitter"></i>
+                            </a>
+
+
+                            <a target='_blank' href="https://www.linkedin.com/company/international-telecommunication-union/mycompany/verification/" class="social-icon si-small si-borderless si-linkedin">
+                                <i class="icon-linkedin"></i>
+                                <i class="icon-linkedin"></i>
+                            </a>
+                        </div>
+
+                        <div class="clear"></div>
+
+                        <i class="icon-envelope2"></i> itumail[at]itu.int <span class="middot">&middot;</span> <i class="icon-headphones"></i> +41 22 730 5111 <span class="middot">&middot;</span>
+                    </div>
+
+                </div>
+
+            </div><!-- #copyrights end -->
+
+        </footer><!-- #footer end -->
+
+    </div><!-- #wrapper end -->
+    <!-- Go To Top
+    ============================================= -->
+    <div id="gotoTop" class="icon-angle-up"></div>
+
+    <script src="/appstatic/bootstrap?v=U1XILSBlnJrCMIKUA98qOj2vWYGhEDXbbMvilvlX7201"></script>
+
+    <script src="/appstatic/itu-layout-js?v=b06EBCa4LrysAVVgkMeFSR4eQwC0SS5jOUvZmCk36c81"></script>
+
+    
+    <script type="text/javascript">
+        $(document).keyup(function (e) {
+            if (e.keyCode == 33) { // page up key maps to keycode `33`
+                var input = $("<input>").attr("type", "hidden").attr("name", "viewCommand").val("PreviousPage");
+                $('#form-main').append($(input));
+                $('#form-main').submit();
+            }
+        });
+        $(document).keyup(function (e) {
+            if (e.keyCode == 34) { // page down key maps to keycode `34`
+                var input = $("<input>").attr("type", "hidden").attr("name", "viewCommand").val("NextPage");
+                $('#form-main').append($(input));
+                $('#form-main').submit();
+            }
+        });
+        $("table.table-hover tbody tr td").click(function (e) {
+            var data = $(e.currentTarget).data();
+            if (data && data.target) {
+                var input = $("<input>").attr("type", "hidden").attr("name", "onview").val(data.target);
+                $('#form-main').append($(input));
+                $('#form-main').submit();
+
+            }
+        });
+    </script>
+
+
+    <script>
+        $(document).scroll(function () {
+            if ($('.scrollTopValue').length) {
+                $('.scrollTopValue').val($(document).scrollTop());
+            }
+        });
+        $(document).ready(function () {
+            if ($('.scrollTopValue').length && $('.scrollTopValue').val().length) {
+                $(document).scrollTop($('.scrollTopValue').val());
+            }
+        });
+    </script>
+
+
+</body>
+</html>

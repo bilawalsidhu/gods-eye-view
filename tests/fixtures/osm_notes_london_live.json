@@ -1,0 +1,3724 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0780346,
+     51.528802
+    ]
+   },
+   "properties": {
+    "id": 5466531,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5466531.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5466531/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5466531/close.json",
+    "date_created": "2026-08-19 22:07:42 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-19 22:07:42 UTC",
+      "uid": 932948,
+      "user": "orrick335",
+      "user_url": "https://api.openstreetmap.org/user/orrick335",
+      "action": "opened",
+      "text": "Missing building\n\nvia StreetComplete 63.4\n\nAttached photo(s):\nhttps://streetcomplete.app/p/365503.jpg",
+      "html": "<p dir=\"auto\">Missing building</p>\n\n<p dir=\"auto\">via StreetComplete 63.4</p>\n\n<p dir=\"auto\">Attached photo(s):\n<br /><a href=\"https://streetcomplete.app/p/365503.jpg\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://streetcomplete.app/p/365503.jpg</a></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0714767,
+     51.525146
+    ]
+   },
+   "properties": {
+    "id": 5466530,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5466530.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5466530/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5466530/close.json",
+    "date_created": "2026-08-19 22:07:42 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-19 22:07:42 UTC",
+      "uid": 932948,
+      "user": "orrick335",
+      "user_url": "https://api.openstreetmap.org/user/orrick335",
+      "action": "opened",
+      "text": "Unable to answer \"Is this place wheelchair accessible?\" \u2013 Leather\u00a0Warehouse\u00a0London (Leather\u00a0Shop) \u2013 https://osm.org/node/10138850143 via StreetComplete 63.2:\n\nReplaced by pop up Peaches in the old Float shop",
+      "html": "<p dir=\"auto\">Unable to answer \"Is this place wheelchair accessible?\" \u2013 Leather&nbsp;Warehouse&nbsp;London (Leather&nbsp;Shop) \u2013 <a href=\"https://osm.org/node/10138850143\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/10138850143</a> via StreetComplete 63.2:</p>\n\n<p dir=\"auto\">Replaced by pop up Peaches in the old Float shop</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0774059,
+     51.5304665
+    ]
+   },
+   "properties": {
+    "id": 5466529,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5466529.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5466529/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5466529/close.json",
+    "date_created": "2026-08-19 22:07:41 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-19 22:07:41 UTC",
+      "uid": 932948,
+      "user": "orrick335",
+      "user_url": "https://api.openstreetmap.org/user/orrick335",
+      "action": "opened",
+      "text": "In context of overlay \"Places\" \u2013 Xi\u2019an\u00a0Biang\u00a0Biang\u00a0Noodles (Restaurant) \u2013 https://osm.org/node/13699447102 via StreetComplete 63.2:\n\nDoes not exist, but not vacant: gram'n degrees coffee shop is active",
+      "html": "<p dir=\"auto\">In context of overlay \"Places\" \u2013 Xi\u2019an&nbsp;Biang&nbsp;Biang&nbsp;Noodles (Restaurant) \u2013 <a href=\"https://osm.org/node/13699447102\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/13699447102</a> via StreetComplete 63.2:</p>\n\n<p dir=\"auto\">Does not exist, but not vacant: gram'n degrees coffee shop is active</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0716217,
+     51.5194242
+    ]
+   },
+   "properties": {
+    "id": 4227758,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/4227758.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/4227758/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/4227758/close.json",
+    "date_created": "2024-05-03 15:19:53 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2024-05-03 15:19:53 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "opened",
+      "text": "Is this now Red Brick House?\nhttps://ratings.food.gov.uk/business/1610953",
+      "html": "<p dir=\"auto\">Is this now Red Brick House?\n<br /><a href=\"https://ratings.food.gov.uk/business/1610953\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://ratings.food.gov.uk/business/1610953</a></p>"
+     },
+     {
+      "date": "2026-08-19 22:07:41 UTC",
+      "uid": 932948,
+      "user": "orrick335",
+      "user_url": "https://api.openstreetmap.org/user/orrick335",
+      "action": "commented",
+      "text": "It's now Majang Dong (or will be when/if it opens)\n\nAttached photo(s):\nhttps://streetcomplete.app/p/365502.jpg",
+      "html": "<p dir=\"auto\">It's now Majang Dong (or will be when/if it opens)</p>\n\n<p dir=\"auto\">Attached photo(s):\n<br /><a href=\"https://streetcomplete.app/p/365502.jpg\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://streetcomplete.app/p/365502.jpg</a></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0717417,
+     51.5190589
+    ]
+   },
+   "properties": {
+    "id": 5466528,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5466528.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5466528/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5466528/close.json",
+    "date_created": "2026-08-19 22:07:40 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-19 22:07:40 UTC",
+      "uid": 932948,
+      "user": "orrick335",
+      "user_url": "https://api.openstreetmap.org/user/orrick335",
+      "action": "opened",
+      "text": "Unable to answer \"Does this crossing have an island?\" \u2013 Crossing \u2013 https://osm.org/node/13652877231 via StreetComplete 63.2:\n\nNot a real crossing.\n\nAttached photo(s):\nhttps://streetcomplete.app/p/365501.jpg",
+      "html": "<p dir=\"auto\">Unable to answer \"Does this crossing have an island?\" \u2013 Crossing \u2013 <a href=\"https://osm.org/node/13652877231\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/13652877231</a> via StreetComplete 63.2:</p>\n\n<p dir=\"auto\">Not a real crossing.</p>\n\n<p dir=\"auto\">Attached photo(s):\n<br /><a href=\"https://streetcomplete.app/p/365501.jpg\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://streetcomplete.app/p/365501.jpg</a></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.074827,
+     51.5198962
+    ]
+   },
+   "properties": {
+    "id": 5466527,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5466527.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5466527/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5466527/close.json",
+    "date_created": "2026-08-19 22:07:39 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-19 22:07:39 UTC",
+      "uid": 932948,
+      "user": "orrick335",
+      "user_url": "https://api.openstreetmap.org/user/orrick335",
+      "action": "opened",
+      "text": "Unable to answer \"Is this indoors?\" \u2013 Drinking\u00a0Water \u2013 https://osm.org/node/9974993539 via StreetComplete 63.2:\n\nWater drinking fountain removed (in the middle of summer)\n\nAttached photo(s):\nhttps://streetcomplete.app/p/365500.jpg",
+      "html": "<p dir=\"auto\">Unable to answer \"Is this indoors?\" \u2013 Drinking&nbsp;Water \u2013 <a href=\"https://osm.org/node/9974993539\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/9974993539</a> via StreetComplete 63.2:</p>\n\n<p dir=\"auto\">Water drinking fountain removed (in the middle of summer)</p>\n\n<p dir=\"auto\">Attached photo(s):\n<br /><a href=\"https://streetcomplete.app/p/365500.jpg\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://streetcomplete.app/p/365500.jpg</a></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1035324,
+     51.4973618
+    ]
+   },
+   "properties": {
+    "id": 5466003,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5466003.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5466003/reopen.json",
+    "date_created": "2026-08-19 16:07:32 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-19 21:55:53 UTC",
+    "comments": [
+     {
+      "date": "2026-08-19 16:07:32 UTC",
+      "uid": 95830917,
+      "user": "purlow935284",
+      "user_url": "https://api.openstreetmap.org/user/purlow935284",
+      "action": "opened",
+      "text": "\"Flaxman House\"\nOSM snapshot date: 2026-08-11T11:19:54Z\nPOI has no name\nPOI types: building\n #CoMaps android 2026.08.07-3",
+      "html": "<p dir=\"auto\">\"Flaxman House\"\n<br />OSM snapshot date: 2026-08-11T11:19:54Z\n<br />POI has no name\n<br />POI types: building\n<br /> #CoMaps android 2026.08.07-3</p>"
+     },
+     {
+      "date": "2026-08-19 21:55:53 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "closed",
+      "text": "Added",
+      "html": "<p dir=\"auto\">Added</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.127795,
+     51.509661
+    ]
+   },
+   "properties": {
+    "id": 5466495,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5466495.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5466495/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5466495/close.json",
+    "date_created": "2026-08-19 21:34:12 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-19 21:34:12 UTC",
+      "action": "opened",
+      "text": "Disabled parking bay reported via the BlueBay app. Please survey and map (amenity=parking_space + parking_space=disabled).",
+      "html": "<p dir=\"auto\">Disabled parking bay reported via the BlueBay app. Please survey and map <a href=\"https://wiki.openstreetmap.org/wiki/Tag:(amenity=parking_space\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">(amenity=parking_space</a> + <a href=\"https://wiki.openstreetmap.org/wiki/Tag:parking_space=disabled\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">parking_space=disabled</a>).</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0767674,
+     51.5189366
+    ]
+   },
+   "properties": {
+    "id": 4948072,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/4948072.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/4948072/reopen.json",
+    "date_created": "2025-09-05 16:16:22 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-19 16:43:23 UTC",
+    "comments": [
+     {
+      "date": "2025-09-05 16:16:22 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "opened",
+      "text": "https://www.openstreetmap.org/way/39335872\nHas Whistles closed here? It doesn't seem to be on their store finder.",
+      "html": "<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/way/39335872\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/39335872</a>\n<br />Has Whistles closed here? It doesn't seem to be on their store finder.</p>"
+     },
+     {
+      "date": "2026-08-19 16:08:44 UTC",
+      "uid": 6337600,
+      "user": "Emric Rushel",
+      "user_url": "https://api.openstreetmap.org/user/Emric%20Rushel",
+      "action": "commented",
+      "text": "Yes, closed. Note can be closed (I can't do that via StreetComplete)",
+      "html": "<p dir=\"auto\">Yes, closed. Note can be closed (I can't do that via StreetComplete)</p>"
+     },
+     {
+      "date": "2026-08-19 16:43:23 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "closed",
+      "text": "Thanks.",
+      "html": "<p dir=\"auto\">Thanks.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.10746,
+     51.51142
+    ]
+   },
+   "properties": {
+    "id": 5465256,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5465256.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5465256/reopen.json",
+    "date_created": "2026-08-19 09:46:47 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-19 11:29:53 UTC",
+    "comments": [
+     {
+      "date": "2026-08-19 09:46:47 UTC",
+      "action": "opened",
+      "text": "SCOTLAND HOUSE",
+      "html": "<p dir=\"auto\">SCOTLAND HOUSE</p>"
+     },
+     {
+      "date": "2026-08-19 11:29:53 UTC",
+      "uid": 21785419,
+      "user": "frowe791920",
+      "user_url": "https://api.openstreetmap.org/user/frowe791920",
+      "action": "closed",
+      "text": "added",
+      "html": "<p dir=\"auto\">added</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1251278,
+     51.5089397
+    ]
+   },
+   "properties": {
+    "id": 5305799,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5305799.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5305799/reopen.json",
+    "date_created": "2026-05-23 10:52:13 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-19 11:24:47 UTC",
+    "comments": [
+     {
+      "date": "2026-05-23 10:52:13 UTC",
+      "uid": 9223776,
+      "user": "nettling723289",
+      "user_url": "https://api.openstreetmap.org/user/nettling723289",
+      "action": "opened",
+      "text": "In context of overlay \"Places\" \u2013 house number 441: Clothing\u00a0Shop \u2013 https://osm.org/node/2536622086 via StreetComplete 63.1:\n\nLikely a duplicate of Jigsaw",
+      "html": "<p dir=\"auto\">In context of overlay \"Places\" \u2013 house number 441: Clothing&nbsp;Shop \u2013 <a href=\"https://osm.org/node/2536622086\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/2536622086</a> via StreetComplete 63.1:</p>\n\n<p dir=\"auto\">Likely a duplicate of Jigsaw</p>"
+     },
+     {
+      "date": "2026-08-19 11:24:47 UTC",
+      "uid": 21785419,
+      "user": "frowe791920",
+      "user_url": "https://api.openstreetmap.org/user/frowe791920",
+      "action": "closed",
+      "text": "thanks, removed",
+      "html": "<p dir=\"auto\">thanks, removed</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.101417,
+     51.5393321
+    ]
+   },
+   "properties": {
+    "id": 5465358,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5465358.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5465358/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5465358/close.json",
+    "date_created": "2026-08-19 10:41:10 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-19 10:41:10 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "opened",
+      "text": "#surveyme\nShops seem to be out of date along here.",
+      "html": "<p dir=\"auto\">#surveyme\n<br />Shops seem to be out of date along here.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1026625,
+     51.5399349
+    ]
+   },
+   "properties": {
+    "id": 5250880,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5250880.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5250880/reopen.json",
+    "date_created": "2026-04-15 10:49:44 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-19 10:38:57 UTC",
+    "comments": [
+     {
+      "date": "2026-04-15 10:49:44 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "opened",
+      "text": "https://www.openstreetmap.org/node/345832892\nWhat sort of shop is this?",
+      "html": "<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/node/345832892\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/345832892</a>\n<br />What sort of shop is this?</p>"
+     },
+     {
+      "date": "2026-08-19 10:38:57 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "closed",
+      "text": "Seems to be vacant - will update.\nhttps://www.4prop.com/details/251109172717",
+      "html": "<p dir=\"auto\">Seems to be vacant - will update.\n<br /><a href=\"https://www.4prop.com/details/251109172717\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://www.4prop.com/details/251109172717</a></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0757735,
+     51.5199844
+    ]
+   },
+   "properties": {
+    "id": 5032590,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5032590.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5032590/reopen.json",
+    "date_created": "2025-11-01 12:10:10 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-19 10:24:07 UTC",
+    "comments": [
+     {
+      "date": "2025-11-01 12:10:10 UTC",
+      "uid": 932948,
+      "user": "orrick335",
+      "user_url": "https://api.openstreetmap.org/user/orrick335",
+      "action": "opened",
+      "text": "Unable to answer \"What\u2019s the name of this place?\" \u2013 house number 6b: Fast\u00a0Food \u2013 https://osm.org/way/372609316 via StreetComplete 61.3:\n\nUnclear, sign says \"Crepe & roll\" but inside it looks like a restaurant backroom with staff eating.",
+      "html": "<p dir=\"auto\">Unable to answer \"What\u2019s the name of this place?\" \u2013 house number 6b: Fast&nbsp;Food \u2013 <a href=\"https://osm.org/way/372609316\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/372609316</a> via StreetComplete 61.3:</p>\n\n<p dir=\"auto\">Unclear, sign says \"Crepe &amp; roll\" but inside it looks like a restaurant backroom with staff eating.</p>"
+     },
+     {
+      "date": "2026-03-27 18:09:59 UTC",
+      "uid": 99854429,
+      "user": "Corvi Corbindale",
+      "user_url": "https://api.openstreetmap.org/user/Corvi%20Corbindale",
+      "action": "commented",
+      "text": "It is now a Dumpling Shack. The sign above still states Crepe & Roll\nSeems to be a takeout and delivery kitchen only",
+      "html": "<p dir=\"auto\">It is now a Dumpling Shack. The sign above still states Crepe &amp; Roll\n<br />Seems to be a takeout and delivery kitchen only</p>"
+     },
+     {
+      "date": "2026-08-19 10:24:07 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "closed",
+      "text": "https://www.openstreetmap.org/changeset/187681432",
+      "html": "<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/changeset/187681432\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">changeset/187681432</a></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0773335,
+     51.5202398
+    ]
+   },
+   "properties": {
+    "id": 5465318,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5465318.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5465318/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5465318/close.json",
+    "date_created": "2026-08-19 10:21:03 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-19 10:21:03 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "opened",
+      "text": "https://www.openstreetmap.org/way/276100295\nIs this Main Character Books?\nhttps://www.maincharacterbooks.co.uk/",
+      "html": "<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/way/276100295\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/276100295</a>\n<br />Is this Main Character Books?\n<br /><a href=\"https://www.maincharacterbooks.co.uk/\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://www.maincharacterbooks.co.uk/</a></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0773335,
+     51.5202398
+    ]
+   },
+   "properties": {
+    "id": 5465319,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5465319.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5465319/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5465319/close.json",
+    "date_created": "2026-08-19 10:21:03 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-19 10:21:03 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "opened",
+      "text": "https://www.openstreetmap.org/way/276100295\nIs this Main Character Books?\nhttps://www.maincharacterbooks.co.uk/",
+      "html": "<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/way/276100295\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/276100295</a>\n<br />Is this Main Character Books?\n<br /><a href=\"https://www.maincharacterbooks.co.uk/\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://www.maincharacterbooks.co.uk/</a></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0773335,
+     51.5202398
+    ]
+   },
+   "properties": {
+    "id": 5465317,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5465317.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5465317/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5465317/close.json",
+    "date_created": "2026-08-19 10:21:03 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-19 10:21:03 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "opened",
+      "text": "https://www.openstreetmap.org/way/276100295\nIs this Main Character Books?\nhttps://www.maincharacterbooks.co.uk/",
+      "html": "<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/way/276100295\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/276100295</a>\n<br />Is this Main Character Books?\n<br /><a href=\"https://www.maincharacterbooks.co.uk/\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://www.maincharacterbooks.co.uk/</a></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1098898,
+     51.5245672
+    ]
+   },
+   "properties": {
+    "id": 5464219,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5464219.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5464219/reopen.json",
+    "date_created": "2026-08-18 18:23:53 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-19 03:01:06 UTC",
+    "comments": [
+     {
+      "date": "2026-08-18 18:23:53 UTC",
+      "uid": 3198482,
+      "user": "frowe401477",
+      "user_url": "https://api.openstreetmap.org/user/frowe401477",
+      "action": "opened",
+      "text": "Unable to answer \"Does this pedestrian crossing have tactile paving on both sides?\" \u2013 Crossing \u2013 https://osm.org/node/13844007463 via StreetComplete 63.4:\n\nIs this crossing a remnant? There's another one which looks more real",
+      "html": "<p dir=\"auto\">Unable to answer \"Does this pedestrian crossing have tactile paving on both sides?\" \u2013 Crossing \u2013 <a href=\"https://osm.org/node/13844007463\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/13844007463</a> via StreetComplete 63.4:</p>\n\n<p dir=\"auto\">Is this crossing a remnant? There's another one which looks more real</p>"
+     },
+     {
+      "date": "2026-08-19 03:01:06 UTC",
+      "uid": 78986160,
+      "user": "lorrick254436",
+      "user_url": "https://api.openstreetmap.org/user/lorrick254436",
+      "action": "closed",
+      "text": "It was placed at the intersection of the pavement ways for the crossing and the pavement itself. As the other one is much more real I've removed this crossing. Thanks!",
+      "html": "<p dir=\"auto\">It was placed at the intersection of the pavement ways for the crossing and the pavement itself. As the other one is much more real I've removed this crossing. Thanks!</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1218635,
+     51.5104518
+    ]
+   },
+   "properties": {
+    "id": 4291429,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/4291429.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/4291429/reopen.json",
+    "date_created": "2024-06-14 11:31:16 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-18 20:47:24 UTC",
+    "comments": [
+     {
+      "date": "2024-06-14 11:31:16 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "opened",
+      "text": "Has Robert Dyas closed here and is it now Ryman?\nhttps://www.ryman.co.uk/storefinder/strand/",
+      "html": "<p dir=\"auto\">Has Robert Dyas closed here and is it now Ryman?\n<br /><a href=\"https://www.ryman.co.uk/storefinder/strand/\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://www.ryman.co.uk/storefinder/strand/</a></p>"
+     },
+     {
+      "date": "2026-06-01 23:23:27 UTC",
+      "uid": 85451,
+      "user": "hindle7678",
+      "user_url": "https://api.openstreetmap.org/user/hindle7678",
+      "action": "commented",
+      "text": "Was there a few days ago and saw Robert Dyas, Ryman, and Post Office all in the same shop",
+      "html": "<p dir=\"auto\">Was there a few days ago and saw Robert Dyas, Ryman, and Post Office all in the same shop</p>"
+     },
+     {
+      "date": "2026-08-18 20:47:24 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "closed",
+      "text": "Thanks - updated.\nhttps://www.openstreetmap.org/changeset/187660076",
+      "html": "<p dir=\"auto\">Thanks - updated.\n<br /><a href=\"https://www.openstreetmap.org/changeset/187660076\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">changeset/187660076</a></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1227432,
+     51.5100979
+    ]
+   },
+   "properties": {
+    "id": 5464428,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5464428.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5464428/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5464428/close.json",
+    "date_created": "2026-08-18 20:31:21 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-18 20:31:21 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "opened",
+      "text": "Is this a Rush hair salon?\nhttps://www.rush.co.uk/salons/strand",
+      "html": "<p dir=\"auto\">Is this a Rush hair salon?\n<br /><a href=\"https://www.rush.co.uk/salons/strand\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://www.rush.co.uk/salons/strand</a></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1009919,
+     51.5362969
+    ]
+   },
+   "properties": {
+    "id": 5280877,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5280877.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5280877/reopen.json",
+    "date_created": "2026-05-06 14:39:24 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-18 17:31:03 UTC",
+    "comments": [
+     {
+      "date": "2026-05-06 14:39:24 UTC",
+      "uid": 75590046,
+      "user": "jarrow821654",
+      "user_url": "https://api.openstreetmap.org/user/jarrow821654",
+      "action": "opened",
+      "text": "\"Lease ended, permanently closed :(\"\nThe place has gone or never existed. A user of Organic Maps application has reported that the POI was visible on the map (see snapshot date below), but was not found on the ground.\nOSM snapshot date: 2024-08-10T16:22:45Z\nPOI name: Cass Art London\nPOI types: shop-stationery\n #organicmaps android",
+      "html": "<p dir=\"auto\">\"Lease ended, permanently closed :(\"\n<br />The place has gone or never existed. A user of Organic Maps application has reported that the POI was visible on the map (see snapshot date below), but was not found on the ground.\n<br />OSM snapshot date: 2024-08-10T16:22:45Z\n<br />POI name: Cass Art London\n<br />POI types: shop-stationery\n<br /> #organicmaps android</p>"
+     },
+     {
+      "date": "2026-08-18 17:31:03 UTC",
+      "uid": 3371741,
+      "user": "hindle860098",
+      "user_url": "https://api.openstreetmap.org/user/hindle860098",
+      "action": "closed",
+      "text": "Updated (changeset/187652245)",
+      "html": "<p dir=\"auto\">Updated (<a href=\"https://www.openstreetmap.org/changeset/187652245\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">changeset/187652245</a>)</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0745436,
+     51.5238805
+    ]
+   },
+   "properties": {
+    "id": 5281308,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5281308.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5281308/reopen.json",
+    "date_created": "2026-05-06 21:57:23 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-18 17:27:08 UTC",
+    "comments": [
+     {
+      "date": "2026-05-06 21:57:23 UTC",
+      "uid": 932948,
+      "user": "orrick335",
+      "user_url": "https://api.openstreetmap.org/user/orrick335",
+      "action": "opened",
+      "text": "Unable to answer \"This shop has been vacant. What\u2019s here now?\" \u2013 house number 17 \u2013 https://osm.org/node/470285837 via StreetComplete 63.0:\n\nClara's: deli, wine, bistro",
+      "html": "<p dir=\"auto\">Unable to answer \"This shop has been vacant. What\u2019s here now?\" \u2013 house number 17 \u2013 <a href=\"https://osm.org/node/470285837\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/470285837</a> via StreetComplete 63.0:</p>\n\n<p dir=\"auto\">Clara's: deli, wine, bistro</p>"
+     },
+     {
+      "date": "2026-08-18 17:27:08 UTC",
+      "uid": 3371741,
+      "user": "hindle860098",
+      "user_url": "https://api.openstreetmap.org/user/hindle860098",
+      "action": "closed",
+      "text": "Since added",
+      "html": "<p dir=\"auto\">Since added</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0728076,
+     51.5240048
+    ]
+   },
+   "properties": {
+    "id": 5281307,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5281307.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5281307/reopen.json",
+    "date_created": "2026-05-06 21:57:23 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-18 17:25:59 UTC",
+    "comments": [
+     {
+      "date": "2026-05-06 21:57:23 UTC",
+      "uid": 932948,
+      "user": "orrick335",
+      "user_url": "https://api.openstreetmap.org/user/orrick335",
+      "action": "opened",
+      "text": "In context of overlay \"Places\" \u2013 on level 0: Building\u00a0Part \u2013 https://osm.org/way/756604573 via StreetComplete 63.0:\n\nNow an Urban Baristas. Shop only on the ground floor, not the whole building.",
+      "html": "<p dir=\"auto\">In context of overlay \"Places\" \u2013 on level 0: Building&nbsp;Part \u2013 <a href=\"https://osm.org/way/756604573\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/756604573</a> via StreetComplete 63.0:</p>\n\n<p dir=\"auto\">Now an Urban Baristas. Shop only on the ground floor, not the whole building.</p>"
+     },
+     {
+      "date": "2026-08-18 17:25:59 UTC",
+      "uid": 3371741,
+      "user": "hindle860098",
+      "user_url": "https://api.openstreetmap.org/user/hindle860098",
+      "action": "closed",
+      "text": "Since added",
+      "html": "<p dir=\"auto\">Since added</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1745073,
+     51.5037279
+    ]
+   },
+   "properties": {
+    "id": 5461196,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5461196.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5461196/reopen.json",
+    "date_created": "2026-08-17 09:59:16 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-17 17:40:08 UTC",
+    "comments": [
+     {
+      "date": "2026-08-17 09:59:16 UTC",
+      "uid": 83725775,
+      "user": "cropple443411",
+      "user_url": "https://api.openstreetmap.org/user/cropple443411",
+      "action": "opened",
+      "text": "Unable to answer \"S\u00fa tieto otv\u00e1racie hodiny spr\u00e1vne?\" \u2013 Br\u00e1na \u2013 https://osm.org/node/1109765915 via StreetComplete 63.4:\n\nDifferent opening times for various periods of year.\n\nAttached photo(s):\nhttps://streetcomplete.app/p/364962.jpg",
+      "html": "<p dir=\"auto\">Unable to answer \"S\u00fa tieto otv\u00e1racie hodiny spr\u00e1vne?\" \u2013 Br\u00e1na \u2013 <a href=\"https://osm.org/node/1109765915\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/1109765915</a> via StreetComplete 63.4:</p>\n\n<p dir=\"auto\">Different opening times for various periods of year.</p>\n\n<p dir=\"auto\">Attached photo(s):\n<br /><a href=\"https://streetcomplete.app/p/364962.jpg\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://streetcomplete.app/p/364962.jpg</a></p>"
+     },
+     {
+      "date": "2026-08-17 17:40:08 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "closed",
+      "text": "Conveniently, the Kensington Gardens web site includes a page which always displays the current opening hours and is more likely to be correct than anything OSM maps.\n\nThe best opening hours tag is therefore opening_hours:url=https://www.royalparks.org.uk/visit/parks/kensington-gardens. But I've also included opening_hours=06:00-dusk (taken from https://www.royalparks.org.uk/visit/parks/kensington-gardens/faqs#park-menu) because that allows people to work out future opening hours too.\n\nI've mapped that",
+      "html": "<p dir=\"auto\">Conveniently, the Kensington Gardens web site includes a page which always displays the current opening hours and is more likely to be correct than anything OSM maps.</p>\n\n<p dir=\"auto\">The best opening hours tag is therefore <a href=\"https://wiki.openstreetmap.org/wiki/Tag:opening_hours:url=https://www.royalparks.org.uk/visit/parks/kensington-gardens\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">opening_hours:url=https://www.royalparks.org.uk/visit/parks/kensington-gardens</a>. But I've also included <a href=\"https://wiki.openstreetmap.org/wiki/Tag:opening_hours=06:00-dusk\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">opening_hours=06:00-dusk</a> (taken from <a href=\"https://www.royalparks.org.uk/visit/parks/kensington-gardens/faqs#park-menu\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://www.royalparks.org.uk/visit/parks/kensington-gardens/faqs#park-menu</a>) because that allows people to work out future opening hours too.</p>\n\n<p dir=\"auto\">I've mapped that</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1490477,
+     51.5156448
+    ]
+   },
+   "properties": {
+    "id": 5140442,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5140442.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5140442/reopen.json",
+    "date_created": "2026-01-23 15:48:29 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-17 17:16:52 UTC",
+    "comments": [
+     {
+      "date": "2026-01-23 15:48:29 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "opened",
+      "text": "https://www.openstreetmap.org/way/882409239\nIs this still a construction site?\nI'm trying to find a Hilton hotel at 30 Marylebone Lane - is this it?\nhttps://www.hilton.com/en/hotels/lonbtqq-the-botree-london/",
+      "html": "<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/way/882409239\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/882409239</a>\n<br />Is this still a construction site?\n<br />I'm trying to find a Hilton hotel at 30 Marylebone Lane - is this it?\n<br /><a href=\"https://www.hilton.com/en/hotels/lonbtqq-the-botree-london/\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://www.hilton.com/en/hotels/lonbtqq-the-botree-london/</a></p>"
+     },
+     {
+      "date": "2026-07-09 11:53:32 UTC",
+      "uid": 17708380,
+      "user": "orrick250996",
+      "user_url": "https://api.openstreetmap.org/user/orrick250996",
+      "action": "commented",
+      "text": "It is finished, \"the BoTree\" ",
+      "html": "<p dir=\"auto\">It is finished, \"the BoTree\" </p>"
+     },
+     {
+      "date": "2026-08-17 17:16:52 UTC",
+      "uid": 8700163,
+      "user": "Pim Wickerham",
+      "user_url": "https://api.openstreetmap.org/user/Pim%20Wickerham",
+      "action": "closed",
+      "text": "Now mapped as such.",
+      "html": "<p dir=\"auto\">Now mapped as such.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1469413,
+     51.5134021
+    ]
+   },
+   "properties": {
+    "id": 4775121,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/4775121.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/4775121/reopen.json",
+    "date_created": "2025-05-25 17:19:57 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-17 17:15:37 UTC",
+    "comments": [
+     {
+      "date": "2025-05-25 17:19:57 UTC",
+      "uid": 5783459,
+      "user": "Emric Orbeck",
+      "user_url": "https://api.openstreetmap.org/user/Emric%20Orbeck",
+      "action": "opened",
+      "text": "Assuming Elizabeth Line westbound\n\nvia StreetComplete 61.0",
+      "html": "<p dir=\"auto\">Assuming Elizabeth Line westbound</p>\n\n<p dir=\"auto\">via StreetComplete 61.0</p>"
+     },
+     {
+      "date": "2026-08-17 17:15:37 UTC",
+      "uid": 8700163,
+      "user": "Pim Wickerham",
+      "user_url": "https://api.openstreetmap.org/user/Pim%20Wickerham",
+      "action": "closed",
+      "text": "way/1300523930 is already mapped as westbound.",
+      "html": "<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/way/1300523930\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/1300523930</a> is already mapped as westbound.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.148132,
+     51.5131026
+    ]
+   },
+   "properties": {
+    "id": 3653396,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/3653396.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/3653396/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/3653396/close.json",
+    "date_created": "2023-04-21 18:01:49 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2023-04-21 18:01:50 UTC",
+      "uid": 3871710,
+      "user": "orrick229533",
+      "user_url": "https://api.openstreetmap.org/user/orrick229533",
+      "action": "opened",
+      "text": "Road closed\n\nvia StreetComplete 52.0\n\nAttached photo(s):\nhttps://westnordost.de/p/143838.jpg",
+      "html": "<p dir=\"auto\">Road closed</p>\n\n<p dir=\"auto\">via StreetComplete 52.0</p>\n\n<p dir=\"auto\">Attached photo(s):\n<br /><a href=\"https://westnordost.de/p/143838.jpg\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://westnordost.de/p/143838.jpg</a></p>"
+     },
+     {
+      "date": "2026-08-17 17:13:51 UTC",
+      "uid": 8700163,
+      "user": "Pim Wickerham",
+      "user_url": "https://api.openstreetmap.org/user/Pim%20Wickerham",
+      "action": "commented",
+      "text": "The construction may well be done now - could do with a survey. #surveyme",
+      "html": "<p dir=\"auto\">The construction may well be done now - could do with a survey. #surveyme</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.153557,
+     51.507339
+    ]
+   },
+   "properties": {
+    "id": 4789233,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/4789233.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/4789233/reopen.json",
+    "date_created": "2025-06-04 04:46:51 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-17 17:12:41 UTC",
+    "comments": [
+     {
+      "date": "2025-06-04 04:46:51 UTC",
+      "action": "opened",
+      "text": "Other:\n20mph\nThis error is submitted from Navmii GPS.",
+      "html": "<p dir=\"auto\">Other:\n<br />20mph\n<br />This error is submitted from Navmii GPS.</p>"
+     },
+     {
+      "date": "2026-08-17 17:12:41 UTC",
+      "uid": 8700163,
+      "user": "Pim Wickerham",
+      "user_url": "https://api.openstreetmap.org/user/Pim%20Wickerham",
+      "action": "closed",
+      "text": "This road is already mapped as having a 20mph speed limit.",
+      "html": "<p dir=\"auto\">This road is already mapped as having a 20mph speed limit.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1882687,
+     51.4899528
+    ]
+   },
+   "properties": {
+    "id": 5303008,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5303008.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5303008/reopen.json",
+    "date_created": "2026-05-21 11:56:23 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-17 15:31:44 UTC",
+    "comments": [
+     {
+      "date": "2026-05-21 11:56:23 UTC",
+      "uid": 22827233,
+      "user": "jarrow080248",
+      "user_url": "https://api.openstreetmap.org/user/jarrow080248",
+      "action": "opened",
+      "text": "Unable to answer \"Does this crossing have an island?\" \u2013 Crossing \u2013 https://osm.org/node/300413422 via StreetComplete 63.1:\n\nCrossing is not at this location, slightly further east",
+      "html": "<p dir=\"auto\">Unable to answer \"Does this crossing have an island?\" \u2013 Crossing \u2013 <a href=\"https://osm.org/node/300413422\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/300413422</a> via StreetComplete 63.1:</p>\n\n<p dir=\"auto\">Crossing is not at this location, slightly further east</p>"
+     },
+     {
+      "date": "2026-08-17 15:31:44 UTC",
+      "uid": 3371741,
+      "user": "hindle860098",
+      "user_url": "https://api.openstreetmap.org/user/hindle860098",
+      "action": "closed",
+      "text": "Updated (changeset/187594685)",
+      "html": "<p dir=\"auto\">Updated (<a href=\"https://www.openstreetmap.org/changeset/187594685\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">changeset/187594685</a>)</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.120517,
+     51.4934516
+    ]
+   },
+   "properties": {
+    "id": 5461849,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5461849.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5461849/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5461849/close.json",
+    "date_created": "2026-08-17 15:30:17 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-17 15:30:17 UTC",
+      "action": "opened",
+      "text": "Building marked 46 on Lambeth High Street is part of the International Maritime Organization Headquarters Building",
+      "html": "<p dir=\"auto\">Building marked 46 on Lambeth High Street is part of the International Maritime Organization Headquarters Building</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0948434,
+     51.4864661
+    ]
+   },
+   "properties": {
+    "id": 5015620,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5015620.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5015620/reopen.json",
+    "date_created": "2025-10-20 17:57:10 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-16 20:54:07 UTC",
+    "comments": [
+     {
+      "date": "2025-10-20 17:57:10 UTC",
+      "action": "opened",
+      "text": "The restaurant CheeMc here has closed, and reopened in Elephant and Castle.",
+      "html": "<p dir=\"auto\">The restaurant CheeMc here has closed, and reopened in Elephant and Castle.</p>"
+     },
+     {
+      "date": "2026-08-15 17:17:04 UTC",
+      "uid": 5783459,
+      "user": "Emric Orbeck",
+      "user_url": "https://api.openstreetmap.org/user/Emric%20Orbeck",
+      "action": "commented",
+      "text": "Marked this one as vacant. I don't know if the other has been mapped... ",
+      "html": "<p dir=\"auto\">Marked this one as vacant. I don't know if the other has been mapped... </p>"
+     },
+     {
+      "date": "2026-08-16 20:54:07 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "closed",
+      "text": "Yes, it's mapped at https://www.openstreetmap.org/node/13764193602/ which is correct according to https://www.cheemcuk.com/cheemc-elephant\n",
+      "html": "<p dir=\"auto\">Yes, it's mapped at <a href=\"https://www.openstreetmap.org/node/13764193602/\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/13764193602/</a> which is correct according to <a href=\"https://www.cheemcuk.com/cheemc-elephant\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://www.cheemcuk.com/cheemc-elephant</a>\n</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1501023,
+     51.488334
+    ]
+   },
+   "properties": {
+    "id": 4299727,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/4299727.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/4299727/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/4299727/close.json",
+    "date_created": "2024-06-20 10:14:11 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2024-06-20 10:14:11 UTC",
+      "uid": 7610110,
+      "user": "frowe17583",
+      "user_url": "https://api.openstreetmap.org/user/frowe17583",
+      "action": "opened",
+      "text": "Unable to answer \"Is this bicycle parking covered (protected from rain)?\" \u2013 Bicycle Parking \u2013 https://osm.org/node/10280269921 via StreetComplete 58.0:\n\nPrivate property",
+      "html": "<p dir=\"auto\">Unable to answer \"Is this bicycle parking covered (protected from rain)?\" \u2013 Bicycle Parking \u2013 <a href=\"https://osm.org/node/10280269921\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/10280269921</a> via StreetComplete 58.0:</p>\n\n<p dir=\"auto\">Private property</p>"
+     },
+     {
+      "date": "2026-08-16 13:00:35 UTC",
+      "uid": 83830357,
+      "user": "bindle652485",
+      "user_url": "https://api.openstreetmap.org/user/bindle652485",
+      "action": "commented",
+      "text": "Guessing this is no longer here since you've deleted it?",
+      "html": "<p dir=\"auto\">Guessing this is no longer here since you've deleted it?</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1213217,
+     51.5162274
+    ]
+   },
+   "properties": {
+    "id": 4044898,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/4044898.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/4044898/reopen.json",
+    "date_created": "2023-12-29 08:39:48 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-15 23:18:57 UTC",
+    "comments": [
+     {
+      "date": "2023-12-29 08:39:48 UTC",
+      "action": "opened",
+      "text": "Wimbledon Buildings, Newton Street, Covent Garden WC2B",
+      "html": "<p dir=\"auto\">Wimbledon Buildings, Newton Street, Covent Garden WC2B</p>"
+     },
+     {
+      "date": "2024-03-03 17:23:43 UTC",
+      "uid": 32777541,
+      "user": "jarrow662335",
+      "user_url": "https://api.openstreetmap.org/user/jarrow662335",
+      "action": "closed",
+      "text": "All paid!",
+      "html": "<p dir=\"auto\">All paid!</p>"
+     },
+     {
+      "date": "2024-03-03 17:51:25 UTC",
+      "uid": 718227,
+      "user": "dimmet462409",
+      "user_url": "https://api.openstreetmap.org/user/dimmet462409",
+      "action": "reopened",
+      "text": "",
+      "html": "<p dir=\"auto\"></p>"
+     },
+     {
+      "date": "2024-03-03 17:59:28 UTC",
+      "uid": 718227,
+      "user": "dimmet462409",
+      "user_url": "https://api.openstreetmap.org/user/dimmet462409",
+      "action": "commented",
+      "text": "Erroneously closed. See https://www.openstreetmap.org/user_blocks/15764",
+      "html": "<p dir=\"auto\">Erroneously closed. See <a href=\"https://www.openstreetmap.org/user_blocks/15764\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">osm.org/user_blocks/15764</a></p>"
+     },
+     {
+      "date": "2026-08-15 23:18:57 UTC",
+      "uid": 83830357,
+      "user": "bindle652485",
+      "user_url": "https://api.openstreetmap.org/user/bindle652485",
+      "action": "closed",
+      "text": "https://www.openstreetmap.org/changeset/187511618",
+      "html": "<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/changeset/187511618\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">changeset/187511618</a></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0556169,
+     51.4789051
+    ]
+   },
+   "properties": {
+    "id": 5454105,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5454105.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5454105/reopen.json",
+    "date_created": "2026-08-13 12:26:36 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-15 21:59:11 UTC",
+    "comments": [
+     {
+      "date": "2026-08-13 12:26:36 UTC",
+      "uid": 94347116,
+      "user": "elling951276",
+      "user_url": "https://api.openstreetmap.org/user/elling951276",
+      "action": "opened",
+      "text": "\"32 spaces along building\"\nOSM snapshot date: 2026-08-03T22:53:49Z\nPOI has no name\nPOI types: amenity-bicycle_parking\n #CoMaps ios 2026.07.25-1-ios",
+      "html": "<p dir=\"auto\">\"32 spaces along building\"\n<br />OSM snapshot date: 2026-08-03T22:53:49Z\n<br />POI has no name\n<br />POI types: amenity-bicycle_parking\n<br /> #CoMaps ios 2026.07.25-1-ios</p>"
+     },
+     {
+      "date": "2026-08-14 07:53:44 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "Do you mean capacity=32, or something else?",
+      "html": "<p dir=\"auto\">Do you mean <a href=\"https://wiki.openstreetmap.org/wiki/Tag:capacity=32\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">capacity=32</a>, or something else?</p>"
+     },
+     {
+      "date": "2026-08-15 16:10:47 UTC",
+      "uid": 94347116,
+      "user": "elling951276",
+      "user_url": "https://api.openstreetmap.org/user/elling951276",
+      "action": "closed",
+      "text": "Yes, unfortunately comaps doesnt allow this change.",
+      "html": "<p dir=\"auto\">Yes, unfortunately comaps doesnt allow this change.</p>"
+     },
+     {
+      "date": "2026-08-15 17:05:11 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "reopened",
+      "text": "",
+      "html": "<p dir=\"auto\"></p>"
+     },
+     {
+      "date": "2026-08-15 17:05:47 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "OK I will fix it.",
+      "html": "<p dir=\"auto\">OK I will fix it.</p>"
+     },
+     {
+      "date": "2026-08-15 21:59:12 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "closed",
+      "text": "",
+      "html": "<p dir=\"auto\"></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0946769,
+     51.4862732
+    ]
+   },
+   "properties": {
+    "id": 5458126,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5458126.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5458126/reopen.json",
+    "date_created": "2026-08-15 17:16:37 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-15 21:57:08 UTC",
+    "comments": [
+     {
+      "date": "2026-08-15 17:16:37 UTC",
+      "uid": 5783459,
+      "user": "Emric Orbeck",
+      "user_url": "https://api.openstreetmap.org/user/Emric%20Orbeck",
+      "action": "opened",
+      "text": "Unable to answer \"Is this still here?\" \u2013 CeX (Electronics\u00a0Shop) \u2013 https://osm.org/node/13104187913 via StreetComplete 63.4:\n\nI'm sceptical there's another CeX so close to the one I did see further North... ",
+      "html": "<p dir=\"auto\">Unable to answer \"Is this still here?\" \u2013 CeX (Electronics&nbsp;Shop) \u2013 <a href=\"https://osm.org/node/13104187913\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/13104187913</a> via StreetComplete 63.4:</p>\n\n<p dir=\"auto\">I'm sceptical there's another CeX so close to the one I did see further North... </p>"
+     },
+     {
+      "date": "2026-08-15 21:57:08 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "closed",
+      "text": "Cex store finder https://uk.webuy.com/site/storeDetail?branchId=139 shows nearest store at 240 Walworth Rd which will be the one you saw further north. The housenumbers here are 318 and 320. So this is clearly either a mistake or a former location. ",
+      "html": "<p dir=\"auto\">Cex store finder <a href=\"https://uk.webuy.com/site/storeDetail?branchId=139\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://uk.webuy.com/site/storeDetail?branchId=139</a> shows nearest store at 240 Walworth Rd which will be the one you saw further north. The housenumbers here are 318 and 320. So this is clearly either a mistake or a former location. </p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1406363,
+     51.5496345
+    ]
+   },
+   "properties": {
+    "id": 5451931,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5451931.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5451931/reopen.json",
+    "date_created": "2026-08-12 10:49:51 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-15 21:05:30 UTC",
+    "comments": [
+     {
+      "date": "2026-08-12 10:49:51 UTC",
+      "uid": 9902917,
+      "user": "bindle868217",
+      "user_url": "https://api.openstreetmap.org/user/bindle868217",
+      "action": "opened",
+      "text": "\"Wrong pin location \"\nThe place has gone or never existed. A user of Organic Maps application has reported that the POI was visible on the map (see snapshot date below), but was not found on the ground.\nOSM snapshot date: 2026-07-14T00:42:02Z\nPOI name: Woo Tang\nPOI types: amenity-restaurant cuisine-korean\n #organicmaps android 2026.07.23-6-Google",
+      "html": "<p dir=\"auto\">\"Wrong pin location \"\n<br />The place has gone or never existed. A user of Organic Maps application has reported that the POI was visible on the map (see snapshot date below), but was not found on the ground.\n<br />OSM snapshot date: 2026-07-14T00:42:02Z\n<br />POI name: Woo Tang\n<br />POI types: amenity-restaurant cuisine-korean\n<br /> #organicmaps android 2026.07.23-6-Google</p>"
+     },
+     {
+      "date": "2026-08-12 20:30:22 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "We currently have Woo Tang mapped here and claiming to be 258\nIslip Street but we also have Woo Tang mapped further north and claiming to be 258 Kentish Town Road. I'm assuming the other one is the correct one ... is that correct?\n\nIf it is, there's a further problem. It's currently mapped as being a part of a The Parakeet. But it has the same housenumber 258 as Simply Fine Foods. Has that gone, and should Woo Tang be in its place?",
+      "html": "<p dir=\"auto\">We currently have Woo Tang mapped here and claiming to be 258\n<br />Islip Street but we also have Woo Tang mapped further north and claiming to be 258 Kentish Town Road. I'm assuming the other one is the correct one ... is that correct?</p>\n\n<p dir=\"auto\">If it is, there's a further problem. It's currently mapped as being a part of a The Parakeet. But it has the same housenumber 258 as Simply Fine Foods. Has that gone, and should Woo Tang be in its place?</p>"
+     },
+     {
+      "date": "2026-08-15 17:44:17 UTC",
+      "uid": 9902917,
+      "user": "bindle868217",
+      "user_url": "https://api.openstreetmap.org/user/bindle868217",
+      "action": "commented",
+      "text": "Woo Tang is on 258 Kentish Town Road \u2013\u00a0the 258 Islip Street pin was in the wrong location. \n\nWhen I last visited, I did not see Simply Fine Foods in that location so it's possible that Woo Tang has replaced it. ",
+      "html": "<p dir=\"auto\">Woo Tang is on 258 Kentish Town Road \u2013&nbsp;the 258 Islip Street pin was in the wrong location. </p>\n\n<p dir=\"auto\">When I last visited, I did not see Simply Fine Foods in that location so it's possible that Woo Tang has replaced it. </p>"
+     },
+     {
+      "date": "2026-08-15 21:05:30 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "closed",
+      "text": "All updated.",
+      "html": "<p dir=\"auto\">All updated.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0958532,
+     51.4852021
+    ]
+   },
+   "properties": {
+    "id": 5458124,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5458124.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5458124/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5458124/close.json",
+    "date_created": "2026-08-15 17:15:49 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-15 17:15:50 UTC",
+      "uid": 5783459,
+      "user": "Emric Orbeck",
+      "user_url": "https://api.openstreetmap.org/user/Emric%20Orbeck",
+      "action": "opened",
+      "text": "Unable to answer \"Is this still here?\" \u2013 Orbit\u00a0Beers\u00a0Brewery (Craft\u00a0Brewery) \u2013 https://osm.org/way/342351899 via StreetComplete 63.4:\n\nThe tap room is definitely the other side of the road and I've moved it. I couldn't tell for certain either way whether the brewery was here or the other side. ",
+      "html": "<p dir=\"auto\">Unable to answer \"Is this still here?\" \u2013 Orbit&nbsp;Beers&nbsp;Brewery (Craft&nbsp;Brewery) \u2013 <a href=\"https://osm.org/way/342351899\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/342351899</a> via StreetComplete 63.4:</p>\n\n<p dir=\"auto\">The tap room is definitely the other side of the road and I've moved it. I couldn't tell for certain either way whether the brewery was here or the other side. </p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1761334,
+     51.5160983
+    ]
+   },
+   "properties": {
+    "id": 5457976,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5457976.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5457976/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5457976/close.json",
+    "date_created": "2026-08-15 16:14:03 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-15 16:14:03 UTC",
+      "uid": 5783459,
+      "user": "Emric Orbeck",
+      "user_url": "https://api.openstreetmap.org/user/Emric%20Orbeck",
+      "action": "opened",
+      "text": "In context of overlay \"Places\" \u2013 on level 0: FCB\u00a0Coffee (Coffee\u00a0shop) \u2013 https://osm.org/node/11854284163 via StreetComplete 63.4:\n\nThere are two FCB coffees mapped here. I assume there's only one in reality... #surveyme",
+      "html": "<p dir=\"auto\">In context of overlay \"Places\" \u2013 on level 0: FCB&nbsp;Coffee (Coffee&nbsp;shop) \u2013 <a href=\"https://osm.org/node/11854284163\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/11854284163</a> via StreetComplete 63.4:</p>\n\n<p dir=\"auto\">There are two FCB coffees mapped here. I assume there's only one in reality... #surveyme</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0746146,
+     51.5243792
+    ]
+   },
+   "properties": {
+    "id": 5281304,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5281304.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5281304/reopen.json",
+    "date_created": "2026-05-06 21:57:21 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-15 11:26:04 UTC",
+    "comments": [
+     {
+      "date": "2026-05-06 21:57:21 UTC",
+      "uid": 932948,
+      "user": "orrick335",
+      "user_url": "https://api.openstreetmap.org/user/orrick335",
+      "action": "opened",
+      "text": "In context of overlay \"Places\" \u2013 Burro\u00a0e\u00a0Salvia (Restaurant) \u2013 https://osm.org/way/373272364 via StreetComplete 63.0:\n\nSign on the shop saying a perfumery called \"fl\u00e2ner\" is opening here in May",
+      "html": "<p dir=\"auto\">In context of overlay \"Places\" \u2013 Burro&nbsp;e&nbsp;Salvia (Restaurant) \u2013 <a href=\"https://osm.org/way/373272364\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/373272364</a> via StreetComplete 63.0:</p>\n\n<p dir=\"auto\">Sign on the shop saying a perfumery called \"fl\u00e2ner\" is opening here in May</p>"
+     },
+     {
+      "date": "2026-08-15 11:26:04 UTC",
+      "uid": 19043148,
+      "user": "lorrick928278",
+      "user_url": "https://api.openstreetmap.org/user/lorrick928278",
+      "action": "closed",
+      "text": "Thanks. Updated.",
+      "html": "<p dir=\"auto\">Thanks. Updated.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0555901,
+     51.4792509
+    ]
+   },
+   "properties": {
+    "id": 5456194,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5456194.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5456194/reopen.json",
+    "date_created": "2026-08-14 16:28:33 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-14 20:46:46 UTC",
+    "comments": [
+     {
+      "date": "2026-08-14 16:28:33 UTC",
+      "uid": 95830917,
+      "user": "purlow935284",
+      "user_url": "https://api.openstreetmap.org/user/purlow935284",
+      "action": "opened",
+      "text": "\"local ref is ES\"\nOSM snapshot date: 2026-08-11T11:19:54Z\nPOI name: Old Kent Road / Ilderton Road\nPOI types: public_transport-platform highway-bus_stop amenity-bench amenity-shelter\n #CoMaps android 2026.08.07-3",
+      "html": "<p dir=\"auto\">\"local ref is ES\"\n<br />OSM snapshot date: 2026-08-11T11:19:54Z\n<br />POI name: Old Kent Road / Ilderton Road\n<br />POI types: public_transport-platform highway-bus_stop amenity-bench amenity-shelter\n<br /> #CoMaps android 2026.08.07-3</p>"
+     },
+     {
+      "date": "2026-08-14 20:46:46 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "closed",
+      "text": "Updated",
+      "html": "<p dir=\"auto\">Updated</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1631311,
+     51.4896855
+    ]
+   },
+   "properties": {
+    "id": 5456490,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5456490.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5456490/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5456490/close.json",
+    "date_created": "2026-08-14 20:29:41 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-14 20:29:42 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "opened",
+      "text": "https://www.openstreetmap.org/node/444686858\nHas this closed? The website is broken.",
+      "html": "<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/node/444686858\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/444686858</a>\n<br />Has this closed? The website is broken.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1168934,
+     51.496792
+    ]
+   },
+   "properties": {
+    "id": 5454211,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5454211.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5454211/reopen.json",
+    "date_created": "2026-08-13 13:35:43 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-14 07:35:15 UTC",
+    "comments": [
+     {
+      "date": "2026-08-13 13:35:43 UTC",
+      "uid": 95832877,
+      "user": "gilder40690",
+      "user_url": "https://api.openstreetmap.org/user/gilder40690",
+      "action": "opened",
+      "text": "\"Closing times change on a weekly basis, and will reach 17.15h with WW44.\"\nOSM snapshot date: 2026-07-28T06:39:58Z\nPOI name: Archbishop's Park\nPOI types: leisure-park\n #CoMaps ios 2026.07.25-1-ios",
+      "html": "<p dir=\"auto\">\"Closing times change on a weekly basis, and will reach 17.15h with WW44.\"\n<br />OSM snapshot date: 2026-07-28T06:39:58Z\n<br />POI name: Archbishop's Park\n<br />POI types: leisure-park\n<br /> #CoMaps ios 2026.07.25-1-ios</p>"
+     },
+     {
+      "date": "2026-08-14 07:35:15 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "closed",
+      "text": "Web site https://www.lambeth.gov.uk/parks/archbishops-park says opening hours are 7:30 to 15 minutes before sunset so I've retagged \nopening_hours=Mo-Su 07:30-(sunset-00:15)",
+      "html": "<p dir=\"auto\">Web site <a href=\"https://www.lambeth.gov.uk/parks/archbishops-park\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://www.lambeth.gov.uk/parks/archbishops-park</a> says opening hours are 7:30 to 15 minutes before sunset so I've retagged \n<br /><a href=\"https://wiki.openstreetmap.org/wiki/Tag:opening_hours=Mo-Su\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">opening_hours=Mo-Su</a> 07:30-(sunset-00:15)</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.122247,
+     51.5290447
+    ]
+   },
+   "properties": {
+    "id": 5454549,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5454549.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5454549/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5454549/close.json",
+    "date_created": "2026-08-13 16:37:37 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-13 16:37:37 UTC",
+      "uid": 55848452,
+      "user": "orrick756111",
+      "user_url": "https://api.openstreetmap.org/user/orrick756111",
+      "action": "opened",
+      "text": "\"23-24, Meridiana Hotel\"\nOSM snapshot date: 2026-06-10T02:39:33Z\nPOI name: Argyle Square Gardens\nPOI types: leisure-park\n #CoMaps android 2026.08.07-3",
+      "html": "<p dir=\"auto\">\"23-24, Meridiana Hotel\"\n<br />OSM snapshot date: 2026-06-10T02:39:33Z\n<br />POI name: Argyle Square Gardens\n<br />POI types: leisure-park\n<br /> #CoMaps android 2026.08.07-3</p>"
+     },
+     {
+      "date": "2026-08-14 06:57:11 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "Only a garden is visible here on bing.\n\nThat could be just outdated imagery, but https://www.hotelmeridiana.co.uk/ gives the address as 43-44 Argyle Square, which is a lot more plausible. ",
+      "html": "<p dir=\"auto\">Only a garden is visible here on bing.</p>\n\n<p dir=\"auto\">That could be just outdated imagery, but <a href=\"https://www.hotelmeridiana.co.uk/\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://www.hotelmeridiana.co.uk/</a> gives the address as 43-44 Argyle Square, which is a lot more plausible. </p>"
+     },
+     {
+      "date": "2026-08-14 07:14:10 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "That would put it between KX rooms (41-42) and Macdonald Hotel (45-46). \n\nI've provisionally put it there, but the buildings on this side of Argyle Square have no housenumbers and I suspect those nodes are not accurately positioned relative to the buildings. \n\nSo a survey of housenumbers along this side of Argyle Square is needed (and the buildings need to be properly squared at the same time).",
+      "html": "<p dir=\"auto\">That would put it between KX rooms (41-42) and Macdonald Hotel (45-46). </p>\n\n<p dir=\"auto\">I've provisionally put it there, but the buildings on this side of Argyle Square have no housenumbers and I suspect those nodes are not accurately positioned relative to the buildings. </p>\n\n<p dir=\"auto\">So a survey of housenumbers along this side of Argyle Square is needed (and the buildings need to be properly squared at the same time).</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1092144,
+     51.52115
+    ]
+   },
+   "properties": {
+    "id": 5352806,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5352806.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5352806/reopen.json",
+    "date_created": "2026-06-20 10:17:36 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-13 19:25:08 UTC",
+    "comments": [
+     {
+      "date": "2026-06-20 10:17:36 UTC",
+      "uid": 8101175,
+      "user": "jarrow5069",
+      "user_url": "https://api.openstreetmap.org/user/jarrow5069",
+      "action": "opened",
+      "text": "\"Pleas move to the correct street. Just north\"\nOSM snapshot date: 2026-05-27T00:05:23Z\nPOI name: Avari Apartments - Hatton Collection\nPOI types: tourism-apartment\n #organicmaps ios 2026.06.01-1-ios",
+      "html": "<p dir=\"auto\">\"Pleas move to the correct street. Just north\"\n<br />OSM snapshot date: 2026-05-27T00:05:23Z\n<br />POI name: Avari Apartments - Hatton Collection\n<br />POI types: tourism-apartment\n<br /> #organicmaps ios 2026.06.01-1-ios</p>"
+     },
+     {
+      "date": "2026-08-13 19:25:08 UTC",
+      "uid": 3371741,
+      "user": "hindle860098",
+      "user_url": "https://api.openstreetmap.org/user/hindle860098",
+      "action": "closed",
+      "text": "Updated (changeset/187408797)",
+      "html": "<p dir=\"auto\">Updated (<a href=\"https://www.openstreetmap.org/changeset/187408797\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">changeset/187408797</a>)</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1092144,
+     51.52115
+    ]
+   },
+   "properties": {
+    "id": 5352838,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5352838.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/5352838/reopen.json",
+    "date_created": "2026-06-20 10:47:25 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-13 19:24:59 UTC",
+    "comments": [
+     {
+      "date": "2026-06-20 10:47:25 UTC",
+      "uid": 8101175,
+      "user": "jarrow5069",
+      "user_url": "https://api.openstreetmap.org/user/jarrow5069",
+      "action": "opened",
+      "text": "\"Pleas move to the correct street. Just north\"\nOSM snapshot date: 2026-05-27T00:05:23Z\nPOI name: Avari Apartments - Hatton Collection\nPOI types: tourism-apartment\n #organicmaps ios 2026.06.01-1-ios",
+      "html": "<p dir=\"auto\">\"Pleas move to the correct street. Just north\"\n<br />OSM snapshot date: 2026-05-27T00:05:23Z\n<br />POI name: Avari Apartments - Hatton Collection\n<br />POI types: tourism-apartment\n<br /> #organicmaps ios 2026.06.01-1-ios</p>"
+     },
+     {
+      "date": "2026-08-13 19:24:59 UTC",
+      "uid": 3371741,
+      "user": "hindle860098",
+      "user_url": "https://api.openstreetmap.org/user/hindle860098",
+      "action": "closed",
+      "text": "Updated (changeset/187408797)",
+      "html": "<p dir=\"auto\">Updated (<a href=\"https://www.openstreetmap.org/changeset/187408797\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">changeset/187408797</a>)</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1404673,
+     51.5473092
+    ]
+   },
+   "properties": {
+    "id": 2446374,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/2446374.json",
+    "reopen_url": "https://api.openstreetmap.org/api/0.6/notes/2446374/reopen.json",
+    "date_created": "2020-11-29 11:13:53 UTC",
+    "status": "closed",
+    "closed_at": "2026-08-13 18:21:47 UTC",
+    "comments": [
+     {
+      "date": "2020-11-29 11:13:53 UTC",
+      "action": "opened",
+      "text": "Motorcycle parking bay, Bartholomew Villas",
+      "html": "<p dir=\"auto\">Motorcycle parking bay, Bartholomew Villas</p>"
+     },
+     {
+      "date": "2026-08-13 18:21:47 UTC",
+      "uid": 48279119,
+      "user": "orrick731719",
+      "user_url": "https://api.openstreetmap.org/user/orrick731719",
+      "action": "closed",
+      "text": "Added in https://www.openstreetmap.org/changeset/187406117\n\nPS: This note is miles off of where it actually was - you're lucky there was street level imagery coverage.",
+      "html": "<p dir=\"auto\">Added in <a href=\"https://www.openstreetmap.org/changeset/187406117\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">changeset/187406117</a></p>\n\n<p dir=\"auto\">PS: This note is miles off of where it actually was - you're lucky there was street level imagery coverage.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.144399,
+     51.495353
+    ]
+   },
+   "properties": {
+    "id": 5450049,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5450049.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5450049/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5450049/close.json",
+    "date_created": "2026-08-11 10:19:04 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-11 10:19:04 UTC",
+      "uid": 18340150,
+      "user": "dimmet855775",
+      "user_url": "https://api.openstreetmap.org/user/dimmet855775",
+      "action": "opened",
+      "text": "I can't see a water fountain here, just a column with seating around it.",
+      "html": "<p dir=\"auto\">I can't see a water fountain here, just a column with seating around it.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1423375,
+     51.496056
+    ]
+   },
+   "properties": {
+    "id": 5449792,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5449792.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5449792/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5449792/close.json",
+    "date_created": "2026-08-11 07:49:12 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-11 07:49:12 UTC",
+      "uid": 7610110,
+      "user": "frowe17583",
+      "user_url": "https://api.openstreetmap.org/user/frowe17583",
+      "action": "opened",
+      "text": "Unable to answer \"Is there a bin at this stop?\" \u2013 Victoria\u00a0Station\u00a0(U) (Bus\u00a0Stop) \u2013 https://osm.org/node/469776983 via StreetComplete 63.2:\n\nIt's 15m north of the bus stop",
+      "html": "<p dir=\"auto\">Unable to answer \"Is there a bin at this stop?\" \u2013 Victoria&nbsp;Station&nbsp;(U) (Bus&nbsp;Stop) \u2013 <a href=\"https://osm.org/node/469776983\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/469776983</a> via StreetComplete 63.2:</p>\n\n<p dir=\"auto\">It's 15m north of the bus stop</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0752459,
+     51.5150082
+    ]
+   },
+   "properties": {
+    "id": 5447012,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5447012.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5447012/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5447012/close.json",
+    "date_created": "2026-08-09 16:52:14 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-09 16:52:14 UTC",
+      "uid": 3147033,
+      "user": "gilder075730",
+      "user_url": "https://api.openstreetmap.org/user/gilder075730",
+      "action": "opened",
+      "text": "Does Aldgate Avenue connect to the sidewalk of St Botolph Street here?\n\nhttps://www.openstreetmap.org/way/27120676",
+      "html": "<p dir=\"auto\">Does Aldgate Avenue connect to the sidewalk of St Botolph Street here?</p>\n\n<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/way/27120676\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/27120676</a></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0555164,
+     51.5274058
+    ]
+   },
+   "properties": {
+    "id": 5446570,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5446570.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5446570/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5446570/close.json",
+    "date_created": "2026-08-09 14:03:26 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-09 14:03:26 UTC",
+      "uid": 3147033,
+      "user": "gilder075730",
+      "user_url": "https://api.openstreetmap.org/user/gilder075730",
+      "action": "opened",
+      "text": "The junction of Cambridge Heath Road / Bethnal Green Road / Roman Road needs remodelling.\n\nTrying to represent staggered crossings with a single crossing way and node isn't great for pedestrian routing as it misses kerb modifications and tactile paving.\n\nThe roads entering the junction need to be split around the crossing islands.",
+      "html": "<p dir=\"auto\">The junction of Cambridge Heath Road / Bethnal Green Road / Roman Road needs remodelling.</p>\n\n<p dir=\"auto\">Trying to represent staggered crossings with a single crossing way and node isn't great for pedestrian routing as it misses kerb modifications and tactile paving.</p>\n\n<p dir=\"auto\">The roads entering the junction need to be split around the crossing islands.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1304752,
+     51.5159597
+    ]
+   },
+   "properties": {
+    "id": 5260033,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5260033.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5260033/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5260033/close.json",
+    "date_created": "2026-04-21 17:13:57 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-04-21 17:13:57 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "opened",
+      "text": "https://www.openstreetmap.org/node/12723541368\nIs this still here? There is a Uniqlo just round the corner.\nhttps://www.openstreetmap.org/node/12168424200",
+      "html": "<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/node/12723541368\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/12723541368</a>\n<br />Is this still here? There is a Uniqlo just round the corner.\n<br /><a href=\"https://www.openstreetmap.org/node/12168424200\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/12168424200</a></p>"
+     },
+     {
+      "date": "2026-07-14 23:41:07 UTC",
+      "uid": 24267250,
+      "user": "Corvi Co",
+      "user_url": "https://api.openstreetmap.org/user/Corvi%20Co",
+      "action": "commented",
+      "text": "The Uniqlo is double tagged, as it's the same store with 2 entrances. The Charing Cross road entrance is further north than here also. Not sure how to fix this",
+      "html": "<p dir=\"auto\">The Uniqlo is double tagged, as it's the same store with 2 entrances. The Charing Cross road entrance is further north than here also. Not sure how to fix this</p>"
+     },
+     {
+      "date": "2026-08-09 11:35:17 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "commented",
+      "text": "Thank you. I've merged the 2 nodes for the same shop. If you add a note in the right place, I'll add an entrance on Charing Cross Road. (Let me know here that you've added a note.)",
+      "html": "<p dir=\"auto\">Thank you. I've merged the 2 nodes for the same shop. If you add a note in the right place, I'll add an entrance on Charing Cross Road. (Let me know here that you've added a note.)</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0506274,
+     51.4768794
+    ]
+   },
+   "properties": {
+    "id": 5441643,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5441643.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5441643/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5441643/close.json",
+    "date_created": "2026-08-07 07:56:30 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-07 07:56:30 UTC",
+      "uid": 95830917,
+      "user": "purlow935284",
+      "user_url": "https://api.openstreetmap.org/user/purlow935284",
+      "action": "opened",
+      "text": "brownfield\n\n#EveryDoor",
+      "html": "<p dir=\"auto\">brownfield</p>\n\n<p dir=\"auto\">#EveryDoor</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0604892,
+     51.4927652
+    ]
+   },
+   "properties": {
+    "id": 5441154,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5441154.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5441154/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5441154/close.json",
+    "date_created": "2026-08-06 20:41:42 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-06 20:41:42 UTC",
+      "uid": 37692536,
+      "user": "gilder5094",
+      "user_url": "https://api.openstreetmap.org/user/gilder5094",
+      "action": "opened",
+      "text": "Tartaric Tower here apparently (part of Pearl Yard).",
+      "html": "<p dir=\"auto\">Tartaric Tower here apparently (part of Pearl Yard).</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0610766,
+     51.4937238
+    ]
+   },
+   "properties": {
+    "id": 5441153,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5441153.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5441153/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5441153/close.json",
+    "date_created": "2026-08-06 20:40:57 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-06 20:40:57 UTC",
+      "uid": 37692536,
+      "user": "gilder5094",
+      "user_url": "https://api.openstreetmap.org/user/gilder5094",
+      "action": "opened",
+      "text": "Viennese Court here apparently - need to check",
+      "html": "<p dir=\"auto\">Viennese Court here apparently - need to check</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1619974,
+     51.4905867
+    ]
+   },
+   "properties": {
+    "id": 5441015,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5441015.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5441015/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5441015/close.json",
+    "date_created": "2026-08-06 19:04:12 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-06 19:04:12 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "opened",
+      "text": "https://www.openstreetmap.org/node/444687648\nHas Liu Jo closed?",
+      "html": "<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/node/444687648\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/444687648</a>\n<br />Has Liu Jo closed?</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1614663,
+     51.4905942
+    ]
+   },
+   "properties": {
+    "id": 5441010,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5441010.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5441010/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5441010/close.json",
+    "date_created": "2026-08-06 19:01:02 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-06 19:01:02 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "opened",
+      "text": "https://www.openstreetmap.org/node/8363772346\nHas Yamamay closed? It doesn't seem to have any stores in the UK or sell to the UK any more from its website.",
+      "html": "<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/node/8363772346\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/8363772346</a>\n<br />Has Yamamay closed? It doesn't seem to have any stores in the UK or sell to the UK any more from its website.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1616889,
+     51.4904765
+    ]
+   },
+   "properties": {
+    "id": 5440993,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5440993.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5440993/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5440993/close.json",
+    "date_created": "2026-08-06 18:54:19 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-06 18:54:19 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "opened",
+      "text": "https://www.openstreetmap.org/node/444284623\nNot on the Geox website.",
+      "html": "<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/node/444284623\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/444284623</a>\n<br />Not on the Geox website.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1615441,
+     51.4905419
+    ]
+   },
+   "properties": {
+    "id": 3155180,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/3155180.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/3155180/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/3155180/close.json",
+    "date_created": "2022-04-27 23:17:11 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2022-04-27 23:17:11 UTC",
+      "uid": 59071226,
+      "user": "Ubel Standry",
+      "user_url": "https://api.openstreetmap.org/user/Ubel%20Standry",
+      "action": "opened",
+      "text": "33 Kings Rd. is the store, \u2018Brandy Melville\u2019. ",
+      "html": "<p dir=\"auto\">33 Kings Rd. is the store, \u2018Brandy Melville\u2019. </p>"
+     },
+     {
+      "date": "2022-09-30 20:02:38 UTC",
+      "uid": 51941,
+      "user": "elling339552",
+      "user_url": "https://api.openstreetmap.org/user/elling339552",
+      "action": "closed",
+      "text": "It's already mapped",
+      "html": "<p dir=\"auto\">It's already mapped</p>"
+     },
+     {
+      "date": "2022-09-30 20:03:41 UTC",
+      "uid": 51941,
+      "user": "elling339552",
+      "user_url": "https://api.openstreetmap.org/user/elling339552",
+      "action": "reopened",
+      "text": "",
+      "html": "<p dir=\"auto\"></p>"
+     },
+     {
+      "date": "2022-09-30 20:06:02 UTC",
+      "uid": 51941,
+      "user": "elling339552",
+      "user_url": "https://api.openstreetmap.org/user/elling339552",
+      "action": "commented",
+      "text": "Didn't realize this was from a logged-in user. Thanks for your contribution. It's really helpful to get notes saying when shops change. This shopped is on the map as 'Brandy & Melville' your note says it may be called 'Brandy Melville' with no '&', which one is correct?",
+      "html": "<p dir=\"auto\">Didn't realize this was from a logged-in user. Thanks for your contribution. It's really helpful to get notes saying when shops change. This shopped is on the map as 'Brandy &amp; Melville' your note says it may be called 'Brandy Melville' with no '&amp;', which one is correct?</p>"
+     },
+     {
+      "date": "2022-12-05 09:34:03 UTC",
+      "uid": 7897187,
+      "user": "Nerissa Zennorwyn",
+      "user_url": "https://api.openstreetmap.org/user/Nerissa%20Zennorwyn",
+      "action": "commented",
+      "text": "It is on the map as 'Brandy & Melville' your note says it may be called 'Brandy Melville' with no '&', which one is correct?\n\nhttps://www.openstreetmap.org/node/8363772347",
+      "html": "<p dir=\"auto\">It is on the map as 'Brandy &amp; Melville' your note says it may be called 'Brandy Melville' with no '&amp;', which one is correct?</p>\n\n<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/node/8363772347\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/8363772347</a></p>"
+     },
+     {
+      "date": "2024-04-23 11:51:28 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "commented",
+      "text": "This is the website https://locations.brandymelville.com/ which says the King's Road store is at number 140-144. Has this store closed?",
+      "html": "<p dir=\"auto\">This is the website <a href=\"https://locations.brandymelville.com/\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://locations.brandymelville.com/</a> which says the King's Road store is at number 140-144. Has this store closed?</p>"
+     },
+     {
+      "date": "2024-04-23 12:35:42 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "commented",
+      "text": "Is 33-36 King's Road vacant?\nhttps://www.loopnet.com/Listing/33-36-Kings-Rd-London/23720122/",
+      "html": "<p dir=\"auto\">Is 33-36 King's Road vacant?\n<br /><a href=\"https://www.loopnet.com/Listing/33-36-Kings-Rd-London/23720122/\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://www.loopnet.com/Listing/33-36-Kings-Rd-London/23720122/</a></p>"
+     },
+     {
+      "date": "2026-08-06 17:14:45 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "commented",
+      "text": "Is this an Alo Yoga shop now?\nhttps://www.aloyoga.com/en-gb/pages/stores#global",
+      "html": "<p dir=\"auto\">Is this an Alo Yoga shop now?\n<br /><a href=\"https://www.aloyoga.com/en-gb/pages/stores#global\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://www.aloyoga.com/en-gb/pages/stores#global</a></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0791858,
+     51.5121056
+    ]
+   },
+   "properties": {
+    "id": 4475527,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/4475527.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/4475527/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/4475527/close.json",
+    "date_created": "2024-10-12 13:42:23 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2024-10-12 13:42:23 UTC",
+      "uid": 768105,
+      "user": "kimble365210",
+      "user_url": "https://api.openstreetmap.org/user/kimble365210",
+      "action": "opened",
+      "text": "Unable to answer \"What are the opening hours here?\" \u2013 Cafe Brera (Restaurant) \u2013 https://osm.org/node/707377198 via StreetComplete 59.2:\n\nUnder refurbishment\n\nAttached photo(s):\nhttps://westnordost.de/p/245760.jpg",
+      "html": "<p dir=\"auto\">Unable to answer \"What are the opening hours here?\" \u2013 Cafe Brera (Restaurant) \u2013 <a href=\"https://osm.org/node/707377198\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/707377198</a> via StreetComplete 59.2:</p>\n\n<p dir=\"auto\">Under refurbishment</p>\n\n<p dir=\"auto\">Attached photo(s):\n<br /><a href=\"https://westnordost.de/p/245760.jpg\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://westnordost.de/p/245760.jpg</a></p>"
+     },
+     {
+      "date": "2026-08-05 01:14:33 UTC",
+      "uid": 12327897,
+      "user": "hindle830046",
+      "user_url": "https://api.openstreetmap.org/user/hindle830046",
+      "action": "commented",
+      "text": "Do we know if the refurbishment is now finished or other updates?",
+      "html": "<p dir=\"auto\">Do we know if the refurbishment is now finished or other updates?</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.116775,
+     51.500286
+    ]
+   },
+   "properties": {
+    "id": 5429371,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5429371.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5429371/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5429371/close.json",
+    "date_created": "2026-08-01 06:51:59 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-08-01 06:51:59 UTC",
+      "action": "opened",
+      "text": "Junction could do with a proper sort out and redrawer/survey. Some restrictions remain after 'simplification' 4 years ago, of the junction drawing that don't apply in the simplified drawing style creating issues.  ",
+      "html": "<p dir=\"auto\">Junction could do with a proper sort out and redrawer/survey. Some restrictions remain after 'simplification' 4 years ago, of the junction drawing that don't apply in the simplified drawing style creating issues.  </p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0673129,
+     51.4841866
+    ]
+   },
+   "properties": {
+    "id": 5425848,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5425848.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5425848/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5425848/close.json",
+    "date_created": "2026-07-30 08:00:25 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-30 08:00:26 UTC",
+      "uid": 95830917,
+      "user": "purlow935284",
+      "user_url": "https://api.openstreetmap.org/user/purlow935284",
+      "action": "opened",
+      "text": "new building construction\n\n#EveryDoor",
+      "html": "<p dir=\"auto\">new building construction</p>\n\n<p dir=\"auto\">#EveryDoor</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0925003,
+     51.4939187
+    ]
+   },
+   "properties": {
+    "id": 5423981,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5423981.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5423981/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5423981/close.json",
+    "date_created": "2026-07-29 07:55:17 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-29 07:55:17 UTC",
+      "uid": 95830917,
+      "user": "purlow935284",
+      "user_url": "https://api.openstreetmap.org/user/purlow935284",
+      "action": "opened",
+      "text": "New building, no driveway\n\nvia StreetComplete_ee 63.21",
+      "html": "<p dir=\"auto\">New building, no driveway</p>\n\n<p dir=\"auto\">via StreetComplete_ee 63.21</p>"
+     },
+     {
+      "date": "2026-07-29 09:02:44 UTC",
+      "uid": 95830917,
+      "user": "purlow935284",
+      "user_url": "https://api.openstreetmap.org/user/purlow935284",
+      "action": "commented",
+      "text": "visible on esri and mapbox",
+      "html": "<p dir=\"auto\">visible on esri and mapbox</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1127762,
+     51.5125201
+    ]
+   },
+   "properties": {
+    "id": 5356485,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5356485.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5356485/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5356485/close.json",
+    "date_created": "2026-06-22 14:03:38 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-06-22 14:03:38 UTC",
+      "uid": 2227614,
+      "user": "hindle339118",
+      "user_url": "https://api.openstreetmap.org/user/hindle339118",
+      "action": "opened",
+      "text": "Klaus Reichert SC",
+      "html": "<p dir=\"auto\">Klaus Reichert SC</p>"
+     },
+     {
+      "date": "2026-07-29 04:54:40 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "Does it have a shop front or equivalent signage? OSM is a map, not a business directory. Without signage it doesn't meet osm.wiki/Verifiability which is necessary to qualify it for mapping.",
+      "html": "<p dir=\"auto\">Does it have a shop front or equivalent signage? OSM is a map, not a business directory. Without signage it doesn't meet <a href=\"https://wiki.openstreetmap.org/Verifiability\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">osm.wiki/Verifiability</a> which is necessary to qualify it for mapping.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1116094,
+     51.5124792
+    ]
+   },
+   "properties": {
+    "id": 5356479,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5356479.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5356479/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5356479/close.json",
+    "date_created": "2026-06-22 14:00:31 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-06-22 14:00:31 UTC",
+      "uid": 2227614,
+      "user": "hindle339118",
+      "user_url": "https://api.openstreetmap.org/user/hindle339118",
+      "action": "opened",
+      "text": "Klaus Reichert SC",
+      "html": "<p dir=\"auto\">Klaus Reichert SC</p>"
+     },
+     {
+      "date": "2026-07-28 17:57:03 UTC",
+      "uid": 190,
+      "user": "Corvi Cray",
+      "user_url": "https://api.openstreetmap.org/user/Corvi%20Cray",
+      "action": "commented",
+      "text": "What is that? Is \"Klaus Reichert SC\" the name of a law firm based near here?",
+      "html": "<p dir=\"auto\">What is that? Is \"Klaus Reichert SC\" the name of a law firm based near here?</p>"
+     },
+     {
+      "date": "2026-07-29 04:52:56 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "And does it have a shop front or equivalent signage? OSM is a map, not a business directory. Without signage it doesn't meet https://wiki.openstreetmap.org/wiki/Verifiability which is necessary to qualify it for mapping.",
+      "html": "<p dir=\"auto\">And does it have a shop front or equivalent signage? OSM is a map, not a business directory. Without signage it doesn't meet <a href=\"https://wiki.openstreetmap.org/wiki/Verifiability\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">osm.wiki/Verifiability</a> which is necessary to qualify it for mapping.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1908338,
+     51.5487369
+    ]
+   },
+   "properties": {
+    "id": 4554746,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/4554746.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/4554746/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/4554746/close.json",
+    "date_created": "2024-12-17 17:48:51 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2024-12-17 17:48:51 UTC",
+      "uid": 24267250,
+      "user": "Corvi Co",
+      "user_url": "https://api.openstreetmap.org/user/Corvi%20Co",
+      "action": "opened",
+      "text": "Much of this development is complete now and needs mapping properly. I've added in 3 retail premises as a start (approximate positioning from going past on the bus)",
+      "html": "<p dir=\"auto\">Much of this development is complete now and needs mapping properly. I've added in 3 retail premises as a start (approximate positioning from going past on the bus)</p>"
+     },
+     {
+      "date": "2026-07-28 20:53:59 UTC",
+      "uid": 21785419,
+      "user": "frowe791920",
+      "user_url": "https://api.openstreetmap.org/user/frowe791920",
+      "action": "commented",
+      "text": "how many businesses are here?",
+      "html": "<p dir=\"auto\">how many businesses are here?</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1366256,
+     51.5148591
+    ]
+   },
+   "properties": {
+    "id": 5421574,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5421574.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5421574/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5421574/close.json",
+    "date_created": "2026-07-27 21:23:18 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-27 21:23:18 UTC",
+      "uid": 44743334,
+      "user": "hindle970424",
+      "user_url": "https://api.openstreetmap.org/user/hindle970424",
+      "action": "opened",
+      "text": "\"L'Eto Restaurant/pastry shop\"\nOSM snapshot date: 2026-07-14T00:42:02Z\nPOI has no name\nPOI types: building\n #organicmaps android 2026.07.15-11-Google",
+      "html": "<p dir=\"auto\">\"L'Eto Restaurant/pastry shop\"\n<br />OSM snapshot date: 2026-07-14T00:42:02Z\n<br />POI has no name\n<br />POI types: building\n<br /> #organicmaps android 2026.07.15-11-Google</p>"
+     },
+     {
+      "date": "2026-07-28 00:45:30 UTC",
+      "uid": 62181252,
+      "user": "gilder621965",
+      "user_url": "https://api.openstreetmap.org/user/gilder621965",
+      "action": "commented",
+      "text": "I can't find any information about a shop here online, L'Eto Cafe is nearby here, https://www.openstreetmap.org/way/275127233, is this definitely a new location on Noel Street?",
+      "html": "<p dir=\"auto\">I can't find any information about a shop here online, L'Eto Cafe is nearby here, <a href=\"https://www.openstreetmap.org/way/275127233\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/275127233</a>, is this definitely a new location on Noel Street?</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0948469,
+     51.5046801
+    ]
+   },
+   "properties": {
+    "id": 5415211,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5415211.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5415211/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5415211/close.json",
+    "date_created": "2026-07-24 15:50:56 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-24 15:50:56 UTC",
+      "uid": 99137242,
+      "user": "Dalla Krant",
+      "user_url": "https://api.openstreetmap.org/user/Dalla%20Krant",
+      "action": "opened",
+      "text": "\"Carrubo is no more \ud83d\ude10\"\nOSM snapshot date: 2026-07-14T04:20:21Z\nPOI name: Pyro\nPOI types: amenity-bar\n #CoMaps android 2026.07.16-10",
+      "html": "<p dir=\"auto\">\"Carrubo is no more \ud83d\ude10\"\n<br />OSM snapshot date: 2026-07-14T04:20:21Z\n<br />POI name: Pyro\n<br />POI types: amenity-bar\n<br /> #CoMaps android 2026.07.16-10</p>"
+     },
+     {
+      "date": "2026-07-25 09:18:24 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "Carrubo is not currently mapped here. \n\nI'm puzzled by the mappings for Outdoor Plus (billboard) here. Is it really inside the building, or is it actually on the outside wall?",
+      "html": "<p dir=\"auto\">Carrubo is not currently mapped here. </p>\n\n<p dir=\"auto\">I'm puzzled by the mappings for Outdoor Plus (billboard) here. Is it really inside the building, or is it actually on the outside wall?</p>"
+     },
+     {
+      "date": "2026-07-25 10:09:18 UTC",
+      "uid": 99137242,
+      "user": "Dalla Krant",
+      "user_url": "https://api.openstreetmap.org/user/Dalla%20Krant",
+      "action": "commented",
+      "text": "Sorry, not enough of an expert to know about billboard mappings. This place is a bit non-standard in that it's a large courtyard, all under the \"Pyro\" name, the inside area being the restaurant - called Pyro again, but the outside area is a a bar called \"Baraki\".\nThere's no billboard at all btw, the place is therefore difficult to find! ",
+      "html": "<p dir=\"auto\">Sorry, not enough of an expert to know about billboard mappings. This place is a bit non-standard in that it's a large courtyard, all under the \"Pyro\" name, the inside area being the restaurant - called Pyro again, but the outside area is a a bar called \"Baraki\".\n<br />There's no billboard at all btw, the place is therefore difficult to find! </p>"
+     },
+     {
+      "date": "2026-07-25 22:24:22 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "Billboards are huge posters, often fixed to a wall outside a building but can also be pole mounted. They typically feature paid advertising for third party products or businesses (eg coca cola or a bank account) or events and are mostly unrelated to the premises on which they are displayed. If you were specifically looking for some kind of direction sign, you might not realise you were seeing a billboard.",
+      "html": "<p dir=\"auto\">Billboards are huge posters, often fixed to a wall outside a building but can also be pole mounted. They typically feature paid advertising for third party products or businesses (eg coca cola or a bank account) or events and are mostly unrelated to the premises on which they are displayed. If you were specifically looking for some kind of direction sign, you might not realise you were seeing a billboard.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1095971,
+     51.5072122
+    ]
+   },
+   "properties": {
+    "id": 5399399,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5399399.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5399399/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5399399/close.json",
+    "date_created": "2026-07-16 15:18:33 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-16 15:18:33 UTC",
+      "uid": 9549957,
+      "user": "bindle203337",
+      "user_url": "https://api.openstreetmap.org/user/bindle203337",
+      "action": "opened",
+      "text": "Gated\n\nvia StreetComplete 63.2",
+      "html": "<p dir=\"auto\">Gated</p>\n\n<p dir=\"auto\">via StreetComplete 63.2</p>"
+     },
+     {
+      "date": "2026-07-24 21:20:46 UTC",
+      "uid": 73855578,
+      "user": "bindle460713",
+      "user_url": "https://api.openstreetmap.org/user/bindle460713",
+      "action": "commented",
+      "text": "I've added a gate where the note was left. When you say 'gated', do you mean that the whole park here is private access?",
+      "html": "<p dir=\"auto\">I've added a gate where the note was left. When you say 'gated', do you mean that the whole park here is private access?</p>"
+     },
+     {
+      "date": "2026-07-24 22:09:55 UTC",
+      "uid": 9549957,
+      "user": "bindle203337",
+      "user_url": "https://api.openstreetmap.org/user/bindle203337",
+      "action": "commented",
+      "text": "Yes, that entire park and the playground is not accessible for general public ",
+      "html": "<p dir=\"auto\">Yes, that entire park and the playground is not accessible for general public </p>"
+     },
+     {
+      "date": "2026-07-25 09:05:57 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "Added access=private. But there are three other entrances. Are they all gated, and where?\n\nIn particular, is https://www.openstreetmap.org/way/77830715/ still a public path between its two streets?",
+      "html": "<p dir=\"auto\">Added <a href=\"https://wiki.openstreetmap.org/wiki/Tag:access=private\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">access=private</a>. But there are three other entrances. Are they all gated, and where?</p>\n\n<p dir=\"auto\">In particular, is <a href=\"https://www.openstreetmap.org/way/77830715/\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/77830715/</a> still a public path between its two streets?</p>"
+     },
+     {
+      "date": "2026-07-25 14:14:09 UTC",
+      "uid": 9549957,
+      "user": "bindle203337",
+      "user_url": "https://api.openstreetmap.org/user/bindle203337",
+      "action": "commented",
+      "text": "I think so, don'e remember exactly. I'd hope someone local would go there and do a proper survey, add some fences to accompany the gates. I am there only once every few weeks, and often in a hurry",
+      "html": "<p dir=\"auto\">I think so, don'e remember exactly. I'd hope someone local would go there and do a proper survey, add some fences to accompany the gates. I am there only once every few weeks, and often in a hurry</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0948841,
+     51.5046935
+    ]
+   },
+   "properties": {
+    "id": 5416569,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5416569.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5416569/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5416569/close.json",
+    "date_created": "2026-07-25 10:36:01 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-25 10:36:01 UTC",
+      "uid": 99137242,
+      "user": "Dalla Krant",
+      "user_url": "https://api.openstreetmap.org/user/Dalla%20Krant",
+      "action": "opened",
+      "text": "\"not to be confused with Baraki by Pyro, which is a bar in the courtyard of the same address under the same company.\"\nOSM snapshot date: 2026-07-21T20:05:09Z\nPOI name: Pyro\nPOI types: cuisine-greek amenity-restaurant\n #CoMaps android 2026.07.16-10",
+      "html": "<p dir=\"auto\">\"not to be confused with Baraki by Pyro, which is a bar in the courtyard of the same address under the same company.\"\n<br />OSM snapshot date: 2026-07-21T20:05:09Z\n<br />POI name: Pyro\n<br />POI types: cuisine-greek amenity-restaurant\n<br /> #CoMaps android 2026.07.16-10</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0948253,
+     51.5408999
+    ]
+   },
+   "properties": {
+    "id": 5415345,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5415345.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5415345/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5415345/close.json",
+    "date_created": "2026-07-24 16:36:45 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-24 16:36:45 UTC",
+      "uid": 5783459,
+      "user": "Emric Orbeck",
+      "user_url": "https://api.openstreetmap.org/user/Emric%20Orbeck",
+      "action": "opened",
+      "text": "In context of overlay \"Places\" \u2013 house number 212\u2013220: Restaurant \u2013 https://osm.org/way/68442871 via StreetComplete 63.0:\n\nNow subdivided",
+      "html": "<p dir=\"auto\">In context of overlay \"Places\" \u2013 house number 212\u2013220: Restaurant \u2013 <a href=\"https://osm.org/way/68442871\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/68442871</a> via StreetComplete 63.0:</p>\n\n<p dir=\"auto\">Now subdivided</p>"
+     },
+     {
+      "date": "2026-07-25 08:58:37 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "Into what?",
+      "html": "<p dir=\"auto\">Into what?</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1452875,
+     51.5171586
+    ]
+   },
+   "properties": {
+    "id": 5291585,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5291585.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5291585/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5291585/close.json",
+    "date_created": "2026-05-14 09:32:12 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-05-14 09:32:12 UTC",
+      "uid": 72464593,
+      "user": "Rowanna Orbeck",
+      "user_url": "https://api.openstreetmap.org/user/Rowanna%20Orbeck",
+      "action": "opened",
+      "text": "\"According to Bing Streetside, sidewalks are present on both sides of the Dean's Mews road segment. Since this road some portion of the segment of this location is designated as a tunnel- building passage. I need clarification: should we also assign tunnel=yes to the sidewalks?\"",
+      "html": "<p dir=\"auto\">\"According to Bing Streetside, sidewalks are present on both sides of the Dean's Mews road segment. Since this road some portion of the segment of this location is designated as a tunnel- building passage. I need clarification: should we also assign <a href=\"https://wiki.openstreetmap.org/wiki/Tag:tunnel=yes\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">tunnel=yes</a> to the sidewalks?\"</p>"
+     },
+     {
+      "date": "2026-07-23 22:23:37 UTC",
+      "uid": 231225,
+      "user": "Quin Lombe",
+      "user_url": "https://api.openstreetmap.org/user/Quin%20Lombe",
+      "action": "commented",
+      "text": "If you're going to map the sidewalks separately then, yes, they will need to be tagged as tunnel=building_passage and layer=0 too.",
+      "html": "<p dir=\"auto\">If you're going to map the sidewalks separately then, yes, they will need to be tagged as <a href=\"https://wiki.openstreetmap.org/wiki/Tag:tunnel=building_passage\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">tunnel=building_passage</a> and <a href=\"https://wiki.openstreetmap.org/wiki/Tag:layer=0\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">layer=0</a> too.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1750716,
+     51.5109058
+    ]
+   },
+   "properties": {
+    "id": 5411202,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5411202.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5411202/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5411202/close.json",
+    "date_created": "2026-07-22 13:51:45 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-22 13:51:45 UTC",
+      "action": "opened",
+      "text": "This way is not starting here. \n\n#OsmAnd",
+      "html": "<p dir=\"auto\">This way is not starting here. </p>\n\n<p dir=\"auto\">#OsmAnd</p>"
+     },
+     {
+      "date": "2026-07-22 21:44:48 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "This part is tagged as a path, the rest is tagged as a footway. The distinction is often only a matter of opinion. See https://wiki.openstreetmap.org/wiki/Tag:highway%3Dpath\n\nAn editor may decide to check, but I suspect it's fine either way.",
+      "html": "<p dir=\"auto\">This part is tagged as a path, the rest is tagged as a footway. The distinction is often only a matter of opinion. See <a href=\"https://wiki.openstreetmap.org/wiki/Tag:highway%3Dpath\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">highway=path</a></p>\n\n<p dir=\"auto\">An editor may decide to check, but I suspect it's fine either way.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1493829,
+     51.5285972
+    ]
+   },
+   "properties": {
+    "id": 5411011,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5411011.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5411011/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5411011/close.json",
+    "date_created": "2026-07-22 11:58:25 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-22 11:58:25 UTC",
+      "uid": 61071013,
+      "user": "purlow852338",
+      "user_url": "https://api.openstreetmap.org/user/purlow852338",
+      "action": "opened",
+      "text": "https://www.openstreetmap.org/way/1509544930\nThe current tagging with height=* + min_height=* looks odd. Would building=roof + layer=1 + height=3.1 be better in this case?",
+      "html": "<p dir=\"auto\"><a href=\"https://www.openstreetmap.org/way/1509544930\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/1509544930</a>\n<br />The current tagging with <a href=\"https://wiki.openstreetmap.org/wiki/Key:height\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">height=*</a> + <a href=\"https://wiki.openstreetmap.org/wiki/Key:min_height\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">min_height=*</a> looks odd. Would <a href=\"https://wiki.openstreetmap.org/wiki/Tag:building=roof\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">building=roof</a> + <a href=\"https://wiki.openstreetmap.org/wiki/Tag:layer=1\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">layer=1</a> + <a href=\"https://wiki.openstreetmap.org/wiki/Tag:height=3.1\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">height=3.1</a> be better in this case?</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1245041,
+     51.5301986
+    ]
+   },
+   "properties": {
+    "id": 5409659,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5409659.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5409659/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5409659/close.json",
+    "date_created": "2026-07-21 16:38:47 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-21 16:38:47 UTC",
+      "uid": 6959659,
+      "user": "kimble20295",
+      "user_url": "https://api.openstreetmap.org/user/kimble20295",
+      "action": "opened",
+      "text": "\"cette fontaine ne semble plus utilisable / unudable\"\nOSM snapshot date: 2026-07-14T00:42:02Z\nPOI name: Captain Robert Hansler J.P. Fountain\nPOI types: amenity-drinking_water\n #organicmaps android 2026.07.15-11-FDroid",
+      "html": "<p dir=\"auto\">\"cette fontaine ne semble plus utilisable / unudable\"\n<br />OSM snapshot date: 2026-07-14T00:42:02Z\n<br />POI name: Captain Robert Hansler J.P. Fountain\n<br />POI types: amenity-drinking_water\n<br /> #organicmaps android 2026.07.15-11-FDroid</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.104623,
+     51.5158349
+    ]
+   },
+   "properties": {
+    "id": 5405788,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5405788.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5405788/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5405788/close.json",
+    "date_created": "2026-07-19 21:48:52 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-19 21:48:52 UTC",
+      "uid": 5783459,
+      "user": "Emric Orbeck",
+      "user_url": "https://api.openstreetmap.org/user/Emric%20Orbeck",
+      "action": "opened",
+      "text": "Kerb ramp\n\nvia StreetComplete 63.0",
+      "html": "<p dir=\"auto\">Kerb ramp</p>\n\n<p dir=\"auto\">via StreetComplete 63.0</p>"
+     },
+     {
+      "date": "2026-07-21 06:58:54 UTC",
+      "uid": 48965236,
+      "user": "purlow388964",
+      "user_url": "https://api.openstreetmap.org/user/purlow388964",
+      "action": "commented",
+      "text": "Do you mean this is a lowered kerb instead of a flush kerb?",
+      "html": "<p dir=\"auto\">Do you mean this is a lowered kerb instead of a flush kerb?</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0906278,
+     51.5158062
+    ]
+   },
+   "properties": {
+    "id": 5317658,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5317658.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5317658/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5317658/close.json",
+    "date_created": "2026-05-30 13:24:50 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-05-30 13:24:50 UTC",
+      "uid": 28460259,
+      "user": "dimmet3463",
+      "user_url": "https://api.openstreetmap.org/user/dimmet3463",
+      "action": "opened",
+      "text": "\"closed over 1 year ago. Currently empty as of May 2026\"\nThe place has gone or never existed. A user of Organic Maps application has reported that the POI was visible on the map (see snapshot date below), but was not found on the ground.\nOSM snapshot date: 2026-05-27T00:05:23Z\nPOI name: Nusa Kitchen\nPOI types: wheelchair-no amenity-fast_food\n #organicmaps ios 2026.05.27-11-ios",
+      "html": "<p dir=\"auto\">\"closed over 1 year ago. Currently empty as of May 2026\"\n<br />The place has gone or never existed. A user of Organic Maps application has reported that the POI was visible on the map (see snapshot date below), but was not found on the ground.\n<br />OSM snapshot date: 2026-05-27T00:05:23Z\n<br />POI name: Nusa Kitchen\n<br />POI types: wheelchair-no amenity-fast_food\n<br /> #organicmaps ios 2026.05.27-11-ios</p>"
+     },
+     {
+      "date": "2026-05-31 10:28:32 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "Removed Nusa.\n\nIs anything there now?",
+      "html": "<p dir=\"auto\">Removed Nusa.</p>\n\n<p dir=\"auto\">Is anything there now?</p>"
+     },
+     {
+      "date": "2026-05-31 12:41:23 UTC",
+      "uid": 28460259,
+      "user": "dimmet3463",
+      "user_url": "https://api.openstreetmap.org/user/dimmet3463",
+      "action": "commented",
+      "text": "No - empty shop since. ",
+      "html": "<p dir=\"auto\">No - empty shop since. </p>"
+     },
+     {
+      "date": "2026-07-20 17:10:39 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "Still empty tonight",
+      "html": "<p dir=\"auto\">Still empty tonight</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0886058,
+     51.5134784
+    ]
+   },
+   "properties": {
+    "id": 5406461,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5406461.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5406461/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5406461/close.json",
+    "date_created": "2026-07-20 08:10:16 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-20 08:10:16 UTC",
+      "uid": 565259,
+      "user": "kimble499781",
+      "user_url": "https://api.openstreetmap.org/user/kimble499781",
+      "action": "opened",
+      "text": "Are there still toilets in Bank Station?  No sign of them on a Saturday, in the main corridor that connects the entrances around Bank Junction.   Are they hidden away?  Are they past the ticket barriers? Are they weekday only?  Are they disabled only?  Survey/local knowledge needed.",
+      "html": "<p dir=\"auto\">Are there still toilets in Bank Station?  No sign of them on a Saturday, in the main corridor that connects the entrances around Bank Junction.   Are they hidden away?  Are they past the ticket barriers? Are they weekday only?  Are they disabled only?  Survey/local knowledge needed.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1048957,
+     51.513999
+    ]
+   },
+   "properties": {
+    "id": 5405897,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5405897.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5405897/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5405897/close.json",
+    "date_created": "2026-07-20 00:35:58 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-20 00:35:58 UTC",
+      "uid": 5783459,
+      "user": "Emric Orbeck",
+      "user_url": "https://api.openstreetmap.org/user/Emric%20Orbeck",
+      "action": "opened",
+      "text": "In context of overlay \"Places\" \u2013 Punch\u00a0Tavern (Pub) \u2013 https://osm.org/relation/7037852 via StreetComplete 63.0:\n\nTwo duplicate ways with slightly different areas.\n\nI didn't actually check if this pub exists ( #surveyme ) but given the phone shop does, it could only cover the larger footprint on a floor other than the ground floor.",
+      "html": "<p dir=\"auto\">In context of overlay \"Places\" \u2013 Punch&nbsp;Tavern (Pub) \u2013 <a href=\"https://osm.org/relation/7037852\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">relation/7037852</a> via StreetComplete 63.0:</p>\n\n<p dir=\"auto\">Two duplicate ways with slightly different areas.</p>\n\n<p dir=\"auto\">I didn't actually check if this pub exists ( #surveyme ) but given the phone shop does, it could only cover the larger footprint on a floor other than the ground floor.</p>"
+     },
+     {
+      "date": "2026-07-20 07:56:38 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "Punch Tavern exists -- it has a recent (June) review at https://www.tripadvisor.com/Restaurant_Review-g186338-d733252-Reviews-Punch_Tavern-London_England.html#review_1059856032\n\nAs far as I can see, the pub has two levels (0 and 1) with the difference being Timpson (on level 0 only).\n\nI'm puzzled. JOSM search finds it as a multipolygon with only one member. Yet the objects panel shows two objects with multiple differences, including the two levels and a different name variant for each.\n\nWhen this is sorted, the website https://www.urbanpubsandbars.com/venues/punch-tavern needs adding and confirms that the correct name is just Punch Tavern (no The).",
+      "html": "<p dir=\"auto\">Punch Tavern exists -- it has a recent (June) review at <a href=\"https://www.tripadvisor.com/Restaurant_Review-g186338-d733252-Reviews-Punch_Tavern-London_England.html#review_1059856032\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://www.tripadvisor.com/Restaurant_Review-g186338-d733252-Reviews-Punch_Tavern-London_England.html#review_1059856032</a></p>\n\n<p dir=\"auto\">As far as I can see, the pub has two levels (0 and 1) with the difference being Timpson (on level 0 only).</p>\n\n<p dir=\"auto\">I'm puzzled. JOSM search finds it as a multipolygon with only one member. Yet the objects panel shows two objects with multiple differences, including the two levels and a different name variant for each.</p>\n\n<p dir=\"auto\">When this is sorted, the website <a href=\"https://www.urbanpubsandbars.com/venues/punch-tavern\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://www.urbanpubsandbars.com/venues/punch-tavern</a> needs adding and confirms that the correct name is just Punch Tavern (no The).</p>"
+     },
+     {
+      "date": "2026-07-20 08:01:04 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "tSmart is similarly defined as a multipolygon with only one member. Yet that seems to be only ground floor so no obvious need for a multipolygon at all.",
+      "html": "<p dir=\"auto\">tSmart is similarly defined as a multipolygon with only one member. Yet that seems to be only ground floor so no obvious need for a multipolygon at all.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1054871,
+     51.5199304
+    ]
+   },
+   "properties": {
+    "id": 5292028,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5292028.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5292028/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5292028/close.json",
+    "date_created": "2026-05-14 14:01:54 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-05-14 14:01:54 UTC",
+      "uid": 76045996,
+      "user": "kimble2436",
+      "user_url": "https://api.openstreetmap.org/user/kimble2436",
+      "action": "opened",
+      "text": "\"Wrong side\"\nThe place has gone or never existed. A user of Organic Maps application has reported that the POI was visible on the map (see snapshot date below), but was not found on the ground.\nOSM snapshot date: 2026-05-03T01:52:52Z\nPOI name: Snap Inc.\nPOI types: office-company\n #organicmaps ios 2026.05.08-1-ios",
+      "html": "<p dir=\"auto\">\"Wrong side\"\n<br />The place has gone or never existed. A user of Organic Maps application has reported that the POI was visible on the map (see snapshot date below), but was not found on the ground.\n<br />OSM snapshot date: 2026-05-03T01:52:52Z\n<br />POI name: Snap Inc.\n<br />POI types: office-company\n<br /> #organicmaps ios 2026.05.08-1-ios</p>"
+     },
+     {
+      "date": "2026-07-20 00:30:44 UTC",
+      "uid": 5783459,
+      "user": "Emric Orbeck",
+      "user_url": "https://api.openstreetmap.org/user/Emric%20Orbeck",
+      "action": "commented",
+      "text": "There's definitely one as mapped on the South side. I didn't personally check they don't have a second office here too.",
+      "html": "<p dir=\"auto\">There's definitely one as mapped on the South side. I didn't personally check they don't have a second office here too.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1050843,
+     51.520108
+    ]
+   },
+   "properties": {
+    "id": 5405813,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5405813.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5405813/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5405813/close.json",
+    "date_created": "2026-07-19 22:18:42 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-19 22:18:42 UTC",
+      "uid": 5783459,
+      "user": "Emric Orbeck",
+      "user_url": "https://api.openstreetmap.org/user/Emric%20Orbeck",
+      "action": "opened",
+      "text": "Unable to answer \"Is this still here?\" \u2013 Department\u00a0of\u00a0Coffee\u00a0and\u00a0Social\u00a0Affairs (Cafe) \u2013 https://osm.org/way/504896158 via StreetComplete 63.0:\n\nI think this might be Cafe Pronto or there's something up with the mapping of businesses around here...\n#surveyme",
+      "html": "<p dir=\"auto\">Unable to answer \"Is this still here?\" \u2013 Department&nbsp;of&nbsp;Coffee&nbsp;and&nbsp;Social&nbsp;Affairs (Cafe) \u2013 <a href=\"https://osm.org/way/504896158\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/504896158</a> via StreetComplete 63.0:</p>\n\n<p dir=\"auto\">I think this might be Cafe Pronto or there's something up with the mapping of businesses around here...\n<br />#surveyme</p>"
+     },
+     {
+      "date": "2026-07-19 23:42:14 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "Needs checking. At least two directories think it's Triple Two Coffee.",
+      "html": "<p dir=\"auto\">Needs checking. At least two directories think it's Triple Two Coffee.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0781839,
+     51.5266855
+    ]
+   },
+   "properties": {
+    "id": 5404431,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5404431.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5404431/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5404431/close.json",
+    "date_created": "2026-07-19 08:15:29 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-19 08:15:29 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "opened",
+      "text": "Presumed numbering error -- likely to be 129 and/or 130",
+      "html": "<p dir=\"auto\">Presumed numbering error -- likely to be 129 and/or 130</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1397981,
+     51.4967768
+    ]
+   },
+   "properties": {
+    "id": 4429073,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/4429073.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/4429073/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/4429073/close.json",
+    "date_created": "2024-09-10 17:30:07 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2024-09-10 17:30:07 UTC",
+      "uid": 4640593,
+      "user": "jarrow843597",
+      "user_url": "https://api.openstreetmap.org/user/jarrow843597",
+      "action": "opened",
+      "text": "Has Clarks closed here? It isn't on the website.",
+      "html": "<p dir=\"auto\">Has Clarks closed here? It isn't on the website.</p>"
+     },
+     {
+      "date": "2026-07-18 07:31:35 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "Currently closed but its not clear whether that's permanent. Sign says \"closing our doors for now\"",
+      "html": "<p dir=\"auto\">Currently closed but its not clear whether that's permanent. Sign says \"closing our doors for now\"</p>"
+     },
+     {
+      "date": "2026-07-19 07:56:52 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "Ignore that. Photo doesn't match adjacent shops so probably GPS error. Small print on photo (not legible from where I was standing) suggests it is probably of https://www.openstreetmap.org/node/5197677087/",
+      "html": "<p dir=\"auto\">Ignore that. Photo doesn't match adjacent shops so probably GPS error. Small print on photo (not legible from where I was standing) suggests it is probably of <a href=\"https://www.openstreetmap.org/node/5197677087/\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/5197677087/</a></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0769266,
+     51.5234536
+    ]
+   },
+   "properties": {
+    "id": 5401447,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5401447.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5401447/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5401447/close.json",
+    "date_created": "2026-07-17 19:16:22 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-17 19:16:22 UTC",
+      "uid": 932948,
+      "user": "orrick335",
+      "user_url": "https://api.openstreetmap.org/user/orrick335",
+      "action": "opened",
+      "text": "Add stairs back down to toilets from level 1 to ground level: metal, 2 x 8 steps.\n\nvia StreetComplete 63.2",
+      "html": "<p dir=\"auto\">Add stairs back down to toilets from level 1 to ground level: metal, 2 x 8 steps.</p>\n\n<p dir=\"auto\">via StreetComplete 63.2</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0775811,
+     51.524108
+    ]
+   },
+   "properties": {
+    "id": 5401446,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5401446.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5401446/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5401446/close.json",
+    "date_created": "2026-07-17 19:16:22 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-17 19:16:22 UTC",
+      "uid": 932948,
+      "user": "orrick335",
+      "user_url": "https://api.openstreetmap.org/user/orrick335",
+      "action": "opened",
+      "text": "Add ground level path to shop, with door on the street side\n\nvia StreetComplete 63.2",
+      "html": "<p dir=\"auto\">Add ground level path to shop, with door on the street side</p>\n\n<p dir=\"auto\">via StreetComplete 63.2</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0775749,
+     51.5240316
+    ]
+   },
+   "properties": {
+    "id": 5401445,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5401445.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5401445/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5401445/close.json",
+    "date_created": "2026-07-17 19:16:21 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-17 19:16:21 UTC",
+      "uid": 932948,
+      "user": "orrick335",
+      "user_url": "https://api.openstreetmap.org/user/orrick335",
+      "action": "opened",
+      "text": "Unable to answer \"Do you need to pay to enter here?\" \u2013 Howard\u00a0Griffin\u00a0Gallery (Art\u00a0Gallery) \u2013 https://osm.org/way/164599237 via StreetComplete 63.2:\n\nDoes not exist. Also, POI / shop only on ground floor: separate from building.",
+      "html": "<p dir=\"auto\">Unable to answer \"Do you need to pay to enter here?\" \u2013 Howard&nbsp;Griffin&nbsp;Gallery (Art&nbsp;Gallery) \u2013 <a href=\"https://osm.org/way/164599237\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/164599237</a> via StreetComplete 63.2:</p>\n\n<p dir=\"auto\">Does not exist. Also, POI / shop only on ground floor: separate from building.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0764543,
+     51.5247099
+    ]
+   },
+   "properties": {
+    "id": 5401437,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5401437.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5401437/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5401437/close.json",
+    "date_created": "2026-07-17 19:16:13 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-17 19:16:13 UTC",
+      "uid": 932948,
+      "user": "orrick335",
+      "user_url": "https://api.openstreetmap.org/user/orrick335",
+      "action": "opened",
+      "text": "This crossing is a mess of too many ways, it should be simplified\n\nvia StreetComplete 63.2",
+      "html": "<p dir=\"auto\">This crossing is a mess of too many ways, it should be simplified</p>\n\n<p dir=\"auto\">via StreetComplete 63.2</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1251879,
+     51.5132102
+    ]
+   },
+   "properties": {
+    "id": 5400786,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5400786.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5400786/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5400786/close.json",
+    "date_created": "2026-07-17 13:02:03 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-17 13:02:03 UTC",
+      "uid": 57403967,
+      "user": "kimble913281",
+      "user_url": "https://api.openstreetmap.org/user/kimble913281",
+      "action": "opened",
+      "text": "\"maybe it should be \"office\"\"\nOSM snapshot date: 2026-06-24T00:53:17Z\nPOI name: The Conduit\nPOI types: amenity-conference_centre internet_access-wlan\n #organicmaps ios 2026.06.24-17-ios",
+      "html": "<p dir=\"auto\">\"maybe it should be \"office\"\"\n<br />OSM snapshot date: 2026-06-24T00:53:17Z\n<br />POI name: The Conduit\n<br />POI types: amenity-conference_centre internet_access-wlan\n<br /> #organicmaps ios 2026.06.24-17-ios</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1251879,
+     51.5132102
+    ]
+   },
+   "properties": {
+    "id": 5400785,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5400785.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5400785/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5400785/close.json",
+    "date_created": "2026-07-17 13:02:02 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-17 13:02:02 UTC",
+      "uid": 57403967,
+      "user": "kimble913281",
+      "user_url": "https://api.openstreetmap.org/user/kimble913281",
+      "action": "opened",
+      "text": "\"it\u2019s a coworking space, i am not sure about the OSM categorization it should fall into\"\nOSM snapshot date: 2026-06-24T00:53:17Z\nPOI name: The Conduit\nPOI types: amenity-conference_centre internet_access-wlan\n #organicmaps ios 2026.06.24-17-ios",
+      "html": "<p dir=\"auto\">\"it\u2019s a coworking space, i am not sure about the OSM categorization it should fall into\"\n<br />OSM snapshot date: 2026-06-24T00:53:17Z\n<br />POI name: The Conduit\n<br />POI types: amenity-conference_centre internet_access-wlan\n<br /> #organicmaps ios 2026.06.24-17-ios</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0574818,
+     51.5392696
+    ]
+   },
+   "properties": {
+    "id": 5247212,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5247212.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5247212/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5247212/close.json",
+    "date_created": "2026-04-12 15:26:17 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-04-12 15:26:17 UTC",
+      "uid": 97807184,
+      "user": "lorrick026925",
+      "user_url": "https://api.openstreetmap.org/user/lorrick026925",
+      "action": "opened",
+      "text": "\"There are three stations.\"\nOSM snapshot date: 2026-03-21T17:13:14Z\nPOI has no name\nPOI types: amenity-bicycle_parking\n #CoMaps android 2026.04.07-8-FDroid",
+      "html": "<p dir=\"auto\">\"There are three stations.\"\n<br />OSM snapshot date: 2026-03-21T17:13:14Z\n<br />POI has no name\n<br />POI types: amenity-bicycle_parking\n<br /> #CoMaps android 2026.04.07-8-FDroid</p>"
+     },
+     {
+      "date": "2026-07-17 09:49:32 UTC",
+      "uid": 718227,
+      "user": "dimmet462409",
+      "user_url": "https://api.openstreetmap.org/user/dimmet462409",
+      "action": "commented",
+      "text": "Thanks for adding it, do you mean space for 3 bikes to park?",
+      "html": "<p dir=\"auto\">Thanks for adding it, do you mean space for 3 bikes to park?</p>"
+     },
+     {
+      "date": "2026-07-17 10:26:38 UTC",
+      "uid": 97807184,
+      "user": "lorrick026925",
+      "user_url": "https://api.openstreetmap.org/user/lorrick026925",
+      "action": "commented",
+      "text": "I believe I wrote stations because I thought they were three charging points, but they could've been parking? They looked odd either way. Maybe worth leaving a note for a future survey?",
+      "html": "<p dir=\"auto\">I believe I wrote stations because I thought they were three charging points, but they could've been parking? They looked odd either way. Maybe worth leaving a note for a future survey?</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1563835,
+     51.5015301
+    ]
+   },
+   "properties": {
+    "id": 465052,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/465052.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/465052/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/465052/close.json",
+    "date_created": "2015-11-09 06:56:30 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2015-11-09 06:56:30 UTC",
+      "action": "opened",
+      "text": "http://www.openstreetmap.org/relation/2223191 - this category relation clearly violates http://wiki.openstreetmap.org/wiki/Relations/Relations_are_not_Categories\n\nIt is likely that it should be deleted.",
+      "html": "<p dir=\"auto\"><a href=\"http://www.openstreetmap.org/relation/2223191\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">relation/2223191</a> - this category relation clearly violates <a href=\"http://wiki.openstreetmap.org/wiki/Relations/Relations_are_not_Categories\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">osm.wiki/Relations/Relations_are_not_Categories</a></p>\n\n<p dir=\"auto\">It is likely that it should be deleted.</p>"
+     },
+     {
+      "date": "2026-07-17 09:31:43 UTC",
+      "uid": 95830917,
+      "user": "purlow935284",
+      "user_url": "https://api.openstreetmap.org/user/purlow935284",
+      "action": "commented",
+      "text": "agreed, need someone with JOSM and time to do it #fixme",
+      "html": "<p dir=\"auto\">agreed, need someone with JOSM and time to do it #fixme</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1279496,
+     51.5074677
+    ]
+   },
+   "properties": {
+    "id": 5397956,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5397956.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5397956/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5397956/close.json",
+    "date_created": "2026-07-15 18:14:06 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-15 18:14:06 UTC",
+      "uid": 7424926,
+      "user": "nettling700901",
+      "user_url": "https://api.openstreetmap.org/user/nettling700901",
+      "action": "opened",
+      "text": "There are 3 very short sections in the road of this roundabout that are named Charing Cross. All the other sections were renamed to King Charles I Island. If that is correct (see below), were those just forgotten?\nSection 1: https://www.openstreetmap.org/way/49796163\nSection 2: https://www.openstreetmap.org/way/43118734\nSection 3: https://www.openstreetmap.org/way/4256531\n\nI'm not even sure if it should have been renamed to (only) King Charles I Island. It's not indicated that way on lots of maps. But if that is correct, leaving these 3 short sections with the old name seems wrong.\n\nIt was edited on 10 December 2025 with reference to \"According to how Knowledge of London calls it.\".\nChangeset: https://www.openstreetmap.org/changeset/175777381\nBut I couldn't find that reference when looking up Knowledge of London and that street. I could only find various Knowledge of London related websites talking about the island using that name, but not specifically the road.",
+      "html": "<p dir=\"auto\">There are 3 very short sections in the road of this roundabout that are named Charing Cross. All the other sections were renamed to King Charles I Island. If that is correct (see below), were those just forgotten?\n<br />Section 1: <a href=\"https://www.openstreetmap.org/way/49796163\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/49796163</a>\n<br />Section 2: <a href=\"https://www.openstreetmap.org/way/43118734\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/43118734</a>\n<br />Section 3: <a href=\"https://www.openstreetmap.org/way/4256531\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/4256531</a></p>\n\n<p dir=\"auto\">I'm not even sure if it should have been renamed to (only) King Charles I Island. It's not indicated that way on lots of maps. But if that is correct, leaving these 3 short sections with the old name seems wrong.</p>\n\n<p dir=\"auto\">It was edited on 10 December 2025 with reference to \"According to how Knowledge of London calls it.\".\n<br />Changeset: <a href=\"https://www.openstreetmap.org/changeset/175777381\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">changeset/175777381</a>\n<br />But I couldn't find that reference when looking up Knowledge of London and that street. I could only find various Knowledge of London related websites talking about the island using that name, but not specifically the road.</p>"
+     },
+     {
+      "date": "2026-07-16 04:25:20 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "Is there any signage? That is what we should be mapping. \n\nIf signage about the island is only on the island side of the road, then it should probably be applied to the island rather than the road. If there is signage on the outside of the road, then it should be applied to the road. \n\nIf there is no signage then it is at least arguable whether it should be mapped at all, but if the name if the island is well known then sensible logic would be to map it to the island only but revert the road around it to its original name.",
+      "html": "<p dir=\"auto\">Is there any signage? That is what we should be mapping. </p>\n\n<p dir=\"auto\">If signage about the island is only on the island side of the road, then it should probably be applied to the island rather than the road. If there is signage on the outside of the road, then it should be applied to the road. </p>\n\n<p dir=\"auto\">If there is no signage then it is at least arguable whether it should be mapped at all, but if the name if the island is well known then sensible logic would be to map it to the island only but revert the road around it to its original name.</p>"
+     },
+     {
+      "date": "2026-07-16 22:05:45 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "But a web search finds: No results found for \"King Charles I Island\" and https://en.wikipedia.org/wiki/Equestrian_statue_of_Charles_I,_Charing_Cross gives the address as Charing Cross rather than KC1 Island. So I think the name of the island is de-facto NOT well known so the change should probably be reverted.",
+      "html": "<p dir=\"auto\">But a web search finds: No results found for \"King Charles I Island\" and <a href=\"https://en.wikipedia.org/wiki/Equestrian_statue_of_Charles_I,_Charing_Cross\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://en.wikipedia.org/wiki/Equestrian_statue_of_Charles_I,_Charing_Cross</a> gives the address as Charing Cross rather than KC1 Island. So I think the name of the island is de-facto NOT well known so the change should probably be reverted.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.09784,
+     51.51567
+    ]
+   },
+   "properties": {
+    "id": 4357253,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/4357253.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/4357253/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/4357253/close.json",
+    "date_created": "2024-07-29 14:12:25 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2024-07-29 14:12:25 UTC",
+      "action": "opened",
+      "text": "Building current being converted, new tenant will be HSBC",
+      "html": "<p dir=\"auto\">Building current being converted, new tenant will be HSBC</p>"
+     },
+     {
+      "date": "2026-07-16 20:12:56 UTC",
+      "uid": 21785419,
+      "user": "frowe791920",
+      "user_url": "https://api.openstreetmap.org/user/frowe791920",
+      "action": "commented",
+      "text": "true, but map should only be updated when they move\n\nits the HQ so not a bank\nhttps://www.standard.co.uk/business/business-news/hsbc-to-leave-canary-wharf-tower-by-2027-b1090148.html",
+      "html": "<p dir=\"auto\">true, but map should only be updated when they move</p>\n\n<p dir=\"auto\">its the HQ so not a bank\n<br /><a href=\"https://www.standard.co.uk/business/business-news/hsbc-to-leave-canary-wharf-tower-by-2027-b1090148.html\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">https://www.standard.co.uk/business/business-news/hsbc-to-leave-canary-wharf-tower-by-2027-b1090148.html</a></p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1282727,
+     51.5081687
+    ]
+   },
+   "properties": {
+    "id": 5399385,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5399385.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5399385/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5399385/close.json",
+    "date_created": "2026-07-16 15:13:00 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-16 15:13:00 UTC",
+      "action": "opened",
+      "text": "Public seating near the north edge (in front of the National Gallery steps) appears reduced compared to older satellite imagery \u2014 fewer benches visible in current Bing aerial layer. Local mappers may want to verify and update amenity=bench tags in this area.",
+      "html": "<p dir=\"auto\">Public seating near the north edge (in front of the National Gallery steps) appears reduced compared to older satellite imagery \u2014 fewer benches visible in current Bing aerial layer. Local mappers may want to verify and update <a href=\"https://wiki.openstreetmap.org/wiki/Tag:amenity=bench\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">amenity=bench</a> tags in this area.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1261523,
+     51.5009791
+    ]
+   },
+   "properties": {
+    "id": 5397975,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5397975.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5397975/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5397975/close.json",
+    "date_created": "2026-07-15 18:36:57 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-15 18:36:57 UTC",
+      "uid": 7424926,
+      "user": "nettling700901",
+      "user_url": "https://api.openstreetmap.org/user/nettling700901",
+      "action": "opened",
+      "text": "Is this very short section of road really named Saint Margaret Street?\nhttps://www.openstreetmap.org/way/406370789\n\nIt's really short and completely separate from the (currently 3) sections of St. Margaret Street (note there it's St. not Saint) a bit further south (to the southeast of Parliament Square).\n\nIn other maps, that is either Parliament Square or the whole eastern part from there to the lower Saint Margaret Street, it's all Saint Margaret Street and not Parliament Square.\n\nIf the current situation is really correct (even the St. vs. Saint difference), a note=* tag should be added to this street segment and the eastern Parliament Square section, as it looks wrong and will help future mappers looking at this again.",
+      "html": "<p dir=\"auto\">Is this very short section of road really named Saint Margaret Street?\n<br /><a href=\"https://www.openstreetmap.org/way/406370789\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/406370789</a></p>\n\n<p dir=\"auto\">It's really short and completely separate from the (currently 3) sections of St. Margaret Street (note there it's St. not Saint) a bit further south (to the southeast of Parliament Square).</p>\n\n<p dir=\"auto\">In other maps, that is either Parliament Square or the whole eastern part from there to the lower Saint Margaret Street, it's all Saint Margaret Street and not Parliament Square.</p>\n\n<p dir=\"auto\">If the current situation is really correct (even the St. vs. Saint difference), a <a href=\"https://wiki.openstreetmap.org/wiki/Key:note\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">note=*</a> tag should be added to this street segment and the eastern Parliament Square section, as it looks wrong and will help future mappers looking at this again.</p>"
+     },
+     {
+      "date": "2026-07-16 04:34:01 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "This looks like a mapping error to me.\n\nAs usual, the first question should be what do the signs say and exactly where are they. \n\nThere are no buildings here to confirm an address and it seems unlikely that there is a sign with that name here, in which case it should be presumed to be a mistake.",
+      "html": "<p dir=\"auto\">This looks like a mapping error to me.</p>\n\n<p dir=\"auto\">As usual, the first question should be what do the signs say and exactly where are they. </p>\n\n<p dir=\"auto\">There are no buildings here to confirm an address and it seems unlikely that there is a sign with that name here, in which case it should be presumed to be a mistake.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0819686,
+     51.475003
+    ]
+   },
+   "properties": {
+    "id": 5394278,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5394278.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5394278/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5394278/close.json",
+    "date_created": "2026-07-13 20:51:49 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-13 20:51:49 UTC",
+      "uid": 83264357,
+      "user": "jarrow901940",
+      "user_url": "https://api.openstreetmap.org/user/jarrow901940",
+      "action": "opened",
+      "text": "Ramp for steps\n\nvia StreetComplete 63.2",
+      "html": "<p dir=\"auto\">Ramp for steps</p>\n\n<p dir=\"auto\">via StreetComplete 63.2</p>"
+     },
+     {
+      "date": "2026-07-14 09:34:19 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "No steps are currently mapped here. Should there be steps with a bypass ramp?",
+      "html": "<p dir=\"auto\">No steps are currently mapped here. Should there be steps with a bypass ramp?</p>"
+     },
+     {
+      "date": "2026-07-14 10:02:24 UTC",
+      "uid": 83264357,
+      "user": "jarrow901940",
+      "user_url": "https://api.openstreetmap.org/user/jarrow901940",
+      "action": "commented",
+      "text": "The steps are slightly further west (left), I modeled a footpath as ramp yesterday",
+      "html": "<p dir=\"auto\">The steps are slightly further west (left), I modeled a footpath as ramp yesterday</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1255368,
+     51.5174837
+    ]
+   },
+   "properties": {
+    "id": 5392587,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5392587.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5392587/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5392587/close.json",
+    "date_created": "2026-07-12 23:30:47 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-12 23:30:47 UTC",
+      "uid": 10955333,
+      "user": "dimmet273352",
+      "user_url": "https://api.openstreetmap.org/user/dimmet273352",
+      "action": "opened",
+      "text": "\"closed permanently \"\nThe place has gone or never existed. A user of Organic Maps application has reported that the POI was visible on the map (see snapshot date below), but was not found on the ground.\nOSM snapshot date: 2026-05-03T01:52:52Z\nPOI name: Noisette\nPOI types: amenity-cafe\n #organicmaps ios 2026.06.24-17-ios",
+      "html": "<p dir=\"auto\">\"closed permanently \"\n<br />The place has gone or never existed. A user of Organic Maps application has reported that the POI was visible on the map (see snapshot date below), but was not found on the ground.\n<br />OSM snapshot date: 2026-05-03T01:52:52Z\n<br />POI name: Noisette\n<br />POI types: amenity-cafe\n<br /> #organicmaps ios 2026.06.24-17-ios</p>"
+     },
+     {
+      "date": "2026-07-13 06:59:00 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "Removed Noisette. Is anything else there now?",
+      "html": "<p dir=\"auto\">Removed Noisette. Is anything else there now?</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.0942126,
+     51.4815387
+    ]
+   },
+   "properties": {
+    "id": 5390681,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5390681.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5390681/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5390681/close.json",
+    "date_created": "2026-07-12 10:39:57 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-12 10:39:57 UTC",
+      "uid": 98087567,
+      "user": "frowe50651",
+      "user_url": "https://api.openstreetmap.org/user/frowe50651",
+      "action": "opened",
+      "text": "\"Electronics recycling only\"\nOSM snapshot date: 2026-06-03T15:31:04Z\nPOI has no name\nPOI types: amenity-recycling-container\n #CoMaps android 2026.06.05-11-FDroid",
+      "html": "<p dir=\"auto\">\"Electronics recycling only\"\n<br />OSM snapshot date: 2026-06-03T15:31:04Z\n<br />POI has no name\n<br />POI types: amenity-recycling-container\n<br /> #CoMaps android 2026.06.05-11-FDroid</p>"
+     },
+     {
+      "date": "2026-07-12 22:04:16 UTC",
+      "uid": 87114,
+      "user": "gilder5921",
+      "user_url": "https://api.openstreetmap.org/user/gilder5921",
+      "action": "commented",
+      "text": "I've provisionally tagged it recycling:electrical_appliances=yes.\n\nDoes that seem correct, or does signage or size restrict it more specifically? See https://wiki.openstreetmap.org/wiki/Tag:amenity%3Drecycling for other available options.",
+      "html": "<p dir=\"auto\">I've provisionally tagged it <a href=\"https://wiki.openstreetmap.org/wiki/Tag:recycling:electrical_appliances=yes\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">recycling:electrical_appliances=yes</a>.</p>\n\n<p dir=\"auto\">Does that seem correct, or does signage or size restrict it more specifically? See <a href=\"https://wiki.openstreetmap.org/wiki/Tag:amenity%3Drecycling\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">amenity=recycling</a> for other available options.</p>"
+     },
+     {
+      "date": "2026-07-12 22:38:09 UTC",
+      "uid": 98087567,
+      "user": "frowe50651",
+      "user_url": "https://api.openstreetmap.org/user/frowe50651",
+      "action": "commented",
+      "text": "Thanks, it will take small electrical appliances, computers and mobile phones. TVs might fit, haven't tried. White goods: unlikely. Also, loose batteries are forbidden.\n\nThanks for tagging!",
+      "html": "<p dir=\"auto\">Thanks, it will take small electrical appliances, computers and mobile phones. TVs might fit, haven't tried. White goods: unlikely. Also, loose batteries are forbidden.</p>\n\n<p dir=\"auto\">Thanks for tagging!</p>"
+     },
+     {
+      "date": "2026-07-12 22:39:50 UTC",
+      "uid": 98087567,
+      "user": "frowe50651",
+      "user_url": "https://api.openstreetmap.org/user/frowe50651",
+      "action": "commented",
+      "text": "Oh, and I think it can take lightbulbs, but would need someone to check. Should have got a photo, sorry.",
+      "html": "<p dir=\"auto\">Oh, and I think it can take lightbulbs, but would need someone to check. Should have got a photo, sorry.</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1127074,
+     51.4826949
+    ]
+   },
+   "properties": {
+    "id": 5391396,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5391396.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5391396/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5391396/close.json",
+    "date_created": "2026-07-12 15:45:44 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-12 15:45:44 UTC",
+      "uid": 83264357,
+      "user": "jarrow901940",
+      "user_url": "https://api.openstreetmap.org/user/jarrow901940",
+      "action": "opened",
+      "text": "Unable to answer \"What is the width of the opening here?\" \u2013 Gate \u2013 https://osm.org/node/4259478166 via StreetComplete 63.2:\n\nConstruction site",
+      "html": "<p dir=\"auto\">Unable to answer \"What is the width of the opening here?\" \u2013 Gate \u2013 <a href=\"https://osm.org/node/4259478166\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/4259478166</a> via StreetComplete 63.2:</p>\n\n<p dir=\"auto\">Construction site</p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1128724,
+     51.4825885
+    ]
+   },
+   "properties": {
+    "id": 5390834,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5390834.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5390834/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5390834/close.json",
+    "date_created": "2026-07-12 11:51:56 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-12 11:51:56 UTC",
+      "uid": 83264357,
+      "user": "jarrow901940",
+      "user_url": "https://api.openstreetmap.org/user/jarrow901940",
+      "action": "opened",
+      "text": "Unable to answer \"What is the width of the opening here?\" \u2013 Gate \u2013 https://osm.org/node/4259478163 via StreetComplete 63.2:\n\nClosed due to construction ",
+      "html": "<p dir=\"auto\">Unable to answer \"What is the width of the opening here?\" \u2013 Gate \u2013 <a href=\"https://osm.org/node/4259478163\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">node/4259478163</a> via StreetComplete 63.2:</p>\n\n<p dir=\"auto\">Closed due to construction </p>"
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -0.1254366,
+     51.527821
+    ]
+   },
+   "properties": {
+    "id": 5389019,
+    "url": "https://api.openstreetmap.org/api/0.6/notes/5389019.json",
+    "comment_url": "https://api.openstreetmap.org/api/0.6/notes/5389019/comment.json",
+    "close_url": "https://api.openstreetmap.org/api/0.6/notes/5389019/close.json",
+    "date_created": "2026-07-11 16:28:39 UTC",
+    "status": "open",
+    "comments": [
+     {
+      "date": "2026-07-11 16:28:39 UTC",
+      "uid": 83264357,
+      "user": "jarrow901940",
+      "user_url": "https://api.openstreetmap.org/user/jarrow901940",
+      "action": "opened",
+      "text": "Unable to answer \"Do you have to pay to use this toilet?\" \u2013 on level 0: Toilets \u2013 https://osm.org/way/565921961 via StreetComplete 63.2:\n\nConstruction site, most likely not there anymore ",
+      "html": "<p dir=\"auto\">Unable to answer \"Do you have to pay to use this toilet?\" \u2013 on level 0: Toilets \u2013 <a href=\"https://osm.org/way/565921961\" rel=\"nofollow noopener noreferrer\" dir=\"auto\">way/565921961</a> via StreetComplete 63.2:</p>\n\n<p dir=\"auto\">Construction site, most likely not there anymore </p>"
+     }
+    ]
+   }
+  }
+ ]
+}

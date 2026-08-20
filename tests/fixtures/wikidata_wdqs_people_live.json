@@ -1,0 +1,1532 @@
+{
+  "head" : {
+    "vars" : [ "item", "itemLabel", "dob", "image", "pobLabel", "pobCoord", "residenceLabel", "residenceCoord", "employerLabel", "hqLabel", "hqCoord" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-97.151666666 25.996944444)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Boca Chica"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "SpaceX"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-76.481111111 44.230555555)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Kingston"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "SpaceX"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-118.44778 34.08333)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bel Air"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "SpaceX"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-106.0 55.0)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Saskatchewan"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "SpaceX"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-97.151666666 25.996944444)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Boca Chica"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Tesla"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-76.481111111 44.230555555)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Kingston"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Tesla"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-118.44778 34.08333)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bel Air"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Tesla"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-106.0 55.0)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Saskatchewan"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Tesla"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-97.151666666 25.996944444)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Boca Chica"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "PayPal"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-76.481111111 44.230555555)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Kingston"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "PayPal"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-118.44778 34.08333)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bel Air"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "PayPal"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-106.0 55.0)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Saskatchewan"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "PayPal"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-97.151666666 25.996944444)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Boca Chica"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "SolarCity"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-76.481111111 44.230555555)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Kingston"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "SolarCity"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-118.44778 34.08333)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bel Air"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "SolarCity"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-106.0 55.0)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Saskatchewan"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "SolarCity"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-97.151666666 25.996944444)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Boca Chica"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "OpenAI"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-76.481111111 44.230555555)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Kingston"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "OpenAI"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-118.44778 34.08333)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bel Air"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "OpenAI"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-106.0 55.0)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Saskatchewan"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "OpenAI"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-97.151666666 25.996944444)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Boca Chica"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The Boring Company"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-76.481111111 44.230555555)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Kingston"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The Boring Company"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-118.44778 34.08333)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bel Air"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The Boring Company"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-106.0 55.0)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Saskatchewan"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The Boring Company"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-97.151666666 25.996944444)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Boca Chica"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Neuralink"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-76.481111111 44.230555555)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Kingston"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Neuralink"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-118.44778 34.08333)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bel Air"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Neuralink"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-106.0 55.0)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Saskatchewan"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Neuralink"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-97.151666666 25.996944444)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Boca Chica"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Department of Government Efficiency"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-76.481111111 44.230555555)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Kingston"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Department of Government Efficiency"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-118.44778 34.08333)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bel Air"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Department of Government Efficiency"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999000317"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Marlow%20Zennorwyn%20%2822222222222%29%20%28cropped%202%29%20%28b%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1969-11-14T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(28.188055555 -25.746388888)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-106.0 55.0)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Marlow Zennorwyn"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pretoria"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Saskatchewan"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Department of Government Efficiency"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q478214"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Gigafactory%20Texas%20Building%201%20June%202022.jpg"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Tesla"
+      },
+      "hqCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-97.733333333 30.3)"
+      },
+      "hqLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Austin"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q999005284"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Hesper%20Brackhollow%20at%20the%20European%20Commission%20-%202025%20-%20P000000-000000%20%28cropped%29.jpg"
+      },
+      "dob" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1955-10-28T00:00:00Z"
+      },
+      "pobCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-122.33 47.605)"
+      },
+      "residenceCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-122.242 47.6278)"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Hesper Brackhollow"
+      },
+      "pobLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Seattle"
+      },
+      "residenceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Hesper Brackhollow's house"
+      },
+      "employerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Brackhollow Foundation"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q95"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Googleplex%20HQ%20%28cropped%29.jpg"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Google"
+      },
+      "hqCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-122.084442 37.422053)"
+      },
+      "hqLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Googleplex"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q95"
+      },
+      "image" : {
+        "type" : "uri",
+        "value" : "http://commons.wikimedia.org/wiki/Special:FilePath/Googleplex%20HQ%20%28cropped%29.jpg"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Google"
+      },
+      "hqCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-122.041944444 37.392777777)"
+      },
+      "hqLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mountain View"
+      }
+    } ]
+  }
+}

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><getVesselSummaryXMLStringResponse xmlns="https://cgmix.uscg.mil"><getVesselSummaryXMLStringResult>&lt;NewDataSet&gt;
+  &lt;VesselSummary&gt;
+    &lt;VesselId&gt;639884&lt;/VesselId&gt;
+    &lt;VesselName&gt;QUEEN MARY 2&lt;/VesselName&gt;
+    &lt;VesselCallSign&gt;ZCEF6&lt;/VesselCallSign&gt;
+    &lt;ServiceType&gt;Passenger (Inspected)&lt;/ServiceType&gt;
+    &lt;ConstructionCompletedYear&gt;2003&lt;/ConstructionCompletedYear&gt;
+    &lt;StatusLookupName&gt;Active&lt;/StatusLookupName&gt;
+    &lt;Identification&gt;9241061&lt;/Identification&gt;
+    &lt;ManufacturerHullNumber&gt;G32&lt;/ManufacturerHullNumber&gt;
+    &lt;CountryLookupName&gt;BERMUDA&lt;/CountryLookupName&gt;
+  &lt;/VesselSummary&gt;
+&lt;/NewDataSet&gt;</getVesselSummaryXMLStringResult></getVesselSummaryXMLStringResponse></soap:Body></soap:Envelope>
