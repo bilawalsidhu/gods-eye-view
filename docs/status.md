@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-23. This is the only document expected to churn.
+Last updated: 2026-08-24. This is the only document expected to churn.
 
 Nothing goes in **Works** without pasted output from a command that was actually run. The phase 4
 figures came off one verification pass on 2026-08-20 between 17:36 and 17:57 local time, on one
@@ -9,123 +9,96 @@ laptop. The phase 2 and phase 3 figures came off an earlier pass the same day, b
 
 ## Now
 
-**Phase 4 is built and verified on both halves, and all six acceptance criteria are met.** The
-GeoNames city layer, `/api/cities`, `/api/cities/{geonames_id}`, `/api/search` and the throttled
-Nominatim geocoder behind it, plus the browser half: the label layer, the search box, follow mode
-and URL state. Both gates pass in one run and the 18-test Playwright suite passes. Evidence is
-below, criterion by criterion, and every number came off a running server today.
+**Everything Alexander Fanthome asked for on 2026-08-20 is on the globe, and the two defects left
+are named at the bottom of this section.** Keyless sources with redundancy, whole-globe coverage,
+ships, satellites, NASA imagery, real cloud, self-hosted Cesium with no token of any kind, trains
+and buses, social posts, cards for every entity class, and the attribution behind an "i" in the
+corner. Live on one server at 13:19 on 2026-08-24: **1,013 aircraft, 179 military, 6,454 vessels,
+24,660 transit vehicles, 698 satellites, 34,072 cities.**
 
-Phase 3 is built and verified live: aircraft classification, the adsbdb ownership join, and the
-aircraft layer turned into an ADR 010 provider union. Seven of the eight acceptance criteria are
-met and one is blocked on source access. Phase 2 before it is built and verified. Aircraft,
-military aircraft and ships are all live off keyless feeds.
+**Two of the three cloud satellites had been drawing nothing at all, and nobody knew.** The layer
+asked GIBS for its `default` frame, read the timestamp out of the `layer-time-actual` response
+header and pinned it. Measured across all three layers at 09:42 UTC on 2026-08-24: GOES-East's
+header named 09:20 and **every tile on that slot 404s**, Himawari's named 09:00 and 404s, and
+GOES-West's named 08:50 when 09:20 was available. So two layers drew nothing and the third drew
+half-hour-old cloud as current and said nothing about it, which is the worse of the two because
+there is no symptom. The header is no longer consulted: each candidate slot is asked for by name,
+which is the only thing that establishes a slot is addressable. A published timestamp is a claim,
+not a fact.
 
-**Satellites draw as of 2026-08-23: 698 objects, verified in a browser.** The layer had never had a
-live element set, and the reason was not the one recorded here. See "Satellites draw, and CelesTrak
-was never going to come back" below. Two things changed: the elements now come from a keyless
-republisher serving the identical CelesTrak contract, and a real defect was fixed that had been
-keeping the store empty on every restart regardless of the source.
+**The white wedge across the North Atlantic was a correctness fault, not a cosmetic one.** Beyond
+65 degrees off nadir the mean brightness sits within a few counts of `CLOUD_FLOOR` and 43 to 55
+per cent of pixels cross it, because a sensor looking along the limb looks through several times
+the air mass and the brightness temperature drops whatever is underneath. A threshold calibrated
+at nadir calls that cloud. Cut at 70 degrees with an 8-degree fade, computed per pixel against the
+great-circle angle from each sub-satellite point. Failed requests on a cold load went from 14 to 7
+and the composition changed: **zero tile failures**, the remaining seven being probe HEADs asking
+whether a frame exists yet, which is how you find out.
 
-**The globe now shows every layer it claims.** Measured on one running server on 2026-08-23: 795
-aircraft, 37 military, 630 vessels, 698 satellites, 34,072 cities, zero console errors in Chromium.
+**Three user-visible claims were false when checked against the running system, out of about
+forty-five.** The headline banner said "1 of 5 feeds down" while 698 satellites from that feed's
+disk cache were on screen, because "never polled yet" and "failed" were the same state; it now
+reads "Live, 4 of 5 feeds polled" with a fourth `idle` level. The vessel layer said "Ships shown
+for Northern Europe only" above a provider line counting 1,624 of its own ships on the Great Lakes
+and the St Lawrence. And the credits panel asserted "Unfiltered aircraft data from ADS-B Exchange"
+while the licence field in the same row read "redistribution prohibited without written
+permission", for a feed this project has never had access to. All three are fixed, and every
+replacement is derived from what is actually reporting rather than written by hand, because a
+sentence naming regions goes stale the next time a provider is added.
 
-**The vessel layer now has four keyless providers on two continents, and the ship count is
-6,001 rather than 649.** Verified live on 2026-08-23 at 17:11 UTC on one running server. Per
-provider: Kystdatahuset 3,217, Seaway 1,883, Transpordiamet 609, Fintraffic 638. All 6,001
-served records had a distinct MMSI, all had `providers[0] == source`, all were positioned, none
-carried MMSI 999999999 or a `111` search-and-rescue prefix, and no name kept a `[NN%]` suffix.
-346 records were seen by more than one provider, so the merge is doing real work rather than
-concatenating.
+**Cluster badges now say what they are a badge of.** All five mover layers rendered an identical
+grey hexagon, so a badge reading "6k" could have been six thousand ships or six thousand buses.
+The layer hue went on the casing rather than the fill, and the numbers are why: a hue behind the
+count measures **1.1:1 to 2.2:1** against near-white text where AA for normal text is 4.5:1, so
+the obvious version of that change would have been unreadable rather than merely worse. On the
+casing the count stays at 10.65:1 worst case.
 
-**The globe is no longer Nordic. 31% of the ships are in North America.** Bounding box lon
--92.12 to 34.25, lat 41.42 to 79.91, against lon 0.9 to 31.5 before. By region: Norwegian coast
-and Skagerrak 41%, Great Lakes and St Lawrence and the western Atlantic 31%, Baltic and Gulf of
-Finland 19%, Baltic approaches 6%, North Sea 3%, Barents 0.2%.
+**Notices reach the layer rail unjoined, which is what the rail's own comment had been claiming
+while the code did the opposite.** `RailInput.notices` carried one string per layer, so `main.ts`
+joined the backend's array with a middle dot and a three-notice social row arrived as a single
+218-character element: the row cut inside the first notice and the other two were not "behind a
+click", they were inside the same element. Separately the row's real budget is 62 characters
+rather than 72, because the "(+N more)" suffix comes out of the same two lines, and three of the
+four social strings ran past it. The worst was four characters over and dropped the word "floor",
+so our own rate discipline read as a truncated error.
 
-**And here is the number that matters, stated plainly: 379 one-degree cells have a ship in
-them, which is 0.58% of the globe.** Two continents is better than one and it is not global.
-The national sweep behind that is in `docs/data-sources.md`: **twenty-nine authorities were
-called on 2026-08-23 and four publish keyless live AIS.** Denmark charges DKK 1,800 to 5,600 a
-year for it, Sweden's is behind the paid RAIS database, the UK's own dataset is a stub with zero
-resources attached, and Italy, Greece and Lithuania answer 403 to a descriptive User-Agent.
-Everything else is gated, historical, a density raster or absent. If more of the ocean is
-wanted, that is a purchase decision rather than an engineering one.
+**The transit row's two numbers disagreed by 1.9x and the cause was not transit.** The shared row
+builder summed each feed's last sweep rather than what the server holds. Transit fans out over 258
+feeds with a per-host floor on each, so every cycle asks a different subset while the store keeps
+the rest inside its time to live: sampled over a minute, the sweep total swung 12,483 to 13,635
+while the store sat at 17,241 to 17,548. The row was moving by a third with the politeness floors
+rather than with the traffic. Aircraft and vessels had the same error at 4 per cent.
 
-**Two near-misses worth knowing about, because both look like the answer and neither is.** NOAA
-publishes WMO Voluntary Observing Ship reports keylessly and genuinely globally, 9,211
-observations from lat -83 to +89, and **there are nine distinct ship identifiers across all of
-them**, eight buoy numbers and the literal string `SHIP`, with zero MMSIs. Under ADR 010 every
-one of those would merge into a single record. France's oceanographic fleet publishes 9 research
-vessels worldwide with no MMSI either. Both are recorded so nobody spends the day again.
+**All of it is committed, which it was not this morning.** 255 files were uncommitted on `main`
+with no git remote, holding the transit layer, the social layer, the ownership spine, the
+four-provider vessel union and every fix above. It is now fourteen commits on
+`feat/globe-layers-and-enrichment`. Both gates green in one run: backend **2,519 tests at 99.85%**
+branch coverage with ruff, ruff-format, ty and mypy all clean, frontend `pnpm verify` exit 0 at
+**1,124 tests across 35 files**.
 
-**Kystdatahuset was wired in earlier the same day as the second keyless provider, taking the
-count from 649 to 1,898.** Verified live on 2026-08-23 at 10:16 UTC on one running server:
-`/api/layers` reported `vessels: 1898`, with `digitraffic` contributing 649 and `kystdatahuset`
-1,249, and `exclusive` equal to `records` on both because the MMSI intersection is zero. All
-1,898 served records had a distinct MMSI and all 1,898 had `providers[0] == source`. Coverage
-went from Finnish waters to lon 0.88 to 31.11 and lat 56.27 to 79.59, which is the North Sea to
-Svalbard. Norwegian records arrive already decoded: name, IMO, call sign, ship type,
-navigational status, draught, length, beam and destination, so nothing is thinner than the
-Finnish half.
+### The two things still wrong, and one is in flight
 
-**The provider's own output varies by a factor of two and a half, and the "triples the count"
-claim depends on when you ask.** Measured on 2026-08-23: 3,542 features at 09:53 UTC against
-1,467 at 10:18 UTC, from the same unfiltered call twenty-five minutes apart. The empty-geometry
-share moves with it, 77 of 3,542 against 252 of 1,467, so a quiet moment is thinner twice over.
-The earlier research figure of 4,350 merged vessels was a good moment; 1,898 was a poor one.
-Both are real and the layer reports whichever it got rather than smoothing it.
+**City names sit under cluster badges.** Measured off the scene at 1400x900: **31 label-and-badge
+overlaps at the opening view**, hitting Moscow, London, Istanbul, Shanghai, Hangzhou and New York,
+falling to 7 over Europe at 3,000km. Moscow currently renders as "cow". The mechanism is built and
+unit-tested, `badgeSlots.reserve` holding every lattice point a label's rectangle touches, and it
+needs two calls inside `globe/layers/cities.ts`. In flight at the time of writing, with two traps
+already turned into test names: the city layer's own screen position is a linear longitude and
+latitude interpolation valid only "over a view a few hundred kilometres across" by its own comment,
+while badge positions come from a real camera projection through `projectToScreen`, and the two
+diverge worst at exactly the whole-Earth view where the 31 overlaps are; and the badge lattice is
+in device pixels while `measureText` returns CSS pixels, a factor of two here, which would make
+every reservation half the width of the word.
 
-**What it does not show, and why, stated plainly.** Vessel coverage is still Northern Europe
-only, bounded by roughly lon 0.14 to 32.54 and lat 56.27 to 80.34, which is 0.33% of the globe's
-one-degree cells. Fintraffic is Finnish and Kystverket is Norwegian, and no keyless combination
-reaches global AIS: 20-odd national authorities were called on 2026-08-20 and nearly all publish
-vessel *density rasters* rather than live positions. Global AIS needs an aisstream.io key, an AISHub
-membership with a physical VHF antenna, or a paid aggregator. That is a decision rather than a
-finding, and it is open. Until it is taken, the layer rail reads "0 in view of 694" rather than
-showing an empty globe, which is the honest version of the same fact.
-
-The three phase 4 numbers worth carrying out of this document. **34,072 cities in the index** off
-the real 34,099-row dump, the 27 refusals being dead places, counted where a person can read them.
-**"London" answers in 1.46 microseconds in process and 2.1 milliseconds over HTTP** against a
-300-millisecond budget, with the English one first and Ontario directly below it. **Four identical
-`/api/search?q=Buckingham Palace` requests cost exactly one upstream Nominatim call**, 563ms cold
-and 1.8ms warm.
-
-**Phase 4's review findings are applied.** Four reviewers attacked it and seventeen findings
-survived an adversarial pass. Fifteen are fixed, two are rejected with reasons, and the whole
-list is below under "The phase 4 review, finding by finding". The sharpest was a blocker: a
-Nominatim outage on a 79-character query answered `/api/search` with an HTTP 500, because the
-degraded group's own reason string overflowed its 300-character contract. The most expensive to
-have shipped was silent: a CDN error page served with HTTP 200 was cached over the working city
-dump, and the weekly floor then short-circuited onto it for a week while the product reported
-that the refresh had never run.
-
-Three things are worth reading before the evidence.
-
-**The aircraft union has exactly one live member.** That is a source-access problem, not a code
-problem. adsb.lol is keyless and answers. ADS-B Exchange answers HTTP 401 without a paid key and
-prohibits redistribution even with one. airplanes.live answers HTTP 403 until somebody sends the
-access email. adsb.one answers HTTP 403 from this network. All four re-verified live today.
-adsb.fi is the failover inside the adsb.lol client rather than a union member, per R3. So the
-union is a correct implementation behind an access blocker, and the coverage argument ADR 010
-rests on is unproven. Adding a provider is one row in `UNION_PROVIDERS`
-(`src/tracker/sources/adsb.py`) plus a base URL.
-
-**The LADD flag has a real source and it is the feed, not the FAA.** `dbFlags` bit 8 on the
-readsb `/v2` schema is the LADD bit. readsb documents the bitfield in `README-json.md`, adsb.lol
-publishes `/v2/ladd` on top of it, and 17 of 856 live aircraft carried the bit on today's run.
-Both re-verified today, output below. Anyone reading this file expecting criterion 2 to be
-unbuildable should read that section: the FAA registry genuinely has no LADD column, and it does
-not need one, because the flag arrives on ordinary position queries from a volunteer receiver
-network.
-
-**A green gate is not a working product.** An adversarial pass in an earlier phase found a
-frontend vessel layer that nothing imported and a Cesium asset copy that broke every render,
-with both gates green throughout. A green gate buys you that the contracts hold, the adapters
-map what they claim, the drop counts are real and the cadence floors cannot be configured away.
-It does not buy you that a layer is wired, that a browser draws anything, or that an upstream is
-reachable. Those need a running server, a real browser and a curl, and this document keeps the
-two apart.
+**Badge density stays as it is, and that is now a measured decision rather than an untested one.**
+Badges cover about 12 per cent of the visible globe and about 25 per cent of the band they occupy.
+The obvious lever, raising the group minimum, was tested on painted ink rather than mark count,
+because at whole-globe zoom a transit mark paints 5.2 pixels against a badge's 30 to 48 and
+counting marks flatters the badge about thirty to one. Raising it saves 7 per cent of ink at
+whole-Earth and costs **52 per cent** over Europe. The satellite precedent does not transfer: a
+diamond is the inkiest mark in the app and there are only 700 of them, so a satellite badge
+replaces few marks that each cost a lot, which is when a badge fails to earn its place, while a
+transit badge replaces thousands that each cost almost nothing.
 
 ## Works
 
@@ -399,7 +372,7 @@ list that ignored that would have been both longer and wrong. ODbL's 46 feeds ne
 named alongside the operator, which each feed's own credit string already carries. CC-BY's 35
 need the licence link. CC0's 31 owe nothing at all and are kept as courtesy.
 
-## Broken or not yet built
+## Verified, with the evidence, newest first
 
 ### The removal route needs an authentication story before this app goes on a network
 
@@ -1876,7 +1849,13 @@ data, and none of them has been exercised by two networks disagreeing in real ti
 same root cause as criterion 8 and it is the second thing about phase 3 that cannot be closed
 here.
 
-### A failover record credits the wrong provider on the layer rail
+### ~~A failover record credits the wrong provider on the layer rail~~ Fixed 2026-08-24
+
+Fixed by putting the serving host on the sighting: `ProviderSighting` gained `served_by`,
+`MergedRecord.providers` returns the serving hosts deduped and freshest first, and
+`merge_providers` takes a `served_by` callable so a client that failed over reports the host
+that actually answered. The original finding is kept below because the licence consequence is
+the reason it mattered rather than the field mismatch.
 
 Found in this pass, and it is a real defect rather than a design note. After the adsb.fi failover
 fired, `GET /api/aircraft` served 891 records whose `source` field split adsb.lol 829 and adsb.fi
@@ -2140,10 +2119,15 @@ the adsb.fi attribution defect, which was fixed the same day. Both are why this 
    This sits alongside the US privacy position as a precondition for any public deployment
    carrying real profiles.
 
-6. **Fold the two `## Broken or not yet built` sections into one.** This document has two headings
-   of that exact name, at lines 402 and 1799, and has reached 2,128 lines. AGENTS.md describes it
-   as Now, Works, Broken, Next; a reader cannot tell which of two identically named sections is
-   current, and the duplication is how the stale Next above survived as long as it did.
+6. **~~Fold the two `## Broken or not yet built` sections into one.~~ Done 2026-08-24, and the fold
+   turned out to be a retitle.** The two were not two lists of blockers. The first, 1,397 lines and
+   64% of the document, was almost entirely verified-working evidence that agents had appended under
+   whichever heading was nearest: cards wired, satellites drawing, ships live off a keyless feed,
+   every endpoint answering. The second is the real list. So the first is now
+   `## Verified, with the evidence, newest first` and nobody's evidence moved, which is the right
+   trade against restructuring 1,300 lines of measurements by hand. What is still owed is smaller:
+   that section is chronological and has no index, so finding whether a thing was verified means
+   reading it.
 
 ### What is deliberately not on this list
 
