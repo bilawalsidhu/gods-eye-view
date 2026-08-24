@@ -121,6 +121,34 @@ vi.mock('cesium', () => {
       }
     },
     HorizontalOrigin: { CENTER: 'CENTER', LEFT: 'LEFT' },
+    // A real column-major 4x4 multiply rather than a stub. The label reservation builds its view
+    // projection by multiplying the camera's projection and view matrices and hands the product to
+    // `projectToScreen`, so a fake that ignored its operands would make the reservation land wherever
+    // the stub happened to point. The projection maths itself is tested for real in
+    // `globe/cluster.test.ts`, which needs no Cesium at all.
+    Matrix4: class FakeMatrix4 {
+      readonly length = 16;
+      [index: number]: number;
+
+      constructor() {
+        for (let at = 0; at < 16; at += 1) {
+          this[at] = 0;
+        }
+      }
+
+      static multiply(left: FakeMatrix4, right: FakeMatrix4, result: FakeMatrix4): FakeMatrix4 {
+        for (let column = 0; column < 4; column += 1) {
+          for (let row = 0; row < 4; row += 1) {
+            let sum = 0;
+            for (let k = 0; k < 4; k += 1) {
+              sum += (left[k * 4 + row] ?? 0) * (right[column * 4 + k] ?? 0);
+            }
+            result[column * 4 + row] = sum;
+          }
+        }
+        return result;
+      }
+    },
     LabelCollection: FakeLabelCollection,
     LabelStyle: { FILL_AND_OUTLINE: 'FILL_AND_OUTLINE' },
     VerticalOrigin: { CENTER: 'CENTER' },
@@ -149,6 +177,8 @@ const {
   geonamesFromPickId,
 } = await import('./cities');
 const { makeCity } = await import('../../testing/city');
+const { badgeSlots } = await import('../badge-slots');
+const { CLUSTER_CELL_PX } = await import('../cluster');
 import type { City } from '../../types/entities';
 
 interface FakeLabel {
@@ -173,6 +203,31 @@ interface FakeLabelCollection {
   timesRemoved: number;
 }
 
+/**
+ * A view projection that maps world x and y straight to pixels in a 1400 by 800 viewport.
+ *
+ * Column-major, like Cesium's own layout. Only the terms `projectToScreen` reads are set.
+ */
+function pixelProjection(): number[] {
+  const m = Array.from({ length: 16 }, () => 0);
+  m[0] = 2 / 1400;
+  m[12] = -1;
+  m[5] = -2 / 800;
+  m[13] = 1;
+  m[15] = 1;
+  return m;
+}
+
+/** Identity, so multiplying by the view matrix leaves the projection alone. */
+function identityMatrix(): number[] {
+  const m = Array.from({ length: 16 }, () => 0);
+  m[0] = 1;
+  m[5] = 1;
+  m[10] = 1;
+  m[15] = 1;
+  return m;
+}
+
 /** A layer wired to a fake scene, plus a direct handle on the collection it created. */
 function build() {
   const collections: FakeLabelCollection[] = [];
@@ -186,6 +241,23 @@ function build() {
     // size every collision measurement in this file was taken at.
     drawingBufferWidth: 1400,
     drawingBufferHeight: 800,
+    // The canvas, for the drawing-buffer to CSS pixel ratio the label reservation carries. Equal to
+    // the buffer, which is what Cesium does unless `resolutionScale` is changed.
+    canvas: { clientWidth: 1400, clientHeight: 800 },
+    // A camera, because the reservation projects each label through the real view projection rather
+    // than through this layer's flat cell arithmetic. The two spaces agree over a city and diverge at
+    // a whole-Earth view, so the reservation has to use the one the badges use.
+    //
+    // A matrix that maps world x and y straight to pixels, so a test can put a city at a pixel and
+    // assert on it, and an eye at the origin, which is what every layer fixture here does. The
+    // occlusion half of the reservation cannot be modelled faithfully against a pixel passthrough,
+    // because these fake positions are nowhere near an ellipsoid; `occludedByGlobe` has its own
+    // tests in `globe/cluster.test.ts` against real earth-fixed geometry.
+    camera: {
+      frustum: { projectionMatrix: pixelProjection() },
+      viewMatrix: identityMatrix(),
+      positionWC: { x: 0, y: 0, z: 0 },
+    },
   };
   const layer = new CityLayer(scene as unknown as ConstructorParameters<typeof CityLayer>[0]);
   const [labels] = collections;
@@ -229,6 +301,124 @@ const LADDER: City[] = [
   makeCity({ geonames_id: 5, name: 'Hastings', population: 92_000, point: at(50, 0) }),
   makeCity({ geonames_id: 6, name: 'Ely', population: 20_112, point: at(100, 0) }),
 ];
+
+/** A city at a given pixel, given the fixture's projection maps world x and y straight to pixels. */
+function cityAtPixel(x: number, y: number, name = 'London') {
+  return makeCity({ name, population: 9_000_000, point: { lon: x, lat: y, altitude_m: null } });
+}
+
+describe('CityLayer holding lattice space so a badge cannot cover a name', () => {
+  /** A view rectangle wide enough to contain a city placed at a pixel rather than at a coordinate. */
+  const PIXEL_VIEW = { west: -2000, south: -2000, east: 2000, north: 2000, heightM: WHOLE_GLOBE_M };
+
+  it('reserves the pixels a drawn label paints', () => {
+    // The whole point. A cluster badge is drawn on a lattice point; a name that holds the points it
+    // covers pushes the badge off them. Measured before this: 31 label-and-badge overlaps at a
+    // whole-globe view, hitting Shanghai, Istanbul, Moscow, Hangzhou, London and New York City.
+    const { layer } = build();
+    badgeSlots.reset();
+    layer.load([cityAtPixel(300, 200)]);
+
+    layer.refresh(PIXEL_VIEW);
+
+    expect(badgeSlots.claimed).toBeGreaterThan(0);
+  });
+
+  it('reserves more points for a long name than a short one', () => {
+    // A label is wide, so reserving only the cell its centre falls in would leave a badge sitting on
+    // the second half of the word. This is the half of `reserve` that a point could not carry.
+    const short = build();
+    badgeSlots.reset();
+    short.layer.load([cityAtPixel(300, 200, 'Ur')]);
+    short.layer.refresh(PIXEL_VIEW);
+    const forShort = badgeSlots.claimed;
+
+    const long = build();
+    badgeSlots.reset();
+    long.layer.load([cityAtPixel(300, 200, 'Comodoro Rivadavia')]);
+    long.layer.refresh(PIXEL_VIEW);
+
+    expect(badgeSlots.claimed).toBeGreaterThan(forShort);
+  });
+
+  it('places the reservation through the camera projection, not the label cell arithmetic', () => {
+    // The trap this would otherwise have walked into. `cellFor` interpolates longitude and latitude
+    // linearly across the view rectangle and says so in its own comment; badge positions come from
+    // the camera's own view projection. The two agree over a city and diverge at a whole-globe view,
+    // worst near the limb, which is exactly where the collisions were. A reservation placed with the
+    // flat arithmetic would move badges convincingly and move them off the wrong pixels.
+    //
+    // The projection here maps world x and y straight to pixels, so a city at 300, 200 must hold the
+    // lattice point at pixel 300, 200. `cellFor` over this view rectangle would put it elsewhere
+    // entirely, because 300 of a 4000-wide span is a fifth of the way across the screen.
+    const { layer } = build();
+    badgeSlots.reset();
+    layer.load([cityAtPixel(300, 200)]);
+    layer.refresh(PIXEL_VIEW);
+
+    const out = { x: 0, y: 0 };
+    badgeSlots.claim('transit', 300, 200, out);
+    const projected = {
+      x: (Math.floor(300 / CLUSTER_CELL_PX) + 0.5) * CLUSTER_CELL_PX,
+      y: (Math.floor(200 / CLUSTER_CELL_PX) + 0.5) * CLUSTER_CELL_PX,
+    };
+    // The point at the projected pixel is taken, so a badge asking for it is sent elsewhere.
+    expect(out).not.toEqual(projected);
+  });
+
+  it('reserves nothing for a label it did not draw', () => {
+    // Only the names on screen hold points. A city outside the view rectangle is never written, and
+    // holding a point for it would push a badge off a pixel nothing occupies.
+    const { layer } = build();
+    badgeSlots.reset();
+    layer.load([cityAtPixel(9000, 9000)]);
+
+    layer.refresh(PIXEL_VIEW);
+
+    expect(badgeSlots.claimed).toBe(0);
+  });
+
+  it('gives its points back when the rail switches the layer off', () => {
+    // A dark layer that kept them would push every other layer's badges aside for as long as it
+    // stayed off, which reads as the other layers being wrong.
+    const { layer } = build();
+    badgeSlots.reset();
+    layer.load([cityAtPixel(300, 200)]);
+    layer.refresh(PIXEL_VIEW);
+    expect(badgeSlots.claimed).toBeGreaterThan(0);
+
+    layer.setVisible(false);
+
+    expect(badgeSlots.claimed).toBe(0);
+  });
+
+  it('frees the points a moved label has left, rather than accumulating them', () => {
+    // Released and re-made in one pass, like every other holder. Without the release the layer would
+    // hold every point every camera position ever put a label on, and the badges would be pushed off
+    // pixels no name has occupied for minutes. Two passes with the label in different places is the
+    // smallest test that sees it: reserving the same points twice looks identical either way.
+    const { layer } = build();
+    badgeSlots.reset();
+    layer.load([cityAtPixel(300, 200)]);
+    layer.refresh(PIXEL_VIEW);
+    const forOne = badgeSlots.claimed;
+    expect(forOne).toBeGreaterThan(0);
+
+    layer.load([cityAtPixel(900, 600)]);
+    layer.refresh({ ...PIXEL_VIEW, heightM: WHOLE_GLOBE_M - 1 });
+
+    // Not twice as many. The exact count differs between the two places, because a box wider than a
+    // cell clips to a different number of columns depending where its edges fall, so the assertion is
+    // that the old points came back rather than that the number is identical.
+    expect(badgeSlots.claimed).toBeLessThan(forOne * 2);
+    const out = { x: 0, y: 0 };
+    badgeSlots.claim('transit', 300, 200, out);
+    expect(out).toEqual({
+      x: (Math.floor(300 / CLUSTER_CELL_PX) + 0.5) * CLUSTER_CELL_PX,
+      y: (Math.floor(200 / CLUSTER_CELL_PX) + 0.5) * CLUSTER_CELL_PX,
+    });
+  });
+});
 
 describe('the population bands', () => {
   it('never lets a smaller city be visible from further away', () => {

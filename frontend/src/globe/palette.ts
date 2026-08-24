@@ -242,7 +242,7 @@ export function clusterBadgePx(count: number): number {
  * cannot overflow for any input at all.
  */
 const SMALLEST_BADGE_PX = 30;
-const LARGEST_BADGE_PX = 48;
+export const LARGEST_BADGE_PX = 48;
 const BADGE_STEPS: readonly number[] = [SMALLEST_BADGE_PX, 38, LARGEST_BADGE_PX, LARGEST_BADGE_PX];
 
 /**

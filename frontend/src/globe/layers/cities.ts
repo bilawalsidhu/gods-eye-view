@@ -34,10 +34,14 @@ import {
   HorizontalOrigin,
   LabelCollection,
   LabelStyle,
+  Matrix4,
   VerticalOrigin,
 } from 'cesium';
 import type { Label, Scene } from 'cesium';
 
+import { badgeSlots } from '../badge-slots';
+import { CLUSTER_CELL_PX, occludedByGlobe, projectToScreen } from '../cluster';
+import { LARGEST_BADGE_PX } from '../palette';
 import { cesiumColour } from '../colour';
 import { pointInView } from '../project';
 import type { ViewRect } from '../project';
@@ -78,6 +82,75 @@ export const CITY_LAYER = 'cities';
  * prefix is what keeps one click routing to one layer.
  */
 export const CITY_PICK_PREFIX = 'city:';
+
+/**
+ * What this layer holds on the shared badge lattice, so a cluster badge is pushed off a name.
+ *
+ * A label sits on a fixed geographic point and reading it is the whole of its job. A badge is a
+ * count over an area, has never claimed to mark a position, and is already free to move by up to
+ * half a cell. So when the two want the same pixels the badge yields, and the way to make that
+ * happen is for the label to take the points first. See `badge-slots.ts`.
+ */
+const CITY_SLOT_KEY = 'cities';
+
+/**
+ * How much wider and taller the painted label is than its glyphs.
+ *
+ * `outlineWidth: 3` with `FILL_AND_OUTLINE`, so three pixels each side, and the line box runs a
+ * little past the cap height. Six and eight rather than a measurement, because a reservation that
+ * is a pixel or two generous costs nothing and one that is short leaves a badge on the last letter.
+ */
+const LABEL_PAINT_MARGIN_PX = 6;
+const LABEL_LINE_MARGIN_PX = 8;
+
+/**
+ * How much wider than the name the reservation has to be: the widest badge, so half of it each side.
+ *
+ * Measured 2026-08-24, and the first version of this was wrong without it. Holding only the cells a
+ * name covers leaves the cell next door free, and the badge that lands there still overlaps the name:
+ * two badges are a cell apart, 56 pixels, while a 48-pixel badge beside an 80-pixel name like "Dar es
+ * Salaam" overlaps until their centres are 64 apart. So the first attempt moved thirty badges and
+ * reduced collisions by nothing, which is the failure mode that looks like it worked.
+ *
+ * Growing the box by a whole badge means every point left free is genuinely clear of the name, which
+ * is the property the reservation is for.
+ */
+const LABEL_KEEP_OUT_PX = LARGEST_BADGE_PX;
+
+/** Reused for the view projection the reservation needs. Not the cell arithmetic's, which is flat. */
+const scratchMatrix = new Matrix4();
+
+/** Reused for the projected label position. Plain numbers: `projectToScreen` wants no Cesium type. */
+const screenAt = { x: 0, y: 0 };
+
+/**
+ * A canvas context kept only to measure text, created on first use.
+ *
+ * The width of a name in pixels is not derivable from the string: Cesium renders the glyphs itself
+ * and the only honest way to know how wide "Comodoro Rivadavia" is at `500 12px` is to ask the same
+ * engine that will draw it.
+ */
+const measurer: { context: CanvasRenderingContext2D | null | undefined } = { context: undefined };
+
+/**
+ * Average width of a mixed-case Latin glyph as a fraction of the font size.
+ *
+ * Only used where there is no canvas to ask, which in practice means a test runner rather than a
+ * browser. A proportion rather than zero on purpose: it keeps the reservation proportional to the
+ * name, so "Comodoro Rivadavia" still reserves more than "Bath" and the width path is exercised
+ * rather than skipped. Measured against the real metrics at 12px, an estimate within a few per cent.
+ */
+const ESTIMATED_GLYPH_WIDTH_RATIO = 0.5;
+
+function textWidthPx(text: string, font: string, fontPx: number): number {
+  measurer.context ??=
+    typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d');
+  if (measurer.context === null) {
+    return text.length * ESTIMATED_GLYPH_WIDTH_RATIO * fontPx;
+  }
+  measurer.context.font = font;
+  return measurer.context.measureText(text).width;
+}
 
 /**
  * The GeoNames id in a picked id, or null when the pick was not a city.
@@ -389,6 +462,17 @@ export class CityLayer {
     this.claimed.clear();
     // Cell arithmetic once per pass rather than per city.
     const columns = Math.max(1, Math.ceil(this.scene.drawingBufferWidth / CITY_LABEL_CELL_PX));
+    // The badge lattice, so a name can hold the pixels it occupies and push a cluster badge aside.
+    // Released and re-made in the same pass, like every other holder, so it can never go stale.
+    badgeSlots.begin(
+      this.scene.drawingBufferWidth,
+      this.scene.drawingBufferHeight,
+      CLUSTER_CELL_PX,
+    );
+    badgeSlots.release(CITY_SLOT_KEY);
+    const camera = this.scene.camera;
+    Matrix4.multiply(camera.frustum.projectionMatrix, camera.viewMatrix, scratchMatrix);
+    const eye = camera.positionWC;
     let used = 0;
     let scanned = 0;
     for (const city of this.records) {
@@ -414,6 +498,7 @@ export class CityLayer {
       }
       this.claimed.add(cell);
       this.write(used, city, band);
+      this.reserveLabelSpace(city, band, eye);
       used += 1;
       if (used === CITY_LABEL_BUDGET) {
         break;
@@ -439,6 +524,10 @@ export class CityLayer {
     this.labels.show = visible;
     if (visible) {
       this.lastView = null;
+    } else {
+      // A dark layer that kept its lattice points would push every other layer's badges aside for as
+      // long as it stayed off, which reads as the other layers being wrong.
+      badgeSlots.release(CITY_SLOT_KEY);
     }
   }
 
@@ -510,6 +599,56 @@ export class CityLayer {
     // The setter clones, so one scratch vector serves the whole refresh.
     label.position = scratch;
     label.show = true;
+  }
+
+  /**
+   * Hold the pixels this label paints, so no cluster badge is drawn on top of the name.
+   *
+   * **Through the real camera projection, not through `cellFor`.** Those are two different spaces.
+   * `cellFor` interpolates longitude and latitude linearly across the view rectangle and says so in
+   * its own comment: over a few hundred kilometres the error is small and a legibility heuristic can
+   * carry it. Badge positions come from `projectToScreen` against the camera's own view-projection.
+   * The two agree over a city and diverge badly at a whole-Earth view, worst near the limb, which is
+   * exactly where the label collisions were measured. A reservation placed with the flat arithmetic
+   * would move badges convincingly and move them off the wrong pixels, which is worse than not
+   * moving them at all because it looks like it worked.
+   *
+   * The occlusion test is not optional either. A city on the far side still projects to a valid
+   * screen point, so without it this would hold points for names nobody can see and push badges off
+   * pixels that were never contested.
+   */
+  private reserveLabelSpace(city: City, band: PopulationBand, eye: Cartesian3): void {
+    Cartesian3.fromDegrees(city.point.lon, city.point.lat, 0, undefined, scratch);
+    if (occludedByGlobe(eye.x, eye.y, eye.z, scratch.x, scratch.y, scratch.z)) {
+      return;
+    }
+    if (
+      !projectToScreen(
+        scratchMatrix,
+        scratch.x,
+        scratch.y,
+        scratch.z,
+        this.scene.drawingBufferWidth,
+        this.scene.drawingBufferHeight,
+        screenAt,
+      )
+    ) {
+      return;
+    }
+    // `measureText` answers in CSS pixels and the lattice is in drawing-buffer pixels. They are the
+    // same today, because Cesium leaves `pixelRatio` at one unless `resolutionScale` is changed, and
+    // measured at device scale factors of one, two and three the buffer stayed equal to the client
+    // size and a badge painted a constant 37 pixels. The ratio is carried anyway: it costs a divide
+    // and it is the difference between this working and reserving half a name if anyone ever asks
+    // Cesium for a sharper canvas.
+    const perCssPx = this.scene.drawingBufferWidth / (this.scene.canvas.clientWidth || 1);
+    const fontPx = Number(/(\d+)px/.exec(band.font)?.[1] ?? 12);
+    const width =
+      textWidthPx(city.name, band.font, fontPx) * perCssPx +
+      LABEL_PAINT_MARGIN_PX +
+      LABEL_KEEP_OUT_PX;
+    const height = fontPx * perCssPx + LABEL_LINE_MARGIN_PX + LABEL_KEEP_OUT_PX;
+    badgeSlots.reserve(CITY_SLOT_KEY, screenAt.x, screenAt.y, width, height);
   }
 
   /** The pooled label at this index, allocating only when the pool has never been this deep. */
