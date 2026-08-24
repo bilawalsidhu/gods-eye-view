@@ -173,14 +173,13 @@ async def list_social_posts(
             # every dense place. Counted on the records the provider sent rather than the ones
             # that mapped, or a single dropped file would hide the truncation.
             notices.append(
-                f"photograph search returned its maximum of {commons.RESULT_LIMIT} files, so "
-                "this view holds the nearest of them rather than all of them"
+                f"the nearest {commons.RESULT_LIMIT} photographs, not all: provider ceiling"
             )
     except RateLimitedError:
         # Our own one-per-second floor, or the provider's. Not an error: the caller asked
         # faster than we are allowed to ask, and saying so beats an empty answer that reads
         # as "no photographs here".
-        notices.append("photograph search skipped: asked again inside its one-second floor")
+        notices.append("photographs skipped: asked again inside its one-second floor")
     except (SourceError, ContractViolationError, httpx.HTTPError) as exc:
         # Named rather than a bare `except Exception`: a read route must not 500 because one
         # provider misbehaved, and it must not swallow our own bugs while it is at it. These
@@ -194,8 +193,7 @@ async def list_social_posts(
     if box_radius > searched:
         # The honest statement, and the reason `searched_radius_m` is on the response at all.
         notices.append(
-            f"photographs searched within {searched // 1000}km of the centre of this view, "
-            "which is as wide as the provider allows"
+            f"photographs within {searched // 1000}km of the centre, the provider's widest"
         )
 
     inside = [post for post in (*upstream, *held.derived) if box.contains(post.point)]

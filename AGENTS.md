@@ -736,6 +736,11 @@ the section stays navigable.
   `git fsck --lost-found` for a dangling stash, then the session transcript under
   `~/.claude/projects/`, and verify the rebuild by coverage rather than by eye, because a file
   that looks right can be missing a test nobody counted.
+  **Do not type the command at all, in any form.** A bare `git checkout` with no pathspec is a
+  harmless no-op that lists modified files, and `git checkout -- <file>` destroys them, so the
+  safe and the destructive forms differ by two characters and the safe one prints a wall of
+  `M <path>` lines that looks exactly like something happened. Nearly typed on 2026-08-24 in a
+  restore step where `cp` was meant, with four agents holding uncommitted work in the tree.
 - **A green `pnpm test` is not evidence a file compiles, so it is never the check after a type
   edit.** Vitest transpiles through esbuild, which strips type annotations without resolving
   them, so a type used but never imported is simply erased and every test that exercises the file

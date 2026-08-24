@@ -4,3 +4,7 @@ coverage/
 playwright-report/
 test-results/
 .playwright/
+# Verification screenshots. An agent comparing cloud coverage across regions wrote 4.3MB of
+# PNGs here on 2026-08-24, untracked and unignored, which one `git add -A` would have put in
+# the history for good. Linters skip images, so the gate stays green and nothing warns you.
+shots/

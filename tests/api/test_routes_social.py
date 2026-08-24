@@ -295,13 +295,13 @@ class TestCoverageIsStated:
         app, _ = build(commons_body=a_full_page())
         body = (await get(app, **LONDON_BOX)).json()
 
-        assert any("maximum of 500 files" in notice for notice in body["notices"])
+        assert any("provider ceiling" in notice for notice in body["notices"])
 
     async def test_a_short_page_says_nothing_about_a_maximum(self) -> None:
         app, _ = build(commons_body=a_full_page(commons.RESULT_LIMIT - 1))
         body = (await get(app, **LONDON_BOX)).json()
 
-        assert not any("maximum of" in notice for notice in body["notices"])
+        assert not any("provider ceiling" in notice for notice in body["notices"])
 
     async def test_a_dropped_file_does_not_hide_the_truncation(self) -> None:
         # Counted on what the provider sent rather than on what mapped. A page of 500 with one
@@ -313,7 +313,7 @@ class TestCoverageIsStated:
         body = (await get(app, **LONDON_BOX)).json()
 
         assert body["count"] == commons.RESULT_LIMIT - 1
-        assert any("maximum of 500 files" in notice for notice in body["notices"])
+        assert any("provider ceiling" in notice for notice in body["notices"])
 
     async def test_the_provider_is_asked_at_the_centre_of_the_box(self) -> None:
         # Latitude first, because that is what the provider wants and the adapter swaps at its
