@@ -268,20 +268,37 @@ export const CITY_LABEL_BUDGET = 600;
  * testing, which is quadratic in a method that runs on every camera move. Two pairs out of 122
  * candidates for linear cost is the trade.
  *
- * Roughly one label wide, which is why the figure is physical rather than tuned: a ten-character
- * name is about 66px at 12px type and a long one passes 100px.
+ * **What this measures changed on 2026-08-24 and so did the figure.** It used to be one label per
+ * cell, sized to be roughly one name wide, and the exclusion distance was therefore this number. A
+ * name now claims every cell its own painted box covers, so the exclusion distance is the name's
+ * width and this is only the grid the box is quantised onto. Finer is strictly better for accuracy
+ * and costs a slightly longer walk per label.
  *
- * The cell is derived from the view rectangle and the viewport rather than from a real projection.
- * `globe/cluster.ts` would give a better answer, with a proper camera matrix and a horizon test,
- * and it is what the mover layers use. It is not used here because this layer's whole suite runs
- * against a mocked Cesium whose `Cartesian3.fromDegrees` passes degrees straight through, so real
- * projection maths cannot consume it, and switching would mean giving 45 tests a real camera and
- * changing them from rectangle semantics to camera semantics. That is the rewrite this fix was
- * asked not to become. The cost of the cheaper route is that the cell inherits the rectangle's
- * known unreliability at altitude, which is already recorded as a limitation: where the rectangle
- * is wrong the cells are wrong in the same direction, so this makes nothing worse than it was.
+ * Ninety-six was far too coarse once it meant that. A sixty-three pixel box straddling a boundary
+ * claimed two cells, so it excluded a hundred and ninety-two pixels: three times its own width, and
+ * names that would have fitted were dropped. Swept live against the real feeds at four zooms, with
+ * overlapping label pairs at zero throughout and names kept as the thing to maximise:
+ *
+ * - 96px: 13, 14, 26 and 12 names at Europe 12,000km, China 12,000km, Europe 3,000km and Randstad
+ *   300km
+ * - 48px: 15, 19, 30, 16
+ * - 32px: 14, 20, 30, 17
+ * - **24px: 17, 25, 33, 20**
+ *
+ * Twenty-four keeps the most names and still has no pair touching, which is the whole point: the box
+ * is what excludes, so a finer grid drops fewer names *without* letting any of them collide. It is
+ * about a third of a typical name's width, so the quantisation error is bounded at a third of a name,
+ * and going finer buys progressively less for a longer walk.
+ *
+ * Worth stating plainly because it is the unusual case: this is not a trade. Before any of it, a
+ * China-centred view drew 22 names with Cairo and Baghdad colliding. It now draws 25 with nothing
+ * colliding, so the fix costs no names at all and returns three.
+ *
+ * The projection is a real one now. This used to derive the cell from the view rectangle by linear
+ * interpolation, and that flat arithmetic is what caused the label-on-label collisions near the limb:
+ * see `projectCity` for the two frames that proved it.
  */
-export const CITY_LABEL_CELL_PX = 96;
+export const CITY_LABEL_CELL_PX = 24;
 
 /**
  * What the camera can see, plus how high it is.
@@ -493,19 +510,17 @@ export class CityLayer {
       if (!this.projectCity(city, eye)) {
         continue;
       }
-      // One label per screen cell, and the first to claim one wins. Records run population
-      // descending, so that is always the largest city in the cell, which is the right one to
+      // One name per patch of screen, and the first to claim one wins. Records run population
+      // descending, so that is always the largest city in the patch, which is the right one to
       // keep: at 300km over Tokyo 122 labels produced 168 overlapping pairs, and unreadable text
       // is worse than absent text.
-      const cell =
-        Math.floor(screenAt.y / CITY_LABEL_CELL_PX) * columns +
-        Math.floor(screenAt.x / CITY_LABEL_CELL_PX);
-      if (this.claimed.has(cell)) {
+      const box = this.labelBox(band, city.name);
+      if (this.crowded(box, columns)) {
         continue;
       }
-      this.claimed.add(cell);
+      this.claim(box, columns);
       this.write(used, city, band);
-      this.reserveLabelSpace(city, band);
+      this.reserveLabelSpace(box);
       used += 1;
       if (used === CITY_LABEL_BUDGET) {
         break;
@@ -629,21 +644,79 @@ export class CityLayer {
     );
   }
 
-  private reserveLabelSpace(city: City, band: PopulationBand): void {
-    // `measureText` answers in CSS pixels and the lattice is in drawing-buffer pixels. They are the
-    // same today, because Cesium leaves `pixelRatio` at one unless `resolutionScale` is changed, and
-    // measured at device scale factors of one, two and three the buffer stayed equal to the client
-    // size and a badge painted a constant 37 pixels. The ratio is carried anyway: it costs a divide
-    // and it is the difference between this working and reserving half a name if anyone ever asks
-    // Cesium for a sharper canvas.
+  /**
+   * The pixels a name paints, centred on `screenAt`.
+   *
+   * `measureText` answers in CSS pixels and both grids are in drawing-buffer pixels. They are the
+   * same today, because Cesium leaves `pixelRatio` at one unless `resolutionScale` is changed, and
+   * measured at device scale factors of one, two and three the buffer stayed equal to the client size
+   * and a badge painted a constant 37 pixels. The ratio is carried anyway: it costs a divide and it is
+   * the difference between this working and measuring half a name if anyone ever asks Cesium for a
+   * sharper canvas.
+   */
+  private labelBox(band: PopulationBand, name: string): { width: number; height: number } {
     const perCssPx = this.scene.drawingBufferWidth / (this.scene.canvas.clientWidth || 1);
     const fontPx = Number(/(\d+)px/.exec(band.font)?.[1] ?? 12);
-    const width =
-      textWidthPx(city.name, band.font, fontPx) * perCssPx +
-      LABEL_PAINT_MARGIN_PX +
-      LABEL_KEEP_OUT_PX;
-    const height = fontPx * perCssPx + LABEL_LINE_MARGIN_PX + LABEL_KEEP_OUT_PX;
-    badgeSlots.reserve(CITY_SLOT_KEY, screenAt.x, screenAt.y, width, height);
+    return {
+      width: textWidthPx(name, band.font, fontPx) * perCssPx + LABEL_PAINT_MARGIN_PX,
+      height: fontPx * perCssPx + LABEL_LINE_MARGIN_PX,
+    };
+  }
+
+  /**
+   * Whether a name at `screenAt` would land on a patch a bigger name already holds.
+   *
+   * **Every cell the box covers, not the one its centre falls in.** That single-cell test is what left
+   * Cairo and Alexandria touching after the projection was fixed: two and a half degrees apart, either
+   * side of a cell boundary, so both claimed a free cell and both drew. It is the same defect the badge
+   * lattice had, where reserving one cell left the cell next door free and the badge that landed there
+   * still overlapped, and it takes the same answer.
+   *
+   * Conservative by a cell at worst. Two boxes sharing a cell might not actually intersect, if one ends
+   * early in the cell and the next starts late, so this drops a name that would just have fitted. That
+   * is the right direction to err and it is the direction the single-cell version erred in too.
+   */
+  private crowded(box: { width: number; height: number }, columns: number): boolean {
+    return this.forEachCell(box, columns, (cell) => this.claimed.has(cell));
+  }
+
+  /** Hold every cell the box covers, so no smaller name is drawn onto this one. */
+  private claim(box: { width: number; height: number }, columns: number): void {
+    this.forEachCell(box, columns, (cell) => {
+      this.claimed.add(cell);
+      return false;
+    });
+  }
+
+  /** Walk the cells a box centred on `screenAt` covers, stopping early if the visitor says so. */
+  private forEachCell(
+    box: { width: number; height: number },
+    columns: number,
+    visit: (cell: number) => boolean,
+  ): boolean {
+    const first = Math.floor((screenAt.x - box.width / 2) / CITY_LABEL_CELL_PX);
+    const last = Math.floor((screenAt.x + box.width / 2) / CITY_LABEL_CELL_PX);
+    const top = Math.floor((screenAt.y - box.height / 2) / CITY_LABEL_CELL_PX);
+    const bottom = Math.floor((screenAt.y + box.height / 2) / CITY_LABEL_CELL_PX);
+    const rows = Math.max(1, Math.ceil(this.scene.drawingBufferHeight / CITY_LABEL_CELL_PX));
+    for (let column = Math.max(0, first); column <= Math.min(columns - 1, last); column += 1) {
+      for (let row = Math.max(0, top); row <= Math.min(rows - 1, bottom); row += 1) {
+        if (visit(row * columns + column)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private reserveLabelSpace(box: { width: number; height: number }): void {
+    badgeSlots.reserve(
+      CITY_SLOT_KEY,
+      screenAt.x,
+      screenAt.y,
+      box.width + LABEL_KEEP_OUT_PX,
+      box.height + LABEL_KEEP_OUT_PX,
+    );
   }
 
   /** The pooled label at this index, allocating only when the pool has never been this deep. */

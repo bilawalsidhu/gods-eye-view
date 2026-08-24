@@ -349,6 +349,95 @@ function cityAt(lon: number, lat: number, name = 'London') {
   return makeCity({ name, population: 9_000_000, point: { lon, lat, altitude_m: null } });
 }
 
+describe('CityLayer decluttering by name width', () => {
+  it('keeps the grid finer than a name, because it is a quantisation and not a distance', () => {
+    // What this constant means changed: a name now claims every cell its box covers, so the cell is
+    // the granularity of that box test rather than the exclusion distance. At 96 a 63-pixel box
+    // straddling a boundary claimed two cells and excluded 192 pixels, three times its own width, and
+    // names that would have fitted were dropped. Swept live, 24 kept the most names with no pair
+    // touching: 16, 21, 32 and 20 against 96's 13, 14, 26 and 12 at four zooms.
+    //
+    // The invariant is that it stays well under a name's width, or the quantisation error exceeds the
+    // thing being quantised. A short name at the smallest type is about 40 pixels.
+    expect(CITY_LABEL_CELL_PX).toBeLessThan(40);
+  });
+
+  it('drops a name whose box would touch a bigger one across a cell boundary', () => {
+    // Cairo and Alexandria, the last visual defect in the product. One and a third degrees apart, so
+    // once the projection was fixed they landed in *different* cells with the boundary between them,
+    // both claimed a free cell, and both drew touching. The single-cell test could not see it. This is
+    // the same defect the badge lattice had, where reserving one cell left the cell next door free and
+    // the badge that landed there still overlapped, and it takes the same answer.
+    //
+    // Forty degrees across, which puts them 46 pixels apart against a combined half-width of 63.
+    const framing = { west: 10, south: 10, east: 50, north: 50 };
+    const { layer, labels } = build(framing);
+    layer.load([
+      makeCity({ geonames_id: 1, name: 'Cairo', population: 9_000_000, point: at(31.24, 30.05) }),
+      makeCity({
+        geonames_id: 2,
+        name: 'Alexandria',
+        population: 5_200_000,
+        point: at(29.92, 31.2),
+      }),
+    ]);
+
+    layer.refresh({ ...framing, heightM: WHOLE_GLOBE_M });
+
+    // Cairo is the larger, so Cairo keeps its place and Alexandria is held rather than drawn.
+    expect(drawn(labels)).toEqual(['Cairo']);
+    expect(layer.held).toBe(2);
+  });
+
+  it('draws both once there is room for both names', () => {
+    // The other half, so the test above is about the geometry rather than about those two records.
+    // Zoomed in, the same pair are far enough apart that neither box reaches the other.
+    const framing = { west: 29, south: 29, east: 32.5, north: 32 };
+    const { layer, labels } = build(framing);
+    layer.load([
+      makeCity({ geonames_id: 1, name: 'Cairo', population: 9_000_000, point: at(31.24, 30.05) }),
+      makeCity({
+        geonames_id: 2,
+        name: 'Alexandria',
+        population: 5_200_000,
+        point: at(29.92, 31.2),
+      }),
+    ]);
+
+    layer.refresh({ ...framing, heightM: 300_000 });
+
+    expect(drawn(labels)).toEqual(['Cairo', 'Alexandria']);
+  });
+
+  it('excludes more screen for a long name than a short one', () => {
+    // The property a single cell could not have. A wide name has to hold more than a narrow one, or
+    // the exclusion is a cell test wearing a box's clothes.
+    const framing = { west: 20, south: 20, east: 45, north: 40 };
+    const short = build(framing);
+    short.layer.load([
+      makeCity({ geonames_id: 1, name: 'Ur', population: 9_000_000, point: at(31.24, 30.05) }),
+      makeCity({ geonames_id: 2, name: 'Bath', population: 5_200_000, point: at(32.54, 30.05) }),
+    ]);
+    short.layer.refresh({ ...framing, heightM: WHOLE_GLOBE_M });
+
+    const long = build(framing);
+    long.layer.load([
+      makeCity({
+        geonames_id: 1,
+        name: 'Comodoro Rivadavia',
+        population: 9_000_000,
+        point: at(31.24, 30.05),
+      }),
+      makeCity({ geonames_id: 2, name: 'Bath', population: 5_200_000, point: at(32.54, 30.05) }),
+    ]);
+    long.layer.refresh({ ...framing, heightM: WHOLE_GLOBE_M });
+
+    // Same two positions. The short name leaves room for its neighbour; the long one does not.
+    expect(drawn(short.labels)).toHaveLength(2);
+    expect(drawn(long.labels)).toEqual(['Comodoro Rivadavia']);
+  });
+});
+
 describe('CityLayer decluttering near the limb', () => {
   it('gives two cities that land in the same pixels one label between them', () => {
     // The bug this layer shipped with, and the reason the decluttering cell moved onto the camera's
@@ -799,11 +888,14 @@ describe('CityLayer render policy', () => {
 
     layer.refresh(everywhere(WHOLE_GLOBE_M));
 
-    // The grid is 15 by 9 at this viewport, so 135 is the ceiling and the budget is never reached.
+    // The cap is one name per patch of screen the width of a name, not one per grid cell: the cell is
+    // only what the box test is quantised onto. So the ceiling is how many name-sized boxes fit in the
+    // viewport, which is far below the budget and far below the cell count.
     const cells = Math.ceil(1400 / CITY_LABEL_CELL_PX) * Math.ceil(800 / CITY_LABEL_CELL_PX);
+    const nameBoxes = Math.floor((1400 * 800) / (70 * 28));
 
-    expect(cells).toBe(135);
-    expect(layer.count).toBeLessThanOrEqual(cells);
+    expect(layer.count).toBeLessThanOrEqual(nameBoxes);
+    expect(layer.count).toBeLessThan(cells);
     expect(layer.count).toBeLessThan(CITY_LABEL_BUDGET);
     // Everything is still held: the cap is on what is drawn, never on what the layer knows.
     expect(layer.held).toBe(CITY_LABEL_BUDGET + 100);
@@ -1256,7 +1348,11 @@ describe('a wrapped view rectangle', () => {
     // over London loses London and Paris and gains New York and Chicago, which sit at European
     // latitudes on the other side of the Atlantic. Tokyo is not drawn either, and not because
     // the layer got that one right: at 35.7°N it falls below the rectangle's own southern edge.
-    const { layer, labels } = build();
+    //
+    // Framed on North America, because New York and Chicago are thirteen degrees apart and a
+    // whole-world camera puts their names close enough to touch, at which point the decluttering
+    // correctly drops the smaller and this test stops being about the rectangle.
+    const { layer, labels } = build({ west: -125, south: 25, east: -66, north: 50 });
     layer.load(WORLD);
     layer.refresh(WRAPPED);
 
