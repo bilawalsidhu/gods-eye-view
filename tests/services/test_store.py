@@ -7,7 +7,9 @@ leaves the globe, which is the difference between a live picture and a plausible
 lie.
 """
 
-from tests.conftest import FrozenClock, make_aircraft
+from datetime import datetime, timedelta
+
+from tests.conftest import REFERENCE_TIME, FrozenClock, make_aircraft
 from tracker.contracts.aircraft import Aircraft
 from tracker.services.store import EntityStore, StoreChanges
 
@@ -334,3 +336,101 @@ def test_a_zero_ttl_expires_everything_on_the_next_call(frozen_clock: FrozenCloc
     frozen_clock.advance(0.001)
 
     assert store.expire() == ("3c6444",)
+
+
+# ---------------------------------------------------------------- newer wins
+
+
+def _fix_time(aircraft: Aircraft) -> datetime:
+    """The same fix time the app wires in: response time minus the position's own age."""
+    return aircraft.observed_at - timedelta(seconds=aircraft.position_age_s)
+
+
+def _recency_store(clock: FrozenClock | None = None) -> EntityStore[Aircraft]:
+    if clock is None:
+        return EntityStore(ttl_seconds=90.0, fix_time=_fix_time)
+    return EntityStore(ttl_seconds=90.0, clock=clock, fix_time=_fix_time)
+
+
+def test_an_older_report_never_replaces_the_newer_one_already_held() -> None:
+    """ADR 010: conflicts resolve by recency, and that has to hold across poll cycles.
+
+    Without this the merge resolves recency inside one cycle and the store then takes
+    whatever it is handed, so an asset walks backwards whenever the freshest provider
+    skips a cycle.
+    """
+    store = _recency_store()
+    newer = make_aircraft("3c6444", lon=1.0, observed_at=REFERENCE_TIME, position_age_s=0.0)
+    older = make_aircraft("3c6444", lon=2.0, observed_at=REFERENCE_TIME, position_age_s=600.0)
+    store.upsert("3c6444", newer)
+
+    store.upsert("3c6444", older)
+
+    held = store.get("3c6444")
+    assert held is newer
+    assert held is not None
+    assert held.point.lon == 1.0
+
+
+def test_an_older_report_is_not_broadcast_as_a_change() -> None:
+    """The regressed value must not reach a browser either, or the pin jumps backwards."""
+    store = _recency_store()
+    newer = make_aircraft("3c6444", observed_at=REFERENCE_TIME, position_age_s=0.0)
+    store.upsert("3c6444", newer)
+    store.take_changes()
+
+    store.upsert("3c6444", make_aircraft("3c6444", observed_at=REFERENCE_TIME, position_age_s=99.0))
+
+    assert store.take_changes().is_empty
+
+
+def test_a_stale_report_still_counts_as_the_entity_being_seen(frozen_clock: FrozenClock) -> None:
+    """A provider re-serving an old fix is still a provider reporting the ship.
+
+    Expiring it would take an asset off the globe while a feed is actively naming it, which
+    is a worse lie than showing the fix we already had.
+    """
+    store = _recency_store(frozen_clock)
+    store.upsert("3c6444", make_aircraft("3c6444", observed_at=REFERENCE_TIME, position_age_s=0.0))
+
+    frozen_clock.advance(80.0)
+    store.upsert("3c6444", make_aircraft("3c6444", observed_at=REFERENCE_TIME, position_age_s=60.0))
+    frozen_clock.advance(20.0)
+
+    assert store.expire() == (), "100s after the first fix, but only 20s after the last report"
+    assert len(store) == 1
+
+
+def test_an_equally_fresh_report_replaces_the_one_held() -> None:
+    """Two fixes at the same instant: nothing to choose between them, so the newest write wins."""
+    store = _recency_store()
+    store.upsert("3c6444", make_aircraft("3c6444", callsign="FIRST", position_age_s=0.0))
+
+    store.upsert("3c6444", make_aircraft("3c6444", callsign="SECOND", position_age_s=0.0))
+
+    held = store.get("3c6444")
+    assert held is not None
+    assert held.callsign == "SECOND"
+
+
+def test_without_a_fix_time_the_store_keeps_last_write_wins() -> None:
+    """A satellite carries an element set rather than an observation, so it has no fix time."""
+    store = _store()
+    store.upsert("3c6444", make_aircraft("3c6444", callsign="FIRST", position_age_s=0.0))
+
+    store.upsert("3c6444", make_aircraft("3c6444", callsign="SECOND", position_age_s=600.0))
+
+    held = store.get("3c6444")
+    assert held is not None
+    assert held.callsign == "SECOND"
+
+
+def test_replace_all_also_refuses_an_older_report() -> None:
+    """The guard belongs to the store, so both write paths get it."""
+    store = _recency_store()
+    newer = make_aircraft("3c6444", lon=1.0, position_age_s=0.0)
+    store.upsert("3c6444", newer)
+
+    store.replace_all([("3c6444", make_aircraft("3c6444", lon=2.0, position_age_s=600.0))])
+
+    assert store.get("3c6444") is newer

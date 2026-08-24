@@ -7,13 +7,18 @@ loop would have exited permanently on the first failure.
 """
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
+import httpx
 import pytest
 
+from tracker.cache import FILE_NAME, DiskCache
+from tracker.cache import key as cache_key
 from tracker.services.poller import (
     JITTER_FRACTION,
     MAX_BACKOFF_SECONDS,
+    NOT_BEFORE_KEY,
     Poller,
     PollerGroup,
     PollerHealth,
@@ -44,8 +49,10 @@ def _poller(
     interval_seconds: float = 5.0,
     min_interval_seconds: float = 1.0,
     name: str = "adsb.lol/point",
+    cache: DiskCache | None = None,
 ) -> Poller:
     return Poller(
+        cache=cache,
         name=name,
         layer="aircraft",
         poll=poll,
@@ -109,6 +116,20 @@ async def test_a_raising_poll_records_the_failure_without_killing_the_poller() -
     assert health.consecutive_failures == 1
     assert health.total_failures == 1
     assert health.last_error == "RuntimeError: upstream exploded"
+
+
+async def test_a_failure_with_no_message_still_says_what_broke() -> None:
+    """``last_error`` is served on ``/api/health`` and drawn on the layer rail.
+
+    An httpx connect timeout carries no message, so interpolating it served
+    "ConnectTimeout: " with nothing after the colon: a feed that broke for no stated reason.
+    """
+    poll = _Counter(error=httpx.ConnectTimeout(""))
+    poller = _poller(poll, interval_seconds=0.0, min_interval_seconds=0.001)
+
+    await poller.run_once()
+
+    assert poller.health.last_error == "ConnectTimeout"
 
 
 async def test_consecutive_failures_accumulate() -> None:
@@ -449,3 +470,81 @@ def test_a_feed_is_stale_when_unhealthy_or_repeatedly_failing() -> None:
     healthy.consecutive_failures = 0
     healthy.healthy = False
     assert healthy.to_contract().is_stale is True
+
+
+# ---------------------------------------------------------------- surviving a restart
+
+
+async def test_a_fresh_poller_honours_the_floor_the_previous_one_wrote(tmp_path: Path) -> None:
+    """The claim this module's docstring used to make and did not keep.
+
+    A supervisor bouncing a failing poller, or a person stopping and starting the app, used to
+    get a brand new floor every time. The provider cannot tell that apart from hammering. So
+    the second poller here is a different object over the same cache file, and it must refuse.
+    """
+    cache = DiskCache(tmp_path)
+    first = _Counter()
+    assert await _poller(first, interval_seconds=60.0, cache=cache).run_once() is True
+    assert first.calls == 1
+
+    restarted = _Counter()
+    assert await _poller(restarted, interval_seconds=60.0, cache=cache).run_once() is False
+    assert restarted.calls == 0
+
+
+async def test_a_fresh_poller_polls_once_the_persisted_floor_has_passed(tmp_path: Path) -> None:
+    """The floor delays, it never latches. A poller that could never poll again is worse."""
+    cache = DiskCache(tmp_path)
+    assert await _poller(_Counter(), interval_seconds=60.0, cache=cache).run_once() is True
+
+    # Rewind the stored floor rather than sleeping a minute: the value on disk is the whole
+    # mechanism, so writing an elapsed one is exactly what waiting would produce.
+    cache.set_time(
+        cache_key("poller", "adsb.lol/point", NOT_BEFORE_KEY),
+        datetime.now(UTC) - timedelta(seconds=1),
+    )
+    restarted = _Counter()
+
+    assert await _poller(restarted, interval_seconds=60.0, cache=cache).run_once() is True
+    assert restarted.calls == 1
+
+
+async def test_a_persisted_rate_limit_backoff_outlives_the_process(tmp_path: Path) -> None:
+    """The provider's own figure, not ours, and it is the one that matters.
+
+    adsb.lol answers HTTP 420 and asks for 120 seconds. Losing that on a restart is how a
+    fresh process opens by hammering an endpoint that had just asked it to stop.
+    """
+    cache = DiskCache(tmp_path)
+    limited = _Counter(error=RateLimitedError("adsb.lol", 420, 120.0))
+    poller = _poller(limited, interval_seconds=5.0, cache=cache)
+    await poller.run_once()
+
+    stored = cache.get_time(cache_key("poller", "adsb.lol/point", NOT_BEFORE_KEY))
+    assert stored is not None
+    assert stored > datetime.now(UTC) + timedelta(seconds=100)
+
+    fresh = _Counter()
+    assert await _poller(fresh, interval_seconds=5.0, cache=cache).run_once() is False
+    assert fresh.calls == 0
+
+
+async def test_two_pollers_do_not_share_one_floor(tmp_path: Path) -> None:
+    """The key is namespaced by poller name, so the vessel floor is not the aircraft floor."""
+    cache = DiskCache(tmp_path)
+    assert await _poller(_Counter(), interval_seconds=60.0, cache=cache).run_once() is True
+
+    other = _Counter()
+    poller = _poller(other, interval_seconds=60.0, cache=cache, name="vessels/union")
+
+    assert await poller.run_once() is True
+    assert other.calls == 1
+
+
+async def test_a_poller_with_no_cache_writes_nothing_and_behaves_as_before(tmp_path: Path) -> None:
+    """The persistence is opt-in, so a poller built without a cache is unchanged."""
+    poller = _poller(_Counter(), interval_seconds=60.0)
+    await poller.run_once()
+
+    assert poller.not_before is not None
+    assert not (tmp_path / FILE_NAME).exists()

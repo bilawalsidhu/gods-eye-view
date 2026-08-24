@@ -26,10 +26,23 @@ EXPECTED_PATHS = {
     "/api/aircraft",
     "/api/aircraft/{icao24}",
     "/api/vessels",
+    "/api/transit",
     "/api/vessels/{mmsi}",
     "/api/satellites",
     "/api/satellites/elements",
+    "/api/cities",
+    "/api/cities/{geonames_id}",
     "/api/layers",
+    "/api/search",
+    # The media proxy ADR 005 requires: post media is fetched and cached by us rather than
+    # hot-linked from a provider, which is a licence condition on several sources here.
+    "/api/media",
+    # Social posts, ADR 005. The pin a post draws is about its subject, because no source
+    # in this layer reports an author position.
+    "/api/social",
+    # The removal control ADR 008 requires: removal is immediate, with no queue and no
+    # human step, so the control is exposed rather than described.
+    "/api/removals",
 }
 
 

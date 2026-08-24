@@ -348,3 +348,22 @@ def test_observed_at_must_be_timezone_aware() -> None:
 def test_source_must_not_be_empty() -> None:
     with pytest.raises(ValidationError):
         make_aircraft(source="")
+
+
+def test_the_privacy_address_field_publishes_the_adr_009_position() -> None:
+    """The published schema carries this text, so a superseded rule in it is a shipped rule.
+
+    The description reaches ``openapi.json``, which CI pins, and the generated frontend client
+    type. It used to read "Not resolvable to an owner by design; we do not attempt to unmask
+    it", which is the pre-ADR-009 rule: ADR 009 decided a privacy address is correlated back to
+    a registration in phase 11, and ADR 007 and ADR 008 both strike the old wording through as
+    reversed. ``services/classify.py`` already had it right; the contract was where it survived.
+    """
+    schema = Aircraft.model_json_schema()
+    description = schema["properties"]["uses_privacy_address"]["description"]
+
+    assert "phase 11" in description
+    assert "ADR 009" in description
+    assert "by design" not in description
+    assert "unmask" not in description
+    assert "never attempt" not in (AircraftClass.__doc__ or "")

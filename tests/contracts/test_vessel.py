@@ -31,6 +31,7 @@ from tracker.contracts.vessel import (
     AIS_ROT_TURNING_LEFT_NO_RATE,
     AIS_ROT_TURNING_RIGHT_NO_RATE,
     AIS_SHIP_TYPE_NOT_AVAILABLE,
+    AIS_SOG_MAX_MPS,
     AIS_SOG_NOT_AVAILABLE,
     AIS_SOG_NOT_AVAILABLE_SCALED,
     MmsiCategory,
@@ -581,6 +582,43 @@ def test_derived_values_stay_off_the_wire() -> None:
     assert payload["mmsi"] == "230992610"
 
 
+def test_the_provider_list_survives_the_wire() -> None:
+    """ADR 010 wants the providers that saw a ship on the record, so it has to serialise.
+
+    The merge computes the list and the store is the boundary it has to cross: everything
+    downstream of ``services/union.py`` sees this contract and nothing else.
+    """
+    merged = make_vessel(source="aishub").model_copy(
+        update={"providers": ("aishub", "digitraffic")}
+    )
+
+    restored = Vessel.model_validate_json(merged.model_dump_json())
+
+    assert restored.providers == ("aishub", "digitraffic")
+    assert restored.providers[0] == restored.source
+    assert json.loads(merged.model_dump_json())["providers"] == ["aishub", "digitraffic"]
+
+
+def test_an_unmerged_vessel_carries_an_empty_provider_list() -> None:
+    """Empty rather than absent, so a client never has to branch on a missing key."""
+    assert make_vessel().providers == ()
+    assert json.loads(make_vessel().model_dump_json())["providers"] == []
+
+
+def test_field_descriptions_carry_no_internal_process_notes() -> None:
+    """Same rule the satellite contract asserts: a description says what the field is.
+
+    These land verbatim in ``openapi.json`` and then in ``frontend/src/types/api.d.ts``, so
+    an unratified internal decision reference is not something a consumer can act on. The
+    reasoning goes in a comment above the field.
+    """
+    for name, field in Vessel.model_fields.items():
+        text = field.description or ""
+        assert "pending-decisions" not in text, f"{name} cites an internal working note"
+        assert "A test asserts" not in text, f"{name} describes our test suite"
+        assert len(text) <= 400, f"{name} description is {len(text)} chars of prose"
+
+
 # ---------------------------------------------------------------- entity union
 
 
@@ -795,9 +833,52 @@ def test_speed_over_ground_converts_knots_to_metres_per_second() -> None:
         pytest.param(102.4, id="the reading AGENTS.md records"),
         pytest.param(-3.0, id="negative is not a speed"),
         pytest.param(None, id="absent"),
+        pytest.param(102.2, id="RATNIK, the gap between the bound and the sentinel"),
+        pytest.param(100.1, id="just over the domain bound"),
     ],
 )
 def test_speed_over_ground_maps_a_non_speed_to_none(knots: float | None) -> None:
     """A negative becomes None rather than zero: zero would claim the receiver said the
     vessel was stopped, and it said nothing of the kind."""
     assert speed_over_ground_mps(knots) is None
+
+
+def test_a_speed_between_the_domain_bound_and_the_sentinel_does_not_drop_the_vessel() -> None:
+    """The gap a real ship fell down, measured live on 2026-08-23.
+
+    ``AIS_SOG_MAX_MPS`` is 100 knots and the not-available sentinel is 102.3, so a wire value
+    in between used to pass the sentinel check, convert cleanly, and then be refused by the
+    field bound, which dropped the **whole vessel** over one junk display attribute. MMSI
+    273253530, "RATNIK", reported 102.2 knots on the Estonian feed and vanished from the globe.
+
+    The ship has to survive and the speed has to go, which is what every other out-of-range
+    optional field in this contract already does.
+    """
+    assert speed_over_ground_mps(102.2) is None
+    vessel = Vessel(
+        mmsi="273253530",
+        name="RATNIK",
+        point=Point(lon=28.049783, lat=60.49025),
+        speed_over_ground_mps=speed_over_ground_mps(102.2),
+        observed_at=REFERENCE_TIME,
+        position_age_s=0.0,
+        source="transpordiamet",
+    )
+    assert vessel.speed_over_ground_mps is None
+    assert vessel.mmsi == "273253530"
+
+
+def test_the_guard_sits_at_the_domain_bound_and_not_at_a_round_number_of_knots() -> None:
+    """``AIS_SOG_MAX_MPS`` is documented as 100 knots and is actually 99.91 of them.
+
+    51.4 m/s is where the contract's field bound sits, and 100 knots is 51.4444 m/s, so the
+    real ceiling is a hair under the round figure the constant's docstring quotes. Asserted
+    rather than smoothed over, because the next person to read "100 knots" and write a test
+    against exactly 100 deserves to find this instead of a puzzle. Nothing afloat is within
+    fifty knots of it either way.
+    """
+    assert speed_over_ground_mps(99.0) == pytest.approx(99.0 * KNOTS_TO_METRES_PER_SECOND)
+    assert speed_over_ground_mps(99.0) is not None
+    assert speed_over_ground_mps(100.0) is None
+    ceiling_in_knots = AIS_SOG_MAX_MPS / KNOTS_TO_METRES_PER_SECOND
+    assert ceiling_in_knots == pytest.approx(99.91, abs=0.01)

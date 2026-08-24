@@ -1,0 +1,181 @@
+agency_id,route_id,route_short_name,route_long_name,route_type,route_desc,route_url,route_color,route_text_color
+AKT:Authority:AKT_ID,AKT:Line:100,100,Arendal-Kristiansand,701,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:101,101,Eydehavn-Arendal-Grimstad N/S,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1010,10,Sykehuset - Kvadraturen,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1012,12,Kjos haveby - Justvik,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1013,13,Lokalbuss Grimsmyra - Lund,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1015,15,Tinnheia - Lund - UiA,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:102,102,Tromøy Øst-Arendal-Rykene,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:103,103,Tromøy Vest-Arendal-Hisøy,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1034,34,Lokalbuss Vennesla,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1040,40,Kristiansand - Årosskogen,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1043,43,Vedderheia - Langenes,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1044,44,Norddalsheia - Langenes,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1045,45,Kristiansand - Stokkeland,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1046,46,Kristiansand - Finsland,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1048,48,Høllen - Nodelandsheia,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:105,105,Arendal-Froland,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1051,51,Kvadraturen - Andøya,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1052,52,Bråvann - Slettheia,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1057,57,Lokalbuss Flekkerøy,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:108,100D,Arendal-Kristiansand direkte,701,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:109,100E,Arendal-Kristiansand ekspress,701,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:110,110,Jovannslia-Arendal-Stoa-Myra,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:111,111,Sykehuset-Arendal-Solåsen,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:118,118,Svipp Revesand,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:130,130,Brekkestø-Lillesand,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:133,133,Birkeland-Lillesand,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:134,134,Herefoss-Birkeland,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:138,138,Høvåg sk-Ulvøysund-Skottevig,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:139,139,Lillesand-Høvåg-Kristiansand,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:140,140,Grimstad-Myråsen-Homborsund,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:141,141,Feviktoppen-Haugenes,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:145,145,Grimstad-Rønnes,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:146,146,Grimstad-Rykene-Froland,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:150,150,Arendal-Tvedestrand-Risør,701,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:151,151,Tvedestrand-Staubø-Saltrød,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:152,152,Tvedestrand-Borøy,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:153,153,Tvedestrand-Gjeving,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:155,155,Tvedestrand-Vegårshei,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:156,156,Åmli-Tvedestrand,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:157,157,Åmli-Svenes,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:158,158,Arendal-Holt-Tvedestrand,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:162,162,Risør-Krabbesund,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:163,163,Risør-Krana,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:165,165,Vegårshei-Risør,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:166,166,Gjerstad-Vinterkjær,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:170,170,Kristiansand-Evje-Hovden,701,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:172,172,Åseral-Evje,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:173,173,Iveland-Vennesla,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:175,175,Arendal-Evje,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:19,19,Suldalen - Gimlekollen,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1908,1908,Videreg. skolebusser Lillesand,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1909,1909,Videreg. skolebusser Grimstad,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:191,191,Byferjer Arendal,1014,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1910,1910,Videreg. skolebusser Arendal,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1920,1920,Skolebusser Asdal og Rykene,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1921,1921,Skolebusser Myra og Stinta,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1922,1922,Skolebusser Nesheim og Stuenes,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1923,1923,Skolebusser Roligheden/Sandnes,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1924,1924,Skolebusser Hisøy og Nedenes,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1925,1925,Skolebusser Froland/Blakstadh.,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1926,1926,Skolebusser Froland og Mykland,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1933,1933,Skolebusser Birkeland,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1934,1934,Skolebusser Engesland/Herefoss,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1939,1939,Skolebusser Lillesand og Høvåg,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:194,194,Sandøya - Borøy,1014,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1940,1940,Skolebusser Eide og Holvika,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1943,1943,Skolebusser Landvik/Grimstad,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1945,1945,Skolebusser Hesnes og Jappa,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1946,1946,Skolebusser Fjære og Fevik,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:195,195,Lyngør - Gjeving,1014,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1950,1950,Videreg. skolebusser Tvedestr.,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1951,1951,Skolebusser Flosta og Stuenes,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1953,1953,Skolebusser Tvedestrand,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1955,1955,Skolebusser Vegårshei,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1956,1956,Skulebussar Åmli,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1962,1962,Skolebusser Risør,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1966,1966,Skolebusser Gjerstad,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1970,1970,Skulebussar Evje og Hornnes,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1972,1972,Skulebussar Åseral kommune,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1973,1973,Skulebussar Iveland kommune,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1975,1975,Skulebussar Bygland kommune,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1977,1977,Skulebussar Valle kommune,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:1979,1979,Skulebussar Bykle kommune,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:198,SVIPP,Svipp øst,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:199,BESTILL,Bestillingstransport,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:200,200,Kristiansand-Mandal-Lyngdal,701,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:201,201,Mandal-Vigeland-Audnedal,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:202,202,Mandal-Marnardal-Bjelland,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:203,203,Mandal-Vigeland-Lindesnes,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:204,204,Taxus Mandal,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:205,205,Skolebuss Vassmyra/Ime/Oasen,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:210,210,Mandal - Møll - Dølebru,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2101,2101,Vestbygda/Kile - Eikeland,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2102,2102,Røyknes - Eikeland skole,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2103,2103,Tjomsås/Lie - Skarpengland,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2104,2104,Homstean/Stallemo - Skarpengl.,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2105,2105,Skarpengland - Vennesla,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2106,2106,Kvarstein skole,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2107,2107,Steinsland - Venneslahallen,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2108,2108,Høietun - Venneslahallen,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2116,2116,Hellemyr - Grim skole,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2119,2119,Andøya - Sjøstrand skole,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2120,2120,Bjørndalssletta-Presteheia sk,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2121,2121,Gimlekollen - Havlimyra sk,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2128,58,Rona-Ytre Randesund-Dvergsnes,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2129,59,Erkleiv- Justvik skole,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2131,2131,Sødal - Lovisenlund sk,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2137,2137,Tveit - Ve skole,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2152,2152,Bråvann - Voiebyen skole,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2154,2154,Benestad - Strømme - Søm,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2170,2170,Ålo - Tangvall,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2171,2171,Langenes-Tangvall-Tinntjønn,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2172,2172,Try-Kleivset-Tinntjønn,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2175,2175,Stokkeland - Tunballen skole,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2176,2176,Rosseland - Tunnballen skole,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2177,2177,Vestre Fidje-Kilen-Finsland,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2178,2178,Stokkeland - Tunballen skole,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2181,2181,Nodelandsheia - Birkelid,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2182,2182,Søgne - Samfundets skole,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2184,2184,Tofteland - Samfundet skole,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2212,12,Dublering linje 12 mot Justvik,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2219,19,Suldalen - Gimlekollen,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2240,40E,Kristiansand - Åros,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2248,48,Tangvall - Hortemo,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2258,2258,Kristiansand - Søgne vgs,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2261,M1,Flekkerøy - Sørlandsparken,704,,,66FF33,000000
+AKT:Authority:AKT_ID,AKT:Line:2262,M2,Hånes - Voiebyen,704,,,FF3366,000000
+AKT:Authority:AKT_ID,AKT:Line:2263,M3,Slettheia - Søm,704,,,33FFFF,000000
+AKT:Authority:AKT_ID,AKT:Line:2264,M4,Hellemyr - Tømmerstø,704,,,82368C,000000
+AKT:Authority:AKT_ID,AKT:Line:230,230,Farsund-Borhaug,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2307,2307,Skolebuss Mandal omegn,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2311,2311,Skoleruter Vassm./Furul./Holum,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2318,2318,Skolerute Nyplass,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2319,2319,Skolerute Laudal/Øyslebø,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2322,2322,Skolebuss Øyslebø/Konsmo/Byrem,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2330,2330,Skolerute Lyngdal - Farsund,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2331,2331,Skolebuss i Farsund,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2332,2332,Skolerute Kvås/Berge/Lyngdal k,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2335,2335,Skolerute Berge/Årnes/Lyngdal,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2340,2340,Skolerute Eiken/Kollemo,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2341,2341,Skolerute Eiken/Snartemo/Byreo,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:240,240,Skoleruter Hægebostad,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2451,2451,Skolebuss i Kvinesdal,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2470,2470,Skulebussar Sirdal kommune,712,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:250,250,Flekkefjord - Lyngdal,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:251,251,Flekkefjord - Kvinesdal,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:252,252,Liknes -Kvinlog,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:2521,252,Bestilling Liknes - Knaben,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:253,253,Liknes -Kvinlog,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:256,256,Feda - Farsund - Vans,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:260,260,Flekkefjord - Sira - Moi,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:261,261,Flekkefjord - Hidra,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:262,262,Flekkefjord - Åna Sira,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:265,265,Bybuss Flekkefjord,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:270,270,Flekkefjord - Gyland - Tonstad,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:296,296,Launes (Hidra) - Kvellandstran,1004,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:297,297,Andabeløy - Abelnes,1004,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:30,30,Kvadraturen - Mosby - Vennesl,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:3001,M1,Flekkerøy - Sørlandsparken,704,,,66FF33,000000
+AKT:Authority:AKT_ID,AKT:Line:3002,M2,Voiebyen - Hånes,704,,,FF3366,000000
+AKT:Authority:AKT_ID,AKT:Line:3003,M3,Slettheia - Søm,704,,,33FFFF,000000
+AKT:Authority:AKT_ID,AKT:Line:3004,M4,Hellemyr - Tømmerstø,704,,,82368C,000000
+AKT:Authority:AKT_ID,AKT:Line:31,31,Kvadraturen - Sødal - Vennesla,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:32,32,Kvadraturen - Høietun,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:35,35,Tveit-Kjevik-Kristiansand,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:36,36,Birkeland-Tveit-Kristiansand,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:3701,881,Liknes-Kvinlog-Fjotland-Liknes,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:410,410,Svipp Mandal - Tangvall,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:4111,411,Lyngdal - Bryggeså,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:4121,412,Feda - Farsund,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:4141,414,Konsmo - Byremo,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:4151,415,Bjelland - Øyslebø,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:4161,416,Sveindal - Hægeland,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:4171,417,Oftebro - Romskogen,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:4572,457,Liknes - Knaben,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:4713,270,Flekkefjord - Gyland - Sirdal,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:472,472,Tonstad - Stavanger,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:5002,A2,Hånes - Vågdbygd senter o/t.,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:5025,A25,Kristiansand - Mjåvann,704,,,000000,FFFF00
+AKT:Authority:AKT_ID,AKT:Line:5026,A26,Voiebyen - IKEA,704,,,000000,FFFF00

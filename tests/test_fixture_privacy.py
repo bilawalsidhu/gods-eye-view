@@ -25,6 +25,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 SCRUBBED = (
     "casa_acrftreg_extract.csv",
     "ccarcs_carsownr_extract.csv",
+    "commons_geosearch_generator_live.json",
     "commons_imageinfo_p18_live.json",
     "companies_house_psc_snapshot_live.jsonl",
     "faa_master_extract.csv",

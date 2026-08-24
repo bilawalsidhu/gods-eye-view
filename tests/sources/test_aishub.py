@@ -113,8 +113,8 @@ def parse_one(**overrides: object) -> Vessel:
     """Parse a single-record body and return the one vessel, asserting nothing was dropped."""
     parsed = parse_response(body(record(**overrides)), received_at=RECEIVED_AT)
     assert parsed.drops == {}
-    assert len(parsed.vessels) == 1
-    return parsed.vessels[0]
+    assert len(parsed.records) == 1
+    return parsed.records[0]
 
 
 class FakeMonotonic:
@@ -196,7 +196,7 @@ def test_a_position_only_record_maps_with_everything_else_empty() -> None:
     )
 
     assert parsed.drops == {}
-    vessel = parsed.vessels[0]
+    vessel = parsed.records[0]
     assert vessel.label == "230992610"
     assert (vessel.name, vessel.call_sign, vessel.destination, vessel.eta) == (None,) * 4
     assert (vessel.imo, vessel.ship_type, vessel.draught_m) == (None, None, None)
@@ -212,7 +212,7 @@ def test_a_record_with_no_timestamp_at_all_is_dropped_and_counted() -> None:
     win a merge it should lose."""
     parsed = parse_response(body(record(TIME=None)), received_at=RECEIVED_AT)
 
-    assert parsed.vessels == ()
+    assert parsed.records == ()
     assert parsed.dropped == 1
     assert "no readable timestamp" in next(iter(parsed.drops))
 
@@ -341,7 +341,7 @@ def test_scaled_format_descales_position_course_speed_and_draught() -> None:
     )
 
     assert parsed.drops == {}
-    vessel = parsed.vessels[0]
+    vessel = parsed.records[0]
     assert vessel.point.lon == pytest.approx(22.216732, abs=1e-6)
     assert vessel.point.lat == pytest.approx(60.432413, abs=1e-6)
     assert vessel.course_over_ground_deg == pytest.approx(143.2)
@@ -370,7 +370,7 @@ def test_scaled_sentinels_map_to_none_too(sog: int) -> None:
         received_at=RECEIVED_AT,
     )
 
-    vessel = parsed.vessels[0]
+    vessel = parsed.records[0]
     assert vessel.course_over_ground_deg is None
     assert vessel.speed_over_ground_mps is None
     assert vessel.true_heading_deg is None
@@ -388,7 +388,7 @@ def test_an_unrecognised_format_echo_is_left_alone() -> None:
         parse_response(
             body(record(), envelope={"FORMAT": "SOMETHING NEW"}), received_at=RECEIVED_AT
         )
-        .vessels[0]
+        .records[0]
         .mmsi
         == "230992610"
     )
@@ -412,7 +412,7 @@ def test_the_xml_and_csv_field_name_is_accepted_for_the_same_value() -> None:
 
     parsed = parse_response(body(payload), received_at=RECEIVED_AT)
 
-    assert parsed.vessels[0].position_age_s == pytest.approx(30.0)
+    assert parsed.records[0].position_age_s == pytest.approx(30.0)
 
 
 def test_an_epoch_timestamp_is_read_as_seconds() -> None:
@@ -429,7 +429,7 @@ def test_a_clock_ahead_of_us_never_produces_a_negative_age() -> None:
 def test_an_undatable_record_is_dropped_and_counted(unreadable: object) -> None:
     parsed = parse_response(body(record(TIME=unreadable)), received_at=RECEIVED_AT)
 
-    assert parsed.vessels == ()
+    assert parsed.records == ()
     assert parsed.dropped == 1
     assert "no readable timestamp" in next(iter(parsed.drops))
 
@@ -441,7 +441,7 @@ def test_a_search_and_rescue_aircraft_is_dropped_with_its_category_named() -> No
     """MMSI 111265583 is LIFEGUARD 003 on the live feed, doing 36 knots. Not a vessel."""
     parsed = parse_response(body(record(MMSI=111265583)), received_at=RECEIVED_AT)
 
-    assert parsed.vessels == ()
+    assert parsed.records == ()
     assert parsed.dropped == 1
     assert "sar_aircraft" in next(iter(parsed.drops))
 
@@ -450,7 +450,7 @@ def test_the_placeholder_mmsi_is_dropped_rather_than_merging_ships_together() ->
     """999999999 is NATO WARSHIP on the live feed. Every ship using it merges into one."""
     parsed = parse_response(body(record(MMSI=999999999)), received_at=RECEIVED_AT)
 
-    assert parsed.vessels == ()
+    assert parsed.records == ()
     assert "unallocated" in next(iter(parsed.drops))
 
 
@@ -467,7 +467,7 @@ def test_the_placeholder_mmsi_is_dropped_rather_than_merging_ships_together() ->
 def test_an_unmappable_record_is_dropped_and_counted(bad: dict[str, object], reason: str) -> None:
     parsed = parse_response(body(record(**bad)), received_at=RECEIVED_AT)
 
-    assert parsed.vessels == ()
+    assert parsed.records == ()
     assert parsed.dropped == 1
     assert reason in next(iter(parsed.drops))
 
@@ -477,14 +477,14 @@ def test_one_bad_record_does_not_lose_the_good_ones() -> None:
 
     parsed = parse_response(payload, received_at=RECEIVED_AT)
 
-    assert {vessel.mmsi for vessel in parsed.vessels} == {"230992610", "265513270"}
+    assert {vessel.mmsi for vessel in parsed.records} == {"230992610", "265513270"}
     assert parsed.dropped == 1
 
 
 def test_a_record_that_is_not_even_an_object_is_dropped_and_counted() -> None:
     parsed = parse_response(json.dumps([{"ERROR": False}, ["a string"]]), received_at=RECEIVED_AT)
 
-    assert parsed.vessels == ()
+    assert parsed.records == ()
     assert parsed.dropped == 1
 
 
@@ -534,8 +534,8 @@ async def test_an_empty_200_never_empties_the_vessel_store(
 
     async def poll() -> int:
         parsed = await client.vessels()
-        store.replace_all((vessel.mmsi, vessel) for vessel in parsed.vessels)
-        return len(parsed.vessels)
+        store.replace_all((vessel.mmsi, vessel) for vessel in parsed.records)
+        return len(parsed.records)
 
     assert await poll() == 1
     clock.advance(MIN_INTERVAL_SECONDS)
@@ -569,7 +569,7 @@ def test_the_status_envelope_is_not_read_as_a_ship() -> None:
     """Element 0 is metadata. Anything iterating the response as ships counts it as one."""
     parsed = parse_response(body(record()), received_at=RECEIVED_AT)
 
-    assert len(parsed.vessels) == 1
+    assert len(parsed.records) == 1
 
 
 # ---------------------------------------------------------------- the cadence floor
@@ -799,4 +799,4 @@ def test_an_envelope_reporting_no_records_above_an_empty_array_is_a_legitimate_z
     box over quiet water or a ship that is not currently reporting is a correct zero, and
     calling that a provider failure would be a false alarm on the exact path it touches."""
     quiet = json.dumps([{"ERROR": False, "FORMAT": "HUMAN", "RECORDS": 0}, []]).encode()
-    assert parse_response(quiet).vessels == ()
+    assert parse_response(quiet).records == ()

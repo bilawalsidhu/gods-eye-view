@@ -169,7 +169,7 @@ def _mock_both(router: respx.Router, locations: bytes, statics: bytes) -> None:
 
 
 def test_parses_the_live_locations_body(locations_payload: bytes) -> None:
-    vessels = parse_locations(locations_payload)
+    vessels = parse_locations(locations_payload).records
     assert len(vessels) == VESSEL_COUNT
     assert {vessel.source for vessel in vessels} == {SOURCE_NAME}
     assert all(vessel.kind == "vessel" for vessel in vessels)
@@ -178,7 +178,7 @@ def test_parses_the_live_locations_body(locations_payload: bytes) -> None:
 
 def test_one_record_per_mmsi_across_the_live_body(locations_payload: bytes) -> None:
     """ADR 010 makes MMSI the merge key, so a duplicate here is a phantom ship."""
-    vessels = parse_locations(locations_payload)
+    vessels = parse_locations(locations_payload).records
     assert len({vessel.mmsi for vessel in vessels}) == len(vessels)
 
 
@@ -188,7 +188,7 @@ def test_coordinates_are_longitude_then_latitude(locations_payload: bytes) -> No
     The live capture is Finland and the Baltic. A latitude of 32 there is impossible, which
     is what makes this assertion meaningful rather than circular.
     """
-    vessels = parse_locations(locations_payload)
+    vessels = parse_locations(locations_payload).records
     assert all(16.0 < vessel.point.lon < 33.0 for vessel in vessels)
     assert all(57.0 < vessel.point.lat < 66.0 for vessel in vessels)
 
@@ -201,7 +201,7 @@ def test_parses_the_live_static_body(statics_payload: bytes) -> None:
 
 def test_sentinels_map_to_none_over_the_live_body(locations_payload: bytes) -> None:
     """Every AIS not-available value becomes ``None`` rather than a plausible number."""
-    vessels = parse_locations(locations_payload)
+    vessels = parse_locations(locations_payload).records
     assert sum(v.course_over_ground_deg is None for v in vessels) == COG_UNAVAILABLE
     assert sum(v.speed_over_ground_mps is None for v in vessels) == SOG_UNAVAILABLE
     assert sum(v.true_heading_deg is None for v in vessels) == HEADING_UNAVAILABLE
@@ -211,7 +211,7 @@ def test_sentinels_map_to_none_over_the_live_body(locations_payload: bytes) -> N
 
 def test_a_course_of_zero_is_a_real_course_due_north() -> None:
     """The sentinel is 360.0. Checking the bearing bound first drops 110 real live records."""
-    vessels = parse_locations(_envelope(_feature(cog=0.0)))
+    vessels = parse_locations(_envelope(_feature(cog=0.0))).records
     assert vessels[0].course_over_ground_deg == 0.0
 
 
@@ -237,7 +237,7 @@ def test_position_time_comes_from_timestamp_external_not_timestamp(
     raw = fixture_json("digitraffic_ais_locations_live.json")
     feature = next(f for f in raw["features"] if f["properties"]["timestamp"] >= 60)
     vessel = next(
-        v for v in parse_locations(locations_payload) if v.mmsi == f"{feature['mmsi']:09d}"
+        v for v in parse_locations(locations_payload).records if v.mmsi == f"{feature['mmsi']:09d}"
     )
 
     fixed_at = vessel.observed_at - timedelta(seconds=vessel.position_age_s)
@@ -254,12 +254,12 @@ def test_a_second_of_minute_is_never_read_as_a_time() -> None:
     date this record happily. This one drops it, because it has no fix time.
     """
     payload = _envelope(_feature(timestamp=1787179287522, timestampExternal=None))
-    assert parse_locations(payload) == ()
+    assert parse_locations(payload).records == ()
 
 
 def test_a_fix_time_outside_the_representable_range_is_dropped() -> None:
     payload = _envelope(_feature(timestampExternal=10**20))
-    assert parse_locations(payload) == ()
+    assert parse_locations(payload).records == ()
 
 
 # ---------------------------------------------------------------- trap 2
@@ -404,7 +404,7 @@ async def test_the_box_filter_is_applied_locally(
     _mock_both(respx_mock, _envelope(inside, outside), _statics())
 
     box = BoundingBox(west=21.0, south=60.0, east=23.0, north=61.0)
-    vessels = await client.vessels_in_box(box)
+    vessels = (await client.vessels_in_box(box)).records
     assert [vessel.mmsi for vessel in vessels] == ["230992610"]
 
 
@@ -449,7 +449,7 @@ async def test_positions_join_static_data_on_mmsi(
     statics_payload: bytes,
 ) -> None:
     _mock_both(respx_mock, locations_payload, statics_payload)
-    vessels = await client.all_vessels()
+    vessels = (await client.all_vessels()).records
 
     assert len(vessels) == VESSEL_COUNT
     assert sum(vessel.name is not None for vessel in vessels) == JOINED_COUNT
@@ -460,7 +460,7 @@ def test_a_position_with_no_static_record_still_renders(
 ) -> None:
     """108 of 1,058 live positions had no static record. That is normal, not an error."""
     statics = parse_static(statics_payload)
-    vessels = parse_locations(locations_payload, statics)
+    vessels = parse_locations(locations_payload, statics).records
 
     unnamed = [vessel for vessel in vessels if vessel.name is None]
     assert len(unnamed) == VESSEL_COUNT - JOINED_COUNT
@@ -483,7 +483,7 @@ def test_a_static_record_with_no_position_is_not_on_the_globe(
 ) -> None:
     """A vessel we know the name of but have never seen is not an entity."""
     statics = parse_static(statics_payload)
-    vessels = parse_locations(locations_payload, statics)
+    vessels = parse_locations(locations_payload, statics).records
 
     rendered = {vessel.mmsi for vessel in vessels}
     unpositioned = set(statics) - rendered
@@ -494,7 +494,7 @@ def test_a_static_record_with_no_position_is_not_on_the_globe(
 
 def test_static_data_is_optional(locations_payload: bytes) -> None:
     """A failed static call must not empty the layer: positions are the thing on screen."""
-    vessels = parse_locations(locations_payload)
+    vessels = parse_locations(locations_payload).records
     assert len(vessels) == VESSEL_COUNT
     assert all(vessel.name is None for vessel in vessels)
 
@@ -511,7 +511,7 @@ def test_a_search_and_rescue_aircraft_is_dropped(locations_payload: bytes) -> No
     raw = fixture_json("digitraffic_ais_locations_live.json")
     assert any(f["mmsi"] == int(SAR_AIRCRAFT_MMSI) for f in raw["features"])
 
-    vessels = parse_locations(locations_payload)
+    vessels = parse_locations(locations_payload).records
     assert SAR_AIRCRAFT_MMSI not in {vessel.mmsi for vessel in vessels}
     assert len(vessels) == FEATURE_COUNT - 1
 
@@ -527,7 +527,7 @@ def test_the_placeholder_mmsi_is_dropped_rather_than_merged() -> None:
     assert junk["mmsi"] == PLACEHOLDER_MMSI
 
     payload = _envelope(_feature(mmsi=PLACEHOLDER_MMSI), _feature(mmsi=230992610))
-    vessels = parse_locations(payload, parse_static(_statics(junk)))
+    vessels = parse_locations(payload, parse_static(_statics(junk))).records
     assert [vessel.mmsi for vessel in vessels] == ["230992610"]
     assert all(vessel.name != "NATO WARSHIP" for vessel in vessels)
 
@@ -536,36 +536,64 @@ def test_a_disagreeing_mmsi_is_dropped() -> None:
     """The MMSI arrives twice. Two copies that disagree are not an identity we can use."""
     feature = _feature(mmsi=230992610)
     feature["properties"]["mmsi"] = 230078610
-    assert parse_locations(_envelope(feature)) == ()
+    assert parse_locations(_envelope(feature)).records == ()
 
 
 @pytest.mark.parametrize("mmsi", [1_000_000_000, 12_345_678_901])
 def test_an_mmsi_that_is_not_nine_digits_is_dropped(mmsi: int) -> None:
-    assert parse_locations(_envelope(_feature(mmsi=mmsi))) == ()
+    assert parse_locations(_envelope(_feature(mmsi=mmsi))).records == ()
     assert parse_static(_statics(_static(mmsi=mmsi))) == {}
 
 
 def test_a_feature_with_no_position_is_dropped() -> None:
     feature = _feature()
     feature["geometry"] = None
-    assert parse_locations(_envelope(feature)) == ()
+    assert parse_locations(_envelope(feature)).records == ()
 
     short = _feature()
     short["geometry"]["coordinates"] = [22.2]
-    assert parse_locations(_envelope(short)) == ()
+    assert parse_locations(_envelope(short)).records == ()
 
 
 def test_a_feature_with_no_properties_is_dropped() -> None:
     feature = _feature()
     feature["properties"] = None
-    assert parse_locations(_envelope(feature)) == ()
+    assert parse_locations(_envelope(feature)).records == ()
 
 
 def test_a_record_that_fails_the_contract_is_dropped_not_partially_accepted() -> None:
-    """A speed above the contract bound means the sentinel was missed, so nothing is kept."""
-    payload = _envelope(_feature(sog=101.0), _feature(mmsi=230078610))
-    vessels = parse_locations(payload)
-    assert [vessel.mmsi for vessel in vessels] == ["230078610"]
+    """An unsalvageable field drops the whole record. Nothing is half-accepted.
+
+    A position is the one field a vessel cannot render without, so a coordinate outside WGS84
+    is the case that has to lose the record rather than empty a field.
+    """
+    off_the_earth = _feature()
+    off_the_earth["geometry"] = {"type": "Point", "coordinates": [200.0, 60.432413]}
+    payload = _envelope(off_the_earth, _feature(mmsi=230078610))
+    parsed = parse_locations(payload)
+    assert [vessel.mmsi for vessel in parsed.records] == ["230078610"]
+    assert parsed.dropped == 1
+
+
+def test_a_junk_speed_empties_the_speed_and_keeps_the_ship() -> None:
+    """Changed 2026-08-23, and it reverses what this test used to assert.
+
+    It used to say that a speed above the contract bound meant the sentinel had been missed, so
+    the whole vessel was dropped. Real data disproved the premise: MMSI 273253530, "RATNIK",
+    was reported at **102.2 knots** on the Estonian feed, which is below the 102.3
+    not-available sentinel and above the 100-knot domain bound. The sentinel was not missed;
+    the provider simply sent a junk speed. Under the old behaviour that ship vanished from the
+    globe over one display attribute.
+
+    So an out-of-range speed now maps to ``None`` in
+    :func:`~tracker.contracts.vessel.speed_over_ground_mps`, which is what ``imo``,
+    ``ship_type``, ``draught``, ``length`` and ``beam`` in this contract have always done. The
+    guard is in the shared helper rather than in five adapters.
+    """
+    parsed = parse_locations(_envelope(_feature(sog=101.0)))
+    assert len(parsed.records) == 1
+    assert parsed.records[0].speed_over_ground_mps is None
+    assert parsed.dropped == 0
 
 
 # ---------------------------------------------------------------- units and decoding
@@ -575,7 +603,7 @@ def test_units_are_converted_in_the_adapter() -> None:
     """Knots to metres per second, decimetres to metres, and dimensions summed."""
     vessels = parse_locations(
         _envelope(_feature(sog=10.0)), parse_static(_statics(_static(draught=49)))
-    )
+    ).records
     vessel = vessels[0]
     assert vessel.speed_over_ground_mps == pytest.approx(10.0 * KNOTS_TO_METRES_PER_SECOND)
     assert vessel.draught_m == pytest.approx(4.9)
@@ -585,20 +613,21 @@ def test_units_are_converted_in_the_adapter() -> None:
 
 def test_a_rate_of_turn_with_no_rate_is_not_turned_into_one() -> None:
     """+/-127 says "faster than 5 degrees per 30 seconds" without saying how fast."""
-    assert parse_locations(_envelope(_feature(rot=127)))[0].rate_of_turn_deg_per_min is None
-    assert parse_locations(_envelope(_feature(rot=-127)))[0].rate_of_turn_deg_per_min is None
-    turning = parse_locations(_envelope(_feature(rot=20)))[0].rate_of_turn_deg_per_min
+    saturated = parse_locations(_envelope(_feature(rot=127), _feature(rot=-127))).records
+    assert [vessel.rate_of_turn_deg_per_min for vessel in saturated] == [None, None]
+    turning = parse_locations(_envelope(_feature(rot=20))).records[0].rate_of_turn_deg_per_min
     assert turning is not None
     assert 0.0 < turning < 20.0
 
 
 def test_navigational_status_is_decoded_and_the_reserved_codes_are_empty() -> None:
     assert (
-        parse_locations(_envelope(_feature(navStat=5)))[0].navigational_status
+        parse_locations(_envelope(_feature(navStat=5))).records[0].navigational_status
         is NavigationalStatus.MOORED
     )
     for code in (9, 10, 13, 15):
-        assert parse_locations(_envelope(_feature(navStat=code)))[0].navigational_status is None
+        reserved = parse_locations(_envelope(_feature(navStat=code))).records[0]
+        assert reserved.navigational_status is None
 
 
 def test_the_packed_eta_is_decoded_and_never_becomes_a_datetime() -> None:
@@ -639,7 +668,7 @@ def test_a_transponder_with_no_dimensions_reports_none_not_zero_metres() -> None
 
 def test_the_age_is_measured_against_the_response_time(locations_payload: bytes) -> None:
     """``observed_at`` minus ``position_age_s`` recovers the fix, so the union can rank it."""
-    vessels = parse_locations(locations_payload)
+    vessels = parse_locations(locations_payload).records
     assert all(vessel.position_age_s >= 0.0 for vessel in vessels)
     assert max(vessel.position_age_s for vessel in vessels) > 3600.0
 
@@ -654,13 +683,15 @@ def test_a_fix_newer_than_the_response_gives_an_age_of_zero() -> None:
     payload = _envelope(
         _feature(timestampExternal=1787179287522), data_updated_time="2026-08-18T23:43:12Z"
     )
-    vessel = parse_locations(payload)[0]
+    vessel = parse_locations(payload).records[0]
     assert vessel.position_age_s == 0.0
     assert vessel.observed_at == datetime.fromtimestamp(1787179287522 / 1000.0, tz=UTC)
 
 
 def test_a_naive_response_time_gets_utc_attached_in_the_adapter() -> None:
-    vessel = parse_locations(_envelope(_feature(), data_updated_time="2026-08-19T22:42:53"))[0]
+    vessel = parse_locations(
+        _envelope(_feature(), data_updated_time="2026-08-19T22:42:53")
+    ).records[0]
     assert vessel.observed_at.tzinfo is not None
     assert vessel.observed_at.utcoffset() == timedelta(0)
 
@@ -686,7 +717,7 @@ def test_an_unrecognisable_locations_envelope_is_a_contract_violation(payload: b
 
 def test_an_empty_feature_list_is_a_legitimate_answer() -> None:
     """A radius query over open water is allowed to see nothing."""
-    assert parse_locations(_envelope()) == ()
+    assert parse_locations(_envelope()).records == ()
 
 
 @pytest.mark.parametrize("payload", [b"{}", b'{"vessels": []}', b"not json at all"])
@@ -735,8 +766,8 @@ async def test_an_etag_is_replayed_and_a_304_reuses_the_cached_body(
         ]
     )
 
-    first = await client.all_vessels()
-    second = await client.all_vessels()
+    first = (await client.all_vessels()).records
+    second = (await client.all_vessels()).records
 
     assert first == second
     assert len(first) == VESSEL_COUNT
@@ -878,8 +909,8 @@ def test_one_junk_field_in_one_feature_loses_that_feature_and_nothing_else(
     raw["features"][5]["properties"]["rot"] = 0.5
     broken = json.dumps(raw).encode()
 
-    assert len(parse_locations(locations_payload)) == VESSEL_COUNT
-    assert len(parse_locations(broken)) == VESSEL_COUNT - 1
+    assert len(parse_locations(locations_payload).records) == VESSEL_COUNT
+    assert len(parse_locations(broken).records) == VESSEL_COUNT - 1
 
 
 @pytest.mark.parametrize(
@@ -898,7 +929,7 @@ def test_an_unreadable_feature_is_dropped_and_the_rest_survive(
 ) -> None:
     raw = fixture_json("digitraffic_ais_locations_live.json")
     mutate(raw["features"][7])
-    assert len(parse_locations(json.dumps(raw).encode())) == VESSEL_COUNT - 1
+    assert len(parse_locations(json.dumps(raw).encode()).records) == VESSEL_COUNT - 1
 
 
 @pytest.mark.parametrize("draught", ["n/a", 5.5], ids=["text", "fractional"])
@@ -931,7 +962,7 @@ async def test_a_failing_static_endpoint_still_renders_the_positions(
     respx_mock.get(VESSELS_URL).respond(503)
     respx_mock.get(LOCATIONS_URL).respond(200, content=locations_payload)
 
-    vessels = await client.all_vessels()
+    vessels = (await client.all_vessels()).records
     assert len(vessels) == VESSEL_COUNT
     assert all(vessel.name is None for vessel in vessels)
 
@@ -949,8 +980,8 @@ async def test_a_static_failure_falls_back_to_the_last_static_data_we_hold(
     )
     respx_mock.get(LOCATIONS_URL).respond(200, content=locations_payload)
 
-    first = await client.all_vessels()
-    second = await client.all_vessels()
+    first = (await client.all_vessels()).records
+    second = (await client.all_vessels()).records
     named = {vessel.mmsi: vessel.name for vessel in first if vessel.name is not None}
     assert len(named) == JOINED_COUNT
     assert {vessel.mmsi: vessel.name for vessel in second if vessel.name is not None} == named
@@ -974,14 +1005,14 @@ def test_a_fix_time_in_our_future_is_dropped_and_counted() -> None:
     forbids however it arrives. 1893456000000 is 1 January 2030: dated to the future the
     record carries an age of zero and beats every real report until the clock catches up."""
     payload = _envelope(_feature(timestampExternal=1893456000000))
-    assert parse_locations(payload, now=REFERENCE_NOW) == ()
+    assert parse_locations(payload, now=REFERENCE_NOW).records == ()
 
 
 def test_a_fix_a_little_ahead_of_our_clock_is_kept() -> None:
     """Clock skew between us and the provider is not a broken record."""
     ahead = int((REFERENCE_NOW + timedelta(seconds=5)).timestamp() * 1000)
     payload = _envelope(_feature(timestampExternal=ahead), data_updated_time="2026-08-19T12:00:00Z")
-    vessel = parse_locations(payload, now=REFERENCE_NOW)[0]
+    vessel = parse_locations(payload, now=REFERENCE_NOW).records[0]
     assert vessel.position_age_s == 0.0
     assert vessel.observed_at == datetime.fromtimestamp(ahead / 1000.0, tz=UTC)
 
@@ -996,7 +1027,7 @@ def test_a_seconds_epoch_is_refused_rather_than_dated_to_1970() -> None:
     dates the fix to January 1970 and gives it an age of 1.8 billion seconds, which loses
     every recency contest in the union without anything being counted."""
     payload = _envelope(_feature(timestampExternal=1787179287))
-    assert parse_locations(payload, now=REFERENCE_NOW) == ()
+    assert parse_locations(payload, now=REFERENCE_NOW).records == ()
 
 
 def test_a_static_record_dated_in_seconds_is_undated_rather_than_dated_to_1970() -> None:
@@ -1036,4 +1067,4 @@ async def test_an_empty_answer_to_a_bounded_query_is_a_legitimate_zero(
 ) -> None:
     """Quiet water is not a broken feed, which is why the guard is scoped to the bare call."""
     _mock_both(respx_mock, _envelope(), _statics())
-    assert await client.vessels_near(lat=60.1, lon=24.9, radius_km=5) == ()
+    assert (await client.vessels_near(lat=60.1, lon=24.9, radius_km=5)).records == ()

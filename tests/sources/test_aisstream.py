@@ -187,12 +187,58 @@ async def _run_briefly(client: AisStreamClient, condition: Callable[[], bool]) -
 # ---------------------------------------------------------------- construction guards
 
 
+REGION_WORDS = (
+    "Europe",
+    "European",
+    "Nordic",
+    "Scandinav",
+    "Baltic",
+    "America",
+    "Atlantic",
+    "Pacific",
+    "Asia",
+    "Africa",
+    "Finland",
+    "Norway",
+    "Norwegian",
+    "Great Lakes",
+    "Lawrence",
+)
+"""Words that date a coverage string to the day it was written.
+
+Not an exhaustive gazetteer and it does not need to be: it is every region this layer has
+actually covered or been described as covering, which is where a stale claim comes from.
+"""
+
+
 def test_a_missing_key_is_unavailable_not_broken() -> None:
-    """No key means the layer reports itself off, with the reason a user can act on."""
+    """No key means the layer reports itself off, saying what the viewer actually loses.
+
+    This used to assert the reason named ``TRACKER_AISSTREAM_API_KEY``, on the theory that a
+    reason should tell you how to fix it. That is no longer the intent. Alexander Fanthome
+    ruled on 2026-08-20 that every source must be public with no API key at all, which puts
+    aisstream out of scope, so a card telling a viewer to go and get one argues against the
+    project's own constraint. What belongs on a card is the consequence, and the reason is now
+    asserted for that instead: it names the consequence and it does not name an environment
+    variable.
+
+    **It also names no region, and that assertion replaces one demanding "Northern Europe".**
+    The string said "Ships shown for Northern Europe only" until 2026-08-24, by which time the
+    Seaway feed had put 1,624 of 6,036 vessels on the Great Lakes and the St Lawrence, 26.9% of
+    the layer, and the rail was showing that sentence directly above a provider line reading
+    ``seaway only: 1,624``. A region named here is invalidated by the next authority added, and
+    this project adds them, so the test now forbids the class of claim rather than pinning one
+    wording. What is asserted is the part that stays true: no worldwide feed.
+    """
     with pytest.raises(AisStreamUnavailableError) as caught:
         AisStreamClient(api_key="", boxes=[NORTH_SEA], on_vessel=lambda _v: None)
     assert caught.value.detail == UNAVAILABLE_REASON
-    assert "TRACKER_AISSTREAM_API_KEY" in str(caught.value)
+    assert "TRACKER_" not in str(caught.value), "keyed sources are out of scope; do not ask"
+    assert "worldwide" in str(caught.value)
+    for region in REGION_WORDS:
+        assert region.lower() not in str(caught.value).lower(), (
+            f"{region!r} dates this string to the day it was written"
+        )
 
 
 def test_whitespace_is_not_a_key() -> None:

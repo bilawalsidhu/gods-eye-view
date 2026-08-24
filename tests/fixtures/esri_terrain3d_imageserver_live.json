@@ -1,0 +1,307 @@
+{
+ "currentVersion": 11.5,
+ "serviceDescription": "<p>Terrain 3D provides global elevation to use as a ground surface in 3D applications such as ArcGIS Pro, ArcGIS Online webscene. Heights are orthometric (in meters) and are based on multiple sources.This elevation layer compiles data from multiple data sources ranging from 1000m - 50cm (see <a href='https://esriurl.com/elevationcoveragemap'>Elevation Coverage Map<\/a> for details.). For more information on this service, including the terms of use, visit us <a href='http://goto.arcgisonline.com/elevation3d/WorldTerrain3D/Terrain3D'>online<\/a>.<\/p>",
+ "name": "WorldElevation3D/Terrain3D",
+ "description": "<p>Terrain 3D provides global elevation to use as a ground surface in 3D applications such as ArcGIS Pro, ArcGIS Online webscene. Heights are orthometric (in meters) and are based on multiple sources.This elevation layer compiles data from multiple data sources ranging from 1000m - 50cm (see <a href='https://esriurl.com/elevationcoveragemap'>Elevation Coverage Map<\/a> for details.). For more information on this service, including the terms of use, visit us <a href='http://goto.arcgisonline.com/elevation3d/WorldTerrain3D/Terrain3D'>online<\/a>.<\/p>",
+ "extent": {
+  "xmin": -2.0037507842788246E7,
+  "ymin": -2.0037508342687853E7,
+  "xmax": 2.0037507842788246E7,
+  "ymax": 2.00375083428E7,
+  "spatialReference": {
+   "wkid": 102100,
+   "latestWkid": 3857
+  }
+ },
+ "initialExtent": {
+  "xmin": -2.0037507842788246E7,
+  "ymin": -2.0037508342687853E7,
+  "xmax": 2.0037507842788246E7,
+  "ymax": 2.00375083428E7,
+  "spatialReference": {
+   "wkid": 102100,
+   "latestWkid": 3857
+  }
+ },
+ "fullExtent": {
+  "xmin": -2.0037507842788246E7,
+  "ymin": -2.0037508342687853E7,
+  "xmax": 2.0037507842788246E7,
+  "ymax": 2.00375083428E7,
+  "spatialReference": {
+   "wkid": 102100,
+   "latestWkid": 3857
+  }
+ },
+ "sortableFields": "",
+ "bandCount": 1,
+ "pixelType": "F32",
+ "minValues": [
+  -450
+ ],
+ "maxValues": [
+  8700
+ ],
+ "meanValues": [
+  400
+ ],
+ "stdvValues": [
+  870
+ ],
+ "serviceProperties": "<ImageServer><ImageServiceProperties><MosaicMethod>None<\/MosaicMethod><MosaicOperator>First<\/MosaicOperator><SortAscending>true<\/SortAscending><LockImageID><\/LockImageID><TileOrderField>MinPS<\/TileOrderField><TileOrderBase><\/TileOrderBase><AvgImageSpacingX>300.000000<\/AvgImageSpacingX><AvgImageSpacingY>300.000000<\/AvgImageSpacingY><ViewPointX>0.0<\/ViewPointX><ViewPointY>0.0<\/ViewPointY><ViewPointDefShiftX>0.0<\/ViewPointDefShiftX><ViewPointDefShiftY>0.0<\/ViewPointDefShiftY><CompressionMethod>LERC<\/CompressionMethod><CompressionQuality>75<\/CompressionQuality><CompressionTolerance>0.010000<\/CompressionTolerance><SamplingMethod>Bilinear<\/SamplingMethod><\/ImageServiceProperties><\/ImageServer>",
+ "allowedFields": "Name",
+ "hasMultidimensions": false,
+ "pixelSizeX": 0.5971642774751897,
+ "pixelSizeY": 0.59716415,
+ "meanPixelSize": 0.5971642137375949,
+ "datasetFormat": "AMD",
+ "uncompressedSize": 18014401999142792,
+ "blockWidth": 2048,
+ "blockHeight": 256,
+ "compressionType": "None",
+ "bandNames": [
+  "Band_1"
+ ],
+ "allowCopy": false,
+ "allowAnalysis": true,
+ "itemAccess": false,
+ "inspectionCapabilities": "",
+ "minPixelSize": 0,
+ "maxPixelSize": 0,
+ "copyrightText": "Sources: Vantor, Airbus DS, USGS, NGA, NASA, CGIAR, GEBCO, N Robinson, NCEAS, NLS, OS, NMA, Geodatastyrelsen and the GIS User Community",
+ "serviceDataType": "esriImageServiceDataTypeElevation",
+ "serviceSourceType": "esriImageServiceSourceTypeMosaicDataset",
+ "objectIdField": "OBJECTID",
+ "fields": [
+  {
+   "name": "OBJECTID",
+   "type": "esriFieldTypeOID",
+   "alias": "OBJECTID",
+   "domain": null
+  },
+  {
+   "name": "Shape",
+   "type": "esriFieldTypeGeometry",
+   "alias": "Shape",
+   "domain": null
+  },
+  {
+   "name": "Name",
+   "type": "esriFieldTypeString",
+   "alias": "Name",
+   "domain": null,
+   "length": 200
+  },
+  {
+   "name": "Category",
+   "type": "esriFieldTypeInteger",
+   "alias": "Category",
+   "domain": {
+    "type": "codedValue",
+    "name": "MosaicCatalogItemCategoryDomain",
+    "description": "Catalog item categories.",
+    "codedValues": [
+     {
+      "name": "Unknown",
+      "code": 0
+     },
+     {
+      "name": "Primary",
+      "code": 1
+     },
+     {
+      "name": "Overview",
+      "code": 2
+     },
+     {
+      "name": "Unprocessed Overview",
+      "code": 3
+     },
+     {
+      "name": "Partial Overview",
+      "code": 4
+     },
+     {
+      "name": "Inactive",
+      "code": 5
+     },
+     {
+      "name": "Uploaded",
+      "code": 253
+     },
+     {
+      "name": "Incomplete",
+      "code": 254
+     },
+     {
+      "name": "Custom",
+      "code": 255
+     }
+    ],
+    "mergePolicy": "esriMPTDefaultValue",
+    "splitPolicy": "esriSPTDefaultValue"
+   }
+  }
+ ],
+ "capabilities": "Image,Tilemap,Mensuration",
+ "defaultMosaicMethod": "None",
+ "allowedMosaicMethods": "None",
+ "mosaicOperator": "First",
+ "maxDownloadSizeLimit": 2048,
+ "defaultCompressionQuality": 10000,
+ "defaultResamplingMethod": "Bilinear",
+ "maxImageHeight": 4000,
+ "maxImageWidth": 4000,
+ "maxRecordCount": 1,
+ "maxDownloadImageCount": 0,
+ "maxMosaicImageCount": 20,
+ "singleFusedMapCache": true,
+ "tileInfo": {
+  "rows": 256,
+  "cols": 256,
+  "dpi": 96,
+  "format": "LERC",
+  "compressionQuality": 0,
+  "lercError": 0.1,
+  "origin": {
+   "x": -2.0037508342787E7,
+   "y": 2.0037508342787E7
+  },
+  "spatialReference": {
+   "wkid": 102100,
+   "latestWkid": 3857
+  },
+  "lods": [
+   {
+    "level": 0,
+    "resolution": 156543.03392800014,
+    "scale": 5.91657527591555E8
+   },
+   {
+    "level": 1,
+    "resolution": 78271.51696399994,
+    "scale": 2.95828763795777E8
+   },
+   {
+    "level": 2,
+    "resolution": 39135.75848200009,
+    "scale": 1.47914381897889E8
+   },
+   {
+    "level": 3,
+    "resolution": 19567.87924099992,
+    "scale": 7.3957190948944E7
+   },
+   {
+    "level": 4,
+    "resolution": 9783.93962049996,
+    "scale": 3.6978595474472E7
+   },
+   {
+    "level": 5,
+    "resolution": 4891.96981024998,
+    "scale": 1.8489297737236E7
+   },
+   {
+    "level": 6,
+    "resolution": 2445.98490512499,
+    "scale": 9244648.868618
+   },
+   {
+    "level": 7,
+    "resolution": 1222.992452562495,
+    "scale": 4622324.434309
+   },
+   {
+    "level": 8,
+    "resolution": 611.4962262813797,
+    "scale": 2311162.217155
+   },
+   {
+    "level": 9,
+    "resolution": 305.74811314055756,
+    "scale": 1155581.108577
+   },
+   {
+    "level": 10,
+    "resolution": 152.87405657041106,
+    "scale": 577790.554289
+   },
+   {
+    "level": 11,
+    "resolution": 76.43702828507324,
+    "scale": 288895.277144
+   },
+   {
+    "level": 12,
+    "resolution": 38.21851414253662,
+    "scale": 144447.638572
+   },
+   {
+    "level": 13,
+    "resolution": 19.10925707126831,
+    "scale": 72223.819286
+   },
+   {
+    "level": 14,
+    "resolution": 9.554628535634155,
+    "scale": 36111.909643
+   },
+   {
+    "level": 15,
+    "resolution": 4.77731426794937,
+    "scale": 18055.954822
+   },
+   {
+    "level": 16,
+    "resolution": 2.388657133974685,
+    "scale": 9027.977411
+   }
+  ]
+ },
+ "storageInfo": {
+  "storageFormat": "esriMapCacheStorageModeCompactV2",
+  "packetSize": 128
+ },
+ "cacheType": "Elevation",
+ "allowRasterFunction": false,
+ "rasterFunctionInfos": [
+  {
+   "name": "None",
+   "description": "",
+   "help": ""
+  }
+ ],
+ "rasterTypeInfos": [
+  {
+   "name": "Raster Dataset",
+   "description": "Supports all ArcGIS Raster Datasets",
+   "help": ""
+  }
+ ],
+ "mensurationCapabilities": "Basic",
+ "hasHistograms": true,
+ "hasColormap": false,
+ "hasRasterAttributeTable": false,
+ "minScale": 0,
+ "maxScale": 0,
+ "exportTilesAllowed": false,
+ "supportsStatistics": true,
+ "supportsAdvancedQueries": true,
+ "editFieldsInfo": null,
+ "ownershipBasedAccessControlForRasters": null,
+ "allowComputeTiePoints": false,
+ "useStandardizedQueries": true,
+ "advancedQueryCapabilities": {
+  "useStandardizedQueries": true,
+  "supportsStatistics": true,
+  "supportsOrderBy": true,
+  "supportsDistinct": true,
+  "supportsPagination": true
+ },
+ "spatialReference": {
+  "wkid": 102100,
+  "latestWkid": 3857
+ },
+ "resampling": false
+}

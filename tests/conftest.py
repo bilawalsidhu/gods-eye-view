@@ -18,6 +18,11 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+# Aliased: this module already has a `settings` fixture, and hypothesis's `settings` is a
+# different thing entirely.
+from hypothesis import HealthCheck
+from hypothesis import settings as hypothesis_settings
+
 from tracker.api.state import AppState
 from tracker.app import create_app
 from tracker.config import Settings
@@ -25,6 +30,29 @@ from tracker.contracts.aircraft import Aircraft, AircraftClass, EmergencyState
 from tracker.contracts.geo import Point
 from tracker.contracts.satellite import Satellite
 from tracker.contracts.vessel import NavigationalStatus, Vessel, VesselEta
+
+# ---------------------------------------------------------------- hypothesis
+
+# **No per-example deadline.** Hypothesis defaults to 200ms per example, and a property test
+# asserts a property rather than a latency, so a wall-clock bound inside a run competing with
+# other work fails by luck and reports as a logic error.
+#
+# Measured 2026-08-23: `test_contains_agrees_with_a_manual_check_for_a_non_crossing_box` failed
+# once in a loaded full run, then passed in isolation, passed on the next full run, and survived
+# 20,000 examples of its own strategies with no counterexample. Nothing was wrong with
+# `BoundingBox.contains`; the machine was busy. A geospatial correctness test that cries wolf is
+# worse than one that is merely slow, because this project's rules make a bounding-box defect a
+# thing you must stop and investigate.
+#
+# Same family as the local Playwright worker cap in `frontend/playwright.config.ts` and the
+# vitest timing assertion deleted from the clustering tests. `max_examples` still bounds the
+# work, so dropping the deadline cannot make the suite run away.
+hypothesis_settings.register_profile(
+    "tracker",
+    deadline=None,
+    suppress_health_check=[HealthCheck.too_slow],
+)
+hypothesis_settings.load_profile("tracker")
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -238,6 +266,24 @@ def make_satellite(
 # ---------------------------------------------------------------- application
 
 
+@pytest.fixture(autouse=True)
+def isolated_cache_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Give every ``Settings()`` in the suite its own disk cache directory.
+
+    Autouse, because the disk cache does its job whether a test asked for it or not: a rate
+    floor one run writes is a floor the next run honours, and the default points at the repo.
+    Sharing one file across a session made that leak sideways, which showed up as a poller
+    refusing its very first call because an unrelated test had already spent the slot. Per
+    test, the persistence stays real and the tests stay independent.
+
+    Returned so a test that wants to assert on the file, or reuse it across two constructions
+    to stand in for a restart, can ask for the same directory.
+    """
+    directory = tmp_path / "cache"
+    monkeypatch.setenv("TRACKER_CACHE_DIR", str(directory))
+    return directory
+
+
 @pytest.fixture
 def keyless_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Remove every credential from the environment.
@@ -251,7 +297,6 @@ def keyless_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "TRACKER_DIGITRAFFIC_USER",
         "TRACKER_WINDY_API_KEY",
         "TRACKER_TFL_APP_KEY",
-        "TRACKER_CESIUM_ION_TOKEN",
         "TRACKER_CONTACT_EMAIL",
     ):
         monkeypatch.delenv(name, raising=False)

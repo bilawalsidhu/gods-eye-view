@@ -1,0 +1,509 @@
+{
+ "batchcomplete": true,
+ "query": {
+  "pages": [
+   {
+    "pageid": 79430385,
+    "ns": 6,
+    "title": "File:Iraq Olympic basketball team uniforms.jpg",
+    "index": 27,
+    "imagerepository": "local",
+    "imageinfo": [
+     {
+      "timestamp": "2019-06-02T23:28:55Z",
+      "user": "Testuploader1",
+      "size": 3118077,
+      "width": 3458,
+      "height": 2113,
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Iraq_Olympic_basketball_team_uniforms.jpg/500px-Iraq_Olympic_basketball_team_uniforms.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "thumbwidth": 500,
+      "thumbheight": 306,
+      "responsiveUrls": {
+       "2": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Iraq_Olympic_basketball_team_uniforms.jpg/1280px-Iraq_Olympic_basketball_team_uniforms.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+      },
+      "thumbattribs": {
+       "src": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Iraq_Olympic_basketball_team_uniforms.jpg/500px-Iraq_Olympic_basketball_team_uniforms.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+       "decoding": "async",
+       "loading": "lazy",
+       "width": 500,
+       "height": 306,
+       "srcset": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Iraq_Olympic_basketball_team_uniforms.jpg/1280px-Iraq_Olympic_basketball_team_uniforms.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail 2x"
+      },
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/94/Iraq_Olympic_basketball_team_uniforms.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Iraq_Olympic_basketball_team_uniforms.jpg",
+      "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=79430385",
+      "extmetadata": {
+       "DateTime": {
+        "value": "2019-06-02 23:28:55",
+        "source": "mediawiki-metadata",
+        "hidden": ""
+       },
+       "ObjectName": {
+        "value": "Iraq Olympic basketball team uniforms",
+        "source": "mediawiki-metadata"
+       },
+       "CommonsMetadataExtension": {
+        "value": 1.2,
+        "source": "extension",
+        "hidden": ""
+       },
+       "Categories": {
+        "value": "Iraq at the 1948 Summer Olympics|Basketball at the 1948 Summer Olympics|Template Unknown (author)|1948 black and white portrait photographs of men|Files with coordinates missing SDC location of creation (51° N, 1° W)",
+        "source": "commons-categories",
+        "hidden": ""
+       },
+       "Assessments": {
+        "value": "",
+        "source": "commons-categories",
+        "hidden": ""
+       },
+       "GPSLatitude": {
+        "value": "51.507400",
+        "source": "commons-desc-page"
+       },
+       "GPSLongitude": {
+        "value": "-0.127800",
+        "source": "commons-desc-page"
+       },
+       "GPSMapDatum": {
+        "value": "WGS-84",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "ImageDescription": {
+        "value": "Members of the team: Ahmed Hamed, Emile Yousef, George Hanna, Hashim Abdul-Jalil, Irfan Abdul-Kadir, Kanan Aoni, Salih Faraj, Salman Mahdi Deheh, Salman Ali Daleh and Wadud Khalil Jumaa.",
+        "source": "commons-desc-page"
+       },
+       "DateTimeOriginal": {
+        "value": "cir. 1948",
+        "source": "commons-desc-page"
+       },
+       "Credit": {
+        "value": "Source: Photo archives of John Hanna Hallaq",
+        "source": "commons-desc-page"
+       },
+       "Artist": {
+        "value": "Synthetic Author One<span style=\"display: none;\">Synthetic Author One</span>",
+        "source": "commons-desc-page"
+       },
+       "LicenseShortName": {
+        "value": "CC BY-SA 4.0",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "UsageTerms": {
+        "value": "Creative Commons Attribution-Share Alike 4.0",
+        "source": "commons-desc-page"
+       },
+       "AttributionRequired": {
+        "value": "true",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "LicenseUrl": {
+        "value": "https://creativecommons.org/licenses/by-sa/4.0",
+        "source": "commons-desc-page"
+       },
+       "Copyrighted": {
+        "value": "True",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "Restrictions": {
+        "value": "",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "License": {
+        "value": "cc-by-sa-4.0",
+        "source": "commons-templates",
+        "hidden": ""
+       }
+      },
+      "mime": "image/jpeg"
+     }
+    ],
+    "coordinates": [
+     {
+      "lat": 51.5074,
+      "lon": -0.1278,
+      "primary": true,
+      "globe": "earth"
+     }
+    ]
+   },
+   {
+    "pageid": 176884078,
+    "ns": 6,
+    "title": "File:Boris-grey-interview.ogg",
+    "index": 40,
+    "imagerepository": "local",
+    "imageinfo": [
+     {
+      "timestamp": "2025-10-17T11:02:03Z",
+      "user": "Testuploader2",
+      "size": 6213274,
+      "width": 0,
+      "height": 0,
+      "duration": 738.5474603174603,
+      "thumburl": "https://commons.wikimedia.org/w/resources/assets/file-type-icons/fileicon-ogg.png",
+      "thumbwidth": 500,
+      "thumbheight": 500,
+      "thumbattribs": [],
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/9e/Boris-grey-interview.ogg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Boris-grey-interview.ogg",
+      "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=176884078",
+      "extmetadata": {
+       "DateTime": {
+        "value": "2025-10-17 11:02:03",
+        "source": "mediawiki-metadata",
+        "hidden": ""
+       },
+       "ObjectName": {
+        "value": "Boris-grey-interview",
+        "source": "mediawiki-metadata"
+       },
+       "CommonsMetadataExtension": {
+        "value": 1.2,
+        "source": "extension",
+        "hidden": ""
+       },
+       "Categories": {
+        "value": "Files with coordinates missing SDC location of creation (51° N, 1° W)|Radio interviews",
+        "source": "commons-categories",
+        "hidden": ""
+       },
+       "Assessments": {
+        "value": "",
+        "source": "commons-categories",
+        "hidden": ""
+       },
+       "GPSLatitude": {
+        "value": "51.507400",
+        "source": "commons-desc-page"
+       },
+       "GPSLongitude": {
+        "value": "-0.127800",
+        "source": "commons-desc-page"
+       },
+       "GPSMapDatum": {
+        "value": "WGS-84",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "ImageDescription": {
+        "value": "Interview with Boris Grey aired on The Antidote Radio (Canada). The audio file is freely available for download from the official website.",
+        "source": "commons-desc-page"
+       },
+       "DateTimeOriginal": {
+        "value": "2024-03-20",
+        "source": "commons-desc-page"
+       },
+       "Credit": {
+        "value": "<a rel=\"nofollow\" class=\"external free\" href=\"https://example.invalid/source\">https://example.invalid/source</a>",
+        "source": "commons-desc-page"
+       },
+       "Artist": {
+        "value": "Synthetic Author Two",
+        "source": "commons-desc-page"
+       },
+       "LicenseShortName": {
+        "value": "CC BY-SA 4.0",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "UsageTerms": {
+        "value": "Creative Commons Attribution-Share Alike 4.0",
+        "source": "commons-desc-page"
+       },
+       "AttributionRequired": {
+        "value": "true",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "LicenseUrl": {
+        "value": "https://creativecommons.org/licenses/by-sa/4.0",
+        "source": "commons-desc-page"
+       },
+       "Copyrighted": {
+        "value": "True",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "Restrictions": {
+        "value": "",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "License": {
+        "value": "cc-by-sa-4.0",
+        "source": "commons-templates",
+        "hidden": ""
+       }
+      },
+      "mime": "application/ogg"
+     }
+    ],
+    "coordinates": [
+     {
+      "lat": 51.5074,
+      "lon": -0.1278,
+      "primary": true,
+      "globe": "earth"
+     }
+    ]
+   },
+   {
+    "pageid": 176918466,
+    "ns": 6,
+    "title": "File:Interview with Boris Grey - The Culture News (2024).ogg",
+    "index": 41,
+    "imagerepository": "local",
+    "imageinfo": [
+     {
+      "timestamp": "2025-10-18T00:18:13Z",
+      "user": "Testuploader3",
+      "size": 4339292,
+      "width": 0,
+      "height": 0,
+      "duration": 447.82460317460317,
+      "thumburl": "https://commons.wikimedia.org/w/resources/assets/file-type-icons/fileicon-ogg.png",
+      "thumbwidth": 500,
+      "thumbheight": 500,
+      "thumbattribs": [],
+      "url": "https://upload.wikimedia.org/wikipedia/commons/5/51/Interview_with_Boris_Grey_-_The_Culture_News_%282024%29.ogg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Interview_with_Boris_Grey_-_The_Culture_News_(2024).ogg",
+      "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=176918466",
+      "extmetadata": {
+       "DateTime": {
+        "value": "2025-10-18 00:18:13",
+        "source": "mediawiki-metadata",
+        "hidden": ""
+       },
+       "ObjectName": {
+        "value": "Interview with Boris Grey - The Culture News (2024)",
+        "source": "mediawiki-metadata"
+       },
+       "CommonsMetadataExtension": {
+        "value": 1.2,
+        "source": "extension",
+        "hidden": ""
+       },
+       "Categories": {
+        "value": "Files with coordinates missing SDC location of creation (51° N, 1° W)|Boris Grey; The Culture News; iHeart Radio; Interview; Music artist",
+        "source": "commons-categories",
+        "hidden": ""
+       },
+       "Assessments": {
+        "value": "",
+        "source": "commons-categories",
+        "hidden": ""
+       },
+       "GPSLatitude": {
+        "value": "51.507400",
+        "source": "commons-desc-page"
+       },
+       "GPSLongitude": {
+        "value": "-0.127800",
+        "source": "commons-desc-page"
+       },
+       "GPSMapDatum": {
+        "value": "WGS-84",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "ImageDescription": {
+        "value": "Radio interview with Boris Grey aired on The Culture News.",
+        "source": "commons-desc-page"
+       },
+       "DateTimeOriginal": {
+        "value": "2024-03-25",
+        "source": "commons-desc-page"
+       },
+       "Credit": {
+        "value": "<a rel=\"nofollow\" class=\"external free\" href=\"https://example.invalid/source\">https://example.invalid/source</a>",
+        "source": "commons-desc-page"
+       },
+       "Artist": {
+        "value": "Synthetic Author Three",
+        "source": "commons-desc-page"
+       },
+       "LicenseShortName": {
+        "value": "CC BY-SA 4.0",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "UsageTerms": {
+        "value": "Creative Commons Attribution-Share Alike 4.0",
+        "source": "commons-desc-page"
+       },
+       "AttributionRequired": {
+        "value": "true",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "LicenseUrl": {
+        "value": "https://creativecommons.org/licenses/by-sa/4.0",
+        "source": "commons-desc-page"
+       },
+       "Copyrighted": {
+        "value": "True",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "Restrictions": {
+        "value": "",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "License": {
+        "value": "cc-by-sa-4.0",
+        "source": "commons-templates",
+        "hidden": ""
+       }
+      },
+      "mime": "application/ogg"
+     }
+    ],
+    "coordinates": [
+     {
+      "lat": 51.5074,
+      "lon": -0.1278,
+      "primary": true,
+      "globe": "earth"
+     }
+    ]
+   },
+   {
+    "pageid": 38713198,
+    "ns": 6,
+    "title": "File:London, England (4131767098).jpg",
+    "index": -1,
+    "imagerepository": "local",
+    "imageinfo": [
+     {
+      "timestamp": "2015-03-03T22:47:11Z",
+      "user": "Testuploader4",
+      "size": 987983,
+      "width": 2412,
+      "height": 1794,
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/London%2C_England_%284131767098%29.jpg/500px-London%2C_England_%284131767098%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "thumbwidth": 500,
+      "thumbheight": 372,
+      "responsiveUrls": {
+       "2": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/London%2C_England_%284131767098%29.jpg/1280px-London%2C_England_%284131767098%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+      },
+      "thumbattribs": {
+       "src": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/London%2C_England_%284131767098%29.jpg/500px-London%2C_England_%284131767098%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+       "decoding": "async",
+       "loading": "lazy",
+       "width": 500,
+       "height": 372,
+       "srcset": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/London%2C_England_%284131767098%29.jpg/1280px-London%2C_England_%284131767098%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail 2x"
+      },
+      "url": "https://upload.wikimedia.org/wikipedia/commons/5/59/London%2C_England_%284131767098%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:London,_England_(4131767098).jpg",
+      "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=38713198",
+      "extmetadata": {
+       "DateTime": {
+        "value": "2015-03-03 22:47:11",
+        "source": "mediawiki-metadata",
+        "hidden": ""
+       },
+       "ObjectName": {
+        "value": "London, England (4131767098)",
+        "source": "mediawiki-metadata"
+       },
+       "CommonsMetadataExtension": {
+        "value": 1.2,
+        "source": "extension",
+        "hidden": ""
+       },
+       "Categories": {
+        "value": "Austin FX4|Flickr images reviewed by FlickreviewR|Taxis in London|Photographs by Mic|Files with coordinates missing SDC location of creation (51° N, 1° W)",
+        "source": "commons-categories",
+        "hidden": ""
+       },
+       "Assessments": {
+        "value": "",
+        "source": "commons-categories",
+        "hidden": ""
+       },
+       "GPSLatitude": {
+        "value": "51.507433",
+        "source": "commons-desc-page"
+       },
+       "GPSLongitude": {
+        "value": "-0.127737",
+        "source": "commons-desc-page"
+       },
+       "GPSMapDatum": {
+        "value": "WGS-84",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "ImageDescription": {
+        "value": "London Taxi International black cab.",
+        "source": "commons-desc-page"
+       },
+       "DateTimeOriginal": {
+        "value": "2009-11-14 14:07",
+        "source": "commons-desc-page"
+       },
+       "Credit": {
+        "value": "<a rel=\"nofollow\" class=\"external text\" href=\"https://example.invalid/source\">London, England</a>",
+        "source": "commons-desc-page"
+       },
+       "Artist": {
+        "value": "Synthetic Author Four",
+        "source": "commons-desc-page"
+       },
+       "LicenseShortName": {
+        "value": "CC BY 2.0",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "UsageTerms": {
+        "value": "Creative Commons Attribution 2.0",
+        "source": "commons-desc-page"
+       },
+       "AttributionRequired": {
+        "value": "true",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "LicenseUrl": {
+        "value": "https://creativecommons.org/licenses/by/2.0",
+        "source": "commons-desc-page"
+       },
+       "Copyrighted": {
+        "value": "True",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "Restrictions": {
+        "value": "",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "License": {
+        "value": "cc-by-2.0",
+        "source": "commons-templates",
+        "hidden": ""
+       }
+      },
+      "mime": "image/jpeg"
+     }
+    ],
+    "coordinates": [
+     {
+      "lat": 51.507433,
+      "lon": -0.127737,
+      "primary": true,
+      "globe": "earth"
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -20,6 +20,7 @@ captured.
 import json
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -34,7 +35,14 @@ from tests.conftest import (
 )
 from tracker.contracts.aircraft import Aircraft
 from tracker.services.store import EntityStore
-from tracker.services.union import ProviderResult, UnionResult, merge_providers
+from tracker.services.union import (
+    ProviderResult,
+    ProviderTally,
+    UnionResult,
+    count_drops,
+    merge_providers,
+    record_cycle,
+)
 from tracker.sources.adsb import parse_response
 from tracker.sources.base import RateLimitedError
 
@@ -507,6 +515,22 @@ def test_a_provider_that_raises_drops_out_and_the_layer_keeps_serving() -> None:
     assert all(record.providers == (LOL,) for record in result.records)
 
 
+def test_a_failure_with_no_message_is_still_named_on_the_layer() -> None:
+    """``degraded_reason`` is served on ``/api/layers``, so it cannot end in a colon.
+
+    An httpx read timeout carries no message. Interpolating it left the row reading
+    "aisstream: ReadTimeout: " and told a viewer nothing about what is missing.
+    """
+    silent: ProviderResult[Aircraft] = ProviderResult.from_error(FI, httpx.ReadTimeout(""))
+
+    result = _merge(ProviderResult(provider=LOL), silent)
+
+    assert silent.error == "ReadTimeout"
+    reason = result.degraded_reason
+    assert reason == f"{FI}: ReadTimeout"
+    assert not reason.endswith(":")
+
+
 def test_an_empty_answer_is_not_a_failure() -> None:
     """AISHub answers a bad username with an empty HTTP 200.
 
@@ -658,3 +682,138 @@ def test_a_dropped_provider_reports_itself_the_way_the_poller_does() -> None:
     assert dropped.failed
     assert dropped.records == ()
     assert dropped.error == "ValueError: bad envelope"
+
+
+# ---------------------------------------------------------------- running per-provider counts
+#
+# A UnionResult describes one cycle and is replaced by the next, so on its own it cannot
+# tell a provider that failed once from one that has failed every cycle for a week. ADR 010
+# wants an empty answer counted; these are the counts.
+
+
+def _tallied(*results: ProviderResult[Aircraft], cycles: int = 1) -> dict[str, ProviderTally]:
+    tallies: dict[str, ProviderTally] = {}
+    union = merge_providers(
+        results, key=lambda a: a.icao24, reported_at=lambda a: a.observed_at, clock=FrozenClock()
+    )
+    for _ in range(cycles):
+        record_cycle(tallies, union, clock=FrozenClock())
+    return tallies
+
+
+def test_a_cycle_counts_a_poll_for_every_provider_that_was_asked() -> None:
+    tallies = _tallied(
+        ProviderResult(provider=LOL, records=(make_aircraft(),)),
+        ProviderResult(provider=FI, error="RuntimeError: boom"),
+        cycles=3,
+    )
+
+    assert tallies[LOL].polls == 3
+    assert tallies[FI].polls == 3
+
+
+def test_a_failed_provider_accumulates_failures_and_never_a_success_time() -> None:
+    tallies = _tallied(ProviderResult(provider=FI, error="RuntimeError: boom"), cycles=5)
+
+    assert tallies[FI].failures == 5
+    assert tallies[FI].empty_polls == 0
+    assert tallies[FI].last_success_at is None
+
+
+def test_a_provider_that_answered_with_nothing_is_counted_separately_from_a_failure() -> None:
+    """An empty answer is thin coverage once and a broken feed a thousand times."""
+    tallies = _tallied(ProviderResult(provider=FI), cycles=4)
+
+    assert tallies[FI].empty_polls == 4
+    assert tallies[FI].failures == 0
+    assert tallies[FI].last_success_at == REFERENCE_TIME
+
+
+def test_a_provider_that_reported_records_is_neither_empty_nor_failed() -> None:
+    tallies = _tallied(ProviderResult(provider=LOL, records=(make_aircraft(),)))
+
+    assert tallies[LOL] == ProviderTally(
+        provider=LOL, polls=1, failures=0, empty_polls=0, drops=0, last_success_at=REFERENCE_TIME
+    )
+
+
+def test_drops_accumulate_against_the_provider_that_reported_them() -> None:
+    """Dropped and counted means counted somewhere, not logged by the adapter and discarded."""
+    tallies: dict[str, ProviderTally] = {}
+
+    count_drops(tallies, LOL, 3)
+    count_drops(tallies, LOL, 2)
+
+    assert tallies[LOL].drops == 5
+    assert tallies[LOL].polls == 0, "a drop count is not a poll"
+
+
+# --------------------------------------------------------------- the serving host
+#
+# These four cover a defect that reached the live API: two of 1,040 aircraft were served
+# reading `source: adsb.fi` beside `providers: ["adsb.lol"]`, because `AdsbClient` polls
+# adsb.lol and falls back to adsb.fi inside one union member row. Nothing above caught it,
+# since every helper in this module lets the polled member stand in for the serving host,
+# which is the right default for an adapter that talks to one host and exactly wrong for one
+# that fails over. Found by reading the wire on 2026-08-23, not by a test.
+#
+# It is a licence defect rather than a cosmetic one. adsb.lol publishes under ODbL 1.0 and
+# adsb.fi under non-commercial terms, so crediting the wrong one states the wrong licence
+# over the aircraft on screen.
+
+
+def _merge_served(
+    *results: ProviderResult[Aircraft], at: datetime = MERGE_TIME
+) -> UnionResult[Aircraft]:
+    """The same merge the app wires, crediting each record's own ``source``."""
+    return merge_providers(
+        results,
+        key=lambda aircraft: aircraft.icao24,
+        reported_at=_fix_time,
+        served_by=lambda aircraft: aircraft.source,
+        clock=FrozenClock(at),
+    )
+
+
+def test_an_internal_failover_credits_the_host_that_served_the_record() -> None:
+    """Polled adsb.lol, answered by adsb.fi: the record must credit adsb.fi."""
+    failed_over = make_aircraft("4bcdaa", source=FI)
+
+    union = _merge_served(ProviderResult(provider=LOL, records=(failed_over,)))
+
+    assert union.records[0].providers == (FI,)
+
+
+def test_the_first_provider_is_always_the_one_named_in_source() -> None:
+    """Both contracts promise this in the ``providers`` field description. Assert it."""
+    union = _merge_served(
+        ProviderResult(provider=LOL, records=(make_aircraft("4bcdaa", source=FI),))
+    )
+
+    record = union.records[0]
+    assert record.providers[0] == record.value.source
+
+
+def test_coverage_counts_follow_the_member_polled_not_the_host_that_answered() -> None:
+    """The two questions are different and the commercial one is about what we polled.
+
+    "Aircraft only this feed can see" prices a feed we subscribe to, so it counts against
+    the member. Keying it on the serving host would drop adsb.lol out of its own table on
+    a cycle its failover carried, and would raise ``KeyError`` on a host that is not a
+    member at all.
+    """
+    union = _merge_served(
+        ProviderResult(provider=LOL, records=(make_aircraft("4bcdaa", source=FI),))
+    )
+
+    assert union.attributable_counts() == {LOL: 1}
+
+
+def test_two_members_falling_back_to_one_host_credit_that_host_once() -> None:
+    """One host's data twice is one source, not corroboration. ADR 011, and R1."""
+    union = _merge_served(
+        ProviderResult(provider=LOL, records=(make_aircraft("4bcdaa", source=FI),)),
+        ProviderResult(provider="airplanes.live", records=(make_aircraft("4bcdaa", source=FI),)),
+    )
+
+    assert union.records[0].providers == (FI,)

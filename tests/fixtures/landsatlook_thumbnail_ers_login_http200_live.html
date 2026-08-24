@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en" dir="ltr" class="h-100">
+    <head>
+        <meta charset="utf-8">
+        <title>Login - EROS Registration System</title>
+        <meta http-equiv="Content-Security-Policy" content="default-src 'self';script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://ajax.googleapis.com https://maps.googleapis.com https://maps.google.com https://stackpath.bootstrapcdn.com https://cdn.jsdelivr.net https://imsdev.cr.usgs.gov https://ims.cr.usgs.gov https://www.googletagmanager.com https://www.google-analytics.com https://search.usa.gov/ https://www.ssa.gov/ https://dap.digitalgov.gov https://dmiddev.cr.usgs.gov https://dmidit.cr.usgs.gov https://dmidst.cr.usgs.gov https://dmidprod.cr.usgs.gov https://imsdev.cr.usgs.gov https://imsit.cr.usgs.gov https://imsst.cr.usgs.gov https://imsprod.cr.usgs.gov https://www.google.com https://www.gstatic.com;style-src 'self' 'unsafe-inline' https://stackpath.bootstrapcdn.com https://cdn.jsdelivr.net https://ajax.googleapis.com https://imsdev.cr.usgs.gov https://ims.cr.usgs.gov https://www.ssa.gov/ https://dmiddev.cr.usgs.gov https://dmidit.cr.usgs.gov https://dmidst.cr.usgs.gov https://dmidprod.cr.usgs.gov https://imsdev.cr.usgs.gov https://imsit.cr.usgs.gov https://imsst.cr.usgs.gov https://imsprod.cr.usgs.gov;img-src 'self' data: https://ajax.googleapis.com https://maps.google.com https://imsdev.cr.usgs.gov https://ims.cr.usgs.gov https://services.arcgisonline.com https://server.arcgisonline.com https://basemap.nationalmap.gov https://*.tile.openstreetmap.org https://www.ssa.gov/ https://dmiddev.cr.usgs.gov https://dmidit.cr.usgs.gov https://dmidst.cr.usgs.gov https://dmidprod.cr.usgs.gov https://imsdev.cr.usgs.gov https://imsit.cr.usgs.gov https://imsst.cr.usgs.gov https://imsprod.cr.usgs.gov;connect-src 'self' https://ajax.googleapis.com https://maps.google.com https://maps.googleapis.com https://www.google-analytics.com/ https://imsdev.cr.usgs.gov https://ims.cr.usgs.gov https://cdnjs.cloudflare.com https://dmiddev.cr.usgs.gov https://dmidit.cr.usgs.gov https://dmidst.cr.usgs.gov https://dmidprod.cr.usgs.gov https://imsdev.cr.usgs.gov https://imsit.cr.usgs.gov https://imsst.cr.usgs.gov https://imsprod.cr.usgs.gov https://www.google.com https://www.recaptcha.net;font-src 'self' https://imsdev.cr.usgs.gov https://ims.cr.usgs.gov https://dmiddev.cr.usgs.gov https://dmidit.cr.usgs.gov https://dmidst.cr.usgs.gov https://dmidprod.cr.usgs.gov https://imsdev.cr.usgs.gov https://imsit.cr.usgs.gov https://imsst.cr.usgs.gov https://imsprod.cr.usgs.gov;object-src 'none';media-src 'self';frame-src https://www.google.com https://www.recaptcha.net;child-src 'self';form-action 'self' https://*.usgs.gov;base-uri 'self';worker-src 'none';manifest-src 'none'">
+        <meta name="viewport" content="width&#x3D;device-width,&#x20;initial-scale&#x3D;1.0">
+<meta name="description" content="Query&#x20;and&#x20;order&#x20;satellite&#x20;images,&#x20;aerial&#x20;photographs,&#x20;and&#x20;cartographic&#x20;products&#x20;through&#x20;the&#x20;U.S.&#x20;Geological&#x20;Survey">
+<meta name="keywords" content="U.S.&#x20;Geological&#x20;Survey,USGS,National&#x20;Mapping&#x20;Division,NMD,USA,&#x0A;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;United&#x20;States,Territories,Antarctica,cartographic,cartography,geographic,&#x0A;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;geography,geospatial&#x20;data,geographic&#x20;information&#x20;system,GIS,mapping,maps,&#x0A;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;aerial&#x20;photographs,satellite&#x20;imagery,digital&#x20;elevation&#x20;model,&#x0A;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;digital&#x20;raster&#x20;graphic,digital&#x20;orthophoto,topographic,topography,&#x0A;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;geographic&#x20;names,earthscience,data,geospatial&#x20;metadata,geospatial&#x20;data&#x20;standards,&#x0A;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;&#x20;landsat,GNIS,NAPP,DEM,DRG,DOQ,NSDI,Earth&#x20;Explorer,&#x20;EarthExplorer">
+<meta name="author" content="USGS&#x20;-&#x20;U.S.&#x20;Geological&#x20;Survey">
+<meta name="publisher" content="USGS&#x20;-&#x20;U.S.&#x20;Geological&#x20;Survey">
+<meta name="classification" content="Government">
+<meta name="robots" content="ALL">
+<meta name="distribution" content="Global">
+<meta name="rating" content="Safe&#x20;For&#x20;Kids">
+<meta name="copyright" content="None">
+<meta name="language" content="English">
+<meta name="doc-type" content="Government">
+<meta name="doc-class" content="Living&#x20;Document">
+<meta name="doc-rights" content="Public&#x20;Domain">
+<meta http-equiv="X-UA-Compatible" content="IE&#x3D;edge">
+<meta http-equiv="Content-Type" content="text&#x2F;html&#x3B;&#x20;charset&#x3D;utf-8">
+        <!-- Le styles -->
+        <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%224%22%20fill%3D%22%231B4F8A%22%2F%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2212.2%22%20fill%3D%22%232471A3%22%2F%3E%3Cg%20clip-path%3D%22url%28%23fc%29%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.28%29%22%20stroke-width%3D%220.77%22%20fill%3D%22none%22%3E%3Cellipse%20cx%3D%2216%22%20cy%3D%2216%22%20rx%3D%2212.2%22%20ry%3D%224.03%22%2F%3E%3Cellipse%20cx%3D%2216%22%20cy%3D%229.66%22%20rx%3D%2212.2%22%20ry%3D%222.69%22%2F%3E%3Cellipse%20cx%3D%2216%22%20cy%3D%2222.34%22%20rx%3D%2212.2%22%20ry%3D%222.69%22%2F%3E%3Cellipse%20cx%3D%2216%22%20cy%3D%2216%22%20rx%3D%224.64%22%20ry%3D%2212.2%22%2F%3E%3Cellipse%20cx%3D%2216%22%20cy%3D%2216%22%20rx%3D%228.78%22%20ry%3D%2212.2%22%2F%3E%3C%2Fg%3E%3Cdefs%3E%3CclipPath%20id%3D%22fc%22%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2212.2%22%2F%3E%3C%2FclipPath%3E%3C%2Fdefs%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2212.2%22%20fill%3D%22none%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.45%29%22%20stroke-width%3D%220.7%22%2F%3E%3Ctext%20x%3D%2216%22%20y%3D%2221%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%20Black%2CArial%2Csans-serif%22%20font-weight%3D%22900%22%20font-size%3D%228.16%22%20fill%3D%22white%22%20paint-order%3D%22stroke%22%20stroke%3D%22rgba%280%2C0%2C0%2C0.25%29%22%20stroke-width%3D%221.28%22%20stroke-linejoin%3D%22round%22%3EERS%3C%2Ftext%3E%3C%2Fsvg%3E"><link href="https&#x3A;&#x2F;&#x2F;ims.cr.usgs.gov&#x2F;lib&#x2F;bootstrap&#x2F;5.3.8&#x2F;css&#x2F;bootstrap.min.css" media="screen" rel="stylesheet" type="text&#x2F;css">
+<link href="https&#x3A;&#x2F;&#x2F;ims.cr.usgs.gov&#x2F;lib&#x2F;web&#x2F;uswds.css" media="screen" rel="stylesheet" type="text&#x2F;css">
+<link href="&#x2F;css&#x2F;style.css&#x3F;jb&#x3D;2026-08-20" media="screen" rel="stylesheet" type="text&#x2F;css">
+<link href="&#x2F;css&#x2F;common.css&#x3F;jb&#x3D;2026-08-20" media="screen" rel="stylesheet" type="text&#x2F;css">
+<link href="https&#x3A;&#x2F;&#x2F;ims.cr.usgs.gov&#x2F;font-awesome&#x2F;stable&#x2F;css&#x2F;all.min.css" media="screen" rel="stylesheet" type="text&#x2F;css">
+<link href="&#x2F;css&#x2F;login.css" media="screen" rel="stylesheet" type="text&#x2F;css">
+<link href="&#x2F;css&#x2F;profile.css" media="screen" rel="stylesheet" type="text&#x2F;css">
+        <!-- Scripts -->
+        <script type="text/javascript">
+            //Set some base confiugrations that all applications will be interested in
+            LaminasCore = {
+                baseUrl: "/"
+            };
+
+            //Frame buster - must have this
+            if (top != self) {
+                top.location = self.location;
+            }
+        </script>
+
+                    <!--NEW G4 Google analytics added--keep both versions until test results-->
+            <!---HAS to be in head tag to work, no longer allowed in footer-->
+            <!-- Global site tag (gtag.js) - Google Analytics -->
+            <script async src="https://www.googletagmanager.com/gtag/js?id=G-71JPYV1CCS"></script>
+            <script>
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', 'G-71JPYV1CCS');
+            </script>
+
+            <!-- Google Tag Manager -->
+            <script>(function(w,d,s,l,i){
+                    w[l]=w[l]||[];
+                    w[l].push({'gtm.start': new Date().getTime(),event:'gtm.js'});
+                    var f=d.getElementsByTagName(s)[0],
+                    j=d.createElement(s),
+                    dl=l!='dataLayer'?'&l='+l:'';
+                    j.async=true;
+                    j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;
+                    f.parentNode.insertBefore(j,f);
+                })(window,document,'script','dataLayer','GTM-TKQR8KP');
+            </script>
+            <!-- End Google Tag Manager -->
+
+        
+        <script  src="https&#x3A;&#x2F;&#x2F;ims.cr.usgs.gov&#x2F;lib&#x2F;jquery&#x2F;3.7.1&#x2F;js&#x2F;jquery.min.js"></script>
+<script  src="https&#x3A;&#x2F;&#x2F;ims.cr.usgs.gov&#x2F;lib&#x2F;bootstrap&#x2F;5.3.8&#x2F;js&#x2F;bootstrap.bundle.min.js"></script>    </head>
+    <body class="d-flex flex-column h-100">
+        <!-- BEGIN USGS Applications Header Template -->
+                    <!-- Google Tag Manager (noscript) -->
+            <!--Added sandbox for security flag--will see if resolves the low security flag-->
+            <noscript><iframe sandbox src="https://www.googletagmanager.com/ns.html?id=GTM-TKQR8KP"
+                height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+            <!-- End Google Tag Manager (noscript) -->
+        
+        <script>
+                    !function(){"use strict";var n,e="usa-js-loading";function t(){document.documentElement.classList.remove(e)}document.documentElement.classList.add(e),n=setTimeout(t,8e3),window.addEventListener("load",function e(){window.uswdsPresent&&(clearTimeout(n),t(),window.removeEventListener("load",e,!0))},!0)}();
+                    //# sourceMappingURL=uswds-init.min.js.map
+                  </script>        <section class="usa-banner" aria-label="Official website of the United States government">
+            <div class="usa-accordion">
+                <header class="usa-banner__header">
+                    <div class="usa-banner__inner">
+                        <div class="grid-col-auto">
+                            <img aria-hidden="true" class="usa-banner__header-flag" src="https://ims.cr.usgs.gov/lib/web/us_flag_small.png" alt="U.S. flag" />
+                        </div>
+                        <div class="grid-col-fill tablet:grid-col-auto" aria-hidden="true">
+                            <p class="usa-banner__header-text">
+                                An official website of the United States government
+                            </p>
+                            <p class="usa-banner__header-action">Here’s how you know</p>
+                        </div>
+                        <button type="button" class="usa-accordion__button usa-banner__button" aria-expanded="false" aria-controls="gov-banner-default">
+                            <span class="usa-banner__button-text">Here’s how you know</span>
+                        </button>
+                    </div>
+                </header>
+                <div class="usa-banner__content usa-accordion__content" id="gov-banner-default" hidden="">
+                    <div class="grid-row grid-gap-lg">
+                        <div class="usa-banner__guidance tablet:grid-col-6">
+                            <img class="usa-banner__icon usa-media-block__img" src="https://ims.cr.usgs.gov/lib/web/icon-dot-gov.svg" role="img" alt="Dot Gov icon" aria-hidden="true" />
+                            <div class="usa-media-block__body">
+                                <p>
+                                    <strong>Official websites use .gov</strong><br />A
+                                    <strong>.gov</strong> website belongs to an official government organization in the United States.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="usa-banner__guidance tablet:grid-col-6">
+                            <img class="usa-banner__icon usa-media-block__img" src="https://ims.cr.usgs.gov/lib/web/icon-https.svg" role="img" alt="HTTPS Icon" aria-hidden="true" />
+                            <div class="usa-media-block__body">
+                                <p>
+                                    <strong>Secure .gov websites use HTTPS</strong><br />A
+                                    <strong>lock</strong> (
+                                    <span class="icon-lock"><svg xmlns="http://www.w3.org/2000/svg" width="52" height="64" viewBox="0 0 52 64" class="usa-banner__lock-image" role="img" aria-labelledby="banner-lock-description-default" focusable="false">
+                                        <title id="banner-lock-title-default">Lock</title>
+                                        <desc id="banner-lock-description-default">Locked padlock icon</desc>
+                                        <path fill="#000000" fill-rule="evenodd" d="M26 0c10.493 0 19 8.507 19 19v9h3a4 4 0 0 1 4 4v28a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V32a4 4 0 0 1 4-4h3v-9C7 8.507 15.507 0 26 0zm0 8c-5.979 0-10.843 4.77-10.996 10.712L15 19v9h22v-9c0-6.075-4.925-11-11-11z"></path>
+                                        </svg> </span>) or <strong>https://</strong> means you’ve safely connected to the .gov website. Share sensitive information only on official, secure websites.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <header id="navbar" class="header-nav" role="banner">
+            <div class="tmp-container">
+                <!-- primary navigation bar -->
+                <!-- search bar -->
+                <div class="header-search">
+                    <a class="logo-header" href="https://www.usgs.gov" title="USGS Home">
+                        <img class="img" src="https://ims.cr.usgs.gov/lib/web/usgs-logo.png?jb=2026-08-20" alt="Home" />
+                    </a>
+                                    </div>
+                <!-- end search bar -->
+            </div>
+            <!-- end header-container -->
+        </header>
+        <!-- END USGS Applications Header Template -->
+
+        <nav class="navbar navbar-expand-lg bg-dark" data-bs-theme="dark" style="overflow: visible;">
+            <a class="navbar-brand" href="/">EROS Registration System</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar-menu" aria-controls="navbar-menu" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse justify-content-between" id="navbar-menu">
+                
+                <ul class="navbar-nav me-auto">
+                        <li  class="nav-item">
+                                    <a class="nav-link " href="/password"   >
+                                Change Password                                </a>
+            </li>
+            </ul>
+
+                <!-- System Notifications -->
+                                
+                <ul class="navbar-nav">
+                        <li  class="nav-item">
+                                    <a class="nav-link " href="https://www.usgs.gov/centers/eros/science/earthexplorer-help-index#ERS"  target="_blank" >
+                                Help                                </a>
+            </li>
+                                <li  class="nav-item">
+                                    <a class="nav-link " href="/feedback/"  target="_blank" >
+                                Feedback                                </a>
+            </li>
+                                <li id="authMenuLink" class="nav-item">
+                                      
+                    <a class="nav-link " href="/login" aria-label="Login">
+                                Login                                </a>
+            </li>
+            </ul>
+                                    <script type="text/javascript">
+    DevConsole = {
+        messageTypes: {},
+        logMessage: function(messageType, messageContents)
+        {
+            return;
+        },
+        init: function()
+        {
+
+        }
+    };
+</script>                            </div>
+        </nav>
+
+        
+        <div id="pageContentLayoutContainer" class="container-fluid">
+            <script src="https://www.google.com/recaptcha/enterprise.js" async defer></script>
+<style type="text/css">
+	#captchaContainer .g-recaptcha > div{
+		margin: 0 auto;
+	}
+
+	#pageError {
+		background-color: #ffe6bf;
+		border: 1px solid #ffce80;
+		border-radius: 0 0 10px 10px;
+		margin: 0 auto;
+		padding: 10px;
+		text-align: center;
+		width: 65%;
+	}
+
+	label[for="enablePassword"] {
+		margin-top: 3px;
+	}
+
+	#enablePassword {
+		border: 1px solid #c9c9c9;
+		margin-right: 5px;
+		height: 1.5em;
+		width: 2.5em;
+	}
+
+	.btn-secondary {
+		color: #000;
+		background-color: #f0f0f0 !important;
+		border-color: #c9c9c9 !important;
+	}
+
+	.btn-secondary:hover {
+		color: #000;
+		background-color: #d9d9d9 !important;
+		border-color: #c9c9c9 !important;
+	}
+
+	.btn-secondary:disabled {
+		color: #000;
+		background-color: #f0f0f0 !important;
+		border-color: #c9c9c9 !important;
+		opacity: 0.65;
+	}
+</style>
+<script type="text/javascript">
+    $(document).ready(function()
+    {
+        $('.oAuthType').click(function()
+        {
+        	window.location = '/login' + $(this).attr('data-serviceKey');
+        });
+
+        $('#registerButton').click(function()
+        {
+        	document.location = '/register';
+        });
+
+		$('#mfaHelp').click(function()
+        {
+			var mfaHelpLink = '';
+			if (mfaHelpLink !== '') {
+				window.open(mfaHelpLink, '_blank');
+			} else {
+				$('#mfaHelpModal').modal('show');
+			}
+        });
+
+        $('#username').focus();
+
+		const $username = $('input[name="username"]');
+		const $password = $('input[name="password"]');
+		const $loginButton = $('#loginButton');
+		const requireRecaptcha = false;
+		const siteKey = '6LePBnEsAAAAACTYVK5GlCtUcNLlub5dpT_L1NO_';
+
+		function toggleLoginButton() {
+			const hasUsername = $username.val().trim().length > 0;
+			const hasPassword = $password.val().trim().length > 0;
+			$loginButton.prop('disabled', !(hasUsername && hasPassword));
+		}
+
+		$username.on('input change keyup', toggleLoginButton);
+		$password.on('input change keyup', toggleLoginButton);
+
+		$('#loginForm').on('keydown', function(e) {
+			if (e.key === 'Enter' && !$loginButton.prop('disabled')) {
+				e.preventDefault();
+				$(this).submit();
+			}
+		});
+
+		toggleLoginButton();
+
+		function base64urlDecode(value) {
+			// Convert Base64URL to Base64
+			value = value.replace(/-/g, '+').replace(/_/g, '/');
+			// Add padding if needed
+			while (value.length % 4) {
+				value += '=';
+			}
+			return Uint8Array.from(atob(value), c => c.charCodeAt(0));
+		}
+
+		function preformatGetRequestOptions(options) {
+			options.challenge = base64urlDecode(options.challenge);
+			if (Array.isArray(options.allowCredentials)) {
+				options.allowCredentials = options.allowCredentials.map(cred => ({
+					...cred,
+					id: base64urlDecode(cred.id)
+				}));
+			}
+			return options;
+		}
+
+		$('#mfaLoginButton').click(async function()
+		{
+			try {
+				var userName = $('input[name="username"]').val();
+
+				if (!userName) {
+					alert('Please enter your username.');
+					return;
+				}
+
+				let recaptchaToken = null;
+
+				if (requireRecaptcha) {
+					recaptchaToken = grecaptcha.enterprise.getResponse();
+					if (!recaptchaToken) {
+						alert('Please complete the reCAPTCHA');
+						return;
+					}
+				}
+
+				var response = await fetch('/webauthn/authenticate/options/', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({userName: userName, recaptchaToken: recaptchaToken})
+				});
+				var data = await response.json();
+
+				if (!response.ok || !data.success) {
+					if (data.redirectUrl) {
+						window.location.href = data.redirectUrl;
+					} else {
+						alert('Authentication Failed.');
+					}
+					return;
+				}
+
+				const publicKey = preformatGetRequestOptions(data.options);
+
+				var assertion = await navigator.credentials.get({publicKey});
+
+				var formData = $('#loginForm').serializeArray().reduce((obj, item) => {
+					obj[item.name] = item.value;
+					return obj;
+				}, {});
+
+				const verifyResponse = await fetch('/webauthn/authenticate/verify/', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						credential: assertion,
+						userName: userName,
+						formData: formData
+					}),
+				});
+
+				const verifyResult = await verifyResponse.json();
+
+				if (!verifyResult.success) {
+					if (verifyResult.redirectUrl) {
+						window.location.href = verifyResult.redirectUrl;
+					} else {
+						alert('Authentication Failed.');
+					}
+				} else {
+					window.location.href = verifyResult.redirectUrl;
+				}
+			} catch (error) {
+				console.error('Authentication failed:', error);
+			}
+		});
+    });
+</script>
+
+
+
+<div id="loginHeading">
+    	    <p>ERS consolidates user profile and authentication for all EROS web services into a single independent application.</p>
+	</div>
+<div id="centeredContainer" class="row">
+	<div class="col-12 col-lg-7">
+		<h2>Sign In</h2>
+				<div class="seperator">
+			<span></span>
+			sign in with your existing USGS registered username and password/passkeys			<span></span>
+		</div>
+		<form method="post" name="loginForm" action="&#x2F;login" id="loginForm">			<div>
+				<div class="inputContainer" style="margin-bottom: 10px;">
+					<input type="text" name="username" placeholder="&#x20;Registered&#x20;USGS&#x20;Username" maxlength="30" aria-label="userName" class="form-control&#x20;mx-auto" autocomplete="off" value="">									</div>
+				<div class="inputContainer">
+					<input type="password" name="password" placeholder="Registered&#x20;USGS&#x20;Password" aria-label="password" class="form-control&#x20;mx-auto" value="">									</div>
+							</div>
+			<div class="signinOptions clearfix">
+				<div id="forgotPasswordContainer">
+					<a href="/password" class="link-underline-light" style="color:#0060C5;">forgot password?</a>
+				</div>
+			</div>
+			<input type="hidden" name="csrf" value="5cdeffbc9607393376c3da3825f0104d-0b4352ba2092dea1aa93ed1a6df44078">			<div class="mb-3">
+				<input id="loginButton" type="submit" value="Sign in with USGS Password" class="btn btn-secondary" disabled role="button" style="width: 225px;" /> 
+			</div>
+							<button id="mfaLoginButton" type="button" class="btn btn-secondary" style="width: 225px; margin-left: 25px;"><i class="fas fa-fingerprint"></i> Sign in with a passkey</button> 
+				<i class="far fa-question-circle align-middle fs-6" id="mfaHelp" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Multi-factor Authentication Help"></i><br />
+				<div class="m-auto" style="font-size: 0.8em; width: 200px;">Don't have one? Create a passkey after signing in and skip the password next time.</div>
+					</form>
+		<div class="seperator mt-4">
+			<span></span>
+			Don't have an account?
+			<span></span>
+		</div>
+		<input type="button" id="registerButton" value="Create New Account" class="btn btn-secondary" role="button" />
+	</div>
+	<div class="col-12 col-lg-4">
+		<div class="alert alert-secondary fst-italic text-center" role="alert" style="font-size: 0.9em; margin: 10px auto;">
+			<h4 class="alert-heading">WARNING TO USERS OF THIS SYSTEM</h4>
+			<hr />
+			<p>
+				This computer system, including all related equipment, networks, and network devices (including Internet access), is provided by the
+				Department of the Interior (DOI) in accordance with the agency policy for official use and limited personal use. All agency computer
+				systems may be monitored for all lawful purposes, including but not limited to, ensuring that use is authorized, for management of the
+				system, to facilitate protection against unauthorized access, and to verify security procedures, survivability and operational security.
+				Any information on this computer system may be examined, recorded, copied and used for authorized purposes at any time. All information,
+				including personal information, placed or sent over this system may be monitored, and users of this system are reminded that such
+				monitoring does occur. Therefore, there should be no expectation of privacy with respect to use of this system. By logging into this
+				agency computer system, you acknowledge and consent to the monitoring of this system. Evidence of your use, authorized or unauthorized,
+				collected during monitoring may be used for civil, criminal, administrative, or other adverse action. Unauthorized or illegal use may
+				subject you to prosecution.
+			</p>
+		</div>
+	</div>
+</div>
+<br />
+
+<style type="text/css">
+    #praMessage{
+        border-bottom: 1px solid #CCCCCC;
+        border-top: 1px solid #CCCCCC;
+        font-size: 0.9em;
+        font-style: italic;
+        padding: 5px 0;
+        margin-bottom: 10px;
+        text-align: center;
+    }
+</style>
+
+<div id="praMessage">
+    OMB number 1028-0119<br />
+    OMB expiration date 04/30/2027<br /><br />
+​    Privacy and Paperwork Reduction Act statements: 16 U.S.C. 1a7 authorized collection of this
+    information. This information will be used by the U.S. Geological Survey to better serve the public.
+    The time required to complete this information collection is estimated to
+    average 2 minutes per response.  We will not distribute responses associated with you as an individual.
+    We ask you for some basic organizational and contact information to help us interpret the results and,
+    if needed, to contact you for clarification.  Comments on this collection should be sent to
+    <a href="mailto:custserv@usgs.gov" style="color:#0060C5; text-decoration: underline;">custserv@usgs.gov</a>.​
+</div>
+<div id="mfaHelpModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="mfaHelpModalLabel" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable" style="max-width:800px;">
+        <!-- Modal content-->
+        <div class="modal-content" style="border:0px;border-radius: .6rem;">
+            <div class="modal-header" style="background-color:#678ab7;color:#fff;">
+                <h1 class="modal-title fs-4" id="mfaHelpModalLabel" style="text-shadow: 2px 4px 5px rgba(0, 0, 0, 0.2);"><i class="fa fa-fingerprint"></i> Multi-factor Authentication - Passkey</h1>
+                <button type="button" aria-label="Close" class="btn-close" data-bs-dismiss="modal" style="padding:20px;"></button>
+            </div>
+            <div class="modal-body">
+				<p>
+					EROS Registration System (ERS) now offers an option of accessing accounts using a Multi-factor Authentication (MFA) passkey as an added security feature. 
+					The option allows users to login into ERS and associated websites; EarthExplorer, GloVis, HDDS, etc. via cell phones, tablets, etc. that store the passkey. 
+					Users now have the option of using either the traditional registered Username/Password or the new Passkey option.
+				</p>
+				<h5>Quick Start Guide</h5>
+				<div class="ps-3">
+					<h6>First Time Setup</h6>
+					<ul style="list-style-type: disc;">
+						<li>First time setting a Passkey and for users that already have a registered Username/Password, enter your 
+							username/password information into the Sign In page and click on the “Sign in with USGS Password” button.</li>
+						<li>Within the ERS user profile page, Click the dropdown with “Authentication Options”.</li>
+						<li>Click “Add Authenticator”.</li>
+						<li>At Register an Authenticator, enter a name for the authenticator, i.e. Mobile, Tablet, iPAD etc. Click “Continue”.</li>
+						<li>Choose device to save your passkey. Click on “iPhone, iPad, or Android Device” option and then click “Next”. 
+							As more devices are made available, they will be added to the list.</li>
+						<li>Make sure Bluetooth is enabled on the device to save passkey. Click “Next”.</li>
+						<li>Scan QR code and follow instructions on your device and the website popups.</li>
+						<li>You will receive an email confirming the saved passkey.</li>
+					</ul>
+					<h6>Follow On ERS Passkey Login</h6>
+					<ul style="list-style-type: disc;">
+						<li>Users that already have a registered ERS account and a saved passkey can enter their registered “username” and 
+							click “Sign in with a passkey”. <i>Note: a password will not need to be entered.</i></li>
+						<li>The list of devices will display. Depending on the device you registered with, select “iPhone, iPad, or Android” 
+							choice or the device, if listed.</li>
+						<li>Scan the QR code or check your device for a connection notification.</li>
+						<li>Follow the steps on the device.</li>
+						<li>Once completed you will be logged in.</li>
+					</ul>
+					<p>(Detailed instructions at <a class="link-underline-light" href="https://www.usgs.gov/centers/eros/science/ers-multi-factor-authentication-mfa-passkey-help" target="blank">ERS Multi-Factor Passkey Help</a> or access Help in the menu bar.)</p>
+				</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+        </div>
+
+        
+        <footer class="footer mt-auto py-3">
+            <div class="container-fluid">
+                <div class="d-flex">
+                    <div>
+                        <ul class="menu nav">
+                            <li><a href="https://www.doi.gov/privacy">DOI Privacy Policy</a></li>
+                            <li><a href="https://www.usgs.gov/policies-and-notices">Legal</a></li>
+                            <li><a href="https://www.usgs.gov/accessibility-and-us-geological-survey">Accessibility</a></li>
+                            <li><a href="https://www.usgs.gov/sitemap">Site Map</a></li>
+                            <li><a href="https://answers.usgs.gov/">Contact USGS</a></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <hr />
+
+                <div class="d-flex">
+                    <div>
+                        <ul class="menu nav">
+                            <li><a href="https://www.doi.gov/">U.S. Department of the Interior</a></li>
+                            <li><a href="https://www.doioig.gov/">DOI Inspector General</a></li>
+                            <li><a href="https://www.whitehouse.gov/">White House</a></li>
+                            <li><a href="https://www.whitehouse.gov/omb/management/egov/">E-gov</a></li>
+                            <li><a href="https://www.doi.gov/pmb/eeo/no-fear-act">No Fear Act</a></li>
+                            <li><a href="https://www.usgs.gov/foia">FOIA</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="ms-auto footer-icons">
+                        <ul>
+                                                    </ul>
+                    </div>
+                </div>
+            </div>
+        </footer>
+                    <!-- Google Tag Manager (noscript) -->
+            <!--Added sandbox for security flag--will see if resolves the low security flag-->
+            <noscript><iframe sandbox src="https://www.googletagmanager.com/ns.html?id=GTM-TKQR8KP"
+                height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+            <!-- End Google Tag Manager (noscript) -->
+
+            
+            <script type="text/javascript" src="https://www.google-analytics.com/analytics.js"></script>
+
+            <!--OLD version of GA--remove once results verififed-->
+            <script type="text/javascript">
+                try {
+                    ga('set', 'anonymizeIp', true);
+
+                    ga('create', 'UA-21295076-2', 'auto', {'name': 'lta'});
+
+                    //Assuming this is what will be required once usgs analytics is updated
+                    ga('lta.send', 'pageview');
+                } catch (exception) {
+                    // Ignore the exception and continue loading EE
+                    console.log(exception);
+                }
+            </script>
+
+        
+            </body>
+
+    <script src="https://ims.cr.usgs.gov/lib/web/uswds.min.js"></script></html>
+

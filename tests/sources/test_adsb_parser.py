@@ -13,22 +13,15 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from tests.conftest import ADSBFI_POINT_AIRCRAFT, ADSBFI_POINT_ON_GROUND, make_aircraft
+from tests.conftest import ADSBFI_POINT_AIRCRAFT, ADSBFI_POINT_ON_GROUND
 from tracker.contracts.aircraft import Aircraft, AircraftClass, EmergencyState
 from tracker.contracts.base import ContractViolationError
 from tracker.contracts.geo import (
     FEET_PER_MINUTE_TO_METRES_PER_SECOND,
     FEET_TO_METRES,
     KNOTS_TO_METRES_PER_SECOND,
-    BoundingBox,
 )
-from tracker.sources.adsb import (
-    DB_FLAG_MILITARY,
-    DB_FLAG_PRIVACY_ICAO,
-    merge_by_identity,
-    only_in_box,
-    parse_response,
-)
+from tracker.sources.adsb import DB_FLAG_MILITARY, DB_FLAG_PRIVACY_ICAO, parse_response
 
 POINT_AIRCRAFT_COUNT = 65
 """Records in the captured ``/v2/point`` response, all of which carry a position."""
@@ -622,96 +615,6 @@ def test_the_source_name_is_stamped_onto_every_record() -> None:
     result = parse_response(_envelope(_record()), source="adsb.fi")
 
     assert result[0].source == "adsb.fi"
-
-
-# ---------------------------------------------------------------- merge_by_identity
-
-
-def test_merge_keeps_the_record_with_the_lower_position_age() -> None:
-    stale = make_aircraft("3c6444", position_age_s=30.0, callsign="STALE")
-    fresh = make_aircraft("3c6444", position_age_s=1.5, callsign="FRESH")
-
-    merged = merge_by_identity([stale], [fresh])
-
-    assert len(merged) == 1
-    assert merged[0].callsign == "FRESH"
-
-
-def test_merge_is_order_independent() -> None:
-    stale = make_aircraft("3c6444", position_age_s=30.0, callsign="STALE")
-    fresh = make_aircraft("3c6444", position_age_s=1.5, callsign="FRESH")
-
-    assert merge_by_identity([fresh], [stale])[0].callsign == "FRESH"
-    assert merge_by_identity([stale], [fresh])[0].callsign == "FRESH"
-
-
-def test_merge_keeps_the_first_of_two_equally_aged_records() -> None:
-    first = make_aircraft("3c6444", position_age_s=2.0, callsign="FIRST")
-    second = make_aircraft("3c6444", position_age_s=2.0, callsign="SECOND")
-
-    assert merge_by_identity([first], [second])[0].callsign == "FIRST"
-
-
-def test_merge_keeps_distinct_addresses_apart() -> None:
-    merged = merge_by_identity(
-        [make_aircraft("aaaaaa"), make_aircraft("bbbbbb")],
-        [make_aircraft("bbbbbb"), make_aircraft("cccccc")],
-    )
-
-    assert {a.icao24 for a in merged} == {"aaaaaa", "bbbbbb", "cccccc"}
-
-
-def test_merge_of_nothing_is_empty() -> None:
-    assert merge_by_identity() == ()
-    assert merge_by_identity([], []) == ()
-
-
-def test_merge_deduplicates_within_a_single_batch() -> None:
-    """The viewport and military queries overlap, and so can one provider's own response."""
-    merged = merge_by_identity(
-        [
-            make_aircraft("3c6444", position_age_s=9.0, callsign="OLD"),
-            make_aircraft("3c6444", position_age_s=0.5, callsign="NEW"),
-        ]
-    )
-
-    assert len(merged) == 1
-    assert merged[0].callsign == "NEW"
-
-
-# ---------------------------------------------------------------- only_in_box
-
-
-def test_only_in_box_filters_to_the_box() -> None:
-    inside = make_aircraft("aaaaaa", lon=-0.12, lat=51.5)
-    outside = make_aircraft("bbbbbb", lon=2.35, lat=48.86)
-    box = BoundingBox(west=-1.0, south=51.0, east=1.0, north=52.0)
-
-    assert only_in_box([inside, outside], box) == (inside,)
-
-
-def test_only_in_box_handles_the_antimeridian() -> None:
-    box = BoundingBox(west=170.0, south=-10.0, east=-170.0, north=10.0)
-    east_side = make_aircraft("aaaaaa", lon=175.0, lat=0.0)
-    west_side = make_aircraft("bbbbbb", lon=-175.0, lat=0.0)
-    elsewhere = make_aircraft("cccccc", lon=0.0, lat=0.0)
-    wrong_latitude = make_aircraft("dddddd", lon=175.0, lat=40.0)
-
-    result = only_in_box([east_side, west_side, elsewhere, wrong_latitude], box)
-
-    assert {a.icao24 for a in result} == {"aaaaaa", "bbbbbb"}
-
-
-def test_only_in_box_preserves_order() -> None:
-    box = BoundingBox(west=-10.0, south=40.0, east=10.0, north=60.0)
-    first = make_aircraft("aaaaaa", lon=0.0, lat=50.0)
-    second = make_aircraft("bbbbbb", lon=1.0, lat=51.0)
-
-    assert only_in_box([first, second], box) == (first, second)
-
-
-def test_only_in_box_of_nothing_is_empty() -> None:
-    assert only_in_box([], BoundingBox(west=0.0, south=0.0, east=1.0, north=1.0)) == ()
 
 
 # ---------------------------------------------------------------- property-based

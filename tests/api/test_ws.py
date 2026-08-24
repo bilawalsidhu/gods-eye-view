@@ -44,7 +44,7 @@ def _state(client: TestClient) -> AppState:
     return state
 
 
-SNAPSHOT_LAYERS = ("aircraft", "military", "vessels", "satellites")
+SNAPSHOT_LAYERS = ("aircraft", "military", "vessels", "transit", "satellites")
 """The layers the hub registers, and therefore the snapshots a new client receives."""
 
 

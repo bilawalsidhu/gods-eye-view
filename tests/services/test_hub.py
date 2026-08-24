@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 from pydantic import TypeAdapter
 
-from tests.conftest import FrozenClock, make_aircraft
+from tests.conftest import FrozenClock, make_aircraft, make_satellite, make_vessel
 from tracker.contracts.aircraft import Aircraft
 from tracker.contracts.messages import (
     Entity,
@@ -142,6 +142,63 @@ async def test_connect_sends_a_snapshot_per_registered_layer() -> None:
     layers = [m["layer"] for m in socket.messages()]
     assert layers == ["aircraft", "military"]
     assert hub.connection_count == 1
+
+
+def _mixed_hub() -> tuple[Hub, EntityStore[Entity], EntityStore[Entity], EntityStore[Entity]]:
+    """A hub with the three entity classes phase 2 registers, one store each."""
+    aircraft: EntityStore[Entity] = EntityStore(ttl_seconds=90.0)
+    vessels: EntityStore[Entity] = EntityStore(ttl_seconds=90.0)
+    satellites: EntityStore[Entity] = EntityStore(ttl_seconds=90.0)
+    hub = Hub(broadcast_interval_seconds=0.01)
+    hub.register_layer("aircraft", aircraft)
+    hub.register_layer("vessels", vessels)
+    hub.register_layer("satellites", satellites)
+    aircraft.upsert("3c6444", make_aircraft("3c6444"))
+    vessels.upsert("230992610", make_vessel())
+    satellites.upsert("25544", make_satellite())
+    return hub, aircraft, vessels, satellites
+
+
+async def test_a_snapshot_keeps_each_layer_to_its_own_frame_and_its_own_kind() -> None:
+    """One socket carries every layer, so the frame's layer and the entity's discriminator
+    are the only things a client has to route on.
+
+    A vessel arriving inside the aircraft frame is a garbage pin and a satellite carries no
+    position at all, so this is the contract the browser routes on. Registering the vessel
+    and satellite layers is what makes their live deltas reach a tab that has already
+    loaded; the fix for a client that ignored the discriminator belongs in the client.
+    """
+    hub, _, _, _ = _mixed_hub()
+    socket = FakeSocket()
+
+    await hub.connect(socket)
+
+    by_layer = {message["layer"]: message for message in socket.messages()}
+    assert set(by_layer) == {"aircraft", "vessels", "satellites"}
+    assert [e["kind"] for e in by_layer["aircraft"]["entities"]] == ["aircraft"]
+    assert [e["kind"] for e in by_layer["vessels"]["entities"]] == ["vessel"]
+    assert [e["kind"] for e in by_layer["satellites"]["entities"]] == ["satellite"]
+    assert by_layer["vessels"]["entities"][0]["mmsi"] == "230992610"
+    assert by_layer["satellites"]["entities"][0]["norad_cat_id"] == 25544
+
+
+async def test_a_flush_keeps_each_layer_to_its_own_frame_and_its_own_kind() -> None:
+    """Same contract on the delta path, which is where a live tab spends its life."""
+    hub, aircraft, vessels, satellites = _mixed_hub()
+    socket = FakeSocket()
+    await hub.connect(socket)
+    socket.sent.clear()
+    aircraft.upsert("3c6444", make_aircraft("3c6444", callsign="MOVED"))
+    vessels.upsert("230992610", make_vessel(lon=23.0))
+    satellites.upsert("25544", make_satellite())
+
+    assert await hub.flush() == 3
+
+    by_layer = {message["layer"]: message for message in socket.messages()}
+    assert [m["type"] for m in socket.messages()] == ["upsert", "upsert", "upsert"]
+    assert [e["kind"] for e in by_layer["aircraft"]["entities"]] == ["aircraft"]
+    assert [e["kind"] for e in by_layer["vessels"]["entities"]] == ["vessel"]
+    assert [e["kind"] for e in by_layer["satellites"]["entities"]] == ["satellite"]
 
 
 def _entity_ids(message: dict[str, Any]) -> set[str]:

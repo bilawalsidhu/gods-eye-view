@@ -41,7 +41,7 @@ unassigned 005xx block and Australian postcodes in the unassigned 0001 to 0099 b
 `sec_edgar_form4_officer_live.xml`, `sec_edgar_form4_director_live.xml`,
 `sec_edgar_fts_person_live.json`, `faa_master_extract.csv`,
 `ccarcs_carsownr_extract.csv`, `casa_acrftreg_extract.csv`,
-`commons_imageinfo_p18_live.json`, `wikidata_wdqs_people_live.json`,
+`commons_imageinfo_p18_live.json`, `commons_geosearch_generator_live.json`, `wikidata_wdqs_people_live.json`,
 `wikidata_wdqs_statements_live.json`, `wikidata_wbsearchentities_live.json`,
 `wikipedia_rest_summary_person_live.json`, `mastodon_masto_public_live.json`,
 `osm_notes_london_live.json`, `propublica_nonprofit_org_live.json`.
@@ -64,7 +64,15 @@ name on a public register, not a person's record.
 
 Aircraft, vessel, satellite, earthquake, weather, imagery, camera and gazetteer payloads
 carry no personal data. `ccarcs_carscurr_extract.csv` and `faa_acftref_extract.csv` carry
-aircraft data with no owner names. `digitraffic_portcall_vessel_details_live.json` names
+aircraft data with no owner names. `adsbdb_ab374c_live.json` and `adsbdb_a184ca_live.json`,
+both recorded 2026-08-20, are the aircraft-registry payloads here that carry an owner, and both
+owners are companies on a public register (**Adobe Inc** and **Nike Inc**), so they stay real.
+Each pairs with its own address in `adsb_type_glf6_live.json` to give the phase 3 tests a real
+business jet joined to a real owner: `ab374c` for the designator disagreement, where the feed
+says `GLF6` and the register says `G650`, and `a184ca` for the fill-from-empty case, where the
+register supplies `GLF5` and the class has to be recomputed from it. Anyone re-recording either
+should check the owner is still a company: the same endpoint returns a natural person's name for
+plenty of other airframes, and that would need the scrub above. `digitraffic_portcall_vessel_details_live.json` names
 company ship owners, not people. Wikimedia Commons author credits name people, but a
 licence credit has to stay for the licence to be honoured, and it carries no personal
 attribute beyond the credit itself.
@@ -72,6 +80,29 @@ attribute beyond the credit itself.
 `commons_thumb_250_live.jpg` was opened and looked at. It is a photograph of a building and
 two buses with nobody identifiable in it, so it stays as recorded. There is no reference
 portrait image in this directory.
+
+## The two GeoNames slices, and which lines they are
+
+`geonames_cities15000_extract.tsv` is `head -300` of the real `cities15000.txt`.
+`geonames_cities15000_london_dead_extract.tsv` is lines **939, 4351, 10616, 12171, 12173,
+18005, 29307, 30801 and 33867** of the same file, `sed -n` and nothing else, verified
+byte-identical to those nine lines with `cmp`. It exists because the head slice holds neither
+London row: London GB is line 12173 and London Ontario is line 4351, and plan phase 4
+acceptance 3 is about London specifically. The nine rows also cover the three dead feature
+codes (PPLH, PPLQ, PPLW), the PPLX city-section case, and the near-miss names Londonderry
+County Borough, New London and East London that a ranking test needs.
+
+`nominatim_search_rotterdam_live.json` is the live answer to
+`search?q=rotterdam&format=jsonv2&limit=5`, recorded 2026-08-20, three results: the city
+relation, the municipality relation and the town of Rotterdam in New York State. It carries
+place names and coordinates and no personal data. It exists because plan phase 4 acceptance 2
+is about Rotterdam specifically, and neither GeoNames slice holds the row, so the query falls
+through to the geocoder exactly as an address would.
+
+Neither GeoNames file is hand-written and neither ever should be. A hand-built row tests the parser
+against our own assumptions rather than against what GeoNames actually sends, which is the
+whole reason this directory exists. The head slice does contain two dead places, at its lines
+67 and 181, which contradicts an earlier recon note saying it held none.
 
 ## The guard
 
