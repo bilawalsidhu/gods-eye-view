@@ -741,6 +741,19 @@ the section stays navigable.
   safe and the destructive forms differ by two characters and the safe one prints a wall of
   `M <path>` lines that looks exactly like something happened. Nearly typed on 2026-08-24 in a
   restore step where `cp` was meant, with four agents holding uncommitted work in the tree.
+- **`tsc` cannot see a use-before-initialisation reached through a call made during module load,
+  so a derived constant needs a test that imports the module.** Measured 2026-08-24 in
+  `globe/layers/clouds.ts`: `CLOUD_GAP_WEST` is `equatorGap().west`, evaluated at import, and
+  `equatorGap` reads `CLOUD_TRUST_LIMIT`. With that constant declared *below* the call,
+  `tsc --noEmit` passed **completely clean** and the module threw
+  `Cannot access 'CLOUD_TRUST_LIMIT' before initialization` the moment anything imported it.
+  TypeScript's own use-before-declaration check does not follow a call into another function, so
+  this class of error is invisible to the type checker by design rather than by oversight. It
+  matters more here than it would elsewhere, because deriving a constant at module load is now the
+  house style for anything a later change could invalidate: the cloud gap bounds are scanned off
+  the satellites, and the vessel coverage reason is built from the providers actually reporting,
+  precisely so neither can go stale behind an edit somewhere else. The cost of that style is this
+  trap, and the only thing that catches it is a unit test that imports the module.
 - **A green `pnpm test` is not evidence a file compiles, so it is never the check after a type
   edit.** Vitest transpiles through esbuild, which strips type annotations without resolving
   them, so a type used but never imported is simply erased and every test that exercises the file
