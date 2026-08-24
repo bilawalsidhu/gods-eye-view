@@ -16,6 +16,43 @@ and buses, social posts, cards for every entity class, and the attribution behin
 corner. Live on one server at 13:19 on 2026-08-24: **1,013 aircraft, 179 military, 6,454 vessels,
 24,660 transit vehicles, 698 satellites, 34,072 cities.**
 
+### Three more requests on 2026-08-24, and one of them is impossible
+
+**"Ensure the satellite images are cloud free."** Done. The basemap was
+`VIIRS_SNPP_CorrectedReflectance_TrueColor`, yesterday's true-colour mosaic, which has the weather
+baked in, so with a live cloud layer on top every cloud was drawn twice: once as whatever the
+spacecraft saw yesterday and once as today's infrared, in different places. Turning the Clouds
+switch off left yesterday's clouds behind. It is now `BlueMarble_ShadedRelief_Bathymetry`,
+cloud-free by construction, keyless, publishing only in `GoogleMapsCompatible_Level8` where
+`Level9` answers HTTP 400. Two accepted costs: it is static rather than a dated pass, and it is
+500m against VIIRS's 250m, which does not show because both cap at level 8 so the on-screen
+resolution is identical.
+
+**"Ensure the clouds, vessels, planes, places, satellites are scaled to be visible."** Half done
+and half impossible, and the impossible half is recorded under what is deliberately closed below.
+The altitude exaggeration cannot work for a point: at nadir it produces exactly 0.00 pixels of
+separation at any factor, and away from nadir the separation and the apparent ground error are one
+number. What was real, and was found while measuring it, is that **every mover's casing was
+sub-pixel at a globe view** and on the new basemap **every layer fill is under the 3:1 floor over
+sand, ice and green land**, transit pink measuring 1.35:1 against the Sahara. So a loose mark over
+land had no working channel at all. Aircraft went to 0.47 and transport to 0.60 at the far end of
+the distance ramp only, leaving vessels and satellites alone, because ships live over water at
+7.60 and cyan against space is not a contrast problem. **A cloud shell is still open**: unlike a
+point, a continuous sheet standing off the limb does read as lifted, so the question is whether
+the ground displacement is tolerable for weather given the coverage notice is a claim about ground
+longitude.
+
+**"Ensure trains and buses are also tracked on the globe."** They already were, 27,399 of them,
+and being asked twice for something the product does is the clearest possible signal that the
+presentation was wrong. Two faults. The marks were invisible, which is the contrast finding above
+and is why he could not see them. And the heading read "Transit", because `layerLabel` capitalised
+the wire name, putting the API's own key on screen where a plain word belonged. "Trains and buses"
+was tried and wrapped to three lines, since that row carries the longest count in the rail and the
+label is squeezed to about six characters, so it is **"Transport"**: one word, what a Londoner
+calls buses and trains together, no layout change. It under-describes deliberately, because the
+feeds carry trams, metros and ferries too and the layer cannot tell any of them apart: vehicle
+type lives in each operator's static `routes.txt`, which this project does not fetch.
+
 **Two of the three cloud satellites had been drawing nothing at all, and nobody knew.** The layer
 asked GIBS for its `default` frame, read the timestamp out of the `layer-time-actual` response
 header and pinned it. Measured across all three layers at 09:42 UTC on 2026-08-24: GOES-East's
