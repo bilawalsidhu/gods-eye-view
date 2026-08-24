@@ -546,11 +546,18 @@ class AdsbdbLookup:
       removal that cleared one key would leave the name reachable by the other two and report
       success while doing it. That is worse than a slow removal, because it looks like it
       worked. Not holding the file is the version of that with nothing to get wrong.
-    - **Nothing polls adsbdb, so a restart produces no burst.** This is called from the card
-      path, one airframe at a time. A restart does not replay traffic here; it costs one
-      lookup per card a person actually opens. The rate protection is the demand-driven call
-      pattern plus :data:`MAX_REQUESTS_PER_MINUTE`, which is half the provider's own lower
-      limit, and neither of those needs disk.
+    - **A restart's refill is paced elsewhere, so it does not need to be avoided here.**
+      Corrected 2026-08-24, when :class:`tracker.services.ingest.RegistryIngest` was added: it
+      used to say "nothing polls adsbdb, so a restart produces no burst", and something does
+      now. A restart empties this cache and the background ingest refills it, so a restart
+      **does** replay traffic. What makes that safe is not the cache: it is the ingest's pace,
+      64 requests a minute, a quarter of :data:`MAX_REQUESTS_PER_MINUTE` and an eighth of the
+      provider's own lower limit, plus a backoff that is on disk precisely because a restart
+      loop is indistinguishable from hammering. So the burst this bullet used to rule out is
+      now bounded by a number in ``services/ingest.py`` rather than by there being no caller,
+      and persisting the answers would buy a smaller refill at the cost of holding named people
+      in a file the removal has to reach through three alias keys. The first two reasons above
+      are what keep this in memory; this one no longer argues either way.
 
     ``tests/sources/test_adsbdb.py`` asserts the consequence rather than the intent: after a
     real lookup, an owner's name appears nowhere in the cache file. If someone later wires
@@ -616,6 +623,31 @@ class AdsbdbLookup:
         found = await self._fetch(normalised)
         self._remember(normalised, _CachedLookup(fetched_at=now, registration=found))
         return found
+
+    def holds(self, key: str) -> bool:
+        """Whether :meth:`aircraft` would answer this key without opening a socket.
+
+        True for a live hit **and** for a live miss, because a cached "adsbdb does not hold
+        that airframe" is an answer and re-asking for it is exactly the 19% of the layer that
+        would otherwise be re-fetched on every pass. False for an expired entry and for an
+        entry that was never made.
+
+        **This exists for the background ingest and not as an optimisation.**
+        :class:`tracker.services.ingest.RegistryIngest` walks the layer 64 records a minute
+        against a store of thirteen thousand, so it has to be able to skip what is already
+        held: without that it would spend every batch re-reading the same cached answers and
+        never reach the rest of the globe.
+
+        Junk in gets ``False`` rather than an exception, because a caller asking whether
+        something is cached has nothing useful to do with a raise and the honest answer to
+        "do you hold this nonsense" is no. :meth:`aircraft` still refuses it loudly.
+        """
+        try:
+            normalised = normalise_lookup_key(key)
+        except ValueError:
+            return False
+        entry = self._cache.get(normalised)
+        return entry is not None and self._clock() - entry.fetched_at < self._ttl
 
     @property
     def name(self) -> str:

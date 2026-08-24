@@ -45,7 +45,7 @@ from typing import Any
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
-from tracker.sources.base import describe_exception
+from tracker.sources.base import RateLimitedError, describe_exception
 
 
 def _utc_now() -> datetime:
@@ -88,6 +88,18 @@ class Enriched[T]:
     registry: str | None = None
     conflicts: tuple[AttributeConflict, ...] = ()
     error: str | None = None
+    retry_after_seconds: float | None = None
+    """How long the registry asked us to wait, when the fault was a throttle rather than a
+    failure. ``None`` on every other outcome, including every other kind of failure.
+
+    Here because a caller that walks a layer has to be able to tell "back off for 60 seconds"
+    from "this one aircraft timed out": the first must stop the walk and the second must not.
+    The card path ignores it and degrades to feed-only data either way, which is why this rides
+    on the result rather than being raised.
+
+    The figure is the provider's own, from
+    :class:`~tracker.sources.base.RateLimitedError`, never a curve of ours.
+    """
 
     @property
     def enriched(self) -> bool:
@@ -140,10 +152,13 @@ class Enricher[T: BaseModel, R]:
             casing rather than the upstream's.
         clock: Now, for the join date. Injected so tests need not sleep.
 
-    Enrichment is demand-driven: called when a record is asked about, not swept across a
-    layer. adsbdb's own limiter allows 512 requests a minute per IP, and a live aircraft
-    layer is thousands of records a cycle, so a sweep would be throttled inside the first
-    poll.
+    One record at a time, whoever is asking. The card path asks about the aircraft somebody
+    clicked; :class:`tracker.services.ingest.RegistryIngest` asks about the layer, a paced
+    batch at a time, so the answer is usually already cached by the time a card wants it.
+    Neither of them may sweep the layer in one go: adsbdb's own limiter allows 512 requests a
+    minute per IP and a live aircraft layer is thousands of records a cycle, so a full sweep
+    would be throttled inside the first pass. The pacing belongs to the caller, because the
+    caller is the only thing that knows whether it is serving a click or walking a globe.
     """
 
     registry: str
@@ -151,10 +166,30 @@ class Enricher[T: BaseModel, R]:
     merge: Callable[[T, R], T]
     key: Callable[[T], str]
     clock: Callable[[], datetime] = _utc_now
+    held: Callable[[str], bool] | None = None
+    """Whether the lookup already holds a live answer for one identity, so no request is due.
+
+    Optional because a lookup is not obliged to cache, and absent means "ask, every time",
+    which is what a card path wants anyway. A caller that walks a layer needs it: without a way
+    to skip what is already held, every pass spends its whole batch re-reading cached answers
+    and never reaches the rest of the layer.
+
+    A predicate rather than the cache itself, because the cache is the lookup's business. This
+    module already refuses to hold a second one: a removal under ADR 008 that cleared a cache
+    here and left the adapter's would look like it had worked.
+    """
     tally: EnrichmentTally = field(init=False)
 
     def __post_init__(self) -> None:
         self.tally = EnrichmentTally(registry=self.registry)
+
+    def holds(self, record: T) -> bool:
+        """Whether a lookup for this record would be answered without a request.
+
+        ``False`` when no :attr:`held` predicate was supplied, because "we cannot tell" and
+        "we do not have it" have the same safe consequence here: ask.
+        """
+        return self.held is not None and self.held(self.key(record))
 
     async def enrich(self, record: T) -> Enriched[T]:
         """Join one record to the registry, degrading to the record itself on any fault.
@@ -194,14 +229,28 @@ class Enricher[T: BaseModel, R]:
         )
 
     def _degraded(self, key: str, record: T, exc: Exception, *, unmappable: bool) -> Enriched[T]:
-        """Count a fault and hand the feed's own record back, unchanged."""
+        """Count a fault and hand the feed's own record back, unchanged.
+
+        A throttle is counted as a failure like any other, because from the tally's point of
+        view the registry did not answer. What it also does is put the provider's own wait on
+        the result, so a caller walking a layer can stop rather than working through the rest
+        of its batch into a refusal. See :attr:`Enriched.retry_after_seconds`.
+        """
         reason = describe_exception(exc)
         if unmappable:
             self.tally.unmappable += 1
         else:
             self.tally.failures += 1
         self.tally.last_error = reason
-        return Enriched(key=key, value=record, joined_at=self.clock(), error=reason)
+        return Enriched(
+            key=key,
+            value=record,
+            joined_at=self.clock(),
+            error=reason,
+            retry_after_seconds=(
+                exc.retry_after_seconds if isinstance(exc, RateLimitedError) else None
+            ),
+        )
 
 
 def _keep_feed_values[T: BaseModel](feed: T, merged: T) -> tuple[T, tuple[AttributeConflict, ...]]:

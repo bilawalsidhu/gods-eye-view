@@ -964,7 +964,9 @@ class AdsbClient:
         # A path built for the primary and replayed against the failover is how a 1000nm sweep
         # turned every failover into an unexplained HTTP 400.
         def for_host(source: str) -> str:
-            return path(source) if callable(path) else path
+            # `isinstance` against `str` rather than `callable()`, because `ty` does not narrow a
+            # `str | Callable` union through `callable` and reports the call as unsafe.
+            return path if isinstance(path, str) else path(source)
 
         primary_path = for_host(self._source_name)
         try:
