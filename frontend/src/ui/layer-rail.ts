@@ -249,9 +249,32 @@ function related(left: string, right: string): boolean {
   return a.length > 0 && b.length > 0 && (a.includes(b) || b.includes(a));
 }
 
+/**
+ * Layers whose wire name does not describe them to a person, and what to call them instead.
+ *
+ * `transit` is the case this exists for. Alexander Fanthome asked on 2026-08-24 to "ensure trains
+ * and busses are also tracked on the globe" while 27,399 of them were being tracked and the row
+ * was reporting them, which is as clear a signal as a label ever gets that the label was the
+ * problem. "Transit" is the wire name and it is the industry's word, not his: this rail is read by
+ * people being shown the product, and one of the standing constraints on it is that some of them
+ * have poor vision and none of them should have to decode a heading.
+ *
+ * It is a map with one entry rather than a rename of the layer key, because the key is the API
+ * contract, the pick-id namespace and the URL's layer switch, and none of those should move to fix
+ * a heading. Every other layer names itself, so nothing else belongs in here: adding a friendlier
+ * word for `vessels` or `satellites` would be a rename nobody asked for.
+ *
+ * It slightly under-describes what it holds. The feeds publish trams, metros and ferries too where
+ * an operator has them, and the layer cannot tell any of these apart, because the vehicle type
+ * lives in each operator's static `routes.txt` and this project does not fetch it. Buses and
+ * trains are the overwhelming bulk, so this is the honest short name rather than a precise one,
+ * and the row's own count says "recent reports" for the same reason.
+ */
+const LAYER_LABELS: Readonly<Record<string, string>> = { transit: 'Trains and buses' };
+
 /** Layer names are lower case on the wire; this is a heading. */
 function layerLabel(layer: string): string {
-  return layer.charAt(0).toUpperCase() + layer.slice(1);
+  return LAYER_LABELS[layer] ?? layer.charAt(0).toUpperCase() + layer.slice(1);
 }
 
 /** The provider part of `vessels/aishub`, which is `aishub`. */

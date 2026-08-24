@@ -1247,6 +1247,41 @@ describe('noticeSummary', () => {
   });
 });
 
+describe('the heading a person reads', () => {
+  it('calls the transit row trains and buses, not "Transit"', () => {
+    // Alexander Fanthome asked to "ensure trains and busses are also tracked on the globe" while
+    // 27,399 of them were tracked and this row was reporting them, so the heading was the defect.
+    // Asserted rather than left to the map, because a label nobody tests is a label that reverts.
+    // Its own capability list rather than the shared fixture, which carries no transit row: adding
+    // one there would change what every other test in this file is handed.
+    const rows = railRows({
+      capabilities: [{ layer: 'transit', available: true, reason: null }],
+      feeds: FEEDS,
+      attribution: ATTRIBUTION,
+      toggleable: TOGGLEABLE,
+    });
+
+    expect(rows.find((row) => row.layer === 'transit')?.label).toBe('Trains and buses');
+  });
+
+  it('still capitalises a layer that names itself, so the map stays the exception', () => {
+    // The mutation this catches is someone routing every heading through the map and leaving the
+    // rest undefined. Vessels, satellites and aircraft need no friendlier word and must not get one.
+    const rows = railRows({
+      capabilities: [
+        { layer: 'vessels', available: true, reason: null },
+        { layer: 'satellites', available: true, reason: null },
+      ],
+      feeds: FEEDS,
+      attribution: ATTRIBUTION,
+      toggleable: TOGGLEABLE,
+    });
+
+    expect(rows.find((row) => row.layer === 'vessels')?.label).toBe('Vessels');
+    expect(rows.find((row) => row.layer === 'satellites')?.label).toBe('Satellites');
+  });
+});
+
 describe('railRows in-view counts', () => {
   it('carries the browser count onto the row it belongs to', () => {
     const rows = railRows({
