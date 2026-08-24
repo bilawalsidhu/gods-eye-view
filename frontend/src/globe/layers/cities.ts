@@ -488,17 +488,24 @@ export class CityLayer {
       if (!pointInView(view, city.point.lon, city.point.lat)) {
         continue;
       }
+      // Where this city actually lands, through the camera's own projection. A cheap rectangle test
+      // first, because projecting five thousand records to reject most of them is the wrong order.
+      if (!this.projectCity(city, eye)) {
+        continue;
+      }
       // One label per screen cell, and the first to claim one wins. Records run population
       // descending, so that is always the largest city in the cell, which is the right one to
       // keep: at 300km over Tokyo 122 labels produced 168 overlapping pairs, and unreadable text
       // is worse than absent text.
-      const cell = this.cellFor(view, city.point.lon, city.point.lat, columns);
+      const cell =
+        Math.floor(screenAt.y / CITY_LABEL_CELL_PX) * columns +
+        Math.floor(screenAt.x / CITY_LABEL_CELL_PX);
       if (this.claimed.has(cell)) {
         continue;
       }
       this.claimed.add(cell);
       this.write(used, city, band);
-      this.reserveLabelSpace(city, band, eye);
+      this.reserveLabelSpace(city, band);
       used += 1;
       if (used === CITY_LABEL_BUDGET) {
         break;
@@ -553,29 +560,6 @@ export class CityLayer {
     }
   }
 
-  /**
-   * Which screen cell a point falls in, from the view rectangle and the viewport.
-   *
-   * The same wrap convention as `pointInView`: a rectangle whose `west` exceeds its `east` crosses
-   * the antimeridian, and the longitude offset has to be taken the long way round for it.
-   *
-   * Latitude is used as it comes rather than corrected for the projection. Over a view a few
-   * hundred kilometres across the error is small, and the cell is a legibility heuristic rather
-   * than a measurement: being a cell out at the top of a tall view costs one name.
-   */
-  private cellFor(view: CityView, lon: number, lat: number, columns: number): number {
-    const spanLon = view.west <= view.east ? view.east - view.west : 360 - view.west + view.east;
-    const spanLat = view.north - view.south;
-    const offsetLon = lon >= view.west ? lon - view.west : 360 - view.west + lon;
-    // A degenerate rectangle would divide by zero and put every city in cell 0, which is a
-    // one-label view rather than a crash.
-    const fx = spanLon > 0 ? offsetLon / spanLon : 0;
-    const fy = spanLat > 0 ? (view.north - lat) / spanLat : 0;
-    const column = Math.floor((fx * this.scene.drawingBufferWidth) / CITY_LABEL_CELL_PX);
-    const row = Math.floor((fy * this.scene.drawingBufferHeight) / CITY_LABEL_CELL_PX);
-    return row * columns + column;
-  }
-
   private write(index: number, city: City, band: PopulationBand): void {
     const label = this.label(index);
     // Written here rather than in `label`, because the pool reuses one label for a different
@@ -604,37 +588,48 @@ export class CityLayer {
   /**
    * Hold the pixels this label paints, so no cluster badge is drawn on top of the name.
    *
-   * **Through the real camera projection, not through `cellFor`.** Those are two different spaces.
-   * `cellFor` interpolates longitude and latitude linearly across the view rectangle and says so in
-   * its own comment: over a few hundred kilometres the error is small and a legibility heuristic can
-   * carry it. Badge positions come from `projectToScreen` against the camera's own view-projection.
-   * The two agree over a city and diverge badly at a whole-Earth view, worst near the limb, which is
-   * exactly where the label collisions were measured. A reservation placed with the flat arithmetic
-   * would move badges convincingly and move them off the wrong pixels, which is worse than not
-   * moving them at all because it looks like it worked.
-   *
-   * The occlusion test is not optional either. A city on the far side still projects to a valid
-   * screen point, so without it this would hold points for names nobody can see and push badges off
-   * pixels that were never contested.
+   * Placed on the point `projectCity` computed, which is the same point the decluttering cell uses
+   * and the same space the badges live in. That agreement is the whole of why this works; see
+   * `projectCity` for what happened when the two disagreed.
    */
-  private reserveLabelSpace(city: City, band: PopulationBand, eye: Cartesian3): void {
+  /**
+   * Where a city lands on screen, or false when the camera cannot see it.
+   *
+   * **One projection per city, feeding both the decluttering cell and the label reservation.** They
+   * used to disagree: the reservation projected properly while the cell interpolated longitude and
+   * latitude linearly across the view rectangle, and that flat arithmetic is what caused the
+   * label-on-label collisions this layer shipped with. Proved by two frames of the same build ten
+   * minutes apart on 2026-08-24: centred on Europe, Shanghai and Hangzhou stacked and Chengdu ran
+   * into Chongqing, all four on the right limb, while the centre was clean. Centred on China, the
+   * same Shanghai read clean and separate and **Cairo and Baghdad stacked instead**, 13 degrees apart
+   * on the new left limb. The collisions followed the limb rather than the cities.
+   *
+   * The reason is the one the deleted `cellFor` comment gave about itself: near the limb a degree of
+   * longitude compresses to almost nothing on screen, so two cities thirteen degrees apart land in
+   * the same few pixels while flat arithmetic puts them in different cells and lets both draw. The
+   * grid was doing what it was told; it was being told the wrong positions.
+   *
+   * The occlusion test earns its place twice over here. It keeps the reservation off names nobody can
+   * see, and it stops the label budget being spent on the far side of the globe, which the rectangle
+   * test cannot catch because a hemisphere away is still inside a whole-world rectangle.
+   */
+  private projectCity(city: City, eye: Cartesian3): boolean {
     Cartesian3.fromDegrees(city.point.lon, city.point.lat, 0, undefined, scratch);
     if (occludedByGlobe(eye.x, eye.y, eye.z, scratch.x, scratch.y, scratch.z)) {
-      return;
+      return false;
     }
-    if (
-      !projectToScreen(
-        scratchMatrix,
-        scratch.x,
-        scratch.y,
-        scratch.z,
-        this.scene.drawingBufferWidth,
-        this.scene.drawingBufferHeight,
-        screenAt,
-      )
-    ) {
-      return;
-    }
+    return projectToScreen(
+      scratchMatrix,
+      scratch.x,
+      scratch.y,
+      scratch.z,
+      this.scene.drawingBufferWidth,
+      this.scene.drawingBufferHeight,
+      screenAt,
+    );
+  }
+
+  private reserveLabelSpace(city: City, band: PopulationBand): void {
     // `measureText` answers in CSS pixels and the lattice is in drawing-buffer pixels. They are the
     // same today, because Cesium leaves `pixelRatio` at one unless `resolutionScale` is changed, and
     // measured at device scale factors of one, two and three the buffer stayed equal to the client

@@ -204,18 +204,54 @@ interface FakeLabelCollection {
 }
 
 /**
- * A view projection that maps world x and y straight to pixels in a 1400 by 800 viewport.
+ * A view projection that spreads a rectangle across the 1400 by 800 viewport.
  *
- * Column-major, like Cesium's own layout. Only the terms `projectToScreen` reads are set.
+ * The mock's `Cartesian3.fromDegrees` passes longitude and latitude straight through, so this maps the
+ * given rectangle to the whole viewport: an equirectangular sheet that follows the camera, which is
+ * what a real one does. A whole-world rectangle is the default, because most tests here are about
+ * banding and budget rather than geometry.
+ *
+ * Column-major, like Cesium's own layout, and only the terms `projectToScreen` reads are set.
+ *
+ * Flat on purpose, and the one thing it cannot show is limb compression. That is the whole reason the
+ * decluttering cell moved onto this projection, so `limbProjection` exists for it.
  */
-function pixelProjection(): number[] {
+const WHOLE_WORLD_RECT = { west: -180, south: -90, east: 180, north: 90 };
+
+function pixelProjection(rect = WHOLE_WORLD_RECT): number[] {
+  const spanLon = rect.east - rect.west;
+  const spanLat = rect.north - rect.south;
   const m = Array.from({ length: 16 }, () => 0);
-  m[0] = 2 / 1400;
-  m[12] = -1;
-  m[5] = -2 / 800;
-  m[13] = 1;
+  // clipX / clipW must run -1..1 across the rectangle, and screenX is (clipX + 1) / 2 * width.
+  m[0] = 2 / spanLon;
+  m[12] = -(2 * rect.west) / spanLon - 1;
+  m[5] = 2 / spanLat;
+  m[13] = -(2 * rect.south) / spanLat - 1;
   m[15] = 1;
   return m;
+}
+
+/**
+ * A projection with a perspective divide, so one edge compresses the way a globe's limb does.
+ *
+ * `projectToScreen` divides by the w term, so making w depend on x squeezes longitudes together as
+ * they approach one side. That is the behaviour that broke the decluttering grid: near the limb two
+ * cities thirteen degrees apart land in the same few pixels, and flat arithmetic put them in
+ * different cells and drew both on top of each other.
+ */
+function limbProjection(): number[] {
+  const m = Array.from({ length: 16 }, () => 0);
+  m[0] = 1 / 180;
+  m[5] = 1 / 90;
+  // w grows with longitude, so the further east a city is the harder it is squeezed.
+  m[3] = 1 / 200;
+  m[15] = 1;
+  return m;
+}
+
+/** Where a longitude and latitude land under `pixelProjection`. */
+function pixelOf(lon: number, lat: number) {
+  return { x: ((lon / 180 + 1) / 2) * 1400, y: (1 - (lat / 90 + 1) / 2) * 800 };
 }
 
 /** Identity, so multiplying by the view matrix leaves the projection alone. */
@@ -229,7 +265,10 @@ function identityMatrix(): number[] {
 }
 
 /** A layer wired to a fake scene, plus a direct handle on the collection it created. */
-function build() {
+function build(
+  framing?: { west: number; south: number; east: number; north: number },
+  projectionMatrix?: readonly number[],
+) {
   const collections: FakeLabelCollection[] = [];
   const scene = {
     primitives: {
@@ -250,11 +289,14 @@ function build() {
     //
     // A matrix that maps world x and y straight to pixels, so a test can put a city at a pixel and
     // assert on it, and an eye at the origin, which is what every layer fixture here does. The
-    // occlusion half of the reservation cannot be modelled faithfully against a pixel passthrough,
-    // because these fake positions are nowhere near an ellipsoid; `occludedByGlobe` has its own
-    // tests in `globe/cluster.test.ts` against real earth-fixed geometry.
+    // occlusion half cannot be modelled faithfully here: the mock's `fromDegrees` returns longitude
+    // and latitude straight through, so no fake position can sit behind the globe and no test in this
+    // file can make `occludedByGlobe` return true. Deleting that call leaves this file green, and it
+    // is worth knowing that rather than assuming otherwise. The function has its own tests in
+    // `globe/cluster.test.ts` against real earth-fixed geometry, and its second job here, keeping the
+    // label budget off the far side of the globe, rests on those rather than on anything below.
     camera: {
-      frustum: { projectionMatrix: pixelProjection() },
+      frustum: { projectionMatrix: projectionMatrix ?? pixelProjection(framing) },
       viewMatrix: identityMatrix(),
       positionWC: { x: 0, y: 0, z: 0 },
     },
@@ -302,14 +344,54 @@ const LADDER: City[] = [
   makeCity({ geonames_id: 6, name: 'Ely', population: 20_112, point: at(100, 0) }),
 ];
 
-/** A city at a given pixel, given the fixture's projection maps world x and y straight to pixels. */
-function cityAtPixel(x: number, y: number, name = 'London') {
-  return makeCity({ name, population: 9_000_000, point: { lon: x, lat: y, altitude_m: null } });
+/** A big city at a coordinate, so it survives every band filter and is always written. */
+function cityAt(lon: number, lat: number, name = 'London') {
+  return makeCity({ name, population: 9_000_000, point: { lon, lat, altitude_m: null } });
 }
+
+describe('CityLayer decluttering near the limb', () => {
+  it('gives two cities that land in the same pixels one label between them', () => {
+    // The bug this layer shipped with, and the reason the decluttering cell moved onto the camera's
+    // own projection. Two frames of the same build on 2026-08-24: centred on Europe, Shanghai and
+    // Hangzhou stacked and Chengdu ran into Chongqing, all four on the right limb, while the centre
+    // was clean. Centred on China the same Shanghai read clean and Cairo and Baghdad stacked instead,
+    // on the new left limb. The collisions followed the limb rather than the cities.
+    //
+    // Cairo and Baghdad are thirteen degrees of longitude apart. Under a projection that compresses
+    // one edge the way a globe does, they land 36 pixels apart, inside one 96-pixel cell, so one name
+    // is drawn and the other is held. The flat arithmetic this replaced put them in different cells
+    // and drew both, on top of each other.
+    const { layer, labels } = build(undefined, limbProjection());
+    layer.load([
+      makeCity({ geonames_id: 1, name: 'Cairo', population: 9_000_000, point: at(31.24, 30.05) }),
+      makeCity({ geonames_id: 2, name: 'Baghdad', population: 7_000_000, point: at(44.36, 33.31) }),
+    ]);
+
+    layer.refresh({ west: -180, south: -90, east: 180, north: 90, heightM: WHOLE_GLOBE_M });
+
+    expect(drawn(labels)).toEqual(['Cairo']);
+    expect(layer.held).toBe(2);
+  });
+
+  it('draws both of them where the projection does not compress', () => {
+    // The other half, so the test above is about the geometry rather than about those two records.
+    // Framed on the region, the same pair are hundreds of pixels apart and both are drawn.
+    const framing = { west: 20, south: 20, east: 55, north: 45 };
+    const { layer, labels } = build(framing);
+    layer.load([
+      makeCity({ geonames_id: 1, name: 'Cairo', population: 9_000_000, point: at(31.24, 30.05) }),
+      makeCity({ geonames_id: 2, name: 'Baghdad', population: 7_000_000, point: at(44.36, 33.31) }),
+    ]);
+
+    layer.refresh({ ...framing, heightM: WHOLE_GLOBE_M });
+
+    expect(drawn(labels)).toEqual(['Cairo', 'Baghdad']);
+  });
+});
 
 describe('CityLayer holding lattice space so a badge cannot cover a name', () => {
   /** A view rectangle wide enough to contain a city placed at a pixel rather than at a coordinate. */
-  const PIXEL_VIEW = { west: -2000, south: -2000, east: 2000, north: 2000, heightM: WHOLE_GLOBE_M };
+  const WORLD_VIEW = { west: -180, south: -90, east: 180, north: 90, heightM: WHOLE_GLOBE_M };
 
   it('reserves the pixels a drawn label paints', () => {
     // The whole point. A cluster badge is drawn on a lattice point; a name that holds the points it
@@ -317,9 +399,9 @@ describe('CityLayer holding lattice space so a badge cannot cover a name', () =>
     // whole-globe view, hitting Shanghai, Istanbul, Moscow, Hangzhou, London and New York City.
     const { layer } = build();
     badgeSlots.reset();
-    layer.load([cityAtPixel(300, 200)]);
+    layer.load([cityAt(20, 40)]);
 
-    layer.refresh(PIXEL_VIEW);
+    layer.refresh(WORLD_VIEW);
 
     expect(badgeSlots.claimed).toBeGreaterThan(0);
   });
@@ -329,14 +411,14 @@ describe('CityLayer holding lattice space so a badge cannot cover a name', () =>
     // the second half of the word. This is the half of `reserve` that a point could not carry.
     const short = build();
     badgeSlots.reset();
-    short.layer.load([cityAtPixel(300, 200, 'Ur')]);
-    short.layer.refresh(PIXEL_VIEW);
+    short.layer.load([cityAt(20, 40, 'Ur')]);
+    short.layer.refresh(WORLD_VIEW);
     const forShort = badgeSlots.claimed;
 
     const long = build();
     badgeSlots.reset();
-    long.layer.load([cityAtPixel(300, 200, 'Comodoro Rivadavia')]);
-    long.layer.refresh(PIXEL_VIEW);
+    long.layer.load([cityAt(20, 40, 'Comodoro Rivadavia')]);
+    long.layer.refresh(WORLD_VIEW);
 
     expect(badgeSlots.claimed).toBeGreaterThan(forShort);
   });
@@ -353,14 +435,15 @@ describe('CityLayer holding lattice space so a badge cannot cover a name', () =>
     // entirely, because 300 of a 4000-wide span is a fifth of the way across the screen.
     const { layer } = build();
     badgeSlots.reset();
-    layer.load([cityAtPixel(300, 200)]);
-    layer.refresh(PIXEL_VIEW);
+    layer.load([cityAt(20, 40)]);
+    layer.refresh(WORLD_VIEW);
 
+    const at = pixelOf(20, 40);
     const out = { x: 0, y: 0 };
-    badgeSlots.claim('transit', 300, 200, out);
+    badgeSlots.claim('transit', at.x, at.y, out);
     const projected = {
-      x: (Math.floor(300 / CLUSTER_CELL_PX) + 0.5) * CLUSTER_CELL_PX,
-      y: (Math.floor(200 / CLUSTER_CELL_PX) + 0.5) * CLUSTER_CELL_PX,
+      x: (Math.floor(at.x / CLUSTER_CELL_PX) + 0.5) * CLUSTER_CELL_PX,
+      y: (Math.floor(at.y / CLUSTER_CELL_PX) + 0.5) * CLUSTER_CELL_PX,
     };
     // The point at the projected pixel is taken, so a badge asking for it is sent elsewhere.
     expect(out).not.toEqual(projected);
@@ -369,11 +452,11 @@ describe('CityLayer holding lattice space so a badge cannot cover a name', () =>
   it('reserves nothing for a label it did not draw', () => {
     // Only the names on screen hold points. A city outside the view rectangle is never written, and
     // holding a point for it would push a badge off a pixel nothing occupies.
-    const { layer } = build();
+    const { layer } = build({ west: -20, south: 30, east: 20, north: 60 });
     badgeSlots.reset();
-    layer.load([cityAtPixel(9000, 9000)]);
+    layer.load([cityAt(179, 89)]);
 
-    layer.refresh(PIXEL_VIEW);
+    layer.refresh({ west: -20, south: 30, east: 20, north: 60, heightM: WHOLE_GLOBE_M });
 
     expect(badgeSlots.claimed).toBe(0);
   });
@@ -383,8 +466,8 @@ describe('CityLayer holding lattice space so a badge cannot cover a name', () =>
     // stayed off, which reads as the other layers being wrong.
     const { layer } = build();
     badgeSlots.reset();
-    layer.load([cityAtPixel(300, 200)]);
-    layer.refresh(PIXEL_VIEW);
+    layer.load([cityAt(20, 40)]);
+    layer.refresh(WORLD_VIEW);
     expect(badgeSlots.claimed).toBeGreaterThan(0);
 
     layer.setVisible(false);
@@ -399,23 +482,24 @@ describe('CityLayer holding lattice space so a badge cannot cover a name', () =>
     // smallest test that sees it: reserving the same points twice looks identical either way.
     const { layer } = build();
     badgeSlots.reset();
-    layer.load([cityAtPixel(300, 200)]);
-    layer.refresh(PIXEL_VIEW);
+    layer.load([cityAt(20, 40)]);
+    layer.refresh(WORLD_VIEW);
     const forOne = badgeSlots.claimed;
     expect(forOne).toBeGreaterThan(0);
 
-    layer.load([cityAtPixel(900, 600)]);
-    layer.refresh({ ...PIXEL_VIEW, heightM: WHOLE_GLOBE_M - 1 });
+    layer.load([cityAt(-80, -30)]);
+    layer.refresh({ ...WORLD_VIEW, heightM: WHOLE_GLOBE_M - 1 });
 
     // Not twice as many. The exact count differs between the two places, because a box wider than a
     // cell clips to a different number of columns depending where its edges fall, so the assertion is
     // that the old points came back rather than that the number is identical.
     expect(badgeSlots.claimed).toBeLessThan(forOne * 2);
     const out = { x: 0, y: 0 };
-    badgeSlots.claim('transit', 300, 200, out);
+    const freed = pixelOf(20, 40);
+    badgeSlots.claim('transit', freed.x, freed.y, out);
     expect(out).toEqual({
-      x: (Math.floor(300 / CLUSTER_CELL_PX) + 0.5) * CLUSTER_CELL_PX,
-      y: (Math.floor(200 / CLUSTER_CELL_PX) + 0.5) * CLUSTER_CELL_PX,
+      x: (Math.floor(freed.x / CLUSTER_CELL_PX) + 0.5) * CLUSTER_CELL_PX,
+      y: (Math.floor(freed.y / CLUSTER_CELL_PX) + 0.5) * CLUSTER_CELL_PX,
     });
   });
 });
@@ -1077,9 +1161,10 @@ describe('label collision', () => {
   it('lets the winner change as the camera moves, without reordering anything', () => {
     // Zoomed in, the cell covers less ground and the neighbours separate. Nothing about the
     // records changed; the cell is a function of the view.
-    const { layer, labels } = build();
+    const framing = { west: 4.55, south: 52.25, east: 4.98, north: 52.45 };
+    const { layer, labels } = build(framing);
     layer.load(CROWD);
-    layer.refresh({ west: 4.55, south: 52.25, east: 4.98, north: 52.45, heightM: 40_000 });
+    layer.refresh({ ...framing, heightM: 40_000 });
 
     expect(drawn(labels)).toContain('Amsterdam');
     expect(drawn(labels).length).toBeGreaterThan(1);
@@ -1158,7 +1243,7 @@ describe('a wrapped view rectangle', () => {
   const WRAPPED = { west: 10, south: 40, east: -10, north: 60, heightM: 800_000 };
 
   it('draws what is in an ordinary rectangle', () => {
-    const { layer, labels } = build();
+    const { layer, labels } = build(EUROPE);
     layer.load(WORLD);
     layer.refresh(EUROPE);
 
