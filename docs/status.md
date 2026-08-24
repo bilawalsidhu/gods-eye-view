@@ -2144,6 +2144,20 @@ refused it. They are closed, not pending.
   statement, 58% of a 900-row sample cite no source at all, and four figures are dated 2026. It is
   a permanently unavailable capability row rather than a silent blank, because eleven empty fields
   on a profile read as a bug unless the product says why.
+- **Vertical exaggeration of aircraft, cloud or vessel altitude, to separate the layers on screen.**
+  Requested by Alexander Fanthome on 2026-08-24 and measured the same day: it cannot be made to
+  work, and the reason is a geometric identity rather than a tuning problem. **At nadir it produces
+  exactly 0.00 pixels of separation at any factor**, measured at nine camera heights from 20,000km
+  to 12km, because the radial offset lies along the line of sight. Away from nadir the separation
+  gained and the apparent ground error introduced are one parallax read two ways: at a whole-globe
+  view a factor of twenty buys 10.5 pixels of lift for **356km** of apparent ground error at 45°
+  off nadir, and 11.4 pixels for **1,080km** at 60°. No taper helps, because near nadir the error
+  is small and the separation is also nil, so a taper trades one useless regime for another from
+  either end. An aircraft at 11km against a 6,371km radius is 0.17%, which reads as 0.08 to 0.57 of
+  a pixel across the whole visible disc: genuinely invisible, and not liftable without drawing it
+  where it is not. Satellites separate at 44 to 88 pixels and do it truthfully, because they really
+  are 400 to 800km up. Below about 20km the layers are told apart by shape and hue, which is the
+  channel that cannot lie.
 - **More ocean for the vessel layer.** Twenty-nine authorities were called on 2026-08-23 and four
   publish keyless live AIS. Denmark charges DKK 1,800 to 5,600 a year, Sweden's sits behind the
   paid RAIS database, and Italy, Greece and Lithuania answer 403 to a descriptive User-Agent. More

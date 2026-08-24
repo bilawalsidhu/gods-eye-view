@@ -736,6 +736,16 @@ the section stays navigable.
   `git fsck --lost-found` for a dangling stash, then the session transcript under
   `~/.claude/projects/`, and verify the rebuild by coverage rather than by eye, because a file
   that looks right can be missing a test nobody counted.
+  **The root cause is the large uncommitted tree, and it makes two different commands dangerous,
+  not one.** `git checkout <file>` reverts to HEAD rather than undoing your edit, and
+  `git add <dir>` stages every other agent's in-flight work into your commit. Both happened on
+  2026-08-24: the second put 245 lines of another agent's city-label work into a commit whose
+  message was about basemap imagery, which is exactly what makes a history unbisectable, and it
+  was fixed with a soft reset and a re-split verified byte-identical. Neither command is
+  reckless in a normal repository; both are dangerous in one carrying hundreds of uncommitted
+  files. **So the real mitigation is committing often enough that the tree is small**, which is
+  why the 255-file backlog was cleared into batched commits rather than left. Stage explicit
+  paths, never a directory, while anyone else is working.
   **Do not type the command at all, in any form.** A bare `git checkout` with no pathspec is a
   harmless no-op that lists modified files, and `git checkout -- <file>` destroys them, so the
   safe and the destructive forms differ by two characters and the safe one prints a wall of
