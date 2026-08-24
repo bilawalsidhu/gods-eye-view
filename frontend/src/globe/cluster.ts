@@ -194,6 +194,30 @@ export interface ClusterMark {
    * most half a cell diagonal from its anchor, which costs nothing true, because a badge is a count
    * over an area and has never claimed to mark a position.
    */
+  /**
+   * The members' mean position, on the surface rather than inside it.
+   *
+   * This is where a **merged icon** is drawn, which is a different thing from where a badge hangs
+   * from. Alexander Fanthome asked on 2026-08-24 to drop the hexagons and "merge the asset
+   * locations into one icon, and average the position/rotation", so this is that average.
+   *
+   * The raw arithmetic mean of positions on a sphere sits inside the sphere, which is why `x`,
+   * `y` and `z` above hold a real member instead. This is that mean pushed back out to the
+   * members' mean distance from the earth's centre, so it lands on the surface they are on and
+   * keeps their altitude with it.
+   */
+  meanX: number;
+  meanY: number;
+  meanZ: number;
+  /**
+   * The members' mean heading in degrees, or null when none of them reported one.
+   *
+   * A circular mean, taken from summed sine and cosine. An arithmetic mean of bearings is wrong
+   * at the wrap: 350 and 10 average to 180, so a merged icon would point back down the track its
+   * members are flying. Null rather than zero when nothing reported a heading, because zero is
+   * due north and a great many feeds simply omit the field.
+   */
+  meanHeadingDeg: number | null;
   nudgeX: number;
   nudgeY: number;
   /**
@@ -240,7 +264,32 @@ const MAX_Z = 10;
  */
 const NUDGE_X = 11;
 const NUDGE_Y = 12;
-const STRIDE = 13;
+/**
+ * Running totals of the members' earth-fixed positions, for the merged icon's own position.
+ *
+ * Summed rather than resolved per member because a pass must allocate nothing. The mean of these
+ * sits *inside* the sphere, a chord's midpoint being nearer the centre than its ends, so
+ * `marks()` pushes it back out to the members' mean distance from the centre before anyone draws
+ * on it. Without that step a merged icon is swallowed by the globe's own depth buffer, which is
+ * the reason this clusterer originally kept a real member's position instead of a mean.
+ */
+const SUM_X = 13;
+const SUM_Y = 14;
+const SUM_Z = 15;
+/** Sum of the members' distances from the earth's centre, so the mean can be pushed back out. */
+const SUM_RADIUS = 16;
+/**
+ * Heading accumulated as a unit vector rather than as degrees.
+ *
+ * Averaging bearings arithmetically is wrong at the wrap: 350 and 10 average to 180, which points
+ * the merged icon backwards down the track its members are flying. Summing sine and cosine and
+ * taking the arctangent is the standard fix and it is the only correct one.
+ */
+const SUM_SIN = 17;
+const SUM_COS = 18;
+/** How many members supplied a heading, which is not always the count: many feeds omit it. */
+const HEADING_COUNT = 19;
+const STRIDE = 20;
 
 /**
  * Whether the globe hides a point from a camera.
@@ -385,6 +434,7 @@ export class ScreenClusterer {
     x: number,
     y: number,
     z: number,
+    headingDeg: number | null = null,
   ): number {
     if (occludedByGlobe(cameraX, cameraY, cameraZ, x, y, z)) {
       return OFF_SCREEN;
@@ -399,6 +449,19 @@ export class ScreenClusterer {
     const cells = this.cells;
     const count = (cells[at + COUNT] ?? 0) + 1;
     cells[at + COUNT] = count;
+    // Running sums for the merged icon's own position and rotation. Accumulated here because
+    // `offer` is the only place that sees every member, and a second pass would need the members
+    // held somewhere, which is the allocation this whole class exists to avoid.
+    cells[at + SUM_X] = (cells[at + SUM_X] ?? 0) + x;
+    cells[at + SUM_Y] = (cells[at + SUM_Y] ?? 0) + y;
+    cells[at + SUM_Z] = (cells[at + SUM_Z] ?? 0) + z;
+    cells[at + SUM_RADIUS] = (cells[at + SUM_RADIUS] ?? 0) + Math.hypot(x, y, z);
+    if (headingDeg !== null) {
+      const radians = (headingDeg * Math.PI) / 180;
+      cells[at + SUM_SIN] = (cells[at + SUM_SIN] ?? 0) + Math.sin(radians);
+      cells[at + SUM_COS] = (cells[at + SUM_COS] ?? 0) + Math.cos(radians);
+      cells[at + HEADING_COUNT] = (cells[at + HEADING_COUNT] ?? 0) + 1;
+    }
     // How near this member is to the middle of its cell, squared because the square root would
     // buy nothing: only the ordering matters.
     const offX = this.screen.x - (column + 0.5) * this.cellPx;
@@ -483,12 +546,32 @@ export class ScreenClusterer {
       const dx = (cells[at + MAX_X] ?? 0) - (cells[at + MIN_X] ?? 0);
       const dy = (cells[at + MAX_Y] ?? 0) - (cells[at + MIN_Y] ?? 0);
       const dz = (cells[at + MAX_Z] ?? 0) - (cells[at + MIN_Z] ?? 0);
+      // The mean position, pushed back out to the members' mean distance from the earth's
+      // centre. The raw mean of points on a sphere lies inside it, so drawing there puts the
+      // merged icon under the surface and the depth buffer hides it. Normalising to the mean
+      // radius rather than to the ellipsoid keeps an aircraft's altitude: a merged icon of
+      // things at 11km sits at 11km, not on the ground.
+      const meanX = (cells[at + SUM_X] ?? 0) / count;
+      const meanY = (cells[at + SUM_Y] ?? 0) / count;
+      const meanZ = (cells[at + SUM_Z] ?? 0) / count;
+      const chord = Math.hypot(meanX, meanY, meanZ);
+      const lift = chord === 0 ? 0 : (cells[at + SUM_RADIUS] ?? 0) / count / chord;
+      const headings = cells[at + HEADING_COUNT] ?? 0;
       yield {
         cellId,
         count,
         x: cells[at + BEST_X] ?? 0,
         y: cells[at + BEST_Y] ?? 0,
         z: cells[at + BEST_Z] ?? 0,
+        meanX: meanX * lift,
+        meanY: meanY * lift,
+        meanZ: meanZ * lift,
+        meanHeadingDeg:
+          headings === 0
+            ? null
+            : ((Math.atan2(cells[at + SUM_SIN] ?? 0, cells[at + SUM_COS] ?? 0) * 180) / Math.PI +
+                360) %
+              360,
         nudgeX: cells[at + NUDGE_X] ?? 0,
         nudgeY: cells[at + NUDGE_Y] ?? 0,
         centreX: ((cellId % this.columns) + 0.5) * this.cellPx,

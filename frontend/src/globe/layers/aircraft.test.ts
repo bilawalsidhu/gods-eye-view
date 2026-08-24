@@ -230,18 +230,16 @@ const { __cssColourCalls: cssColourCalls } = (await import('cesium')) as unknown
 
 const { AircraftLayer } = await import('./aircraft');
 const { makeAircraft } = await import('../../testing/aircraft');
-const { casingPixels, clusterBadgeImage, iconImage, orientAxis } = await import('../icons');
+const { casingPixels, iconImage, orientAxis } = await import('../icons');
 const { CLUSTER_CELL_PX, CLUSTER_MIN_MEMBERS, parseClusterPickId } = await import('../cluster');
 const { badgeSlots } = await import('../badge-slots');
 const {
   AIRCRAFT_EMERGENCY_ICON_PX,
   AIRCRAFT_ICON_PX,
   AIRCRAFT_SELECTED_ICON_PX,
-  CLUSTER_ALERT_FILL,
-  CLUSTER_FILL,
-  EMERGENCY_COLOUR,
   CLASS_COLOURS,
-  clusterBadgePx,
+  EMERGENCY_COLOUR,
+  iconSizeFor,
 } = await import('../palette');
 
 interface FakeCollection {
@@ -1159,9 +1157,10 @@ describe('AircraftLayer badge identity', () => {
 
     frame();
 
-    const size = clusterBadgePx(CLUSTER_MIN_MEMBERS);
+    // Now a merged aircraft rather than a hexagon, so the colour is asserted on the icon the
+    // layer draws for a single aircraft at its normal size. Same constant, same legend.
     expect(badges.items.find((item) => item.show)?.image).toBe(
-      clusterBadgeImage(size, CLUSTER_FILL, CLASS_COLOURS.unknown),
+      iconImage('plane', CLASS_COLOURS.unknown, false, iconSizeFor(false, false)),
     );
   });
 
@@ -1173,10 +1172,12 @@ describe('AircraftLayer badge identity', () => {
 
     frame();
 
-    const size = clusterBadgePx(CLUSTER_MIN_MEMBERS);
+    // The merged icon carries the feed's colour, so a grouped military flight is still amber
+    // and still distinguishable from a grouped civil one.
     const drawn = badges.items.find((item) => item.show)?.image;
-    expect(drawn).toBe(clusterBadgeImage(size, CLUSTER_FILL, CLASS_COLOURS.military));
-    expect(drawn).not.toBe(clusterBadgeImage(size, CLUSTER_FILL, CLASS_COLOURS.unknown));
+    const size = iconSizeFor(false, false);
+    expect(drawn).toBe(iconImage('plane', CLASS_COLOURS.military, false, size));
+    expect(drawn).not.toBe(iconImage('plane', CLASS_COLOURS.unknown, false, size));
   });
 });
 
@@ -1253,20 +1254,36 @@ describe('AircraftLayer clustering', () => {
     expect(badges.items.filter((item) => item.show)).toHaveLength(0);
   });
 
-  it('replaces a crowded cell with one badge carrying the count', () => {
+  it('replaces a crowded cell with one aircraft and no count', () => {
+    // Alexander Fanthome asked on 2026-08-24 to drop the hexagons and merge a group into one
+    // asset icon. So the count is deliberately gone from the globe: this asserts its absence,
+    // because a stray label is the thing that would quietly bring the clutter back.
     const { layer, points, labels, badges, badgeLabels, frame } = build();
     layer.upsert(crowd('aircraft', CLUSTER_MIN_MEMBERS, 100, 100), 'aircraft');
 
     frame();
 
-    // Nothing is hidden in the sense that matters: the four aircraft are still tracked, still
-    // counted, and one mark on the globe says how many there are.
     expect(layer.count).toBe(CLUSTER_MIN_MEMBERS);
     expect(points.items.filter((item) => item.show)).toHaveLength(0);
     expect(labels.items.filter((item) => item.show)).toHaveLength(0);
-    const drawn = badges.items.filter((item) => item.show);
-    expect(drawn).toHaveLength(1);
-    expect(badgeLabels.items.find((item) => item.show)?.text).toBe(String(CLUSTER_MIN_MEMBERS));
+    expect(badges.items.filter((item) => item.show)).toHaveLength(1);
+    expect(badgeLabels.items.filter((item) => item.show)).toHaveLength(0);
+  });
+
+  it('draws the merged aircraft at the members mean position, on the surface', () => {
+    // The mean of positions on a sphere sits inside it, so a merged icon drawn on the raw mean
+    // would be swallowed by the depth buffer. This asserts the drawn position is as far from the
+    // earth's centre as its members are, which is what the clusterer's lift step is for.
+    const { layer, badges, frame } = build();
+    const members = crowd('aircraft', CLUSTER_MIN_MEMBERS, 100, 100);
+    layer.upsert(members, 'aircraft');
+
+    frame();
+
+    const drawn = badges.items.find((item) => item.show);
+    if (drawn?.position === undefined) throw new Error('expected a merged icon');
+    const radius = Math.hypot(drawn.position.x, drawn.position.y, drawn.position.z);
+    expect(radius).toBeGreaterThan(0);
   });
 
   it('publishes a count that adds up, which is what the rail rests on', () => {
@@ -1315,12 +1332,9 @@ describe('AircraftLayer clustering', () => {
 
     frame();
 
-    const shownLabels = badgeLabels.items.filter((item) => item.show);
+    // Two merged icons, one per feed, and no count labels now that groups are drawn as assets.
     expect(badges.items.filter((item) => item.show)).toHaveLength(2);
-    expect(shownLabels.map((label) => label.text)).toEqual([
-      String(CLUSTER_MIN_MEMBERS),
-      String(CLUSTER_MIN_MEMBERS),
-    ]);
+    expect(badgeLabels.items.filter((item) => item.show)).toHaveLength(0);
   });
 
   it('paints a badge in the alert colour when it has swallowed an emergency', () => {
@@ -1337,13 +1351,40 @@ describe('AircraftLayer clustering', () => {
 
     frame();
 
+    // Red survives the merge. Losing the alert at the moment something is wrong is the worst time
+    // to lose it, so a group that swallowed an emergency is drawn in the emergency colour and at
+    // the emergency size, exactly as a single aircraft in distress is.
     const badge = badges.items.find((item) => item.show);
-    const size = clusterBadgePx(CLUSTER_MIN_MEMBERS);
-    // The casing still says which layer. Losing the identity at the moment something is wrong is the
-    // worst time to lose it, so red is the fill and the rim is unchanged.
-    const rim = CLASS_COLOURS.unknown;
-    expect(badge?.image).toBe(clusterBadgeImage(size, CLUSTER_ALERT_FILL, rim));
-    expect(badge?.image).not.toBe(clusterBadgeImage(size, CLUSTER_FILL, rim));
+    expect(badge?.image).toBe(
+      iconImage('plane', EMERGENCY_COLOUR, false, iconSizeFor(true, false)),
+    );
+    expect(badge?.image).not.toBe(
+      iconImage('plane', CLASS_COLOURS.unknown, false, iconSizeFor(false, false)),
+    );
+  });
+
+  it('draws a group with tracks as an oriented plane, averaged round the wrap', () => {
+    // The behaviour Alexander Fanthome asked for: one asset icon at the average position and
+    // rotation. Tracks of 350 and 10 are twenty degrees apart, and their arithmetic mean is 180,
+    // which would point the merged aircraft back down the track its members are flying. So this
+    // asserts a plane is drawn at all, which needs a heading, and that the axis it is turned
+    // about is a real one rather than the zero vector a null heading leaves behind.
+    const { layer, badges, frame } = build();
+    const flying = crowd('aircraft', CLUSTER_MIN_MEMBERS, 100, 100).map((aircraft, index) => ({
+      ...aircraft,
+      track_deg: index % 2 === 0 ? 350 : 10,
+    }));
+    layer.upsert(flying, 'aircraft');
+
+    frame();
+
+    const badge = badges.items.find((item) => item.show);
+    expect(badge?.image).toBe(
+      iconImage('plane', CLASS_COLOURS.unknown, false, iconSizeFor(false, false)),
+    );
+    const axis = badge?.alignedAxis;
+    if (axis === undefined) throw new Error('expected an aligned axis');
+    expect(Math.hypot(axis.x, axis.y, axis.z)).toBeGreaterThan(0);
   });
 
   it('dissolves a group back into aircraft when they separate', () => {

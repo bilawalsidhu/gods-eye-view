@@ -66,23 +66,11 @@ import {
 import { badgeSlots } from '../badge-slots';
 import type { BadgeSlot } from '../badge-slots';
 import type { ClusterFlyTo, ClusterMark, ClusterState } from '../cluster';
-import { clusterBadgeImage, iconImage, orientAxis } from '../icons';
+import { iconImage, orientAxis } from '../icons';
 import type { IconShape } from '../icons';
 import { advanceGreatCircle, pointInView } from '../project';
 import type { ViewRect } from '../project';
-import {
-  CLASS_COLOURS,
-  CLUSTER_ALERT_FILL,
-  CLUSTER_ALERT_TEXT,
-  CLUSTER_FILL,
-  CLUSTER_TEXT,
-  EMERGENCY_COLOUR,
-  clusterBadgePx,
-  clusterBadgeText,
-  clusterFontPx,
-  colourFor,
-  iconSizeFor,
-} from '../palette';
+import { CLASS_COLOURS, EMERGENCY_COLOUR, colourFor, iconSizeFor } from '../palette';
 import type { Changes } from '../../net/ws';
 import type { Aircraft, AircraftClass, LayerName } from '../../types/entities';
 
@@ -140,7 +128,6 @@ const LABEL_GAP_PX = 7;
 const CLASS_FALLBACK_COLOUR = colourFor('unknown', false);
 
 /** Bold, because a count inside a badge is the one piece of text here that has to be read. */
-const BADGE_FONT_FAMILY = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 
 /** A badge and the count drawn on it. Pooled like everything else in this file. */
 interface Badge {
@@ -514,7 +501,10 @@ export class AircraftLayer {
       }
 
       const at = slot.mark.position;
-      slot.cell = grid.offer(scratchMatrix, eye.x, eye.y, eye.z, at.x, at.y, at.z);
+      // The track goes in so a merged group can be turned to the members' mean heading. Null
+      // where the feed carried none, which about half of live records do, and the clusterer
+      // keeps those out of the circular mean rather than counting them as due north.
+      slot.cell = grid.offer(scratchMatrix, eye.x, eye.y, eye.z, at.x, at.y, at.z, slot.trackDeg);
     }
     grid.resolve();
     const hidden = this.hiddenLayers.has(feed);
@@ -626,36 +616,68 @@ export class AircraftLayer {
   }
 
   /**
-   * Draw one badge, taking the next one out of the pool.
+   * Draw one group as a single aircraft, taking the next slot out of the pool.
    *
-   * A group holding an aircraft in distress is drawn in the alert colour with the text inverted.
-   * Red is reserved for alerts across the whole app, and a group that swallowed one silently
-   * would be the single case where clustering hid something that mattered.
+   * **No hexagon and no count.** Alexander Fanthome asked on 2026-08-24 to "remove those
+   * hexagons ... instead just merge the asset locations into one icon, and average the
+   * position/rotation ... Do not scale the asset icon size when merging, keep at the current
+   * size", after saying the rail was very cluttered. So a group of aircraft is drawn as one
+   * aircraft: same silhouette, same size, at the members' mean position, pointing along their
+   * mean track.
+   *
+   * **The information this gives up is the count**, and that is the trade he asked for: one plane
+   * over the Atlantic now looks the same whether it stands for two aircraft or two hundred. The
+   * rail still carries the totals per layer, and zooming in splits the group into its members,
+   * which is where the number becomes visible again.
+   *
+   * A group holding an aircraft in distress keeps the alert colour, because red is reserved for
+   * alerts across the whole app and a group that swallowed one silently would be the single case
+   * where merging hid something that mattered.
    */
   private drawBadge(feed: LayerName, mark: ClusterMark, used: number): number {
     const alert = this.alertCells.has(mark.cellId);
-    const sizePx = clusterBadgePx(mark.count);
+    // The unmerged size, deliberately. `clusterBadgePx` grew with the count and that is exactly
+    // what was asked to stop: a merged icon is one aircraft's worth of ink wherever it appears.
+    const sizePx = iconSizeFor(alert, false);
     const badge = this.badgePool[used] ?? this.acquireBadge();
     badge.feed = feed;
     badge.mark.show = true;
     badge.mark.id = clusterPickId(feed, mark.cellId);
-    badge.mark.image = clusterBadgeImage(
+    // A disc when nothing in the group reported a track, matching what a single aircraft with no
+    // track draws. A plane pointing north would be a bearing nobody reported.
+    const feedColour = feed === 'military' ? CLASS_COLOURS.military : CLASS_COLOURS.unknown;
+    badge.mark.image = iconImage(
+      mark.meanHeadingDeg === null ? 'disc' : 'plane',
+      alert ? EMERGENCY_COLOUR : feedColour,
+      false,
       sizePx,
-      alert ? CLUSTER_ALERT_FILL : CLUSTER_FILL,
-      feed === 'military' ? CLASS_COLOURS.military : CLASS_COLOURS.unknown,
     );
     badge.mark.width = sizePx;
     badge.mark.height = sizePx;
-    scratchBadge.x = mark.x;
-    scratchBadge.y = mark.y;
-    scratchBadge.z = mark.z;
+    scratchBadge.x = mark.meanX;
+    scratchBadge.y = mark.meanY;
+    scratchBadge.z = mark.meanZ;
     // Both setters clone, so one scratch vector serves every badge in the pass.
     badge.mark.position = scratchBadge;
-    badge.label.show = true;
-    badge.label.text = clusterBadgeText(mark.count);
-    badge.label.font = `700 ${clusterFontPx(mark.count)}px ${BADGE_FONT_FAMILY}`;
-    badge.label.fillColor = cesiumColour(alert ? CLUSTER_ALERT_TEXT : CLUSTER_TEXT);
-    badge.label.position = scratchBadge;
+    if (mark.meanHeadingDeg === null) {
+      // No member reported a track, so there is no bearing to turn to. The zero vector is
+      // Cesium's own "unrotated", which is what a trackless single aircraft draws as too.
+      badge.mark.alignedAxis = Cartesian3.ZERO;
+    } else {
+      // Orientation is a world-space axis rather than a screen angle, the same way a single
+      // aircraft is turned. The mean position has to be converted back to degrees for it,
+      // because `orientAxis` works from a point on the ellipsoid and a bearing there.
+      const at = Cartographic.fromCartesian(scratchBadge, undefined, scratchCarto);
+      orientAxis(
+        (at.longitude * 180) / Math.PI,
+        (at.latitude * 180) / Math.PI,
+        mark.meanHeadingDeg,
+        scratchAxis,
+      );
+      badge.mark.alignedAxis = scratchAxis;
+    }
+    badge.label.show = false;
+    badge.label.text = '';
     // Drawn on a lattice point rather than on the member it hangs from. Its own cell's centre when
     // that is free, which is what keeps two badges of this layer apart, and the nearest free point
     // otherwise, which is what keeps it from landing exactly on another layer's badge. See

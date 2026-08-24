@@ -518,3 +518,81 @@ describe('the badge nudge', () => {
     }
   });
 });
+
+// ------------------------------------------------------- the merged icon's position and rotation
+
+describe('the merged icon', () => {
+  it('places the mean on the sphere rather than inside it', () => {
+    // The whole reason `x`, `y`, `z` hold a real member and not a mean. Two points on a sphere
+    // have an arithmetic mean at the midpoint of the chord between them, which is nearer the
+    // centre than either end, so an icon drawn there is under the surface and the depth buffer
+    // hides it. This asserts the mean has been pushed back out.
+    //
+    // Points on a sphere rather than the flat `atPixel` helper, because the whole effect is a
+    // property of curvature and `atPixel` returns a plane at z = 0 where a chord midpoint is not
+    // inside anything.
+    //
+    // A small radius rather than the earth's, and that is forced by the harness: `pixelMatrix`
+    // maps world x and y straight to pixels, so earth-scale coordinates land millions of pixels
+    // off screen and the two points never share a cell. 200 with three degrees between them keeps
+    // both inside one cell while still curving, which is what is being tested. The sag scales with
+    // the radius, so the property is the same one the globe has.
+    const SPHERE = 200;
+    const onSphere = (lonDeg: number): [number, number, number] => {
+      const lon = (lonDeg * Math.PI) / 180;
+      return [SPHERE * Math.cos(lon), SPHERE * Math.sin(lon), 0];
+    };
+    // Both at positive longitude so both project on screen: `pixelMatrix` maps world y straight
+    // to a pixel row, so a negative y is above the viewport and gets culled before it is binned.
+    const a = onSphere(3);
+    const b = onSphere(9);
+    const clusterer = new ScreenClusterer(CLUSTER_CELL_PX, 2);
+    clusterer.begin(WIDTH, HEIGHT);
+    clusterer.offer(pixelMatrix(), 0, 0, 0, ...a);
+    clusterer.offer(pixelMatrix(), 0, 0, 0, ...b);
+    clusterer.resolve();
+
+    const [mark] = [...clusterer.marks()];
+    if (mark === undefined) throw new Error('expected one group');
+
+    const chord = Math.hypot((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
+    const merged = Math.hypot(mark.meanX, mark.meanY, mark.meanZ);
+
+    // The raw midpoint is measurably under the surface; the published mean is on it.
+    expect(SPHERE - chord).toBeGreaterThan(0.2);
+    expect(merged).toBeCloseTo(SPHERE, 1);
+  });
+
+  it('averages headings round the wrap rather than through it', () => {
+    // 350 and 10 are twenty degrees apart and their arithmetic mean is 180, which points a merged
+    // aircraft back down the track its members are flying. The circular mean is 0.
+    const clusterer = new ScreenClusterer(CLUSTER_CELL_PX, 2);
+    clusterer.begin(WIDTH, HEIGHT);
+    clusterer.offer(pixelMatrix(), 0, 0, 0, ...atPixel(100, 100), 350);
+    clusterer.offer(pixelMatrix(), 0, 0, 0, ...atPixel(104, 104), 10);
+    clusterer.resolve();
+
+    const [mark] = [...clusterer.marks()];
+    if (mark === undefined) throw new Error('expected one group');
+    if (mark.meanHeadingDeg === null) throw new Error('expected a heading');
+
+    // Within a degree of due north, and nowhere near the 180 an arithmetic mean would give.
+    const offBy = Math.min(mark.meanHeadingDeg, 360 - mark.meanHeadingDeg);
+    expect(offBy).toBeLessThan(1);
+  });
+
+  it('reports no heading when no member carried one, rather than due north', () => {
+    // Many feeds omit heading entirely. Zero is a real bearing, so defaulting to it would point
+    // every merged transit icon at the north pole and look deliberate.
+    const clusterer = new ScreenClusterer(CLUSTER_CELL_PX, 2);
+    clusterer.begin(WIDTH, HEIGHT);
+    clusterer.offer(pixelMatrix(), 0, 0, 0, ...atPixel(100, 100));
+    clusterer.offer(pixelMatrix(), 0, 0, 0, ...atPixel(104, 104));
+    clusterer.resolve();
+
+    const [mark] = [...clusterer.marks()];
+    if (mark === undefined) throw new Error('expected one group');
+
+    expect(mark.meanHeadingDeg).toBeNull();
+  });
+});
