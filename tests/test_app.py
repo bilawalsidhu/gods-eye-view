@@ -138,15 +138,17 @@ def test_the_health_provider_is_wired_to_the_poller_group(http: httpx.AsyncClien
 
 
 @respx.mock(assert_all_called=True)
-async def test_the_viewport_poller_uses_the_configured_default_when_nothing_is_set(
+async def test_with_no_viewport_the_layer_still_sweeps_the_globe(
     respx_mock: respx.Router, http: httpx.AsyncClient
 ) -> None:
-    state = build_state(
-        _settings(adsb_default_lat=51.5, adsb_default_lon=-0.12, adsb_radius_nm=120), http
-    )
-    route = respx_mock.get(f"{PRIMARY}/v2/lat/51.5000/lon/-0.1200/dist/120").mock(
-        return_value=httpx.Response(200, content=TWO_AIRCRAFT)
-    )
+    # Replaces a test that asserted the configured default point was queried when no client had
+    # sent a viewport. That default is no longer how the layer decides where to look: with no
+    # camera there is nothing to favour, so it takes the next cell of the global rotation, and
+    # the first cell of a fresh rotation is the first of `sweep_cells()`.
+    state = build_state(_settings(), http)
+    first = adsb.sweep_cells()[0]
+    expected = f"{PRIMARY}/v2/lat/{first[0]:.4f}/lon/{first[1]:.4f}/dist/{adsb.SWEEP_RADIUS_NM}"
+    route = respx_mock.get(expected).mock(return_value=httpx.Response(200, content=TWO_AIRCRAFT))
     poller = next(iter(state.pollers))
 
     assert await poller.run_once() is True
@@ -157,15 +159,20 @@ async def test_the_viewport_poller_uses_the_configured_default_when_nothing_is_s
 
 
 @respx.mock(assert_all_called=True)
-async def test_the_viewport_poller_follows_the_client_viewport(
+async def test_the_sweep_favours_the_grid_cell_holding_the_camera(
     respx_mock: respx.Router, http: httpx.AsyncClient
 ) -> None:
+    # The camera is honoured by asking for the grid cell that contains it, not by asking for a
+    # circle around it. That is the whole reason the layer became global without spending any
+    # more requests: the local refresh and the global rotation are now the same request. A test
+    # that accepted any circle at the camera's own latitude would pass on the old behaviour too.
     state = build_state(_settings(), http)
     state.viewport = BoundingBox(west=-1.0, south=51.0, east=1.0, north=52.0)
     centre = state.viewport.centre
-    route = respx_mock.get(url__regex=rf"{PRIMARY}/v2/lat/{centre.lat:.4f}/lon/.*").mock(
-        return_value=httpx.Response(200, content=TWO_AIRCRAFT)
-    )
+    cell = adsb.GlobalSweep().cell_containing(centre.lat, centre.lon)
+    assert cell != (centre.lat, centre.lon), "the grid centre must not be the camera itself"
+    expected = f"{PRIMARY}/v2/lat/{cell[0]:.4f}/lon/{cell[1]:.4f}/dist/{adsb.SWEEP_RADIUS_NM}"
+    route = respx_mock.get(expected).mock(return_value=httpx.Response(200, content=TWO_AIRCRAFT))
     poller = next(iter(state.pollers))
 
     await poller.run_once()
@@ -591,7 +598,10 @@ def test_the_console_entry_point_serves_a_single_worker(monkeypatch: pytest.Monk
 # its payload, not its licence.
 
 AIRPLANESLIVE = "https://api.airplanes.live"
-VIEWPORT_PATH = "/v2/lat/51.5000/lon/-0.1200/dist/250"
+# No exact sweep path is pinned here on purpose. The aircraft layer asks for a grid cell of
+# its own choosing rather than a circle around the camera, so a test naming the full URL would
+# be asserting where the grid happens to put its centres. The two tests that care about which
+# cell is chosen say so explicitly; everything else matches on the prefix.
 
 ADSB_LOL_AIRCRAFT = 65
 """Records in the recorded adsb.lol viewport capture, all of which carry a position."""
@@ -620,10 +630,10 @@ def _aircraft_poller(state: AppState) -> Poller:
 
 
 def _mock_two_providers(respx_mock: respx.Router) -> None:
-    respx_mock.get(f"{PRIMARY}{VIEWPORT_PATH}").mock(
+    respx_mock.get(url__startswith=f"{PRIMARY}/v2/lat/").mock(
         return_value=httpx.Response(200, content=fixture_bytes("adsb_point_live.json"))
     )
-    respx_mock.get(f"{AIRPLANESLIVE}{VIEWPORT_PATH}").mock(
+    respx_mock.get(url__startswith=f"{AIRPLANESLIVE}/v2/lat/").mock(
         return_value=httpx.Response(200, content=fixture_bytes("adsbfi_point_live.json"))
     )
 
@@ -721,10 +731,10 @@ async def test_adding_a_provider_is_a_row_rather_than_a_code_change(
         base_url_setting="airplaneslive_base_url",
     )
     state = build_state(_settings(), http)
-    route = respx_mock.get(f"{AIRPLANESLIVE}{VIEWPORT_PATH}").mock(
+    route = respx_mock.get(url__startswith=f"{AIRPLANESLIVE}/v2/lat/").mock(
         return_value=httpx.Response(200, content=fixture_bytes("adsb_point_live.json"))
     )
-    primary = respx_mock.get(f"{PRIMARY}{VIEWPORT_PATH}")
+    primary = respx_mock.get(url__startswith=f"{PRIMARY}/v2/lat/")
 
     found = await _aircraft_client(state, row).aircraft_near(lat=51.5, lon=-0.12, radius_nm=250)
 
@@ -903,10 +913,12 @@ async def test_killing_one_aircraft_provider_leaves_the_layer_up_and_degraded(
 ) -> None:
     """Acceptance 7. The layer serves, reads degraded, and names the provider that is gone."""
     state = build_state(_two_provider_settings(), http)
-    respx_mock.get(f"{PRIMARY}{VIEWPORT_PATH}").mock(
+    respx_mock.get(url__startswith=f"{PRIMARY}/v2/lat/").mock(
         return_value=httpx.Response(200, content=fixture_bytes("adsb_point_live.json"))
     )
-    respx_mock.get(f"{AIRPLANESLIVE}{VIEWPORT_PATH}").mock(return_value=httpx.Response(503))
+    respx_mock.get(url__startswith=f"{AIRPLANESLIVE}/v2/lat/").mock(
+        return_value=httpx.Response(503)
+    )
     poller = _aircraft_poller(state)
 
     assert await poller.run_once() is True
@@ -935,8 +947,10 @@ async def test_every_aircraft_provider_failing_at_once_never_empties_the_store(
     """
     state = build_state(_two_provider_settings(), http)
     state.aircraft.upsert("aaaaaa", make_aircraft("aaaaaa"))
-    respx_mock.get(f"{PRIMARY}{VIEWPORT_PATH}").mock(return_value=httpx.Response(503))
-    respx_mock.get(f"{AIRPLANESLIVE}{VIEWPORT_PATH}").mock(return_value=httpx.Response(503))
+    respx_mock.get(url__startswith=f"{PRIMARY}/v2/lat/").mock(return_value=httpx.Response(503))
+    respx_mock.get(url__startswith=f"{AIRPLANESLIVE}/v2/lat/").mock(
+        return_value=httpx.Response(503)
+    )
     poller = _aircraft_poller(state)
 
     # It ran; it failed. `run_once` reports whether the cadence let it run, so the feed's own
@@ -963,8 +977,8 @@ async def test_the_union_member_falls_over_to_its_own_failover(
     record rather than inferred.
     """
     state = build_state(Settings(adsb_base_url=PRIMARY, adsb_failover_base_url=FAILOVER), http)
-    respx_mock.get(f"{PRIMARY}{VIEWPORT_PATH}").mock(return_value=httpx.Response(500))
-    respx_mock.get(f"{FAILOVER}{VIEWPORT_PATH}").mock(
+    respx_mock.get(url__startswith=f"{PRIMARY}/v2/lat/").mock(return_value=httpx.Response(500))
+    respx_mock.get(url__startswith=f"{FAILOVER}/v2/lat/").mock(
         return_value=httpx.Response(200, content=fixture_bytes("adsbfi_point_live.json"))
     )
 
@@ -1016,7 +1030,7 @@ async def test_the_aircraft_a_provider_refused_are_counted_where_they_can_be_rea
             ],
         }
     ).encode()
-    respx_mock.get(f"{PRIMARY}{VIEWPORT_PATH}").mock(
+    respx_mock.get(url__startswith=f"{PRIMARY}/v2/lat/").mock(
         return_value=httpx.Response(200, content=payload)
     )
 
@@ -1036,7 +1050,7 @@ async def test_one_cycle_of_drops_is_counted_once_and_not_again_next_cycle(
     """The client counts cumulatively, so the wiring must add the difference, not the total."""
     state = build_state(_settings(), http)
     payload = json.dumps({"now": 1787165611001, "ac": [{"hex": "bbbbbb"}]}).encode()
-    respx_mock.get(f"{PRIMARY}{VIEWPORT_PATH}").mock(
+    respx_mock.get(url__startswith=f"{PRIMARY}/v2/lat/").mock(
         return_value=httpx.Response(200, content=payload)
     )
     poll = _aircraft_poller(state).poll
@@ -1058,7 +1072,7 @@ async def test_a_union_record_still_carries_its_resolved_class(
     screen with nothing failing anywhere.
     """
     state = build_state(_settings(), http)
-    respx_mock.get(f"{PRIMARY}{VIEWPORT_PATH}").mock(
+    respx_mock.get(url__startswith=f"{PRIMARY}/v2/lat/").mock(
         return_value=httpx.Response(200, content=fixture_bytes("adsb_type_glf6_live.json"))
     )
 

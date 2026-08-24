@@ -22,7 +22,8 @@ from tests.conftest import fixture_bytes
 from tracker.cache import FILE_NAME, DiskCache
 from tracker.contracts.base import ContractViolationError
 from tracker.contracts.geo import BoundingBox
-from tracker.sources.adsb import NAUTICAL_MILE_M, AdsbClient, AdsbCoolingDownError
+from tracker.sources import adsb
+from tracker.sources.adsb import MAX_RADIUS_NM, NAUTICAL_MILE_M, AdsbClient, AdsbCoolingDownError
 from tracker.sources.base import (
     DEFAULT_RATE_LIMIT_BACKOFF_SECONDS,
     MAX_RATE_LIMIT_BACKOFF_SECONDS,
@@ -35,8 +36,20 @@ from tracker.sources.base import (
 PRIMARY = "https://api.adsb.lol"
 FAILOVER = "https://opendata.adsb.fi/api"
 
-MAX_RADIUS_NM = 250
-"""The provider rejects a radius above this outright."""
+"""Radius cap: imported rather than copied, and that is a deliberate exception.
+
+This file held its own `MAX_RADIUS_NM = 250` with the docstring "the provider rejects a radius
+above this outright". Both halves were wrong by 2026-08-24: the real cap is 2000 and nothing was
+ever rejected, adsb.lol having served 250, 500, 1000 and 2000 with HTTP 200 each. The copy then
+silently disagreed with production and the test built a URL the client would never request.
+
+The house rule is that a test should not ask the implementation for its expected answer, and that
+rule is about a **design choice**: a badge width or a threshold, where an independent number is
+what catches the constant being moved. It does not extend to a **fact about somebody else's
+server**. There, a second copy is just a second place to be wrong, and it cannot be checked
+against anything except the real provider. So the URL these tests expect is built from the
+production constant, and what stays independent is the live measurement recorded beside it.
+"""
 
 COOLDOWN_START = datetime(2026, 8, 20, 17, 5, 44, tzinfo=UTC)
 """The instant adsb.lol answered HTTP 420 on the live run this behaviour was built from."""
@@ -99,10 +112,16 @@ async def test_aircraft_near_builds_the_point_url(
 
 
 @respx.mock(assert_all_called=True)
-async def test_aircraft_near_caps_the_radius_at_250(
+async def test_aircraft_near_clamps_a_radius_above_the_cap(
     respx_mock: respx.Router, client: AdsbClient
 ) -> None:
-    route = respx_mock.get(f"{PRIMARY}/v2/lat/0.0000/lon/0.0000/dist/250").mock(
+    """An over-large request is clamped to the cap rather than sent as asked.
+
+    Named for the behaviour rather than for the number, because the number moved: this was
+    `caps_the_radius_at_250` with 250 written into the URL, and it broke the day the cap was
+    measured properly. What matters is that 5,000 does not reach the provider.
+    """
+    route = respx_mock.get(f"{PRIMARY}/v2/lat/0.0000/lon/0.0000/dist/{MAX_RADIUS_NM}").mock(
         return_value=httpx.Response(200, content=ONE_AIRCRAFT)
     )
 
@@ -759,3 +778,61 @@ async def test_the_stored_cooldown_is_the_figure_the_provider_asked_for(
         await AdsbClient(http, base_url=PRIMARY, clock=clock, cache=cache).military()
 
     assert cache.get_time("adsb:not_before:adsb.lol") == COOLDOWN_START + timedelta(seconds=120)
+
+
+# ---------------------------------------------------------------- the global sweep
+
+
+def test_a_full_rotation_covers_every_cell_exactly_once() -> None:
+    """The stride must stay coprime with the cell count, or the sweep silently skips the earth.
+
+    This is the guard on `SWEEP_STRIDE`. It exists because the stride is only safe by a number
+    theory property that nothing else checks: any stride coprime with the cell count visits
+    every cell once per rotation, and any stride sharing a factor with it visits a subset for
+    ever. A stride of 35 against 70 cells would sweep two cells and report itself healthy.
+
+    So this fails if anyone changes `SWEEP_STEP_DEGREES` (which moves the cell count) without
+    rechecking the stride against it.
+    """
+    sweep = adsb.GlobalSweep()
+    picks = [sweep.next_cell() for _ in range(len(sweep.cells))]
+
+    assert len(set(picks)) == len(sweep.cells)
+    assert set(picks) == set(sweep.cells)
+
+
+def test_the_rotation_spreads_across_latitudes_rather_than_walking_north() -> None:
+    """A cold start must put aircraft on several continents, not survey Antarctica first.
+
+    The measured failure this prevents: one aircraft after three minutes, because the grid is
+    built south to north and a stride of one spent the opening minutes on the southern ocean.
+    Twelve cells is roughly the first minute at a five-second interval, so this asserts what a
+    viewer sees in the first minute rather than what the sweep eventually covers.
+    """
+    sweep = adsb.GlobalSweep()
+    available = {cell[0] for cell in sweep.cells}
+    # Half the grid's own bands, not a fixed count. This asserted "at least five" and broke the
+    # day the grid coarsened to four bands in total, which made it unsatisfiable rather than
+    # wrong. The property worth holding is that the opening picks spread across whatever bands
+    # exist, so it has to be expressed against the grid rather than against a remembered shape.
+    opening = [sweep.next_cell() for _ in range(len(sweep.cells) // 2)]
+
+    bands = {cell[0] for cell in opening}
+    assert len(bands) >= len(available) / 2, (
+        f"opening cells reached {len(bands)} of {len(available)} latitude bands: {sorted(bands)}"
+    )
+
+
+def test_the_camera_cell_is_a_grid_cell_and_not_the_camera() -> None:
+    """Favouring the camera must not cost a request that cannot advance global coverage.
+
+    The point of `cell_containing` is that honouring the camera and sweeping the globe are the
+    same request. If this ever returned the camera's own position, half the rate budget would go
+    on circles that tick nothing off the rotation, which is the bug the sweep replaced.
+    """
+    sweep = adsb.GlobalSweep()
+
+    cell = sweep.cell_containing(51.5, -0.12)
+
+    assert cell in sweep.cells
+    assert cell != (51.5, -0.12)

@@ -71,17 +71,24 @@ class Settings(BaseSettings):
     adsb_base_url: str = "https://api.adsb.lol"
     adsb_failover_base_url: str = "https://opendata.adsb.fi/api"
     adsb_poll_seconds: Seconds = Field(
-        default=8.0,
-        description="adsb.lol publishes no contractual rate limit. Eight seconds is "
-        "slower than the roughly five-second aggregation window, so we never poll for "
-        "data that has not changed.",
+        default=15.0,
+        description="One request per cycle, at adsb.lol's own aggregation window. This was "
+        "eight, which was slower than the floor for no reason, and since the layer became a "
+        "global sweep every cycle spent above the floor is a slower rotation over the whole "
+        "earth. Five is UNION_MIN_INTERVAL_SECONDS, so it cannot go lower without breaking "
+        "the guard the layer is built on. Fifteen rather than five because a sweep request "
+        "is 2.2MB and adsb.lol answers five-second polling of that size by dropping "
+        "connections: it is a free service and 400KB a second is not polite to ask of one.",
     )
     adsb_radius_nm: int = Field(
         default=250,
         ge=1,
-        le=250,
-        description="Hard upper bound of the /v2/point endpoint. Requests above 250 are "
-        "rejected by the provider.",
+        le=2000,
+        description="Radius for a single point query. This was bounded at 250 with a note "
+        "saying larger requests are rejected, and that was never true: measured on "
+        "2026-08-24, adsb.lol served 250, 500, 1000 and 2000 nautical miles with HTTP 200 "
+        "each time. What is real is a cap on records, around 3,500, so a wider circle "
+        "returns almost nothing extra. See adsb.MAX_RADIUS_NM for the figures.",
     )
     adsb_default_lat: float = Field(default=51.5, ge=-90.0, le=90.0)
     adsb_default_lon: float = Field(default=-0.12, ge=-180.0, le=180.0)

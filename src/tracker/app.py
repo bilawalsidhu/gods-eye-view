@@ -525,8 +525,26 @@ def build_state(settings: Settings, http: httpx.AsyncClient) -> AppState:
     owner_lookup = adsbdb.AdsbdbLookup(http)
     media = routes_media.MediaStore(http, cache, settings.cache_dir / routes_media.MEDIA_DIRECTORY)
     suppression = SuppressionStore(cache, settings.cache_dir)
+    # **The aircraft store outlives one poll cycle by design, because the layer is now a
+    # global sweep rather than a viewport query.** One cell is fetched per cycle and alternate
+    # cycles go to the camera, so a cell far from the camera comes round once every
+    # 2 x cells x interval. At the default five-second interval that is 250 seconds across
+    # twenty-five productive cells, and the ninety-second default would have expired every
+    # aircraft outside the current view before its cell was swept again: the globe would have
+    # shown the camera's own cell and nothing else, which is the bug this change exists to fix.
+    #
+    # Derived rather than typed, so changing the grid step or the interval moves it without
+    # anyone remembering to. Stated as the sum AGENTS.md asks for: this feed carries no
+    # acceptance window of its own, so the worst age on screen is the store's alone, and it is
+    # about eight minutes for somewhere nobody is looking. That is the cost of global coverage
+    # from one keyless provider at a five-second floor, and the rail says so rather than
+    # implying every aircraft is five seconds old.
+    aircraft_ttl_seconds = max(
+        settings.entity_ttl_seconds,
+        2 * adsb.PRODUCTIVE_CELL_ESTIMATE * settings.adsb_poll_seconds * 2.0,
+    )
     aircraft: EntityStore[Aircraft] = EntityStore(
-        ttl_seconds=settings.entity_ttl_seconds, fix_time=_aircraft_fix_time
+        ttl_seconds=aircraft_ttl_seconds, fix_time=_aircraft_fix_time
     )
     military: EntityStore[Aircraft] = EntityStore(
         ttl_seconds=settings.entity_ttl_seconds, fix_time=_aircraft_fix_time
@@ -980,16 +998,37 @@ def _register_aircraft_pollers(state: AppState) -> None:
     members = _aircraft_union_members(state)
     counted_drops: dict[str, int] = {}
 
+    sweep = adsb.GlobalSweep()
+
     async def fetch(client: AdsbClient) -> tuple["Aircraft", ...]:
-        """One provider's contribution: the current viewport, or the configured default."""
+        """One provider's contribution: alternating the viewport and one cell of the globe.
+
+        **The aircraft layer used to query the viewport and nothing else, so it was never
+        global.** Measured on 2026-08-24 before this changed: 954 aircraft in 4 of 648
+        ten-degree cells, longitude -6.8 to 6.5, which is Britain, France and Benelux. Every
+        aircraft coverage figure this project had published described one browser window.
+
+        One request per cycle, because that is what adsb.lol's five-second floor allows, and
+        **every one of them is a grid cell**. Alternate cycles ask for the grid cell nearest the
+        camera rather than a bounding box around it, so the local refresh and the global
+        rotation are the same request instead of competing for the budget. An earlier version
+        alternated the viewport box with a grid cell and spent half the rate on requests that
+        could never advance coverage.
+
+        `GlobalSweep` skips cells that came back empty, so the rotation converges on the places
+        with traffic rather than sweeping ocean at the same rate as western Europe.
+
+        The consequence a viewer must be told, and the rail says it: an aircraft outside the
+        current view can be minutes old. That is the trade Alexander Fanthome asked for on
+        2026-08-24, in his words "you can poll some things slower, but also you must increase
+        coverage (the whole globe)".
+        """
         box = state.viewport
-        if box is None:
-            return await client.aircraft_near(
-                lat=settings.adsb_default_lat,
-                lon=settings.adsb_default_lon,
-                radius_nm=settings.adsb_radius_nm,
-            )
-        return await client.aircraft_in_box(box)
+        centre = None if box is None else (box.centre.lat, box.centre.lon)
+        lat, lon = sweep.next_cell(near=centre)
+        found = await client.aircraft_near(lat=lat, lon=lon, radius_nm=adsb.SWEEP_RADIUS_NM)
+        sweep.record((lat, lon), len(found))
+        return found
 
     def count_client_drops(name: str, client: AdsbClient) -> None:
         """Add the records this provider's parser refused since the last cycle.

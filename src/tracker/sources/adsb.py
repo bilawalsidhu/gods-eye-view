@@ -12,6 +12,7 @@ Every provider quirk is confined to this file. Downstream code sees only
 
 import json
 import logging
+import math
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -92,8 +93,73 @@ and renders like any other and the flag is an attribute on the record.
 
 NAUTICAL_MILE_M: Final = 1852.0
 
-MAX_RADIUS_NM: Final = 250
-"""Provider-enforced ceiling on a radius query. Larger values are rejected outright."""
+MAX_RADIUS_NM: Final = 2000
+"""Largest radius a provider will actually serve, measured rather than assumed.
+
+**This said 250 and claimed larger values were "rejected outright", and that was wrong.**
+Measured against adsb.lol on 2026-08-24 from one point at 50N 5E, one request per seven
+seconds:
+
+    250nm    HTTP 200    519KB     859 aircraft   lon  -1.4 to  11.4
+    500nm    HTTP 200   1214KB   1,996 aircraft   lon  -7.3 to  17.9
+   1000nm    HTTP 200   2008KB   3,240 aircraft   lon -15.8 to  29.1
+   2000nm    HTTP 200   2206KB   3,561 aircraft   lon -28.8 to  45.0
+
+Every one answered. The 250 was our own invention and it is the reason this app has only
+ever shown aircraft over one viewport: a 250nm circle is 1.4% of the earth's surface.
+
+**What is real is a cap on records rather than on radius.** Quadrupling the area from 1000nm
+to 2000nm bought 10% more aircraft and 10% more bytes, so the response is truncated somewhere
+around 3,500 records. That is why the sweep below uses 1000nm rather than the maximum: a
+larger circle covers more map and returns almost nothing extra, so it trades completeness for
+nothing. Anywhere dense enough to hit the record cap needs a smaller circle, not a bigger one.
+"""
+
+HOST_MAX_RADIUS_NM: Final = {
+    "adsb.lol": 2000,
+    "adsb.fi": 250,
+}
+"""Largest radius each host will serve, because **it is not the same number for both.**
+
+Measured 2026-08-24, one request per six seconds from 50N 5E:
+
+    adsb.lol   250nm  200 | 500nm  200 | 1000nm  200 | 2000nm  200
+    adsb.fi    250nm  200 | 500nm  400 |  750nm  400 | 1000nm  400
+
+adsb.fi refuses anything past 250 with a bare **HTTP 400 and a zero-byte body**, so there is
+nothing in the response to explain it and the failure arrives as an unexplained client error.
+
+This is why the old module-wide 250 existed and why raising it broke the layer: the constant was
+right about the failover and wrong about the primary, and one number cannot describe both. The
+global sweep asks adsb.lol for 1000nm, and when adsb.lol fails and the request falls over to
+adsb.fi it must be rebuilt at 250 rather than replayed, or the failover answers 400 every time
+and a working provider looks like an outage.
+"""
+
+DEFAULT_MAX_RADIUS_NM: Final = 250
+"""What an unlisted host is assumed to serve. The lower of the two measured values, on purpose."""
+
+SWEEP_RADIUS_NM: Final = 2000
+"""The radius the global sweep asks adsb.lol for, and it is the maximum on purpose.
+
+**A bigger circle is very nearly free and there are far fewer of them.** From one centre:
+1000nm returned 3,240 aircraft in 2.0MB and 2000nm returned 3,561 in 2.2MB, so quadrupling the
+area cost 10% more bytes. Covering the earth needs 70 cells at 1000nm against 24 at 2000nm, so
+the large circle is a third of the requests and a third of the traffic for the same coverage.
+
+That matters because **adsb.lol throttles by dropping connections, not by answering 429.** At
+1000nm cells polled every five seconds it began timing out on connect, falling over to adsb.fi,
+which serves only 250nm and so quietly shrank the sweep back to a viewport. The failure looked
+like a network fault and the layer reported itself healthy throughout.
+"""
+
+SWEEP_STEP_DEGREES: Final = 45.0
+"""Latitude spacing of the sweep grid, and the longitude spacing at the equator.
+
+A 2000nm circle is 33.3 degrees of arc in radius, so 66.6 across. A square grid is covered when
+the spacing is under radius times root two, which is 47, so 45 keeps a margin rather than sitting
+on the limit and gives **24 cells** for the whole earth.
+"""
 
 VIEWPORT_PATH_TEMPLATE: Final = "/v2/lat/{lat:.4f}/lon/{lon:.4f}/dist/{radius}"
 """Radius-query path, chosen because every provider we use accepts this exact shape.
@@ -262,6 +328,209 @@ nothing to configure, so it is a candidate rather than a row.
 
 SWEPT_PROVIDERS: Final = tuple(provider for provider in UNION_PROVIDERS if provider.swept)
 """Providers the union may poll on a cycle. A demand-driven provider is never in here."""
+
+
+def sweep_cells(step_degrees: float = SWEEP_STEP_DEGREES) -> tuple[tuple[float, float], ...]:
+    """Centres of a set of circles covering the whole earth, for the global aircraft sweep.
+
+    **This exists because the aircraft layer was never global and nobody had noticed.** Measured
+    on 2026-08-24: 954 aircraft occupying 4 of 648 ten-degree cells, longitude -6.8 to 6.5, which
+    is the United Kingdom, France and Benelux. The sweep followed the browser's viewport, so every
+    coverage claim this project had made about aircraft was a claim about one view.
+
+    There is no global endpoint to use instead. ``/v2/all`` on adsb.lol answers **HTTP 503**, while
+    ``/v2/mil`` and ``/v2/ladd`` are genuinely worldwide, which is what proves the data exists
+    globally and only the unfiltered query is radius-bound.
+
+    Longitude spacing widens by ``1 / cos(latitude)`` so the circles stay overlapped as they
+    converge, and is clamped near the poles where that factor runs away: at 85 degrees a naive
+    spacing would ask for one cell and leave a hole, and the clamp costs a handful of cells over
+    empty ice instead.
+
+    Returned in a fixed order so the rotation is reproducible, and returned as a tuple because a
+    caller holding an index into it must not be handed something another caller can mutate.
+    """
+    if step_degrees <= 0:
+        msg = f"sweep step must be positive, got {step_degrees}"
+        raise ValueError(msg)
+    cells: list[tuple[float, float]] = []
+    latitude = SOUTH_POLE_DEGREES + step_degrees / 2
+    while latitude < NORTH_POLE_DEGREES:
+        shrink = max(math.cos(math.radians(latitude)), POLE_SPACING_FLOOR)
+        columns = max(1, math.ceil(FULL_TURN_DEGREES / (step_degrees / shrink)))
+        cells.extend(
+            (
+                round(latitude, 4),
+                round(SOUTH_POLE_DEGREES * 2 + (index + 0.5) * FULL_TURN_DEGREES / columns, 4),
+            )
+            for index in range(columns)
+        )
+        latitude += step_degrees
+    return tuple(cells)
+
+
+SOUTH_POLE_DEGREES: Final = -90.0
+NORTH_POLE_DEGREES: Final = 90.0
+FULL_TURN_DEGREES: Final = 360.0
+
+POLE_SPACING_FLOOR: Final = 0.08
+"""Smallest ``cos(latitude)`` the sweep grid will divide by, which bounds the polar cell count.
+
+Without it the last band asks for a single cell to cover a whole circle of latitude and leaves a
+gap either side of it. 0.08 is about 85.4 degrees, so the grid keeps four cells in the top band.
+"""
+
+
+def _angular_gap(cell: tuple[float, float], lat: float, lon: float) -> float:
+    """Great-circle separation between a grid cell's centre and a point, in radians.
+
+    The haversine rather than a flat difference of degrees, because a degree of longitude is not
+    a degree of distance anywhere but the equator, and picking the nearest cell by flat degrees
+    would choose badly at exactly the latitudes where the grid is widest.
+    """
+    lat1, lon1 = math.radians(cell[0]), math.radians(cell[1])
+    lat2, lon2 = math.radians(lat), math.radians(lon)
+    half_lat = (lat2 - lat1) / 2
+    half_lon = (lon2 - lon1) / 2
+    inner = math.sin(half_lat) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(half_lon) ** 2
+    return 2 * math.asin(min(1.0, math.sqrt(inner)))
+
+
+PRODUCTIVE_CELL_ESTIMATE: Final = 12
+"""How many of the 70 grid cells are expected to hold aircraft, for sizing the store's lifetime.
+
+An estimate and labelled as one. The earth is 71% water and aircraft concentrate over land and a
+handful of oceanic corridors, so most cells report nothing and are skipped after their first
+sweep. Twelve of the twenty-four is the working figure for how long a full rotation over the
+cells that matter takes, which is what the aircraft store's time to live has to cover.
+
+It is deliberately not measured at runtime: the store's lifetime is fixed when it is built, and a
+figure that moved underneath a live store would make the expiry depend on when a cell last
+happened to be empty. If the real count turns out to be far from this, the fix is to change this
+number with the measurement beside it, not to make it dynamic.
+"""
+
+
+def _spreading_stride(count: int) -> int:
+    """A step through ``count`` cells that visits every one of them but not in order.
+
+    Any stride coprime with the count visits every cell exactly once per rotation; a stride
+    sharing a factor visits a subset for ever, so a stride of 12 against 24 cells would sweep two
+    cells and report itself healthy. Derived rather than written down, because the cell count
+    moves with `SWEEP_STEP_DEGREES` and a hand-picked stride silently stops being coprime when it
+    does. Counts down from just under half the count, which is the largest jump that still spreads
+    in both directions round the ring.
+    """
+    for stride in range(max(1, count // 2 - 1), 0, -1):
+        if math.gcd(stride, count) == 1:
+            return stride
+    return 1
+
+
+SWEEP_STRIDE: Final = _spreading_stride(len(sweep_cells()))
+"""How far the rotation jumps between consecutive cells, rather than taking the next one along.
+
+**Measured cold-start failure on 2026-08-24: one aircraft after three minutes.** The grid is built
+south to north, so walking it one cell at a time spends the first four bands on Antarctica and the
+southern ocean and the globe stays empty for minutes. Correct, and useless to look at.
+
+Any stride coprime with the cell count still visits every cell exactly once per rotation, so
+nothing is skipped or repeated; it just arrives in an order that spreads. 29 against 70 cells
+(70 = 2 x 5 x 7) is coprime, so coverage becomes coarse-to-fine: after a dozen cycles there are
+aircraft on several continents instead of a complete survey of the Weddell Sea.
+
+Derived from the cell count, so changing the grid step cannot leave it sharing a factor. A test
+asserts a full rotation still covers every cell, which is what fails if that ever breaks.
+"""
+
+
+EMPTY_CELL_RECHECK_ROUNDS: Final = 8
+"""How many rotations an empty cell is skipped for before it is tried again.
+
+The earth is mostly water and most of these cells will never hold an aircraft, so sweeping them
+at the same rate as western Europe spends the entire rate budget on ocean. Skipping them is what
+turns a 5.8-minute global rotation into a fast rotation over the places that actually have
+traffic, and it is self-tuning: a cell that starts reporting rejoins the fast set on its own.
+
+Eight rather than never, because an empty cell is not permanently empty. A polar route opens, an
+airspace reopens, a ferry flight crosses the south Atlantic. Eight rotations is under an hour at
+the observed cadence, which is soon enough to catch that and rare enough to cost almost nothing.
+"""
+
+
+class GlobalSweep:
+    """Which cell to sweep next, biased towards the cells that actually hold aircraft.
+
+    Held apart from the poller so the rotation can be tested without a network or a clock. The
+    poller owns one of these and calls :meth:`next_cell` once per cycle.
+    """
+
+    def __init__(self, cells: tuple[tuple[float, float], ...] | None = None) -> None:
+        self._cells = cells if cells is not None else sweep_cells()
+        self._index = 0
+        self._rounds = 0
+        self._toward_camera = False
+        # Absent means never swept, which is treated as productive so the first rotation
+        # visits every cell. Zero means swept and empty.
+        self._last_count: dict[tuple[float, float], int] = {}
+
+    @property
+    def cells(self) -> tuple[tuple[float, float], ...]:
+        """The full grid, in rotation order."""
+        return self._cells
+
+    @property
+    def productive(self) -> int:
+        """How many cells have reported at least one aircraft."""
+        return sum(1 for count in self._last_count.values() if count > 0)
+
+    def record(self, cell: tuple[float, float], count: int) -> None:
+        """Remember what a cell returned, which is what biases the rotation."""
+        self._last_count[cell] = count
+
+    def cell_containing(self, lat: float, lon: float) -> tuple[float, float]:
+        """The grid cell whose centre is nearest a point, by great-circle distance.
+
+        Nearest centre rather than the cell a point falls "inside", because the circles overlap
+        by design and several contain any given point. The nearest centre is the one that sees
+        the point furthest from its own edge, which is where the record cap bites least.
+        """
+        return min(self._cells, key=lambda cell: _angular_gap(cell, lat, lon))
+
+    def next_cell(self, near: tuple[float, float] | None = None) -> tuple[float, float]:
+        """The next cell to sweep, favouring the camera's own cell on alternate calls.
+
+        **Every call returns a grid cell, including the ones chosen for the camera**, and that is
+        the point. An earlier version of this alternated between a viewport bounding-box query
+        and a grid cell, which spent half the rate budget on requests that could never advance
+        global coverage. Asking for the grid cell *containing* the camera instead means the local
+        refresh and the global rotation are the same request: whatever is under the camera stays
+        fresh and the cell it lives in is ticked off the sweep at the same time.
+
+        Walks the rotation, skipping cells known to be empty unless this rotation is their
+        re-check round. Always returns a cell: if every cell is empty and none is due, the walk
+        would otherwise spin, so it falls back to advancing one step.
+        """
+        self._toward_camera = not self._toward_camera
+        if near is not None and self._toward_camera:
+            return self.cell_containing(*near)
+        for _ in range(len(self._cells)):
+            cell = self._cells[self._index]
+            self._advance()
+            last = self._last_count.get(cell)
+            due = self._rounds % EMPTY_CELL_RECHECK_ROUNDS == 0
+            if last is None or last > 0 or due:
+                return cell
+        cell = self._cells[self._index]
+        self._advance()
+        return cell
+
+    def _advance(self) -> None:
+        self._index += SWEEP_STRIDE
+        if self._index >= len(self._cells):
+            self._index %= len(self._cells)
+            self._rounds += 1
+
 
 UNION_MIN_INTERVAL_SECONDS: Final = max(
     provider.min_interval_seconds for provider in SWEPT_PROVIDERS
@@ -645,11 +914,17 @@ class AdsbClient:
     ) -> tuple[Aircraft, ...]:
         """All aircraft within ``radius_nm`` nautical miles of a point.
 
-        The provider caps radius at 250 nautical miles and rejects anything larger, so
-        callers covering a wider area must tile.
+        Capped at :data:`MAX_RADIUS_NM`, which is a measurement rather than a guess: see that
+        constant for what each radius actually returns. A caller covering the whole earth
+        still tiles, because the response truncates on record count rather than on area.
         """
-        capped = max(1, min(radius_nm, MAX_RADIUS_NM))
-        return await self._get(VIEWPORT_PATH_TEMPLATE.format(lat=lat, lon=lon, radius=capped))
+
+        def path_for(source: str) -> str:
+            ceiling = HOST_MAX_RADIUS_NM.get(source, DEFAULT_MAX_RADIUS_NM)
+            capped = max(1, min(radius_nm, ceiling))
+            return VIEWPORT_PATH_TEMPLATE.format(lat=lat, lon=lon, radius=capped)
+
+        return await self._get(path_for)
 
     async def aircraft_in_box(self, box: BoundingBox) -> tuple[Aircraft, ...]:
         """All aircraft within a bounding box.
@@ -671,7 +946,7 @@ class AdsbClient:
         """
         return await self._get("/v2/mil")
 
-    async def _get(self, path: str) -> tuple[Aircraft, ...]:
+    async def _get(self, path: str | Callable[[str], str]) -> tuple[Aircraft, ...]:
         """Fetch and parse, falling back to the secondary provider on failure.
 
         Failover covers transport errors, rate limiting, 5xx responses and contract
@@ -684,8 +959,16 @@ class AdsbClient:
         figure on it. That is the only path by which a throttle reaches the poller now, and it
         is the right one: while either provider can answer, the layer is not degraded.
         """
+
+        # Per host, because the two do not accept the same radius: see HOST_MAX_RADIUS_NM.
+        # A path built for the primary and replayed against the failover is how a 1000nm sweep
+        # turned every failover into an unexplained HTTP 400.
+        def for_host(source: str) -> str:
+            return path(source) if callable(path) else path
+
+        primary_path = for_host(self._source_name)
         try:
-            return await self._fetch_from(self._base_url, path, self._source_name)
+            return await self._fetch_from(self._base_url, primary_path, self._source_name)
         except (httpx.HTTPError, ContractViolationError, SourceError) as primary_error:
             if self._failover_base_url is None:
                 raise
@@ -694,11 +977,15 @@ class AdsbClient:
             _log.warning(
                 "%s failed for %s (%s); trying %s",
                 self._source_name,
-                path,
+                primary_path,
                 describe_exception(primary_error),
                 self._failover_source_name,
             )
-            return await self._fetch_from(self._failover_base_url, path, self._failover_source_name)
+            return await self._fetch_from(
+                self._failover_base_url,
+                for_host(self._failover_source_name),
+                self._failover_source_name,
+            )
 
     async def _fetch_from(self, base_url: str, path: str, source: str) -> tuple[Aircraft, ...]:
         remaining = self._cooldown_remaining(source)
