@@ -736,6 +736,19 @@ the section stays navigable.
   `git fsck --lost-found` for a dangling stash, then the session transcript under
   `~/.claude/projects/`, and verify the rebuild by coverage rather than by eye, because a file
   that looks right can be missing a test nobody counted.
+- **A scratch or debug file never goes anywhere the gate looks. Three instances on 2026-08-24.**
+  `tmp-render-check.mjs` at the repo root, a stray Playwright script, and
+  `frontend/e2e/tmp-limb.spec.ts`, a genuinely good harness measuring GOES-East brightness against
+  off-nadir angle. Each was correct work and each reddened `pnpm verify` for every other agent,
+  because `e2e/` and the repo root are both linted and typechecked. The third one was the whole of
+  what was red in the project at the time: backend clean at 2,519 tests, frontend clean at 1,092,
+  and one scratch file failing eleven lint rules. A gate that is red for a reason unrelated to the
+  change under test is a gate people learn to ignore, which costs more than the file saved.
+  **Write it in the session scratchpad and run it from there.** The lint errors are also a useful
+  signal rather than noise: `unicorn/isolated-functions` firing on `fetch`, `createImageBitmap` and
+  `OffscreenCanvas` is the linter correctly observing that those do not exist in the Node scope it
+  is checking, because they only exist in the browser where `page.evaluate` runs the body. When a
+  linter is right about the scope and wrong about the intent, the file is in the wrong place.
 - **A test that asks the implementation what the answer should be is not a test.** It agrees
   with itself and survives the mutation that matters, because moving the constant moves both the
   code and the expectation. Two instances on 2026-08-23. A badge fit test read
