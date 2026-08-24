@@ -736,6 +736,24 @@ the section stays navigable.
   `git fsck --lost-found` for a dangling stash, then the session transcript under
   `~/.claude/projects/`, and verify the rebuild by coverage rather than by eye, because a file
   that looks right can be missing a test nobody counted.
+- **A green `pnpm test` is not evidence a file compiles, so it is never the check after a type
+  edit.** Vitest transpiles through esbuild, which strips type annotations without resolving
+  them, so a type used but never imported is simply erased and every test that exercises the file
+  passes. Measured 2026-08-24: `SweepCoverage` was used in `layer-rail.test.ts` with no import,
+  **all 80 rail tests passed**, and only `tsc` found it. The same hole swallows a type that has
+  been renamed, deleted or moved to another module. So `pnpm verify` rather than `pnpm test` after
+  anything touching a type, and note the asymmetry: vitest cannot see a broken type and `tsc`
+  cannot see a broken behaviour, which is why neither is the gate on its own.
+- **A default fixture that agrees with the bug hides it from every test that uses it.** The status
+  banner claimed a feed was down while 698 satellites from that feed's disk cache were on screen,
+  and no unit test caught it because both `feed()` fixtures, in `status.test.ts` and
+  `layer-rail.test.ts`, carried `last_success_at: null`. So every test calling the default
+  "healthy" feed was in fact asserting against a never-polled one, and they passed because the
+  code could not tell those apart either. The fixture encoded the same wrong assumption as the
+  implementation. A default fixture must carry what the live payload actually carries, which for
+  a working feed is a success time, and a test that wants the absent case has to ask for it. This
+  is the fixture form of "a test that asks the implementation what the answer should be", below:
+  there the expectation came from the code, here it came from a shared fixture built to match it.
 - **A scratch or debug file never goes anywhere the gate looks. Three instances on 2026-08-24.**
   `tmp-render-check.mjs` at the repo root, a stray Playwright script, and
   `frontend/e2e/tmp-limb.spec.ts`, a genuinely good harness measuring GOES-East brightness against
