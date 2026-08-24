@@ -753,7 +753,16 @@ the section stays navigable.
   house style for anything a later change could invalidate: the cloud gap bounds are scanned off
   the satellites, and the vessel coverage reason is built from the providers actually reporting,
   precisely so neither can go stale behind an edit somewhere else. The cost of that style is this
-  trap, and the only thing that catches it is a unit test that imports the module.
+  trap. **It is now guarded structurally rather than by remembering**: 
+  `frontend/src/every-module-imports.test.ts` imports every module under `src/` through
+  `import.meta.glob`, so a fatal error at module load fails the suite naming the module even
+  when nothing else imports it. Measured before writing it, with the fault planted in a real
+  file: `tsc --noEmit` reported **nothing** and `vitest run --coverage` reported **35 files and
+  1,130 tests passed**, because `coverage.include` counts a file's lines without executing it.
+  So a fatally broken module was entirely green on both gates. `worker.ts` and `main.ts` are
+  excluded by name, being a Web Worker reading `self` and the entry point reading `document`;
+  named individually rather than by pattern, so the third browser-only module fails there and
+  somebody decides instead of a wildcard swallowing it.
 - **A green `pnpm test` is not evidence a file compiles, so it is never the check after a type
   edit.** Vitest transpiles through esbuild, which strips type annotations without resolving
   them, so a type used but never imported is simply erased and every test that exercises the file
