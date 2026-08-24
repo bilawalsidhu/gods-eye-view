@@ -61,7 +61,6 @@ import {
 } from 'cesium';
 import type { Billboard, Label, Polyline, Scene } from 'cesium';
 
-import { cesiumColour } from '../colour';
 import {
   CLUSTER_CELL_PX,
   OFF_SCREEN,
@@ -73,14 +72,7 @@ import {
 import { badgeSlots } from '../badge-slots';
 import type { BadgeSlot } from '../badge-slots';
 import type { ClusterFlyTo, ClusterMark, ClusterState } from '../cluster';
-import { clusterBadgeImage, iconImage } from '../icons';
-import {
-  CLUSTER_FILL,
-  CLUSTER_TEXT,
-  clusterBadgePx,
-  clusterBadgeText,
-  clusterFontPx,
-} from '../palette';
+import { iconImage } from '../icons';
 
 /**
  * One hue for the whole layer.
@@ -120,6 +112,31 @@ const SCALE_FAR_FACTOR = 0.38;
 
 /** The trail is the same hue, thin, so the mark stays the thing being read. */
 export const ORBIT_TRAIL_WIDTH = 1.5;
+
+/**
+ * The ground track, which is the second half of making a satellite read as tracked.
+ *
+ * **What it is.** The sub-satellite point: for every sample of the orbit, the place on the
+ * earth directly beneath it. It is the same longitude and latitude series as the trail with the
+ * altitude taken out, so it costs one extra polyline and no extra propagation. It is what makes
+ * an overpass legible, because an orbit drawn 400 km up passes over nothing a viewer can name,
+ * and the line on the ground passes over cities.
+ *
+ * **Dashed, and that is a claim rather than a style.** The orbit is a path something is
+ * actually on. The ground track is a projection of that path, and nothing travels along it, so
+ * it is drawn as a line that is visibly not solid. Same rule as the social layer's hollow ring
+ * for a derived location.
+ *
+ * **It is 25 km up rather than at zero, and it has to be.** A polyline on the ellipsoid fights
+ * the globe surface for depth and gets swallowed in patches, which reads as a broken primitive
+ * rather than as a line on the ground. Twenty-five kilometres is four thousandths of the
+ * earth's radius, so it is invisible as an offset at any zoom this draws, and it clears the
+ * depth buffer everywhere. It is not `clampToGround`, which needs a `GroundPolylinePrimitive`
+ * and a terrain provider, and this globe deliberately has neither.
+ */
+export const GROUND_TRACK_WIDTH = 2;
+export const GROUND_TRACK_ELEVATION_M = 25_000;
+export const GROUND_TRACK_DASH_LENGTH = 14;
 
 /**
  * The two images this layer ever draws, built once each.
@@ -178,9 +195,13 @@ export const SATELLITE_CLUSTER_MIN = 30;
 /** The key a satellite badge's pick id carries. */
 export const SATELLITE_CLUSTER_KEY = 'satellites';
 
-const BADGE_FONT_FAMILY = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-
-/** A badge and the count drawn on it. Pooled like everything else in this file. */
+/**
+ * A merged group and the label slot it no longer uses. Pooled like everything else in this file.
+ *
+ * The label stays in the pool with nothing on it. Groups are drawn as one diamond now rather than
+ * as a counted hexagon, so there is no text, but the collection is kept because dropping a
+ * primitive collection from a scene is the churn this file exists to avoid.
+ */
 interface Badge {
   mark: Billboard;
   label: Label;
@@ -461,23 +482,43 @@ export class SatelliteLayer {
     this.trail.show = positions.length > 1;
   }
 
+  /**
+   * Draw one group as a single satellite, taking the next slot out of the pool.
+   *
+   * **No hexagon and no count.** Alexander Fanthome asked on 2026-08-24 to "remove those
+   * hexagons ... instead just merge the asset locations into one icon, and average the
+   * position/rotation ... Do not scale the asset icon size when merging, keep at the current
+   * size", after saying the globe was very cluttered. So a group is drawn as one diamond, same
+   * size as a single satellite, at the members' mean position.
+   *
+   * **No rotation here, and there is nothing to average.** A propagated element set carries no
+   * attitude, which is why the diamond is rotationally symmetric in the first place, so the
+   * clusterer is handed no heading and the merged icon is left unrotated like every other mark in
+   * this layer. See `ICON_SILHOUETTES.diamond`.
+   *
+   * The mean position matters more here than anywhere else in the app, because these are the only
+   * marks that are not on the surface: `ClusterMark.meanX` is pushed back out to the members' mean
+   * distance from the earth's centre, so a merged group of objects at 550km sits at 550km rather
+   * than being swallowed by the globe.
+   */
   private drawBadge(mark: ClusterMark, used: number): number {
-    const sizePx = clusterBadgePx(mark.count);
+    // `SATELLITE_IMAGE` rather than a fresh call, so a merged group shares the one atlas entry the
+    // whole catalogue already uses. The unmerged size, deliberately: `clusterBadgePx` grew with
+    // the count and that is exactly what was asked to stop.
+    const sizePx = SATELLITE_ICON_PX;
     const badge = this.badgePool[used] ?? this.acquireBadge();
     badge.mark.show = true;
     badge.mark.id = clusterPickId(SATELLITE_CLUSTER_KEY, mark.cellId);
-    badge.mark.image = clusterBadgeImage(sizePx, CLUSTER_FILL, SATELLITE_COLOUR);
+    badge.mark.image = SATELLITE_IMAGE;
     badge.mark.width = sizePx;
     badge.mark.height = sizePx;
-    scratchBadge.x = mark.x;
-    scratchBadge.y = mark.y;
-    scratchBadge.z = mark.z;
+    scratchBadge.x = mark.meanX;
+    scratchBadge.y = mark.meanY;
+    scratchBadge.z = mark.meanZ;
     // Both setters clone, so one scratch vector serves every badge in the pass.
     badge.mark.position = scratchBadge;
-    badge.label.show = true;
-    badge.label.text = clusterBadgeText(mark.count);
-    badge.label.font = `700 ${clusterFontPx(mark.count)}px ${BADGE_FONT_FAMILY}`;
-    badge.label.position = scratchBadge;
+    badge.label.show = false;
+    badge.label.text = '';
     // Drawn on a lattice point rather than on the member it hangs from. Its own cell's centre when
     // that is free, which is what keeps two badges of this layer apart, and the nearest free point
     // otherwise, which is what keeps it from landing exactly on another layer's badge. See
@@ -508,8 +549,8 @@ export class SatelliteLayer {
     const label = this.badgeLabels.add({ position: Cartesian3.ZERO });
     label.horizontalOrigin = HorizontalOrigin.CENTER;
     label.verticalOrigin = VerticalOrigin.CENTER;
+    // Fill only, held from when a group carried a count. Nothing is drawn on it now.
     label.style = LabelStyle.FILL;
-    label.fillColor = cesiumColour(CLUSTER_TEXT);
     const badge: Badge = { mark, label };
     this.badgePool.push(badge);
     return badge;

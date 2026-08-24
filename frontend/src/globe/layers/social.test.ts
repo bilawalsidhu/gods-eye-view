@@ -340,6 +340,7 @@ interface FakeCollection {
     id: string | undefined;
     image: string;
     scaleByDistance: unknown;
+    alignedAxis: { x: number; y: number; z: number };
     width: number;
     height: number;
     text: string;
@@ -410,21 +411,70 @@ function sameCity(count: number, lon = 100, lat = 100): SocialPost[] {
 }
 
 describe('SocialLayer badge identity', () => {
-  it('rims its badge in the colour it draws its own marks in', () => {
-    // Before this, all five layers rendered an identical grey hexagon, so a badge reading "6k" could
-    // have been six thousand of anything, with several layers in the frame at once. The rim takes the
-    // colour this layer already uses for its marks, which is the same constant the rail is handed for
-    // its legend row, so the globe and the key cannot drift apart.
+  it('draws a group as one ring in the colour it draws its own marks in', () => {
+    // A group is a merged asset now rather than a counted hexagon, so this asserts the icon and
+    // its hue together. The colour is the same constant the rail is handed for its legend row, so
+    // the globe and the key cannot drift apart.
     const { layer, badges, frame } = build();
     layer.upsert(sameCity(SOCIAL_CLUSTER_MIN, 300, 300));
 
     frame();
 
-    const size = clusterBadgePx(SOCIAL_CLUSTER_MIN);
     const drawn = badges.items.find((item) => item.show)?.image;
-    expect(drawn).toBe(clusterBadgeImage(size, CLUSTER_FILL, SOCIAL_COLOUR));
-    // Not the old shared grey, which is the regression this guards.
-    expect(drawn).not.toBe(clusterBadgeImage(size, CLUSTER_FILL));
+    expect(drawn).toBe(areaRingImage(SOCIAL_ICON_PX, SOCIAL_COLOUR, false));
+    // Not a hexagon of any colour, which is the thing that was asked to go.
+    expect(drawn).not.toBe(
+      clusterBadgeImage(clusterBadgePx(SOCIAL_CLUSTER_MIN), CLUSTER_FILL, SOCIAL_COLOUR),
+    );
+  });
+
+  it('never merges a group into a pin, however many of its posts were reported ones', () => {
+    // The ADR 005 assertion, and the one thing in this file that must not be relaxed for looks. A
+    // pin's tip claims *here, at this point, exactly*, and the mean of a hundred exact coordinates
+    // is a place none of them reported. So even a group made entirely of upstream posts merges
+    // into the ring, which claims *somewhere in this* and is true of every group.
+    const { layer, badges, frame } = build();
+    layer.upsert(
+      sameCity(SOCIAL_CLUSTER_MIN + 6, 300, 300).map((post) => ({
+        ...post,
+        location_basis: 'upstream' as const,
+        place_name: null,
+      })),
+    );
+
+    frame();
+
+    const drawn = badges.items.find((item) => item.show)?.image;
+    expect(drawn).toBe(areaRingImage(SOCIAL_ICON_PX, SOCIAL_COLOUR, false));
+    expect(drawn).not.toBe(iconImage('pin', SOCIAL_COLOUR, false, SOCIAL_ICON_PX));
+  });
+
+  it('draws a merged ring at one post size however many it stands for', () => {
+    // "Do not scale the asset icon size when merging, keep at the current size". The old badge
+    // grew with the count, from 30 pixels to 48.
+    const { layer, badges, frame } = build();
+
+    layer.replace(sameCity(SOCIAL_CLUSTER_MIN, 300, 300));
+    frame();
+    const smallWidth = badges.items.find((item) => item.show)?.width;
+
+    layer.replace(sameCity(SOCIAL_CLUSTER_MIN * 100, 300, 300));
+    frame();
+    const large = badges.items.find((item) => item.show);
+
+    expect(smallWidth).toBe(SOCIAL_ICON_PX);
+    expect(large?.width).toBe(SOCIAL_ICON_PX);
+    expect(large?.height).toBe(SOCIAL_ICON_PX);
+  });
+
+  it('leaves a merged ring unrotated, because a post carries no bearing', () => {
+    // A post is a fixed event at a place. There is nothing to average and nothing to point.
+    const { layer, badges, frame } = build();
+    layer.upsert(sameCity(SOCIAL_CLUSTER_MIN, 300, 300));
+
+    frame();
+
+    expect(badges.items.find((item) => item.show)?.alignedAxis).toEqual({ x: 0, y: 0, z: 0 });
   });
 });
 
@@ -752,7 +802,11 @@ describe('SocialLayer clustering', () => {
 
     expect(marks.items.filter((item) => item.show)).toHaveLength(0);
     expect(badges.items.filter((item) => item.show)).toHaveLength(1);
-    expect(badgeLabels.items.find((item) => item.show)?.text).toBe(String(SOCIAL_CLUSTER_MIN + 2));
+    // No count on the globe any more: a group is drawn as one post pin, per Alexander Fanthome's
+    // instruction on 2026-08-24 to merge grouped assets into one icon. Asserting the label's
+    // absence rather than dropping the assertion, because a stray label is what would quietly
+    // bring the clutter back.
+    expect(badgeLabels.items.filter((item) => item.show)).toHaveLength(0);
   });
 
   it('draws a lone post as a post', () => {
@@ -778,7 +832,7 @@ describe('SocialLayer clustering', () => {
 
     expect(marks.items.filter((item) => item.show)).toHaveLength(0);
     expect(badges.items.filter((item) => item.show)).toHaveLength(1);
-    expect(badgeLabels.items.find((item) => item.show)?.text).toBe('2');
+    expect(badgeLabels.items.filter((item) => item.show)).toHaveLength(0);
   });
 
   it('groups at the lowest count of any layer, and the reason is different from theirs', () => {
@@ -941,30 +995,28 @@ describe('SocialLayer clustering', () => {
     expect(431 + (badge?.pixelOffset.y ?? 0)).toBeCloseTo(wanted.y, 6);
   });
 
-  it('offsets the badge and its count together, or the digits leave the hexagon', () => {
-    // The nudge is applied to two primitives and both have to move. Missing the label leaves the
-    // count where the anchor member is while its badge sits on the cell centre, which is a number
-    // floating on bare globe next to an empty hexagon.
-    const { layer, badges, badgeLabels, frame } = build();
+  it('draws a merged group at the members mean position, not nudged onto a lattice point', () => {
+    // Replaces a test about the badge and its count label moving together under the lattice nudge.
+    // Both halves of that are gone: there is no count label, and a merged icon is drawn where its
+    // members actually are rather than on a cell centre. What is worth keeping is the invariant
+    // underneath it, that the drawn position is derived from the members and not from the grid,
+    // because a group pinned to a cell centre would drift as the camera moved and read as a mark
+    // that had moved when nothing had.
+    const { layer, badges, frame } = build();
     badgeSlots.reset();
     layer.upsert(sameCity(SOCIAL_CLUSTER_MIN, 617, 431));
 
     frame();
 
     const badge = badges.items.find((item) => item.show);
-    const label = badgeLabels.items.find((item) => item.show);
-    // The projection in this file maps a coordinate straight to its pixel, so 617,431 is the anchor
-    // and the offset is the distance from there to the centre of the cell holding it.
-    const expected = {
-      x: (Math.floor(617 / CLUSTER_CELL_PX) + 0.5) * CLUSTER_CELL_PX - 617,
-      y: (Math.floor(431 / CLUSTER_CELL_PX) + 0.5) * CLUSTER_CELL_PX - 431,
-    };
-    expect(badge?.pixelOffset.x).toBeCloseTo(expected.x, 6);
-    expect(badge?.pixelOffset.y).toBeCloseTo(expected.y, 6);
-    expect(label?.pixelOffset.x).toBeCloseTo(expected.x, 6);
-    expect(label?.pixelOffset.y).toBeCloseTo(expected.y, 6);
-    // Non-zero, or the test would pass on a layer that never applied it. 617 is not a cell centre.
-    expect(Math.hypot(expected.x, expected.y)).toBeGreaterThan(0);
+    if (badge === undefined) throw new Error('expected a merged group');
+    // Every member of `sameCity` is at the identical coordinate, so their mean is that coordinate
+    // and the drawn position must be it. A lattice-nudged badge would sit on the cell centre,
+    // which for 617 is a different number: 617 is not a cell centre, which is why it was chosen.
+    const cellCentreX = (Math.floor(617 / CLUSTER_CELL_PX) + 0.5) * CLUSTER_CELL_PX;
+    expect(cellCentreX).not.toBeCloseTo(617, 6);
+    expect(badge.position.x).toBeCloseTo(617, 3);
+    expect(badge.position.y).toBeCloseTo(431, 3);
   });
 
   it('pools its badges rather than removing them', () => {

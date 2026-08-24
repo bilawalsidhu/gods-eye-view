@@ -57,18 +57,11 @@ import {
 import { badgeSlots } from '../badge-slots';
 import type { BadgeSlot } from '../badge-slots';
 import type { ClusterFlyTo, ClusterMark, ClusterState } from '../cluster';
-import { areaRingImage, clusterBadgeImage, iconImage, pinTipOffsetPx } from '../icons';
+import { areaRingImage, iconImage, pinTipOffsetPx } from '../icons';
 import { pointInView } from '../project';
 import type { ViewRect } from '../project';
 import type { SocialPost } from '../../types/entities';
-import {
-  CLUSTER_FILL,
-  CLUSTER_TEXT,
-  SOCIAL_COLOUR,
-  clusterBadgePx,
-  clusterBadgeText,
-  clusterFontPx,
-} from '../palette';
+import { SOCIAL_COLOUR } from '../palette';
 
 /**
  * The one route to a post's media, so nothing in the app can hot-link by accident.
@@ -188,7 +181,6 @@ export const RING_LEGIBLE_FLOOR_PX = 16;
 const LABEL_FONT = '500 12px system-ui, -apple-system, "Segoe UI", sans-serif';
 const LABEL_COLOUR = '#e6edf3';
 const LABEL_GAP_PX = 6;
-const BADGE_FONT_FAMILY = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 
 /**
  * The label for a post: the place it is about, never its text.
@@ -214,7 +206,13 @@ interface Slot {
   grouped: boolean;
 }
 
-/** A badge and the count drawn on it. */
+/**
+ * A merged group and the label slot it no longer uses.
+ *
+ * The label stays in the pool with nothing on it. Groups are drawn as one ring now rather than as a
+ * counted hexagon, so there is no text, but the collection is kept because dropping a primitive
+ * collection from a scene is the churn this file exists to avoid.
+ */
 interface Badge {
   mark: Billboard;
   label: Label;
@@ -477,30 +475,40 @@ export class SocialLayer {
   }
 
   /**
-   * Draw one badge.
+   * Draw one group as a single ring, taking the next slot out of the pool.
    *
-   * A badge deliberately says nothing about basis, and that is not a gap in the rule. ADR 005
-   * forbids a *post* from looking like an observation; a badge is not a post and looks like neither
-   * a pin nor a ring. It is a count of posts near a place, which is true whatever their bases are,
-   * and clicking it resolves them into pins and rings. The alternative, a grid per basis, would put
-   * two badges on the same city and cost more legibility than it buys.
+   * **No hexagon and no count.** Alexander Fanthome asked on 2026-08-24 to "remove those
+   * hexagons ... instead just merge the asset locations into one icon, and average the
+   * position/rotation ... Do not scale the asset icon size when merging, keep at the current
+   * size", after saying the globe was very cluttered. So a group of posts is drawn as one mark at
+   * the members' mean position, at the size a single post draws at.
+   *
+   * **The ring, never the pin, and ADR 005 is what settles it.** A pin's tip claims *here, at this
+   * point, exactly*, and the mean of two hundred exact coordinates is a place none of them
+   * reported. A ring claims *somewhere in this*, which is true of every group whatever its members'
+   * bases are. So the old badge's rule survives the merge intact: the merged mark still says
+   * nothing about basis, and it still cannot be read as an observation. Clicking it resolves the
+   * group back into its own pins and rings, which is where the basis is stated.
+   *
+   * **Nothing is rotated.** A post is a fixed event at a place and carries no bearing, so the
+   * clusterer is handed no heading and there is nothing to average.
    */
   private drawBadge(mark: ClusterMark, used: number): number {
-    const sizePx = clusterBadgePx(mark.count);
+    // The unmerged size, deliberately. `clusterBadgePx` grew with the count, which is exactly what
+    // was asked to stop: a merged icon is one post's worth of ink wherever it appears.
+    const sizePx = SOCIAL_ICON_PX;
     const badge = this.badgePool[used] ?? this.acquireBadge();
     badge.mark.show = true;
     badge.mark.id = clusterPickId(SOCIAL_CLUSTER_KEY, mark.cellId);
-    badge.mark.image = clusterBadgeImage(sizePx, CLUSTER_FILL, SOCIAL_COLOUR);
+    badge.mark.image = areaRingImage(sizePx, SOCIAL_COLOUR, false);
     badge.mark.width = sizePx;
     badge.mark.height = sizePx;
-    scratchBadge.x = mark.x;
-    scratchBadge.y = mark.y;
-    scratchBadge.z = mark.z;
+    scratchBadge.x = mark.meanX;
+    scratchBadge.y = mark.meanY;
+    scratchBadge.z = mark.meanZ;
     badge.mark.position = scratchBadge;
-    badge.label.show = true;
-    badge.label.text = clusterBadgeText(mark.count);
-    badge.label.font = `700 ${clusterFontPx(mark.count)}px ${BADGE_FONT_FAMILY}`;
-    badge.label.position = scratchBadge;
+    badge.label.show = false;
+    badge.label.text = '';
     // Drawn on a lattice point rather than on the member it hangs from. Its own cell's centre when
     // that is free, which is what keeps two badges of this layer apart, and the nearest free point
     // otherwise, which is what keeps it from landing exactly on another layer's badge. See
@@ -520,8 +528,8 @@ export class SocialLayer {
     const label = this.badgeLabels.add({ position: Cartesian3.ZERO });
     label.horizontalOrigin = HorizontalOrigin.CENTER;
     label.verticalOrigin = VerticalOrigin.CENTER;
+    // Fill only, held from when a group carried a count. Nothing is drawn on it now.
     label.style = LabelStyle.FILL;
-    label.fillColor = cesiumColour(CLUSTER_TEXT);
     const badge: Badge = { mark, label };
     this.badgePool.push(badge);
     return badge;

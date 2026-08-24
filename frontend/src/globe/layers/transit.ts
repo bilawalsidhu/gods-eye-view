@@ -67,20 +67,13 @@ import {
 import { badgeSlots } from '../badge-slots';
 import type { BadgeSlot } from '../badge-slots';
 import type { ClusterFlyTo, ClusterMark, ClusterState } from '../cluster';
-import { clusterBadgeImage, iconImage, orientAxis } from '../icons';
+import { iconImage, orientAxis } from '../icons';
 import type { IconShape } from '../icons';
 import { pointInView } from '../project';
 import type { ViewRect } from '../project';
 import { transitKey } from '../../domain/transit';
 import type { TransitVehicle } from '../../types/entities';
-import {
-  CLUSTER_FILL,
-  CLUSTER_TEXT,
-  TRANSIT_COLOUR,
-  clusterBadgePx,
-  clusterBadgeText,
-  clusterFontPx,
-} from '../palette';
+import { TRANSIT_COLOUR } from '../palette';
 
 /**
  * The slot key: the contract's merge key, joined. Re-exported so the socket and the layer cannot
@@ -175,8 +168,6 @@ const LABEL_COLOUR = '#e6edf3';
 /** Gap in pixels between the edge of the mark and the start of the label. */
 const LABEL_GAP_PX = 4;
 
-const BADGE_FONT_FAMILY = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-
 /**
  * The best label for a vehicle, which is the route rather than the fleet number.
  *
@@ -241,7 +232,13 @@ interface Slot {
   grouped: boolean;
 }
 
-/** A badge and the count drawn on it. Pooled like everything else in this file. */
+/**
+ * A merged group and the label slot it no longer uses. Pooled like everything else in this file.
+ *
+ * The label stays in the pool with nothing on it. Groups are drawn as one vehicle now rather than
+ * as a counted hexagon, so there is no text, but the collection is kept because dropping a
+ * primitive collection from a scene is the churn this file exists to avoid.
+ */
 interface Badge {
   mark: Billboard;
   label: Label;
@@ -410,7 +407,19 @@ export class TransitLayer {
     this.grid.begin(this.scene.drawingBufferWidth, this.scene.drawingBufferHeight);
     for (const slot of this.slots.values()) {
       const at = slot.mark.position;
-      slot.cell = this.grid.offer(scratchMatrix, eye.x, eye.y, eye.z, at.x, at.y, at.z);
+      // The bearing goes in so a merged group can be turned to the members' mean heading. Null
+      // where the feed carried none, and the clusterer keeps those out of the circular mean
+      // rather than counting them as due north.
+      slot.cell = this.grid.offer(
+        scratchMatrix,
+        eye.x,
+        eye.y,
+        eye.z,
+        at.x,
+        at.y,
+        at.z,
+        slot.bearingDeg,
+      );
     }
     this.grid.resolve();
     for (const slot of this.slots.values()) {
@@ -517,22 +526,63 @@ export class TransitLayer {
     slot.label.position = scratch;
   }
 
+  /**
+   * Draw one group as a single vehicle, taking the next slot out of the pool.
+   *
+   * **No hexagon and no count.** Alexander Fanthome asked on 2026-08-24 to "remove those
+   * hexagons ... instead just merge the asset locations into one icon, and average the
+   * position/rotation ... Do not scale the asset icon size when merging, keep at the current
+   * size", after saying the globe was very cluttered. So a group of vehicles is drawn as one
+   * vehicle: same silhouette, same size, at the members' mean position, pointing along their
+   * mean bearing.
+   *
+   * **This is the layer that gives up the most, and it is still the right trade.** Transit is the
+   * densest feed in the app: one Prague cell holds a thousand vehicles, and that thousand now
+   * looks exactly like a cell holding fifteen. The rail carries the totals, and the count returns
+   * as soon as the camera comes in far enough to split the group.
+   */
   private drawBadge(mark: ClusterMark, used: number): number {
-    const sizePx = clusterBadgePx(mark.count);
+    // The unmerged size, deliberately. `clusterBadgePx` grew with the count, which is exactly what
+    // was asked to stop: a merged icon is one vehicle's worth of ink wherever it appears.
+    const sizePx = TRANSIT_ICON_PX;
     const badge = this.badgePool[used] ?? this.acquireBadge();
     badge.mark.show = true;
     badge.mark.id = clusterPickId(TRANSIT_CLUSTER_KEY, mark.cellId);
-    badge.mark.image = clusterBadgeImage(sizePx, CLUSTER_FILL, TRANSIT_COLOUR);
+    // A cut-cornered square when nothing in the group reported a bearing, matching what a single
+    // vehicle with no bearing draws. GTFS-Realtime omits `bearing` on a great many feeds, so this
+    // is the common case rather than the exception, and a vehicle pointing north would be a
+    // heading nobody reported.
+    badge.mark.image = iconImage(
+      mark.meanHeadingDeg === null ? 'block' : 'vehicle',
+      TRANSIT_COLOUR,
+      false,
+      sizePx,
+    );
     badge.mark.width = sizePx;
     badge.mark.height = sizePx;
-    scratchBadge.x = mark.x;
-    scratchBadge.y = mark.y;
-    scratchBadge.z = mark.z;
+    scratchBadge.x = mark.meanX;
+    scratchBadge.y = mark.meanY;
+    scratchBadge.z = mark.meanZ;
     badge.mark.position = scratchBadge;
-    badge.label.show = true;
-    badge.label.text = clusterBadgeText(mark.count);
-    badge.label.font = `700 ${clusterFontPx(mark.count)}px ${BADGE_FONT_FAMILY}`;
-    badge.label.position = scratchBadge;
+    if (mark.meanHeadingDeg === null) {
+      // No member reported a bearing, so there is nothing to turn to. The zero vector is Cesium's
+      // own "unrotated", which is what a bearingless single vehicle draws as too.
+      badge.mark.alignedAxis = Cartesian3.ZERO;
+    } else {
+      // A world-space axis rather than a screen angle, the same way a single vehicle is turned.
+      // The mean position has to be converted back to degrees for it, because `orientAxis` works
+      // from a point on the ellipsoid and a bearing there.
+      const at = Cartographic.fromCartesian(scratchBadge, undefined, scratchCarto);
+      orientAxis(
+        (at.longitude * 180) / Math.PI,
+        (at.latitude * 180) / Math.PI,
+        mark.meanHeadingDeg,
+        scratchAxis,
+      );
+      badge.mark.alignedAxis = scratchAxis;
+    }
+    badge.label.show = false;
+    badge.label.text = '';
     // Drawn on a lattice point rather than on the member it hangs from. Its own cell's centre when
     // that is free, which is what keeps two badges of this layer apart, and the nearest free point
     // otherwise, which is what keeps it from landing exactly on another layer's badge. See
@@ -552,8 +602,8 @@ export class TransitLayer {
     const label = this.badgeLabels.add({ position: Cartesian3.ZERO });
     label.horizontalOrigin = HorizontalOrigin.CENTER;
     label.verticalOrigin = VerticalOrigin.CENTER;
+    // Fill only, held from when a group carried a count. Nothing is drawn on it now.
     label.style = LabelStyle.FILL;
-    label.fillColor = cesiumColour(CLUSTER_TEXT);
     const badge: Badge = { mark, label };
     this.badgePool.push(badge);
     return badge;

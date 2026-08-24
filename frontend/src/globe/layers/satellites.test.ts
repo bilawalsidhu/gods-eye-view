@@ -32,6 +32,11 @@ vi.mock('cesium', () => {
       set position(value: { x: number; y: number; z: number }) {
         position = { x: value.x, y: value.y, z: value.z };
       },
+      // Cesium's own default for a billboard nobody has pointed, and this layer must never
+      // point one: an element set carries no attitude. Here so a test can assert the layer left
+      // it alone, rather than asserting a property the fake simply does not have, which passes
+      // for the wrong reason the day somebody adds one.
+      alignedAxis: { x: 0, y: 0, z: 0 },
       show: false,
       id: undefined as string | undefined,
       image: '',
@@ -235,6 +240,7 @@ interface FakeCollection {
     id: string | undefined;
     image: string;
     scaleByDistance: unknown;
+    alignedAxis: { x: number; y: number; z: number };
     width: number;
     height: number;
     horizontalOrigin: unknown;
@@ -726,21 +732,77 @@ function crowded(count: number, originX = 100, originY = 100) {
 }
 
 describe('SatelliteLayer badge identity', () => {
-  it('rims its badge in the cyan it draws its own diamonds in', () => {
-    // Before this, all five layers rendered an identical grey hexagon, so a badge reading "6k" could
-    // have been six thousand of anything with several layers in the frame at once. The rim takes the
-    // colour this layer already uses for its marks, which is the same constant the rail is handed for
-    // its legend row, so the globe and the key cannot drift apart.
+  it('draws a group as one diamond in the cyan it draws its own marks in', () => {
+    // A group is a merged asset now rather than a counted hexagon, so this asserts the icon and
+    // its hue together. The colour is the same constant the rail is handed for its legend row, so
+    // the globe and the key cannot drift apart.
     const { layer, badges, frame } = build();
     layer.apply(...tick(crowded(SATELLITE_CLUSTER_MIN)));
 
     frame();
 
-    const size = clusterBadgePx(SATELLITE_CLUSTER_MIN);
     const drawn = badges.items.find((item) => item.show)?.image;
-    expect(drawn).toBe(clusterBadgeImage(size, CLUSTER_FILL, SATELLITE_COLOUR));
-    // Not the old shared grey, which is the regression this guards.
-    expect(drawn).not.toBe(clusterBadgeImage(size, CLUSTER_FILL));
+    expect(drawn).toBe(iconImage('diamond', SATELLITE_COLOUR, false, SATELLITE_ICON_PX));
+    // Not a hexagon of any colour, which is the thing that was asked to go.
+    expect(drawn).not.toBe(
+      clusterBadgeImage(clusterBadgePx(SATELLITE_CLUSTER_MIN), CLUSTER_FILL, SATELLITE_COLOUR),
+    );
+  });
+
+  it('draws a merged diamond at one satellite size however many it stands for', () => {
+    // "Do not scale the asset icon size when merging, keep at the current size". The old badge
+    // grew with the count, from 30 pixels to 48, on the layer whose whole argument for a small
+    // mark is that it is the one that can hide the planet.
+    const { layer, badges, frame } = build();
+
+    layer.apply(...tick(crowded(SATELLITE_CLUSTER_MIN)));
+    frame();
+    const smallWidth = badges.items.find((item) => item.show)?.width;
+
+    layer.apply(...tick(crowded(SATELLITE_CLUSTER_MIN * 30)));
+    frame();
+    const large = badges.items.find((item) => item.show);
+
+    expect(smallWidth).toBe(SATELLITE_ICON_PX);
+    expect(large?.width).toBe(SATELLITE_ICON_PX);
+    expect(large?.height).toBe(SATELLITE_ICON_PX);
+  });
+
+  it('leaves a merged diamond unrotated, because an element set carries no attitude', () => {
+    // The one layer with nothing to average. SGP4 propagates a position and nothing else, so a
+    // merged icon that pointed anywhere would be inventing a fact, which is the same reason the
+    // diamond is rotationally symmetric in the first place.
+    const { layer, badges, frame } = build();
+    layer.apply(...tick(crowded(SATELLITE_CLUSTER_MIN)));
+
+    frame();
+
+    expect(badges.items.find((item) => item.show)?.alignedAxis).toEqual({ x: 0, y: 0, z: 0 });
+  });
+
+  it('draws the merged diamond at the members mean position, above the globe', () => {
+    // This layer is the only one whose marks are not on the surface, so the lift matters most
+    // here: the raw mean of positions on a sphere sits inside it, and a merged icon of objects at
+    // 500km has to end up at 500km rather than under the terrain. The fake `Cartesian3` puts
+    // longitude in x, latitude in y and height in z, so the expected radius is worked out here
+    // from the fixture's own numbers rather than taken from the clusterer.
+    const { layer, badges, frame } = build();
+    const members = crowded(SATELLITE_CLUSTER_MIN);
+    layer.apply(...tick(members));
+
+    frame();
+
+    const drawn = badges.items.find((item) => item.show);
+    if (drawn?.position === undefined) throw new Error('expected a merged diamond');
+    const meanRadius =
+      members.reduce(
+        (total, satellite) => total + Math.hypot(satellite.lon, satellite.lat, satellite.altitudeM),
+        0,
+      ) / members.length;
+    expect(Math.hypot(drawn.position.x, drawn.position.y, drawn.position.z)).toBeCloseTo(
+      meanRadius,
+      6,
+    );
   });
 });
 
@@ -779,7 +841,10 @@ describe('SatelliteLayer clustering', () => {
     expect(badges.items.filter((item) => item.show)).toHaveLength(0);
   });
 
-  it('groups a pile nobody could have read anyway, and says how many', () => {
+  it('groups a pile nobody could have read anyway, into one diamond and no count', () => {
+    // Alexander Fanthome asked on 2026-08-24 to drop the hexagons and merge a group into one asset
+    // icon. So the count is deliberately gone from the globe: this asserts its absence, because a
+    // stray label is the thing that would quietly bring the clutter back.
     const { layer, points, badges, badgeLabels, frame } = build();
     layer.apply(...tick(crowded(SATELLITE_CLUSTER_MIN)));
 
@@ -787,7 +852,7 @@ describe('SatelliteLayer clustering', () => {
 
     expect(points.items.filter((item) => item.show)).toHaveLength(0);
     expect(badges.items.filter((item) => item.show)).toHaveLength(1);
-    expect(badgeLabels.items.find((item) => item.show)?.text).toBe(String(SATELLITE_CLUSTER_MIN));
+    expect(badgeLabels.items.filter((item) => item.show)).toHaveLength(0);
   });
 
   it('publishes a count that adds up', () => {

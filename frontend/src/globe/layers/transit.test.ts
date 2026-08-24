@@ -387,21 +387,93 @@ function crowd(count: number, originX = 100, originY = 100, prefix = 'V'): Trans
 }
 
 describe('TransitLayer badge identity', () => {
-  it('rims its badge in the colour it draws its own marks in', () => {
-    // Before this, all five layers rendered an identical grey hexagon, so a badge reading "6k" could
-    // have been six thousand of anything, with several layers in the frame at once. The rim takes the
-    // colour this layer already uses for its marks, which is the same constant the rail is handed for
-    // its legend row, so the globe and the key cannot drift apart.
+  it('draws a group as one vehicle in the colour it draws its own marks in', () => {
+    // A group is a merged asset now rather than a counted hexagon, so this asserts the icon and
+    // its hue together. The colour is the same constant the rail is handed for its legend row, so
+    // the globe and the key cannot drift apart.
     const { layer, badges, frame } = build();
     layer.replace(crowd(TRANSIT_CLUSTER_MIN, 300, 300));
 
     frame();
 
-    const size = clusterBadgePx(TRANSIT_CLUSTER_MIN);
     const drawn = badges.items.find((item) => item.show)?.image;
-    expect(drawn).toBe(clusterBadgeImage(size, CLUSTER_FILL, TRANSIT_COLOUR));
-    // Not the old shared grey, which is the regression this guards.
-    expect(drawn).not.toBe(clusterBadgeImage(size, CLUSTER_FILL));
+    expect(drawn).toBe(iconImage('vehicle', TRANSIT_COLOUR, false, TRANSIT_ICON_PX));
+    // Not a hexagon of any colour, which is the thing that was asked to go.
+    expect(drawn).not.toBe(
+      clusterBadgeImage(clusterBadgePx(TRANSIT_CLUSTER_MIN), CLUSTER_FILL, TRANSIT_COLOUR),
+    );
+  });
+
+  it('draws a merged vehicle at one vehicle size however many it stands for', () => {
+    // "Do not scale the asset icon size when merging, keep at the current size". The old badge
+    // grew with the count, from 30 pixels to 48. This layer is the densest in the app, so it is
+    // the one where a size that grew with the count grew the most.
+    const { layer, badges, frame } = build();
+
+    layer.replace(crowd(TRANSIT_CLUSTER_MIN, 300, 300));
+    frame();
+    const smallWidth = badges.items.find((item) => item.show)?.width;
+
+    layer.replace(crowd(TRANSIT_CLUSTER_MIN * 40, 300, 300));
+    frame();
+    const large = badges.items.find((item) => item.show);
+
+    expect(smallWidth).toBe(TRANSIT_ICON_PX);
+    expect(large?.width).toBe(TRANSIT_ICON_PX);
+    expect(large?.height).toBe(TRANSIT_ICON_PX);
+  });
+
+  it('turns a merged vehicle to the members mean bearing, round the wrap', () => {
+    // Bearings of 350 and 10 are twenty degrees apart and their arithmetic mean is 180, which
+    // would point the merged vehicle back down the road its members are driving. The circular mean
+    // of an even split of that pair is due north, worked out here rather than read off the
+    // clusterer: the sines cancel, the cosines are both positive, so the answer is 0.
+    //
+    // This also catches the bearing never reaching the clusterer at all. `offer` takes it as the
+    // last argument and a layer that forgets to pass it draws the no-bearing square every time,
+    // which looks entirely deliberate on screen.
+    const { layer, badges, frame } = build();
+    layer.replace(
+      crowd(TRANSIT_CLUSTER_MIN, 300, 300).map((vehicle, index) => ({
+        ...vehicle,
+        bearing: index % 2 === 0 ? 350 : 10,
+      })),
+    );
+
+    frame();
+
+    const drawn = badges.items.find((item) => item.show);
+    expect(drawn?.image).toBe(iconImage('vehicle', TRANSIT_COLOUR, false, TRANSIT_ICON_PX));
+    // The fake `Cartesian3.fromDegrees` puts longitude in x and latitude in y, so the drawn
+    // position reads back as degrees and the expected axis can be built at the very place the
+    // merged vehicle was drawn. Compared to a tolerance because the sines of 350 and 10 cancel to
+    // about 1e-16 rather than to nothing.
+    const at = drawn?.position ?? { x: 0, y: 0, z: 0 };
+    const axis = drawn?.alignedAxis ?? { x: 0, y: 0, z: 0 };
+    const north = orientAxis(at.x, at.y, 0, { x: 0, y: 0, z: 0 });
+    const backwards = orientAxis(at.x, at.y, 180, { x: 0, y: 0, z: 0 });
+    expect(axis.x).toBeCloseTo(north.x, 9);
+    expect(axis.y).toBeCloseTo(north.y, 9);
+    expect(axis.z).toBeCloseTo(north.z, 9);
+    // 180 is what an arithmetic average of 350 and 10 gives, and it is the whole reason the
+    // clusterer accumulates sine and cosine instead.
+    expect(axis.z).not.toBeCloseTo(backwards.z, 3);
+  });
+
+  it('draws a bearingless group as the square, pointing nowhere', () => {
+    // GTFS-Realtime omits `bearing` on a great many feeds, so this is the common case rather than
+    // the exception, and a vehicle aimed north would be a heading nobody reported. A single
+    // bearingless vehicle already draws the cut-cornered square; a group of them draws the same.
+    const { layer, badges, frame } = build();
+    layer.replace(
+      crowd(TRANSIT_CLUSTER_MIN, 300, 300).map((vehicle) => ({ ...vehicle, bearing: null })),
+    );
+
+    frame();
+
+    const drawn = badges.items.find((item) => item.show);
+    expect(drawn?.image).toBe(iconImage('block', TRANSIT_COLOUR, false, TRANSIT_ICON_PX));
+    expect(drawn?.alignedAxis).toEqual({ x: 0, y: 0, z: 0 });
   });
 });
 
@@ -718,7 +790,10 @@ describe('TransitLayer clustering', () => {
     expect(badges.items.filter((item) => item.show)).toHaveLength(0);
   });
 
-  it('replaces a crowded cell with one badge carrying the count', () => {
+  it('replaces a crowded cell with one vehicle and no count', () => {
+    // Alexander Fanthome asked on 2026-08-24 to drop the hexagons and merge a group into one asset
+    // icon. So the count is deliberately gone from the globe: this asserts its absence, because a
+    // stray label is the thing that would quietly bring the clutter back.
     const many = TRANSIT_CLUSTER_MIN + 3;
     const { layer, marks, badges, badgeLabels, frame } = build();
     layer.upsert(crowd(many));
@@ -728,7 +803,32 @@ describe('TransitLayer clustering', () => {
     expect(layer.count).toBe(many);
     expect(marks.items.filter((item) => item.show)).toHaveLength(0);
     expect(badges.items.filter((item) => item.show)).toHaveLength(1);
-    expect(badgeLabels.items.find((item) => item.show)?.text).toBe(String(many));
+    expect(badgeLabels.items.filter((item) => item.show)).toHaveLength(0);
+  });
+
+  it('draws the merged vehicle at the members mean position, on the surface', () => {
+    // The mean of positions on a sphere sits inside it, so a merged icon drawn on the raw mean
+    // would be swallowed by the depth buffer. The clusterer pushes it back out to the members'
+    // mean distance from the centre, and this asserts the drawn point is that far out. The fake
+    // `Cartesian3` puts longitude in x and latitude in y, so the expected radius is computed here
+    // from the fixture's own coordinates rather than taken from the clusterer.
+    const { layer, badges, frame } = build();
+    const members = crowd(TRANSIT_CLUSTER_MIN);
+    layer.upsert(members);
+
+    frame();
+
+    const drawn = badges.items.find((item) => item.show);
+    if (drawn?.position === undefined) throw new Error('expected a merged vehicle');
+    const meanRadius =
+      members.reduce(
+        (total, vehicle) => total + Math.hypot(vehicle.point.lon, vehicle.point.lat),
+        0,
+      ) / members.length;
+    expect(Math.hypot(drawn.position.x, drawn.position.y, drawn.position.z)).toBeCloseTo(
+      meanRadius,
+      6,
+    );
   });
 
   it('groups harder than the vessel layer, because it is denser still', () => {

@@ -383,21 +383,136 @@ function moored(mmsi: string) {
 }
 
 describe('VesselLayer badge identity', () => {
-  it('rims its badge in the colour it draws its own marks in', () => {
-    // Before this, all five layers rendered an identical grey hexagon, so a badge reading "6k" could
-    // have been six thousand of anything, with several layers in the frame at once. The rim takes the
-    // colour this layer already uses for its marks, which is the same constant the rail is handed for
-    // its legend row, so the globe and the key cannot drift apart.
+  it('draws a group as one hull in the colour it draws its own marks in', () => {
+    // A group is a merged asset now rather than a counted hexagon, so this asserts the icon and
+    // its hue together. The colour is the same constant the rail is handed for its legend row, so
+    // the globe and the key cannot drift apart.
     const { layer, badges, frame } = build();
     layer.replace(crowd(VESSEL_CLUSTER_MIN, 300, 300));
 
     frame();
 
-    const size = clusterBadgePx(VESSEL_CLUSTER_MIN);
     const drawn = badges.items.find((item) => item.show)?.image;
-    expect(drawn).toBe(clusterBadgeImage(size, CLUSTER_FILL, UNDER_WAY_COLOUR));
-    // Not the old shared grey, which is the regression this guards.
-    expect(drawn).not.toBe(clusterBadgeImage(size, CLUSTER_FILL));
+    expect(drawn).toBe(iconImage('ship', UNDER_WAY_COLOUR, false, VESSEL_ICON_PX));
+    // Not a hexagon of any colour, which is the thing that was asked to go.
+    expect(drawn).not.toBe(
+      clusterBadgeImage(clusterBadgePx(VESSEL_CLUSTER_MIN), CLUSTER_FILL, UNDER_WAY_COLOUR),
+    );
+  });
+
+  it('draws a merged hull at one vessel size however many it stands for', () => {
+    // "Do not scale the asset icon size when merging, keep at the current size". The old badge
+    // grew with the count, from 30 pixels to 48, so this asserts the two group sizes are the same
+    // number and that the number is the size a lone ship draws at.
+    const { layer, badges, frame } = build();
+
+    layer.replace(crowd(VESSEL_CLUSTER_MIN, 300, 300));
+    frame();
+    const small = badges.items.find((item) => item.show);
+    const smallWidth = small?.width;
+
+    layer.replace(crowd(VESSEL_CLUSTER_MIN * 20, 300, 300));
+    frame();
+    const large = badges.items.find((item) => item.show);
+
+    expect(smallWidth).toBe(VESSEL_ICON_PX);
+    expect(large?.width).toBe(VESSEL_ICON_PX);
+    expect(large?.height).toBe(VESSEL_ICON_PX);
+  });
+
+  it('turns a merged hull to the members mean course, round the wrap', () => {
+    // Courses of 350 and 10 are twenty degrees apart and their arithmetic mean is 180, which
+    // would point the merged hull back down the track its members are sailing. The circular mean
+    // of that pair is due north, worked out here rather than read off the clusterer: the sines
+    // cancel, the cosines are both positive, so the answer is 0.
+    //
+    // This also catches the heading never reaching the clusterer at all. `offer` takes the course
+    // as its last argument and a layer that forgets to pass it draws the no-course square every
+    // time, which looks entirely deliberate on screen.
+    const { layer, badges, frame } = build();
+    // An even number of members, so the two courses are eight apiece and the answer really is due
+    // north. An odd split would put the true circular mean somewhere between the two and the
+    // expectation would have to be computed the way the clusterer computes it, which is no test
+    // at all.
+    layer.replace(
+      crowd(VESSEL_CLUSTER_MIN + 1, 300, 300).map((vessel, index) => ({
+        ...vessel,
+        course_over_ground_deg: index % 2 === 0 ? 350 : 10,
+      })),
+    );
+
+    frame();
+
+    const drawn = badges.items.find((item) => item.show);
+    expect(drawn?.image).toBe(iconImage('ship', UNDER_WAY_COLOUR, false, VESSEL_ICON_PX));
+    // The fake `Cartesian3.fromDegrees` puts longitude in x and latitude in y, so the drawn
+    // position reads back as degrees and the expected axis can be built at the very place the
+    // merged hull was drawn. Compared to a tolerance because the sines of 350 and 10 cancel to
+    // about 1e-16 rather than to nothing, so the recovered bearing is a hair off zero.
+    const at = drawn?.position ?? { x: 0, y: 0, z: 0 };
+    const axis = drawn?.alignedAxis ?? { x: 0, y: 0, z: 0 };
+    const north = orientAxis(at.x, at.y, 0, { x: 0, y: 0, z: 0 });
+    const backwards = orientAxis(at.x, at.y, 180, { x: 0, y: 0, z: 0 });
+    expect(axis.x).toBeCloseTo(north.x, 9);
+    expect(axis.y).toBeCloseTo(north.y, 9);
+    expect(axis.z).toBeCloseTo(north.z, 9);
+    // 180 is what an arithmetic average of 350 and 10 gives, and it is the whole reason the
+    // clusterer accumulates sine and cosine instead.
+    expect(axis.z).not.toBeCloseTo(backwards.z, 3);
+  });
+
+  it('draws a courseless group as the square, pointing nowhere', () => {
+    // The feed omits course on a great many records, and a hull aimed north would be a bearing
+    // nobody reported. A single courseless vessel already draws the cut-cornered square; a group
+    // of them draws the same thing.
+    //
+    // Grey rather than cyan, and that is `isUnderWay`'s doing rather than this file's: it requires
+    // a course as well as a speed, so a ship with no course is never under way in this layer and
+    // the shape and the hue move together.
+    const { layer, badges, frame } = build();
+    layer.replace(
+      crowd(VESSEL_CLUSTER_MIN, 300, 300).map((vessel) => ({
+        ...vessel,
+        course_over_ground_deg: null,
+      })),
+    );
+
+    frame();
+
+    const drawn = badges.items.find((item) => item.show);
+    expect(drawn?.image).toBe(iconImage('block', STOPPED_COLOUR, false, VESSEL_ICON_PX));
+    expect(drawn?.alignedAxis).toEqual({ x: 0, y: 0, z: 0 });
+  });
+
+  it('keeps the under-way cyan on a group that swallowed one moving ship', () => {
+    // Cyan and grey are this layer's only state channel. A port at a wide zoom is one cell and is
+    // mostly moored, so a merge that took its colour from the majority would hide the one ship
+    // leaving. Same rule as the aircraft layer keeping red on a group holding an emergency.
+    const { layer, badges, frame } = build();
+    const berth = crowd(VESSEL_CLUSTER_MIN, 300, 300).map((vessel) => moored(vessel.mmsi));
+    // `makeVessel`'s own defaults are a ship under way with a course, so this one leaves.
+    berth[0] = makeVessel({ mmsi: '230000000' });
+    layer.replace(berth);
+
+    frame();
+
+    const drawn = badges.items.find((item) => item.show)?.image;
+    expect(drawn).toBe(iconImage('ship', UNDER_WAY_COLOUR, false, VESSEL_ICON_PX));
+    expect(drawn).not.toBe(iconImage('ship', STOPPED_COLOUR, false, VESSEL_ICON_PX));
+  });
+
+  it('draws a wholly moored group in the stopped grey', () => {
+    // The other half of the rule. A berth is not traffic, and drawing every merged icon in the
+    // under-way cyan would put moving-ship colour on every harbour on the coast.
+    const { layer, badges, frame } = build();
+    layer.replace(crowd(VESSEL_CLUSTER_MIN, 300, 300).map((vessel) => moored(vessel.mmsi)));
+
+    frame();
+
+    // Moored, so no course either: the same record that stops a ship also drops its course.
+    expect(badges.items.find((item) => item.show)?.image).toBe(
+      iconImage('block', STOPPED_COLOUR, false, VESSEL_ICON_PX),
+    );
   });
 });
 
@@ -1152,7 +1267,10 @@ function at(pixels: readonly (readonly [number, number])[]) {
 }
 
 describe('VesselLayer clustering', () => {
-  it('replaces a crowded cell with one badge carrying the count', () => {
+  it('replaces a crowded cell with one vessel and no count', () => {
+    // Alexander Fanthome asked on 2026-08-24 to drop the hexagons and merge a group into one asset
+    // icon. So the count is deliberately gone from the globe: this asserts its absence, because a
+    // stray label is the thing that would quietly bring the clutter back.
     const { layer, points, badges, badgeLabels, frame } = build();
     layer.upsert(crowd(VESSEL_CLUSTER_MIN));
 
@@ -1161,7 +1279,31 @@ describe('VesselLayer clustering', () => {
     expect(layer.count).toBe(VESSEL_CLUSTER_MIN);
     expect(points.items.filter((item) => item.show)).toHaveLength(0);
     expect(badges.items.filter((item) => item.show)).toHaveLength(1);
-    expect(badgeLabels.items.find((item) => item.show)?.text).toBe(String(VESSEL_CLUSTER_MIN));
+    expect(badgeLabels.items.filter((item) => item.show)).toHaveLength(0);
+  });
+
+  it('draws the merged vessel at the members mean position, on the surface', () => {
+    // The mean of positions on a sphere sits inside it, so a merged icon drawn on the raw mean
+    // would be swallowed by the depth buffer. The clusterer pushes it back out to the members'
+    // mean distance from the centre, and this asserts the drawn point is that far out rather than
+    // nearer in. The fake `Cartesian3` puts longitude in x and latitude in y, so the members'
+    // distances are computed the same way here as they are there, from independently written
+    // arithmetic over the fixture's own coordinates.
+    const { layer, badges, frame } = build();
+    const members = crowd(VESSEL_CLUSTER_MIN);
+    layer.upsert(members);
+
+    frame();
+
+    const drawn = badges.items.find((item) => item.show);
+    if (drawn?.position === undefined) throw new Error('expected a merged vessel');
+    const meanRadius =
+      members.reduce((total, vessel) => total + Math.hypot(vessel.point.lon, vessel.point.lat), 0) /
+      members.length;
+    expect(Math.hypot(drawn.position.x, drawn.position.y, drawn.position.z)).toBeCloseTo(
+      meanRadius,
+      6,
+    );
   });
 
   it('takes the name off a grouped ship even while it is under way', () => {
