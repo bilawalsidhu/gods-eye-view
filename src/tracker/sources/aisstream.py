@@ -62,7 +62,7 @@ from tracker.contracts.vessel import (
     ais_bearing,
     speed_over_ground_mps,
 )
-from tracker.sources.base import SourceError
+from tracker.sources.base import SourceError, describe_exception
 
 _log = logging.getLogger(__name__)
 
@@ -73,10 +73,33 @@ AISSTREAM_URL: Final = "wss://stream.aisstream.io/v0/stream"
 """The only endpoint. Verified 2026-08-19: HTTP 101 with no credentials sent."""
 
 UNAVAILABLE_REASON: Final = (
-    "Set TRACKER_AISSTREAM_API_KEY (free key from aisstream.io) to enable global ships. "
-    "Without it the vessel layer runs on the keyless regional providers only."
+    "No worldwide AIS feed is available. Coverage is the regional feeds only."
 )
-"""Why the layer is off, worded for ``/api/capabilities`` rather than for a log."""
+"""Why the layer is off, worded for a card rather than for a log.
+
+It deliberately does not tell the reader to set an environment variable. Alexander Fanthome
+ruled on 2026-08-20 that every source must be public with no API key at all, which puts
+aisstream out of scope, so instructing a viewer to obtain one is advice against the project's
+own constraint. What is worth saying is the consequence.
+
+**And it deliberately names no region, because the version that did went stale in a day.** It
+read "Ships shown for Northern Europe only" until 2026-08-24, and by then the Seaway feed had
+put 1,624 of 6,036 vessels west of 50 degrees west, 26.9% of the layer, on the Great Lakes and
+the St Lawrence. The rail showed that sentence directly above a provider line reading
+``seaway only: 1,624``, so a viewer looking at Lake Erie was told there was no coverage there
+while counting the ships. A string naming regions is invalidated by the next authority added,
+and this project adds them.
+
+What replaces the region names is a count derived from the providers actually reporting, built
+in ``api/routes_meta._vessel_coverage_reason``. This constant is the fallback for the adapter's
+own error path, where there is no union to count. The claim that survives either way is about
+what is **absent**: no keyless worldwide AIS exists, and that only stops being true on the day
+this row would disappear anyway.
+
+The full reasoning, the measured coverage and the three routes to global AIS live in
+``docs/data-sources.md`` and ``docs/pending-decisions.md``, which is where a paragraph
+belongs.
+"""
 
 SUBSCRIBE_DEADLINE_SECONDS: Final = 3.0
 """Provider-stated: a connection that has not subscribed inside this is closed.
@@ -292,6 +315,13 @@ class AisStreamClient:
     Construction fails rather than degrades when it cannot possibly work: no key, no
     bounding box, or an MMSI filter above the provider's cap. Everything after that is a
     runtime condition the loop survives.
+
+    **Nothing here goes on the disk cache**, unlike the polled adapters moved onto
+    :class:`~tracker.cache.DiskCache` on 2026-08-20. There is nothing to carry across a restart:
+    this is one long-lived socket rather than a request cadence, a new process opens a new
+    connection whatever happened to the last one, and the reconnect delay is a base figure with
+    a floor rather than state that accumulates. A restart loop here costs one connection each,
+    which is what the provider's one-subscription-a-second floor already governs.
     """
 
     def __init__(
@@ -476,8 +506,11 @@ class AisStreamClient:
             except asyncio.CancelledError:
                 raise
             except (WebSocketException, OSError, TimeoutError, ContractViolationError) as exc:
-                self.last_error = f"{type(exc).__name__}: {exc}"
-                _log.warning("%s: connection ended: %s", SOURCE_NAME, exc)
+                # Rendered rather than interpolated: a WebSocket read that times out
+                # stringifies to nothing, and this is served as the provider's error on
+                # /api/layers when the socket is down.
+                self.last_error = describe_exception(exc)
+                _log.warning("%s: connection ended: %s", SOURCE_NAME, self.last_error)
             self._failures = 0 if received else self._failures + 1
 
             if self._silent_connections >= MAX_SILENT_CONNECTIONS:

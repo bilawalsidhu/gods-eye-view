@@ -47,6 +47,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Self
 
+from tracker.sources.base import describe_exception
+
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
@@ -75,7 +77,10 @@ class ProviderResult[T]:
     @classmethod
     def from_error(cls, provider: str, exc: BaseException) -> Self:
         """A provider that dropped out, described the way the poller describes a failure."""
-        return cls(provider=provider, error=f"{type(exc).__name__}: {exc}")
+        # Rendered rather than interpolated. This string is served as the provider's error
+        # on /api/layers and inside degraded_reason, and several httpx exceptions carry no
+        # message: interpolating one leaves a dangling colon and no reason.
+        return cls(provider=provider, error=describe_exception(exc))
 
     @property
     def failed(self) -> bool:
@@ -89,11 +94,27 @@ class ProviderSighting:
 
     ``age_s`` is measured at the merge, not at the response, so a card can show why one
     provider's view of an asset is worth less than another's.
+
+    **``provider`` and ``served_by`` are two different questions and conflating them was a
+    live bug.** ``provider`` is the union member we polled. ``served_by`` is the host whose
+    bytes this record actually is, which differs whenever an adapter fails over internally:
+    ``AdsbClient`` polls adsb.lol and falls back to adsb.fi inside one provider row, so a
+    cycle can hand back records served by adsb.fi under the member name adsb.lol. Measured
+    live on 2026-08-23: two of 1,040 aircraft reached the API reading
+    ``source: adsb.fi`` beside ``providers: ["adsb.lol"]``.
+
+    That is a licence misstatement rather than a cosmetic one. adsb.lol publishes under ODbL
+    1.0 and adsb.fi under non-commercial terms, so a card crediting the wrong one of the two
+    states the wrong licence for the data on screen. Keep both: attribution follows
+    ``served_by``, and coverage maths such as :meth:`UnionResult.attributable_counts` follows
+    ``provider``, because "aircraft only this feed can see" is a question about what we
+    polled, not about which host answered on the day.
     """
 
     provider: str
     reported_at: datetime
     age_s: float
+    served_by: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,8 +139,16 @@ class MergedRecord[T]:
 
     @property
     def providers(self) -> tuple[str, ...]:
-        """Every provider that saw this asset, freshest first."""
-        return tuple(sighting.provider for sighting in self.sightings)
+        """Every host that served this asset, freshest first, for attribution.
+
+        The serving hosts rather than the polled members, so this list agrees with the
+        record's own ``source`` field: both contracts promise that the first entry is the
+        one named in ``source``, and before ``served_by`` existed an internal failover broke
+        that promise silently. Duplicates are collapsed, keeping the freshest position, since
+        two members failing over to one host is one host's data twice and not corroboration.
+        """
+        ordered = dict.fromkeys(sighting.served_by for sighting in self.sightings)
+        return tuple(ordered)
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,11 +219,69 @@ class UnionResult[T]:
         return counts
 
 
+@dataclass(slots=True)
+class ProviderTally:
+    """Cumulative outcomes for one provider of one merged layer, across every cycle.
+
+    :class:`UnionResult` describes one cycle and is replaced by the next one, so on its own
+    a provider that has failed every cycle for a week is indistinguishable from one that
+    failed once. ADR 010 says an empty AISHub 200 is "an error, counted", and the plan's
+    phase 2 acceptance 8 says "counted as a failed poll": this is where that count lives,
+    because the single union poller stays healthy when one provider drops out and so its own
+    failure counters never move.
+
+    ``empty_polls`` is the same argument for the answer that is not a failure. A provider
+    reporting nothing every cycle is thin coverage once and a broken feed a thousand times,
+    and the layer cannot tell them apart from the current cycle alone.
+
+    ``drops`` is the records the adapter refused, added per cycle where the adapter hands the
+    count back. Dropped and counted has to mean counted somewhere a human can read it, not
+    logged and discarded by the wiring.
+    """
+
+    provider: str
+    polls: int = 0
+    failures: int = 0
+    empty_polls: int = 0
+    drops: int = 0
+    last_success_at: datetime | None = None
+
+
+def record_cycle[T](
+    tallies: dict[str, ProviderTally],
+    union: UnionResult[T],
+    *,
+    clock: Callable[[], datetime] = _utc_now,
+) -> None:
+    """Add one merge cycle to the running per-provider tallies, creating them as needed.
+
+    Called by the poller after every merge. Keyed on the provider name rather than held on
+    the result, so the history survives the result being replaced.
+    """
+    now = clock()
+    for result in union.provider_results:
+        tally = tallies.setdefault(result.provider, ProviderTally(provider=result.provider))
+        tally.polls += 1
+        if result.failed:
+            tally.failures += 1
+            continue
+        if not result.records:
+            tally.empty_polls += 1
+        tally.last_success_at = now
+
+
+def count_drops(tallies: dict[str, ProviderTally], provider: str, dropped: int) -> None:
+    """Add the records one provider's adapter refused this cycle to its running total."""
+    tally = tallies.setdefault(provider, ProviderTally(provider=provider))
+    tally.drops += dropped
+
+
 def merge_providers[T](
     results: Iterable[ProviderResult[T]],
     *,
     key: Callable[[T], str],
     reported_at: Callable[[T], datetime],
+    served_by: Callable[[T], str] | None = None,
     clock: Callable[[], datetime] = _utc_now,
 ) -> UnionResult[T]:
     """Merge concurrent provider results into one record per identity.
@@ -212,6 +299,13 @@ def merge_providers[T](
             the response, and the position inside it can be seconds older. Resolving a
             conflict on response time would let a slow provider's stale fix win, which is
             provider precedence wearing a recency costume.
+        served_by: The host whose bytes a record actually is, where that can differ from
+            the member we polled. Omit it and the polled member is assumed to be the
+            serving host, which is right for any adapter that talks to exactly one host.
+            Pass it wherever an adapter fails over internally: ``AdsbClient`` polls
+            adsb.lol and falls back to adsb.fi under one member name, so without this the
+            record's ``providers`` list credits adsb.lol for adsb.fi's data and states
+            adsb.lol's licence over it. See :class:`ProviderSighting`.
         clock: Now, for the report ages. Injected so tests need not sleep.
 
     Returns:
@@ -231,7 +325,8 @@ def merge_providers[T](
                 by_provider[result.provider] = (fixed_at, record)
     return UnionResult(
         records=tuple(
-            _merge_one(identity, by_provider, now=now) for identity, by_provider in seen.items()
+            _merge_one(identity, by_provider, now=now, served_by=served_by)
+            for identity, by_provider in seen.items()
         ),
         provider_results=polled,
     )
@@ -242,6 +337,7 @@ def _merge_one[T](
     by_provider: Mapping[str, tuple[datetime, T]],
     *,
     now: datetime,
+    served_by: Callable[[T], str] | None = None,
 ) -> MergedRecord[T]:
     """Take the freshest of one asset's reports and keep the rest as evidence.
 
@@ -258,8 +354,9 @@ def _merge_one[T](
                     provider=provider,
                     reported_at=fixed_at,
                     age_s=max(0.0, (now - fixed_at).total_seconds()),
+                    served_by=provider if served_by is None else served_by(record),
                 )
-                for provider, (fixed_at, _) in by_provider.items()
+                for provider, (fixed_at, record) in by_provider.items()
             ),
             key=lambda sighting: (-sighting.reported_at.timestamp(), sighting.provider),
         )

@@ -42,8 +42,10 @@ class AircraftClass(StrEnum):
 
     Derived, not broadcast. ``MILITARY`` comes from the feed's own database flag;
     ``BUSINESS_JET`` from the type designator; ``ANONYMOUS`` marks an aircraft using a
-    privacy ICAO address, which we display as anonymous by design and never attempt to
-    resolve to an owner.
+    privacy ICAO address, which displays anonymised at this phase and is correlated back to a
+    registration in phase 11, per ADR 009, above a threshold set higher than an ordinary
+    registry join. The anonymity is never hidden: a correlated card says the identification is
+    inferred rather than observed.
     """
 
     UNKNOWN = "unknown"
@@ -134,8 +136,20 @@ class Aircraft(StrictModel):
     is_military: bool = False
     uses_privacy_address: bool = Field(
         default=False,
-        description="Aircraft is broadcasting a privacy ICAO address. Not resolvable to "
-        "an owner by design; we do not attempt to unmask it.",
+        description="Aircraft is broadcasting a privacy ICAO address, so the address it "
+        "sends is not tied to its registration. Carried as-is at this phase, flagged and "
+        "unresolved. Per ADR 009 correlation back to a registration is phase 11, above a "
+        "threshold set higher than an ordinary registry join, and the flag stays on the "
+        "record afterwards so a card can say the identification is inferred.",
+    )
+    on_ladd: bool = Field(
+        default=False,
+        description="The owner is on the FAA's Limiting Aircraft Data Displayed "
+        "programme, read from dbFlags bit 8. An attribute, never a display block: per "
+        "ADR 009 a LADD aircraft resolves and renders like any other, because LADD binds "
+        "the feeds the FAA itself supplies and every position here comes from volunteer "
+        "receivers. False means the provider's aircraft database does not flag this "
+        "airframe, which is not the same as proof it is off the programme.",
     )
 
     operator: str | None = Field(default=None, max_length=120)
@@ -151,10 +165,20 @@ class Aircraft(StrictModel):
         "the feed's seen_pos. Drives the stale badge in the UI.",
     )
     messages_received: int = Field(default=0, ge=0)
+    # Per ADR 010 the provider is per record and never per layer, because a merged store
+    # that cannot say which network saw a given aircraft is unauditable. Both fields below
+    # are coverage rather than corroboration: under R1 in docs/pending-decisions.md the
+    # whole list is still one origin, because the providers are repeating one transponder
+    # broadcast and one volunteer antenna routinely feeds several networks at once.
     source: str = Field(
         min_length=1,
         max_length=40,
         description="Which adapter produced this record, e.g. adsb.lol. Shown as attribution.",
+    )
+    providers: tuple[str, ...] = Field(
+        default=(),
+        description="Every provider that saw this aircraft, freshest report first, so the "
+        "first entry is the one named in source. Empty on a record no merge has touched.",
     )
 
     # Plain properties, NOT pydantic computed fields, so they stay off the wire.

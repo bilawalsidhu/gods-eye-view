@@ -57,15 +57,47 @@ class EntityStore[T]:
 
     ttl_seconds: float
     clock: Callable[[], datetime] = _utc_now
+    fix_time: Callable[[T], datetime] | None = None
+    """When a value's position was actually fixed, for a store that must not go backwards.
+
+    Optional because the rule needs a report time and not every entity has one: a satellite
+    carries an element set rather than an observation, so its store leaves this unset and
+    keeps last-write-wins.
+
+    Where it is set, an incoming report older than the one already held is not stored, per
+    ADR 010: conflicts resolve by recency and never by provider precedence. Without it
+    recency only holds inside one poll cycle, because the merge compares the reports of that
+    cycle and the store then takes whatever it is handed. A provider re-serving a stale fix
+    while the freshest provider skips a cycle would walk a ship backwards across the globe,
+    which is provider precedence arriving by accident.
+    """
+
     _entities: dict[str, _Tracked[T]] = field(default_factory=dict, init=False)
     _pending_upserts: set[str] = field(default_factory=set, init=False)
     _pending_removals: set[str] = field(default_factory=set, init=False)
 
     def upsert(self, key: str, value: T) -> None:
-        """Insert or replace an entity and mark it as changed."""
+        """Insert or replace an entity and mark it as changed.
+
+        A store with a :attr:`fix_time` keeps the newer fix and does not queue a delta for
+        the older one, so nothing on screen moves backwards. The held record's update time
+        is still refreshed, because a provider re-reporting a stale fix is still a provider
+        reporting: expiring the ship instead would take it off the globe while a feed is
+        actively naming it.
+        """
+        held = self._entities.get(key)
+        if held is not None and self._is_older(value, held.value):
+            held.updated_at = self.clock()
+            return
         self._entities[key] = _Tracked(value=value, updated_at=self.clock())
         self._pending_upserts.add(key)
         self._pending_removals.discard(key)
+
+    def _is_older(self, incoming: T, held: T) -> bool:
+        """Whether ``incoming`` reports an earlier fix than the value already held."""
+        if self.fix_time is None:
+            return False
+        return self.fix_time(incoming) < self.fix_time(held)
 
     def upsert_many(self, items: Iterable[tuple[str, T]]) -> None:
         """Insert or update several entities in one pass."""

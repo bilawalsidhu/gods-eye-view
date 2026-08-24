@@ -347,17 +347,29 @@ def speed_over_ground_mps(knots: float | None) -> float | None:
     encodes the sentinel as 1023 tenths of a knot and ``AGENTS.md`` records AISHub sending
     102.4. No vessel does 102 knots, so one inequality covers both readings.
 
+    **There is a gap between the sentinel and the field's own bound, and a real ship fell down
+    it.** :data:`AIS_SOG_MAX_MPS` is 100 knots and the sentinel is 102.3, so a wire value in
+    between passes the sentinel check, converts cleanly, and is then refused by
+    :attr:`Vessel.speed_over_ground_mps`, which drops the **whole vessel** over one junk
+    display field. Measured live on 2026-08-23: MMSI 273253530, "RATNIK", reported 102.2 knots
+    on the Estonian feed and vanished from the globe because of it. Every AIS provider here
+    shares this helper, so the guard belongs here rather than in five adapters, and the
+    contract's own field documentation already says an adapter must map an out-of-range
+    optional value to ``None`` rather than hand it to a strict field.
+
     Args:
         knots: The wire value in knots, already descaled if the provider scaled it.
 
     Returns:
         Metres per second, or ``None`` when the field carries no speed. A negative value is
         not a speed either, and mapping it to ``None`` rather than clamping it to zero keeps
-        the record: zero would claim the receiver said the vessel was stopped.
+        the record: zero would claim the receiver said the vessel was stopped. A value above
+        the domain bound is refused for the same reason: the ship stays, the speed goes.
     """
     if knots is None or knots >= AIS_SOG_NOT_AVAILABLE or knots < 0.0:
         return None
-    return float(knots) * KNOTS_TO_METRES_PER_SECOND
+    metres_per_second = float(knots) * KNOTS_TO_METRES_PER_SECOND
+    return None if metres_per_second > AIS_SOG_MAX_MPS else metres_per_second
 
 
 # ---------------------------------------------------------------- navigational status
@@ -574,14 +586,19 @@ class Vessel(StrictModel):
         "default query window is 24 hours, so an age of tens of thousands of seconds is a "
         "real answer and not a fault.",
     )
+    # Per ADR 010 the provider is per record and never per layer, because a merged store
+    # that cannot say which network saw a given ship is unauditable. Both fields below are
+    # coverage rather than corroboration: under R1 in docs/pending-decisions.md the whole
+    # list is still one origin, because the providers are repeating one AIS broadcast.
     source: str = Field(
         min_length=1,
         max_length=40,
-        description="Which provider supplied this record, e.g. digitraffic. Per ADR 010 "
-        "this is per record and never per layer: a merged store that cannot say which "
-        "network saw a given ship is unauditable. The full list of providers that saw it "
-        "rides on the merge result in services/union.py, and under R1 in "
-        "docs/pending-decisions.md that list is still one origin for corroboration.",
+        description="Which provider supplied this record, e.g. digitraffic.",
+    )
+    providers: tuple[str, ...] = Field(
+        default=(),
+        description="Every provider that saw this ship, freshest report first, so the first "
+        "entry is the one named in source. Empty on a record no merge has touched.",
     )
 
     # Plain properties, NOT pydantic computed fields, for the reason set out at

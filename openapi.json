@@ -127,6 +127,12 @@
             "title": "On Ground",
             "type": "boolean"
           },
+          "on_ladd": {
+            "default": false,
+            "description": "The owner is on the FAA's Limiting Aircraft Data Displayed programme, read from dbFlags bit 8. An attribute, never a display block: per ADR 009 a LADD aircraft resolves and renders like any other, because LADD binds the feeds the FAA itself supplies and every position here comes from volunteer receivers. False means the provider's aircraft database does not flag this airframe, which is not the same as proof it is off the programme.",
+            "title": "On Ladd",
+            "type": "boolean"
+          },
           "operator": {
             "anyOf": [
               {
@@ -159,6 +165,15 @@
             "minimum": 0.0,
             "title": "Position Age S",
             "type": "number"
+          },
+          "providers": {
+            "default": [],
+            "description": "Every provider that saw this aircraft, freshest report first, so the first entry is the one named in source. Empty on a record no merge has touched.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Providers",
+            "type": "array"
           },
           "registered_country": {
             "anyOf": [
@@ -233,7 +248,7 @@
           },
           "uses_privacy_address": {
             "default": false,
-            "description": "Aircraft is broadcasting a privacy ICAO address. Not resolvable to an owner by design; we do not attempt to unmask it.",
+            "description": "Aircraft is broadcasting a privacy ICAO address, so the address it sends is not tied to its registration. Carried as-is at this phase, flagged and unresolved. Per ADR 009 correlation back to a registration is phase 11, above a threshold set higher than an ordinary registry join, and the flag stays on the record afterwards so a card can say the identification is inferred.",
             "title": "Uses Privacy Address",
             "type": "boolean"
           },
@@ -263,7 +278,7 @@
         "type": "object"
       },
       "AircraftClass": {
-        "description": "How we classify an aircraft for display purposes.\n\nDerived, not broadcast. ``MILITARY`` comes from the feed's own database flag;\n``BUSINESS_JET`` from the type designator; ``ANONYMOUS`` marks an aircraft using a\nprivacy ICAO address, which we display as anonymous by design and never attempt to\nresolve to an owner.",
+        "description": "How we classify an aircraft for display purposes.\n\nDerived, not broadcast. ``MILITARY`` comes from the feed's own database flag;\n``BUSINESS_JET`` from the type designator; ``ANONYMOUS`` marks an aircraft using a\nprivacy ICAO address, which displays anonymised at this phase and is correlated back to a\nregistration in phase 11, per ADR 009, above a threshold set higher than an ordinary\nregistry join. The anonymity is never hidden: a correlated card says the identification is\ninferred rather than observed.",
         "enum": [
           "unknown",
           "commercial",
@@ -275,6 +290,214 @@
         ],
         "title": "AircraftClass",
         "type": "string"
+      },
+      "AircraftDetail": {
+        "additionalProperties": false,
+        "description": "One aircraft plus the registry join that produced its ownership, and its provenance.\n\nADR 011 wants every claim to carry where it came from and when, so the join is described\nrather than merged invisibly into the record: ``registry`` names the register that\nanswered, ``joined_at`` dates this join, and ``degraded_reason`` says why there is no\nowner when there is none.\n\n``registry`` is null in two situations that must not be confused. The register answered\nand does not hold the airframe, which is about one live aircraft in five and leaves\n``degraded_reason`` null. Or the register did not answer, which sets it.\n\nNo photograph. adsbdb's photo URL is a hot-link into a third party and AGENTS.md forbids\nhot-linking media, so it stays server side for a proxy that owes its own host allowlist.",
+        "properties": {
+          "aircraft": {
+            "$ref": "#/components/schemas/Aircraft"
+          },
+          "conflicts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RegistryConflict"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          },
+          "degraded_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Degraded Reason"
+          },
+          "joined_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Joined At"
+          },
+          "ownership": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AircraftOwnership"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "registry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry"
+          },
+          "registry_attribution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Attribution"
+          }
+        },
+        "required": [
+          "aircraft"
+        ],
+        "title": "AircraftDetail",
+        "type": "object"
+      },
+      "AircraftOwnership": {
+        "additionalProperties": false,
+        "description": "The ownership spine for one aircraft: registrant, filing entity, and named officers.\n\n**``asserted`` is the decision and the client must read it rather than the number.**\n:func:`tracker.services.spine.asserted_join` is the single place that decides, and it stays\nthe single place: a card applying its own cut-off to ``join.confidence`` is how a card, an\naggregate and this route come to disagree about the same join. The confidence is served\nanyway, because ADR 011 wants the score shown on a possible match, but it is for display\nand never for a decision.\n\n**The basis is not decoration.** ``BASIS_EXACT`` and ``BASIS_CORE`` say different things: one\nis an exact match against the SEC company index, the other is a match after stripping legal\nsuffixes with the parent company unconfirmed. Measured across the whole register, the first\nproduced zero ambiguous matches on 78,140 organisation registrant names and the second\nproduced three, which is why one asserts and the other does not.\n\n**There is no total here on purpose.** A possible match is excluded from every aggregate, so\nthis carries one join and a boolean rather than a count a client might add up.\n\nThe officers are the sensitive half. Their contact fields are separate, tuple-typed and\nempty, so a serializer honouring ``NoContactData`` drops them without touching anything\nelse, and nothing here has to be retrofitted when suppression under ADR 008 lands: the\ncandidate set is built in one place, :func:`_officers`, which is where the check goes.",
+        "properties": {
+          "as_of": {
+            "description": "The register's own extract date. Never the date of the request.",
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "asserted": {
+            "description": "Whether this join may be shown as fact. Read this, not the confidence.",
+            "title": "Asserted",
+            "type": "boolean"
+          },
+          "asset_register": {
+            "description": "Which asset register answered, e.g. ``faa``. Named this rather than ``register`` because that shadows a pydantic attribute and only warns.",
+            "title": "Asset Register",
+            "type": "string"
+          },
+          "degraded_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the officers are missing when there is a join. A filing lookup that fails degrades this to the join alone and never to an error, the same contract the registry join already has.",
+            "title": "Degraded Reason"
+          },
+          "join": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Join"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The link itself, with its basis, source, origin key, confidence and date. ``null`` when nothing matched, and ``refused_reason`` then says why."
+          },
+          "officers": {
+            "default": [],
+            "description": "Named officers and directors of that entity, each from a primary filing. Empty when there is no join, when the entity files none, or when the lookup failed, and ``degraded_reason`` distinguishes the last of those.",
+            "items": {
+              "$ref": "#/components/schemas/Person"
+            },
+            "title": "Officers",
+            "type": "array"
+          },
+          "officers_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the officers were obtained, the parallel to ``join.basis``.",
+            "title": "Officers Basis"
+          },
+          "organisation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Organisation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The filing entity the registrant resolved to. ``null`` when there is no join."
+          },
+          "refused_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why there is no join, in the matcher's own words: the registrant is a natural person, the name is claimed by more than one filing entity, or no filing entity carries it.",
+            "title": "Refused Reason"
+          },
+          "registrant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The owner name as the asset register wrote it, not normalised. A card showing a normalised name would be showing our string rather than the register's. ``null`` when the register was read and does not hold this airframe, which ``refused_reason`` then states.",
+            "title": "Registrant"
+          },
+          "registrant_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "person",
+                  "organisation",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the register says the registrant is. A person is never name-matched, on measured evidence: of 23 owner names that looked like natural people, two returned any candidate at all and both were wrong.",
+            "title": "Registrant Kind"
+          },
+          "wealth_tier_reason": {
+            "default": "Wealth tier not established: no keyless public source publishes one.",
+            "description": "Why every officer's wealth tier is empty. Carried rather than omitted: an absent field reads as an oversight and an empty one with a stated reason reads as a finding.",
+            "title": "Wealth Tier Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "asset_register",
+          "as_of",
+          "asserted"
+        ],
+        "title": "AircraftOwnership",
+        "type": "object"
       },
       "AircraftSnapshot": {
         "additionalProperties": false,
@@ -301,11 +524,31 @@
       },
       "AttributionEntry": {
         "additionalProperties": false,
-        "description": "One licence credit the UI is required to display.",
+        "description": "One licence credit the UI is required to display.\n\n**A row is compliant, not a field.** 183 transit credits are served as 8 rows, and that\ncollapse is only honest because a row names every owner in ``operators``, links the terms\nbinding each of them, and carries in ``as_of`` the date Etalab 2.0 demands. ``text`` is the\nheadline sentence; on its own it discharges the single-source rows and not the grouped\nones, because no static string can carry a per-request date.",
         "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
           "licence": {
             "title": "Licence",
             "type": "string"
+          },
+          "operators": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CreditedOperatorEntry"
+            },
+            "title": "Operators",
+            "type": "array"
           },
           "source": {
             "title": "Source",
@@ -329,9 +572,29 @@
         "title": "AttributionEntry",
         "type": "object"
       },
+      "CacheSweep": {
+        "additionalProperties": false,
+        "description": "One cache a removal emptied, and how much went.\n\nThe count is not attributable to the person: a sweep cannot know which entries were theirs,\nwhich is why it is a sweep. It is here so that \"did the removal reach everything\" has an\nanswer.",
+        "properties": {
+          "cache": {
+            "title": "Cache",
+            "type": "string"
+          },
+          "entries_cleared": {
+            "title": "Entries Cleared",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cache",
+          "entries_cleared"
+        ],
+        "title": "CacheSweep",
+        "type": "object"
+      },
       "Capabilities": {
         "additionalProperties": false,
-        "description": "What this deployment can actually do, given its configuration.",
+        "description": "What this deployment can actually do, given its configuration.\n\nNo Cesium ion token, and there is nothing here for one to go in. The globe is built\nfrom keyless imagery served through us, Cesium's own library and assets come from our\norigin, and the token Cesium 1.144 bundles is blanked in the browser\n(``frontend/src/globe/viewer.ts``). A field here would be a field asking for a key.",
         "properties": {
           "attribution": {
             "items": {
@@ -340,22 +603,27 @@
             "title": "Attribution",
             "type": "array"
           },
-          "cesium_ion_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cesium Ion Token"
-          },
           "layers": {
             "items": {
               "$ref": "#/components/schemas/LayerCapability"
             },
             "title": "Layers",
+            "type": "array"
+          },
+          "media_types": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Media Types",
+            "type": "array"
+          },
+          "suppressions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Suppression"
+            },
+            "title": "Suppressions",
             "type": "array"
           }
         },
@@ -364,6 +632,271 @@
           "attribution"
         ],
         "title": "Capabilities",
+        "type": "object"
+      },
+      "City": {
+        "additionalProperties": false,
+        "description": "One populated place from the GeoNames ``cities15000`` bulk file.\n\nImmutable, like every other domain contract here, and for a stronger reason: the whole\nfile is loaded once into a read-only in-memory index that answers search with zero\nnetwork calls, and a mutable row would let a caller edit the index underneath the next\nreader.",
+        "properties": {
+          "admin1_code": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "First-order administrative division, empty on 25 rows. A code, not a display name, and not always a FIPS code either: the US, Switzerland, Belgium and Montenegro use ISO codes, and the UK and Greece insert an extra level, so London GB carries ENG. Rendering it as a region name needs GeoNames' separate admin1Codes.txt, which this project does not fetch.",
+            "title": "Admin1 Code"
+          },
+          "ascii_name": {
+            "description": "The same name transliterated to ASCII by GeoNames. Differs from name on 7,085 rows, and it is the provider's transliteration rather than a mechanical one: K\u00f6ln becomes Koeln, not Koln. Indexed alongside name so both spellings resolve.",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Ascii Name",
+            "type": "string"
+          },
+          "country_code": {
+            "description": "ISO 3166-1 alpha-2, present on every row.",
+            "pattern": "^[A-Z]{2}$",
+            "title": "Country Code",
+            "type": "string"
+          },
+          "elevation_m": {
+            "anyOf": [
+              {
+                "maximum": 9000.0,
+                "minimum": -500.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Metres above mean sea level, the provider's own integer, absent on 29,612 of 34,099 rows. Measured range in the file is -34 to 3,831. Absent means absent: there is no fallback, see the module docstring on dem.",
+            "title": "Elevation M"
+          },
+          "feature_code": {
+            "description": "GeoNames feature code, e.g. PPLC for a national capital, PPL for a plain populated place, PPLA2 for a second-order administrative seat. 17 distinct values in the file and one of them is STLMT rather than PPL-prefixed, so this is not pattern-constrained. PPLH, PPLQ and PPLW mean historical, abandoned and destroyed; those 27 rows never reach this contract, see sources/geonames.py.",
+            "maxLength": 10,
+            "minLength": 1,
+            "title": "Feature Code",
+            "type": "string"
+          },
+          "geonames_id": {
+            "description": "GeoNames' own integer id, the merge key. Catalogue numbers have run past seven digits: the recorded Pechersk row is 13535745.",
+            "minimum": 1.0,
+            "title": "Geonames Id",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "city",
+            "default": "city",
+            "title": "Kind",
+            "type": "string"
+          },
+          "modification_date": {
+            "description": "When GeoNames last changed the row. A bare date, not a timestamp: there is no time and no zone anywhere in the file, so this is a date rather than a UtcDatetime and no midnight is invented. Range across the file is 2006-01-15 to 2026-08-18.",
+            "format": "date",
+            "title": "Modification Date",
+            "type": "string"
+          },
+          "name": {
+            "description": "The place name as GeoNames publishes it, UTF-8. Longest in the file is 57 characters; the bound is the provider's own varchar(200). Already the English name for most large cities (Munich, Rome, Tokyo, Moscow) but not all (K\u00f6ln stays K\u00f6ln).",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "point": {
+            "$ref": "#/components/schemas/Point",
+            "description": "City centre, longitude first. altitude_m is left unset: elevation below is metres above mean sea level as the provider gives it, and this project's altitudes are metres above the WGS84 ellipsoid. The two differ by up to about 100 metres, so copying one into the other would be a quiet lie. Cesium clamps the label to terrain anyway."
+          },
+          "population": {
+            "description": "The provider's figure, and the search ranking key. Never empty, but 3 rows report 0 and 45 rows sit below the file's own 15,000 threshold because capitals are included regardless of size. Largest in the file is 24,874,500.",
+            "minimum": 0.0,
+            "title": "Population",
+            "type": "integer"
+          },
+          "timezone": {
+            "description": "IANA timezone id, present on every row. 356 distinct values, all containing a slash.",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "geonames_id",
+          "name",
+          "ascii_name",
+          "point",
+          "feature_code",
+          "country_code",
+          "population",
+          "timezone",
+          "modification_date"
+        ],
+        "title": "City",
+        "type": "object"
+      },
+      "CitySnapshot": {
+        "additionalProperties": false,
+        "description": "Cities from the local gazetteer, biggest first, optionally inside a bounding box.\n\n``total`` is how many matched before the limit was applied, so a capped read says so\nrather than reading as everything the server holds. It answers a different question from\n``count`` whenever the two differ, and a client that needs the rest asks with a box.",
+        "properties": {
+          "cities": {
+            "items": {
+              "$ref": "#/components/schemas/City"
+            },
+            "title": "Cities",
+            "type": "array"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "total",
+          "cities"
+        ],
+        "title": "CitySnapshot",
+        "type": "object"
+      },
+      "Claim": {
+        "additionalProperties": false,
+        "description": "One attribute value, and everything needed to decide whether to believe it.\n\nFrozen and strict like every other contract here. A claim with no date does not exist:\nADR 006 drops an undated entry at the adapter and counts it, and that rule is enforced by\n``as_of`` being required rather than by a check somewhere downstream.",
+        "properties": {
+          "as_of": {
+            "description": "The source's own date, never the date of the run that read it. A Form 4 is dated to its period of report, a registry extract to its extract date. ADR 015 says the same thing about media: the timestamp comes from the thing, not the fetch.",
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "confidence": {
+            "description": "How strongly this is believed. Decomposable by whatever produced it: a card saying 'possible match, 0.62' is useless, one saying which fields agreed is the product.",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "derived": {
+            "default": false,
+            "description": "True when produced by joining sources rather than read from one, per ADR 006. The label reaches the card and the API.",
+            "title": "Derived",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SourceKind",
+            "description": "Primary, report or crowd. Only primary may assert alone."
+          },
+          "origin_key": {
+            "description": "What makes two claims the same source. An SEC accession number, a registry snapshot date plus record id, a Wikidata reference URL. Two claims sharing an origin key are one source however many adapters produced them, and corroboration counts them once.",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Origin Key",
+            "type": "string"
+          },
+          "pii": {
+            "default": false,
+            "description": "True for contact attributes, so a profile can be served with them suppressed. ADR 008 sells that exclusion as NoContactData and NoPII, so it is a demo feature rather than plumbing.",
+            "title": "Pii",
+            "type": "boolean"
+          },
+          "source": {
+            "description": "The adapter's name for where this came from, e.g. ``sec-form4``.",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "value": {
+            "description": "What is claimed, as the source said it. Never normalised for display, because ADR 011 forbids corroboration narrowing a value beyond what the strongest single source actually said.",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "as_of",
+          "source",
+          "origin_key",
+          "kind",
+          "confidence"
+        ],
+        "title": "Claim",
+        "type": "object"
+      },
+      "CreditedOperatorEntry": {
+        "additionalProperties": false,
+        "description": "One data owner inside a grouped credit, with the terms binding that owner alone.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "url"
+        ],
+        "title": "CreditedOperatorEntry",
+        "type": "object"
+      },
+      "DateOfBirth": {
+        "additionalProperties": false,
+        "description": "A date of birth at whatever precision the source actually had.\n\n**Not a ``date``, and that is the point.** Wikidata's ``wdt:P569`` silently widens a\nyear-only date of birth to 1 January, which then reads as a real day and will either\nfalsely match another person born on 1 January or falsely fail to match the right one. The\nCompanies House PSC snapshot gives month and year only, by design, and never a day: a real\nrecord reads ``{\"month\": 2, \"year\": 1947}``.\n\nHolding the precision explicitly means a comparator can only ever compare at the coarser of\ntwo precisions, which is the correct behaviour and is impossible if the value has already\nbeen widened to a day.",
+        "properties": {
+          "day": {
+            "anyOf": [
+              {
+                "maximum": 31.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day"
+          },
+          "month": {
+            "anyOf": [
+              {
+                "maximum": 12.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Month"
+          },
+          "year": {
+            "maximum": 2100.0,
+            "minimum": 1800.0,
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year"
+        ],
+        "title": "DateOfBirth",
         "type": "object"
       },
       "EmergencyState": {
@@ -500,6 +1033,76 @@
         "title": "Health",
         "type": "object"
       },
+      "Join": {
+        "additionalProperties": false,
+        "description": "One link between two records we hold, and how good it is.\n\nSeparate from :class:`Claim` because a join is about two things rather than one, and\nbecause ADR 007 requires a join to carry its source, its confidence and its as-of date\nonto the card. The ``basis`` field is what stops a card implying more than was measured.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "basis": {
+            "description": "How the link was made, in the adapter's own words, e.g. 'exact normalised name match against the SEC company index'. This is what a viewer reads when they ask why two records are connected.",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Basis",
+            "type": "string"
+          },
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "inferred": {
+            "default": false,
+            "description": "True when this link is an inference rather than something a source stated. ADR 012 is explicit: an owned aircraft being airborne is a fact about the aircraft, and 'the owner is aboard' is a different claim. This build never sets this true, and the field exists so that a later one cannot make that claim silently.",
+            "title": "Inferred",
+            "type": "boolean"
+          },
+          "origin_key": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Origin Key",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "target_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_kind": {
+            "description": "What is on the other end. Kept explicit so a card never has to guess.",
+            "enum": [
+              "person",
+              "organisation",
+              "aircraft",
+              "vessel"
+            ],
+            "title": "Target Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id",
+          "target_kind",
+          "basis",
+          "as_of",
+          "source",
+          "origin_key",
+          "confidence"
+        ],
+        "title": "Join",
+        "type": "object"
+      },
       "LayerCapability": {
         "additionalProperties": false,
         "description": "Whether one layer can run, and why not when it cannot.\n\nA merged layer also names its gated providers, as ``vessels/aishub`` and\n``vessels/aisstream``. The layer itself stays available because its keyless providers\ncarry it, and the entry for the gated provider says what is missing. Without that split\na vessel layer serving Baltic ships would read as entirely off.",
@@ -537,6 +1140,7 @@
           "military",
           "vessels",
           "satellites",
+          "transit",
           "events",
           "cameras"
         ],
@@ -567,6 +1171,22 @@
             },
             "title": "Providers",
             "type": "array"
+          },
+          "registries": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RegistryCoverage"
+            },
+            "title": "Registries",
+            "type": "array"
+          },
+          "sweeps": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SweepCoverage"
+            },
+            "title": "Sweeps",
+            "type": "array"
           }
         },
         "required": [
@@ -574,6 +1194,53 @@
           "feeds"
         ],
         "title": "LayerSummary",
+        "type": "object"
+      },
+      "MediaLicence": {
+        "additionalProperties": false,
+        "description": "The rights on one media item, travelling with the item into the domain.\n\nNothing here is optional except the parts that genuinely vary between licences. ``name``\nis required, and that is the load-bearing decision in this module: it makes an unlicensed\nitem impossible to construct, so \"we showed a photograph and could not say whose it was\"\ncannot happen by omission.",
+        "properties": {
+          "attribution_required": {
+            "description": "Whether the licence obliges us to name the author wherever the item is shown. Commons states this per file in 'AttributionRequired' and the two values seen are the strings 'true' and 'false', so the adapter compares strings rather than trusting truthiness, the same trap as TfL's 'available' flag.",
+            "title": "Attribution Required",
+            "type": "boolean"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who to credit, plain text. None when the provider says the author is unknown, which Commons does often and explicitly. Arrives as HTML from Commons ('Unknown author<span style=\"display: none;\">Unknown author</span>' is a real value) and is stripped in the adapter, because a card is not a browser.",
+            "title": "Author"
+          },
+          "name": {
+            "description": "The licence as the provider names it, verbatim: 'CC BY-SA 4.0', 'Public domain'. Never normalised into a scheme of our own, because a card showing a licence has to show the one the item actually carries.",
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Canonical licence text. Absent on public-domain items, which have no deed to link to, so absence here is not a missing value.",
+            "title": "Url"
+          }
+        },
+        "required": [
+          "name",
+          "attribution_required"
+        ],
+        "title": "MediaLicence",
         "type": "object"
       },
       "NavigationalStatus": {
@@ -594,6 +1261,279 @@
         ],
         "title": "NavigationalStatus",
         "type": "string"
+      },
+      "Organisation": {
+        "additionalProperties": false,
+        "description": "A company, government body or other entity that files, registers or owns things.",
+        "properties": {
+          "joins": {
+            "default": [],
+            "description": "Links to assets and people, each with its own basis, date and confidence. A join below the assertion threshold stays here and renders as a possible match.",
+            "items": {
+              "$ref": "#/components/schemas/Join"
+            },
+            "maxItems": 500,
+            "title": "Joins",
+            "type": "array"
+          },
+          "kind": {
+            "default": "organisation",
+            "maxLength": 20,
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "description": "The name as the strongest source gives it, not normalised for matching.",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "organisation_id": {
+            "description": "Our own stable key. ``sec-{cik}`` where the SEC knows it, otherwise ``faa-{normalised name}``, so an organisation reached only through an asset registry still has an identity.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Organisation Id",
+            "type": "string"
+          },
+          "registry_names": {
+            "default": [],
+            "description": "Every string this organisation appears under in an asset register, as that register wrote it. This is what an owner-name match actually joins to.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Registry Names",
+            "type": "array"
+          },
+          "sec_cik": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{10}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Zero-padded to ten digits, as the SEC writes it in a filing. Present only when a primary filing established it, so it is an assertable identifier rather than a guess.",
+            "title": "Sec Cik"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
+          },
+          "wikidata_qid": {
+            "anyOf": [
+              {
+                "pattern": "^Q\\d+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Crowd-sourced, so it never asserts anything on its own. Carried for candidate generation and for a portrait under ADR 013, nothing more.",
+            "title": "Wikidata Qid"
+          }
+        },
+        "required": [
+          "organisation_id",
+          "name"
+        ],
+        "title": "Organisation",
+        "type": "object"
+      },
+      "Person": {
+        "additionalProperties": false,
+        "description": "A natural person. Small assertable core, large honest emptiness.\n\nFrozen and strict like every other contract here, and with one addition that matters more\nthan the rest: nothing on this record may be filled by inference. ADR 008 is explicit that\nwhere a field is empty it is empty, with no default, approximation or inference.",
+        "properties": {
+          "addresses": {
+            "default": [],
+            "description": "PII, and empty. See :data:`ADDRESS_WARNING`: the two address fields public filings carry are the company's and the registrar's, never the person's.",
+            "items": {
+              "$ref": "#/components/schemas/Claim"
+            },
+            "maxItems": 50,
+            "title": "Addresses",
+            "type": "array"
+          },
+          "claims": {
+            "default": [],
+            "description": "Everything softer than a role: dates, places, handles. Each carries its own origin key, and anything not from a primary record renders as a possible match.",
+            "items": {
+              "$ref": "#/components/schemas/Claim"
+            },
+            "maxItems": 500,
+            "title": "Claims",
+            "type": "array"
+          },
+          "companies_house_psc_id": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Companies House Psc Id"
+          },
+          "country_of_residence": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A country, from a PSC record. This is not a residence and must never be widened into one: the PSC statutory address is a service address.",
+            "title": "Country Of Residence"
+          },
+          "date_of_birth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateOfBirth"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "emails": {
+            "default": [],
+            "description": "PII. Empty, because no keyless public source supplies a personal email.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Emails",
+            "type": "array"
+          },
+          "joins": {
+            "default": [],
+            "description": "Links to organisations and assets. A join to an asset is a fact about ownership, never about where this person is.",
+            "items": {
+              "$ref": "#/components/schemas/Join"
+            },
+            "maxItems": 200,
+            "title": "Joins",
+            "type": "array"
+          },
+          "kind": {
+            "default": "person",
+            "maxLength": 20,
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "description": "As the filing wrote it. SEC writes an insider surname first, 'Undersby Quillon', and that form is kept rather than reordered, because reordering guesses which token is the surname and a middle initial defeats the guess.",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "nationality": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nationality"
+          },
+          "person_id": {
+            "description": "Our own stable key, derived from the strongest identifier available: ``sec-{cik}`` or ``psc-{company}-{id}``. Never derived from a name.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Person Id",
+            "type": "string"
+          },
+          "phones": {
+            "default": [],
+            "description": "PII. Empty. 1,497 humans in the whole of Wikidata carry any phone number and those are institutional switchboards.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Phones",
+            "type": "array"
+          },
+          "roles": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Role"
+            },
+            "maxItems": 200,
+            "title": "Roles",
+            "type": "array"
+          },
+          "sec_cik": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{10}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A natural person has their own SEC CIK and it is not a company CIK: the submissions API returns ``entityType: other`` with a surname-first name. It is the stable identifier that makes this whole path work.",
+            "title": "Sec Cik"
+          },
+          "wealth_tier": {
+            "anyOf": [
+              {
+                "enum": [
+                  "UHNW",
+                  "VHNW",
+                  "HNW",
+                  "Likely UHNW",
+                  "Likely VHNW"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Always None in this build. The field exists so the product can say the tier is not established rather than leaving a blank, and so that nothing may quietly start inferring one from an asset. See :data:`WEALTH_TIER_REASON`.",
+            "title": "Wealth Tier"
+          },
+          "wikidata_qid": {
+            "anyOf": [
+              {
+                "pattern": "^Q\\d+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Crowd-sourced. Never asserts, never a match key, carried for candidate generation and for a reference portrait under ADR 013.",
+            "title": "Wikidata Qid"
+          }
+        },
+        "required": [
+          "person_id",
+          "name"
+        ],
+        "title": "Person",
+        "type": "object"
       },
       "Point": {
         "additionalProperties": false,
@@ -632,10 +1572,93 @@
         "title": "Point",
         "type": "object"
       },
+      "PostMedia": {
+        "additionalProperties": false,
+        "description": "One image, video or audio item attached to a post.\n\n``url`` is the provider's own. Nothing in this project hands it to a browser: media is\nproxied and cached server-side, per ADR 005, so this is the address our proxy fetches\nfrom rather than the address a page loads.",
+        "properties": {
+          "dated_by": {
+            "const": "published",
+            "default": "published",
+            "description": "Which timestamp the item's date came from. See :data:`MEDIA_DATED_BY`.",
+            "title": "Dated By",
+            "type": "string"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pixels, when the provider says.",
+            "title": "Height"
+          },
+          "licence": {
+            "$ref": "#/components/schemas/MediaLicence"
+          },
+          "mime": {
+            "description": "Media type as the provider reports it. Carried rather than filtered on, because a geosearch of the Commons file namespace returns audio as readily as photographs: two .ogg interviews came back in the first three results of a London query on 2026-08-23.",
+            "minLength": 1,
+            "title": "Mime",
+            "type": "string"
+          },
+          "preview_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A smaller rendition where the provider offers one. Its stated dimensions are not trustworthy: Commons reports the width that was asked for rather than the width of the bytes it served, so anything measuring this image reads the decoded bytes instead.",
+            "title": "Preview Url"
+          },
+          "url": {
+            "description": "Provider URL for the full item, for our proxy.",
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pixels, when the provider says.",
+            "title": "Width"
+          }
+        },
+        "required": [
+          "url",
+          "mime",
+          "licence"
+        ],
+        "title": "PostMedia",
+        "type": "object"
+      },
       "ProviderCoverage": {
         "additionalProperties": false,
-        "description": "One provider's contribution to a merged layer, for the last cycle.\n\nADR 010 asks for two things this carries. ``exclusive`` is the provider-attributable\ncount, so \"ships only this network can see\" is measured rather than asserted. ``error``\nnames a provider that dropped out, which is how the layer reports itself degraded\ninstead of quietly covering less.\n\nThis is coverage, not corroboration, and the two must not be confused: under R1 in\n``docs/pending-decisions.md`` three providers reporting one ship are still one origin,\nbecause they are repeating one AIS broadcast. Nothing here may be counted as\nindependent sources.",
+        "description": "One provider's contribution to a merged layer, for the last cycle.\n\nADR 010 asks for two things this carries. ``exclusive`` is the provider-attributable\ncount, so \"ships only this network can see\" is measured rather than asserted. ``error``\nnames a provider that dropped out, which is how the layer reports itself degraded\ninstead of quietly covering less.\n\nThe four running totals are the history the per-cycle fields cannot carry. ``records``\nand ``error`` describe this cycle only and are replaced by the next one, so a provider\nthat has answered an empty HTTP 200 every cycle for a week looks exactly like one that\ndid it once. ``failures`` and ``empty_polls`` against ``polls`` are what tell those\napart, and ``drops`` is the records the adapter refused, which ADR 010's \"an error,\ncounted\" needs somewhere a human can read.\n\nThis is coverage, not corroboration, and the two must not be confused: under R1 in\n``docs/pending-decisions.md`` three providers reporting one ship are still one origin,\nbecause they are repeating one AIS broadcast. Nothing here may be counted as\nindependent sources.",
         "properties": {
+          "drops": {
+            "default": 0,
+            "title": "Drops",
+            "type": "integer"
+          },
+          "empty_polls": {
+            "default": 0,
+            "title": "Empty Polls",
+            "type": "integer"
+          },
           "error": {
             "anyOf": [
               {
@@ -651,9 +1674,31 @@
             "title": "Exclusive",
             "type": "integer"
           },
+          "failures": {
+            "default": 0,
+            "title": "Failures",
+            "type": "integer"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
           "layer": {
             "title": "Layer",
             "type": "string"
+          },
+          "polls": {
+            "default": 0,
+            "title": "Polls",
+            "type": "integer"
           },
           "provider": {
             "title": "Provider",
@@ -671,6 +1716,267 @@
           "exclusive"
         ],
         "title": "ProviderCoverage",
+        "type": "object"
+      },
+      "RefusedRecords": {
+        "additionalProperties": false,
+        "description": "One reason the adapter refused records, and how many it has refused for it.\n\n**Deliberately not a** :class:`ProviderCoverage`. That model answers \"how many records did\nonly this provider see\", which has no meaning for a reason: it has no records and nothing is\nexclusive to it. Borrowing the shape put rows on ``/api/layers`` reading ``records: 0`` and\n``exclusive: 0``, and the layer rail then rendered \"report older than 5 minutes only: 0\",\nwhich is not a statement about anything. A reason and a count is the whole of it.",
+        "properties": {
+          "count": {
+            "description": "How many records, cumulative since start-up.",
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "reason": {
+            "description": "The adapter's own words for why the records were refused.",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "count"
+        ],
+        "title": "RefusedRecords",
+        "type": "object"
+      },
+      "RegistryConflict": {
+        "additionalProperties": false,
+        "description": "One attribute where the registry disagreed with the feed. Both values are shown.\n\nNothing is silently overwritten and nothing is combined. The feed keeps the attribute\nbecause its value is dated and the registry's is not (adsbdb carries no as-of date at\nall), and the registry's value is carried here so the card can show the disagreement.\n\nIt happens on real records rather than in theory. The Gulfstream G650 in\n``tests/fixtures/adsbdb_ab374c_live.json`` reads ``GLF6`` off the feed, which is its ICAO\nDoc 8643 designator, and ``G650`` off adsbdb, which is not a designator at all.",
+        "properties": {
+          "attribute": {
+            "title": "Attribute",
+            "type": "string"
+          },
+          "feed_value": {
+            "title": "Feed Value",
+            "type": "string"
+          },
+          "registry_value": {
+            "title": "Registry Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "attribute",
+          "feed_value",
+          "registry_value"
+        ],
+        "title": "RegistryConflict",
+        "type": "object"
+      },
+      "RegistryCoverage": {
+        "additionalProperties": false,
+        "description": "One registry's enrichment outcomes since start-up, for the same reason as a provider's.\n\nThe counts exist because an :class:`~tracker.services.enrich.Enriched` describes one card\nopen and is then thrown away, so a registry that has failed every lookup since start-up\nlooks exactly like one that failed the last one. ``unmappable`` is the drop-and-count rule\none layer up from the adapters: the registry answered and the domain contract would not\ntake it, which is a different fault from the registry not answering.\n\nDemand-driven, so these move when cards are opened rather than on a cadence. A registry\nwith ``requests`` at zero has not been asked yet, which is not the same as healthy.",
+        "properties": {
+          "conflicts": {
+            "title": "Conflicts",
+            "type": "integer"
+          },
+          "enriched": {
+            "title": "Enriched",
+            "type": "integer"
+          },
+          "failures": {
+            "title": "Failures",
+            "type": "integer"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "not_held": {
+            "title": "Not Held",
+            "type": "integer"
+          },
+          "registry": {
+            "title": "Registry",
+            "type": "string"
+          },
+          "requests": {
+            "title": "Requests",
+            "type": "integer"
+          },
+          "unmappable": {
+            "title": "Unmappable",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "registry",
+          "requests",
+          "enriched",
+          "not_held",
+          "failures",
+          "unmappable",
+          "conflicts"
+        ],
+        "title": "RegistryCoverage",
+        "type": "object"
+      },
+      "RemovalRequest": {
+        "additionalProperties": false,
+        "description": "What a caller sends. Neither field can carry a name.",
+        "properties": {
+          "person_id": {
+            "description": "The record's own key, `sec-{cik}` or `psc-{company}-{id}`. The contract derives it from the strongest identifier available and never from a name, which is why this endpoint can take it. Whitespace is refused because a person_id has none and a name almost always does.",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "title": "Person Id",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why, from the enumeration. There is deliberately no free-text field.",
+            "enum": [
+              "requested_by_subject",
+              "reported_in_product",
+              "operator_removed"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "person_id",
+          "reason"
+        ],
+        "title": "RemovalRequest",
+        "type": "object"
+      },
+      "RemovalResponse": {
+        "additionalProperties": false,
+        "description": "What the removal did, in terms that name nobody.",
+        "properties": {
+          "already_suppressed": {
+            "description": "Whether it was already suppressed before this call. Not a failure.",
+            "title": "Already Suppressed",
+            "type": "boolean"
+          },
+          "reason": {
+            "enum": [
+              "requested_by_subject",
+              "reported_in_product",
+              "operator_removed"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "suppressed": {
+            "description": "True once the record is suppressed. Never false on 200.",
+            "title": "Suppressed",
+            "type": "boolean"
+          },
+          "suppressed_at": {
+            "description": "When it was first suppressed, which is when the person asked rather than when a retry arrived.",
+            "format": "date-time",
+            "title": "Suppressed At",
+            "type": "string"
+          },
+          "swept": {
+            "items": {
+              "$ref": "#/components/schemas/CacheSweep"
+            },
+            "title": "Swept",
+            "type": "array"
+          },
+          "total_suppressed": {
+            "description": "How many records are suppressed in total, for the product to show.",
+            "title": "Total Suppressed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "suppressed",
+          "already_suppressed",
+          "reason",
+          "suppressed_at",
+          "swept",
+          "total_suppressed"
+        ],
+        "title": "RemovalResponse",
+        "type": "object"
+      },
+      "Role": {
+        "additionalProperties": false,
+        "description": "One person's stated relationship to one organisation, from a filing.\n\nEvery field here comes off a Form 3, 4 or 5 or a PSC record. Nothing is inferred, and the\nbooleans are the filing's own flags rather than something derived from a job title.",
+        "properties": {
+          "as_of": {
+            "description": "``periodOfReport`` from the filing, or ``notified_on`` from a PSC record. The source's own date.",
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "is_director": {
+            "default": false,
+            "title": "Is Director",
+            "type": "boolean"
+          },
+          "is_officer": {
+            "default": false,
+            "title": "Is Officer",
+            "type": "boolean"
+          },
+          "is_ten_percent_owner": {
+            "default": false,
+            "title": "Is Ten Percent Owner",
+            "type": "boolean"
+          },
+          "organisation_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Organisation Id",
+            "type": "string"
+          },
+          "organisation_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Organisation Name",
+            "type": "string"
+          },
+          "origin_key": {
+            "description": "Accession number for an SEC filing. Two adapters reading one filing share this and count as one source.",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Origin Key",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "``officerTitle`` as filed, e.g. 'SVP, GC and Secretary'. Absent on a director-only filing, which is normal rather than missing data.",
+            "title": "Title"
+          }
+        },
+        "required": [
+          "organisation_id",
+          "organisation_name",
+          "as_of",
+          "source",
+          "origin_key"
+        ],
+        "title": "Role",
         "type": "object"
       },
       "Satellite": {
@@ -902,6 +2208,634 @@
         "title": "SatelliteSnapshot",
         "type": "object"
       },
+      "SearchGroup": {
+        "additionalProperties": false,
+        "description": "The hits of one type, best first.\n\n``unavailable_reason`` is what stops a degraded group reading as an empty world. Set when\nthe group could not be consulted at all; ``None`` with no hits means it was consulted and\nmatched nothing.",
+        "properties": {
+          "hits": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SearchHit"
+            },
+            "title": "Hits",
+            "type": "array"
+          },
+          "name": {
+            "$ref": "#/components/schemas/SearchGroupName"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "SearchGroup",
+        "type": "object"
+      },
+      "SearchGroupName": {
+        "enum": [
+          "aircraft",
+          "vessels",
+          "satellites",
+          "cities",
+          "places"
+        ],
+        "type": "string"
+      },
+      "SearchHit": {
+        "additionalProperties": false,
+        "description": "One thing the query resolved to, ready to render in a grouped typeahead.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Second line: the identifiers or the country and population that tell two same-named results apart.",
+            "title": "Detail"
+          },
+          "entity_id": {
+            "description": "The identity the rest of the system knows this by: an ICAO 24-bit address, an MMSI, a NORAD catalogue number, a GeoNames id, or an OSM type and id. What the frontend uses to open the card, so it is the store's key and never a generated one.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "group": {
+            "$ref": "#/components/schemas/SearchGroupName"
+          },
+          "label": {
+            "description": "What to show, one line.",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "point": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where to fly the camera. None for a satellite, whose position is propagated in the browser from its element set and is not a field on the record."
+          },
+          "score": {
+            "description": "Match quality, 1.0 for an exact identifier. Ordering inside a group is the order of the tuple, not this number alone: equal scores are already broken by population for cities and by freshness for movers.",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "group",
+          "entity_id",
+          "label",
+          "score"
+        ],
+        "title": "SearchHit",
+        "type": "object"
+      },
+      "SearchResponse": {
+        "additionalProperties": false,
+        "description": "Everything one query resolved to, groups ordered by their best hit.",
+        "properties": {
+          "groups": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SearchGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "query": {
+            "description": "The query as asked, whitespace trimmed.",
+            "maxLength": 200,
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SearchResponse",
+        "type": "object"
+      },
+      "SocialPost": {
+        "additionalProperties": false,
+        "description": "One post, with a position that states where it came from.\n\nThe identity is ``(source, post_id)``. Neither alone is unique: two instances mint their\nown ids, and one instance reuses none.",
+        "properties": {
+          "author_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The author's handle, and per ADR 005 the only author data stored, because attribution requires it and nothing else does. None on Commons, where the uploader is a wiki username rather than a handle and is carried on the item's licence as its author instead.",
+            "title": "Author Handle"
+          },
+          "coordinate_shared_by": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many files in the same response carried this exact coordinate, when more than one did. Set only on a `derived` post, and it is the evidence for that classification in place of a matched phrase: a coordinate several files share was copied rather than observed. Absent on a post whose coordinate is its own.",
+            "title": "Coordinate Shared By"
+          },
+          "kind": {
+            "const": "social_post",
+            "default": "social_post",
+            "title": "Kind",
+            "type": "string"
+          },
+          "location_basis": {
+            "enum": [
+              "upstream",
+              "derived"
+            ],
+            "title": "Location Basis",
+            "type": "string"
+          },
+          "location_phrase": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The words the position was resolved from, shown on the card as ADR 005 requires so that a reader can see the derivation and judge it. Required when `location_basis` is 'derived' and forbidden when it is 'upstream'.",
+            "title": "Location Phrase"
+          },
+          "media": {
+            "default": [],
+            "description": "Attached media that carried a determinable licence. Anything else was dropped and counted by the adapter, which is why this is never a tuple of items with unknown rights.",
+            "items": {
+              "$ref": "#/components/schemas/PostMedia"
+            },
+            "title": "Media",
+            "type": "array"
+          },
+          "place_name": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The gazetteer place the phrase matched, so the card can say 'mentioned London' rather than showing bare coordinates. Same rule as `location_phrase`.",
+            "title": "Place Name"
+          },
+          "point": {
+            "$ref": "#/components/schemas/Point",
+            "description": "Where the post's subject is. Required, because a post whose location cannot be established is dropped by the adapter rather than carried without one."
+          },
+          "post_id": {
+            "description": "The provider's own id, verbatim. Unique within `source` and not beyond it.",
+            "minLength": 1,
+            "title": "Post Id",
+            "type": "string"
+          },
+          "posted_at": {
+            "description": "When the post was published. Never when we fetched it, and never a capture date: for a Commons file this is the upload time, which is the moment the thing became a post.",
+            "format": "date-time",
+            "title": "Posted At",
+            "type": "string"
+          },
+          "retrieved_at": {
+            "description": "When we fetched it, for staleness. Distinct from `posted_at` on purpose.",
+            "format": "date-time",
+            "title": "Retrieved At",
+            "type": "string"
+          },
+          "source": {
+            "description": "Which upstream this came from, as that upstream is named in docs/data-sources.md: 'commons', or the Mastodon instance host such as 'mas.to'. The instance rather than 'mastodon', because instances are configuration and one refusing us is a different fact from the layer being down.",
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "text": {
+            "description": "The post's words, HTML stripped. May be empty: a geotagged Commons file with no description is still a post about a place, and an empty string is the true value rather than a reason to drop it.",
+            "title": "Text",
+            "type": "string"
+          },
+          "url": {
+            "description": "Link to the original, which attribution needs and which is the only way a viewer can check what we made of it.",
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "post_id",
+          "url",
+          "posted_at",
+          "text",
+          "point",
+          "location_basis",
+          "retrieved_at"
+        ],
+        "title": "SocialPost",
+        "type": "object"
+      },
+      "SocialSnapshot": {
+        "additionalProperties": false,
+        "description": "Posts near a place, and an honest account of how far we looked.\n\n``searched_radius_m`` against ``box_radius_m`` is the pair that matters. When the first is\nsmaller, the answer covers the middle of the requested box and nothing further out, and a\nclient that ignored the difference would render partial coverage as a thin scatter.",
+        "properties": {
+          "box_radius_m": {
+            "title": "Box Radius M",
+            "type": "integer"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "derived_as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Derived As Of"
+          },
+          "notices": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Notices",
+            "type": "array"
+          },
+          "posts": {
+            "items": {
+              "$ref": "#/components/schemas/SocialPost"
+            },
+            "title": "Posts",
+            "type": "array"
+          },
+          "searched_radius_m": {
+            "title": "Searched Radius M",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "posts",
+          "searched_radius_m",
+          "box_radius_m"
+        ],
+        "title": "SocialSnapshot",
+        "type": "object"
+      },
+      "SourceKind": {
+        "description": "What sort of thing said this, which is what decides whether it may assert alone.",
+        "enum": [
+          "primary",
+          "report",
+          "crowd"
+        ],
+        "title": "SourceKind",
+        "type": "string"
+      },
+      "Suppression": {
+        "additionalProperties": false,
+        "description": "One suppression, as the product is allowed to see it.\n\nCarries no identity of any kind, and that is not an omission: the whole point is that the\nproduct can say \"one person record was removed on request\" without being able to say whose.\nA field here naming the subject would defeat the module.",
+        "properties": {
+          "reason": {
+            "enum": [
+              "requested_by_subject",
+              "reported_in_product",
+              "operator_removed"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "suppressed_at": {
+            "format": "date-time",
+            "title": "Suppressed At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "suppressed_at"
+        ],
+        "title": "Suppression",
+        "type": "object"
+      },
+      "SweepCoverage": {
+        "additionalProperties": false,
+        "description": "One adapter sweeping a registry of many feeds, rather than polling one endpoint.\n\nCarries what the last pass did and what the adapter has refused since start-up.\n\nSeparate from :class:`ProviderCoverage` because a sweep is not a poll of a provider. The\ntransit adapter reads 258 feeds across 52 hosts, each host with its own cadence floor, so\nthe interesting numbers are how many feeds were read, how many confirmed themselves\nunchanged with a 304, how many were held back inside a floor and how many could not be\nread. Reporting those as a provider's ``polls`` and ``empty_polls`` produced 175 against 83,\nwhich cannot both be true of one provider and was in fact feeds out of a 258-feed registry.\n\n**``unchanged`` is not a failure and must never be folded into one.** A host answering 304\nhas confirmed its held records still stand, and roughly 55% of this layer's traffic is 304s,\nso treating them as empty answers would report a working conditional request as a dead feed.\n\n**``skipped`` is not a failure either.** A 30-second poller against floors of 30, 120 and\n350 seconds skips most of the registry on most passes, and that is the rate discipline\nworking rather than anything going wrong.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why feeds failed on the last pass, or null when none did.",
+            "title": "Error"
+          },
+          "failed": {
+            "description": "Feeds that could not be read at all on the last pass.",
+            "title": "Failed",
+            "type": "integer"
+          },
+          "feeds": {
+            "description": "Feeds in the registry this adapter may read.",
+            "title": "Feeds",
+            "type": "integer"
+          },
+          "layer": {
+            "title": "Layer",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "read": {
+            "description": "Feeds actually fetched on the last pass.",
+            "title": "Read",
+            "type": "integer"
+          },
+          "records": {
+            "description": "Vehicles currently held from this adapter.",
+            "title": "Records",
+            "type": "integer"
+          },
+          "refused": {
+            "default": [],
+            "description": "Why records were refused, cumulative since start-up, **non-zero reasons only**. A reason that has never fired is not information, and filtering it at the presenter instead would leave the wrong shape underneath for every other client.",
+            "items": {
+              "$ref": "#/components/schemas/RefusedRecords"
+            },
+            "title": "Refused",
+            "type": "array"
+          },
+          "skipped": {
+            "description": "Feeds held back inside their host's cadence floor.",
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "unchanged": {
+            "description": "Feeds that answered 304, confirming their held records.",
+            "title": "Unchanged",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "layer",
+          "provider",
+          "feeds",
+          "read",
+          "unchanged",
+          "skipped",
+          "failed",
+          "records"
+        ],
+        "title": "SweepCoverage",
+        "type": "object"
+      },
+      "TransitSnapshot": {
+        "additionalProperties": false,
+        "description": "Every transit vehicle currently held, optionally filtered to a viewport.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "vehicles": {
+            "items": {
+              "$ref": "#/components/schemas/TransitVehicle"
+            },
+            "title": "Vehicles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "vehicles"
+        ],
+        "title": "TransitSnapshot",
+        "type": "object"
+      },
+      "TransitVehicle": {
+        "additionalProperties": false,
+        "description": "A bus, tram, train or ferry at a moment, as one feed reported it.\n\nFrozen and strict like every other domain contract here. Required fields are only the\nones without which the record is worthless: an identity, a place, a time, and the licence\nthat lets us show it at all.",
+        "properties": {
+          "bearing": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 360.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Degrees clockwise from true north, matching the reference and this project's convention. Normalised in the adapter: 470 vehicles reported a negative bearing and 18 reported exactly 360.0 on 2026-08-23, so a strict 0 <= x < 360 field fed the raw value would reject 490 real records. Exact 360.0 maps to None, the same treatment Digitraffic's cog of 360.0 already gets.",
+            "title": "Bearing"
+          },
+          "country": {
+            "description": "ISO 3166-1 alpha-2, from the registry rather than from the feed. The Mobility Database's own country column is wrong on the largest feed in the set, so the registry's values were checked against the vehicles' measured positions and corrected. See sources/gtfsrt.py.",
+            "pattern": "^[A-Z]{2}$",
+            "title": "Country",
+            "type": "string"
+          },
+          "entity_id": {
+            "description": "``FeedEntity.id``, unique within its feed by specification. The other half of the merge key. Present on 16,535 of 16,535 vehicles measured, which is why it is required here while vehicle_id is not.",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "feed_id": {
+            "description": "Which feed published this, as the committed registry names it. Half of the merge key, and the half that stops two agencies' bus number 1 becoming one bus.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Feed Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "transit",
+            "default": "transit",
+            "title": "Kind",
+            "type": "string"
+          },
+          "licence": {
+            "description": "The licence this record travels under, e.g. ``ODbL 1.0``. Required, not optional: this project drops an item whose licence cannot be determined, so a record that reached the contract has one, and it has to reach the card rather than living only on the layer.",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Licence",
+            "type": "string"
+          },
+          "observed_at": {
+            "description": "When the position was measured, not when we fetched it. POSIX seconds on every feed measured, with no millisecond variant anywhere, which is the opposite of ADS-B where adsb.lol is milliseconds and adsb.fi is seconds under the same field name. Checked on 2026-08-23 across 247 feeds and recorded so the next reader does not assume the ADS-B trap applies here.",
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "occupancy": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How full the vehicle is, as the GTFS-Realtime OccupancyStatus enum names it, e.g. ``MANY_SEATS_AVAILABLE``. Present on 18.3%.",
+            "title": "Occupancy"
+          },
+          "point": {
+            "$ref": "#/components/schemas/Point",
+            "description": "Where the vehicle is, longitude first. GTFS-Realtime sends latitude first as separate Position.latitude and Position.longitude floats, so the adapter flips. altitude_m is left unset: the feed reports none and inventing ground level would be a fabricated value."
+          },
+          "position_age_s": {
+            "description": "Seconds between the fix and the sweep that read it. Present for the same reason it is on the vessel contract: a frozen feed is the hardest failure to see. Sixteen feeds returned identical positions ten minutes apart on 2026-08-23 with HTTP 200, and one of them had a newest record 908 days old.",
+            "minimum": 0.0,
+            "title": "Position Age S",
+            "type": "number"
+          },
+          "route_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Route as the operator's static GTFS names it, present on 80.7%. Not a route name: resolving it needs that operator's routes.txt, which we do not fetch.",
+            "title": "Route Id"
+          },
+          "source": {
+            "description": "The operator that published the feed, for the card and the credit.",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "speed_ms": {
+            "anyOf": [
+              {
+                "maximum": 50.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Metres per second, present on 39.9% and believed only below MAX_PLAUSIBLE_SPEED_MS. See that constant for the four feeds that made the bound necessary.",
+            "title": "Speed Ms"
+          },
+          "timestamp_basis": {
+            "description": "Which clock observed_at came from. ``vehicle`` is the record's own VehiclePosition.timestamp, true for 99.2% of vehicles. ``feed`` means the record carried none and the FeedHeader timestamp was used instead, which dates every vehicle in that message to the same instant and is a weaker claim. The card says which, because a rider told the bus is 'now' when the feed only knows the batch is 'now' has been told something the source did not say.",
+            "enum": [
+              "vehicle",
+              "feed"
+            ],
+            "title": "Timestamp Basis",
+            "type": "string"
+          },
+          "trip_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The scheduled trip being run, present on 90.5%. Absent between trips, which is exactly why it is not part of the merge key.",
+            "title": "Trip Id"
+          },
+          "vehicle_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The operator's own vehicle number. Present on 85.3% of vehicles and never a key here, for the reason in this module's docstring. A display and diagnostic field only.",
+            "title": "Vehicle Id"
+          },
+          "vehicle_label": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The number shown to riders on the vehicle, present on 76.9%. Often differs from vehicle_id, which is the internal fleet number.",
+            "title": "Vehicle Label"
+          }
+        },
+        "required": [
+          "feed_id",
+          "entity_id",
+          "point",
+          "observed_at",
+          "timestamp_basis",
+          "position_age_s",
+          "source",
+          "licence",
+          "country"
+        ],
+        "title": "TransitVehicle",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -1104,6 +3038,15 @@
             "title": "Position Age S",
             "type": "number"
           },
+          "providers": {
+            "default": [],
+            "description": "Every provider that saw this ship, freshest report first, so the first entry is the one named in source. Empty on a record no merge has touched.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Providers",
+            "type": "array"
+          },
           "rate_of_turn_deg_per_min": {
             "anyOf": [
               {
@@ -1133,7 +3076,7 @@
             "title": "Ship Type"
           },
           "source": {
-            "description": "Which provider supplied this record, e.g. digitraffic. Per ADR 010 this is per record and never per layer: a merged store that cannot say which network saw a given ship is unauditable. The full list of providers that saw it rides on the merge result in services/union.py, and under R1 in docs/pending-decisions.md that list is still one origin for corroboration.",
+            "description": "Which provider supplied this record, e.g. digitraffic.",
             "maxLength": 40,
             "minLength": 1,
             "title": "Source",
@@ -1367,7 +3310,7 @@
     },
     "/api/aircraft/{icao24}": {
       "get": {
-        "description": "One aircraft by ICAO address, from either store. ``null`` when not currently seen.",
+        "description": "One aircraft by ICAO address, joined to the registry. ``null`` when not seen.\n\n**This is the card path, and it is the only place enrichment happens.** A card asks\nabout one aircraft and the registry is asked about that one aircraft, because adsbdb's\nlimiter allows 512 requests a minute per IP and a live layer is thousands of records a\ncycle. Sweeping the layer would be throttled inside the first poll and would tell us\nnothing the card needs.\n\nA registry that does not answer degrades this to feed-only data and never to an error, so\nthe aircraft still renders with its position, callsign, type and class. Per ADR 009 the\nLADD flag changes nothing here: a LADD aircraft resolves to its owner and comes back like\nany other.",
         "operationId": "get_aircraft_api_aircraft__icao24__get",
         "parameters": [
           {
@@ -1387,7 +3330,7 @@
                 "schema": {
                   "anyOf": [
                     {
-                      "$ref": "#/components/schemas/Aircraft"
+                      "$ref": "#/components/schemas/AircraftDetail"
                     },
                     {
                       "type": "null"
@@ -1438,6 +3381,175 @@
         ]
       }
     },
+    "/api/cities": {
+      "get": {
+        "description": "Populated places above 15,000 people, from the local GeoNames index.\n\nReads no network and never can: the gazetteer holds no HTTP client. It is not a\ntime-to-live store either, so a city that was here at start-up is still here an hour\nlater without anything writing it back.\n\nOrdered by population descending with the GeoNames id breaking ties, which is what makes\na capped read useful: the first page is the cities a world view labels, and a bounding box\nis how a client reaches the smaller ones. Empty until the weekly refresh has run once,\nwhich ``/api/capabilities`` reports as unavailable with the reason rather than leaving it\nlooking like a layer that draws nothing.",
+        "operationId": "list_cities_api_cities_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "west",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180.0,
+                  "minimum": -180.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "West"
+            }
+          },
+          {
+            "in": "query",
+            "name": "south",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90.0,
+                  "minimum": -90.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "South"
+            }
+          },
+          {
+            "in": "query",
+            "name": "east",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180.0,
+                  "minimum": -180.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "East"
+            }
+          },
+          {
+            "in": "query",
+            "name": "north",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90.0,
+                  "minimum": -90.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "North"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 2000,
+              "maximum": 40000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CitySnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Cities",
+        "tags": [
+          "entities"
+        ]
+      }
+    },
+    "/api/cities/{geonames_id}": {
+      "get": {
+        "description": "One city by its GeoNames id. ``null`` when the index does not hold it.\n\nThe id is what a search hit carries and what a shareable URL puts in its fragment, so\nthis is the direct lookup behind both. A dict read on the index, no scan.",
+        "operationId": "get_city_api_cities__geonames_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "geonames_id",
+            "required": true,
+            "schema": {
+              "title": "Geonames Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/City"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get City Api Cities  Geonames Id  Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get City",
+        "tags": [
+          "entities"
+        ]
+      }
+    },
     "/api/health": {
       "get": {
         "description": "Liveness and upstream feed health.\n\nReports ``ok`` whenever the process is serving, even with every feed down, because\nthis is a liveness probe rather than a data-quality judgement. Feed trouble is\nvisible in ``feeds`` and is what the UI banners read.",
@@ -1480,6 +3592,81 @@
         "tags": [
           "entities"
         ]
+      }
+    },
+    "/api/media": {
+      "get": {
+        "description": "Serve one provider media item from our own origin.\n\nRaises:\n    HTTPException: 400 when the URL is not one this proxy will fetch, and 502 when the\n        provider refused it or sent something that was not what it claimed. Deliberately\n        different codes: the first is the caller's problem and the second is not, and a\n        single 404 for both would send someone looking in the wrong place.",
+        "operationId": "media_api_media_get",
+        "parameters": [
+          {
+            "description": "Provider media URL, allowlisted.",
+            "in": "query",
+            "name": "url",
+            "required": true,
+            "schema": {
+              "description": "Provider media URL, allowlisted.",
+              "maxLength": 2048,
+              "title": "Url",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Media"
+      }
+    },
+    "/api/removals": {
+      "post": {
+        "description": "Remove and suppress one person record, at once.\n\nBoth halves in one call, because a removal that only cleared what we hold is undone by the\nnext crawl and a suppression that only set a flag reports success while the name is still\nbeing served.\n\nRaises:\n    HTTPException: 403 when the API is not bound to loopback, with the reason.",
+        "operationId": "create_removal_api_removals_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemovalResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Removal"
       }
     },
     "/api/satellites": {
@@ -1526,9 +3713,259 @@
         ]
       }
     },
+    "/api/search": {
+      "get": {
+        "description": "Resolve one query against everything the server holds, grouped and ranked.\n\nA callsign, a registration, an ICAO address, a vessel name, an MMSI, an IMO number, a\nsatellite name, a NORAD catalogue number, a city, or an address: one field for all of it,\nbecause the search box is the only navigation this globe has.\n\nLocal first, and almost always local only. Live entities are scanned in the stores the\nWebSocket already serves and cities come from the in-process gazetteer, so a hit costs no\nnetwork at all. Nominatim is consulted only when every local group came back empty **and\nthe gazetteer holds something**, which is what keeps a typeahead inside a usage policy that\nnames systematic querying as unacceptable use. Before the weekly download lands there is\nnothing local to have missed, so the cities group comes back carrying that reason instead\nand no query leaves the process.\n\nA group with no hits and no reason was asked and found nothing. A group carrying a reason\ncould not be asked, which is the same rule ``/api/capabilities`` follows for a missing key.",
+        "operationId": "search_api_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 8,
+              "maximum": 25,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
+    "/api/social": {
+      "get": {
+        "description": "Posts whose subject is in this box, each saying how it came to be placed there.\n\nThe box is required rather than optional, unlike the mover routes. Those hold a world set\nand filter it; this one has to ask a provider about a place, and a request with no place is\nnot a smaller version of this query, it is a different one.\n\nRaises:\n    HTTPException: 422 when the box is inverted, which is the caller's mistake rather than\n        ours and must not read as a server fault. A ``west`` greater than ``east`` is\n        legitimate and means the box crosses the antimeridian.",
+        "operationId": "list_social_posts_api_social_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "west",
+            "required": true,
+            "schema": {
+              "maximum": 180.0,
+              "minimum": -180.0,
+              "title": "West",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "south",
+            "required": true,
+            "schema": {
+              "maximum": 90.0,
+              "minimum": -90.0,
+              "title": "South",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "east",
+            "required": true,
+            "schema": {
+              "maximum": 180.0,
+              "minimum": -180.0,
+              "title": "East",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "north",
+            "required": true,
+            "schema": {
+              "maximum": 90.0,
+              "minimum": -90.0,
+              "title": "North",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 540,
+              "maximum": 600,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SocialSnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Social Posts"
+      }
+    },
+    "/api/transit": {
+      "get": {
+        "description": "Buses and trains currently known to the server, across 258 keyless licensed feeds.\n\nOne record per ``(feed_id, entity_id)``, which is the compound key rather than the\nvehicle's own id: 20% of id-carrying vehicles share an id with another agency, so keying\non the obvious field collapses two buses in different countries into one.\n\nCoverage is 17 countries, almost all in Europe and North America, and the count moves\nwith the time of day by a factor of 2.7 because a transit layer counts buses where\nbuses are running. Both facts are on the layer's capability reason rather than implied.",
+        "operationId": "list_transit_api_transit_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "west",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180.0,
+                  "minimum": -180.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "West"
+            }
+          },
+          {
+            "in": "query",
+            "name": "south",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90.0,
+                  "minimum": -90.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "South"
+            }
+          },
+          {
+            "in": "query",
+            "name": "east",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180.0,
+                  "minimum": -180.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "East"
+            }
+          },
+          {
+            "in": "query",
+            "name": "north",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90.0,
+                  "minimum": -90.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "North"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitSnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Transit",
+        "tags": [
+          "entities"
+        ]
+      }
+    },
     "/api/vessels": {
       "get": {
-        "description": "Vessels currently known to the server, merged across every reporting provider.\n\nOne record per MMSI whatever the provider count, per ADR 010, and each record names the\nprovider whose report supplied it and how old that report was.",
+        "description": "Vessels currently known to the server, merged across every reporting provider.\n\nOne record per MMSI whatever the provider count, per ADR 010. Each record names the\nprovider whose report supplied it, how old that report was, and every provider that saw\nthe ship, because a merged store you cannot audit per record is the bug that rule exists\nto prevent.",
         "operationId": "list_vessels_api_vessels_get",
         "parameters": [
           {

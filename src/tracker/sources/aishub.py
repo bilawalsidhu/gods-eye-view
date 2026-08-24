@@ -38,7 +38,6 @@ import re
 import time
 from collections import Counter
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final, Literal
 
@@ -69,6 +68,7 @@ from tracker.contracts.vessel import (
 )
 from tracker.sources.base import (
     RATE_LIMIT_STATUS_CODES,
+    ParsedRecords,
     RateLimitedError,
     SourceError,
     retry_after_seconds,
@@ -266,25 +266,6 @@ Validating the array in one pass would let a single junk element fail the batch,
 provider hiccup on one ship must not blank the layer. Per record, an element that is not
 even an object is dropped and counted like any other unmappable record.
 """
-
-
-@dataclass(frozen=True, slots=True)
-class ParsedVessels:
-    """One AISHub response, mapped: the vessels that survived and why the rest did not.
-
-    The drop counter is the contract's "dropped and counted" made returnable rather than
-    logged and forgotten, keyed by reason so a poll that loses half its records says which
-    half. Reasons are validation messages, so an MMSI belonging to a search-and-rescue
-    aircraft reads as exactly that.
-    """
-
-    vessels: tuple[Vessel, ...]
-    drops: Counter[str]
-
-    @property
-    def dropped(self) -> int:
-        """How many records did not map. Zero on a clean poll."""
-        return sum(self.drops.values())
 
 
 def _descale(value: float | None, divisor: float) -> float | None:
@@ -519,7 +500,7 @@ def parse_response(
     source: str = SOURCE_NAME,
     ais_format: Literal[0, 1] = FORMAT_HUMAN,
     received_at: datetime | None = None,
-) -> ParsedVessels:
+) -> ParsedRecords[Vessel]:
     """Parse an AISHub response into domain vessels.
 
     Args:
@@ -564,7 +545,7 @@ def parse_response(
             sum(drops.values()),
             dict(drops),
         )
-    return ParsedVessels(vessels=tuple(vessels), drops=drops)
+    return ParsedRecords(records=tuple(vessels), drops=drops)
 
 
 class AishubClient:
@@ -573,6 +554,15 @@ class AishubClient:
     Holds one piece of state, the time of the last request, because the once-per-minute
     floor has to survive a caller polling on a shorter cadence. Keep one instance per
     process for that to mean anything.
+
+    **That floor is deliberately not on disk**, unlike the others moved onto
+    :class:`~tracker.cache.DiskCache` on 2026-08-20. Two reasons. It is a **monotonic** reading
+    rather than a wall clock, and a monotonic value means nothing in another process, so
+    persisting it would need it converted first: real work for no gain. And the restart case is
+    already covered one level up, by the vessel poller's persisted floor, which is 60 seconds
+    from the same provider figure. There is also nothing to protect today, because AISHub grants
+    access only to members running a physical receiver and this client never calls at all
+    without a username.
     """
 
     def __init__(
@@ -616,7 +606,7 @@ class AishubClient:
         box: BoundingBox | None = None,
         mmsi: Sequence[str] | None = None,
         interval_minutes: int | None = None,
-    ) -> ParsedVessels:
+    ) -> ParsedRecords[Vessel]:
         """Fetch vessels, optionally bounded by a box, an MMSI list or a position age.
 
         Args:

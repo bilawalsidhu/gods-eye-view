@@ -14,9 +14,10 @@ from tracker.contracts.aircraft import Aircraft
 from tracker.contracts.base import StrictModel, UtcDatetime
 from tracker.contracts.geo import BoundingBox
 from tracker.contracts.satellite import Satellite
+from tracker.contracts.transit import TransitVehicle
 from tracker.contracts.vessel import Vessel
 
-type Entity = Annotated[Aircraft | Vessel | Satellite, Field(discriminator="kind")]
+type Entity = Annotated[Aircraft | Vessel | Satellite | TransitVehicle, Field(discriminator="kind")]
 """The entity union, discriminated on ``kind``.
 
 Widened in phase 2 and the claim that it would touch no consumer held: every domain
@@ -25,7 +26,9 @@ picks the member off ``kind`` rather than trying each in turn, which is why a ve
 fails validation reports a vessel error instead of three unrelated ones.
 """
 
-type LayerName = Literal["aircraft", "military", "vessels", "satellites", "events", "cameras"]
+type LayerName = Literal[
+    "aircraft", "military", "vessels", "satellites", "transit", "events", "cameras"
+]
 
 
 class FeedHealth(StrictModel):

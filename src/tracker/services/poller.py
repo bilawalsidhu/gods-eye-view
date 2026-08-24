@@ -11,8 +11,15 @@ Two guards live here that exist to stop us being blocked by a provider:
 configuration asks for. CelesTrak permanently firewalls clients that poll too fast, so
 that limit must not be a configuration value someone can lower by accident.
 
-``NotBefore`` tracking makes the floor hold across restarts within a process, so a
-supervisor restarting a failing poller in a tight loop cannot hammer an upstream.
+``NotBefore`` tracking holds the floor between polls, and with a
+:class:`~tracker.cache.DiskCache` passed in it holds across a **process** restart as well.
+That second half used to be a claim this module made and did not honour: the earlier wording
+here said the floor held "across restarts within a process", which is two different things
+run together, and across a real restart it held for nothing at all. A supervisor bouncing a
+failing poller, or a person stopping and starting ``uv run tracker`` while working on
+something, produced a fresh floor every time, and a provider cannot tell that apart from
+hammering. Without a cache the behaviour is exactly what it was, so the persistence is opt-in
+per poller and the tests cover both.
 """
 
 import asyncio
@@ -22,8 +29,10 @@ from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
+from tracker.cache import DiskCache
+from tracker.cache import key as cache_key
 from tracker.contracts.messages import FeedHealth, LayerName
-from tracker.sources.base import RateLimitedError
+from tracker.sources.base import RateLimitedError, describe_exception
 
 _log = logging.getLogger(__name__)
 
@@ -34,6 +43,9 @@ to be noticed, while still backing right off from a sustained outage."""
 JITTER_FRACTION = 0.15
 """Random spread applied to every sleep, so several pollers started together do not
 synchronise into a thundering herd against different endpoints of the same provider."""
+
+NOT_BEFORE_KEY = "not_before"
+"""Cache key suffix under the ``poller:<name>:`` namespace, when a cache is provided."""
 
 
 @dataclass(slots=True)
@@ -74,6 +86,13 @@ class Poller:
     ``poll`` returns the number of entities it produced, which is used only for health
     reporting. It is expected to do its own storing; the poller deliberately knows
     nothing about stores so the same machinery drives feeds that write nowhere.
+
+    ``cache`` is optional. With one, the next-allowed-poll time is written to disk on every
+    attempt and read back on construction, so a fresh process finishes waiting out the
+    interval the previous one started rather than polling immediately. Only the floor is
+    persisted, never health or a failure count: a floor can only ever delay us, so it cannot
+    turn a transient fault into a lasting one. Without a cache nothing is written and the
+    floor holds within the process only, which is what it did before.
     """
 
     name: str
@@ -81,6 +100,7 @@ class Poller:
     poll: Callable[[], Awaitable[int]]
     interval_seconds: float
     min_interval_seconds: float = 1.0
+    cache: DiskCache | None = None
     health: PollerHealth = field(init=False)
     _task: asyncio.Task[None] | None = field(default=None, init=False)
     _not_before: datetime | None = field(default=None, init=False)
@@ -95,6 +115,24 @@ class Poller:
             layer=self.layer,
             poll_interval_seconds=self.effective_interval,
         )
+
+    @property
+    def not_before(self) -> datetime | None:
+        """The earliest this poller may call again, or ``None`` when it never has.
+
+        Read from disk when a cache is configured, so the floor a previous process wrote is
+        the floor this one honours. The in-memory copy is the fallback and stays authoritative
+        for a poller with no cache.
+        """
+        if self.cache is not None:
+            return self.cache.get_time(cache_key("poller", self.name, NOT_BEFORE_KEY))
+        return self._not_before
+
+    def _hold_until(self, when: datetime) -> None:
+        """Record the next allowed poll time, in memory and on disk."""
+        self._not_before = when
+        if self.cache is not None:
+            self.cache.set_time(cache_key("poller", self.name, NOT_BEFORE_KEY), when)
 
     @property
     def effective_interval(self) -> float:
@@ -134,13 +172,12 @@ class Poller:
         manual refresh endpoint can ask for data without spawning a loop.
         """
         now = datetime.now(UTC)
-        if self._not_before is not None and now < self._not_before:
-            _log.debug(
-                "%s: skipping poll, cadence floor holds until %s", self.name, self._not_before
-            )
+        not_before = self.not_before
+        if not_before is not None and now < not_before:
+            _log.debug("%s: skipping poll, cadence floor holds until %s", self.name, not_before)
             return False
 
-        self._not_before = now + timedelta(seconds=self.effective_interval)
+        self._hold_until(now + timedelta(seconds=self.effective_interval))
         self.health.total_polls += 1
         try:
             count = await self.poll()
@@ -149,7 +186,7 @@ class Poller:
         except RateLimitedError as exc:
             # Honour the provider's own figure rather than our backoff curve. Retrying a
             # throttled endpoint on a generic schedule is how a free feed bans an IP.
-            self._not_before = datetime.now(UTC) + timedelta(seconds=exc.retry_after_seconds)
+            self._hold_until(datetime.now(UTC) + timedelta(seconds=exc.retry_after_seconds))
             self.health.healthy = False
             self.health.consecutive_failures += 1
             self.health.total_failures += 1
@@ -161,7 +198,10 @@ class Poller:
             self.health.healthy = False
             self.health.consecutive_failures += 1
             self.health.total_failures += 1
-            self.health.last_error = f"{type(exc).__name__}: {exc}"
+            # An httpx timeout stringifies to nothing, so the type name is the only part
+            # guaranteed to be there. This string is served on /api/health and drawn on the
+            # layer rail, and an empty one reads as a feed that broke for no reason.
+            self.health.last_error = describe_exception(exc)
             _log.warning(
                 "%s: poll failed (%d consecutive): %s",
                 self.name,
@@ -192,8 +232,9 @@ class Poller:
                 self.effective_interval * (2.0**self.health.consecutive_failures),
                 MAX_BACKOFF_SECONDS,
             )
-        if self._not_before is not None:
-            remaining = (self._not_before - datetime.now(UTC)).total_seconds()
+        not_before = self.not_before
+        if not_before is not None:
+            remaining = (not_before - datetime.now(UTC)).total_seconds()
             base = max(base, remaining)
         # Jitter spreads poller wake-ups apart. It is not a security decision, so the
         # standard generator is the right tool.

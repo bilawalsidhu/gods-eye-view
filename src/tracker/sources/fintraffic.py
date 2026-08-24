@@ -95,8 +95,10 @@ from tracker.contracts.vessel import (
 )
 from tracker.sources.base import (
     RATE_LIMIT_STATUS_CODES,
+    ParsedRecords,
     RateLimitedError,
     SourceError,
+    describe_exception,
     retry_after_seconds,
 )
 
@@ -504,6 +506,11 @@ def parse_static(payload: bytes | str, *, source: str = SOURCE_NAME) -> dict[str
         ContractViolationError: The payload is not the array this endpoint returns. Only the
             array itself is validated here; a record inside it that will not read is dropped
             and counted, because one junk ``draught`` must not lose the other 92 names.
+
+    A refused static record is not a refused vessel, so this count stays in the log rather
+    than joining the provider's drop total on ``/api/layers``. The ship still renders; it
+    renders with its name and voyage fields empty, which is the same outcome as the 108
+    positions in the capture that have no static record at all.
     """
     raw_records = validate_payload(_STATIC_ADAPTER, payload, source=source).root
     statics: dict[str, VesselStatic] = {}
@@ -656,7 +663,7 @@ def parse_locations(
     *,
     source: str = SOURCE_NAME,
     now: datetime | None = None,
-) -> tuple[Vessel, ...]:
+) -> ParsedRecords[Vessel]:
     """Parse ``/api/ais/v1/locations`` into vessels, joined to static data on MMSI.
 
     Args:
@@ -670,8 +677,10 @@ def parse_locations(
             wall clock; a test passes one so the bound is exercised without waiting.
 
     Returns:
-        One vessel per usable feature. Records that cannot be read, identified, located or
-        dated are dropped and counted by reason, never partially accepted.
+        One vessel per usable feature, plus the records that could not be read, identified,
+        located or dated, counted by reason and never partially accepted. The count is
+        returned rather than only logged because ``/api/layers`` serves it: a drop total
+        that stops at a log line is dropped and logged, not dropped and counted.
 
     Raises:
         ContractViolationError: The envelope is not the FeatureCollection this endpoint
@@ -716,7 +725,7 @@ def parse_locations(
             sum(dropped.values()),
             dict(dropped),
         )
-    return tuple(vessels)
+    return ParsedRecords(records=tuple(vessels), drops=dropped)
 
 
 # ---------------------------------------------------------------- client
@@ -736,6 +745,14 @@ class FintrafficClient:
     Holds one piece of state, the conditional-request cache, because ``ETag`` with
     ``If-None-Match`` is the cheap way to poll a feed that caches for a minute: a real
     HTTP 304 with an empty body was verified against the live host.
+
+    **That cache is deliberately not on disk.** Every rate guard in ``sources/`` was moved onto
+    :class:`~tracker.cache.DiskCache` on 2026-08-20 and this one was left out, because it saves
+    bandwidth rather than requests: with a persisted ``ETag`` a restart sends the same
+    conditional GET and gets a 304 back, so the provider is asked exactly as often either way,
+    and its cap is 60 requests a minute rather than a byte budget. What does protect it across a
+    restart is the vessel poller's own floor, which is persisted. Body plus ``ETag`` is about
+    441KB a minute of write churn for nothing.
     """
 
     def __init__(
@@ -784,16 +801,21 @@ class FintrafficClient:
         """How far back the positions query reaches, never shorter than the cadence floor."""
         return self._window_seconds
 
-    async def all_vessels(self) -> tuple[Vessel, ...]:
-        """Every vessel the feed has reported inside the query window.
+    async def all_vessels(self) -> ParsedRecords[Vessel]:
+        """Every vessel the feed has reported inside the query window, plus its drop count.
 
         The whole body is 1,058 features and 441KB uncompressed, so there is no reason to
         filter spatially unless a viewport asks for it.
+
+        The drop count comes back with the vessels rather than staying in the log, because
+        the caller is what puts it on ``/api/layers``.
         """
         return await self._vessels({})
 
-    async def vessels_near(self, *, lat: float, lon: float, radius_km: int) -> tuple[Vessel, ...]:
-        """Vessels within ``radius_km`` kilometres of a point.
+    async def vessels_near(
+        self, *, lat: float, lon: float, radius_km: int
+    ) -> ParsedRecords[Vessel]:
+        """Vessels within ``radius_km`` kilometres of a point, plus the drop count.
 
         ``radius`` with ``latitude`` and ``longitude`` is the provider's only spatial
         filter, and it is a haversine radius in kilometres. ``bbox`` is accepted and
@@ -807,17 +829,21 @@ class FintrafficClient:
             }
         )
 
-    async def vessels_in_box(self, box: BoundingBox) -> tuple[Vessel, ...]:
-        """Vessels inside a bounding box.
+    async def vessels_in_box(self, box: BoundingBox) -> ParsedRecords[Vessel]:
+        """Vessels inside a bounding box, plus the drop count.
 
         The feed understands circles only, so this queries the circumscribed circle and
         filters locally. The local filter is not belt and braces: ``bbox`` is silently
         ignored upstream, so this is the only thing that makes the answer match the box.
+
+        The box filter is not a drop: a vessel outside the box mapped cleanly and was never
+        refused, so the count carried here is the parser's alone.
         """
         centre = box.centre
         radius_km = math.ceil(box.enclosing_radius_m() / METRES_PER_KM)
         found = await self.vessels_near(lat=centre.lat, lon=centre.lon, radius_km=radius_km)
-        return tuple(vessel for vessel in found if box.contains(vessel.point))
+        inside = tuple(vessel for vessel in found.records if box.contains(vessel.point))
+        return ParsedRecords(records=inside, drops=found.drops)
 
     def window_start_ms(self) -> int:
         """The ``from`` value for the next positions query, as a millisecond epoch.
@@ -830,7 +856,7 @@ class FintrafficClient:
         bucket = math.floor(self._clock().timestamp() / MIN_INTERVAL_SECONDS)
         return int((bucket * MIN_INTERVAL_SECONDS - self._window_seconds) * 1000)
 
-    async def _vessels(self, params: dict[str, str]) -> tuple[Vessel, ...]:
+    async def _vessels(self, params: dict[str, str]) -> ParsedRecords[Vessel]:
         """Fetch both endpoints and join them on MMSI.
 
         Sequential rather than concurrent: two requests a minute is nowhere near the
@@ -845,12 +871,12 @@ class FintrafficClient:
         """
         statics = await self._statics()
         query = {**params, "from": str(self.window_start_ms())}
-        vessels = parse_locations(
+        parsed = parse_locations(
             await self._get(LOCATIONS_PATH, query), statics, source=SOURCE_NAME
         )
-        if not params and not vessels:
+        if not params and not parsed.records:
             raise SourceError(SOURCE_NAME, EMPTY_WORLD_DETAIL)
-        return vessels
+        return parsed
 
     async def _statics(self) -> dict[str, VesselStatic]:
         """Static and voyage data, or the last set that parsed.
@@ -864,7 +890,9 @@ class FintrafficClient:
         except RateLimitedError:
             raise
         except (ContractViolationError, SourceError, httpx.HTTPError) as exc:
-            _log.warning("%s: %s (%s)", SOURCE_NAME, STATIC_FETCH_FAILED_DETAIL, exc)
+            _log.warning(
+                "%s: %s (%s)", SOURCE_NAME, STATIC_FETCH_FAILED_DETAIL, describe_exception(exc)
+            )
         return self._last_statics
 
     async def _get(self, path: str, params: dict[str, str]) -> bytes:
