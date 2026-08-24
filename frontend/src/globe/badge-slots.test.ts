@@ -111,6 +111,72 @@ describe('a contested claim', () => {
   });
 });
 
+describe('reserve, for a label a badge must not sit on', () => {
+  it('pushes a badge off the point a label occupies', () => {
+    // The whole point of it. A city label sits on a fixed geographic point and reading it is its job;
+    // a badge is a count over an area and has always been free to move. So the badge yields.
+    const wanted = claim('probe', 300, 400);
+    badgeSlots.release('probe');
+    badgeSlots.reserve('cities', 300, 400, 10, 10);
+
+    expect(claim('transit', 300, 400)).not.toEqual(wanted);
+  });
+
+  it('takes more than one point for a label wider than a cell', () => {
+    // "Moscow" at 13 pixels runs to about 55, which is a cell and part of the next. Reserving only
+    // the centre would leave a badge sitting on the second half of the word.
+    badgeSlots.reset();
+    badgeSlots.begin(WIDTH, HEIGHT, CLUSTER_CELL_PX);
+
+    const narrow = badgeSlots.reserve('cities', 300, 400, 8, 8);
+    badgeSlots.release('cities');
+    const wide = badgeSlots.reserve('cities', 300, 400, 55, 13);
+
+    expect(narrow).toBe(1);
+    expect(wide).toBeGreaterThan(1);
+  });
+
+  it('reports how many points it took, and takes none when it is off the lattice', () => {
+    badgeSlots.reset();
+
+    expect(badgeSlots.reserve('cities', 300, 400, 55, 13)).toBe(0);
+  });
+
+  it('never steals a point another layer is already drawing on', () => {
+    // First holder wins. A reservation arriving after a badge has claimed its point must not move a
+    // badge that is already placed, because the layers run in an order nobody controls and a
+    // reservation that could evict would make the badge positions depend on that order.
+    const held = claim('transit', 300, 400);
+
+    const taken = badgeSlots.reserve('cities', 300, 400, 8, 8);
+
+    expect(taken).toBe(0);
+    expect(claim('transit-again', 300, 400)).not.toEqual(held);
+  });
+
+  it('is released like any other holding, so a label leaving frees its points', () => {
+    const wanted = claim('probe', 700, 500);
+    badgeSlots.release('probe');
+    badgeSlots.reserve('cities', 700, 500, 8, 8);
+
+    badgeSlots.release('cities');
+
+    expect(claim('transit', 700, 500)).toEqual(wanted);
+  });
+
+  it('clips to the lattice rather than reserving off screen', () => {
+    // A label against the left edge has half its box outside the viewport, and a negative column
+    // would index behind the start of the map.
+    badgeSlots.reset();
+    badgeSlots.begin(WIDTH, HEIGHT, CLUSTER_CELL_PX);
+
+    const taken = badgeSlots.reserve('cities', 4, 4, 120, 40);
+
+    expect(taken).toBeGreaterThan(0);
+    expect(taken).toBeLessThanOrEqual(3 * 2);
+  });
+});
+
 describe('release', () => {
   it('frees only the releasing layer', () => {
     const air = claim('aircraft', 300, 400);

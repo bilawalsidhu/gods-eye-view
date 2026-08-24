@@ -95,6 +95,51 @@ class BadgeSlots {
     this.held.clear();
   }
 
+  /**
+   * Hold every lattice point a rectangle touches, so a badge is pushed off it.
+   *
+   * For things that are not badges and cannot move. A city label is the case this exists for: it sits
+   * on a fixed geographic point and reading it is the whole of its job, where a badge is a count over
+   * an area that has never claimed to mark a position and has always been free to shift. So when the
+   * two want the same pixels the badge yields, and the way to make that happen is for the label to
+   * take the points first.
+   *
+   * A rectangle rather than a point because a label is wide: "Moscow" at 13 pixels runs to about 55,
+   * which is a whole lattice cell and part of the next. Reserving only the centre would leave a badge
+   * sitting on the second half of the word.
+   *
+   * Returns how many points it took, which is what a test can assert and what tells a caller whether
+   * a wide label actually needed more than one.
+   */
+  reserve(
+    layerKey: string,
+    centreX: number,
+    centreY: number,
+    widthPx: number,
+    heightPx: number,
+  ): number {
+    if (this.pitchPx <= 0) {
+      return 0;
+    }
+    const firstColumn = Math.floor((centreX - widthPx / 2) / this.pitchPx);
+    const lastColumn = Math.floor((centreX + widthPx / 2) / this.pitchPx);
+    const firstRow = Math.floor((centreY - heightPx / 2) / this.pitchPx);
+    const lastRow = Math.floor((centreY + heightPx / 2) / this.pitchPx);
+    let taken = 0;
+    for (let c = Math.max(0, firstColumn); c <= Math.min(this.columns - 1, lastColumn); c += 1) {
+      for (let r = Math.max(0, firstRow); r <= Math.min(this.rows - 1, lastRow); r += 1) {
+        const index = r * this.columns + c;
+        // First holder wins, so a reservation never steals a point another layer is already drawing
+        // on. Two labels overlapping is the city layer's own problem and it declutters them itself.
+        if (!this.held.has(index)) {
+          this.held.set(index, layerKey);
+          taken += 1;
+        }
+      }
+    }
+    return taken;
+  }
+
   /** Drop everything one layer holds, before it makes its claims again or when it goes dark. */
   release(layerKey: string): void {
     for (const [index, holder] of this.held) {

@@ -37,8 +37,9 @@
  * requests across nine camera positions produced two 404s, both at one disk corner a
  * rectangle cannot help overhanging, against sixteen from the VIIRS basemap in the same run.
  *
- * A frame GIBS has not built yet answers 404, and the newest frame always is one. That is what
- * {@link cloudDefaultUrl} is for: nothing here ever pins a slot it has not had a tile back for.
+ * A frame GIBS has not built yet answers 404, and the newest frame always is one. So nothing here
+ * pins a slot it has not had a tile back for: see {@link newestCloudSlot}, which walks until one
+ * answers instead of believing what the provider says its newest frame is.
  *
  * And a 404 can simply be wrong. The same tile URL answered 404, 404, then 200 with 80,131
  * bytes behind it. So a single 404 is not evidence that a tile does not exist, and a 404 on a
@@ -102,12 +103,56 @@ export const CLOUD_SLOT_MINUTES = 10;
  * 09:30 for GOES-West and 09:20 for GOES-East and Himawari, so between 26 and 36 minutes
  * old. The capabilities document's own `Default` time agreed, at 09:10 to 09:20.
  *
- * So this is where the fallback walk starts, not where it stops. A request for a slot GIBS
- * has not built yet is a 404, and a naive "now" would 404 every tile on the globe and read as
- * a layer that is broken rather than one that is waiting. The normal path does not guess at
- * all: see {@link cloudDefaultUrl}, which has GIBS name the frame itself.
+ * So this is where the walk starts, not where it stops. A request for a slot GIBS has not built
+ * yet is a 404, and a naive "now" would 404 every tile on the globe and read as a layer that is
+ * broken rather than one that is waiting. It is deliberately a little conservative: overshooting
+ * costs one wasted `HEAD`, and undershooting draws nothing.
  */
 export const CLOUD_LATENCY_MINUTES = 20;
+
+/**
+ * Why {@link newestCloudSlot} takes the second frame that answers rather than the first.
+ *
+ * **A frame that answers is not a frame that is finished.** GIBS publishes a slot tile by tile,
+ * and the level-zero tile the probe asks for is an early one, so a slot can answer while most of
+ * its pyramid is still missing. Measured 2026-08-24 at 10:01 UTC on GOES-East, against the ten
+ * tile addresses a whole-globe frame actually requested:
+ *
+ * | slot | tiles present | probe tile answers |
+ * | --- | --- | --- |
+ * | 09:40 and newer | 0 of 10 | no |
+ * | 09:30 | 2 of 10 | **no**, so the probe tile is not even the first built |
+ * | **09:20** | **9 of 10** | **yes**, and this is what the walk used to return |
+ * | 09:10 | 10 of 10 | yes |
+ * | 09:00 | 10 of 10 | yes |
+ *
+ * So the newest answering slot was 90% built, and the missing tenth is exactly the scatter of
+ * tile 404s that showed in the console. One slot older was complete. The cost of the margin is
+ * ten minutes of staleness on a product whose frames are ten minutes apart and which is already
+ * twenty to fifty minutes behind the clock, so it is the cheapest thing in this file.
+ *
+ * **Two slots rather than one, and the second slot was bought by a screenshot.** A margin of one
+ * left five failed requests on a whole-globe frame, and the missing tiles are visible: a tile is
+ * a quarter or a sixteenth of the sheet at the levels a whole-globe view draws, so a hole in the
+ * frame is a rectangular step in the sheet. Compared against `#off=clouds` on the same sky, the
+ * North Atlantic was clean without the layer and had a flat region with tile-shaped edges with
+ * it, which is the same "reads as a broken render" complaint one cause further down.
+ *
+ * **A deeper probe tile would not have helped, and that is worth writing down.** The obvious fix
+ * is to probe a tile built late in the pyramid instead of level zero. Measured 2026-08-24 at
+ * 10:06 UTC, GIBS builds a frame in **no pyramid order at all**: GOES-West's 09:40 had level 3
+ * present while levels 0, 1, 2 and 4 were absent, and GOES-East's 09:30 had levels 3 and 4
+ * present while level 0 was **missing**. So no single tile, shallow or deep, is evidence about
+ * any other tile, and the only cheap lever is time.
+ *
+ * Two slots was complete on both layers at both moments measured, at 10:01 and at 10:06. The
+ * cost is twenty minutes of staleness in total, which for a cloud layer already twenty to fifty
+ * minutes behind is not material, and a complete frame is worth more than ten minutes of
+ * currency. It is still not a guarantee, and it is deliberately not papered over with a
+ * swallowed tile error, because a layer that quietly draws nothing is the failure this file has
+ * already made once today.
+ */
+export const CLOUD_COMPLETE_MARGIN = 2;
 
 /**
  * How many ten-minute slots back to walk before giving up, which is 90 minutes.
@@ -130,6 +175,14 @@ export interface CloudSatellite {
   readonly west: number;
   /** Eastern edge of the slice, degrees. */
   readonly east: number;
+  /**
+   * Longitude the satellite sits over, degrees. What every angle here is measured from.
+   *
+   * Present because the slice cannot express what the instrument can see. A slice is a
+   * rectangle and a disk is a circle, so the poleward corners of a slice are further off
+   * nadir than anything at the equator, and it is those corners that both 404 and paint.
+   */
+  readonly subLon: number;
 }
 
 /**
@@ -150,7 +203,13 @@ export interface CloudSatellite {
 export const CLOUD_SATELLITES: readonly CloudSatellite[] = [
   // GOES-West sits at 137°W. Its slice runs from the antimeridian to the midpoint between
   // it and GOES-East, which is 106°W.
-  { name: 'GOES-West', layer: 'GOES-West_ABI_Band13_Clean_Infrared', west: -180, east: -106 },
+  {
+    name: 'GOES-West',
+    layer: 'GOES-West_ABI_Band13_Clean_Infrared',
+    west: -180,
+    east: -106,
+    subLon: -137,
+  },
   // GOES-East sits at 75.2°W and its disk ends at 5.8°E, which is why London is on this
   // layer at all and why Cairo is not. Verified: a tile over London returned bytes and a
   // tile over Cairo returned a fully transparent one.
@@ -163,7 +222,13 @@ export const CLOUD_SATELLITES: readonly CloudSatellite[] = [
   // south-east corners, and an east edge of 0 cost none. What is given up is a six-degree
   // strip over the North Sea and Belgium, seen at better than 80 degrees off nadir where a
   // pixel is smeared six times its width. London sits at 0.12°W and stays.
-  { name: 'GOES-East', layer: 'GOES-East_ABI_Band13_Clean_Infrared', west: -106, east: 0 },
+  {
+    name: 'GOES-East',
+    layer: 'GOES-East_ABI_Band13_Clean_Infrared',
+    west: -106,
+    east: 0,
+    subLon: -75.2,
+  },
   // Himawari sits at 140.7°E, so its disk starts at 59.7°E and runs past the antimeridian.
   // The part east of the dateline is left to GOES-West, which is nearer overhead there.
   //
@@ -176,7 +241,13 @@ export const CLOUD_SATELLITES: readonly CloudSatellite[] = [
   // eastern Siberia, where the same probe found imagery. Measured on 2026-08-23: over those
   // same nine camera positions this layer makes 529 tile requests and 2 of them 404, while
   // the VIIRS basemap that was already here makes 16 in the same run.
-  { name: 'Himawari', layer: 'Himawari_AHI_Band13_Clean_Infrared', west: 60, east: 180 },
+  {
+    name: 'Himawari',
+    layer: 'Himawari_AHI_Band13_Clean_Infrared',
+    west: 60,
+    east: 180,
+    subLon: 140.7,
+  },
 ];
 
 /**
@@ -270,28 +341,6 @@ export function cloudTileTemplate(satellite: CloudSatellite): string {
   );
 }
 
-/**
- * The same tile, asked for without naming a slot.
- *
- * GIBS accepts `default` in the time dimension and serves whatever the newest built frame is,
- * naming it in a `layer-time-actual` response header. Verified on 2026-08-23 at 10:25 UTC: it
- * answered 200 for all three layers and reported 10:00 for the two GOES satellites and 09:30
- * for Himawari, which is 25 and 55 minutes old respectively. So this one request replaces the
- * whole walk below, and it is worth having because Himawari that far behind would otherwise
- * have cost four 404s to find, and a 404 in a browser is a console error whether or not the
- * code that made it was expecting one.
- *
- * **This is used to learn the slot and never to draw, and that is not a precaution, it is
- * measured.** `default` is resolved per request, not per layer: on 2026-08-23 at 15:40 UTC,
- * four GOES-East tiles asked for in the same second came back naming three different frames,
- * `1/0/0` at 15:40, `1/1/1` at 15:30 and `1/0/1` at 15:20. Drawing on `default` would put
- * tiles from three frames next to each other on the globe and call it one picture. So one
- * request learns the frame, and every tile after it names that frame explicitly.
- */
-export function cloudDefaultUrl(satellite: CloudSatellite): string {
-  return `${GIBS_WMTS}/${satellite.layer}/default/default/${TILE_MATRIX_SET}/0/0/0.png`;
-}
-
 /** What a probe learned: whether the tile is there, and which frame GIBS says it is. */
 export interface TileAnswer {
   ok: boolean;
@@ -335,10 +384,29 @@ export async function headTile(url: string): Promise<TileAnswer> {
 /**
  * The newest slot this satellite actually has imagery for, or null if it has none.
  *
- * One request on the normal path: GIBS is asked for `default` and names the frame it served.
- * The walk is the fallback for the case where the answer arrived without the header, which is
- * what a proxy stripping it looks like, and for a transient failure. Transient is the right
- * word: measured on 2026-08-23, the same tile URL answered 404, 404, then 200 with bytes.
+ * **Every candidate is asked for by name, and that is the fix for a layer that drew nothing.**
+ * This used to ask GIBS for `default`, read the frame out of the `layer-time-actual` header and
+ * take that as the answer, on the reasoning that a provider naming its own newest frame beats us
+ * guessing. Measured 2026-08-24 at 09:42 UTC across all three layers, that header cannot be used
+ * to address a tile:
+ *
+ * | layer | `default` names | asking for it by name | newest that serves |
+ * | --- | --- | --- | --- |
+ * | GOES-East | 09:20 | **404** | 09:10 |
+ * | GOES-West | 08:50 | 200 | **09:20** |
+ * | Himawari | 09:00 | **404** | 08:50 |
+ *
+ * Wrong in both directions. Two of the three name a frame that is not addressable, so the layer
+ * pinned a slot on which **every tile 404s** and drew nothing; the third named a frame thirty
+ * minutes staler than what was available, which would have drawn half-hour-old cloud as current
+ * and said nothing about it. The second is the worse bug, because nobody would ever notice it.
+ *
+ * So the header is not consulted. The walk starts at {@link CLOUD_LATENCY_MINUTES} behind the
+ * clock and takes the first slot that answers, which is the only method that establishes a slot
+ * is addressable at all, and it finds the newest addressable frame rather than whichever one
+ * `default` felt like naming. Measured cost at that same moment: two probes for GOES-East, one
+ * for GOES-West, four for Himawari. Seven `HEAD` requests per ten-minute refresh for the whole
+ * layer, against three full tile `GET`s before, so it is cheaper in bytes as well as correct.
  *
  * The walk is sequential on purpose. Firing all eight at once would be seven wasted requests
  * on the path where the first answers, against a provider whose cadence discipline is a rule
@@ -349,15 +417,22 @@ export async function newestCloudSlot(
   now: Date,
   probe: TileProbe,
 ): Promise<string | null> {
-  const reported = await probe(cloudDefaultUrl(satellite));
-  if (reported.slot !== null) {
-    return reported.slot;
-  }
-  for (const slot of cloudSlots(now)) {
+  const candidates = cloudSlots(now);
+  for (const [index, slot] of candidates.entries()) {
     const answer = await probe(cloudProbeUrl(satellite, slot));
-    if (answer.ok) {
+    if (!answer.ok) {
+      continue;
+    }
+    // One slot older than the newest that answers, because a frame is built tile by tile and
+    // the probe tile is an early one. See `CLOUD_COMPLETE_MARGIN`.
+    const older = candidates[index + CLOUD_COMPLETE_MARGIN];
+    if (older === undefined) {
       return slot;
     }
+    // Bound before it is read: `(await x).ok` trips `unicorn/no-await-expression-member`, and
+    // that rule has cost this repo a shared gate before.
+    const behind = await probe(cloudProbeUrl(satellite, older));
+    return behind.ok ? older : slot;
   }
   return null;
 }
@@ -419,13 +494,22 @@ export function cloudImagery(
   // nobody could see. This is the only member whose behaviour changes.
   const request = provider.requestImage.bind(provider);
   provider.requestImage = (x, y, level, options) => {
+    const bounds = tileBounds(x, y, level);
+    // Not asked for at all when the whole tile is outside what this instrument can see. The
+    // provider's rectangle cannot express a disk, so its poleward corners used to be requested
+    // and 404ed: twelve of them on one whole-globe frame, and a 404 is a red console line
+    // whether or not the code expected it. Answering with an empty tile is exactly what a 404
+    // produced on screen, minus the request.
+    if (tileNearestOffNadir(satellite.subLon, bounds) >= CLOUD_TRUST_LIMIT) {
+      return Promise.resolve(blankTile(provider.tileWidth));
+    }
     const pending = request(x, y, level, options);
     // A promise chain rather than an await, and it has to be. An `undefined` return is
     // Cesium's own signal that the request was throttled and the tile should be asked for
     // again later; an async function cannot return one, because it would wrap it in a
     // resolved promise and Cesium would take a deferred tile for a delivered blank one.
     // eslint-disable-next-line unicorn/prefer-await -- reason above
-    return pending?.then(paintCloudTile);
+    return pending?.then((image) => paintCloudTile(image, satellite.subLon, bounds));
   };
   return provider;
 }
@@ -466,6 +550,90 @@ export function cloudImagery(
  */
 export const CLEAR_SKY_CEILING = 128;
 export const CLOUD_FLOOR = 176;
+
+/**
+ * How far off nadir this product can still be read as cloud, in degrees.
+ *
+ * **Measured 2026-08-24 on GOES-East, and it overturns an earlier refusal of mine.** The lead
+ * asked for a limb taper on 2026-08-23 and I declined it, having measured that the imagery is
+ * fully resolved right out to the disk edge: run lengths of 1.1 to 2.1 pixels and 82 to 251
+ * distinct values per tile at 81 degrees off nadir. That measurement was correct and it was
+ * the wrong measurement. **Detail is not accuracy.** The limb has plenty of detail and a
+ * systematic cold bias, because a sensor looking along the limb looks through several times
+ * the air mass, and more atmosphere means a colder brightness temperature whatever is under it.
+ *
+ * The percentage of pixels this palette paints fully opaque, against angle from the
+ * sub-satellite point, sampled down one radial from nadir to past the limb:
+ *
+ * | off nadir | mean grey | painted opaque |
+ * | --- | --- | --- |
+ * | 0 to 65 | 99 to 154 | 0 to 25% |
+ * | **70** | **173** | **43%** |
+ * | **75** | **172** | **43%** |
+ * | **80** | 159 | **55%** |
+ * | 85 | 0 | 0%, and the source is transparent |
+ *
+ * So beyond 65 degrees the mean grey sits within a few counts of :data:`CLOUD_FLOOR` and half
+ * the pixels cross it. That is not cloud. It is path length being read as cloud by a threshold
+ * calibrated at nadir, and on screen it is a band of near-solid white following the circular
+ * limb: from Europe it reads as a razor-straight diagonal from the Bay of Biscay past Iceland,
+ * which is what the lead saw and correctly called a broken render rather than weather.
+ *
+ * 70 is the first bin where the figure breaks out of the 0-to-25% range the rest of the disk
+ * holds. The cost is stated rather than hidden: London sits at 80.8 degrees off GOES-East and
+ * therefore loses its cloud entirely. That is a real loss of coverage and it is the honest
+ * trade, because what London was being shown was a fabricated overcast.
+ */
+export const CLOUD_TRUST_LIMIT = 70;
+
+/**
+ * Degrees over which the sheet fades out before the limit.
+ *
+ * **Wide, and the width is the point: the weight tracks how much the reading can be trusted,
+ * and trust falls continuously with angle rather than at a line.** A narrow band was tried
+ * first, 8 degrees, and it swapped one razor edge for another a little further in. Over the
+ * Greenland ice cap and the Southern Ocean, where this palette paints hardest because the
+ * surface genuinely is cold, an 8-degree fade from fully opaque to nothing still read as a
+ * geometric boundary in a screenshot.
+ *
+ * At 25 the sheet is at full weight only inside 45 degrees, where the nine-climate measurement
+ * behind {@link CLEAR_SKY_CEILING} was taken, and it thins to nothing by 70 where the slant
+ * path has taken the reading over. That is a continuous statement of confidence rather than a
+ * cliff, it removes the edge without implying coverage we do not have, and the fade costs
+ * nothing where it matters most: real cloud over a dark ocean still contrasts at 20% alpha,
+ * while a cold surface at the same weight stops blowing the basemap out.
+ */
+export const CLOUD_TRUST_FADE = 25;
+
+/**
+ * Great-circle angle from a satellite's sub-satellite point to a place, in degrees.
+ *
+ * The sub-satellite point is on the equator, so the general spherical-distance formula
+ * collapses to this. Both arguments in contract order, degrees.
+ */
+export function offNadirDegrees(subLon: number, lon: number, lat: number): number {
+  const toRad = Math.PI / 180;
+  const cosine = Math.cos(lat * toRad) * Math.cos((lon - subLon) * toRad);
+  return (Math.acos(Math.min(1, Math.max(-1, cosine))) * 180) / Math.PI;
+}
+
+/**
+ * How much of the sheet to draw at this angle off nadir: 1 inside, 0 beyond, linear between.
+ *
+ * A weight rather than a boolean so the boundary is a fade. Multiplied into whatever alpha
+ * {@link renderAsCloud} produced, so clear sky stays clear and thick cloud thins out towards
+ * the limb rather than the whole band switching off at once.
+ */
+export function limbWeight(offNadir: number): number {
+  if (offNadir >= CLOUD_TRUST_LIMIT) {
+    return 0;
+  }
+  const fadeFrom = CLOUD_TRUST_LIMIT - CLOUD_TRUST_FADE;
+  if (offNadir <= fadeFrom) {
+    return 1;
+  }
+  return (CLOUD_TRUST_LIMIT - offNadir) / CLOUD_TRUST_FADE;
+}
 
 /**
  * How far a pixel's channels must spread before it counts as coloured rather than grey.
@@ -542,6 +710,108 @@ export function renderAsCloud(pixels: Uint8ClampedArray): void {
   }
 }
 
+/** A tile's geographic extent in degrees, contract order, from its Web Mercator address. */
+export interface TileBounds {
+  west: number;
+  east: number;
+  south: number;
+  north: number;
+}
+
+/**
+ * Where a Web Mercator tile sits on the globe.
+ *
+ * Longitude is linear in this projection and latitude is not, which is the trap: interpolating
+ * latitude straight across a tile is wrong by kilometres at high latitude, and high latitude is
+ * exactly where the limb cut has to be right. So the northing is computed in projected space
+ * and converted once per edge here, and once per pixel row in {@link fadeToLimb}.
+ */
+export function tileBounds(x: number, y: number, level: number): TileBounds {
+  const count = 2 ** level;
+  const latitudeAt = (row: number): number => {
+    const northing = Math.PI - (2 * Math.PI * row) / count;
+    return (180 / Math.PI) * Math.atan(Math.sinh(northing));
+  };
+  return {
+    west: (x / count) * 360 - 180,
+    east: ((x + 1) / count) * 360 - 180,
+    north: latitudeAt(y),
+    south: latitudeAt(y + 1),
+  };
+}
+
+/**
+ * The smallest off-nadir angle anywhere in this tile.
+ *
+ * Angle grows with both `|lat|` and `|lon - subLon|`, so the nearest point in the tile is
+ * simply the sub-satellite longitude clamped into its longitude span and the equator clamped
+ * into its latitude span. No search and no sampling: the extremum is at the clamp.
+ */
+export function tileNearestOffNadir(subLon: number, bounds: TileBounds): number {
+  const lon = Math.min(bounds.east, Math.max(bounds.west, subLon));
+  const lat = Math.min(bounds.north, Math.max(bounds.south, 0));
+  return offNadirDegrees(subLon, lon, lat);
+}
+
+/**
+ * Multiply {@link limbWeight} into the alpha of every pixel, in place.
+ *
+ * Runs after {@link renderAsCloud}, so it thins what that decided rather than deciding
+ * anything itself. Clear sky is already at alpha zero and stays there.
+ *
+ * The cosine is compared before any `acos` is taken, which keeps the inverse trig to the eight
+ * degrees of the fade band rather than all 65,536 pixels of a tile: outside the band the
+ * answer is 0 or 1 and the angle itself is never needed.
+ */
+export function fadeToLimb(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  subLon: number,
+  bounds: TileBounds,
+): void {
+  const toRad = Math.PI / 180;
+  const cosLimit = Math.cos(CLOUD_TRUST_LIMIT * toRad);
+  const cosFade = Math.cos((CLOUD_TRUST_LIMIT - CLOUD_TRUST_FADE) * toRad);
+  const cosLongitude = new Float64Array(width);
+  for (let column = 0; column < width; column += 1) {
+    const lon = bounds.west + ((bounds.east - bounds.west) * (column + 0.5)) / width;
+    cosLongitude[column] = Math.cos((lon - subLon) * toRad);
+  }
+  // Northing rather than latitude, for the reason in `tileBounds`.
+  const northOf = Math.atanh(Math.sin(bounds.north * toRad));
+  const southOf = Math.atanh(Math.sin(bounds.south * toRad));
+  for (let row = 0; row < height; row += 1) {
+    const northing = northOf + ((southOf - northOf) * (row + 0.5)) / height;
+    const cosLatitude = Math.cos(Math.atan(Math.sinh(northing)));
+    for (let column = 0; column < width; column += 1) {
+      const alpha = (row * width + column) * 4 + 3;
+      const weight = weightFromCosine(cosLatitude * (cosLongitude[column] ?? 0), cosLimit, cosFade);
+      if (weight < 1) {
+        pixels[alpha] = Math.round((pixels[alpha] ?? 0) * weight);
+      }
+    }
+  }
+}
+
+/**
+ * {@link limbWeight} without taking an `acos` unless the answer needs one.
+ *
+ * The cosine of the angle is what the loop already has, and cosine is monotonic over nought to
+ * 180 degrees, so both flat parts of the ramp can be decided by comparison. Only the eight
+ * degrees of the fade band need the angle itself, which is a few hundred pixels of a 65,536
+ * pixel tile rather than all of them. A sweep test asserts this agrees with `limbWeight`.
+ */
+function weightFromCosine(cosine: number, cosLimit: number, cosFade: number): number {
+  if (cosine <= cosLimit) {
+    return 0;
+  }
+  if (cosine >= cosFade) {
+    return 1;
+  }
+  return limbWeight((Math.acos(cosine) * 180) / Math.PI);
+}
+
 /**
  * One tile, repainted onto a canvas with {@link renderAsCloud} applied.
  *
@@ -556,7 +826,7 @@ export function renderAsCloud(pixels: Uint8ClampedArray): void {
  * carries the decisions and is tested directly; that the pixels reach the globe at all is
  * asserted by driving the built bundle in a browser.
  */
-function paintCloudTile(image: ImageryTypes): ImageryTypes {
+function paintCloudTile(image: ImageryTypes, subLon: number, bounds: TileBounds): ImageryTypes {
   const canvas = document.createElement('canvas');
   canvas.width = image.width;
   canvas.height = image.height;
@@ -567,7 +837,16 @@ function paintCloudTile(image: ImageryTypes): ImageryTypes {
   context.drawImage(image, 0, 0);
   const painted = context.getImageData(0, 0, canvas.width, canvas.height);
   renderAsCloud(painted.data);
+  fadeToLimb(painted.data, canvas.width, canvas.height, subLon, bounds);
   context.putImageData(painted, 0, 0);
+  return canvas;
+}
+
+/** A tile-sized transparent canvas, for an address wholly outside what the satellite sees. */
+function blankTile(size: number): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
   return canvas;
 }
 

@@ -317,9 +317,15 @@ new SearchBox(element('search'), {
  * nothing about why.
  */
 function updateRail(feeds: readonly FeedHealth[] = store.feeds): void {
-  const notices = new Map(satelliteNotices(satelliteFeed.state));
+  // One array element per notice, never a joined string. The social layer serves two and the
+  // rail's own shortening is built to show the first and keep the rest behind a click; joining
+  // them here threw that structure away before the rail could use it. Every other producer has
+  // exactly one notice and so passes a one-element array.
+  const notices = new Map<string, readonly string[]>(
+    [...satelliteNotices(satelliteFeed.state)].map(([layer, text]) => [layer, [text]]),
+  );
   if (cityStatus.notice !== null) {
-    notices.set(CITY_LAYER, cityStatus.notice);
+    notices.set(CITY_LAYER, [cityStatus.notice]);
   }
   if (socialState.notice !== null) {
     notices.set(SOCIAL_CLUSTER_KEY, socialState.notice);
@@ -329,7 +335,7 @@ function updateRail(feeds: readonly FeedHealth[] = store.feeds): void {
   // row says so only while the user is looking at the hole.
   const cloudNotice = clouds.notice(cityView(globe.viewer.scene));
   if (cloudNotice !== null) {
-    notices.set(CLOUD_LAYER, cloudNotice);
+    notices.set(CLOUD_LAYER, [cloudNotice]);
   }
   const counts = viewCounts();
   rail.update(
@@ -514,7 +520,8 @@ function applyTransit(batch: Batch): void {
  * exists to stop.
  */
 const socialState: {
-  notice: string | null;
+  /** The provider's own words, one element per notice. Null when it has said nothing. */
+  notice: readonly string[] | null;
   lastBox: BoundingBox | null;
   inFlight: boolean;
 } = { notice: null, lastBox: null, inFlight: false };
@@ -553,11 +560,11 @@ function refreshSocial(): void {
       // The provider's own words about what it actually searched. Commons caps its geosearch at a
       // 10km radius and there is no world call, so a wide viewport gets one search at the box
       // centre: a sparse scatter with nothing said about it reads as a broken layer.
-      socialState.notice = snapshot.notices.length === 0 ? null : snapshot.notices.join(' · ');
+      socialState.notice = snapshot.notices.length === 0 ? null : snapshot.notices;
       globe.requestRender();
     } catch (error: unknown) {
       console.error('could not read social posts', error);
-      socialState.notice = SOCIAL_READ_FAILED;
+      socialState.notice = [SOCIAL_READ_FAILED];
     } finally {
       socialState.inFlight = false;
       updateRail();

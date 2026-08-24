@@ -166,12 +166,25 @@ export interface RailInput {
    */
   providers?: readonly ProviderCoverage[] | undefined;
   /**
-   * Notices only the browser knows, keyed by layer.
+   * Notices only the browser knows, keyed by layer, one array element per notice.
    *
    * The satellite layer is the one that has any: the server can say CelesTrak is
    * unreachable, but only the propagator knows how many element sets it refused this tick.
+   *
+   * **An array, and it was a single string, which quietly defeated everything below it.**
+   * `RailRow.notices` says "the same notices, unjoined, so the row can show one and keep the rest
+   * behind a click", and that was not true of anything arriving here: a `string` value cannot
+   * carry two notices, so `main.ts` joined them with a middle dot before the rail ever saw them.
+   * The social layer serves two, 115 and 100 characters, measured live on 2026-08-24, so what
+   * reached the row builder was one 218-character element. `noticeSummary` then cut inside the
+   * first notice at 72 and the disclosure showed a single run-on line rather than two legible
+   * rows, and no amount of shortening or budgeting could have fixed it, because the structure the
+   * shortening needed had already been thrown away one file upstream.
+   *
+   * A producer with one notice passes a one-element array, which is what every other producer
+   * here does.
    */
-  notices?: ReadonlyMap<string, string> | undefined;
+  notices?: ReadonlyMap<string, readonly string[]> | undefined;
   /**
    * How many of each layer's entities are inside the current view, keyed by layer.
    *
@@ -332,8 +345,7 @@ function buildRow(layer: string, input: RailInput): RailRow {
   const dropped = coverage
     .filter((entry) => entry.error !== null && entry.error !== undefined)
     .map((entry) => `${entry.provider} dropped out: ${entry.error ?? NO_REASON_GIVEN}`);
-  const notice = input.notices?.get(layer);
-  const detail = [...failing, ...dropped, ...missing, ...(notice === undefined ? [] : [notice])];
+  const detail = [...failing, ...dropped, ...missing, ...(input.notices?.get(layer) ?? [])];
 
   return {
     ...row,
@@ -450,20 +462,59 @@ export function notDrawnLabel(count: number): string {
  * How long a notice can be before the row shows a shortened form and keeps the rest behind
  * a click.
  *
- * Two lines at 14px in the rail's 24rem. It was 96, which is three lines, and three lines of
- * amber under a row is the wall of text this exists to remove. Every reason that is actually
- * about a fault is shorter than this and so is shown whole: "CelesTrak has not been queried
- * yet" is 34 characters and "vessels/union down: no successful poll yet" is 41. What gets
- * shortened is the "set this environment variable" notes, which run past 150.
+ * Two lines at 14px in the rail's 24rem. Three lines of amber under a row is the wall of text
+ * this exists to remove.
+ *
+ * **72 stays, and this comment exists because I measured it in order to raise it and could not.**
+ * The reason for measuring was sound: the old comment here claimed the only thing shortening would
+ * ever hit was the "set this environment variable" notes, which run past 150, and that is wrong.
+ * The social notice is 115 characters whose second half carries the entire meaning, and at 72 it
+ * reads "…so this view holds…", which tells a reader a ceiling was hit and nothing about what it
+ * means for the view in front of them.
+ *
+ * So I measured rendered line boxes in a real browser at the real 354px and 14px, rather than
+ * counting characters. How many characters actually fit two lines:
+ *
+ *     all-caps text                                61
+ *     "Set TRACKER_WINDY_API_KEY or TRACKER_..."   73   ← a third key added to a real reason
+ *     the same reason as it stands today           74
+ *     "Set TRACKER_CONTACT_EMAIL. Nominatim..."    94
+ *     aishub gate                                 103
+ *     airplanes.live                              106
+ *     social 500-cap                              109
+ *     typical prose                               108
+ *     narrow lowercase                            119
+ *
+ * **The limit varies by nearly two to one with the glyphs, so no fixed character count is
+ * correct, and 72 is about as high as one can safely go.** Capitals and underscores are the
+ * problem and this rail is full of them, because environment variable names are what a gate
+ * reason names. 94 looked safe against every string the live API serves and I nearly shipped it:
+ * what stopped it was `CAMERAS_REASON` in the test file, a reason of the same shape one key
+ * longer, which renders three lines at anything above 73. The strings I had sampled were the ones
+ * the running server happened to be sending, which excluded exactly the class the old comment had
+ * named.
+ *
+ * So the social notice is not fixed here. The informative half has to come first in the string
+ * itself, which is the backend's to change. The layout-correct alternative is `line-clamp: 2`,
+ * which needs a span inside the `summary` and moves the disclosure decision out of a pure
+ * function into a layout query, and that is not worth it for a line whose full text is already
+ * one click away.
+ *
+ * If the rail's width or font size ever changes, every number above is stale.
  */
 export const NOTICE_SUMMARY_MAX = 72;
 
-/** Cut to the last word that fits, so the shortened form is not a severed word. */
-function shorten(text: string): string {
-  if (text.length <= NOTICE_SUMMARY_MAX) {
+/**
+ * Cut to the last word that fits, so the shortened form is not a severed word.
+ *
+ * Takes its own budget because the caller may have a suffix to fit on the same two lines, and
+ * appending one after shortening spends characters the budget already promised away.
+ */
+function shorten(text: string, max: number = NOTICE_SUMMARY_MAX): string {
+  if (text.length <= max) {
     return text;
   }
-  const cut = text.slice(0, NOTICE_SUMMARY_MAX);
+  const cut = text.slice(0, max);
   const lastSpace = cut.lastIndexOf(' ');
   return `${(lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
@@ -504,9 +555,18 @@ export function noticeSummary(notices: readonly string[], gatesOnly = false): st
     const count = notices.length;
     return count === 1 ? '1 provider unavailable' : `${String(count)} providers unavailable`;
   }
-  return notices.length === 1
-    ? shorten(first)
-    : `${shorten(first)} (+${String(notices.length - 1)} more)`;
+  if (notices.length === 1) {
+    return shorten(first);
+  }
+  // **The suffix comes out of the same two lines, so it comes out of the same budget.** This was
+  // a real three-line overflow, not a precaution: appending after shortening to the full budget
+  // spends 72 characters and then 10 more, and measured in a real browser
+  // "Set TRACKER_WINDY_API_KEY or TRACKER_TFL_APP_KEY or TRACKER_NY511_KEY…" plus " (+2 more)"
+  // renders 80 characters over three lines. Budgeting the suffix brings the same row back to two.
+  // Found while measuring whether `NOTICE_SUMMARY_MAX` could be raised; it could not, and this
+  // was next door to it.
+  const suffix = ` (+${String(notices.length - 1)} more)`;
+  return `${shorten(first, NOTICE_SUMMARY_MAX - suffix.length)}${suffix}`;
 }
 
 /**
@@ -693,7 +753,7 @@ export class LayerRail {
   private providers: readonly ProviderCoverage[] = [];
   private sweeps: readonly SweepCoverage[] = [];
   private held: ReadonlyMap<string, number> = new Map();
-  private notices: ReadonlyMap<string, string> = new Map();
+  private notices: ReadonlyMap<string, readonly string[]> = new Map();
   private inView: ReadonlyMap<string, number> = new Map();
   private groups: ReadonlyMap<string, number> = new Map();
   private built = '';
@@ -773,7 +833,7 @@ export class LayerRail {
    */
   update(
     feeds: readonly FeedHealth[],
-    notices: ReadonlyMap<string, string> = new Map(),
+    notices: ReadonlyMap<string, readonly string[]> = new Map(),
     inView: ReadonlyMap<string, number> = new Map(),
     groups: ReadonlyMap<string, number> = new Map(),
   ): void {

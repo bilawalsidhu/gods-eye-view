@@ -169,7 +169,7 @@ function provider(overrides: Partial<ProviderCoverage> = {}): ProviderCoverage {
 interface RowOverrides {
   feeds?: readonly FeedHealth[];
   providers?: readonly ProviderCoverage[];
-  notices?: ReadonlyMap<string, string>;
+  notices?: ReadonlyMap<string, readonly string[]>;
   held?: ReadonlyMap<string, number>;
 }
 
@@ -759,16 +759,36 @@ describe('railRows with per-provider coverage', () => {
     expect(vessels!.coverage).toBeNull();
   });
 
+  it('keeps two browser-side notices apart, which is what the disclosure needs', () => {
+    // The two strings `/api/social` actually served on 2026-08-24, 115 and 100 characters. They
+    // used to be joined with a middle dot in `main.ts` before the rail saw them, because this map
+    // carried a `string`, so the row received one 218-character element. The shortening then cut
+    // inside the first notice and the disclosure showed one run-on line instead of two rows, and
+    // nothing here could have fixed it: the structure had been thrown away one file upstream.
+    const first =
+      'photograph search returned its maximum of 500 files, so this view holds the nearest of them rather than all of them';
+    const second =
+      'photographs searched within 10km of the centre of this view, which is as wide as the provider allows';
+
+    const satellites = row('satellites', { notices: new Map([['satellites', [first, second]]]) });
+
+    expect(satellites.notices).toStrictEqual([first, second]);
+    expect(noticeSummary(satellites.notices)).toContain('(+1 more)');
+    expect(noticesNeedDisclosure(satellites.notices)).toBe(true);
+    // Both verbatim inside, neither shortened, and no middle dot joining them.
+    expect(satellites.notices.every((text) => !text.includes(' · '))).toBe(true);
+  });
+
   it('carries a browser-side notice onto its layer, alongside whatever the server said', () => {
     const satellites = row('satellites', {
-      notices: new Map([['satellites', '3 objects dropped: would not propagate.']]),
+      notices: new Map([['satellites', ['3 objects dropped: would not propagate.']]]),
     });
 
     // Only the propagator knows this: the server holds the element set and the browser is
     // the thing that refused it.
     expect(satellites.state).toBe('degraded');
     expect(satellites.detail).toBe('3 objects dropped: would not propagate.');
-    expect(row('aircraft', { notices: new Map([['satellites', 'x']]) }).detail).toBeNull();
+    expect(row('aircraft', { notices: new Map([['satellites', ['x']]]) }).detail).toBeNull();
   });
 });
 
@@ -1159,6 +1179,26 @@ describe('standing gates', () => {
     expect(noticeSummary(GATES)).toContain('adsbexchange missing');
     expect(noticeSummary(GATES)).toContain('(+1 more)');
   });
+
+  it('takes the "(+N more)" suffix out of the budget rather than adding it on top', () => {
+    // A real three-line overflow before this, measured in a browser at the rail's 354px and 14px.
+    // The first notice was shortened to the full 72 and then 10 more characters of suffix were
+    // appended, giving 80, and 80 characters of capitals and underscores is three lines: the
+    // measured two-line limit for text of that shape is 73. Capital-heavy is not a corner case
+    // here, because an environment variable name is most of what a gate reason is made of.
+    const capitals = 'Set TRACKER_WINDY_API_KEY or TRACKER_TFL_APP_KEY or TRACKER_NY511_KEY now';
+
+    const summary = noticeSummary([capitals, 'second', 'third']);
+
+    expect(summary).toContain('(+2 more)');
+    expect(summary.length).toBeLessThanOrEqual(73);
+  });
+
+  it('spends the whole budget when there is no suffix to pay for', () => {
+    // The other half of the same rule: a lone notice must not be charged for a suffix it has not
+    // got, or every single-notice row loses ten characters to nothing.
+    expect(noticeSummary(['a'.repeat(200)]).length).toBe(NOTICE_SUMMARY_MAX + 1);
+  });
 });
 
 describe('noticesNeedDisclosure', () => {
@@ -1169,7 +1209,12 @@ describe('noticesNeedDisclosure', () => {
   });
 
   it('collapses a reason too long to be a row', () => {
-    expect(noticesNeedDisclosure(['x'.repeat(NOTICE_SUMMARY_MAX + 1)])).toBe(true);
+    // A literal length, not `NOTICE_SUMMARY_MAX + 1`, which is the test asking the implementation
+    // what the answer is: move the constant and the expectation moves with it, so the assertion
+    // survives the mutation it exists to catch. 73 is one past the measured two-line limit for a
+    // capital-heavy reason, taken from rendered line boxes in a real browser, not from this module.
+    expect(noticesNeedDisclosure(['x'.repeat(73)])).toBe(true);
+    expect(NOTICE_SUMMARY_MAX).toBeLessThan(73);
   });
 
   it('collapses two reasons however short they are', () => {

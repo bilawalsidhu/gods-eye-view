@@ -28,9 +28,11 @@ import {
   CLOUD_LAYER,
   CLOUD_REASON_MAX,
   CLOUD_SATELLITES,
+  CLOUD_COMPLETE_MARGIN,
+  CLOUD_TRUST_FADE,
+  CLOUD_TRUST_LIMIT,
   CLOUD_SLOT_CANDIDATES,
   CloudLayer,
-  cloudDefaultUrl,
   cloudGapInView,
   cloudImagery,
   cloudProbeUrl,
@@ -41,7 +43,12 @@ import {
   describeError,
   headTile,
   renderAsCloud,
+  fadeToLimb,
+  limbWeight,
   newestCloudSlot,
+  offNadirDegrees,
+  tileBounds,
+  tileNearestOffNadir,
   slotFromHeader,
 } from './clouds';
 import type { CloudSatellite } from './clouds';
@@ -219,6 +226,9 @@ type Answer = Promise<{ ok: boolean; slot: string | null }>;
 
 /** GIBS answering every tile and naming no frame, which is the fallback path. */
 const ALWAYS = (): Answer => Promise.resolve({ ok: true, slot: null });
+/** Serves every slot asked for while naming a much older one, which GOES-West really did. */
+const VOLUNTEERS_A_STALE_FRAME = (): Answer =>
+  Promise.resolve({ ok: true, slot: '2026-08-23T09:00:00Z' });
 const NEVER = (): Answer => Promise.resolve({ ok: false, slot: null });
 /** GIBS naming the frame it served, which is the normal path and one request. */
 const REPORTS =
@@ -337,30 +347,81 @@ describe('slotFromHeader', () => {
 });
 
 describe('newestCloudSlot', () => {
-  it('takes the frame GIBS names, in one request, with nothing guessed', async () => {
+  it('takes the newest slot that answers, and asks for each one by name', async () => {
     const asked: string[] = [];
     const probe = (url: string): Answer => {
       asked.push(url);
-      return REPORTS('2026-08-23T09:30:00Z')(url);
+      return Promise.resolve({ ok: asked.length >= 3, slot: null });
     };
 
-    expect(await newestCloudSlot(named('Himawari'), NOON, probe)).toBe('2026-08-23T09:30:00Z');
-    // One request, not the four the walk would take to reach a frame that old, three of them
-    // 404s and so three console errors in a browser.
-    expect(asked).toStrictEqual([cloudDefaultUrl(named('Himawari'))]);
+    // The third answers, so the one `CLOUD_COMPLETE_MARGIN` behind it is asked for and taken:
+    // a frame that answers is not a frame that is finished.
+    expect(await newestCloudSlot(named('GOES-West'), NOON, probe)).toBe(
+      cloudSlots(NOON)[2 + CLOUD_COMPLETE_MARGIN],
+    );
+    // Three to find one that answers, then one for the margin. Not all eight: the rest would be
+    // wasted requests against a provider whose cadence discipline is a rule here.
+    expect(asked).toHaveLength(4);
+    expect(asked.every((url) => !url.includes('/default/default/'))).toBe(true);
   });
 
-  it('walks the slots when the answer names no frame', async () => {
+  it('never adopts a slot the provider names but will not serve', async () => {
+    // The bug this replaced, measured live on 2026-08-24: `default` reported 09:20 for
+    // GOES-East while an explicit request for 09:20 answered 404, so the layer pinned a slot on
+    // which every tile 404ed and drew nothing at all. A probe that reports a frame in its header
+    // and refuses the tile must not be believed.
     const asked: string[] = [];
     const probe = (url: string): Answer => {
       asked.push(url);
-      return Promise.resolve({ ok: asked.length === 3, slot: null });
+      return Promise.resolve({ ok: asked.length >= 2, slot: '2026-08-23T11:40:00Z' });
     };
 
-    expect(await newestCloudSlot(named('GOES-West'), NOON, probe)).toBe('2026-08-23T11:30:00Z');
-    // The `default` request and then two slots. Not all nine: the rest would be wasted
-    // requests against a provider whose cadence discipline is a rule here.
-    expect(asked).toHaveLength(3);
+    const slot = await newestCloudSlot(named('GOES-East'), NOON, probe);
+
+    // The second candidate answers, so the one behind the margin is taken. What matters here is
+    // that the frame named in the header is not.
+    expect(slot).toBe(cloudSlots(NOON)[1 + CLOUD_COMPLETE_MARGIN]);
+    expect(slot).not.toBe('2026-08-23T11:40:00Z');
+  });
+
+  it('does not stop at a stale frame the provider volunteers', async () => {
+    // The other half of the same measurement, and the one nobody would notice: GOES-West's
+    // header named 08:50 while 09:20 was addressable, so trusting it drew half-hour-old cloud
+    // as current. The walk starts at the newest candidate, so it cannot be talked backwards.
+    expect(await newestCloudSlot(named('GOES-West'), NOON, VOLUNTEERS_A_STALE_FRAME)).toBe(
+      cloudSlots(NOON)[CLOUD_COMPLETE_MARGIN],
+    );
+  });
+
+  it('steps back from the newest that answers, because a frame is built in pieces', async () => {
+    // Measured 2026-08-24: the newest answering slot was 9 of 10 tiles built, and the missing
+    // tenth was a rectangular hole in the sheet. A probe tile says a frame has started rather
+    // than that it has finished, and GIBS builds one in no pyramid order, so no tile is evidence
+    // about any other and the only cheap lever is time.
+    const asked: string[] = [];
+    const probe = (url: string): Answer => {
+      asked.push(url);
+      return Promise.resolve({ ok: true, slot: null });
+    };
+
+    expect(await newestCloudSlot(named('GOES-East'), NOON, probe)).toBe(
+      cloudSlots(NOON)[CLOUD_COMPLETE_MARGIN],
+    );
+    // Two probes whatever the margin: the newest, then the one the margin points at.
+    expect(asked).toHaveLength(2);
+  });
+
+  it('keeps the newest frame when there is nothing older to fall back to', async () => {
+    // The last candidate has no older neighbour, so the margin cannot be paid and the frame
+    // that answered is drawn rather than the layer reporting nothing.
+    const asked: string[] = [];
+    const probe = (url: string): Answer => {
+      asked.push(url);
+      return Promise.resolve({ ok: asked.length === CLOUD_SLOT_CANDIDATES, slot: null });
+    };
+
+    const oldest = cloudSlots(NOON).at(-1);
+    expect(await newestCloudSlot(named('GOES-East'), NOON, probe)).toBe(oldest);
   });
 
   it('gives up rather than walking back into last week', async () => {
@@ -371,7 +432,7 @@ describe('newestCloudSlot', () => {
     };
 
     expect(await newestCloudSlot(named('GOES-West'), NOON, probe)).toBeNull();
-    expect(asked).toHaveLength(CLOUD_SLOT_CANDIDATES + 1);
+    expect(asked).toHaveLength(CLOUD_SLOT_CANDIDATES);
   });
 });
 
@@ -559,7 +620,12 @@ describe('cloudImagery tile repaint', () => {
     const state = stubCanvas();
     const provider = cloudImagery(named('GOES-East'), '2026-08-23T09:20:00Z');
 
-    await provider.requestImage(0, 0, 0);
+    // The address matters now, and it did not before. Level 4 tile 4/8 spans 90°W to 67.5°W on
+    // the equator, so both stub pixels land within 15 degrees of GOES-East's sub-satellite
+    // point and the limb fade leaves them alone. Tile 0/0/0 would put the second pixel at 90°E,
+    // which this satellite genuinely cannot see, and the ramp's answer would be masked by a
+    // correct geographic cut.
+    await provider.requestImage(4, 8, 4);
 
     expect(state.painted).not.toBeNull();
     // Warm sea out, dense cloud in.
@@ -576,16 +642,20 @@ describe('CloudLayer', () => {
     expect(sheets.live).toHaveLength(CLOUD_SATELLITES.length);
     expect(sheets.log).toStrictEqual(['add', 'add', 'add']);
     expect(layer.capability).toStrictEqual({ layer: CLOUD_LAYER, available: true, reason: null });
-    expect(layer.showing.get('GOES-East')).toBe('2026-08-23T11:40:00Z');
+    expect(layer.showing.get('GOES-East')).toBe(cloudSlots(NOON)[CLOUD_COMPLETE_MARGIN]);
   });
 
-  it('draws the frame GIBS named rather than the one the clock suggested', async () => {
+  it('draws a frame it has had a tile back for, not one the provider merely names', async () => {
+    // Replaces a test that asserted the opposite. It used to read "draws the frame GIBS named
+    // rather than the one the clock suggested", on the belief that `layer-time-actual` was
+    // authoritative. Measured live on 2026-08-24, that header names an unaddressable frame on
+    // two of the three layers and a thirty-minute-stale one on the third, so believing it drew
+    // either nothing or old cloud. The frame drawn is now always one that answered.
     const { layer } = makeLayer({ probe: REPORTS('2026-08-23T09:30:00Z'), now: () => NOON });
 
     expect(await layer.refresh()).toBe(true);
-    // 150 minutes old, which is well outside the fallback walk. Himawari really was that far
-    // behind when this was measured, and a layer that refused it would have drawn nothing.
-    expect(layer.showing.get('Himawari')).toBe('2026-08-23T09:30:00Z');
+    expect(layer.showing.get('GOES-East')).toBe(cloudSlots(NOON)[CLOUD_COMPLETE_MARGIN]);
+    expect(layer.showing.get('GOES-East')).not.toBe('2026-08-23T09:30:00Z');
   });
 
   it('leaves the blend to the pixels rather than veiling the globe with a constant', async () => {
@@ -633,7 +703,7 @@ describe('CloudLayer', () => {
       'remove+destroy',
     ]);
     expect(sheets.live).toHaveLength(CLOUD_SATELLITES.length);
-    expect(layer.showing.get('Himawari')).toBe('2026-08-23T12:10:00Z');
+    expect(layer.showing.get('Himawari')).toBe(cloudSlots(LATER)[CLOUD_COMPLETE_MARGIN]);
   });
 
   it('keeps a sheet built and stops drawing it when the switch moves', async () => {
@@ -695,5 +765,135 @@ describe('CloudLayer', () => {
     // Short enough to be shown outright rather than shortened behind a click, which is what
     // NOTICE_SUMMARY_MAX in the rail decides.
     expect(CLOUD_GAP_NOTICE.length).toBeLessThanOrEqual(72);
+  });
+});
+
+/** Two opaque pixels side by side, so each column is a known longitude. */
+function twoOpaquePixels(): Uint8ClampedArray {
+  return new Uint8ClampedArray([255, 255, 255, 255, 255, 255, 255, 255]);
+}
+
+describe('the limb, which is where the palette stops meaning anything', () => {
+  it('measures the angle from the sub-satellite point, not from the slice', () => {
+    const goesEast = named('GOES-East');
+    expect(goesEast.subLon).toBe(-75.2);
+    // Nadir.
+    expect(offNadirDegrees(goesEast.subLon, -75.2, 0)).toBeCloseTo(0, 6);
+    // London, which the earlier measurement put at 80.8 degrees off this satellite and which
+    // is therefore outside what the palette can read. That is the stated cost of the cut.
+    expect(offNadirDegrees(goesEast.subLon, -0.1276, 51.5072)).toBeCloseTo(80.8, 1);
+    // The far side of the world is not a small angle.
+    expect(offNadirDegrees(goesEast.subLon, 104.8, 0)).toBeCloseTo(180, 4);
+  });
+
+  it('draws nothing beyond the limit and everything well inside it', () => {
+    expect(limbWeight(0)).toBe(1);
+    expect(limbWeight(CLOUD_TRUST_LIMIT - CLOUD_TRUST_FADE)).toBe(1);
+    expect(limbWeight(CLOUD_TRUST_LIMIT)).toBe(0);
+    expect(limbWeight(85)).toBe(0);
+    expect(limbWeight(180)).toBe(0);
+  });
+
+  it('fades rather than cutting, so the boundary is not a second razor edge', () => {
+    // A hard cut at 70 would swap one geometric edge for another further in. Half way through
+    // the fade band is half weight.
+    expect(limbWeight(CLOUD_TRUST_LIMIT - CLOUD_TRUST_FADE / 2)).toBeCloseTo(0.5, 6);
+    expect(limbWeight(CLOUD_TRUST_LIMIT - 1)).toBeCloseTo(1 / CLOUD_TRUST_FADE, 6);
+  });
+
+  it('puts a tile where Web Mercator actually puts it', () => {
+    // Level 0 is the whole world. The latitude bound is the projection's own limit rather than
+    // 90, which is the thing a linear interpolation of latitude would get wrong.
+    const world = tileBounds(0, 0, 0);
+    expect(world.west).toBe(-180);
+    expect(world.east).toBe(180);
+    expect(world.north).toBeCloseTo(85.051129, 4);
+    expect(world.south).toBeCloseTo(-85.051129, 4);
+    // And a tile at level 2 holds a quarter of the longitudes, which is 90 degrees rather than
+    // the 45 this test first asserted: there are four columns at that level, not eight.
+    const equator = tileBounds(1, 1, 2);
+    expect(equator.west).toBe(-90);
+    expect(equator.east).toBe(0);
+    expect(equator.north).toBeCloseTo(66.5133, 3);
+    expect(equator.south).toBeCloseTo(0, 6);
+  });
+
+  it('finds a tile nearest angle at the clamp rather than by searching', () => {
+    const subLon = -75.2;
+    // A tile containing the sub-satellite point is at nadir somewhere inside it.
+    expect(tileNearestOffNadir(subLon, { west: -90, east: -60, south: -20, north: 20 })).toBe(0);
+    // One east of it: nearest point is its western edge on the equator.
+    expect(
+      tileNearestOffNadir(subLon, { west: -45, east: -30, south: -20, north: 20 }),
+    ).toBeCloseTo(30.2, 6);
+    // A polar tile at the same longitudes is much further off, which is the case a rectangle
+    // cannot express and the reason those corners used to 404.
+    expect(tileNearestOffNadir(subLon, { west: -80, east: -70, south: 70, north: 85 })).toBeCloseTo(
+      70,
+      0,
+    );
+  });
+
+  it('empties a tile the satellite cannot see, and leaves one it can', () => {
+    const nearNadir = twoOpaquePixels();
+    fadeToLimb(nearNadir, 2, 1, -75.2, { west: -90, east: -67.5, south: -10, north: 10 });
+    expect([nearNadir[3], nearNadir[7]]).toStrictEqual([255, 255]);
+
+    const overEurope = twoOpaquePixels();
+    fadeToLimb(overEurope, 2, 1, -75.2, { west: 0, east: 20, south: 45, north: 55 });
+    expect([overEurope[3], overEurope[7]]).toStrictEqual([0, 0]);
+  });
+
+  it('thins the sheet across the fade band rather than switching it off', () => {
+    const pixels = new Uint8ClampedArray([255, 255, 255, 255]);
+    // One pixel centred at 65 degrees off nadir on the equator, which is inside the band.
+    fadeToLimb(pixels, 1, 1, 0, { west: 64, east: 66, south: -1, north: 1 });
+    const weight = limbWeight(offNadirDegrees(0, 65, 0));
+    expect(pixels[3]).toBe(Math.round(255 * weight));
+    expect(pixels[3]).toBeGreaterThan(0);
+    expect(pixels[3]).toBeLessThan(255);
+  });
+
+  it('agrees with limbWeight at every angle, including inside the fade band', () => {
+    // `fadeToLimb` decides the two flat parts of the ramp by comparing cosines, so it never
+    // takes an `acos` outside the fade band. That is an optimisation on a correctness path, so
+    // the two are swept against each other rather than assumed to match: a sign slip or a
+    // swapped bound would show up only in the eight degrees that matter least to look at and
+    // most to get right.
+    for (let degrees = 0; degrees <= 90; degrees += 0.25) {
+      const pixels = new Uint8ClampedArray([255, 255, 255, 255]);
+      // One pixel on the equator at this longitude east of nadir, so its angle is its longitude.
+      fadeToLimb(pixels, 1, 1, 0, {
+        west: degrees - 0.0001,
+        east: degrees + 0.0001,
+        south: -0.0001,
+        north: 0.0001,
+      });
+      // Within one count of 255. The residual is the projection round-trip, not the ramps
+      // disagreeing: `fadeToLimb` gets a pixel's latitude back through `atanh`, `sinh` and
+      // `atan` on a tile a ten-thousandth of a degree tall, and with a 25-degree fade one
+      // alpha count is a fortieth of a degree of angle. A drift larger than this would be a
+      // real divergence between the cosine shortcut and the angle it stands in for.
+      expect(
+        Math.abs((pixels[3] ?? 0) - Math.round(255 * limbWeight(degrees))),
+      ).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('leaves clear sky clear rather than making it faintly cloudy', () => {
+    // The fade multiplies what the ramp decided. Alpha zero times any weight is alpha zero, so
+    // a warm sea cannot be turned into thin cloud by being near the limb.
+    const clear = new Uint8ClampedArray([104, 104, 104, 0]);
+    fadeToLimb(clear, 1, 1, 0, { west: 64, east: 66, south: -1, north: 1 });
+    expect(clear[3]).toBe(0);
+  });
+
+  it('gives every satellite a sub-satellite longitude inside its own slice', () => {
+    // A slice is meant to hand each longitude to whichever satellite is most nearly overhead,
+    // so a sub-satellite point outside its own slice would mean the slices were cut wrong.
+    for (const satellite of CLOUD_SATELLITES) {
+      expect(satellite.subLon).toBeGreaterThanOrEqual(satellite.west);
+      expect(satellite.subLon).toBeLessThanOrEqual(satellite.east);
+    }
   });
 });
