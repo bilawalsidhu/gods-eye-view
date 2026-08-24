@@ -103,6 +103,35 @@ export const CLUSTER_CELL_PX = 56;
  * Layers override it. A layer whose marks are already quiet enough to see the globe through wants
  * a much higher number, because for it a badge is a step backwards until the pile is genuinely
  * large. See `layers/satellites.ts`.
+ *
+ * **Do not raise the mover minimums to thin out the opening view, and do not reach for the satellite
+ * precedent to justify it. Both were measured on 2026-08-24 and both say no.**
+ *
+ * The argument for raising them is a good one: the satellite minimum is thirty because a badge hides
+ * more of the globe than the seven-pixel diamonds it replaces, so a badge has to earn its place, and
+ * at a whole-globe view the mover layers look like they fail the same test. Applying that test
+ * properly is what settles it, and the metric has to be **painted ink rather than mark count**: at
+ * that range a transit mark is 5.2 pixels drawn and a badge is 30 to 48, so counting marks flatters
+ * the badge by a factor of thirty. Ink fractions taken from the real silhouette polygons: a plane
+ * paints 0.447 of its box with its casing, a ship 0.409, a vehicle 0.393, a diamond 0.544, and the
+ * badge hexagon about 0.60.
+ *
+ * Total ink over the live feeds, badges plus the loose marks that replace them:
+ *
+ * - **Whole Earth: it barely moves.** 30,310 square pixels at ten, 28,083 at forty, 28,691 at a
+ *   hundred. Seven per cent at best, and then it gets worse again. The reason is that the badges up
+ *   there hold thousands each, far above any threshold worth setting, so raising the minimum removes
+ *   only the handful of small ones and the twenty-odd big ones are not going anywhere.
+ * - **Europe at 3,000km: fifteen is the optimum and above it degrades fast.** 122,441 at fifteen,
+ *   132,943 at forty, 186,147 at a hundred. Fifty-two per cent worse.
+ * - **A dense city: lower is better all the way down.** 87,530 at ten rising monotonically to 95,154,
+ *   where nothing groups at all.
+ *
+ * So the mover minimums are already at the ink optimum or within one step of it at every zoom, and
+ * the satellite precedent does not transfer for a reason that is measurable rather than a matter of
+ * taste: a diamond is the inkiest mark in the app at 0.544 of its box, there are only about seven
+ * hundred satellites and they are spread around a shell, so a satellite badge replaces few marks that
+ * each cost a lot. A transit badge replaces thousands that each cost almost nothing.
  */
 export const CLUSTER_MIN_MEMBERS = 10;
 

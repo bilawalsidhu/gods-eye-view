@@ -772,6 +772,15 @@ the section stays navigable.
   `OffscreenCanvas` is the linter correctly observing that those do not exist in the Node scope it
   is checking, because they only exist in the browser where `page.evaluate` runs the body. When a
   linter is right about the scope and wrong about the intent, the file is in the wrong place.
+  **Amended the same day, after a fourth instance: for Playwright specifically the tool won.**
+  Four agents independently chose `e2e/` over the scratchpad, which is a design signal rather
+  than four lapses: Playwright wants `frontend/playwright.config.ts` for its `baseURL` and its
+  `webServer`, and driving it from outside the project is more setup than a throwaway file is
+  worth. So `e2e/tmp-*.spec.ts` is now excluded from git, biome, eslint and `tsconfig.json`,
+  and since `pnpm verify` runs `format:check`, `lint`, `lint:html`, `typecheck` and `test` but
+  **never Playwright**, one costs nobody anything while `pnpm e2e` still runs it. Name a scratch
+  spec `tmp-` and put it in `e2e/`; everything else still goes in the scratchpad. A convention
+  that four people break in one day is a bad convention, not four bad decisions.
 - **A test that asks the implementation what the answer should be is not a test.** It agrees
   with itself and survives the mutation that matters, because moving the constant moves both the
   code and the expectation. Two instances on 2026-08-23. A badge fit test read

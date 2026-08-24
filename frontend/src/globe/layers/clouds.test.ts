@@ -25,6 +25,7 @@ import {
   CLEAR_SKY_CEILING,
   CLOUD_FLOOR,
   CLOUD_GAP_NOTICE,
+  CLOUD_LIMB_NOTICE,
   CLOUD_LAYER,
   CLOUD_REASON_MAX,
   CLOUD_SATELLITES,
@@ -34,6 +35,7 @@ import {
   CLOUD_SLOT_CANDIDATES,
   CloudLayer,
   cloudGapInView,
+  cloudsOutOfSight,
   cloudImagery,
   cloudProbeUrl,
   cloudSlot,
@@ -313,6 +315,43 @@ describe('CLOUD_SATELLITES', () => {
   });
 });
 
+describe('cloudsOutOfSight', () => {
+  it('says so over London, which the 70 degree cut removed from the layer', () => {
+    // London is at 80.8 degrees off GOES-East, so nothing reads it and nothing is drawn.
+    expect(cloudsOutOfSight({ west: -1, south: 51, east: 1, north: 52 })).toBe(true);
+  });
+
+  it('answers about latitude, which is what the gap notice cannot', () => {
+    // The predicate's real job once the gap is derived. A polar view sits at a longitude some
+    // satellite covers on the equator, so the gap says nothing about it, and is still past the
+    // limit because the angle grows with latitude as well. Northern Greenland, at longitudes
+    // GOES-East owns.
+    expect(cloudGapInView({ west: -45, south: 78, east: -35, north: 83 })).toBe(false);
+    expect(cloudsOutOfSight({ west: -45, south: 78, east: -35, north: 83 })).toBe(true);
+  });
+
+  it('says nothing over places a satellite can actually read', () => {
+    expect(cloudsOutOfSight(ATLANTIC)).toBe(false);
+    // Tokyo, well inside Himawari.
+    expect(cloudsOutOfSight({ west: 139, south: 35, east: 140, north: 36 })).toBe(false);
+    // Florida, near nadir for GOES-East.
+    expect(cloudsOutOfSight({ west: -82, south: 25, east: -80, north: 27 })).toBe(false);
+  });
+
+  it('is false for a whole-globe view, which contains every sub-satellite point', () => {
+    expect(cloudsOutOfSight({ west: -180, south: -85, east: 180, north: 85 })).toBe(false);
+  });
+
+  it('answers about the strip and not the rest of the world when the view wraps', () => {
+    // A view from 170 to -170 crosses the dateline and is 20 degrees wide. Clamping a
+    // sub-satellite longitude into `[west, east]` on those numbers would answer about the other
+    // 340 degrees. Himawari at 140.7°E is 30 degrees from the near edge, so this is in sight.
+    expect(cloudsOutOfSight({ west: 170, south: -5, east: -170, north: 5 })).toBe(false);
+    // And the mid-Atlantic strip, which no satellite reads, is not.
+    expect(cloudsOutOfSight({ west: 25, south: 45, east: 35, north: 55 })).toBe(true);
+  });
+});
+
 describe('cloudGapInView', () => {
   it('says nothing about a view the satellites cover', () => {
     expect(cloudGapInView(ATLANTIC)).toBe(false);
@@ -321,10 +360,15 @@ describe('cloudGapInView', () => {
 
   it('reports the hole GIBS leaves where Meteosat would be', () => {
     expect(cloudGapInView(EGYPT)).toBe(true);
-    // The eastern edge of GOES-East is the meridian, so Berlin is in the hole and London is
-    // not. Six degrees of smeared limb was traded for a console with nothing in it.
     expect(cloudGapInView({ west: 12, south: 51, east: 15, north: 54 })).toBe(true);
-    expect(cloudGapInView({ west: -1, south: 51, east: -0.1, north: 52 })).toBe(false);
+    // **London is in the hole now, and it was not before.** This line asserted the opposite,
+    // with a comment reading "the eastern edge of GOES-East is the meridian, so Berlin is in the
+    // hole and London is not". That was true when the disk was asked about longitudes out to its
+    // slice edge. Cutting it at 70 degrees off nadir moved GOES-East's real reach 5.2 degrees
+    // west of the meridian, so the hole grew and this test is what said so.
+    expect(cloudGapInView({ west: -1, south: 51, east: -0.1, north: 52 })).toBe(true);
+    // West of the hole's new edge: the sea off Ireland, which GOES-East still reads.
+    expect(cloudGapInView({ west: -12, south: 51, east: -8, north: 54 })).toBe(false);
   });
 
   it('honours a view that crosses the antimeridian rather than answering about its mirror', () => {
@@ -634,6 +678,33 @@ describe('cloudImagery tile repaint', () => {
   });
 });
 
+describe('the notice ranking', () => {
+  it('names the gap over London, and the gap now genuinely includes London', async () => {
+    // The point of deriving the gap. A viewer over London reads "no cloud cover from 6°W to
+    // 71°E", which explains their empty layer, where before the cut they read a band starting
+    // east of them while seeing nothing.
+    const { layer } = makeLayer({ probe: ALWAYS, now: () => NOON });
+    await layer.refresh();
+
+    expect(layer.notice({ west: -1, south: 51, east: 1, north: 52 })).toBe(CLOUD_GAP_NOTICE);
+    expect(CLOUD_GAP_NOTICE).toContain('6°W');
+  });
+
+  it('names the limb where the gap has nothing to say, which is a polar view', async () => {
+    const { layer } = makeLayer({ probe: ALWAYS, now: () => NOON });
+    await layer.refresh();
+
+    expect(layer.notice({ west: -45, south: 78, east: -35, north: 83 })).toBe(CLOUD_LIMB_NOTICE);
+  });
+
+  it('lets a missing satellite outrank both, because that one is a fault', async () => {
+    const { layer } = makeLayer({ probe: NEVER, now: () => NOON });
+    await layer.refresh();
+
+    expect(layer.notice({ west: -1, south: 51, east: 1, north: 52 })).toContain('missing');
+  });
+});
+
 describe('CloudLayer', () => {
   it('puts one sheet on the globe per satellite that answered', async () => {
     const { layer, sheets } = makeLayer({ probe: ALWAYS, now: () => NOON });
@@ -874,9 +945,8 @@ describe('the limb, which is where the palette stops meaning anything', () => {
       // `atan` on a tile a ten-thousandth of a degree tall, and with a 25-degree fade one
       // alpha count is a fortieth of a degree of angle. A drift larger than this would be a
       // real divergence between the cosine shortcut and the angle it stands in for.
-      expect(
-        Math.abs((pixels[3] ?? 0) - Math.round(255 * limbWeight(degrees))),
-      ).toBeLessThanOrEqual(1);
+      const wanted = Math.round(255 * limbWeight(degrees));
+      expect(Math.abs((pixels[3] ?? 0) - wanted)).toBeLessThanOrEqual(1);
     }
   });
 

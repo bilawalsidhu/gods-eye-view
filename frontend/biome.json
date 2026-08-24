@@ -23,6 +23,7 @@
       "!test-results",
       "!.omc",
       "!.remember",
+      "!e2e/tmp-*.spec.ts",
       "!src/types/api.d.ts",
       "!pnpm-lock.yaml"
     ]

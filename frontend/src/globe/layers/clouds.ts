@@ -250,26 +250,40 @@ export const CLOUD_SATELLITES: readonly CloudSatellite[] = [
   },
 ];
 
-/**
- * The longitudes no satellite in this list can see, degrees, contract order.
- *
- * Between GOES-East's eastern edge and Himawari's western limb: Europe east of the meridian,
- * most of Africa, the Middle East and the western Indian Ocean. Meteosat covers exactly this
- * and GIBS does not carry it, so the gap is a property of the source rather than of this code.
- */
-export const CLOUD_GAP_WEST = 0;
-export const CLOUD_GAP_EAST = 60;
-
-/**
- * What the rail says when the camera is looking at the gap.
- *
- * Under 72 characters, which is `NOTICE_SUMMARY_MAX` in the rail, so it is shown outright
- * rather than shortened behind a click.
- */
-export const CLOUD_GAP_NOTICE = 'No cloud cover from 0°E to 60°E: NASA GIBS carries no Meteosat';
-
 /** The longest a reason may be, matching the cap the backend's own reasons are held to. */
 export const CLOUD_REASON_MAX = 120;
+
+/**
+ * The longitude in this view nearest a satellite, in degrees, honouring an antimeridian wrap.
+ *
+ * Separate from the clamp in {@link tileNearestOffNadir} because a tile never wraps and a view
+ * does: a view from 170 to -170 is a narrow strip across the dateline, and clamping into
+ * `[west, east]` on those numbers answers about the other 340 degrees of the world.
+ */
+function nearestLongitudeInView(subLon: number, west: number, east: number): number {
+  const inside = west <= east ? subLon >= west && subLon <= east : subLon >= west || subLon <= east;
+  if (inside) {
+    return subLon;
+  }
+  const away = (edge: number): number => Math.abs((((edge - subLon + 540) % 360) - 180) % 180);
+  return away(west) <= away(east) ? west : east;
+}
+
+/**
+ * Whether nothing in this view is close enough to any satellite to be drawn.
+ *
+ * The nearest point of the view to each sub-satellite point, which is the sub-satellite
+ * longitude clamped into the view and the equator clamped into it, for the reason given on
+ * {@link tileNearestOffNadir}. If even that point is past the limit for every satellite, the
+ * layer is drawing nothing here and should say why.
+ */
+export function cloudsOutOfSight(view: ViewRect): boolean {
+  return CLOUD_SATELLITES.every((satellite) => {
+    const lon = nearestLongitudeInView(satellite.subLon, view.west, view.east);
+    const lat = Math.min(view.north, Math.max(view.south, 0));
+    return offNadirDegrees(satellite.subLon, lon, lat) >= CLOUD_TRUST_LIMIT;
+  });
+}
 
 /**
  * Whether the view overlaps the uncovered longitudes.
@@ -587,23 +601,112 @@ export const CLOUD_FLOOR = 176;
 export const CLOUD_TRUST_LIMIT = 70;
 
 /**
- * Degrees over which the sheet fades out before the limit.
+ * What the rail says when the whole view is outside every satellite's usable angle.
  *
- * **Wide, and the width is the point: the weight tracks how much the reading can be trusted,
- * and trust falls continuously with angle rather than at a line.** A narrow band was tried
- * first, 8 degrees, and it swapped one razor edge for another a little further in. Over the
- * Greenland ice cap and the Southern Ocean, where this palette paints hardest because the
- * surface genuinely is cold, an 8-degree fade from fully opaque to nothing still read as a
- * geometric boundary in a screenshot.
+ * **Added because the cut in {@link CLOUD_TRUST_LIMIT} made the existing notice wrong.** London
+ * is at 80.8 degrees off GOES-East, so it draws no cloud now, and it sits at 0.13°W: just
+ * outside the 0°E to 60°E band {@link CLOUD_GAP_NOTICE} names. A viewer over London therefore
+ * saw an empty layer explained by a gap their view is not in, which is a confident and wrong
+ * statement of exactly the kind this product exists not to make.
  *
- * At 25 the sheet is at full weight only inside 45 degrees, where the nine-climate measurement
- * behind {@link CLEAR_SKY_CEILING} was taken, and it thins to nothing by 70 where the slant
- * path has taken the reading over. That is a continuous statement of confidence rather than a
- * cliff, it removes the edge without implying coverage we do not have, and the fade costs
- * nothing where it matters most: real cloud over a dark ocean still contrasts at 20% alpha,
- * while a cold surface at the same weight stops blowing the basemap out.
+ * It names the angle rather than the satellites, because the answer to "why is there no cloud
+ * here" is that no geostationary satellite can read this place, not that a particular one is
+ * missing.
  */
-export const CLOUD_TRUST_FADE = 25;
+export const CLOUD_LIMB_NOTICE =
+  `No cloud here: every satellite sees this place at over ${String(CLOUD_TRUST_LIMIT)}° off nadir, ` +
+  'too oblique for infrared to read';
+
+// The gap below is derived from CLOUD_TRUST_LIMIT above, so it has to be declared after it.
+// It was declared before, and `tsc --noEmit` passed: the reference is inside a function body,
+// and TypeScript's use-before-declaration check does not follow a call made during module
+// initialisation. It failed at import instead, with `Cannot access 'CLOUD_TRUST_LIMIT' before
+// initialization`, which the unit suite caught and the type checker could not.
+
+/**
+ * The longitudes no satellite in this list can see, degrees, contract order.
+ *
+ * Between GOES-East's eastern edge and Himawari's western limb: Europe east of the meridian,
+ * most of Africa, the Middle East and the western Indian Ocean. Meteosat covers exactly this
+ * and GIBS does not carry it, so the gap is a property of the source rather than of this code.
+ */
+/**
+ * Whether any satellite reads this longitude on the equator well enough to draw.
+ *
+ * The building block for the gap below, and the reason the gap is derived rather than typed.
+ */
+function coveredAtEquator(lon: number): boolean {
+  return CLOUD_SATELLITES.some(
+    (satellite) => offNadirDegrees(satellite.subLon, lon, 0) < CLOUD_TRUST_LIMIT,
+  );
+}
+
+/**
+ * The uncovered band, measured off the satellites rather than written down.
+ *
+ * **It was `0` and `60`, and {@link CLOUD_TRUST_LIMIT} made those numbers wrong.** GOES-East
+ * used to be asked about longitudes out to its slice edge at the meridian, so the hole started
+ * at 0°E. With the disk cut at 70 degrees off nadir it now reaches 5.2°E short of that, and the
+ * rail was telling a viewer over London that the hole starts east of them while their own screen
+ * showed no cloud. A hard-coded coverage bound going stale behind a change somewhere else is the
+ * exact failure this whole audit has been about, so it is scanned instead: add a satellite, move
+ * one, or change the limit, and these follow.
+ *
+ * Rounded outward, so the stated hole is at least as wide as the real one. Rounding inward would
+ * claim coverage at the edges that the cut has just removed.
+ */
+function equatorGap(): { west: number; east: number } {
+  const uncovered: number[] = [];
+  for (let lon = -180; lon < 180; lon += GAP_SCAN_STEP) {
+    if (!coveredAtEquator(lon)) {
+      uncovered.push(lon);
+    }
+  }
+  return {
+    west: Math.floor(Math.min(...uncovered)),
+    east: Math.ceil(Math.max(...uncovered)),
+  };
+}
+
+/** Tenth of a degree, which is finer than the notice states and cheap at import. */
+const GAP_SCAN_STEP = 0.1;
+
+export const CLOUD_GAP_WEST = equatorGap().west;
+export const CLOUD_GAP_EAST = equatorGap().east;
+
+/** `5.2` as `5°W`, because a notice reads worse with a minus sign in it. */
+function degreesEastWest(value: number): string {
+  return value < 0 ? `${String(Math.abs(value))}°W` : `${String(value)}°E`;
+}
+
+/**
+ * What the rail says when the camera is looking at the gap.
+ *
+ * Under 72 characters, which is `NOTICE_SUMMARY_MAX` in the rail, so it is shown outright
+ * rather than shortened behind a click.
+ */
+export const CLOUD_GAP_NOTICE =
+  `No cloud cover from ${degreesEastWest(CLOUD_GAP_WEST)} to ` +
+  `${degreesEastWest(CLOUD_GAP_EAST)}: NASA GIBS carries no Meteosat`;
+
+/**
+ * Degrees over which the sheet fades out before the limit, so the edge is not a geometric one.
+ *
+ * A hard cut at {@link CLOUD_TRUST_LIMIT} would swap one razor edge for another a little further
+ * in. Fading from 62 to 70 puts the boundary somewhere a viewer reads as the edge of what a
+ * geostationary satellite can see, and it fades **coverage we do have** rather than implying
+ * coverage we do not: nothing outside the limit is drawn at any weight.
+ *
+ * **A wider fade of 25 degrees was tried and reverted, and the reason is a rule rather than a
+ * preference.** The argument for it was good: confidence in a single-channel threshold falls
+ * continuously with angle, so the weight arguably should too. It was reverted because it was
+ * chosen by reading a screenshot rather than by measurement, and the artefact it was meant to
+ * remove turned out to be present at both widths, so the screenshot had been misread. 8 is the
+ * width the brightness curve in {@link CLOUD_TRUST_LIMIT} supports: that curve locates a break
+ * at 70 degrees and says nothing about where a taper should start. A constant tuned to an
+ * interpretation of a picture is exactly the kind of number this file is full of warnings about.
+ */
+export const CLOUD_TRUST_FADE = 8;
 
 /**
  * Great-circle angle from a satellite's sub-satellite point to a place, in degrees.
@@ -1002,7 +1105,15 @@ export class CloudLayer {
     if (missing.length > 0) {
       return `${missing.join(' and ')} cloud imagery missing from NASA GIBS`;
     }
-    return cloudGapInView(view) ? CLOUD_GAP_NOTICE : null;
+    // The gap first, because it names *why* there is no satellite rather than restating the
+    // geometry: GIBS carrying no Meteosat is the cause, and being far off nadir is the shape of
+    // it. The limb notice is for what the gap cannot explain, which is a view unreadable by
+    // latitude rather than by longitude: a polar view sits inside a covered longitude and is
+    // still past the limit.
+    if (cloudGapInView(view)) {
+      return CLOUD_GAP_NOTICE;
+    }
+    return cloudsOutOfSight(view) ? CLOUD_LIMB_NOTICE : null;
   }
 
   /** The slot each satellite is showing, for the tests and for nothing else. */

@@ -28,6 +28,7 @@ import {
   colourFor,
   contrastRatio,
   iconSizeFor,
+  relativeLuminance,
 } from './palette';
 import { BADGE_FILL_OPACITY, clusterBadgeImage } from './icons';
 
@@ -153,6 +154,23 @@ function tintedFill(casing: string): string {
   };
   return `#${[0, 2, 4].map((at) => mix(at).toString(16).padStart(2, '0')).join('')}`;
 }
+
+describe('contrast arithmetic', () => {
+  it('anchors on black and white, which is what fixes the scale', () => {
+    // Black and white also exercise the low-channel branch of the sRGB transfer, which every colour
+    // in this palette is too bright to reach.
+    expect(relativeLuminance('#000000')).toBe(0);
+    expect(relativeLuminance('#ffffff')).toBeCloseTo(1, 10);
+    expect(contrastRatio('#000000', '#ffffff')).toBeCloseTo(21, 6);
+  });
+
+  it('is one for a colour against itself, and does not care which way round', () => {
+    expect(contrastRatio(CLUSTER_FILL, CLUSTER_FILL)).toBe(1);
+    expect(contrastRatio(CLUSTER_TEXT, CLUSTER_FILL)).toBe(
+      contrastRatio(CLUSTER_FILL, CLUSTER_TEXT),
+    );
+  });
+});
 
 describe('badge contrast, which is a requirement rather than a preference', () => {
   it('keeps the count at AAA against the body, for every layer', () => {

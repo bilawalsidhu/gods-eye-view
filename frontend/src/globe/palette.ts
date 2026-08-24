@@ -286,9 +286,11 @@ export const SMALLEST_FONT_PX = 11;
  */
 export function relativeLuminance(hex: string): number {
   const value = hex.replace('#', '');
-  const channels = [0, 2, 4].map((at) => Number.parseInt(value.slice(at, at + 2), 16) / 255);
-  const linear = channels.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-  return 0.2126 * (linear[0] ?? 0) + 0.7152 * (linear[1] ?? 0) + 0.0722 * (linear[2] ?? 0);
+  const linearise = (at: number): number => {
+    const channel = Number.parseInt(value.slice(at, at + 2), 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * linearise(0) + 0.7152 * linearise(2) + 0.0722 * linearise(4);
 }
 
 /** WCAG contrast ratio between two colours, 1 for identical and 21 for black against white. */
