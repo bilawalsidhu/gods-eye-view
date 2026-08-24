@@ -264,13 +264,21 @@ function related(left: string, right: string): boolean {
  * a heading. Every other layer names itself, so nothing else belongs in here: adding a friendlier
  * word for `vessels` or `satellites` would be a rename nobody asked for.
  *
- * It slightly under-describes what it holds. The feeds publish trams, metros and ferries too where
- * an operator has them, and the layer cannot tell any of these apart, because the vehicle type
- * lives in each operator's static `routes.txt` and this project does not fetch it. Buses and
- * trains are the overwhelming bulk, so this is the honest short name rather than a precise one,
- * and the row's own count says "recent reports" for the same reason.
+ * **One word, and "Trains and buses" was tried first.** `.rail-name` is `flex: 1` and this row
+ * carries the longest count in the rail, "14,771 in view of 27,679 recent reports · 75 groups", so
+ * the label is squeezed to about six characters and the phrase wrapped to three lines reading
+ * "Trains / and / buses". Widening the label column would have narrowed the count on every other
+ * row, and the count is the largest text in the rail because it is the thing a viewer reads. So
+ * the label gives way instead: "Transport" is what a Londoner calls buses and trains together,
+ * it is one word, and it needs no layout change.
+ *
+ * It under-describes what it holds, and deliberately. The feeds publish trams, metros and ferries
+ * too where an operator has them, and the layer cannot tell any of them apart, because vehicle
+ * type lives in each operator's static `routes.txt` and this project does not fetch it. So a
+ * precise name is not available at any length, and the row's own count says "recent reports"
+ * rather than "vehicles" for the same reason.
  */
-const LAYER_LABELS: Readonly<Record<string, string>> = { transit: 'Trains and buses' };
+const LAYER_LABELS: Readonly<Record<string, string>> = { transit: 'Transport' };
 
 /** Layer names are lower case on the wire; this is a heading. */
 function layerLabel(layer: string): string {

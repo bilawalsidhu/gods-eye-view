@@ -1248,7 +1248,7 @@ describe('noticeSummary', () => {
 });
 
 describe('the heading a person reads', () => {
-  it('calls the transit row trains and buses, not "Transit"', () => {
+  it('gives the transit row a plain English heading, not the wire name', () => {
     // Alexander Fanthome asked to "ensure trains and busses are also tracked on the globe" while
     // 27,399 of them were tracked and this row was reporting them, so the heading was the defect.
     // Asserted rather than left to the map, because a label nobody tests is a label that reverts.
@@ -1261,7 +1261,7 @@ describe('the heading a person reads', () => {
       toggleable: TOGGLEABLE,
     });
 
-    expect(rows.find((row) => row.layer === 'transit')?.label).toBe('Trains and buses');
+    expect(rows.find((row) => row.layer === 'transit')?.label).toBe('Transport');
   });
 
   it('still capitalises a layer that names itself, so the map stays the exception', () => {
