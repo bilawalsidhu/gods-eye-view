@@ -265,7 +265,7 @@ Verified live on 2026-08-19 unless marked otherwise. Full detail in
 
 ---
 
-## Phase 1: vertical slice — COMPLETE
+## Phase 1: vertical slice. COMPLETE
 
 Repo scaffold, strict contracts, live aircraft from adsb.lol with failover, CesiumJS
 globe on NASA GIBS imagery, docked info card, WebSocket fan-out, CI, docs.
@@ -274,7 +274,14 @@ globe on NASA GIBS imagery, docked info card, WebSocket fan-out, CI, docs.
 `mypy --strict` clean, the globe renders several hundred real aircraft over real imagery
 and updates without refresh, and provider failover works against both live providers.
 
-## Phase 2: ships and satellites
+## Phase 2: ships and satellites, BUILT with three criteria restated
+
+**Proven on 2026-08-20:** 1,055 backend tests at 99.64% branch coverage, 321 frontend tests,
+10 Playwright tests against the built bundle, ruff, ty and mypy clean, and the OpenAPI drift
+check clean. Criteria 1, 2b and 5 were restated rather than satisfied, and each says why
+below. No live vessel or satellite run has happened: AISHub needs a physical receiver,
+aisstream needs a key nobody has, and CelesTrak was unreachable from this network, so the
+vessel evidence is recorded real payloads through the real parser and the real wiring.
 
 **Goal:** the other two moving-asset classes, live.
 
@@ -306,12 +313,26 @@ and updates without refresh, and provider failover works against both live provi
 - Layer rail with per-layer toggles and live counts; vessel and satellite cards.
 
 **Acceptance**
-1. Ships appear in a coastal viewport within 30 seconds, with name, type, speed, flag.
-2. The ISS renders within visual tolerance of its published position and 1,000+
-   satellites hold 60fps.
+1. Ships appear in a coastal viewport within 30 seconds, with name, type, speed and the
+   ITU MID off the MMSI. **Restated 2026-08-20:** the flag state is phase 5 work, because
+   it needs the ITU table and one MID can cover several territories. The card reads
+   "not resolved (MMSI MID 230)" until then, asserted in `frontend/e2e/smoke.spec.ts`.
+2. The ISS renders within visual tolerance of its published position. **Met**, against a
+   position published by wheretheiss.at, which shares neither code nor element source
+   with ours: 1.50km and 2.21km against a 5km tolerance
+   (`frontend/src/globe/satellites/orbit.test.ts:94`).
+2b. 1,000+ satellites hold 60fps in a browser. **Open**, and split out on 2026-08-20
+   because it was being read as met. What is proven is the propagation cost, 1,000
+   element sets inside a 16.7ms budget in Node (`orbit.test.ts:382`), and that every
+   layer mutates one primitive collection in place rather than rebuilding it. Neither is
+   a frame rate. Measuring one needs a real GPU, so it belongs with the Playwright work
+   in phase 9 rather than in software-rendered CI.
 3. Killing the AIS connection reconnects and resubscribes within 15 seconds, tested.
 4. CelesTrak is fetched at most once per group per two hours, asserted by a test.
-5. 5,000 combined live entities hold 30fps or better.
+5. 5,000 combined live entities hold 30fps or better. **Unmeasured**, same reason as 2b:
+   nothing in either suite draws more than 40 records, and a headless software renderer
+   would produce a number that says nothing about a real browser. Stated here rather
+   than quietly counted as met.
 6. One vessel record per MMSI across a multi-provider fixture, with the provider and the
    report age on each record and conflicts resolved by recency. Same assertions as the
    aircraft union, per ADR 010.
@@ -355,19 +376,56 @@ later layer reuses.
 **Acceptance**
 1. A live business jet is classified and shows its registered owner from a real response.
 2. A LADD-listed aircraft resolves to its owner and renders like any other, with the LADD
-   flag shown as an attribute. Asserted against a real record.
+   flag shown as an attribute. Asserted against a real record. **Buildable as written: the flag is
+   `dbFlags & 8` on the feed**, documented by readsb and published by adsb.lol on `/v2/ladd`
+   (357 aircraft, every one carrying bit 8, verified live 2026-08-20), so it arrives on ordinary
+   position queries from a volunteer receiver network. We consume the aggregator's assertion, never
+   the FAA's own `IndustryLADD` list, because the only route to that list is a SWIM Data Access
+   User Agreement binding the subscriber to suppress those aircraft. Add to the assertion: nothing
+   in the classification, ownership or display path reads a suppression list of any kind, which is
+   ADR 009's actual purpose and is testable as an absence.
+   **Amended 2026-08-20, later the same day: the criterion is met as originally written, because
+   the flag does not have to come from the FAA.** Everything above about the FAA route stands.
+   What it missed is that `dbFlags` bit 8 on the readsb `/v2` schema is the LADD bit: readsb
+   documents the bitfield as `LADD = dbFlags & 8`, adsb.lol publishes `/v2/ladd` on top of it
+   under ODbL 1.0 and answered a live call with 249 aircraft, 26 of 539 aircraft in a New York
+   viewport carried the bit, and 16 of the 18 real G650s in the already-committed
+   `tests/fixtures/adsb_type_glf6_live.json` carry it. A third party has therefore already
+   separated the fact from the obligation: adsb.lol filters nothing and its licence asks nothing
+   of us that we are not already doing. We sign no Data Access User Agreement and take no SWIM
+   feed. So `Aircraft.on_ladd` exists, sourced from bit 8, not hardcoded, not inferred and not
+   always false, and a real record proves it: `49d371`/OK-PPP live, and `ab374c`/Adobe Inc from a
+   committed capture. See the U1 amendment in `docs/pending-decisions.md` for what remains
+   Alexander Fanthome's call, which is narrower than before.
 3. Registry lookups are cached; no repeat call for the same hex in a session, asserted.
-4. Failover is proven by a test that kills the primary provider.
+   **Met 2026-08-20**, live and by test: four card opens, one upstream request.
+4. Failover is proven by a test that kills the primary provider. **Met.**
 5. **One record per ICAO 24-bit address across a multi-provider fixture.** The same aircraft
    reported by three networks is one aircraft, asserted by a test, because the obvious new
-   bug here is a phantom fleet and an inflated layer count.
+   bug here is a phantom fleet and an inflated layer count. **Met**: 65 plus 57 real records
+   merge to 118 distinct addresses, 4 seen by both.
 6. Every aircraft record names the provider that supplied it and the age of that report, and
    two providers reporting one hex resolve to the newer position with both providers listed.
-   No averaged position that no receiver reported, asserted.
+   No averaged position that no receiver reported, asserted. **Met.** The winner is asserted
+   byte-identical to one real input record, because an averaged position would still pass a
+   range check.
 7. Killing one provider in the union leaves the layer up with a degraded flag naming which
-   provider is missing, asserted.
+   provider is missing, asserted. **Met.**
 8. The count of aircraft visible only via an unfiltered provider is produced from a real run
-   and recorded in `docs/status.md`.
+   and recorded in `docs/status.md`. **Blocked, and the zero is recorded there.** No unfiltered
+   provider is reachable: ADS-B Exchange answers HTTP 401 without a paid key and prohibits
+   redistribution anyway, airplanes.live answers HTTP 403 until an access email is answered,
+   adsb.one is Cloudflare-blocked. All three re-verified live 2026-08-20. The machinery is built
+   and asserted on the two recorded real provider payloads, at 61 and 53; the live figure is
+   zero because there is nothing to attribute. No number was invented.
+
+**Restated 2026-08-20: the union has one live member and that is the honest position.** ADR 010
+names four providers for this layer and R3 removes adsb.fi to failover, leaving adsb.lol, ADS-B
+Exchange and airplanes.live. Only adsb.lol answers. So the union is a correct implementation
+behind an access blocker rather than a coverage improvement today. Adding a provider is a row in
+`sources/adsb.py` plus a base URL, and ADS-B Exchange is demand-driven rather than swept because
+its only published plan is 10,000 requests a month, which a five-second sweep spends in fourteen
+hours.
 
 ## Phase 4: cities, free-text search and fly-to
 
@@ -428,8 +486,9 @@ flying to it.
    request time (the registry is local).
 2. A resolved owner address carries the registry as its source and the extract date as its
    date, asserted by a test. An address with no date is dropped at the adapter and counted.
-3. A LADD-listed aircraft resolves to its owner like any other, per ADR 009. Nothing in the
-   ownership path reads a suppression list.
+3. A LADD-listed aircraft resolves to its owner like any other, per ADR 009, and **nothing in the
+   ownership path reads a suppression list of any kind**. A LADD aircraft is identifiable from
+   `dbFlags & 8` on the feed, so this is assertable against a real record as well as as an absence.
 
 ## Phase 6: profiles, organisations and the join
 

@@ -11,6 +11,28 @@ Use those exact terms, one tier per profile, higher tier wins. This project rebu
 profile-to-asset join from public sources. Read
 [business context](docs/business-context.md) before changing anything user-facing.
 
+## Where it runs
+
+**One laptop with an internet connection. No cloud infrastructure, ever.** Stated by Alexander
+Fanthome on 2026-08-20 and it is a hard constraint rather than a current stage. ADR 015 already
+says it for inference; this says it for everything.
+
+- **Disk persistence is expected and encouraged.** Caches, a local SQLite database, downloaded
+  bulk files, proxied media, embedding blobs. `uv run tracker` plus a browser is the whole
+  deployment. The GeoNames dump caches to disk (`config.py:182`) and that is the pattern.
+- **No managed service and no cloud SDK.** No AWS, no Databricks, no S3 for our own storage, no
+  Postgres or Redis or a message queue, no cloud inference, no paid model API. Verified clean on
+  2026-08-20: nothing in `pyproject.toml` and no reference in `src/` or `frontend/src/`.
+- **Reading someone else's bucket over HTTPS is not cloud infrastructure.** earth-search's
+  Sentinel-2 assets and the TfL JamCam stills both sit on S3, and fetching them is an ordinary HTTP
+  request. The rule is about what *we* run, not about where a public feed happens to live.
+- **The things a later phase will reach for, and must not.** A vector database (ADR 015 says
+  numpy over blobs in the existing SQLite file until a brute-force scan is *measurably* too slow,
+  and the measurement is the gate), a search server, a cache server, a task queue, or object
+  storage for the media proxy. Each of those has a local answer already in the tree or a few lines
+  away. If one genuinely cannot be done locally, that is a blocker to report rather than a reason
+  to add infrastructure.
+
 ## Commands
 
 ```bash
@@ -90,11 +112,34 @@ the section stays navigable.
   Decided on magnitude in the adapter, not assumed. Verified 2026-08-19 against both captures.
 - Heading resolution order: `track`, then `true_heading`, then `mag_heading`, then `dir`.
   Only about half of live records carry `track`.
-- `dbFlags` bit 1 (value 1) is military; bit 4 is a privacy ICAO address. A PIA aircraft is
-  displayed anonymised until phase 11 correlates it to a registration, per ADR 009. The PIA
-  flag stays on the record after correlation and the card says the identification is
-  inferred, never observed. LADD is not applied at all: it binds FAA-provided feeds and our
-  positions come from volunteer receivers.
+- `dbFlags` bit 1 (value 1) is military, bit 2 is interesting, bit 4 is a privacy ICAO address
+  and **bit 8 is LADD**. A PIA aircraft is displayed anonymised until phase 11 correlates it to
+  a registration, per ADR 009. The PIA flag stays on the record after correlation and the card
+  says the identification is inferred, never observed.
+- **The LADD bit is real and it is where the LADD attribute comes from.** Corrected 2026-08-20:
+  an earlier version of this line listed bits 1 and 4 and said nothing about bit 8, which is how
+  the repo came to believe the LADD flag had no source (U1 in `docs/pending-decisions.md`, now
+  closed). readsb documents `LADD = dbFlags & 8` and adsb.lol publishes `/v2/ladd` on top of it:
+  249 aircraft, 248 at `dbFlags` 8, verified live. 26 of 539 aircraft in a New York viewport
+  carried it, so it arrives on ordinary position queries. The flag is still **not applied** as a
+  suppression: LADD binds FAA-provided feeds and our positions come from volunteer receivers, so
+  per ADR 009 a LADD aircraft resolves to its owner and renders like any other, with the flag as
+  an attribute on the card. What we carry is the provider's assertion sourced from the FAA list,
+  not the FAA list: the FAA issues `IndustryLADD` monthly through `adx.faa.gov` only to Service
+  Consumers who have signed its terms, and `faa.gov/pilots/ladd` answers 403 to our client.
+- **49 U.S.C. section 44114(b) is a third FAA privacy programme that ADR 009 never mentions.**
+  It operates on the registry rather than on flight data: 4,773 of 316,030 FAA `MASTER.txt` rows
+  arrive with the owner name blank and 4,771 with the street blank. The withholding happened
+  upstream, so there is nothing to work through and no suppression logic to find. The record
+  arrives empty, is dropped and counted. Recorded next to the FAA row in `docs/data-sources.md`.
+- **The FAA's own `IndustryLADD` list is not the route and must not be taken.** It exists on
+  `adx.faa.gov`, published the first Thursday of each month, but the FAA states that vendors
+  subscribing to its SWIM feeds "are bound by a Data Access User Agreement to filter any LADD
+  participant from public display of aircraft flight data", and that agreement is the only route to
+  it. Taking it would bind us to hide exactly the aircraft a wealth profile is about, which is the
+  coverage ADR 010 exists to gain. We do not need it: `dbFlags & 8` on the feed already carries the
+  flag, sourced from the FAA list by the aggregator rather than handed to us under terms. Consume
+  the bit, never the list.
 - ADS-B Exchange does not filter aircraft on FAA blocking programmes, which is why it is in
   the union. Access is a paid RapidAPI key (`adsbexchange-com1.p.rapidapi.com`, verified 401
   without one) or a free feeder key. Its terms **prohibit redistribution**, and serving
@@ -105,16 +150,48 @@ the section stays navigable.
 - airplanes.live answers 403 until you email them a project description; adsb.one was
   Cloudflare-blocked from our network on 2026-08-19. Both serve the same readsb v2 schema, so
   neither needs parser work once access lands.
-- Per-provider cadence floors, not one global floor. adsb.lol tolerates a short cycle; a
-  metered ADS-B Exchange key does not, so its calls are demand-driven rather than a sweep.
+- Per-provider cadence floors, not one global floor, and they are constants in
+  `sources/adsb.py` on the provider row rather than in configuration. adsb.lol is 5s and
+  airplanes.live states 1s. **ADS-B Exchange is 260s and is never swept at all**, because its
+  only published plan is a monthly quota of 10,000 requests rather than a rate: a 5-second sweep
+  spends the month in fourteen hours. Its calls are demand-driven, and the union cycle floor is
+  taken from the swept providers only, or one metered key would slow the whole layer down.
+- **The aircraft union has exactly one live member and that is the honest position.** adsb.lol
+  is keyless and answers. ADS-B Exchange answers 401 without a paid key and prohibits
+  redistribution anyway. airplanes.live answers 403 until an access email is answered. adsb.one
+  is Cloudflare-blocked. adsb.fi is the failover inside the adsb.lol client and not a member,
+  per R3. So the provider-attributable count for every unfiltered provider is zero, and
+  `/api/layers` reports the zero rather than omitting the number.
 - **The FAA and CASA registry hosts both refuse the descriptive User-Agent this file mandates.**
   FAA answers HTTP 403 host-wide from Akamai, `robots.txt` included, while permitting the
   download path in the robots file it will not serve. CASA hangs until timeout with zero bytes,
   and a bare Chrome string is not enough: only the full browser header set gets a reply. So on
   CASA a block looks like a network fault rather than a refusal and the difference has to be
-  logged. This is a direct conflict with our own sourcing rule and it needs Alexander's
-  decision rather than a quiet workaround. Open as U3 in `docs/pending-decisions.md`.
-  Verified 2026-08-20.
+  logged. **Decided 2026-08-20: use `cloudscraper` for these two.** Where `robots.txt` permits a
+  path and the CDN refuses the User-Agent, the `robots.txt` governs: a CDN bot filter is not a
+  stated directive. The rate discipline is unchanged, so the FAA zip is still a conditional
+  once-a-day fetch on `Last-Modified`. Recorded with its limits as U3 in
+  `docs/pending-decisions.md`. Verified 2026-08-20.
+- **cloudscraper gets the FAA zip on a GET and answers 503 on a HEAD, so a freshness check that
+  uses HEAD reports the source down.** Measured 2026-08-20 against
+  `registry.faa.gov/database/ReleasableAircraft.zip`. A descriptive User-Agent gets 403 on both
+  verbs. Through cloudscraper: `HEAD` returns **HTTP 503** with a 3KB HTML body and a decoy
+  `Last-Modified` of 2013, while `GET` returns the real file. So the daily freshness check is a
+  **conditional GET**, never a HEAD. `If-Modified-Since` with the held value returns a real
+  **HTTP 304 with zero bytes**; with a stale value it returns 200, or 206 for a ranged request.
+  Ranged requests work, which is how you test without pulling the file. The real figures: full
+  size **73,046,130 bytes**, `Content-Type: application/x-zip-compressed`, and `Last-Modified`
+  moved to 04:58 UTC on the day it was checked, consistent with the documented 23:30 US central
+  daily rebuild. The browser profile makes no difference: default, chrome/windows, firefox/linux
+  and chrome/darwin all behaved identically.
+- **`cloudscraper` is for bot filters and never for a stated directive, and the difference is the
+  whole rule.** It is a project dependency and the right tool for the FAA and CASA CDN blocks and
+  for Cloudflare-blocked adsb.one. It is **not** for airplanes.live, whose 403 asks us to email a
+  project description and tells us exactly how to get in, and it is **not** for the ADS-B Exchange
+  globe map, which answers 403 "Request forbidden by administrative rules", disallows those paths
+  by name in `robots.txt`, and prohibits redistribution in its terms. Three independent reasons
+  there, none of them a User-Agent problem. Where a provider states a route in, that route is the
+  route in.
 
 ### Vessels and AIS
 
@@ -255,11 +332,29 @@ the section stays navigable.
   real file and the provider's own readme. `Last-Modified` and `ETag` are both served, so the
   weekly refresh is a conditional request that normally costs nothing. Cities do not move, so
   this is a weekly download into a local index, never a poller and never a TTL store.
+- **A 200 carrying an HTML error page is worse for the GeoNames dump than a 503, and an ETag
+  can outlive its zip.** Cached before it is checked, a CDN error page destroys the working
+  gazetteer, takes a fresh mtime, and the weekly floor then short-circuits onto the poison for
+  a week with no further request, while the discarded reason makes the product report that the
+  refresh never ran. Validate the body before writing it, and only send `If-None-Match` when
+  the zip it validates is in hand: a validator with no file behind it gets a 304 that is
+  unusable by construction. Verified 2026-08-20.
+- **A failed city refresh must retry in minutes, not in a week.** The weekly floor is enforced
+  in the adapter against the file's own mtime, so the loop's sleep is not what protects the
+  provider. Sleeping a week after a refresh that indexed nothing means seven days of no city
+  resolving, no label drawn, and every city query falling through to Nominatim.
 - Nominatim and Overpass require a descriptive User-Agent with contact details. **Nominatim's cap
   is an absolute maximum of one request per second, caching is mandatory rather than advised, and
   systematic queries are named as unacceptable use by the OSMF**, so the city list comes from the
   GeoNames dump and never from Nominatim. Corrected 2026-08-20: an earlier version of this line
   said "roughly one request per second" for both. Cache server-side; never call from the browser.
+- **Nominatim's own backoff has to be stored, not just reported.** A 429 carries `Retry-After`
+  and the 403 block page carries nothing at all, so both need a cooldown held on the client:
+  computing the figure, raising it and then sending the next query a second later puts 120
+  requests inside the window the provider asked us to stay out of while the reason string says
+  we are backing off. A 500 is a failure rather than a refusal and keeps the plain floor. Also,
+  a 200 whose every record fails to map is a failure and not "no such place", and caching that
+  empty answer reports the query as unknown for the life of the process. Verified 2026-08-20.
 
 ### People, registries and filings
 
@@ -268,6 +363,78 @@ the section stays navigable.
   at the company. The Companies House PSC `address` is the statutory service address, with the
   residential address suppressed upstream. Ingesting either as a dated home address under ADR 008
   attaches a corporate HQ to a named individual as their residence, and no test catches it.
+  Live example measured 2026-08-23: a real Form 4 carried `rptOwnerStreet1` reading literally
+  `C/O SPACE EXPLORATION TECHNOLOGIES CORP.`, so the naive read puts a named individual's
+  residence at a rocket factory.
+- **The profile-to-asset join only runs person to asset, never asset to person, and that is a
+  fact about the population rather than a gap in our sources.** Measured 2026-08-23 against this
+  project's own live feed: 210 registrations from New York and Texas viewports, 188 returning a
+  registered owner, and in the jet-heavy New York sample **44 distinct owners with not one
+  natural person among them**. Named individuals do appear, and they own light aircraft: 16 of 54
+  light piston owners are people against 3 of 26 for everything else, one of those three being an
+  airline brand. The population this project is about holds aircraft through entities, because
+  that is what the arrangement is for. Then **75% of the 93 distinct organisation owners resolve
+  to nothing at all in Wikidata**, and the 25% that resolve are Delta, Southwest, United, Boeing
+  and NetJets, the least interesting records in the set. The ones that matter are `2J2G LLC` and
+  `BOHO LLC`: single-purpose companies holding one aircraft with no public footprint by design.
+  There is no keyless route from one of those to a person. FinCEN's beneficial ownership registry
+  under the Corporate Transparency Act is not public, and the UK alternative fails at the first
+  hop because the CAA states that "G-INFO on the web is a read only tool" and the downloadable
+  register is a paid CD. So the direction that works is SEC Form 4 to a named person with a
+  stable CIK, then `company_tickers.json` across 7,997 listed companies, then an exact owner-name
+  match into the FAA registry and onto an aircraft we already track. Every hop is a primary
+  record, so under ADR 011 the whole spine asserts. The reachable population is officers and
+  directors of US listed companies plus UK persons with significant control, which is real and is
+  **not** the wealth tiers.
+- **Never name-match a private individual, and this is the measurement that settles it.** Of 23
+  registry owners that look like natural persons, only 2 returned any Wikidata candidate at all,
+  8.7%, and **both were wrong**: one private aircraft owner in Texas matched three researchers
+  and a German Waffen-SS tank commander. Organisation matching is safer and still not safe:
+  `SUN COUNTRY AIRLINES` matched `SUNCOR ENERGY INC` in the SEC index and `Bank of America NA`
+  matched a Supreme Court case in Wikidata. A bare name is not an identity.
+- **No keyless public source carries a current wealth tier or net worth, so every field in the
+  tier set sits empty and the product says so.** All of Wikidata holds **2,076 humans with a net
+  worth statement**. Of a 900-row sample, **58% cite no source at all**, and among those that do
+  the largest single reference host is the Swedish National Archives at 122 against Forbes at 31,
+  with the remainder a tail of celebrity-net-worth content farms that copy each other and are
+  therefore one origin under ADR 011. The figures are stale: 237 dated 2018, 138 dated 2021, four
+  dated 2026. Personal phone is the same shape, 1,497 humans across all of Wikidata and those are
+  switchboards. Measured 2026-08-23.
+- **Almost every person-level claim collapses to one origin, and there is no middle ground.** SEC
+  Form 4 and the issuer's own proxy statement are one origin, both being the company filing about
+  itself. Wikidata and Wikipedia are one origin, because the article is usually the statement's
+  own reference. So under ADR 011 a claim either rests on a primary record and asserts alone, or
+  rests on crowd-sourced data and can never assert. The demo consequence is deliberate: the
+  corporate spine is asserted and everything that makes a profile look like a profile renders as
+  a scored possible match. That is a lot of grey text on a card, and it is the honest amount.
+- **A User-Agent containing the substring `github` is refused by the SEC with a bare HTTP 403,
+  and this project's own default User-Agent contains it.** Measured 2026-08-23 on both
+  `www.sec.gov` and `data.sec.gov`: `tracker/0.1 (+https://github.com/local/tracker) (a@b.test)`
+  gives 403, and so does a bare `tracker/0.1 (github) (a@b.test)`, and so does one naming
+  `raw.githubusercontent.com`. Meanwhile `gitlab.com/x` gives 200 and
+  `+https://example.invalid/x` gives 200. **It is the substring, not the URL and not the
+  parentheses.** Since `config.py` builds the shared User-Agent as
+  `tracker/0.1 (+https://github.com/local/tracker) (contact)`, every SEC request from a client
+  using the shared header is refused, and the refusal reads as a bare 403 rather than as
+  anything resembling a policy statement, so it looks like a network fault or a rate limit. Do
+  not change the shared header to suit one provider: `sources/sec.py` sends its own per request,
+  in the shape the SEC's own sample documents, a product name and a contact address and no URL
+  at all. A test asserts the header the client actually sends carries no `github` and overrides
+  a shared header that does.
+- **The SEC refuses an undeclared client, so `TRACKER_CONTACT_EMAIL` is a hard requirement for
+  the ownership layer rather than a courtesy**, and the layer returns before opening a socket
+  when it is unset. Spending a refusal to learn what configuration already knows is the same
+  mistake as testing FAA freshness with a HEAD. This is also the one case where naming a
+  `TRACKER_` variable in a capability reason is right: it is a free contact address that a
+  provider genuinely requires, not a credential this project has ruled out. Compare the
+  aisstream reason, which names a coverage consequence instead precisely because a key is out
+  of scope.
+- **The SEC's own `primaryDocument` field points at an XSL-rendered path that parses as empty.**
+  Fetching it returns HTTP 200 and about 38KB of HTML in which **every field parses as absent**,
+  while the raw XML at the same filename with the `xslF345X06/` directory removed returns
+  everything. So a parser built against the documented path finds nothing and reports the filing
+  as empty rather than erroring, which is the failure mode that looks like poor coverage.
+  Measured 2026-08-23.
 - **FEC `sort=-contribution_receipt_date` returns undated rows, not the newest rows.** The field
   is nullable, descending sort puts nulls first, and `pagination.last_indexes` confirms it with
   `sort_null_only: true`. Since ADR 008 drops and counts an undated entry, the whole first page is
@@ -299,6 +466,29 @@ the section stays navigable.
   1920, 3840) and a direct request for anything else is HTTP 400 with an HTML body. Any face
   bounding box or crop computed against `thumbwidth` is misaligned rather than erroring, which in
   phase 14 reads as poor match rates rather than a bug. Read the dimensions off the decoded image.
+- **Asking Commons for a thumbnail caps the whole query at 50 records, and nothing in the
+  response says so.** `iiurlwidth` makes MediaWiki resolve `prop=imageinfo` for at most 50 titles
+  however large `ggslimit` is. Measured 2026-08-24 on a 500-page geosearch: with it, 500 pages but
+  **50 `imageinfo` blocks**, 342KB, `batchcomplete` absent and an `iicontinue` token; without it,
+  **500 blocks, 2,081KB, `batchcomplete: true`**. Since the drop rule is the absence of
+  `imageinfo`, the other 450 are discarded as unlicensable, so raising `ggslimit` on its own buys
+  450 dropped records and 32% more bytes for not one extra post, and the layer looks like a
+  provider with nothing in it. Do not send `iiurlwidth` on a bulk query: derive the thumbnail
+  address instead, `/commons/6/66/Name.jpg` to
+  `/commons/thumb/6/66/Name.jpg/500px-Name.jpg`, which for all 47 raster files in a live response
+  was byte-identical to the API's own answer. Only `image/jpeg`, `image/png` and `image/gif`
+  (99.86% of a 4,000-record census) have a derivable still; `application/ogg`, `video/webm` and
+  `image/tiff` answer HTTP 400 and get none, which is what they got before. Pair it with
+  `iiextmetadatafilter`, which cut the same response 64% for a byte-identical parse, and remember
+  that 500 is the provider's stated `ggslimit` ceiling rather than a number to raise.
+- **A Commons search that finds nothing and a Commons search that failed are the same shape.**
+  A genuine empty answer is HTTP 200 with **no `query` key at all**, 51 bytes reading
+  `{"batchcomplete":true,"limits":{"coordinates":500}}`, verified mid-ocean. Under load
+  `CirrusSearch` refuses with HTTP 200 and `code: cirrussearch-too-busy-error`, 2 of 36 sustained
+  calls, which at least carries an `error` to branch on. A third body, 57 bytes with neither
+  `error` nor `query`, appeared three times at places that reliably return 500 pages. So a missing
+  `query` is treated as a failure rather than as "no photographs here": the cost is a wrong notice
+  over open ocean, and the alternative is telling a user there are no photographs in Delhi.
 - **Flickr signals total authentication failure with HTTP 200.** No key, an empty key and a bogus
   key all return 200 with `{"stat":"fail","code":100,...}`. `raise_for_status()` passes and
   `response.json()` parses, so the adapter either throws a `KeyError` or treats it as "no photos
@@ -330,12 +520,54 @@ the section stays navigable.
 
 ### Cross-cutting
 
+- **A store's time to live and an adapter's acceptance window add, they do not bound each
+  other, and the worst case on screen is their sum.** `EntityStore` expires on the time it was
+  *handed* a record, while an adapter decides how old a report may be when it accepts it. So a
+  layer whose adapter accepts a 900-second-old report and whose store holds for 1,050 seconds
+  can draw a position 1,950 seconds old, and nothing anywhere states that number. Measured on
+  the transit layer 2026-08-23: median position age 359s, p90 891s, worst 1,814s, with 8,437 of
+  15,065 vehicles older than five minutes. For a bus that is the wrong street by a mile, which
+  is the same error this project refuses to make by extrapolating, held silently instead of
+  openly. Fixed by bringing both terms down on their own measurements, acceptance 900 to 300
+  and the store 1,050 to 240: median 61s, p90 259s, worst 532s, 3.7% over five minutes.
+  **Whenever you set either number, state the sum.**
+- **Derive a cadence figure from the feeds that exist, not from the declared floors, or it can
+  be governed by a host the registry never calls.** The transit store's time to live was taken
+  from the slowest entry in `HOST_MIN_INTERVAL_SECONDS`, which is `passio3.com` at 350 seconds.
+  That host governs **no feed at all**: all 23 of its feeds were dropped for having no licence
+  recorded. So the figure was three times too large and derived from something unused. Taking
+  it from `max(feed.min_interval_seconds for feed in FEEDS)` is self-correcting, because
+  dropping a feed or adding a slower host moves it without anyone remembering to. It must stay
+  above the largest floor that does govern a feed, or our own rate discipline manufactures stale
+  drops: a feed we choose to poll every 350 seconds cannot produce a report under 300 seconds
+  old.
+- **An entity id can be trip-scoped, so a count of records is not a count of things.** 23.7% of
+  GTFS-Realtime `FeedEntity.id` values contain their own trip id, and on Entur it is all of
+  them, which also publishes repositioning runs carrying no passengers labelled `DeadRun`. So a
+  bus finishing a trip reappears under a new key and the finished one lingers until it expires,
+  and a longer time to live buys dead trips rather than live buses. This is not an argument
+  against the compound key, which is measurably right: `(feed_id, entity_id)` gives zero
+  collisions across 13,054 vehicles where 47.7% of `vehicle_id` values are shared between
+  agencies. It is an argument that the product must say it is counting recent reports.
 - **Live-mover layers are a union of providers, not one with a failover** (ADR 010). Merge
   key is the existing identity: ICAO 24-bit address for aircraft, MMSI for vessels. Every
   record carries which provider supplied it and how old
   that report is. Conflicts resolve by recency, never by provider precedence, and two
   positions are never averaged into a third no receiver reported. One record per hex is
   asserted by a test: the obvious bug here is one aircraft counted three times.
+- **A recency merge plus a last-write-wins store gives you provider precedence by accident, and
+  every test still passes.** `merge_providers` compares the reports of one cycle; `EntityStore`
+  used to take whatever it was handed. So the store accepted an older fix over the newer one it
+  already held, and a ship went 18 minutes and about 9km backwards on the globe every time the
+  freshest provider skipped a cycle, which for AISHub is roughly every other cycle under its own
+  60-second floor while Fintraffic re-serves one stale fix for its whole 600-second window. The
+  guard is an optional `fix_time` on the store, so every layer gets it from one place: an entity
+  with no report time, a satellite element set, simply does not set it. Verified 2026-08-20.
+- **The list of providers that saw a record is per record and it has to survive the store.**
+  `UnionResult.keyed()` carries the winning value only, so a merged `Vessel` used to reach the
+  API naming one provider while the merge had computed three. The list rides on the contract as
+  `providers`, freshest first. Naming providers on a card from the layer-level coverage on
+  `/api/layers` is not the same fact and would be a guess about that particular ship.
 - **Four bounding-box conventions now live in this project and six sources disagree with ours in
   four different ways.** Our contracts and the STAC `bbox` are `[west, south, east, north]`; OSM
   notes is `bbox={w},{s},{e},{n}`; Nominatim returns `[south, north, west, east]` as four
@@ -384,11 +616,172 @@ the section stays navigable.
   hash, not CLIP: pHash separates same-photograph from different-photograph by 16 bits while
   CLIP's margin is 0.03 and inverted, so a CLIP origin key would merge unrelated photographs and
   split identical ones in the same index. Measured 2026-08-20.
+- **In-memory rate state does not survive a restart, and a restart loop is indistinguishable
+  from hammering as far as the provider is concerned.** Every floor, backoff and response cache
+  now goes through `cache.py`, one SQLite file under `settings.cache_dir`. CelesTrak is the
+  worked example, because it firewalls abusive clients permanently and without appeal: its
+  two-hour-per-group floor and its element sets are both on disk, so a process started inside
+  the window opens no socket at all. Measured on 2026-08-20, adsb.lol makes the same point from
+  the other end: it answered HTTP 420 on the **first** `/v2/mil` request of a fresh process,
+  having asked a process that had already exited for 120 seconds of quiet. Two rules fall out
+  of it. A floor is persisted unconditionally, because it can only ever delay us. A stop is
+  persisted with an expiry chosen by cause, because one transient 503 written to a file with no
+  expiry darks a layer for ever.
+- **A throttle absorbed by a failover never reaches the poller, so the provider's own figure
+  has to be honoured where the response arrived.** `AdsbClient` used to hold no state and say
+  so. adsb.lol answered 420 on `/v2/mil` asking for 120 seconds, adsb.fi answered fine, the
+  poll therefore succeeded, and the next cycle called adsb.lol again 65 seconds into the window
+  it had asked for. A successful failover is not a failed poll, so no backoff was ever applied.
+  The cooldown is now per provider, checked before the request rather than after it, and shared
+  between the two adsb.lol clients this app runs, because a 420 binds the egress address and
+  not the endpoint. Verified live 2026-08-20: after the change a restarted process made zero
+  requests to adsb.lol inside the window and served the layer off adsb.fi throughout.
+- **Several httpx exceptions stringify to the empty string, so a broken layer says nothing
+  rather than erroring.** `ConnectTimeout`, `ReadTimeout` and `PoolTimeout` all carry no
+  message: `f"{exc}"` renders nothing and `f"{type(exc).__name__}: {exc}"` renders a dangling
+  colon. Live on 2026-08-20 the ADS-B failover logged
+  `adsb.lol failed for /v2/lat/51.5000/lon/-0.1200/dist/250 ()` and CelesTrak served
+  `unreachable: ConnectTimeout: ` to `/api/health`, `/api/capabilities` and the browser's
+  layer rail. Nothing throws, so nobody notices. Render one with
+  `sources.base.describe_exception`, which gives the type name always and the message only
+  when there is one, and never interpolate an exception into a string a person reads.
+- **A cache of an attribute a removal can delete needs an eviction path, or the removal reports
+  success while the value is still served.** The adsbdb owner cache is the worked example:
+  `registered_owner` is a named individual on a great many N-numbers, the TTL is a day, and
+  ADR 008 makes removal immediate with no queue and no human step. Without a way in, a removal
+  would delete the profile and this cache would keep serving the name for the rest of the day,
+  which is worse than a slow removal because it looks like it worked. The aliases are the
+  subtler half: one answer is remembered under the requested key, the record's own address and
+  its registration, so clearing one key leaves the name reachable by the other two.
+  `AdsbdbLookup.forget` sweeps on identity for that reason. Before adding any cache, ask
+  whether a removal can reach it, and check every key it writes rather than the obvious one.
+  **Which is why this is the one cache in `sources/` that is not on disk.** Decided 2026-08-20
+  when every other rate guard moved to `cache.py`: a restart clearing a cache of named people is
+  the right behaviour rather than a cost, persisting it would put personal data in a file the
+  removal then has to reach through three alias keys, and nothing polls adsbdb so a restart
+  produces no burst to protect against. A test asserts the consequence rather than the
+  intent: after a real lookup, the owner's name appears nowhere in the cache file. Persisting a
+  cache of personal data is allowed, but the removal path is then not optional.
 - Never expose the aisstream, Windy or TfL key to the browser. Keyed feeds are proxied.
 - Windy image tokens expire after ten minutes. Never cache an image URL beyond validity.
 - Cesium's `Entity` API collapses in the low thousands of movers. Use
   `PointPrimitiveCollection` / `BillboardCollection` and mutate positions in place. This
   cannot be retrofitted; it is a rewrite.
+- **Cesium ships a hard-coded demo ion token with a stated deletion date, so "no token
+  configured" does not mean "no token used".** 1.144 sets `Ion.defaultAccessToken` to a JWT
+  whose own audience claim reads "1.144 Release - Delete on October 1, 2026". Left alone, any
+  ion-backed default works silently on Cesium's key today and starts answering 401 in October,
+  in a failure mode nothing here has ever tested. `frontend/src/globe/viewer.ts` blanks it at
+  import time, before any viewer exists, which is what makes an accidental ion dependency fail
+  now instead. Measured 2026-08-20: with it blanked, `IonImageryProvider.fromAssetId(2)` throws
+  "Request has failed. Status Code: 401", and a viewer left on its ion-backed default imagery
+  renders a starfield with no Earth. Do not paste the token back. The same trap exists at
+  `ArcGisMapService.defaultAccessToken`, so reach for
+  `ArcGisMapServerImageryProvider.fromUrl` and never `fromBasemapType`.
+- **Removing the ion logo is `CreditDisplay.cesiumCredit`, never the credit container.**
+  `Credit.isIon()` is a substring test for `ion-credit.png` and any credit passing it is
+  short-circuited into `.cesium-credit-logoContainer`, so replacing `cesiumCredit` with an
+  empty credit drops the logo and leaves the text container and the "Data attribution"
+  lightbox intact. Those two carry imagery attribution, which is a licence condition on
+  several sources here, so killing the container would break a licence to fix a logo.
+- **Cesium draws every translucent command after every opaque one, whatever order the
+  primitives were added in, so primitive order does not decide what covers what.** The cluster
+  badges are the worked example: a `BillboardCollection` built with
+  `BlendOption.TRANSLUCENT` carries the badge and a `LabelCollection` on its default blend
+  carries the count, the two were added in the right order with a comment explaining that a
+  count must never end up under its own badge, and every badge on the globe still rendered as
+  an empty hexagon. The count went into the opaque pass and its badge was painted straight over
+  it. Nothing errors, and it reads as a layer that draws no text. Two collections that must
+  overlap in a chosen order have to share a pass; then, and only then, primitive order decides.
+  Verified 2026-08-23 by patching one layer of three and watching the digits reappear on that
+  layer alone.
+- **Cesium's own zoom throws on a rounding coin flip above 1,000km, and it kills the render
+  loop.** `ScreenSpaceCameraController.handleZoom` runs a "rotating zoom" that pulls the point
+  under the cursor towards the screen centre. It guards the parallel case with
+  `dot > 0 && dot < 1` and that guard does not hold, for a floating-point reason rather than a
+  geometric one: once the zoom has converged the two vectors are the *same* unit vector,
+  `cross(v, v)` is exactly zero because every term cancels, while `dot(v, v)` rounds either side
+  of one. At 0.9999999999999999 the guard passes with an axis of no length,
+  `Quaternion.fromAxisAngle` normalises it and throws `normalized result is not a number`.
+  Measured over 500,000 randomised pairs sharing a line through the earth's centre: bit-identical
+  normals 22.3% of the time and **7.2% both passed the guard and produced an exactly zero axis**.
+  So it is a one-in-fourteen lottery at every convergence, which is why it feels random and why
+  it cannot be reproduced on demand from a browser. It exists only above 1,000km, and between
+  1,000 and 2,000km the vulnerable path runs on **every** wheel tick. `globe/viewer.ts` guards
+  `Camera.prototype.rotate` against a degenerate axis at import time, beside
+  `Ion.defaultAccessToken`: rotating about an axis of no length is the identity, so returning
+  early changes no documented behaviour. Delete it when Cesium guards the axis itself; a test
+  asserts `Quaternion.fromAxisAngle` still throws on a zero axis, so it fails when that day comes.
+- **`scene.renderError` does not see a throw from the camera controller, and
+  `showRenderLoopErrors: false` on its own is worse than the red panel.** `Scene.render` wraps its
+  own work and raises `renderError`, but the camera controller runs in `Scene.initializeFrame`,
+  which the widget calls *before* `scene.render` and which sits outside that try. So a throw from
+  zooming reaches only `CesiumWidget`'s catch, which sets `useDefaultRenderLoop = false` and stops
+  the loop. Verified 2026-08-23 by poisoning the camera in a built bundle: with the panel
+  suppressed there was no panel, no `renderError`, and a dead silent globe, which is worse than a
+  visible error because nobody knows to reload. Recovery needs a watchdog on
+  `useDefaultRenderLoop` per animation frame, restoring the last pose that rendered. Two traps in
+  writing one: `camera.setView` throws when the camera it is replacing is the non-finite one being
+  repaired, so restore by assigning the vectors directly; and the watchdog must re-arm its own
+  animation frame *before* anything that can throw, or it recovers exactly once.
+- **Never `git checkout --` a working file to undo a temporary edit. It happened twice on
+  2026-08-23 and cost real work both times.** This repository runs with a large uncommitted
+  working tree, so a checkout does not revert your edit, it reverts the file to HEAD and
+  discards everything anyone has done to it since the last commit. Once on `src/tracker/app.py`,
+  destroying about 450 lines including a satellite-priming fix, and once on
+  `frontend/src/globe/layers/aircraft.test.ts`. Both were recovered, one from a dropped `git
+  stash` still in the object store plus the session transcript, one by replaying the patch
+  sequence from the transcript, and neither recovery was certain at the time. **Copy the file
+  aside before a temporary edit, and restore it with `cp`.** If it has already happened: check
+  `git fsck --lost-found` for a dangling stash, then the session transcript under
+  `~/.claude/projects/`, and verify the rebuild by coverage rather than by eye, because a file
+  that looks right can be missing a test nobody counted.
+- **A test that asks the implementation what the answer should be is not a test.** It agrees
+  with itself and survives the mutation that matters, because moving the constant moves both the
+  code and the expectation. Two instances on 2026-08-23. A badge fit test read
+  `GLYPH_WIDTH_RATIO` and the badge's inner width out of the module it was testing, and survived
+  both setting the ratio back to its broken value and pointing the budget at the wrong width. A
+  module with 34 tests sat at 85% because every function its uncovered function called was
+  tested, which reads as coverage. **The expectation needs an independently sourced number**: a
+  width measured in a real browser, a count taken from a live feed, a figure from the provider's
+  own documentation. And mutation-test the test itself, not only the code: break the thing it
+  claims to catch and watch it go red.
+- **The test for a defensive fallback is not "is this defensive", it is "does the fallback lie
+  about what it achieved".** Two fallbacks on 2026-08-23 and 2026-08-24 looked identical and were
+  opposites. A `getattr(state, "removal", None)` where the field is `removals` turned a wrong
+  name into "absent", and absent had a handler, so a typo became a permanent 503 with every test
+  green. A `?? []` on a required `operators` field survived review because the failure mode is
+  asymmetric, a throw takes every credit off the globe, **and because the degraded state is
+  written down as degraded**: a grouped credit row that lost its owners is under-credited, which
+  these licences do not permit, so the comment says the fallback is not a compliant state. The
+  first lied about what it had achieved; the second says plainly that it has achieved something
+  worse than the requirement.
+- **A nested `<details>` widens every descendant selector aimed at the outer one, and the tests
+  that break are not the ones you are editing.** Adding a grouped credit put a second `<summary>`
+  inside `#attribution`, so `#attribution summary` matched two elements and Playwright's strict
+  mode refused. Four sites used the bare selector and **three of them passed only because the
+  shared stub had no grouped row, while production has six**: they were one realistic payload
+  from failing. Use the child combinator, `#attribution > summary`, to name a component's own
+  control. Anything with a locator like `#status summary` or a rail equivalent has the same trap
+  waiting the day a disclosure is nested inside it.
+- **An e2e suite that needs a running backend is not self-contained, and its failure lies about
+  the cause.** The legibility test did not stub `/api/search`, so on a clean machine it got
+  `ECONNREFUSED` and reported against the font-size assertion as though the type scale were
+  wrong. Every other test in that suite stubs. Verified 2026-08-24: with the backend down the
+  suite is 32 of 32 after the stub and was 31 of 32 before it. The way to prove a call never
+  leaves the browser without taking a shared server down is a catch-all
+  `page.route('**/api/**', route => route.abort())` registered first, then check the aborted list.
+- **A default camera is a product decision, so no test may inherit it.** Three Playwright tests
+  put their stub entity at the old default position and reached it by opening `/`, which meant
+  they were asserting the opening view as a side effect of testing something else. Moving the
+  camera from 2,400km over London to the whole Earth then read as three broken features. A test
+  that clicks a mark asks for its camera through the URL hash, `#lon=..&lat=..&alt=..`, the way
+  the shared-link test already did.
+- **`frontend/.remember/` has to be ignored by both linters, not just by git.** It is a plugin's
+  scratch directory, regenerated by a save hook, so deleting it does not stop it coming back,
+  and the type-aware eslint parser fails on a file outside `tsconfig.json` and takes the whole
+  gate down with it. `biome.json` and `eslint.config.js` already ignore `.omc` for the same
+  reason.
 - Multiple uvicorn workers each run lifespan and so duplicate every poller. Pollers run
   in a single process until a lock exists.
 

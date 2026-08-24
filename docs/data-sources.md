@@ -21,27 +21,31 @@ not add a vendor row to this table, and do not invent a value to stand in for on
 
 ## Verified
 
-Called live on 2026-08-19 with a real 200 response.
+Called live with a real 200 response, on 2026-08-19 or on 2026-08-20. The 2026-08-20
+additions come from five keyless-source hunts run that day, and every one of them was
+called from this laptop with no credential of any kind attached.
 
 | Source | Endpoint | Auth | Cadence / rate limit | Format | Licence | Cost | Last verified |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| adsb.lol | `https://api.adsb.lol/v2/point/{lat}/{lon}/{radius_nm}` | None | No published contractual limit. We poll at 8s, floor 5s in code | JSON, readsb v2 | ODbL 1.0 | Free | 2026-08-19 |
+| adsb.lol | `https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/{nm}` | None | No published contractual limit. We poll at 8s, floor 5s in code. Throttles with HTTP 420, seen on the first poll of a run. **This is the shape the code sends, because it is the only viewport path adsb.fi also accepts.** `/v2/point/{lat}/{lon}/{nm}` works on adsb.lol and 400s on adsb.fi | JSON, readsb v2 | ODbL 1.0 | Free | 2026-08-20 |
 | adsb.lol | `https://api.adsb.lol/v2/mil` | None | Throttles with HTTP 420. We poll no faster than 30s and fail over to adsb.fi | JSON, readsb v2 | ODbL 1.0 | Free | 2026-08-19 |
 | adsb.lol | `https://api.adsb.lol/v2/type/{icao_type}` | None | Same throttling behaviour as the rest of the v2 API | JSON, readsb v2 | ODbL 1.0 | Free | 2026-08-19 |
+| adsb.lol | `https://api.adsb.lol/v2/ladd` | None | Same throttling behaviour as the rest of the v2 API. Called on demand, not polled: the flag it carries also arrives on every ordinary viewport response | JSON, readsb v2 | ODbL 1.0 | Free | 2026-08-20 |
+| adsb.lol | `https://api.adsb.lol/v2/pia` | None | Same throttling behaviour as the rest of the v2 API | JSON, readsb v2 | ODbL 1.0 | Free | 2026-08-20 |
 | adsb.fi | `https://opendata.adsb.fi/api/v2/mil` | None | 1 request per second, stated by the provider | JSON, readsb v2 | **Non-commercial** | Free | 2026-08-19 |
 | adsb.fi | `https://opendata.adsb.fi/api/v2/lat/{lat}/lon/{lon}/dist/{nm}` | None | 1 request per second | JSON, readsb v2 | **Non-commercial** | Free | 2026-08-19 |
-| CelesTrak | `https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=json` | None | **Never faster than once per 2 hours per group**, stated by the provider. Any non-200 must stop the poller outright, not back off. Abusive clients are firewalled permanently | JSON, OMM mean elements (not TLE line format) | **Not stated.** No attribution, copyright or citation requirement exists on any provider page (rechecked 2026-08-20). Credit is courtesy | Free | 2026-08-19 |
+| CelesTrak | `https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=json` | None. **Answering HTTP 000 for four days as of 2026-08-20, and it is a block on this network rather than an outage. Use ReTLEctor** | **Never faster than once per 2 hours per group**, stated by the provider. Any non-200 must stop the poller outright, not back off. Abusive clients are firewalled permanently | JSON, OMM mean elements (not TLE line format) | **Not stated.** No attribution, copyright or citation requirement exists on any provider page (rechecked 2026-08-20). Credit is courtesy | Free | 2026-08-19 |
 | USGS | `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson` | None | No rate limit published. The provider's own cache is 60s (`cache-control: max-age=60`). Planned cadence 2 minutes | GeoJSON | Public domain (US Government work) | Free | 2026-08-19 |
 | NASA EONET | `https://eonet.gsfc.nasa.gov/api/v3/events/geojson` | None | **`X-RateLimit-Limit: 60` is published on every response.** The bare URL is 8.5MB and 7,728 features, so narrow it with `limit`, `days` or `category` before polling | GeoJSON, served as `application/rss+xml` | NASA open data, attribution requested | Free | 2026-08-19 |
 | NASA GIBS | `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/` | None | Tile service, no key. Respect normal tile-client behaviour | WMTS (XML capabilities, raster tiles) | NASA open data, acknowledgement requested | Free | 2026-08-19 |
-| GeoNames | `https://download.geonames.org/export/dump/cities15000.zip` | None | Bulk file, not an API. Download at most once a week | Tab-separated text in a zip | CC BY 4.0 | Free | 2026-08-19 |
+| GeoNames | `https://download.geonames.org/export/dump/cities15000.zip` | None | Bulk file, not an API. Download at most once a week. The conditional request is verified: `If-None-Match` with the stored `ETag` answers **HTTP 304, zero bytes, 64ms** | Tab-separated text in a zip | CC BY 4.0 | Free | 2026-08-20 |
 | Wikidata WDQS | `https://query.wikidata.org/sparql` | None, descriptive User-Agent required | Provider states: 60-second hard query deadline, 5 parallel queries per IP, 60 seconds of processing per 60 seconds per client, 30 error queries per minute, 429 on breach. One query per user action, never per keystroke. Server-side cache | SPARQL JSON results | CC0 | Free | 2026-08-19 |
 | Wikimedia Commons | `https://commons.wikimedia.org/w/api.php?action=query&list=geosearch` | None, descriptive User-Agent required | **No numeric read cap is published for the action API.** MediaWiki API:Etiquette asks for serial rather than parallel requests. The 1 request per second used here is our own floor | JSON | Per-file, mostly CC BY-SA or public domain | Free | 2026-08-19 |
 | OpenStreetMap notes | `https://api.openstreetmap.org/api/0.6/notes.json?bbox={w},{s},{e},{n}` | None, descriptive User-Agent required | **No provider request figure exists.** The OSMF policy says the editing API is not for read-only projects and caps download threads at 2; `robots.txt` disallows `/api/` and `/note`. 1 request per second is our own floor | JSON | ODbL 1.0 | Free | 2026-08-19 |
-| ADS-B Exchange (RapidAPI) | `https://adsbexchange-com1.p.rapidapi.com/v2/...` | **Paid RapidAPI key**, or a free key as a data feeder | Per-plan request quota. Continuous polling exhausts the entry tier in about a day | JSON, readsb v2 | **Provider terms prohibit redistribution without written permission** | From $10/month, free to feeders | 2026-08-19 |
+| ADS-B Exchange (RapidAPI) | `https://adsbexchange-com1.p.rapidapi.com/v2/...` | **OUT OF SCOPE under the keyless rule, 2026-08-20, and separately a licence blocker.** **Paid RapidAPI key**, or a free key as a data feeder. **HTTP 401 without one, re-verified 2026-08-20.** The body varies: `Invalid API key` on 2026-08-19 and `Too many requests` on 2026-08-20 for the identical keyless request, so branch on the status and never on the message | **10,000 requests a month** on the only published plan, so a quota rather than a rate. A 5-second sweep spends the month in 14 hours, which is why this provider is demand-driven in code and never swept. Floor `ADSBEXCHANGE_MIN_INTERVAL_SECONDS` = 260s, being one month divided by the quota | JSON, readsb v2 | **Provider terms prohibit redistribution without written permission**, and serving positions to a browser is redistribution. Licence blocker on the layer, not a footnote | $10/month, free to feeders | 2026-08-20 |
 | ADS-B Exchange (globe map) | `https://globe.adsbexchange.com/data/aircraft.json`, `/re-api/` | n/a | **Do not use.** 403 by administrative rule and disallowed in `robots.txt` | n/a | n/a | n/a | 2026-08-19 |
-| airplanes.live | `https://api.airplanes.live/v2/...` | Access granted by email request | Unstated until granted | JSON, readsb v2 | Provider terms, ask on request | Free | 2026-08-19 |
-| adsb.one | `https://api.adsb.one/v2/...` | None documented | **Cloudflare-blocked from this network on 2026-08-19** | JSON, readsb v2 | Provider terms | Free | 2026-08-19 |
+| airplanes.live | `https://api.airplanes.live/v2/...` | Access granted by email request. **Still HTTP 403 on 2026-08-20**, on `/v2/mil` and on a viewport path, with the same plain-text ask | **1 request per second, stated by the provider** in the `airplanes-live/api-archive` README. Held as `AIRPLANESLIVE_MIN_INTERVAL_SECONDS` in `sources/adsb.py` | JSON, readsb v2 | Provider terms, ask on request | Free | 2026-08-20 |
+| adsb.one | `https://api.adsb.one/v2/...` | None documented | **Cloudflare-blocked from this network, HTTP 403 with a Cloudflare HTML body, re-verified 2026-08-20** | JSON, readsb v2 | Provider terms | Free | 2026-08-20 |
 | Mastodon (`mas.to`) | `https://{instance}/api/v1/timelines/public` | None on instances that still allow it | 300 requests per 5 minutes per IP on default Mastodon config | JSON | Per-post, author's own; instance terms apply | Free | 2026-08-19 |
 | GDELT DOC 2.0 | `https://api.gdeltproject.org/api/v2/doc/doc?query={q}&mode=artlist&format=json&timespan={t}` | None, descriptive User-Agent required | **One request per five seconds**, stated by the provider in its own 429 body. One call bought a 429 penalty window of at least twelve minutes, so the floor is minutes not seconds. Cache per profile | JSON | GDELT terms, attribution required | Free | 2026-08-19 |
 | Element 84 earth-search | `https://earth-search.aws.element84.com/v1/search` | None | No published cap, verified absent rather than quoted. One search per user action, cached server-side | STAC JSON. Assets are Cloud-Optimised GeoTIFF on S3, plus a keyless 343x343 `thumbnail` JPEG that a browser can render as-is | Copernicus free, full and open. Attribution mandatory | Free | 2026-08-19 |
@@ -49,12 +53,12 @@ Called live on 2026-08-19 with a real 200 response.
 | NASA Worldview snapshot | `https://wvs.earthdata.nasa.gov/api/v1/snapshot` | None | Renders one image per call, not a tile service. Cache per place and date | JPEG, PNG or GeoTIFF | NASA open data, acknowledgement requested | Free | 2026-08-19 |
 | TfL JamCams | `https://api.tfl.gov.uk/Place/Type/JamCam` | **None.** A key raises the rate limit, it does not grant access | **500 calls per minute per data feed**, stated by TfL. Inventory is 1.1MB and is CDN-cached up to 24 hours, so refresh daily and never per view. Stills refresh on the order of minutes | JSON, stills as `image/jpeg` on S3 | TfL open data, credit string mandatory | Free | 2026-08-19 |
 | New York 511 | `https://511ny.org/api/getcameras?format=json` | **None in practice, but the provider documents a key as required** and ignores the parameter rather than validating it | **10 calls per 60 seconds**, stated by the provider. 2,931 cameras in one 858KB response. Refresh the inventory on a slow cycle | JSON. Live video mostly HLS `.m3u8`, 9 records are `.mjpg` | NYSDOT open data. Restreaming needs a read | Free | 2026-08-19 |
-| Fintraffic Digitraffic AIS | `https://meri.digitraffic.fi/api/ais/v1/locations` | None. `Digitraffic-User` header is requested, not required | 60 requests per minute per IP without the header, stated by the provider, 429 on excess. Provider cache is 60s, so 60s is the floor. **gzip is mandatory, HTTP 406 without it** | GeoJSON FeatureCollection with a `dataUpdatedTime` extension | CC BY 4.0, commercial use and redistribution permitted with credit | Free | 2026-08-19 |
-| Fintraffic Digitraffic AIS | `https://meri.digitraffic.fi/api/ais/v1/vessels` and `/api/ais/v1/vessels/{mmsi}` | None, as above | As above | **Bare JSON array**, not a FeatureCollection. Different top-level shape from `/locations` on the same API version | CC BY 4.0 | Free | 2026-08-19 |
+| Fintraffic Digitraffic AIS | `https://meri.digitraffic.fi/api/ais/v1/locations` | None. `Digitraffic-User` header is requested, not required. **Regional, not global: measured lon 16.76 to 32.54, lat 57.67 to 65.80 on 2026-08-20** | 60 requests per minute per IP without the header, stated by the provider, 429 on excess. Provider cache is 60s, so 60s is the floor. **gzip is mandatory, HTTP 406 without it** | GeoJSON FeatureCollection with a `dataUpdatedTime` extension | CC BY 4.0, commercial use and redistribution permitted with credit | Free | 2026-08-20, live from the running app |
+| Fintraffic Digitraffic AIS | `https://meri.digitraffic.fi/api/ais/v1/vessels` and `/api/ais/v1/vessels/{mmsi}` | None, as above | As above | **Bare JSON array**, not a FeatureCollection. Different top-level shape from `/locations` on the same API version | CC BY 4.0 | Free | 2026-08-20, live from the running app |
 | Fintraffic Digitraffic AIS | `wss://meri.digitraffic.fi:443/mqtt` with `Sec-WebSocket-Protocol: mqtt` | None. CONNACK returned code 0 with no username and no password sent | **5 MQTT connections per minute per IP** without the header, stated by the provider. About 35 messages per second on `vessels-v2/#` | MQTT 3.1.1 over WSS. JSON payloads with **different field names and different units from REST** | CC BY 4.0 | Free | 2026-08-19 |
 | Fintraffic Digitraffic port call | `https://meri.digitraffic.fi/api/port-call/v1/vessel-details` | None, as above | As above. gzip mandatory | Bare JSON array. Registry fields: IMO, name, callsign, nationality, port of registry, tonnage, dimensions, owner | CC BY 4.0 | Free | 2026-08-19 |
 | Kystverket (Norway) AIS | `153.44.253.27` port `5631`, raw TCP, no TLS | None. The provider states access needs no registration | Broadcast stream rather than a request API, so no cap is stated. Persistent socket, not a poll | NMEA 0183 AIVDM-family sentences behind IEC 62320-1 TAG blocks | NLOD 2.0. Commercial use and redistribution permitted, attribution mandatory | Free | 2026-08-19 |
-| adsbdb | `https://api.adsbdb.com/v0/aircraft/{hex_or_registration}` | None | 512 requests per minute per IP, read from the provider's own server source rather than a header. No rate-limit headers on any response | JSON in a `response` envelope | **None stated.** Aircraft data is credited to PlaneBase, a commercial database, with no redistribution grant | Free | 2026-08-19 |
+| adsbdb | `https://api.adsbdb.com/v0/aircraft/{hex_or_registration}` | None | 512 requests per minute per IP, read from the provider's own server source rather than a header. No rate-limit headers on any response | JSON in a `response` envelope | **None stated.** Aircraft data is credited to PlaneBase, a commercial database, with no redistribution grant | Free | 2026-08-20 |
 | adsbdb | `https://api.adsbdb.com/v0/callsign/{callsign}` | None | As above | JSON, `response.flightroute` with nested `airline`, `origin` and `destination` | **Prohibited.** The route data "may not be copied, published, or incorporated into other databases" without named written permission | Free | 2026-08-19 |
 | FAA Releasable Aircraft Database | `https://registry.faa.gov/database/ReleasableAircraft.zip` | None, **but a descriptive User-Agent is refused 403 by Akamai across the whole host** | Refreshed daily at 23:30 US central time, stated by the FAA. No request cap published | Zip, 69.6MB, 8 space-padded CSV files with a `.txt` extension. `MASTER.txt` is 316,030 rows | Public domain (US Government work) | Free | 2026-08-19 |
 | Transport Canada CCARCS | `https://wwwapps.tc.gc.ca/Saf-Sec-Sur/2/CCARCS-RIACC/download/ccarcsdb.zip` | None. The descriptive User-Agent works here | No cadence published. `Last-Modified` moved on the day of verification | Zip, 4.3MB, 3 cp1252 quoted CSVs with **no header row**. 34,919 aircraft, 38,536 owner rows | Government of Canada Open Data Licence. **Clause 3.1(d) forbids linking the data to identify an individual** | Free | 2026-08-19 |
@@ -69,15 +73,106 @@ Called live on 2026-08-19 with a real 200 response.
 | SEC EDGAR browse-edgar | `https://www.sec.gov/cgi-bin/browse-edgar?...&output=atom` | n/a | **Do not use.** It answers HTTP 200 with a valid Atom feed, and `sec.gov/robots.txt` disallows `/cgi-bin` by name | n/a | n/a | n/a | 2026-08-19 |
 | ProPublica Nonprofit Explorer | `https://projects.propublica.org/nonprofits/api/v2/search.json` and `/organizations/{ein}.json` | None | None published. Treat as unstated, not unlimited, and cache hard. The data is a monthly IRS Business Master File extract, so it is never current | JSON. **No trustee, officer or director name field exists on either endpoint** | **ProPublica Data Store terms bar republishing or distributing the data in whole or in part on a stand-alone basis, and bar charging for access** | Free | 2026-08-19 |
 | Companies House PSC bulk snapshot | `https://download.companieshouse.gov.uk/psc-snapshot-{date}_{n}of32.zip` | **None** | Daily snapshot, 2.2GB whole or 32 parts of about 72MB. Bulk ingest into a local index, never a poller | JSON Lines inside a zip member with a `.txt` extension | Open Government Licence 3.0 | Free | 2026-08-19 |
-| FEC OpenFEC | `https://api.open.fec.gov/v1/schedules/schedule_a/` | `api_key` required. `DEMO_KEY` works | **`x-ratelimit-limit: 10` observed on `DEMO_KEY`**, tighter than the 30 per hour api.data.gov documents. 1,000 per hour on a signed key. Trust the header | JSON, 81 fields per result, with a 40-field `committee` object inlined on every row | Public domain (US Government work) | Free | 2026-08-19 |
+| FEC OpenFEC | `https://api.open.fec.gov/v1/schedules/schedule_a/` | **OUT OF SCOPE under the keyless rule, 2026-08-20.** `api_key` required. `DEMO_KEY` works and is still a key, so this is out until the constraint changes. Do not wire it in | **`x-ratelimit-limit: 10` observed on `DEMO_KEY`**, tighter than the 30 per hour api.data.gov documents. 1,000 per hour on a signed key. Trust the header | JSON, 81 fields per result, with a 40-field `committee` object inlined on every row | Public domain (US Government work) | Free | 2026-08-19 |
 | Wikidata `wbsearchentities` | `https://www.wikidata.org/w/api.php?action=wbsearchentities` | None, descriptive User-Agent required | No numeric read cap published for the action API. Serial rather than parallel. 1 request per second is our own floor | JSON. `success` is an integer, `url` is protocol-relative | CC0 | Free | 2026-08-19 |
 | Wikipedia REST summary | `https://en.wikipedia.org/api/rest_v1/page/summary/{title}` | None, descriptive User-Agent required | **200 requests per second**, stated in the API's own OpenAPI spec | JSON, profile `Summary/1.5.0`. `coordinates` is `{lat, lon}` and is absent on a person | **CC BY-SA 3.0 and GFDL**, per the API's own declaration, not 4.0 | Free | 2026-08-19 |
 | Wikipedia geosearch (action API) | `https://en.wikipedia.org/w/api.php?action=query&list=geosearch&formatversion=2` | None, descriptive User-Agent required | No numeric read cap published. `gsradius` is capped at 10 to 10,000 metres and anything else is an error | JSON. A requested-but-absent property comes back as an explicit `null` | CC BY-SA 3.0 and GFDL | Free | 2026-08-19 |
 | Wikimedia Commons imageinfo | `https://commons.wikimedia.org/w/api.php?action=query&prop=imageinfo&iiprop=url,extmetadata` | None, descriptive User-Agent required | As the geosearch row above | JSON. The licence, author and any required credit string live in `imageinfo[0].extmetadata` | Per file, carried on the record | Free | 2026-08-19 |
 | Wikimedia upload (image bytes) | `https://upload.wikimedia.org/wikipedia/commons/thumb/{path}/{width}px-{file}` | None | Only the provider's standard thumbnail widths are served. Anything else is HTTP 400 with an HTML body | Image bytes | Per file, as above | Free | 2026-08-19 |
-| Nominatim | `https://nominatim.openstreetmap.org/search?format=jsonv2` | None, descriptive User-Agent mandatory | **An absolute maximum of 1 request per second**, stated by the OSMF. Caching is mandatory, not advised. Systematic queries are named as unacceptable use | JSON, a bare list. `lat` and `lon` are **strings**; `boundingbox` is 4 strings as `[south, north, west, east]` | ODbL 1.0. The response carries its own credit string | Free | 2026-08-19 |
+| Nominatim | `https://nominatim.openstreetmap.org/search?format=jsonv2` | None, descriptive User-Agent mandatory | **An absolute maximum of 1 request per second**, stated by the OSMF. Caching is mandatory, not advised. Systematic queries are named as unacceptable use. **Called at most once per unique query, measured 2026-08-20 through the running product: four identical searches, one upstream call, 563ms cold then 1.8ms** | JSON, a bare list. `lat` and `lon` are **strings**; `boundingbox` is 4 strings as `[south, north, west, east]` | ODbL 1.0. The response carries its own credit string | Free | 2026-08-20 |
 | Overpass | `https://overpass-api.de/api/interpreter`, POST | None, descriptive User-Agent with contact required | **About 10,000 requests and under 1GB of download per day**, both stated by the provider. 2 concurrent slots for this IP per `/api/status`. Requests queue 15 seconds then are discarded | JSON when `[out:json]` is asked for, but **errors are HTML or plain text** | ODbL 1.0, self-declared in the body at `osm3s.copyright` | Free | 2026-08-19 |
 | EOX Sentinel-2 cloudless | `https://tiles.maps.eox.at/wmts` | None | No published cap. `ows:Fees` is absent from the capabilities | WMTS XML capabilities plus 256x256 JPEG tiles | **CC BY 4.0 on the 2016 and 2017 mosaics only. CC BY-NC-SA 4.0 on 2018 through 2025** | Free, and a paid EOX licence for commercial use | 2026-08-19 |
+| Kystdatahuset (Kystverket, Norway) | `https://kystdatahuset.no/ws/api/ais/realtime/geojson` | **None.** The OpenAPI document declares one `JWT Bearer` scheme and no global `security` requirement, and this path carries none. A call with the User-Agent header suppressed entirely returned the full body | **None stated**, in the OpenAPI document, on the access page or in `robots.txt` (`User-agent: *` / empty `Disallow:`). The cadence is set by the data: the provider serves "all ships that have reported positions within the last 10 minutes" and wipes positions after 20. A 60s poll sits well inside that and costs about 1MB gzipped. **`HEAD` is HTTP 405 with `Allow: GET`**, so a freshness check written as a HEAD reports the source down | GeoJSON FeatureCollection. **Geometry is a `LineString` and the current position is the LAST coordinate**, not the first. 3,542 features on 2026-08-23, 3,399 of them mapping to a vessel | **NLOD 1.0, which is what this endpoint's own document says.** `info.license` in the live OpenAPI document reads "Norwegian Licence for Open Government Data (NLOD) 1.0" and points at `data.norge.no/nlod/en/1.0`, re-read 2026-08-23. This file had recorded 2.0 for both Kystverket endpoints on the reasoning that it is one authority under one licence, and that reasoning still holds; the version does not. Nothing practical turns on it: both licence texts were read on 2026-08-23 and both grant copying, use and distribution provided the contributor is acknowledged, so the credit discharges either. `sources/kystdatahuset.py` serves 1.0 because stating a grant the provider did not state for this endpoint is the wrong way round to be wrong. Which of Kystverket's two statements governs is theirs to settle | Free | 2026-08-23, live from the running app |
+| Transpordiamet (Estonia) | `https://gis.transpordiamet.ee/arcgis/rest/services/Hosted/AIS_vessels_feature_view/FeatureServer/0/query` | **None.** An ArcGIS FeatureServer with `capabilities: Query`. The portal declares `authInfo.isTokenBasedSecurity: true` for its admin endpoints and this query needs no token, no header and no cookie. **Not in the maritime folder**: the AIS layer sits in `Hosted`, while the folder named for vessel traffic (`Laevaliikluse_tiheduskaardid`) holds 52 `ImageServer` density rasters, so a quick sweep of this host concludes "density only" and moves on | **None stated.** `robots.txt` is HTTP 404, so there are no directives. Cadence read off the data: report ages ran 84s at the freshest, 148s median, 1,878s max, so a minute buys everything there is. `maxRecordCount` is 1,000 and `resultOffset` paging is verified at offset 600 | Esri JSON. **Default spatial reference is EPSG:3301, Estonian grid in METRES**: without `outSR=4326` a berth reads `x: 466890.13, y: 6529584.57` and every vessel fails a WGS84 contract. **`sys_timestamp` is a constant `-2209161600000`, which is 1900-01-01, on every record**; the real fix time is `timestamp`, a 13-digit ms epoch. **An error arrives as HTTP 200 with an `error` key.** `mmsi` is a 9-char string, `draught` is metres, `eta` is a real ms epoch rather than the packed AIS integer | **None stated.** `copyrightText` on the FeatureServer is an empty string, there is no terms page in the service directory and no licence on the viewer. Verified absent rather than assumed. Credit is courtesy; a licence read is needed before commercial redistribution | Free | 2026-08-23, live from the running app |
+| Great Lakes St. Lawrence Seaway VIS (Canada and USA) | `https://vis.seaway.ca/graphql`, POST, operation `getAllVessels` | **None.** A cold POST carrying only a User-Agent and a content type, with no cookie, referer, session or authorization header, returned all 7,118 records. The public map's own bundle at `vis.greatlakes-seaway.com` names this endpoint, this operation and this argument, and contains the word "anonymous" nineteen times. The same schema exposes `currentUser`, `roles`, `directoryUsers` and pilot assignments: **query the AIS fields and nothing else** | **None stated**, on either host, in `robots.txt` (`User-agent: *` / empty `Disallow:` on both) or in any response header. Cadence read off the data: freshest report 119s, and the ten-minute window held 1,664 against 1,537 at five minutes | GraphQL. **`age` is not an age, it is an absolute ISO 8601 instant.** **The body is a SIXTY-DAY roster, not a snapshot**: median report 2.4 days old, p90 33.6 days, 4,100 of 7,118 over 24 hours, so it must be cut to a freshness window locally because the server's own `ageOrLastUpdatedDays` filter is in whole days. `sessionFilterOverrides` is a required argument with ~70 non-null booleans and no defaults, each of which silently narrows the answer. Errors arrive inside HTTP 200. `latitude: 91` / `longitude: 181` is the position sentinel. **`accuracyType: MALFUNCTION` on 6,103 of 7,118 does NOT mean a bad fix** and dropping on it loses four fifths of the feed. Two fields are called `id`; only `aisInformation.id` is the MMSI | **None stated.** No terms page on either host and no licence field in the response. Verified absent. Both operating corporations are public bodies, which points at open terms and is not a grant. Credit is courtesy; a licence read is needed before commercial redistribution | Free | 2026-08-23, live from the running app |
+| ReTLEctor (CelesTrak cache) | `https://retlector.eu/{group}/json` and `https://retlector.eu/{norad_id}/json` | None | **60 requests per 60 seconds, stated by the provider**, and confirmed on the wire as `x-ratelimit-limit: 60`, `x-ratelimit-remaining`, `x-ratelimit-reset`. Honour the header, not a constant. `/{group}/status` returns `Last Updated`, `Age` and `Next Update` as a few hundred bytes of plain text, so freshness is checked before pulling 6.9MB. Groups refresh every 4 to 12 hours. `robots.txt` is HTTP 404 | **The exact CelesTrak OMM JSON contract**, same field names, same naive `EPOCH`, same types. The committed `celestrak_iss_omm.json` key set matches field for field | **Unresolved, and unchanged by using it.** ReTLEctor's code is MIT; the data is CelesTrak's, whose position this file already records as not stated | Free | 2026-08-20 |
+| astrion-tech CelesTrak mirror | `https://raw.githubusercontent.com/astrion-tech/celestrak-mirror/main/tle/{group}.tle`, plus `satcat/satcat.csv` and `LAST_REFRESH` | None | None stated beyond GitHub's defaults. Refreshed every 30 minutes by GitHub Actions. `etag` and `last-modified` are served, so conditional requests cost nothing | TLE line triples, 8 groups only. **TLE means a hard 5-digit catalogue ceiling**, so every object catalogued since 2026-07-11 is absent or Alpha-5 encoded | **None declared at all**, which is worse than a restrictive one. The README asks consumers to respect CelesTrak's terms | Free | 2026-08-20 |
+| SatNOGS DB | `https://db.satnogs.org/api/tle/?format=json` | None | **None published.** The provider says only "API access is open to anyone", so treat as unstated rather than unlimited. `robots.txt` disallows `/admin/` only. The host timed out twice at 20 and 25 seconds before answering in 0.60s, so a short client timeout reads it as dead | JSON, `tle0` / `tle1` / `tle2` / `tle_source` / `sat_id` / `norad_cat_id` / `updated`. **It names its own provenance per record**, which nothing else here does | **CC BY-SA 4.0**, stated by the provider. The cleanest orbital licence available, and ShareAlike binds any derived database | Free | 2026-08-20 |
+| AMSAT | `https://www.amsat.org/tle/current/nasabare.txt` | None | **None published** on the file, the directory index or the page. Verified absent. Behind Cloudflare with `max-age=14400`; `etag` and `last-modified` both served, so a daily conditional fetch costs the provider nothing. `robots.txt` disallows `/dokuwiki/` only | Plain text, 3-line format, 99 amateur satellites. Rebuilt daily | **None stated**, on the file, the directory index or the page. Verified absent rather than assumed | Free | 2026-08-20 |
+| tle.ivanstanojevic.me | `https://tle.ivanstanojevic.me/api/tle/{norad_id}` | None | None published, no rate-limit headers. `cache-control: no-cache, private`, `vary: User-Agent`. `robots.txt` permits everything. **Per-object lookup only, never swept**: there is no bulk route and 25,675 objects would be thousands of paged requests | JSON, Hydra/JSON-LD envelope, CORS open. TLE line pairs, never OMM | **None stated** | Free | 2026-08-20 |
+| wheretheiss.at | `https://api.wheretheiss.at/v1/satellites/25544` and `/25544/tles` | None | **None published on the response.** The provider's documentation states roughly one request per second, unverified, so 1/s is our own floor rather than a quoted cap | JSON. A **computed position**, not elements: latitude, longitude, altitude in **kilometres**, velocity, visibility, footprint, timestamp | **None stated** | Free | 2026-08-20 |
+| open-notify.org | `http://api.open-notify.org/iss-now.json` | None | None published | JSON, 113 bytes. **HTTP only, no TLS**, so a browser on an HTTPS page blocks it and the backend must proxy it. Latitude and longitude arrive as **strings** | **None stated** | Free | 2026-08-20 |
+| NASA SSCWeb | `https://sscweb.gsfc.nasa.gov/WS/sscr/2/observatories` and `/WS/sscr/2/locations/{id}/{start},{stop}/geo/` | None | None published. `cache-control: no-transform, max-age=86400` | XML. Positions rather than elements, in the Earth-fixed `Geo` frame, as **parallel repeated `<X>`, `<Y>`, `<Z>` and `<RadialLength>` elements against a separate `<Time>` array**, in kilometres | NASA open data, acknowledgement requested | Free | 2026-08-20 |
+| SpaceX Starlink public ephemerides | `https://api.starlink.com/public-files/ephemerides/MANIFEST.txt` and the per-satellite MEME files | None | None published. `robots.txt` is HTTP 404 | Plain text. **State-vector ephemerides, not mean elements**: 3 days at 60-second steps in frame `UVW`, km and km/s, plus a 21-element covariance. No SGP4 path. 11,001 files at about 2MB each, so about 22GB whole | **None stated** on the manifest or the files | Free | 2026-08-20 |
+| Mike McCants element sets | `https://mmccants.org/tles/classfd.zip` and `/tles/inttles.zip` | None | None published. `etag`, `last-modified` and `accept-ranges: bytes` all served. `robots.txt` is HTTP 404 | Zip containing TLE text. 404 classified objects in `classfd.tle`, 63 integrated-forward objects in `inttles.zip` whose epochs sit in the **future** | **None stated** | Free | 2026-08-20 |
+| NASA GIBS geostationary cloud layers | `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/{GOES-East_ABI_GeoColor,GOES-West_ABI_GeoColor,Himawari_AHI_Band3_Red_Visible_1km,Himawari_AHI_Band13_Clean_Infrared}/default/{Time}/{TileMatrixSet}/{z}/{y}/{x}.png` | None | None published, verified absent. `PT10M` product cadence, measured 62 to 72 minutes old at a single clock reading, so poll every 5 minutes against the endpoint's own `Time` default and label the layer with the frame's timestamp | Transparent PNG WMTS tiles. `GoogleMapsCompatible_Level7`, **Level6 for `Himawari_AHI_Band13_Clean_Infrared`**. GeoColor is true colour by day and infrared by night, so it never blanks on the dark half | NASA open data, acknowledgement requested | Free | 2026-08-20 |
+| NASA GIBS HLS 30m true colour | `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/{HLS_S30_Nadir_BRDF_Adjusted_Reflectance,HLS_L30_Nadir_BRDF_Adjusted_Reflectance}/default/{Time}/GoogleMapsCompatible_Level12/{z}/{y}/{x}.png` | None | As the GIBS row above. Date-addressable daily, S30 back to 2015-11-28 across 17 ranges, L30 back to 2013-03-22 across 13 | PNG. **30m, eight times sharper than the 250m MODIS layer the app draws today.** Harmonised Landsat Sentinel-2 | NASA open data, acknowledgement requested. Public domain | Free | 2026-08-20 |
+| NASA GIBS Blue Marble | `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg` | None | As the GIBS row above | JPEG. **No `Time` dimension at all**: zero `<Value>` elements and no `<Default>`, so the dateless template is the correct one here and a date in the path is accepted and ignored. Ceiling `Level8`, so zoom 0 to 8. Cloud-free by construction | NASA open data, acknowledgement requested. Public domain | Free | 2026-08-20 |
+| EUMETView (EUMETSAT GeoServer) | `https://view.eumetsat.int/geoserver/ows?service=WMS&version=1.3.0` | None | **None published and none discoverable.** Verified absent. `ows:Fees` is `none` and `AccessConstraints` is `none`. `mtg_fd:rgb_geocolour` is `PT10M`, `msg_fes:rgb_natural` `PT15M`, `mumi:worldcloudmap_ir108` `PT3H` | WMS 1.3.0 GetMap, PNG. 255 named layers. **The WMTS endpoint is HTTP 400; only WMS works** | **NOT ESTABLISHED, and this gates the layer.** `Fees: none` and `AccessConstraints: none` are machine-readable and verified. Every human-readable licence page is unreadable: `/eumetsat-data-licensing` answers 200 with a JavaScript shell to curl and 403 to a fetch service, `/copyright-notice` and `/our-satellites/data-policy` are both 404, and the data-policy PDF is 404. No licence name, no attribution string, no redistribution position. The satellite layers carry no `<Attribution>` and `<ContactInformation>` is present but empty | Free | 2026-08-20 |
+| NOAA STAR NESDIS CDN | `https://cdn.star.nesdis.noaa.gov/GOES19/ABI/FD/GEOCOLOR/1808x1808.jpg` | None | **None published.** `cache-control: max-age=0,s-maxage=600` is the only cadence signal and matches a 10-minute product cycle. `robots.txt` is HTTP 404. **Freshness comes from the response `last-modified`**, because the filename is fixed and carries no timestamp | JPEG full disk in the satellite's own geostationary fixed grid, **not a tiled Web Mercator layer**. `latest.jpg` is 18,548,436 bytes; use `1808x1808.jpg` at 2,581,852 or `339x339.jpg` at 127,833 | NOAA, US federal government work, so public domain by default, but **no explicit licence statement was found on the CDN**, so record the position as unstated | Free | 2026-08-20 |
+| JMA Himawari tiles | `https://www.jma.go.jp/bosai/himawari/data/satimg/targetTimes_fd.json`, then `.../{basetime}/fd/{validtime}/{band}/{product}/{z}/{x}/{y}.jpg` | None | **None published** | Standard Web Mercator `{z}/{x}/{y}.jpg`, 10-minute cadence, 213 frames listed. **Zoom 0, 1 and 2 are all HTTP 404; minimum usable zoom is 3.** Off-disk is **opaque white with no alpha channel**, 44.2% of a zoom-3 composite, so it is a poor overlay next to GIBS's transparent PNGs. Infrared is the only product that works round the clock | **Not established.** `robots.txt` is HTTP 404 with an HTML body, so no crawl policy either way and the status has to be checked before the body is parsed | Free | 2026-08-20 |
+| CIRA SLIDER | `https://slider.cira.colostate.edu/data/json/{satellite}/full_disk/geocolor/latest_times.json` | None | None published. `robots.txt` is HTTP 404. The old `rammb-slider.cira.colostate.edu` host answers **302 on every path including `robots.txt`** | JSON frame lists plus PNG tiles in the satellite's **native fixed-grid geostationary projection** with a `{zz}/{yyy}_{xxx}.png` scheme, so Cesium needs a reprojection step | **Not established.** CIRA is a Colorado State University co-operative institute with NOAA; no licence statement found | Free | 2026-08-20 |
+| Microsoft Planetary Computer | `https://planetarycomputer.microsoft.com/api/stac/v1/search`, `/api/data/v1/item/preview.jpg`, `/api/data/v1/mosaic/register` | **None.** Microsoft's own words: the datasets "are anonymously accessible: you don't need to supply a subscription key", and a key "allows for less restricted rate limiting". The same shape as TfL JamCams, so keyless is the sanctioned route | **The provider states rate limiting exists and publishes no number.** Record as verified-absent. `robots.txt` is `User-agent: *` with no `Disallow` | STAC JSON, **and it honours `cql2-json` for real**, unlike earth-search. Keyless browser JPEG per scene at `preview.jpg?format=jpeg&max_size=512`, and a keyless on-demand XYZ mosaic. **Content-type on the JPEG is `image/jpg`, not `image/jpeg`** | Data is Copernicus free, full and open with attribution mandatory (`sentinel-2-l2a` declares `license: proprietary` with a `rel=license` link to the ESA Sentinel Data Terms). **Microsoft's own service terms are not fetchable**: `/` and `/terms` both return the same 2,356-byte React shell. No SLA, no published availability commitment | Free | 2026-08-20 |
+| USGS LandsatLook STAC | `https://landsatlook.usgs.gov/stac-server/search` | None to search | None published, verified absent. `robots.txt` is HTTP 403 with an S3 `AccessDenied` XML body, so there is nothing to honour and nothing granting permission | STAC JSON, 18 collections, and it honours `cql2-json`. **Catalogue only: the imagery is not reachable keyless.** See the detail section | USGS Landsat Data Policy, public domain, no commercial restriction | Free | 2026-08-20 |
+| AWS Open Data Terrain Tiles | `https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png` | None | **None published**; it is a public S3 bucket. `robots.txt` is an S3 `NoSuchKey` 404. An EU replica bucket `elevation-tiles-prod-eu` exists in eu-central-1 | Terrarium-encoded PNG heightmaps, `height = (R*256 + G + B/256) - 32768`. Zoom 0 to **15**; zoom 16 is a 404. Cesium has no terrarium provider, so it goes through `CustomHeightmapTerrainProvider` | Open, but **attribution is mandatory across about thirteen source datasets** per `tilezen/joerd/docs/attribution.md`. A thirteen-line credit block | Free | 2026-08-20 |
+| Natural Earth II, bundled in the `cesium` package | `/cesium/Assets/Textures/NaturalEarthII/{z}/{x}/{reverseY}.jpg`, served from our own origin | None | **Not applicable, zero network.** 536KB on disk, already copied by `frontend/vite.config.ts:35` | TMS JPEG tiles, zoom 0 to **2** only, full `-180 / -90 / 180 / 90` extent | Public domain (Natural Earth). **The Cesium provider carries no credit of its own**, so one has to be added explicitly | Free | 2026-08-20 |
+| NASA GIBS geostationary cloud layers, as shipped | `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/{GOES-East,GOES-West}_ABI_Band13_Clean_Infrared` and `.../Himawari_AHI_Band13_Clean_Infrared`, `/default/{Time}/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png` | None | `PT10M` product cadence, and the newest frame is never the current one. **Ask for `default` in the time dimension and GIBS names the frame it served in a `layer-time-actual` response header**, which it also lists in `access-control-expose-headers`, so a browser can read it: one `HEAD` per satellite replaces guessing. **Use it to learn the frame and never to draw:** `default` resolves per request, and four GOES-East tiles asked for in the same second at 15:40 UTC named three different frames (15:40, 15:30, 15:20), so drawing on it puts three frames side by side and calls it one picture. Measured 2026-08-23 at 10:25 UTC: 10:00 for both GOES, 09:30 for Himawari, so 25 and 55 minutes old in the same reading. At 09:57 UTC the newest slot with bytes behind it was 26 to 36 minutes old and the two newer slots answered 404 on three attempts each. Client re-probes every 10 minutes | PNG WMTS tiles, `GoogleMapsCompatible_Level6`, deepest level 6. **A 404 here means one of three things and only one is a fault.** A slot GIBS has not built answers 404 rather than a blank tile, and the newest slot always is one. A tile outside the satellite's own footprint also 404s rather than serving transparency: `GOES-East` at level 2, row 1, column 3 is 90°E to 180°E and answered 404 six times of six, while a tile inside the pyramid with no data is a 334-byte fully transparent PNG instead. And a 404 can simply be wrong: one tile URL answered 404, 404, then 200 with 80,131 bytes, so a single 404 is not evidence a tile is absent, and a coarse-level 404 is almost certainly this rather than a footprint edge (`Himawari` at level 1, row 0, column 1 contains the whole disk and answered 200 six times of six). Off-disk pixels inside a straddling tile are opaque and **exactly `(0,0,0)`**, 72% of a tile over the Sahara, while the darkest real pixel in the same tiles was above 64 of 255, so keying black out is safe at Cesium's default threshold. **On this product grey level is temperature, not cloudiness, so there is no grey that means "clear".** Measured 2026-08-23 as the grey histogram of one tile per climate: Amazon rainforest peaks at 48 to 95 and has nothing above 160; tropical Atlantic peaks at 96 to 111; Sahara by day and the western Pacific at 96 to 127; North Atlantic at 50°N at 112 to 143; South Pacific and Australia at 112 to 159; and the **Southern Ocean at 65°S has nothing at all below 144 and peaks at 160 to 175**, brighter than a good deal of real cloud because sea ice genuinely is that cold. 62 to 99 per cent of pixels in every tile are exactly grey, and NASA colourises only the cold end, so the tallest storms arrive cyan and green with a brightest channel *below* clear sky: `(0, 67, 90)` is a cold top. Any brightness threshold has to exempt coloured pixels or it punches holes through deep convection. **There is no `Himawari_AHI_GeoColor`**, so GeoColor cannot cover the western Pacific and Band 13 is the only product all three satellites publish. **There is no Meteosat layer at all**, so 0°E to 60°E has no cloud imagery from this source. `HEAD` works and returns `content-length` with no body | NASA open data, acknowledgement requested. The satellites are NOAA's and JMA's, so the credit names them | Free | 2026-08-23, live from the built bundle in a browser |
+| Wikimedia Commons geosearch, as shipped | `https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2&maxlag=5&generator=geosearch&ggscoord={lat}|{lon}&ggsradius={m}&ggslimit={n}&ggsnamespace=6&ggsglobe=earth&prop=imageinfo|coordinates&iiprop=url|user|extmetadata|mime|size|timestamp&iiextmetadatafilter=LicenseShortName|UsageTerms|LicenseUrl|Artist|AttributionRequired|ImageDescription&colimit=max` | None, descriptive User-Agent | **No published read cap, and the provider says so**: API:Etiquette states "There is no hard speed limit on read requests" and asks for requests "in series rather than in parallel". So 1 request per second is our own floor. **`maxlag` is required of us, not optional**: the same page says "If your task is not interactive, i.e. a user is not waiting for the result, you should use the maxlag parameter", and a poller is exactly that. **One request, not two**: `generator=geosearch` with `prop=imageinfo|coordinates` returns the coordinates and the licences together, which is the same page's advice to use "a generator instead of making a request for each result from another request". Verified 2026-08-24: 500 pages, all 500 with imageinfo, all 500 with coordinates, `batchcomplete: true`, 743KB. **`iiurlwidth` caps the whole query at 50 records and nothing says so**, which is why it is no longer sent: see the section below | JSON. **`formatversion=2` is mandatory in practice**: without it booleans are empty strings and pages are keyed by pageid instead of being a list. **Every error arrives inside an HTTP 200**, in an `error` key: `ggsradius=50000` gives `code: outofrange` ("must be between 10 and 10,000") and `maxlag=-1` gives `code: maxlag` with a `lag` figure, and the two need opposite handling because one is a bad request and the other is "come back shortly". **An over-limit `ggslimit` is a *warning*, not an error, and silently changes the count**: 600 answered 200, warned "must be between 1 and 500", and returned 64 results. **`missing: true` does not mean missing**: a Commons file queried against `en.wikipedia.org` answers `missing: true`, `imagerepository: shared` and a full `imageinfo` with `LicenseShortName: Public domain`, so the drop condition is the absence of `imageinfo`. **Coordinates carry a `globe`** and MediaWiki also stores Moon and Mars, so the earth entry is picked by name rather than by position. **`width` and `height` are `0` for `application/ogg`** (3 of 50), which is "not applicable" and not a dimension. **`Artist` is HTML**, real value `'Unknown author<span style="display: none;">Unknown author</span>'`, which renders once in a browser and twice through a naive tag stripper. **`AttributionRequired` is the string `'true'` or `'false'`**, both truthy. **`DateTimeOriginal` is free text**: `cir. 1948` is a real value. **A geosearch of namespace 6 returns audio as readily as photographs**. **`iiurlwidth` silently caps `prop=imageinfo` at 50 titles whatever `ggslimit` says**: 500 pages, 50 with `imageinfo`, `batchcomplete` absent and an `iicontinue` token, so the other 450 are unlicensable and dropped. Without it, 500 pages with 500 `imageinfo` and `batchcomplete: true`. **`iiextmetadatafilter` cuts the body 64%**, 2,081KB to 743KB, for a byte-identical parse. **`CirrusSearch` refuses under load with an HTTP 200**, `code: cirrussearch-too-busy-error` plus a `mediawiki-api-error` response header, 2 of 36 sustained calls. **A search that matches nothing has no `query` key at all**, 51 bytes reading `{"batchcomplete":true,"limits":{"coordinates":500}}`, so an empty answer and a broken one are the same shape. **`imageinfo.url` carries `utm_*` tracking parameters** (`utm_source=commons.wikimedia.org&utm_campaign=imageinfo`) which the media proxy strips | **Per file, never per source.** One London query returned CC BY-SA 4.0, CC0, CC BY 3.0, CC BY 2.0 and CC BY-SA 2.0 across 50 files. Each record carries its own licence, URL, author and attribution flag, and an item whose licence cannot be determined is dropped and counted | Free | 2026-08-23 |
+| Mastodon public timeline (`mas.to`), as shipped | `https://mas.to/api/v1/timelines/public?limit=40` | None on instances that still serve anonymous clients | **The provider states its own budget on every response**: `x-ratelimit-limit: 300`, `x-ratelimit-remaining`, and `x-ratelimit-reset` as an ISO timestamp. `cache-control: max-age=15` is the instance's own cache window, so **15s is the floor**: polling faster than a provider's cache cannot return anything new. `robots.txt` allows `/` for `*` and disallows only `/media_proxy/`, `/interact/` and `/api/v1/instance/domain_blocks`, so this path is permitted; it also carries `Content-Signal: search=yes,ai-train=no,use=reference` | Bare JSON array of statuses, no envelope; paging is in a `Link` header. **No positional field of any kind**, re-verified 2026-08-23: nothing on the status, nothing on `account`, nothing in the `meta` block of a media attachment. `content` is HTML. `language` may be `null`. Undocumented-by-us fields now present and ignored: `card`, `quote`, `quote_approval`, `tagged_collections`, `edited_at`. **`mastodon.social` answers HTTP 422 `{"error":"This method requires an authenticated user"}` to the identical request `mas.to` answers 200 to**, so an instance list is configuration and 401, 403 or 422 drops that instance for the cycle | **Per post, and a status carries no rights field at all**, so a media attachment's licence cannot be determined and every one is dropped and counted per ADR 005. The handle and the link are stored because attribution needs them. This half of the layer is text | Free | 2026-08-23 |
+| OpenStreetMap notes | `https://api.openstreetmap.org/api/0.6/notes.json?bbox={w},{s},{e},{n}` | None, and it answers: HTTP 200, 30,446 bytes, 100 features for a London box on 2026-08-23 | n/a | GeoJSON `FeatureCollection`. Technically fine and not the problem | **DROPPED ON THE PROVIDER'S OWN TERMS, 2026-08-23.** Not a key problem and not a technical one: the endpoint works. `operations.osmfoundation.org/policies/api/` states, verbatim, that "The editing API is provided in order to edit the map data, **not for read-only purposes or projects**", names planet.osm and Overpass as the routes for data users, and caps downloaders at 2 threads. `robots.txt` independently carries `Disallow: /api/` and `Disallow: /note` under `User-agent: *`. Two stated directives naming our exact use, so per AGENTS.md the stated route in is the route in, and neither planet.osm nor Overpass carries notes. ADR 005 names this as an upstream-coordinate source; it is not available to us | Free | 2026-08-23 |
+| Wikimedia media bytes, proxied | `https://upload.wikimedia.org/wikipedia/commons/...` and `.../thumb/.../{width}px-...` | None | **Not polled.** Demand-driven and cached for 30 days per item, because a photograph does not change: a replaced Commons file arrives under a new URL. Served to browsers from our own origin, never hot-linked, per ADR 005. Hot-linking would spend the provider's rate limit through viewers we cannot see or slow down, and would tell Wikimedia which photograph on our globe each viewer opened | Raw media bytes. **The only media host**: both `url` and `thumburl` on a Commons file point here. **`thumbwidth` never describes the bytes at `thumburl`** and Wikimedia renders only to its own standard widths, verified 2026-08-23: `500px-` and `250px-` both answered 200 with real JPEG while **`512px-` answered HTTP 400 with 2,010 bytes of `text/html`**, so a client must never construct a width and must validate the body against its declared type before caching it. **The URLs carry the provider's own analytics** (`utm_source`, `utm_campaign`, `utm_content`); stripping them returned byte-identical content, 38,279 bytes either way. **Its coordinates are often a copied placeholder rather than an observation, and this is the trap that matters most on this source.** Measured 2026-08-24 as a 50-file geosearch within 10km of a centre: **Charing Cross returned all 50 files on one coordinate**, `51.5073509, -0.1277583`; Notre-Dame 259 of 500 on `48.856614, 2.352222`; Midtown Manhattan 37 distinct coordinates across 50 files with 32 carried by one file each; Reykjavik 30 distinct and rural Wales 27. The clustered files are bulk imports named "Rustic stovetop", "Binoculars" and "Small Dog Confidence", 45 of one Manhattan cluster uploaded by "File Upload Bot", and one London file's own description reads "Geolocation data has this at Charing...". **The provider quotes six to seven decimal places**, which is centimetres, and no two independent photographs have fixes agreeing to a centimetre, so an exact repeat is one value copied onto several records. Treating such a coordinate as source-supplied would assert an observed position that does not exist, so the adapter reclassifies it as derived and counts it. **No tolerance and no gazetteer are needed**: the test is inter-file agreement, not proximity to a known centroid. **A `thumburl` on `commons.wikimedia.org` is not a thumbnail**: for media it cannot render a preview of, MediaWiki substitutes its own static UI icon at `/w/resources/assets/file-type-icons/fileicon-ogg.png`, so that host is excluded from the proxy allowlist and the adapter no longer offers it as a preview. Sends `access-control-allow-origin: *`, so a browser *could* hot-link, which is why the rule is a decision rather than a limitation. **SVG is never served**: it is a document a browser runs script from, and serving one from our origin would put a provider's markup in our security context | Per file, established before a URL reaches the proxy: `MediaLicence` makes an unlicensed item unrepresentable, so the proxy has no licence decision to make and no way to bypass one | Free | 2026-08-23, live through the proxy |
+| CARTO raster basemaps | `https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png` | None | **None published on the tile CDN.** No published cap means no permission either: treat as courtesy access and cache | PNG, rendered cartography rather than imagery | ODbL 1.0 on the OpenStreetMap data plus a CARTO credit. Both are attribution conditions | Free | 2026-08-20 |
+| Mobility Database catalogue | `https://files.mobilitydatabase.org/feeds_v2.csv` | None | manual, weekly at most | CSV, 2,647,828 B | catalogue metadata; see robots note below | free | 2026-08-23 |
+| 258 operator feeds | see `gtfsrt_feeds.csv` | None | per **host**: 350s passio3.com, 120s data.gouv.fr, 60s buscatch.jp, 30s otherwise | GTFS-RT protobuf | per feed, carried on every record | free | 2026-08-23 |
+| Entur (Norway, national) | `https://api.entur.io/realtime/v1/gtfs-rt/vehicle-positions` | None | 30s | GTFS-RT protobuf, 304,907 B, 1,497 vehicles | NLOD 2.0, attribution | free | 2026-08-23 |
+| transit.land REST | `https://transit.land/api/v2/rest/feeds?spec=gtfs-rt` | **API key** | n/a | JSON | n/a | n/a | 2026-08-23, HTTP 401 |
+
+### Measured coverage
+
+The Verified table has no coverage column, and coverage is the fact most often assumed rather
+than measured. Everything below was measured on 2026-08-20 from a real body or a real tile
+grid, never read off a provider's claim. Where a source straddles the antimeridian the figure
+is given as bands, because a naive min and max reads `-180 to 180` for a single geostationary
+satellite and is wrong by 200 degrees.
+
+| Source | Measured coverage | How it was measured |
+| --- | --- | --- |
+| Fintraffic Digitraffic AIS | **lon 16.76 to 32.54, lat 57.67 to 65.80. 1,075 vessels, 1,075 distinct MMSI, 70 one-degree cells.** The Gulf of Finland, the Gulf of Bothnia, Aland and the Archipelago Sea | Every coordinate in one live `/locations` body |
+| Kystdatahuset | lon 0.155 to 32.492, lat 56.23 to 80.338. 3,283 features, 3,275 distinct MMSI, 144 one-degree cells. Norwegian coast 2,349, Barents and Murmansk 138, western North Sea 99, Kattegat and Skagerrak 50, Svalbard 34. **Baltic proper: zero. Gulf of Finland and Bothnia: zero** | The last coordinate of every `LineString` in one live body |
+| Kystdatahuset plus Fintraffic, merged on MMSI | **4,350 distinct vessels, 214 one-degree cells, 0.33% of the globe's cells.** MMSI intersection **zero**. Cell intersection **zero** | Set intersection of the two bodies above, captured in the same minute |
+| Transpordiamet (Estonia) | lon 19.68 to 29.41, lat 56.98 to 60.71. 627 vessels, 627 distinct MMSI. Against the other two keyless members in the same minute: 397 already in Fintraffic, **zero** in Kystdatahuset, **230 in neither**. Reaches further south than Fintraffic, lat 56.98 against 57.67, which is the Latvian coast | One live FeatureServer query, 2026-08-23 |
+| Seaway VIS (Canada and USA) | **lon -92.10 to -51.83, lat 41.42 to 51.61. 1,664 vessels inside a ten-minute window**, out of 7,118 served. MIDs 316 Canada 810, USA 338/366/367/368/369 about 756, plus 538 Marshall Islands, 636 Liberia, 311 Bahamas. The Great Lakes, the St Lawrence and the Gulf of St Lawrence. **The first ships on the globe outside northern Europe** | One live GraphQL POST, 2026-08-23 |
+| All four keyless vessel providers merged on MMSI | **6,001 vessels, lon -92.12 to 34.25, lat 41.42 to 79.91, 379 one-degree cells = 0.58% of the globe.** By region: Norwegian coast and Skagerrak 41%, North America 31%, Baltic and Gulf of Finland 19%, Baltic approaches 6%, North Sea 3%, Barents 0.2%. 346 records seen by more than one provider. **Two continents, and that is the honest ceiling of keyless AIS** | Live from the running app, 2026-08-23 |
+| Kystverket raw NMEA TCP | lon -13.345 to 31.505, lat 57.596 to 78.357, 224 positions, 65 cells in a 12-second read | Hand-decoded single-part type 1, 2 and 3 sentences |
+| ReTLEctor `/active/json` | **lat -88.78 to +89.00, lon -179.97 to +179.98, altitude 132.4km to 128,888.7km. All 216 cells of a 10 by 30 degree grid, 100%.** Quadrants NW 4,142 / NE 3,972 / SW 3,973 / SE 4,312. Zero SGP4 failures out of 16,399 | All 16,399 objects propagated with SGP4 to the instant of the call, TEME converted to ECEF through GMST at the same instant |
+| SatNOGS DB | lat -86.47 to +82.69, lon -179.05 to +178.82, 210 of 216 grid cells (97%). 1,579 of 1,669 propagated clean | As above |
+| AMSAT | lat -82.47 to +82.31, lon -178.47 to +178.09, 78 of 216 grid cells (36%). 98 of 99 propagated | As above. 99 objects cannot fill a grid at one instant, so the spread is global and the count is small |
+| Mike McCants `classfd.tle` | lat -81.37 to +82.67, lon -178.64 to +179.12, 175 of 216 grid cells (81%). 398 of 404 propagated | As above |
+| astrion-tech `stations.tle` | lat -42.83 to +51.78, lon -146.35 to +168.54, 9 of 216 grid cells. 21 objects | As above. Its value is being a second host on a second network, not one file covering the world |
+| GIBS `GOES-East_ABI_GeoColor` | lon -151.5 to 1.4, lat -76.5 to 76.5, 42.5% of longitude | 4x4 zoom-2 tile grid composited to 1024x1024, alpha channel scanned column by column |
+| GIBS `GOES-West_ABI_GeoColor` | lon -180 to -60.5 and 146.6 to 180, lat -76.5 to 76.5, 42.5% of longitude | As above |
+| GIBS `Himawari_AHI_Band13_Clean_Infrared` | lon -180 to -138.2 and 59.4 to 180, lat -79.7 to 79.7, 45.1% of longitude | As above |
+| **GIBS geostationary trio, union** | **83.9% of longitude, with exactly one gap: 1.4E to 59.4E.** That 58-degree hole is Europe, Africa and the Middle East. **GIBS carries zero Meteosat layers**: 3,905 layer identifiers, 12 GOES, 3 Himawari, 0 matching Meteosat or MSG | Union of the three measurements above |
+| EUMETView `mtg_fd:rgb_geocolour` | lon -81.2 to 81.2, 45.1% of longitude, and it covers **100.0% of the measured GIBS gap** | 1024x512 global GetMap render, alpha scanned column by column |
+| EUMETView `mumi:worldcloudmap_ir108` | **lon -180 to 180, lat -81.6 to 81.6, 100.0% of longitude**, 87.8% of pixels opaque. One layer, whole globe, no compositing | As above |
+| **GIBS trio plus `mtg_fd:rgb_geocolour`** | **100.0% of longitude, no gap** | Union of the measurements above |
+| JMA Himawari tiles | lon -180 to -137.8 and 59.1 to 180, lat -85.1 to 85.1, 45.8% of longitude. **Adds no coverage GIBS does not already have** | Full 8x8 zoom-3 grid, 48 tiles at 200 and 16 at 404, composited and scanned for pixels that are neither pure white nor pure black |
+| GIBS `BlueMarble_NextGeneration` | 64 of 64 zoom-3 tiles at HTTP 200, 63 distinct images, lat -85.05 to 85.05, lon -180 to 180 | Full 8x8 zoom-3 grid, each tile checked for a real JPEG or PNG magic number |
+| GIBS `MODIS_Terra_CorrectedReflectance_TrueColor` | 61 of 64 zoom-3 tiles, the three failures all in the southernmost row as HTTP 404 | As above |
+| EOX `s2cloudless-2025_3857` | 62 of 64 zoom-3 tiles with a real image, lat -85.05 to 85.05, lon -180 to 180. The two failures are Antarctic and arrive as **HTTP 200 with a 116-byte PNG** | As above |
+| Microsoft Planetary Computer mosaic | Global over land inside Sentinel-2's own band, **zoom 9 and up only**. Zoom 4 to 8 are HTTP 204 with zero bytes. 200 at Tokyo, Sydney, Sao Paulo, Dubai, Anchorage, London, Kinshasa and Manaus; 204 over open Pacific and McMurdo | One zoom-11 tile request per city, plus one request per zoom level over the same London column |
+| USGS National Map imagery | **United States only.** 64 of 64 at zoom 3 because a global low-resolution backdrop is served at coarse zooms, then Denver 200, London 404, Tokyo 404 at zoom 10 | Zoom-3 grid, then one zoom-10 tile per city |
+| Esri World Elevation 3D | Global. `fullExtent` spans the full Web Mercator world in EPSG:3857. Sampled in a real Cesium viewer: Everest 8,839m, London 6m, Hawai'i 2,107m, Chilean Andes 4,605m | `sampleTerrainMostDetailed` against the rendered provider |
+| AWS Terrain Tiles terrarium | Global and real. `z0/0/0` decodes to -7,527m to 5,657m, so ocean floor and mountains are both present | Terrarium PNG decoded with `height = (R*256 + G + B/256) - 32768` |
+
+**Two facts from that table deserve saying in words, because both were assumed the other way
+before they were measured.**
+
+**Fintraffic Digitraffic is a regional provider, not a global one.** lon 16.76 to 32.54, lat
+57.67 to 65.80. That is the Gulf of Finland, the Gulf of Bothnia and the Archipelago Sea, and
+nothing else. It has been the vessel layer's only live source, so the layer has been Finnish
+coastal waters presented as a world map. Adding Kystdatahuset triples the count and still
+leaves the layer at 0.33% of the globe's one-degree cells. Anything that reads "vessels" in
+this product means Northern Europe until a global provider exists, and there is no keyless
+global one.
+
+**The two vessel providers do not overlap at all.** Zero shared MMSI and zero shared cells,
+measured in the same minute. So they are **complementary, not redundant**: either one going
+down darks its whole region with no failover behind it, and no vessel position in this layer
+will ever be corroborated by a second provider. That is a harder version of the ADR 010 and
+ADR 011 conflict already recorded in `docs/pending-decisions.md`. For aircraft, two
+aggregators repeat one transponder broadcast; for vessels, the two providers never see the
+same ship.
 
 ### Model artefacts
 
@@ -109,6 +204,50 @@ detector producing five landmarks, which the ADR does not name. YuNet closes tha
 233KB, MIT, and 3.92ms per frame measured on this machine. The leanest workable int8 set is
 491MB (MiniLM 23MB, CLIP 153MB, ArcFace 66MB, Whisper 249MB, YuNet 0.23MB). Taking the
 declared-MIT Qdrant CLIP instead makes it 944MB.
+
+### Build-time references
+
+Not feeds. A build-time reference is read once by a person, written into a code constant and
+never called by the running product. It gets a row for the same reason a feed does: someone
+has to be able to check where a constant came from, and when.
+
+| Source | Endpoint | Auth | Cadence / rate limit | Format | Licence | Cost | Last verified |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ICAO Doc 8643 aircraft type designators | `https://www.icao.int/operational-safety/doc-8643-aircraft-type-designators` | None | **Not polled.** Read when the constant is edited, which was once | HTML landing page. No machine-readable form exists | **No data licence read.** ICAO publishes the document itself; what this project holds is a list of designator strings in a code constant | Free | 2026-08-20 |
+| doc8643.com per-designator mirror | `https://doc8643.com/aircraft/{designator}` | None | **Not polled.** One request per designator, self-imposed 1 per second | HTML per designator: manufacturer, model, description code, wake category | **None stated** on the mirror | Free | 2026-08-20 |
+
+Where it is used: `src/tracker/services/classify.py:53`, the business-jet designator set.
+
+**There is no machine-readable ICAO endpoint.** ICAO's own search application at
+`https://cfapps.icao.int/doc8643/` answers **HTTP 404 host-wide**, re-verified 2026-08-20. So
+the designator set was read off per-designator pages on the mirror, one request each, and
+every entry in the constant carries its Doc 8643 manufacturer and model verbatim beside it as
+the citation.
+
+**The ICAO path is exact and the shorter one is a 403.**
+`/operational-safety/doc-8643-aircraft-type-designators` answers 200 and
+`/doc-8643-aircraft-type-designators` answers **403** on the same host, both re-verified
+2026-08-20. Dropping the prefix reads as a block rather than as a wrong URL.
+
+**The mirror's index is gated and its per-designator pages are not.**
+`https://doc8643.com/aircrafts` sat behind a Cloudflare challenge on the first attempt on
+2026-08-20 and answered 200 with 20KB of real HTML on a re-check the same day, for a
+descriptive User-Agent both times. Treat the index as intermittently gated and the
+per-designator pages as the route in.
+
+**The mirror has at least one real data error, so its description code column carries no
+weight.** `FA6X`, the Dassault Falcon 6X, reads description code `L1P`, a single-engine
+piston, for what is a twin jet. Read off the live page on 2026-08-20. The designator and the
+model name on that page are right and they are what the constant keys on, so the
+classification is unaffected. Nothing may be built on the description code.
+
+Nine candidate designators answered 404 on the mirror and were dropped rather than guessed at:
+`FA5X`, `MYST`, `C526`, `C552`, `GL8T`, `LJ29`, `LJ36`, `LJ54`, `CL65`.
+
+**Nothing from Doc 8643 reaches a browser**, which is why there is no attribution string and
+no licence-audit item for it. The designators are a filter inside the classification rules; a
+card's type designator comes from the ADS-B feed under ODbL and its model name comes from
+adsbdb.
 
 ### adsb.lol `/v2/point/{lat}/{lon}/{radius_nm}`
 
@@ -160,11 +299,20 @@ The failover provider, and the reason a single parser serves both: adsb.fi, adsb
 ADSBexchange all serve the readsb v2 schema.
 
 `/v2/mil` is path-identical to adsb.lol, which is why the military failover works with no
-code change. The viewport endpoint is **not** path-identical: adsb.fi uses
-`/v2/lat/{lat}/lon/{lon}/dist/{nm}` and answers HTTP 400 for adsb.lol's
-`/v2/point/{lat}/{lon}/{nm}`. Both were confirmed on 2026-08-19. The current failover in
-`src/tracker/sources/adsb.py:331` retries the same path against the secondary base URL, so
-the viewport failover does not work yet. Recorded in `docs/status.md`.
+code change.
+
+**The viewport path has to be chosen for both providers, and only one shape works.** adsb.fi
+answers HTTP 400 for adsb.lol's `/v2/point/{lat}/{lon}/{nm}`, which is adsb.lol only, and
+failover replays the same path against the secondary base URL, so using it silently disabled
+the viewport failover entirely. The shape both providers accept is
+`/v2/lat/{lat}/lon/{lon}/dist/{nm}`, and it is now the only one the code sends
+(`src/tracker/sources/adsb.py:56`).
+
+**Verified live on 2026-08-20**, twice in one nine-minute run of the app. adsb.lol answered
+`GET /v2/lat/51.5000/lon/-0.1200/dist/250` with HTTP 420, and
+`GET https://opendata.adsb.fi/api/v2/lat/51.5000/lon/-0.1200/dist/250` answered HTTP 200, and
+the aircraft layer kept its records. So both providers serve the shared shape and the
+viewport failover works. This corrects the previous entry, which said it did not.
 
 The envelope's batch timestamp is **seconds**, not milliseconds. The capture taken on
 2026-08-19 sent `now: 1787170658.001` with a fractional `ptime` of 0.067, where adsb.lol
@@ -217,6 +365,16 @@ Four things that will cost you time if you skip them:
   give `jdsatepoch=2461272.03387`, the `+00:00` form gives `NaN`. Every satellite lands at
   NaN, which renders as an empty layer rather than an error.
 
+**Reachability, rechecked 2026-08-20 from a running server and by hand.** Still dead, and it
+is a network fact rather than our code. DNS resolves `celestrak.org` to `104.168.149.178`, a
+raw TCP connect to port 443 times out, and `curl --max-time 15` returns HTTP 000 with exit 28.
+The app's own poller logged
+`SourceError: celestrak: unreachable: ConnectTimeout:` and the satellite layer reported itself
+unavailable with that reason on `/api/health` and `/api/capabilities`, serving
+`{"count":0,"satellites":[]}` rather than claiming health. That is three checks across three
+days and two networks, and **zero requests have ever been served**, so the two-hour budget is
+untouched and the non-200 stop latch has never been exercised against a real response.
+
 **Attribution: this file's previous claim was wrong.** It said "CelesTrak terms, attribution
 required". Rechecked on 2026-08-20 across the usage policy, the GP data formats page, the
 SupGP queries page, the SATCAT format page and the home page: there is no attribution,
@@ -240,6 +398,130 @@ returns `null` with a non-zero `satrec.error`, and the cheap guards are absence 
 days. Measured: a real ISS element set propagated 365 days past epoch still reported
 `error=0` and a plausible 402km altitude, so a clean error code is not evidence of a usable
 position.
+
+**CelesTrak is not down. CelesTrak is refusing our network, and it has answered HTTP 000 for
+four days.** Corrected 2026-08-20. This file and `sources/celestrak.py:58` both described the
+silence as a transport failure that might clear on its own. It will not. Measured on 2026-08-20
+from three independent networks against the same IP, `104.168.149.178`:
+
+| Network | Result |
+| --- | --- |
+| This laptop, curl | `http=000`, connection timed out after 30,003ms on `celestrak.org:443`. `celestrak.com:443` behaved identically at 25s. DNS resolves cleanly |
+| A third-party fetch service | `connect ECONNREFUSED 104.168.149.178:443` |
+| GitHub Actions runners, via two mirrors | **HTTP 200 with that day's data**, ten minutes before the check |
+
+Two different TCP failure modes from two networks against one IP, while a third network is
+served. That is a firewall rule keyed on where the request comes from, not an outage. The
+`astrion-tech/celestrak-mirror` README names the mechanism in as many words: a workflow
+re-fetches "from runner IPs that CelesTrak does not block, so consumers behind blocked
+datacenter ASNs (notably Hetzner) can still ingest the data".
+
+**Four days of HTTP 000 is the run.** Two of those days are directly evidenced in this file,
+2026-08-19 and 2026-08-20. `sources/celestrak.py:59` records the site serving a week before the
+first failure, so the block began between 2026-08-13 and 2026-08-19. There is no appeal route in
+CelesTrak's usage policy, so the working assumption is that it never comes back for us.
+
+Three consequences.
+
+- **Retrying is not a plan and redundancy is the only route.** The keyless replacements are
+  ReTLEctor (the same OMM JSON contract, 16,399 objects, measured global), the astrion-tech
+  mirror (a second host on a second network) and SatNOGS DB (a genuinely independent origin).
+- **The two-hour-per-group floor now applies to a cache we do not own**, which is a different
+  obligation from the one CelesTrak's policy states and should not be read as the same promise.
+  ReTLEctor's groups refresh every 4 to 12 hours, so a 2-hour poll already asks twice as often
+  as the data moves, and it sits well inside the 60-requests-per-60-seconds the cache states.
+- **Every keyless full-catalogue mirror is CelesTrak wearing a different hostname.** ReTLEctor,
+  `astrion-tech/celestrak-mirror`, `navsuite/celestrak-orbital-data`, `satvisorcom/satvisor-data`
+  and `tle.ivanstanojevic.me` are **one origin between them**. Two of them agreeing is the same
+  file fetched twice, not corroboration, which is exactly the ADR 010 error
+  `docs/pending-decisions.md` already flags for ADS-B. The independent origins are CelesTrak,
+  Space-Track (reachable only through SatNOGS), AMSAT, McCants, NASA SSCWeb and SpaceX.
+
+### Satellite element sets without CelesTrak
+
+Verified 2026-08-20. Three keyless providers, and the order matters.
+
+**ReTLEctor is the primary**, because it is the only keyless source that hands over the exact
+CelesTrak OMM JSON contract the layer already parses, the only one carrying 6-digit catalogue
+numbers (326 of 16,399), and the only one whose coverage measures as the entire globe. Pointing
+`sources/celestrak.py` at a second base URL is the whole integration and the committed fixtures
+still pass. Fixtures: `tests/fixtures/retlector_active_omm_slice_live.json` (every 25th object
+of `/active/json`, so the slice spans the catalogue rather than one launch),
+`retlector_iss_omm_live.json` and `retlector_groups_live.json`.
+
+Its traps:
+
+- **Every numeric field arrives as `int` or `float` in the same response**, on fields SGP4
+  needs. Measured across 16,399: `MEAN_MOTION_DDOT` int on 16,302 and float on 97, `BSTAR` int
+  on 802, `INCLINATION` int on 85, `MEAN_MOTION_DOT` int on 14, `MEAN_ANOMALY` int on 3,
+  `ARG_OF_PERICENTER` int on 1. A `strict=True` float field rejects the ints. Same class as
+  earth-search's `eo:cloud_cover`.
+- **`OBJECT_ID` is up to 10 characters, not 9.** Real values `2013-066AA`, `2013-066AB`,
+  `2014-033AD`. A regex expecting `YYYY-NNN[A-Z]` drops them.
+- `EPOCH` is naive with no `Z` and no offset on all 16,399, exactly as CelesTrak. The
+  `json2satrec` trap above applies unchanged: attach UTC in the adapter and serialise as `Z`.
+- **One person, one host, no SLA, and it exists precisely because CelesTrak bans people.** If
+  CelesTrak bans it, the layer goes dark again, which is why the failover below is not optional.
+
+**The astrion-tech mirror is the failover.** Different host, different network, same upstream
+bytes, refreshed every 30 minutes, and its ISS element set matched ReTLEctor's to the digit,
+which cross-validates both. It is TLE only, so it carries a hard 5-digit catalogue ceiling and
+misses every object catalogued since 2026-07-11. Accept that as the price of a failover and say
+so on the layer. Its own sanity gate is worth copying: a file is committed only when the fetch
+passes a check, TLE line counts divisible by three and the SATCAT over 1MB. Fixture:
+`tests/fixtures/astrion_mirror_stations_tle_live.txt`.
+
+**SatNOGS DB is the independent origin.** CC BY-SA 4.0, and it names its own provenance per
+record, which nothing else here does: Space-Track.org 1,520, Celestrak (supplemental) 83,
+SatNOGS Team 21, Satellite Team 18, McCants 16, CalPoly 7. Under ADR 011 that makes most of it
+Space-Track-origin rather than CelesTrak-origin, so it can corroborate the mirrors instead of
+repeating them. Small, so it joins the union rather than carrying it. Fixture:
+`tests/fixtures/satnogs_db_tle_slice_live.json`.
+
+Its traps:
+
+- **A long stale tail hides behind a healthy median.** Median element age 14.7 hours, p90 2,779
+  hours (116 days), and the oldest record's TLE year field is `75`. A parser using `2000 + yy`
+  dates it to 2075, which then wins every recency contest in the merge. **The TLE pivot is 57 to
+  99 for the 1900s and 00 to 56 for the 2000s, and it is not optional.**
+- **Alpha-5 is present**: one record's catalogue field has a non-digit first character.
+- 90 of 1,669 fail SGP4 outright. Drop and count.
+- Amateur and cubesat weighted. Starlink is absent entirely.
+
+**The freshness policy, taken from the measured numbers rather than picked.** Draw an object
+when its element epoch is under **72 hours** old: that covers 84.8% of SatNOGS, 96.0% of AMSAT,
+and all of ReTLEctor's active set, whose p90 is 32 hours. Between 72 hours and **14 days**, draw
+it and mark the position degraded on the card, because SGP4 error grows roughly a kilometre a
+day in low orbit, so a week-old element set is a useful pin and a dishonest one if shown as
+current. Over 14 days, drop and count. That threshold is what kills McCants' 15-day median.
+
+**Measure that age on ingest from the element epochs in the body, never from mirror metadata.**
+Not `pushed_at`, not `Last-Modified`, not a README table, not a `LAST_REFRESH` file.
+`satvisorcom/satvisor-data` is the worked example and the reason the rule exists: pushed five
+minutes before it was looked at, with a per-group refresh table in its README, and its two
+largest files (`active.json` 14,875 objects, `starlink.json` 9,984) carry **March epochs, a
+median age of 3,537 hours, 147 days**, while its small groups are 13 to 30 hours old. Nothing on
+the surface says so. Fixture: `tests/fixtures/satvisor_mirror_stale_active_omm_slice_live.json`,
+kept precisely because a mirror pushed minutes ago can be serving five-month-old data. Log a
+median epoch age per group and report it on `/api/layers` next to the provider list. It is the
+only honest health signal a cache can give us.
+
+**Two single-object routes exist so the demo's hero pin is never missing.** `wheretheiss.at`
+returns the ISS position, altitude, velocity and footprint in one keyless call with no
+propagation code at all, and `open-notify.org` sits behind it. Neither is an independent origin:
+`wheretheiss.at`'s TLE matched `tle.ivanstanojevic.me` byte for byte on both lines.
+`wheretheiss.at` gives altitude in **kilometres**, so it converts in the adapter under the
+metres-above-the-ellipsoid rule, and it returns a position with no element set behind it, so
+there is no epoch to age-check and freshness comes from its own `timestamp` field.
+
+**Two verified sources that are recorded and not built.** SpaceX's public Starlink ephemerides
+are the highest-quality orbital data in the set, straight from the operator, and the wrong shape:
+state vectors rather than mean elements, so no SGP4 and no `json2satrec`, and 11,001 files at
+about 2MB each is roughly 22GB. Demand-driven per satellite is the only sane read. And NASA
+SSCWeb returns keyless Earth-fixed positions for 85 currently-active named spacecraft, which
+makes it an independent origin for a corroboration test; its `Geo` frame is already Earth-fixed,
+so the existing `gstime` TEME-to-ECEF conversion must be **bypassed** for those records rather
+than applied, or the whole thing rotates twice.
 
 ### USGS earthquake feed
 
@@ -310,14 +592,60 @@ inventory.
 
 Five traps, all verified on 2026-08-19:
 
-- **The dateless tile template GIBS publishes in its own capabilities returns HTTP 404.** The
-  layer advertises three templates: one with `{Time}`, one with no date segment and one with a
-  literal `default` in the date position. Only the dated form works
-  (`.../default/2026-08-15/GoogleMapsCompatible_Level9/6/21/31.jpeg` gave 200 and 15,827 bytes;
-  the dateless sibling gave 404 with an HTML body). The date segment is mandatory in practice
-  whatever the capabilities says.
-- **The `Time` dimension `Default` is tomorrow's date.** It read `2026-08-20` on 2026-08-19. A
-  timeline that clamps its upper bound to the advertised default offers a day with no imagery.
+- **CORRECTED 2026-08-20: the dateless tile template no longer 404s. It now returns HTTP 200
+  with the wrong day's imagery, which is worse.** The layer advertises three templates: one with
+  `{Time}`, one with no date segment and one with a literal `default` in the date position. The
+  dated form is stable and unchanged (`.../default/2026-08-15/GoogleMapsCompatible_Level9/6/21/31.jpeg`
+  still gives 200 at exactly 15,827 bytes), but the dateless sibling and the literal-`default`
+  form both now give **200 at 27,420 bytes, which is today's imagery**. A loud 404 became a
+  silent wrong-day image, the same class as the Worldview `TIME` trap. **Send the date always.**
+- **CORRECTED 2026-08-20: the trap only applies to a layer that has a `Time` dimension.**
+  `BlueMarble_NextGeneration` has none at all, zero `<Value>` elements and no `<Default>`, and
+  all three template forms returned the identical 9,416-byte JPEG including one with an
+  arbitrary `2004-08-01` in the date slot. So on a static layer a garbage date is accepted
+  silently and a date error cannot be detected at all.
+- **CORRECTED 2026-08-20: the `Time` `Default` being tomorrow is layer-specific, not a service
+  rule.** `MODIS_Terra_Cloud_Fraction_Day` and `MODIS_Terra_Cloud_Top_Temp_Day` read
+  `2026-08-21` on 2026-08-20, as recorded, but `MODIS_Terra_CorrectedReflectance_TrueColor` and
+  the VIIRS true-colour layers read `2026-08-20`. Read it per layer.
+- **The EPSG:4326 and EPSG:3857 endpoints report different `Time` defaults for the same layer,
+  up to 30 minutes apart.** Both capabilities fetched back to back: `GOES-East_ABI_GeoColor`
+  17:50:00Z on 4326 against 17:40:00Z on 3857; `Himawari_AHI_Band13_Clean_Infrared` 18:00:00Z
+  against 17:30:00Z. **Take the default from the endpoint you are actually tiling from.**
+- **An off-disk tile on a geostationary layer is HTTP 404 with an HTML body, not a transparent
+  PNG.** At zoom 2, `GOES-East_ABI_GeoColor` returned 404 on 4 of 16 tiles, `GOES-West` on 6 of
+  16, `Himawari_AHI_Band13` on 4 of 16. A geostationary disk is a circle on a rectangular grid,
+  so about a quarter of tile requests legitimately have no data and **the Cesium imagery
+  provider has to treat 404 as an empty tile rather than as an error to retry**, or a quarter of
+  the layer logs failures and the retry traffic is pointless load on NASA. This is the one real
+  integration cost on the recommended primary cloud layer.
+- **A zoom past the layer ceiling is not always HTTP 400.** MODIS at `Level9` gives 400, as
+  recorded below, but HLS at `Level12` requested at zoom 12 answered **HTTP 200 with a 334-byte
+  transparent PNG**. Over-zoom errors on one layer and silently blanks on another, so a client
+  handling only the 400 draws nothing and reports success.
+- **The advertised `Default` date 404s per tile on a granule layer.**
+  `HLS_S30_Nadir_BRDF_Adjusted_Reflectance` advertises `Default` `2026-08-18` inside its own
+  last range, and London at zoom 10 on 2026-08-18 answered **HTTP 404** with a 196-byte HTML
+  body while the same tile on 2026-08-13 answered 200 with 69,720 bytes. Coverage ranges are
+  service-wide, not per tile, because HLS only exists where a satellite passed. Fixture:
+  `tests/fixtures/gibs_hls_s30_default_date_404_live.html`.
+- **The sub-daily coverage holes are far worse than the daily ones.** `GOES-East_ABI_GeoColor`
+  advertises **100 separate `PT10M` ranges** with real gaps between them, for example
+  `2026-08-13T09:30Z/09:40Z` then a jump to `10:00Z/10:00Z`. The eleven-`P1D`-ranges trap below
+  is the mild version.
+- **`gibs-a`, `gibs-b` and `gibs-c` are not redundancy.** All three answered 200 for the same
+  tile, and `gibs.earthdata.nasa.gov` resolves to `18.165.201.35` while all three lettered hosts
+  resolve to `18.165.201.43`. One CloudFront distribution behind four names. Any claim of
+  provider redundancy on imagery has to come from somewhere other than NASA.
+- **The capabilities census, 2026-08-20.** 1,315 layers on the EPSG:3857 endpoint, 3,905 layer
+  identifiers counted on the EPSG:4326 one. Tile matrix sets in use: `Level6` 821, `Level7` 302,
+  `Level8` 101, `Level9` 64, `Level12` 22, `Level13` 5. **27 layers reach Level12 or Level13,
+  and two of them are 30m global true colour this file had never recorded**:
+  `HLS_S30_Nadir_BRDF_Adjusted_Reflectance` and `HLS_L30_Nadir_BRDF_Adjusted_Reflectance`. 12
+  GOES layers and 3 Himawari layers exist and **zero Meteosat or MSG layers do**, which is why
+  the cloud layer needs a second provider.
+  `Landsat_WELD_CorrectedReflectance_TrueColor_Global_Annual` is also Level12 and is dead: its
+  latest advertised time value is `1998-12-01/2000-12-01/P1Y`, twenty-six years stale.
 - **Coverage has real gaps: eleven separate `P1D` ranges, not one.** Missing windows include
   2000-04-26 to 2000-04-27, 2016-02-19 to 2016-02-26 and 2022-10-11 to 2022-10-22. A timeline
   stepping day by day hits dates that 404, so the valid ranges have to be parsed from the
@@ -334,6 +662,39 @@ Five traps, all verified on 2026-08-19:
 numeric rate cap is published anywhere in the GIBS access documentation, so record that as
 verified-absent rather than implying a provider figure.
 
+### FAA LADD: the flag has a source, and it is not the FAA
+
+**Verified live 2026-08-20.** The LADD attribute on
+`tracker.contracts.aircraft.Aircraft.on_ladd` comes from `dbFlags` bit 8 on the readsb `/v2`
+schema. readsb documents the whole bitfield in `README-json.md` as
+`military = dbFlags & 1; interesting = dbFlags & 2; PIA = dbFlags & 4; LADD = dbFlags & 8`,
+and adsb.lol publishes `/v2/ladd` on top of it, described in its own OpenAPI document as
+"Aircrafts on LADD (Limiting Aircraft Data Displayed)" with a link to the FAA's programme page.
+
+The measurements, so nobody has to re-take them:
+
+- `GET https://api.adsb.lol/v2/ladd` answered HTTP 200 with **249 aircraft**, 248 at
+  `dbFlags` 8 and one at 10 (LADD plus interesting). All 249 carried a registration and 225
+  carried a position.
+- A 250nm viewport on New York carried **26 LADD aircraft out of 539**, so the bit rides on
+  ordinary position queries and not only on the dedicated endpoint. That is what makes the
+  attribute available on the live layer rather than on a separate sweep.
+- **16 of the 18 real Gulfstream G650s** in `tests/fixtures/adsb_type_glf6_live.json`, a
+  payload already in the repo, carry it.
+
+**This closes U1 in `docs/pending-decisions.md`.** The earlier reading, that no source for the
+flag exists, was drawn from the FAA registry (which genuinely has no LADD field) and from an
+`AGENTS.md` line that listed only bits 1 and 4. Both were true and neither was the whole
+schema.
+
+**The FAA does publish the list, and it is not a route open to us.** The participation list is
+issued monthly, on the first Thursday, as `IndustryLADD` through the NAS Aeronautical Data
+Exchange portal at `https://adx.faa.gov`, to Service Consumers who have signed FAA terms of
+service. `https://www.faa.gov/pilots/ladd` itself answers **HTTP 403** to our client. So the
+flag we carry is the provider's assertion, sourced from that list, rather than a fact we read
+at source, and the code says so at `DB_FLAG_LADD`. Per ADR 009 nothing reads it as a
+suppression instruction: a LADD aircraft resolves to its owner and renders like any other.
+
 ### ADS-B Exchange, and the three ways in
 
 The reason this provider matters, in one line: **it does not filter.** adsb.lol and most
@@ -347,7 +708,15 @@ Three access routes, verified on 2026-08-19, and only two of them are usable.
 **The paid API, which is the route.** `https://adsbexchange-com1.p.rapidapi.com/v2/mil/`
 answered HTTP 401 with `{"message":"Invalid API key..."}` from RapidAPI itself, so the host,
 the path shape and the gate are all confirmed live: it is the readsb `/v2` schema behind a
-RapidAPI key. Entry pricing is around $10 a month for roughly 10,000 requests, which
+RapidAPI key.
+
+**The 401 body is not stable and nothing should key on it.** Re-verified 2026-08-20 on
+`/v2/lat/51.5/lon/-0.12/dist/25/`: the same missing-key request answered HTTP 401 with
+`{"message":"Too many requests"}` rather than `Invalid API key`. RapidAPI's gateway picks the
+message, so a client that branches on the string will read "throttled" when the real cause is
+"no credential" and will back off instead of reporting itself unavailable. Branch on the 401.
+The capability reason in `sources/adsb.py` quotes the `Invalid API key` wording as the thing we
+observed first, which is accurate as history and is not a parse target. Entry pricing is around $10 a month for roughly 10,000 requests, which
 continuous polling burns through in about a day, so the cadence has to be demand-driven
 rather than a fixed poll. The provider also grants API access to anyone feeding data into the
 network, which is the cheaper route if a receiver goes up. That feeder route is documented by
@@ -426,20 +795,28 @@ Five traps, all from the same page, and each one is the kind that ships a broken
 
 - **`output` defaults to `xml`.** Pass it explicitly every time, exactly like CelesTrak's
   `FORMAT`.
-- **Failure is HTTP 200 with a structured JSON error envelope, not an empty body. This file
-  and `AGENTS.md` both had this wrong until 2026-08-19.** Called with
-  `username=TRACKER_NO_SUCH_USER` on 2026-08-19 it answered **HTTP 200 with 115 bytes**,
-  verbatim: `[{"ERROR":true,"USERNAME":"TRACKER_NO_SUCH_USER","FORMAT":"HUMAN","ERROR_MESSAGE":"Invalid username or password!"}]`
-  (`tests/fixtures/aishub_ws_invalid_username_live.json`, the complete body). The correct check
-  is `body[0]["ERROR"] is True`, with `ERROR_MESSAGE` carrying the reason. An adapter written
-  to the old claim would read this as a successful empty vessel list, which is the exact
-  failure the note existed to prevent. The earlier run used `username=TEST`, which may be
-  special-cased upstream; either way the general claim was false as written.
+- **There are two failure bodies, not one, and both are HTTP 200.** Measured 2026-08-20 in one
+  sweep, same host, same query string, one parameter apart:
+  - **No `username` parameter at all: HTTP 200, `content-length: 0`, `content-type: text/html`.**
+    An empty body with no JSON in it. This is the empty-200 case this file and `AGENTS.md` both
+    recorded as untested, and it is now measured.
+  - **A bad `username`: HTTP 200 with a JSON error envelope.** `username=NOSUCHUSER` answered
+    **105 bytes**, verbatim:
+    `[{"ERROR":true,"USERNAME":"NOSUCHUSER","FORMAT":"HUMAN","ERROR_MESSAGE":"Invalid username or password!"}]`
+  So an adapter has to survive a body that will not parse as JSON as well as one that parses into
+  a status envelope. `response.json()` raises on the first and succeeds on the second.
+- **The byte count was never a safe check, and this file quoted one.** The envelope length includes
+  the username echoed back, so the same failure was 115 bytes for `TRACKER_NO_SUCH_USER` on
+  2026-08-19 and 105 bytes for `NOSUCHUSER` on 2026-08-20. Corrected 2026-08-20: do not compare
+  lengths. The check that holds is `body[0]["ERROR"] is True` on a body that parsed, and a body that
+  did not parse or came back empty is a failed poll, counted, never an empty vessel list treated as
+  "no ships anywhere". `tests/fixtures/aishub_ws_invalid_username_live.json` holds the complete
+  2026-08-19 body.
 - **The over-frequent-call half of the claim is still untested.** Their own note says "The web
   service will return nothing if executed more frequently", and confirming it needs two calls
-  inside a minute, which is the abuse the cadence rule exists to stop. Treat it as unverified,
-  not as wrong. Either way an empty 200 is an error in the adapter, counted, and never an empty
-  vessel list treated as "no ships anywhere".
+  inside a minute, which is the abuse the cadence rule exists to stop. Treat it as unverified, not
+  as wrong. It is worth noting that a throttled response and a no-username response would now look
+  identical, both being an empty 200, so the adapter cannot tell them apart and does not try.
 - **The response is an array whose element 0 is a status envelope**, not a flat list of
   vessels. So a success body is an envelope followed by the vessel data, and anything doing
   `for vessel in response` iterates the metadata object as if it were a ship. This is new: the
@@ -486,6 +863,21 @@ division, population, timezone and coordinates. Verified on 2026-08-19 by downlo
 whole file: HTTP 200, 3,306,600 bytes, `Last-Modified` and `ETag` both served, so the weekly
 refresh is a conditional `If-None-Match` request that normally costs nothing.
 
+**The conditional request is now verified rather than assumed.** Called on 2026-08-20 with the
+`ETag` the running product had cached, `"327468-65970ccb25bfc"`:
+
+```
+HTTP/1.1 304 Not Modified
+ETag: "327468-65970ccb25bfc"
+[bytes=0 time=0.063775]
+```
+
+Zero bytes and 64 milliseconds against 3,306,600 bytes for the file, so the weekly refresh costs
+effectively nothing in the normal case. The running product also proves the in-process floor is
+doing its job before the network is involved at all: a restart six hours after the last download
+indexed 34,072 cities in 65 milliseconds from the cached zip and issued no request to
+`download.geonames.org` at all. Both measured on a live run, output in `docs/status.md`.
+
 **Three corrections, all made 2026-08-19 against the real file.** This file was wrong in three
 separate ways at once and one of them would have put cities in the wrong hemisphere.
 
@@ -503,6 +895,19 @@ separate ways at once and one of them would have put cities in the wrong hemisph
    with zero values outside +/-90, index 5 ranges -176.17 to 179.36 with **9,075 values
    outside +/-90**. Anyone coding to the old numbers reads the single character `P` where a
    float belongs, which at least fails loudly.
+
+**A 200 carrying an HTML error page is worse than an outright 503.** Found by review on
+2026-08-20. A CDN or proxy error page served with HTTP 200 is a usable-looking body that is not
+a zip. Cached before it is checked, it destroys the working gazetteer, takes a fresh mtime, and
+the weekly floor then short-circuits onto the poison for a week with no further request, while
+the failure reason is discarded so the product reports that the refresh never ran. A 503 keeps
+the good copy and reports the reason, so the unchecked path was strictly the worse outcome. The
+body is checked before it is written, and an unreadable copy on disk sets the reason too.
+
+**An ETag file can outlive its zip.** A tmp reaper, a manual delete or a truncated write leaves
+the validator on disk with nothing to validate. Sending it asks GeoNames to confirm a file we
+cannot serve, and the 304 that comes back is unusable by construction, so the layer stays empty
+until the upstream zip happens to change. The validator is only sent when the zip is in hand.
 
 It is a bulk file, not an API, which is the point: cities do not move, so this is a weekly
 download into a local index rather than a poller. `cities1000` exists if a denser set is
@@ -642,6 +1047,50 @@ Six more traps in the same response, all verified:
   `camera` from `object`, and which one arrived has to reach the domain contract because they
   are different claims. Filter on `globe == "earth"`: Wikimedia holds coordinates on the Moon
   and Mars.
+
+**The 50-record ceiling was `iiurlwidth`, not `ggslimit`, and it is the trap that cost most
+here.** Measured 2026-08-24 against a 500-page geosearch of London. With `iiurlwidth=500` the
+response carried 500 pages, **50 `imageinfo` blocks**, 342KB, no `batchcomplete`, and an
+`iicontinue` token offering the rest. Because the drop rule is the absence of `imageinfo`, the
+other 450 were discarded as unlicensable, so raising `ggslimit` alone bought 450 dropped records
+and 32% more bytes for not one extra post. Removing `iiurlwidth` gave **500 `imageinfo` blocks,
+2,081KB and `batchcomplete: true`**. MediaWiki resolves a `prop` module for at most 50 titles per
+request when a thumbnail render is asked for, and nothing in the payload states it.
+
+The thumbnail address is derivable instead, so nothing is lost: `/commons/6/66/Name.jpg` becomes
+`/commons/thumb/6/66/Name.jpg/500px-Name.jpg`, and for **all 47 raster files in a live 50-record
+response the derived URL was byte-identical to the one the API returned**. The three non-rasters
+were the only difference, and there the API answers with its own static UI icon on
+`commons.wikimedia.org`, which is not a rendition of the item. A derived thumbnail for
+`application/ogg`, `video/webm` and `image/tiff` answers **HTTP 400**, because Wikimedia renders
+those under other names, so only `image/jpeg`, `image/png` and `image/gif` get one. Those are
+99.86% of a 4,000-record census across ten viewports (jpeg 99.60%, png 0.23%, gif 0.03%). This
+also stops us asking the thumbnailer to render fifty images per viewport that we then do not
+fetch, which is expensive work for the provider in a way that JSON is not.
+
+**500 is the number because a city is not legible below it**, and it is the provider's own stated
+ceiling rather than one we picked. Distinct coordinates against `ggslimit`, no `iiurlwidth`: at
+Times Square 37, 41, 95, 153, 300 for 50, 100, 200, 300, 500, still doubling between the last
+two. At Charing Cross **19 distinct coordinates from 50 all the way through 300**, because the
+nearest 300 files there sit on 19 copied placeholder points, and real places only appear past
+300. Bytes are 745KB median across twelve city viewports, 712KB best, 1,600KB worst (Berlin).
+`iiextmetadatafilter` is what makes that affordable: filtered to the six keys the adapter reads,
+a 500-record London response falls from 2,081KB to 743KB with a byte-identical parse.
+
+**The count is a ceiling and not a total, even zoomed in.** A 359m circle on Charing Cross still
+returns a full 500 files, so the layer reports the truncation the same way it reports a clamped
+radius.
+
+**Two failures share one shape and only one of them means "nothing here".** A search that matches
+nothing, verified mid-Pacific, mid-South-Atlantic and Antarctic interior, returns HTTP 200 and 51
+bytes: `{"batchcomplete":true,"limits":{"coordinates":500}}`, with no `query` key and no `error`.
+`CirrusSearch` under load returns HTTP 200 with `code: cirrussearch-too-busy-error`, 2 of 36
+sustained calls, which is distinguishable because it carries an `error`. A third shape was seen
+three times, 57 bytes with neither `error` nor `query`, at two locations that reliably return 500
+pages on their own, and **its body was not captured**, so whether it is distinguishable from the
+genuine empty is unproven. Until it is, a response with no `query` is treated as a failure rather
+than as "no photographs here": the cost is a wrong notice over open ocean, and the alternative is
+reporting zero photographs at Delhi.
 
 Two of the 30 geosearch results sat at `dist: 0` with coordinates equal to the query point to
 four decimal places, one of them the `.ogg`. That is a generic "London" coordinate copied onto
@@ -1048,6 +1497,35 @@ The primary keyless vessel source in the plan, and it had **no row in this file 
 verified or planned, until 2026-08-19. Three interfaces, three different shapes, all keyless,
 all CC BY 4.0 with commercial use explicitly permitted.
 
+**It is a regional provider, not a global one, measured 2026-08-20: lon 16.76 to 32.54, lat
+57.67 to 65.80.** 1,075 vessels, 1,075 distinct MMSI, 70 one-degree cells, taken from every
+coordinate in one live `/locations` body. That is the Gulf of Finland, the Gulf of Bothnia,
+Aland and the Archipelago Sea, and nothing else. It has been the vessel layer's only live
+source, so **the layer has been Finnish coastal waters presented as a world map**. Adding
+Kystdatahuset triples the count to 4,350 vessels and still leaves the layer at 214 one-degree
+cells, 0.33% of the globe's. The two providers share zero MMSI and zero cells, so they are
+complementary rather than redundant and neither has a failover behind it. See the Measured
+coverage section for the figures and what the layer rail has to say.
+
+**Driven live from the running app on 2026-08-20**, which is the first time this project has
+served real ships rather than a recorded payload. Five cycles over nine minutes, each on the
+60-second floor, keeping 658, 661, 659 and 663 vessels through the strict `Vessel` contract.
+The first cycle produced 658 renderable ships 0.24 seconds after the poller started. Both
+endpoints answered HTTP 200 on every cycle. Three things this run adds to the notes below:
+
+- **The SAR-aircraft filter fires on live traffic, not just on the capture.** Three of the four
+  logged cycles dropped exactly one record for `MMSI is a sar_aircraft, not a ship station`.
+  The ITU `111` prefix arriving in a vessel feed is recurring rather than a one-off in a
+  fixture, so the prefix check is load-bearing every minute.
+- **Live contract rejections are small and real**: two records per cycle failed the `Vessel`
+  contract outright. Dropped and counted, positions unaffected.
+- **The `from` parameter is sent on every call**, as `?from=1787219700000`, so the 24-hour
+  default never applies. Without it the layer would render a day of ghost ships.
+
+Those drop counts reached the log and not the API when the run was made, because
+`parse_locations` returned the vessel tuple alone. Fixed on 2026-08-20: it returns the count
+with the vessels and `/api/layers` serves it per provider. See `docs/status.md`.
+
 `/api/ais/v1/locations` returned HTTP 200, 1,058 features, 441KB decompressed, with every key
 present on every record and zero nulls anywhere. The current host and path is
 `https://meri.digitraffic.fi/api/ais/v1/...`: the historic unversioned `/api/v1/locations`
@@ -1252,11 +1730,251 @@ VesselFinder all gate the aggregate behind a receiver requirement or a paid plan
 two regional keyless feeds and no global coverage without either an aisstream.io key or an
 antenna.
 
+### Kystdatahuset (Kystverket, Norway)
+
+Verified 2026-08-20. **The one new live keyless vessel provider anywhere**, and it supersedes
+the raw NMEA TCP socket the plan carried for Norway. Same authority, same receivers, same NLOD
+licence, over plain HTTP, with names, IMO numbers, call signs and destinations already decoded.
+3,283 vessels in one GET, 3,571,020 bytes raw and 1,019,926 gzipped.
+
+**Wired in and re-verified live on 2026-08-23**, as the second keyless member of the vessel
+union. Two GETs 163 seconds apart returned 3,542 and 3,543 features in 3,685,163 bytes, and the
+parser kept 3,399 vessels, dropped 124 and superseded 19 duplicate reports, which closes exactly
+against the feature count. Every drop is a non-vessel or a record with no position: 70 empty
+geometries, 29 unallocated MIDs, 21 auxiliary craft on the `98` prefix, and one each of a coast
+station, a handheld DSC set, an aid to navigation and a SAR helicopter.
+
+Fixture: `tests/fixtures/kystdatahuset_ais_realtime_live.json`, **120 features** sliced from the
+2026-08-23 body, chosen so every trap below is in the committed bytes rather than hand-written.
+No field was altered and no value was scrubbed: an MMSI and a vessel name are public vessel
+identifiers, not data about a natural person. Tracks longer than 40 coordinates are truncated
+**from the front**, keeping the newest end, so the direction trap survives the slice. Two
+corrections to what an earlier draft of this section said it would be: it is 120 features rather
+than 80, it carries no `_fixture_selection` map, and it **does** carry two duplicate-MMSI pairs,
+so that trap is asserted against the real bytes rather than needing a hand-built case. There is
+no `kystdatahuset_head_405_live.txt`: nothing in the adapter ever issues a HEAD, so the trap is
+avoided by construction rather than parsed.
+
+**Keyless, proved rather than assumed.** The OpenAPI document at `/ws/swagger/v1/swagger.json`
+declares one `JWT Bearer` scheme and no global `security` requirement, and this path carries
+none. A call with the User-Agent header suppressed entirely returned the full body.
+
+Kystverket state the coverage themselves: "vessels within the Norwegian economic zone and the
+protection zones off Svalbard and Jan Mayen", and the open feed **excludes fishing vessels
+under 15 metres and recreational craft under 45 metres**. So the count will never match a
+commercial tracker even inside the box, and that is the provider's choice rather than a gap in
+our parsing.
+
+Twelve traps, all measured on the real body.
+
+- **The geometry is a `LineString`, not a `Point`, and the current position is the LAST
+  coordinate.** Every one of 3,212 features in the first poll was a LineString. Verified against
+  course over ground on three fast movers: the track runs oldest-first. **Taking
+  `coordinates[0]` puts every moving ship up to ten minutes behind where it is, silently**, and
+  the layer looks merely stale rather than wrong. Assert this with a test.
+- **42 of 3,212 features carry `"coordinates": []`.** An empty list, not null and not absent.
+  Indexing `[-1]` on it raises `IndexError`. Histogram: 0 pairs on 42 features, 2 on 1,910, 3 on
+  124, up to 89,180 pairs across the body.
+- **The empty-geometry share is not 1%, it moves between 2% and 21%, and it is real named ships
+  rather than beacons.** Measured 2026-08-23 across five polls: 77 of 3,542 at 09:53 UTC, then
+  252 of 1,467, 319 of 1,492, 358 of 1,898 and 349 of 1,827 by 10:21. The records carry a
+  `date_time_utc`, a name, a length and a status and no position anywhere: SJOBAS, AQUA MARINE,
+  CAMPUS BLAA, FRANCO. **93% of the ships with no geometry at 10:20 UTC had one at 09:53 UTC**,
+  and only 6% of one poll's empties recovered a geometry in the next poll 19 seconds later. So
+  the set churns rather than being a fixed group of untrackable vessels, and losing it is the
+  provider withholding a position it held minutes earlier. Dropping and counting is the only
+  correct handling, because there is no position in the payload to use, but it means the vessel
+  store's time to live decides whether a ship flickers off the globe or rides out the gap. That
+  is a decision about the TTL, not an adapter bug.
+- **`POST /api/ais/positions/for-mmsis-time` is the obvious way to backfill those ships and it is
+  broken, and it fails with HTTP 200.** Keyless, verified 2026-08-23, and it answered
+  `{"success":false,"msg":"42P01: relation \"ais202608.ais_20260823\" does not exist"}` with a
+  200 and an empty `data` array, leaking that the provider partitions AIS by day and that the
+  day's partition had not been created. Same trap class as Flickr and the MediaWiki action API:
+  **branch on `success`, never on the status code.** Not wired in.
+- **`draught` is `int` on 1,965 features and `float` on 1,247 in the same response.** A
+  `strict=True` float field rejects 1,965 real ships. Same class as `eo:cloud_cover`.
+- **`date_time_utc` is naive and arrives in two formats.** `2026-08-20T18:22:44` on most and
+  `2026-08-20T18:32:16.19084` with fractional seconds on 172 of 3,212. Attach UTC in the
+  adapter, per the CelesTrak precedent.
+- **`ship_name` carries a decode-confidence suffix inside the string.** Real values
+  `'BUOY OK 1      [86%]'`, `'GH 3           [50%]'`, `'ANDOYVAERING B [73%]'`: space-padded,
+  then `[NN%]`. A name used for display or as a match key has to be stripped of it. 11 names are
+  empty strings, not null. Assert this with a test.
+- **Sentinels rather than nulls, and the same values as Digitraffic**: `cog` 360.0 on 472,
+  `true_heading` 511 on 1,011, `imo` 0 on 1,593, `draught` 0 on 1,228, `length` 0 on 117.
+  `destination` is an empty string on 681 of 3,212.
+- **Non-ship MMSIs are present, and they are not the `111` SAR-aircraft case already recorded**:
+  26 at `109xxxxxx`, 6 at `941xxxxxx`, 4 at `982xxxxxx`, 2 at `119xxxxxx`, 1 at `992xxxxxx`. By
+  name they are AIS fishing-gear beacons and man-overboard units. `109` and `941` sit outside the
+  ITU MID allocation entirely, so the MID validation this project already does drops them, which
+  is the right outcome.
+- **7 duplicate MMSI within one response**, all Norwegian MID 257. One MMSI, two features, two
+  tracks. **ADR 010's one-record-per-key test has to resolve inside a single provider's payload,
+  not only across providers.** The committed fixture slice does not carry a duplicate pair, so
+  this trap needs its own hand-built case rather than a fixture assertion.
+- **`HEAD` returns HTTP 405 with `Allow: GET`.** A freshness or liveness check written as a HEAD
+  reports the source down. Same shape as the FAA zip trap, different cause.
+- **No `bbox` parameter exists.** The only filters are `timeStamp` and `aisShipType`, and
+  unknown parameters are dropped rather than rejected. Viewport pruning is ours to do.
+
+**The bounding box lies about the Baltic.** The lon 32.492 maximum comes from Barents and
+Murmansk, not the Gulf of Finland. There are zero vessels in the Baltic proper and zero inside
+Fintraffic's measured box. Reading the box without counting the cells would suggest an overlap
+that does not exist.
+
+**Do not build the Kystverket raw TCP socket now.** It still works (36,862 bytes and 468 lines
+in a 12-second read on 2026-08-20, and the `BSVDM` talker trap reconfirmed: 449 BSVDM, 13
+B2VDM, 5 B1VDM, **zero AIVDM**), and it is now redundant. The socket path costs a long-lived
+reader with reconnect that no existing `Poller` shape fits, a 6-bit de-armourer, multipart type
+5 reassembly, two checksum layers including the IEC 62320-1 TAG block, and `BSVDM` talker
+handling, all to arrive at a worse version of a GeoJSON endpoint. Its row stays as a documented
+fallback if Kystdatahuset ever closes.
+
+### The national AIS sweep: twenty-nine authorities, four keyless live feeds
+
+Done 2026-08-23, because the layer had been built one country at a time and nobody had gone
+through the list properly. **Every row below was called from this machine on that date.** The
+conclusion, stated before the evidence: **keyless live AIS exists in northern Europe and on the
+Great Lakes, and nowhere else we can find.** Four authorities publish it. Twenty-five do not.
+
+**What counted as a hit**: an endpoint returning live individual vessel positions with an MMSI,
+a latitude, a longitude and a timestamp, reachable with no key, no registration, no token, no
+email approval and no signed agreement. A **vessel density raster is not a hit** and several
+authorities publish those instead; a **historical archive is not a hit** either.
+
+| Authority | Verdict | Evidence |
+| --- | --- | --- |
+| **Fintraffic (Finland)** | **KEYLESS LIVE, in use** | `meri.digitraffic.fi/api/ais/v1/locations`. Already the layer's first member |
+| **Kystverket / Kystdatahuset (Norway)** | **KEYLESS LIVE, in use** | `kystdatahuset.no/ws/api/ais/realtime/geojson` |
+| **Transpordiamet (Estonia)** | **KEYLESS LIVE, in use** | ArcGIS FeatureServer, found by enumerating the portal's service directory behind an Experience Builder viewer |
+| **Seaway VIS (Canada and USA)** | **KEYLESS LIVE, in use** | `vis.seaway.ca/graphql`, found by reading the public map's JavaScript bundle |
+| Denmark, Søfartsstyrelsen | **GATED, and priced** | The authority's own page states live AIS costs DKK 1,800 to 5,600 a year; only historical data is free. `web.ais.dk` is dead on top of that: its certificate expired 12 June 2025 and the connection is reset even with verification disabled, while plain HTTP times out. `aisdata.ais.dk` serves historical zips only |
+| Sweden, Sjöfartsverket | GATED | No public API or download; live vessel-traffic extracts come from the paid RAIS database |
+| Latvia, Maritime Administration | No feed | Ordinary authority website, no AIS section |
+| Lithuania, LTSA | Blocked | Cloudflare interactive challenge on a plain descriptive User-Agent. `geoportal.lt` has no vessel layer |
+| Poland, Urząd Morski / SIPAM | Dead / no feed | `mapy.umgdy.gov.pl` resolves but answers on neither 80 nor 443. SIPAM publishes ENC and hydrographic WMS, no positions |
+| Germany, WSV / BSH | No feed | The federal shore-based AIS network is documented for internal use; the coastal portal advertises **vessel density** products sourced annually from EMSA |
+| Iceland, Vegagerðin and Landhelgisgæslan | No feed | VTS monitoring is internal; the Coast Guard links a chart viewer |
+| Faroe Islands, FMA | No feed | Ship register site, no AIS |
+| Ireland, Marine Institute | **KEYLESS but useless** | The ERDDAP server at `erddap.marine.ie` is genuinely open, and across 75 datasets there is no general vessel feed: the AIS-shaped one carries **MMSI prefix 992**, the ITU aid-to-navigation block, and its stations are named weather buoys. The only ship data is its own two research vessels' underway logs |
+| Netherlands, Rijkswaterstaat | No feed | All six JavaScript bundles of the fairway-information app grepped for ais/vessel/ship/geoserver: static fairway, lock and bridge infrastructure only. The national portal's shipping layer is static planning cartography |
+| Belgium, MDK and VTS-Scheldt | No feed | Legacy CMS, soft-404s on every path, no discoverable map API |
+| United Kingdom, MCA | No feed, confirmed | The `data.gov.uk` AIS dataset exists as a stub with **zero resources attached**. The only other UK offering is a 2011-2015 vessel **density grid** |
+| France, national portals | No feed | Static anchorage and traffic-separation polygons, a 2012-13 AIS-derived study, a vessel registry |
+| France, Flotte Océanographique | **KEYLESS LIVE but unusable** | `localisation.flotteoceanographique.fr/api/v2/positions` is open and genuinely global, lon -28.31 to 159.24, lat -21.46 to 48.65. It is **9 research vessels and carries no MMSI at all**, so there is no merge key under ADR 010, and two of the nine were 13 and 53 days stale. Recorded because it is real and because the reason it is out is the contract rather than the access |
+| Spain, Puertos del Estado | No feed | Open data surface is oceanographic buoys |
+| Portugal, DGRM | No feed | Two search hits, both irrelevant |
+| Italy, Guardia Costiera | Blocked | Akamai WAF answers 403 on a descriptive User-Agent, `robots.txt` included |
+| Greece, Ministry of Shipping and Coast Guard | Blocked | Akamai WAF 403 on both hosts |
+| Canada, CCG and DFO | No feed | No live AIS dataset published; the Seaway row above is the Canadian answer |
+| USA, NAIS / USCG NavCen | GATED | The provider's own page states access is restricted |
+| USA, MarineCadastre / BOEM | HISTORICAL | Monthly zip archive tool, confirmed not live |
+| USA, NOAA nowCOAST | Dead | The `/arcgis/rest/services` path was retired 19 April 2023 and the replacement host does not resolve |
+| Australia, AMSA | HISTORICAL | The Craft Tracking System publishes monthly datasets |
+| New Zealand, data.govt.nz | Unverified | A bot-challenge page blocked the catalogue API |
+| Singapore, MPA | GATED | SG-MDH support ended 30 January 2026 and its host no longer resolves; the successor OCEANS-X is behind Incapsula with a marketplace and subscription model |
+| Japan, JCG MICS | GATED | Portal gates behind terms-of-use acceptance |
+| South Korea, GICOMS | GATED | Its own site states access needs the technical team's approval |
+| Taiwan, TIPC ports | No feed | VTS is internal to port control |
+| Brazil, Marinha and ANTAQ | GATED | The Navy's interior-navigation API requires approved-provider status |
+| Chile, DIRECTEMAR | GATED | SITPORT is mobile-app only. A Chilean logistics site that looks like a government feed is **embedding the commercial MarineTraffic widget** |
+| Argentina, Prefectura Naval | GATED | Registration by national ID number required |
+| South Africa, Transnet | GATED | Restricted to authorised government users |
+| India, VTMS / port authorities | No feed | Nothing public found |
+| UAE, Dubai Trade | GATED | Registered service; the federal open-data maritime page answers 403 |
+| Global aggregators | GATED, re-confirmed | **Global Fishing Watch** answers `{"error":"invalid token"}` with HTTP 401 without a token, verified rather than assumed. AISHub needs a physical receiver, aisstream.io needs a key |
+
+**The one genuinely global keyless source of ship positions, and why it is useless.** NOAA
+NDBC publishes WMO Voluntary Observing Ship reports at
+`https://www.ndbc.noaa.gov/data/realtime2/ship_obs.txt`, keyless, 1.56MB, HTTP 200, and
+`robots.txt` disallows only two named crawlers. It is genuinely global: 9,211 observations
+spanning lat -83.4 to 89.3 and lon -179.2 to 179.8, 58 thirty-degree cells. It fails on
+identity, absolutely. **There are 9 distinct `SHIP_ID` values across all 9,211 rows**, eight of
+which are five-digit WMO buoy numbers and the ninth is the literal string `SHIP`, because the
+WMO scheme lets a vessel mask its call sign and essentially all of them do. **Zero rows carry a
+nine-digit MMSI.** Under ADR 010 the merge key is the vessel's own identity, so every one of
+those observations would collapse into a single record: the 999999999 placeholder problem
+multiplied by nine thousand. Position resolution is one decimal place, about 11km, timestamps
+are hour-resolution, and the median report is 12 hours old with a maximum of 23. Keyless,
+global, and not a vessel layer. Verified 2026-08-23.
+
+**The Kystverket raw NMEA socket was measured rather than assumed, and it is not worth
+building.** `153.44.253.27:5631`, raw TCP, no TLS, no registration, and it works: a 101-second
+capture gave 3,952 sentences, 3,930 with IEC 62320-1 TAG blocks, and decoded to **2,200
+distinct MMSI with a position** plus 769 names from type 5 and 24 sentences. The documented
+talker trap reconfirmed: 3,810 `BSVDM`, 97 `B2VDM`, 29 `B1VDM`, **16 `BSVDO`** which this file
+had not recorded before, and **zero `AIVDM`**. Its box is wider than Kystdatahuset's, lon -8.71
+to 37.20 against 0.58 to 32.06. But against a Kystdatahuset poll in the same minute it added
+only **309 ships** on a 3,271-ship union, and under ADR 011 it is the same authority's
+receivers so it is one origin and adds no corroboration. The cost is a persistent socket that
+no existing `Poller` shape fits, a 6-bit de-armourer, multipart reassembly and two checksum
+layers. **309 ships in water we already cover does not pay for that**, and now there is a
+number behind that sentence rather than an assertion.
+
+### Vessel sources that are closed, and one that moved host
+
+Verified negative 2026-08-20. Recorded so nobody spends the day again.
+
+**aiscatcher.org is the closest thing to an adsb.lol for ships and it is closed three ways,
+none of them the User-Agent.** The root serves 200 and 36,884 bytes of HTML, and
+`static/map.bundle.js` names the real endpoints (`/api/stations.json`, `/api/path`,
+`/api/station/coverage_h3`, `/api/vas?<station>` behind `hubVUrl = "/api/v"`). All of them
+answer **403** with a Cloudflare block page. First, `robots.txt` disallows `/api/`, `/hub/`,
+`/ships`, `/stations`, `/tiles/`, `/livemap`, `/ship/ais/`, `/search/` and `/stats` by name, and
+`Allow:` covers only `/static/`, `/about`, `/howto`, the root and the sitemap. Second, the same
+file names our own client, `User-agent: ClaudeBot` / `Disallow: /`, alongside GPTBot, CCBot and
+Bytespider, plus a Content-Signal reservation of rights under Article 4 of EU Directive 2019/790
+with `ai-train=no`. Third, `static/turnstile.js` shows the API sitting behind a Cloudflare
+Turnstile human challenge: any 403 triggers `triggerTurnstile()` and the request is retried only
+after a person passes it. That is a deliberate anti-automation gate, not a CDN bot filter, so
+`cloudscraper` is barred here by this project's own rule. The site looks open, which is the
+trap: a shallow probe concludes the API just needs the right path. Fixture:
+`tests/fixtures/aiscatcher_robots_live.txt`, which is the load-bearing artefact for the negative.
+
+**The Danish Maritime Authority archive moved host, which explains the TLS failure recorded
+here.** `https://web.ais.dk/aisdata/` still fails, HTTP 000 after a 30-second timeout on both
+schemes. `dma.dk`'s own AIS page now links to `http://aisdata.ais.dk/`, a directory-listing
+shell over an S3 bucket, and both the shell and the bucket listing answer keylessly. Reading
+someone else's bucket over HTTPS is not cloud infrastructure under this project's rule, so it is
+usable. It is also **historical and eighteen months stale**: year prefixes run 2006 to 2025 and
+stop, there is no 2026 prefix, and the newest keys are `2025/aisdk-2025-02-19.zip` through
+`aisdk-2025-02-26.zip`, at 540 to 590MB each. Useless for a live layer. Two traps for anyone who
+does use it, from the bucket's own readme: **latitude and longitude use a comma as the decimal
+separator** (`57,8794` / `17,9125`), and latitude is column 4 with longitude column 5, so
+latitude comes first, the opposite of our contract order. Fixture:
+`tests/fixtures/dma_aisdata_s3_listing_2025_live.xml`.
+
+**Everything else called on 2026-08-20 and found empty.** Estonia's Transport Administration
+ArcGIS (`gis.vta.ee`) has a folder literally named `AIS` and it holds boundaries, warnings and
+anchorages, no vessels: read the layer list before believing the folder name. Ireland's Marine
+Institute ERDDAP has one AIS hit, `ais_met_hydro`, which is weather from aid-to-navigation
+stations. Australia's AMSA Ship Tracking Service answers 200 with a login form, and
+`data.gov.au` returns 121 AIS hits that are all 2013 to 2015 density rasters. Canada's
+`open.canada.ca` returns 61 AIS hits, all DFO density products 2014 to 2020. NOAA's
+MarineCadastre folder holds `AISVesselTransitCounts2019` through `2025`, which are annual
+aggregates and not positions, and the USCG Nationwide AIS feed is not public. HELCOM and EMODnet
+both answer keylessly with plausible maritime WMS layers that are **density rasters**, and a
+raster cannot populate an entity layer. The Netherlands, New Zealand, Iceland, Singapore, Sweden
+and Havbase are variously 404, Cloudflare-challenged, DNS failures, keyed or unreachable.
+
+**Global keyless AIS does not exist, and no further hunting will produce it.** It needs an
+aisstream.io key (free, and a free key is still a key), an AISHub membership (a physical VHF
+antenna within range of real shipping), or a paid aggregator. That is a decision for Alexander
+Fanthome rather than a finding.
+
 ### adsbdb
 
 Aircraft registry lookup for phase 3, verified 2026-08-19. `/v0` is the current version prefix,
 and `GET /v0/online` reports `api_version: 0.6.5`, so the URL major version and the software
 version are different numbers.
+
+**Re-verified through the running product on 2026-08-20.** `GET /api/aircraft/adca0b` on a live
+server drove one upstream `GET https://api.adsbdb.com/v0/aircraft/ADCA0B`, HTTP 200, which
+resolved a live Gulfstream G650 to `registered_owner: "21st Century Fox America Inc"`. Four card
+opens on that address produced exactly one upstream call, so the cache holds for the session.
+The lookup also disagreed with the feed on the type: adsb.lol sent `GLF6` and adsbdb sent
+`G650`, and both sides are served on the record rather than one overwriting the other.
 
 Everything is wrapped in a `response` envelope. The aircraft object carries `type` (a marketing
 name), `icao_type` (the designator), `manufacturer`, `mode_s`, `registration`,
@@ -1315,6 +2033,280 @@ hot-linking, so `url_photo` is proxied and cached like any other image.
 and the terms forbid copying. The recorded body sits outside the repo as recon evidence and
 whether it comes in is Alexander's call.
 
+### Near-realtime cloud imagery
+
+Verified 2026-08-20. Every freshness figure is measured against one clock reading of
+`2026-08-20T18:42:53Z`.
+
+**NASA has already reprojected the geostationary fleet into Web Mercator and publishes it as
+WMTS, so Cesium renders it with no reprojection at all.** That is the whole finding. Three
+`WebMapTileServiceImageryProvider` layers on `GoogleMapsCompatible_Level7` (`Level6` for the
+Himawari infrared band) give a measured 83.9% of longitude at a `PT10M` product cadence, with
+transparent PNG tiles. GeoColor is the layer to draw, because it is true colour by day and
+infrared cloud by night, so it never blanks on the dark half of the globe.
+
+**The honest refresh interval is 10 minutes at the provider and 20 to 70 minutes on screen.**
+The products are produced every 10 minutes, but measured age at a single clock reading was 62 to
+72 minutes for GIBS and 23 to 33 minutes for EUMETView. So poll every 5 minutes against the
+endpoint's own `Time` default, expect the newest frame to be roughly half an hour to an hour
+old, and **label the layer with the frame's own timestamp rather than the fetch time**. Same
+rule as every other feed here: carry the observation time, never the request time.
+
+**EUMETView closes the gap and its licence is not established, so the layer ships with a
+58-degree hole until it is.** `mtg_fd:rgb_geocolour` covers 100.0% of the measured
+1.4E-to-59.4E GIBS gap at `PT10M`, taking the union to a measured 100.0% of longitude with no
+gap, and `mumi:worldcloudmap_ir108` is a single keyless layer covering the whole globe at `PT3H`
+so one WMS layer draws clouds everywhere with no compositing. Both are on `view.eumetsat.int`,
+whose licence position is recorded in the Verified table as NOT ESTABLISHED. Under this file's
+own rule a licence goes in only once verified, so the GIBS half ships now and the EUMETView half
+waits for a static EUMETSAT data-policy document. **Until then the cloud layer has a measured
+58-degree hole over Europe, Africa and the Middle East, and that is said out loud rather than
+papered over.** Fixtures: `tests/fixtures/eumetview_wms_cloud_layers_live.xml` (the service
+header plus eight `<Layer>` blocks verbatim with their time dimensions) and
+`eumetview_worldcloudmap_ir108_global_live.png`.
+
+EUMETView's traps:
+
+- **`CRS=EPSG:4326` is latitude-first here, and getting it wrong gives HTTP 502 with a zero-byte
+  body and no content-type.** This is a **fifth** bounding-box convention for this project and
+  the worst-behaved. Proved with a box that is valid one way and invalid the other:
+  `CRS=EPSG:4326&BBOX=-170,-80,170,80` is 502 with 0 bytes, while `CRS=CRS:84` with the identical
+  box is 200 with an 81,525-byte PNG. The capabilities states it: `<BoundingBox CRS="EPSG:4326"
+  minx="-89.99" miny="-180" maxx="89.99" maxy="180"/>`, where `minx` is a latitude. A zero-byte
+  502 reads as a dead upstream rather than a bad request, so an axis-order bug will be diagnosed
+  as "EUMETSAT is down". **Use `CRS:84` for longitude-first or `EPSG:3857` for Web Mercator**,
+  both advertised and both verified 200. Flip in the adapter with a test, the way the Worldview
+  `BBOX` flip already is.
+- **`TIME` is optional and omitting it returns a different image at HTTP 200.** A no-`TIME`
+  request returned 500,266 bytes against 499,270 for the explicit-latest request, with different
+  pixel hashes. Send `TIME` always. Same class as the Worldview `TIME` trap.
+- **`nearestValue="1"` means a wrong timestamp silently snaps to a real frame** rather than
+  erroring, so a units or format mistake produces a plausible image of the wrong moment.
+- **The WMTS endpoint does not work; only WMS does.** `gwc/service/wmts` GetCapabilities is HTTP
+  400 with a GeoWebCache error page and the RESTful tile form is 400 `text/xml`.
+- **`view.eumetsat.int/robots.txt` returns HTTP 200 with the site's Angular index page**, 709
+  bytes of `text/html`, not a robots file. A tolerant robots parser fed that HTML finds no
+  directives and reports the path allowed. The absence of a crawl policy has to be established
+  from the content type, not from the status code.
+
+**Two verified sources not to build.** The NOAA STAR NESDIS CDN is by far the freshest thing
+found at 7 minutes old, and it is a full-disk JPEG in the satellite's own geostationary
+projection: reprojecting and tiling 5,424 by 5,424 pixels every ten minutes on this laptop to
+arrive at what GIBS already publishes is the wrong trade. Keep it as the "show me the current
+full disk as a picture" source, the role the Worldview snapshot API already plays for a place on
+a day. And JMA's tiles are real Web Mercator and genuinely redundant for the Himawari sector,
+but **off-disk is opaque white with no alpha channel**, 44.2% of a zoom-3 composite, so as a
+Cesium overlay it would paint the rest of the world white. Chroma-keying white to transparent
+also eats the genuine white of the brightest cloud tops. Fixture:
+`tests/fixtures/jma_himawari_targettimes_fd_live.json`.
+
+**CIRA SLIDER is fresh for GOES and 45 days dead for Meteosat, which is the one sector we needed
+it for.** `meteosat-0deg`'s newest geocolor frame is 2026-07-06T17:15:00Z, 64,887 minutes stale,
+**while still returning a valid HTTP 200 and a well-formed `timestamps_int` array**. A layer
+built on it would connect, report healthy and draw July's clouds. `meteosat-iodc` returns a body
+that is not JSON at all, so the parse throws rather than reporting an empty feed. Fixtures:
+`tests/fixtures/slider_goes19_latest_times_live.json` and
+`slider_meteosat0deg_stale_latest_times_live.json`, the second kept precisely because a freshness
+check that trusts this source reports a working layer.
+
+**RainViewer is negative twice over.** `api.rainviewer.com/public/weather-maps.json` answers
+HTTP 200 with a structurally valid body whose `satellite.infrared` array is **empty**. Nothing
+errors, nothing is missing, the layer simply draws nothing and reports healthy. Separately,
+`api.rainviewer.com/robots.txt` is `User-agent: *` / `Disallow: /`, a blanket directive over the
+whole host. Fixture: `tests/fixtures/rainviewer_weather_maps_empty_satellite_live.json`.
+
+**Redundancy per sector, which is what the constraint actually asks for.** Americas and Pacific:
+GIBS GOES-East and GOES-West, with the NOAA CDN as a fresher but reprojection-heavy second
+string. Asia-Pacific: GIBS Himawari, with JMA's own XYZ tiles as a genuine keyless second string.
+Europe, Africa, Middle East, Indian Ocean: **EUMETView only, with no independent second**,
+because GIBS carries zero Meteosat layers, SLIDER's Meteosat is 45 days stale and DWD is
+robots-blocked. That sector is the thin one and it is the same single-provider fragility the
+redundancy rule exists to fix.
+
+### Basemap and place-card imagery
+
+Verified 2026-08-20.
+
+**`BlueMarble_NextGeneration` is the globe basemap.** Public domain, cloud-free by construction
+because it is a composite rather than a daily pass, no `Time` dimension so no date segment to get
+wrong, ceiling `Level8` which is exactly the range a globe basemap needs, and measured faster
+than the daily MODIS layer (mean 0.218s against 0.317s over ten sequential zoom-8 tiles). The
+daily true-colour layers stay for the timeline.
+
+**Microsoft Planetary Computer is the strongest new find and it does three things nothing else
+keyless does.** It honours `cql2-json` for real, which is the direct contrast with earth-search:
+same box and window, unfiltered top result `eo:cloud_cover` 99.999, and with a
+`filter-lang: cql2-json` cloud-under-1 filter the top result is 0.011. It serves a keyless
+browser-renderable JPEG per scene at Sentinel-2's native 10m. And it serves a keyless on-demand
+mosaic: POST a STAC search to `/api/data/v1/mosaic/register`, take the `searchid`, then serve XYZ
+tiles of every matching scene. Fixtures: `tests/fixtures/mpc_stac_s2a_search_live.json`,
+`mpc_mosaic_register_live.json`, `mpc_item_preview_512_live.jpg`.
+
+Its traps:
+
+- **HTTP 204 with zero bytes and no content-type** for any mosaic tile below zoom 9, or over a
+  place with no matching scene. Not a 404, not an empty PNG, nothing to content-sniff. **So the
+  mosaic cannot draw a globe**: it is a zoom-in overlay that must sit on a real basemap, and a
+  tile client treating 204 as an error logs noise across the whole world view.
+- **No `numberMatched` in a search response.** `numberReturned` is present; `numberMatched` and
+  `context` are both absent, so the proof technique that works on earth-search is unavailable and
+  you cannot tell how many scenes matched.
+- **Raw blob assets are not keyless but the signer is.** The `visual` href on
+  `sentinel2l2a01.blob.core.windows.net` answers HTTP 409 with no token, and
+  `/api/sas/v1/token/{account}/{container}` answers 200 keyless with a token carrying an
+  `msft:expiry` about 45 minutes out. Same class as the Windy ten-minute token: never cache a
+  signed URL past its expiry. **The tiler and the previews need none of it**, which is why they
+  are the route to use.
+- The `rendered_preview` asset href in every item is a 1024x1024 PNG at 2,883,695 bytes, far too
+  heavy for a card; `format=jpeg&max_size=512` cuts it to 133,239 bytes.
+- **Content-type on the JPEG is `image/jpg`, not `image/jpeg`**, so a strict check on the
+  canonical spelling rejects a good image.
+- Two path shapes exist for mosaic tiles, and getting the wrong one returns **HTTP 422 with a
+  JSON `detail` array**, not a 404.
+- No published SLA, no fetchable terms, and Microsoft has been moving this estate toward the paid
+  Planetary Computer Pro. It answered every call made on 2026-08-20. It is the right card path
+  and it must not be the only one.
+
+**USGS LandsatLook is a catalogue whose pictures are behind a login, and the failure is silent.**
+The search is keyless, global and honours `cql2-json`, which makes two of three keyless STAC APIs
+that do and leaves earth-search the odd one out. But the `thumbnail` and
+`reduced_resolution_browse` hrefs are HTTPS on `landsatlook.usgs.gov` and look keyless: they
+answer **HTTP 302** to `ers.cr.usgs.gov`, and following the redirect lands on the USGS EROS
+Registration System **login page served at HTTP 200 with `text/html`**. A browser `img` tag
+renders a broken image and any client checking only the status code records a success and stores
+a login page as a satellite photograph. Same class as the Flickr `stat: fail` at 200. Fixtures:
+`tests/fixtures/landsatlook_stac_search_live.json` and
+`landsatlook_thumbnail_ers_login_http200_live.html`. **The keyless route to Landsat imagery is
+GIBS `HLS_L30_Nadir_BRDF_Adjusted_Reflectance`**, which is the same Landsat data harmonised, at
+30m, on the public-domain NASA host, with no login.
+
+**earth-search's Landsat half has the same shape of problem for a different reason.** Its
+`landsat-c2-l2` `thumbnail` hrefs are `s3://usgs-landsat/...` URIs, which a browser cannot fetch
+at all, and the HTTPS equivalent answers 403: "Anonymous users cannot invoke requests against
+Requester Pays buckets." So earth-search's Landsat is a catalogue and its Sentinel-2 half is both
+a catalogue and a picture source. Its `preview.jpg` thumbnail is confirmed at 343x343, and **the
+byte size is per scene, not fixed**: this file records 2,563 bytes and a scene measured on
+2026-08-20 was 35,733. Do not assert a size.
+
+**On a granule layer the Worldview snapshot fills the missing part with black at HTTP 200.** The
+30m HLS card image over London carries a black nodata wedge across the bottom-left corner where
+the granule edge falls, so a card can render half an image and report success. Fixture:
+`tests/fixtures/worldview_snapshot_hls30_london_live.jpg`. The snapshot API does render the 30m
+HLS layer, which makes it the cleanest keyless card path in existence: one GET, no STAC search,
+no GeoTIFF, no token, at 30m instead of 250m.
+
+**What to show when the requested date has no imagery.** Sentinel-2 revisit is about five days
+and Landsat 8 and 9 are 16 days each, so for most places on most dates nothing was captured.
+Search a window rather than a date, take the least cloudy scene in it, and put **that scene's own
+timestamp** on the card with how far it is from the date asked for. Say the number: "nearest
+clear pass, 13 August 2026, seven days before the date requested, 0.01% cloud". When the window
+is empty, say so and stop: no nearest-cloudy-thing, no 250m smear standing in for 10m, no basemap
+tile dressed up as a dated observation. Widening the bracket is the right knob rather than
+lowering the cloud bar, because a cloudy image looks broken while an older clear one looks
+correct and is labelled.
+
+**`s2maps-tiles.eu` is a stated refusal and must not be worked around.** It answers HTTP 403
+with a 93-byte body reading "Request forbidden by administrative rules", byte-for-byte the ADS-B
+Exchange globe-map wording this file already names as the worked example of a stated directive.
+`tiles.maps.eox.at` is the sanctioned host for the identical mosaics and answers 200, so there is
+nothing to gain. Fixture: `tests/fixtures/s2maps_tiles_eu_403_live.html`.
+
+**Probe a tile service at the zoom you intend to draw, not at zoom 3.** USGS National Map
+imagery returns 64 of 64 tiles at zoom 3 because a global low-resolution backdrop is served at
+coarse zooms, and collapses to 404 outside the United States at zoom 10. A zoom-3 coverage probe
+would have recorded it as a global provider.
+
+**The honest redundancy count for the globe basemap is one.** NASA GIBS is the only keyless,
+global, licence-clean provider, and its four hostnames are one CloudFront distribution. EOX is
+CC BY-NC-SA on 2018 to 2025 so only the 2016 and 2017 mosaics are usable commercially, which
+makes the redundant basemap nine-year-old imagery. Esri is licence-blocked. Planetary Computer
+and earth-search cannot draw below zoom 9. USGS National Map is the United States only. The two
+mitigations are local rather than another provider, and both fit a laptop with disk persistence
+encouraged: **cache `BlueMarble_NextGeneration` zoom 0 to 5 to disk** (1,365 tiles, about 14MB,
+so the globe always draws at a distance with the network down; zoom 0 to 8 would be 87,381 tiles
+and about 870MB, which is not worth it), and **cut our own tiles from the keyless Sentinel-2 COGs
+on `sentinel-cogs.s3.us-west-2.amazonaws.com`**, which answer HTTP 206 to a range request, if a
+tiler is ever needed. More code than calling a provider, and it is the fallback that cannot be
+withdrawn.
+
+### CesiumJS with no ion token
+
+Verified 2026-08-20 against Cesium 1.144.0, by reading the unminified bundle and then driving a
+real browser against the running app and against a standalone keyless page.
+
+**The app already runs with no token of any kind.** Twelve seconds after load the running app
+made 89 requests to `gibs.earthdata.nasa.gov` and 87 to localhost, **zero to any Cesium or ion
+host**, zero HTTP 400 or above, zero console errors and no Cesium error panel.
+`frontend/src/globe/viewer.ts:89` already passes `baseLayer`, `baseLayerPicker: false` and
+`geocoder: false`, which closes all three network touchpoints.
+
+**"No token configured" is not "no token used", and that is the trap.** Cesium 1.144 ships a
+hard-coded ion JWT at `frontend/node_modules/cesium/Build/CesiumUnminified/index.js:69093` whose
+`aud` claim reads **"1.144 Release - Delete on October 1, 2026"**, `iat` 2026-07-25T05:54:50Z.
+`api.cesium.com/v1/assets/2/endpoint` answers **401** with no credential and **200** with that
+bundled token, and so do asset 1 (Cesium World Terrain) and asset 96188 (Cesium OSM Buildings).
+So any ion-backed default works today on Cesium's own key and 401s in October, in a product that
+has never seen the failure in testing. A bare `new Viewer(div)` was measured firing the ion
+endpoint, then Bing metadata carrying a third-party Bing key handed straight to the browser,
+then Bing tiles **over plain HTTP**. Neither the key nor the scheme is ours to manage. Fixtures:
+`tests/fixtures/cesium_ion_asset2_401_no_token_live.json` and
+`cesium_ion_asset2_bundled_demo_token_live.json`.
+
+`Ion.defaultAccessToken = ''` is the guard, and it needs a test behind it: with the token blanked
+an accidental ion call throws `Request has failed. Status Code: 401` and the console logs it, so
+the mistake becomes loud instead of a six-week fuse.
+
+**Terrain is not an ion touchpoint by default.** `Globe`'s constructor sets
+`new EllipsoidTerrainProvider()` at `index.js:218166` and `Viewer` only touches terrain if
+`terrain` or `terrainProvider` is passed. A bare `new Viewer(div)` reported
+`terrainProvider = "EllipsoidTerrainProvider"`. So there is nothing to turn off and the risk runs
+the other way: passing `Terrain.fromWorldTerrain()` or picking "Cesium World Terrain" in the base
+layer picker opts **in** to ion asset 1. Flat terrain costs this product almost nothing, because
+every entity is an aircraft at altitude, a ship at sea level, a satellite in orbit or a city
+label, and none of them touches the ground.
+
+**The ion logo is a false credit.** `getDefaultCredit()` at `index.js:223909` renders a link to
+`cesium.com` titled "Cesium ion" bottom-left, while the app uses nothing from ion, and it sits
+next to twelve real licence-condition credits, which undermines all of them. CesiumJS itself is
+Apache-2.0 and asks for no logo. `CreditDisplay.cesiumCredit = new Credit('', false)` removes it
+and leaves an empty wrapper div.
+
+**`Credit`'s `showOnScreen` parameter defaults to false** (`index.js:68503`), so the
+`new Credit('Imagery courtesy of NASA EOSDIS GIBS')` at `viewer.ts:71` lands behind the "Data
+attribution" click rather than on screen. And `Credit.isIon()` is literally
+`this.html.indexOf('ion-credit.png') !== -1`, so a provider credit that happens to contain that
+filename is silently swallowed into the logo container.
+
+**GIBS is credited in three DOM surfaces today and only one is always visible.** Cesium's own
+lightbox, the project's `#attribution` panel and the layer rail footer. The two lists disagree
+about **scope** rather than wording: Cesium knows only what its own providers told it, the
+project's panel knows every upstream feed the backend touches, and they will never be the same
+list. Passing `creditContainer` moves Cesium's entire credit block inside our element and removes
+`.cesium-widget-credits` from the viewer's own container, so there is one credit surface rather
+than two competing ones.
+
+**There is no keyless global 3D building source, so the buildings layer is a delete rather than a
+swap.** `data.osmbuildings.org`'s `anonymous` tier now answers 403, `data.3dbag.nl`'s versioned
+path is a 404 and Netherlands-only anyway, and swisstopo's tileset works keylessly and covers
+Switzerland. The Overpass route measured at **1.0MB of JSON for one square kilometre** of central
+London, 866 building ways, of which **15 carry a `height` tag (1.7%) and 333 carry
+`building:levels` (38%), so 62% have no height information at all** and would be extruded at a
+guess, which fails this project's own no-fabricated-value rule. **Deleted on 2026-08-20.**
+`routes_meta.py` used to publish a `buildings` capability whose reason string read "Set
+TRACKER_CESIUM_ION_TOKEN to stream 3D buildings", and the layer rail builds one row per
+advertised layer, so that sentence was on screen in the running app asking the user for a
+Cesium key in a product whose constraint is no keys at all. The capability, the
+`buildings_layer_available` property and the `cesium_ion_token` setting are all gone, and
+`tests/api/test_routes.py` asserts that no capability reason mentions a Cesium key.
+
+**Two Cesium classes are traps rather than options.** `VRTheWorldTerrainProvider` still ships and
+its default host `www.vr-theworld.com` answers 404, so it constructs cleanly and fails at
+tile-load time with an empty terrain and no error. `assets.agi.com/stk-terrain`, Cesium's
+pre-ion terrain host, is a 404. And **`ArcGisMapServerImageryProvider.fromBasemapType` is the
+wrong door**: it reads `ArcGisMapService.defaultAccessToken`, for which Cesium also hard-codes a
+default at `index.js:113892`. Same expiring-borrowed-key trap as ion, different vendor. `fromUrl`
+does not touch it.
+
 ### FAA Releasable Aircraft Database
 
 Verified 2026-08-19. The URL has not moved. **73,031,563 bytes, 69.6MB**, 16% larger than the
@@ -1325,6 +2317,16 @@ matching the plan's estimate, and `ACFTREF.txt` is 93,982.
 **The cadence in this file was wrong: it is daily, not weekly.** The FAA's own page states "The
 data in the download is refreshed daily at 11:30 pm central time." No request cap is published,
 and there is no reason to fetch more than once a day.
+
+**49 U.S.C. section 44114(b) is a third FAA privacy programme and ADR 009 does not cover it.**
+ADR 009 worked through two, LADD and privacy ICAO addresses. This is a separate one and it bites
+the ownership spine rather than the aircraft layer: a private owner can ask that personally
+identifiable information such as names and addresses be withheld from broad dissemination or
+display on a publicly available FAA website. **4,773 of 316,030 `MASTER.txt` rows arrive with an
+empty `NAME` and 4,771 with an empty `STREET`**, which is 1.51%. There is nothing for the product
+to decide or work through: the withholding already happened upstream, the record arrives empty,
+and it is dropped and counted like any other unmappable record. Without this note somebody loses
+a day hunting for suppression logic that does not exist.
 
 **A descriptive User-Agent is refused with HTTP 403 across the whole host, `robots.txt`
 included.** The error page is Akamai's (`errors.edgesuite.net`). The identical request with a
@@ -1834,6 +2836,15 @@ position below.
 Verified 2026-08-19, HTTP 200 on `format=jsonv2`. Top level is a **bare JSON list**, not an
 object. London UK ranks first as the plan requires.
 
+**Re-verified 2026-08-20 through the running product**, which is a different test from a curl:
+`GET /search?q=buckingham+palace&format=jsonv2&limit=5` answered HTTP 200 and resolved to
+`relation/5208404` at `-0.1430045, 51.5008349` with the full address string, plus a second hit for
+a Buckingham Palace in Teton County, Wyoming. Two things worth recording from that run. The query
+is **folded before it leaves**, to `buckingham palace`, so the cache key is insensitive to case
+and accents rather than storing an entry per spelling. And four identical `/api/search` requests
+cost **exactly one** upstream call, 563ms for the first and 1.8 to 4.7ms after, which is the
+provider's mandatory caching requirement met and measured rather than designed.
+
 - **`lat` and `lon` come back as strings**, `"51.5074456"`, which a `strict=True` float field
   rejects. Convert in the wire-to-domain mapping.
 - **`boundingbox` is four strings in latitude-first order**, `[south, north, west, east]`. That
@@ -1859,6 +2870,29 @@ includes reverse queries in a grid, searching for complete lists of postcodes, t
 caching is mandatory rather than advised, and **the city list must come from the GeoNames dump,
 never from Nominatim.** The API hands us the exact credit string to render in every record's
 `licence` field, so use that rather than a hand-written one.
+
+**Its refusals carry a delay and it has to be stored, not just reported.** Added 2026-08-20
+after a review found the figure was computed and thrown away. A 429 with `Retry-After: 120` was
+followed by another request one second later, 120 of them inside the window the provider asked
+us to stay out of, while the reason string handed back to the browser read "backing off 120s".
+The client now holds a cooldown of its own: the provider's figure on a 429 or 420, and a flat
+120s on the 403 block page, which carries no `Retry-After` at all. A 500 is deliberately not
+treated as a refusal, only as a failure. Repeatedly re-sending one failing query is the exact
+pattern the policy calls faulty, so a failure is never cached but is never immediately retried
+either.
+
+**A 200 whose records all fail to map is a failure, not "no such place".** Also added
+2026-08-20. `lat` and `lon` are declared as strings on purpose, so a switch to JSON numbers
+drops every record in the response. Caching that empty answer would report the query as unknown
+for the life of the process, long after the provider was fixed, with an INFO log line as the
+only trace. The adapter raises instead and the search response carries the reason.
+
+**Five fields the provider sends are deliberately not carried:** `boundingbox`, `category`,
+`type`, `addresstype` and `place_rank`. Nothing ranks, renders or flies on them, search flies
+the camera to a point at a fixed altitude, and `place_rank` behind its documented `le=30` bound
+would have dropped a whole live result the day the provider exceeded its own ceiling. The traps
+above are recorded here and in the adapter's module docstring so a later reader starts from the
+right order rather than measuring it again.
 
 ### Overpass
 
@@ -2068,13 +3102,22 @@ which is scratch working rather than a repo document.
 request caps in code." Two sources the plan depends on disallow the paths we need:
 
 - **`https://download.geonames.org/robots.txt` is `User-agent: *` / `Disallow: /`**, every path
-  and every robot, and `cities15000.zip` sits behind it. Verified 2026-08-19. The file answered
-  HTTP 200 at 3,306,600 bytes with `ETag` and `Last-Modified` served, is published under CC BY
-  4.0 and is documented by GeoNames for exactly this use.
+  and every robot, and `cities15000.zip` sits behind it. Verified 2026-08-19, re-verified
+  2026-08-20, unchanged. The file answered HTTP 200 at 3,306,600 bytes with `ETag` and
+  `Last-Modified` served, is published under CC BY 4.0 and is documented by GeoNames for exactly
+  this use. Phase 4's whole city layer, all 34,072 rows, now sits on this reading as well.
 - **`https://meri.digitraffic.fi/robots.txt` is 31 bytes and contains `Disallow: /api/`**,
-  verified 2026-08-19, which covers every Fintraffic endpoint in the verified table above.
-  Digitraffic publishes that API, its OpenAPI document, its licence and a per-client
-  identification header inviting programmatic use.
+  verified 2026-08-19 and re-verified 2026-08-20, which covers every Fintraffic endpoint in the
+  verified table above. Digitraffic publishes that API, its OpenAPI document, its licence and a
+  per-client identification header inviting programmatic use.
+
+  **The robots file itself is only served to a client that offers gzip, found 2026-08-20.** Without
+  `Accept-Encoding: gzip` the path answers **HTTP 200** with the single line `Use of gzip
+  compression is required with Accept-Encoding: gzip header.` and no directives at all. With gzip it
+  answers the real 31 bytes. So a robots checker that does not negotiate compression cannot read
+  the crawl policy it claims to honour, and it gets a success status while failing to. Same class of
+  trap as `registry.faa.gov` answering HTTP 403 on its own `robots.txt`, recorded as U3, except this
+  one looks like a permissive empty policy rather than a block.
 
 Two more sit in the same class: `api.open.fec.gov/robots.txt` disallows `/v1/*`, the whole API
 the FEC issues keys for, and `wwwapps.tc.gc.ca/robots.txt` is `Disallow: /` over the CCARCS zip.
@@ -2099,6 +3142,65 @@ reversing it is a grep rather than an excavation. If Alexander rules the other w
 weekly download, the Fintraffic vessel layer, the FEC lookup and the CCARCS ingest all stop, and
 phases 2, 4, 5 and 6 lose a source each.
 
+## Out of scope: needs a key or a credential
+
+**Stated by Alexander Fanthome on 2026-08-20: no API keys at all.** Not a free key, not a
+registration, not "email us and we will let you in". A source needing a credential is out of
+scope for this project, whatever its data is worth.
+
+Nothing below is deleted, because a row that disappears gets rediscovered and wired in six
+weeks later. Each one stays, marked, with what it would have been for and what replaced it.
+**Do not wire any of these in.** If one becomes necessary, that is a decision for Alexander
+Fanthome and it changes the constraint, not the code first.
+
+| Source | What it was for | The gate | Keyless replacement |
+| --- | --- | --- | --- |
+| aisstream.io | Global live ship positions over WebSocket | Free API key. The handshake is keyless (`HTTP/1.1 101`) and authentication is in the first application message, so a bad key is indistinguishable from a dropped socket | **None. There is no keyless global AIS.** Kystdatahuset plus Fintraffic reach 0.33% of the globe's cells |
+| AISHub | Crowd-sourced worldwide vessel positions | A username granted only to members streaming raw NMEA off a physical AIS receiver: 10 vessels averaged over 7 days, 90% uptime. Feeding it data from other public AIS services is prohibited by name, so there is no software route in | As above |
+| ADS-B Exchange | Unfiltered aircraft, including FAA-blocked airframes | Paid RapidAPI key, HTTP 401 without one. Its terms also prohibit redistribution, so it is barred twice over | None. adsb.lol is the only live unfiltered provider, and the provider-attributable count for every other member of the aircraft union is zero |
+| Space-Track.org | The authoritative orbital catalogue | Account. Both `/basicspacedata/query` and `/publicfiles/query` answer HTTP 401 with the same body, so there is no anonymous corner of the host | **SatNOGS DB**, which names Space-Track as the origin of 1,520 of its 1,669 records and is CC BY-SA 4.0 |
+| Cesium ion | 3D buildings (asset 96188) and world terrain (asset 1) | Client-side ion token. `api.cesium.com` answers 401 with no credential. **Cesium 1.144 ships its own demo JWT whose `aud` reads "1.144 Release - Delete on October 1, 2026"**, so an ion-backed default works today on someone else's key and 401s in October | **None for 3D buildings**, and none is wanted: see the `cesium-no-token` findings. Terrain needs nothing, because `EllipsoidTerrainProvider` is already Cesium's default |
+| Companies House REST API | Officer roles and occupations | Free key. HTTP 401 with two distinct bodies, so no-key and wrong-key are separable | The **Companies House PSC bulk snapshot**, which is keyless and Open Government Licence 3.0, and carries no officer roles |
+| FEC OpenFEC | US campaign finance, a person-to-place signal | `api_key` required. `DEMO_KEY` works and carries `x-ratelimit-limit: 10`, which is still a key | None. `DEMO_KEY` is a shared credential rather than an absence of one, so this is out under today's rule |
+| Flickr | Geotagged photographs with author text | Free key. **The gate is HTTP 200, not a 4xx**: no key, an empty key and a bogus key all return `{"stat":"fail","code":100}` | Wikimedia Commons geosearch and OpenStreetMap notes, both keyless, both already verified |
+| Windy Webcams v3 | Owner-submitted public webcams | API key in an `x-windy-api-key` header, HTTP 403 without it | **TfL JamCams** and **New York 511**, both keyless and both already verified |
+| Copernicus Data Space Sentinel Hub WMS | Sentinel imagery as a WMS layer | The instance id in the URL path is the credential, which is a key that does not look like one | **Microsoft Planetary Computer** and **NASA GIBS HLS**, both keyless |
+| MapTiler quantized-mesh terrain | Cesium terrain | Key. HTTP 403 | AWS Terrain Tiles terrarium, keyless |
+| Nextzen terrarium tiles | Cesium terrain | Key. **HTTP 400 with a 22-byte plain-text body**, which reads as a malformed request rather than a missing credential | The same terrarium data on the AWS bucket, keyless |
+| N2YO | Satellite element sets | Key. **HTTP 200 carrying `{"error":"No API Key provided"}`**, so a client branching on status treats it as an empty result | ReTLEctor, SatNOGS DB, AMSAT |
+| KeepTrack API | Satellite element sets | Key. v4 answers HTTP 401 asking for a free key; v1 answers HTTP 410 Gone, decommissioned 2026-03-25 | As above |
+| ESA DISCOSweb | European orbital catalogue | Token. HTTP 401 JSON:API error envelope | As above. **There is no keyless agency catalogue in Europe** |
+| BarentsWatch live AIS | Norwegian vessel positions | Credentials. HTTP 401, and the old open historic path is a 404 | **Kystdatahuset**, which serves the same Norwegian data keylessly |
+| Equasis, IMO GISIS, AMSA Ship Tracking Service | Vessel registry and ownership | Accounts and login forms. AMSA's host answers HTTP 200 with an email and password form, which reads as a working endpoint | Fintraffic port-call vessel details, USCG PSIX, Wikidata |
+
+**A free key is still a key, and so is a shared demo key.** That is the whole rule and it is
+what puts `DEMO_KEY`, aisstream's free tier, KeepTrack's free tier and the Cesium ion community
+tier in the same bucket as a paid RapidAPI subscription. The point of the constraint is that
+`uv run tracker` plus a browser is the whole deployment, with nothing to register for and
+nothing to rotate.
+
+**Three sources are keyless and still out, and the reason is a stated directive rather than a
+credential.** They are recorded here so nobody reads "keyless" as "usable": aiscatcher.org
+(`robots.txt` disallows every data path by name, names `ClaudeBot` specifically, and the API
+sits behind a Cloudflare Turnstile human challenge), RealEarth (`Disallow: /api/`, and product
+and timestamp discovery are both under `/api/`), and DWD's GeoServer (`Disallow: /geoserver/`,
+where the one `Allow` line meant to permit GetCapabilities is misspelt `geopserver` and so
+matches nothing). `cloudscraper` is for CDN bot filters and never for a stated directive, so
+there is no route in for any of the three. RealEarth and DWD belong next to R4 in
+`docs/pending-decisions.md`, because both are the same class as Digitraffic's `Disallow: /api/`
+and both are genuinely good: DWD's global 3km infrared world mosaic was fresher than
+EUMETSAT's global composite at the same clock reading.
+
+**Two more are keyless and out on licence.** Planet Labs' orbital ephemerides state
+`CC BY-NC 4.0` verbatim on the page, and Esri's World Imagery and World Elevation 3D are
+governed by the Esri Master License Agreement (E204, 1 August 2025), whose section 3.3(b)
+prohibits using the data "for the purpose of compiling, enhancing, verifying, supplementing,
+adding to, or deleting from compilation of information that is sold, rented, published,
+furnished, or in any manner provided to a third party". That describes this project's purpose.
+Section 3.2(a) restricts use to Esri products and 3.2(c) forbids storing the data at all, which
+rules out the disk cache this project requires of every source. Both are keyless, verified
+working and unusable. Do not cache a single tile of either.
+
 ## Planned, NOT YET VERIFIED
 
 None of these has been called from this project. Each is a phase deliverable, and each must
@@ -2106,25 +3208,25 @@ be called and moved into the verified table before any code depends on its shape
 
 | Source | Purpose | Phase | Auth | Known constraints | Licence | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| aisstream.io | Live ship positions over WebSocket | 2 | Free API key | **Handshake verified, shape not.** `wss://stream.aisstream.io/v0/stream` answered `HTTP/1.1 101 Switching Protocols` with **no credentials at all** on 2026-08-19: authentication is in the first application message, not the handshake. With a bogus key, an empty key and no key field the server closed the raw TCP socket after about 0.5s with **zero bytes, no close frame, no close code and no error text**, so "bad key" is indistinguishable from a dropped network. The documented `{"error":"Api Key Is Not Valid"}` does not arrive. Subscribe must be sent within 3 seconds. `BoundingBoxes` is **`[latitude, longitude]`**, the opposite of our rule. A global box is 300 messages a second, so subscribe to a bounded region. `/apikeys` answers 401, so key issuance is behind a login. **No wire model may be written against the documented field names.** Beta, no SLA, key must never reach the browser | Provider terms. No licence grant, no redistribution grant and no attribution string found. `robots.txt` carries only Cloudflare boilerplate with no directives | HANDSHAKE VERIFIED, SHAPE NOT |
-| AISHub | Crowd-sourced vessel positions, worldwide | 2 | Username, granted only to contributors running a physical AIS receiver | **Once per minute, hard.** An invalid username answers **HTTP 200 with a 115-byte JSON error envelope**, `[{"ERROR":true,...,"ERROR_MESSAGE":"Invalid username or password!"}]`, not an empty body. Corrected 2026-08-19: the previous claim in this file and in `AGENTS.md` was wrong. A success body is an envelope object followed by the vessel data, not a flat list. `output` defaults to XML. The over-frequent-call behaviour is still untested | Contributor terms, no redistribution grant stated | GATE VERIFIED, SHAPE NOT |
-| CelesTrak GP group query | Full-catalogue element sets for the satellite layer | 2 | None | **Not called: celestrak.org was unreachable on 2026-08-20**, TCP 443 and 80 both filtered from two independent networks with `connect=0.000000`, so zero requests were served and the budget is intact. `FORMAT` defaults to CSV since 2026-05-09. Estimated 4 to 6MB per refresh for the active group. Any non-200 must stop the poller outright rather than back off. The empty or no-match response shape is undocumented and unverified | Not stated. Credit is courtesy | NOT YET VERIFIED |
+| aisstream.io | Live ship positions over WebSocket | 2 | **OUT OF SCOPE under the keyless rule, 2026-08-20.** Free API key | **Handshake verified, shape not.** `wss://stream.aisstream.io/v0/stream` answered `HTTP/1.1 101 Switching Protocols` with **no credentials at all** on 2026-08-19: authentication is in the first application message, not the handshake. With a bogus key, an empty key and no key field the server closed the raw TCP socket after about 0.5s with **zero bytes, no close frame, no close code and no error text**, so "bad key" is indistinguishable from a dropped network. The documented `{"error":"Api Key Is Not Valid"}` does not arrive. Subscribe must be sent within 3 seconds. `BoundingBoxes` is **`[latitude, longitude]`**, the opposite of our rule. A global box is 300 messages a second, so subscribe to a bounded region. `/apikeys` answers 401, so key issuance is behind a login. **No wire model may be written against the documented field names.** Beta, no SLA, key must never reach the browser | Provider terms. No licence grant, no redistribution grant and no attribution string found. `robots.txt` carries only Cloudflare boilerplate with no directives | HANDSHAKE VERIFIED, SHAPE NOT |
+| AISHub | Crowd-sourced vessel positions, worldwide | 2 | **OUT OF SCOPE under the keyless rule, 2026-08-20.** Username, granted only to contributors running a physical AIS receiver | **Once per minute, hard.** Two failure bodies, both HTTP 200, measured 2026-08-20: no `username` parameter answers **zero bytes** with `content-type: text/html`, and a bad username answers a **JSON error envelope**, `[{"ERROR":true,...,"ERROR_MESSAGE":"Invalid username or password!"}]`. Do not check the length: it was 115 bytes for `TRACKER_NO_SUCH_USER` and 105 for `NOSUCHUSER`, because the username is echoed back. Check `body[0]["ERROR"] is True` on a body that parsed. A success body is an envelope object followed by the vessel data, not a flat list. `output` defaults to XML. The over-frequent-call behaviour is still untested, and would now be indistinguishable from the no-username empty 200 | Contributor terms, no redistribution grant stated | GATE VERIFIED, SHAPE NOT |
+| CelesTrak GP group query | Full-catalogue element sets for the satellite layer | 2 | None. **Superseded 2026-08-20 by ReTLEctor, which serves the identical OMM JSON contract keylessly and answers.** CelesTrak is blocking this network** | **Not called: celestrak.org was unreachable on 2026-08-20**, TCP 443 and 80 both filtered from two independent networks with `connect=0.000000`, so zero requests were served and the budget is intact. `FORMAT` defaults to CSV since 2026-05-09. Estimated 4 to 6MB per refresh for the active group. Any non-200 must stop the poller outright rather than back off. The empty or no-match response shape is undocumented and unverified | Not stated. Credit is courtesy | NOT YET VERIFIED |
 | CelesTrak SATCAT | Decay date, operational status, on-orbit flag | 2 | None | `satcat/records.php`, where **`FORMAT` defaults to JSON**, unlike `gp.php`. Updates manually once or twice a day. Documentation only, no call made | Not stated | NOT YET VERIFIED |
 | CelesTrak supplemental elements | Higher-accuracy element sets for named constellations | later | None | `NORAD/elements/supplemental/sup-gp.php`. **Multiple element sets can exist per object**, from multiple sources and multiple epochs, so the merge key is catalogue number plus source plus epoch rather than the number alone. Documentation only, no call made | Not stated | NOT YET VERIFIED |
 | GDELT GEO 2.0 | Geolocated news coverage density | 5 | None | **Unreachable.** `https://api.gdeltproject.org/api/v2/geo/geo` answered **HTTP 404** on two attempts on 2026-08-19, with Apache's default error page, while DOC 2.0 on the same host answered 200. The URL is correct, so this is the endpoint being down. Nothing may be designed on top of it | GDELT terms, attribution required | UNREACHABLE 2026-08-19 |
 | GDELT DOC 2.0 `mode=timelinevolinfo` | Coverage volume time series with sample articles | 6 | None | **Not reached:** 429 on four attempts across twelve minutes after a single successful `artlist` call. On the provider's documentation it carries the same eight article fields and no location | GDELT terms | NOT REACHED |
-| Windy Webcams v3 | Owner-submitted public webcams | 5 | API key, confirmed mandatory | Answered HTTP 403 `{"message":"Missing Header 'x-windy-api-key' with API key","error":"Forbidden","statusCode":403}` on 2026-08-19, so the key gate is verified and the payload shape is not. **The gate is on a header, not a query parameter**, so the key cannot leak into a browser-visible URL but must be injected server-side on every call. **Image tokens expire after 10 minutes**, unverified from this side of the gate. Never cache an image URL beyond validity | Provider terms, non-commercial tiers exist | KEY GATE VERIFIED, SHAPE NOT |
-| Flickr | Geotagged photographs with author text | 8 | Free key | **The gate is HTTP 200, not a 4xx.** No key, an empty key and a bogus key all returned 200 with `{"stat":"fail","code":100}`, so `stat` must be checked before anything else. Pass `nojsoncallback=1` or the body is wrapped in `jsonFlickrApi(...)`. Provider figures: **3,600 queries per hour per key** and a hard **4,000-result ceiling per query** with no way to page past it. `bbox` is longitude-first. Omitting `license` returns All Rights Reserved items, so the filter is mandatory here. Payload shape unverified | Per photo, and licence 0 is the default without a filter | GATE VERIFIED, SHAPE NOT |
-| Companies House REST API | Officer roles and occupations, which the keyless PSC bulk does not carry | 6 | Free key | **401 verified twice with two distinct bodies:** `{"error":"Empty Authorization header"}` with no credential and `{"error":"Invalid Authorization"}` with a wrong one, so no-key-configured and wrong-key are separable and should not be collapsed. HTTP Basic with the key as username and a blank password. 600 requests per 5 minutes, **and a breach locks you out for the remainder of the five-minute window**, so the floor needs a token bucket rather than a sleep. Payload shape unverified | Open Government Licence 3.0 | GATE VERIFIED, SHAPE NOT |
+| Windy Webcams v3 | Owner-submitted public webcams | 5 | **OUT OF SCOPE under the keyless rule, 2026-08-20.** API key, confirmed mandatory | Answered HTTP 403 `{"message":"Missing Header 'x-windy-api-key' with API key","error":"Forbidden","statusCode":403}` on 2026-08-19, so the key gate is verified and the payload shape is not. **The gate is on a header, not a query parameter**, so the key cannot leak into a browser-visible URL but must be injected server-side on every call. **Image tokens expire after 10 minutes**, unverified from this side of the gate. Never cache an image URL beyond validity | Provider terms, non-commercial tiers exist | KEY GATE VERIFIED, SHAPE NOT |
+| Flickr | Geotagged photographs with author text | 8 | **OUT OF SCOPE under the keyless rule, 2026-08-20.** Free key | **The gate is HTTP 200, not a 4xx.** No key, an empty key and a bogus key all returned 200 with `{"stat":"fail","code":100}`, so `stat` must be checked before anything else. Pass `nojsoncallback=1` or the body is wrapped in `jsonFlickrApi(...)`. Provider figures: **3,600 queries per hour per key** and a hard **4,000-result ceiling per query** with no way to page past it. `bbox` is longitude-first. Omitting `license` returns All Rights Reserved items, so the filter is mandatory here. Payload shape unverified | Per photo, and licence 0 is the default without a filter | GATE VERIFIED, SHAPE NOT |
+| Companies House REST API | Officer roles and occupations, which the keyless PSC bulk does not carry | 6 | **OUT OF SCOPE under the keyless rule, 2026-08-20.** Free key. The keyless PSC bulk snapshot stays in scope | **401 verified twice with two distinct bodies:** `{"error":"Empty Authorization header"}` with no credential and `{"error":"Invalid Authorization"}` with a wrong one, so no-key-configured and wrong-key are separable and should not be collapsed. HTTP Basic with the key as username and a blank password. 600 requests per 5 minutes, **and a breach locks you out for the remainder of the five-minute window**, so the floor needs a token bucket rather than a sleep. Payload shape unverified | Open Government Licence 3.0 | GATE VERIFIED, SHAPE NOT |
 | IRS bulk Form 990 XML | Real 990 trustee and officer names, the only keyless route to them | 6 | None | `https://apps.irs.gov/pub/epostcard/990/xml/{year}/{year}_TEOS_XML_{nn}.zip`. **HEAD only:** 200, `application/zip`, 71,497,607 bytes for one 2026 month, roughly 1.1GB a year. Deliberately not downloaded, so the XML shape is unverified. Carries `Form990PartVIISectionAGrp` with `PersonNm` and `TitleTxt`. A bulk local-index ingest in the same category as GeoNames, never a poller. **Its predecessor is dead**: the `irs-form-990` S3 bucket lists zero objects and any per-filing key 404s | Public domain (US Government work) | HEAD VERIFIED, SHAPE NOT |
 | USCG Vessel Documentation Search bulk file | US vessel ownership, which PSIX does not carry | 5 | Unknown | **Not called.** Named because PSIX carries no owner field in any of its seven operations, so US vessel ownership has no source in this project yet | Public domain expected, unverified | NOT YET VERIFIED |
 | Equasis | Vessel registry and ownership | 5 | Account | **Gate verified.** The public home page answers 200 with navigation only, every vessel record is behind the login, and the site is JavaScript-gated. **`robots.txt` answers HTTP 403**, so there is no crawl permission to read, and absence of a directive is not permission. Registration is free but it is an account we would have to hold and honour terms under, which puts it in the same bucket as AISHub: no software route in | Provider terms | GATE VERIFIED, SHAPE NOT |
 | IMO GISIS | Ship particulars | 5 | IMO public-user account | **Not called.** Same account class as Equasis, and two keyless registries already answer the phase 5 question | Provider terms | NOT YET VERIFIED |
-| Terrascope WMTS | Sentinel-2 basemap option | 7 | None expected | **Not reached, and diagnosed rather than assumed.** DNS resolves, TCP 443 is open, TLS completes with a valid certificate, and the host **resets the connection after the request is written**, on HTTP/2 and HTTP/1.1, with a Chrome User-Agent, over IPv4, and on `/robots.txt`. So this is application-layer blocking, not a network fault. Same class as adsb.one. Two claims that must not be written as verified: that the RESTful tile templates 400 while the key-value form works, and that the tile matrix set identifier is the literal `EPSG:3857`. For contrast, the literal `EPSG:3857` is a 404 on EOX | Not established: the capabilities document carries it and could not be fetched. The underlying data is Copernicus | NOT REACHED |
+| Terrascope WMTS | Sentinel-2 basemap option | 7 | None expected. **Re-tested 2026-08-20, unchanged: leave as NOT REACHED and stop retrying it** | **Not reached, and diagnosed rather than assumed.** DNS resolves, TCP 443 is open, TLS completes with a valid certificate, and the host **resets the connection after the request is written**, on HTTP/2 and HTTP/1.1, with a Chrome User-Agent, over IPv4, and on `/robots.txt`. So this is application-layer blocking, not a network fault. Same class as adsb.one. Two claims that must not be written as verified: that the RESTful tile templates 400 while the key-value form works, and that the tile matrix set identifier is the literal `EPSG:3857`. For contrast, the literal `EPSG:3857` is a 404 on EOX | Not established: the capabilities document carries it and could not be fetched. The underlying data is Copernicus | NOT REACHED |
 | US 511 programmes beyond New York | State traffic cameras outside NY | 8 | Varies by state | Not one API. WSDOT answered HTTP 401 without a key on 2026-08-19. Each state is its own adapter and its own row here | Per state, usually open data | NOT YET VERIFIED |
-| Copernicus Data Space download | Sentinel product bytes, not just the catalogue record | 7 | OAuth token from the Copernicus identity service | Catalogue search is already verified and keyless. Only the byte download needs the account and carries the quota. A full SAFE archive is about 707MB, so it is not a browser asset | Copernicus free, full and open | NOT YET VERIFIED |
+| Copernicus Data Space download | Sentinel product bytes, not just the catalogue record | 7 | **OUT OF SCOPE under the keyless rule, 2026-08-20.** OAuth token from the Copernicus identity service | Catalogue search is already verified and keyless. Only the byte download needs the account and carries the quota. A full SAFE archive is about 707MB, so it is not a browser asset | Copernicus free, full and open | NOT YET VERIFIED |
 | Public live-stream webcams | Owner-published city, port and landmark streams | 8 | Varies | Owner-published only. Each stream is checked individually for a publish-to-web intent before it is used | Per stream | NOT YET VERIFIED |
-| Cesium ion | OSM Buildings 3D Tiles, optional terrain | 7 | Client-side ion token | Community tier quota. Token is client-side by design | **Non-commercial community tier, paid past $50k organisation revenue** | NOT YET VERIFIED |
+| Cesium ion | OSM Buildings 3D Tiles, optional terrain | 7 | **OUT OF SCOPE under the keyless rule, 2026-08-20, and the layer should be deleted rather than replaced.** Client-side ion token | Community tier quota. Token is client-side by design | **Non-commercial community tier, paid past $50k organisation revenue** | NOT YET VERIFIED |
 | Bluesky (`public.api.bsky.app`) | Social posts, text only | 8 | None documented | **Answered HTTP 403 from this network on 2026-08-19** for `app.bsky.feed.searchPosts` while `app.bsky.actor.getProfile` answered 200, so search is gated. Posts carry no coordinates | Per-post | NOT YET VERIFIED |
 
 ---
@@ -2133,9 +3235,10 @@ be called and moved into the verified table before any code depends on its shape
 
 Read this before anyone says the word "launch".
 
-**The project is not currently licensed for commercial deployment.** Eight sources block it
-now rather than three, and the four added on 2026-08-19 are the sharpest, because each one is
-the only source for the thing its phase needs.
+**The project is not currently licensed for commercial deployment.** Eleven sources block it
+now rather than eight. Items 1 to 8 were read on 2026-08-19 and items 9 to 11 on 2026-08-20.
+Item 9 is the sharpest of the three, because it is the only source that closes a measured
+hole in a layer.
 
 1. **adsb.fi is non-commercial use only.** It is the aircraft failover, so commercial use
    means either dropping the failover (and accepting that an adsb.lol HTTP 420 takes the
@@ -2143,9 +3246,10 @@ the only source for the thing its phase needs.
    commercially licensed readsb v2 provider. The adapter makes that a base-URL change, and
    that is exactly why the provider-swap interface exists. See ADR 003.
 2. **Cesium ion's community tier is non-commercial**, and flips to paid past $50,000 of
-   organisation revenue. This one is contained: the buildings layer is optional, the app
-   works with no ion token, and `/api/capabilities` reports the layer as unavailable with a
-   reason (`src/tracker/api/routes_meta.py:93`).
+   organisation revenue. This one is closed rather than contained, as of 2026-08-20: nothing
+   in the product reaches ion, there is no setting to put a token in, and the demo token
+   Cesium 1.144 bundles is blanked in the browser at `frontend/src/globe/viewer.ts`. The
+   buildings capability that used to ask for a token is deleted.
 3. **EOX Sentinel-2 cloudless is CC BY-NC-SA 4.0 on 2018 through 2025**, corrected 2026-08-19
    from "CC BY-NC on the newer mosaics". ShareAlike is the harder clause and it covers eight of
    the ten mosaic years: only 2016 and 2017 are CC BY 4.0. EOX's own licence page names "Web
@@ -2188,6 +3292,48 @@ the only source for the thing its phase needs.
    `w600k_r50`, `w600k_mbf`, SCRFD and every mirror of them for phase 14. The permissive route
    exists (ONNX Model Zoo ArcFace, Apache 2.0, plus YuNet, MIT) at 66MB rather than the 4MB
    MobileFaceNet everyone reaches for.
+
+**Three licence positions added on 2026-08-20, and one of them gates a layer outright.**
+
+9. **EUMETView's licence is not established, and it is the only source that closes the cloud
+   layer's 58-degree hole over Europe, Africa and the Middle East.** The service declares
+   `Fees: none` and `AccessConstraints: none`, which is machine-readable and verified, and every
+   human-readable page is unreadable: `/eumetsat-data-licensing` answers 200 with a JavaScript
+   shell, `/copyright-notice` and `/our-satellites/data-policy` are 404, and the data-policy PDF
+   is 404. No licence name, no attribution string, no redistribution position, and no
+   `<Attribution>` on any satellite layer. Under this file's own rule the GIBS half of the cloud
+   layer ships and the EUMETView half waits. **The consequence is a measured hole in the layer,
+   not a footnote**, and the layer rail has to say so.
+10. **Esri is keyless, verified working and unusable, and the block is threefold.** The Esri
+    Master License Agreement (E204, 1 August 2025) section 3.2(a) restricts use to Esri products,
+    so a CesiumJS globe is out; 3.2(c) says "Customer may not otherwise scrape, download, or
+    store Data", which rules out the disk cache this project requires of every source; and 3.3(b)
+    prohibits use "for the purpose of compiling, enhancing, verifying, supplementing, adding to,
+    or deleting from compilation of information that is sold, rented, published, furnished, or in
+    any manner provided to a third party", which describes this project's purpose almost word for
+    word. This one is worth naming loudly because **Esri World Imagery was the fastest and
+    sharpest imagery measured by a distance** (mean 0.030s per tile, real imagery at zoom 19, 24
+    zoom levels) and Esri Terrain 3D is the only keyless global terrain Cesium reads natively.
+    Two hunts on 2026-08-20 reached opposite conclusions about it: the imagery hunt read the
+    Master Agreement text and ruled it out, the Cesium hunt recommended it as a base-layer
+    fallback having read only the ArcGIS Online item record. **The Master Agreement wins.** Do not
+    build it and do not cache a single tile.
+11. **Planet Labs' orbital ephemerides are CC BY-NC 4.0**, stated verbatim on the page:
+    "Orbital ephemerides data provided hereunder is licensed under CC BY-NC 4.0." Non-commercial
+    only, so out on the same reasoning that bars adsb.fi and the InsightFace weights. It was the
+    best independent operator-grade orbital source found. Do not fetch it again.
+
+**Three licence positions improved on 2026-08-20.** **SatNOGS DB is CC BY-SA 4.0**, which is the
+cleanest orbital licence available and the first orbital source in this project with a stated
+licence at all, though ShareAlike binds a derived database the same way ODbL does.
+**Kystdatahuset is the same NLOD already cleared for Kystverket**, so the vessel layer's
+biggest coverage gain carries no new licence work. Corrected 2026-08-23: the **version** is
+NLOD **1.0** on this API, not 2.0. The endpoint's own OpenAPI document names 1.0 and links
+`data.norge.no/nlod/en/1.0`. Both texts were read the same day and both grant copying, use and
+distribution provided the contributor is acknowledged, so the obligation is unchanged and the
+one Kystverket credit still covers both endpoints. Only the version string was wrong. And **CelesTrak's absence stops being a
+licence question**: what replaces it is a cache with no stated licence over data with no stated
+licence, which is exactly where we already were.
 
 **Camera restreaming is its own question, and it is not the same as proxying a JPEG.** TfL
 JamCams are stills on S3 under TfL open data with a mandatory credit string, and proxying and
@@ -2270,6 +3416,30 @@ Every visible layer renders its credit. These strings are served from the API ra
 hardcoded in the frontend, at `src/tracker/app.py:51`, so a new source cannot ship without
 one.
 
+**Where they render, since 2026-08-20.** Twelve credits with their licence fields was a
+970x215 pixel panel across the bottom of the globe, and several licence fields are whole
+sentences rather than a short name. So they live behind a control: a 44px round "i" pinned
+bottom left, always on screen, one click from every view, opening the full list on its own
+opaque panel (`frontend/src/ui/attribution.ts`). Specified in that form by Alexander Fanthome
+on 2026-08-20. The list is the API's own, rendered whole and **matched to nothing**, so a
+source the backend adds reaches the screen whether or not the frontend recognises its name.
+
+The layer rail no longer renders credits at all. It used to match them to layers and list the
+leftovers underneath, which was two lines under every row plus a line under the rail, and the
+match could silently fail. The control above is the stronger guarantee. The rail keeps the
+attribution list for one thing only: spelling a provider slug the way its own credit does,
+`aishub` as `AISHub`.
+
+Cesium keeps its own credit line, at the very bottom left, indented clear of the control
+rather than underneath it. It credits the imagery provider it is handed, and the NASA GIBS
+string it gets is the same exported constant the control's baseline uses
+(`frontend/src/ui/attribution.ts`, imported by `frontend/src/globe/viewer.ts`), so the two
+cannot drift into contradicting each other. A test asserts it.
+
+What a control does not satisfy is a licence requiring the credit to be visible with no
+interaction at all. Nothing in the table below states that. If a source ever does, that one
+belongs on screen rather than in here.
+
 Currently served, verbatim:
 
 | Source | Credit string | Licence field |
@@ -2310,7 +3480,7 @@ Required for the sources verified on 2026-08-19, with the licence field each one
 | Source | Required credit | Licence field |
 | --- | --- | --- |
 | Fintraffic Digitraffic | `Source: Fintraffic / digitraffic.fi, license CC 4.0 BY` (**the provider's exact wording, from their terms of service. Do not paraphrase it**) | `CC BY 4.0` |
-| Kystverket | `Vessel data from Kystverket (Norwegian Coastal Administration)` with a link to the NLOD 2.0 licence at `https://data.norge.no/nlod/en/2.0/`. NLOD makes acknowledgement mandatory but does not prescribe a string, so this wording is ours | `NLOD 2.0` |
+| Kystverket | `Vessel data from Kystverket (Norwegian Coastal Administration)` with a link to the NLOD **1.0** licence at `https://data.norge.no/nlod/en/1.0`. NLOD makes acknowledgement mandatory but does not prescribe a string, so this wording is ours. **Corrected 2026-08-24: this row said 2.0 and linked 2.0, contradicting the Kystdatahuset row in this same file and the running app.** The endpoint's own OpenAPI document names 1.0, and the live credit serves `NLOD 1.0` with the 1.0 URL, so the code was right and this table was stale. The raw TCP AIS socket is separately documented as 2.0, which is Kystverket's own inconsistency rather than ours; the vessel layer credits the endpoint it actually reads | `NLOD 1.0` |
 | adsbdb | `Aircraft data from adsbdb, sourced from PlaneBase` | `No licence stated. Route data prohibited from republication` |
 | FAA | `Aircraft registration data from the FAA Releasable Aircraft Database` | `Public domain (US Government work)` |
 | Transport Canada CCARCS | `Reproduced and distributed with the permission of the Government of Canada.` and `This product has been produced by or for Altrata and includes data provided by the Government of Canada. The incorporation of data sourced from the Government of Canada within this product shall not be construed as constituting an endorsement by the Government of Canada of our product.` (**both strings are mandatory under clauses 4.1 and 4.2 and are quoted verbatim**) | `Government of Canada Open Data Licence. Clause 3.1(d) forbids linking to identify an individual` |
@@ -2331,6 +3501,43 @@ Required for the sources verified on 2026-08-19, with the licence field each one
 | GeoNames | `City data from GeoNames, CC BY 4.0` **with a link to the source and a link to the licence**, because CC BY attribution requires both and the bare text is thin on its own | `CC BY 4.0` |
 | Local ONNX model weights | Not rendered on a card: the model artefact and its version are recorded on every embedding, per ADR 015 | `Apache 2.0` (MiniLM, model-zoo ArcFace), `MIT` (YuNet, Qdrant CLIP), **`None declared`** (Xenova CLIP, onnx-community Whisper) |
 
+Required for the keyless sources verified on 2026-08-20, with the licence field each one
+renders. **A row here whose licence is not established does not ship**, because a layer cannot
+render without a credit and a credit cannot be invented.
+
+| Source | Required credit | Licence field |
+| --- | --- | --- |
+| Kystdatahuset (Kystverket) | `Vessel data from Kystverket (Norwegian Coastal Administration)` with a link to the licence. **The credit string is served exactly as written here**, in `sources/kystdatahuset.py` and on `/api/attributions`, verified 2026-08-23. The same string already required for the raw TCP stream: **one Kystverket credit covers both endpoints**, because it is one authority and one licence. NLOD makes acknowledgement mandatory but prescribes no wording, so this is ours. **The licence link is `https://data.norge.no/nlod/en/1.0`, corrected 2026-08-23**: the API's own OpenAPI document names version 1.0, this file had recorded 2.0, and both texts require the same acknowledgement | `NLOD 1.0` |
+| Transpordiamet (Estonia) | `Vessel data from Transpordiamet (Estonian Transport Administration)`. **No licence is stated on the service at all**: `copyrightText` is an empty string, there is no terms page and `robots.txt` is a 404. So this is courtesy, not a condition, and it is served as such | `Not stated by the provider; credit is courtesy` |
+| Great Lakes St. Lawrence Seaway VIS | `Vessel data from the Great Lakes St. Lawrence Seaway Vessel Information System`. No terms page on either host and no licence field in the response. Courtesy, and the credit names the system rather than one of the two corporations that jointly run it, because crediting one would be wrong half the time | `Not stated by the provider; credit is courtesy` |
+| ReTLEctor | `Orbital elements from CelesTrak, served via the ReTLEctor cache` . Neither party states an attribution requirement, so this is courtesy on both halves and it names the cache because that is who we actually called | `None stated. CelesTrak data, MIT code` |
+| astrion-tech CelesTrak mirror | `Orbital elements from CelesTrak` . The repository declares no licence at all and asks consumers to respect CelesTrak's terms, so the credit goes to the origin rather than the mirror | `None declared` |
+| SatNOGS DB | `Orbital elements from SatNOGS DB, CC BY-SA 4.0` **with a link to the source and a link to the licence**, because CC BY attribution requires both. **ShareAlike binds any derived database**, so this needs a licence read of its own before an aggregated store of it is redistributed, the same caveat that already applies to ODbL | `CC BY-SA 4.0` |
+| AMSAT | `Amateur satellite elements from AMSAT` . No licence is stated anywhere on the file, the directory index or the page, so this is courtesy | `None stated` |
+| NASA SSCWeb | `Spacecraft positions from NASA SSCWeb` | `NASA open data, acknowledgement requested` |
+| SpaceX Starlink ephemerides | `Starlink ephemerides from SpaceX` | `None stated` |
+| Mike McCants element sets | `Classified-object elements from Mike McCants` | `None stated` |
+| tle.ivanstanojevic.me, wheretheiss.at, open-notify.org | `Orbital data from {host}` , named per host because none of the three states a licence and none is an independent origin | `None stated` |
+| NASA GIBS geostationary, HLS and Blue Marble layers | `Imagery courtesy of NASA EOSDIS GIBS` , the string already served. **One credit covers every GIBS layer**, so the new layers add no new string | `Public domain, attribution requested` |
+| EUMETView | **NOT ESTABLISHED, and there is nothing to render.** The service carries no `<Attribution>`, no `<MetadataURL>` and an empty `<ContactInformation>`, and every human-readable licence page is a JavaScript shell or a 404. **This layer does not ship until a static EUMETSAT data-policy document is in hand.** Do not invent a credit string for it | `Not established` |
+| NOAA STAR NESDIS CDN | `Full-disk imagery from NOAA STAR` . NOAA is a US federal government work so public domain by default, but no explicit statement was found on the CDN, so the position is unstated rather than confirmed | `Unstated. NOAA, expected public domain` |
+| JMA Himawari tiles | **Not established.** Nothing on the host states a licence and `robots.txt` is a 404 HTML page. Do not ship the layer without reading JMA's terms | `Not established` |
+| CIRA SLIDER | **Not established.** No licence statement found. Not built in any case | `Not established` |
+| Microsoft Planetary Computer | `Contains modified Copernicus Sentinel data [year]` , which is mandatory for any scene we cloud-filter, tile-cut or composite, plus `Hosted by Microsoft Planetary Computer` . The collection declares `license: proprietary` with a link to the ESA Sentinel Data Terms, and ESA is named as producer and licensor | `Copernicus free, full and open. Attribution mandatory` |
+| USGS LandsatLook | `Landsat data courtesy of the U.S. Geological Survey` | `USGS Landsat Data Policy, public domain` |
+| AWS Open Data Terrain Tiles | **Thirteen strings, not one**, per `tilezen/joerd/docs/attribution.md`, and several are fixed wording: `SRTM data courtesy of the U.S. Geological Survey` , `DOC/NOAA/NESDIS/NCEI > National Centers for Environmental Information` , `(c) Kartverket` , `Source: INEGI, Continental relief, 2016` , plus 3DEP, GMTED2010, LINZ (CC-BY-3.0-NZ), UK LIDAR (OGL v3), Austria (CC-BY-3.0-AT), ArcticDEM, EU-DEM (Copernicus), Canada CDEM (OGL) and Geoscience Australia (CC-BY-4.0). A thirteen-line credit block for a feature this product does not need | `Open, per-dataset attribution mandatory` |
+| Natural Earth II, bundled in the `cesium` package | `Basemap from Natural Earth, public domain` . **The Cesium provider returns a null credit**, so one has to be added explicitly or the layer renders uncredited, which breaks this project's own rule by omission | `Public domain` |
+| CARTO raster basemaps | Two strings: `Map data (c) OpenStreetMap contributors` under ODbL, and `Basemap (c) CARTO` | `ODbL 1.0 plus CARTO terms` |
+| Esri World Imagery and World Elevation 3D | **Recorded and not shipped.** Required credit if it ever were: `Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community` for imagery and `Sources: Vantor, Airbus DS, USGS, NGA, NASA, CGIAR, GEBCO, N Robinson, NCEAS, NLS, OS, NMA, Geodatastyrelsen and the GIS User Community` for terrain, and attribution on World Imagery is a **live per-tile lookup** against `static.arcgis.com/attribution/World_Imagery` with per-contributor bounding boxes, so one credit string does not cover it. Blocked by the Esri Master License Agreement regardless | `Esri Master License Agreement. Not an open licence` |
+| CesiumJS itself | **No credit and no logo required.** Apache-2.0, and the ion logo Cesium draws by default credits a service this product does not use | `Apache-2.0` |
+
+Two rules that fall out of the 2026-08-20 additions. **One authority, one credit**: Kystverket
+gets one string across the TCP stream and the HTTP endpoint, and GIBS gets one string across
+every layer, because a credit names who the data came from rather than which URL we hit.
+And **credit the origin, not the cache**: ReTLEctor and the astrion mirror both serve CelesTrak's
+element sets, so the credit names CelesTrak and mentions the cache we actually called. Reading a
+mirror does not make the mirror the source.
+
 Four rules that sit alongside the strings. Wikipedia's CC BY-SA needs a link to the source
 article, not just the word "Wikipedia". TfL's wording is fixed by their terms and must not
 be paraphrased, and the TfL credit is three strings rather than one. Commons, Mastodon and
@@ -2343,3 +3550,287 @@ reproduced exactly**, the same treatment TfL gets. And **an attribution that has
 not satisfied by text**: EOX names three specific URLs in its own access constraints, CC BY
 wants a link to the source and a link to the licence, and Wikipedia's share-alike wants a link
 to the article.
+
+### GTFS-Realtime transit vehicle positions
+
+Buses, trams, trains and ferries. One layer, 258 feeds, 52 hosts, verified 2026-08-23 by calling
+every one of them. The registry is committed data at `src/tracker/sources/gtfsrt_feeds.csv` and is
+refreshed by hand, never fetched at runtime. The four endpoint rows are in the Verified table
+above, alongside every other source.
+
+Licences across the 258: Etalab 2.0 on 101, ODbL 1.0 on 46, CC-BY 4.0 on 35, CC0 1.0 on 31, NLOD
+2.0 on 1, and bespoke operator terms on 44. ODbL is share-alike and serving positions to a browser
+is redistribution, so those 46 carry a condition the attribution list has to satisfy.
+`ATTRIBUTIONS` in `sources/gtfsrt.py` is **183 distinct credits**.
+
+**`files.mobilitydatabase.org/robots.txt` is `Disallow: /` while `mobilitydatabase.org/robots.txt`
+is `Allow: /`.** Same conflict as GeoNames and Digitraffic, recorded as R4 in
+`docs/pending-decisions.md` and unratified. The catalogue is therefore a manual refresh rather than
+anything on a timer. The v1 catalogue at `bit.ly/catalogs-csv`, which redirects to
+`storage.googleapis.com/storage/v1/b/mdb-csv/o/sources.csv`, has no robots.txt at all and is the
+fallback list at the cost of 933 fewer realtime rows.
+
+#### What was excluded, and why
+
+From 553 keyless active vehicle-position candidates in the catalogue, all of them called:
+
+| Excluded | Feeds | Reason |
+|:--|--:|:--|
+| Network failure, 404, 403, 401, 503 | 35 | did not answer |
+| HTTP 200 carrying something else | 6 | HTML, a GTFS **static** zip, protobuf text format, two JSON documents |
+| Feed header over an hour old | 9 | abandoned, not quiet |
+| Same feed under two URLs | 4 | byte-identical bodies |
+| `bct.tmix.se` (BC Transit) | 35 | its `robots.txt` is `Disallow: /`, which binds |
+| New York MTA | 9 | licence is a Data Feed Agreement you accept |
+| No licence recorded anywhere | 184 | this project does not show what it cannot licence |
+| Licence URL is an acceptance agreement | 7 | MBTA, Port Authority of Allegheny County, Denver RTD, Edmonton, CATA, Emery Go-Round |
+
+MBTA is worth its own line. `mass.gov` answers **HTTP 403 host-wide to a descriptive User-Agent,
+including on `robots.txt` itself**, so the MassDOT Developers License Agreement its data is governed
+by cannot be read at all. A licence that cannot be read is a licence that cannot be determined.
+
+#### Coverage, measured rather than claimed
+
+The catalogue holds a vehicle-position row for **29 countries** including keyed and deprecated ones,
+**23** with a keyless active one, and **17** survive the licence rule. Two of the 29 are wrong:
+`CG` (Congo) is `opendata.samtrafiken.se`, which is Dalarna in Sweden, and `OM` (Oman) is
+`app.mwasalat.om`, which refuses TCP entirely and is correctly marked deprecated.
+
+**Latin America, Africa, the Middle East, India and China publish no keyless GTFS-Realtime vehicle
+positions at all.** This is not a licensing problem in those regions, it is an absence. The same
+catalogue lists **static** GTFS for 27 of them, Turkey 24 feeds, India 20, Brazil 15, Mexico 13,
+Chile 11, Thailand 10. Schedules exist, live positions do not.
+
+Live vehicle positions do exist there in other formats, and neither can ship:
+
+| Source | Endpoint | Auth | Format | Position | Last verified |
+|:--|:--|:--|:--|:--|:--|
+| Rio de Janeiro BRT | `dados.mobilidade.rio/gps/brt` | none | JSON, 275,020 B, not GTFS-RT | **no licence established**; also carries `placa`, a licence plate | 2026-08-23 |
+| Israel, Open Bus Stride | `open-bus-stride-api.hasadna.org.il` | none | JSON SIRI, not GTFS-RT | code is MIT, **the data carries no licence or terms** | 2026-08-23 |
+
+Neither host serves a `robots.txt` (both 404), so there is no directive on either. Both fail the
+same rule: a licence that cannot be determined means the feed does not ship. The Rio feed would also
+need the licence plate dropped at the wire layer, since this project holds a people layer and an
+entity resolver and a plate resolves to a registered keeper.
+
+#### The count moves with the hour, so the layer reports what it measured
+
+Four sweeps of all 553 candidates on 2026-08-23, same code, same 16 concurrent workers:
+
+| Sweep | Time | Feeds carrying vehicles | Vehicles |
+|:--|:--|--:|--:|
+| A | 10:21 UTC | 247 | 16,535 |
+| B | 10:31 UTC | 248 | 17,254 |
+| C | 11:56 UTC | 258 | 18,476 |
+| D | 16:50 UTC | 293 | 20,349 |
+
+**A to D is +23% on vehicles and +46 feeds, and it is entirely the clock.** United States 2,391 to
+6,039, Canada 367 to 1,542, Ukraine 422 to 838. Going the other way, Japan 518 to 2 and Australia
+487 to 0, both asleep by 16:50 UTC.
+
+**93 feeds that carried nothing at 10:21 UTC were carrying vehicles at 16:50**: 67 in the United
+States, 23 in Canada, 3 in France. An empty feed is not a dead feed, and 261 of the 265 empty ones
+at 10:21 had a header timestamp under five minutes old. Nothing in this layer may be dismissed for
+being empty; only the feed's own header timestamp says whether it is alive.
+
+The shipping registry itself, swept live at 17:08:22 UTC after the four feeds below came out:
+**258 of 258 polled, zero failures, 23.3 seconds, 9,894 vehicles kept and 2,243 dropped** (1,843
+older than the staleness bound, 269 at 0,0, 130 with no position, 1 repeating an entity id inside
+one message), and zero merge-key collisions. In that sweep, keying on `vehicle.id` would have
+collapsed 1,630 of 8,055 id-carrying records, 20.2%.
+
+#### Correction, 2026-08-23: four more feeds excluded after reading the terms
+
+Matching "agree" in a licence URL was not enough. Reading all 41 bespoke operator terms pages found
+four more feeds gated behind an agreement the URL does not advertise, so the registry is **258
+feeds, 52 hosts**, not 262.
+
+| Feed | What the terms say |
+|:--|:--|
+| SEPTA (2 feeds) | "In order to download the Trip Planning Data, you are required to agree to SEPTA License Agreement", with a form. "THIS SEPTA LICENSE AGREEMENT is entered into by and between SEPTA and you (Licensee)." |
+| CTtransit | "In order to download the Trip Planning Data, you are required to agree to CT transit's License Agreement and complete the following form." |
+| Everett Transit (Sound Transit terms) | "By using the Data or **completing the registration required to access the data**, you agree to be bound by all of the terms." |
+
+"By using this data you agree to these terms" is **not** a gate and does not exclude anything. That
+is browsewrap, and it is how every open licence binds, NLOD 2.0 included. The distinction is whether
+a person has to sign or submit something to get the bytes.
+
+#### What each licence actually requires, read rather than assumed
+
+`ATTRIBUTIONS` in `sources/gtfsrt.py` is **183 distinct credits** and they are not interchangeable.
+
+| Licence | Feeds | What it requires | Verbatim wording? |
+|:--|--:|:--|:--|
+| CC0 1.0 | 31 | nothing; the affirmer waives attribution | no, and no credit is owed at all |
+| CC-BY 4.0 | 35 | creator, copyright notice, licence notice, disclaimer notice, **URI for the licence**; "any reasonable manner" | no, but the licence link is not optional |
+| ODbL 1.0 | 46 | a notice "reasonably calculated" to show the content came from the database **and that it is available under this licence** | no; a safe-harbour text is offered, not mandated |
+| Etalab 2.0 | 101 | the source, "a minima le nom du Concédant", **and the date of the last update of the information reused** | no, but the **date** is required |
+| NLOD 2.0 | 1 | source "as specified by the licensor" plus a reference to the licence | no |
+| Bespoke operator | 44 | varies; two mandate exact words | **yes, twice** |
+
+**How the 183 credits are served: eight rows, and the shape is driven by the obligations
+rather than by the row count.** Settled 2026-08-24 after reading the licence texts. The
+framing "183 is too many for a menu" was wrong: the real problem is that three of the six
+licences require three different things said, so a grouping that ignored that would have been
+shorter *and* non-compliant. `/api/capabilities` therefore serves:
+
+| Field on each credit | What it is for |
+| --- | --- |
+| `text` | A **complete compliant sentence on its own**, so a client rendering only this is still inside every licence. Worded per licence, because the licences differ |
+| `licence` and `url` | The family and its canonical text. **Mandatory under CC-BY 4.0**, which requires a licence notice and a URI, so an empty URL there would be a breach rather than a cosmetic gap |
+| `operators` | The data owners this row credits, each with **its own terms URL**. This is what lets one row satisfy 39 obligations that a comma-joined string and a single link cannot |
+| `as_of` | The date of the last update, **resolved per request** from the freshest record actually held for that licence |
+
+The eight rows: six licence families plus the two verbatim mandates, which get their own rows
+and are never merged into a group. 181 operator entries sit inside the six groups and cover
+180 distinct operators, because **one operator publishes under two licences**: Oise Mobilité
+has feeds under both Etalab 2.0 and ODbL 1.0, and since those licences require different
+things said it is correctly credited in both.
+
+What each licence forced:
+
+- **Etalab 2.0, 101 feeds and 67 credits, the largest block.** Requires "sa source (a minima le
+  nom du Concédant) **et la date de la dernière mise à jour de l'Information réutilisée**".
+  Bizkaia's CTB says the same in its own terms. **This is the one that changed the data shape**:
+  a static credit list cannot carry a date, so `as_of` is a field resolved at request time from
+  the transit store rather than a string baked in when the registry is read. The licence asks
+  about the information *being reused*, which is what is on screen, so a build-time constant
+  would have described when the registry was compiled and would be wrong the moment a bus moved.
+  A licence holding no records carries no date, which is correct rather than a gap.
+- **ODbL 1.0, 46 feeds.** Wants a notice reasonably calculated to convey both the source **and**
+  that it is available under that licence, so naming the operators alone fails it. The licence
+  is in the sentence rather than only in a neighbouring field a client might not render:
+  "Contains information from ..., which is made available under the Open Database License
+  (ODbL) 1.0". Section 4.3's safe-harbour text is offered rather than mandated, so this follows
+  its shape without quoting it.
+- **operator terms, 44 feeds and 41 credits across 38 different terms pages.** Not a licence
+  family, so it has **no group URL at all**: picking one would state the wrong terms for the
+  other 38 operators. Each operator carries its own. Four of those URLs are plain `http`
+  (Halifax, Madison, Mississauga, Votran) and are linked as published, because linking the
+  terms that really bind beats rewriting a provider's own address to a scheme it may not answer
+  on.
+- **CC-BY 4.0, 35 feeds.** Creator, copyright notice, licence notice, disclaimer and a URI,
+  satisfiable "in any reasonable manner", explicitly including a link to a resource carrying the
+  required information. The grouped row with its licence URL is that resource.
+- **CC0 1.0, 31 feeds and 18 credits.** The affirmer waives attribution outright, so these are
+  the only credits a grouping could drop entirely. **They are kept**, and the sentence says the
+  data is dedicated to the public domain. Dropping them to save a row would be the only place in
+  this project where provenance was traded for space.
+- **NLOD 2.0, 1 feed.** Attribution required, no wording prescribed.
+
+Separately from the text, three licensors constrain **rendering** rather than words, and that is
+the frontend's to honour: COTA, Community Transit and Duluth Transit each forbid use of their
+marks in any manner likely to cause confusion or that disparages them, and COTA requires any
+link to its site to open full-screen rather than in a frame.
+
+The two mandated forms of words, carried on `TransitFeed.attribution` and used verbatim by
+`TransitFeed.credit`:
+
+- **King County Metro**: "Transit scheduling, geographic, and real-time data provided by permission
+  of King County", **prominently displayed**, "unless otherwise agreed by King County in writing".
+- **City of Hamilton**: "Contains public sector Data made available under the City of Hamilton's
+  Open Data Licence". Hamilton also reserves the right to require its removal.
+
+Three consequences for any grouping of the credit list. **A credit naming only the operator does not
+satisfy ODbL**, which covers 46 feeds, so the licence has to appear alongside the name. **Etalab
+needs a date**, which covers 101 feeds and is the requirement nobody guesses. And **the two mandated
+strings cannot be folded into a grouped line at all.** Going the other way, the 31 CC0 feeds owe
+nothing, so 18 of the 183 credits are courtesy rather than obligation.
+
+Separately, COTA, Community Transit and Duluth Transit each forbid use of their marks "in any manner
+that is likely to cause confusion, or in any manner that disparages or discredits" them, and COTA
+requires that a link to its site "display the site full-screen and not within a frame". Those
+constrain how a credit appears rather than what it says.
+
+
+#### Correction, 2026-08-23: the staleness bound is a rendering bound and 900 seconds was too loose
+
+`MAX_REPORT_AGE_SECONDS` was set to 900 from a distribution measured to answer "is this feed
+alive". That is the wrong question for a position drawn on a map a viewer can check against the
+street, and the two are different bounds. Whether a feed is alive is answered by its own header
+timestamp, which is why 261 of 265 feeds carrying no vehicles in one sweep were working feeds with
+no buses running.
+
+Retuned to **300 seconds**, and the measurement is why it was nearly free. A live sweep gave
+acceptance ages of **median 49s, p75 68s, p90 82s, p99 762s**. Only two records of 5,196 sat
+between 600 and 900 seconds, so the old bound permitted a great deal while doing almost nothing.
+
+| bound | kept of the set | unknown movement at the measured 11.9 km/h |
+|:--|--:|--:|
+| 60 s | 64.3% | 0.20 km |
+| 120 s | 93.8% | 0.40 km |
+| 180 s | 95.6% | 0.59 km |
+| **300 s** | **97.1%** | **0.99 km** |
+| 600 s | 98.4% | 1.98 km |
+| 900 s | 100.0% | 2.98 km |
+
+300 seconds costs **151 vehicles of 5,196, 2.9%**, and halves the distance a bus could have moved
+unobserved. Below 120 seconds the curve falls off a cliff because feed publish cadences are
+themselves 30 to 60 seconds, so a freshly fetched report is already that old.
+
+**Who pays is the right set.** Over 300 seconds by country: France 22.8%, Norway 19.6%, everyone
+else under 3% and most at zero. Those two are the retention-policy feeds, Entur holding a
+last-known position for hours and the French aggregator behind it. Losing a last-known position is
+the point rather than the cost.
+
+**The bound must stay above the largest host floor**, or our own rate discipline manufactures
+stale drops: a feed we choose to poll every 350 seconds cannot produce a report under 300 seconds
+old. The largest floor governing a feed actually in the registry is 120 seconds. `passio3.com`
+carries a 350-second floor and governs no feed at all, all 23 of its feeds having been dropped for
+having no licence recorded. Asserted by a test.
+
+**A count of vehicles is a count of recent reports, not of vehicles.** `FeedEntity.id` is
+trip-scoped on some producers: **1,232 of 5,196 entity ids, 23.7%, contain their own trip id**, and
+on Entur it is 255 of 255. A vehicle finishing a trip therefore reappears under a new key and the
+finished one sits in the store until it expires, so a longer store time to live buys more dead
+trips rather than more live buses. This is not an argument against the compound key, which is
+measurably right at zero collisions. It is an argument that the product should not call the number
+a fleet size. Entur also publishes dead runs, repositioning movements with no passengers, plainly
+labelled in the id as `BOR:DeadRun:...`.
+
+#### Correction, 2026-08-23: the coverage reason named continents and the feed contradicted it
+
+`COVERAGE_REASON` read "Europe and North America only. No keyless feed exists for 5 regions." A
+live read carried **Japan 676 and Australia 53**, so the product was telling a viewer in Tokyo
+there was no coverage in Tokyo while their screen showed buses.
+
+It now reads **"17 countries. Latin America, Africa, the Middle East, India and China publish
+schedules, not positions."**, 103 characters. It names a country count rather than continents,
+because the licensed set is fixed at 17 and the reporting set is always a subset of it, so the
+count cannot contradict the screen the way a continent can. Three facts will not fit in 120
+characters: the licensed set, the reporting set that moves by a factor of 2.7 with the clock, and
+why the absent
+regions are absent. The reason carries the first and the third; the second belongs beside the
+vehicle count, which is the thing that moves.
+
+
+#### Correction, 2026-08-24: the diurnal swing is a factor of 2.7, not 23%
+
+The first reading took four sweeps and put the movement at 23%. **All four fell inside one
+European working day**, which is the largest block of feeds in the registry, so the measurement
+missed its own low point. Three more sweeps carried it through the European night.
+
+| sweep | time | candidate set (553 feeds) | shipping registry (258 feeds) |
+|:--|:--|--:|--:|
+| A | 10:21 UTC | 16,535 | 8,545 |
+| B | 10:31 UTC | 17,254 | 8,610 |
+| C | 11:56 UTC | 18,476 | 9,125 |
+| D | 16:50 UTC | **20,349** | **9,668** |
+| E | 18:50 UTC | 18,556 | 8,313 |
+| F | 22:33 UTC | 14,578 | 5,452 |
+| G | 00:48 UTC | **10,358** | **3,629** |
+
+**The shipping registry runs 3,629 to 9,668, a factor of 2.7.** The candidate set swings less, 96%,
+because it carries more of the Asia-Pacific feeds that were dropped for having no licence
+recorded. So the licence rule, which is right on its own terms, has made the layer **more**
+Europe-weighted and therefore more volatile across a day, and that is a consequence worth knowing
+rather than a defect.
+
+Peak hour differs by country, which is the whole point. Across the seven sweeps: the United States
+peaks at 18:50 UTC with 6,201, Australia at 22:33 with 2,360, Japan at 22:33 with 1,185, Poland at
+10:21 with 1,939, France at 16:50 with 1,608. **No single sweep sees more than a fraction of the
+world awake**, so any figure quoted without its timestamp is meaningless.
+
+The honest product sentence is therefore that the count moves by a factor of about 2.7 across a
+day, not by a quarter. A viewer who sees 3,600 vehicles at midnight UTC and 9,700 at teatime has
+not found a bug.

@@ -52,13 +52,28 @@ thing with the propagation moved to the browser, described below.
 **Static reference data** (cities, and the orbital element sets behind satellites) is a
 periodic bulk load into a local index that is read in-process and never expires. Cities do
 not stop existing between polls, so a TTL would be a bug. The GeoNames city file is
-downloaded weekly and 26,000 rows are held in memory, which is also what keeps place
-search off the network entirely.
+downloaded weekly and 34,072 of its 34,099 rows are held in memory, the 27 refusals being dead
+places, which is also what keeps place search off the network entirely. The weekly request is
+conditional on the stored `ETag` and normally costs nothing: verified 2026-08-20 as HTTP 304 with
+zero bytes in 64 milliseconds against 3,306,600 bytes for the file. Both bulk fetches sit behind a
+`robots.txt` that disallows them, and the reading that permits a weekly conditional fetch is R4 in
+`docs/pending-decisions.md`. It is unratified and it carries every live vessel number and every
+city in `docs/status.md`.
 
 **Fetched-and-cached records** (social posts, organisation and person records, registry
 lookups, camera images) are pulled on demand or on a slow cycle, cached server-side with
 their own expiry, and are not part of the WebSocket delta stream. A social post is a fixed
 event with a timestamp: it never updates, it never moves, and it is never dead-reckoned.
+
+**Rate-limit state is a fourth thing on disk, and it is the smallest.** `cache.py` is one
+SQLite file under `Settings.cache_dir`, holding two kinds of row: when may I next call this
+provider, and what did it last tell me. Every guard that used to keep that in memory now
+writes it there, because a restart threw the lot away and a provider cannot tell a restart
+loop apart from hammering. Measured on 2026-08-20: adsb.lol answered HTTP 420 on the first
+`/v2/mil` request of a fresh process, having been asked for 120 seconds of quiet by a process
+that had already exited. Get with a time to live, set, delete, delete by prefix, list keys,
+and nothing else. It is not a data layer, and no personal data goes in it: the adsbdb owner
+cache is deliberately in memory only (`sources/adsbdb.py:472`).
 
 **Media and its embeddings** (ADR 015) are a fetched-and-cached record with two extra
 properties. They are keyed by **content hash**, because the same photograph arrives from
@@ -102,6 +117,56 @@ REST snapshots (`api/routes_entities.py`) read the same stores and never touch a
 upstream. A browser refresh must not become an upstream request, or a reload loop turns
 into a denial of service against a free provider.
 
+Cities walk none of those steps, and that is the whole design of the layer. The weekly
+download is one asyncio task started by the lifespan rather than a `Poller`
+(`app.py:_refresh_cities_forever`), because a poller belongs to a feed with a delta channel
+and a static file has none. The index is never registered with the hub, so no city delta is
+ever pushed and no time to live can expire London. `/api/cities` reads the ordered rows and
+`/api/cities/{geonames_id}` the index (`api/routes_entities.py`), and both read memory only.
+`/api/search` (`api/routes_meta.py`) builds a `SearchService` per request over the live
+stores, the index and the geocoder, which is what stops a weekly index swap leaving the
+search answering out of a gazetteer it was born with. A retry that indexed nothing waits
+`app.CITY_RETRY_SECONDS` rather than the week, because the floor that protects the provider is
+the adapter's own and a week-long sleep after a failure only starves the layer.
+
+The city read is the one response big enough to matter on the wire: 34,072 rows and **10,227,194
+bytes** of JSON, asked for in full on every page load because the layer decides which labels to
+draw from where the camera is and cannot decide that over rows it does not hold. Gzip is registered
+next to CORS in `app.create_app` and takes it to **2,062,053 bytes**, five times smaller, at
+compression level 1 so the saving costs a fraction of the CPU that level 9 does. Both figures read
+off `content-length` on a running server on 2026-08-20; an earlier version of this paragraph said
+1.57MB and was wrong. There is no reverse proxy in this deployment, since FastAPI serves the built
+bundle itself, so nothing else was ever going to compress it.
+
+Two things about that layer that only the browser half decides, and the second is not optional.
+`CityLayer` (`frontend/src/globe/layers/cities.ts`) holds every record in memory, sorted, and draws
+through one `LabelCollection` created once and mutated in place. Six population bands drive a
+per-label `DistanceDisplayCondition`, so the range test is the GPU's and costs nothing per frame:
+59 cities are visible from orbit, 562 by continent framing, 1,989 by country zoom, all 34,072 at
+street zoom, measured against the real file on 2026-08-20. On top of that sits
+`CITY_LABEL_BUDGET`, 600 labels. Banding alone would still put 34,072 labels in the collection, and
+a Cesium label is not one primitive: `rebindAllGlyphs` builds one billboard per glyph as soon as a
+label has text, whatever its display condition says. The whole gazetteer is roughly 300,000 glyph
+billboards, hundreds of megabytes of vertex buffer and a multi-second hitch on load, so the
+collection holds a working set of the biggest cities that could be visible from where the camera is
+now. Nothing is refetched to change the picture.
+
+The gazetteer itself is `CityIndex` (`services/gazetteer.py`), and the thing to know about it is
+what it does not contain: no client, no URL, no coroutine. "A city lookup issues zero requests" is
+a structural fact about the type rather than a rule somebody has to remember, which is what phase 4
+acceptance 3 asks for. Storage is a dict on the GeoNames id plus two parallel lists, one of folded
+keys sorted lexicographically and one of matching cities, searched with `bisect.bisect_left`. No
+search library and no trie. Measured on 2026-08-20 against the real 34,099-row file over 2,000
+iterations: `"London"` 1.46 microseconds median, and the worst case in the whole design, the
+one-letter query `"l"` that matches thousands of rows, 347 microseconds. The plan's budget is 300
+milliseconds.
+
+The other two mover layers walk the same eight steps with one difference each. Vessels insert
+a merge between step 4 and step 5: every provider is fetched concurrently, the results are
+merged on MMSI in `services/union.py`, and the store is fed one record per ship carrying the
+providers that saw it. Satellites stop at step 5 and hand the browser element sets rather than
+positions, for the reasons below.
+
 ## Why the backend owns every upstream connection
 
 Three reasons, heaviest first.
@@ -123,9 +188,40 @@ is sometimes the string `"ground"`.
 
 ## Providers: union, not failover
 
-The aircraft layer polls every configured provider at once and merges the results on the ICAO
-24-bit address (ADR 010). Failover still exists inside a provider; coverage across providers
-is additive.
+A mover layer is the union of what its providers return, merged on the existing identity: the
+ICAO 24-bit address for aircraft, MMSI for vessels (ADR 010). Failover still exists inside a
+provider; coverage across providers is additive.
+
+**The vessel layer is where this is actually built.** One poller drives up to three providers,
+Fintraffic Digitraffic, aisstream.io and AISHub, merges them on MMSI in
+`services/union.py`, and writes one record per ship carrying the list of providers that saw
+it and the age of the winning report. A provider with no credential is left out of the union
+entirely rather than added and failed every cycle, so an unconfigured AISHub does not make the
+layer read degraded forever: it reports itself unavailable from `/api/capabilities` instead. A
+provider that errors drops out of that cycle, is named on `/api/layers`, and the layer reads
+degraded rather than healthy.
+
+**The aircraft layer is a union with one live member**, and that is a source-access problem
+rather than a code one. Phase 3 built it: `_register_aircraft_pollers` (`app.py`) polls its
+members concurrently, merges them on the ICAO 24-bit address through the same
+`services/union.py` the vessel layer uses, writes the provider list onto every record, and
+reports per-provider coverage on `/api/layers`. The membership is a table, `UNION_PROVIDERS` in
+`sources/adsb.py`, so adding a provider is a row plus a base URL rather than a code change.
+
+What is missing is providers, not machinery. adsb.lol is the only one we can reach and serve.
+adsb.fi is a failover only, because its licence is non-commercial, which is R3 in
+`docs/pending-decisions.md`. ADS-B Exchange answers HTTP 401 without a paid key and prohibits
+redistribution, and serving positions to a browser is redistribution. airplanes.live answers
+HTTP 403 until an email is answered. adsb.one is Cloudflare-blocked. All four re-verified live
+on 2026-08-20. So ADR 010's coverage argument has no second member on the aircraft side today,
+and the provider-attributable count is reported as zero rather than hidden.
+
+**Cadence is per provider and it is what makes this more than a second base URL.** Each row in
+the table carries its own floor as a constant: adsb.lol 5s, airplanes.live 1s stated by the
+provider, ADS-B Exchange 260s. The last one is not a rate at all, it is a monthly quota of
+10,000 requests divided into a month, which is why that provider is marked demand-driven and is
+excluded from the sweep and from the cycle floor. A metered key on a five-second sweep spends
+its month in fourteen hours.
 
 The reason is coverage rather than resilience. Aggregators do not see the same aircraft,
 partly because each is the union of its own volunteers' receivers, and mostly because most of
@@ -139,6 +235,31 @@ the age of that report, so a merged store stays auditable. Conflicts resolve by 
 by provider precedence, and two disagreeing positions are never averaged into a third that no
 receiver reported. And cadence is per provider: a metered key cannot be swept on the same
 cycle as a keyless feed, so its calls are demand-driven.
+
+**Two fields name a provider and they are not the same field.** `Aircraft.source` is set by the
+adapter to the host that actually answered, so a failover inside a client shows up there.
+`Aircraft.providers` is set by the union wiring (`app.py:610`) to the configured union member's
+name, so a failover does not show up there at all. On a live run on 2026-08-20 the adsb.fi
+failover fired and the layer served 62 records reading `source: adsb.fi` alongside
+`providers: ["adsb.lol"]`, with the provider row on `/api/layers` crediting adsb.lol for a cycle
+adsb.fi supplied in full. The card reads `source` and the layer rail reads the provider list, so
+the two surfaces credit different providers for the same aircraft. That matters beyond tidiness,
+because adsb.fi is licensed non-commercial and its attribution is not interchangeable with
+adsb.lol's ODbL. Recorded as a defect in `docs/status.md`; not fixed.
+
+**Recency has to hold across cycles, not just inside one.** The merge resolving recency and
+the store then taking whatever it was handed is not enough, and the gap is not theoretical: a
+provider dropping out on its own cadence floor let an older fix, re-served inside its own
+lookback window, replace a newer position already held, which walked a ship backwards on the
+globe and pushed the regression out in the next delta. The guard is on `EntityStore` itself as
+an optional fix time (`services/store.py:64`), so every layer gets it from one place rather
+than the vessel path getting it alone.
+
+**One record per identity is asserted by a test, not assumed.** The obvious bug in a union is
+one asset counted once per provider. Note also that the merge key has to be validated, not
+trusted: MMSI 999999999 is a placeholder rather than an allocation and two ships broadcasting
+it would collide into one record while the one-record-per-MMSI test still passed, so a
+non-conformant MMSI is dropped and counted rather than merged on.
 
 ## The deliberate exception: satellites
 
@@ -167,6 +288,23 @@ is more than 3.5 days old, and the count next to the layer is the count actually
 
 This is the only place the browser does its own physics. Everything else it draws was
 validated server-side.
+
+**Two server-side copies, and they answer different questions.** The CelesTrak client holds
+the element cache, which is what `/api/satellites/elements` serves as a tab's initial load.
+The satellites `EntityStore` looks like a duplicate and is not: it is the delta channel for
+that cache, so a refreshed element set or a decayed object reaches an open tab without a page
+reload. Delete the registration and every open browser propagates whatever it read at load
+time for as long as it stays open.
+
+**An empty cache must never reach the store.** `replace_all(())` deletes every satellite and
+tells every browser to remove it, on a poll that would otherwise report healthy with a count
+of zero. Two guards close it. The adapter refuses an all-dropped refresh, so a good cached
+group survives a shape change upstream rather than being overwritten by nothing
+(`sources/celestrak.py:267`). And availability is computed from cached element sets rather
+than from cache keys, because a dict holding one empty group is truthy and used to publish
+`available=True` over a layer with nothing to draw (`sources/celestrak.py:332`). With the
+cache empty the layer reports itself unavailable with the provider's own error on it, which is
+what a running server does today.
 
 ## The wire-model and domain-model boundary
 
@@ -213,10 +351,15 @@ and is sent once, at its latest value. Feed frequency can rise without client ba
 following it. Upserts carry whole entities because the frontend replaces rather than
 patches; removals carry only keys because there is nothing left to send.
 
-Two stores, not one (`app.py:80`). The viewport feed and the worldwide military feed would
-otherwise fight: `/v2/mil` is a complete world picture, so `replace_all` is correct for it,
-and running `replace_all` over a merged store would evict every locally seen aircraft on
-every military poll.
+One store per layer, four of them, not one shared store. The viewport feed and the worldwide
+military feed would otherwise fight: `/v2/mil` is a complete world picture, so `replace_all`
+is correct for it, and running `replace_all` over a merged store would evict every locally
+seen aircraft on every military poll.
+
+Which write method a feed uses is a design decision, not a preference. `replace_all` is for a
+feed that publishes a complete world each poll. `upsert_many` is for everything else, and the
+vessel union needs it specifically: each provider covers its own patch of sea, so replacing
+would delete every ship only a missing provider could see.
 
 The store is not thread-safe on purpose. Everything touching it runs on one asyncio event
 loop, and a lock would be overhead plus a false sense of safety.
@@ -239,6 +382,16 @@ an IP gets permanently blocked. `RATE_LIMIT_STATUS_CODES` (`sources/base.py:21`)
 both 429 and 420, because adsb.lol answers 420 ("enhance your calm"), which is not a
 standard code and would otherwise be treated as a plain client error.
 
+**Two things were wrong with that and both are now fixed.** The floor only held inside one
+process, so stopping and starting the app produced a fresh floor every time; it is now written
+to the disk cache on every attempt and read back on construction
+(`services/poller.py:118`). And a throttle absorbed by a failover never reached the poller at
+all, because a successful failover is not a failed poll: adsb.lol asked for 120 seconds on
+`/v2/mil`, adsb.fi answered, and the next cycle called adsb.lol again 65 seconds in. The
+provider's figure is now honoured where the response arrived, per provider, and shared between
+the two adsb.lol clients because a 420 binds the egress address rather than the endpoint
+(`sources/adsb.py:735`).
+
 ### The incident that justifies the provider-swap interface
 
 On the first live run of this app, adsb.lol answered `/v2/mil` with HTTP 420 and the
@@ -248,14 +401,56 @@ and contract violations, then retries the same path against the secondary base U
 providers serve the readsb v2 schema, so the same parser handles both and swapping is a
 base-URL change (`config.py:64`, `config.py:65`).
 
-That is the interface earning its keep on day one. It also found its own limit: the
-military path `/v2/mil` is identical on both providers, but adsb.lol's viewport path
-`/v2/point/{lat}/{lon}/{nm}` is not, and adsb.fi answers 400 for it. The viewport failover
-is therefore currently broken by path shape. See `docs/status.md` for the detail and
-`docs/data-sources.md` for the path adsb.fi actually uses.
+That is the interface earning its keep on day one. It also found its own limit and then paid
+for the fix. Failover replays the same path against the secondary provider, so a
+provider-specific path silently disables failover for that call, and adsb.lol's viewport path
+`/v2/point/{lat}/{lon}/{nm}` is adsb.lol only: adsb.fi answers 400 for it. Only `/v2/mil`
+survived, because it happens to be path-identical. The fix is one path both providers accept,
+`VIEWPORT_PATH_TEMPLATE` at `sources/adsb.py:56`, and it was seen working live twice on
+2026-08-20: adsb.lol answered 420, adsb.fi answered 200 on the same path, and the layer kept
+its aircraft. Evidence in `docs/status.md`.
+
+The lesson generalises past this one path. Any per-provider difference on a shared code path
+turns a failover into a second failure, and it does so quietly, because the primary's error is
+what gets logged.
 
 Jitter (`services/poller.py:34`) spreads every sleep by 15%, so pollers started together
 do not synchronise into a burst against one provider.
+
+## Search: local first, and the geocoder is the exception
+
+One field resolves everything, so `/api/search` is the only navigation this globe has. The rule
+that keeps it inside Nominatim's usage policy is a fall-through with two guards, all of it in
+`services/search.py:496`.
+
+Four local groups are scanned first, every one of them in process: aircraft by callsign,
+registration and hex, vessels by name, MMSI and IMO, satellites by name and NORAD number, and
+cities out of the gazetteer. **If any local group returned a hit, Nominatim is not consulted at
+all.** So a city query never leaves the process, which is what makes the OSMF's "systematic
+queries are unacceptable use" line survivable: a typeahead firing on every keystroke costs the
+provider nothing.
+
+The two guards on the fall-through are the part that is easy to get wrong. First, an **empty**
+gazetteer blocks the geocoder rather than opening it: with no cities indexed, "every local group
+came back empty" is not evidence that the query needs an address lookup, and answering it remotely
+would point the typeahead at Nominatim for every city query for as long as the download is down.
+The response carries the cities group with that reason instead. Second, the distinction between an
+empty gazetteer and an absent one is deliberate. `AppState` always wires an index, so empty means
+the weekly download has not landed; `None` means a deployment built without a city group at all,
+which is a choice rather than a fault and leaves the geocoder to do its own job.
+
+Degradation follows the same shape as a missing feed key, and Nominatim is the one keyless source
+that still has a gate: it needs contact details in the User-Agent under the OSMF policy, so with
+no `TRACKER_CONTACT_EMAIL` the client is not built. `/api/capabilities` then reports
+`places` unavailable with the reason, the cities layer stays available, and a query only a geocoder
+could answer comes back as a `places` group with zero hits and its reason attached. A group with no
+hits and no reason was asked and found nothing; a group carrying a reason could not be asked. That
+one distinction is why the search box can tell "no such place" apart from "the geocoder is off",
+and it is asserted live in `docs/status.md`.
+
+Every reason string is clipped to `MAX_REASON_CHARS` on the way out. That is not tidiness: a
+review found `/api/search` answering HTTP 500 when a long query hit a failing geocoder, because
+the reason string built from the query overflowed its own 300-character contract.
 
 ## Enrichment: a fourth shape, and where inference sits
 
@@ -298,6 +493,40 @@ article search is a query about one person on demand with a server-side cache an
 five-second floor between requests, so it belongs with the other fetched-and-cached records
 above rather than in the TTL store and never in the WebSocket delta stream.
 
+**The registry join is demand-driven, and `GET /api/aircraft/{icao24}` is the only route in
+the product that reaches an upstream.** Phase 3 built the first enrichment: `services/enrich.py`
+holds one generic `Enricher` over domain contracts with the lookup, the merge and the identity
+injected, and `sources/adsbdb.py` supplies all three for aircraft. It is not a poller and it
+must not become one: adsbdb allows 512 requests a minute per IP and a live aircraft layer is
+several hundred records a cycle, so a sweep would be throttled inside the first poll and would
+tell the card nothing it needed. A card asks about one aircraft, that aircraft is looked up, and
+the answer is cached per identity with a one-day time to live. Four card opens on one address
+cost one request, measured on a live run.
+
+Three rules make that safe rather than merely cheap. **The feed keeps every attribute it
+supplied** and the registry's value is kept beside it as a conflict rather than dropped, because
+adsbdb carries no as-of date and ADR 008 does not let an undated claim displace a timestamped
+one; that also makes it structurally impossible for enrichment to move an aircraft or restamp
+its observation. **A registry fault degrades the card to feed-only data and never to an error**,
+so an aircraft with no owner still renders with its position, callsign, type and class. And
+**a failure is never remembered**, so the next card open is a real attempt rather than a cached
+"this does not exist".
+
+**A cache of a personal attribute needs a way out of it.** A registered owner is a named
+individual on a great many N-numbers, so this cache holds personal data with a one-day life, and
+ADR 008 makes a removal immediate with no queue and no human step. `AdsbdbLookup.forget`
+(`src/tracker/sources/adsbdb.py:592`) empties it by identity rather than by key, because one
+answer is remembered under the requested key, the record's own address and its registration, and
+clearing one of the three would report success while the name stayed reachable by the other two.
+Phase 6 owns the suppression register that stops the next lookup fetching the name again; this is
+only the hook it will call.
+
+**Classification is a service, not adapter code.** `services/classify.py` resolves the display
+class from what the feed reported, in a fixed precedence, and the adapter calls it on the way
+into the domain so no record ever reaches a store unclassified. It reads `tracker.contracts`
+only, so the direction of the dependency cannot cycle, and it is idempotent so the union can
+re-apply it after a merge without allocating.
+
 ## Frontend render policy
 
 Non-negotiable, and it cannot be retrofitted.
@@ -319,6 +548,21 @@ Non-negotiable, and it cannot be retrofitted.
   the expensive tier.
 - **Feed parsing in a Web Worker**, handing transferable typed arrays to the render
   thread.
+- **One thing owns the camera at a time.** Follow mode
+  (`frontend/src/globe/follow.ts:108`) locks it to the selected entity and reads that
+  entity's last reported fix out of the store, extrapolated the way the layers extrapolate,
+  rather than holding a primitive: a layer pools and reuses its primitives, so a held
+  reference can end up pointing at another aircraft's. Manual camera input takes it back at
+  once (`frontend/src/globe/follow.ts:122`): a pointer drag past four pixels, or any wheel
+  or pinch zoom. A click is not manual input, because clicking is how an entity gets
+  selected. A search fly-to disengages it too.
+- **The URL carries the camera and the layer switches, and nothing else.** In the hash, so
+  it never reaches the server, written with `replaceState` on `moveEnd`
+  (`frontend/src/state/url.ts:229`) and longitude first like every other coordinate in this
+  project. Entities are left out because they have moved by the time the link is opened.
+  A hash that does not parse leaves the globe on its opening view, and a layer named in one
+  that this deployment does not have is dropped rather than erroring
+  (`frontend/src/ui/layer-rail.ts:353`), so a shared link always opens.
 
 ## The single-worker constraint
 
@@ -362,6 +606,15 @@ one goes.
    `api/routes_meta.py:76` so `/api/capabilities` reports it.
 6. **`docs/data-sources.md`** in the same commit, with the endpoint, licence, cadence and
    the date someone actually called it. An unverified endpoint does not go in that file.
+
+A **new provider for a layer that already exists** is smaller than that. On the aircraft
+layer it is one row in `UNION_PROVIDERS` (`sources/adsb.py`) carrying its name, its own cadence
+floor, whether it filters, whether it can be swept, the names of the settings holding its base
+URL and any failover, and the name of the setting that clears its gate, plus those settings in
+`config.py`. The wiring reads all of it off the row: nothing compares a row against a named
+constant, so a new row gets its own host, its own name on every record it supplies, and its own
+gate honoured. Its terms belong in `docs/data-sources.md`, which is the source of truth for
+them, and its credit in `ATTRIBUTIONS` (`app.py`).
 
 Then the tests: a parser test against a recorded real payload in `tests/fixtures/`, and a
 cadence test asserting the floor holds. Refresh the wire contract with

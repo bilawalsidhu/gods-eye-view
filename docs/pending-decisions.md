@@ -155,7 +155,7 @@ carries it. ADR 007 is later and stricter, so it governs.
 
 ## Still genuinely unresolved, and not mine to read either way
 
-## U1 (was C4): the LADD flag has no source
+## U1 (was C4): the LADD flag has no source. WRONG on both counts: see U1 CLOSED below
 
 ADR 009 requires LADD membership carried as an attribute on the aircraft record, "because it is
 itself a fact about the owner worth having on a wealth profile". The same ADR's Context says the
@@ -173,6 +173,87 @@ written. The aviation-registry recon was asked to look; if it found nothing, pha
 as a blocker and does not fake the flag. A hardcoded LADD list, a guessed flag or a test fixture
 standing in for a real record would all be placeholder data in the running product, which the
 global constraints forbid.
+
+---
+
+## U1 CLOSED 2026-08-20: the LADD flag comes off the feed, and my earlier reading of it was wrong
+
+**Closed, and ADR 009 is buildable exactly as written.** Two earlier entries in this file said the
+LADD flag had no source, then said the only source bound us to suppress. Both were wrong, and the
+error was mine rather than the recon's.
+
+**What is actually true.** `dbFlags & 8` on the readsb `/v2` schema is the LADD bit. readsb documents
+it, `DB_FLAG_LADD: Final = 8` has been in `src/tracker/sources/adsb.py` since phase 1, and adsb.lol
+publishes `/v2/ladd` on top of it. Verified live 2026-08-20: 357 aircraft, every one carrying bit 8,
+with real registrations. The phase 3 build agents found this and were right.
+
+**Where I went wrong, because the shape of the mistake is worth keeping.** The aviation registry
+recon correctly reported that the FAA `MASTER.txt` file has no LADD column, which is true. I read
+that as "the project has no source for the flag", searched for the FAA's own list, found it behind a
+SWIM Data Access User Agreement that obliges the subscriber to suppress, and concluded ADR 009 was
+internally impossible. The registry and the feed are two different sources and only one of them was
+ever missing the field. I had already read the `DB_FLAG_LADD = 8` constant earlier in the session and
+did not connect it.
+
+**The distinction that makes ADR 009 work.** We consume **the aggregator's assertion**, which
+adsb.lol derived from the FAA list and publishes as a database field on a volunteer receiver network.
+We do not consume **the FAA list**, which would come with the agreement attached. So the flag arrives
+with no obligation, which is exactly the position ADR 009 reasoned toward: LADD binds FAA-provided
+feeds, our positions come from volunteer receivers, so the suppression was never handed to us and the
+flag is just an attribute.
+
+**What stands from the wrong analysis, because it is still worth holding:** never take the
+`IndustryLADD` list. It is on `adx.faa.gov`, first Thursday monthly, and the only route to it binds us
+to hide exactly the aircraft ADR 010 exists to reach. Consume the bit, never the list. That line is
+now in `AGENTS.md`.
+
+**Phase 3 acceptance criterion 2 and phase 5 acceptance criterion 3 are restored to their original
+wording** in `docs/plan/implementation-plan.md`, with the `dbFlags & 8` source named.
+
+---
+
+## U5: the PII suppression is two packages with different field sets, not one flag
+
+**Found:** 2026-08-20, reading `docs/business-context.md:140` against the plan's phase 6 deliverables.
+Recorded because phase 6 has not been built and a single boolean is the obvious thing to reach for.
+
+The plan says contact fields "carry a PII marker so a suppressed view can be served", mirroring "the
+`NoContactData` and `NoPII` packages the business sells". ADR 008 says the same. Read on its own that
+implies one flag on the contact fields.
+
+The business context is more specific, and the names are different:
+
+- **`Core-NoContactData`** strips email addresses and phone numbers. That is it.
+- **`Core-NoPII`** strips **nationality, gender, date of birth, age, deceased date, diversity,
+  residence, hometown, personal email and personal phone.**
+
+So the two sets are neither equal nor nested in the obvious direction. `Core-NoPII` reaches identity
+attributes that are not contact data at all (nationality, gender, date of birth, age, deceased date,
+hometown) and reaches only the *personal* email and phone, while `Core-NoContactData` takes every
+email and phone including the business ones. Neither is a subset of the other.
+
+**What that means for the contract.** A single `pii: bool` marker on the contact fields cannot serve
+either package correctly. It would over-strip a `Core-NoContactData` view by hiding date of birth,
+and under-strip a `Core-NoPII` view by leaving nationality and gender in. Phase 6 needs the
+membership modelled per field and per package, and phase 6 acceptance 7 ("a profile served with
+contact data suppressed carries none of its contact fields") should be read as one of two views
+rather than the only one.
+
+**Two more facts from the same source worth carrying into the contract:**
+
+- **Personal address is its own table and the platform shows up to fifty personal addresses on a
+  profile.** So addresses are a collection with a cap, not a field, and the dated-series rule from
+  ADR 006 applies to them the same way it applies to locations.
+- **The exact tier vocabulary, which is fixed and must not be paraphrased:** HNW (over $1m excluding
+  primary residence), VHNW ($5m to $30m), UHNW (over $30m), plus two that are ours rather than the
+  industry's, **Likely VHNW** ($2m to $5m on an incomplete valuation) and **Likely UHNW** (a single
+  asset of $5m or more, or total assets of $20m to $29.9m, on an incomplete valuation). One tier per
+  profile, higher wins, so a profile that is both Confirmed VHNW and Likely UHNW displays as Likely
+  UHNW.
+  **One inconsistency to flag rather than resolve:** HNW starts at $1m and Likely VHNW covers $2m to
+  $5m, so a $3m incomplete valuation satisfies both definitions. The higher-wins rule settles the
+  display, but the thresholds themselves overlap in the source. Not ours to change, worth knowing
+  before someone writes a classifier and finds the bands do not partition.
 
 ---
 
@@ -224,7 +305,7 @@ that probably deserves its own ADR rather than a line in a gotchas list.
 
 ---
 
-## U1 update: the FAA registry holds no LADD data, and a different privacy programme was mistaken for it
+## U1 update: the FAA registry holds no LADD data (true, and not the point: the feed does), and a different privacy programme was mistaken for it
 
 **Found:** 2026-08-20, aviation registry recon, measured on the real 316,030-row MASTER.txt.
 
@@ -315,3 +396,146 @@ two of the three registries. It needs Alexander Fanthome's decision. Until it la
 reports both hosts as blocked and builds the CCARCS path, which needs no workaround.
 
 **Do not write this into an ADR.** ADRs record his decisions, not ours.
+
+---
+
+### Decided 2026-08-20 by Alexander Fanthome: use cloudscraper for the bot-filter blocks
+
+He said, verbatim: "if you're struggling to get web pages, use cloudscraper with astral uv, it's
+what we use in other projects to download pages". The decision stands and `cloudscraper` is
+what phase 5's registry fetcher will use. It is **not** declared in `pyproject.toml` yet: it was
+declared ahead of any call site, where it pulled in requests, urllib3, charset-normalizer,
+pyparsing and requests-toolbelt, so a project whose HTTP stack is httpx shipped a second HTTP
+stack with nothing behind it. It lands in the change that first imports it.
+
+**This settles U3 for the FAA and CASA, and it does not settle everything.** The distinction is
+whether the block is a bot filter or a stated directive from the provider, and the two are not the
+same thing.
+
+**Where cloudscraper applies.**
+
+- **FAA `registry.faa.gov`.** The 403 comes from Akamai and hits `robots.txt` itself, while the
+  FAA's own `robots.txt` **permits the download path**. So the provider allows the fetch and its CDN
+  refuses the User-Agent. The data is public domain, published for download. Presenting a browser
+  header set to get the file the provider says we may have is closing a gap between two of their own
+  systems, not going round a decision they made.
+- **CASA `services.casa.gov.au`.** Same shape. It hangs to timeout on a descriptive User-Agent and
+  answers on a full browser header set. Nothing states a prohibition.
+- **adsb.one.** Cloudflare-blocked, which is what cloudscraper exists for, and no stated
+  prohibition. It stays a candidate provider rather than a dead one.
+
+**Where it must not be used, and this is the part worth holding.**
+
+- **airplanes.live.** Its 403 is not a bot filter. It is the provider saying "email us a description
+  of your project" and telling us exactly how to get in. Defeating that with a browser header set
+  goes round a decision a human made and told us about. The route in is the email, which nobody has
+  sent.
+- **ADS-B Exchange's globe map.** `/data/aircraft.json` and `/re-api/` answer 403 "Request forbidden
+  by administrative rules", `robots.txt` disallows those paths **by name**, and the provider's terms
+  prohibit redistribution while serving positions to a browser is redistribution. Three independent
+  reasons, none of them a User-Agent problem. ADR 010 already calls this settled twice over and says
+  anyone finding a way round the 403 is working against both a technical control and a stated
+  directive. cloudscraper changes nothing here.
+
+**The rule this leaves in AGENTS.md.** "Honour `robots.txt`, published crawl delays and stated
+request caps in code" stands unchanged. What is now explicit is that a CDN User-Agent filter is not
+a stated directive, and that where `robots.txt` permits a path the CDN refuses, the `robots.txt`
+governs. Where a provider states a route in, that route is the route in.
+
+**Still open under U3:** nothing on the FAA or CASA side. The rate discipline still applies: the FAA
+zip refreshes daily at 23:30 US central, so the fetch is conditional on `Last-Modified` and runs
+once a day at most, cloudscraper or not.
+
+---
+
+## U4: three plan claims the live recon disproved, one of them a licence blocker on phase 12
+
+**Found:** 2026-08-19 and 2026-08-20, during the live source recon. Recorded here because each one
+sits in a phase not yet built, so the correction has nowhere else to live until then.
+
+### ProPublica does not give trustees, and phase 6 assumes it does
+
+`docs/plan/implementation-plan.md` lists ProPublica Nonprofit Explorer under phase 6 for "trustees,
+foundation assets", and the ADR 011 corroboration design counts it as a source of people.
+
+Verified against the live API with all 168 response keys enumerated: **there is no trustee, officer
+or director name field anywhere in it.** Assets yes, people no. So ProPublica is a source of
+organisation financials and not a source of person records, and phase 6 loses one of its four
+public profile sources before it starts.
+
+That matters for corroboration rather than just for coverage. ADR 011 says a single scraped or
+crowd-sourced source never crosses the assertion threshold alone, and primary records may. Dropping
+ProPublica from the people side removes one of the few primary records that could have corroborated
+a trusteeship, so phase 6 should not be planned on the assumption it is there.
+
+### Wikipedia REST has no geosearch, and phase 7 assumes it does
+
+The plan's phase 7 deliverables include a "Wikipedia geosearch nearby panel for the current view".
+Geosearch is not in the Wikipedia REST API at all. It exists on the MediaWiki **action** API, which
+is a different interface with different error semantics: an error arrives as an `error` key inside a
+200 body, `formatversion=2` is mandatory in practice, and `gsradius` is capped at 10 to 10,000
+metres so a wide-area search has to be tiled. Also worth correcting in the same pass: the API
+declares **CC BY-SA 3.0 and GFDL**, not the CC BY-SA 4.0 the plan and the attribution table claim.
+
+### adsbdb's flight-route licence blocks what ADR 012 wants
+
+This is the one that needs a decision rather than a correction.
+
+adsbdb is already in the tree as the phase 3 registry lookup. Its **flight-route data may not be
+copied, published or incorporated into another database.** The aircraft half carries no licence
+statement at all.
+
+ADR 012's occupancy estimator draws on "the live transponder or AIS track and the current origin and
+destination pair". The origin and destination pair is exactly the route data, and storing it so the
+estimator can reason over it is incorporating it into another database. So either:
+
+- the route pair comes out of the phase 12 evidence set, and the estimator loses one of its named
+  inputs, or
+- another source supplies the route pair on terms that permit storage, and it gets its own
+  `docs/data-sources.md` row with a verification date, or
+- the route is read at request time and never stored, which is a weaker version of the same claim
+  and needs checking against the same licence text rather than assumed to be permitted.
+
+Nobody has picked one. Phase 12 is a long way off, but ADR 012 names the input, so this should be
+settled before the estimator is designed rather than discovered while building it.
+
+**Two smaller facts worth carrying, both measured:** adsbdb misses about **19% of real aircraft**
+(3 of 16 genuine aircraft in this repo's own live fixture do not resolve) and a 404 is normal
+operation rather than a fault, so the enrichment path must treat a miss as an answer. Its airport
+`elevation` is in **feet** with nothing in the payload saying so.
+
+---
+
+## U6: the LADD flag is one non-primary source, and nothing says how to label it
+
+**Found:** 2026-08-20, closing out phase 3. Recorded rather than answered: it is a labelling
+decision for phase 6, not a phase 3 defect, and no code is waiting on it.
+
+`on_ladd` reaches the aircraft contract from `dbFlags & 8` and the source is verified:
+adsb.lol's `/v2/ladd` returned 357 aircraft on 2026-08-20 and every one carried bit 8. U1
+CLOSED above settles where the flag comes from, and ADR 009 settles that we carry it as an
+attribute rather than applying it as a suppression. Neither settles how it should be
+**labelled** once phase 6's corroboration service starts putting confidence on a card.
+
+What the flag actually is: **the aggregator's copy of the FAA list, not the FAA list.**
+adsb.lol derived it from the FAA's `IndustryLADD` publication and serves it as a field on its
+own aircraft database, over a volunteer receiver network. Under ADR 011 that is a single
+non-primary source, and ADR 011 says a single scraped or crowd-sourced source never crosses
+the assertion threshold on its own: it is shown as unconfirmed with its score and excluded
+from every aggregate. There is no second origin to be had, because the only route to the FAA
+list itself binds the subscriber to hide the aircraft.
+
+The two readings:
+
+- **Asserted.** It is a field on a database a provider publishes about an aircraft, the same
+  class of thing as the registration and the type designator this project already takes off
+  the same feed and displays with no corroboration count. On this reading ADR 011 governs
+  claims about people rather than provider database fields, and a card says "on the FAA LADD
+  programme" flat.
+- **Unconfirmed, with its score.** LADD membership is a fact about the owner, which is the
+  reason ADR 009 wants it on a wealth profile at all, so it is a person-attached claim and
+  ADR 011's threshold applies. On this reading a card says one source reports it, and it stays
+  out of any count of LADD-listed owners.
+
+Whoever settles it settles the same question for `uses_privacy_address` and for every other
+provider database flag ADR 009 leans on, so it is worth deciding once rather than per field.
