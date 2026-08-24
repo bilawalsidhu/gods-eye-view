@@ -143,7 +143,28 @@ Camera.prototype.rotate = function guardedRotate(
   rotateAboutAxis.call(this, axis, angle);
 };
 
-const GIBS_LAYER = 'VIIRS_SNPP_CorrectedReflectance_TrueColor';
+/**
+ * The basemap layer, and it is **cloud free on purpose**.
+ *
+ * This was `VIIRS_SNPP_CorrectedReflectance_TrueColor`, yesterday's true-colour mosaic, which
+ * has the weather baked into it. With a live cloud layer drawn on top of it, every cloud on
+ * screen was drawn twice: once as whatever the spacecraft saw yesterday and once as today's
+ * infrared, in different places, and neither could be switched off without the other. Turning
+ * the Clouds switch off left yesterday's clouds behind, which is the opposite of what a switch
+ * called Clouds should do.
+ *
+ * Blue Marble is a composite with the cloud removed by construction, so the basemap is now the
+ * ground and the cloud layer is the weather. Alexander Fanthome asked for this on 2026-08-24.
+ *
+ * The costs, both real and both accepted. It is a **static** product rather than a dated pass,
+ * so the globe no longer shows what the earth looked like yesterday, and it is 500m where VIIRS
+ * is 250m. Neither shows at the zooms this draws: both products cap at level 8 in their matrix
+ * sets, so the resolution on screen is identical.
+ *
+ * Verified 2026-08-24: it serves keyless, and it publishes **only** in
+ * `GoogleMapsCompatible_Level8`, where `GoogleMapsCompatible_Level9` answers HTTP 400.
+ */
+const GIBS_LAYER = 'BlueMarble_ShadedRelief_Bathymetry';
 
 /**
  * The braced names left in are Cesium's own placeholders and it fills them in per tile.
@@ -155,29 +176,21 @@ const GIBS_LAYER = 'VIIRS_SNPP_CorrectedReflectance_TrueColor';
 const GIBS_URL =
   'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/' +
   GIBS_LAYER +
-  '/default/{Time}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.jpg';
+  '/default/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.jpg';
 
-const GIBS_TILE_MATRIX_SET = 'GoogleMapsCompatible_Level9';
+const GIBS_TILE_MATRIX_SET = 'GoogleMapsCompatible_Level8';
 
+/** Level 8 is the deepest this matrix set publishes: level 9 answers HTTP 400. */
 const GIBS_MAXIMUM_LEVEL = 8;
-/** Level 9 is the deepest this matrix set publishes, and level indices are zero-based. */
 
 /**
- * The date whose imagery to request, as `YYYY-MM-DD` in UTC.
+ * NASA GIBS Blue Marble. No Cesium ion token and no API key of any kind.
  *
- * Yesterday, not today. GIBS builds a day's mosaic as the satellite passes land, so a
- * request for the current date returns black gaps over everywhere the spacecraft has not
- * reached yet, which reads as a broken globe rather than as missing data.
+ * No `Time` dimension, because the product is static. GIBS accepts a date on it and returns a
+ * byte-identical tile, which is worse than not sending one: it reads as dated imagery to
+ * anyone who looks at the request.
  */
-export function imageryDate(now: Date = new Date()): string {
-  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  return yesterday.toISOString().slice(0, 10);
-}
-
-/**
- * NASA GIBS true-colour imagery. No Cesium ion token and no API key of any kind.
- */
-export function gibsImagery(date: string = imageryDate()): WebMapTileServiceImageryProvider {
+export function gibsImagery(): WebMapTileServiceImageryProvider {
   return new WebMapTileServiceImageryProvider({
     url: GIBS_URL,
     layer: GIBS_LAYER,
@@ -189,7 +202,6 @@ export function gibsImagery(date: string = imageryDate()): WebMapTileServiceImag
     // Web Mercator has no imagery beyond about 85 degrees, so asking for the poles just
     // produces failed tile requests.
     rectangle: Rectangle.fromDegrees(-180, -85, 180, 85),
-    dimensions: { Time: date },
     credit: new Credit(GIBS_CREDIT_TEXT),
     enablePickFeatures: false,
   });

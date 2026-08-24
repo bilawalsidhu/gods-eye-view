@@ -94,7 +94,7 @@ export const GIBS_CREDIT_TEXT = 'Imagery courtesy of NASA EOSDIS GIBS';
  * The cloud layer's credit, which names the satellites rather than only the service.
  *
  * Its own string rather than a second use of the basemap's, because it is not the same
- * imagery and saying so is the point of a credit. The basemap is NASA's own VIIRS mosaic;
+ * imagery and saying so is the point of a credit. The basemap is NASA's cloud-free Blue Marble composite;
  * the clouds are NOAA's two GOES spacecraft and JMA's Himawari, reprojected and published by
  * GIBS. `globe/layers/clouds.ts` hands this to Cesium for all three sheets, and Cesium shows
  * one line for three identical credits.

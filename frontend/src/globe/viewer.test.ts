@@ -15,13 +15,7 @@
 import { Camera, Cartesian3, Quaternion } from 'cesium';
 import { describe, expect, it } from 'vitest';
 
-import {
-  MAX_RENDER_RECOVERIES,
-  imageryDate,
-  isDegenerateAxis,
-  isUsablePose,
-  shouldRestartLoop,
-} from './viewer';
+import { MAX_RENDER_RECOVERIES, isDegenerateAxis, isUsablePose, shouldRestartLoop } from './viewer';
 
 /**
  * Just what `Camera.prototype.rotate` touches on its receiver: four vectors, one default, and one
@@ -177,15 +171,5 @@ describe('the recovery budget', () => {
     // tab is worse than a stopped one.
     expect(MAX_RENDER_RECOVERIES).toBeGreaterThan(0);
     expect(MAX_RENDER_RECOVERIES).toBeLessThanOrEqual(5);
-  });
-});
-
-describe('imageryDate', () => {
-  it('asks for yesterday, because today has black gaps where the satellite has not passed', () => {
-    expect(imageryDate(new Date('2026-08-23T09:00:00Z'))).toBe('2026-08-22');
-  });
-
-  it('crosses a month boundary backwards', () => {
-    expect(imageryDate(new Date('2026-03-01T00:30:00Z'))).toBe('2026-02-28');
   });
 });
