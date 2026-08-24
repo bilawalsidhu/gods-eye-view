@@ -20,7 +20,13 @@ frontend/.vite/
 .env.local
 
 # Tooling state
+.playwright-mcp/
 .omc/
 .remember/
 .codegraph/
 .DS_Store
+
+# Local data cache: the GeoNames dump and its ETag, and upstream.sqlite3, which is where
+# response caches and rate-limit floors survive a restart. Both are settings, so a deployment
+# may point them elsewhere; this covers the defaults.
+.cache/

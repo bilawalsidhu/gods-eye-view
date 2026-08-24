@@ -67,7 +67,12 @@ export default defineConfig({
       },
     ],
   },
-  server: { port: 5173, proxy },
+  // `watch.ignored` because vite's watcher does not read `.gitignore`, and `pnpm verify`
+  // writes an lcov HTML report of roughly forty files into `coverage/`. Running the gate with
+  // the dev server up therefore full-page-reloaded the app once per file written, which reads
+  // as the globe flickering and losing its camera rather than as a watcher misconfiguration.
+  // Measured 2026-08-24. `coverage/` is gitignored, so nothing here is a source file.
+  server: { port: 5173, proxy, watch: { ignored: ['**/coverage/**'] } },
   // The built bundle needs the same origin for the API as it has in production, or
   // `pnpm preview` is testing something the deployment never does.
   preview: { port: 4173, proxy },
@@ -93,8 +98,18 @@ export default defineConfig({
         // A test fixture, not shipped code.
         'src/testing/**',
         'src/**/*.test.ts',
-        // Bootstrap wiring: constructions and subscriptions with no branches of its own.
-        // Covered end to end by e2e/smoke.spec.ts, which fails if any of it is wrong.
+        // Bootstrap wiring. Excluded because it builds a real Cesium viewer, which needs a
+        // WebGL context, and because its last statement is a top-level await. What covers it
+        // is e2e/smoke.spec.ts, against the built bundle in a real browser: a mover on the
+        // globe and its card, a shared URL restoring the camera and the layer switches, the
+        // Cities switch and the URL, the search box painting a row and flying the camera,
+        // follow mode holding a moving aircraft, and a failed gazetteer read on the rail.
+        // Each of those was mutation-tested on 2026-08-20 by breaking the line it asserts.
+        // Two things in here are not browser-observable and so are not covered by that suite:
+        // whether follow mode is engaged (only its effect is), and whether the city labels
+        // actually left the globe when the switch moved. Cesium primitives are not in the DOM
+        // and the canvas pixels are not stable enough to carry either. globe/follow.test.ts
+        // and globe/layers/cities.test.ts carry them.
         'src/main.ts',
         // Builds a real Cesium Viewer, which needs a WebGL context. Also covered by the
         // Playwright suite, which renders the actual globe.
@@ -124,12 +139,25 @@ export default defineConfig({
        * at 100 per cent of lines. What still holds the total down is the three classes that
        * paint the DOM, AttributionPanel, StatusBanner and the two cards, whose rendering needs
        * a real document and is covered by the Playwright suite in e2e/ instead.
+       *
+       * Raised again in phase 4. The suite measures 87.7 statements, 86.4 branches, 87.2
+       * functions and 87.7 lines, with the city layer, the search box, the fly-to, follow
+       * mode and the URL state all landing at or near 100 per cent. Set a point and a half
+       * under that rather than on it: the same four DOM-painting classes still hold the
+       * total down and they are what a later phase will lift.
+       *
+       * Raised again with the credits menu. Two of those four DOM-painting classes are no
+       * longer holding anything down: AttributionPanel and StatusBanner are painted against
+       * a fake element here, the way the layer rail already was, so the menu's fallback to
+       * the baseline credits and the collapsed banner's wording are both asserted rather
+       * than left to the browser suite. The suite now measures 90.5 statements, 87.5
+       * branches, 90.3 functions and 90.5 lines. The two cards are what is left.
        */
       thresholds: {
-        lines: 82,
-        functions: 82,
-        branches: 81,
-        statements: 82,
+        lines: 89,
+        functions: 89,
+        branches: 86,
+        statements: 89,
         perFile: false,
       },
     },

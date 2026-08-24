@@ -12,6 +12,17 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "websockets>=14.0",
     "orjson>=3.10",
+    "cloudscraper>=1.2.71",
+    # GTFS-Realtime is protocol buffers, so the transit layer cannot be parsed with anything
+    # already here. The official bindings rather than a hand-rolled decoder, for a measured
+    # reason: a hand-rolled version written on 2026-08-23 reported 3,476 vehicles against the
+    # bindings' 16,535, because `TripDescriptor` does not number its fields in declaration
+    # order. It threw rather than lying, which was luck. Apache 2.0, 11KB wheel.
+    "gtfs-realtime-bindings>=1.0",
+    # Pinned with an upper bound of our own, because gtfs-realtime-bindings declares protobuf
+    # with none at all, and a major protobuf release would otherwise arrive unannounced in a
+    # transitive dependency of a layer nobody was touching.
+    "protobuf>=5.27,<7",
 ]
 
 [project.scripts]

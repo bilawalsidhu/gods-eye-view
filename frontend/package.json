@@ -37,6 +37,7 @@
     "eslint-plugin-regexp": "^3.2.0",
     "eslint-plugin-unicorn": "^73.0.0",
     "html-validate": "^11.8.0",
+    "jsdom": "27.4.0",
     "openapi-typescript": "^7.9.1",
     "typescript": "6.0.3",
     "typescript-eslint": "^8.67.0",

@@ -22,6 +22,7 @@
       "!playwright-report",
       "!test-results",
       "!.omc",
+      "!.remember",
       "!src/types/api.d.ts",
       "!pnpm-lock.yaml"
     ]
