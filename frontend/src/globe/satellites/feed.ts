@@ -135,6 +135,25 @@ export class SatelliteFeed {
     return this.current;
   }
 
+  /**
+   * The element set held for one catalogue number, or null when nothing is held for it.
+   *
+   * A read accessor over `held` rather than a getter that hands the map out. The map is
+   * mutable and the card layer has no business writing to the element cache, so what crosses
+   * the boundary is one record and never the container.
+   *
+   * It lives here rather than in `main.ts` because this map is the only place the socket's
+   * snapshots, upserts and removals are reconciled into the whole set. A second copy kept
+   * beside it would be correct until the first frame of socket traffic and stale from then
+   * on, and stale here means a card naming an object that CelesTrak has stopped serving.
+   *
+   * Null rather than undefined so the caller has one absent value to test, matching how
+   * every other lookup in this app answers.
+   */
+  elementsFor(noradCatId: number): Satellite | null {
+    return this.held.get(noradCatId) ?? null;
+  }
+
   /** Hand the worker a fresh element cache. Replaces whatever it held. */
   load(records: readonly Satellite[]): void {
     this.held.clear();

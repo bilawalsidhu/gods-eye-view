@@ -12,11 +12,95 @@ import {
   navStatusText,
   speedText,
   vesselFixAgeSeconds,
+  vesselIconFill,
+  vesselIconShape,
 } from './vessel-card';
+import { STOPPED_COLOUR, UNDER_WAY_COLOUR } from '../globe/layers/vessels';
 // The bearing wording is one function for both cards: an aircraft's track and a vessel's
 // course are the same measurement, so this is the shared one being exercised on vessel data.
 import { ageSeverity, bearingText } from './card';
 import { makeVessel } from '../testing/vessel';
+import type { Vessel } from '../domain/vessel';
+
+/**
+ * The one card icon that carries a state rather than labelling a type.
+ *
+ * Asserted against the layer's own constants rather than against hex strings, because the point
+ * of importing them is that the card and the globe answer the same for the same ship.
+ */
+/** A vessel with `course_over_ground_deg` genuinely absent rather than set to undefined. */
+function withoutCourse(): Vessel {
+  const record: Record<string, unknown> = { ...makeVessel() };
+  delete record['course_over_ground_deg'];
+  return record as unknown as Vessel;
+}
+
+describe('vesselIconShape', () => {
+  it('draws a hull when a course over ground was reported', () => {
+    expect(vesselIconShape(makeVessel({ course_over_ground_deg: 187.4 }))).toBe('ship');
+    // `cog` legitimately reads 0.0, which is why 360.0 is the provider's not-available value.
+    expect(vesselIconShape(makeVessel({ course_over_ground_deg: 0 }))).toBe('ship');
+  });
+
+  it('refuses to draw a bow direction for a ship that reported no course', () => {
+    // 110 of 1,058 live records sent the 360.0 not-available course, which the adapter maps to
+    // null. Pointing a hull somewhere on the strength of a sentinel is inventing a course.
+    expect(vesselIconShape(makeVessel({ course_over_ground_deg: null }))).toBe('block');
+  });
+
+  it('refuses it just as firmly when the server omitted the field altogether', () => {
+    // The field is optional in the generated contract, so absent and null both arrive, and
+    // `exactOptionalPropertyTypes` will not let the second be written as an explicit undefined.
+    expect(vesselIconShape(withoutCourse())).toBe('block');
+  });
+
+  it('agrees with the globe about the same record', () => {
+    // `layers/vessels.ts` branches on `record.course_over_ground_deg ?? null` for exactly this.
+    const steering = makeVessel({ course_over_ground_deg: 90 });
+    const adrift = makeVessel({ course_over_ground_deg: null });
+
+    expect(vesselIconShape(steering)).not.toBe(vesselIconShape(adrift));
+  });
+});
+
+describe('vesselIconFill', () => {
+  it('paints a moving ship in the globe under-way colour', () => {
+    const moving = makeVessel({ speed_over_ground_mps: 6.2, course_over_ground_deg: 187.4 });
+
+    expect(vesselIconFill(moving)).toBe(UNDER_WAY_COLOUR);
+  });
+
+  it('paints a stopped ship in the globe stopped colour', () => {
+    const moored = makeVessel({ speed_over_ground_mps: 0, course_over_ground_deg: 187.4 });
+
+    expect(vesselIconFill(moored)).toBe(STOPPED_COLOUR);
+  });
+
+  it('treats a ship with no reported course as stopped, because it cannot be tracked', () => {
+    // 110 of 1,058 live records sent the 360.0 not-available course, which the adapter maps to
+    // null. Dead reckoning has nothing to extrapolate along, so the globe holds it still and
+    // the card says the same.
+    const noCourse = makeVessel({ speed_over_ground_mps: 6.2, course_over_ground_deg: null });
+
+    expect(vesselIconFill(noCourse)).toBe(STOPPED_COLOUR);
+  });
+
+  it('believes the speed over the broadcast status, the way the globe does', () => {
+    // A ship set to "moored" and making six knots is a ship that is moving. The status is typed
+    // in by the master; the speed is a measurement.
+    const movingButMoored = makeVessel({
+      speed_over_ground_mps: 6.2,
+      course_over_ground_deg: 12,
+      navigational_status: 'moored',
+    });
+
+    expect(vesselIconFill(movingButMoored)).toBe(UNDER_WAY_COLOUR);
+  });
+
+  it('gives the two states different colours, or the icon would say nothing', () => {
+    expect(UNDER_WAY_COLOUR).not.toBe(STOPPED_COLOUR);
+  });
+});
 
 describe('speedText', () => {
   it('leads with knots, because that is the unit AIS and the bridge both use', () => {

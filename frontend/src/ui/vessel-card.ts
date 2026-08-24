@@ -26,18 +26,27 @@
  * its root's markup, so two of them on one element leaves the first holding detached nodes.
  */
 
+import { FOLLOW_HINT } from '../globe/follow';
+// The two state colours the globe already paints a hull in, imported rather than restated. A
+// colour is a shared design token and a second copy of one drifts the moment either moves, so
+// this is the card and the globe reading the same constant. It costs no bundle weight: the
+// layer is already in the main bundle through `main.ts`.
+import type { IconShape } from '../globe/icons';
+import { STOPPED_COLOUR, UNDER_WAY_COLOUR } from '../globe/layers/vessels';
 import { store } from '../state/store';
 import type { TrackedVessel } from '../state/store';
-import { flagMid, shipTypeLabel, vesselLabel } from '../domain/vessel';
+import { flagMid, isUnderWay, shipTypeLabel, vesselLabel } from '../domain/vessel';
 import type { Vessel } from '../domain/vessel';
 import {
   ABSENT,
   MPS_TO_KNOTS,
   ageSeverity,
   bearingText,
+  cardIconElement,
   creditFor,
   formatAge,
   mustFind,
+  paintCardIcon,
   rows,
 } from './card';
 import type { AttributionEntry } from '../types/entities';
@@ -133,6 +142,40 @@ export function etaText(eta: Vessel['eta']): string {
   return `${String(eta.day)} ${month}, ${time} (no year broadcast)`;
 }
 
+/**
+ * The hull colour for one vessel: the globe's own two state colours, and no third one.
+ *
+ * A function rather than an expression at the call site, so the mapping can be asserted
+ * without a document. It is the one card icon that encodes a state rather than labelling a
+ * type, which makes it the one worth testing on its own: if this flattened to a single hue,
+ * every card would look the same and nothing would fail.
+ *
+ * `isUnderWay` reads the speed and the course rather than the broadcast navigational status,
+ * for the reason `domain/vessel.ts` gives: the status is typed in by the master and the speed
+ * is a measurement. So a ship set to "moored" and making way reads as under way here, which is
+ * the same answer the globe gives for the same ship.
+ */
+export function vesselIconFill(vessel: Vessel): string {
+  return isUnderWay(vessel) ? UNDER_WAY_COLOUR : STOPPED_COLOUR;
+}
+
+/**
+ * The silhouette for one vessel, mirroring what the globe draws for the same record.
+ *
+ * `block` when no course over ground was reported, `ship` when one was, keyed on the same field
+ * the layer keys on (`layers/vessels.ts` reads `record.course_over_ground_deg ?? null`), so the
+ * card and the globe never show two different shapes for one ship.
+ *
+ * Not a rotation question. The hull is a directional shape whether or not a transform is
+ * applied, and 110 of 1,058 live records carry the 360.0 not-available course that the adapter
+ * maps to null, so drawing a bow direction for those would be inventing a course from a
+ * sentinel. The course itself is stated to the degree in the Course over ground row.
+ */
+export function vesselIconShape(vessel: Vessel): IconShape {
+  const course = vessel.course_over_ground_deg;
+  return course === null || course === undefined ? 'block' : 'ship';
+}
+
 export interface VesselCardOptions {
   onClose: () => void;
 }
@@ -140,6 +183,7 @@ export interface VesselCardOptions {
 export class VesselCard {
   private readonly title: HTMLElement;
   private readonly subtitle: HTMLElement;
+  private readonly icon: HTMLElement;
   private readonly age: HTMLElement;
   private readonly fields: HTMLElement;
   private readonly credit: HTMLElement;
@@ -156,18 +200,26 @@ export class VesselCard {
     root.setAttribute('aria-label', 'Selected vessel');
     root.innerHTML = `
       <header class="card-head">
-        <div>
-          <h2 class="card-title"></h2>
-          <p class="card-subtitle"></p>
+        <div class="card-identity">
+          <div class="card-headings">
+            <h2 class="card-title"></h2>
+            <p class="card-subtitle"></p>
+          </div>
         </div>
         <button type="button" class="card-close" aria-label="Close card, Escape">Close</button>
       </header>
+      <p class="card-hint"></p>
       <p class="card-age" aria-live="polite"></p>
       <dl class="card-fields"></dl>
       <footer class="card-credit"></footer>`;
 
     this.title = mustFind(root, '.card-title');
     this.subtitle = mustFind(root, '.card-subtitle');
+    // Built here rather than written into the template above, so the element never exists
+    // without a `src` on it. `show` paints it before the card is ever unhidden.
+    this.icon = cardIconElement();
+    mustFind(root, '.card-identity').prepend(this.icon);
+    mustFind(root, '.card-hint').textContent = FOLLOW_HINT;
     this.age = mustFind(root, '.card-age');
     this.fields = mustFind(root, '.card-fields');
     this.credit = mustFind(root, '.card-credit');
@@ -202,6 +254,12 @@ export class VesselCard {
 
     this.root.hidden = false;
     this.title.textContent = vesselLabel(record);
+    // The globe's own two state colours, so a moored ship reads moored on the card as well.
+    // It is a state rather than a label, so it gets the same care as the text: the
+    // navigational status and the speed are both rows below, and neither depends on the hue.
+    // The shape mirrors the globe too, including its refusal to draw a bow direction for a
+    // ship that reported no course.
+    paintCardIcon(this.icon, vesselIconShape(record), vesselIconFill(record));
     this.subtitle.textContent = [
       shipTypeLabel(record.ship_type) ?? 'type unknown',
       `MMSI ${record.mmsi}`,

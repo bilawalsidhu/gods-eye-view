@@ -8,6 +8,7 @@ import {
   parseServerMessage,
 } from './ws';
 import type { Batch } from './ws';
+import type { TransitVehicle } from '../types/entities';
 import { makeAircraft } from '../testing/aircraft';
 import { makeSatellite } from '../testing/satellite';
 import { makeVessel } from '../testing/vessel';
@@ -407,5 +408,96 @@ describe('parseServerMessage', () => {
     expect(parseServerMessage('not json')).toBeNull();
     expect(parseServerMessage('null')).toBeNull();
     expect(parseServerMessage('{"type":"something_new"}')).toBeNull();
+  });
+});
+
+/**
+ * A transit vehicle, built here rather than in `src/testing/`.
+ *
+ * These two tests are the only thing in the suite that needs one, and a fixture module is a
+ * shared file. Shaped by the generated contract, so a required field added to the backend breaks
+ * this rather than passing with a hole in it.
+ */
+function makeTransit(overrides: Partial<TransitVehicle> = {}): TransitVehicle {
+  return {
+    kind: 'transit',
+    feed_id: 'mta-nyct',
+    entity_id: 'MTA NYCT_1234',
+    country: 'US',
+    licence: 'CC BY 4.0',
+    source: 'mta-nyct',
+    observed_at: '2026-08-23T12:00:00Z',
+    position_age_s: 4,
+    // The feed's own clock rather than the vehicle's. Both are real values in the contract and
+    // which one a record carries is a fact about the agency, not a default.
+    timestamp_basis: 'feed',
+    point: { lon: -73.9857, lat: 40.7484, altitude_m: null },
+    bearing: 187.4,
+    ...overrides,
+  };
+}
+
+/**
+ * The one thing `ws.ts` restates rather than imports.
+ *
+ * `transitId` there and `transitKey` in `globe/layers/transit.ts` have to produce the same string,
+ * or a removal off the socket names a vehicle the globe does not have. Every removal would miss
+ * its slot and the layer would grow for the life of the tab with nothing erroring. The copy exists
+ * because transport must not depend on a renderer, which would drag Cesium into the socket client;
+ * this test is what makes the copy safe.
+ */
+describe('the transit key', () => {
+  it('matches the key the layer slots vehicles under', async () => {
+    // Imported here rather than at the top of the file: this module pulls Cesium in, and only
+    // these two tests need it.
+    const { transitKey } = await import('../globe/layers/transit');
+    const vehicle = makeTransit();
+    const { applied, queued, batcher } = harness();
+
+    batcher.push({
+      type: 'upsert',
+      layer: 'transit',
+      entities: [vehicle],
+      server_time: '2026-08-23T12:00:00Z',
+    });
+    queued[0]?.();
+
+    expect([...(applied[0]?.transit.upserts.keys() ?? [])]).toEqual([transitKey(vehicle)]);
+  });
+
+  it('separates on a tab, so two ids containing a colon cannot collide', () => {
+    // The mistake this catches, found while writing it: a colon separator folds these two
+    // different vehicles into one key, `a:b:c`, and one silently replaces the other.
+    const { applied, queued, batcher } = harness();
+
+    batcher.push({
+      type: 'upsert',
+      layer: 'transit',
+      entities: [
+        makeTransit({ feed_id: 'a', entity_id: 'b:c' }),
+        makeTransit({ feed_id: 'a:b', entity_id: 'c' }),
+      ],
+      server_time: '2026-08-23T12:00:00Z',
+    });
+    queued[0]?.();
+
+    expect(applied[0]?.transit.upserts.size).toBe(2);
+  });
+
+  it('counts a transit frame rather than ignoring it', () => {
+    // Before this layer was wired the socket dropped these into `ignored`, so a snapshot of five
+    // thousand vehicles arrived and vanished. This is the assertion that it reaches a layer.
+    const { applied, queued, batcher } = harness();
+
+    batcher.push({
+      type: 'snapshot',
+      layer: 'transit',
+      entities: [makeTransit()],
+      server_time: '2026-08-23T12:00:00Z',
+    });
+    queued[0]?.();
+
+    expect(applied[0]?.ignored).toBe(0);
+    expect(applied[0]?.transit.snapshots.get('transit')).toHaveLength(1);
   });
 });

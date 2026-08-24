@@ -19,10 +19,18 @@
  * vessel keyed as an aircraft is a garbage pin and a satellite carries no position at all.
  */
 
-import type { Aircraft, FeedHealth, LayerName, Satellite, Vessel } from '../types/entities';
+import { transitKey } from '../domain/transit';
+import type {
+  Aircraft,
+  FeedHealth,
+  LayerName,
+  Satellite,
+  TransitVehicle,
+  Vessel,
+} from '../types/entities';
 
 /** The entity union, exactly as `contracts/messages.py` declares it. */
-export type Entity = Aircraft | Vessel | Satellite;
+export type Entity = Aircraft | Vessel | Satellite | TransitVehicle;
 
 export interface SnapshotMessage {
   type: 'snapshot';
@@ -75,6 +83,16 @@ export interface Batch {
   aircraft: Changes<Aircraft>;
   vessels: Changes<Vessel>;
   satellites: Changes<Satellite>;
+  /**
+   * Transit vehicles, keyed on feed and entity together rather than on one identifier.
+   *
+   * Every other layer here has a global identity to key on: an ICAO address, an MMSI, a NORAD
+   * catalogue number. A GTFS-realtime entity id is unique only inside its own feed, so two
+   * agencies can both run a vehicle "1", and keying on the id alone would have one operator's
+   * bus overwrite another's. `transitKey` in `domain/transit.ts` is the composite and the wire id
+   * is that same composite.
+   */
+  transit: Changes<TransitVehicle>;
   feeds: FeedHealth[] | null;
   /**
    * Frames and entities this build could not route, counted rather than dropped silently.
@@ -96,6 +114,7 @@ export function emptyBatch(): Batch {
     aircraft: emptyChanges(),
     vessels: emptyChanges(),
     satellites: emptyChanges(),
+    transit: emptyChanges(),
     feeds: null,
     ignored: 0,
   };
@@ -110,6 +129,7 @@ function isEmpty(batch: Batch): boolean {
     changesEmpty(batch.aircraft) &&
     changesEmpty(batch.vessels) &&
     changesEmpty(batch.satellites) &&
+    changesEmpty(batch.transit) &&
     batch.feeds === null &&
     batch.ignored === 0
   );
@@ -125,6 +145,10 @@ function isVessel(entity: Entity): entity is Vessel {
 
 function isSatellite(entity: Entity): entity is Satellite {
   return entity.kind === 'satellite';
+}
+
+function isTransit(entity: Entity): entity is TransitVehicle {
+  return entity.kind === 'transit';
 }
 
 /** Schedules the flush. Swapped in tests so no test has to wait for a real frame. */
@@ -185,6 +209,13 @@ export class MessageBatcher {
         this.fold(this.batch.satellites, message, isSatellite, (record) =>
           String(record.norad_cat_id),
         );
+        break;
+      }
+      case 'transit': {
+        // Feed and entity together, because a GTFS-realtime entity id is unique only inside its
+        // own feed. One function in `domain/transit.ts`, shared with the layer, so a removal off
+        // the wire and a slot on the globe cannot disagree about what they are naming.
+        this.fold(this.batch.transit, message, isTransit, transitKey);
         break;
       }
       default: {

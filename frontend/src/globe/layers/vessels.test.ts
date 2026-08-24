@@ -12,6 +12,11 @@
  * `vi.mock` factory is hoisted above every import in its file, and two copies of test
  * scaffolding is cheaper than the indirection needed to share it. Worth extracting when a
  * third layer wants it.
+ *
+ * The mark is asserted through `iconImage`, which is a pure string builder tested in full in
+ * `../icons.test.ts`. What this file is for is the choice the layer makes about a record: a
+ * hull when the feed gave a course and a square when it did not, and which way round it
+ * pointed the hull.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,6 +26,8 @@ vi.mock('cesium', () => {
   // eslint-disable-next-line unicorn/consistent-function-scoping -- a vi.mock factory is hoisted above every import in the file, so it cannot reference anything declared outside itself.
   function makePrimitive() {
     let position = { x: 0, y: 0, z: 0 };
+    let alignedAxis = { x: 0, y: 0, z: 0 };
+    let pixelOffset = { x: 0, y: 0 };
     return {
       get position() {
         return position;
@@ -30,10 +37,27 @@ vi.mock('cesium', () => {
       set position(value: { x: number; y: number; z: number }) {
         position = { x: value.x, y: value.y, z: value.z };
       },
+      get alignedAxis() {
+        return alignedAxis;
+      },
+      // Clones, like the real setter. The layer points every hull through one scratch axis,
+      // so a fake that aliased would leave the whole fleet on the last ship's course.
+      set alignedAxis(value: { x: number; y: number; z: number }) {
+        alignedAxis = { x: value.x, y: value.y, z: value.z };
+      },
+      get pixelOffset() {
+        return pixelOffset;
+      },
+      set pixelOffset(value: { x: number; y: number }) {
+        pixelOffset = { x: value.x, y: value.y };
+      },
       show: false,
       id: undefined as string | undefined,
+      image: '',
+      scaleByDistance: undefined as unknown,
+      width: 0,
+      height: 0,
       color: undefined as unknown,
-      pixelSize: 0,
       outlineWidth: 0,
       outlineColor: undefined as unknown,
       text: '',
@@ -42,7 +66,6 @@ vi.mock('cesium', () => {
       style: undefined as unknown,
       horizontalOrigin: undefined as unknown,
       verticalOrigin: undefined as unknown,
-      pixelOffset: undefined as unknown,
       distanceDisplayCondition: undefined as unknown,
     };
   }
@@ -56,8 +79,9 @@ vi.mock('cesium', () => {
       this.options = options;
     }
 
-    add(): ReturnType<typeof makePrimitive> {
+    add(template?: Record<string, unknown>): ReturnType<typeof makePrimitive> {
       const primitive = makePrimitive();
+      Object.assign(primitive, template ?? {});
       this.items.push(primitive);
       return primitive;
     }
@@ -75,7 +99,7 @@ vi.mock('cesium', () => {
   const cssColourCalls = { count: 0 };
 
   return {
-    BlendOption: { OPAQUE: 'OPAQUE' },
+    BlendOption: { OPAQUE: 'OPAQUE', TRANSLUCENT: 'TRANSLUCENT' },
     Cartesian2: class {
       readonly x: number;
       readonly y: number;
@@ -125,10 +149,75 @@ vi.mock('cesium', () => {
         this.far = far;
       }
     },
-    HorizontalOrigin: { LEFT: 'LEFT' },
+    BillboardCollection: FakeCollection,
+    HorizontalOrigin: { CENTER: 'CENTER', LEFT: 'LEFT' },
     LabelCollection: FakeCollection,
-    LabelStyle: { FILL_AND_OUTLINE: 'FILL_AND_OUTLINE' },
-    PointPrimitiveCollection: FakeCollection,
+    LabelStyle: { FILL: 'FILL', FILL_AND_OUTLINE: 'FILL_AND_OUTLINE' },
+    // A real column-major 4x4 multiply, not a stub. `recluster` builds its view-projection by
+    // multiplying the camera's projection and view matrices and hands the product straight to
+    // `projectToScreen`, so a fake that ignored its operands would make any clustering test
+    // assert against a matrix nobody computed. The projection maths itself is tested for real
+    // in `globe/cluster.test.ts`, which needs no Cesium at all.
+    Matrix4: class FakeMatrix4 {
+      readonly length = 16;
+      [index: number]: number;
+
+      constructor() {
+        for (let index = 0; index < 16; index += 1) {
+          this[index] = 0;
+        }
+      }
+
+      static multiply(
+        left: ArrayLike<number>,
+        right: ArrayLike<number>,
+        result: Record<number, number>,
+      ): Record<number, number> {
+        for (let column = 0; column < 4; column += 1) {
+          for (let row = 0; row < 4; row += 1) {
+            let sum = 0;
+            for (let k = 0; k < 4; k += 1) {
+              sum += (left[k * 4 + row] ?? 0) * (right[column * 4 + k] ?? 0);
+            }
+            result[column * 4 + row] = sum;
+          }
+        }
+        return result;
+      }
+    },
+    // The inverse of this file's `Cartesian3.fromDegrees` fake, which puts degrees straight
+    // through into x and y. The layer converts what comes back into degrees, so treating x and
+    // y as degrees here and returning radians round-trips: a test asserts on the longitude and
+    // latitude it fed in. Doing the real ECEF conversion would be testing Cesium.
+    Cartographic: class FakeCartographic {
+      longitude = 0;
+      latitude = 0;
+      height = 0;
+
+      static fromCartesian(
+        cartesian: { x: number; y: number; z: number },
+        _ellipsoid: unknown,
+        result?: FakeCartographic,
+      ): FakeCartographic {
+        const target = result ?? new FakeCartographic();
+        target.longitude = (cartesian.x * Math.PI) / 180;
+        target.latitude = (cartesian.y * Math.PI) / 180;
+        return target;
+      }
+    },
+    NearFarScalar: class {
+      readonly near: number;
+      readonly nearValue: number;
+      readonly far: number;
+      readonly farValue: number;
+
+      constructor(near: number, nearValue: number, far: number, farValue: number) {
+        this.near = near;
+        this.nearValue = nearValue;
+        this.far = far;
+        this.farValue = farValue;
+      }
+    },
     VerticalOrigin: { CENTER: 'CENTER' },
     // Exposed so a test can prove the colour cache stops the layer reparsing CSS.
     __cssColourCalls: cssColourCalls,
@@ -143,48 +232,138 @@ const {
   VesselLayer,
   UNDER_WAY_COLOUR,
   STOPPED_COLOUR,
-  VESSEL_PIXEL_SIZE,
-  SELECTED_VESSEL_PIXEL_SIZE,
+  VESSEL_ICON_PX,
+  SELECTED_VESSEL_ICON_PX,
   MAX_DEAD_RECKON_SECONDS,
+  VESSEL_CLUSTER_KEY,
+  VESSEL_CLUSTER_MIN,
 } = await import('./vessels');
+const { parseClusterPickId } = await import('../cluster');
 const { makeVessel } = await import('../../testing/vessel');
-const { SELECTION_COLOUR } = await import('../palette');
+const { clusterBadgeImage, iconImage, orientAxis } = await import('../icons');
+const { CLUSTER_FILL, clusterBadgePx } = await import('../palette');
 
 interface FakeCollection {
   show?: boolean;
   items: {
     position: { x: number; y: number; z: number };
+    alignedAxis: { x: number; y: number; z: number };
+    pixelOffset: { x: number; y: number };
     show: boolean;
     id: string | undefined;
+    image: string;
+    scaleByDistance: unknown;
+    width: number;
+    height: number;
     color: unknown;
-    pixelSize: number;
     outlineWidth: number;
     outlineColor: unknown;
     text: string;
+    horizontalOrigin: unknown;
+    verticalOrigin: unknown;
   }[];
   timesRemoved: number;
   options: unknown;
 }
 
+interface FakeRangeScale {
+  near: number;
+  nearValue: number;
+  far: number;
+  farValue: number;
+}
+
+/** The range-scaling attribute Cesium evaluates in its vertex shader. */
+function rangeScaleOf(item: { scaleByDistance: unknown }): FakeRangeScale {
+  return item.scaleByDistance as FakeRangeScale;
+}
+
+/** The image the layer should have chosen for a vessel in this state. */
+function expectedImage(colour: string, selected: boolean, shape: 'ship' | 'block' = 'ship') {
+  const sizePx = selected ? SELECTED_VESSEL_ICON_PX : VESSEL_ICON_PX;
+  return iconImage(shape, colour, selected, sizePx);
+}
+
 /** A layer wired to a fake scene, plus direct handles on the collections it created. */
+/**
+ * A view-projection that maps a fake position's x and y straight to canvas pixels.
+ *
+ * `Cartesian3.fromDegrees` is faked to put degrees through into x and y, so a record placed at
+ * longitude 100 and latitude 120 lands on pixel (100, 120) and a test can say which movers share
+ * a cell by writing coordinates. Column-major, like the real thing.
+ */
+const VIEWPORT_W = 1600;
+const VIEWPORT_H = 1000;
+
+function pixelProjection(): number[] {
+  const m = Array.from({ length: 16 }, () => 0);
+  m[0] = 2 / VIEWPORT_W;
+  m[12] = -1;
+  // Negative because device coordinates run y up and a canvas runs y down.
+  m[5] = -2 / VIEWPORT_H;
+  m[13] = 1;
+  m[15] = 1;
+  return m;
+}
+
+function identity(): number[] {
+  const m = Array.from({ length: 16 }, () => 0);
+  m[0] = 1;
+  m[5] = 1;
+  m[10] = 1;
+  m[15] = 1;
+  return m;
+}
+
 function build() {
   const primitives: FakeCollection[] = [];
+  const preUpdateListeners: (() => void)[] = [];
   const scene = {
     primitives: {
       add: (collection: FakeCollection) => {
         primitives.push(collection);
       },
     },
+    // The layer clusters on `preUpdate` rather than running a frame loop of its own, so the
+    // fake scene has to offer the event or construction throws. Listeners are collected rather
+    // than dropped so a test can drive a clustering pass deliberately; nothing here ever fires
+    // a frame by itself, which is why the existing tests are untouched by clustering.
+    preUpdate: {
+      addEventListener: (listener: () => void) => {
+        preUpdateListeners.push(listener);
+      },
+    },
+    // The camera sits at the earth's centre so the occlusion test passes for everything: these
+    // tests are about which movers share a cell, and the horizon maths has its own tests in
+    // `globe/cluster.test.ts` where it can be checked against real radii.
+    camera: {
+      frustum: { projectionMatrix: pixelProjection() },
+      viewMatrix: identity(),
+      positionWC: { x: 0, y: 0, z: 0 },
+    },
+    drawingBufferWidth: VIEWPORT_W,
+    drawingBufferHeight: VIEWPORT_H,
   };
   const layer = new VesselLayer(scene as unknown as ConstructorParameters<typeof VesselLayer>[0]);
   const [points, labels] = primitives;
   if (points === undefined || labels === undefined) {
     throw new Error('the layer did not add both collections to the scene');
   }
-  return { layer, points, labels };
+  const badges = primitives[2];
+  const badgeLabels = primitives[3];
+  if (badges === undefined || badgeLabels === undefined) {
+    throw new Error('the layer did not add its cluster collections to the scene');
+  }
+  /** Drive one clustering pass, the way a rendered frame would. */
+  const frame = (): void => {
+    for (const listener of preUpdateListeners) {
+      listener();
+    }
+  };
+  return { layer, points, labels, badges, badgeLabels, frame };
 }
 
-/** The point currently drawn for this vessel, found by the MMSI the layer stamps on it. */
+/** The mark currently drawn for this vessel, found by the MMSI the layer stamps on it. */
 function pointFor(points: FakeCollection, mmsi: string) {
   return points.items.find((item) => item.id === mmsi);
 }
@@ -203,13 +382,36 @@ function moored(mmsi: string) {
   });
 }
 
+describe('VesselLayer badge identity', () => {
+  it('rims its badge in the colour it draws its own marks in', () => {
+    // Before this, all five layers rendered an identical grey hexagon, so a badge reading "6k" could
+    // have been six thousand of anything, with several layers in the frame at once. The rim takes the
+    // colour this layer already uses for its marks, which is the same constant the rail is handed for
+    // its legend row, so the globe and the key cannot drift apart.
+    const { layer, badges, frame } = build();
+    layer.replace(crowd(VESSEL_CLUSTER_MIN, 300, 300));
+
+    frame();
+
+    const size = clusterBadgePx(VESSEL_CLUSTER_MIN);
+    const drawn = badges.items.find((item) => item.show)?.image;
+    expect(drawn).toBe(clusterBadgeImage(size, CLUSTER_FILL, UNDER_WAY_COLOUR));
+    // Not the old shared grey, which is the regression this guards.
+    expect(drawn).not.toBe(clusterBadgeImage(size, CLUSTER_FILL));
+  });
+});
+
 describe('VesselLayer construction', () => {
-  it('draws through primitive collections, with the opaque fast path on the points', () => {
+  it('draws through primitive collections, on the translucent pass only', () => {
     const { points, labels } = build();
 
     // Two collections, both registered with the scene. One Cesium Entity per vessel would
     // mean these did not exist at all.
-    expect(points.options).toEqual({ blendOption: 'OPAQUE' });
+    //
+    // Translucent because an image has antialiased edges and transparent corners, which the
+    // opaque pass would draw as black squares. Named explicitly all the same, because
+    // Cesium's default pays for both passes.
+    expect((points.options as { blendOption: string }).blendOption).toBe('TRANSLUCENT');
     expect(labels.items).toHaveLength(0);
   });
 });
@@ -277,6 +479,7 @@ describe('VesselLayer.upsert', () => {
         observed_at: '2026-08-19T12:00:00Z',
         position_age_s: 4,
         source: 'digitraffic',
+        providers: ['digitraffic'],
       },
     ]);
 
@@ -350,16 +553,121 @@ describe('VesselLayer port density', () => {
 
     layer.upsert([makeVessel({ mmsi: '230000001' }), moored('230000002')]);
 
-    expect(pointFor(points, '230000001')?.color).toEqual({ css: UNDER_WAY_COLOUR });
-    expect(pointFor(points, '230000002')?.color).toEqual({ css: STOPPED_COLOUR });
+    expect(pointFor(points, '230000001')?.image).toBe(expectedImage(UNDER_WAY_COLOUR, false));
+    expect(pointFor(points, '230000002')?.image).toBe(
+      expectedImage(STOPPED_COLOUR, false, 'block'),
+    );
   });
 
-  it('draws vessels small, so a full berth keeps its structure', () => {
+  it('draws vessels smaller than aircraft, so a full berth keeps its structure', () => {
     const { layer, points } = build();
 
     layer.upsert([makeVessel({ mmsi: '230123450' })]);
 
-    expect(pointFor(points, '230123450')?.pixelSize).toBe(VESSEL_PIXEL_SIZE);
+    expect(pointFor(points, '230123450')?.width).toBe(VESSEL_ICON_PX);
+    expect(pointFor(points, '230123450')?.height).toBe(VESSEL_ICON_PX);
+  });
+
+  it('shares one image across a berth in the same state, which is one atlas entry', () => {
+    const { layer, points } = build();
+
+    layer.upsert(
+      Array.from({ length: 40 }, (_unused, index) =>
+        moored(`2300000${String(index).padStart(2, '0')}`),
+      ),
+    );
+
+    // Cesium keys its billboard texture atlas on the image id, so forty distinct strings
+    // here would be forty textures on the GPU for one state.
+    expect(new Set(points.items.map((item) => item.image)).size).toBe(1);
+  });
+});
+
+describe('VesselLayer orientation', () => {
+  it('points the hull along the course over ground, in earth-fixed terms', () => {
+    const { layer, points } = build();
+
+    layer.upsert([
+      makeVessel({
+        mmsi: '230000001',
+        point: { lon: 24.95, lat: 60.16, altitude_m: null },
+        course_over_ground_deg: 187.4,
+      }),
+    ]);
+
+    // A world-space axis, not a screen angle: the hull has to keep pointing at 187 degrees
+    // once the camera is dragged round.
+    expect(pointFor(points, '230000001')?.alignedAxis).toEqual(
+      orientAxis(24.95, 60.16, 187.4, { x: 0, y: 0, z: 0 }),
+    );
+  });
+
+  it('draws a square, pointing nowhere, when the feed reported no course', () => {
+    const { layer, points } = build();
+
+    layer.upsert([moored('230000002')]);
+
+    // The AIS not-available course is 360 and the adapter maps it to null, so a missing
+    // course is a missing measurement rather than a bearing of zero. Pointing a bow north on
+    // the strength of it would invent a heading for about one ship in twenty.
+    const mark = pointFor(points, '230000002');
+    expect(mark?.image).toBe(expectedImage(STOPPED_COLOUR, false, 'block'));
+    expect(mark?.alignedAxis).toEqual({ x: 0, y: 0, z: 0 });
+  });
+
+  it('ignores the true heading, which is not where the ship is going', () => {
+    const { layer, points } = build();
+
+    layer.upsert([
+      makeVessel({
+        mmsi: '230000003',
+        speed_over_ground_mps: 0,
+        course_over_ground_deg: null,
+        true_heading_deg: 190,
+        navigational_status: 'moored',
+      }),
+    ]);
+
+    // A heading is where the bow looks; the layer extrapolates on course over ground and
+    // draws what it extrapolates on. A moored ship with a heading still gets the square.
+    expect(pointFor(points, '230000003')?.image).toBe(
+      expectedImage(STOPPED_COLOUR, false, 'block'),
+    );
+  });
+
+  it('centres the mark on the fix, so a rotation turns it about the ship', () => {
+    const { layer, points } = build();
+
+    layer.upsert([makeVessel({ mmsi: '230000001' })]);
+
+    expect(pointFor(points, '230000001')?.horizontalOrigin).toBe('CENTER');
+    expect(pointFor(points, '230000001')?.verticalOrigin).toBe('CENTER');
+  });
+});
+
+describe('VesselLayer mark size against camera range', () => {
+  it('shrinks the mark as the camera pulls back', () => {
+    // This layer holds the most records in the app and they sit in one part of the world, so
+    // from a whole-globe view they are a single dense patch. The shrink is what stops that
+    // patch becoming an inkblot over Northern Europe.
+    const { layer, points } = build();
+
+    layer.upsert([makeVessel({ mmsi: '230123450' })]);
+
+    const scale = rangeScaleOf(pointFor(points, '230123450')!);
+    expect(scale.nearValue).toBe(1);
+    expect(scale.farValue).toBeLessThan(1);
+    expect(scale.far).toBeGreaterThan(scale.near);
+  });
+
+  it('never shrinks the selected vessel, whatever the range', () => {
+    const { layer, points } = build();
+    layer.upsert([makeVessel({ mmsi: '230123450' })]);
+
+    layer.setSelected('230123450');
+
+    const scale = rangeScaleOf(pointFor(points, '230123450')!);
+    expect(scale.farValue).toBe(1);
   });
 });
 
@@ -406,7 +714,8 @@ describe('VesselLayer update path', () => {
       ),
     );
 
-    // Two parses at most for a fleet all in the same state: the hue and the label colour.
+    // One parse at most now: the mark's hue lives inside its own image, so the only CSS
+    // this layer parses is the label text colour.
     expect(cssColourCalls.count - before).toBeLessThanOrEqual(2);
   });
 });
@@ -616,25 +925,29 @@ describe('VesselLayer.setSelected', () => {
     context.layer.upsert([makeVessel({ mmsi: '230000001' }), makeVessel({ mmsi: '230000002' })]);
   });
 
-  it('rings the selected vessel in white without changing its hue', () => {
+  it('haloes the selected vessel without changing its hue', () => {
     context.layer.setSelected('230000001');
 
-    const point = pointFor(context.points, '230000001');
-    expect(point?.outlineColor).toEqual({ css: SELECTION_COLOUR });
-    expect(point?.outlineWidth).toBe(2);
-    expect(point?.pixelSize).toBe(SELECTED_VESSEL_PIXEL_SIZE);
-    expect(point?.color).toEqual({ css: UNDER_WAY_COLOUR });
+    const mark = pointFor(context.points, '230000001');
+    // Still the under-way cyan, so the mark and the card cannot disagree about the ship's
+    // state. The halo and the size are what changed.
+    expect(mark?.image).toBe(expectedImage(UNDER_WAY_COLOUR, true));
+    expect(mark?.width).toBe(SELECTED_VESSEL_ICON_PX);
+    expect(SELECTED_VESSEL_ICON_PX).toBeGreaterThan(VESSEL_ICON_PX);
   });
 
-  it('clears the ring off the vessel that was selected before', () => {
+  it('clears the halo off the vessel that was selected before', () => {
     context.layer.setSelected('230000001');
 
     context.layer.setSelected('230000002');
 
-    expect(pointFor(context.points, '230000001')?.outlineWidth).toBe(0);
-    expect(pointFor(context.points, '230000001')?.outlineColor).toBe('TRANSPARENT');
-    expect(pointFor(context.points, '230000001')?.pixelSize).toBe(VESSEL_PIXEL_SIZE);
-    expect(pointFor(context.points, '230000002')?.outlineWidth).toBe(2);
+    expect(pointFor(context.points, '230000001')?.image).toBe(
+      expectedImage(UNDER_WAY_COLOUR, false),
+    );
+    expect(pointFor(context.points, '230000001')?.width).toBe(VESSEL_ICON_PX);
+    expect(pointFor(context.points, '230000002')?.image).toBe(
+      expectedImage(UNDER_WAY_COLOUR, true),
+    );
   });
 
   it('deselects on null', () => {
@@ -642,7 +955,9 @@ describe('VesselLayer.setSelected', () => {
 
     context.layer.setSelected(null);
 
-    expect(pointFor(context.points, '230000001')?.outlineWidth).toBe(0);
+    expect(pointFor(context.points, '230000001')?.image).toBe(
+      expectedImage(UNDER_WAY_COLOUR, false),
+    );
   });
 
   it('ignores a repeat of the current selection', () => {
@@ -650,23 +965,38 @@ describe('VesselLayer.setSelected', () => {
 
     context.layer.setSelected('230000001');
 
-    expect(pointFor(context.points, '230000001')?.outlineWidth).toBe(2);
+    expect(pointFor(context.points, '230000001')?.image).toBe(
+      expectedImage(UNDER_WAY_COLOUR, true),
+    );
   });
 
   it('survives selecting a vessel the layer does not hold', () => {
     context.layer.setSelected('230999999');
 
-    expect(pointFor(context.points, '230000001')?.outlineWidth).toBe(0);
+    expect(pointFor(context.points, '230000001')?.image).toBe(
+      expectedImage(UNDER_WAY_COLOUR, false),
+    );
   });
 
-  it('keeps the selection ring across a position update', () => {
+  it('keeps the selection halo across a position update', () => {
     context.layer.setSelected('230000001');
 
     context.layer.upsert([makeVessel({ mmsi: '230000001' })]);
 
-    // The ring is reapplied on upsert rather than being lost until the next click.
-    expect(pointFor(context.points, '230000001')?.outlineWidth).toBe(2);
-    expect(pointFor(context.points, '230000001')?.pixelSize).toBe(SELECTED_VESSEL_PIXEL_SIZE);
+    // The halo is reapplied on upsert rather than being lost until the next click.
+    expect(pointFor(context.points, '230000001')?.image).toBe(
+      expectedImage(UNDER_WAY_COLOUR, true),
+    );
+    expect(pointFor(context.points, '230000001')?.width).toBe(SELECTED_VESSEL_ICON_PX);
+  });
+
+  it('keeps the selected ship pointing along its course', () => {
+    context.layer.setSelected('230000001');
+
+    // Selection swaps the image. It must not swap in the unrotated one.
+    expect(pointFor(context.points, '230000001')?.alignedAxis).toEqual(
+      orientAxis(24.95, 60.16, 187.4, { x: 0, y: 0, z: 0 }),
+    );
   });
 });
 
@@ -764,5 +1094,167 @@ describe('VesselLayer.setVisible', () => {
 
     layer.setVisible(false);
     expect(layer.advance(3000)).toBe(false);
+  });
+});
+
+describe('VesselLayer.countInView', () => {
+  it('counts only the ships the camera can see', () => {
+    const { layer } = build();
+    layer.upsert([
+      makeVessel({ mmsi: '230000001', point: { lon: 24.9, lat: 60.2, altitude_m: null } }),
+      makeVessel({ mmsi: '230000002', point: { lon: 25.1, lat: 60.4, altitude_m: null } }),
+      makeVessel({ mmsi: '235000003', point: { lon: -0.5, lat: 51.4, altitude_m: null } }),
+    ]);
+
+    // This layer is why the count exists. Its only keyless provider covers Finnish waters,
+    // so it is legitimately live with hundreds of ships and legitimately empty everywhere
+    // else, and a row reading "685" over the Atlantic reads as a broken renderer.
+    expect(layer.countInView({ west: 17, south: 57, east: 32, north: 66 })).toBe(2);
+    expect(layer.countInView({ west: -10, south: 45, east: 5, north: 55 })).toBe(1);
+  });
+
+  it('counts none when the camera is somewhere the provider does not cover', () => {
+    const { layer } = build();
+    layer.upsert([
+      makeVessel({ mmsi: '230000001', point: { lon: 24.9, lat: 60.2, altitude_m: null } }),
+    ]);
+
+    expect(layer.countInView({ west: -60, south: -40, east: -30, north: -10 })).toBe(0);
+  });
+});
+
+/**
+ * `count` vessels all landing inside a single grid cell.
+ *
+ * Ten across and one apart down, so any count used here stays inside a single grid cell.
+ */
+function crowd(count: number, originX = 100, originY = 100) {
+  return Array.from({ length: count }, (_unused, index) =>
+    makeVessel({
+      mmsi: `23000${String(index).padStart(4, '0')}`,
+      point: {
+        lon: originX + (index % 10),
+        lat: originY + Math.floor(index / 10),
+        altitude_m: null,
+      },
+    }),
+  );
+}
+
+/** Vessels that land on the given pixels. */
+function at(pixels: readonly (readonly [number, number])[]) {
+  return pixels.map(([x, y], index) =>
+    makeVessel({
+      mmsi: `2300000${String(index).padStart(2, '0')}`,
+      point: { lon: x, lat: y, altitude_m: null },
+    }),
+  );
+}
+
+describe('VesselLayer clustering', () => {
+  it('replaces a crowded cell with one badge carrying the count', () => {
+    const { layer, points, badges, badgeLabels, frame } = build();
+    layer.upsert(crowd(VESSEL_CLUSTER_MIN));
+
+    frame();
+
+    expect(layer.count).toBe(VESSEL_CLUSTER_MIN);
+    expect(points.items.filter((item) => item.show)).toHaveLength(0);
+    expect(badges.items.filter((item) => item.show)).toHaveLength(1);
+    expect(badgeLabels.items.find((item) => item.show)?.text).toBe(String(VESSEL_CLUSTER_MIN));
+  });
+
+  it('takes the name off a grouped ship even while it is under way', () => {
+    // The port rule draws a name for a ship with way on. Grouping outranks it: a ship inside a
+    // badge shows nothing of its own, or the badge would sit in a pile of its members' names.
+    const { layer, labels, frame } = build();
+    layer.upsert(crowd(VESSEL_CLUSTER_MIN));
+    expect(labels.items.filter((item) => item.show)).toHaveLength(VESSEL_CLUSTER_MIN);
+
+    frame();
+
+    expect(labels.items.filter((item) => item.show)).toHaveLength(0);
+  });
+
+  it('keeps a grouped ship hidden when a fresh position arrives for it', () => {
+    // An upsert repaints the mark, and repainting must not undo the grouping until the camera
+    // has had a chance to say the cell is no longer crowded.
+    const { layer, points, frame } = build();
+    layer.upsert(crowd(VESSEL_CLUSTER_MIN));
+    frame();
+
+    layer.upsert(crowd(1));
+
+    expect(points.items.filter((item) => item.show)).toHaveLength(0);
+  });
+
+  it('publishes a count that adds up', () => {
+    const { layer, frame } = build();
+    layer.upsert([
+      ...crowd(VESSEL_CLUSTER_MIN),
+      ...at([
+        [900, 500],
+        [905, 505],
+      ]).map((vessel, index) =>
+        makeVessel({ ...vessel, mmsi: `23099${String(index).padStart(4, '0')}` }),
+      ),
+    ]);
+
+    frame();
+
+    const state = layer.clusterState;
+    expect(state).toMatchObject({
+      onScreen: VESSEL_CLUSTER_MIN + 2,
+      individuals: 2,
+      groups: 1,
+      inGroups: VESSEL_CLUSTER_MIN,
+    });
+    expect(state.individuals + state.inGroups).toBe(state.onScreen);
+  });
+
+  it('hides its badges with the rail switch', () => {
+    const { layer, badges, badgeLabels, frame } = build();
+    layer.upsert(crowd(VESSEL_CLUSTER_MIN));
+    frame();
+
+    layer.setVisible(false);
+
+    expect(badges.show).toBe(false);
+    expect(badgeLabels.show).toBe(false);
+    expect(layer.count).toBe(VESSEL_CLUSTER_MIN);
+  });
+
+  it('pools its badges rather than removing them', () => {
+    const { layer, badges, badgeLabels, frame } = build();
+    layer.upsert(crowd(VESSEL_CLUSTER_MIN));
+    frame();
+    layer.replace([]);
+
+    frame();
+
+    expect(badges.timesRemoved).toBe(0);
+    expect(badgeLabels.timesRemoved).toBe(0);
+  });
+
+  it('sends a picked badge to a camera position rather than to a card', () => {
+    const { layer, badges, frame } = build();
+    layer.upsert(crowd(VESSEL_CLUSTER_MIN));
+    frame();
+    const pickId = badges.items.find((item) => item.show)?.id ?? null;
+
+    const target = layer.clusterFlyTo(pickId);
+
+    expect(parseClusterPickId(pickId)?.layerKey).toBe(VESSEL_CLUSTER_KEY);
+    expect(target?.count).toBe(VESSEL_CLUSTER_MIN);
+    // Somewhere among its own members: `crowd` lays them out across twenty units from 100.
+    expect(target?.lon).toBeGreaterThanOrEqual(100);
+    expect(target?.lon).toBeLessThanOrEqual(110);
+  });
+
+  it('refuses another layer badge, so one click belongs to one layer', () => {
+    const { layer } = build();
+
+    expect(layer.clusterFlyTo('cluster:aircraft:0')).toBeNull();
+    expect(layer.clusterFlyTo('satellite:25544')).toBeNull();
   });
 });

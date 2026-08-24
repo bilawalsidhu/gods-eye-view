@@ -379,11 +379,19 @@ describe('the worker protocol', () => {
 });
 
 describe('propagation cost', () => {
-  it('propagates a thousand satellites inside one 60fps frame budget', () => {
+  it('propagates a thousand satellites well inside a worker frame budget', () => {
     // Acceptance criterion 2 is 1,000-plus satellites at 60fps, which is a 16.7 ms frame.
-    // This runs in the worker rather than on the render thread, so the budget here is
-    // generous; the assertion is that the maths is nowhere near being the problem. Measured
-    // on this laptop at about 3.5 ms.
+    // This runs in the worker rather than on the render thread, so the assertion is only
+    // that the maths is nowhere near being the problem.
+    //
+    // The bound is 60 ms, not 16.7, and that is deliberate. `pnpm test` runs under v8
+    // coverage instrumentation, which inflates this loop by roughly eight times: the same
+    // work measures about 3.5 ms uninstrumented and 20 to 22 ms with coverage on. A 16.7 ms
+    // assertion therefore passed on an idle machine and failed on a loaded one, which is a
+    // flake rather than a regression guard, and it broke a build on 2026-08-20. 60 ms still
+    // catches a real regression (anything worse than about 8 ms of actual work) while
+    // leaving headroom for a busy CI box. If you want the true figure, run vitest without
+    // --coverage.
     const engine = new SatelliteEngine();
     engine.load(
       Array.from({ length: 1000 }, (_, index) => makeSatellite({ norad_cat_id: 90_000 + index })),
@@ -397,6 +405,6 @@ describe('propagation cost', () => {
     const elapsedMs = performance.now() - started;
 
     expect(positions.ids.length).toBe(1000);
-    expect(elapsedMs).toBeLessThan(16.7);
+    expect(elapsedMs).toBeLessThan(60);
   });
 });

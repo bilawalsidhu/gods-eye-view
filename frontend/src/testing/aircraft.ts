@@ -24,6 +24,8 @@ export function makeAircraft(overrides: Partial<Aircraft> = {}): Aircraft {
     messages_received: 4200,
     non_icao_address: false,
     on_ground: false,
+    on_ladd: false,
+    providers: [],
     uses_privacy_address: false,
     ground_speed_mps: 220,
     track_deg: 94.5,

@@ -21,33 +21,55 @@
       panels cannot overlap as either grows, which fixed positioning on both would allow.
     -->
     <div class="dock">
+      <!--
+        The search box is the only navigation this globe has, so it sits at the top of the
+        dock rather than behind a button. Ctrl+K and / both put the cursor in it.
+      -->
+      <div id="search"></div>
       <div id="status"></div>
       <div id="layers"></div>
     </div>
     <!--
-      Two cards, one root each. Each class owns the markup inside its own root, so sharing
+      Four cards, one root each. Each class owns the markup inside its own root, so sharing
       one element would leave the first holding detached nodes. Only one is ever open: a
-      selection is one thing, and the store deselects the other kind when it changes.
+      selection is one thing, and picking any of the four closes the other three.
+
+      The aircraft and vessel cards are driven by the store, which keys them on an ICAO
+      address and an MMSI. The satellite and place cards are not: a satellite's position is
+      propagated in the browser rather than served, and a city is a row of a weekly file with
+      no socket behind it, so `main.ts` opens those two directly off the picked id.
     -->
     <aside id="card" aria-label="Selected aircraft" hidden></aside>
     <aside id="vessel-card" aria-label="Selected vessel" hidden></aside>
+    <aside id="satellite-card" aria-label="Selected satellite" hidden></aside>
+    <aside id="place-card" aria-label="Selected place" hidden></aside>
     <!--
-      The credits are licence conditions: ODbL 1.0 requires attribution for adsb.lol data
-      and NASA asks for a credit on GIBS imagery. Present in the markup so they are on
-      screen from the first frame, then replaced with the list the API serves.
+      The credits are licence conditions: ODbL 1.0 requires attribution for adsb.lol data,
+      CC BY for Fintraffic and GeoNames, and NASA asks for a credit on GIBS imagery. Twelve
+      of them with their licence strings covered the bottom of the globe, so they live behind
+      an "i" in the bottom corner: the control is always on screen and the full list is one
+      click away in every view. A `details` element, so the browser owns the open state, the
+      keyboard and the announcement of it. The `aria-label` is what a screen reader reads,
+      because a lone "i" says nothing; the count in it is rewritten when the API answers.
+      Present in the markup so the credits exist from the first frame.
     -->
-    <ul id="attribution">
-      <li>
-        <a href="https://adsb.lol" rel="noreferrer" target="_blank">Aircraft data from adsb.lol</a>
-        <span class="attribution-licence"> (ODbL 1.0)</span>
-      </li>
-      <li>
-        <a href="https://gibs.earthdata.nasa.gov" rel="noreferrer" target="_blank"
-          >Imagery courtesy of NASA EOSDIS GIBS</a
-        >
-        <span class="attribution-licence"> (Public domain, attribution requested)</span>
-      </li>
-    </ul>
+    <details id="attribution">
+      <summary aria-label="Data sources and licences (2)" title="Data sources and licences (2)">
+        i
+      </summary>
+      <ul>
+        <li>
+          <a href="https://adsb.lol" rel="noreferrer" target="_blank">Aircraft data from adsb.lol</a>
+          <span class="attribution-licence"> (ODbL 1.0)</span>
+        </li>
+        <li>
+          <a href="https://gibs.earthdata.nasa.gov" rel="noreferrer" target="_blank"
+            >Imagery courtesy of NASA EOSDIS GIBS</a
+          >
+          <span class="attribution-licence"> (Public domain, attribution requested)</span>
+        </li>
+      </ul>
+    </details>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -8,9 +8,13 @@
  * be asserted rather than assumed.
  *
  * That contract is the point of most of what follows. Aircraft render through a
- * `PointPrimitiveCollection` mutated in place, never through the Entity API, and a retired
+ * `BillboardCollection` mutated in place, never through the Entity API, and a retired
  * aircraft's primitives are pooled rather than removed. If a refactor ever swaps that for
  * remove-and-re-add, these tests fail.
+ *
+ * The mark itself is asserted through `iconImage`, which is a pure string builder tested in
+ * full in `../icons.test.ts`. What matters here is which mark the layer chose and which way
+ * it pointed it, because both are decisions this file makes about a record.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,6 +24,8 @@ vi.mock('cesium', () => {
   // eslint-disable-next-line unicorn/consistent-function-scoping -- a vi.mock factory is hoisted above every import in the file, so it cannot reference anything declared outside itself.
   function makePrimitive() {
     let position = { x: 0, y: 0, z: 0 };
+    let alignedAxis = { x: 0, y: 0, z: 0 };
+    let pixelOffset = { x: 0, y: 0 };
     return {
       get position() {
         return position;
@@ -30,10 +36,28 @@ vi.mock('cesium', () => {
       set position(value: { x: number; y: number; z: number }) {
         position = { x: value.x, y: value.y, z: value.z };
       },
+      get alignedAxis() {
+        return alignedAxis;
+      },
+      // Clones, like the real setter. The layer points every aircraft through one scratch
+      // axis, so a fake that aliased would leave the whole layer pointing whichever way the
+      // last aircraft in the batch was going.
+      set alignedAxis(value: { x: number; y: number; z: number }) {
+        alignedAxis = { x: value.x, y: value.y, z: value.z };
+      },
+      get pixelOffset() {
+        return pixelOffset;
+      },
+      set pixelOffset(value: { x: number; y: number }) {
+        pixelOffset = { x: value.x, y: value.y };
+      },
       show: false,
       id: undefined as string | undefined,
+      image: '',
+      scaleByDistance: undefined as unknown,
+      width: 0,
+      height: 0,
       color: undefined as unknown,
-      pixelSize: 0,
       outlineWidth: 0,
       outlineColor: undefined as unknown,
       text: '',
@@ -42,7 +66,6 @@ vi.mock('cesium', () => {
       style: undefined as unknown,
       horizontalOrigin: undefined as unknown,
       verticalOrigin: undefined as unknown,
-      pixelOffset: undefined as unknown,
       distanceDisplayCondition: undefined as unknown,
     };
   }
@@ -56,8 +79,9 @@ vi.mock('cesium', () => {
       this.options = options;
     }
 
-    add(): ReturnType<typeof makePrimitive> {
+    add(template?: Record<string, unknown>): ReturnType<typeof makePrimitive> {
       const primitive = makePrimitive();
+      Object.assign(primitive, template ?? {});
       this.items.push(primitive);
       return primitive;
     }
@@ -75,7 +99,7 @@ vi.mock('cesium', () => {
   const cssColourCalls = { count: 0 };
 
   return {
-    BlendOption: { OPAQUE: 'OPAQUE' },
+    BlendOption: { OPAQUE: 'OPAQUE', TRANSLUCENT: 'TRANSLUCENT' },
     Cartesian2: class {
       readonly x: number;
       readonly y: number;
@@ -93,8 +117,7 @@ vi.mock('cesium', () => {
       static readonly ZERO = new FakeCartesian3();
 
       // Not a real projection. Degrees go straight through so a test can assert on the
-      // longitude and latitude that reached Cesium; turning those into ECEF metres is
-      // Cesium's job and testing it here would test the fake.
+      // longitude and latitude that reached Cesium.
       static fromDegrees(
         lon: number,
         lat: number,
@@ -126,10 +149,75 @@ vi.mock('cesium', () => {
         this.far = far;
       }
     },
-    HorizontalOrigin: { LEFT: 'LEFT' },
+    BillboardCollection: FakeCollection,
+    HorizontalOrigin: { CENTER: 'CENTER', LEFT: 'LEFT' },
     LabelCollection: FakeCollection,
-    LabelStyle: { FILL_AND_OUTLINE: 'FILL_AND_OUTLINE' },
-    PointPrimitiveCollection: FakeCollection,
+    LabelStyle: { FILL: 'FILL', FILL_AND_OUTLINE: 'FILL_AND_OUTLINE' },
+    // A real column-major 4x4 multiply, not a stub. `recluster` builds its view-projection by
+    // multiplying the camera's projection and view matrices and hands the product straight to
+    // `projectToScreen`, so a fake that ignored its operands would make any clustering test
+    // assert against a matrix nobody computed. The projection maths itself is tested for real
+    // in `globe/cluster.test.ts`, which needs no Cesium at all.
+    Matrix4: class FakeMatrix4 {
+      readonly length = 16;
+      [index: number]: number;
+
+      constructor() {
+        for (let index = 0; index < 16; index += 1) {
+          this[index] = 0;
+        }
+      }
+
+      static multiply(
+        left: ArrayLike<number>,
+        right: ArrayLike<number>,
+        result: Record<number, number>,
+      ): Record<number, number> {
+        for (let column = 0; column < 4; column += 1) {
+          for (let row = 0; row < 4; row += 1) {
+            let sum = 0;
+            for (let k = 0; k < 4; k += 1) {
+              sum += (left[k * 4 + row] ?? 0) * (right[column * 4 + k] ?? 0);
+            }
+            result[column * 4 + row] = sum;
+          }
+        }
+        return result;
+      }
+    },
+    // The inverse of this file's `Cartesian3.fromDegrees` fake, which puts degrees straight
+    // through into x and y. The layer converts what comes back into degrees, so treating x and
+    // y as degrees here and returning radians round-trips: a test asserts on the longitude and
+    // latitude it fed in. Doing the real ECEF conversion would be testing Cesium.
+    Cartographic: class FakeCartographic {
+      longitude = 0;
+      latitude = 0;
+      height = 0;
+
+      static fromCartesian(
+        cartesian: { x: number; y: number; z: number },
+        _ellipsoid: unknown,
+        result?: FakeCartographic,
+      ): FakeCartographic {
+        const target = result ?? new FakeCartographic();
+        target.longitude = (cartesian.x * Math.PI) / 180;
+        target.latitude = (cartesian.y * Math.PI) / 180;
+        return target;
+      }
+    },
+    NearFarScalar: class {
+      readonly near: number;
+      readonly nearValue: number;
+      readonly far: number;
+      readonly farValue: number;
+
+      constructor(near: number, nearValue: number, far: number, farValue: number) {
+        this.near = near;
+        this.nearValue = nearValue;
+        this.far = far;
+        this.farValue = farValue;
+      }
+    },
     VerticalOrigin: { CENTER: 'CENTER' },
     // Exposed so a test can prove the colour cache stops the layer reparsing CSS.
     __cssColourCalls: cssColourCalls,
@@ -142,63 +230,146 @@ const { __cssColourCalls: cssColourCalls } = (await import('cesium')) as unknown
 
 const { AircraftLayer } = await import('./aircraft');
 const { makeAircraft } = await import('../../testing/aircraft');
+const { clusterBadgeImage, iconImage, orientAxis } = await import('../icons');
+const { CLUSTER_CELL_PX, CLUSTER_MIN_MEMBERS, parseClusterPickId } = await import('../cluster');
+const { badgeSlots } = await import('../badge-slots');
 const {
+  AIRCRAFT_EMERGENCY_ICON_PX,
+  AIRCRAFT_ICON_PX,
+  AIRCRAFT_SELECTED_ICON_PX,
+  CLUSTER_ALERT_FILL,
+  CLUSTER_FILL,
   EMERGENCY_COLOUR,
-  EMERGENCY_PIXEL_SIZE,
-  POINT_PIXEL_SIZE,
-  SELECTED_PIXEL_SIZE,
-  SELECTION_COLOUR,
   CLASS_COLOURS,
+  clusterBadgePx,
 } = await import('../palette');
 
 interface FakeCollection {
   items: {
     position: { x: number; y: number; z: number };
+    alignedAxis: { x: number; y: number; z: number };
+    pixelOffset: { x: number; y: number };
     show: boolean;
     id: string | undefined;
+    image: string;
+    scaleByDistance: unknown;
+    width: number;
+    height: number;
     color: unknown;
-    pixelSize: number;
     outlineWidth: number;
     outlineColor: unknown;
     text: string;
     fillColor: unknown;
+    horizontalOrigin: unknown;
+    verticalOrigin: unknown;
   }[];
   timesRemoved: number;
   options: unknown;
 }
 
 /** A layer wired to a fake scene, plus direct handles on the collections it created. */
+const VIEWPORT_W = 1600;
+const VIEWPORT_H = 1000;
+
+function pixelProjection(): number[] {
+  const m = Array.from({ length: 16 }, () => 0);
+  m[0] = 2 / VIEWPORT_W;
+  m[12] = -1;
+  // Negative because device coordinates run y up and a canvas runs y down.
+  m[5] = -2 / VIEWPORT_H;
+  m[13] = 1;
+  m[15] = 1;
+  return m;
+}
+
+function identity(): number[] {
+  const m = Array.from({ length: 16 }, () => 0);
+  m[0] = 1;
+  m[5] = 1;
+  m[10] = 1;
+  m[15] = 1;
+  return m;
+}
+
 function build() {
   const primitives: FakeCollection[] = [];
+  const preUpdateListeners: (() => void)[] = [];
   const scene = {
     primitives: {
       add: (collection: FakeCollection) => {
         primitives.push(collection);
       },
     },
+    preUpdate: {
+      addEventListener: (listener: () => void) => {
+        preUpdateListeners.push(listener);
+      },
+    },
+    camera: {
+      frustum: { projectionMatrix: pixelProjection() },
+      viewMatrix: identity(),
+      positionWC: { x: 0, y: 0, z: 0 },
+    },
+    drawingBufferWidth: VIEWPORT_W,
+    drawingBufferHeight: VIEWPORT_H,
   };
   const layer = new AircraftLayer(
     scene as unknown as ConstructorParameters<typeof AircraftLayer>[0],
   );
-  const [points, labels] = primitives;
-  if (points === undefined || labels === undefined) {
+  const [marks, labels] = primitives;
+  if (marks === undefined || labels === undefined) {
     throw new Error('the layer did not add both collections to the scene');
   }
-  return { layer, points, labels };
+  const badges = primitives[2];
+  const badgeLabels = primitives[3];
+  if (badges === undefined || badgeLabels === undefined) {
+    throw new Error('the layer did not add its cluster collections to the scene');
+  }
+  /** Drive one clustering pass, the way a rendered frame would. */
+  const frame = (): void => {
+    for (const listener of preUpdateListeners) {
+      listener();
+    }
+  };
+  return { layer, points: marks, labels, badges, badgeLabels, frame };
 }
 
-/** The point currently drawn for this aircraft, found by the id the layer stamps on it. */
+/** The mark currently drawn for this aircraft, found by the id the layer stamps on it. */
 function pointFor(points: FakeCollection, icao24: string) {
   return points.items.find((item) => item.id === icao24);
 }
 
+interface FakeRangeScale {
+  near: number;
+  nearValue: number;
+  far: number;
+  farValue: number;
+}
+
+/** The range-scaling attribute Cesium evaluates in its vertex shader. */
+function rangeScaleOf(item: { scaleByDistance: unknown }): FakeRangeScale {
+  return item.scaleByDistance as FakeRangeScale;
+}
+
+/** The image the layer should have chosen for an aircraft in this state. */
+function expectedImage(colour: string, selected: boolean, shape: 'plane' | 'disc' = 'plane') {
+  const unselected = colour === EMERGENCY_COLOUR ? AIRCRAFT_EMERGENCY_ICON_PX : AIRCRAFT_ICON_PX;
+  const sizePx = selected ? AIRCRAFT_SELECTED_ICON_PX : unselected;
+  return { image: iconImage(shape, colour, selected, sizePx), sizePx };
+}
+
 describe('AircraftLayer construction', () => {
-  it('draws through primitive collections, with the opaque fast path on the points', () => {
+  it('draws through primitive collections, on the translucent pass only', () => {
     const { points, labels } = build();
 
     // Two collections, both registered with the scene. If this ever became one Entity per
     // aircraft the collections would not exist at all.
-    expect(points.options).toEqual({ blendOption: 'OPAQUE' });
+    //
+    // Translucent rather than opaque, which is the one thing the switch from points to icons
+    // changed here: an image has antialiased edges and transparent corners, and the opaque
+    // pass would draw those corners as black squares. Naming the pass explicitly is still
+    // narrower than Cesium's default, which pays for both.
+    expect((points.options as { blendOption: string }).blendOption).toBe('TRANSLUCENT');
     expect(labels.items).toHaveLength(0);
   });
 });
@@ -265,24 +436,138 @@ describe('AircraftLayer.upsert', () => {
       'aircraft',
     );
 
-    expect(pointFor(points, 'aaa111')?.color).toEqual({ css: CLASS_COLOURS.military });
-    expect(pointFor(points, 'aaa111')?.pixelSize).toBe(POINT_PIXEL_SIZE);
+    const routine = expectedImage(CLASS_COLOURS.military, false);
+    expect(pointFor(points, 'aaa111')?.image).toBe(routine.image);
+    expect(pointFor(points, 'aaa111')?.width).toBe(AIRCRAFT_ICON_PX);
     // Size as well as colour: red alone would be invisible to a red/green deficiency.
-    expect(pointFor(points, 'bbb222')?.color).toEqual({ css: EMERGENCY_COLOUR });
-    expect(pointFor(points, 'bbb222')?.pixelSize).toBe(EMERGENCY_PIXEL_SIZE);
-    expect(pointFor(points, 'bbb222')?.outlineColor).toEqual({ css: EMERGENCY_COLOUR });
-    expect(pointFor(points, 'bbb222')?.outlineWidth).toBe(2);
+    const alert = expectedImage(EMERGENCY_COLOUR, false);
+    expect(pointFor(points, 'bbb222')?.image).toBe(alert.image);
+    expect(pointFor(points, 'bbb222')?.width).toBe(AIRCRAFT_EMERGENCY_ICON_PX);
+    expect(pointFor(points, 'bbb222')?.height).toBe(AIRCRAFT_EMERGENCY_ICON_PX);
   });
 
-  it('gives a routine aircraft a transparent outline rather than a zero-width red one', () => {
+  it('draws a square mark, so an icon is never stretched into an ellipse', () => {
     const { layer, points } = build();
 
     layer.upsert([makeAircraft({ icao24: 'abc123' })], 'aircraft');
 
-    // Cesium antialiases the edge against the outline colour whatever the width, so a
-    // zero-width red ring fringed every ordinary aircraft in alert red.
-    expect(pointFor(points, 'abc123')?.outlineWidth).toBe(0);
-    expect(pointFor(points, 'abc123')?.outlineColor).toBe('TRANSPARENT');
+    const mark = pointFor(points, 'abc123');
+    expect(mark?.width).toBe(mark?.height);
+  });
+
+  it('centres the mark on the fix, so a rotation turns it about the aircraft', () => {
+    const { layer, points } = build();
+
+    layer.upsert([makeAircraft({ icao24: 'abc123' })], 'aircraft');
+
+    // Off-centre, the mark would swing round its own corner as the track changed and would
+    // sit beside the position rather than on it.
+    expect(pointFor(points, 'abc123')?.horizontalOrigin).toBe('CENTER');
+    expect(pointFor(points, 'abc123')?.verticalOrigin).toBe('CENTER');
+  });
+
+  it('points the aircraft along its reported track, in earth-fixed terms', () => {
+    const { layer, points } = build();
+
+    layer.upsert(
+      [
+        makeAircraft({
+          icao24: 'abc123',
+          point: { lon: -0.12, lat: 51.5, altitude_m: 10_000 },
+          track_deg: 235,
+        }),
+      ],
+      'aircraft',
+    );
+
+    // A world-space axis, not a screen angle: the mark has to keep pointing at 235 degrees
+    // after the camera is dragged round, and a screen angle would not.
+    expect(pointFor(points, 'abc123')?.alignedAxis).toEqual(
+      orientAxis(-0.12, 51.5, 235, { x: 0, y: 0, z: 0 }),
+    );
+  });
+
+  it('draws a circle, pointing nowhere, when the feed reported no track', () => {
+    const { layer, points } = build();
+
+    layer.upsert([makeAircraft({ icao24: 'abc123', track_deg: null })], 'aircraft');
+
+    // An aircraft silhouette aimed at a bearing nobody measured is a fabricated fact that
+    // looks exactly like a real one. The circle is the honest answer.
+    const mark = pointFor(points, 'abc123');
+    expect(mark?.image).toBe(expectedImage(CLASS_COLOURS.commercial, false, 'disc').image);
+    expect(mark?.alignedAxis).toEqual({ x: 0, y: 0, z: 0 });
+  });
+
+  it('goes back to pointing once a track arrives on a later report', () => {
+    const { layer, points } = build();
+    layer.upsert([makeAircraft({ icao24: 'abc123', track_deg: null })], 'aircraft');
+
+    layer.upsert(
+      [
+        makeAircraft({
+          icao24: 'abc123',
+          point: { lon: 10, lat: 20, altitude_m: 0 },
+          track_deg: 90,
+        }),
+      ],
+      'aircraft',
+    );
+
+    const mark = pointFor(points, 'abc123');
+    expect(mark?.image).toBe(expectedImage(CLASS_COLOURS.commercial, false, 'plane').image);
+    expect(mark?.alignedAxis).toEqual(orientAxis(10, 20, 90, { x: 0, y: 0, z: 0 }));
+  });
+
+  it('holds the callsign clear of the mark, and further clear of a bigger one', () => {
+    const { layer, labels } = build();
+    layer.upsert([makeAircraft({ icao24: 'aaa111' })], 'aircraft');
+    const routine = labels.items[0]?.pixelOffset.x ?? 0;
+
+    layer.upsert([makeAircraft({ icao24: 'aaa111', squawk: '7700' })], 'aircraft');
+
+    expect(routine).toBeGreaterThan(AIRCRAFT_ICON_PX / 2);
+    expect(labels.items[0]?.pixelOffset.x).toBeGreaterThan(routine);
+  });
+});
+
+describe('AircraftLayer mark size against camera range', () => {
+  it('shrinks the mark as the camera pulls back, because one size cannot serve both', () => {
+    // The bug this fixes: a size that lets one aircraft be read over a city painted Europe
+    // solid when the camera framed the globe, and the continent underneath disappeared. There
+    // is no single number that serves a city view and an orbital one.
+    const { layer, points } = build();
+
+    layer.upsert([makeAircraft({ icao24: 'abc123' })], 'aircraft');
+
+    const scale = rangeScaleOf(pointFor(points, 'abc123')!);
+    expect(scale.nearValue).toBe(1);
+    expect(scale.farValue).toBeLessThan(1);
+    expect(scale.far).toBeGreaterThan(scale.near);
+  });
+
+  it('never shrinks the selected aircraft, whatever the range', () => {
+    // There is at most one selected mark, so it costs the picture nothing, and a selection
+    // that faded with distance would fail at exactly the zoom where you most need telling
+    // which of a thousand marks you just clicked.
+    const { layer, points } = build();
+    layer.upsert([makeAircraft({ icao24: 'abc123' })], 'aircraft');
+
+    layer.setSelected('abc123');
+
+    const scale = rangeScaleOf(pointFor(points, 'abc123')!);
+    expect(scale.nearValue).toBe(1);
+    expect(scale.farValue).toBe(1);
+  });
+
+  it('puts the mark back on the range curve when it is deselected', () => {
+    const { layer, points } = build();
+    layer.upsert([makeAircraft({ icao24: 'abc123' })], 'aircraft');
+    layer.setSelected('abc123');
+
+    layer.setSelected(null);
+
+    expect(rangeScaleOf(pointFor(points, 'abc123')!).farValue).toBeLessThan(1);
   });
 });
 
@@ -337,9 +622,25 @@ describe('AircraftLayer update path', () => {
       'aircraft',
     );
 
-    // Two parses at most: the class hue and the label colour. Parsing per aircraft per
+    // Two parses at most, and only for the label: the mark's hue lives inside its own
+    // image now, so the only CSS this layer parses is text colour. Parsing per aircraft per
     // update would be the hottest thing in the loop.
     expect(cssColourCalls.count - before).toBeLessThanOrEqual(2);
+  });
+
+  it('shares one image between every aircraft of a class, which is one atlas entry', () => {
+    const { layer, points } = build();
+
+    layer.upsert(
+      Array.from({ length: 40 }, (_unused, index) =>
+        makeAircraft({ icao24: `id${String(index)}`, aircraft_class: 'commercial' }),
+      ),
+      'aircraft',
+    );
+
+    // Cesium keys its billboard texture atlas on the image id. Forty distinct strings here
+    // would be forty textures on the GPU for one hue.
+    expect(new Set(points.items.map((item) => item.image)).size).toBe(1);
   });
 });
 
@@ -560,24 +861,29 @@ describe('AircraftLayer.setSelected', () => {
     );
   });
 
-  it('rings the selected aircraft in white without changing its hue', () => {
+  it('haloes the selected aircraft without changing its hue', () => {
     context.layer.setSelected('aaa111');
 
-    const point = pointFor(context.points, 'aaa111');
-    expect(point?.outlineColor).toEqual({ css: SELECTION_COLOUR });
-    expect(point?.outlineWidth).toBe(2);
-    expect(point?.pixelSize).toBe(SELECTED_PIXEL_SIZE);
-    expect(point?.color).toEqual({ css: CLASS_COLOURS.commercial });
+    const mark = pointFor(context.points, 'aaa111');
+    // The class hue is still the fill, so the card and the mark cannot disagree about what
+    // the aircraft is. The halo and the size are what changed.
+    expect(mark?.image).toBe(expectedImage(CLASS_COLOURS.commercial, true).image);
+    expect(mark?.width).toBe(AIRCRAFT_SELECTED_ICON_PX);
+    expect(AIRCRAFT_SELECTED_ICON_PX).toBeGreaterThan(AIRCRAFT_ICON_PX);
   });
 
-  it('clears the ring off the aircraft that was selected before', () => {
+  it('clears the halo off the aircraft that was selected before', () => {
     context.layer.setSelected('aaa111');
 
     context.layer.setSelected('bbb222');
 
-    expect(pointFor(context.points, 'aaa111')?.outlineWidth).toBe(0);
-    expect(pointFor(context.points, 'aaa111')?.pixelSize).toBe(POINT_PIXEL_SIZE);
-    expect(pointFor(context.points, 'bbb222')?.outlineWidth).toBe(2);
+    expect(pointFor(context.points, 'aaa111')?.image).toBe(
+      expectedImage(CLASS_COLOURS.commercial, false).image,
+    );
+    expect(pointFor(context.points, 'aaa111')?.width).toBe(AIRCRAFT_ICON_PX);
+    expect(pointFor(context.points, 'bbb222')?.image).toBe(
+      expectedImage(CLASS_COLOURS.commercial, true).image,
+    );
   });
 
   it('deselects on null', () => {
@@ -585,17 +891,54 @@ describe('AircraftLayer.setSelected', () => {
 
     context.layer.setSelected(null);
 
-    expect(pointFor(context.points, 'aaa111')?.outlineWidth).toBe(0);
+    expect(pointFor(context.points, 'aaa111')?.image).toBe(
+      expectedImage(CLASS_COLOURS.commercial, false).image,
+    );
   });
 
-  it('lets an emergency win over selection, so an alert is never dressed down', () => {
+  it('ignores a repeat of the current selection', () => {
+    context.layer.setSelected('aaa111');
+
+    context.layer.setSelected('aaa111');
+
+    // Early return rather than a second pass over the marks. Clicking the same aircraft
+    // twice is the commonest interaction there is.
+    expect(pointFor(context.points, 'aaa111')?.image).toBe(
+      expectedImage(CLASS_COLOURS.commercial, true).image,
+    );
+  });
+
+  it('keeps an emergency red and enlarged when it is selected, never dressed down', () => {
     context.layer.upsert([makeAircraft({ icao24: 'aaa111', squawk: '7700' })], 'aircraft');
 
     context.layer.setSelected('aaa111');
 
-    const point = pointFor(context.points, 'aaa111');
-    expect(point?.pixelSize).toBe(EMERGENCY_PIXEL_SIZE);
-    expect(point?.color).toEqual({ css: EMERGENCY_COLOUR });
+    // Both states show at once: the fill is still the alert red, and the halo is added on
+    // top of a mark that is larger than the unselected emergency rather than smaller.
+    const mark = pointFor(context.points, 'aaa111');
+    expect(mark?.image).toBe(expectedImage(EMERGENCY_COLOUR, true).image);
+    expect(mark?.width).toBe(AIRCRAFT_SELECTED_ICON_PX);
+    expect(AIRCRAFT_SELECTED_ICON_PX).toBeGreaterThan(AIRCRAFT_EMERGENCY_ICON_PX);
+  });
+
+  it('keeps the selected aircraft pointing where it is going', () => {
+    context.layer.upsert(
+      [
+        makeAircraft({
+          icao24: 'aaa111',
+          point: { lon: 5, lat: 6, altitude_m: 0 },
+          track_deg: 45,
+        }),
+      ],
+      'aircraft',
+    );
+
+    context.layer.setSelected('aaa111');
+
+    // Selection swaps the image. It must not swap in the unrotated one.
+    expect(pointFor(context.points, 'aaa111')?.alignedAxis).toEqual(
+      orientAxis(5, 6, 45, { x: 0, y: 0, z: 0 }),
+    );
   });
 
   it('forgets the selection when the selected aircraft leaves the feed', () => {
@@ -605,7 +948,9 @@ describe('AircraftLayer.setSelected', () => {
     context.layer.upsert([makeAircraft({ icao24: 'aaa111' })], 'aircraft');
 
     // Reappearing must not silently come back selected, having never been picked.
-    expect(pointFor(context.points, 'aaa111')?.outlineWidth).toBe(0);
+    expect(pointFor(context.points, 'aaa111')?.image).toBe(
+      expectedImage(CLASS_COLOURS.commercial, false).image,
+    );
   });
 });
 
@@ -713,5 +1058,357 @@ describe('AircraftLayer.setVisible', () => {
     layer.upsert([makeAircraft({ icao24: 'def456', is_military: true })], 'military', 1000);
 
     expect(pointFor(points, 'def456')?.show).toBe(false);
+  });
+});
+
+/** Aircraft that land on the given pixels, all in one feed. */
+/** A cell's worth of aircraft, twenty across and two apart down so any count stays in one cell. */
+function crowd(feed: 'aircraft' | 'military', count: number, originX = 100, originY = 100) {
+  return Array.from({ length: count }, (_unused, index) =>
+    makeAircraft({
+      icao24: `${feed === 'military' ? 'mil' : 'civ'}${String(index).padStart(3, '0')}`,
+      point: {
+        lon: originX + (index % 20),
+        lat: originY + Math.floor(index / 20) * 2,
+        altitude_m: 0,
+      },
+    }),
+  );
+}
+
+/** Aircraft that land on the given pixels, all on one feed. */
+function at(feed: 'aircraft' | 'military', pixels: readonly (readonly [number, number])[]) {
+  return pixels.map(([x, y], index) =>
+    makeAircraft({
+      icao24: `${feed === 'military' ? 'mil' : 'civ'}${String(index).padStart(3, '0')}`,
+      point: { lon: x, lat: y, altitude_m: 0 },
+    }),
+  );
+}
+
+describe('AircraftLayer.countInView against the rectangle it is handed', () => {
+  /**
+   * The rail reads "0 in view of 820" at the whole-globe default while aircraft are visibly
+   * drawn over Europe, and these two tests exist to say where that is and is not coming from.
+   *
+   * `countInView` takes a longitude and latitude rectangle from `cityView`, which gets it from
+   * Cesium's `camera.computeViewRectangle`. Given a rectangle that really does cover what the
+   * camera sees, this function counts correctly, and the tests below pin that down. So a zero on
+   * the rail is the rectangle, not the counting, and `clusterState.onScreen` sidesteps the whole
+   * question by projecting each mover through the real camera matrix instead.
+   */
+  const WHOLE_WORLD = { west: -180, south: -90, east: 180, north: 90 };
+
+  it('counts every aircraft of a feed when the rectangle is the whole world', () => {
+    const { layer } = build();
+    layer.upsert(
+      at('aircraft', [
+        [-170, -80],
+        [0, 0],
+        [179, 89],
+      ]),
+      'aircraft',
+    );
+
+    expect(layer.countInView(WHOLE_WORLD, 'aircraft')).toBe(3);
+  });
+
+  it('counts nothing when the rectangle collapses to a line, which is the failure to look for', () => {
+    // A degenerate rectangle is the shape that produces a truthful-looking zero: every aircraft
+    // is outside a band with no height, so the count is right and the answer is useless.
+    const { layer } = build();
+    layer.upsert(
+      at('aircraft', [
+        [0, 10],
+        [0, 20],
+      ]),
+      'aircraft',
+    );
+
+    expect(layer.countInView({ west: 0, south: 25, east: 0, north: 25 }, 'aircraft')).toBe(0);
+    expect(layer.countInView(WHOLE_WORLD, 'aircraft')).toBe(2);
+  });
+});
+
+describe('AircraftLayer badge identity', () => {
+  it('rims a civil badge in the colour the civil marks are drawn in', () => {
+    // Before this, all five layers rendered an identical grey hexagon, so a badge reading "6k" could
+    // have been six thousand aircraft or six thousand buses with both in the frame at once. The rim
+    // takes the colour this layer already draws its own marks in, which is the same constant the rail
+    // is handed for its legend row, so the globe and the key cannot disagree.
+    const { layer, badges, frame } = build();
+    layer.upsert(crowd('aircraft', CLUSTER_MIN_MEMBERS, 300, 300), 'aircraft', 1000);
+
+    frame();
+
+    const size = clusterBadgePx(CLUSTER_MIN_MEMBERS);
+    expect(badges.items.find((item) => item.show)?.image).toBe(
+      clusterBadgeImage(size, CLUSTER_FILL, CLASS_COLOURS.unknown),
+    );
+  });
+
+  it('rims a military badge in amber, so the two feeds are told apart when grouped', () => {
+    // Military has its own rail row and its own hue, and that distinction is the sharpest one on the
+    // globe. It used to survive being an individual mark and vanish the moment a cell grouped.
+    const { layer, badges, frame } = build();
+    layer.upsert(crowd('military', CLUSTER_MIN_MEMBERS, 300, 300), 'military', 1000);
+
+    frame();
+
+    const size = clusterBadgePx(CLUSTER_MIN_MEMBERS);
+    const drawn = badges.items.find((item) => item.show)?.image;
+    expect(drawn).toBe(clusterBadgeImage(size, CLUSTER_FILL, CLASS_COLOURS.military));
+    expect(drawn).not.toBe(clusterBadgeImage(size, CLUSTER_FILL, CLASS_COLOURS.unknown));
+  });
+});
+
+describe('AircraftLayer badge placement', () => {
+  it('keeps the civil and military badges of one cell apart from each other', () => {
+    // This layer is the only one that clusters twice, once per feed, so it is the only one that can
+    // collide with itself. Two grids over one lattice is the same problem as two layers over one
+    // lattice, and it takes the same answer: a claim per feed key.
+    const { layer, badges, frame } = build();
+    badgeSlots.reset();
+    layer.upsert(crowd('aircraft', CLUSTER_MIN_MEMBERS, 300, 300), 'aircraft', 1000);
+    layer.upsert(crowd('military', CLUSTER_MIN_MEMBERS, 300, 300), 'military', 1000);
+
+    frame();
+
+    const drawn = badges.items
+      .filter((item) => item.show)
+      .map((item) => ({ x: 300 + item.pixelOffset.x, y: 300 + item.pixelOffset.y }));
+    expect(drawn).toHaveLength(2);
+    const [a, b] = drawn;
+    expect(Math.hypot((a?.x ?? 0) - (b?.x ?? 0), (a?.y ?? 0) - (b?.y ?? 0))).toBeGreaterThanOrEqual(
+      CLUSTER_CELL_PX,
+    );
+  });
+
+  it('holds both badges still across passes', () => {
+    const { layer, badges, frame } = build();
+    badgeSlots.reset();
+    layer.upsert(crowd('aircraft', CLUSTER_MIN_MEMBERS, 300, 300), 'aircraft', 1000);
+    layer.upsert(crowd('military', CLUSTER_MIN_MEMBERS, 300, 300), 'military', 1000);
+
+    frame();
+    const first = badges.items.filter((item) => item.show).map((item) => ({ ...item.pixelOffset }));
+    for (let pass = 0; pass < 5; pass += 1) {
+      frame();
+    }
+
+    expect(
+      badges.items.filter((item) => item.show).map((item) => ({ ...item.pixelOffset })),
+    ).toEqual(first);
+  });
+
+  it('frees the military point when that feed is switched off', () => {
+    // The feed leaves the loop rather than running and returning early, so this layer is the one that
+    // has to free its points where the switch is thrown instead of on the next pass.
+    const { layer, frame } = build();
+    badgeSlots.reset();
+    layer.upsert(crowd('aircraft', CLUSTER_MIN_MEMBERS, 300, 300), 'aircraft', 1000);
+    layer.upsert(crowd('military', CLUSTER_MIN_MEMBERS, 300, 300), 'military', 1000);
+    frame();
+    expect(badgeSlots.claimed).toBe(2);
+
+    layer.setVisible('military', false);
+    frame();
+
+    expect(badgeSlots.claimed).toBe(1);
+  });
+});
+
+describe('AircraftLayer clustering', () => {
+  it('leaves two aircraft in a cell drawn as themselves', () => {
+    const { layer, points, badges, frame } = build();
+    layer.upsert(
+      at('aircraft', [
+        [100, 100],
+        [110, 110],
+      ]),
+      'aircraft',
+    );
+
+    frame();
+
+    expect(points.items.filter((item) => item.show)).toHaveLength(2);
+    expect(badges.items.filter((item) => item.show)).toHaveLength(0);
+  });
+
+  it('replaces a crowded cell with one badge carrying the count', () => {
+    const { layer, points, labels, badges, badgeLabels, frame } = build();
+    layer.upsert(crowd('aircraft', CLUSTER_MIN_MEMBERS, 100, 100), 'aircraft');
+
+    frame();
+
+    // Nothing is hidden in the sense that matters: the four aircraft are still tracked, still
+    // counted, and one mark on the globe says how many there are.
+    expect(layer.count).toBe(CLUSTER_MIN_MEMBERS);
+    expect(points.items.filter((item) => item.show)).toHaveLength(0);
+    expect(labels.items.filter((item) => item.show)).toHaveLength(0);
+    const drawn = badges.items.filter((item) => item.show);
+    expect(drawn).toHaveLength(1);
+    expect(badgeLabels.items.find((item) => item.show)?.text).toBe(String(CLUSTER_MIN_MEMBERS));
+  });
+
+  it('publishes a count that adds up, which is what the rail rests on', () => {
+    const { layer, frame } = build();
+    layer.upsert(
+      [
+        ...crowd('aircraft', CLUSTER_MIN_MEMBERS, 100, 100),
+        makeAircraft({ icao24: 'lone01', point: { lon: 900, lat: 500, altitude_m: 0 } }),
+      ],
+      'aircraft',
+    );
+
+    frame();
+
+    const state = layer.clusterState('aircraft');
+    expect(state).toMatchObject({
+      onScreen: CLUSTER_MIN_MEMBERS + 1,
+      individuals: 1,
+      groups: 1,
+      inGroups: CLUSTER_MIN_MEMBERS,
+    });
+    expect(state.individuals + state.inGroups).toBe(state.onScreen);
+    expect(state.largestGroup).toBe(CLUSTER_MIN_MEMBERS);
+  });
+
+  it('reports nothing for a feed it has never held', () => {
+    const { layer, frame } = build();
+
+    frame();
+
+    expect(layer.clusterState('military')).toEqual({
+      onScreen: 0,
+      individuals: 0,
+      groups: 0,
+      inGroups: 0,
+      largestGroup: 0,
+    });
+  });
+
+  it('never groups the two feeds together, because the rail switches them apart', () => {
+    // A badge spanning both feeds could not be hidden by either switch without lying about the
+    // other, and its count would change meaning depending on which switches were on.
+    const { layer, badges, badgeLabels, frame } = build();
+    layer.upsert(crowd('aircraft', CLUSTER_MIN_MEMBERS, 100, 100), 'aircraft');
+    layer.upsert(crowd('military', CLUSTER_MIN_MEMBERS, 100, 100), 'military');
+
+    frame();
+
+    const shownLabels = badgeLabels.items.filter((item) => item.show);
+    expect(badges.items.filter((item) => item.show)).toHaveLength(2);
+    expect(shownLabels.map((label) => label.text)).toEqual([
+      String(CLUSTER_MIN_MEMBERS),
+      String(CLUSTER_MIN_MEMBERS),
+    ]);
+  });
+
+  it('paints a badge in the alert colour when it has swallowed an emergency', () => {
+    // Red is reserved for alerts across the whole app. A group that took one in silently would be
+    // the single case where clustering hid something that mattered.
+    const { layer, badges, frame } = build();
+    const flight = crowd('aircraft', CLUSTER_MIN_MEMBERS, 100, 100);
+    flight[1] = makeAircraft({
+      icao24: 'civ001',
+      point: { lon: 101, lat: 100, altitude_m: 0 },
+      squawk: '7700',
+    });
+    layer.upsert(flight, 'aircraft');
+
+    frame();
+
+    const badge = badges.items.find((item) => item.show);
+    const size = clusterBadgePx(CLUSTER_MIN_MEMBERS);
+    // The casing still says which layer. Losing the identity at the moment something is wrong is the
+    // worst time to lose it, so red is the fill and the rim is unchanged.
+    const rim = CLASS_COLOURS.unknown;
+    expect(badge?.image).toBe(clusterBadgeImage(size, CLUSTER_ALERT_FILL, rim));
+    expect(badge?.image).not.toBe(clusterBadgeImage(size, CLUSTER_FILL, rim));
+  });
+
+  it('dissolves a group back into aircraft when they separate', () => {
+    const { layer, points, badges, frame } = build();
+    layer.upsert(crowd('aircraft', CLUSTER_MIN_MEMBERS, 100, 100), 'aircraft');
+    frame();
+
+    layer.upsert(
+      crowd('aircraft', CLUSTER_MIN_MEMBERS, 100, 100).map((record, index) => ({
+        ...record,
+        point: { lon: 100 + index * 120, lat: 100 + index * 70, altitude_m: 0 },
+      })),
+      'aircraft',
+    );
+    frame();
+
+    expect(points.items.filter((item) => item.show)).toHaveLength(CLUSTER_MIN_MEMBERS);
+    expect(badges.items.filter((item) => item.show)).toHaveLength(0);
+  });
+
+  it('pools its badges rather than removing them, like every other primitive here', () => {
+    const { layer, badges, badgeLabels, frame } = build();
+    layer.upsert(crowd('aircraft', CLUSTER_MIN_MEMBERS, 100, 100), 'aircraft');
+    frame();
+    layer.replace([], 'aircraft');
+
+    frame();
+
+    expect(badges.timesRemoved).toBe(0);
+    expect(badgeLabels.timesRemoved).toBe(0);
+    expect(badges.items.filter((item) => item.show)).toHaveLength(0);
+  });
+
+  it('hides a switched-off feed badges and all, without forgetting the count', () => {
+    const { layer, badges, frame } = build();
+    layer.upsert(crowd('aircraft', CLUSTER_MIN_MEMBERS, 100, 100), 'aircraft');
+    frame();
+
+    layer.setVisible('aircraft', false);
+
+    expect(badges.items.filter((item) => item.show)).toHaveLength(0);
+    expect(layer.count).toBe(CLUSTER_MIN_MEMBERS);
+    frame();
+    expect(layer.clusterState('aircraft').inGroups).toBe(CLUSTER_MIN_MEMBERS);
+  });
+
+  it('keeps a grouped aircraft hidden when its feed comes back on', () => {
+    // Otherwise the aircraft and the badge speaking for it are both drawn until the camera moves.
+    const { layer, points, frame } = build();
+    layer.upsert(crowd('aircraft', CLUSTER_MIN_MEMBERS, 100, 100), 'aircraft');
+    frame();
+    layer.setVisible('aircraft', false);
+
+    layer.setVisible('aircraft', true);
+
+    expect(points.items.filter((item) => item.show)).toHaveLength(0);
+  });
+
+  it('sends a picked badge to a camera position rather than to a card', () => {
+    // A card for two hundred aircraft is not a card. The only question a group can answer is
+    // "what is in there", and it answers it by getting close enough to become aircraft again.
+    const { layer, badges, frame } = build();
+    layer.upsert(crowd('aircraft', CLUSTER_MIN_MEMBERS, 100, 100), 'aircraft');
+    frame();
+    const pickId = badges.items.find((item) => item.show)?.id ?? null;
+
+    const target = layer.clusterFlyTo(pickId);
+
+    expect(parseClusterPickId(pickId)?.layerKey).toBe('aircraft');
+    expect(target?.count).toBe(CLUSTER_MIN_MEMBERS);
+    expect(target?.lon).toBeGreaterThanOrEqual(100);
+    expect(target?.altitudeM).toBeGreaterThan(0);
+  });
+
+  it('refuses a pick id that is not a live badge of its own', () => {
+    const { layer, frame } = build();
+    layer.upsert(at('aircraft', [[100, 100]]), 'aircraft');
+    frame();
+
+    expect(layer.clusterFlyTo(null)).toBeNull();
+    expect(layer.clusterFlyTo('abc123')).toBeNull();
+    expect(layer.clusterFlyTo('cluster:vessels:4')).toBeNull();
+    // A cell that exists but is not crowded: the badge has dissolved since the click.
+    expect(layer.clusterFlyTo('cluster:aircraft:0')).toBeNull();
   });
 });

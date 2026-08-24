@@ -17,6 +17,9 @@ export function makeVessel(overrides: Partial<Vessel> = {}): Vessel {
     observed_at: '2026-08-19T12:00:00Z',
     position_age_s: 12,
     source: 'digitraffic',
+    // Every provider that saw the ship, freshest first, so the first is `source`. The
+    // backend attaches it at the merge, so a served record always has at least one.
+    providers: ['digitraffic'],
     name: 'FINNMAID',
     call_sign: 'OJPQ',
     ship_type: 60,

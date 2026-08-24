@@ -37,7 +37,18 @@ export interface paths {
         };
         /**
          * Get Aircraft
-         * @description One aircraft by ICAO address, from either store. ``null`` when not currently seen.
+         * @description One aircraft by ICAO address, joined to the registry. ``null`` when not seen.
+         *
+         *     **This is the card path, and it is the only place enrichment happens.** A card asks
+         *     about one aircraft and the registry is asked about that one aircraft, because adsbdb's
+         *     limiter allows 512 requests a minute per IP and a live layer is thousands of records a
+         *     cycle. Sweeping the layer would be throttled inside the first poll and would tell us
+         *     nothing the card needs.
+         *
+         *     A registry that does not answer degrades this to feed-only data and never to an error, so
+         *     the aircraft still renders with its position, callsign, type and class. Per ADR 009 the
+         *     LADD flag changes nothing here: a LADD aircraft resolves to its owner and comes back like
+         *     any other.
          */
         get: operations["get_aircraft_api_aircraft__icao24__get"];
         put?: never;
@@ -64,6 +75,59 @@ export interface paths {
          *     leave the server.
          */
         get: operations["capabilities_api_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Cities
+         * @description Populated places above 15,000 people, from the local GeoNames index.
+         *
+         *     Reads no network and never can: the gazetteer holds no HTTP client. It is not a
+         *     time-to-live store either, so a city that was here at start-up is still here an hour
+         *     later without anything writing it back.
+         *
+         *     Ordered by population descending with the GeoNames id breaking ties, which is what makes
+         *     a capped read useful: the first page is the cities a world view labels, and a bounding box
+         *     is how a client reaches the smaller ones. Empty until the weekly refresh has run once,
+         *     which ``/api/capabilities`` reports as unavailable with the reason rather than leaving it
+         *     looking like a layer that draws nothing.
+         */
+        get: operations["list_cities_api_cities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cities/{geonames_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get City
+         * @description One city by its GeoNames id. ``null`` when the index does not hold it.
+         *
+         *     The id is what a search hit carries and what a shareable URL puts in its fragment, so
+         *     this is the direct lookup behind both. A dict read on the index, no scan.
+         */
+        get: operations["get_city_api_cities__geonames_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -116,6 +180,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Media
+         * @description Serve one provider media item from our own origin.
+         *
+         *     Raises:
+         *         HTTPException: 400 when the URL is not one this proxy will fetch, and 502 when the
+         *             provider refused it or sent something that was not what it claimed. Deliberately
+         *             different codes: the first is the caller's problem and the second is not, and a
+         *             single 404 for both would send someone looking in the wrong place.
+         */
+        get: operations["media_api_media_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/removals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Removal
+         * @description Remove and suppress one person record, at once.
+         *
+         *     Both halves in one call, because a removal that only cleared what we hold is undone by the
+         *     next crawl and a suppression that only set a flag reports success while the name is still
+         *     being served.
+         *
+         *     Raises:
+         *         HTTPException: 403 when the API is not bound to loopback, with the reason.
+         */
+        post: operations["create_removal_api_removals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/satellites": {
         parameters: {
             query?: never;
@@ -160,6 +277,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search
+         * @description Resolve one query against everything the server holds, grouped and ranked.
+         *
+         *     A callsign, a registration, an ICAO address, a vessel name, an MMSI, an IMO number, a
+         *     satellite name, a NORAD catalogue number, a city, or an address: one field for all of it,
+         *     because the search box is the only navigation this globe has.
+         *
+         *     Local first, and almost always local only. Live entities are scanned in the stores the
+         *     WebSocket already serves and cities come from the in-process gazetteer, so a hit costs no
+         *     network at all. Nominatim is consulted only when every local group came back empty **and
+         *     the gazetteer holds something**, which is what keeps a typeahead inside a usage policy that
+         *     names systematic querying as unacceptable use. Before the weekly download lands there is
+         *     nothing local to have missed, so the cities group comes back carrying that reason instead
+         *     and no query leaves the process.
+         *
+         *     A group with no hits and no reason was asked and found nothing. A group carrying a reason
+         *     could not be asked, which is the same rule ``/api/capabilities`` follows for a missing key.
+         */
+        get: operations["search_api_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/social": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Social Posts
+         * @description Posts whose subject is in this box, each saying how it came to be placed there.
+         *
+         *     The box is required rather than optional, unlike the mover routes. Those hold a world set
+         *     and filter it; this one has to ask a provider about a place, and a request with no place is
+         *     not a smaller version of this query, it is a different one.
+         *
+         *     Raises:
+         *         HTTPException: 422 when the box is inverted, which is the caller's mistake rather than
+         *             ours and must not read as a server fault. A ``west`` greater than ``east`` is
+         *             legitimate and means the box crosses the antimeridian.
+         */
+        get: operations["list_social_posts_api_social_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Transit
+         * @description Buses and trains currently known to the server, across 258 keyless licensed feeds.
+         *
+         *     One record per ``(feed_id, entity_id)``, which is the compound key rather than the
+         *     vehicle's own id: 20% of id-carrying vehicles share an id with another agency, so keying
+         *     on the obvious field collapses two buses in different countries into one.
+         *
+         *     Coverage is 17 countries, almost all in Europe and North America, and the count moves
+         *     with the time of day by a factor of 2.7 because a transit layer counts buses where
+         *     buses are running. Both facts are on the layer's capability reason rather than implied.
+         */
+        get: operations["list_transit_api_transit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/vessels": {
         parameters: {
             query?: never;
@@ -171,8 +380,10 @@ export interface paths {
          * List Vessels
          * @description Vessels currently known to the server, merged across every reporting provider.
          *
-         *     One record per MMSI whatever the provider count, per ADR 010, and each record names the
-         *     provider whose report supplied it and how old that report was.
+         *     One record per MMSI whatever the provider count, per ADR 010. Each record names the
+         *     provider whose report supplied it, how old that report was, and every provider that saw
+         *     the ship, because a merged store you cannot audit per record is the bug that rule exists
+         *     to prevent.
          */
         get: operations["list_vessels_api_vessels_get"];
         put?: never;
@@ -281,6 +492,12 @@ export interface components {
              * @default false
              */
             on_ground: boolean;
+            /**
+             * On Ladd
+             * @description The owner is on the FAA's Limiting Aircraft Data Displayed programme, read from dbFlags bit 8. An attribute, never a display block: per ADR 009 a LADD aircraft resolves and renders like any other, because LADD binds the feeds the FAA itself supplies and every position here comes from volunteer receivers. False means the provider's aircraft database does not flag this airframe, which is not the same as proof it is off the programme.
+             * @default false
+             */
+            on_ladd: boolean;
             /** Operator */
             operator?: string | null;
             /** Owner */
@@ -291,6 +508,12 @@ export interface components {
              * @description Seconds between the position fix and observed_at, as reported by the feed's seen_pos. Drives the stale badge in the UI.
              */
             position_age_s: number;
+            /**
+             * Providers
+             * @description Every provider that saw this aircraft, freshest report first, so the first entry is the one named in source. Empty on a record no merge has touched.
+             * @default []
+             */
+            providers: string[];
             /** Registered Country */
             registered_country?: string | null;
             /**
@@ -317,7 +540,7 @@ export interface components {
             type_designator?: string | null;
             /**
              * Uses Privacy Address
-             * @description Aircraft is broadcasting a privacy ICAO address. Not resolvable to an owner by design; we do not attempt to unmask it.
+             * @description Aircraft is broadcasting a privacy ICAO address, so the address it sends is not tied to its registration. Carried as-is at this phase, flagged and unresolved. Per ADR 009 correlation back to a registration is phase 11, above a threshold set higher than an ordinary registry join, and the flag stays on the record afterwards so a card can say the identification is inferred.
              * @default false
              */
             uses_privacy_address: boolean;
@@ -333,11 +556,130 @@ export interface components {
          *
          *     Derived, not broadcast. ``MILITARY`` comes from the feed's own database flag;
          *     ``BUSINESS_JET`` from the type designator; ``ANONYMOUS`` marks an aircraft using a
-         *     privacy ICAO address, which we display as anonymous by design and never attempt to
-         *     resolve to an owner.
+         *     privacy ICAO address, which displays anonymised at this phase and is correlated back to a
+         *     registration in phase 11, per ADR 009, above a threshold set higher than an ordinary
+         *     registry join. The anonymity is never hidden: a correlated card says the identification is
+         *     inferred rather than observed.
          * @enum {string}
          */
         AircraftClass: "unknown" | "commercial" | "business_jet" | "general_aviation" | "military" | "helicopter" | "anonymous";
+        /**
+         * AircraftDetail
+         * @description One aircraft plus the registry join that produced its ownership, and its provenance.
+         *
+         *     ADR 011 wants every claim to carry where it came from and when, so the join is described
+         *     rather than merged invisibly into the record: ``registry`` names the register that
+         *     answered, ``joined_at`` dates this join, and ``degraded_reason`` says why there is no
+         *     owner when there is none.
+         *
+         *     ``registry`` is null in two situations that must not be confused. The register answered
+         *     and does not hold the airframe, which is about one live aircraft in five and leaves
+         *     ``degraded_reason`` null. Or the register did not answer, which sets it.
+         *
+         *     No photograph. adsbdb's photo URL is a hot-link into a third party and AGENTS.md forbids
+         *     hot-linking media, so it stays server side for a proxy that owes its own host allowlist.
+         */
+        AircraftDetail: {
+            aircraft: components["schemas"]["Aircraft"];
+            /**
+             * Conflicts
+             * @default []
+             */
+            conflicts: components["schemas"]["RegistryConflict"][];
+            /** Degraded Reason */
+            degraded_reason?: string | null;
+            /** Joined At */
+            joined_at?: string | null;
+            ownership?: components["schemas"]["AircraftOwnership"] | null;
+            /** Registry */
+            registry?: string | null;
+            /** Registry Attribution */
+            registry_attribution?: string | null;
+        };
+        /**
+         * AircraftOwnership
+         * @description The ownership spine for one aircraft: registrant, filing entity, and named officers.
+         *
+         *     **``asserted`` is the decision and the client must read it rather than the number.**
+         *     :func:`tracker.services.spine.asserted_join` is the single place that decides, and it stays
+         *     the single place: a card applying its own cut-off to ``join.confidence`` is how a card, an
+         *     aggregate and this route come to disagree about the same join. The confidence is served
+         *     anyway, because ADR 011 wants the score shown on a possible match, but it is for display
+         *     and never for a decision.
+         *
+         *     **The basis is not decoration.** ``BASIS_EXACT`` and ``BASIS_CORE`` say different things: one
+         *     is an exact match against the SEC company index, the other is a match after stripping legal
+         *     suffixes with the parent company unconfirmed. Measured across the whole register, the first
+         *     produced zero ambiguous matches on 78,140 organisation registrant names and the second
+         *     produced three, which is why one asserts and the other does not.
+         *
+         *     **There is no total here on purpose.** A possible match is excluded from every aggregate, so
+         *     this carries one join and a boolean rather than a count a client might add up.
+         *
+         *     The officers are the sensitive half. Their contact fields are separate, tuple-typed and
+         *     empty, so a serializer honouring ``NoContactData`` drops them without touching anything
+         *     else, and nothing here has to be retrofitted when suppression under ADR 008 lands: the
+         *     candidate set is built in one place, :func:`_officers`, which is where the check goes.
+         */
+        AircraftOwnership: {
+            /**
+             * As Of
+             * Format: date
+             * @description The register's own extract date. Never the date of the request.
+             */
+            as_of: string;
+            /**
+             * Asserted
+             * @description Whether this join may be shown as fact. Read this, not the confidence.
+             */
+            asserted: boolean;
+            /**
+             * Asset Register
+             * @description Which asset register answered, e.g. ``faa``. Named this rather than ``register`` because that shadows a pydantic attribute and only warns.
+             */
+            asset_register: string;
+            /**
+             * Degraded Reason
+             * @description Why the officers are missing when there is a join. A filing lookup that fails degrades this to the join alone and never to an error, the same contract the registry join already has.
+             */
+            degraded_reason?: string | null;
+            /** @description The link itself, with its basis, source, origin key, confidence and date. ``null`` when nothing matched, and ``refused_reason`` then says why. */
+            join?: components["schemas"]["Join"] | null;
+            /**
+             * Officers
+             * @description Named officers and directors of that entity, each from a primary filing. Empty when there is no join, when the entity files none, or when the lookup failed, and ``degraded_reason`` distinguishes the last of those.
+             * @default []
+             */
+            officers: components["schemas"]["Person"][];
+            /**
+             * Officers Basis
+             * @description How the officers were obtained, the parallel to ``join.basis``.
+             */
+            officers_basis?: string | null;
+            /** @description The filing entity the registrant resolved to. ``null`` when there is no join. */
+            organisation?: components["schemas"]["Organisation"] | null;
+            /**
+             * Refused Reason
+             * @description Why there is no join, in the matcher's own words: the registrant is a natural person, the name is claimed by more than one filing entity, or no filing entity carries it.
+             */
+            refused_reason?: string | null;
+            /**
+             * Registrant
+             * @description The owner name as the asset register wrote it, not normalised. A card showing a normalised name would be showing our string rather than the register's. ``null`` when the register was read and does not hold this airframe, which ``refused_reason`` then states.
+             */
+            registrant?: string | null;
+            /**
+             * Registrant Kind
+             * @description What the register says the registrant is. A person is never name-matched, on measured evidence: of 23 owner names that looked like natural people, two returned any candidate at all and both were wrong.
+             */
+            registrant_kind?: ("person" | "organisation" | "unknown") | null;
+            /**
+             * Wealth Tier Reason
+             * @description Why every officer's wealth tier is empty. Carried rather than omitted: an absent field reads as an oversight and an empty one with a stated reason reads as a finding.
+             * @default Wealth tier not established: no keyless public source publishes one.
+             */
+            wealth_tier_reason: string;
+        };
         /**
          * AircraftSnapshot
          * @description Every aircraft currently held, optionally filtered to a viewport.
@@ -351,10 +693,23 @@ export interface components {
         /**
          * AttributionEntry
          * @description One licence credit the UI is required to display.
+         *
+         *     **A row is compliant, not a field.** 183 transit credits are served as 8 rows, and that
+         *     collapse is only honest because a row names every owner in ``operators``, links the terms
+         *     binding each of them, and carries in ``as_of`` the date Etalab 2.0 demands. ``text`` is the
+         *     headline sentence; on its own it discharges the single-source rows and not the grouped
+         *     ones, because no static string can carry a per-request date.
          */
         AttributionEntry: {
+            /** As Of */
+            as_of?: string | null;
             /** Licence */
             licence: string;
+            /**
+             * Operators
+             * @default []
+             */
+            operators: components["schemas"]["CreditedOperatorEntry"][];
             /** Source */
             source: string;
             /** Text */
@@ -363,16 +718,211 @@ export interface components {
             url: string;
         };
         /**
+         * CacheSweep
+         * @description One cache a removal emptied, and how much went.
+         *
+         *     The count is not attributable to the person: a sweep cannot know which entries were theirs,
+         *     which is why it is a sweep. It is here so that "did the removal reach everything" has an
+         *     answer.
+         */
+        CacheSweep: {
+            /** Cache */
+            cache: string;
+            /** Entries Cleared */
+            entries_cleared: number;
+        };
+        /**
          * Capabilities
          * @description What this deployment can actually do, given its configuration.
+         *
+         *     No Cesium ion token, and there is nothing here for one to go in. The globe is built
+         *     from keyless imagery served through us, Cesium's own library and assets come from our
+         *     origin, and the token Cesium 1.144 bundles is blanked in the browser
+         *     (``frontend/src/globe/viewer.ts``). A field here would be a field asking for a key.
          */
         Capabilities: {
             /** Attribution */
             attribution: components["schemas"]["AttributionEntry"][];
-            /** Cesium Ion Token */
-            cesium_ion_token?: string | null;
             /** Layers */
             layers: components["schemas"]["LayerCapability"][];
+            /**
+             * Media Types
+             * @default []
+             */
+            media_types: string[];
+            /**
+             * Suppressions
+             * @default []
+             */
+            suppressions: components["schemas"]["Suppression"][];
+        };
+        /**
+         * City
+         * @description One populated place from the GeoNames ``cities15000`` bulk file.
+         *
+         *     Immutable, like every other domain contract here, and for a stronger reason: the whole
+         *     file is loaded once into a read-only in-memory index that answers search with zero
+         *     network calls, and a mutable row would let a caller edit the index underneath the next
+         *     reader.
+         */
+        City: {
+            /**
+             * Admin1 Code
+             * @description First-order administrative division, empty on 25 rows. A code, not a display name, and not always a FIPS code either: the US, Switzerland, Belgium and Montenegro use ISO codes, and the UK and Greece insert an extra level, so London GB carries ENG. Rendering it as a region name needs GeoNames' separate admin1Codes.txt, which this project does not fetch.
+             */
+            admin1_code?: string | null;
+            /**
+             * Ascii Name
+             * @description The same name transliterated to ASCII by GeoNames. Differs from name on 7,085 rows, and it is the provider's transliteration rather than a mechanical one: Köln becomes Koeln, not Koln. Indexed alongside name so both spellings resolve.
+             */
+            ascii_name: string;
+            /**
+             * Country Code
+             * @description ISO 3166-1 alpha-2, present on every row.
+             */
+            country_code: string;
+            /**
+             * Elevation M
+             * @description Metres above mean sea level, the provider's own integer, absent on 29,612 of 34,099 rows. Measured range in the file is -34 to 3,831. Absent means absent: there is no fallback, see the module docstring on dem.
+             */
+            elevation_m?: number | null;
+            /**
+             * Feature Code
+             * @description GeoNames feature code, e.g. PPLC for a national capital, PPL for a plain populated place, PPLA2 for a second-order administrative seat. 17 distinct values in the file and one of them is STLMT rather than PPL-prefixed, so this is not pattern-constrained. PPLH, PPLQ and PPLW mean historical, abandoned and destroyed; those 27 rows never reach this contract, see sources/geonames.py.
+             */
+            feature_code: string;
+            /**
+             * Geonames Id
+             * @description GeoNames' own integer id, the merge key. Catalogue numbers have run past seven digits: the recorded Pechersk row is 13535745.
+             */
+            geonames_id: number;
+            /**
+             * Kind
+             * @default city
+             * @constant
+             */
+            kind: "city";
+            /**
+             * Modification Date
+             * Format: date
+             * @description When GeoNames last changed the row. A bare date, not a timestamp: there is no time and no zone anywhere in the file, so this is a date rather than a UtcDatetime and no midnight is invented. Range across the file is 2006-01-15 to 2026-08-18.
+             */
+            modification_date: string;
+            /**
+             * Name
+             * @description The place name as GeoNames publishes it, UTF-8. Longest in the file is 57 characters; the bound is the provider's own varchar(200). Already the English name for most large cities (Munich, Rome, Tokyo, Moscow) but not all (Köln stays Köln).
+             */
+            name: string;
+            /** @description City centre, longitude first. altitude_m is left unset: elevation below is metres above mean sea level as the provider gives it, and this project's altitudes are metres above the WGS84 ellipsoid. The two differ by up to about 100 metres, so copying one into the other would be a quiet lie. Cesium clamps the label to terrain anyway. */
+            point: components["schemas"]["Point"];
+            /**
+             * Population
+             * @description The provider's figure, and the search ranking key. Never empty, but 3 rows report 0 and 45 rows sit below the file's own 15,000 threshold because capitals are included regardless of size. Largest in the file is 24,874,500.
+             */
+            population: number;
+            /**
+             * Timezone
+             * @description IANA timezone id, present on every row. 356 distinct values, all containing a slash.
+             */
+            timezone: string;
+        };
+        /**
+         * CitySnapshot
+         * @description Cities from the local gazetteer, biggest first, optionally inside a bounding box.
+         *
+         *     ``total`` is how many matched before the limit was applied, so a capped read says so
+         *     rather than reading as everything the server holds. It answers a different question from
+         *     ``count`` whenever the two differ, and a client that needs the rest asks with a box.
+         */
+        CitySnapshot: {
+            /** Cities */
+            cities: components["schemas"]["City"][];
+            /** Count */
+            count: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * Claim
+         * @description One attribute value, and everything needed to decide whether to believe it.
+         *
+         *     Frozen and strict like every other contract here. A claim with no date does not exist:
+         *     ADR 006 drops an undated entry at the adapter and counts it, and that rule is enforced by
+         *     ``as_of`` being required rather than by a check somewhere downstream.
+         */
+        Claim: {
+            /**
+             * As Of
+             * Format: date
+             * @description The source's own date, never the date of the run that read it. A Form 4 is dated to its period of report, a registry extract to its extract date. ADR 015 says the same thing about media: the timestamp comes from the thing, not the fetch.
+             */
+            as_of: string;
+            /**
+             * Confidence
+             * @description How strongly this is believed. Decomposable by whatever produced it: a card saying 'possible match, 0.62' is useless, one saying which fields agreed is the product.
+             */
+            confidence: number;
+            /**
+             * Derived
+             * @description True when produced by joining sources rather than read from one, per ADR 006. The label reaches the card and the API.
+             * @default false
+             */
+            derived: boolean;
+            /** @description Primary, report or crowd. Only primary may assert alone. */
+            kind: components["schemas"]["SourceKind"];
+            /**
+             * Origin Key
+             * @description What makes two claims the same source. An SEC accession number, a registry snapshot date plus record id, a Wikidata reference URL. Two claims sharing an origin key are one source however many adapters produced them, and corroboration counts them once.
+             */
+            origin_key: string;
+            /**
+             * Pii
+             * @description True for contact attributes, so a profile can be served with them suppressed. ADR 008 sells that exclusion as NoContactData and NoPII, so it is a demo feature rather than plumbing.
+             * @default false
+             */
+            pii: boolean;
+            /**
+             * Source
+             * @description The adapter's name for where this came from, e.g. ``sec-form4``.
+             */
+            source: string;
+            /**
+             * Value
+             * @description What is claimed, as the source said it. Never normalised for display, because ADR 011 forbids corroboration narrowing a value beyond what the strongest single source actually said.
+             */
+            value: string;
+        };
+        /**
+         * CreditedOperatorEntry
+         * @description One data owner inside a grouped credit, with the terms binding that owner alone.
+         */
+        CreditedOperatorEntry: {
+            /** Name */
+            name: string;
+            /** Url */
+            url: string;
+        };
+        /**
+         * DateOfBirth
+         * @description A date of birth at whatever precision the source actually had.
+         *
+         *     **Not a ``date``, and that is the point.** Wikidata's ``wdt:P569`` silently widens a
+         *     year-only date of birth to 1 January, which then reads as a real day and will either
+         *     falsely match another person born on 1 January or falsely fail to match the right one. The
+         *     Companies House PSC snapshot gives month and year only, by design, and never a day: a real
+         *     record reads ``{"month": 2, "year": 1947}``.
+         *
+         *     Holding the precision explicitly means a comparator can only ever compare at the coarser of
+         *     two precisions, which is the correct behaviour and is impossible if the value has already
+         *     been widened to a day.
+         */
+        DateOfBirth: {
+            /** Day */
+            day?: number | null;
+            /** Month */
+            month?: number | null;
+            /** Year */
+            year: number;
         };
         /**
          * EmergencyState
@@ -435,6 +985,46 @@ export interface components {
             status: string;
         };
         /**
+         * Join
+         * @description One link between two records we hold, and how good it is.
+         *
+         *     Separate from :class:`Claim` because a join is about two things rather than one, and
+         *     because ADR 007 requires a join to carry its source, its confidence and its as-of date
+         *     onto the card. The ``basis`` field is what stops a card implying more than was measured.
+         */
+        Join: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /**
+             * Basis
+             * @description How the link was made, in the adapter's own words, e.g. 'exact normalised name match against the SEC company index'. This is what a viewer reads when they ask why two records are connected.
+             */
+            basis: string;
+            /** Confidence */
+            confidence: number;
+            /**
+             * Inferred
+             * @description True when this link is an inference rather than something a source stated. ADR 012 is explicit: an owned aircraft being airborne is a fact about the aircraft, and 'the owner is aboard' is a different claim. This build never sets this true, and the field exists so that a later one cannot make that claim silently.
+             * @default false
+             */
+            inferred: boolean;
+            /** Origin Key */
+            origin_key: string;
+            /** Source */
+            source: string;
+            /** Target Id */
+            target_id: string;
+            /**
+             * Target Kind
+             * @description What is on the other end. Kept explicit so a card never has to guess.
+             * @enum {string}
+             */
+            target_kind: "person" | "organisation" | "aircraft" | "vessel";
+        };
+        /**
          * LayerCapability
          * @description Whether one layer can run, and why not when it cannot.
          *
@@ -452,7 +1042,7 @@ export interface components {
             reason?: string | null;
         };
         /** @enum {string} */
-        LayerName: "aircraft" | "military" | "vessels" | "satellites" | "events" | "cameras";
+        LayerName: "aircraft" | "military" | "vessels" | "satellites" | "transit" | "events" | "cameras";
         /**
          * LayerSummary
          * @description Counts and health per layer, for the layer rail and the degraded banners.
@@ -469,6 +1059,47 @@ export interface components {
              * @default []
              */
             providers: components["schemas"]["ProviderCoverage"][];
+            /**
+             * Registries
+             * @default []
+             */
+            registries: components["schemas"]["RegistryCoverage"][];
+            /**
+             * Sweeps
+             * @default []
+             */
+            sweeps: components["schemas"]["SweepCoverage"][];
+        };
+        /**
+         * MediaLicence
+         * @description The rights on one media item, travelling with the item into the domain.
+         *
+         *     Nothing here is optional except the parts that genuinely vary between licences. ``name``
+         *     is required, and that is the load-bearing decision in this module: it makes an unlicensed
+         *     item impossible to construct, so "we showed a photograph and could not say whose it was"
+         *     cannot happen by omission.
+         */
+        MediaLicence: {
+            /**
+             * Attribution Required
+             * @description Whether the licence obliges us to name the author wherever the item is shown. Commons states this per file in 'AttributionRequired' and the two values seen are the strings 'true' and 'false', so the adapter compares strings rather than trusting truthiness, the same trap as TfL's 'available' flag.
+             */
+            attribution_required: boolean;
+            /**
+             * Author
+             * @description Who to credit, plain text. None when the provider says the author is unknown, which Commons does often and explicitly. Arrives as HTML from Commons ('Unknown author<span style="display: none;">Unknown author</span>' is a real value) and is stripped in the adapter, because a card is not a browser.
+             */
+            author?: string | null;
+            /**
+             * Name
+             * @description The licence as the provider names it, verbatim: 'CC BY-SA 4.0', 'Public domain'. Never normalised into a scheme of our own, because a card showing a licence has to show the one the item actually carries.
+             */
+            name: string;
+            /**
+             * Url
+             * @description Canonical licence text. Absent on public-domain items, which have no deed to link to, so absence here is not a missing value.
+             */
+            url?: string | null;
         };
         /**
          * NavigationalStatus
@@ -479,6 +1110,136 @@ export interface components {
          * @enum {string}
          */
         NavigationalStatus: "under_way_using_engine" | "at_anchor" | "not_under_command" | "restricted_manoeuvrability" | "constrained_by_draught" | "moored" | "aground" | "engaged_in_fishing" | "under_way_sailing" | "towing_astern" | "pushing_ahead" | "ais_sart_active";
+        /**
+         * Organisation
+         * @description A company, government body or other entity that files, registers or owns things.
+         */
+        Organisation: {
+            /**
+             * Joins
+             * @description Links to assets and people, each with its own basis, date and confidence. A join below the assertion threshold stays here and renders as a possible match.
+             * @default []
+             */
+            joins: components["schemas"]["Join"][];
+            /**
+             * Kind
+             * @default organisation
+             */
+            kind: string;
+            /**
+             * Name
+             * @description The name as the strongest source gives it, not normalised for matching.
+             */
+            name: string;
+            /**
+             * Organisation Id
+             * @description Our own stable key. ``sec-{cik}`` where the SEC knows it, otherwise ``faa-{normalised name}``, so an organisation reached only through an asset registry still has an identity.
+             */
+            organisation_id: string;
+            /**
+             * Registry Names
+             * @description Every string this organisation appears under in an asset register, as that register wrote it. This is what an owner-name match actually joins to.
+             * @default []
+             */
+            registry_names: string[];
+            /**
+             * Sec Cik
+             * @description Zero-padded to ten digits, as the SEC writes it in a filing. Present only when a primary filing established it, so it is an assertable identifier rather than a guess.
+             */
+            sec_cik?: string | null;
+            /** Ticker */
+            ticker?: string | null;
+            /**
+             * Wikidata Qid
+             * @description Crowd-sourced, so it never asserts anything on its own. Carried for candidate generation and for a portrait under ADR 013, nothing more.
+             */
+            wikidata_qid?: string | null;
+        };
+        /**
+         * Person
+         * @description A natural person. Small assertable core, large honest emptiness.
+         *
+         *     Frozen and strict like every other contract here, and with one addition that matters more
+         *     than the rest: nothing on this record may be filled by inference. ADR 008 is explicit that
+         *     where a field is empty it is empty, with no default, approximation or inference.
+         */
+        Person: {
+            /**
+             * Addresses
+             * @description PII, and empty. See :data:`ADDRESS_WARNING`: the two address fields public filings carry are the company's and the registrar's, never the person's.
+             * @default []
+             */
+            addresses: components["schemas"]["Claim"][];
+            /**
+             * Claims
+             * @description Everything softer than a role: dates, places, handles. Each carries its own origin key, and anything not from a primary record renders as a possible match.
+             * @default []
+             */
+            claims: components["schemas"]["Claim"][];
+            /** Companies House Psc Id */
+            companies_house_psc_id?: string | null;
+            /**
+             * Country Of Residence
+             * @description A country, from a PSC record. This is not a residence and must never be widened into one: the PSC statutory address is a service address.
+             */
+            country_of_residence?: string | null;
+            date_of_birth?: components["schemas"]["DateOfBirth"] | null;
+            /**
+             * Emails
+             * @description PII. Empty, because no keyless public source supplies a personal email.
+             * @default []
+             */
+            emails: string[];
+            /**
+             * Joins
+             * @description Links to organisations and assets. A join to an asset is a fact about ownership, never about where this person is.
+             * @default []
+             */
+            joins: components["schemas"]["Join"][];
+            /**
+             * Kind
+             * @default person
+             */
+            kind: string;
+            /**
+             * Name
+             * @description As the filing wrote it. SEC writes an insider surname first, 'Undersby Quillon', and that form is kept rather than reordered, because reordering guesses which token is the surname and a middle initial defeats the guess.
+             */
+            name: string;
+            /** Nationality */
+            nationality?: string | null;
+            /**
+             * Person Id
+             * @description Our own stable key, derived from the strongest identifier available: ``sec-{cik}`` or ``psc-{company}-{id}``. Never derived from a name.
+             */
+            person_id: string;
+            /**
+             * Phones
+             * @description PII. Empty. 1,497 humans in the whole of Wikidata carry any phone number and those are institutional switchboards.
+             * @default []
+             */
+            phones: string[];
+            /**
+             * Roles
+             * @default []
+             */
+            roles: components["schemas"]["Role"][];
+            /**
+             * Sec Cik
+             * @description A natural person has their own SEC CIK and it is not a company CIK: the submissions API returns ``entityType: other`` with a surname-first name. It is the stable identifier that makes this whole path work.
+             */
+            sec_cik?: string | null;
+            /**
+             * Wealth Tier
+             * @description Always None in this build. The field exists so the product can say the tier is not established rather than leaving a blank, and so that nothing may quietly start inferring one from an asset. See :data:`WEALTH_TIER_REASON`.
+             */
+            wealth_tier?: ("UHNW" | "VHNW" | "HNW" | "Likely UHNW" | "Likely VHNW") | null;
+            /**
+             * Wikidata Qid
+             * @description Crowd-sourced. Never asserts, never a match key, carried for candidate generation and for a reference portrait under ADR 013.
+             */
+            wikidata_qid?: string | null;
+        };
         /**
          * Point
          * @description A position on the WGS84 ellipsoid.
@@ -496,6 +1257,49 @@ export interface components {
             lon: number;
         };
         /**
+         * PostMedia
+         * @description One image, video or audio item attached to a post.
+         *
+         *     ``url`` is the provider's own. Nothing in this project hands it to a browser: media is
+         *     proxied and cached server-side, per ADR 005, so this is the address our proxy fetches
+         *     from rather than the address a page loads.
+         */
+        PostMedia: {
+            /**
+             * Dated By
+             * @description Which timestamp the item's date came from. See :data:`MEDIA_DATED_BY`.
+             * @default published
+             * @constant
+             */
+            dated_by: "published";
+            /**
+             * Height
+             * @description Pixels, when the provider says.
+             */
+            height?: number | null;
+            licence: components["schemas"]["MediaLicence"];
+            /**
+             * Mime
+             * @description Media type as the provider reports it. Carried rather than filtered on, because a geosearch of the Commons file namespace returns audio as readily as photographs: two .ogg interviews came back in the first three results of a London query on 2026-08-23.
+             */
+            mime: string;
+            /**
+             * Preview Url
+             * @description A smaller rendition where the provider offers one. Its stated dimensions are not trustworthy: Commons reports the width that was asked for rather than the width of the bytes it served, so anything measuring this image reads the decoded bytes instead.
+             */
+            preview_url?: string | null;
+            /**
+             * Url
+             * @description Provider URL for the full item, for our proxy.
+             */
+            url: string;
+            /**
+             * Width
+             * @description Pixels, when the provider says.
+             */
+            width?: number | null;
+        };
+        /**
          * ProviderCoverage
          * @description One provider's contribution to a merged layer, for the last cycle.
          *
@@ -504,22 +1308,221 @@ export interface components {
          *     names a provider that dropped out, which is how the layer reports itself degraded
          *     instead of quietly covering less.
          *
+         *     The four running totals are the history the per-cycle fields cannot carry. ``records``
+         *     and ``error`` describe this cycle only and are replaced by the next one, so a provider
+         *     that has answered an empty HTTP 200 every cycle for a week looks exactly like one that
+         *     did it once. ``failures`` and ``empty_polls`` against ``polls`` are what tell those
+         *     apart, and ``drops`` is the records the adapter refused, which ADR 010's "an error,
+         *     counted" needs somewhere a human can read.
+         *
          *     This is coverage, not corroboration, and the two must not be confused: under R1 in
          *     ``docs/pending-decisions.md`` three providers reporting one ship are still one origin,
          *     because they are repeating one AIS broadcast. Nothing here may be counted as
          *     independent sources.
          */
         ProviderCoverage: {
+            /**
+             * Drops
+             * @default 0
+             */
+            drops: number;
+            /**
+             * Empty Polls
+             * @default 0
+             */
+            empty_polls: number;
             /** Error */
             error?: string | null;
             /** Exclusive */
             exclusive: number;
+            /**
+             * Failures
+             * @default 0
+             */
+            failures: number;
+            /** Last Success At */
+            last_success_at?: string | null;
             /** Layer */
             layer: string;
+            /**
+             * Polls
+             * @default 0
+             */
+            polls: number;
             /** Provider */
             provider: string;
             /** Records */
             records: number;
+        };
+        /**
+         * RefusedRecords
+         * @description One reason the adapter refused records, and how many it has refused for it.
+         *
+         *     **Deliberately not a** :class:`ProviderCoverage`. That model answers "how many records did
+         *     only this provider see", which has no meaning for a reason: it has no records and nothing is
+         *     exclusive to it. Borrowing the shape put rows on ``/api/layers`` reading ``records: 0`` and
+         *     ``exclusive: 0``, and the layer rail then rendered "report older than 5 minutes only: 0",
+         *     which is not a statement about anything. A reason and a count is the whole of it.
+         */
+        RefusedRecords: {
+            /**
+             * Count
+             * @description How many records, cumulative since start-up.
+             */
+            count: number;
+            /**
+             * Reason
+             * @description The adapter's own words for why the records were refused.
+             */
+            reason: string;
+        };
+        /**
+         * RegistryConflict
+         * @description One attribute where the registry disagreed with the feed. Both values are shown.
+         *
+         *     Nothing is silently overwritten and nothing is combined. The feed keeps the attribute
+         *     because its value is dated and the registry's is not (adsbdb carries no as-of date at
+         *     all), and the registry's value is carried here so the card can show the disagreement.
+         *
+         *     It happens on real records rather than in theory. The Gulfstream G650 in
+         *     ``tests/fixtures/adsbdb_ab374c_live.json`` reads ``GLF6`` off the feed, which is its ICAO
+         *     Doc 8643 designator, and ``G650`` off adsbdb, which is not a designator at all.
+         */
+        RegistryConflict: {
+            /** Attribute */
+            attribute: string;
+            /** Feed Value */
+            feed_value: string;
+            /** Registry Value */
+            registry_value: string;
+        };
+        /**
+         * RegistryCoverage
+         * @description One registry's enrichment outcomes since start-up, for the same reason as a provider's.
+         *
+         *     The counts exist because an :class:`~tracker.services.enrich.Enriched` describes one card
+         *     open and is then thrown away, so a registry that has failed every lookup since start-up
+         *     looks exactly like one that failed the last one. ``unmappable`` is the drop-and-count rule
+         *     one layer up from the adapters: the registry answered and the domain contract would not
+         *     take it, which is a different fault from the registry not answering.
+         *
+         *     Demand-driven, so these move when cards are opened rather than on a cadence. A registry
+         *     with ``requests`` at zero has not been asked yet, which is not the same as healthy.
+         */
+        RegistryCoverage: {
+            /** Conflicts */
+            conflicts: number;
+            /** Enriched */
+            enriched: number;
+            /** Failures */
+            failures: number;
+            /** Last Error */
+            last_error?: string | null;
+            /** Not Held */
+            not_held: number;
+            /** Registry */
+            registry: string;
+            /** Requests */
+            requests: number;
+            /** Unmappable */
+            unmappable: number;
+        };
+        /**
+         * RemovalRequest
+         * @description What a caller sends. Neither field can carry a name.
+         */
+        RemovalRequest: {
+            /**
+             * Person Id
+             * @description The record's own key, `sec-{cik}` or `psc-{company}-{id}`. The contract derives it from the strongest identifier available and never from a name, which is why this endpoint can take it. Whitespace is refused because a person_id has none and a name almost always does.
+             */
+            person_id: string;
+            /**
+             * Reason
+             * @description Why, from the enumeration. There is deliberately no free-text field.
+             * @enum {string}
+             */
+            reason: "requested_by_subject" | "reported_in_product" | "operator_removed";
+        };
+        /**
+         * RemovalResponse
+         * @description What the removal did, in terms that name nobody.
+         */
+        RemovalResponse: {
+            /**
+             * Already Suppressed
+             * @description Whether it was already suppressed before this call. Not a failure.
+             */
+            already_suppressed: boolean;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "requested_by_subject" | "reported_in_product" | "operator_removed";
+            /**
+             * Suppressed
+             * @description True once the record is suppressed. Never false on 200.
+             */
+            suppressed: boolean;
+            /**
+             * Suppressed At
+             * Format: date-time
+             * @description When it was first suppressed, which is when the person asked rather than when a retry arrived.
+             */
+            suppressed_at: string;
+            /** Swept */
+            swept: components["schemas"]["CacheSweep"][];
+            /**
+             * Total Suppressed
+             * @description How many records are suppressed in total, for the product to show.
+             */
+            total_suppressed: number;
+        };
+        /**
+         * Role
+         * @description One person's stated relationship to one organisation, from a filing.
+         *
+         *     Every field here comes off a Form 3, 4 or 5 or a PSC record. Nothing is inferred, and the
+         *     booleans are the filing's own flags rather than something derived from a job title.
+         */
+        Role: {
+            /**
+             * As Of
+             * Format: date
+             * @description ``periodOfReport`` from the filing, or ``notified_on`` from a PSC record. The source's own date.
+             */
+            as_of: string;
+            /**
+             * Is Director
+             * @default false
+             */
+            is_director: boolean;
+            /**
+             * Is Officer
+             * @default false
+             */
+            is_officer: boolean;
+            /**
+             * Is Ten Percent Owner
+             * @default false
+             */
+            is_ten_percent_owner: boolean;
+            /** Organisation Id */
+            organisation_id: string;
+            /** Organisation Name */
+            organisation_name: string;
+            /**
+             * Origin Key
+             * @description Accession number for an SEC filing. Two adapters reading one filing share this and count as one source.
+             */
+            origin_key: string;
+            /** Source */
+            source: string;
+            /**
+             * Title
+             * @description ``officerTitle`` as filed, e.g. 'SVP, GC and Secretary'. Absent on a director-only filing, which is normal rather than missing data.
+             */
+            title?: string | null;
         };
         /**
          * Satellite
@@ -670,6 +1673,375 @@ export interface components {
             /** Satellites */
             satellites: components["schemas"]["Satellite"][];
         };
+        /**
+         * SearchGroup
+         * @description The hits of one type, best first.
+         *
+         *     ``unavailable_reason`` is what stops a degraded group reading as an empty world. Set when
+         *     the group could not be consulted at all; ``None`` with no hits means it was consulted and
+         *     matched nothing.
+         */
+        SearchGroup: {
+            /**
+             * Hits
+             * @default []
+             */
+            hits: components["schemas"]["SearchHit"][];
+            name: components["schemas"]["SearchGroupName"];
+            /** Unavailable Reason */
+            unavailable_reason?: string | null;
+        };
+        /** @enum {string} */
+        SearchGroupName: "aircraft" | "vessels" | "satellites" | "cities" | "places";
+        /**
+         * SearchHit
+         * @description One thing the query resolved to, ready to render in a grouped typeahead.
+         */
+        SearchHit: {
+            /**
+             * Detail
+             * @description Second line: the identifiers or the country and population that tell two same-named results apart.
+             */
+            detail?: string | null;
+            /**
+             * Entity Id
+             * @description The identity the rest of the system knows this by: an ICAO 24-bit address, an MMSI, a NORAD catalogue number, a GeoNames id, or an OSM type and id. What the frontend uses to open the card, so it is the store's key and never a generated one.
+             */
+            entity_id: string;
+            group: components["schemas"]["SearchGroupName"];
+            /**
+             * Label
+             * @description What to show, one line.
+             */
+            label: string;
+            /** @description Where to fly the camera. None for a satellite, whose position is propagated in the browser from its element set and is not a field on the record. */
+            point?: components["schemas"]["Point"] | null;
+            /**
+             * Score
+             * @description Match quality, 1.0 for an exact identifier. Ordering inside a group is the order of the tuple, not this number alone: equal scores are already broken by population for cities and by freshness for movers.
+             */
+            score: number;
+        };
+        /**
+         * SearchResponse
+         * @description Everything one query resolved to, groups ordered by their best hit.
+         */
+        SearchResponse: {
+            /**
+             * Groups
+             * @default []
+             */
+            groups: components["schemas"]["SearchGroup"][];
+            /**
+             * Query
+             * @description The query as asked, whitespace trimmed.
+             */
+            query: string;
+        };
+        /**
+         * SocialPost
+         * @description One post, with a position that states where it came from.
+         *
+         *     The identity is ``(source, post_id)``. Neither alone is unique: two instances mint their
+         *     own ids, and one instance reuses none.
+         */
+        SocialPost: {
+            /**
+             * Author Handle
+             * @description The author's handle, and per ADR 005 the only author data stored, because attribution requires it and nothing else does. None on Commons, where the uploader is a wiki username rather than a handle and is carried on the item's licence as its author instead.
+             */
+            author_handle?: string | null;
+            /**
+             * Coordinate Shared By
+             * @description How many files in the same response carried this exact coordinate, when more than one did. Set only on a `derived` post, and it is the evidence for that classification in place of a matched phrase: a coordinate several files share was copied rather than observed. Absent on a post whose coordinate is its own.
+             */
+            coordinate_shared_by?: number | null;
+            /**
+             * Kind
+             * @default social_post
+             * @constant
+             */
+            kind: "social_post";
+            /**
+             * Location Basis
+             * @enum {string}
+             */
+            location_basis: "upstream" | "derived";
+            /**
+             * Location Phrase
+             * @description The words the position was resolved from, shown on the card as ADR 005 requires so that a reader can see the derivation and judge it. Required when `location_basis` is 'derived' and forbidden when it is 'upstream'.
+             */
+            location_phrase?: string | null;
+            /**
+             * Media
+             * @description Attached media that carried a determinable licence. Anything else was dropped and counted by the adapter, which is why this is never a tuple of items with unknown rights.
+             * @default []
+             */
+            media: components["schemas"]["PostMedia"][];
+            /**
+             * Place Name
+             * @description The gazetteer place the phrase matched, so the card can say 'mentioned London' rather than showing bare coordinates. Same rule as `location_phrase`.
+             */
+            place_name?: string | null;
+            /** @description Where the post's subject is. Required, because a post whose location cannot be established is dropped by the adapter rather than carried without one. */
+            point: components["schemas"]["Point"];
+            /**
+             * Post Id
+             * @description The provider's own id, verbatim. Unique within `source` and not beyond it.
+             */
+            post_id: string;
+            /**
+             * Posted At
+             * Format: date-time
+             * @description When the post was published. Never when we fetched it, and never a capture date: for a Commons file this is the upload time, which is the moment the thing became a post.
+             */
+            posted_at: string;
+            /**
+             * Retrieved At
+             * Format: date-time
+             * @description When we fetched it, for staleness. Distinct from `posted_at` on purpose.
+             */
+            retrieved_at: string;
+            /**
+             * Source
+             * @description Which upstream this came from, as that upstream is named in docs/data-sources.md: 'commons', or the Mastodon instance host such as 'mas.to'. The instance rather than 'mastodon', because instances are configuration and one refusing us is a different fact from the layer being down.
+             */
+            source: string;
+            /**
+             * Text
+             * @description The post's words, HTML stripped. May be empty: a geotagged Commons file with no description is still a post about a place, and an empty string is the true value rather than a reason to drop it.
+             */
+            text: string;
+            /**
+             * Url
+             * @description Link to the original, which attribution needs and which is the only way a viewer can check what we made of it.
+             */
+            url: string;
+        };
+        /**
+         * SocialSnapshot
+         * @description Posts near a place, and an honest account of how far we looked.
+         *
+         *     ``searched_radius_m`` against ``box_radius_m`` is the pair that matters. When the first is
+         *     smaller, the answer covers the middle of the requested box and nothing further out, and a
+         *     client that ignored the difference would render partial coverage as a thin scatter.
+         */
+        SocialSnapshot: {
+            /** Box Radius M */
+            box_radius_m: number;
+            /** Count */
+            count: number;
+            /** Derived As Of */
+            derived_as_of?: string | null;
+            /**
+             * Notices
+             * @default []
+             */
+            notices: string[];
+            /** Posts */
+            posts: components["schemas"]["SocialPost"][];
+            /** Searched Radius M */
+            searched_radius_m: number;
+        };
+        /**
+         * SourceKind
+         * @description What sort of thing said this, which is what decides whether it may assert alone.
+         * @enum {string}
+         */
+        SourceKind: "primary" | "report" | "crowd";
+        /**
+         * Suppression
+         * @description One suppression, as the product is allowed to see it.
+         *
+         *     Carries no identity of any kind, and that is not an omission: the whole point is that the
+         *     product can say "one person record was removed on request" without being able to say whose.
+         *     A field here naming the subject would defeat the module.
+         */
+        Suppression: {
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "requested_by_subject" | "reported_in_product" | "operator_removed";
+            /**
+             * Suppressed At
+             * Format: date-time
+             */
+            suppressed_at: string;
+        };
+        /**
+         * SweepCoverage
+         * @description One adapter sweeping a registry of many feeds, rather than polling one endpoint.
+         *
+         *     Carries what the last pass did and what the adapter has refused since start-up.
+         *
+         *     Separate from :class:`ProviderCoverage` because a sweep is not a poll of a provider. The
+         *     transit adapter reads 258 feeds across 52 hosts, each host with its own cadence floor, so
+         *     the interesting numbers are how many feeds were read, how many confirmed themselves
+         *     unchanged with a 304, how many were held back inside a floor and how many could not be
+         *     read. Reporting those as a provider's ``polls`` and ``empty_polls`` produced 175 against 83,
+         *     which cannot both be true of one provider and was in fact feeds out of a 258-feed registry.
+         *
+         *     **``unchanged`` is not a failure and must never be folded into one.** A host answering 304
+         *     has confirmed its held records still stand, and roughly 55% of this layer's traffic is 304s,
+         *     so treating them as empty answers would report a working conditional request as a dead feed.
+         *
+         *     **``skipped`` is not a failure either.** A 30-second poller against floors of 30, 120 and
+         *     350 seconds skips most of the registry on most passes, and that is the rate discipline
+         *     working rather than anything going wrong.
+         */
+        SweepCoverage: {
+            /**
+             * Error
+             * @description Why feeds failed on the last pass, or null when none did.
+             */
+            error?: string | null;
+            /**
+             * Failed
+             * @description Feeds that could not be read at all on the last pass.
+             */
+            failed: number;
+            /**
+             * Feeds
+             * @description Feeds in the registry this adapter may read.
+             */
+            feeds: number;
+            /** Layer */
+            layer: string;
+            /** Provider */
+            provider: string;
+            /**
+             * Read
+             * @description Feeds actually fetched on the last pass.
+             */
+            read: number;
+            /**
+             * Records
+             * @description Vehicles currently held from this adapter.
+             */
+            records: number;
+            /**
+             * Refused
+             * @description Why records were refused, cumulative since start-up, **non-zero reasons only**. A reason that has never fired is not information, and filtering it at the presenter instead would leave the wrong shape underneath for every other client.
+             * @default []
+             */
+            refused: components["schemas"]["RefusedRecords"][];
+            /**
+             * Skipped
+             * @description Feeds held back inside their host's cadence floor.
+             */
+            skipped: number;
+            /**
+             * Unchanged
+             * @description Feeds that answered 304, confirming their held records.
+             */
+            unchanged: number;
+        };
+        /**
+         * TransitSnapshot
+         * @description Every transit vehicle currently held, optionally filtered to a viewport.
+         */
+        TransitSnapshot: {
+            /** Count */
+            count: number;
+            /** Vehicles */
+            vehicles: components["schemas"]["TransitVehicle"][];
+        };
+        /**
+         * TransitVehicle
+         * @description A bus, tram, train or ferry at a moment, as one feed reported it.
+         *
+         *     Frozen and strict like every other domain contract here. Required fields are only the
+         *     ones without which the record is worthless: an identity, a place, a time, and the licence
+         *     that lets us show it at all.
+         */
+        TransitVehicle: {
+            /**
+             * Bearing
+             * @description Degrees clockwise from true north, matching the reference and this project's convention. Normalised in the adapter: 470 vehicles reported a negative bearing and 18 reported exactly 360.0 on 2026-08-23, so a strict 0 <= x < 360 field fed the raw value would reject 490 real records. Exact 360.0 maps to None, the same treatment Digitraffic's cog of 360.0 already gets.
+             */
+            bearing?: number | null;
+            /**
+             * Country
+             * @description ISO 3166-1 alpha-2, from the registry rather than from the feed. The Mobility Database's own country column is wrong on the largest feed in the set, so the registry's values were checked against the vehicles' measured positions and corrected. See sources/gtfsrt.py.
+             */
+            country: string;
+            /**
+             * Entity Id
+             * @description ``FeedEntity.id``, unique within its feed by specification. The other half of the merge key. Present on 16,535 of 16,535 vehicles measured, which is why it is required here while vehicle_id is not.
+             */
+            entity_id: string;
+            /**
+             * Feed Id
+             * @description Which feed published this, as the committed registry names it. Half of the merge key, and the half that stops two agencies' bus number 1 becoming one bus.
+             */
+            feed_id: string;
+            /**
+             * Kind
+             * @default transit
+             * @constant
+             */
+            kind: "transit";
+            /**
+             * Licence
+             * @description The licence this record travels under, e.g. ``ODbL 1.0``. Required, not optional: this project drops an item whose licence cannot be determined, so a record that reached the contract has one, and it has to reach the card rather than living only on the layer.
+             */
+            licence: string;
+            /**
+             * Observed At
+             * Format: date-time
+             * @description When the position was measured, not when we fetched it. POSIX seconds on every feed measured, with no millisecond variant anywhere, which is the opposite of ADS-B where adsb.lol is milliseconds and adsb.fi is seconds under the same field name. Checked on 2026-08-23 across 247 feeds and recorded so the next reader does not assume the ADS-B trap applies here.
+             */
+            observed_at: string;
+            /**
+             * Occupancy
+             * @description How full the vehicle is, as the GTFS-Realtime OccupancyStatus enum names it, e.g. ``MANY_SEATS_AVAILABLE``. Present on 18.3%.
+             */
+            occupancy?: string | null;
+            /** @description Where the vehicle is, longitude first. GTFS-Realtime sends latitude first as separate Position.latitude and Position.longitude floats, so the adapter flips. altitude_m is left unset: the feed reports none and inventing ground level would be a fabricated value. */
+            point: components["schemas"]["Point"];
+            /**
+             * Position Age S
+             * @description Seconds between the fix and the sweep that read it. Present for the same reason it is on the vessel contract: a frozen feed is the hardest failure to see. Sixteen feeds returned identical positions ten minutes apart on 2026-08-23 with HTTP 200, and one of them had a newest record 908 days old.
+             */
+            position_age_s: number;
+            /**
+             * Route Id
+             * @description Route as the operator's static GTFS names it, present on 80.7%. Not a route name: resolving it needs that operator's routes.txt, which we do not fetch.
+             */
+            route_id?: string | null;
+            /**
+             * Source
+             * @description The operator that published the feed, for the card and the credit.
+             */
+            source: string;
+            /**
+             * Speed Ms
+             * @description Metres per second, present on 39.9% and believed only below MAX_PLAUSIBLE_SPEED_MS. See that constant for the four feeds that made the bound necessary.
+             */
+            speed_ms?: number | null;
+            /**
+             * Timestamp Basis
+             * @description Which clock observed_at came from. ``vehicle`` is the record's own VehiclePosition.timestamp, true for 99.2% of vehicles. ``feed`` means the record carried none and the FeedHeader timestamp was used instead, which dates every vehicle in that message to the same instant and is a weaker claim. The card says which, because a rider told the bus is 'now' when the feed only knows the batch is 'now' has been told something the source did not say.
+             * @enum {string}
+             */
+            timestamp_basis: "vehicle" | "feed";
+            /**
+             * Trip Id
+             * @description The scheduled trip being run, present on 90.5%. Absent between trips, which is exactly why it is not part of the merge key.
+             */
+            trip_id?: string | null;
+            /**
+             * Vehicle Id
+             * @description The operator's own vehicle number. Present on 85.3% of vehicles and never a key here, for the reason in this module's docstring. A display and diagnostic field only.
+             */
+            vehicle_id?: string | null;
+            /**
+             * Vehicle Label
+             * @description The number shown to riders on the vehicle, present on 76.9%. Often differs from vehicle_id, which is the internal fleet number.
+             */
+            vehicle_label?: string | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -762,6 +2134,12 @@ export interface components {
              */
             position_age_s: number;
             /**
+             * Providers
+             * @description Every provider that saw this ship, freshest report first, so the first entry is the one named in source. Empty on a record no merge has touched.
+             * @default []
+             */
+            providers: string[];
+            /**
              * Rate Of Turn Deg Per Min
              * @description Rate of turn, decoded from the signed ROT_AIS wire value where ROT_AIS is 4.733 times the square root of the rate. Negative is to port. None when the feed said not available (-128) and also at +/-127, where the feed says the vessel is turning faster than 5 degrees per 30 seconds without giving a rate.
              */
@@ -773,7 +2151,7 @@ export interface components {
             ship_type?: number | null;
             /**
              * Source
-             * @description Which provider supplied this record, e.g. digitraffic. Per ADR 010 this is per record and never per layer: a merged store that cannot say which network saw a given ship is unauditable. The full list of providers that saw it rides on the merge result in services/union.py, and under R1 in docs/pending-decisions.md that list is still one origin for corroboration.
+             * @description Which provider supplied this record, e.g. digitraffic.
              */
             source: string;
             /**
@@ -877,7 +2255,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Aircraft"] | null;
+                    "application/json": components["schemas"]["AircraftDetail"] | null;
                 };
             };
             /** @description Validation Error */
@@ -907,6 +2285,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Capabilities"];
+                };
+            };
+        };
+    };
+    list_cities_api_cities_get: {
+        parameters: {
+            query?: {
+                west?: number | null;
+                south?: number | null;
+                east?: number | null;
+                north?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CitySnapshot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_city_api_cities__geonames_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                geonames_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["City"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -951,6 +2395,69 @@ export interface operations {
             };
         };
     };
+    media_api_media_get: {
+        parameters: {
+            query: {
+                /** @description Provider media URL, allowlisted. */
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_removal_api_removals_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemovalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_satellites_api_satellites_get: {
         parameters: {
             query?: never;
@@ -987,6 +2494,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SatelliteElements"];
+                };
+            };
+        };
+    };
+    search_api_search_get: {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_social_posts_api_social_get: {
+        parameters: {
+            query: {
+                west: number;
+                south: number;
+                east: number;
+                north: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialSnapshot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_transit_api_transit_get: {
+        parameters: {
+            query?: {
+                west?: number | null;
+                south?: number | null;
+                east?: number | null;
+                north?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitSnapshot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

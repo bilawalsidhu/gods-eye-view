@@ -366,6 +366,96 @@ describe('SatelliteFeed.apply', () => {
   });
 });
 
+/**
+ * The read accessor the satellite card opens on.
+ *
+ * The card needs the element set for the object that was picked, and this map is the only
+ * place the socket's snapshots, upserts and removals are reconciled into the whole set. What
+ * these tests are really asserting is that a caller reading through here cannot go stale,
+ * because there is no second copy for it to read.
+ */
+describe('SatelliteFeed.elementsFor', () => {
+  it('answers the element set it was loaded with', () => {
+    const { feed } = build();
+    feed.load([makeSatellite({ norad_cat_id: 25_544, object_name: 'ISS (ZARYA)' })]);
+
+    expect(feed.elementsFor(25_544)?.object_name).toBe('ISS (ZARYA)');
+  });
+
+  it('answers null for a catalogue number it holds nothing for', () => {
+    const { feed } = build();
+    feed.load([makeSatellite({ norad_cat_id: 1 })]);
+
+    // Null rather than undefined, so the caller has one absent value to test.
+    expect(feed.elementsFor(99_999)).toBeNull();
+  });
+
+  it('answers null before anything has been loaded at all', () => {
+    const { feed } = build();
+
+    expect(feed.elementsFor(25_544)).toBeNull();
+  });
+
+  it('follows a socket upsert, so an open card is never a stale copy', () => {
+    const { feed } = build();
+    feed.load([makeSatellite({ norad_cat_id: 25_544, group: 'stations' })]);
+    const frame = changes();
+    frame.upserts.set('25544', {
+      entity: makeSatellite({ norad_cat_id: 25_544, group: 'active' }),
+      layer: 'satellites',
+    });
+
+    feed.apply(frame);
+
+    expect(feed.elementsFor(25_544)?.group).toBe('active');
+  });
+
+  it('follows a socket removal, so a decayed object stops answering', () => {
+    const { feed } = build();
+    feed.load([makeSatellite({ norad_cat_id: 1 }), makeSatellite({ norad_cat_id: 2 })]);
+    const frame = changes();
+    frame.removals.set('1', 'satellites');
+
+    feed.apply(frame);
+
+    expect(feed.elementsFor(1)).toBeNull();
+    expect(feed.elementsFor(2)).not.toBeNull();
+  });
+
+  it('follows a snapshot, which replaces rather than merges', () => {
+    const { feed } = build();
+    feed.load([makeSatellite({ norad_cat_id: 1 })]);
+    const frame = changes();
+    frame.snapshots.set('satellites', [makeSatellite({ norad_cat_id: 2 })]);
+
+    feed.apply(frame);
+
+    expect(feed.elementsFor(1)).toBeNull();
+    expect(feed.elementsFor(2)).not.toBeNull();
+  });
+
+  it('follows a reload, which is what the half-hourly refetch is', () => {
+    const { feed } = build();
+    feed.load([makeSatellite({ norad_cat_id: 1 })]);
+    feed.load([makeSatellite({ norad_cat_id: 2 })]);
+
+    expect(feed.elementsFor(1)).toBeNull();
+    expect(feed.elementsFor(2)).not.toBeNull();
+  });
+
+  it('hands back one record and never the container it came from', () => {
+    // The element cache is mutable and the card layer has no business writing to it, so what
+    // crosses the boundary is a record. Asserted on the shape rather than described: a
+    // `Satellite` has a catalogue number on it and no `set`, `delete` or `clear`.
+    const { feed } = build();
+    feed.load([makeSatellite({ norad_cat_id: 25_544 })]);
+    const held = feed.elementsFor(25_544);
+
+    expect(held?.norad_cat_id).toBe(25_544);
+    expect(held).not.toBeInstanceOf(Map);
+  });
+});
+
 describe('satelliteNotices', () => {
   it('hands the rail the notice keyed by layer, so the row can show it', () => {
     const { feed, fake } = build();

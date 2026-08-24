@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { advanceGreatCircle, normaliseLongitude } from './project';
+import { advanceGreatCircle, normaliseLongitude, pointInView } from './project';
 
 const EARTH_RADIUS_M = 6_371_008.8;
 const DEG = Math.PI / 180;
@@ -94,5 +94,39 @@ describe('normaliseLongitude', () => {
     expect(normaliseLongitude(181)).toBe(-179);
     expect(normaliseLongitude(-181)).toBe(179);
     expect(normaliseLongitude(540)).toBe(-180);
+  });
+});
+
+describe('pointInView', () => {
+  const london = { west: -1, south: 51, east: 1, north: 52 };
+
+  it('accepts a point inside the rectangle and its edges', () => {
+    expect(pointInView(london, -0.12, 51.5)).toBe(true);
+    expect(pointInView(london, -1, 51)).toBe(true);
+    expect(pointInView(london, 1, 52)).toBe(true);
+  });
+
+  it('rejects a point outside it in either axis', () => {
+    expect(pointInView(london, -0.12, 40)).toBe(false);
+    expect(pointInView(london, 30, 51.5)).toBe(false);
+  });
+
+  it('handles a view across the antimeridian, where west is greater than east', () => {
+    // Cesium's own convention, and the fourth bounding-box convention in this project. An
+    // `and` here rather than an `or` would answer confidently about the wrong half of the
+    // world: everything from Fiji to Alaska would read as off screen.
+    const pacific = { west: 170, south: -10, east: -170, north: 10 };
+
+    expect(pointInView(pacific, 179, 0)).toBe(true);
+    expect(pointInView(pacific, -179, 0)).toBe(true);
+    expect(pointInView(pacific, 0, 0)).toBe(false);
+  });
+
+  it('accepts everything when the view is the whole world', () => {
+    // What `cityView` falls back to when the camera is looking at the limb and Cesium
+    // cannot give it a rectangle. A layer must not read as empty because of that.
+    const world = { west: -180, south: -90, east: 180, north: 90 };
+
+    expect(pointInView(world, 179.9, -89.9)).toBe(true);
   });
 });

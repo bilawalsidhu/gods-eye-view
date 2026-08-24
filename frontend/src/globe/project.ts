@@ -71,3 +71,34 @@ export function normaliseLongitude(lon: number): number {
   const wrapped = (((lon + 180) % 360) + 360) % 360;
   return wrapped - 180;
 }
+
+/**
+ * What the camera can see, in contract order and degrees.
+ *
+ * `west` is greater than `east` when the view crosses the antimeridian, which is Cesium's
+ * convention and the fourth of the four bounding-box conventions AGENTS.md lists. Kept
+ * here rather than in a layer because three layers now ask the same question of it.
+ */
+export interface ViewRect {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+}
+
+/**
+ * Whether a point is inside the view, honouring a rectangle that crosses the antimeridian.
+ *
+ * A wrapped rectangle has `west` greater than `east`, so the longitude test is an or rather
+ * than an and. Getting that wrong returns a plausible answer about the wrong half of the
+ * world, which is the failure mode AGENTS.md warns about for every bounding box in this
+ * project.
+ */
+export function pointInView(view: ViewRect, lon: number, lat: number): boolean {
+  if (lat < view.south || lat > view.north) {
+    return false;
+  }
+  return view.west <= view.east
+    ? lon >= view.west && lon <= view.east
+    : lon >= view.west || lon <= view.east;
+}
