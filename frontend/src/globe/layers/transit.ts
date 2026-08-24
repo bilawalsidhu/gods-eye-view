@@ -145,13 +145,27 @@ export const SELECTED_TRANSIT_ICON_PX = 38;
 /**
  * The camera range over which a vehicle mark shrinks, in metres, and how far it shrinks.
  *
- * The tightest near figure in the app, because transit is only meaningful at a city zoom, and the
- * hardest far factor, because urban concentration is a worse case at range than the North Sea is: a
- * European view puts tens of thousands of vehicles into the few hundred pixels its cities occupy.
+ * The tightest near figure in the app, because transit is only meaningful at a city zoom. The far
+ * factor used to be the hardest too, on the reasoning that urban concentration is a worse case at
+ * range than the North Sea is: a European view puts tens of thousands of vehicles into the few hundred
+ * pixels its cities occupy.
+ *
+ * **That reasoning was answered by clustering and the factor was raised from 0.26 on 2026-08-24.** The
+ * concentration it was defending against is now a badge, so the marks the factor governs are only the
+ * ones sparse enough to be drawn loose: measured on a 17,039-vehicle feed, **25 at a whole-globe view
+ * and 107 over Europe at 3,000km.** A hundred marks cannot smear a continent, and the old factor was
+ * costing something real, because the ramp scales the whole image and at 0.26 a vehicle drew at 5.2
+ * pixels with 0.43 of a pixel of casing. Against the Blue Marble basemap the pink fill is 1.35:1 over
+ * Sahara sand and 2.24:1 over green land, both under the 3:1 floor, so over land the casing was the
+ * only channel and there was less than half of one. A bus over Spain was a speck nobody could find.
+ *
+ * 0.60 puts the drawn size at 12 pixels and the casing at a whole one, and no larger. Judged on frames
+ * at both views rather than on the ratio: the loose marks read as objects along coastlines and around
+ * cities, and the dense regions are unaffected because they were already badges.
  */
 const SCALE_NEAR_M = 40_000;
 const SCALE_FAR_M = 1_200_000;
-const SCALE_FAR_FACTOR = 0.26;
+const SCALE_FAR_FACTOR = 0.6;
 
 const LABEL_FONT = '500 12px system-ui, -apple-system, "Segoe UI", sans-serif';
 

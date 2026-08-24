@@ -99,12 +99,28 @@ const LABEL_COLOUR = '#e6edf3';
  *
  * Aircraft fly below about 13 km, so the distance from the camera to one is very close to the
  * camera's own height and this behaves as a zoom response. Full size from a city view;
- * `SCALE_FAR_FACTOR` of it from anywhere that frames a continent or the whole globe, where
- * about eleven pixels is what keeps a thousand of them from painting Europe solid.
+ * `SCALE_FAR_FACTOR` of it from anywhere that frames a continent or the whole globe, where the
+ * point is to keep a thousand of them from painting Europe solid.
+ *
+ * **The far factor is set by the casing rather than by the mark, and it was raised from 0.36 on
+ * 2026-08-24.** The ramp scales the whole image, casing included, so at 0.36 an aircraft drew at 9.4
+ * pixels with **0.78 of a pixel of casing**, and 0.78 of a pixel is not a casing. That matters because
+ * of what the fill is up against: measured against the Blue Marble basemap, the grey-blue of an
+ * unknown-class aircraft is 1.46:1 over Sahara sand, 2.06:1 over green land and 2.35:1 over polar ice,
+ * all below the 3:1 floor for a graphical element. Over deep ocean it is 5.93:1 and fine. So over land
+ * the casing is the only channel there is, and at a wide zoom it was not there: a lone aircraft over
+ * the Sahara could not be found.
+ *
+ * 0.47 puts the drawn size just past 12 pixels, which is the smallest size at which the casing is a
+ * whole pixel, and no larger. 0.46 was the figure agreed and it misses: 26 times 0.46 is 11.96 pixels
+ * and a casing of 0.997, which is the same failure one decimal place further down. The test asserts
+ * the casing rather than the factor, which is why that showed up rather than shipping. It cannot bring the clutter back, because at a wide zoom almost every aircraft
+ * is inside a badge: measured on the live feed, 14 marks are drawn loose at a whole-globe view and 90
+ * over Europe at 3,000km, against 903 records.
  */
 const SCALE_NEAR_M = 120_000;
 const SCALE_FAR_M = 4_000_000;
-const SCALE_FAR_FACTOR = 0.36;
+const SCALE_FAR_FACTOR = 0.47;
 
 /**
  * Gap in pixels between the edge of the mark and the start of the callsign.

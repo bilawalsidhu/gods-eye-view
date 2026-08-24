@@ -293,7 +293,22 @@ export function relativeLuminance(hex: string): number {
   return 0.2126 * linearise(0) + 0.7152 * linearise(2) + 0.0722 * linearise(4);
 }
 
-/** WCAG contrast ratio between two colours, 1 for identical and 21 for black against white. */
+/**
+ * WCAG contrast ratio between two colours, 1 for identical and 21 for black against white.
+ *
+ * **What a mark is measured against changed on 2026-08-24, and the two changes read as unrelated
+ * unless this says otherwise.** The basemap moved from `VIIRS_SNPP_CorrectedReflectance_TrueColor` to
+ * `BlueMarble_ShadedRelief_Bathymetry`, so weather is no longer baked into it and the live cloud layer
+ * is the only white. Measured against the new one, every entity fill is comfortable over deep ocean
+ * and below the 3:1 floor over land: the grey-blue of an unknown aircraft is 5.93:1 over ocean and
+ * 1.46:1 over Sahara sand, vessel teal is 7.60 and 1.14, transit pink 6.45 and 1.35. The casing is
+ * 10.86:1 over sand, so over land the casing is the channel and the fill is not.
+ *
+ * The cost of the swap is that **the bright extreme no longer moves.** A mark lost against cloud was
+ * findable tomorrow when the cloud moved on; a mark lost against the Sahara is lost every day. So the
+ * floor over land matters more than it did before the swap, and that is why `layers/aircraft.ts` now
+ * sizes its far end from the casing rather than from the mark.
+ */
 export function contrastRatio(a: string, b: string): number {
   const first = relativeLuminance(a);
   const second = relativeLuminance(b);

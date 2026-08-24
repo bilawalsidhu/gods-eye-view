@@ -231,7 +231,7 @@ const {
   transitLabel,
   transitShape,
 } = await import('./transit');
-const { clusterBadgeImage, iconImage, orientAxis } = await import('../icons');
+const { casingPixels, clusterBadgeImage, iconImage, orientAxis } = await import('../icons');
 const { CLUSTER_FILL, TRANSIT_COLOUR, clusterBadgePx } = await import('../palette');
 const { parseClusterPickId } = await import('../cluster');
 const { badgeSlots } = await import('../badge-slots');
@@ -654,6 +654,24 @@ describe('TransitLayer.advance', () => {
   });
 });
 
+describe('TransitLayer mark size against camera range', () => {
+  it('never shrinks so far that the casing stops being a pixel', () => {
+    // The ramp scales the whole image, casing included, and over land the casing is the only channel
+    // this layer has: pink measures 1.35:1 against Sahara sand and 2.24:1 against green land, both
+    // under the 3:1 floor, while over deep ocean it is a comfortable 6.45:1. At the old 0.26 a vehicle
+    // drew at 5.2 pixels with 0.43 of a pixel of casing, so a bus over Spain was a speck.
+    //
+    // A whole pixel of casing needs a drawn size of twelve, because the casing is a sixteen-unit
+    // stroke in a ninety-six unit box with half of it painted over by the fill.
+    const { layer, marks } = build();
+    layer.replace([makeVehicle()]);
+
+    const scale = marks.items[0]?.scaleByDistance as { farValue: number };
+
+    expect(casingPixels(TRANSIT_ICON_PX * scale.farValue)).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe('TransitLayer badge placement', () => {
   it('holds its badges still across passes rather than walking them a cell per frame', () => {
     // This layer draws the most badges of any, so it feels a self-displacement first. It releases its
@@ -928,7 +946,7 @@ describe('TransitLayer sizing', () => {
       farValue: number;
     };
     expect(scale.nearValue).toBe(1);
-    expect(scale.farValue).toBeLessThan(0.3);
+    expect(scale.farValue).toBeLessThan(1);
 
     layer.setSelected(transitKey(makeVehicle()));
 

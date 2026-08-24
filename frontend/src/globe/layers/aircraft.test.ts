@@ -230,7 +230,7 @@ const { __cssColourCalls: cssColourCalls } = (await import('cesium')) as unknown
 
 const { AircraftLayer } = await import('./aircraft');
 const { makeAircraft } = await import('../../testing/aircraft');
-const { clusterBadgeImage, iconImage, orientAxis } = await import('../icons');
+const { casingPixels, clusterBadgeImage, iconImage, orientAxis } = await import('../icons');
 const { CLUSTER_CELL_PX, CLUSTER_MIN_MEMBERS, parseClusterPickId } = await import('../cluster');
 const { badgeSlots } = await import('../badge-slots');
 const {
@@ -544,6 +544,24 @@ describe('AircraftLayer mark size against camera range', () => {
     expect(scale.nearValue).toBe(1);
     expect(scale.farValue).toBeLessThan(1);
     expect(scale.far).toBeGreaterThan(scale.near);
+  });
+
+  it('never shrinks so far that the casing stops being a pixel', () => {
+    // The ramp scales the whole image, casing included, and the casing is one of the two channels the
+    // contrast work rests on. At the old 0.36 an aircraft drew at 9.4 pixels with 0.78 of a pixel of
+    // casing, and over land that was the only channel it had: the grey-blue fill measures 1.46:1
+    // against Sahara sand and 2.06:1 against green land, both under the 3:1 floor. So a lone aircraft
+    // over bright terrain at a wide zoom could not be found.
+    //
+    // A whole pixel of casing needs a drawn size of twelve, because the casing is a sixteen-unit
+    // stroke in a ninety-six unit box with half of it painted over by the fill.
+    const { layer, points } = build();
+    layer.upsert([makeAircraft({ icao24: 'abc123' })], 'aircraft');
+
+    const scale = rangeScaleOf(pointFor(points, 'abc123')!);
+    const drawnAtRange = AIRCRAFT_ICON_PX * scale.farValue;
+
+    expect(casingPixels(drawnAtRange)).toBeGreaterThanOrEqual(1);
   });
 
   it('never shrinks the selected aircraft, whatever the range', () => {

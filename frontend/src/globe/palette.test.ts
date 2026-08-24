@@ -142,8 +142,19 @@ const LAYER_COLOURS: readonly (readonly [string, string])[] = [
   ['social', SOCIAL_COLOUR],
 ];
 
-/** Extremes of the NASA basemap: deep ocean, the brightest cloud, and Sahara sand. */
-const BASEMAP = { ocean: '#0b1a2b', cloud: '#f2f4f6', desert: '#c8a86a' };
+/**
+ * Extremes of the basemap, and of the cloud layer drawn on top of it.
+ *
+ * Blue Marble shaded relief since 2026-08-24, so the bright extremes are polar ice and Sahara sand
+ * rather than weather, and the live cloud layer supplies the only white that moves.
+ */
+const BASEMAP = {
+  ocean: '#0b2545',
+  cloud: '#f2f4f6',
+  ice: '#f2f4f6',
+  desert: '#d9c08a',
+  land: '#5a7247',
+};
 
 /** The body colour a viewer actually sees, once the casing bleeds through at the body's opacity. */
 function tintedFill(casing: string): string {
@@ -209,6 +220,19 @@ describe('badge contrast, which is a requirement rather than a preference', () =
     }
     expect(contrastRatio(CLUSTER_FILL, BASEMAP.cloud)).toBeGreaterThanOrEqual(3);
     expect(contrastRatio(CLUSTER_FILL, BASEMAP.desert)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('leans on the casing over land, because no fill clears the floor there', () => {
+    // The division of labour, asserted rather than described. Over deep ocean a fill carries a mark on
+    // its own; over sand, ice and green land not one of them reaches 3:1 and the casing is the only
+    // channel left. That is why `layers/aircraft.ts` sizes its far end from the casing: a sub-pixel
+    // casing over land is a mark nobody can find.
+    for (const [, colour] of LAYER_COLOURS) {
+      expect(contrastRatio(colour, BASEMAP.ocean)).toBeGreaterThanOrEqual(3);
+      expect(contrastRatio(colour, BASEMAP.desert)).toBeLessThan(3);
+    }
+    expect(contrastRatio(CLUSTER_FILL, BASEMAP.desert)).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(CLUSTER_FILL, BASEMAP.ice)).toBeGreaterThanOrEqual(3);
   });
 
   it('gives every layer a different badge, which is the point of the exercise', () => {
