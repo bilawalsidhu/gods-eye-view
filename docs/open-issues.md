@@ -88,12 +88,50 @@ refuses everywhere else.
 > "all assets should be clickable, with an info box about them, but somtimes nothing happens when
 > clicked (social media, public transport)"
 
-Named layers: social posts and public transport. The pick-id namespace is shared and
-`installPicking` in `globe/viewer.ts` routes one string; layers that never stamp a pick id, or
-whose id no resolver recognises, silently do nothing.
+Named layers: social posts and public transport.
 
-Every layer needs a pick id, a resolver and a card. Silence on a click is the worst outcome
-because it is indistinguishable from a missed click.
+### Audited 2026-08-25, and my first description of this was wrong
+
+I wrote that the cause was layers that "never stamp a pick id, **or** whose id no resolver
+recognises". It is entirely the second half. **Transit and social both stamp ids, and the ids are
+correct and stable**: `transit.ts:616,622` and `social.ts:542,544`. Nothing in `main.ts` resolves
+them, so the id falls through to `store.select`, which holds only aircraft and vessels.
+
+That distinction matters because "add an id to the layer" would have been the wrong fix, and it
+would have meant editing files another agent is rewriting.
+
+The full audit, and **two layers are broken, one is broken deliberately, and nothing else is
+missing**:
+
+| Layer | Stamps an id | Resolver | Card | Verdict |
+|---|---|---|---|---|
+| aircraft | bare 6-hex ICAO | `store.select` | yes | works |
+| vessels | bare 9-digit MMSI | `store.select` | yes | works |
+| satellites | `satellite:<norad>` | `noradFromPickId` | yes | works |
+| cities | `city:<geonames id>` | `geonamesFromPickId` | yes | works |
+| **transit** | `<feed_id>\t<entity_id>` | **none** | **none** | **dead click** |
+| **social** | `<source>\t<post_id>` | **none** | **none** | **dead click** |
+| user location | none, deliberately | — | — | dead click, documented |
+| clouds | imagery, not primitives | — | — | correctly not pickable |
+
+He found both of the genuinely broken ones.
+
+**A second correction.** A note in `main.ts:730` warns that passing a prefixed id into
+`store.select` "stops working the day the store counts or logs an id it does not recognise".
+It does not: `state/store.ts:206` already returns early on an id held in neither map, so an
+unrecognised id is a no-op by construction rather than by luck. Worth removing the pass-through
+anyway, but it is not the live hazard the note claims.
+
+### Design note
+
+The two dead ids are both two fields joined by a tab, so no parser can tell them apart by shape.
+They are resolved by asking each registry whether it holds the id, which is also immune to the id
+scheme changing while the declutter agent rewrites those layers.
+
+Silence on a click is the worst outcome because it is indistinguishable from a missed click, so a
+click resolving to no card opens a notice naming the layer rather than doing nothing. That needs
+`installPicking` to distinguish a click on a mark carrying no id from a click on empty ocean,
+which today both arrive as `null`.
 
 ## 5. UK public transport is missing
 
