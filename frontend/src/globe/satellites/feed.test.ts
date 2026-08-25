@@ -17,7 +17,7 @@ import {
   withDrawnSatelliteCount,
 } from './feed';
 import type { EnginePort } from './feed';
-import type { EngineReply, EngineRequest } from './orbit';
+import type { EngineReply, EngineRequest, OrbitTrack } from './orbit';
 import { emptyChanges } from '../../net/ws';
 import { makeSatellite } from '../../testing/satellite';
 import type { FeedHealth, Satellite } from '../../types/entities';
@@ -71,7 +71,10 @@ function positions(ids: number[], extra: { dropped?: number; stale?: number } = 
 function build() {
   const fake = fakePort();
   const onPositions = vi.fn<(ids: Int32Array, lonLatAlt: Float64Array) => void>();
-  const onOrbit = vi.fn<(noradCatId: number | null, lonLatAlt: Float64Array | null) => void>();
+  const onOrbit =
+    vi.fn<
+      (noradCatId: number | null, lonLatAlt: Float64Array | null, track: OrbitTrack | null) => void
+    >();
   const onState = vi.fn();
   const feed = new SatelliteFeed({ port: fake.port, onPositions, onOrbit, onState });
   return { feed, fake, onPositions, onOrbit, onState };
@@ -170,12 +173,16 @@ describe('the orbit trail', () => {
     feed.setSelected(25_544, 5000);
     expect(fake.sent).toEqual([{ type: 'orbit', noradCatId: 25_544, atMs: 5000 }]);
 
-    const track = new Float64Array([0, 0, 400_000, 1, 1, 400_000]);
-    fake.reply({ type: 'orbit', noradCatId: 25_544, lonLatAlt: track });
-    expect(onOrbit).toHaveBeenCalledWith(25_544, track);
+    const lonLatAlt = new Float64Array([0, 0, 400_000, 1, 1, 400_000]);
+    const track = { lonLatAlt, nowIndex: 0, epochMs: 0, spanMs: 5_574_000 };
+    fake.reply({ type: 'orbit', noradCatId: 25_544, track });
+    // The flat array and the track both, so a renderer drawing one undifferentiated line
+    // needs no knowledge of the track contract and one drawing the half ahead differently
+    // has the split index to do it with.
+    expect(onOrbit).toHaveBeenCalledWith(25_544, lonLatAlt, track);
 
     feed.setSelected(null);
-    expect(onOrbit).toHaveBeenLastCalledWith(null, null);
+    expect(onOrbit).toHaveBeenLastCalledWith(null, null, null);
     // Deselecting asks the worker for nothing.
     expect(fake.sent).toHaveLength(1);
   });
@@ -194,9 +201,13 @@ describe('the orbit trail', () => {
     feed.setSelected(25_544, 5000);
     feed.setSelected(20_580, 5001);
 
-    fake.reply({ type: 'orbit', noradCatId: 25_544, lonLatAlt: new Float64Array([0, 0, 0]) });
+    fake.reply({
+      type: 'orbit',
+      noradCatId: 25_544,
+      track: { lonLatAlt: new Float64Array([0, 0, 0]), nowIndex: 0, epochMs: 0, spanMs: 1 },
+    });
 
-    expect(onOrbit).not.toHaveBeenCalledWith(25_544, expect.anything());
+    expect(onOrbit).not.toHaveBeenCalledWith(25_544, expect.anything(), expect.anything());
   });
 });
 

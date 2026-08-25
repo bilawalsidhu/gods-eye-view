@@ -83,6 +83,154 @@ Two halves with very different answers, and they must not be blurred:
 Drawing an interpolated past track as though it were observed would be the lie this project
 refuses everywhere else.
 
+### The future path for satellites is built, 2026-08-25
+
+`SatelliteEngine.orbitAt` already propagated one full revolution centred on the instant asked
+for, so half of it was always the future path. What it did not do was say which half was which,
+and it drew both from a single undifferentiated array. Three changes, all inside
+`frontend/src/globe/satellites/`:
+
+- `orbitAt` now returns an `OrbitTrack` rather than a bare array: the samples, the index of the
+  sample propagated to the instant asked for, the epoch of the element set they came from, and
+  the span they cover. A renderer slices at `nowIndex` and gets the line ahead and the line
+  behind as two views on one buffer, no copy.
+- **The sample count went from 180 to 181, and that is the whole reason the split is exact.**
+  With an even count the instant asked for falls between two samples and there is no sample to
+  cut at: measured on the recorded ISS elements, the nearest sample was 15.6 seconds and 0.065
+  degrees of longitude away, and it would have been reported as the object's own position.
+- `globe/satellites/track.ts` holds `splitTrack`, `forwardHorizonMs` and `trackProvenance`, the
+  last being the sentence a card prints beside the line. It says the horizon (46 minutes in low
+  orbit, 12 hours in geostationary, because half a revolution is half a day), the age of the
+  element set, and that **neither half is an observed track**. A test asserts that last clause
+  by name and asserts the word "travelled" is absent, because the half behind the object is
+  SGP4 run backwards from the same elements and this project holds no observed history of
+  anything.
+
+**A real bug fell out of it and is fixed.** `orbitAt` never applied the 3.5-day staleness guard
+that `positionsAt` applies to a mark. Proved before fixing: the recorded ISS elements, asked for
+a track one second past the guard, returned a full orbit at a plausible 440 km altitude with no
+error anywhere. It is reachable without a click, because `main.ts` selects a satellite from the
+search box as well as from the globe, so an object the mark collection is holding back can still
+be asked for a track. The guard is now checked at the far end of the track rather than at the
+instant asked for, which matters only in geostationary orbit, where the last twelve hours before
+the mark goes now draw a mark and no track.
+
+Six mutations were planted against the new tests and all six went red, after two of them
+survived a first pass and the tests were tightened.
+
+### The travelled path: measured against the live backend, 2026-08-25
+
+Nothing here is built. These are the numbers the decision needs, taken off the running product
+rather than estimated: twelve snapshots of every mover layer thirty seconds apart, a 330-second
+window, plus real SQLite files built from the live entity keys and coordinates.
+
+**How many fixes a day actually is.** A fix is only worth recording when a feed reports a newer
+one, so the rate is not the poll rate. Counting distinct `observed_at` values per entity across
+the window:
+
+| Layer | Entities | New fixes/second | Mean interval per entity |
+|---|---|---|---|
+| Aircraft | 10,464 | 32.7 | 320 s |
+| Vessels | 6,288 | 73.0 | 86 s |
+| Transit | 5,209 | 108.9 | 48 s |
+| **Total** | **21,961** | **214.6** | |
+
+**What a fix costs on disk.** Measured, not estimated: real SQLite files built from the live
+entity keys, `VACUUM`ed, divided by row count. A row is layer, entity id, fix time, longitude,
+latitude and altitude, with `PRIMARY KEY (layer, entity_id, fix_time) WITHOUT ROWID` so the
+index is the table and there is no second copy of the key.
+
+| Row shape | Bytes per fix |
+|---|---|
+| Floats, text key, `WITHOUT ROWID` | 48.3 |
+| Integers at 1e-6 degrees (0.11 m), text key, `WITHOUT ROWID` | 34.1 |
+| Integers at 1e-5 degrees (1.1 m), text key, `WITHOUT ROWID` | 25.2 |
+| Integers, interned integer key, rowid table plus index | 41.3 |
+
+Quantising to integers is worth 29% and interning the key into a lookup table costs 21% rather
+than saving anything, because the rowid and the index entry cost more than the text key did.
+Take 34.1 bytes: 1e-6 degrees matches the finest any feed here reports, which is adsb.lol's six
+decimal places, so nothing is thrown away. 1e-5 saves a further 26% and costs at most 0.6 m.
+
+**So the arithmetic, at today's coverage:**
+
+| Window | Rows | Disk |
+|---|---|---|
+| 1 hour | 773,000 | 26 MB |
+| 6 hours | 4.6 M | 158 MB |
+| 24 hours | 18.5 M | 632 MB |
+| 7 days | 130 M | 4.4 GB |
+
+**The budget has to be a size, not a window, and issue 7 is why.** Every figure above is today's
+coverage and issue 7 exists to widen it. Aircraft went from 954 to 13,627 in one day on
+2026-08-24. A 24-hour window that costs 632 MB now costs 2 GB the day the vessel sweep finds
+three more authorities, and nothing would say so. Cap the file and drop the oldest rows to stay
+under it, then state the window that cap is currently buying.
+
+### The finding that decides the shape: an aircraft trail cannot be a line
+
+Distance between consecutive recorded fixes, measured directly off the snapshots with no speed
+assumption:
+
+| Layer | Segments measured | Median | p90 | p99 | Max |
+|---|---|---|---|---|---|
+| Aircraft | 10,791 | **24.9 km** | 79.6 km | 119 km | 1,166 km |
+| Vessels | 24,082 | 0 m | 331 m | 841 m | 10.4 km |
+| Transit | 23,143 | 143 m | 688 m | 15.2 km | 44.4 km |
+
+A straight line between two aircraft fixes 25 km apart is an invention. An aeroplane that turned
+between them did not fly it, and the line says it did. This is the same error the transit
+staleness work went to real trouble to stop, held in a different form: there the wrong street by
+a mile, here the wrong side of a city.
+
+So the honest answer differs by layer, and it is not a preference:
+
+- **Aircraft: dated points, not a line.** Exactly what ADR 005 already does with social posts,
+  and for the same stated reason, that the route is not something any source reported.
+- **Vessels and transit: a line is defensible**, at 331 m and 688 m at the ninetieth percentile.
+  Break the line rather than joining across a gap longer than a per-layer threshold, the same
+  all-or-nothing rule `orbitAt` uses for a failed sample.
+
+The aircraft figure is our sweep design, not a provider limit. adsb.lol's floor is 5 seconds and
+the union sweeps the globe in tiles at 15 seconds a tile, so a given aircraft comes round every
+320 seconds. Sweeping the selected aircraft's tile densely would make a line honest for that one
+aircraft. That is a real piece of work and it partly reverses `1b45ed7`.
+
+### Transit has no usable trail key, and both candidates are wrong
+
+Measured on one live cycle of 10,558 vehicle records:
+
+- `(feed_id, entity_id)` is unique, all 10,558 distinct, and trip-scoped on 23.7% of feeds and on
+  all of Entur. A bus finishing a trip reappears under a new key, so the trail resets at every
+  trip boundary.
+- `(feed_id, vehicle_id)` collapses those 10,558 to 5,095 and survives a trip change, but it is
+  **not unique**: 1,194 keys carry more than one concurrent record and 1,089 of those put the two
+  records in different places, a median of 977 m apart and up to 7.2 km. A trail on that key
+  draws a bus jumping a kilometre back and forth every poll.
+
+Neither is fit as it stands. This needs settling before any transit trail is drawn, and it is a
+separate piece of work from the store.
+
+### Proposed shape
+
+- **A second SQLite file**, not `upstream.sqlite3`. That file holds rate-limit state that must
+  never be lost, and a history file we truncate to reclaim disk must not take the CelesTrak floor
+  with it. Different lifetimes, different files.
+- **The write hook is `EntityStore.upsert`**, which is the one funnel every layer's fixes already
+  pass through and which already knows whether the incoming fix is newer than the one held. One
+  optional callback field and the recorder writes only when the store accepted a newer fix, so
+  the deduplication is free. Three lines in `services/store.py`, and the construction sites in
+  `app.py`.
+- **Buffered writes**, batched into one transaction every ten seconds. 215 rows a second in one
+  statement, not 215 transactions.
+- **`auto_vacuum=INCREMENTAL`.** Without it a `DELETE` frees pages and never shrinks the file, so
+  the peak day's size becomes permanent.
+- **The read path is one entity at a time**: `GET /api/{layer}/{id}/track?since=`, oldest first,
+  capped, with the cap stated in the response. Never a bulk route for every trail at once, which
+  is megabytes a frame and the ball of wool the satellite trail already refuses.
+- **A restart has no history**, so the first minutes after one draw a short trail or none, and the
+  card says which rather than drawing a stub.
+
 ## 4. Nothing is clickable in some layers
 
 > "all assets should be clickable, with an info box about them, but somtimes nothing happens when

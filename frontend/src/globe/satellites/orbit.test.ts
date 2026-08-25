@@ -297,27 +297,28 @@ describe('the orbit trail', () => {
     const track = engine.orbitAt(25_544, when);
 
     expect(track).not.toBeNull();
-    expect(track!.length).toBe(ORBIT_TRAIL_SAMPLES * 3);
-    expect([...track!].every((value) => Number.isFinite(value))).toBe(true);
+    const samples = track!.lonLatAlt;
+    expect(samples.length).toBe(ORBIT_TRAIL_SAMPLES * 3);
+    expect([...samples].every((value) => Number.isFinite(value))).toBe(true);
 
     // One full revolution, which is what the first and last samples prove between them. The
     // ISS is back to the same latitude and the same altitude, and 23.3 degrees of longitude
     // further west, because the earth turned under it during the 92.9-minute orbit. A trail
     // that closed on the ground would mean the earth-fixed rotation was not being applied.
-    const first = { lon: track![0]!, lat: track![1]!, altitudeM: track![2]! };
+    const first = { lon: samples[0]!, lat: samples[1]!, altitudeM: samples[2]! };
     const last = {
-      lon: track![(ORBIT_TRAIL_SAMPLES - 1) * 3]!,
-      lat: track![(ORBIT_TRAIL_SAMPLES - 1) * 3 + 1]!,
-      altitudeM: track![(ORBIT_TRAIL_SAMPLES - 1) * 3 + 2]!,
+      lon: samples[(ORBIT_TRAIL_SAMPLES - 1) * 3]!,
+      lat: samples[(ORBIT_TRAIL_SAMPLES - 1) * 3 + 1]!,
+      altitudeM: samples[(ORBIT_TRAIL_SAMPLES - 1) * 3 + 2]!,
     };
     expect(Math.abs(last.lat - first.lat)).toBeLessThan(0.5);
     expect(Math.abs(last.altitudeM - first.altitudeM)).toBeLessThan(1000);
     expect(last.lon - first.lon).toBeCloseTo(-23.33, 1);
 
     // And the middle of the trail is where the point itself is drawn.
-    const middle = Math.round(ORBIT_TRAIL_SAMPLES / 2);
     const drawn = onlyPosition(engine, when);
-    const midSample = { lon: track![middle * 3]!, lat: track![middle * 3 + 1]! };
+    const middle = track!.nowIndex;
+    const midSample = { lon: samples[middle * 3]!, lat: samples[middle * 3 + 1]! };
     expect(groundSeparationKm(midSample, drawn)).toBeLessThan(200);
   });
 
@@ -327,6 +328,73 @@ describe('the orbit trail', () => {
 
     expect(engine.orbitAt(99_999, when)).toBeNull();
     expect(engine.orbitAt(25_544, when, 1)).toBeNull();
+  });
+
+  it('refuses a track propagated from an element set past the staleness guard', () => {
+    // The guard that stops a stale element set being drawn as a live point has to stop it
+    // being drawn as a track too, and it is the *far* end of the track that decides. A
+    // forward track from stale elements is the same fiction as a stale point, drawn longer:
+    // the object is not there, and the line says it will be.
+    //
+    // Reachable without a click. `main.ts` selects a satellite from the search box as well as
+    // from the globe, so an object held back from the mark collection can still be asked for
+    // a track. SGP4 does not object: the recorded ISS elements propagate five days past their
+    // own epoch and return a clean error code and a plausible altitude, which is precisely
+    // why this is checked here rather than left to the propagator.
+    const engine = new SatelliteEngine();
+    engine.load([issElements()]);
+    const epoch = new Date(issOmm().EPOCH + 'Z');
+
+    const fresh = engine.orbitAt(25_544, new Date(epoch.getTime() + STALE_EPOCH_AGE_MS / 2));
+    expect(fresh).not.toBeNull();
+
+    const stale = engine.orbitAt(25_544, new Date(epoch.getTime() + STALE_EPOCH_AGE_MS + 1000));
+    expect(stale).toBeNull();
+  });
+
+  it('splits the track at the sample it was asked for, and that sample is the drawn position', () => {
+    // The whole point of the split. Everything before `nowIndex` is behind the object and
+    // everything after it is ahead, so a renderer can draw the two halves differently and a
+    // card can say which is which. If `nowIndex` were off by even one sample the "future"
+    // line would start half a minute in the past, which is the sort of error nobody sees.
+    const engine = new SatelliteEngine();
+    engine.load([issElements()]);
+
+    const track = engine.orbitAt(25_544, when);
+    expect(track).not.toBeNull();
+    expect(track!.lonLatAlt.length).toBe(ORBIT_TRAIL_SAMPLES * 3);
+    expect(track!.nowIndex).toBe((ORBIT_TRAIL_SAMPLES - 1) / 2);
+
+    // Exactly, not approximately: the sample at `nowIndex` is the same propagation the mark
+    // collection draws, so the two agree to the metre rather than to 200 km.
+    const drawn = onlyPosition(engine, when);
+    const at = track!.nowIndex * 3;
+    expect(track!.lonLatAlt[at]).toBeCloseTo(drawn.lon, 9);
+    expect(track!.lonLatAlt[at + 1]).toBeCloseTo(drawn.lat, 9);
+    expect(track!.lonLatAlt[at + 2]).toBeCloseTo(drawn.altitudeM, 6);
+
+    // And with an even sample count too, which is the case that proves `nowIndex` is where
+    // `when` actually landed rather than a number the offsets happen to agree with. A track
+    // laid out symmetrically about its centre puts `when` between samples 89 and 90 of 180,
+    // 15.6 seconds and 0.065 degrees of longitude from either, and reports one of them as the
+    // object's own position.
+    const even = engine.orbitAt(25_544, when, 180)!;
+    const evenAt = even.nowIndex * 3;
+    expect(even.lonLatAlt[evenAt]).toBeCloseTo(drawn.lon, 9);
+    expect(even.lonLatAlt[evenAt + 1]).toBeCloseTo(drawn.lat, 9);
+  });
+
+  it('carries the element set epoch it propagated from, and the span it covers', () => {
+    // Provenance, not decoration. Both halves of this line are computed from one element set
+    // and neither is an observation, so the card has to be able to say when those elements
+    // were taken. The ISS orbit is 92.9 minutes, which is the span.
+    const engine = new SatelliteEngine();
+    engine.load([issElements()]);
+
+    const track = engine.orbitAt(25_544, when)!;
+
+    expect(track.epochMs).toBeCloseTo(Date.parse(issOmm().EPOCH + 'Z'), -1);
+    expect(track.spanMs / 60_000).toBeCloseTo(92.9, 1);
   });
 
   it('has no trail at all when the orbit will not propagate', () => {

@@ -52,8 +52,15 @@ const UNIX_EPOCH_JD = 2_440_587.5;
  */
 export const STALE_EPOCH_AGE_MS = 3.5 * 24 * 60 * 60 * 1000;
 
-/** Samples in one orbit trail. 180 puts the chord error at about a kilometre in low orbit. */
-export const ORBIT_TRAIL_SAMPLES = 180;
+/**
+ * Samples in one orbit track. 181 puts the chord error at about a kilometre in low orbit.
+ *
+ * **Odd on purpose.** The track is one full revolution centred on the instant it was asked
+ * for, so an even count puts that instant between two samples and there is then no sample to
+ * split the drawn line at. With an odd count the middle sample *is* the instant, exactly, and
+ * `OrbitTrack.nowIndex` is `(ORBIT_TRAIL_SAMPLES - 1) / 2` with nothing rounded.
+ */
+export const ORBIT_TRAIL_SAMPLES = 181;
 
 /**
  * The eleven OMM keywords `json2satrec` actually reads, taken off our domain contract.
@@ -145,6 +152,46 @@ export interface Positions {
   stale: number;
 }
 
+/**
+ * One propagated orbit: where the object will be, and where it was.
+ *
+ * **Both halves are propagated and neither is observed, and that is the whole reason this
+ * carries provenance rather than being a bare array.** This project records no position
+ * history, so there is no observed past track for anything, satellites included. What the
+ * half behind the object is, is SGP4 run backwards from the same element set that produced
+ * the half in front. Over one revolution that is accurate, and it is still a computation
+ * rather than a report, so a card drawn from this says so. Compare the aircraft layer, which
+ * has no equivalent: an aeroplane's future is a guess about a pilot, not a solution to an
+ * equation, and there is nothing here that would let one be drawn as if it were this.
+ */
+export interface OrbitTrack {
+  /** `[lon, lat, altitudeMetres]` triples, earliest first. */
+  lonLatAlt: Float64Array;
+  /**
+   * The sample propagated to the instant that was asked for.
+   *
+   * Samples below it are behind the object and samples above it are ahead of it, and the
+   * sample itself belongs to both halves: a renderer that slices here must include this index
+   * at the end of the first line and the start of the second, or the two halves meet across a
+   * gap that reads as a break in the orbit.
+   */
+  nowIndex: number;
+  /**
+   * Epoch of the element set every sample came from, in milliseconds since the Unix epoch.
+   *
+   * Read off the satrec rather than the contract, so the staleness guard, the propagator and
+   * anything a card prints cannot disagree about which instant it is.
+   */
+  epochMs: number;
+  /**
+   * Milliseconds from the first sample to the last: one full revolution.
+   *
+   * With `nowIndex` and the sample count this dates every sample, because they are evenly
+   * spaced: sample `i` is at `when + spanMs * (i - nowIndex) / (samples - 1)`.
+   */
+  spanMs: number;
+}
+
 interface Loaded {
   satrec: SatRec;
   epochMs: number;
@@ -234,35 +281,58 @@ export class SatelliteEngine {
   }
 
   /**
-   * One full revolution of one satellite, centred on `when`, as `[lon, lat, altitudeM]`
-   * triples. Null when the object is not loaded, or when any sample will not propagate.
+   * One full revolution of one satellite, centred on `when`, split at `when`.
    *
-   * All or nothing on purpose: skipping a failed sample would join two points either side
-   * of the gap with a chord straight through the earth, which reads as an orbit nobody is
-   * in. One revolution takes 2π/n minutes, where `satrec.no` is the mean motion in radians
-   * per minute.
+   * Null when the object is not loaded, when `samples` is under two, when any sample will
+   * not propagate, or when the element set is past the staleness guard.
+   *
+   * **The staleness guard is checked at the far end of the track, not at `when`.** It is the
+   * same 3.5-day rule `positionsAt` applies to a mark, and it has to be here too: a track
+   * from stale elements is the same fiction as a stale mark, drawn longer and further into a
+   * future the elements cannot describe. Measured on the recorded ISS elements, propagating
+   * five days past their own epoch returns a clean error code and a plausible 440 km
+   * altitude, so nothing downstream would notice. This is reachable without a click, because
+   * `main.ts` selects a satellite from the search box as well as from the globe, so an object
+   * the mark collection is holding back can still be asked for a track. Checking the far end
+   * rather than `when` matters only in geostationary orbit, where half a revolution is twelve
+   * hours: there the last twelve hours before the mark itself goes draws a mark and no track,
+   * which is the honest way round.
+   *
+   * All or nothing on a failed sample, for the same reason: skipping one would join the two
+   * points either side of the gap with a chord straight through the earth, which reads as an
+   * orbit nobody is in. One revolution takes 2π/n minutes, where `satrec.no` is the mean
+   * motion in radians per minute.
    */
   orbitAt(
     noradCatId: number,
     when: Date,
     samples: number = ORBIT_TRAIL_SAMPLES,
-  ): Float64Array | null {
+  ): OrbitTrack | null {
     const entry = this.loaded.get(noradCatId);
     if (entry === undefined || samples < 2) {
       return null;
     }
     const periodMs = (TWO_PI / entry.satrec.no) * 60_000;
-    const track = new Float64Array(samples * 3);
+    // The middle sample, which is the one propagated to `when` itself. Floored rather than
+    // rounded because `ORBIT_TRAIL_SAMPLES` is odd and this is then exact; a caller passing an
+    // even count gets a track very slightly weighted towards the future, which is harmless and
+    // still splits at a real sample rather than between two.
+    const nowIndex = Math.floor((samples - 1) / 2);
+    const lonLatAlt = new Float64Array(samples * 3);
     for (let index = 0; index < samples; index += 1) {
-      const offsetMs = periodMs * (index / (samples - 1) - 0.5);
-      if (!propagateInto(entry.satrec, new Date(when.getTime() + offsetMs))) {
+      const offsetMs = (periodMs * (index - nowIndex)) / (samples - 1);
+      const atMs = when.getTime() + offsetMs;
+      if (atMs - entry.epochMs > STALE_EPOCH_AGE_MS) {
         return null;
       }
-      track[index * 3] = scratch.lon;
-      track[index * 3 + 1] = scratch.lat;
-      track[index * 3 + 2] = scratch.altitudeM;
+      if (!propagateInto(entry.satrec, new Date(atMs))) {
+        return null;
+      }
+      lonLatAlt[index * 3] = scratch.lon;
+      lonLatAlt[index * 3 + 1] = scratch.lat;
+      lonLatAlt[index * 3 + 2] = scratch.altitudeM;
     }
-    return track;
+    return { lonLatAlt, nowIndex, epochMs: entry.epochMs, spanMs: periodMs };
   }
 }
 
@@ -276,7 +346,7 @@ export type EngineRequest =
 export type EngineReply =
   | { type: 'elements'; accepted: number; rejected: number }
   | ({ type: 'positions'; atMs: number } & Positions)
-  | { type: 'orbit'; noradCatId: number; lonLatAlt: Float64Array | null };
+  | { type: 'orbit'; noradCatId: number; track: OrbitTrack | null };
 
 /**
  * The worker's whole behaviour, as a pure function of engine and request.
@@ -301,7 +371,7 @@ export function handleRequest(engine: SatelliteEngine, request: EngineRequest): 
       return {
         type: 'orbit',
         noradCatId: request.noradCatId,
-        lonLatAlt: engine.orbitAt(request.noradCatId, new Date(request.atMs)),
+        track: engine.orbitAt(request.noradCatId, new Date(request.atMs)),
       };
     }
   }
@@ -318,8 +388,8 @@ export function transferables(reply: EngineReply): Transferable[] {
   if (reply.type === 'positions') {
     return [reply.ids.buffer, reply.lonLatAlt.buffer];
   }
-  if (reply.type === 'orbit' && reply.lonLatAlt !== null) {
-    return [reply.lonLatAlt.buffer];
+  if (reply.type === 'orbit' && reply.track !== null) {
+    return [reply.track.lonLatAlt.buffer];
   }
   return [];
 }

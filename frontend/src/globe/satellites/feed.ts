@@ -9,7 +9,7 @@
  * runner. A real `Worker` satisfies it as it stands, with no adapter.
  */
 
-import type { EngineReply, EngineRequest, Positions } from './orbit';
+import type { EngineReply, EngineRequest, OrbitTrack, Positions } from './orbit';
 import type { Changes } from '../../net/ws';
 import type { FeedHealth, Satellite } from '../../types/entities';
 
@@ -97,8 +97,19 @@ export interface SatelliteFeedOptions {
   port: EnginePort;
   /** One tick of positions, straight off the worker in the form the layer draws. */
   onPositions: (ids: Int32Array, lonLatAlt: Float64Array) => void;
-  /** One orbit trail, or null to clear it. */
-  onOrbit: (noradCatId: number | null, lonLatAlt: Float64Array | null) => void;
+  /**
+   * One orbit track, or nulls to clear it.
+   *
+   * `lonLatAlt` is `track.lonLatAlt`, handed over separately so a renderer that only draws
+   * one undifferentiated line needs no knowledge of the track contract. A renderer that draws
+   * the half ahead differently from the half behind takes `track` and slices it at
+   * `track.nowIndex`.
+   */
+  onOrbit: (
+    noradCatId: number | null,
+    lonLatAlt: Float64Array | null,
+    track: OrbitTrack | null,
+  ) => void;
   onState: (state: SatelliteFeedState) => void;
 }
 
@@ -221,8 +232,12 @@ export class SatelliteFeed {
   /**
    * Draw an orbit trail for one satellite, or none.
    *
-   * One trail at a time, for the selection only. Trails for everything is the thing that
+   * One track at a time, for the selection only. Tracks for everything is the thing that
    * turns a globe into a ball of wool and costs more than the points do.
+   *
+   * A selection whose element set is past the 3.5-day staleness guard comes back with a null
+   * track and draws nothing, which is the same answer its mark gets. See
+   * `SatelliteEngine.orbitAt`.
    */
   setSelected(noradCatId: number | null, nowMs: number = Date.now()): void {
     if (this.selected === noradCatId) {
@@ -230,7 +245,7 @@ export class SatelliteFeed {
     }
     this.selected = noradCatId;
     if (noradCatId === null) {
-      this.options.onOrbit(null, null);
+      this.options.onOrbit(null, null, null);
       return;
     }
     this.options.port.postMessage({ type: 'orbit', noradCatId, atMs: nowMs });
@@ -257,7 +272,7 @@ export class SatelliteFeed {
         // A reply for a satellite that is no longer selected is dropped: the user has moved
         // on, and drawing it would put a trail under a point nobody clicked.
         if (reply.noradCatId === this.selected) {
-          this.options.onOrbit(reply.noradCatId, reply.lonLatAlt);
+          this.options.onOrbit(reply.noradCatId, reply.track?.lonLatAlt ?? null, reply.track);
         }
         break;
       }
