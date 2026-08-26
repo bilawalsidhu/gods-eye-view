@@ -17,24 +17,39 @@ function accept(code, message) {
 }
 
 function isConfirmedCandidate(candidate) {
-  return (
-    candidate?.status === CANDIDATE_STATUS.CONFIRMED ||
-    candidate?.confirmedAtMs != null
-  );
+  return candidate?.status === CANDIDATE_STATUS.CONFIRMED;
 }
 
 export function evaluateCaseAuthorization(caseRecord, nowMs) {
-  const mandate = caseRecord?.mandate || {};
-
-  if (
-    caseRecord?.kind === CASE_KIND.MANDATED &&
-    mandate.expiresAtMs != null &&
-    nowMs > mandate.expiresAtMs
-  ) {
-    return reject('mandate_expired', 'Mandated case expired.');
+  if (caseRecord?.kind !== CASE_KIND.SELF && caseRecord?.kind !== CASE_KIND.NON_SELF) {
+    return reject('case_kind_required', 'Case kind must be explicit.');
   }
 
-  return accept('case_authorized', 'Case is authorized.');
+  if (caseRecord.kind === CASE_KIND.SELF) {
+    return accept('case_authorized', 'Self case is authorized.');
+  }
+
+  const mandate = caseRecord?.mandate;
+  const sourceScopes = Array.isArray(mandate?.sourceScopes) ? mandate.sourceScopes : [];
+  const proof = mandate?.proof || {};
+
+  if (!mandate) {
+    return reject('mandate_missing', 'Non-self cases require a mandate.');
+  }
+
+  if (proof.signedAtMs == null || proof.validatedAtMs == null) {
+    return reject('mandate_unverified', 'Mandate must be signed and validated.');
+  }
+
+  if (sourceScopes.length === 0) {
+    return reject('mandate_scope_missing', 'Mandate source scopes are required.');
+  }
+
+  if (mandate.expiresAtMs == null || nowMs >= mandate.expiresAtMs) {
+    return reject('mandate_expired', 'Non-self case mandate must expire in the future.');
+  }
+
+  return accept('case_authorized', 'Non-self case is authorized.');
 }
 
 export function canCreateRequest(caseRecord, candidate, action, nowMs) {
@@ -49,19 +64,19 @@ export function canCreateRequest(caseRecord, candidate, action, nowMs) {
     return reject('candidate_missing', 'A candidate is required.');
   }
 
-  if (!isConfirmedCandidate(candidate)) {
+  if (candidate.status !== CANDIDATE_STATUS.CONFIRMED || !isConfirmedCandidate(candidate)) {
     return reject('candidate_unconfirmed', 'Candidate confirmation is required.');
   }
 
-  const mandateScope = caseRecord?.mandate?.sourceScope ?? null;
+  const mandateScopes = Array.isArray(caseRecord?.mandate?.sourceScopes) ? caseRecord.mandate.sourceScopes : [];
   const candidateScope = candidate.sourceScope ?? null;
 
-  if (mandateScope && candidateScope !== mandateScope) {
-    return reject('source_scope_mismatch', 'Candidate source scope is out of bounds.');
+  if (caseRecord?.kind === CASE_KIND.NON_SELF && !candidateScope) {
+    return reject('source_scope_missing', 'Candidate source scope is required.');
   }
 
-  if (mandateScope && !candidateScope) {
-    return reject('source_scope_missing', 'Candidate source scope is required.');
+  if (caseRecord?.kind === CASE_KIND.NON_SELF && !mandateScopes.includes(candidateScope)) {
+    return reject('source_scope_mismatch', 'Candidate source scope is out of bounds.');
   }
 
   return accept('request_allowed', 'Draft request is allowed.');
