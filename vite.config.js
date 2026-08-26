@@ -7383,7 +7383,7 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_API_BASE_URL': JSON.stringify(env.VITE_API_BASE_URL ?? ''),
       // Tell Cesium where to find Workers + Assets at runtime.
       // Pointed at unpkg /files/ which contains the Build/Cesium/ tree.
-      'CESIUM_BASE_URL': JSON.stringify('https://unpkg.com/cesium@1.124.0/files/'),
+      'CESIUM_BASE_URL': JSON.stringify('/cesium/'),
     },
     resolve: {
       // Use the pre-built Cesium (same as CDN) to avoid @zip.js dependency issues

@@ -16,7 +16,10 @@
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
   <!-- Cesium bundled by Vite from npm (cesium@1.124.0).
        CESIUM_BASE_URL define tells Cesium where to find Workers + Assets at runtime.
-       Workers are served from unpkg's /files/ path (Build/Cesium/ tree). -->
+       Assets served from /cesium/ (same-origin, public/cesium/ at build time). -->
+  <!-- React 19 — loaded before the app bundle so React is available globally.
+       react-dom is not bundled (avoids huge chunk); the HUD is vanilla-owned. -->
+  <script crossorigin src="https://unpkg.com/react@19/umd/react.production.min.js"></script>
 </head>
 <body>
   <div id="cesiumContainer"></div>
