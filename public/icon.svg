@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="96" fill="#0a0a0a"/>
+  <!-- Globe outline -->
+  <circle cx="256" cy="256" r="180" fill="none" stroke="#1a1a2e" stroke-width="16"/>
+  <!-- Latitude lines -->
+  <ellipse cx="256" cy="256" rx="180" ry="60" fill="none" stroke="#1a1a2e" stroke-width="8"/>
+  <ellipse cx="256" cy="256" rx="180" ry="120" fill="none" stroke="#1a1a2e" stroke-width="8"/>
+  <!-- Longitude line -->
+  <ellipse cx="256" cy="256" rx="60" ry="180" fill="none" stroke="#1a1a2e" stroke-width="8"/>
+  <line x1="256" y1="76" x2="256" y2="436" stroke="#1a1a2e" stroke-width="8"/>
+  <!-- Eye iris -->
+  <circle cx="256" cy="256" r="100" fill="#0f1f3d"/>
+  <!-- Pupil/acquisition dot -->
+  <circle cx="256" cy="256" r="32" fill="#00d4ff" opacity="0.9"/>
+  <!-- Scan ring -->
+  <circle cx="256" cy="256" r="140" fill="none" stroke="#00d4ff" stroke-width="4" stroke-dasharray="24 12" opacity="0.7"/>
+  <!-- Tick marks -->
+  <line x1="256" y1="56" x2="256" y2="80" stroke="#00d4ff" stroke-width="6" opacity="0.8"/>
+  <line x1="256" y1="432" x2="256" y2="456" stroke="#00d4ff" stroke-width="6" opacity="0.8"/>
+  <line x1="56" y1="256" x2="80" y2="256" stroke="#00d4ff" stroke-width="6" opacity="0.8"/>
+  <line x1="432" y1="256" x2="456" y2="256" stroke="#00d4ff" stroke-width="6" opacity="0.8"/>
+</svg>
