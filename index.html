@@ -17,6 +17,13 @@
   <!-- Cesium CDN: loaded before the app bundle so the global is available at init.
        Workers + Assets are fetched from CESIUM_BASE_URL (defined in vite.config.js).
        Workers are served from unpkg's /files/ path (not the main bundle path). -->
+  <script type="importmap">
+  {
+    "imports": {
+      "cesium": "https://unpkg.com/cesium@1.124.0/Build/Cesium/Cesium.js"
+    }
+  }
+  </script>
   <script src="https://unpkg.com/cesium@1.124.0/Build/Cesium/Cesium.js"></script>
 </head>
 <body>

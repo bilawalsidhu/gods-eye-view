@@ -18,5 +18,8 @@
 	"upload_source_maps": true,
 	// Assets (for serving static files if needed)
 	"assets": { "directory": "./public" },
-	"placement": { "mode": "smart" }
+	"placement": { "mode": "smart" },
+	"kv_namespaces": [
+		{ "binding": "CACHE", "id": "4ee12a2365fc48fc98c720b05b80447f" }
+	]
 }
