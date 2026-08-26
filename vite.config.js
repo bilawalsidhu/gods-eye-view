@@ -7396,8 +7396,6 @@ export default defineConfig(({ mode }) => {
       // The Cesium engine bundle is inherently large; raise the warning ceiling
       // so the build log isn't dominated by an expected chunk-size notice.
       chunkSizeWarningLimit: 1500,
-      // Externalize the CDN Cesium — it is already loaded as a global script tag.
-      rollupOptions: { external: ['cesium'] },
     },
   };
 });
