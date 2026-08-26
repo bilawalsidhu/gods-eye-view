@@ -2,13 +2,17 @@
  * NASA FIRMS fire detection proxy.
  * Fetches FIRMS CSV data and returns normalized JSON.
  * Docs: https://firms.modaps.eosdis.nasa.gov/api/
+ *
+ * Offline mode: serves stale KV data when upstream is unavailable.
  */
 import type { Env } from '../lib/shared.js';
 import { MemoryCache, errorResponse, RateLimiter, parseBbox } from '../lib/shared.js';
+import { kvGet, kvSet, cacheKey as kvCacheKey } from '../lib/cacheKv.js';
 
 const CACHE_TTL_MS = 15 * 60_000; // 15-minute cache
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 30;
+const KV_MAX_AGE_MS = 6 * 3600_000; // serve KV stale up to 6 hours
 
 const cache = new MemoryCache<unknown>();
 const rateLimiter = new RateLimiter(RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX);
@@ -44,6 +48,7 @@ export async function handleFirms(request: Request, env: Env): Promise<Response>
 	const apiUrl = new URL(`https://firms.modaps.eosdis.nasa.gov/api/area/csv/${env.NASA_FIRMS_API_KEY}/${source}/${days}`);
 	apiUrl.searchParams.set('bounding_box', bboxQuery);
 
+	let payload: { fires: unknown[]; count: number; source: string };
 	try {
 		const res = await fetch(apiUrl.toString(), {
 			signal: AbortSignal.timeout(30_000),
@@ -54,35 +59,52 @@ export async function handleFirms(request: Request, env: Env): Promise<Response>
 		// Parse CSV: latitude,longitude,bright_ti4,bright_ti5,acq_date,acq_time,satellite,instrument,confidence,frp,type
 		const lines = text.trim().split('\n');
 		if (lines.length < 2) {
-			return Response.json({ fires: [] });
+			payload = { fires: [], count: 0, source };
+		} else {
+			const header = lines[0].split(',');
+			const latIdx = header.indexOf('latitude');
+			const lonIdx = header.indexOf('longitude');
+			const frpIdx = header.indexOf('frp');
+			const dateIdx = header.indexOf('acq_date');
+			const timeIdx = header.indexOf('acq_time');
+			const confIdx = header.indexOf('confidence');
+
+			const fires = lines.slice(1).map((line) => {
+				const cols = line.split(',');
+				return {
+					lat: parseFloat(cols[latIdx]),
+					lon: parseFloat(cols[lonIdx]),
+					frp: parseFloat(cols[frpIdx]),
+					date: cols[dateIdx],
+					time: cols[timeIdx],
+					confidence: cols[confIdx],
+				};
+			}).filter((f) => !isNaN(f.lat) && !isNaN(f.lon));
+
+			payload = { fires, count: fires.length, source };
 		}
 
-		const header = lines[0].split(',');
-		const latIdx = header.indexOf('latitude');
-		const lonIdx = header.indexOf('longitude');
-		const frpIdx = header.indexOf('frp');
-		const dateIdx = header.indexOf('acq_date');
-		const timeIdx = header.indexOf('acq_time');
-		const confIdx = header.indexOf('confidence');
-
-		const fires = lines.slice(1).map((line) => {
-			const cols = line.split(',');
-			return {
-				lat: parseFloat(cols[latIdx]),
-				lon: parseFloat(cols[lonIdx]),
-				frp: parseFloat(cols[frpIdx]),
-				date: cols[dateIdx],
-				time: cols[timeIdx],
-				confidence: cols[confIdx],
-			};
-		}).filter((f) => !isNaN(f.lat) && !isNaN(f.lon));
-
-		const payload = { fires, count: fires.length, source };
 		cache.set(cacheKey, payload, CACHE_TTL_MS);
+		await kvSet(env.CACHE, kvCacheKey('firms', { source, days, bbox: bboxQuery }), payload, { ttl: KV_MAX_AGE_MS });
 
 		return Response.json(payload, { headers: { 'X-Cache': 'MISS' } });
 	} catch (err) {
-		console.error('[firms] fetch failed:', err);
+		// Offline fallback: serve stale KV data
+		const stale = await kvGet<typeof payload>(
+			env.CACHE,
+			kvCacheKey('firms', { source, days, bbox: bboxQuery }),
+			{ maxAge: KV_MAX_AGE_MS }
+		);
+		if (stale.ok) {
+			console.warn('[firms] upstream failed, serving stale KV data');
+			return Response.json(stale.data, {
+				headers: {
+					'X-Cache': 'STALE',
+					'X-Stale-Age-Ms': String(stale.age),
+				},
+			});
+		}
+		console.error('[firms] fetch and KV miss:', err);
 		return errorResponse('FIRMS upstream unavailable', 502);
 	}
 }

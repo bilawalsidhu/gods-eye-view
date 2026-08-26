@@ -22,6 +22,9 @@ import { handleRadio } from './handlers/radio.js';
 import { handleRocketLaunches } from './handlers/rocketLaunches.js';
 import { handleMilitaryInstallations } from './handlers/military.js';
 import { handleRegionalBrief } from './handlers/regional.js';
+import { handleAnalytics } from './handlers/analytics.js';
+import { handleFeatureFlags } from './handlers/featureFlags.js';
+import { handleRollback } from './handlers/rollback.js';
 
 // Route table: pathname → handler
 type Handler = (req: Request, env: Env) => Promise<Response>;
@@ -40,6 +43,9 @@ const ROUTES: Record<string, Handler> = {
 	'/api/rocket-launches': handleRocketLaunches,
 	'/api/military-installations': handleMilitaryInstallations,
 	'/api/regional-brief': handleRegionalBrief,
+	'/api/analytics': handleAnalytics,
+	'/api/flags': handleFeatureFlags,
+	'/api/admin/rollback': handleRollback,
 };
 
 export default {
@@ -50,6 +56,11 @@ export default {
 		// Health check — always accessible
 		if (pathname === '/api/health') {
 			return Response.json({ status: 'ok', timestamp: Date.now() });
+		}
+
+		// Route: /api/admin/* → admin handler (handles sub-paths internally)
+		if (pathname.startsWith('/api/admin/')) {
+			return handleRollback(request, env);
 		}
 
 		const handler = ROUTES[pathname];

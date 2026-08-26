@@ -1,6 +1,7 @@
 /**
  * App — top-level React shell for God's Eye View.
  *
+ * Phase 6.5: useSessionTracking sends anonymous pageview events to /api/analytics.
  * Phase 6.1: Wrapped in ErrorBoundary to catch render errors.
  * Phase 5.3: useVoiceCommands and useSceneDirector hooks provide typed access
  * to the vanilla voice and scene systems. Phase 5.2 LayerPanel replaces the
@@ -11,8 +12,11 @@ import { CesiumViewerContext } from './context/CesiumViewerContext';
 import { LayerPanel } from './components/LayerPanel';
 import { HUDPanel } from './components/HUDPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { InstallBanner } from './components/InstallBanner';
 import { useVoiceCommands } from './hooks/useVoiceCommands';
 import { useSceneDirector } from './hooks/useSceneDirector';
+import { usePWAInstall } from './hooks/usePWAInstall';
+import { useSessionTracking } from './hooks/useSessionTracking';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getViewerValue() {
@@ -39,11 +43,17 @@ function DevIndicator(): React.JSX.Element {
 
 function AppInner(): React.JSX.Element {
   const [viewerValue] = useState(getViewerValue);
+  const { canInstall, install, dismiss } = usePWAInstall();
+
+  // Session tracking — fires pageview on mount, session_end on unload
+  useSessionTracking();
+
   return (
     <CesiumViewerContext.Provider value={viewerValue}>
       <HUDPanel />
       <LayerPanel />
       <DevIndicator />
+      {canInstall && <InstallBanner onInstall={install} onDismiss={dismiss} />}
     </CesiumViewerContext.Provider>
   );
 }

@@ -1,13 +1,17 @@
 /**
  * Rocket launches proxy for Launch Library 2.
  * Docs: https://launchlibrary.net/docs
+ *
+ * Offline mode: serves stale KV data when upstream is unavailable.
  */
 import type { Env } from '../lib/shared.js';
 import { MemoryCache, errorResponse, RateLimiter } from '../lib/shared.js';
+import { kvGet, kvSet } from '../lib/cacheKv.js';
 
 const CACHE_TTL_MS = 5 * 60_000; // 5-minute cache
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 20;
+const KV_MAX_AGE_MS = 24 * 3600_000; // serve KV stale up to 24 hours
 
 const cache = new MemoryCache<unknown>();
 const rateLimiter = new RateLimiter(RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX);
@@ -40,10 +44,22 @@ export async function handleRocketLaunches(request: Request, env: Env): Promise<
 
 		const payload = { launches: data.results ?? [] };
 		cache.set('rocket-launches', payload, CACHE_TTL_MS);
+		await kvSet(env.CACHE, 'rocket-launches', payload, { ttl: KV_MAX_AGE_MS });
 
 		return Response.json(payload, { headers: { 'X-Cache': 'MISS' } });
 	} catch (err) {
-		console.error('[rocket-launches] fetch failed:', err);
+		// Offline fallback: serve stale KV data
+		const stale = await kvGet<{ launches: unknown[] }>(env.CACHE, 'rocket-launches', { maxAge: KV_MAX_AGE_MS });
+		if (stale.ok) {
+			console.warn('[rocket-launches] upstream failed, serving stale KV data');
+			return Response.json(stale.data, {
+				headers: {
+					'X-Cache': 'STALE',
+					'X-Stale-Age-Ms': String(stale.age),
+				},
+			});
+		}
+		console.error('[rocket-launches] fetch and KV miss:', err);
 		return errorResponse('Rocket launches upstream unavailable', 502);
 	}
 }

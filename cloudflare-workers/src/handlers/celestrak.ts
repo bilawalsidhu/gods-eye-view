@@ -2,23 +2,20 @@
  * CelesTrak satellite TLE proxy.
  * Fetches NORAD element sets from celestrak.org and caches them.
  * Docs: https://celestrak.org/NORAD/documentation/gp-data-format.php
+ *
+ * Offline mode: serves stale KV data when upstream is unavailable.
  */
 import type { Env } from '../lib/shared.js';
 import { MemoryCache, errorResponse, RateLimiter } from '../lib/shared.js';
+import { kvGet, kvSet, cacheKey as kvCacheKey } from '../lib/cacheKv.js';
 
 const CACHE_TTL_MS = 6 * 3600_000; // 6-hour cache for TLE data
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 30;
+const KV_MAX_AGE_MS = 7 * 24 * 3600_000; // serve KV stale up to 7 days
 
 const cache = new MemoryCache<{ body: string; at: number }>();
 const rateLimiter = new RateLimiter(RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX);
-
-const VALID_GROUPS = new Set([
-	'stations', 'visual', 'active', ' brightest', 'iridium', 'iridium-NEXT',
-	'oneweb', 'starlink', 'planet', 'swarm', 'orbcomm', 'globalstar',
-	'gonets', 'sky Perfect', 'intelsat', 'ses', 'telesat', 'amazon',
-	'comment', 'intelsat-35e', 'intelsat-37e', 'ses-17', 'astron',
-]);
 
 export async function handleCelestrak(request: Request, env: Env): Promise<Response> {
 	const url = new URL(request.url);
@@ -34,8 +31,8 @@ export async function handleCelestrak(request: Request, env: Env): Promise<Respo
 		return errorResponse('Rate limit exceeded', 429);
 	}
 
-	const cacheKey = `celestrak:${group}`;
-	const cached = cache.get(cacheKey) as { body: string; at: number } | null;
+	const ck = `celestrak:${group}`;
+	const cached = cache.get(ck) as { body: string; at: number } | null;
 	if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
 		return new Response(cached.body, {
 			headers: {
@@ -50,6 +47,7 @@ export async function handleCelestrak(request: Request, env: Env): Promise<Respo
 	apiUrl.searchParams.set('GROUP', group);
 	apiUrl.searchParams.set('FORMAT', 'tle');
 
+	let body: string;
 	try {
 		const res = await fetch(apiUrl.toString(), {
 			signal: AbortSignal.timeout(20_000),
@@ -58,12 +56,14 @@ export async function handleCelestrak(request: Request, env: Env): Promise<Respo
 			},
 		});
 		if (!res.ok) throw new Error(`HTTP ${res.status}`);
-		const body = await res.text();
+		body = await res.text();
 		// CelesTrak returns an error HTML page when a group doesn't exist
 		if (!/^1 /m.test(body)) throw new Error('no TLE lines in response');
 
 		const entry = { body, at: Date.now() };
-		cache.set(cacheKey, entry, CACHE_TTL_MS);
+		cache.set(ck, entry, CACHE_TTL_MS);
+		// Persist to KV for offline access
+		await kvSet(env.CACHE, kvCacheKey('celestrak', { group }), { body }, { ttl: KV_MAX_AGE_MS });
 
 		return new Response(body, {
 			headers: {
@@ -73,7 +73,20 @@ export async function handleCelestrak(request: Request, env: Env): Promise<Respo
 			},
 		});
 	} catch (err) {
-		console.error('[celestrak] fetch failed:', err);
+		// Offline fallback: try KV stale data
+		const stale = await kvGet<{ body: string }>(env.CACHE, kvCacheKey('celestrak', { group }), { maxAge: KV_MAX_AGE_MS });
+		if (stale.ok) {
+			console.warn('[celestrak] upstream failed, serving stale KV data');
+			return new Response(stale.data.body, {
+				headers: {
+					'Content-Type': 'text/plain',
+					'X-Cache': 'STALE',
+					'X-Stale-Age-Ms': String(stale.age),
+					'Cache-Control': 'public, max-age=3600',
+				},
+			});
+		}
+		console.error('[celestrak] fetch and KV miss:', err);
 		return errorResponse('CelesTrak upstream unavailable', 502);
 	}
 }
