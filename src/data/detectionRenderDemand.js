@@ -13,7 +13,7 @@
  * Nobody noticed because detection was OFF by default. Turning it ON by default
  * (2026-08-22) would have shipped that hot loop to every idle first-run tab —
  * defeating the render governor, whose whole reason for existing is the ~60% GPU
- * and ~54% of a core a parked scene used to burn (`src/renderGovernor.js`).
+ * and ~54% of a core a parked scene used to burn (`src/renderGovernor.ts`).
  *
  * So detection no longer holds. It is driven the way the rest of the host is:
  * repaint on CHANGE, and — for work that spans frames — ask for exactly one more
