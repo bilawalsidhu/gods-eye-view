@@ -1,0 +1,4 @@
+allowBuilds:
+  esbuild: set this to true or false
+  puppeteer: set this to true or false
+  sharp: set this to true or false
