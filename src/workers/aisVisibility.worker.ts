@@ -16,6 +16,8 @@
  * }
  */
 
+export {}; // make this file a module so its block-scoped constants are isolated
+
 // WGS84 ellipsoid semi-axes (meters)
 const WGS84_A = 6378137.0;        // equatorial radius
 const WGS84_F = 1 / 298.257223563; // flattening

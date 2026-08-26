@@ -287,7 +287,7 @@ let _projectionRequestId = 0;
 function getProjectionWorker() {
   if (!_projectionWorker && typeof Worker !== 'undefined') {
     _projectionWorker = new Worker(
-      new URL('../workers/detectionProjection.worker.js', import.meta.url),
+      new URL('../workers/detectionProjection.worker.ts', import.meta.url),
       { type: 'module' },
     );
     _projectionWorker.onmessage = (e) => {
