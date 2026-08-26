@@ -45,12 +45,94 @@ import {
 } from './focusDeemphasis.js';
 import { requestWorldFocus } from '../worldFocus.js';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
+import { processChunked } from './processChunked.js';
 
 const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 
 /** Camera pose signature at the last vessel rotation pass. */
 let _lastCamPoseSig = '';
+/** Camera position WC at the last occluder computation — null if no occluder cached. */
+let _lastOccluderCameraPos = null;
+/** Cached EllipsoidalOccluder — rebuilt only when camera position changes. */
+let _cachedOccluder = null;
+/** Guard against re-entrant reconcileVessel calls while chunked normalization is pending. */
+let _reconcilePending = false;
+/** Whether a full visibility pass has completed at least once this session. */
+let _visibilityPassCompleted = false;
 const _scratchFocusScreen = new Cesium.Cartesian2();
+
+// ─── AIS Visibility Web Worker ─────────────────────────────────────────────────
+
+/** Lazily-created worker instance. */
+let _visibilityWorker = null;
+/** Request ID counter for matching async responses. */
+let _visibilityRequestId = 0;
+/**
+ * The latest visibility result from the worker: Uint8Array(visible[i]).
+ * Updated asynchronously; read on the next preRender to avoid blocking.
+ */
+let _workerVisibleResult = null;
+/** The requestId of the most recent valid worker result. */
+let _workerVisibleResultId = -1;
+/** Pending request ID — this request is in flight. */
+let _workerPendingId = -1;
+
+/**
+ * Get or create the visibility worker. Created lazily on first use.
+ */
+function getVisibilityWorker() {
+  if (!_visibilityWorker) {
+    _visibilityWorker = new Worker(
+      new URL('../workers/aisVisibility.worker.js', import.meta.url),
+      { type: 'module' }
+    );
+    _visibilityWorker.onmessage = (e) => {
+      const { visible, requestId } = e.data;
+      if (requestId === _workerPendingId) {
+        _workerVisibleResult = visible;
+        _workerVisibleResultId = requestId;
+        _workerPendingId = -1;
+      }
+      // Older results are discarded — only the latest matters
+    };
+    _visibilityWorker.onerror = (err) => {
+      console.warn('[AIS] Visibility worker error, falling back to main thread:', err.message);
+      _visibilityWorker = null;
+    };
+  }
+  return _visibilityWorker;
+}
+
+/**
+ * Dispatch a visibility computation to the worker.
+ * Returns immediately — result is delivered asynchronously via onmessage.
+ * @param {Array} positions — array of vessel surface positions
+ * @param {{x:number,y:number,z:number}} cameraPosition
+ */
+function dispatchVisibilityWorker(positions, cameraPosition) {
+  const worker = getVisibilityWorker();
+  if (!worker) return;
+  const requestId = ++_visibilityRequestId;
+  _workerPendingId = requestId;
+  worker.postMessage({
+    positions,
+    cameraPosition,
+    requestId,
+  }, []);
+}
+
+/**
+ * Destroy the visibility worker (e.g., on layer destroy).
+ */
+function destroyVisibilityWorker() {
+  if (_visibilityWorker) {
+    _visibilityWorker.terminate();
+    _visibilityWorker = null;
+    _workerPendingId = -1;
+    _workerVisibleResult = null;
+    _workerVisibleResultId = -1;
+  }
+}
 
 const DEFAULT_API_URL = '/api/ais-live';
 const DEFAULT_RENDER_ROWS = 12000;
@@ -406,6 +488,7 @@ const aisLiveVesselsLayer = {
 
   destroy(viewer) {
     invalidateAisSession();
+    destroyVisibilityWorker();
     releaseContinuousRender('ais-vessels'); // direct-destroy path (perf wave 2 fix)
     if (state.abort) state.abort.abort();
     unregisterPickOwner('ais-live-vessels');
@@ -778,6 +861,12 @@ function invalidateAisSession() {
   state.firstConnectPhase = 'idle';
   state.firstConnectStartedAt = null;
   state.firstConnectDeadline = null;
+  // Invalidate occluder cache — camera may have moved while layer was disabled.
+  _lastOccluderCameraPos = null;
+  _cachedOccluder = null;
+  _visibilityPassCompleted = false;
+  // Reset chunked reconcile guard so the next poll is not blocked.
+  _reconcilePending = false;
 }
 
 function beginAisSession() {
@@ -982,10 +1071,21 @@ function ensureCollections(viewer) {
  * removed — except the selected vessel, which is pinned for up to
  * SELECTED_PIN_REFRESHES consecutive misses with a stale HUD readout.
  * Rows without an MMSI are rendered unkeyed and rebuilt fresh each refresh.
+ *
+ * Processing is split into chunked normalization (via requestIdleCallback) to
+ * avoid main-thread stalls on large payloads (12k vessels), followed by a fast
+ * synchronous diff+apply pass.
+ *
  * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
  * @param {Array<Object>} rows - Raw AIS rows from the live API.
  */
 function reconcileVessels(viewer, rows) {
+  // Guard: if a previous reconcile is still chunking, let the next poll handle
+  // this payload — it will be at most one poll cycle behind and the AIS feed
+  // is already showing stale positions, which is acceptable.
+  if (_reconcilePending) return;
+  _reconcilePending = true;
+
   ensureCollections(viewer);
 
   // Unkeyed (no-MMSI) records cannot be diffed — drop and rebuild them.
@@ -994,12 +1094,43 @@ function reconcileVessels(viewer, rows) {
   }
   state.unkeyedRecords = [];
 
-  const occluder = makeOccluder();
-  const seen = new Set();
-  for (let index = 0; index < rows.length; index += 1) {
-    const next = normalizeVessel(rows[index]);
-    if (!next) continue;
+  // Use cached occluder — if camera position changed, updateVisibility will rebuild it
+  const occluder = _cachedOccluder ?? makeOccluder();
 
+  // Collect the MMSI set from this payload for the fast diff pass
+  const seen = new Set();
+  const normalizedRows = [];
+
+  // Phase 1 (chunked): normalize all rows via requestIdleCallback so the main
+  // thread stays responsive during large payload processing.
+  processChunked(
+    rows,
+    500,
+    (row) => {
+      const next = normalizeVessel(row);
+      if (!next) return;
+      normalizedRows.push(next);
+    },
+    () => {
+      // Phase 2 (synchronous): diff + apply against the live map.
+      reconcileVesselsFinish(viewer, occluder, seen, normalizedRows);
+      _reconcilePending = false;
+    },
+  );
+}
+
+/**
+ * Phase 2 of vessel reconciliation: synchronous diff pass.
+ * Called once all rows are normalized by the chunked setup phase.
+ *
+ * @param {Cesium.Viewer} viewer
+ * @param {any} occluder
+ * @param {Set<string>} seen
+ * @param {Array<Object>} normalizedRows
+ */
+function reconcileVesselsFinish(viewer, occluder, seen, normalizedRows) {
+  for (let i = 0; i < normalizedRows.length; i++) {
+    const next = normalizedRows[i];
     if (!next.mmsi) {
       addRecordPrimitives(next, occluder);
       state.unkeyedRecords.push(next);
@@ -1244,24 +1375,85 @@ function updateVisibility(force = false) {
     const poseSig = camera ? cameraPoseSignature(camera) : '';
     const doRotations = force || poseSig !== _lastCamPoseSig;
     if (doRotations) _lastCamPoseSig = poseSig;
-    const occluder = makeOccluder();
-    const labelCandidates = [];
-    for (const record of state.vesselRecords) {
-      const visible = isVisible(record.surfacePosition, occluder);
-      if (record.billboard) {
-        record.billboard.show = visible;
-        if (visible && doRotations && scene) {
-          const rot = screenProjectedRotation(
-            scene, record.position, vesselCourseDeg(record), record.billboard.rotation
-          );
-          if (rot !== null && Math.abs(rot - record.billboard.rotation) > 0.002) {
-            record.billboard.rotation = rot;
+
+    // Rebuild occluder only when camera position changes — the horizon doesn't
+    // shift unless the camera moves, so a stationary camera means the same
+    // visibility results from the cached occluder.
+    const cameraPos = camera?.positionWC;
+    const cameraPosChanged = !cameraPos ||
+      !_lastOccluderCameraPos ||
+      !Cesium.Cartesian3.equalsEpsilon(cameraPos, _lastOccluderCameraPos, 1e-9);
+    if (cameraPosChanged) {
+      _lastOccluderCameraPos = cameraPos ? Cesium.Cartesian3.clone(cameraPos) : null;
+      _cachedOccluder = cameraPos
+        ? new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, cameraPos)
+        : null;
+    }
+
+    // Build the positions array for the worker — collect synchronously first
+    // so we can dispatch immediately without waiting for a GC.
+    const positions = new Array(state.vesselRecords.length);
+    for (let i = 0; i < state.vesselRecords.length; i++) {
+      const sp = state.vesselRecords[i].surfacePosition;
+      positions[i] = sp ? { x: sp.x, y: sp.y, z: sp.z } : { x: 0, y: 0, z: 0 };
+    }
+
+    // Dispatch the worker — it processes asynchronously while we render with
+    // whatever result is already available. The 12k visibility loop is the
+    // expensive part (moved off main thread); rotations stay on main thread.
+    if (cameraPos) {
+      dispatchVisibilityWorker(positions, { x: cameraPos.x, y: cameraPos.y, z: cameraPos.z });
+    }
+
+    // Skip the 12k main-thread loop when we have a worker result.
+    // The worker result is from the PREVIOUS dispatch (positions captured
+    // last cycle) — accept the 800ms staleness; it's better than blocking.
+    // Still run if: no worker result yet, or camera moved (worker was invalid).
+    if (_visibilityPassCompleted && !doRotations && !cameraPosChanged && _workerVisibleResult) {
+      // Worker gave us a result from the last cycle — use it and dispatch next.
+      // Apply rotations to visible vessels on main thread.
+      const labelCandidates = [];
+      const workerVis = _workerVisibleResult;
+      for (let i = 0; i < state.vesselRecords.length; i++) {
+        const record = state.vesselRecords[i];
+        const visible = workerVis[i] === 1;
+        if (record.billboard) {
+          record.billboard.show = visible;
+          if (visible && doRotations && scene) {
+            const rot = screenProjectedRotation(
+              scene, record.position, vesselCourseDeg(record), record.billboard.rotation
+            );
+            if (rot !== null && Math.abs(rot - record.billboard.rotation) > 0.002) {
+              record.billboard.rotation = rot;
+            }
           }
         }
+        if (visible) labelCandidates.push(record);
       }
-      if (visible) labelCandidates.push(record);
+      updateClusteredLabels(labelCandidates);
+    } else if (!cameraPosChanged || !_workerVisibleResult) {
+      // Fall back to main-thread loop when: no worker result yet, camera
+      // just changed (worker result was from old position), or first run.
+      _visibilityPassCompleted = true;
+      const occluder = _cachedOccluder;
+      const labelCandidates = [];
+      for (const record of state.vesselRecords) {
+        const visible = isVisible(record.surfacePosition, occluder);
+        if (record.billboard) {
+          record.billboard.show = visible;
+          if (visible && doRotations && scene) {
+            const rot = screenProjectedRotation(
+              scene, record.position, vesselCourseDeg(record), record.billboard.rotation
+            );
+            if (rot !== null && Math.abs(rot - record.billboard.rotation) > 0.002) {
+              record.billboard.rotation = rot;
+            }
+          }
+        }
+        if (visible) labelCandidates.push(record);
+      }
+      updateClusteredLabels(labelCandidates);
     }
-    updateClusteredLabels(labelCandidates);
   }
   if (focusPass && scene && camera) {
     const result = applyVesselFocusDeemphasis({

@@ -31,15 +31,23 @@
  * The governor is O(1) passive: no per-frame work of its own, ever.
  */
 
+/** Milliseconds to keep continuous mode alive after the last hold releases.
+ *  Prevents oscillation when a module briefly releases and re-acquires a hold
+ *  within a short window (e.g. a rapid enable/disable cycle). */
+const CONTINUOUS_COOLDOWN_MS = 100;
+
 let _viewer = null;
 let _installed = false;
 const _holds = new Set();
+
+/** Timer handle for the continuous→idle transition delay. */
+let _idleTransitionTimer = null;
 
 /** Debug trail of the most recent one-shot render requests (idle mode only). */
 const _recentRequests = [];
 const RECENT_REQUEST_CAP = 16;
 
-function applyMode() {
+function applyMode(forceImmediate = false) {
   if (!_installed || !_viewer?.scene) return;
   const continuous = _holds.size > 0;
   const scene = _viewer.scene;
@@ -49,6 +57,24 @@ function applyMode() {
     // Entering idle: render one settling frame so anything the last
     // continuous frame mutated is on screen before the loop stops.
     scene.requestRender?.();
+  }
+}
+
+/** Schedule a transition to idle after a cooldown period. Cancels any pending transition. */
+function scheduleIdleTransition() {
+  if (_idleTransitionTimer !== null) return; // already scheduled
+  _idleTransitionTimer = setTimeout(() => {
+    _idleTransitionTimer = null;
+    // Only transition if still truly idle (no holds acquired during cooldown)
+    if (_holds.size === 0) applyMode(true);
+  }, CONTINUOUS_COOLDOWN_MS);
+}
+
+/** Cancel any pending idle transition (called when a new hold is acquired). */
+function cancelIdleTransition() {
+  if (_idleTransitionTimer !== null) {
+    clearTimeout(_idleTransitionTimer);
+    _idleTransitionTimer = null;
   }
 }
 
@@ -80,6 +106,7 @@ export function installRenderGovernor(viewer) {
  */
 export function holdContinuousRender(ownerId) {
   if (!ownerId) return;
+  cancelIdleTransition(); // cancel any pending idle transition
   _holds.add(ownerId);
   applyMode();
 }
@@ -87,14 +114,24 @@ export function holdContinuousRender(ownerId) {
 /**
  * Release a hold. Safe when never held.
  * Call where the owner's per-frame work ENDS (listener removed, animation
- * settled, tracking stopped, layer disabled).
+ * settled, tracking stopped, layer disabled). Schedules an idle transition
+ * after a short cooldown so rapid re-acquisition doesn't cause oscillation.
  * @param {string} ownerId
+ * @param {boolean} [immediate] - If true, transitions to idle synchronously (bypasses
+ * the cooldown). Used by tests to keep behavior synchronous.
  * @returns {void}
  */
-export function releaseContinuousRender(ownerId) {
+export function releaseContinuousRender(ownerId, immediate = false) {
   if (!ownerId) return;
   _holds.delete(ownerId);
-  applyMode();
+  if (_holds.size === 0) {
+    if (immediate) {
+      cancelIdleTransition();
+      applyMode(true);
+    } else {
+      scheduleIdleTransition();
+    }
+  }
 }
 
 /**
@@ -130,6 +167,10 @@ export function getRenderGovernorDiagnostics() {
 
 /** Test seam: reset module state between unit tests. */
 export function _resetRenderGovernorForTest() {
+  if (_idleTransitionTimer !== null) {
+    clearTimeout(_idleTransitionTimer);
+    _idleTransitionTimer = null;
+  }
   _viewer = null;
   _installed = false;
   _holds.clear();

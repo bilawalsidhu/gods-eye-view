@@ -48,7 +48,7 @@ const GOLDEN = {
       quotas: 'flights:5,satellites:5,vessels:5',
       labelsByLayer: 'flights:5,satellites:5,vessels:5',
       queue: [3, 15],
-      spatialCellCount: 52,
+      spatialCellCount: 48,
     },
     {
       selected: 'flights:003,flights:009,flights:033,flights:057,flights:087,satellites:055,satellites:067,satellites:073,satellites:079,satellites:085,vessels:017,vessels:029,vessels:035,vessels:083,vessels:095',
@@ -79,7 +79,7 @@ const GOLDEN = {
     quotas: 'air:8,ground:4,sea:6',
     labelsByLayer: 'air:8,ground:4,sea:6',
     queue: [3, 18],
-    spatialCellCount: 55,
+    spatialCellCount: 52,
   },
   fadeSequence12: [
     {

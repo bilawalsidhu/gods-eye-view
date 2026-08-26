@@ -266,6 +266,58 @@ let _cockpitActive = false;
 /** @type {((event: CustomEvent) => void)|null} */
 let _cockpitModeListener = null;
 
+// ---------------------------------------------------------------------------
+// Detection Projection Web Worker — offloads O(n) screen projection off main thread
+// Handles: horizon occlusion, view-projection transform, camera distance.
+// Path2D bracket appending stays on main thread (Canvas2D is main-thread-only).
+// ---------------------------------------------------------------------------
+/** @type {Worker|null} */
+let _projectionWorker = null;
+/** @type {Array|null} Cached projection+visibility results from the worker */
+let _workerProjectionResult = null;
+/** @type {number} Request ID of the cached projection result */
+let _workerProjectionResultId = -1;
+/** @type {number} Monotonic request ID for matching worker responses to requests */
+let _projectionRequestId = 0;
+
+/**
+ * Returns the singleton detection projection worker, creating it on first call.
+ * @returns {Worker}
+ */
+function getProjectionWorker() {
+  if (!_projectionWorker && typeof Worker !== 'undefined') {
+    _projectionWorker = new Worker(
+      new URL('../workers/detectionProjection.worker.js', import.meta.url),
+      { type: 'module' },
+    );
+    _projectionWorker.onmessage = (e) => {
+      const { results, requestId } = e.data;
+      if (requestId === _projectionRequestId) {
+        _workerProjectionResult = results;
+        _workerProjectionResultId = requestId;
+      }
+    };
+    _projectionWorker.onerror = (err) => {
+      console.warn('Detection projection worker error:', err.message);
+      _projectionWorker = null;
+    };
+  }
+  return _projectionWorker;
+}
+
+/**
+ * Cleanly terminate the projection worker and reset all cached state.
+ */
+function destroyProjectionWorker() {
+  if (_projectionWorker) {
+    _projectionWorker.terminate();
+    _projectionWorker = null;
+    _workerProjectionResult = null;
+    _workerProjectionResultId = -1;
+    _projectionRequestId = 0;
+  }
+}
+
 /**
  * Initializes detection inside the shared world-overlay host and stores
  * references to data layers. The host owns the canvas and render listener.
@@ -351,6 +403,7 @@ export function destroyDetection() {
   _lastPaintMs = 0;
   _lastSolveMs = 0;
   _throttleSkipCount = 0;
+  destroyProjectionWorker();
 }
 
 /**
@@ -1185,42 +1238,78 @@ function _drawOverlay(frame) {
   const cohortBuilders = shouldSolve ? new Map() : null;
   const demandByLayer = shouldSolve ? new Map() : null;
   let placementBuildCount = 0;
+  // Dispatch projection work to the Web Worker before iterating objects.
+  // The worker handles: horizon occlusion, view-projection transform, distance.
+  // Results are cached by requestId and consumed in the loop below.
+  // On the first frame (no result yet) or when worker is unavailable, fall back to main-thread.
+  const occluderCameraPos = occluder._cameraPosition ?? camPos;
+  const requestId = ++_projectionRequestId;
+  const workerResult = _workerProjectionResultId === requestId ? _workerProjectionResult : null;
+  if (objects.length > 0) {
+    const worker = getProjectionWorker();
+    if (worker) {
+      const projectedObjects = new Array(objects.length);
+      for (let i = 0; i < objects.length; i++) {
+        const obj = objects[i];
+        const pos = obj.position;
+        projectedObjects[i] = {
+          id: i,
+          type: obj.type,
+          skipLabel: !!obj.skipLabel,
+          position: pos ? { x: pos.x, y: pos.y, z: pos.z } : null,
+        };
+      }
+      worker.postMessage({
+        objects: projectedObjects,
+        viewProjection: { vp0, vp1, vp3, vp4, vp5, vp7, vp8, vp9, vp11, vp12, vp13, vp15 },
+        cameraPosition: camPos,
+        width,
+        height,
+        camPos,
+        occluderCameraPos,
+        requestId,
+      });
+    }
+  }
+
   for (let i = 0; i < objects.length; i++) {
     const obj = objects[i];
     if (!obj.position) continue;
-    // Skip objects occluded by the ellipsoid (behind the horizon)
-    if (!occluder.isPointVisible(obj.position)) continue;
 
-    // This product renders in Cesium's 3D scene mode. Multiplying by the
-    // once-per-frame view-projection matrix is equivalent to the general
-    // SceneTransforms helper here, without repeating its mode/viewport setup
-    // for every observation.
-    const px = obj.position.x;
-    const py = obj.position.y;
-    const pz = obj.position.z;
-    const clipW = vp3 * px + vp7 * py + vp11 * pz + vp15;
-    if (clipW <= 0) continue;
-    const invW = 1 / clipW;
-    const sx = ((vp0 * px + vp4 * py + vp8 * pz + vp12) * invW * 0.5 + 0.5) * width;
-    const sy = (0.5 - (vp1 * px + vp5 * py + vp9 * pz + vp13) * invW * 0.5) * height;
-
-    // Tracked objects (skipLabel) get larger boxes. AIR reticles scale with the
-    // plane's on-screen size (same scaleByDistance curve as the billboards) so
-    // they don't look tiny at altitude; other types keep fixed sizes.
-    const isTracked = obj.skipLabel;
-    let halfW;
-    let halfH;
-    if (obj.type === 'AIR') {
-      const bscale = nearFarScale(
-        Cesium.Cartesian3.distance(camPos, obj.position),
-        BILL_NEAR, BILL_NEAR_SCALE, BILL_FAR, BILL_FAR_SCALE,
-      );
-      halfW = _clamp((isTracked ? 14 : 9) * bscale, 7, 48);
-      halfH = _clamp((isTracked ? 11 : 7) * bscale, 5, 38);
+    // Use worker result if available (non-blocking), otherwise compute on main thread.
+    let sx, sy, halfW, halfH;
+    if (workerResult) {
+      const r = workerResult[i];
+      if (!r || !r.visible) continue;
+      sx = r.sx;
+      sy = r.sy;
+      halfW = r.halfW;
+      halfH = r.halfH;
     } else {
-      halfW = _mode === MODE_DENSE ? (isTracked ? 28 : 11) : 16;
-      halfH = _mode === MODE_DENSE ? (isTracked ? 22 : 7) : 10;
+      // Main-thread fallback: horizon occlusion + projection
+      const pos = obj.position;
+      if (!occluder.isPointVisible(pos)) continue;
+      const px = pos.x;
+      const py = pos.y;
+      const pz = pos.z;
+      const clipW = vp3 * px + vp7 * py + vp11 * pz + vp15;
+      if (clipW <= 0) continue;
+      const invW = 1 / clipW;
+      sx = ((vp0 * px + vp4 * py + vp8 * pz + vp12) * invW * 0.5 + 0.5) * width;
+      sy = (0.5 - (vp1 * px + vp5 * py + vp9 * pz + vp13) * invW * 0.5) * height;
+
+      const isTracked = obj.skipLabel;
+      if (obj.type === 'AIR') {
+        const dist = Math.sqrt((px - camPos.x) ** 2 + (py - camPos.y) ** 2 + (pz - camPos.z) ** 2);
+        const bscale = nearFarScale(dist, BILL_NEAR, BILL_NEAR_SCALE, BILL_FAR, BILL_FAR_SCALE);
+        halfW = _clamp((isTracked ? 14 : 9) * bscale, 7, 48);
+        halfH = _clamp((isTracked ? 11 : 7) * bscale, 5, 38);
+      } else {
+        halfW = _mode === MODE_DENSE ? (isTracked ? 28 : 11) : 16;
+        halfH = _mode === MODE_DENSE ? (isTracked ? 22 : 7) : 10;
+      }
     }
+
     // Viewport bounds check with padding
     if (sx < -halfW || sx > width + halfW || sy < -halfH || sy > height + halfH) continue;
 

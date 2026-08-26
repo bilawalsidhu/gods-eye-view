@@ -4216,11 +4216,15 @@ const cctvLayer = {
     // records are normally built WITH their prior (correct first paint in
     // every regime); a cold/slow upstream loses the race and the batch
     // applies post-hoc via applyLateGroundPriors instead of hanging init.
-    const priorsPromise = resolveGroundPriors(catalog);
-    const priors = await Promise.race([
-      priorsPromise,
-      new Promise((resolve) => setTimeout(() => resolve(null), GROUND_PRIOR_INIT_WAIT_MS)),
-    ]);
+    // Defer ground prior resolution: do NOT block init() waiting for the batch.
+    // The catalog positions fall back to ellipsoid height; geometry refines
+    // asynchronously via the staggered load queue and applyLateGroundPriors().
+    // Snapshot _records so the indexed access in applyLateGroundPriors is stable.
+    const initRecords = _records.slice();
+    const priors = null;
+    priorsPromise.then((late) => {
+      if (late) applyLateGroundPriors(initRecords, late);
+    }).catch(() => {});
 
     for (let i = 0; i < catalog.length; i++) {
       const camera = catalog[i];

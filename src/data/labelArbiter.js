@@ -863,6 +863,13 @@ export class LabelArbiter {
     let spatialQueueBuildCount = 0;
     let spatialQueueNextCount = 0;
 
+    // At high fill rates the spatial hash search spends most of its time
+    // finding no free slot. Switching to ordered placement avoids the hash
+    // probe overhead once we're close to capacity.
+    const DENSE_THRESHOLD = 0.9;
+    // Evaluate per-call so selectedCount reflects current fill level.
+    const isDense = () => capacity > 0 && selectedCount >= capacity * DENSE_THRESHOLD;
+
     const attempt = (candidate, allowOverlapFallback = false) => {
       if (selectedCount >= capacity || attemptStamps.get(candidate.key) === stamp) return false;
       attemptStamps.set(candidate.key, stamp);
@@ -874,10 +881,17 @@ export class LabelArbiter {
       // of being pinned by whichever side happened to be free once.
       if (!stateless && !previous?.selected && previous?.cooldownUntil > now) return false;
       const sticky = stateless ? undefined : previous?.corner;
-      let placement = firstFreePlacement(candidate, sticky, spatial);
-      if (!placement && allowOverlapFallback) placement = firstOrderedPlacement(candidate, sticky);
+      let placement;
+      if (isDense()) {
+        // Skip the spatial hash search — ordered placement is visually
+        // indistinguishable at this density and avoids all hash probe cost.
+        placement = firstOrderedPlacement(candidate, sticky);
+      } else {
+        placement = firstFreePlacement(candidate, sticky, spatial);
+        if (!placement && allowOverlapFallback) placement = firstOrderedPlacement(candidate, sticky);
+      }
       if (!placement) return false;
-      spatial.add(placement.rect);
+      if (!isDense()) spatial.add(placement.rect);
       selectStamps.set(candidate.key, stamp);
       selectedCandidates[selectedCount] = candidate;
       selectedPlacements[selectedCount] = placement;

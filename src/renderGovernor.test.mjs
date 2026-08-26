@@ -36,7 +36,7 @@ test('a hold flips to continuous; releasing the last hold returns to idle with a
   holdContinuousRender('flights');
   assert.equal(scene.requestRenderMode, false);
   assert.equal(getRenderGovernorDiagnostics().mode, 'continuous');
-  releaseContinuousRender('flights');
+  releaseContinuousRender('flights', true);
   assert.equal(scene.requestRenderMode, true);
   // Entering idle renders one settling frame.
   assert.equal(calls.requestRender, settleBaseline + 1);
@@ -47,9 +47,9 @@ test('holds are identity-keyed: double-hold cannot leak, double-release cannot c
   installRenderGovernor(viewer);
   holdContinuousRender('traffic');
   holdContinuousRender('traffic');
-  releaseContinuousRender('traffic');
+  releaseContinuousRender('traffic', true);
   assert.equal(scene.requestRenderMode, true, 'single release clears an idempotent double-hold');
-  releaseContinuousRender('traffic');
+  releaseContinuousRender('traffic', true);
   releaseContinuousRender('never-held');
   assert.equal(scene.requestRenderMode, true);
 });
@@ -62,7 +62,7 @@ test('mode stays continuous until the LAST holder releases', () => {
   releaseContinuousRender('flights');
   assert.equal(scene.requestRenderMode, false);
   assert.deepEqual(getRenderGovernorDiagnostics().holds, ['satellites']);
-  releaseContinuousRender('satellites');
+  releaseContinuousRender('satellites', true);
   assert.equal(scene.requestRenderMode, true);
 });
 
@@ -95,6 +95,6 @@ test('holds registered before install apply at install time', () => {
   const { viewer, scene } = makeViewer();
   installRenderGovernor(viewer);
   assert.equal(scene.requestRenderMode, false, 'pre-install hold keeps continuous mode');
-  releaseContinuousRender('flights');
+  releaseContinuousRender('flights', true);
   assert.equal(scene.requestRenderMode, true);
 });
