@@ -45,6 +45,7 @@
     "@mapbox/vector-tile": "^3.0.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
+    "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",

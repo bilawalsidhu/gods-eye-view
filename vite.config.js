@@ -7386,15 +7386,13 @@ export default defineConfig(({ mode }) => {
       'CESIUM_BASE_URL': JSON.stringify('https://unpkg.com/cesium@1.124.0/files/'),
     },
     resolve: {
-      // Map 'cesium' imports to our shim that re-exports window.Cesium (set by the
-      // CDN <script> tag in index.html before the bundle executes).
+      // Use the pre-built Cesium (same as CDN) to avoid @zip.js dependency issues
+      // from the npm source build. This is the UMD build repackaged as ESM.
       alias: {
-        cesium: fileURLToPath(new URL('./src/lib/cesium-shim.mjs', import.meta.url)),
+        cesium: fileURLToPath(new URL('./node_modules/cesium/Build/Cesium/index.js', import.meta.url)),
       },
     },
     build: {
-      // The Cesium engine bundle is inherently large; raise the warning ceiling
-      // so the build log isn't dominated by an expected chunk-size notice.
       chunkSizeWarningLimit: 1500,
     },
   };

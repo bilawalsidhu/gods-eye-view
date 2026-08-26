@@ -14,17 +14,9 @@
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
-  <!-- Cesium CDN: the UMD script sets window.Cesium before the module bundle runs.
-       Workers + Assets fetched from CESIUM_BASE_URL (vite.config.js define).
-       importmap maps the bare 'cesium' specifier so native ES module resolution works. -->
-  <script type="importmap">
-  {
-    "imports": {
-      "cesium": "https://unpkg.com/cesium@1.124.0/Build/Cesium/Cesium.js"
-    }
-  }
-  </script>
-  <script src="https://unpkg.com/cesium@1.124.0/Build/Cesium/Cesium.js"></script>
+  <!-- Cesium bundled by Vite from npm (cesium@1.124.0).
+       CESIUM_BASE_URL define tells Cesium where to find Workers + Assets at runtime.
+       Workers are served from unpkg's /files/ path (Build/Cesium/ tree). -->
 </head>
 <body>
   <div id="cesiumContainer"></div>
