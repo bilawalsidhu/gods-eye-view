@@ -9,6 +9,7 @@
 /** Cesium namespace — provides types like Cesium.Viewer */
 declare namespace Cesium {
   class Viewer {
+    container: Element;
     scene: Scene;
     dataSources: DataSourceCollection;
     entities: EntityCollection;
@@ -20,6 +21,7 @@ declare namespace Cesium {
     requestRenderMode: boolean;
     requestRender(): void;
     maximumRenderTimeChange: number;
+    preRender: Event;
   }
 
   interface DataSourceCollection {}
@@ -30,8 +32,19 @@ declare namespace Cesium {
   }
 
   interface Camera {
+    positionCartographic: Cartographic;
+    moveEnd: Event;
     setView(options: CameraViewOptions): void;
     flyTo(options: FlyToOptions): object;
+  }
+
+  interface Event {
+    addEventListener(listener: () => void): void;
+    removeEventListener(listener: () => void): void;
+  }
+
+  interface Cartographic {
+    height: number;
   }
 
   interface CameraViewOptions {
