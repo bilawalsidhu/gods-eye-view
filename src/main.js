@@ -357,6 +357,43 @@ async function init() {
     };
     window.__godsEyeView.voiceCommands = initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector, annotations });
 
+    // ── PWA: service worker update prompt ─────────────────────────────────────
+    // The vite-plugin-pwa plugin injects SW registration automatically (injectRegister: 'auto').
+    // Here we listen for the controllerchange event to prompt the user when a new
+    // version is available — without disrupting the current session.
+    if ('serviceWorker' in navigator) {
+      // When the controller changes (new SW activated), prompt to reload.
+      // This fires after the new SW takes over — the user sees a non-disruptive
+      // banner rather than an abrupt swap mid-session.
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!document.getElementById('gevv-update-banner')) {
+          const banner = document.createElement('div');
+          banner.id = 'gevv-update-banner';
+          banner.setAttribute('role', 'status');
+          banner.setAttribute('aria-live', 'polite');
+          banner.style.cssText = [
+            'position:fixed', 'bottom:24px', 'left:50%', 'transform:translateX(-50%)',
+            'background:#0f1f3d', 'border:1px solid #1a3a5a', 'border-radius:6px',
+            'padding:12px 24px', 'font-family:"JetBrains Mono",monospace', 'font-size:12px',
+            'color:#6b8aaa', 'letter-spacing:"0.05em"', 'z-index:99999',
+            'display:flex', 'align-items:center', 'gap:16px', 'box-shadow:0 4px 24px rgba(0,0,0,0.6)',
+          ].join(';');
+          banner.innerHTML = `
+            <span style="color:#c8d4e0">A new version is available.</span>
+            <button id="gevv-reload-btn" style="
+              background:#00d4ff; border:none; border-radius:4px;
+              color:#0a0a0a; font-family:inherit; font-size:11px; font-weight:600;
+              letter-spacing:0.08em; padding:6px 16px; cursor:pointer;
+            ">RELOAD</button>
+          `;
+          banner.querySelector('#gevv-reload-btn').addEventListener('click', () => {
+            window.location.reload();
+          });
+          document.body.appendChild(banner);
+        }
+      });
+    }
+
   } catch (error) {
     console.error("God's Eye View initialization failed:", error);
     loaderStatus.textContent = `Error: ${describeError(error)}`;

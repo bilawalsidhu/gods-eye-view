@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>God's Eye View — Offline</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0a0a;
+      color: #c8d4e0;
+      font-family: 'JetBrains Mono', 'Courier New', monospace;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .globe {
+      width: 80px;
+      height: 80px;
+      opacity: 0.4;
+    }
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      color: #e0ecff;
+    }
+    p {
+      font-size: 0.85rem;
+      color: #6b7a8a;
+      text-align: center;
+      max-width: 320px;
+      line-height: 1.6;
+    }
+    .status {
+      font-size: 0.75rem;
+      color: #3a4a5a;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .retry-btn {
+      margin-top: 8px;
+      padding: 10px 28px;
+      background: transparent;
+      border: 1px solid #1a2a3a;
+      color: #6b8aaa;
+      font-family: inherit;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .retry-btn:hover {
+      border-color: #00d4ff;
+      color: #00d4ff;
+    }
+  </style>
+</head>
+<body>
+  <!-- Simple globe icon -->
+  <svg class="globe" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="40" cy="40" r="36" stroke="#1a2a3a" stroke-width="4"/>
+    <ellipse cx="40" cy="40" rx="36" ry="12" stroke="#1a2a3a" stroke-width="2"/>
+    <ellipse cx="40" cy="40" rx="36" ry="24" stroke="#1a2a3a" stroke-width="2"/>
+    <line x1="40" y1="4" x2="40" y2="76" stroke="#1a2a3a" stroke-width="2"/>
+    <circle cx="40" cy="40" r="6" fill="#00d4ff" opacity="0.3"/>
+  </svg>
+
+  <div class="status">— network unavailable —</div>
+  <h1>GOD'S EYE VIEW</h1>
+  <p>You appear to be offline. Check your connection and try again. Cached map data may still be available.</p>
+  <button class="retry-btn" onclick="window.location.reload()">RETRY</button>
+</body>
+</html>
