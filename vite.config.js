@@ -7385,15 +7385,19 @@ export default defineConfig(({ mode }) => {
       // Pointed at unpkg /files/ which contains the Build/Cesium/ tree.
       'CESIUM_BASE_URL': JSON.stringify('https://unpkg.com/cesium@1.124.0/files/'),
     },
+    resolve: {
+      // Map 'cesium' imports to our shim that re-exports window.Cesium (set by the
+      // CDN <script> tag in index.html before the bundle executes).
+      alias: {
+        cesium: fileURLToPath(new URL('./src/lib/cesium-shim.mjs', import.meta.url)),
+      },
+    },
     build: {
       // The Cesium engine bundle is inherently large; raise the warning ceiling
       // so the build log isn't dominated by an expected chunk-size notice.
       chunkSizeWarningLimit: 1500,
-      // Externalize Cesium — it is loaded from CDN via <script> in index.html.
-      // This replaces what vite-plugin-cesium's rollup-plugin-external-globals does.
-      rollupOptions: {
-        external: ['cesium'],
-      },
+      // Externalize the CDN Cesium — it is already loaded as a global script tag.
+      rollupOptions: { external: ['cesium'] },
     },
   };
 });

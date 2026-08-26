@@ -43,13 +43,16 @@
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
     "egm96-universal": "^1.1.1",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "satellite.js": "^6.0.2"
   },
   "devDependencies": {
-    "cesium": "^1.124.0",
     "puppeteer": "^24.37.5",
     "sharp": "^0.34.5",
     "typescript": "^7.0.2",
