@@ -84,7 +84,7 @@ let _workerPendingId = -1;
 function getVisibilityWorker() {
   if (!_visibilityWorker) {
     _visibilityWorker = new Worker(
-      new URL('../workers/aisVisibility.worker.js', import.meta.url),
+      new URL('../workers/aisVisibility.worker.ts', import.meta.url),
       { type: 'module' }
     );
     _visibilityWorker.onmessage = (e) => {
