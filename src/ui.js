@@ -9991,13 +9991,23 @@ export class StyleManager {
 
   /**
    * Syncs the HUD toggle button active class and HUD layout row visibility
-   * with the current HUD visible state.
+   * with the current HUD visible state. Also collapses/expands all panels
+   * to match — panels should not float above the globe when HUD is off.
    * @returns {void}
    */
   _updateHudButtonState() {
     this._hudBtn.classList.toggle('active', this.hud.visible);
     if (this._hudLayoutRow) {
       this._hudLayoutRow.classList.toggle('visible', this.hud.visible);
+    }
+    // When HUD is off, collapse all panels so they don't float above the globe.
+    // When HUD is on, leave panels in their current state.
+    if (!this.hud.visible) {
+      this.setPanelCollapsed('data-panel', true, { syncShare: false, persist: false });
+      this.setPanelCollapsed('cctv-panel', true, { syncShare: false, persist: false });
+      this.setPanelCollapsed('scene-panel', true, { syncShare: false, persist: false });
+      this.setPanelCollapsed('global-context-panel', true, { syncShare: false, persist: false });
+      this.setPanelCollapsed('radio-panel', true, { syncShare: false, persist: false });
     }
     this._scheduleAdaptivePanelLayout({ settle: true });
   }

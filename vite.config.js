@@ -7392,6 +7392,11 @@ export default defineConfig(({ mode }) => {
         cesium: fileURLToPath(new URL('./node_modules/cesium/Build/Cesium/index.js', import.meta.url)),
       },
     },
+    esbuild: {
+      // Use the React 17+ automatic JSX runtime — transforms JSX to use jsx-runtime
+      // instead of the classic React.createElement (which requires a global React ref).
+      jsx: 'automatic',
+    },
     build: {
       chunkSizeWarningLimit: 1500,
     },

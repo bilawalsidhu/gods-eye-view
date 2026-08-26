@@ -258,7 +258,11 @@ async function init() {
         return dataManager.unregisterForQa(layerId);
       };
     }
-    dataManager.buildTogglePanel(document.getElementById('data-toggles'));
+    // buildTogglePanel builds the vanilla layer toggle rows into #data-toggles.
+    // In the PWA/React build, LayerPanel.tsx handles layer UI — skip the vanilla
+    // build so we don't get duplicate layer rows (one from vanilla at z:100, one
+    // from React at z:10, both always-visible).
+    // Data manager state is shared; both paths read/write the same layer registry.
     styleManager.attachDataManager(dataManager);
 
     // Restore "where you left off" camera position and style from localStorage.

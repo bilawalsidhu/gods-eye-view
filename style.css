@@ -55,6 +55,14 @@ html, body {
   left: 0;
 }
 
+/* Cesium widget canvas: fill the full viewport. The canvas is sized to its
+   intrinsic 300×150px by Cesium's own CSS — override that so the globe
+   fills the screen regardless of device pixel ratio. */
+div#cesiumContainer .cesium-viewer canvas {
+  height: 100vh !important;
+  width: 100vw !important;
+}
+
 /* Unified world-overlay host: detection uses one host-owned blend surface
    beneath the shared text/card canvas; both share one frame path. The root
    holds ONLY the card canvas — it is a stacking context (z-index below), and
@@ -4106,7 +4114,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 #intel-hud {
   position: fixed;
   inset: 0;
-  z-index: 2;
+  z-index: 120;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;

@@ -82,7 +82,7 @@ import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor
 import { apiEndpoints } from '../config/apiEndpoints.js';
 
 /** @constant {string} API endpoint proxied to adsb.lol military feed */
-const API_URL = '/api/adsblol/mil'; // TODO: migrate to Cloudflare Worker proxy
+const API_URL = '/api/adsblol';
 /** @constant {number} Milliseconds to wait before retrying after a transient error */
 const ERROR_BACKOFF_INTERVAL = 20000;
 /** @constant {number} Longer cooldown (ms) after a 429 rate-limit, mirroring flights.js */

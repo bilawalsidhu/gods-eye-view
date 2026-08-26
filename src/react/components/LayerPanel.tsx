@@ -1,8 +1,12 @@
 /**
  * LayerPanel — React component for the data-layer toggle accordion.
- * Replaces the vanilla JS toggle panel with a declarative React implementation.
+ * Does NOT use a portal — renders directly into React's DOM tree.
+ * Visibility is synced to the vanilla #data-panel state via a MutationObserver:
+ * when the panel collapses, the React layer content hides too (and vice versa).
+ * This avoids duplicate content (vanilla buildTogglePanel is skipped) and keeps
+ * the F-key / HUD toggle behavior consistent.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDataManager } from '../hooks/useDataManager';
 
 const FEED_STATE_LABELS: Record<string, string> = {
@@ -83,11 +87,30 @@ export function LayerPanel(): React.JSX.Element {
     (dataManager as any).setLayerParams(id, chip.params, { origin: 'user' }).catch((e: unknown) => console.warn(`[LayerPanel] chip error:`, e));
   }, [dataManager]);
 
+  // Sync visibility with the vanilla #data-panel collapsed state.
+  // When the panel collapses (F-key or HUD toggle), this state hides the React content.
+  const [panelVisible, setPanelVisible] = useState(() => {
+    const dp = typeof document !== 'undefined' ? document.getElementById('data-panel') : null;
+    return dp ? dp.classList.contains('active') : false;
+  });
+
+  useEffect(() => {
+    const dp = document.getElementById('data-panel');
+    if (!dp) return;
+    const observer = new MutationObserver(() => {
+      setPanelVisible(dp.classList.contains('active'));
+    });
+    observer.observe(dp, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
   if (!dataManager) {
     return <div className="data-toggle-list" aria-label="Data layers">
       <div className="data-toggle-row"><div className="data-toggle-top"><div className="data-toggle-left"><span className="data-name">Loading layers…</span></div></div></div>
     </div>;
   }
+
+  if (!panelVisible) return null;
 
   return (
     <div className="data-toggle-list" role="list" aria-label="Data layers">

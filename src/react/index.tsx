@@ -6,7 +6,10 @@
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 
+let mounted = false;
 function mount() {
+  if (mounted) return;
+  mounted = true;
   let rootEl = document.getElementById('react-root');
   if (!rootEl) {
     rootEl = document.createElement('div');
