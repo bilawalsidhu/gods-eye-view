@@ -26,6 +26,51 @@ function createInjectedCrypto() {
   };
 }
 
+function createDelayedStore() {
+  const values = new Map();
+  const gates = new Map();
+
+  function gateFor(operation) {
+    return gates.get(operation);
+  }
+
+  return {
+    values,
+    hold(operation) {
+      let started;
+      let release;
+      const gate = {
+        started: new Promise((resolve) => { started = resolve; }),
+        released: new Promise((resolve) => { release = resolve; }),
+        start: started,
+        release,
+      };
+      gates.set(operation, gate);
+      return gate;
+    },
+    async put(id, value) {
+      const gate = gateFor('put');
+      if (gate) {
+        gate.start();
+        await gate.released;
+        gates.delete('put');
+      }
+      values.set(id, value);
+    },
+    async get(id) { return values.get(id); },
+    async entries() { return [...values.entries()]; },
+    async delete(id) {
+      const gate = gateFor('delete');
+      if (gate) {
+        gate.start();
+        await gate.released;
+        gates.delete('delete');
+      }
+      values.delete(id);
+    },
+  };
+}
+
 async function assertEveryCaseMethodIsLocked(vault) {
   await assert.rejects(vault.loadCase('case-1'), (error) => error?.code === 'VAULT_LOCKED');
   await assert.rejects(vault.saveCase({ id: 'case-1' }), (error) => error?.code === 'VAULT_LOCKED');
@@ -105,5 +150,46 @@ test('moving an envelope to a different outer case ID fails closed', async () =>
   store.values.set('case-2', store.values.get('case-1'));
 
   await assert.rejects(vault.loadCase('case-2'), (error) => error?.code === 'DECRYPTION_FAILED');
+  await assertEveryCaseMethodIsLocked(vault);
+});
+
+test('lock serializes behind delayed save and delete persistence', async () => {
+  const store = createDelayedStore();
+  const vault = createDemonForgeVault({
+    store,
+    cryptoApi: createInjectedCrypto(),
+    clock: () => 1_700_000_000_000,
+  });
+  await vault.unlock('synthetic passphrase');
+
+  const putGate = store.hold('put');
+  const saving = vault.saveCase({ id: 'case-1', status: 'open' });
+  await putGate.started;
+  const lockingAfterSave = vault.lock();
+  let saveLockComplete = false;
+  void lockingAfterSave.then(() => { saveLockComplete = true; });
+  await Promise.resolve();
+  assert.equal(saveLockComplete, false);
+  assert.equal(store.values.has('case-1'), false);
+  putGate.release();
+  await saving;
+  await lockingAfterSave;
+  assert.equal(store.values.has('case-1'), true);
+  await assertEveryCaseMethodIsLocked(vault);
+
+  await vault.unlock('synthetic passphrase');
+  const deleteGate = store.hold('delete');
+  const deleting = vault.deleteCase('case-1');
+  await deleteGate.started;
+  const lockingAfterDelete = vault.lock();
+  let deleteLockComplete = false;
+  void lockingAfterDelete.then(() => { deleteLockComplete = true; });
+  await Promise.resolve();
+  assert.equal(deleteLockComplete, false);
+  assert.equal(store.values.has('case-1'), true);
+  deleteGate.release();
+  await deleting;
+  await lockingAfterDelete;
+  assert.equal(store.values.has('case-1'), false);
   await assertEveryCaseMethodIsLocked(vault);
 });

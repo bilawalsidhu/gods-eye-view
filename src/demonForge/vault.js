@@ -67,6 +67,13 @@ function requireCaseId(caseId) {
 export function createDemonForgeVault({ store = createIndexedDbCaseStore(), cryptoApi = globalThis.crypto, clock = Date.now } = {}) {
   let passphrase = null;
   let lockGeneration = 0;
+  let operationQueue = Promise.resolve();
+
+  function serialize(operation) {
+    const result = operationQueue.then(operation, operation);
+    operationQueue = result.catch(() => undefined);
+    return result;
+  }
 
   function requireUnlocked() {
     if (passphrase === null) throw vaultError('VAULT_LOCKED');
@@ -118,59 +125,69 @@ export function createDemonForgeVault({ store = createIndexedDbCaseStore(), cryp
   }
 
   return Object.freeze({
-    async unlock(nextPassphrase) {
+    unlock(nextPassphrase) {
       if (typeof nextPassphrase !== 'string') throw new TypeError('A passphrase is required.');
-      passphrase = nextPassphrase;
-      lockGeneration += 1;
+      return serialize(() => {
+        passphrase = nextPassphrase;
+        lockGeneration += 1;
+      });
     },
 
-    async saveCase(caseRecord) {
-      const session = captureSession();
-      const id = requireCaseId(caseRecord?.id);
-      const record = { ...caseRecord, id, updatedAtMs: clock() };
-      const keyMaterial = await deriveVaultKey(session.passphrase, randomBytes(16), cryptoApi);
-      const envelope = await encryptJson(keyMaterial, record, randomBytes(12), cryptoApi);
-      requireActiveSession(session);
-      await store.put(id, envelope);
-      requireActiveSession(session);
-      return { id, status: record.status ?? null, updatedAtMs: record.updatedAtMs };
+    saveCase(caseRecord) {
+      return serialize(async () => {
+        const session = captureSession();
+        const id = requireCaseId(caseRecord?.id);
+        const record = { ...caseRecord, id, updatedAtMs: clock() };
+        const keyMaterial = await deriveVaultKey(session.passphrase, randomBytes(16), cryptoApi);
+        const envelope = await encryptJson(keyMaterial, record, randomBytes(12), cryptoApi);
+        requireActiveSession(session);
+        await store.put(id, envelope);
+        requireActiveSession(session);
+        return { id, status: record.status ?? null, updatedAtMs: record.updatedAtMs };
+      });
     },
 
-    async loadCase(caseId) {
-      const session = captureSession();
-      const id = requireCaseId(caseId);
-      const envelope = await store.get(id);
-      requireActiveSession(session);
-      if (!envelope) return null;
-      const record = await decryptCase(envelope, id, session);
-      requireActiveSession(session);
-      return record;
-    },
-
-    async listCaseSummaries() {
-      const session = captureSession();
-      const entries = await store.entries();
-      requireActiveSession(session);
-      const summaries = [];
-      for (const [id, envelope] of entries) {
+    loadCase(caseId) {
+      return serialize(async () => {
+        const session = captureSession();
+        const id = requireCaseId(caseId);
+        const envelope = await store.get(id);
+        requireActiveSession(session);
+        if (!envelope) return null;
         const record = await decryptCase(envelope, id, session);
         requireActiveSession(session);
-        summaries.push({ id, status: record.status ?? null, updatedAtMs: record.updatedAtMs ?? null });
-      }
-      requireActiveSession(session);
-      return summaries;
+        return record;
+      });
     },
 
-    async deleteCase(caseId) {
-      const session = captureSession();
-      const id = requireCaseId(caseId);
-      requireActiveSession(session);
-      await store.delete(id);
-      requireActiveSession(session);
+    listCaseSummaries() {
+      return serialize(async () => {
+        const session = captureSession();
+        const entries = await store.entries();
+        requireActiveSession(session);
+        const summaries = [];
+        for (const [id, envelope] of entries) {
+          const record = await decryptCase(envelope, id, session);
+          requireActiveSession(session);
+          summaries.push({ id, status: record.status ?? null, updatedAtMs: record.updatedAtMs ?? null });
+        }
+        requireActiveSession(session);
+        return summaries;
+      });
+    },
+
+    deleteCase(caseId) {
+      return serialize(async () => {
+        const session = captureSession();
+        const id = requireCaseId(caseId);
+        requireActiveSession(session);
+        await store.delete(id);
+        requireActiveSession(session);
+      });
     },
 
     lock() {
-      lockSession();
+      return serialize(lockSession);
     },
   });
 }
