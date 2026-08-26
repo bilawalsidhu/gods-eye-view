@@ -25,6 +25,7 @@ test('ciphertext does not contain serialized plaintext', async () => {
   const envelope = await encryptJson(keyMaterial, value, iv, webcrypto);
 
   assert.doesNotMatch(envelope.ciphertext, /private-synthetic-mandate/);
+  assert.notEqual(Buffer.from(envelope.ciphertext, 'base64url').toString('utf8'), JSON.stringify(value));
   assert.doesNotMatch(JSON.stringify(envelope), /synthetic passphrase/);
 });
 

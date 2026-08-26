@@ -66,16 +66,33 @@ function requireCaseId(caseId) {
 
 export function createDemonForgeVault({ store = createIndexedDbCaseStore(), cryptoApi = globalThis.crypto, clock = Date.now } = {}) {
   let passphrase = null;
+  let lockGeneration = 0;
 
   function requireUnlocked() {
     if (passphrase === null) throw vaultError('VAULT_LOCKED');
+  }
+
+  function captureSession() {
+    requireUnlocked();
+    return { passphrase, lockGeneration };
+  }
+
+  function requireActiveSession(session) {
+    if (passphrase === null || lockGeneration !== session.lockGeneration) {
+      throw vaultError('VAULT_LOCKED');
+    }
+  }
+
+  function lockSession() {
+    passphrase = null;
+    lockGeneration += 1;
   }
 
   function randomBytes(length) {
     return cryptoApi.getRandomValues(new Uint8Array(length));
   }
 
-  async function decryptCase(envelope) {
+  async function decryptCase(envelope, expectedId, session) {
     try {
       if (typeof envelope?.salt !== 'string' || !/^[A-Za-z0-9_-]+$/u.test(envelope.salt)) {
         throw vaultError('DECRYPTION_FAILED');
@@ -85,10 +102,16 @@ export function createDemonForgeVault({ store = createIndexedDbCaseStore(), cryp
         atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')),
         (character) => character.charCodeAt(0),
       );
-      const keyMaterial = await deriveVaultKey(passphrase, salt, cryptoApi);
-      return await decryptJson(keyMaterial, envelope, cryptoApi);
+      const keyMaterial = await deriveVaultKey(session.passphrase, salt, cryptoApi);
+      const record = await decryptJson(keyMaterial, envelope, cryptoApi);
+      if (record?.id !== expectedId) throw vaultError('DECRYPTION_FAILED');
+      requireActiveSession(session);
+      return record;
     } catch (error) {
-      passphrase = null;
+      if (lockGeneration !== session.lockGeneration || passphrase === null) {
+        throw vaultError('VAULT_LOCKED');
+      }
+      lockSession();
       if (error?.code === 'DECRYPTION_FAILED') throw error;
       throw vaultError('DECRYPTION_FAILED');
     }
@@ -98,42 +121,56 @@ export function createDemonForgeVault({ store = createIndexedDbCaseStore(), cryp
     async unlock(nextPassphrase) {
       if (typeof nextPassphrase !== 'string') throw new TypeError('A passphrase is required.');
       passphrase = nextPassphrase;
+      lockGeneration += 1;
     },
 
     async saveCase(caseRecord) {
-      requireUnlocked();
+      const session = captureSession();
       const id = requireCaseId(caseRecord?.id);
       const record = { ...caseRecord, id, updatedAtMs: clock() };
-      const keyMaterial = await deriveVaultKey(passphrase, randomBytes(16), cryptoApi);
+      const keyMaterial = await deriveVaultKey(session.passphrase, randomBytes(16), cryptoApi);
       const envelope = await encryptJson(keyMaterial, record, randomBytes(12), cryptoApi);
+      requireActiveSession(session);
       await store.put(id, envelope);
+      requireActiveSession(session);
       return { id, status: record.status ?? null, updatedAtMs: record.updatedAtMs };
     },
 
     async loadCase(caseId) {
-      requireUnlocked();
-      const envelope = await store.get(requireCaseId(caseId));
-      return envelope ? decryptCase(envelope) : null;
+      const session = captureSession();
+      const id = requireCaseId(caseId);
+      const envelope = await store.get(id);
+      requireActiveSession(session);
+      if (!envelope) return null;
+      const record = await decryptCase(envelope, id, session);
+      requireActiveSession(session);
+      return record;
     },
 
     async listCaseSummaries() {
-      requireUnlocked();
+      const session = captureSession();
       const entries = await store.entries();
+      requireActiveSession(session);
       const summaries = [];
       for (const [id, envelope] of entries) {
-        const record = await decryptCase(envelope);
+        const record = await decryptCase(envelope, id, session);
+        requireActiveSession(session);
         summaries.push({ id, status: record.status ?? null, updatedAtMs: record.updatedAtMs ?? null });
       }
+      requireActiveSession(session);
       return summaries;
     },
 
     async deleteCase(caseId) {
-      requireUnlocked();
-      await store.delete(requireCaseId(caseId));
+      const session = captureSession();
+      const id = requireCaseId(caseId);
+      requireActiveSession(session);
+      await store.delete(id);
+      requireActiveSession(session);
     },
 
     lock() {
-      passphrase = null;
+      lockSession();
     },
   });
 }
