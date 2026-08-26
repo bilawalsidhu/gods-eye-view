@@ -1,0 +1,14 @@
+.cesium-lighter .cesium-widget-errorPanel {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.cesium-lighter .cesium-widget-errorPanel-content {
+  border: 1px solid #526f82;
+  border-radius: 7px;
+  background-color: white;
+  color: black;
+}
+
+.cesium-lighter .cesium-widget-errorPanel-header {
+  color: #b87d00;
+}

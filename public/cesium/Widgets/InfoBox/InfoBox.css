@@ -1,0 +1,92 @@
+/* packages/widgets/Source/InfoBox/InfoBox.css */
+.cesium-infoBox {
+  display: block;
+  position: absolute;
+  top: 50px;
+  right: 0;
+  width: 40%;
+  max-width: 480px;
+  background: rgba(38, 38, 38, 0.95);
+  color: #edffff;
+  border: 1px solid #444;
+  border-right: none;
+  border-top-left-radius: 7px;
+  border-bottom-left-radius: 7px;
+  box-shadow: 0 0 10px 1px #000;
+  transform: translate(100%, 0);
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    visibility 0s 0.2s,
+    opacity 0.2s ease-in,
+    transform 0.2s ease-in;
+}
+.cesium-infoBox-visible {
+  transform: translate(0, 0);
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+}
+.cesium-infoBox-title {
+  display: block;
+  height: 20px;
+  padding: 5px 30px 5px 25px;
+  background: rgba(84, 84, 84, 1);
+  border-top-left-radius: 7px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  box-sizing: content-box;
+}
+.cesium-infoBox-bodyless .cesium-infoBox-title {
+  border-bottom-left-radius: 7px;
+}
+button.cesium-infoBox-camera {
+  display: block;
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border-color: transparent;
+  border-radius: 3px;
+  padding: 0 5px;
+  margin: 0;
+}
+button.cesium-infoBox-close {
+  display: block;
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  border-radius: 2px;
+  font-weight: bold;
+  font-size: 16px;
+  padding: 0 5px;
+  margin: 0;
+  color: #edffff;
+}
+button.cesium-infoBox-close:focus {
+  background: rgba(238, 136, 0, 0.44);
+  outline: none;
+}
+button.cesium-infoBox-close:hover {
+  background: #888;
+  color: #000;
+}
+button.cesium-infoBox-close:active {
+  background: #a00;
+  color: #000;
+}
+.cesium-infoBox-bodyless .cesium-infoBox-iframe {
+  display: none;
+}
+.cesium-infoBox-iframe {
+  border: none;
+  width: 100%;
+  width: calc(100% - 2px);
+}

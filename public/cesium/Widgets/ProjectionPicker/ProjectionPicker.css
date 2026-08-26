@@ -1,0 +1,38 @@
+/* packages/widgets/Source/ProjectionPicker/ProjectionPicker.css */
+span.cesium-projectionPicker-wrapper {
+  display: inline-block;
+  position: relative;
+  margin: 0 3px;
+}
+.cesium-projectionPicker-visible {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.25s linear;
+}
+.cesium-projectionPicker-hidden {
+  visibility: hidden;
+  opacity: 0;
+  transition: visibility 0s 0.25s, opacity 0.25s linear;
+}
+.cesium-projectionPicker-wrapper .cesium-projectionPicker-none {
+  display: none;
+}
+.cesium-projectionPicker-wrapper .cesium-projectionPicker-dropDown-icon {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 3px 0;
+}
+.cesium-projectionPicker-wrapper .cesium-projectionPicker-buttonPerspective,
+.cesium-projectionPicker-wrapper .cesium-projectionPicker-buttonOrthographic {
+  margin: 0 0 3px 0;
+}
+.cesium-projectionPicker-wrapper .cesium-projectionPicker-buttonPerspective .cesium-projectionPicker-iconOrthographic {
+  left: 100%;
+}
+.cesium-projectionPicker-wrapper .cesium-projectionPicker-buttonOrthographic .cesium-projectionPicker-iconPerspective {
+  left: -100%;
+}
+.cesium-projectionPicker-wrapper .cesium-projectionPicker-selected {
+  border-color: #2e2;
+  box-shadow: 0 0 8px #fff, 0 0 8px #fff;
+}

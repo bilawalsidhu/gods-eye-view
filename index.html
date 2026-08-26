@@ -14,6 +14,10 @@
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <!-- Cesium CDN: loaded before the app bundle so the global is available at init.
+       Workers + Assets are fetched from CESIUM_BASE_URL (defined in vite.config.js).
+       Workers are served from unpkg's /files/ path (not the main bundle path). -->
+  <script src="https://unpkg.com/cesium@1.124.0/Build/Cesium/Cesium.js"></script>
 </head>
 <body>
   <div id="cesiumContainer"></div>

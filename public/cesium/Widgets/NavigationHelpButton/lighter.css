@@ -1,0 +1,38 @@
+/* packages/widgets/Source/NavigationHelpButton/lighter.css */
+.cesium-lighter .cesium-navigation-help-instructions {
+  border: 1px solid #759dc0;
+  background-color: rgba(255, 255, 255, 0.9);
+}
+.cesium-lighter .cesium-navigation-help-pan {
+  color: #66ccee;
+  font-weight: bold;
+}
+.cesium-lighter .cesium-navigation-help-zoom {
+  color: #65ec00;
+  font-weight: bold;
+}
+.cesium-lighter .cesium-navigation-help-rotate {
+  color: #eec722;
+  font-weight: bold;
+}
+.cesium-lighter .cesium-navigation-help-tilt {
+  color: #d800d8;
+  font-weight: bold;
+}
+.cesium-lighter .cesium-navigation-help-details {
+  color: #222222;
+}
+.cesium-lighter .cesium-navigation-button {
+  color: #222222;
+  border-top: 1px solid #759dc0;
+  border-right: 1px solid #759dc0;
+}
+.cesium-lighter .cesium-navigation-button-selected {
+  background-color: rgba(196, 225, 255, 0.9);
+}
+.cesium-lighter .cesium-navigation-button-unselected {
+  background-color: rgba(226, 240, 255, 0.9);
+}
+.cesium-lighter .cesium-navigation-button-unselected:hover {
+  background-color: rgba(166, 210, 255, 0.9);
+}

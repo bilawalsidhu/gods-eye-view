@@ -1,0 +1,16 @@
+/* packages/widgets/Source/VoxelInspector/VoxelInspector.css */
+.cesium-VoxelInspector {
+  width: 300px;
+  pointer-events: all;
+}
+.cesium-VoxelInspector div,
+.cesium-VoxelInspector input[type=range] {
+  width: 100%;
+  box-sizing: border-box;
+}
+.cesium-VoxelInspector .cesium-cesiumInspector-section {
+  margin-top: 3px;
+}
+.cesium-VoxelInspector .cesium-cesiumInspector-sectionHeader + .cesium-cesiumInspector-show {
+  border-top: 1px solid white;
+}

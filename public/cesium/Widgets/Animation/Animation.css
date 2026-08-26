@@ -1,0 +1,127 @@
+/* packages/widgets/Source/Animation/Animation.css */
+.cesium-animation-theme {
+  visibility: hidden;
+  display: block;
+  position: absolute;
+  z-index: -100;
+}
+.cesium-animation-themeNormal {
+  color: #222;
+}
+.cesium-animation-themeHover {
+  color: #4488b0;
+}
+.cesium-animation-themeSelect {
+  color: #242;
+}
+.cesium-animation-themeDisabled {
+  color: #333;
+}
+.cesium-animation-themeKnob {
+  color: #222;
+}
+.cesium-animation-themePointer {
+  color: #2e2;
+}
+.cesium-animation-themeSwoosh {
+  color: #8ac;
+}
+.cesium-animation-themeSwooshHover {
+  color: #aef;
+}
+.cesium-animation-svgText {
+  fill: #edffff;
+  font-family: Sans-Serif;
+  font-size: 15px;
+  text-anchor: middle;
+}
+.cesium-animation-blank {
+  fill: #000;
+  fill-opacity: 0.01;
+  stroke: none;
+}
+.cesium-animation-rectButton {
+  cursor: pointer;
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+.cesium-animation-rectButton .cesium-animation-buttonGlow {
+  fill: #fff;
+  stroke: none;
+  display: none;
+}
+.cesium-animation-rectButton:hover .cesium-animation-buttonGlow {
+  display: block;
+}
+.cesium-animation-rectButton .cesium-animation-buttonPath {
+  fill: #edffff;
+}
+.cesium-animation-rectButton .cesium-animation-buttonMain {
+  stroke: #444;
+  stroke-width: 1.2;
+}
+.cesium-animation-rectButton:hover .cesium-animation-buttonMain {
+  stroke: #aef;
+}
+.cesium-animation-rectButton:active .cesium-animation-buttonMain {
+  fill: #abd6ff;
+}
+.cesium-animation-buttonDisabled {
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+.cesium-animation-buttonDisabled .cesium-animation-buttonMain {
+  stroke: #555;
+}
+.cesium-animation-buttonDisabled .cesium-animation-buttonPath {
+  fill: #818181;
+}
+.cesium-animation-buttonDisabled .cesium-animation-buttonGlow {
+  display: none;
+}
+.cesium-animation-buttonToggled .cesium-animation-buttonGlow {
+  display: block;
+  fill: #2e2;
+}
+.cesium-animation-buttonToggled .cesium-animation-buttonMain {
+  stroke: #2e2;
+}
+.cesium-animation-buttonToggled:hover .cesium-animation-buttonGlow {
+  fill: #fff;
+}
+.cesium-animation-buttonToggled:hover .cesium-animation-buttonMain {
+  stroke: #2e2;
+}
+.cesium-animation-shuttleRingG {
+  cursor: pointer;
+}
+.cesium-animation-shuttleRingPointer {
+  cursor: pointer;
+}
+.cesium-animation-shuttleRingPausePointer {
+  cursor: pointer;
+}
+.cesium-animation-shuttleRingBack {
+  fill: #181818;
+  fill-opacity: 0.8;
+  stroke: #333;
+  stroke-width: 1.2;
+}
+.cesium-animation-shuttleRingSwoosh line {
+  stroke: #8ac;
+  stroke-width: 3;
+  stroke-opacity: 0.2;
+  stroke-linecap: round;
+}
+.cesium-animation-knobOuter {
+  cursor: pointer;
+  stroke: #444;
+  stroke-width: 1.2;
+}
+.cesium-animation-knobInner {
+  cursor: pointer;
+}

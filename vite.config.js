@@ -43,7 +43,6 @@ import { filterTrailing24h, parseFirmsCsv } from './src/data/firmsCsv.js';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { defineConfig, loadEnv } from 'vite';
-import cesium from 'vite-plugin-cesium';
 import { normalizeRadioCountryInput } from './src/data/radioCountry.js';
 import {
   normalizeRegionalArticles,
@@ -7340,7 +7339,11 @@ export default defineConfig(({ mode }) => {
   const env = { ...process.env };
   return {
     plugins: [
-      cesium(),
+      // Cesium is loaded from CDN (unpkg.com) via <script> in index.html.
+      // Workers/Assets are at https://unpkg.com/cesium@1.124.0/files/ — see CESIUM_BASE_URL define.
+      // The cesium npm package is still in package.json for type definitions (devDependency).
+      // Dev/preview without internet: set CESIUM_BASE_URL=/cesium/ and copy Assets/Workers
+      // from node_modules/ to public/cesium/ (npm run fetch-cesium-assets).
       openSkyProxy(),
       celestrakProxy(),
       tomtomProxy(),
@@ -7375,11 +7378,19 @@ export default defineConfig(({ mode }) => {
     define: {
       'import.meta.env.VITE_GOOGLE_MAPS_API_KEY': JSON.stringify(env.VITE_GOOGLE_MAPS_API_KEY),
       'import.meta.env.VITE_CESIUM_ION_TOKEN': JSON.stringify(env.VITE_CESIUM_ION_TOKEN),
+      // Tell Cesium where to find Workers + Assets at runtime.
+      // Pointed at unpkg /files/ which contains the Build/Cesium/ tree.
+      'CESIUM_BASE_URL': JSON.stringify('https://unpkg.com/cesium@1.124.0/files/'),
     },
     build: {
       // The Cesium engine bundle is inherently large; raise the warning ceiling
       // so the build log isn't dominated by an expected chunk-size notice.
       chunkSizeWarningLimit: 1500,
+      // Externalize Cesium — it is loaded from CDN via <script> in index.html.
+      // This replaces what vite-plugin-cesium's rollup-plugin-external-globals does.
+      rollupOptions: {
+        external: ['cesium'],
+      },
     },
   };
 });

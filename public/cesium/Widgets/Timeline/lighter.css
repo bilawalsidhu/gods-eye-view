@@ -1,0 +1,23 @@
+/* packages/widgets/Source/Timeline/lighter.css */
+.cesium-lighter .cesium-timeline-bar {
+  background:
+    linear-gradient(
+      to bottom,
+      #eeeeee 0%,
+      #ffffff 50%,
+      #fafafa 100%);
+}
+.cesium-lighter .cesium-timeline-ticLabel {
+  color: #000;
+}
+.cesium-lighter .cesium-timeline-ticMain {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  height: 50%;
+  background: #000;
+}
+.cesium-lighter .cesium-timeline-ticSub {
+  background: #444;
+}

@@ -35,7 +35,7 @@
     "dev": "vite",
     "dev:secure": "./scripts/dev-secure.sh",
     "opensky:import": "./scripts/opensky-import-client.sh",
-    "build": "vite build",
+    "build": "node scripts/copy-cesium-assets.mjs && vite build",
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
@@ -43,17 +43,20 @@
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",
-    "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
     "satellite.js": "^6.0.2"
   },
   "devDependencies": {
+    "cesium": "^1.124.0",
     "puppeteer": "^24.37.5",
     "sharp": "^0.34.5",
     "vite": "^6.0.0",
-    "vite-plugin-cesium": "^1.2.23",
+    "vite-plugin-pwa": "^0.21.1",
+    "workbox-precaching": "^7.4.0",
+    "workbox-routing": "^7.4.0",
+    "workbox-strategies": "^7.4.0",
     "ws": "^8.21.0"
   }
 }

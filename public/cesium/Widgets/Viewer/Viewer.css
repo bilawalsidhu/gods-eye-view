@@ -1,0 +1,107 @@
+/* packages/widgets/Source/Viewer/Viewer.css */
+.cesium-viewer {
+  font-family: sans-serif;
+  font-size: 16px;
+  overflow: hidden;
+  display: block;
+  position: relative;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+.cesium-viewer-cesiumWidgetContainer {
+  width: 100%;
+  height: 100%;
+}
+.cesium-viewer-bottom {
+  display: block;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  padding-right: 5px;
+}
+.cesium-viewer .cesium-widget-credits {
+  display: inline;
+  position: static;
+  bottom: auto;
+  left: auto;
+  padding-right: 0;
+  color: #ffffff;
+  font-size: 10px;
+  text-shadow: 0 0 2px #000000;
+}
+.cesium-viewer-timelineContainer {
+  position: absolute;
+  bottom: 0;
+  left: 169px;
+  right: 29px;
+  height: 27px;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+}
+.cesium-viewer-animationContainer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  padding: 0;
+  width: 169px;
+  height: 112px;
+}
+.cesium-viewer-fullscreenContainer {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  padding: 0;
+  width: 29px;
+  height: 29px;
+  overflow: hidden;
+}
+.cesium-viewer-vrContainer {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  padding: 0;
+  width: 29px;
+  height: 29px;
+  overflow: hidden;
+}
+.cesium-viewer-toolbar {
+  display: block;
+  position: absolute;
+  top: 5px;
+  right: 5px;
+}
+.cesium-viewer-cesiumInspectorContainer {
+  display: block;
+  position: absolute;
+  top: 50px;
+  right: 10px;
+}
+.cesium-viewer-geocoderContainer {
+  position: relative;
+  display: inline-block;
+  margin: 0 3px;
+}
+.cesium-viewer-cesium3DTilesInspectorContainer {
+  display: block;
+  position: absolute;
+  top: 50px;
+  right: 10px;
+  max-height: calc(100% - 120px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.cesium-viewer-voxelInspectorContainer {
+  display: block;
+  position: absolute;
+  top: 50px;
+  right: 10px;
+  max-height: calc(100% - 120px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+}

@@ -1,0 +1,113 @@
+/* packages/widgets/Source/CesiumInspector/CesiumInspector.css */
+.cesium-cesiumInspector {
+  border-radius: 5px;
+  transition: width ease-in-out 0.25s;
+  background: rgba(48, 51, 54, 0.8);
+  border: 1px solid #444;
+  color: #edffff;
+  display: inline-block;
+  position: relative;
+  padding: 4px 12px;
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  overflow: hidden;
+}
+.cesium-cesiumInspector-button {
+  text-align: center;
+  font-size: 11pt;
+}
+.cesium-cesiumInspector-visible .cesium-cesiumInspector-button {
+  border-bottom: 1px solid #aaa;
+  padding-bottom: 3px;
+}
+.cesium-cesiumInspector input:enabled,
+.cesium-cesiumInspector-button {
+  cursor: pointer;
+}
+.cesium-cesiumInspector-visible {
+  width: 185px;
+  height: auto;
+}
+.cesium-cesiumInspector-hidden {
+  width: 122px;
+  height: 17px;
+}
+.cesium-cesiumInspector-sectionContent {
+  max-height: 600px;
+}
+.cesium-cesiumInspector-section-collapsed .cesium-cesiumInspector-sectionContent {
+  max-height: 0;
+  padding: 0 !important;
+  overflow: hidden;
+}
+.cesium-cesiumInspector-dropDown {
+  margin: 5px 0;
+  font-family: sans-serif;
+  font-size: 10pt;
+  width: 185px;
+}
+.cesium-cesiumInspector-frustumStatistics {
+  padding-left: 10px;
+  padding: 5px;
+  background-color: rgba(80, 80, 80, 0.75);
+}
+.cesium-cesiumInspector-pickButton {
+  background-color: rgba(0, 0, 0, 0.3);
+  border: 1px solid #444;
+  color: #edffff;
+  border-radius: 5px;
+  padding: 3px 7px;
+  cursor: pointer;
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  margin: 0 auto;
+}
+.cesium-cesiumInspector-pickButton:focus {
+  outline: none;
+}
+.cesium-cesiumInspector-pickButton:active,
+.cesium-cesiumInspector-pickButtonHighlight {
+  color: #000;
+  background: #adf;
+  border-color: #fff;
+  box-shadow: 0 0 8px #fff;
+}
+.cesium-cesiumInspector-center {
+  text-align: center;
+}
+.cesium-cesiumInspector-sectionHeader {
+  font-weight: bold;
+  font-size: 10pt;
+  margin: 0;
+  cursor: pointer;
+}
+.cesium-cesiumInspector-pickSection {
+  border: 1px solid #aaa;
+  border-radius: 5px;
+  padding: 3px;
+  margin-bottom: 5px;
+}
+.cesium-cesiumInspector-sectionContent {
+  margin-bottom: 10px;
+  transition: max-height 0.25s;
+}
+.cesium-cesiumInspector-tileText {
+  padding-bottom: 10px;
+  border-bottom: 1px solid #aaa;
+}
+.cesium-cesiumInspector-relativeText {
+  padding-top: 10px;
+}
+.cesium-cesiumInspector-sectionHeader::before {
+  margin-right: 5px;
+  content: "-";
+  width: 1ch;
+  display: inline-block;
+}
+.cesium-cesiumInspector-section-collapsed .cesium-cesiumInspector-sectionHeader::before {
+  content: "+";
+}

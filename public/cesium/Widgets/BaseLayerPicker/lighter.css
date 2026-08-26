@@ -1,0 +1,22 @@
+/* packages/widgets/Source/BaseLayerPicker/lighter.css */
+.cesium-lighter .cesium-baseLayerPicker-itemIcon {
+  border-color: #759dc0;
+}
+.cesium-lighter .cesium-baseLayerPicker-dropDown {
+  background-color: rgba(240, 240, 240, 0.75);
+}
+.cesium-lighter .cesium-baseLayerPicker-sectionTitle {
+  color: black;
+}
+.cesium-lighter .cesium-baseLayerPicker-itemLabel {
+  color: black;
+}
+.cesium-lighter .cesium-baseLayerPicker-item:hover .cesium-baseLayerPicker-itemIcon {
+  border-color: #000;
+}
+.cesium-lighter .cesium-baseLayerPicker-selectedItem .cesium-baseLayerPicker-itemLabel {
+  color: rgb(0, 61, 168);
+}
+.cesium-lighter .cesium-baseLayerPicker-selectedItem .cesium-baseLayerPicker-itemIcon {
+  border: double 4px rgb(0, 61, 168);
+}

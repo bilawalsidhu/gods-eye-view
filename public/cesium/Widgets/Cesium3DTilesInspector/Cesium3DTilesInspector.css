@@ -1,0 +1,102 @@
+/* packages/widgets/Source/Cesium3DTilesInspector/Cesium3DTilesInspector.css */
+ul.cesium-cesiumInspector-statistics {
+  margin: 0;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+ul.cesium-cesiumInspector-statistics + ul.cesium-cesiumInspector-statistics {
+  border-top: 1px solid #aaa;
+}
+.cesium-cesiumInspector-slider {
+  margin-top: 5px;
+}
+.cesium-cesiumInspector-slider input[type=number] {
+  text-align: left;
+  background-color: #222;
+  outline: none;
+  border: 1px solid #444;
+  color: #edffff;
+  width: 100px;
+  border-radius: 3px;
+  padding: 1px;
+  margin-left: 10px;
+  cursor: auto;
+}
+.cesium-cesiumInspector-slider input[type=number]::-webkit-outer-spin-button,
+.cesium-cesiumInspector-slider input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.cesium-cesiumInspector-slider input[type=range] {
+  margin-left: 5px;
+  vertical-align: middle;
+}
+.cesium-cesiumInspector-hide .cesium-cesiumInspector-styleEditor {
+  display: none;
+}
+.cesium-cesiumInspector-styleEditor {
+  padding: 10px;
+  border-radius: 5px;
+  background: rgba(48, 51, 54, 0.8);
+  border: 1px solid #444;
+}
+.cesium-cesiumInspector-styleEditor textarea {
+  width: 100%;
+  height: 300px;
+  background: transparent;
+  color: #edffff;
+  border: none;
+  padding: 0;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+.cesium-3DTilesInspector {
+  width: 300px;
+  pointer-events: all;
+}
+.cesium-3DTilesInspector-statistics {
+  font-size: 11px;
+}
+.cesium-3DTilesInspector-disabledElementsInfo {
+  margin: 5px 0 0 0;
+  padding: 0 0 0 20px;
+  color: #eed202;
+}
+.cesium-3DTilesInspector div,
+.cesium-3DTilesInspector input[type=range] {
+  width: 100%;
+  box-sizing: border-box;
+}
+.cesium-cesiumInspector-error {
+  color: #ff9e9e;
+  overflow: auto;
+}
+.cesium-3DTilesInspector .cesium-cesiumInspector-section {
+  margin-top: 3px;
+}
+.cesium-3DTilesInspector .cesium-cesiumInspector-sectionHeader + .cesium-cesiumInspector-show {
+  border-top: 1px solid white;
+}
+input.cesium-cesiumInspector-url {
+  overflow: hidden;
+  white-space: nowrap;
+  overflow-x: scroll;
+  background-color: transparent;
+  color: white;
+  outline: none;
+  border: none;
+  height: 1em;
+  width: 100%;
+}
+.cesium-cesiumInspector .field-group {
+  display: table;
+}
+.cesium-cesiumInspector .field-group > label {
+  display: table-cell;
+  font-weight: bold;
+}
+.cesium-cesiumInspector .field-group > .field {
+  display: table-cell;
+  width: 100%;
+}

@@ -1,0 +1,17 @@
+/* packages/widgets/Source/Geocoder/lighter.css */
+.cesium-lighter .cesium-geocoder-input {
+  border: solid 1px #759dc0;
+  background-color: rgba(240, 240, 240, 0.9);
+  color: black;
+}
+.cesium-lighter .cesium-viewer-geocoderContainer:hover .cesium-geocoder-input {
+  border-color: #aef;
+  box-shadow: 0 0 8px #fff;
+}
+.cesium-lighter .cesium-geocoder-searchButton {
+  background-color: #e2f0ff;
+  fill: #111;
+}
+.cesium-lighter .cesium-geocoder-searchButton:hover {
+  background-color: #a6d2ff;
+}

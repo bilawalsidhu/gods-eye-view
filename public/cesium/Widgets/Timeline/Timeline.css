@@ -1,0 +1,103 @@
+/* packages/widgets/Source/Timeline/Timeline.css */
+.cesium-timeline-main {
+  position: relative;
+  left: 0;
+  bottom: 0;
+  overflow: hidden;
+  border: solid 1px #888;
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+.cesium-timeline-trackContainer {
+  width: 100%;
+  overflow: auto;
+  border-top: solid 1px #888;
+  position: relative;
+  top: 0;
+  left: 0;
+}
+.cesium-timeline-tracks {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+.cesium-timeline-needle {
+  position: absolute;
+  left: 0;
+  top: 1.7em;
+  bottom: 0;
+  width: 1px;
+  background: #f00;
+}
+.cesium-timeline-bar {
+  position: relative;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  cursor: pointer;
+  width: 100%;
+  height: 1.7em;
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(116, 117, 119, 0.8) 0%,
+      rgba(58, 68, 82, 0.8) 11%,
+      rgba(46, 50, 56, 0.8) 46%,
+      rgba(53, 53, 53, 0.8) 81%,
+      rgba(53, 53, 53, 0.8) 100%);
+}
+.cesium-timeline-ruler {
+  visibility: hidden;
+  white-space: nowrap;
+  font-size: 80%;
+  z-index: -200;
+}
+.cesium-timeline-highlight {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  background: #08f;
+}
+.cesium-timeline-ticLabel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  white-space: nowrap;
+  font-size: 80%;
+  color: #eee;
+}
+.cesium-timeline-ticMain {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  height: 50%;
+  background: #eee;
+}
+.cesium-timeline-ticSub {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  height: 33%;
+  background: #aaa;
+}
+.cesium-timeline-ticTiny {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  height: 25%;
+  background: #888;
+}
+.cesium-timeline-icon16 {
+  display: block;
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background-image: url(data:text/plain;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAQCAYAAAB3AH1ZAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9sIDBITKIVzLEMAAAKNSURBVEjHxdXNSxRhHAfw7zzrqhuoWJnSkrippUVSEKsHI9BTUYdAJA/RoYMREV26rAdn6tAfUARi16hQqkOBQRgUEYFWEC3OwczMjdZd92VmdWfmeelgTjO7q7gb0VzmmZnn85vvPPPMM8B/3qTcE2PPpuTZKB1eWuUQACgXYACYwVFbCTTVeZXB/i55o4LFelcAZfStYD4vpAoPGAGo4GBcQEgSOAUMQyAezwK6iQfDPXnhS/FkHZ+/8VLMWxxqWkfH3gbMRNOYi2roavbja0zHQmoFPYf8ED4Ko4aivm9MOG/u9I8mwrafeK7a/tVrNc/bARYN5noadeq7q0342vXw9CIMU6BmW8rVP9cPBPe52uu+v3O/y9sB4gkTWs6Qsk0mj5ExXMelejvA8WafYmkmGPHanTijdtvif8rx5RiCjdWKs2Cp3jWRDl96KhrbqlBeJqBOLyLQXg0IgbkZDS0dO8EZxZfPSTA9jvDDK3mT0OmP1FXh3XwEEAKdTX5MRWLgjCK4pwH3xt/YnjgLHAv4lHTCAKMMu/wV+KZGob6PoKyMQ0+sgBpZVJZn0NterxQaVqef/DRn+/EXYds/mZx2eVeAW9d65dhCEsaKCb7K8HH0gqTevyh9GDkn0VULRiaLzJKGBu9swfdaiie5RVo9ESURN8E8BE0n7ggACJy8KzghSCzp6DmwWxkaCm24EBXr8wI8Hrkq06QBiRC0t24HALS11IBTCyJl4vb1AXmzpbVYTwoVOXN0h7L8Mwtm8bXPybIQ/5FCX3dA2cr6XowvGCA02CvztAnz9+JiZk1AMxG6fEreSoBiPNmoyNnuWiWVzAIAtISO08E6pZi/3N96AIDn4E3h3P8L/wshP+txtEs4JAAAAABJRU5ErkJggg==);
+  background-repeat: no-repeat;
+}

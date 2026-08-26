@@ -1,0 +1,27 @@
+/* packages/widgets/Source/I3SBuildingSceneLayerExplorer/I3SBuildingSceneLayerExplorer.css */
+.cesium-viewer-i3s-explorer ul {
+  list-style-type: none;
+}
+.cesium-viewer-i3s-explorer .layersList {
+  padding: 0;
+}
+.cesium-viewer-i3s-explorer input {
+  margin: 0 3px 0 0;
+}
+.cesium-viewer-i3s-explorer .expandItem {
+  cursor: pointer;
+  user-select: none;
+  width: 20px;
+}
+.cesium-viewer-i3s-explorer .nested,
+.cesium-viewer-i3s-explorer #bsl-wrapper {
+  display: none;
+}
+.cesium-viewer-i3s-explorer .active {
+  display: block;
+}
+.cesium-viewer-i3s-explorer .li-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-content: center;
+}

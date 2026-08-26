@@ -1,0 +1,237 @@
+/* packages/widgets/Source/lighterShared.css */
+.cesium-lighter .cesium-button {
+  color: #111;
+  fill: #111;
+  background: #e2f0ff;
+  border: 1px solid #759dc0;
+}
+.cesium-lighter .cesium-button:focus {
+  color: #000;
+  fill: #000;
+  border-color: #ea4;
+}
+.cesium-lighter .cesium-button:hover {
+  color: #000;
+  fill: #000;
+  background: #a6d2ff;
+  border-color: #aef;
+  box-shadow: 0 0 8px #777;
+}
+.cesium-lighter .cesium-button:active {
+  color: #fff;
+  fill: #fff;
+  background: #48b;
+  border-color: #ea0;
+}
+.cesium-lighter .cesium-button:disabled,
+.cesium-lighter .cesium-button-disabled,
+.cesium-lighter .cesium-button-disabled:focus,
+.cesium-lighter .cesium-button-disabled:hover,
+.cesium-lighter .cesium-button-disabled:active {
+  background: #ccc;
+  border-color: #999;
+  color: #999;
+  fill: #999;
+  box-shadow: none;
+}
+.cesium-lighter .cesium-performanceDisplay {
+  background-color: #e2f0ff;
+  border-color: #759dc0;
+}
+.cesium-lighter .cesium-performanceDisplay-fps {
+  color: #e52;
+}
+.cesium-lighter .cesium-performanceDisplay-ms {
+  color: #ea4;
+}
+
+/* packages/widgets/Source/Animation/lighter.css */
+.cesium-lighter .cesium-animation-themeNormal {
+  color: #e5f2fe;
+}
+.cesium-lighter .cesium-animation-themeHover {
+  color: #abd6ff;
+}
+.cesium-lighter .cesium-animation-themeSelect {
+  color: #e5f2fe;
+}
+.cesium-lighter .cesium-animation-themeDisabled {
+  color: #efefef;
+}
+.cesium-lighter .cesium-animation-themeKnob {
+  color: #e1e2e3;
+}
+.cesium-lighter .cesium-animation-themePointer {
+  color: #fa5;
+}
+.cesium-lighter .cesium-animation-themeSwoosh {
+  color: #ace;
+}
+.cesium-lighter .cesium-animation-themeSwooshHover {
+  color: #bdf;
+}
+.cesium-lighter .cesium-animation-svgText {
+  fill: #111;
+}
+.cesium-lighter .cesium-animation-rectButton .cesium-animation-buttonPath {
+  fill: #111;
+}
+.cesium-lighter .cesium-animation-rectButton .cesium-animation-buttonMain {
+  stroke: #759dc0;
+}
+.cesium-lighter .cesium-animation-buttonToggled .cesium-animation-buttonGlow {
+  fill: #ffaa2a;
+}
+.cesium-lighter .cesium-animation-buttonToggled .cesium-animation-buttonMain {
+  stroke: #ea0;
+}
+.cesium-lighter .cesium-animation-rectButton:hover .cesium-animation-buttonMain {
+  stroke: #759dc0;
+}
+.cesium-lighter .cesium-animation-buttonToggled:hover .cesium-animation-buttonGlow {
+  fill: #fff;
+}
+.cesium-lighter .cesium-animation-buttonToggled:hover .cesium-animation-buttonMain {
+  stroke: #ea0;
+}
+.cesium-lighter .cesium-animation-rectButton:active .cesium-animation-buttonMain {
+  fill: #abd6ff;
+}
+.cesium-lighter .cesium-animation-buttonDisabled .cesium-animation-buttonMain {
+  stroke: #d3d3d3;
+}
+.cesium-lighter .cesium-animation-buttonDisabled .cesium-animation-buttonPath {
+  fill: #818181;
+}
+.cesium-lighter .cesium-animation-shuttleRingBack {
+  fill: #fafafa;
+  fill-opacity: 1;
+  stroke: #aeaeae;
+  stroke-width: 1.2;
+}
+.cesium-lighter .cesium-animation-shuttleRingSwoosh line {
+  stroke: #8ac;
+}
+.cesium-lighter .cesium-animation-knobOuter {
+  stroke: #a5a5a5;
+}
+
+/* packages/widgets/Source/BaseLayerPicker/lighter.css */
+.cesium-lighter .cesium-baseLayerPicker-itemIcon {
+  border-color: #759dc0;
+}
+.cesium-lighter .cesium-baseLayerPicker-dropDown {
+  background-color: rgba(240, 240, 240, 0.75);
+}
+.cesium-lighter .cesium-baseLayerPicker-sectionTitle {
+  color: black;
+}
+.cesium-lighter .cesium-baseLayerPicker-itemLabel {
+  color: black;
+}
+.cesium-lighter .cesium-baseLayerPicker-item:hover .cesium-baseLayerPicker-itemIcon {
+  border-color: #000;
+}
+.cesium-lighter .cesium-baseLayerPicker-selectedItem .cesium-baseLayerPicker-itemLabel {
+  color: rgb(0, 61, 168);
+}
+.cesium-lighter .cesium-baseLayerPicker-selectedItem .cesium-baseLayerPicker-itemIcon {
+  border: double 4px rgb(0, 61, 168);
+}
+
+/* packages/engine/Source/Widget/lighter.css */
+.cesium-lighter .cesium-widget-errorPanel {
+  background: rgba(255, 255, 255, 0.7);
+}
+.cesium-lighter .cesium-widget-errorPanel-content {
+  border: 1px solid #526f82;
+  border-radius: 7px;
+  background-color: white;
+  color: black;
+}
+.cesium-lighter .cesium-widget-errorPanel-header {
+  color: #b87d00;
+}
+
+/* packages/widgets/Source/Geocoder/lighter.css */
+.cesium-lighter .cesium-geocoder-input {
+  border: solid 1px #759dc0;
+  background-color: rgba(240, 240, 240, 0.9);
+  color: black;
+}
+.cesium-lighter .cesium-viewer-geocoderContainer:hover .cesium-geocoder-input {
+  border-color: #aef;
+  box-shadow: 0 0 8px #fff;
+}
+.cesium-lighter .cesium-geocoder-searchButton {
+  background-color: #e2f0ff;
+  fill: #111;
+}
+.cesium-lighter .cesium-geocoder-searchButton:hover {
+  background-color: #a6d2ff;
+}
+
+/* packages/widgets/Source/Timeline/lighter.css */
+.cesium-lighter .cesium-timeline-bar {
+  background:
+    linear-gradient(
+      to bottom,
+      #eeeeee 0%,
+      #ffffff 50%,
+      #fafafa 100%);
+}
+.cesium-lighter .cesium-timeline-ticLabel {
+  color: #000;
+}
+.cesium-lighter .cesium-timeline-ticMain {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  height: 50%;
+  background: #000;
+}
+.cesium-lighter .cesium-timeline-ticSub {
+  background: #444;
+}
+
+/* packages/widgets/Source/NavigationHelpButton/lighter.css */
+.cesium-lighter .cesium-navigation-help-instructions {
+  border: 1px solid #759dc0;
+  background-color: rgba(255, 255, 255, 0.9);
+}
+.cesium-lighter .cesium-navigation-help-pan {
+  color: #66ccee;
+  font-weight: bold;
+}
+.cesium-lighter .cesium-navigation-help-zoom {
+  color: #65ec00;
+  font-weight: bold;
+}
+.cesium-lighter .cesium-navigation-help-rotate {
+  color: #eec722;
+  font-weight: bold;
+}
+.cesium-lighter .cesium-navigation-help-tilt {
+  color: #d800d8;
+  font-weight: bold;
+}
+.cesium-lighter .cesium-navigation-help-details {
+  color: #222222;
+}
+.cesium-lighter .cesium-navigation-button {
+  color: #222222;
+  border-top: 1px solid #759dc0;
+  border-right: 1px solid #759dc0;
+}
+.cesium-lighter .cesium-navigation-button-selected {
+  background-color: rgba(196, 225, 255, 0.9);
+}
+.cesium-lighter .cesium-navigation-button-unselected {
+  background-color: rgba(226, 240, 255, 0.9);
+}
+.cesium-lighter .cesium-navigation-button-unselected:hover {
+  background-color: rgba(166, 210, 255, 0.9);
+}
+
+/* packages/widgets/Source/lighter.css */

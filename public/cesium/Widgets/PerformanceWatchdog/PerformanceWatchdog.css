@@ -1,0 +1,15 @@
+/* packages/widgets/Source/PerformanceWatchdog/PerformanceWatchdog.css */
+.cesium-performance-watchdog-message-area {
+  position: relative;
+  background-color: yellow;
+  color: black;
+  padding: 10px;
+}
+.cesium-performance-watchdog-message {
+  margin-right: 30px;
+}
+.cesium-performance-watchdog-message-dismiss {
+  position: absolute;
+  right: 0;
+  margin: 0 10px 0 0;
+}

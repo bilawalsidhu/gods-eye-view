@@ -1,0 +1,119 @@
+.cesium-widget {
+  font-family: sans-serif;
+  font-size: 16px;
+  overflow: hidden;
+  display: block;
+  position: relative;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.cesium-widget,
+.cesium-widget canvas {
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.cesium-widget-credits {
+  display: block;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  color: #fff;
+  font-size: 10px;
+  text-shadow: 0px 0px 2px #000000;
+  padding-right: 5px;
+}
+
+.cesium-widget-errorPanel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 99999;
+}
+
+.cesium-widget-errorPanel:before {
+  display: inline-block;
+  vertical-align: middle;
+  height: 100%;
+  content: "";
+}
+
+.cesium-widget-errorPanel-content {
+  width: 75%;
+  max-width: 500px;
+  display: inline-block;
+  text-align: left;
+  vertical-align: middle;
+  border: 1px solid #510c00;
+  border-radius: 7px;
+  background-color: #f0d9d5;
+  font-size: 14px;
+  color: #510c00;
+}
+
+.cesium-widget-errorPanel-content.expanded {
+  max-width: 75%;
+}
+
+.cesium-widget-errorPanel-header {
+  font-size: 18px;
+  font-family: "Open Sans", Verdana, Geneva, sans-serif;
+  background: #d69d93;
+  border-bottom: 2px solid #510c00;
+  padding-bottom: 10px;
+  border-radius: 3px 3px 0 0;
+  padding: 15px;
+}
+
+.cesium-widget-errorPanel-scroll {
+  overflow: auto;
+  font-family: "Open Sans", Verdana, Geneva, sans-serif;
+  white-space: pre-wrap;
+  padding: 0 15px;
+  margin: 10px 0 20px 0;
+}
+
+.cesium-widget-errorPanel-buttonPanel {
+  padding: 0 15px;
+  margin: 10px 0 20px 0;
+  text-align: right;
+}
+
+.cesium-widget-errorPanel-buttonPanel button {
+  border-color: #510c00;
+  background: #d69d93;
+  color: #202020;
+  margin: 0;
+}
+.cesium-widget-errorPanel-buttonPanel button:focus {
+  border-color: #510c00;
+  background: #f0d9d5;
+  color: #510c00;
+}
+.cesium-widget-errorPanel-buttonPanel button:hover {
+  border-color: #510c00;
+  background: #f0d9d5;
+  color: #510c00;
+}
+.cesium-widget-errorPanel-buttonPanel button:active {
+  border-color: #510c00;
+  background: #b17b72;
+  color: #510c00;
+}
+
+.cesium-widget-errorPanel-more-details {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.cesium-widget-errorPanel-more-details:hover {
+  color: #2b0700;
+}

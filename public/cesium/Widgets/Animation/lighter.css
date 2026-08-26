@@ -1,0 +1,70 @@
+/* packages/widgets/Source/Animation/lighter.css */
+.cesium-lighter .cesium-animation-themeNormal {
+  color: #e5f2fe;
+}
+.cesium-lighter .cesium-animation-themeHover {
+  color: #abd6ff;
+}
+.cesium-lighter .cesium-animation-themeSelect {
+  color: #e5f2fe;
+}
+.cesium-lighter .cesium-animation-themeDisabled {
+  color: #efefef;
+}
+.cesium-lighter .cesium-animation-themeKnob {
+  color: #e1e2e3;
+}
+.cesium-lighter .cesium-animation-themePointer {
+  color: #fa5;
+}
+.cesium-lighter .cesium-animation-themeSwoosh {
+  color: #ace;
+}
+.cesium-lighter .cesium-animation-themeSwooshHover {
+  color: #bdf;
+}
+.cesium-lighter .cesium-animation-svgText {
+  fill: #111;
+}
+.cesium-lighter .cesium-animation-rectButton .cesium-animation-buttonPath {
+  fill: #111;
+}
+.cesium-lighter .cesium-animation-rectButton .cesium-animation-buttonMain {
+  stroke: #759dc0;
+}
+.cesium-lighter .cesium-animation-buttonToggled .cesium-animation-buttonGlow {
+  fill: #ffaa2a;
+}
+.cesium-lighter .cesium-animation-buttonToggled .cesium-animation-buttonMain {
+  stroke: #ea0;
+}
+.cesium-lighter .cesium-animation-rectButton:hover .cesium-animation-buttonMain {
+  stroke: #759dc0;
+}
+.cesium-lighter .cesium-animation-buttonToggled:hover .cesium-animation-buttonGlow {
+  fill: #fff;
+}
+.cesium-lighter .cesium-animation-buttonToggled:hover .cesium-animation-buttonMain {
+  stroke: #ea0;
+}
+.cesium-lighter .cesium-animation-rectButton:active .cesium-animation-buttonMain {
+  fill: #abd6ff;
+}
+.cesium-lighter .cesium-animation-buttonDisabled .cesium-animation-buttonMain {
+  stroke: #d3d3d3;
+}
+.cesium-lighter .cesium-animation-buttonDisabled .cesium-animation-buttonPath {
+  fill: #818181;
+}
+.cesium-lighter .cesium-animation-shuttleRingBack {
+  fill: #fafafa;
+  fill-opacity: 1;
+  stroke: #aeaeae;
+  stroke-width: 1.2;
+}
+.cesium-lighter .cesium-animation-shuttleRingSwoosh line {
+  stroke: #8ac;
+}
+.cesium-lighter .cesium-animation-knobOuter {
+  stroke: #a5a5a5;
+}

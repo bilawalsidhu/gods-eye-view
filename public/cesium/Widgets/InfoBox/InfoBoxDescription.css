@@ -1,0 +1,178 @@
+/* packages/widgets/Source/shared.css */
+.cesium-svgPath-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.cesium-button {
+  display: inline-block;
+  position: relative;
+  background: #303336;
+  border: 1px solid #444;
+  color: #edffff;
+  fill: #edffff;
+  border-radius: 4px;
+  padding: 5px 12px;
+  margin: 2px 3px;
+  cursor: pointer;
+  overflow: hidden;
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+.cesium-button:focus {
+  color: #fff;
+  fill: #fff;
+  border-color: #ea4;
+  outline: none;
+}
+.cesium-button:hover {
+  color: #fff;
+  fill: #fff;
+  background: #48b;
+  border-color: #aef;
+  box-shadow: 0 0 8px #fff;
+}
+.cesium-button:active {
+  color: #000;
+  fill: #000;
+  background: #adf;
+  border-color: #fff;
+  box-shadow: 0 0 8px #fff;
+}
+.cesium-button:disabled,
+.cesium-button-disabled,
+.cesium-button-disabled:focus,
+.cesium-button-disabled:hover,
+.cesium-button-disabled:active {
+  background: #303336;
+  border-color: #444;
+  color: #646464;
+  fill: #646464;
+  box-shadow: none;
+  cursor: default;
+}
+.cesium-button option {
+  background-color: #000;
+  color: #eee;
+}
+.cesium-button option:disabled {
+  color: #777;
+}
+.cesium-button input,
+.cesium-button label {
+  cursor: pointer;
+}
+.cesium-button input {
+  vertical-align: sub;
+}
+.cesium-toolbar-button {
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  border-radius: 14%;
+  padding: 0;
+  vertical-align: middle;
+  z-index: 0;
+}
+.cesium-performanceDisplay-defaultContainer {
+  position: absolute;
+  top: 50px;
+  right: 10px;
+  text-align: right;
+}
+.cesium-performanceDisplay {
+  background-color: rgba(40, 40, 40, 0.7);
+  padding: 7px;
+  border-radius: 5px;
+  border: 1px solid #444;
+  font: bold 12px sans-serif;
+}
+.cesium-performanceDisplay-fps {
+  color: #e52;
+}
+.cesium-performanceDisplay-throttled {
+  color: #a42;
+}
+.cesium-performanceDisplay-ms {
+  color: #de3;
+}
+
+/* packages/widgets/Source/InfoBox/InfoBoxDescription.css */
+body {
+  margin: 0;
+  padding: 0;
+}
+.cesium-infoBox-description {
+  font-family: sans-serif;
+  font-size: 13px;
+  padding: 4px 10px;
+  margin-right: 4px;
+  color: #edffff;
+}
+.cesium-infoBox-description a:link,
+.cesium-infoBox-description a:visited,
+.cesium-infoBox-description a:hover,
+.cesium-infoBox-description a:active {
+  color: #edffff;
+}
+.cesium-infoBox-description table {
+  color: #edffff;
+}
+.cesium-infoBox-defaultTable {
+  width: 100%;
+  color: #edffff;
+}
+.cesium-infoBox-defaultTable tr:nth-child(odd) {
+  background-color: rgba(84, 84, 84, 0.8);
+}
+.cesium-infoBox-defaultTable tr:nth-child(even) {
+  background-color: rgba(84, 84, 84, 0.25);
+}
+.cesium-infoBox-defaultTable th {
+  font-weight: normal;
+  padding: 3px;
+  vertical-align: middle;
+  text-align: center;
+}
+.cesium-infoBox-defaultTable td {
+  padding: 3px;
+  vertical-align: middle;
+  text-align: left;
+}
+.cesium-infoBox-description-lighter {
+  color: #000000;
+}
+.cesium-infoBox-description-lighter a:link,
+.cesium-infoBox-description-lighter a:visited,
+.cesium-infoBox-description-lighter a:hover,
+.cesium-infoBox-description-lighter a:active {
+  color: #000000;
+}
+.cesium-infoBox-description-lighter table {
+  color: #000000;
+}
+.cesium-infoBox-defaultTable-lighter {
+  width: 100%;
+  color: #000000;
+}
+.cesium-infoBox-defaultTable-lighter tr:nth-child(odd) {
+  background-color: rgba(179, 179, 179, 0.8);
+}
+.cesium-infoBox-defaultTable-lighter tr:nth-child(even) {
+  background-color: rgba(179, 179, 179, 0.25);
+}
+.cesium-infoBox-loadingContainer {
+  margin: 5px;
+  text-align: center;
+}
+.cesium-infoBox-loading {
+  display: inline-block;
+  background-image: url(data:text/plain;base64,R0lGODlhEAALAPQAAAAAAOLTlyAdFSgmGxEQC9zOk+LTl7mse25nSYyDXTw4KMO2gqCVa2dgRIl/Wzg1JsCzgN7PlJySaBUTDiEfFggIBbCkdR4cFAoJB0A7KlNONy4rHg4NCQAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh/hpDcmVhdGVkIHdpdGggYWpheGxvYWQuaW5mbwAh+QQJCwAAACwAAAAAEAALAAAFLSAgjmRpnqSgCuLKAq5AEIM4zDVw03ve27ifDgfkEYe04kDIDC5zrtYKRa2WQgAh+QQJCwAAACwAAAAAEAALAAAFJGBhGAVgnqhpHIeRvsDawqns0qeN5+y967tYLyicBYE7EYkYAgAh+QQJCwAAACwAAAAAEAALAAAFNiAgjothLOOIJAkiGgxjpGKiKMkbz7SN6zIawJcDwIK9W/HISxGBzdHTuBNOmcJVCyoUlk7CEAAh+QQJCwAAACwAAAAAEAALAAAFNSAgjqQIRRFUAo3jNGIkSdHqPI8Tz3V55zuaDacDyIQ+YrBH+hWPzJFzOQQaeavWi7oqnVIhACH5BAkLAAAALAAAAAAQAAsAAAUyICCOZGme1rJY5kRRk7hI0mJSVUXJtF3iOl7tltsBZsNfUegjAY3I5sgFY55KqdX1GgIAIfkECQsAAAAsAAAAABAACwAABTcgII5kaZ4kcV2EqLJipmnZhWGXaOOitm2aXQ4g7P2Ct2ER4AMul00kj5g0Al8tADY2y6C+4FIIACH5BAkLAAAALAAAAAAQAAsAAAUvICCOZGme5ERRk6iy7qpyHCVStA3gNa/7txxwlwv2isSacYUc+l4tADQGQ1mvpBAAIfkECQsAAAAsAAAAABAACwAABS8gII5kaZ7kRFGTqLLuqnIcJVK0DeA1r/u3HHCXC/aKxJpxhRz6Xi0ANAZDWa+kEAA7AAAAAAAAAAAA);
+  width: 16px;
+  height: 11px;
+}

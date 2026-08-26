@@ -1,0 +1,56 @@
+/* packages/widgets/Source/SceneModePicker/SceneModePicker.css */
+span.cesium-sceneModePicker-wrapper {
+  display: inline-block;
+  position: relative;
+  margin: 0 3px;
+}
+.cesium-sceneModePicker-visible {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.25s linear;
+}
+.cesium-sceneModePicker-hidden {
+  visibility: hidden;
+  opacity: 0;
+  transition: visibility 0s 0.25s, opacity 0.25s linear;
+}
+.cesium-sceneModePicker-wrapper .cesium-sceneModePicker-none {
+  display: none;
+}
+.cesium-sceneModePicker-slide-svg {
+  transition: left 2s;
+  top: 0;
+  left: 0;
+}
+.cesium-sceneModePicker-wrapper .cesium-sceneModePicker-dropDown-icon {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 3px 0;
+}
+.cesium-sceneModePicker-wrapper .cesium-sceneModePicker-button3D,
+.cesium-sceneModePicker-wrapper .cesium-sceneModePicker-buttonColumbusView,
+.cesium-sceneModePicker-wrapper .cesium-sceneModePicker-button2D {
+  margin: 0 0 3px 0;
+}
+.cesium-sceneModePicker-wrapper .cesium-sceneModePicker-button3D .cesium-sceneModePicker-icon2D {
+  left: 100%;
+}
+.cesium-sceneModePicker-wrapper .cesium-sceneModePicker-button3D .cesium-sceneModePicker-iconColumbusView {
+  left: 200%;
+}
+.cesium-sceneModePicker-wrapper .cesium-sceneModePicker-buttonColumbusView .cesium-sceneModePicker-icon3D {
+  left: -200%;
+}
+.cesium-sceneModePicker-wrapper .cesium-sceneModePicker-buttonColumbusView .cesium-sceneModePicker-icon2D {
+  left: -100%;
+}
+.cesium-sceneModePicker-wrapper .cesium-sceneModePicker-button2D .cesium-sceneModePicker-icon3D {
+  left: -100%;
+}
+.cesium-sceneModePicker-wrapper .cesium-sceneModePicker-button2D .cesium-sceneModePicker-iconColumbusView {
+  left: 100%;
+}
+.cesium-sceneModePicker-wrapper .cesium-sceneModePicker-selected {
+  border-color: #2e2;
+  box-shadow: 0 0 8px #fff, 0 0 8px #fff;
+}

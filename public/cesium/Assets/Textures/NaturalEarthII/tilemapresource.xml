@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+    <TileMap version="1.0.0" tilemapservice="http://tms.osgeo.org/1.0.0">
+      <Title>NE2_HR_LC_SR_W_DR_recolored.tif</Title>
+      <Abstract></Abstract>
+      <SRS>EPSG:4326</SRS>
+      <BoundingBox miny="-90.00000000000000" minx="-180.00000000000000" maxy="90.00000000000000" maxx="180.00000000000000"/>
+      <Origin y="-90.00000000000000" x="-180.00000000000000"/>
+      <TileFormat width="256" height="256" mime-type="image/jpg" extension="jpg"/>
+      <TileSets profile="geodetic">
+        <TileSet href="0" units-per-pixel="0.70312500000000" order="0"/>
+        <TileSet href="1" units-per-pixel="0.35156250000000" order="1"/>
+        <TileSet href="2" units-per-pixel="0.17578125000000" order="2"/>
+      </TileSets>
+    </TileMap>

@@ -1,0 +1,46 @@
+/* packages/widgets/Source/lighterShared.css */
+.cesium-lighter .cesium-button {
+  color: #111;
+  fill: #111;
+  background: #e2f0ff;
+  border: 1px solid #759dc0;
+}
+.cesium-lighter .cesium-button:focus {
+  color: #000;
+  fill: #000;
+  border-color: #ea4;
+}
+.cesium-lighter .cesium-button:hover {
+  color: #000;
+  fill: #000;
+  background: #a6d2ff;
+  border-color: #aef;
+  box-shadow: 0 0 8px #777;
+}
+.cesium-lighter .cesium-button:active {
+  color: #fff;
+  fill: #fff;
+  background: #48b;
+  border-color: #ea0;
+}
+.cesium-lighter .cesium-button:disabled,
+.cesium-lighter .cesium-button-disabled,
+.cesium-lighter .cesium-button-disabled:focus,
+.cesium-lighter .cesium-button-disabled:hover,
+.cesium-lighter .cesium-button-disabled:active {
+  background: #ccc;
+  border-color: #999;
+  color: #999;
+  fill: #999;
+  box-shadow: none;
+}
+.cesium-lighter .cesium-performanceDisplay {
+  background-color: #e2f0ff;
+  border-color: #759dc0;
+}
+.cesium-lighter .cesium-performanceDisplay-fps {
+  color: #e52;
+}
+.cesium-lighter .cesium-performanceDisplay-ms {
+  color: #ea4;
+}
