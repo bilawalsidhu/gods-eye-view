@@ -6,6 +6,7 @@ import flightsLayer from './data/flights.js';
 import militaryFlightsLayer from './data/militaryFlights.js';
 import earthquakesLayer from './data/earthquakes.js';
 import satellitesLayer from './data/satellites.js';
+import planetsLayer from './data/planets.js';
 import rocketLaunchesLayer from './data/rocketLaunches.js';
 import trafficLayer from './data/traffic.js';
 import cctvLayer from './data/cctv.js';
@@ -74,20 +75,37 @@ async function init() {
     loaderStatus.textContent = 'Configuring viewer...';
 
     // Set Cesium Ion token for World Terrain
-    const cesiumToken = import.meta.env.CESIUM_ION_TOKEN;
+    const cesiumToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
     if (cesiumToken) {
       Cesium.Ion.defaultAccessToken = cesiumToken;
     }
 
-    // Set Google Maps API key for 3D Tiles (optional — falls back to OSM if not set)
-    const googleApiKey = import.meta.env.GOOGLE_MAPS_API_KEY;
+    // Set Google Maps API key for 3D Tiles (optional — globe works with OSM without it)
+    const googleApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
     if (googleApiKey) {
       Cesium.GoogleMaps.defaultApiKey = googleApiKey;
-      // Expose API key globally for geocoding in locations.js
-      window.__GOOGLE_MAPS_API_KEY__ = googleApiKey;
     } else {
-      console.info('GOOGLE_MAPS_API_KEY not set — using OpenStreetMap basemap');
+      console.info('VITE_GOOGLE_MAPS_API_KEY not set — using OpenStreetMap basemap');
     }
+    // Expose API key globally for geocoding in locations.js and Places autocomplete
+    window.__GOOGLE_MAPS_API_KEY__ = googleApiKey || '';
+
+    // Load Google Maps Places library for location search autocomplete
+    window.__googleMapsReady__ = new Promise((resolve) => {
+      if (!googleApiKey) {
+        resolve(null);
+        return;
+      }
+      if (window.google?.maps?.places) {
+        resolve(window.google);
+        return;
+      }
+      window.__mapsCallback__ = () => resolve(window.google);
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${googleApiKey}&libraries=places&callback=__mapsCallback__`;
+      script.async = true;
+      document.head.appendChild(script);
+    });
 
     // Create the Cesium viewer with minimal chrome
     const viewer = new Cesium.Viewer('cesiumContainer', {
@@ -214,6 +232,7 @@ async function init() {
     dataManager.register(militaryFlightsLayer);
     dataManager.register(earthquakesLayer);
     dataManager.register(satellitesLayer);
+    dataManager.register(planetsLayer);
     dataManager.register(rocketLaunchesLayer);
     rocketLaunchesLayer.attachDataManager(dataManager);
     dataManager.register(trafficLayer);
@@ -241,6 +260,18 @@ async function init() {
     }
     dataManager.buildTogglePanel(document.getElementById('data-toggles'));
     styleManager.attachDataManager(dataManager);
+
+    // Restore "where you left off" camera position and style from localStorage.
+    // Only runs when there is no share URL active; share URLs take precedence.
+    const hasShareParams = (() => {
+      const hash = window.location.hash.slice(1);
+      if (!hash) return false;
+      const params = new URLSearchParams(hash);
+      return params.has('lat') && params.has('lon');
+    })();
+    if (!hasShareParams) {
+      styleManager.restoreViewState();
+    }
 
     // Initialize deterministic scene playback for social clip capture
     const sceneDirector = new SceneDirector(viewer, styleManager, dataManager);

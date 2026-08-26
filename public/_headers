@@ -1,0 +1,46 @@
+# Cloudflare Pages custom headers
+# https://developers.cloudflare.com/pages/configuration/custom-headers/
+
+# Service worker — must not be cached
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Service-Worker-Allowed: /
+
+# PWA manifest
+/manifest.json
+  Cache-Control: public, max-age=86400
+
+# Static assets — long cache for versioned hashes
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# API routes — never cache (contains live data)
+/api/*
+  Cache-Control: no-store
+  X-Content-Type-Options: nosniff
+
+# Google Fonts
+/fonts.googleapis.com/*
+  Cache-Control: public, max-age=86400
+/fonts.gstatic.com/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# CDN packages (Cesium, esm.sh)
+/unpkg.com/*
+  Cache-Control: public, max-age=2592000
+/esm.sh/*
+  Cache-Control: public, max-age=2592000
+
+# Google Maps tiles — cache aggressively, revalidate in background
+/google.com/maps/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=3600
+
+# Global security headers
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(self), geolocation=()
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Resource-Policy: same-site

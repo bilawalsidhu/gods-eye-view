@@ -7370,9 +7370,11 @@ export default defineConfig(({ mode }) => {
         : ['localhost', '127.0.0.1', '.local'],
     },
     // Expose selected API keys to the browser via import.meta.env.*
+    // Cloudflare Pages injects VITE_-prefixed vars from _vars / dashboard.
+    // Local dev reads from .env (which maps VITE_GOOGLE_MAPS_API_KEY to the same key).
     define: {
-      'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(env.GOOGLE_MAPS_API_KEY),
-      'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(env.CESIUM_ION_TOKEN),
+      'import.meta.env.VITE_GOOGLE_MAPS_API_KEY': JSON.stringify(env.VITE_GOOGLE_MAPS_API_KEY),
+      'import.meta.env.VITE_CESIUM_ION_TOKEN': JSON.stringify(env.VITE_CESIUM_ION_TOKEN),
     },
     build: {
       // The Cesium engine bundle is inherently large; raise the warning ceiling
