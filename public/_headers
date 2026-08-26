@@ -25,6 +25,10 @@
 /fonts.gstatic.com/*
   Cache-Control: public, max-age=31536000, immutable
 
+# Cesium fallback assets (copied to public/cesium/ at build time)
+/cesium/*
+  Cache-Control: public, max-age=31536000, immutable
+
 # CDN packages (Cesium, esm.sh)
 /unpkg.com/*
   Cache-Control: public, max-age=2592000
