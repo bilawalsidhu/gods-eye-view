@@ -35,8 +35,10 @@ import {
 } from '../overlays/worldOverlay.js';
 import { requestWorldFocus } from '../worldFocus.js';
 
-/** Same-origin live-fires proxy (vite.config.js firmsProxy — key stays server-side). */
-const FIRMS_API_URL = '/api/firms';
+import { apiEndpoints } from '../config/apiEndpoints.js';
+
+/** Same-origin live-fires proxy (Cloudflare Worker — key stays server-side). */
+const FIRMS_API_URL = apiEndpoints.firms;
 /** Client poll interval; the proxy's 30 min TTL is what guards upstream quota. */
 const REFRESH_INTERVAL_MS = 600_000;
 

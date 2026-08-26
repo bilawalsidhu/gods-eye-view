@@ -46,6 +46,7 @@ import {
 import { requestWorldFocus } from '../worldFocus.js';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
 import { processChunked } from './processChunked.js';
+import { apiEndpoints } from '../config/apiEndpoints.js';
 
 const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 
@@ -134,7 +135,7 @@ function destroyVisibilityWorker() {
   }
 }
 
-const DEFAULT_API_URL = '/api/ais-live';
+const DEFAULT_API_URL = apiEndpoints.aisLive;
 const DEFAULT_RENDER_ROWS = 12000;
 const DEFAULT_ACTIVE_LABELS = 900;
 const REFRESH_MS = 60000;

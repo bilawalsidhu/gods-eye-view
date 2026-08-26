@@ -269,8 +269,10 @@ const _scratchModelBS = new Cesium.BoundingSphere(new Cesium.Cartesian3(), 1.0);
 /** Last limb taper per billboard, retained across class/ground/cockpit repaints. */
 const _billboardLimbScale = new WeakMap();
 
-/** @constant {string} API_URL - Vite proxy endpoint for OpenSky /states/all */
-const API_URL = '/api/opensky';
+import { apiEndpoints } from '../config/apiEndpoints.js';
+
+/** @constant {string} API_URL - OpenSky aircraft state vectors */
+const API_URL = apiEndpoints.opensky;
 const SOURCE_STALE_MS = 120_000;
 /** @constant {number} BACKOFF_INTERVAL - Cooldown (ms) after 429 / auth errors */
 const BACKOFF_INTERVAL = 45000; // 45s on rate limit

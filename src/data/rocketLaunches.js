@@ -12,8 +12,10 @@ import {
 } from '../overlays/worldOverlay.js';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
 
+import { apiEndpoints } from '../config/apiEndpoints.js';
+
 const WINDOW_DAYS = 30;
-const API_URL = '/api/launches';
+const API_URL = apiEndpoints.rocketLaunches;
 
 export const ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID = 'rocket-missions';
 export const ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID = 'rocket-mission-selected';

@@ -7378,6 +7378,9 @@ export default defineConfig(({ mode }) => {
     define: {
       'import.meta.env.VITE_GOOGLE_MAPS_API_KEY': JSON.stringify(env.VITE_GOOGLE_MAPS_API_KEY),
       'import.meta.env.VITE_CESIUM_ION_TOKEN': JSON.stringify(env.VITE_CESIUM_ION_TOKEN),
+      // API base URL: empty in dev (Vite proxy), empty in production (same-domain Workers).
+      // Override with VITE_API_BASE_URL in .env for a remote staging API.
+      'import.meta.env.VITE_API_BASE_URL': JSON.stringify(env.VITE_API_BASE_URL ?? ''),
       // Tell Cesium where to find Workers + Assets at runtime.
       // Pointed at unpkg /files/ which contains the Build/Cesium/ tree.
       'CESIUM_BASE_URL': JSON.stringify('https://unpkg.com/cesium@1.124.0/files/'),
