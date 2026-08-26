@@ -115,6 +115,58 @@ test('self and non-self case kinds stay explicit and non-self mandates need proo
   assert.equal(rejectedResult.code, 'candidate_unconfirmed');
 });
 
+test('non-self mandates are blocked when unsigned, unvalidated, or out of scope', () => {
+  const nowMs = 1_700_000_000_000;
+
+  const unsignedCase = createCaseRecord({
+    kind: CASE_KIND.NON_SELF,
+    mandate: {
+      expiresAtMs: nowMs + 60_000,
+      sourceScopes: ['local'],
+      proof: {
+        validatedAtMs: nowMs - 1,
+      },
+    },
+  });
+  const unsignedResult = evaluateCaseAuthorization(unsignedCase, nowMs);
+  assert.equal(unsignedResult.ok, false);
+  assert.equal(unsignedResult.code, 'mandate_unverified');
+
+  const unvalidatedCase = createCaseRecord({
+    kind: CASE_KIND.NON_SELF,
+    mandate: {
+      expiresAtMs: nowMs + 60_000,
+      sourceScopes: ['local'],
+      proof: {
+        signedAtMs: nowMs - 2,
+      },
+    },
+  });
+  const unvalidatedResult = evaluateCaseAuthorization(unvalidatedCase, nowMs);
+  assert.equal(unvalidatedResult.ok, false);
+  assert.equal(unvalidatedResult.code, 'mandate_unverified');
+
+  const scopeExcludedCase = createCaseRecord({
+    kind: CASE_KIND.NON_SELF,
+    mandate: {
+      expiresAtMs: nowMs + 60_000,
+      sourceScopes: ['marine'],
+      proof: {
+        signedAtMs: nowMs - 2,
+        validatedAtMs: nowMs - 1,
+      },
+    },
+  });
+  const candidate = {
+    status: CANDIDATE_STATUS.CONFIRMED,
+    confirmedAtMs: nowMs - 1,
+    sourceScope: 'local',
+  };
+  const scopeExcludedResult = canCreateRequest(scopeExcludedCase, candidate, REQUEST_STATUS.DRAFT, nowMs);
+  assert.equal(scopeExcludedResult.ok, false);
+  assert.equal(scopeExcludedResult.code, 'source_scope_mismatch');
+});
+
 test('sent transitions stay fail-closed in V1', () => {
   const request = {
     status: REQUEST_STATUS.DRAFT,
