@@ -166,6 +166,7 @@ test('lock serializes behind delayed save and delete persistence', async () => {
   const saving = vault.saveCase({ id: 'case-1', status: 'open' });
   await putGate.started;
   const lockingAfterSave = vault.lock();
+  const saveQueuedAfterLock = vault.saveCase({ id: 'case-2', status: 'queued-after-lock' });
   let saveLockComplete = false;
   void lockingAfterSave.then(() => { saveLockComplete = true; });
   await Promise.resolve();
@@ -175,6 +176,8 @@ test('lock serializes behind delayed save and delete persistence', async () => {
   await saving;
   await lockingAfterSave;
   assert.equal(store.values.has('case-1'), true);
+  await assert.rejects(saveQueuedAfterLock, (error) => error?.code === 'VAULT_LOCKED');
+  assert.equal(store.values.has('case-2'), false);
   await assertEveryCaseMethodIsLocked(vault);
 
   await vault.unlock('synthetic passphrase');
@@ -192,4 +195,17 @@ test('lock serializes behind delayed save and delete persistence', async () => {
   await lockingAfterDelete;
   assert.equal(store.values.has('case-1'), false);
   await assertEveryCaseMethodIsLocked(vault);
+});
+
+test('invalid unlock input rejects through the promise contract', async () => {
+  const vault = createDemonForgeVault({
+    store: createFakeStore(),
+    cryptoApi: createInjectedCrypto(),
+    clock: () => 1_700_000_000_000,
+  });
+
+  const invalidUnlock = vault.unlock(null);
+
+  assert.equal(typeof invalidUnlock?.then, 'function');
+  await assert.rejects(invalidUnlock, TypeError);
 });

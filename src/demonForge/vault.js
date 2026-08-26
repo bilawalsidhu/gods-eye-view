@@ -126,8 +126,8 @@ export function createDemonForgeVault({ store = createIndexedDbCaseStore(), cryp
 
   return Object.freeze({
     unlock(nextPassphrase) {
-      if (typeof nextPassphrase !== 'string') throw new TypeError('A passphrase is required.');
       return serialize(() => {
+        if (typeof nextPassphrase !== 'string') throw new TypeError('A passphrase is required.');
         passphrase = nextPassphrase;
         lockGeneration += 1;
       });
