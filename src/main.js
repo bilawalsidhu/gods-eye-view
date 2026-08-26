@@ -357,6 +357,9 @@ async function init() {
     };
     window.__godsEyeView.voiceCommands = initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector, annotations });
 
+    // Signal that the React scaffold can now consume window.__godsEyeView
+    window.dispatchEvent(new CustomEvent('__gev_viewer_ready'));
+
     // ── PWA: service worker update prompt ─────────────────────────────────────
     // The vite-plugin-pwa plugin injects SW registration automatically (injectRegister: 'auto').
     // Here we listen for the controllerchange event to prompt the user when a new
