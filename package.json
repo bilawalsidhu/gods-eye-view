@@ -54,6 +54,7 @@
     "satellite.js": "^6.0.2"
   },
   "devDependencies": {
+    "@zip.js/zip.js": "^2.7.44",
     "playwright": "^1.62.1",
     "puppeteer": "^24.37.5",
     "sharp": "^0.34.5",
