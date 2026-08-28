@@ -801,10 +801,6 @@ class CockpitViewController {
         if (this.active) this._adoptTrackedEntity(performance.now());
         else this.syncEntry();
       }),
-      // Save view state to localStorage on camera move end
-      viewer.camera.moveEnd.addEventListener(() => {
-        this.saveViewState();
-      }),
     );
     this._listen(this.entry, 'click', () => this.enter());
     this._listen(this.tr3bToggle, 'click', () => this.toggleTrackedTr3b());
