@@ -278,6 +278,18 @@ const SOURCE_STALE_MS = 120_000;
 const BACKOFF_INTERVAL = 45000; // 45s on rate limit
 /** @constant {number} ERROR_BACKOFF_INTERVAL - Cooldown (ms) after transient errors */
 const ERROR_BACKOFF_INTERVAL = 20000; // transient error retry
+/** Adaptive refresh: altitude bands drive poll rate. Street-level = faster updates. */
+const FLIGHT_REFRESH_MS = {
+  street:   15_000,  // < 50km   — 15s (close aircraft move fast)
+  city:     20_000,  // < 150km  — 20s
+  regional: 30_000,  // < 500km  — 30s
+  global:   45_000,  // default  — 45s
+};
+const FLIGHT_REFRESH_ALT_THRESHOLDS = {
+  street:   50_000,
+  city:    150_000,
+  regional: 500_000,
+};
 /** @constant {number} POSITION_HISTORY_LIMIT - Max position samples kept per aircraft for dead reckoning */
 const POSITION_HISTORY_LIMIT = 5; // keep last N positions per aircraft
 
@@ -311,6 +323,8 @@ let _backoff = false;
 let _retryAt = 0;
 /** @type {string|null} Human-readable error string shown in stats chip */
 let _lastError = null;
+/** Camera altitude band for adaptive refresh */
+let _lastRefreshBand = null;
 const _activeUpdateControllers = new Set();
 
 function _abortActiveUpdates() {
@@ -323,6 +337,39 @@ let _lastStatus = null;
 let _lastSource = 'OpenSky Network';
 /** @type {string} Completeness boundary for the latest successful snapshot. */
 let _lastCoverage = 'worldwide upstream snapshot';
+
+/**
+ * Get the adaptive refresh interval (ms) for the current camera altitude.
+ * Street-level zoom = faster updates.
+ */
+function _flightRefreshIntervalForAltitude(altitudeM) {
+  if (altitudeM < FLIGHT_REFRESH_ALT_THRESHOLDS.street)   return FLIGHT_REFRESH_MS.street;
+  if (altitudeM < FLIGHT_REFRESH_ALT_THRESHOLDS.city)    return FLIGHT_REFRESH_MS.city;
+  if (altitudeM < FLIGHT_REFRESH_ALT_THRESHOLDS.regional) return FLIGHT_REFRESH_MS.regional;
+  return FLIGHT_REFRESH_MS.global;
+}
+
+/**
+ * Adaptive refresh: watch camera altitude and trigger faster polls when zoomed in.
+ * Runs on every preRender — just a number compare, very cheap.
+ */
+let _altWatcherRemove = null;
+function _installAltitudeWatcher(viewer) {
+  if (_altWatcherRemove || !viewer?.scene) return;
+  _altWatcherRemove = viewer.scene.preRender.addEventListener(() => {
+    if (!viewer.camera) return;
+    const alt = viewer.camera.positionCartographic?.height ?? Infinity;
+    const band =
+      alt < FLIGHT_REFRESH_ALT_THRESHOLDS.street   ? 'street'   :
+      alt < FLIGHT_REFRESH_ALT_THRESHOLDS.city    ? 'city'    :
+      alt < FLIGHT_REFRESH_ALT_THRESHOLDS.regional ? 'regional' : 'global';
+    if (band !== _lastRefreshBand) {
+      _lastRefreshBand = band;
+      // Trigger immediate refresh when crossing to closer band
+      _scheduleRefresh(viewer);
+    }
+  });
+}
 
 function _flightApiUrl(viewer) {
   const cartographic = viewer?.camera?.positionCartographic;
@@ -3989,6 +4036,8 @@ const flightsLayer = {
     if (!_preRenderRemove && viewer?.scene) {
       _preRenderRemove = viewer.scene.preRender.addEventListener(_fleetTick);
     }
+    // Adaptive refresh: watch camera altitude and trigger faster polls when zoomed in.
+    _installAltitudeWatcher(viewer);
     if (!_trackedModelPreUpdateRemove && viewer?.scene) {
       _trackedModelPreUpdateRemove = viewer.scene.preUpdate.addEventListener(_updateTrackedModel);
     }
@@ -4047,6 +4096,10 @@ const flightsLayer = {
     if (_moveEndRemove) {
       _moveEndRemove();
       _moveEndRemove = null;
+    }
+    if (_altWatcherRemove) {
+      _altWatcherRemove();
+      _altWatcherRemove = null;
     }
   },
 
@@ -4677,6 +4730,10 @@ const flightsLayer = {
     if (_moveEndRemove) {
       _moveEndRemove();
       _moveEndRemove = null;
+    }
+    if (_altWatcherRemove) {
+      _altWatcherRemove();
+      _altWatcherRemove = null;
     }
     _releaseModels();
     if (_billboardCollection) {

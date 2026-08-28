@@ -52,6 +52,11 @@ export async function onRequest({ request, env }) {
 function proxyResponse(res) {
   const headers = new Headers(res.headers);
   headers.set('Access-Control-Allow-Origin', '*');
+  // Cache successful responses for 8s at CF edge, serve stale for 4s on revalidation
+  if (res.status === 200) {
+    headers.set('Cache-Control', 'public, max-age=8, stale-while-revalidate=4');
+    headers.set('Vary', 'Accept-Encoding');
+  }
   return new Response(res.body, { status: res.status, headers });
 }
 

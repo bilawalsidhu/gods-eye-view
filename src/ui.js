@@ -228,6 +228,7 @@ const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
  */
 const PANEL_POSITION_STORAGE_VERSION = 'v8';
 const DETECTION_ALLOCATION_STORAGE_KEY = 'gev:detection-allocation:v1';
+const VIEW_STATE_STORAGE_KEY = 'gev:view-state:v1';
 /** Z ladder: panels promote within [100, 139]; voice pill 150, toast 200, clean-view-exit 300. */
 const PANEL_Z_BASE = 100;
 const PANEL_Z_MAX = 139;
@@ -799,6 +800,10 @@ class CockpitViewController {
       viewer.trackedEntityChanged.addEventListener(() => {
         if (this.active) this._adoptTrackedEntity(performance.now());
         else this.syncEntry();
+      }),
+      // Save view state to localStorage on camera move end
+      viewer.camera.moveEnd.addEventListener(() => {
+        this.saveViewState();
       }),
     );
     this._listen(this.entry, 'click', () => this.enter());
@@ -8568,7 +8573,51 @@ export class StyleManager {
   }
 
   /**
-   * Snapshots the full visual state (active style, bloom, sharpen, HUD, detection,
+   * Save the current camera view state (position, orientation, style, HUD state)
+   * to localStorage for "where you left off" behavior.
+   * @returns {void}
+   */
+  saveViewState() {
+    const state = {
+      camera: this.getCameraState(),
+      hudVisible: this.hud?.visible ?? true,
+      activeStyle: this.activeStyle,
+    };
+    try {
+      localStorage.setItem(VIEW_STATE_STORAGE_KEY, JSON.stringify({
+        ...state,
+        savedAt: Date.now(),
+      }));
+    } catch { /* best effort */ }
+  }
+
+  /**
+   * Restore a previously saved view state from localStorage.
+   * Only restores if the saved state is less than 7 days old.
+   * @returns {boolean} True if a state was restored.
+   */
+  restoreViewState() {
+    try {
+      const raw = localStorage.getItem(VIEW_STATE_STORAGE_KEY);
+      if (!raw) return false;
+      const state = JSON.parse(raw);
+      // Expire after 7 days
+      if (Date.now() - state.savedAt > 7 * 24 * 60 * 60 * 1000) {
+        localStorage.removeItem(VIEW_STATE_STORAGE_KEY);
+        return false;
+      }
+      if (state.camera) this.applyCameraState(state.camera);
+      if (state.hudVisible === false && this.hud) this.hud.visible = false;
+      if (state.activeStyle && state.activeStyle !== this.activeStyle) {
+        this.setActiveStyle(state.activeStyle);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * per-style shader uniform values) for serialization or scene recipe capture.
    * @returns {object} Serializable visual state object.
    */
@@ -9327,6 +9376,40 @@ export class StyleManager {
         } finally {
           this._settleLocationSearchUi(generation);
         }
+      }
+    });
+
+    // Set up Google Places Autocomplete for location search dropdown
+    window.__googleMapsReady__.then((google) => {
+      if (!google || !google.maps?.places) return;
+      const input = this._locationSearch;
+      if (!input) return;
+      try {
+        const autocomplete = new google.maps.places.Autocomplete(input, {
+          types: ['geocode'],
+          fields: ['name', 'formatted_address', 'geometry.location'],
+        });
+        autocomplete.addListener('place_changed', () => {
+          const place = autocomplete.getPlace();
+          if (!place.geometry?.location) return;
+          const lat = place.geometry.location.lat();
+          const lon = place.geometry.location.lng();
+          const label = place.formatted_address || place.name || input.value;
+          input.value = label;
+          const dest = {
+            destination: Cesium.Cartesian3.fromDegrees(lon, lat, 800),
+            label,
+            orientation: { direction: Cesium.HeadingPitchRoll.heading(0), pitch: -35, roll: 0 },
+          };
+          this._searchedLocationLabel = label;
+          this._setActiveLocation(null);
+          this._currentPoi = null;
+          this._collapsePOIRow();
+          this._updateLocationMiniStatus();
+          void this._flyToDestination(dest);
+        });
+      } catch (err) {
+        console.warn('[LocationSearch] Autocomplete setup failed:', err);
       }
     });
   }

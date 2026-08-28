@@ -50,6 +50,8 @@ import { apiEndpoints } from '../config/apiEndpoints.js';
 
 const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 
+import { getCached, setCached, CACHE_KEYS } from './layerCache.js';
+
 /** Camera pose signature at the last vessel rotation pass. */
 let _lastCamPoseSig = '';
 /** Camera position WC at the last occluder computation — null if no occluder cached. */
@@ -139,6 +141,29 @@ const DEFAULT_API_URL = apiEndpoints.aisLive;
 const DEFAULT_RENDER_ROWS = 12000;
 const DEFAULT_ACTIVE_LABELS = 900;
 const REFRESH_MS = 60000;
+/** Adaptive refresh: altitude bands drive poll rate. Street-level = faster updates. */
+const AIS_REFRESH_MS = {
+  street: 20_000,    // < 50km   — 20s (close-in vessel traffic moves fast)
+  city:   30_000,   // < 150km  — 30s
+  regional: 45_000, // < 500km  — 45s
+  global:  60_000,  // default  — 60s
+};
+const AIS_REFRESH_ALT_THRESHOLDS = {
+  street:   50_000,
+  city:    150_000,
+  regional: 500_000,
+};
+
+/**
+ * Get the adaptive refresh interval (ms) for the current camera altitude.
+ * Street-level zoom = faster updates.
+ */
+function aisRefreshIntervalForAltitude(altitudeM) {
+  if (altitudeM < AIS_REFRESH_ALT_THRESHOLDS.street) return AIS_REFRESH_MS.street;
+  if (altitudeM < AIS_REFRESH_ALT_THRESHOLDS.city)   return AIS_REFRESH_MS.city;
+  if (altitudeM < AIS_REFRESH_ALT_THRESHOLDS.regional) return AIS_REFRESH_MS.regional;
+  return AIS_REFRESH_MS.global;
+}
 /** Bounded wait for the first accepted vessel position in one enabled session. */
 export const AIS_FIRST_CONNECT_GRACE_MS = 30000;
 const AIS_FIRST_CONNECT_LABEL = 'awaiting first AIS position…';
@@ -443,6 +468,7 @@ const aisLiveVesselsLayer = {
     const activeViewer = viewer || state.viewer;
     ensureCollections(activeViewer);
     installInteraction(activeViewer);
+    installAltitudeWatcher(activeViewer);
     setVisible(true);
     // Height-datum fix: warm the geoid grid once per layer-enable, never
     // blocking a poll. The first refresh may land pre-resolve (N = 0), and
@@ -474,6 +500,10 @@ const aisLiveVesselsLayer = {
     clearVesselInspection();
     destroySelectedVesselTrail();
     removeVesselInteraction();
+    if (state.altitudeWatcherRemover) {
+      state.altitudeWatcherRemover();
+      state.altitudeWatcherRemover = null;
+    }
     if (state.abort) {
       state.abort.abort();
       state.abort = null;
@@ -503,6 +533,10 @@ const aisLiveVesselsLayer = {
     removeVesselInteraction();
     if (state.preRenderRemover) {
       state.preRenderRemover();
+    }
+    if (state.altitudeWatcherRemover) {
+      state.altitudeWatcherRemover();
+      state.altitudeWatcherRemover = null;
     }
     resetState();
   },
@@ -795,8 +829,12 @@ const state = {
   /** Test-only key target paired with interactionHandlerFactory. */
   interactionKeyTarget: null,
   preRenderRemover: null,
+  altitudeWatcherRemover: null,
   lastVisibilityUpdate: 0,
   lastFocusUpdate: 0,
+  /** Camera altitude for adaptive refresh (m). */
+  lastAltitudeM: null,
+  lastRefreshBand: null,
   /** Sprites whose animated emphasis remains outside the 1.0 deadband. */
   activeFocusCount: 0,
   activeLabelCount: 0,
@@ -1349,6 +1387,28 @@ function shipIcon(record, selected) {
 function installRuntime(viewer) {
   if (state.preRenderRemover || !viewer) return;
   state.preRenderRemover = viewer.scene.preRender.addEventListener(() => updateVisibility());
+}
+
+/**
+ * Adaptive refresh: watch camera altitude and trigger faster polls when zoomed in.
+ * Runs on every preRender (cheap — just a number compare).
+ */
+function installAltitudeWatcher(viewer) {
+  if (state.altitudeWatcherRemover || !viewer) return;
+  state.altitudeWatcherRemover = viewer.scene.preRender.addEventListener(() => {
+    if (!state.enabled) return;
+    const alt = viewer.camera.positionCartographic?.height ?? Infinity;
+    const band =
+      alt < AIS_REFRESH_ALT_THRESHOLDS.street   ? 'street'   :
+      alt < AIS_REFRESH_ALT_THRESHOLDS.city    ? 'city'    :
+      alt < AIS_REFRESH_ALT_THRESHOLDS.regional ? 'regional' : 'global';
+    if (band !== state.lastRefreshBand) {
+      state.lastRefreshBand = band;
+      state.lastAltitudeM = alt;
+      // Trigger an immediate refresh when crossing to a closer band
+      loadLivePositions(viewer);
+    }
+  });
 }
 
 function updateVisibility(force = false) {

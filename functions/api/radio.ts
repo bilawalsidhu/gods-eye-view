@@ -38,6 +38,10 @@ export async function onRequest({ request }: { request: Request }): Promise<Resp
 function proxyResponse(res: Response): Response {
   const headers = new Headers(res.headers);
   headers.set('Access-Control-Allow-Origin', '*');
+  // Radio station directory is stable — cache for 1 hour at CF edge
+  if (res.status === 200) {
+    headers.set('Cache-Control', 'public, max-age=3600');
+  }
   return new Response(res.body, { status: res.status, headers });
 }
 function corsResponse(): Response {
