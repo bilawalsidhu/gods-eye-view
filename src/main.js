@@ -74,6 +74,10 @@ async function init() {
   try {
     loaderStatus.textContent = 'Configuring viewer...';
 
+    // Tell bundled Cesium where to find its Workers + Assets at runtime.
+    // This must be set BEFORE any Cesium viewer/imagery/terrain is constructed.
+    Cesium.buildModuleUrl.setBaseUrl('/cesium/');
+
     // Set Cesium Ion token for World Terrain
     const cesiumToken = import.meta.env.CESIUM_ION_TOKEN;
     if (cesiumToken) {

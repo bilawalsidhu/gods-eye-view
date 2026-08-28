@@ -55,14 +55,6 @@ html, body {
   left: 0;
 }
 
-/* Cesium widget canvas: fill the full viewport. The canvas is sized to its
-   intrinsic 300×150px by Cesium's own CSS — override that so the globe
-   fills the screen regardless of device pixel ratio. */
-div#cesiumContainer .cesium-viewer canvas {
-  height: 100vh !important;
-  width: 100vw !important;
-}
-
 /* Unified world-overlay host: detection uses one host-owned blend surface
    beneath the shared text/card canvas; both share one frame path. The root
    holds ONLY the card canvas — it is a stacking context (z-index below), and
@@ -1827,7 +1819,6 @@ body.ui-clean-view #scene-runtime.active {
   align-items: center;
   gap: 0;
   flex-shrink: 0;
-  position: relative;
 }
 
 .search-toggle-btn {
@@ -1877,47 +1868,6 @@ body.ui-clean-view #scene-runtime.active {
 
 #location-search.searching {
   opacity: 0.5;
-}
-
-/* Google Places Autocomplete dropdown — dark theme */
-.pac-container {
-  background: var(--panel-bg);
-  border: 1px solid var(--border);
-  border-top: none;
-  border-radius: 0 0 6px 6px;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-}
-.pac-item {
-  padding: 8px 12px;
-  color: var(--text-primary);
-  cursor: pointer;
-  border-top: 1px solid var(--border);
-}
-.pac-item:first-child {
-  border-top: none;
-}
-.pac-item:hover,
-.pac-item-selected {
-  background: var(--accent-glow);
-}
-.pac-item .pac-icon {
-  display: none;
-}
-.pac-item .pac-item-query {
-  color: var(--text-primary);
-  font-size: 13px;
-}
-.pac-item .pac-item-query span {
-  color: var(--text-dim);
-}
-.pac-matched {
-  color: var(--accent);
-  font-weight: 500;
-}
-.pac-logo {
-  display: none;
 }
 
 /* ── Top-center Globe Actions ────────────────── */
@@ -4485,7 +4435,6 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
 }
 
 .data-toggle-list {
