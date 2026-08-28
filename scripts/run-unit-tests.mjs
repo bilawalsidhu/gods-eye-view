@@ -64,8 +64,8 @@ export function allocationTestArgs(file) {
 const TSX = path.join(process.cwd(), 'node_modules', '.bin', 'tsx');
 
 function runTests(args) {
-  // tsx is required because some test files import TypeScript sources (.ts).
-  // Node's native test runner cannot resolve those without a transformer.
+  // Use tsx to handle TypeScript imports in test files.
+  // tsx transpiles .ts sources on the fly so Node's test runner can load them.
   const result = spawnSync(TSX, args, {
     cwd: process.cwd(),
     stdio: 'inherit',
