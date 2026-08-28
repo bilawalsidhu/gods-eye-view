@@ -92,23 +92,6 @@ async function init() {
 
     // Load Google Maps Places library for location search autocomplete
     window.__googleMapsReady__ = new Promise((resolve) => {
-      if (!googleApiKey) {
-        resolve(null);
-        return;
-      }
-      if (window.google?.maps?.places) {
-        resolve(window.google);
-        return;
-      }
-      window.__mapsCallback__ = () => resolve(window.google);
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${googleApiKey}&libraries=places&callback=__mapsCallback__`;
-      script.async = true;
-      document.head.appendChild(script);
-    });
-
-    // Load Google Maps Places library for location search autocomplete
-    window.__googleMapsReady__ = new Promise((resolve) => {
       if (!googleApiKey || googleApiKey === 'your_google_maps_api_key_here') {
         resolve(null);
         return;
