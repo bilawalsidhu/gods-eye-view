@@ -349,27 +349,6 @@ function _flightRefreshIntervalForAltitude(altitudeM) {
   return FLIGHT_REFRESH_MS.global;
 }
 
-/**
- * Adaptive refresh: watch camera altitude and trigger faster polls when zoomed in.
- * Runs on every preRender — just a number compare, very cheap.
- */
-let _altWatcherRemove = null;
-function _installAltitudeWatcher(viewer) {
-  if (_altWatcherRemove || !viewer?.scene) return;
-  _altWatcherRemove = viewer.scene.preRender.addEventListener(() => {
-    if (!viewer.camera) return;
-    const alt = viewer.camera.positionCartographic?.height ?? Infinity;
-    const band =
-      alt < FLIGHT_REFRESH_ALT_THRESHOLDS.street   ? 'street'   :
-      alt < FLIGHT_REFRESH_ALT_THRESHOLDS.city    ? 'city'    :
-      alt < FLIGHT_REFRESH_ALT_THRESHOLDS.regional ? 'regional' : 'global';
-    if (band !== _lastRefreshBand) {
-      _lastRefreshBand = band;
-      // Trigger immediate refresh when crossing to closer band
-      _scheduleRefresh(viewer);
-    }
-  });
-}
 
 function _flightApiUrl(viewer) {
   const cartographic = viewer?.camera?.positionCartographic;
@@ -4036,8 +4015,6 @@ const flightsLayer = {
     if (!_preRenderRemove && viewer?.scene) {
       _preRenderRemove = viewer.scene.preRender.addEventListener(_fleetTick);
     }
-    // Adaptive refresh: watch camera altitude and trigger faster polls when zoomed in.
-    _installAltitudeWatcher(viewer);
     if (!_trackedModelPreUpdateRemove && viewer?.scene) {
       _trackedModelPreUpdateRemove = viewer.scene.preUpdate.addEventListener(_updateTrackedModel);
     }
@@ -4096,10 +4073,6 @@ const flightsLayer = {
     if (_moveEndRemove) {
       _moveEndRemove();
       _moveEndRemove = null;
-    }
-    if (_altWatcherRemove) {
-      _altWatcherRemove();
-      _altWatcherRemove = null;
     }
   },
 
@@ -4730,10 +4703,6 @@ const flightsLayer = {
     if (_moveEndRemove) {
       _moveEndRemove();
       _moveEndRemove = null;
-    }
-    if (_altWatcherRemove) {
-      _altWatcherRemove();
-      _altWatcherRemove = null;
     }
     _releaseModels();
     if (_billboardCollection) {

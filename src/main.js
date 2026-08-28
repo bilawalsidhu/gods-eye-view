@@ -75,13 +75,13 @@ async function init() {
     loaderStatus.textContent = 'Configuring viewer...';
 
     // Set Cesium Ion token for World Terrain
-    const cesiumToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
+    const cesiumToken = import.meta.env.CESIUM_ION_TOKEN;
     if (cesiumToken) {
       Cesium.Ion.defaultAccessToken = cesiumToken;
     }
 
     // Set Google Maps API key for 3D Tiles (optional — globe works with OSM without it)
-    const googleApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    const googleApiKey = import.meta.env.GOOGLE_MAPS_API_KEY;
     if (googleApiKey) {
       Cesium.GoogleMaps.defaultApiKey = googleApiKey;
     } else {

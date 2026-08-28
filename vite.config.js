@@ -7373,11 +7373,11 @@ export default defineConfig(({ mode }) => {
         : ['localhost', '127.0.0.1', '.local'],
     },
     // Expose selected API keys to the browser via import.meta.env.*
-    // Cloudflare Pages injects VITE_-prefixed vars from _vars / dashboard.
-    // Local dev reads from .env (which maps VITE_GOOGLE_MAPS_API_KEY to the same key).
+    // Cloudflare Pages injects non-prefixed vars from _vars / dashboard at runtime.
+    // Local dev reads from .env (which maps VITE_GOOGLE_MAPS_API_KEY → GOOGLE_MAPS_API_KEY).
     define: {
-      'import.meta.env.VITE_GOOGLE_MAPS_API_KEY': JSON.stringify(env.VITE_GOOGLE_MAPS_API_KEY),
-      'import.meta.env.VITE_CESIUM_ION_TOKEN': JSON.stringify(env.VITE_CESIUM_ION_TOKEN),
+      'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(env.GOOGLE_MAPS_API_KEY),
+      'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(env.CESIUM_ION_TOKEN),
       // API base URL: empty in dev (Vite proxy), empty in production (same-domain Workers).
       // Override with VITE_API_BASE_URL in .env for a remote staging API.
       'import.meta.env.VITE_API_BASE_URL': JSON.stringify(env.VITE_API_BASE_URL ?? ''),
