@@ -60,8 +60,13 @@ export function allocationTestArgs(file) {
   return ['--expose-gc', '--test', '--test-concurrency=1', file];
 }
 
+/** Path to tsx (handles TypeScript imports in test files). */
+const TSX = path.join(process.cwd(), 'node_modules', '.bin', 'tsx');
+
 function runTests(args) {
-  const result = spawnSync(process.execPath, args, {
+  // tsx is required because some test files import TypeScript sources (.ts).
+  // Node's native test runner cannot resolve those without a transformer.
+  const result = spawnSync(TSX, args, {
     cwd: process.cwd(),
     stdio: 'inherit',
     env: process.env,
