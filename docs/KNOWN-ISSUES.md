@@ -1,6 +1,6 @@
 # KNOWN ISSUES
 
-Updated: July 8, 2026
+Updated: August 29, 2026
 
 This file tracks active runtime issues only.
 
@@ -65,6 +65,40 @@ Status: Open (accepted 2026-07-08, documented)
 ---
 
 ## Closed / Intentional (for clarity)
+
+### CCTV layer dead on init; `/api/realtime/debug-log` and HUD summary 404/405 in production
+Status: Closed as fixed on `main` (August 2026)
+
+Context:
+- Two independent root causes produced a dead CCTV layer and the console errors
+  `POST /api/realtime/debug-log 405` / `[HUD] AI summary unavailable: HTTP 405`:
+  1. Production was deployed as a static site with **no** Pages Functions, so
+     every keyless dev middleware 404'd; a stray legacy handler answered the
+     debug-log POST with 405. All keyless endpoints now exist under
+     `functions/api/**` (see `docs/PLAN.md` Phase 1).
+  2. `cctv.js` `init()` referenced a `priorsPromise` variable a refactor had
+     lost — `ReferenceError` before any camera rendered. Restored (the
+     `resolveGroundPriors` batch applies post-hoc again).
+
+Validation:
+- `node --test src/data/cctv.test.mjs` (browser-side init paths), the
+  `functions/api/**` suites, and the runbook's post-deploy checklist
+  (`docs/RUNBOOK.md`).
+
+---
+
+### Label-solve worker fast path crashed on every solve
+Status: Closed as fixed on `main` (August 2026)
+
+Context:
+- `labelSolve.worker.js` built its ordered-placement corners table with
+  shorthand properties (`{ py }`, `{ px }`) that named no variable, so
+  `firstOrderedPlacement` threw `ReferenceError` on every invocation — the
+  worker's dense fast path never ran and solves fell back. The E/C corners now
+  carry the same centered coordinates their siblings use. Found by the strict
+  ESLint baseline (`no-undef`), which is exactly why `npm run lint` is a gate.
+
+---
 
 ### Proxy SSRF and error-surface hardening gaps
 Status: Closed as fixed on `main`

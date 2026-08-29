@@ -18,6 +18,9 @@ npm run dev -- --host localhost --port 4173
 # Production build
 npm run build
 
+# Lint (ESLint 9 flat config, zero warnings tolerated)
+npm run lint
+
 # Unit tests (headless, no browser required)
 npm test
 
@@ -106,10 +109,13 @@ macOS: `scripts/dev-fresh.sh` pulls keys from Keychain.
 
 ## Testing
 
-Unit tests use a headless harness (`scripts/run-unit-tests.mjs`). Test files are co-located with source (`*.test.mjs`). Run a specific test file with Node:
+Unit tests use a headless harness (`scripts/run-unit-tests.mjs`), which runs the whole suite (parallel phase, then two serialized allocation probes). Test files are co-located with source (`*.test.mjs`). To run a single file, invoke node's runner directly:
 ```bash
-node scripts/run-unit-tests.mjs --file src/data/flights.test.mjs
+node --test src/data/flights.test.mjs
 ```
+Use plain filenames — `node --test` silently skips bracketed paths like `[[path]].test.mjs` (glob expands to nothing, exit 0, "tests 0"), so production Pages Function tests live next to their handlers under non-bracketed names (e.g. `functions/api/cctv/cctv.test.mjs`).
+
+CI (`.github/workflows/ci.yml`) runs lint + the full suite (with `GEV_REQUIRE_ALLOCATION_GATE=1`) + build on every push/PR.
 
 Force AIS refresh for testing:
 ```bash
@@ -121,6 +127,8 @@ QA scripts under `scripts/qa-*.mjs` use Puppeteer for visual/behavioral testing 
 ## API Proxy
 
 `vite.config.js` acts as a server-side proxy for external APIs (OpenSky, CelesTrak, Overpass, GBFS, CCTV streams, AISStream WebSocket, TomTom, NASA FIRMS, Radio Browser, terrain heights). This keeps credentials server-side and adds caching/rate-limiting.
+
+**Dev/prod parity**: the keyless middlewares (celestrak, launches, adsbdb, opensky-track, adsblol mil/trace, cctv, openzenith, realtime token/debug-log, hud-summary) exist twice by design — as vite dev middlewares (vite.config.js, Node) and as Cloudflare Pages Functions (`functions/api/**`, workerd). Shared logic lives in worker-safe modules (`functions/_lib.js`, `functions/_upstream.js`, `functions/api/openzenith/_handler.js`, `src/data/cctvSources.js`) imported by BOTH runtimes; workerd has no `node:*`/`fs`/`Buffer`/`process`, so shared code sticks to web primitives (`Uint8Array`, `Request`/`Response`, `URLSearchParams`).
 
 ## Global Exposed API
 
