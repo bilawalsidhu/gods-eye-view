@@ -21,6 +21,7 @@
  */
 import * as Cesium from 'cesium';
 import { aircraftIncludedInNearby } from './aircraftNearbyPolicy.js';
+import { readLocalCache, trimLocalCache, writeLocalCache } from './localCache.js';
 import { registerPickOwner, unregisterPickOwner, isOwnedByOtherLayer, resolvePickId } from './pickRegistry.js';
 import {
   registerSpriteCollection,
@@ -773,10 +774,16 @@ const COURSE_SLEW_DT_MAX_SEC = 0.25;
 // sessions never re-hit adsbdb). Each key is requested at most once per
 // session. Priority jobs (tracked plane, model-eligible planes) jump the
 // queue; the ambient fleet sweep (below) fills the back at poll cadence.
+// In a static deployment there is no server disk, so the BROWSER carries
+// that cache instead: localStorage via localCache.js, one entry per key
+// (negatives included — a plane that has no route today won't tomorrow),
+// 30-day TTL (registrations/types/routes are near-immutable).
 // ---------------------------------------------------------------------------
 const ENRICH_MAX_INFLIGHT = 4;
 /** Min ms between request dispatches — the drip that bounds the fan-out to ≤5/s. */
 const ENRICH_DISPATCH_GAP_MS = 200;
+/** Browser-cache TTL for one adsbdb type/route answer (see block comment). */
+const ENRICH_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 let _enrichActive = 0;
 let _enrichLastDispatchMs = 0;
 /** @type {ReturnType<typeof setTimeout>|null} pending drip wake-up */
@@ -787,7 +794,7 @@ const _enrichSeen = new Set();
 function _enqueueEnrich(key, url, onData, priority = false) {
   if (_enrichSeen.has(key)) return;
   _enrichSeen.add(key);
-  const job = { url, onData };
+  const job = { url, cacheKey: `adsbdb:${key}`, onData };
   // Priority (tracked / model-eligible) goes to the FRONT so a deep ambient
   // backlog can never delay the plane the user just clicked or zoomed into.
   if (priority) _enrichQueue.unshift(job); else _enrichQueue.push(job);
@@ -806,15 +813,46 @@ function _drainEnrich() {
       }
       return;
     }
-    _enrichLastDispatchMs = Date.now();
     const job = _enrichQueue.shift();
+    // Browser cache first: a hit answers synchronously and costs no dispatch
+    // slot or drip budget (only real fetches pace against the gap). Delivered
+    // found OR negative — same contract as the network branch.
+    const cached = readLocalCache(job.cacheKey);
+    if (cached.hit) {
+      if (cached.value) job.onData(cached.value);
+      continue;
+    }
+    _enrichLastDispatchMs = Date.now();
     _enrichActive += 1;
     fetch(job.url)
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (data && data.found) job.onData(data); })
+      .then((data) => {
+        if (!data) return;
+        // Persist before delivering, matching the dev proxy's write-on-answer
+        // (negatives included). Failure to persist is silent by contract.
+        if (writeLocalCache(job.cacheKey, data, { ttlMs: ENRICH_CACHE_TTL_MS })) trimLocalCache();
+        // Delivered for found AND negative answers — both production handlers
+        // no-op on absent fields, and delivering negatives keeps the test seam
+        // able to observe a settled job.
+        job.onData(data);
+      })
       .catch(() => { /* enrichment never surfaces errors */ })
       .finally(() => { _enrichActive -= 1; _drainEnrich(); });
   }
+}
+
+/**
+ * Test seam: run one enrichment job through the production queue, drip,
+ * browser-cache and persistence path. Resolves with the answered payload
+ * (found or negative) once the job settles.
+ *
+ * @param {string} key Enrichment key (`t:<icao24>` / `r:<callsign>`)
+ * @param {string} url Proxy URL to fetch
+ * @returns {Promise<object>} Settled payload, or `null` when the job never
+ *   answers (network error).
+ */
+export function _runEnrichJobForTest(key, url) {
+  return new Promise((resolve) => _enqueueEnrich(key, url, resolve, true));
 }
 
 function _requestTypeEnrichment(icao24, priority = false) {
