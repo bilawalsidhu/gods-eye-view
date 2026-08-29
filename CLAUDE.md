@@ -182,7 +182,13 @@ redundant horizon culling on stationary camera. Cache invalidated on AIS session
 ## Rust / WASM (`rust/`)
 
 Optional performance acceleration via WebAssembly:
-- `rust/firms-renderer/` — FIRMS 100k heatmap renderer (Gaussian splatting in WASM)
+- `rust/firms-renderer/` — FIRMS heatmap renderer (Gaussian splatting in WASM).
+  The crate is implemented and builds, but is **not wired into the app yet**:
+  there is no `public/wasm/` output and `firmsHeatmap.js` does not reference
+  it. Its API is `render_heatmap(lons, lats, brights, width, height, bbox)`
+  returning an RGBA buffer whose alpha channel encodes intensity, plus
+  `version()`.
 - Build: `cd rust/firms-renderer && wasm-pack build --target web --out-dir ../../public/wasm/firms-renderer`
-- Served from `public/wasm/firms-renderer/` and loaded via dynamic `import()` in `firmsHeatmap.js`
-  *(Note: WASM package builds successfully; integration into `firmsHeatmap.js` is pending.)*
+- Wiring it (dynamic `import()` in `firmsHeatmap.js` with a JS fallback) is
+  tracked in `docs/PLAN.md` Phase 5 — it is a visual-output change, so it must
+  land with runtime verification, not blind.

@@ -144,10 +144,13 @@ Order of work, cheapest-first:
       WASM): AIS row normalization batch sizes, detection projection worker
       backpressure, label solve cadence under dense mode.
 - [ ] WASM candidates, only where profiling proves the JS is the bottleneck:
-      the FIRMS heatmap renderer (`rust/firms-renderer/` — the WASM package
-      builds; wiring into `firmsHeatmap.js` is the pending step), and
-      potentially SGP4 batch propagation for dense catalogs. SIMD only for
-      splatting/inner loops that are already vectorizable.
+      the FIRMS heatmap renderer (`rust/firms-renderer/` — the crate is
+      implemented and builds; `render_heatmap(lons, lats, brights, viewport)`
+      returns an alpha-encoded RGBA buffer) and potentially SGP4 batch
+      propagation for dense catalogs. SIMD only for splatting/inner loops
+      that are already vectorizable. The FIRMS wiring is a visual-output
+      change: it must land with runtime verification on a machine that can
+      run the app, behind a JS fallback — not blind.
 - [ ] Concurrency: audit every `await`-in-loop over large cohorts for
       parallelizable fan-out; verify the workers are actually parallel on the
       paths that matter (visibility, projection, label solve).
