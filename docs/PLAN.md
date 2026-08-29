@@ -61,7 +61,7 @@ Findings that drove the phases below:
    budget), CelesTrak TLE groups (6 h, 128 KB per-entry cap), OpenZenith places
    (30 d, ~100 m cells, single-flight per cell).
 
-## Phase 2 — Strict lint & code smells (IN PROGRESS)
+## Phase 2 — Strict lint & code smells (DONE)
 
 - [x] ESLint 9 flat config (`eslint.config.js`): `js.configs.recommended` plus
       error-level discipline rules — `eqeqeq`, `no-var`, `prefer-const`,
@@ -72,9 +72,13 @@ Findings that drove the phases below:
       channel, in the browser and in Pages Functions.
 - [x] Three latent runtime crashes fixed because the first lint baseline
       surfaced them (see Phase 1.2).
-- [ ] Mechanical cleanup to green: ~469 findings (implicit coercions, dead
-      locals, regex space runs, expression statements). In flight.
-- [ ] Lint gate added to CI alongside `npm test`.
+- [x] Mechanical cleanup to green (2026-08-29): 469 errors + 15 dead
+      directives across 112 files resolved with zero behavior change — lint,
+      the full suite (2706+1+13), and the build all verified green. Five
+      `!!` coercions in `ui.js` keep justified inline disables because
+      source-contract tests pin the literal text (the suite caught the first
+      rewrite attempt — the guardrails work).
+- [x] Lint job added to CI alongside test and build.
 
 ## Phase 3 — Test coverage toward 99% (OPEN)
 
@@ -140,6 +144,12 @@ Order of work, cheapest-first:
       boot, a layer storm (all layers on), and a tracked flight under Cockpit.
       Output: a ranked list of main-thread hot spots appended to
       [PERFORMANCE.md](PERFORMANCE.md). No WASM before this exists.
+- [ ] Candidate already identified by the lint pass: `processChunked`'s async
+      path computes its `chunkSize` slice and then never uses it — the drain
+      loop is deadline-driven only, so callers passing a chunk size get no
+      effect (only `processChunkedSync` honours it). Either honour the
+      parameter or remove it from the signature; a behavior decision, hence
+      not "fixed" in a lint pass.
 - [ ] Algorithmic wins first (these are known, measurable, and don't need
       WASM): AIS row normalization batch sizes, detection projection worker
       backpressure, label solve cadence under dense mode.
