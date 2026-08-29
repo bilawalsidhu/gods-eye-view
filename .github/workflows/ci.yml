@@ -1,0 +1,62 @@
+# CI for God's Eye View.
+#
+# Gates mirror the local battery exactly:
+#   - unit suite (scripts/run-unit-tests.mjs) under Node 24 — the runtime the
+#     allocation microbenchmarks were calibrated on, with
+#     GEV_REQUIRE_ALLOCATION_GATE=1 so an uncalibrated runtime FAILS here
+#     instead of silently skipping the budgets;
+#   - production build (vite build) — the artifact a Pages deploy ships.
+#
+# Deployment stays manual (`npx wrangler pages deploy dist --project-name
+# globe --branch main`, see docs/KNOWN-ISSUES.md) — this workflow does not
+# deploy, so a green CI never implies a shipped site.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Unit suite (allocation budgets enforced)
+        run: npm test
+        env:
+          GEV_REQUIRE_ALLOCATION_GATE: '1'
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Production build
+        run: npm run build
+      - name: Archive dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 7
