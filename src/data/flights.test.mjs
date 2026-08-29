@@ -1544,3 +1544,56 @@ test('adsbdb enrichment caches a not-found answer too — no repeated misses per
     setLocalCacheStorage(null);
   }
 });
+
+test('tracked place context: the readout gains an "over <place>" line from the browser cache', async (t) => {
+  const { setLocalCacheStorage, readLocalCache } = await import('./localCache.js');
+  const map = new Map();
+  setLocalCacheStorage({
+    get length() { return map.size; },
+    key: (i) => [...map.keys()][i] ?? null,
+    getItem: (k) => (map.has(k) ? map.get(k) : null),
+    setItem: (k, v) => { map.set(k, String(v)); },
+    removeItem: (k) => { map.delete(k); },
+  });
+  let placeHits = 0;
+  const realFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = realFetch; setLocalCacheStorage(null); });
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('/api/openzenith/reverse-geocode')) {
+      placeHits += 1;
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          place: {
+            display_name: 'Somewhere, Austin, Travis County, Texas, United States',
+            address: { city: 'Austin', state: 'Texas', country: 'United States' },
+          },
+          location: { lat: 30.2, lon: -97.7 },
+        }),
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({ time: 0, states: [] }) };
+  };
+
+  // Fresh module instance = fresh contact maps, like a new page.
+  const mod = await import('./flights.js?place-ctx=1');
+  mod._addFlightTrackingCandidateForTest({
+    icao24: 'cae771',
+    meta: { callsign: 'SWA123', klass: 'airliner', rawLat: 30.201, rawLon: -97.704 },
+    billboard: { show: false },
+  });
+  const meta = await mod._requestPlaceContextForTest('cae771');
+  assert.ok(meta, 'contact still registered after the lookup');
+  assert.equal(meta.placeLabel, 'over Austin, Texas');
+
+  // The answer was persisted by ~100 m cell: a second contact over the SAME
+  // cell costs the network nothing.
+  mod._addFlightTrackingCandidateForTest({
+    icao24: 'cae772',
+    meta: { callsign: 'SWA456', klass: 'airliner', rawLat: 30.2009, rawLon: -97.7041 },
+    billboard: { show: false },
+  });
+  await mod._requestPlaceContextForTest('cae772');
+  assert.equal(placeHits, 1, 'the second lookup in the same cell is a cache hit');
+  assert.ok(readLocalCache('oz:rg:30.201:-97.704').hit, 'the cell entry is in localStorage');
+});

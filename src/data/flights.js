@@ -22,6 +22,7 @@
 import * as Cesium from 'cesium';
 import { aircraftIncludedInNearby } from './aircraftNearbyPolicy.js';
 import { readLocalCache, trimLocalCache, writeLocalCache } from './localCache.js';
+import { reverseGeocodePlace } from './openzenith.js';
 import { registerPickOwner, unregisterPickOwner, isOwnedByOtherLayer, resolvePickId } from './pickRegistry.js';
 import {
   registerSpriteCollection,
@@ -888,6 +889,32 @@ function _requestRouteEnrichment(icao24) {
     if (data.origin && data.destination) meta.route = { origin: data.origin, destination: data.destination };
     if (icao24 === _trackedIcao && _trackedEntity) _updateTrackedLabelModel(icao24);
   }, true); // route lookups only fire for the TRACKED plane — front of the queue
+}
+
+/**
+ * Ground context for the tracked readout: ONE OpenZenith reverse-geocode of
+ * the contact's last known position, re-rendering the label with an
+ * "over <city>, <state>" line when it resolves. Browser-cached by ~100 m
+ * cell for 30 d (openzenith.js); failures and addressless cells (open water)
+ * stay silent — this line is garnish, never worth an error surface.
+ * @param {string} icao24
+ */
+async function _requestPlaceContext(icao24) {
+  const info = _flightData.get(icao24);
+  if (!Number.isFinite(info?.rawLat) || !Number.isFinite(info?.rawLon)) return;
+  const place = await reverseGeocodePlace(info.rawLat, info.rawLon);
+  const meta = _flightData.get(icao24);
+  if (!meta) return; // evicted while the lookup was in flight
+  if (place?.label) meta.placeLabel = `over ${place.label}`;
+  if (icao24 === _trackedIcao && _trackedEntity && meta.placeLabel) {
+    _updateTrackedLabelModel(icao24);
+  }
+  return meta;
+}
+
+/** Test seam: drive the tracked-target place lookup without a viewer. */
+export function _requestPlaceContextForTest(icao24) {
+  return _requestPlaceContext(icao24);
 }
 
 // ---------------------------------------------------------------------------
@@ -3325,6 +3352,9 @@ function _trackedLabelText(icao24) {
   const spd = info.velocity ? `${Math.round(info.velocity * 1.944)} kts` : '';
   const stale = (_missingPolls.get(icao24) || _backoff) ? 'STALE' : '';
   const lines = [[cs, fl, spd, stale].filter(Boolean).join(' · ')];
+  // Ground context under the track: "over Austin, Texas" from the OpenZenith
+  // reverse-geocode, resolved once per contact (browser-cached 30 d by cell).
+  if (info.placeLabel) lines.push(info.placeLabel);
   // Converted contacts report their class as TR-3B and nothing else — the
   // operator/type identity is exactly what the Easter egg is replacing.
   const ident = isTr3b(icao24)
@@ -3700,6 +3730,7 @@ function _trackFlight(icao24, { origin = 'programmatic' } = {}) {
   // starts one.
   _requestTypeEnrichment(icao24, true); // tracked plane — front of the enrichment queue
   _requestRouteEnrichment(icao24);
+  _requestPlaceContext(icao24);
   // Round 2 (owner): grounded contacts get trails too — a landed-but-taxiing
   // aircraft's history is retrievable on select. Grounded flights positions
   // are already surface-clamped (the surfaceM chain), so seeds/appends drape.
