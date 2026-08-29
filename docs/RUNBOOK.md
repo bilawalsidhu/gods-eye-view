@@ -66,14 +66,17 @@ npx wrangler pages dev dist --port 8788 --compatibility-date=2026-01-01
 
 1. **Globe renders** — Google 3D tiles load; camera controls work.
 2. **Functions surface** (keyless, should answer 200):
-   - `/api/openzenith/elevation?lat=30.201&lon=-97.705` → `elevation` ≈ 114 m
-     for Austin (`x-oz-cache: HIT` on the second request)
+   - `/api/openzenith/elevation?lat=30.201&lon=-97.705` → a plausible Austin
+     elevation (~90–130 m for that spot; verified 99 m)
    - `/api/openzenith/reverse-geocode?lat=30.201&lon=-97.705` → a
      `place.display_name`
    - `/api/cctv/sources` → camera catalog JSON
    - `/api/celestrak/stations` → ISS TLE text
-   - `POST /api/realtime/debug-log` → 200 (the historic 405 is the regression
+   - `POST /api/realtime/debug-log` → 204 (the historic 405 is the regression
      signal this checklist exists for)
+   - Cache header is `x-gev-openzenith-cache: HIT|MISS|STALE`; the cache is
+     per-isolate, so rapid repeat requests legitimately alternate HIT/MISS
+     across Cloudflare isolates. HITs present ⇒ caching works.
 3. **CCTV layer** — enable it; icons must render (a dead layer with a console
    `ReferenceError` from `init()` is the historical failure mode).
 4. **HUD AI summary** — no `HTTP 405` errors in console.
