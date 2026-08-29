@@ -87,6 +87,12 @@ Settings → Environment variables), not in the repo.
 
 ## Known operational gotchas
 
+Headless Chrome in a hardened container: `puppeteer.launch()` may start but
+every real navigation hangs (even against a static file server) when the
+host's seccomp/apparmor rules break Chrome's render/network processes —
+`about:blank` works, `http://127.0.0.1:8901/x.html` never commits. If QA
+scripts stall in `page.goto`, run them on a workstation, not the container.
+
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `git push` fails "Could not resolve host" | transient DNS | wait a few seconds, retry |

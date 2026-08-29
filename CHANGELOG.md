@@ -3,6 +3,39 @@
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
+## [Unreleased] — 2026-08-29
+
+### Added
+
+- Added a strict ESLint 9 gate (`npm run lint`, zero warnings) with a flat
+  config that documents the repo's style policy, and a `lint` job in CI.
+- Added a Cloudflare Pages Functions production surface for every keyless dev
+  API middleware (celestrak, launches, adsbdb, opensky-track, adsblol
+  mil/trace, cctv, openzenith, realtime token/debug-log, hud-summary) with
+  shared worker-safe handler modules, response caps, request coalescing, and a
+  shared track cache.
+- Added the OpenZenith keyless elevation and reverse-geocode proxy
+  (`/api/openzenith/**`), edge-cached, and a browser localStorage caching tier
+  (`src/data/localCache.js`) now used by adsbdb enrichment (30 days, negatives
+  included), CelesTrak TLE groups (6 hours), and OpenZenith place lookups
+  (30 days). Tracked aircraft readouts can name the place they are over.
+- Added `docs/PLAN.md` (quality roadmap with status ledger) and
+  `docs/RUNBOOK.md` (dev, gates, deploy, post-deploy verification, operational
+  gotchas), plus `docs/DATA_SERVICES_CATALOG.md` for candidate data services.
+
+### Fixed
+
+- Fixed the CCTV layer failing to initialize in the browser: `init()`
+  referenced a variable a refactor had lost (`priorsPromise`), throwing before
+  any camera rendered. Ground-prior batching applies post-hoc again.
+- Fixed the label-solve worker crashing on every ordered-placement solve
+  (shorthand `{ py }`/`{ px }` named no variable), which had silently disabled
+  its dense fast path.
+- Fixed `/api/realtime/debug-log` and the HUD AI summary failing with 404/405
+  in production: the endpoints now exist as Pages Functions.
+- Fixed a tautological assertion in the route-cinematics suite that compared a
+  value with NaN instead of asserting `Number.isNaN`.
+
 ## [Unreleased] — 2026-08-24
 
 ### Added

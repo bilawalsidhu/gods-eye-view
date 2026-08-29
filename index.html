@@ -440,7 +440,7 @@
              mirrors SCOPE_FEATHER_RATIO_DEFAULT in src/scopeMask.js. Feather
              softens the black mask edge; label fading is the separate Fade
              slider. -->
-        <input type="range" class="pp-slider" id="scope-feather-slider" min="0" max="100" value="100" title="Scope edge feather as a percentage of the keyhole radius" />
+        <input type="range" class="pp-slider" id="scope-feather-slider" min="0" max="100" value="100" title="Scope edge feather as a percentage of the keyhole radius" aria-label="Scope edge feather" />
         <span class="pp-slider-value" id="scope-feather-value">100%</span>
       </div>
     </div>
@@ -451,26 +451,26 @@
       </button>
     </div>
     <button class="pp-toggle-btn" id="clean-view-toggle" title="Hide UI chrome">
-      <span class="pp-icon">&#x25A1;</span>
+      <span class="pp-icon" aria-hidden="true">&#x25A1;</span>
       <span class="pp-label">Clean UI</span>
     </button>
     <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="bloom-toggle" title="Bloom / Glow">
-        <span class="pp-icon">&#x2728;</span>
+        <span class="pp-icon" aria-hidden="true">&#x2728;</span>
         <span class="pp-label">Bloom</span>
       </button>
       <div class="pp-slider-row" id="bloom-slider-row">
-        <input type="range" class="pp-slider" id="bloom-intensity-slider" min="0" max="200" value="0" />
+        <input type="range" class="pp-slider" id="bloom-intensity-slider" min="0" max="200" value="0" aria-label="Bloom intensity" />
         <span class="pp-slider-value" id="bloom-intensity-value">0%</span>
       </div>
     </div>
     <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="sharpen-toggle" title="Sharpening">
-        <span class="pp-icon">&#x1F50D;</span>
+        <span class="pp-icon" aria-hidden="true">&#x1F50D;</span>
         <span class="pp-label">Sharpen</span>
       </button>
       <div class="pp-slider-row" id="sharpen-slider-row">
-        <input type="range" class="pp-slider" id="sharpen-intensity-slider" min="0" max="100" value="49" />
+        <input type="range" class="pp-slider" id="sharpen-intensity-slider" min="0" max="100" value="49" aria-label="Sharpening intensity" />
         <span class="pp-slider-value" id="sharpen-intensity-value">49%</span>
       </div>
     </div>
@@ -562,10 +562,10 @@
         <div class="location-city-row">
           <div id="location-pills" class="location-pills"></div>
           <div class="location-search-wrap">
-            <button id="search-toggle" class="search-toggle-btn" title="Search any location">
-              <span>&#x1F50E;</span>
+            <button id="search-toggle" class="search-toggle-btn" title="Search any location" aria-label="Search any location">
+              <span aria-hidden="true">&#x1F50E;</span>
             </button>
-            <input type="text" id="location-search" placeholder="Search any location..." autocomplete="off" spellcheck="false" />
+            <input type="text" id="location-search" placeholder="Search any location..." aria-label="Search any location" autocomplete="off" spellcheck="false" />
           </div>
         </div>
       </div>

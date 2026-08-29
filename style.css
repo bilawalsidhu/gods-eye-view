@@ -1119,6 +1119,25 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   outline: 1px solid color-mix(in srgb, var(--accent) 80%, transparent);
   outline-offset: 2px;
 }
+
+/* WCAG 2.4.7 (Focus Visible): the base rules for these controls set
+   `outline: none`, which removed their ONLY focus indicator for keyboard
+   users. Restore a keyboard-only ring (:focus-visible leaves pointer clicks
+   unringed) using the same accent token as the rule above. */
+.style-btn:focus-visible,
+.pp-toggle-btn:focus-visible,
+.pp-select:focus-visible,
+.location-pill:focus-visible,
+.poi-pill:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.pp-slider:focus-visible,
+.param-slider:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .gev-quantitative-slider:disabled {
   opacity: .42;
   cursor: not-allowed;

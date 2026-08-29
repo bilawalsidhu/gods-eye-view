@@ -52,6 +52,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
+    "axe-core": "^4.13.0",
     "eslint": "^9.39.5",
     "globals": "^17.11.0",
     "puppeteer": "^24.37.5",

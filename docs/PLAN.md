@@ -93,19 +93,43 @@ The suite is the safety net for everything above: 2700+ co-located tests
       identified from the report get tests. The number follows the tests, not
       the other way around.
 
-## Phase 4 — WCAG 2.1 AA accessibility (OPEN)
+## Phase 4 — WCAG 2.1 accessibility (IN PROGRESS)
 
-- [ ] Audit pass with axe-core in the existing Puppeteer harnesses
-      (scripts/qa-*.mjs pattern) over the HUD, layer panel, first-run launcher,
-      and voice overlay.
-- [ ] Keyboard: every toggle that is click-only today needs a key path; verify
-      focus order in the DISPLAY rail and layer rows.
-- [ ] ARIA: the HUD chips and layer-row controls are custom widgets — roles,
-      states (`aria-pressed`, `aria-busy`), and live-region announcements for
-      the chips that change state asynchronously (loading/failed).
-- [ ] Contrast: HUD text over arbitrary imagery is the hard case — verify the
-      existing text shadows/scrims against AA, and prefer scrim changes over
-      color changes that would break the IR/NVG/FLIR visual identities.
+Note on the bar: the original goal named AAA; this plan treats AA as the
+gate (AAA's 7:1 contrast and sign-language/extended-audio requirements are
+not achievable over arbitrary satellite imagery without redesigning the
+visual identities) and fixes AAA-level items where they are free.
+
+- [x] Static audit applied (2026-08-29):
+      - **2.4.7 Focus Visible** — `.style-btn`, `.pp-toggle-btn`,
+        `.pp-select`, `.pp-slider`, `.param-slider`, `.location-pill`,
+        `.poi-pill` set `outline: none` with no replacement; keyboard users
+        had NO focus indicator on the DISPLAY rail. Restored as a
+        keyboard-only `:focus-visible` ring using the existing accent token
+        (matches the convention already used by `.map-stack-chip` and the
+        cockpit controls).
+      - **4.1.2 / 3.3.2 Names & Labels** — added accessible names to the
+        scope-feather, bloom-intensity, and sharpen-intensity sliders
+        (previously nameless) and the location search input (placeholder
+        only, which is not an accessible name).
+      - Decorative emoji glyphs next to text labels marked `aria-hidden`;
+        the icon-only search button given a real name.
+- [x] `scripts/qa-a11y.mjs` — axe-core audit harness (WCAG 2.1
+      A/AA/AAA + best-practice tags, boot + panel-expanded states, JSON
+      report to `qa-shots/a11y/report.json`, gate mode unless
+      `--report-only`). Headless Chrome cannot run in the primary dev
+      container (see the runbook note), so the first live axe pass must run
+      on a workstation.
+- [ ] Live axe pass over HUD, layer panel, first-run launcher, and voice
+      overlay; triage the report into fixes.
+- [ ] Keyboard: verify focus order in the DISPLAY rail and layer rows; every
+      click-only custom control needs a key path.
+- [ ] ARIA states for the async chips (loading/failed) — `aria-busy` and
+      live-region announcements where a chip changes state on its own.
+- [ ] Contrast: HUD text over arbitrary imagery is the hard case — verify
+      the existing text shadows/scrims against AA, and prefer scrim changes
+      over color changes that would break the IR/NVG/FLIR visual identities.
+      Reduced-motion is already respected (7 CSS blocks + JS callers).
 
 ## Phase 5 — Performance profile & WASM (OPEN)
 
