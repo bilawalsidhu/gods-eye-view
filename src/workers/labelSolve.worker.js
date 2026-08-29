@@ -93,11 +93,11 @@ function firstOrderedPlacement(candidate, sticky) {
     { corner: 'NW', px: x - w, py: y },
     { corner: 'SE', px: x + w, py: y + h },
     { corner: 'SW', px: x - w, py: y + h },
-    { corner: 'E', px: x + w, py },
+    { corner: 'E', px: x + w, py: y + h / 2 },
     { corner: 'W', px: x - w, py: y + h / 2 },
     { corner: 'N', px: x + w / 2, py: y },
     { corner: 'S', px: x + w / 2, py: y + h },
-    { corner: 'C', px, py: y + h / 2 }, // centered fallback
+    { corner: 'C', px: x + w / 2, py: y + h / 2 }, // centered fallback
   ];
   const useCorner = sticky ?? corners[0].corner;
   const idx = corners.findIndex(c => c.corner === useCorner);

@@ -76,6 +76,7 @@ export function normalizeRadioCountryInput(value) {
   if (
     !trimmed
     || trimmed.length > RADIO_COUNTRY_MAX_LENGTH
+    // eslint-disable-next-line no-control-regex -- matching control characters IS the point: they must be rejected
     || /[\u0000-\u001f\u007f]/.test(trimmed)
     || !/^[\p{L}\p{M}.&'’()\-\s]+$/u.test(trimmed)
   ) return Object.freeze({ valid: false, empty: false, code: '', name: '' });

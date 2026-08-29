@@ -271,6 +271,7 @@ function isValidRadioDirectoryStation(station) {
     typeof value === 'string'
     && value.length <= maxLength
     && (allowEmpty || value.trim().length > 0)
+    // eslint-disable-next-line no-control-regex -- matching control characters IS the point: they must be rejected
     && !/[\u0000-\u001f\u007f]/.test(value)
     && value === value.trim()
     && !/\s{2,}/.test(value)

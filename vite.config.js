@@ -786,6 +786,7 @@ const RADIO_FALLBACK_MIRRORS = Object.freeze([
 ]);
 
 function cleanRadioText(value, maxLength) {
+  // eslint-disable-next-line no-control-regex -- the match exists to strip control characters from upstream text
   return String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLength).trim();
 }
 

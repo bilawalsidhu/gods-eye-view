@@ -4221,7 +4221,8 @@ const cctvLayer = {
     // asynchronously via the staggered load queue and applyLateGroundPriors().
     // Snapshot _records so the indexed access in applyLateGroundPriors is stable.
     const initRecords = _records.slice();
-    const priors = null;
+    const priors = null; // per-index priors never block init — the batch lands post-hoc
+    const priorsPromise = resolveGroundPriors(catalog);
     priorsPromise.then((late) => {
       if (late) applyLateGroundPriors(initRecords, late);
     }).catch(() => {});
