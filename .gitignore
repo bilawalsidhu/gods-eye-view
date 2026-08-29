@@ -6,6 +6,7 @@ screenshots/
 qa-shots/
 output/
 .gev-logs/
+.wrangler/
 .gev-cache/
 .DS_Store
 .gstack/

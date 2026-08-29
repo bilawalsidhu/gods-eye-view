@@ -23,7 +23,9 @@ export function assertNode24AllocationRuntime(version = process.versions.node) {
 
 /** Discover repository unit tests in stable path order. */
 export function discoverUnitTestFiles(root = process.cwd()) {
-  const sourceRoot = path.join(root, 'src');
+  // src/ (app + co-located tests) and functions/ (Pages Functions, which run
+  // in workerd in production and under plain Node here) both carry tests.
+  const testRoots = ['src', 'functions'].map((dir) => path.join(root, dir));
   const files = [];
   const visit = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -34,7 +36,7 @@ export function discoverUnitTestFiles(root = process.cwd()) {
       }
     }
   };
-  visit(sourceRoot);
+  for (const testRoot of testRoots) visit(testRoot);
   return files.sort();
 }
 
