@@ -85,14 +85,29 @@ Findings that drove the phases below:
 The suite is the safety net for everything above: 2700+ co-located tests
 (`npm test`, headless, plus two serialized allocation probes). Gaps to close:
 
+- [x] Measure, don't guess (2026-08-29): baseline published via
+      `npm run test:coverage` (Node's built-in reporter) and a CI `coverage`
+      job. Measured: **66.22% lines / 75.87% branches / 63.04% functions**
+      across the 155 non-test modules the suite loads; 67 of them are already
+      at 100% lines. 15 modules are never imported by any test (0% by
+      omission): `src/main.js`, `src/ui.js`, `src/camera.js`, `src/orbit.js`,
+      `src/annotations/index.js`, `src/data/localLayers.js`, the six
+      `src/styles/*.js` shaders, and the three `src/workers/*.js` (browser
+      threads). Note the reporter only sees loaded modules — the honest
+      repo-wide number is lower than the headline.
+- [x] First tranche of weak-spot tests (2026-08-29): contract tests for the
+      six visual-style shaders (uniform metadata ↔ GLSL declarations ↔ ui.js
+      registry) and full-path tests for `processChunked` — which flushed out
+      two real crashes in its `setTimeout` fallback (see KNOWN-ISSUES) and
+      resolved the pending `chunkSize` decision (see Phase 5).
 - [ ] `src/ui.js` and `src/main.js` remain the least-tested modules (boot
       path, panel wiring). Extract-and-test the pure helpers first; do not
       chase line count by snapshotting the DOM.
+- [ ] Next weakest loaded modules per the report: `flights.js` (34% lines,
+      2% functions), `traffic.js` (41%), `mapStackController.js` (0%
+      functions), `logoGaze.js` (26%), `cctvGizmo.js` (30%).
 - [ ] Pages Functions: happy paths are covered; add contract tests for the
       rate-limiter budget boundaries and the CCTV SSRF guard matrix.
-- [ ] Measure, don't guess: add a coverage reporter (node's built-in
-      `--experimental-test-coverage` first; c8 if per-branch data is needed)
-      and publish the number in CI before claiming any percentage.
 - [ ] Definition of done: coverage measured and published; weak spots
       identified from the report get tests. The number follows the tests, not
       the other way around.
@@ -144,12 +159,14 @@ Order of work, cheapest-first:
       boot, a layer storm (all layers on), and a tracked flight under Cockpit.
       Output: a ranked list of main-thread hot spots appended to
       [PERFORMANCE.md](PERFORMANCE.md). No WASM before this exists.
-- [ ] Candidate already identified by the lint pass: `processChunked`'s async
-      path computes its `chunkSize` slice and then never uses it — the drain
-      loop is deadline-driven only, so callers passing a chunk size get no
-      effect (only `processChunkedSync` honours it). Either honour the
-      parameter or remove it from the signature; a behavior decision, hence
-      not "fixed" in a lint pass.
+- [x] Candidate already identified by the lint pass: `processChunked`'s async
+      path computed its `chunkSize` slice and then never used it. Resolved
+      (2026-08-29): the parameter now bounds the `setTimeout` fallback's
+      slices (whose documented purpose is "still yields between chunks" —
+      previously that path crashed outright, see KNOWN-ISSUES), while the
+      `requestIdleCallback` path stays deliberately deadline-driven: with a
+      real idle budget, chunk size is the browser's call, and a test pins
+      that intent so it cannot drift silently.
 - [ ] Algorithmic wins first (these are known, measurable, and don't need
       WASM): AIS row normalization batch sizes, detection projection worker
       backpressure, label solve cadence under dense mode.

@@ -57,6 +57,11 @@ test('npm test stays green on every supported engine, not only the calibrated on
   // range it advertises must not be narrower than what the runner tolerates.
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(pkg.scripts.test, 'node scripts/run-unit-tests.mjs');
+  assert.equal(
+    pkg.scripts['test:coverage'],
+    'node scripts/run-unit-tests.mjs --coverage',
+    'coverage must go through the same runner (plan + allocation handling)',
+  );
   const enginesNode = String(pkg.engines?.node || '');
   assert.ok(enginesNode, 'engines.node must be declared');
   // The runner throws for uncalibrated runtimes ONLY behind the explicit
@@ -64,4 +69,10 @@ test('npm test stays green on every supported engine, not only the calibrated on
   const runner = readFileSync(new URL('../scripts/run-unit-tests.mjs', import.meta.url), 'utf8');
   assert.match(runner, /GEV_REQUIRE_ALLOCATION_GATE/);
   assert.match(runner, /SKIPPED .*allocation microbenchmarks/);
+  // Coverage must ride the parallel battery only: the allocation probes run
+  // WITHOUT the coverage reporter so its overhead can't skew the budgets.
+  assert.match(
+    runner,
+    /coverage\s*\n\s*\?\s*\['--test',\s*'--experimental-test-coverage'/,
+  );
 });

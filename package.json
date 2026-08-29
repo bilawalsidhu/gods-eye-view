@@ -39,6 +39,7 @@
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0",
     "test": "node scripts/run-unit-tests.mjs",
+    "test:coverage": "node scripts/run-unit-tests.mjs --coverage",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs"
   },

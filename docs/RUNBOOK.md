@@ -29,6 +29,7 @@ npm run dev -- --host localhost --port 4173
 ```bash
 npm run lint        # ESLint 9, --max-warnings 0 — must exit 0
 npm test            # full suite, headless (~2 min); includes allocation probes
+npm run test:coverage  # same battery + Node's built-in coverage table (published in CI)
 npm run test:track  # tracking invariants
 npm run build       # production build must succeed
 ```

@@ -8,6 +8,8 @@
 #     allocation microbenchmarks were calibrated on, with
 #     GEV_REQUIRE_ALLOCATION_GATE=1 so an uncalibrated runtime FAILS here
 #     instead of silently skipping the budgets;
+#   - a coverage job publishing the measured number (no threshold gate yet —
+#     see Phase 3 of docs/PLAN.md);
 #   - production build (vite build) — the artifact a Pages deploy ships.
 #
 # Deployment stays manual (`npx wrangler pages deploy dist --project-name
@@ -57,6 +59,23 @@ jobs:
         run: npm test
         env:
           GEV_REQUIRE_ALLOCATION_GATE: '1'
+
+  # Publishes the measured coverage number on every push (Node's built-in
+  # reporter over the parallel battery). Measurement only — no threshold gate
+  # until the Phase 3 targets in docs/PLAN.md are chosen from this data.
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Coverage report
+        run: npm run test:coverage
 
   build:
     runs-on: ubuntu-latest

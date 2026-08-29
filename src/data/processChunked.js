@@ -27,7 +27,7 @@ const SYNC_THRESHOLD = 1000;
  * @param {() => void} [onComplete] - Called after the last item is handled.
  */
 export function processChunked(items, chunkSize, handle, onComplete) {
-  const _chunk = Math.max(1, Math.floor(chunkSize) || DEFAULT_CHUNK);
+  const chunk = Math.max(1, Math.floor(chunkSize) || DEFAULT_CHUNK);
   // Fast path: small arrays are processed synchronously in one go.
   if (items.length <= SYNC_THRESHOLD) {
     for (let i = 0; i < items.length; i++) {
@@ -40,15 +40,24 @@ export function processChunked(items, chunkSize, handle, onComplete) {
   let index = 0;
 
   function runSlice(deadline) {
-    // Process as many items as we can in the remaining idle time
-    while (index < items.length && deadline.timeRemaining() > 0) {
+    // With a real IdleDeadline, process as many items as the remaining idle
+    // time allows. The setTimeout fallback invokes runSlice WITHOUT a
+    // deadline; bound those slices by chunkSize instead, so the fallback
+    // still yields between slices rather than draining in one tick.
+    const idleBudget = deadline && typeof deadline.timeRemaining === 'function'
+      ? () => deadline.timeRemaining()
+      : () => (processed < chunk ? 1 : 0);
+    let processed = 0;
+    while (index < items.length && idleBudget() > 0) {
       handle(items[index], index);
       index++;
+      processed++;
     }
 
     if (index < items.length) {
-      // More items remain — schedule the next slice
-      requestIdleCallback(runSlice, { timeout: 16 });
+      // More items remain — schedule the next slice (via the same scheduler
+      // the first slice used, so the fallback keeps working past one slice).
+      schedule(runSlice, { timeout: 16 });
     } else if (typeof onComplete === 'function') {
       onComplete();
     }

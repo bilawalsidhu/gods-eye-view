@@ -100,6 +100,21 @@ Context:
 
 ---
 
+### `processChunked` fallback scheduler crashed instead of yielding
+Status: Closed as fixed on `main` (August 2026)
+
+Context:
+- In any environment without `requestIdleCallback`, the `setTimeout` fallback
+  was doubly broken: the timer invoked `runSlice()` with no deadline, so the
+  first slice died on `deadline.timeRemaining()` (`TypeError`), and the
+  reschedule line referenced the bare `requestIdleCallback` global, so even
+  past that it would `ReferenceError` after one slice. Fallback slices are now
+  bounded by `chunkSize` (which also gives the long-unused parameter its
+  documented purpose), and rescheduling goes through the same scheduler that
+  started the drain. Found by the new unit tests; both behaviors are pinned.
+
+---
+
 ### Proxy SSRF and error-surface hardening gaps
 Status: Closed as fixed on `main`
 

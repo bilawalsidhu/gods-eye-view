@@ -72,9 +72,16 @@ function runTests(args) {
   return result.status ?? 1;
 }
 
-export function runUnitTests() {
+export function runUnitTests({ coverage = false } = {}) {
   const plan = buildUnitTestPlan(discoverUnitTestFiles());
-  const parallelStatus = runTests(['--test', ...plan.parallel]);
+  // Coverage comes from Node's built-in reporter over the parallel battery
+  // (`npm run test:coverage`). The GC-bracketed allocation probes run without
+  // it: they measure allocations, not code coverage, and the reporter's
+  // overhead would contaminate the budgets they exist to protect.
+  const parallelArgs = coverage
+    ? ['--test', '--experimental-test-coverage', ...plan.parallel]
+    : ['--test', ...plan.parallel];
+  const parallelStatus = runTests(parallelArgs);
   if (parallelStatus !== 0) return parallelStatus;
 
   // The GC-bracketed budgets are calibrated on Node 24 and are meaningless on
@@ -101,4 +108,6 @@ export function runUnitTests() {
 }
 
 const invokedPath = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : '';
-if (import.meta.url === invokedPath) process.exitCode = runUnitTests();
+if (import.meta.url === invokedPath) {
+  process.exitCode = runUnitTests({ coverage: process.argv.includes('--coverage') });
+}

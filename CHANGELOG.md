@@ -7,6 +7,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Added
 
+- Added a measured test-coverage baseline (Node's built-in reporter; 66.2%
+  lines / 75.9% branches across loaded modules, 155 of 170 non-test modules
+  reached), a `npm run test:coverage` script, and a CI job that publishes the
+  number. Contract tests added for the six visual-style shader modules
+  (uniform metadata ↔ GLSL declarations) and for `processChunked`'s sync,
+  idle, and fallback paths.
 - Added a strict ESLint 9 gate (`npm run lint`, zero warnings) with a flat
   config that documents the repo's style policy, and a `lint` job in CI.
 - Added a Cloudflare Pages Functions production surface for every keyless dev
@@ -33,6 +39,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   its dense fast path.
 - Fixed `/api/realtime/debug-log` and the HUD AI summary failing with 404/405
   in production: the endpoints now exist as Pages Functions.
+- Fixed the `processChunked` `setTimeout` fallback crashing instead of
+  yielding: timer-driven slices invoked the drain loop with no deadline
+  (`TypeError` on `timeRemaining()`), and the reschedule referenced the bare
+  `requestIdleCallback` global (`ReferenceError` after one slice). Fallback
+  slices are now bounded by `chunkSize` and reschedule via the active
+  scheduler.
 - Fixed a tautological assertion in the route-cinematics suite that compared a
   value with NaN instead of asserting `Number.isNaN`.
 
