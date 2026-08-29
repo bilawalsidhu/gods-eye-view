@@ -297,8 +297,6 @@ const LEFT_STACK_OBSTACLE_SELECTOR = [
   '#intel-hud .hud-left-edge',
   '#intel-hud .hud-right-edge',
   '#cockpit-context',
-  '#cesium-credits .cesium-credit-logoContainer',
-  '#cesium-credits .cesium-credit-textContainer',
   '#location-bar',
   '#control-panel',
   '#gev-voice-control',
@@ -349,8 +347,6 @@ const RIGHT_STACK_OBSTACLE_SELECTOR = [
   '#intel-hud .hud-right-edge',
   '#cockpit-context',
   '#cockpit-signal-stream',
-  '#cesium-credits .cesium-credit-logoContainer',
-  '#cesium-credits .cesium-credit-textContainer',
   '#command-dock',
   '#gev-voice-control',
 ].join(', ');
@@ -2493,8 +2489,11 @@ export class StyleManager {
           panelState,
           styleParams,
         } = state || {};
-        // Ignore the retired 'ai-edit' style from older share links.
-        if (style && style !== 'normal' && style !== 'ai-edit') {
+        // Ignore the retired 'ai-edit' style from older share links. An
+        // explicit 'normal' now restores too: the first-run baseline is CRT
+        // (2026-08-29), so a plain-looking link must actively return the
+        // console to Normal instead of silently matching the default.
+        if (style && style !== 'ai-edit' && style !== this.activeStyle) {
           this.setStyle(style, { applyPreset: true, revealParameters: false, restore: true });
         }
         if (styleParams && style && this.stages[style] && STYLES[style]?.uniforms) {
@@ -2636,6 +2635,13 @@ export class StyleManager {
     this._startTrafficChipTicker();
     this._updateStyleMiniStatus();
     this._updateLocationMiniStatus();
+
+    // First-run visual: CRT (operator ruling 2026-08-29). Applied through the
+    // real setStyle path — transitions, the retro preset, tray state, HUD
+    // tone, and the share generator all observe one honest style switch.
+    // `restore: true` skips the restore-lane claim a factory default is not
+    // entitled to; an explicit share link still restores over this below.
+    this.setStyle('retro', { applyPreset: true, revealParameters: false, restore: true });
 
     // Restore from URL hash if present
     const savedState = this._initialShareState;
@@ -7070,13 +7076,6 @@ export class StyleManager {
         this._leftStackMutationObserver.observe(hud, {
           attributes: true,
           attributeFilter: ['class', 'data-variant'],
-        });
-      }
-      const credits = document.getElementById('cesium-credits');
-      if (credits) {
-        this._leftStackMutationObserver.observe(credits, {
-          subtree: true,
-          childList: true,
         });
       }
     }

@@ -435,13 +435,13 @@
       </button>
       <div class="pp-slider-row visible" id="scope-slider-row">
         <span class="pp-slider-mini-label">Feather</span>
-        <!-- Feather starts at an 11% soft scope-mask edge (final value
-             2026-08-24, superseding the 08-22 hard-crop and 08-23 8% rulings);
+        <!-- Feather starts at a 100% fully-feathered scope-mask edge
+             (operator ruling 2026-08-29, superseding the 08-24 11% ruling);
              mirrors SCOPE_FEATHER_RATIO_DEFAULT in src/scopeMask.js. Feather
              softens the black mask edge; label fading is the separate Fade
              slider. -->
-        <input type="range" class="pp-slider" id="scope-feather-slider" min="0" max="100" value="11" title="Scope edge feather as a percentage of the keyhole radius" />
-        <span class="pp-slider-value" id="scope-feather-value">11%</span>
+        <input type="range" class="pp-slider" id="scope-feather-slider" min="0" max="100" value="100" title="Scope edge feather as a percentage of the keyhole radius" />
+        <span class="pp-slider-value" id="scope-feather-value">100%</span>
       </div>
     </div>
     <div class="pp-toggle-group">
@@ -492,12 +492,12 @@
       <div id="control-panel-popover" class="dock-popover-content">
       <button class="dock-pin-btn" data-pin-target="control-panel" type="button" aria-label="Pin visual presets" aria-pressed="false" title="Keep visual presets open"><img src="/pin.svg" alt="" /></button>
       <div id="style-buttons" class="button-grid">
-        <button class="style-btn active" data-style="normal">
+        <button class="style-btn" data-style="normal">
           <span class="btn-icon">◯</span>
           <span class="btn-label">Normal</span>
           <span class="btn-key">1</span>
         </button>
-        <button class="style-btn" data-style="retro">
+        <button class="style-btn active" data-style="retro">
           <span class="btn-icon">▦</span>
           <span class="btn-label">CRT</span>
           <span class="btn-key">2</span>
@@ -538,7 +538,7 @@
       </div>
       <div id="style-mini-status" class="panel-mini-status" aria-live="polite">
         <span class="panel-mini-label">Style</span>
-        <span id="style-mini-value" class="panel-mini-value">NORMAL</span>
+        <span id="style-mini-value" class="panel-mini-value">CRT</span>
       </div>
     </div>
   </div>
