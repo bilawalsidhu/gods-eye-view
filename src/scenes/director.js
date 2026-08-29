@@ -68,11 +68,11 @@ function deepClone(value) {
 function normalizeLayerEntry(entry) {
   if (entry && typeof entry === 'object') {
     return {
-      enabled: !!entry.enabled,
+      enabled: Boolean(entry.enabled),
       params: entry.params && typeof entry.params === 'object' ? deepClone(entry.params) : undefined,
     };
   }
-  return { enabled: !!entry };
+  return { enabled: Boolean(entry) };
 }
 
 /**
@@ -97,7 +97,7 @@ function normalizeBloomState(rawBloom = {}, { projectVersion = PROJECT_VERSION, 
     : fallbackIntensity;
 
   return {
-    enabled: !!rawBloom.enabled,
+    enabled: Boolean(rawBloom.enabled),
     intensity: decodeBloomIntensity(rawIntensity, bloomVersion),
     version: BLOOM_SCALE_VERSION,
   };
@@ -146,14 +146,14 @@ function recipeToScene(recipe) {
     visual: {
       style: recipe.style || 'normal',
       bloom: {
-        enabled: typeof post.bloom === 'number' ? post.bloom > 0 : !!post.bloom,
+        enabled: typeof post.bloom === 'number' ? post.bloom > 0 : Boolean(post.bloom),
         intensity: typeof post.bloom === 'number'
           ? decodeBloomIntensity(post.bloom, 1)
           : BLOOM_INTENSITY_DEFAULT,
         version: BLOOM_SCALE_VERSION,
       },
       sharpen: {
-        enabled: typeof post.sharpen === 'boolean' ? post.sharpen : !!post.sharpen,
+        enabled: typeof post.sharpen === 'boolean' ? post.sharpen : Boolean(post.sharpen),
         intensity: 65,
       },
       hud: {
@@ -224,7 +224,7 @@ function normalizeShot(rawShot, index = 0, { projectVersion = PROJECT_VERSION } 
       style: visual.style || 'normal',
       bloom: normalizeBloomState(bloom, { projectVersion, fallbackIntensity: 50 }),
       sharpen: {
-        enabled: !!sharpen.enabled,
+        enabled: Boolean(sharpen.enabled),
         intensity: Math.max(0, Math.min(100, Number.isFinite(Number(sharpen.intensity)) ? Number(sharpen.intensity) : 65)),
       },
       hud: {
@@ -622,7 +622,7 @@ export class SceneDirector {
     for (const layer of this.dataManager.getAll()) {
       const params = this.dataManager.getLayerParams(layer.id);
       layers[layer.id] = {
-        enabled: !!layer.enabled,
+        enabled: Boolean(layer.enabled),
         ...(params ? { params } : {}),
       };
     }
@@ -1362,7 +1362,7 @@ export class SceneDirector {
   _updateRuntime(text) {
     if (!this._sceneRuntime) return;
     this._sceneRuntime.textContent = text;
-    this._sceneRuntime.classList.toggle('active', !!text);
+    this._sceneRuntime.classList.toggle('active', Boolean(text));
   }
 
   /**

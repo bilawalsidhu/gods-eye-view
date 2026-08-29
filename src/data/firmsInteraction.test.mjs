@@ -156,7 +156,7 @@ test('selection restoration uses the same key the cards and focus use', () => {
   // detections from different satellites — the selection could come back on
   // the wrong record. Reachable only through the 30-minute refetch, so this is
   // a source contract; the key's own behavior is proven above.
-  const match = LAYER_SOURCE.match(/function findMatchingFire\(previous\) \{([\s\S]*?)\n  \}\n/);
+  const match = LAYER_SOURCE.match(/function findMatchingFire\(previous\) \{([\s\S]*?)\n {2}\}\n/);
   assert.ok(match, 'findMatchingFire is missing');
   assert.match(match[1], /fireDetectionKey\(previous\)/);
   assert.match(match[1], /fireDetectionKey\(fire\) === key/);

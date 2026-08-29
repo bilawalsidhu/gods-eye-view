@@ -91,7 +91,7 @@ async function open(page, { hash = '', query = '', clearAll = true, clearSession
   }
   // The launcher is revealed after the loading cover yields (~T+1.9 s).
   await page.waitForFunction(
-    (sel) => !!window.__godsEyeView?.styleManager
+    (sel) => Boolean(window.__godsEyeView?.styleManager)
       && (document.querySelector(sel)?.classList.contains('visible') || !document.querySelector(sel)),
     { timeout: 45000 },
     LAUNCHER,
@@ -101,7 +101,7 @@ async function open(page, { hash = '', query = '', clearAll = true, clearSession
 }
 
 const launcherVisible = (page) => page.evaluate(
-  (sel) => !!document.querySelector(sel)?.classList.contains('visible'),
+  (sel) => Boolean(document.querySelector(sel)?.classList.contains('visible')),
   LAUNCHER,
 );
 
@@ -117,7 +117,7 @@ const appState = (page) => page.evaluate(() => {
     'local-datacenters', 'local-dams', 'telegeography-submarine-cables',
     'local-firms', 'earthquakes', 'flights', 'military', 'rocket-launches', 'satellites',
   ]) {
-    layers[id] = !!dm?.isEnabled?.(id);
+    layers[id] = Boolean(dm?.isEnabled?.(id));
     counts[id] = all.find((entry) => entry.id === id)?.stats?.count ?? null;
   }
   const firms = all.find((entry) => entry.id === 'local-firms');
@@ -221,11 +221,11 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
         ? document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
         : null;
       return {
-        present: !!node,
-        classVisible: !!node?.classList.contains('visible'),
+        present: Boolean(node),
+        classVisible: Boolean(node?.classList.contains('visible')),
         // Real visibility: `display:none` yields zero client rects.
-        onScreen: !!node && node.getClientRects().length > 0,
-        topmost: !!(hit && node && node.contains(hit)),
+        onScreen: Boolean(node) && node.getClientRects().length > 0,
+        topmost: Boolean(hit && node && node.contains(hit)),
         session: sessionStorage.getItem('gev:first-run-mission-session:v1'),
       };
     }, LAUNCHER);
@@ -288,8 +288,8 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     const lightboxState = () => page.evaluate(() => {
       const overlay = document.querySelector('.cesium-credit-lightbox-overlay');
       return {
-        present: !!overlay,
-        shown: !!overlay && getComputedStyle(overlay).display !== 'none',
+        present: Boolean(overlay),
+        shown: Boolean(overlay) && getComputedStyle(overlay).display !== 'none',
         z: overlay ? getComputedStyle(overlay).zIndex : null,
       };
     });
@@ -301,7 +301,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     const linkClicked = await page.evaluate(() => {
       const link = document.querySelector('#cesium-credits .cesium-credit-expand-link');
       link?.click();
-      return !!link;
+      return Boolean(link);
     });
     await sleep(300);
     const lightboxUp = await lightboxState();
@@ -365,7 +365,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     record('the launcher is up before the radio disclosure opens', beforeRadio.onScreen);
     const radioOpened = await page.evaluate(() => {
       document.getElementById('context-radio-toggle-btn')?.click();
-      return !!document.getElementById('context-radio-dock')?.classList.contains('disclosure-open');
+      return Boolean(document.getElementById('context-radio-dock')?.classList.contains('disclosure-open'));
     });
     await sleep(250);
     record('the compact Radio disclosure opens', radioOpened);
@@ -379,7 +379,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     await page.keyboard.press('Escape');
     await sleep(400);
     const radioAfterEsc = await page.evaluate(() => (
-      !!document.getElementById('context-radio-dock')?.classList.contains('disclosure-open')
+      Boolean(document.getElementById('context-radio-dock')?.classList.contains('disclosure-open'))
     ));
     const launcherAfterRadioEsc = await launcherState();
     record('ESC closes the disclosure', radioOpened && !radioAfterEsc,
@@ -408,7 +408,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     // to the check rather than set once and hoped for.
     await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
     await page.goto(`${APP_URL}/?welcome=1`, { waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(() => !!document.body, { timeout: 45000 }).catch(() => {});
+    await page.waitForFunction(() => Boolean(document.body), { timeout: 45000 }).catch(() => {});
     const holdCockpit = async (ms) => {
       const until = Date.now() + ms;
       while (Date.now() < until) {
@@ -567,7 +567,7 @@ async function main() {
 
       // Share links bypass entirely.
       await open(page, { hash: '#lat=30.2672&lon=-97.7431&alt=2500' });
-      const shareState = await page.evaluate(() => !!window.__godsEyeView?.styleManager?.hasShareState);
+      const shareState = await page.evaluate(() => Boolean(window.__godsEyeView?.styleManager?.hasShareState));
       const shareShowed = await launcherVisible(page);
       record('a share link bypasses the launcher', shareState && !shareShowed,
         `hasShareState=${shareState} launcherVisible=${shareShowed}`);
@@ -672,7 +672,7 @@ async function main() {
       `contextMode=${state.contextMode}`);
     const panelOpen = await page.evaluate(() => {
       const panel = document.getElementById('global-context-panel');
-      return !!panel && !panel.classList.contains('collapsed');
+      return Boolean(panel) && !panel.classList.contains('collapsed');
     });
     record('LIVE CONTACTS reveals the Context panel', panelOpen);
     record('LIVE CONTACTS still leaves the detection override untouched',
@@ -728,13 +728,13 @@ async function main() {
           top: Math.round(rect.top), bottom: Math.round(rect.bottom),
           left: Math.round(rect.left), right: Math.round(rect.right),
           vw: window.innerWidth, vh: window.innerHeight,
-          listScrolls: !!list && list.scrollHeight > list.clientHeight + 1,
+          listScrolls: Boolean(list) && list.scrollHeight > list.clientHeight + 1,
           // The checkbox and the status line live OUTSIDE the scrolling list, so
           // they must be on screen at every height, scrollable list or not.
-          checkboxOnScreen: !!cb && cb.top >= 0 && cb.bottom <= window.innerHeight,
+          checkboxOnScreen: Boolean(cb) && cb.top >= 0 && cb.bottom <= window.innerHeight,
         };
       }, LAUNCHER);
-      const fits = !!box && box.top >= 0 && box.bottom <= box.vh
+      const fits = Boolean(box) && box.top >= 0 && box.bottom <= box.vh
         && box.left >= 0 && box.right <= box.vw;
       record(
         `the launcher fits a ${vp.label} with no clipping`,
@@ -742,7 +742,7 @@ async function main() {
         box ? `${box.left},${box.top} → ${box.right},${box.bottom} in ${box.vw}x${box.vh}${box.listScrolls ? ' (list scrolls)' : ''}` : 'absent',
       );
       record(`"Don't show this again" stays on screen at ${vp.width}x${vp.height}`,
-        !!box?.checkboxOnScreen);
+        Boolean(box?.checkboxOnScreen));
 
       // Discoverability: if the list scrolls, the LAST tile must still peek
       // above the fold. A fold that lands exactly between tiles looks like a
@@ -766,7 +766,7 @@ async function main() {
       }, LAUNCHER);
       record(
         `the last mission is discoverable at ${vp.width}x${vp.height}`,
-        !!peek && (!peek.scrolls || peek.fraction >= 0.25),
+        Boolean(peek) && (!peek.scrolls || peek.fraction >= 0.25),
         peek
           ? `${peek.label} ${(peek.fraction * 100).toFixed(0)}% visible${peek.scrolls ? ' (list scrolls)' : ' (no scroll needed)'}`
           : 'absent',
@@ -799,7 +799,7 @@ async function main() {
       ) + 1;
       record(
         `every tile and the checkbox are keyboard-reachable at ${vp.width}x${vp.height}`,
-        !!reach && reach.count === expectedFocusable && reach.offscreen.length === 0,
+        Boolean(reach) && reach.count === expectedFocusable && reach.offscreen.length === 0,
         reach
           ? `${reach.count}/${expectedFocusable} focusable${reach.offscreen.length ? `, unreachable: ${reach.offscreen.join(', ')}` : ''}`
           : 'absent',

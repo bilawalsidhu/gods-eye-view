@@ -497,7 +497,7 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 200));
   const keyboardAfterActivate = await page.evaluate(() => ({
     focusedStack: document.activeElement?.dataset?.stackId || null,
-    isChip: !!document.activeElement?.classList?.contains('map-stack-chip'),
+    isChip: Boolean(document.activeElement?.classList?.contains('map-stack-chip')),
   }));
   // Enter the tray with the pointer and leave again, so a real pointerleave
   // schedules the close this pin expects to be declined.

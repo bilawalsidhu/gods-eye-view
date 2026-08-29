@@ -309,7 +309,7 @@ test('detection-on-by-default is a default, not an operator override', () => {
     assert.match(stylePresets, new RegExp(`\\n  ${style}: \\{`),
       `${style} still carries its own preset`);
   }
-  assert.doesNotMatch(stylePresets, /\n  normal: \{/,
+  assert.doesNotMatch(stylePresets, /\n {2}normal: \{/,
     'Normal gained a default, not a style preset — switching to it still touches nothing');
 });
 

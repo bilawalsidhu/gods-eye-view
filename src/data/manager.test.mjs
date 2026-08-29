@@ -2430,7 +2430,7 @@ test('re-entrant setEnabled from a blocked-adoption listener supersedes the comp
 
   const pendingOff = mgr.setEnabled('flights', false, { origin: 'user' });
   await firstDisableStarted;
-  let removeGuard = mgr.addVisibilityGuard((change) => (
+  const removeGuard = mgr.addVisibilityGuard((change) => (
     change.layerId === 'flights' && change.enabled ? 'blocked by mode' : null
   ));
 
@@ -2521,7 +2521,7 @@ test('every manager registration exposes the normalized loading and refresh cont
 test('periodic refresh publishes work, failure, and later manager-owned recovery', async () => {
   const mgr = new DataLayerManager({});
   let updateResult = true;
-  let moduleError = null;
+  const moduleError = null;
   let releaseUpdate;
   let updateStarted;
   const started = new Promise((resolve) => { updateStarted = resolve; });

@@ -506,8 +506,8 @@ export class IntelHUD {
     if (!rect) return null;
     const north = Cesium.Math.toDegrees(rect.north);
     const south = Cesium.Math.toDegrees(rect.south);
-    let east = Cesium.Math.toDegrees(rect.east);
-    let west = Cesium.Math.toDegrees(rect.west);
+    const east = Cesium.Math.toDegrees(rect.east);
+    const west = Cesium.Math.toDegrees(rect.west);
     let lonSpan = Math.abs(east - west);
     // Handle antimeridian wrap: if span exceeds 180 deg, take the shorter arc
     if (lonSpan > 180) lonSpan = 360 - lonSpan;

@@ -1031,7 +1031,7 @@ function main() {
         : buildWorkload(ENTRY_COUNT);
   const { entries, positions, drifts } = workload;
   const solveIntervalMs = Number(process.env.GEV_ALLOC_SOLVE_MS) || 125;
-  const detectionActive = !!workload.detectionLayer;
+  const detectionActive = Boolean(workload.detectionLayer);
   if (detectionActive) {
     // Spread polar ECEF x/y over the viewport while retaining a real WGS84
     // horizon test and detection's manual matrix projection path.

@@ -263,7 +263,7 @@ export function aircraftIcon(kind, px = FLEET_RASTER_PX) {
   let uri = _iconCache.get(key);
   if (!uri) {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" viewBox="0 0 ${VIEW} ${VIEW}"><g transform="translate(${C},${C})">${BODIES[k]}</g></svg>`;
-    uri = 'data:image/svg+xml;base64,' + _b64(svg);
+    uri = `data:image/svg+xml;base64,${  _b64(svg)}`;
     _iconCache.set(key, uri);
   }
   return uri;

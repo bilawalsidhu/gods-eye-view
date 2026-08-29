@@ -56,7 +56,7 @@ try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 860 });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__godsEyeView?.viewer, { timeout: 90_000 });
+  await page.waitForFunction(() => Boolean(window.__godsEyeView?.viewer), { timeout: 90_000 });
   await new Promise((r) => setTimeout(r, 12_000)); // boot flyTo + deferred init
 
   // Park mid-Atlantic (many cables + both coasts' landings in range) and
@@ -161,11 +161,11 @@ try {
         const sum = durations.reduce((s, d) => s + d, 0);
         resolve({
           frames: n,
-          meanMs: +(sum / Math.max(1, n)).toFixed(2),
-          p50Ms: +(durations[Math.floor(n * 0.5)] || 0).toFixed(2),
-          p95Ms: +(durations[Math.floor(n * 0.95)] || 0).toFixed(2),
-          maxMs: +(durations[n - 1] || 0).toFixed(2),
-          effectiveFps: +(n / 10).toFixed(1),
+          meanMs: Number((sum / Math.max(1, n)).toFixed(2)),
+          p50Ms: Number((durations[Math.floor(n * 0.5)] || 0).toFixed(2)),
+          p95Ms: Number((durations[Math.floor(n * 0.95)] || 0).toFixed(2)),
+          maxMs: Number((durations[n - 1] || 0).toFixed(2)),
+          effectiveFps: Number((n / 10).toFixed(1)),
         });
       }
     };

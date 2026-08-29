@@ -61,7 +61,7 @@ test('Earth-disc projection radius rejects local and invalid camera geometry', (
 });
 
 test('camera-plane projection maps right, up, left, and down to canvas angles', () => {
-  assert.ok(Math.abs(celestialScreenAngle(1, 0).angle - 0) < 1e-9);
+  assert.ok(Math.abs(Number(celestialScreenAngle(1, 0).angle)) < 1e-9);
   assert.ok(Math.abs(celestialScreenAngle(0, 1).angle - Math.PI * 1.5) < 1e-9);
   assert.ok(Math.abs(celestialScreenAngle(-1, 0).angle - Math.PI) < 1e-9);
   assert.ok(Math.abs(celestialScreenAngle(0, -1).angle - Math.PI * 0.5) < 1e-9);

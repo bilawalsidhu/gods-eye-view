@@ -1593,7 +1593,7 @@ const satellitesLayer = {
     _applyPendingTrackingRestore();
   },
 
-  disable(viewer) {
+  disable(_viewer) {
     _abortActiveUpdates();
     _cancelPendingTrackingRestore();
     _enabled = false;

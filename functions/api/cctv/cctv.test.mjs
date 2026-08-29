@@ -133,7 +133,7 @@ test('/stream/:id reports feedType and proxy URLs, and works for unknown ids', a
 
 test('/media/:id streams the upstream body through and forwards Range', async () => {
   const upstreamBody = '#EXTM3U\nsegment0.ts\n';
-  const stub = stubFetch((url, init) => {
+  const stub = stubFetch((url, _init) => {
     assert.equal(url, 'https://upstream.example/stream/cam-video.m3u8');
     return Promise.resolve(new Response(upstreamBody, {
       status: 206,

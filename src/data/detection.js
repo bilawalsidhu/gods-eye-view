@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { governorRequestRender } from '../renderGovernor.js';
 import {
   DETECTION_ENABLE_FADE_MS,
@@ -41,7 +40,6 @@ import {
   detectionHorizontalSector,
   labelBudgetFor,
   normalizeAllocationStrategy,
-  normalizeProfile,
   profileForDensity,
   viewScaleForAltitude,
 } from './detectionPolicy.js';
@@ -1255,7 +1253,7 @@ function _drawOverlay(frame) {
         projectedObjects[i] = {
           id: i,
           type: obj.type,
-          skipLabel: !!obj.skipLabel,
+          skipLabel: Boolean(obj.skipLabel),
           position: pos ? { x: pos.x, y: pos.y, z: pos.z } : null,
         };
       }

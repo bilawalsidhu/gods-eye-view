@@ -343,7 +343,7 @@ async function main() {
   console.log(`  Time     : ${totalElapsed}s`);
 
   // Report corner coordinates
-  const topLeft = tilePxToLatLon(minTileX, minTileY, cropLeft - 0, cropTop - 0, opts.zoom);
+  const topLeft = tilePxToLatLon(minTileX, minTileY, Number(cropLeft), Number(cropTop), opts.zoom);
   const botRight = tilePxToLatLon(minTileX, minTileY, cropLeft + opts.size, cropTop + opts.size, opts.zoom);
   console.log(`  NW corner: ${topLeft.lat.toFixed(6)}, ${topLeft.lon.toFixed(6)}`);
   console.log(`  SE corner: ${botRight.lat.toFixed(6)}, ${botRight.lon.toFixed(6)}`);

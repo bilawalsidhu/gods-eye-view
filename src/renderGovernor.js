@@ -47,7 +47,7 @@ let _idleTransitionTimer = null;
 const _recentRequests = [];
 const RECENT_REQUEST_CAP = 16;
 
-function applyMode(forceImmediate = false) {
+function applyMode(_forceImmediate = false) {
   if (!_installed || !_viewer?.scene) return;
   const continuous = _holds.size > 0;
   const scene = _viewer.scene;

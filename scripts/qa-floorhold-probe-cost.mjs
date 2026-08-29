@@ -33,7 +33,7 @@ for (const [label, warm] of [
   _clearMeshFloorCellsForTest();
   const cells = [];
   for (let i = 0; i < CONTACTS; i += 1) {
-    const cell = { lat: +(30 + i * 0.003).toFixed(3), lon: -97.66 };
+    const cell = { lat: Number((30 + i * 0.003).toFixed(3)), lon: -97.66 };
     cells.push(cell);
     if (warm) {
       for (let dLat = -1; dLat <= 1; dLat += 1) {

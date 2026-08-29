@@ -30,7 +30,7 @@ export function runCctvLayerEnableFocus({
 export function mergeCctvEnableOwnership(before = {}, after = {}) {
   return {
     trackedEntity: before.trackedEntity || after.trackedEntity || null,
-    cockpitActive: !!(before.cockpitActive || after.cockpitActive),
+    cockpitActive: Boolean(before.cockpitActive || after.cockpitActive),
   };
 }
 
@@ -61,7 +61,7 @@ export async function runCctvLayerEnableTransition({
   if (target === true) {
     debug?.('[UI:CCTV] ownership before setEnabled await', {
       trackedId: ownershipBefore.trackedEntity?.id ?? null,
-      cockpitActive: !!ownershipBefore.cockpitActive,
+      cockpitActive: Boolean(ownershipBefore.cockpitActive),
     });
   }
   await setEnabled?.(target);
@@ -69,7 +69,7 @@ export async function runCctvLayerEnableTransition({
   if (target === true) {
     debug?.('[UI:CCTV] ownership after setEnabled await', {
       trackedId: ownershipAfter.trackedEntity?.id ?? null,
-      cockpitActive: !!ownershipAfter.cockpitActive,
+      cockpitActive: Boolean(ownershipAfter.cockpitActive),
     });
   }
   if (!target || !shouldFocus?.()) return null;

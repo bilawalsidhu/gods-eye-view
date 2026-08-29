@@ -106,7 +106,7 @@ self.onmessage = (e) => {
   const {
     objects,
     viewProjection,
-    cameraPosition,
+    cameraPosition: _cameraPosition,
     width,
     height,
     camPos,

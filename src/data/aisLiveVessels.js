@@ -1340,7 +1340,7 @@ function shipIcon(record, selected) {
       <path d="M0,-14 L11,10 L4,7 L0,14 L-4,7 L-11,10 Z" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linejoin="round"/>
     </g>
   </svg>`;
-  const icon = 'data:image/svg+xml;base64,' + btoa(svg);
+  const icon = `data:image/svg+xml;base64,${  btoa(svg)}`;
   shipIconCache.set(key, icon);
   return icon;
 }
@@ -1846,7 +1846,7 @@ function startSelectedVesselTrail(record) {
 async function backfillVesselTrail(mmsi, token) {
   let samples = null;
   try {
-    const response = await fetch('/api/ais-live/track?mmsi=' + encodeURIComponent(mmsi), {
+    const response = await fetch(`/api/ais-live/track?mmsi=${  encodeURIComponent(mmsi)}`, {
       signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) return;

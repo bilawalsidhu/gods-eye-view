@@ -26,7 +26,7 @@ const M_TO_FT = 3.28084;
 export function formatFlightLevel(altitudeMeters) {
   if (!Number.isFinite(altitudeMeters) || altitudeMeters <= 0) return '';
   const fl = Math.round((altitudeMeters * M_TO_FT) / 100);
-  return 'FL' + String(fl).padStart(3, '0');
+  return `FL${  String(fl).padStart(3, '0')}`;
 }
 
 /**
@@ -37,7 +37,7 @@ export function formatFlightLevel(altitudeMeters) {
  */
 export function formatKnots(knots) {
   if (!Number.isFinite(knots) || knots <= 0) return '';
-  return Math.round(knots) + ' kn';
+  return `${Math.round(knots)  } kn`;
 }
 
 /**
@@ -157,7 +157,7 @@ export function measureLabelCard(primary, secondary, charWidth) {
   const DESC = 3; // descender depth below the last baseline
   const accentW = 3; // left accent bar width
   const accentGap = 4; // gap between accent bar and text (doubles as left pad)
-  const hasSec = !!(secondary && secondary.length);
+  const hasSec = Boolean(secondary && secondary.length);
   const wId = monoTextWidth(primary, charWidth);
   const wSub = hasSec ? monoTextWidth(secondary, charWidth) : 0;
   const textW = Math.max(wId, wSub);
@@ -189,7 +189,7 @@ export function measureTrackLabel(primary, micro, charWidth) {
   const tickGap = 4;
   const microGap = 6; // space between callsign and the micro-field
   const MICRO_SCALE = 0.9; // micro renders slightly smaller than the callsign
-  const hasMicro = !!(micro && micro.length);
+  const hasMicro = Boolean(micro && micro.length);
   const wPrimary = monoTextWidth(primary, charWidth);
   const wMicro = hasMicro ? monoTextWidth(micro, charWidth * MICRO_SCALE) : 0;
   const textW = wPrimary + (hasMicro ? microGap + wMicro : 0);

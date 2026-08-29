@@ -146,7 +146,7 @@ export async function onRequest(context) {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     return trackResponse(status, body);
-  } catch (error) {
+  } catch {
     return new Response(JSON.stringify({ error: 'OpenSky track fetch failed' }), {
       status: 502,
       headers: { 'Content-Type': 'application/json' },

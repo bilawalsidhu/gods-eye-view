@@ -101,7 +101,7 @@ function suffixVariants(norm) {
   if (norm.endsWith(' mts')) v.push(norm.replace(/ mts$/, ' mountains'), norm.replace(/ mts$/, ''));
   // "x desert" ↔ "x"
   if (norm.endsWith(' desert')) v.push(norm.replace(/ desert$/, ''));
-  else v.push(norm + ' desert');
+  else v.push(`${norm  } desert`);
   // "x peninsula" ↔ "x pen" (pack uses "Pen.")
   if (norm.endsWith(' peninsula')) v.push(norm.replace(/ peninsula$/, ' pen'));
   if (norm.endsWith(' pen')) v.push(norm.replace(/ pen$/, ' peninsula'));
@@ -113,7 +113,7 @@ function suffixVariants(norm) {
 /** @type {Array|null} flat entry list for listRegions() */
 let _entries = null;
 
-const isNode = typeof process !== 'undefined' && !!process.versions?.node
+const isNode = typeof process !== 'undefined' && Boolean(process.versions?.node)
   && typeof window === 'undefined';
 
 async function loadPackFile(base) {

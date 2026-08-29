@@ -44,7 +44,7 @@ export function isMilitaryLayerActive() {
  * @returns {void}
  */
 export function setMilitaryLayerActive(active) {
-  const next = !!active;
+  const next = Boolean(active);
   if (next === _militaryLayerActive) return;
   _militaryLayerActive = next;
   for (const listener of _activeChangeListeners) {

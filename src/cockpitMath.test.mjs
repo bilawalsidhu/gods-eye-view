@@ -155,7 +155,7 @@ test('compass labels use cardinals where exact and degrees elsewhere', () => {
 });
 
 test('great-circle bearing resolves cardinal directions', () => {
-  assert.ok(Math.abs(bearingBetweenCoordinates(0, 0, 1, 0) - 0) < 0.001);
+  assert.ok(Math.abs(Number(bearingBetweenCoordinates(0, 0, 1, 0))) < 0.001);
   assert.ok(Math.abs(bearingBetweenCoordinates(0, 0, 0, 1) - 90) < 0.001);
   assert.equal(bearingBetweenCoordinates(0, 0, 0, 0), null);
 });

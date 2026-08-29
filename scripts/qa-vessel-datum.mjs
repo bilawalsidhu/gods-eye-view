@@ -180,7 +180,7 @@ async function main() {
       page.on('pageerror', (err) => console.error(`    [page-error] ${err.message}`));
 
       await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await page.waitForFunction(() => !!window.__godsEyeView?.viewer, { timeout: 60000 });
+      await page.waitForFunction(() => Boolean(window.__godsEyeView?.viewer), { timeout: 60000 });
 
       // Frame the port (kill the intro flight first) and enable the layer.
       await page.evaluate(async (p) => {

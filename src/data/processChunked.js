@@ -27,7 +27,7 @@ const SYNC_THRESHOLD = 1000;
  * @param {() => void} [onComplete] - Called after the last item is handled.
  */
 export function processChunked(items, chunkSize, handle, onComplete) {
-  const chunk = Math.max(1, Math.floor(chunkSize) || DEFAULT_CHUNK);
+  const _chunk = Math.max(1, Math.floor(chunkSize) || DEFAULT_CHUNK);
   // Fast path: small arrays are processed synchronously in one go.
   if (items.length <= SYNC_THRESHOLD) {
     for (let i = 0; i < items.length; i++) {

@@ -1869,7 +1869,7 @@ function addPaintItem(record, placement, temporalAlpha, selected) {
 
 function sourceCanPaint(sourceId) {
   const source = _sources.get(sourceId);
-  return !!source && sourceActive(source);
+  return Boolean(source) && sourceActive(source);
 }
 
 function solveDomains(timestamp) {
@@ -2203,7 +2203,7 @@ export function initWorldOverlay(viewer) {
     Cesium.Ellipsoid.WGS84,
     viewer.camera?.positionWC || new Cesium.Cartesian3(),
   );
-  _cockpitActive = !!document.body?.classList?.contains('cockpit-mode');
+  _cockpitActive = Boolean(document.body?.classList?.contains('cockpit-mode'));
   _cockpitModeHandler = (event) => {
     _cockpitActive = event?.detail?.active === true;
     invalidateHost();

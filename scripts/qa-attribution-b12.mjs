@@ -300,7 +300,7 @@ async function main() {
   // Find the datacenter + cable layer ids by fuzzy match on the id string.
   const dcId = layerIds.find((id) => /datacenter/i.test(id));
   const cableId = layerIds.find((id) => /cable|submarine|telegeo/i.test(id));
-  check('found datacenter + cable layer ids', !!dcId && !!cableId, `dc=${dcId} cable=${cableId}`);
+  check('found datacenter + cable layer ids', Boolean(dcId) && Boolean(cableId), `dc=${dcId} cable=${cableId}`);
   if (dcId) await page.evaluate((id) => window.__godsEyeView.dataManager.setEnabled(id, true), dcId);
   if (cableId) await page.evaluate((id) => window.__godsEyeView.dataManager.setEnabled(id, true), cableId);
   await new Promise((r) => setTimeout(r, 800));
@@ -333,7 +333,7 @@ async function main() {
         width: rect.width,
         height: rect.height,
         text: (el.textContent || '').trim().slice(0, 120),
-        hasLogo: !!el.querySelector('.cesium-credit-logoContainer, img'),
+        hasLogo: Boolean(el.querySelector('.cesium-credit-logoContainer, img')),
       };
     });
 
@@ -350,7 +350,7 @@ async function main() {
   );
   check(
     'clean-view: "Data attribution" link to per-layer popover still present',
-    !!cleanVis.text && /Data attribution/i.test(cleanVis.text),
+    Boolean(cleanVis.text) && /Data attribution/i.test(cleanVis.text),
     `credit text = "${cleanVis.text}"`,
   );
   await page.evaluate(() => document.body.classList.remove('ui-clean-view'));

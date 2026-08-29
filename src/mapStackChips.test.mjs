@@ -34,7 +34,7 @@ function makeElement(tagName = 'div') {
     classList: {
       toggle(name, force) {
         const classes = new Set(String(element.className).split(/\s+/).filter(Boolean));
-        const next = force === undefined ? !classes.has(name) : !!force;
+        const next = force === undefined ? !classes.has(name) : Boolean(force);
         if (next) classes.add(name);
         else classes.delete(name);
         element.className = [...classes].join(' ');

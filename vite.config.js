@@ -33,7 +33,6 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import https from 'node:https';
 import { lookup as lookupDns } from 'node:dns/promises';
-import { directionToHeading } from './src/data/directionText.js';
 // CCTV subsystem: catalog assembly, feed types, and the frame fallback chain
 // are shared verbatim with the production Pages Function
 // (`functions/api/cctv/[[path]].js`). Only the Node-specific pieces (config-file
@@ -756,8 +755,7 @@ export async function readResponseJsonCapped(response, maxBytes) {
 export function coalesceProxyRequest(inFlight, key, create) {
   const existing = inFlight.get(key);
   if (existing) return { promise: existing, shared: true };
-  let promise;
-  promise = Promise.resolve()
+  const promise = Promise.resolve()
     .then(create)
     .finally(() => {
       if (inFlight.get(key) === promise) inFlight.delete(key);
@@ -3978,7 +3976,7 @@ function trackBackfillProxies() {
           `https://opensky-network.org/api/tracks/all?icao24=${icao24}&time=0`,
           token ? { Authorization: `Bearer ${token}` } : {}
         );
-      } catch (error) {
+      } catch {
         res.statusCode = 502;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ error: 'OpenSky track fetch failed' }));
@@ -4000,7 +3998,7 @@ function trackBackfillProxies() {
           `lol:${hex}`,
           `https://adsb.lol/data/traces/${hex.slice(-2)}/trace_full_${hex}.json`
         );
-      } catch (error) {
+      } catch {
         res.statusCode = 502;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ error: 'adsb.lol trace fetch failed' }));
@@ -4327,7 +4325,7 @@ function googlePlacesContextProxy() {
             return true;
           })
           .sort((a, b) => b.contextPriority - a.contextPriority || a.distanceM - b.distanceM)
-          .map(({ contextPriority, ...place }) => place)
+          .map(({ contextPriority: _contextPriority, ...place }) => place)
           .slice(0, 20) : [];
 
         res.statusCode = response.ok ? 200 : response.status;
@@ -5201,7 +5199,7 @@ function militaryInstallationsProxy() {
           'X-Military-Installations': request.shared ? 'INFLIGHT' : 'MISS',
         });
         res.end(JSON.stringify(payload));
-      } catch (error) {
+      } catch {
         if (cached && now - cached.cachedAt <= MILITARY_INSTALLATION_STALE_MS) {
           res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Military-Installations': 'STALE' });
           res.end(JSON.stringify({ ...cached.payload, status: 'stale' }));

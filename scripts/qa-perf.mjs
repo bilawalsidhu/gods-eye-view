@@ -103,7 +103,7 @@ try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 860 });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__godsEyeView?.viewer, { timeout: 90_000 });
+  await page.waitForFunction(() => Boolean(window.__godsEyeView?.viewer), { timeout: 90_000 });
   // Boot flyTo + tile warm + all deferred init.
   await new Promise((r) => setTimeout(r, 15_000));
 

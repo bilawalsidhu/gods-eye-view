@@ -55,7 +55,7 @@ for (const layer of LAYERS) {
     assert.ok(regime, '_trackedModelRegimeActive is defined');
     assert.match(regime, /if \(!_trackedIcao \|\| _cockpitContactMode \|\|[\s\S]*?return false;/,
       '_trackedModelRegimeActive excludes cockpit');
-    const tracked = /function _updateTrackedModel\(\)[\s\S]*?\n  if \(!active\)/.exec(source)?.[0];
+    const tracked = /function _updateTrackedModel\(\)[\s\S]*?\n {2}if \(!active\)/.exec(source)?.[0];
     assert.ok(tracked, '_updateTrackedModel is defined');
     assert.match(tracked, /_trackedModelRegimeActive\(\)/,
       'the tracked-model driver uses the cockpit-aware predicate');

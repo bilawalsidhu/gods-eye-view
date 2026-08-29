@@ -318,11 +318,10 @@ export function selectCctvLod(candidates, { cameraHeightM, incumbentIds, viewW, 
     || a.id.localeCompare(b.id)
   ));
 
-  let cardIds;
   // Item C: screen-distributed fill. Candidates lacking screen anchors are
   // dropped by the distribution pass; top up from the ranked pool
   // (defensive — cctv.js always projects anchors for in-view candidates).
-  cardIds = distributeCctvCards(stills, { budget: budgets.cardLimit, viewW, viewH });
+  const cardIds = distributeCctvCards(stills, { budget: budgets.cardLimit, viewW, viewH });
   if (cardIds.length < budgets.cardLimit) {
     const chosen = new Set(cardIds);
     for (const candidate of stills) {

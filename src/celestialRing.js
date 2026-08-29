@@ -338,7 +338,7 @@ export class CelestialRing {
    */
   constructor(viewer, { enabled = true, onAutoDisable = null } = {}) {
     this.viewer = viewer;
-    this.enabled = !!enabled;
+    this.enabled = Boolean(enabled);
     this.visible = false;
     this._onAutoDisable = typeof onAutoDisable === 'function' ? onAutoDisable : null;
     this._focusInProgress = false;
@@ -421,7 +421,7 @@ export class CelestialRing {
   /** Enable or disable the user preference for the effect. */
   setEnabled(enabled) {
     const wasEnabled = this.enabled;
-    this.enabled = !!enabled;
+    this.enabled = Boolean(enabled);
     if (this.enabled && !wasEnabled) this._ephemerisDirty = true;
     // The ring paints its canvases from postRender, which only fires on
     // rendered frames — under the idle render governor an enable (or the
@@ -444,7 +444,7 @@ export class CelestialRing {
     const height = canvas.clientHeight || canvas.height;
     if (!(width > 0 && height > 0)) return false;
     const disc = this._projectedEarthDisc(width, height);
-    return !!disc && isFullGlobeInsideKeyhole(disc, false);
+    return Boolean(disc) && isFullGlobeInsideKeyhole(disc, false);
   }
 
   /**

@@ -54,7 +54,7 @@ export async function onRequest(context) {
       upstreamUrl: `https://adsb.lol/data/traces/${hex.slice(-2)}/trace_full_${hex}.json`,
     });
     return trackResponse(status, body);
-  } catch (error) {
+  } catch {
     return new Response(JSON.stringify({ error: 'adsb.lol trace fetch failed' }), {
       status: 502,
       headers: { 'Content-Type': 'application/json' },

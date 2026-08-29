@@ -171,11 +171,6 @@ export const CCTV_FOCUS_RESULT = Object.freeze({
 // (a larger floor would push the plane back through the obstruction).
 const PROBE_CLEARANCE_M = 4;
 const PROBE_MIN_RANGE_M = 12;
-// Bounded wait for the enable-time ground-prior batch: warm proxy disk cache
-// resolves in milliseconds; a cold/slow upstream must never hang layer init,
-// so past this budget init proceeds on catalog fallbacks and the batch applies
-// post-hoc (applyLateGroundPriors) when it lands.
-const GROUND_PRIOR_INIT_WAIT_MS = 8000;
 /** Default calibration offsets — all zeroed, range scale 1x. */
 const DEFAULT_CAMERA_CALIBRATION = Object.freeze({
   offsetNorthM: 0,
@@ -218,7 +213,7 @@ const CAMERA_ICON = (() => {
       <rect x="4.2" y="24" width="8.6" height="2.5" rx="1.1" fill="#0b151d" stroke="#4ecde7" stroke-width="0.8"/>
     </g>
   </svg>`;
-  return 'data:image/svg+xml;base64,' + btoa(svg);
+  return `data:image/svg+xml;base64,${  btoa(svg)}`;
 })();
 
 /**
@@ -298,7 +293,7 @@ let _lastHealthSyncAt = 0;
 let _lastError = null;
 let _healthById = new Map();
 let _calibrationById = new Map();
-let _listeners = new Set();
+const _listeners = new Set();
 let _projectionRaf = 0;
 let _removeFocusAppearListener = null;
 let _lastFocusStyleAt = 0;
@@ -504,28 +499,6 @@ function normalizeHeading(deg) {
  */
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
-}
-
-/**
- * Normalizes an angle to the (-180, 180] range.
- * @param {number} deg
- * @returns {number}
- */
-function normalizeSignedAngle(deg) {
-  let value = deg % 360;
-  if (value > 180) value -= 360;
-  if (value <= -180) value += 360;
-  return value;
-}
-
-/**
- * Returns the absolute angular difference between two headings in degrees.
- * @param {number} aDeg
- * @param {number} bDeg
- * @returns {number} Value in [0, 180].
- */
-function angularDeltaAbs(aDeg, bDeg) {
-  return Math.abs(normalizeSignedAngle(aDeg - bDeg));
 }
 
 /**
@@ -1156,7 +1129,7 @@ function buildCatalogFromSources(rawSources) {
       provider: String(source.provider || seed?.provider || 'Configured CCTV Source'),
       sourceKind: String(source.sourceKind || source.kind || (source.url ? 'configured' : 'seed')).toLowerCase(),
       feedType,
-      feedConfigured: typeof source.url === 'string' && !!source.url.trim(),
+      feedConfigured: typeof source.url === 'string' && Boolean(source.url.trim()),
       lat,
       lon,
       headingDeg,
@@ -1450,7 +1423,7 @@ function refreshProjectionTextures(record) {
   const now = Date.now();
   if (now - safeNumber(runtime.lastTextureSwapAt, 0) < PROJECTION_TEXTURE_SWAP_MS) return;
 
-  const planeShowing = !!(runtime.planeEntity?.show && runtime.planeMaterial);
+  const planeShowing = Boolean(runtime.planeEntity?.show && runtime.planeMaterial);
   if (!planeShowing) return;
 
   // Only swap when the canvas content actually changed since the last swap.
@@ -1579,7 +1552,7 @@ function clearProjectionOverlay() {
  */
 function setPlaneVisible(runtime, visible) {
   if (!runtime) return;
-  if (runtime.planeEntity) runtime.planeEntity.show = !!visible;
+  if (runtime.planeEntity) runtime.planeEntity.show = Boolean(visible);
   if (visible && runtime.overlayEntry && runtime.cameraId) {
     if (_projectionOverlayOwnerId !== runtime.cameraId) {
       _cctvOverlayHost.setEntries(
@@ -2701,7 +2674,7 @@ function rebuildViewshedVolume(record, isActive) {
   // QA tag: the harness counts viewshed volumes by this marker.
   primitive._gevViewshed = record.camera.id;
   record.viewshedPrimitive = _viewer.scene.primitives.add(primitive);
-  record.viewshedActiveTint = !!isActive;
+  record.viewshedActiveTint = Boolean(isActive);
 }
 
 /**
@@ -2942,7 +2915,7 @@ function handleHoverMove(position) {
   // Hovering the active camera or a camera that already has a card is a
   // no-op; video feeds stay icon-only until activated (ambient tier is
   // stills-only — same rule as the LOD selection).
-  const eligible = !!record
+  const eligible = Boolean(record)
     && cameraId !== _activeCameraId
     && !_cardIds.has(cameraId)
     && !isVideoFeedType(normalizeFeedType(record.camera.feedType));
@@ -3118,7 +3091,7 @@ function fetchCardFrame(record, slot, refreshMs, { userGesture = false } = {}) {
         frame = null;
       }
     }
-    Object.assign(slot, applyFrameResult(slot, { ok: !!frame, frame }, Date.now()));
+    Object.assign(slot, applyFrameResult(slot, { ok: Boolean(frame), frame }, Date.now()));
     _viewer?.scene?.requestRender?.();
   };
   image.onload = () => settle(true);
@@ -3242,14 +3215,14 @@ export function refreshCoverageStyles() {
     // One live plane in the world at a time (§2c): only the active camera's
     // far cap carries the monitor plane; idle neighbors get the faint
     // wireframe only.
-    const planeShowing = !!(_enabled && _showProjection && isActive);
+    const planeShowing = Boolean(_enabled && _showProjection && isActive);
 
     const inVisibleSet = coverageVisible.has(record.camera.id);
     for (const entity of record.coverageEntities || []) {
       // The frustum wireframe is part of the projection representation —
       // force it on for the active camera and let it read through geometry
       // via depthFailMaterial (polylines have no disableDepthTestDistance).
-      entity.show = !!(_enabled && ((coverageOn && inVisibleSet) || planeShowing));
+      entity.show = Boolean(_enabled && ((coverageOn && inVisibleSet) || planeShowing));
       if (!entity.polyline) continue;
       // Viewshed mode swaps the cyan/green scheme for the camera's own hue so
       // adjacent cones read as distinct coverage claims (design §3b); the
@@ -3277,7 +3250,7 @@ export function refreshCoverageStyles() {
     // Viewshed volume lifecycle: exists iff enabled + viewshed mode + in the
     // visible set. Rebuild on active-tint flips (rare); otherwise leave the
     // primitive alone so idle refreshes never churn geometry.
-    const wantVolume = !!(_enabled && viewshedOn && inVisibleSet && record.frustumPositions);
+    const wantVolume = Boolean(_enabled && viewshedOn && inVisibleSet && record.frustumPositions);
     if (wantVolume) {
       if (!record.viewshedPrimitive || record.viewshedActiveTint !== isActive) {
         rebuildViewshedVolume(record, isActive);
@@ -3291,7 +3264,7 @@ export function refreshCoverageStyles() {
     }
   }
 
-  if (_billboards) _billboards.show = !!_enabled;
+  if (_billboards) _billboards.show = Boolean(_enabled);
   pauseInactiveProjectionFeeds(activeId);
 }
 
@@ -3410,7 +3383,7 @@ function getPublicCameraState(record, activeId = null) {
     calibration: { ...normalizeCalibration(camera.calibration) },
     // Save-gated persistence (design §3e): true while the live pose carries
     // edits that have not been SAVEd (or RESET). Drives the CAL · EDITED chip.
-    calDirty: !!record.calDirty,
+    calDirty: Boolean(record.calDirty),
     // Deterministic QA seam: counts commit-grade anchor resolutions (E/N drag
     // release, numeric E/N edit, or reset), never transient gizmo moves.
     groundResolveCount: record.calibrationGroundResolveCount || 0,
@@ -4022,9 +3995,9 @@ export function _setCctvCoverageStateForTest({
   _billboards = null;
   _activeCameraId = activeCameraId;
   _autoHopSuspended = false;
-  _enabled = !!enabled;
+  _enabled = Boolean(enabled);
   _coverageMode = normalizeCoverageMode(coverageMode, 'on');
-  _showProjection = !!showProjection;
+  _showProjection = Boolean(showProjection);
 }
 
 /**

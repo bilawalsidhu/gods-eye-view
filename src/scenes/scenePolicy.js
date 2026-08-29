@@ -153,7 +153,7 @@ export function sceneLayerPlan(targetStates, registeredIds) {
     if (known && !known.has(id)) continue;
     plan.push({
       id,
-      enabled: !!(target && target.enabled),
+      enabled: Boolean(target && target.enabled),
       params: target && target.params ? stripSceneTrackingParams(target.params) : undefined,
     });
   }

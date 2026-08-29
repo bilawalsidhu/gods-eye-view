@@ -937,9 +937,9 @@ test('both layers gate the tracked-model load and record its failures', async ()
     assert.match(source, /_noteTrackedModelLoadFailure\(trackedSpec\.url, err\)/,
       `${name}: a rejected load is recorded against this selection, not silently retried`);
     // The reset must be reachable from the real teardown, not only a test seam.
-    assert.match(source, /_releaseTrackedModel\(\);\n  _resetTrackedSelectionState\(\);/,
+    assert.match(source, /_releaseTrackedModel\(\);\n {2}_resetTrackedSelectionState\(\);/,
       `${name}: deselect clears the per-selection latches in the production path`);
-    assert.match(source, /_trackedIcao = icao24;\n  _resetTrackedSelectionState\(\);/,
+    assert.match(source, /_trackedIcao = icao24;\n {2}_resetTrackedSelectionState\(\);/,
       `${name}: selecting a contact starts from a clean per-selection state`);
   }
 });

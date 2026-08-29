@@ -132,22 +132,6 @@ function trackingIdOption(key, token, defaultValue = null) {
   });
 }
 
-function stringOption(key, token, defaultValue) {
-  return Object.freeze({
-    key,
-    token,
-    defaultValue,
-    normalize: (value) => {
-      if (typeof value === 'number' && Number.isFinite(value)) return String(value).trim().toLowerCase();
-      if (typeof value !== 'string') return null;
-      const normalized = value.trim().toLowerCase();
-      return normalized ? normalized : null;
-    },
-    encode: (value) => String(value),
-    decode: (value) => (typeof value === 'string' && value.trim() ? value.trim().toLowerCase() : null),
-  });
-}
-
 function enumOption(key, token, defaultValue, values, codes) {
   const reverse = Object.fromEntries(Object.entries(codes).map(([name, code]) => [code, name]));
   return Object.freeze({

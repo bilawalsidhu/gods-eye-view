@@ -32,9 +32,6 @@
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CELL_SIZE_PX = 32;
-const DENSE_THRESHOLD = 0.9;
-const COOLDOWN_MS = 1200;
-const FADE_IN_MS = 150;
 
 // ─── Spatial hash ─────────────────────────────────────────────────────────────
 
@@ -163,11 +160,10 @@ function solveLabels(candidates, options, selectedKeysSet) {
     strategy = 'ELASTIC',
     layerWeights = {},
     demandByLayer = {},
-    now = Date.now(),
+    now: _now = Date.now(),
     preserveIncumbents = true,
   } = options;
 
-  const stamp = (Math.random() * 0xFFFFFF) | 0;
   const spatial = makeSpatial();
 
   // Filter and group by layer

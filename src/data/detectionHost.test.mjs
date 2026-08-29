@@ -422,7 +422,7 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     assert.equal(getDetectionDiagnostics().profile, 'DENSE');
 
     const bannerCount = () => env.detectionCtx.calls.filter(([name, text]) => (
-      name === 'fillText' && /^(SPARSE|BALANCED|DENSE)  VIS:/.test(String(text))
+      name === 'fillText' && /^(SPARSE|BALANCED|DENSE) {2}VIS:/.test(String(text))
     )).length;
     const beforeSuspend = bannerCount();
     suspendDetection('intercity');
@@ -723,7 +723,7 @@ test('detectionDebugRequested parses the query-string gate and nothing else', ()
 
 test('the mode banner is absent by default and present behind the flag', () => {
   const bannerPaints = (env) => env.detectionCtx.calls.filter(([name, text]) => (
-    name === 'fillText' && /^(SPARSE|BALANCED|DENSE)  VIS:/.test(String(text))
+    name === 'fillText' && /^(SPARSE|BALANCED|DENSE) {2}VIS:/.test(String(text))
   )).length;
 
   const painted = (search) => {

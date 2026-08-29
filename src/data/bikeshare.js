@@ -1279,7 +1279,7 @@ function buildDetectionId(record) {
   // shape), so `record.name` was always undefined → every label read "Dock N".
   const label = record.stationName || `Dock ${record.stationId}`;
   // Truncate long station names to keep HUD readable
-  const short = label.length > 24 ? label.slice(0, 22) + '…' : label;
+  const short = label.length > 24 ? `${label.slice(0, 22)  }…` : label;
   return `🚲 ${short} [${bikes}/${capacity}]`;
 }
 

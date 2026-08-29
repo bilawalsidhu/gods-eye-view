@@ -42,7 +42,7 @@ export function mapStackChipModel(stack, activeId) {
     id: String(stack?.id ?? ''),
     label,
     available,
-    active: !!stack?.id && stack.id === activeId,
+    active: Boolean(stack?.id) && stack.id === activeId,
     requiresIon,
     // Dropdown parity: unavailable options read "<label> · ion key". A chip has
     // no room for that, so an ion-backed stack gets a compact badge; every

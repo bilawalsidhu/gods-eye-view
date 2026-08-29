@@ -2648,7 +2648,7 @@ test('runtime listeners exist only while the awareness layer is enabled', () => 
     },
     setInterval() { return nextTimer++; },
     clearInterval() {},
-    requestAnimationFrame(callback) { return nextTimer++; },
+    requestAnimationFrame(_callback) { return nextTimer++; },
     cancelAnimationFrame() {},
   };
   const fakeBody = new FakeElement();

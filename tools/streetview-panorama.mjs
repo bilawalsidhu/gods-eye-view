@@ -158,7 +158,7 @@ async function fetchTile(apiKey, session, panoId, z, x, y) {
 // ---------------------------------------------------------------------------
 
 async function stitchPanorama(apiKey, session, panoId, metadata, zoom) {
-  const { imageWidth, imageHeight, tileWidth, tileHeight } = metadata;
+  const { tileWidth, tileHeight } = metadata;
 
   // Street View tile grids follow a fixed power-of-2 scheme:
   //   zoom 0: 1×1    (360° FOV, entire panorama in one tile)

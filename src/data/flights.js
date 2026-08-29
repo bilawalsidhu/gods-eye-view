@@ -67,7 +67,7 @@ import { formatFlightLevel } from './detectionDraw.js';
 import { createGroundSnap } from './groundSnap.js';
 import { trackedModelZoomActive } from './trackedModelRegime.js';
 import { geoidSurfaceLastResortM, pickRenderAltitudeM } from './renderAltitude.js';
-import { allocateCorridorCells, cachedGroundFloor, cachedMeshFloor, coarseFloorCoord, corridorFloorCells, displayFloorHeightM, floorAltitudeM, neighborFloorM, stickyFloorCell, warmGroundFloor, resolveGroundFloorCellsBounded, GROUND_FLOOR_LIFT_M } from './groundFloor.js';
+import { allocateCorridorCells, cachedGroundFloor, coarseFloorCoord, corridorFloorCells, displayFloorHeightM, floorAltitudeM, neighborFloorM, stickyFloorCell, warmGroundFloor, resolveGroundFloorCellsBounded, GROUND_FLOOR_LIFT_M } from './groundFloor.js';
 import { sampleMeshFloorCells } from './meshFloorSampler.js';
 import { ensureGeoidReady, geoidHeight } from './geoid.js';
 import {
@@ -1848,7 +1848,7 @@ function _modelOwnsVisual(icao24) {
  * everything else — admission, an unresolved ground, a not-yet-ready glTF, the
  * limb cull, a regime exit — only ever clears it. */
 function _modelIsRendering(model) {
-  return !!model && model.ready === true && model.show === true;
+  return Boolean(model) && model.ready === true && model.show === true;
 }
 
 /** @type {Cesium.Cartographic} Scratch for the grounded display-floor read. */
@@ -2857,7 +2857,7 @@ function _fleetTick() {
       const glyphDevPx = (bb.width || 20) * (bb.scale || 1)
         * distanceScale * (globalThis.devicePixelRatio || 1);
       const wantLarge = bb._gevIconLarge ? glyphDevPx > 56 : glyphDevPx > 76;
-      if (wantLarge !== !!bb._gevIconLarge) {
+      if (wantLarge !== Boolean(bb._gevIconLarge)) {
         bb._gevIconLarge = wantLarge;
         bb.image = aircraftIcon(_iconKind(icao24, info?.klass), wantLarge ? TRACKED_ICON_PX : undefined);
       }
@@ -3111,7 +3111,7 @@ function _startTrail(icao24) {
 async function _backfillTrail(icao24, token, oldestFixEpochSec) {
   let path = null;
   try {
-    const response = await fetch('/api/opensky-track?icao24=' + encodeURIComponent(icao24), {
+    const response = await fetch(`/api/opensky-track?icao24=${  encodeURIComponent(icao24)}`, {
       signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) return;
@@ -4082,7 +4082,7 @@ const flightsLayer = {
    * Also clears any active flight tracking so the camera is released.
    * @param {Cesium.Viewer} viewer
    */
-  disable(viewer) {
+  disable(_viewer) {
     _abortActiveUpdates();
     _cancelPendingTrackingRestore();
     if (_billboardCollection) _billboardCollection.show = false;
@@ -4237,7 +4237,6 @@ const flightsLayer = {
       _lastCoverage = responseCoverage || 'worldwide upstream snapshot';
       const currentIcaos = new Set();
       const acceptedSnapshotIcaos = new Set();
-      const now = Cesium.JulianDate.now();
       // Field-test round 3 (2026-07-06, Austin fleet-underground): viewer
       // subpoint + collected floor cells for the viewer-proximate low-contact
       // clamp below — one carto read per poll, one batch warm after the loop.
@@ -4414,7 +4413,7 @@ const flightsLayer = {
 
         const position = Cesium.Cartesian3.fromDegrees(lon, lat, renderAltitudeM);
         // Landing/takeoff transition: the on_ground flip restyles IN PLACE.
-        const groundFlipped = !!prevMeta && (prevMeta.onGround === true) !== onGround;
+        const groundFlipped = Boolean(prevMeta) && (prevMeta.onGround === true) !== onGround;
         // Either flip direction retires the model's ground snap: a departing plane
         // flies free of it, a landing plane earns a fresh sample where it rolls out.
         if (groundFlipped) _groundSnap.forget(icao24);
@@ -5003,7 +5002,6 @@ const flightsLayer = {
       : 50;
     const maxRange = Number.isFinite(range) && range > 0 ? range : Number.POSITIVE_INFINITY;
 
-    const now = Cesium.JulianDate.now();
     const nearby = [];
 
     for (const [icao24, bb] of _billboards) {
@@ -5119,7 +5117,7 @@ const flightsLayer = {
     const limit = Number.isFinite(maxCount) ? Math.max(1, Math.floor(maxCount)) : 2000;
     const result = [];
     for (const [icao24, info] of _flightData) {
-      const routeOk = !!info?.route && _routeIsPlausible(icao24, info.route);
+      const routeOk = Boolean(info?.route) && _routeIsPlausible(icao24, info.route);
       result.push(mapAnalystRecord(icao24, info, { military: isMilitaryIcao(icao24), routeOk }));
       if (result.length >= limit) break;
     }
@@ -5223,7 +5221,7 @@ const flightsLayer = {
     if (!_trackedIcao) return null;
     const described = _describeFlight(_trackedIcao);
     if (!described) return null;
-    const { position, ...rest } = described;
+    const { position: _position, ...rest } = described;
     return rest;
   },
 

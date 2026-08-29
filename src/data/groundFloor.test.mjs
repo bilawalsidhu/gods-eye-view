@@ -267,7 +267,7 @@ test('stickyFloorCell does not stick to a far-away stale cell', () => {
  *  is charged and the allocation order under test is the only variable. */
 const NONE_WARM = () => false;
 
-const cellsFrom = (lat, n) => Array.from({ length: n }, (_, i) => ({ lat: +(lat + i * 0.001).toFixed(3), lon: -97.66 }));
+const cellsFrom = (lat, n) => Array.from({ length: n }, (_, i) => ({ lat: Number((lat + i * 0.001).toFixed(3)), lon: -97.66 }));
 
 test('allocateCorridorCells: already-collected cells cost nothing', () => {
   const seen = new Set(['30.2,-97.66']);
@@ -293,7 +293,7 @@ test('allocateCorridorCells: 85 grounded contacts — the needy are served first
   const seen = new Set();
   const candidates = [];
   for (let i = 0; i < 64; i++) {
-    const cell = { lat: +(31 + i * 0.001).toFixed(3), lon: -97.66 };
+    const cell = { lat: Number((31 + i * 0.001).toFixed(3)), lon: -97.66 };
     seen.add(`${cell.lat},${cell.lon}`);
     candidates.push({ cells: [cell], cold: 0, speedMps: 0 });
   }
@@ -386,7 +386,7 @@ test('corridorFloorCells keeps a multi-leg path gap-free', () => {
 // runs so the tail cycles in.
 
 test('allocateCorridorCells: the epoch rotates a tie, so a different prefix leads each poll', () => {
-  const cellsFor = (i) => [{ lat: +(50 + i).toFixed(3), lon: -97.66 }];
+  const cellsFor = (i) => [{ lat: Number((50 + i).toFixed(3)), lon: -97.66 }];
   const candidates = Array.from({ length: 5 }, (_, i) => ({ cells: cellsFor(i), cold: 1, speedMps: 10 }));
   const first = (epoch) => allocateCorridorCells(candidates, new Set(), 1, 4, epoch, NONE_WARM)[0].lat;
   const leaders = new Set([first(0), first(1), first(2)]);
@@ -511,7 +511,7 @@ test('allocateCorridorCells: 80 movers are served within the bound the policy im
   for (let i = 0; i < COUNT; i++) {
     movers.push(Array.from(
       { length: CELLS_EACH },
-      (_, k) => ({ lat: +(40 + i + k * 0.001).toFixed(3), lon: -97.66 }),
+      (_, k) => ({ lat: Number((40 + i + k * 0.001).toFixed(3)), lon: -97.66 }),
     ));
   }
   const warmed = new Set();
@@ -550,7 +550,7 @@ test('allocateCorridorCells: every mover reaches its FULL corridor in bounded po
   for (let i = 0; i < COUNT; i++) {
     movers.push(Array.from(
       { length: CELLS_EACH },
-      (_, k) => ({ lat: +(40 + i + k * 0.001).toFixed(3), lon: -97.66 }),
+      (_, k) => ({ lat: Number((40 + i + k * 0.001).toFixed(3)), lon: -97.66 }),
     ));
   }
   const warmed = new Set();

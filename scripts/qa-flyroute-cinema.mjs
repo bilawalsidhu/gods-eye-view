@@ -194,8 +194,8 @@ try {
   });
   if (coldPath && coldPath !== 'module-unavailable') {
     report(true, 'cold-path telemetry read from the live flight',
-      `arming=${coldPath.arming} floorKnown=${coldPath.floorKnown} viaMeshProbe=${coldPath.floorFromMeshProbe}`
-      + (TERRAIN_DELAY_MS ? ` (terrain proxy held back ${TERRAIN_DELAY_MS} ms, ${terrainRequests} request(s))` : ''));
+      `arming=${coldPath.arming} floorKnown=${coldPath.floorKnown} viaMeshProbe=${coldPath.floorFromMeshProbe}${
+       TERRAIN_DELAY_MS ? ` (terrain proxy held back ${TERRAIN_DELAY_MS} ms, ${terrainRequests} request(s))` : ''}`);
   }
 
   // Liveness is read off the CAMERA, never off a module import: under Vite the
@@ -360,8 +360,8 @@ try {
       if (clearance < worst) { worst = clearance; worstAt = row; }
     }
     report(worst > 0, 'the eye is never inside the RENDERED world',
-      `min clearance over the rendered surface ${worst.toFixed(1)} m across ${probed.length} live probes`
-      + (worstAt ? ` (worst at ${worstAt.lat.toFixed(5)}, ${worstAt.lon.toFixed(5)})` : ''));
+      `min clearance over the rendered surface ${worst.toFixed(1)} m across ${probed.length} live probes${
+       worstAt ? ` (worst at ${worstAt.lat.toFixed(5)}, ${worstAt.lon.toFixed(5)})` : ''}`);
   } else {
     note('rendered-surface clearance', `only ${probed.length} live mesh probes answered`);
   }

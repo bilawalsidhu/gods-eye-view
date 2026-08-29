@@ -120,7 +120,7 @@ test('loose mode: a named water body beats a shore feature named after it (field
   assert.equal(fp.kind, 'area');
   // Ring centred on the lake fixture, not offset onto the shore park.
   const lat0 = fp.ring[0][1];
-  assert.ok(Math.abs(lat0 - ANCHOR_ON_WATER.lat) < 0.02, 'ring at ' + lat0);
+  assert.ok(Math.abs(lat0 - ANCHOR_ON_WATER.lat) < 0.02, `ring at ${  lat0}`);
   assert.ok(Math.abs(lat0 - (ANCHOR_ON_WATER.lat + 450 / 111320)) > 0.001, 'must not be the shore park');
 
   // Inverse: a LAND ask near the water is not stolen by the lake polygon.

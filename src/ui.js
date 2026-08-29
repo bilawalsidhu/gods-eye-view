@@ -12,7 +12,7 @@ import {
   clampBloomIntensity,
   decodeBloomIntensity,
 } from './bloom.js';
-import { LOCATIONS, CITY_POIS, GLOBE_VIEW, flyToGlobeView, flyToPresetLocation, flyToPOI, searchAndFlyTo } from './locations.js';
+import { CITY_POIS, GLOBE_VIEW, flyToGlobeView, flyToPresetLocation, flyToPOI, searchAndFlyTo } from './locations.js';
 import { locationMiniStatus } from './locationStatus.js';
 import { interruptCameraMotion } from './cameraVerbs.js';
 import {
@@ -80,8 +80,6 @@ import {
   createLoadingFeedbackState,
   createTrafficSyncFeedbackState,
   presentGlobalLoadingStatus,
-  presentGlobalStatusNotice,
-  presentLoadingFeedback,
   reduceLoadingFeedback,
   reduceTrafficSyncFeedback,
 } from './loadingFeedback.js';
@@ -854,7 +852,7 @@ class CockpitViewController {
 
   syncWeatherToggle(enabled) {
     if (!this.weatherToggle) return;
-    const active = !!enabled;
+    const active = Boolean(enabled);
     this.weatherToggle.setAttribute('aria-pressed', String(active));
     this.weatherToggle.setAttribute(
       'aria-label',
@@ -914,7 +912,7 @@ class CockpitViewController {
   syncTr3bToggle(info) {
     if (!this.tr3bToggle) return;
     const icao24 = String(info?.icao24 || '').trim();
-    const converted = !!icao24 && isTr3b(icao24);
+    const converted = Boolean(icao24) && isTr3b(icao24);
     const signature = icao24 ? `${icao24}:${converted ? 1 : 0}` : '';
     if (this._tr3bSignature === signature) return;
     this._tr3bSignature = signature;
@@ -926,9 +924,9 @@ class CockpitViewController {
   syncEntry() {
     if (this.active) return;
     const info = this.readAircraftInfo();
-    const trackedContact = !!(info && this.viewer.trackedEntity?.position);
+    const trackedContact = Boolean(info && this.viewer.trackedEntity?.position);
     this.syncTr3bToggle(trackedContact ? info : null);
-    const available = !!(this.isEntryAllowed() && trackedContact);
+    const available = Boolean(this.isEntryAllowed() && trackedContact);
     // Change-only DOM writes: this runs on a preUpdate cadence, and
     // unconditional `hidden` assignments invalidate style/layout every frame
     // even when nothing changed. (perf item 9)
@@ -1024,13 +1022,14 @@ class CockpitViewController {
     const key = event.key?.toLowerCase();
     if (key === 'c' && !event.metaKey && !event.ctrlKey && !event.altKey) {
       if (!this.active) {
+        // eslint-disable-next-line no-implicit-coercion -- source-contract test pins the !! form (cockpitMarkup.test.mjs)
         const cockpitAttempt = !!(this.readAircraftInfo() && this.viewer.trackedEntity?.position);
         if (!cockpitAttempt) return;
       }
       event.preventDefault();
       event.stopImmediatePropagation();
       if (!this.active && !this.isEntryAllowed()) return;
-      const changed = this.active ? this.exit() : this.enter();
+      if (this.active) this.exit(); else this.enter();
       return;
     }
   }
@@ -1451,7 +1450,7 @@ class CockpitViewController {
           .join('');
       }
     }
-    if (this.clock) this.clock.textContent = new Date().toISOString().slice(11, 19) + 'Z';
+    if (this.clock) this.clock.textContent = `${new Date().toISOString().slice(11, 19)  }Z`;
     if (this.position) {
       const lat = Number.isFinite(info.latitude)
         ? `${Math.abs(info.latitude).toFixed(3)}°${info.latitude >= 0 ? 'N' : 'S'}` : '--';
@@ -1635,7 +1634,7 @@ class CockpitViewController {
     }
     if (this.contextUpdated) {
       this.contextUpdated.textContent = Number.isFinite(snapshot.evaluatedAt)
-        ? new Date(snapshot.evaluatedAt).toISOString().slice(11, 19) + 'Z' : '--:--:--Z';
+        ? `${new Date(snapshot.evaluatedAt).toISOString().slice(11, 19)  }Z` : '--:--:--Z';
     }
     this.context.dataset.state = unknownCount ? 'uncertain' : 'current';
     this.updateCockpitSignals(snapshot, unknownCount);
@@ -1852,7 +1851,7 @@ class CockpitViewController {
       const entry = document.createElement('li');
       entry.className = item.tone;
       const time = document.createElement('time');
-      time.textContent = new Date(item.timestamp).toISOString().slice(11, 19) + 'Z';
+      time.textContent = `${new Date(item.timestamp).toISOString().slice(11, 19)  }Z`;
       const body = document.createElement('div');
       const heading = item.target ? document.createElement('button') : document.createElement('strong');
       if (item.target) {
@@ -2410,8 +2409,8 @@ export class StyleManager {
       isEntryAllowed: () => cockpitEntryAllowed({
         contextMode: this._contextMode,
         contextModeChanging: this._contextModeChanging,
-        flightsEnabled: !!this._dataManager?.isEnabled('flights'),
-        militaryEnabled: !!this._dataManager?.isEnabled('military'),
+        flightsEnabled: Boolean(this._dataManager?.isEnabled('flights')),
+        militaryEnabled: Boolean(this._dataManager?.isEnabled('military')),
       }),
       onEntered: () => {
         // A new Cockpit session owns both side rails. Clear standard map-view
@@ -2459,7 +2458,7 @@ export class StyleManager {
     this.celestialRing = new CelestialRing(viewer, {
       enabled: false,
       onAutoDisable: () => this.setCelestialRingEnabled(false, {
-        syncShare: !!this.shareLinkManager,
+        syncShare: Boolean(this.shareLinkManager),
         focus: false,
       }),
     });
@@ -2853,6 +2852,7 @@ export class StyleManager {
   _runExplicitNavigation(noun, navigate, releaseOptions = undefined) {
     return runExplicitNavigation({
       disposed: this._disposed,
+      // eslint-disable-next-line no-implicit-coercion -- source-contract test pins the !! form (cameraHandoff.test.mjs)
       cockpitActive: !!this.cockpitView?.active,
       noun,
       showToast: (text) => this._showToast(text),
@@ -2866,6 +2866,7 @@ export class StyleManager {
   _beginDeferredNavigation(noun = 'location', { cancelPendingSelection = true } = {}) {
     return beginDeferredNavigation({
       disposed: this._disposed,
+      // eslint-disable-next-line no-implicit-coercion -- source-contract test pins the !! form (cameraHandoff.test.mjs)
       cockpitActive: !!this.cockpitView?.active,
       noun,
       showToast: (text) => this._showToast(text),
@@ -2880,6 +2881,7 @@ export class StyleManager {
     return reassertNavigationHandoff({
       generation,
       currentGeneration: this._navigationGeneration,
+      // eslint-disable-next-line no-implicit-coercion -- source-contract test pins the !! form (cameraHandoff.test.mjs)
       cockpitActive: !!this.cockpitView?.active,
       disposed: this._disposed,
       showToast: (text) => this._showToast(text),
@@ -3278,7 +3280,7 @@ export class StyleManager {
    */
   _setBloomEnabled(enabled) {
     governorRequestRender('bloom');
-    this.bloomEnabled = !!enabled;
+    this.bloomEnabled = Boolean(enabled);
     this._syncBloomStageEnabled();
     this._bloomBtn.classList.toggle('active', this.bloomEnabled);
     this._bloomSliderRow.classList.toggle('visible', this.bloomEnabled);
@@ -3308,7 +3310,7 @@ export class StyleManager {
    */
   _setSharpenEnabled(enabled) {
     governorRequestRender('sharpen');
-    this.sharpenEnabled = !!enabled;
+    this.sharpenEnabled = Boolean(enabled);
     this._sharpenStage.enabled = this.sharpenEnabled;
     this._sharpenBtn.classList.toggle('active', this.sharpenEnabled);
     if (this._sharpenSliderRow) {
@@ -3474,7 +3476,7 @@ export class StyleManager {
 
     if (this._celestialBtn) {
       this._celestialBtn.addEventListener('click', () => {
-        const ringIsVisible = !!this.celestialRing?.visible;
+        const ringIsVisible = Boolean(this.celestialRing?.visible);
         if (!this.celestialRingEnabled || !ringIsVisible) {
           this.setCelestialRingEnabled(true, { focus: true });
         } else {
@@ -3538,7 +3540,7 @@ export class StyleManager {
         ? '...'
         : (stack?.shortLabel || stack?.label || 'MAP');
       this._mapStackStatus.textContent = label;
-      this._mapStackStatus.classList.toggle('warn', !!state.lastError);
+      this._mapStackStatus.classList.toggle('warn', Boolean(state.lastError));
     }
   }
 
@@ -3886,7 +3888,7 @@ export class StyleManager {
     if (!this._cctvSyncChip || !this._cctvSyncLabel || !this._cctvSyncProgress) return;
     const total = Number(loading?.total) || 0;
     const loaded = Math.max(0, Math.min(Number(loading?.loaded) || 0, total));
-    const busy = !!enabled && !!loading?.active && total > 0;
+    const busy = Boolean(enabled) && Boolean(loading?.active) && total > 0;
 
     if (busy) {
       clearTimeout(this._cctvChipHideTimer);
@@ -4874,8 +4876,8 @@ export class StyleManager {
     this._contextModeEntryIntent = null;
     this._contextModeReplacementIntent = null;
     this._contextModeChanging = true;
-    this._globalContextFlightsBtn && (this._globalContextFlightsBtn.disabled = true);
-    this._globalContextMissionsBtn && (this._globalContextMissionsBtn.disabled = true);
+    if (this._globalContextFlightsBtn) this._globalContextFlightsBtn.disabled = true;
+    if (this._globalContextMissionsBtn) this._globalContextMissionsBtn.disabled = true;
     try {
       if (mode !== 'flights' && this.cockpitView?.active) {
         this.cockpitView.exit({ restoreTracking: false });
@@ -5029,8 +5031,8 @@ export class StyleManager {
     } finally {
       if (isCurrent()) {
         this._contextModeChanging = false;
-        this._globalContextFlightsBtn && (this._globalContextFlightsBtn.disabled = false);
-        this._globalContextMissionsBtn && (this._globalContextMissionsBtn.disabled = false);
+        if (this._globalContextFlightsBtn) this._globalContextFlightsBtn.disabled = false;
+        if (this._globalContextMissionsBtn) this._globalContextMissionsBtn.disabled = false;
         this._syncContextModeButtons();
       }
     }
@@ -5210,7 +5212,7 @@ export class StyleManager {
     });
     if (shouldExitContextForLayerChange({
       contextMode: this._contextMode,
-      globalContextEnabled: !!this._dataManager?.isEnabled('military-awareness'),
+      globalContextEnabled: Boolean(this._dataManager?.isEnabled('military-awareness')),
       change,
     })) {
       void this._trackContextLayerReaction(this._runUserFacingContextAction((notificationToken) => (
@@ -5259,8 +5261,8 @@ export class StyleManager {
     if (this.cockpitView?.active && !cockpitEntryAllowed({
       contextMode: this._contextMode,
       contextModeChanging: this._contextModeChanging,
-      flightsEnabled: !!this._dataManager?.isEnabled('flights'),
-      militaryEnabled: !!this._dataManager?.isEnabled('military'),
+      flightsEnabled: Boolean(this._dataManager?.isEnabled('flights')),
+      militaryEnabled: Boolean(this._dataManager?.isEnabled('military')),
     })) {
       this.cockpitView.exit({ restoreTracking: false });
     }
@@ -6178,7 +6180,7 @@ export class StyleManager {
     });
 
     this._cctvAutoHopBtn?.addEventListener('click', () => {
-      const current = !!this._cctvState?.autoHop;
+      const current = Boolean(this._cctvState?.autoHop);
       this._dataManager?.setLayerParams('cctv', { autoHop: !current }, { origin: 'user' });
     });
 
@@ -6188,7 +6190,7 @@ export class StyleManager {
     });
 
     this._cctvAdjustBtn?.addEventListener('click', () => {
-      const current = !!this._cctvState?.calibrationMode;
+      const current = Boolean(this._cctvState?.calibrationMode);
       this._dataManager?.setLayerParams('cctv', { calibrationMode: !current }, { origin: 'user' });
     });
 
@@ -6308,7 +6310,7 @@ export class StyleManager {
 
     const syncBadge = () => this._syncCctvSourceBadge(
       this._cctvState?.activeCamera,
-      !!this._cctvState?.enabled && !!this._dataManager?.isEnabled('cctv')
+      Boolean(this._cctvState?.enabled) && Boolean(this._dataManager?.isEnabled('cctv'))
     );
 
     if (!ok) {
@@ -6411,7 +6413,7 @@ export class StyleManager {
           return; // re-render restores the chip text from fresh state
         }
       }
-      this._syncCctvCalReadout(!!this._cctvState?.enabled, this._cctvState?.activeCamera || null);
+      this._syncCctvCalReadout(Boolean(this._cctvState?.enabled), this._cctvState?.activeCamera || null);
     };
     input.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') finish(true);
@@ -6430,9 +6432,9 @@ export class StyleManager {
    * @returns {void}
    */
   _syncCctvCalReadout(enabled, activeCamera) {
-    const canCalibrate = !!enabled && !!activeCamera;
+    const canCalibrate = Boolean(enabled) && Boolean(activeCamera);
     if (this._cctvAdjustBtn) {
-      const adjustOn = !!this._cctvState?.calibrationMode;
+      const adjustOn = Boolean(this._cctvState?.calibrationMode);
       this._cctvAdjustBtn.classList.toggle('active', adjustOn && canCalibrate);
       this._cctvAdjustBtn.textContent = adjustOn ? 'ADJUST ON' : 'ADJUST';
       this._cctvAdjustBtn.disabled = !canCalibrate;
@@ -6473,6 +6475,7 @@ export class StyleManager {
       setEnabled: (next) => this._dataManager.setEnabled('cctv', next, { origin: 'user' }),
       readOwnership: () => ({
         trackedEntity: this.viewer?.trackedEntity,
+        // eslint-disable-next-line no-implicit-coercion -- source-contract test pins the !! form (cameraHandoff.test.mjs)
         cockpitActive: !!this.cockpitView?.active,
       }),
       shouldFocus: () => !this._cctvState?.activeCameraId,
@@ -6512,7 +6515,7 @@ export class StyleManager {
   _renderCctvState(state) {
     this._cctvState = state || null;
     const cameras = state?.cameras || [];
-    const enabled = !!state?.enabled && !!this._dataManager?.isEnabled('cctv');
+    const enabled = Boolean(state?.enabled) && Boolean(this._dataManager?.isEnabled('cctv'));
     const activeId = state?.activeCameraId || '';
     const activeCamera = state?.activeCamera || null;
 
@@ -6579,7 +6582,7 @@ export class StyleManager {
     }
 
     if (this._cctvAutoHopBtn) {
-      const autoHop = !!state?.autoHop;
+      const autoHop = Boolean(state?.autoHop);
       this._cctvAutoHopBtn.classList.toggle('active', autoHop);
       this._cctvAutoHopBtn.textContent = autoHop ? 'AUTO HOP ON' : 'AUTO HOP OFF';
       this._cctvAutoHopBtn.disabled = !enabled;
@@ -6601,7 +6604,7 @@ export class StyleManager {
       // EDITED on top of whatever the persisted badge state is — SAVE CAL
       // promotes to CALIBRATED, RESET CAL clears.
       const badge = activeCamera?.calBadge || null;
-      const dirty = !!activeCamera?.calDirty;
+      const dirty = Boolean(activeCamera?.calDirty);
       this._cctvQualityChip.textContent = dirty
         ? 'CAL · EDITED (UNSAVED)'
         : `CAL · ${this._calBadgeLabel(badge)}`;
@@ -7784,7 +7787,7 @@ export class StyleManager {
     this.hud.setMode(normalized);
     this._updateHudButtonState();
     this._syncShareState();
-    return { ok: true, visible: !!this.hud.visible, mode: normalized, layout: this.hud.getVariant() };
+    return { ok: true, visible: Boolean(this.hud.visible), mode: normalized, layout: this.hud.getVariant() };
   }
 
   /**
@@ -7799,7 +7802,7 @@ export class StyleManager {
     }
     this.shareLinkManager?.claimRestoreLane?.('visual');
     this._setHudVariant(variant);
-    return { ok: true, layout: this.hud.getVariant(), visible: !!this.hud.visible };
+    return { ok: true, layout: this.hud.getVariant(), visible: Boolean(this.hud.visible) };
   }
 
   /**
@@ -7962,7 +7965,7 @@ export class StyleManager {
    */
   setBloom({ enabled, intensityPct } = {}) {
     const current = () => ({
-      enabled: !!this.bloomEnabled,
+      enabled: Boolean(this.bloomEnabled),
       intensityPct: this._bloomSlider ? parseInt(this._bloomSlider.value, 10) : null,
     });
     if (enabled !== undefined && typeof enabled !== 'boolean') {
@@ -7993,7 +7996,7 @@ export class StyleManager {
    */
   setSharpen({ enabled, intensityPct } = {}) {
     const current = () => ({
-      enabled: !!this.sharpenEnabled,
+      enabled: Boolean(this.sharpenEnabled),
       intensityPct: this._sharpenSlider ? parseInt(this._sharpenSlider.value, 10) : null,
     });
     if (enabled !== undefined && typeof enabled !== 'boolean') {
@@ -8021,7 +8024,7 @@ export class StyleManager {
 
   /** Whether the full-globe celestial overlay is enabled by user preference. */
   get celestialRingEnabled() {
-    return !!this.celestialRing?.enabled;
+    return Boolean(this.celestialRing?.enabled);
   }
 
   /**
@@ -8038,7 +8041,7 @@ export class StyleManager {
     const styleSupported = isCelestialRingStyleSupported(this.activeStyle);
     const current = () => ({
       enabled: this.celestialRingEnabled,
-      visible: !!this.celestialRing?.visible,
+      visible: Boolean(this.celestialRing?.visible),
     });
     if (typeof enabled !== 'boolean') {
       return {
@@ -8078,7 +8081,7 @@ export class StyleManager {
     }
     let cameraFocused = false;
     if (nextEnabled && focus) {
-      cameraFocused = !!this.celestialRing?.focusFullGlobe();
+      cameraFocused = Boolean(this.celestialRing?.focusFullGlobe());
     }
     if (syncShare) this._syncShareState();
     return {
@@ -8094,7 +8097,7 @@ export class StyleManager {
    * @returns {{ok: boolean, orbiting: boolean, error?: string}}
    */
   setOrbit(enabled) {
-    const active = !!this.orbitController?.active;
+    const active = Boolean(this.orbitController?.active);
     if (typeof enabled === 'boolean' && enabled === active) {
       return { ok: true, orbiting: active };
     }
@@ -8106,7 +8109,7 @@ export class StyleManager {
       return { ok: false, orbiting: false, error: 'No active landmark to orbit — fly to a landmark first' };
     }
     this._toggleOrbit();
-    return { ok: true, orbiting: !!this.orbitController?.active };
+    return { ok: true, orbiting: Boolean(this.orbitController?.active) };
   }
 
   /**
@@ -8343,11 +8346,11 @@ export class StyleManager {
     const alreadyOnLayer = activeLayer === targetLayer;
     if (alreadyOnLayer && !aircraftClass) return { ok: true, retargeted: false };
     const moved = militaryAwarenessLayer?.navigateNext
-      ? !!militaryAwarenessLayer.navigateNext({
+      ? Boolean(militaryAwarenessLayer.navigateNext({
         targetLayer,
         aircraftClass,
         origin: 'voice',
-      })
+      }))
       : false;
     if (moved) return { ok: true, retargeted: true };
     // A filter that matched nothing still enters, as long as the layer is
@@ -8464,7 +8467,7 @@ export class StyleManager {
       };
     }
     if (normalized === 'exit') {
-      const exited = !!this.cockpitView.exit();
+      const exited = Boolean(this.cockpitView.exit());
       return {
         ok: exited,
         action: 'control_cockpit',
@@ -8505,22 +8508,22 @@ export class StyleManager {
     return {
       style: this.activeStyle || 'normal',
       mapStack: this.mapStackController?.getActiveId?.() || null,
-      hud: { visible: !!this.hud?.visible, layout: this.hud?.getVariant?.() || null },
+      hud: { visible: Boolean(this.hud?.visible), layout: this.hud?.getVariant?.() || null },
       detection: this.getDetectionState(),
       bloom: {
-        enabled: !!this.bloomEnabled,
+        enabled: Boolean(this.bloomEnabled),
         intensityPct: this._bloomSlider ? parseInt(this._bloomSlider.value, 10) : null,
       },
       sharpen: {
-        enabled: !!this.sharpenEnabled,
+        enabled: Boolean(this.sharpenEnabled),
         intensityPct: this._sharpenSlider ? parseInt(this._sharpenSlider.value, 10) : null,
       },
       celestialRing: {
         enabled: this.celestialRingEnabled,
-        visible: !!this.celestialRing?.visible,
+        visible: Boolean(this.celestialRing?.visible),
       },
-      orbiting: !!this.orbitController?.active,
-      recording: !!this._recordingMode,
+      orbiting: Boolean(this.orbitController?.active),
+      recording: Boolean(this._recordingMode),
       cleanView: document.body.classList.contains('ui-clean-view'),
     };
   }
@@ -8841,7 +8844,7 @@ export class StyleManager {
    */
   setRecordingMode(enabled, options = {}) {
     const { hidePanels = true, hudMode = 'minimal', safeFrame = '16:9' } = options;
-    this._recordingMode = !!enabled;
+    this._recordingMode = Boolean(enabled);
     this._recordingConfig = { hidePanels, hudMode, safeFrame };
 
     document.body.classList.toggle('recording-mode', this._recordingMode && hidePanels);
@@ -9408,7 +9411,7 @@ export class StyleManager {
     }
 
     const isCityChanged = this._activeLocationId && this._activeLocationId !== cityId;
-    const result = this._flyWithTransition(!!isCityChanged, (hooks) => flyToPresetLocation(this.viewer, cityId, hooks));
+    const result = this._flyWithTransition(Boolean(isCityChanged), (hooks) => flyToPresetLocation(this.viewer, cityId, hooks));
     if (result === false) return;
     this._expandPOIRow(cityId);
     this._setActiveLocation(cityId);
@@ -9432,7 +9435,7 @@ export class StyleManager {
    */
   _onPoiClick(cityId, poiIndex) {
     const isCityChanged = this._activeLocationId && this._activeLocationId !== cityId;
-    const result = this._flyWithTransition(!!isCityChanged, (hooks) => flyToPOI(this.viewer, cityId, poiIndex, hooks));
+    const result = this._flyWithTransition(Boolean(isCityChanged), (hooks) => flyToPOI(this.viewer, cityId, poiIndex, hooks));
     if (result === false) return;
     this._setActiveLocation(cityId);
     this._activePoiIndex = poiIndex;
@@ -9636,8 +9639,8 @@ export class StyleManager {
     this._preservePanelStateDuringLayerClear = true;
     this._syncContextModeButtons();
     this._userFacingContextNotificationTokens.add(notificationToken);
-    this._globalContextFlightsBtn && (this._globalContextFlightsBtn.disabled = true);
-    this._globalContextMissionsBtn && (this._globalContextMissionsBtn.disabled = true);
+    if (this._globalContextFlightsBtn) this._globalContextFlightsBtn.disabled = true;
+    if (this._globalContextMissionsBtn) this._globalContextMissionsBtn.disabled = true;
     this._clearSelectedLayersBtn.disabled = true;
     this._clearSelectedLayersBtn.setAttribute('aria-label', 'Clearing selected data layers');
 
@@ -9670,8 +9673,8 @@ export class StyleManager {
       if (generation === this._contextModeGeneration) {
         this._contextModeChanging = false;
         this._syncContextModeButtons();
-        this._globalContextFlightsBtn && (this._globalContextFlightsBtn.disabled = false);
-        this._globalContextMissionsBtn && (this._globalContextMissionsBtn.disabled = false);
+        if (this._globalContextFlightsBtn) this._globalContextFlightsBtn.disabled = false;
+        if (this._globalContextMissionsBtn) this._globalContextMissionsBtn.disabled = false;
       }
       this._clearSelectedLayersBtn.disabled = false;
       this._clearSelectedLayersBtn.setAttribute('aria-label', 'Clear selected data layers');
@@ -9838,7 +9841,7 @@ export class StyleManager {
   }
 
   _setModels3dEnabled(enabled) {
-    this._models3dEnabled = !!enabled;
+    this._models3dEnabled = Boolean(enabled);
     this._setModels3dParams({ models3d: this._models3dEnabled });
     this._syncModels3dButtonState();
   }
@@ -10080,7 +10083,7 @@ export class StyleManager {
 
   /** Whether a share link was used to load the page */
   get hasShareState() {
-    return !!this._hasShareState;
+    return Boolean(this._hasShareState);
   }
 
   /** Terminal result for the complete initial share restoration. */

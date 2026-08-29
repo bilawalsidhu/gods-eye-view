@@ -698,7 +698,7 @@ async function runBehaviorLayer() {
     r = await run('move_camera', { motion: 'orbit', mode: 'once' });
     await settle(5000);
     let h1 = await heading();
-    let dOnce = Math.abs(((h1 - h0 + 540) % 360) - 180);
+    const dOnce = Math.abs(((h1 - h0 + 540) % 360) - 180);
     report(r?.ok === true && dOnce > 10 && dOnce < 45,
       'behavior: orbit once advances ~30° and self-stops', `Δheading=${dOnce.toFixed(1)}° result=${JSON.stringify(r)?.slice(0, 90)}`);
 
@@ -763,11 +763,11 @@ async function runBehaviorLayer() {
       await settle(1500);
       if (Math.abs((await camState()).altKm - a) < a * 0.02) break;
     }
-    let altBefore = (await camState()).altKm;
+    const altBefore = (await camState()).altKm;
     r = await run('adjust_camera_zoom', { direction: 'out', amount: 'medium' });
     await settle(2500);
-    let altAfter = (await camState()).altKm;
-    let stillOrbiting = (await run('move_camera', { motion: 'stop' }))?.stopped === true;
+    const altAfter = (await camState()).altKm;
+    const stillOrbiting = (await run('move_camera', { motion: 'stop' }))?.stopped === true;
     report(r?.orbitRadiusAdjusted === true && altAfter > altBefore * 1.1 && stillOrbiting,
       'behavior: zoom during orbit grows the radius while circling',
       `alt ${altBefore.toFixed(2)}→${altAfter.toFixed(2)}km adjusted=${r?.orbitRadiusAdjusted} stillOrbiting=${stillOrbiting}`);
@@ -836,7 +836,7 @@ async function runBehaviorLayer() {
 
     // (8) get_entity_context returns basemap context
     r = await run('get_entity_context', {});
-    const hasContext = !!(r && (r.basemap || r.scene || r.context || r.viewScale || r.center));
+    const hasContext = Boolean(r && (r.basemap || r.scene || r.context || r.viewScale || r.center));
     report(hasContext, 'behavior: get_entity_context returns scene context', `keys=${Object.keys(r || {}).slice(0, 8).join(',')}`);
 
     // (9) set_context_mode — happy path and a refusal.
@@ -869,7 +869,7 @@ async function runBehaviorLayer() {
     );
     // Either it genuinely entered (an aircraft was tracked) or it refused with
     // a reason — the one thing it must never do is claim success while inert.
-    report((r?.ok === true && cockpitAfter) || (r?.ok !== true && !!r?.error && !cockpitAfter),
+    report((r?.ok === true && cockpitAfter) || (r?.ok !== true && Boolean(r?.error) && !cockpitAfter),
       'behavior: control_cockpit entry is honest about whether it entered',
       `ok=${r?.ok} error=${String(r?.error || '').slice(0, 80)} before=${cockpitBefore} after=${cockpitAfter}`);
     if (cockpitAfter) await run('control_cockpit', { action: 'exit' });
@@ -935,7 +935,7 @@ async function runBehaviorLayer() {
     );
     report(
       (r?.ok === true && layerAfter === 'military' && cockpitOn)
-      || (r?.ok !== true && !!r?.error && !cockpitOn),
+      || (r?.ok !== true && Boolean(r?.error) && !cockpitOn),
       'behavior: control_cockpit enter honours targetLayer or refuses by name',
       `ok=${r?.ok} subjectLayer=${layerAfter} active=${cockpitOn} error=${String(r?.error || '').slice(0, 90)}`,
     );

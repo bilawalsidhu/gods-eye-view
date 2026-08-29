@@ -125,7 +125,7 @@ test('there is no method guard and no query contract — parity with dev', async
   const original = globalThis.fetch;
   globalThis.fetch = async () => milResponse();
   try {
-    const res = await onRequest(ctx(new Request(url + '?bbox=-10,10,20,30', { method: 'POST' })));
+    const res = await onRequest(ctx(new Request(`${url  }?bbox=-10,10,20,30`, { method: 'POST' })));
     assert.equal(res.status, 200, 'dev never inspects req.method or req.url here');
     assert.equal(res.headers.get('x-ads-b-cache'), 'MISS', 'query params are not part of the cache key');
   } finally {

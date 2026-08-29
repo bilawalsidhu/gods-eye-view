@@ -91,7 +91,7 @@ export async function onRequest(context) {
 
   try {
     const now = Date.now();
-    let entry = mem.get(group);
+    const entry = mem.get(group);
     if (entry && now - entry.at < TLE_TTL_MS) {
       return send(200, entry.body, 'HIT');
     }

@@ -99,7 +99,7 @@ function fakeDataManager({ registered = REGISTERED, refuse = () => false } = {})
     setEnabledCalls,
     setParamsCalls,
     committed,
-    getAll: () => registered.map((id) => ({ id, enabled: !!enabled.get(id) })),
+    getAll: () => registered.map((id) => ({ id, enabled: Boolean(enabled.get(id)) })),
     getLayerParams: () => null,
     async setEnabled(id, shouldEnable, { signal } = {}) {
       setEnabledCalls.push({ id, enabled: shouldEnable, signal });

@@ -76,8 +76,7 @@ export async function readTextCapped(response, maxBytes) {
 export function coalesceRequest(inFlight, key, create) {
   const existing = inFlight.get(key);
   if (existing) return { promise: existing, shared: true };
-  let promise;
-  promise = Promise.resolve()
+  const promise = Promise.resolve()
     .then(create)
     .finally(() => {
       if (inFlight.get(key) === promise) inFlight.delete(key);

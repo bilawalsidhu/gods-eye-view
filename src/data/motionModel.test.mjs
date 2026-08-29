@@ -64,7 +64,7 @@ test('courseBetweenCartesians: due north ≈ 0°, due east ≈ 90°', () => {
   const from = cart(0, 0);
   const north = cart(1000 / 111320, 0);
   const east = cart(0, 1000 / (111320 * Math.cos(AUSTIN.lat * Math.PI / 180)));
-  assert.ok(Math.abs(norm180(courseBetweenCartesians(from, north) - 0)) < 0.5);
+  assert.ok(Math.abs(norm180(Number(courseBetweenCartesians(from, north)))) < 0.5);
   assert.ok(Math.abs(norm180(courseBetweenCartesians(from, east) - 90)) < 0.5);
 });
 
