@@ -1,6 +1,16 @@
 # God's Eye View Current State
 
-Updated: August 24, 2026
+Updated: August 30, 2026
+
+> **2026-08-30 — browser-local RTL-SDR and Local ADS-B.** The Radio panel can
+> connect an RTL2832U receiver through WebUSB, demodulate broadcast FM locally,
+> and seek directional spectrum peaks. The same tuner can switch to 1090 MHz
+> ADS-B at 2 MS/s. CRC-valid Mode S frames feed a separate Local ADS-B layer:
+> positioned contacts render as magenta heading-oriented 2D silhouettes, remain
+> non-trackable, participate in Detection bounding boxes, and show a callout only
+> when a callsign was decoded. Contacts expire at 30 seconds without another
+> packet. Receiver location is opt-in and all IQ/audio/aircraft processing stays
+> in the browser.
 
 > **2026-08-23 — first-run mission launcher** (`src/firstRunExperience.js`,
 > `#first-run-launcher`, styles at the tail of `style.css`). After startup
@@ -1592,6 +1602,7 @@ its criteria cannot be silently ignored.
 | Layer | Source | File | Proxy | Update Interval |
 |-------|--------|------|-------|-----------------|
 | Live Flights ✈️ | OpenSky Network; bounded adsb.lol regional fallback | `src/data/flights.js` | `/api/opensky` (OAuth + fallback) | 30s |
+| Local ADS-B 📡 | Browser-local RTL-SDR/WebUSB at 1090 MHz | `src/data/adsb.js`, `src/data/sdr/` | — | continuous USB stream; 30s contact expiry |
 | Military Flights 🎖️ | adsb.lol /v2/mil | `src/data/militaryFlights.js` | `/api/adsblol/mil` | 15s |
 | Live AIS Vessels 🚢 | AISStream websocket | `src/data/aisLiveVessels.js` | `/api/ais-live` | 60s (+800ms visibility pass) |
 | Mapped Installations ⌖ | OpenStreetMap mapped context; on-demand Google Maps Places supplement | `src/data/militaryInstallations.js` | `/api/military-installations`, `/api/google/text-search` | viewport-driven + user search; while unavailable, auto-retry 30 s → 240 s backoff |
@@ -1600,7 +1611,7 @@ its criteria cannot be silently ignored.
 | Space Missions (30d) | Launch Library 2 + CelesTrak | `src/data/rocketLaunches.js` | `/api/launches` + `/api/celestrak/active` | 5 min |
 | Traffic | OSM Overpass (+ optional TomTom live flow) | `src/data/traffic.js` | `/api/overpass` + `/api/tomtom` | viewport-driven |
 | CCTV | Austin + Caltrans (CA) + TfL London Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
-| Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
+| Radio | Radio Browser station directory + browser-local RTL-SDR FM | `src/data/radio.js`, `src/data/sdr/` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh / continuous USB stream |
 | Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
 | Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Dams ▰ | OpenInfraMap/OSM extract (bundled) | `src/data/localLayers.js` | — | static |

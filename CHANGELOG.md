@@ -7,6 +7,15 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Added
 
+- Added an optional browser-local RTL-SDR connection through WebUSB. The Radio
+  panel can tune and demodulate broadcast FM, seek nearby spectrum peaks, and
+  switch the same receiver to 1090 MHz ADS-B without a server or API key.
+- Added a separate Local ADS-B layer with CRC-valid Mode S decoding, CPR
+  positioning, magenta heading-oriented aircraft silhouettes, conditional
+  Detection callsigns/bounding boxes, and a 30-second stale-contact cutoff.
+- Added focused decoder, CPR, synthetic-IQ, FFT, seek, and receiver-lifecycle
+  tests. Third-party WebUSB and signal-processing dependencies are recorded in
+  `THIRD_PARTY_NOTICES.md`.
 - Added honest aircraft identity narration: callsign, operator, registration,
   type, and route come only from selected-contact context, and missing operator,
   route, or type enrichment is named explicitly.

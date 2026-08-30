@@ -38,6 +38,15 @@ How to read this:
 | **Radio Browser** | Geolocated internet-radio station directory and station-level tags | Public-domain directory data under PDDL 1.0; individual broadcaster stream terms apply | "Radio Browser" plus a link to the selected broadcaster |
 | **Re:Earth Terrain** (Mapterhorn) | Terrain (keyless globe stacks — OSM etc. — + `/api/terrain/heights` ellipsoidal-height lookups) | Terrain mesh: CC BY 4.0; geoid: EGM2008 (NGA, public domain) | "Terrain (keyless globe stacks): Re:Earth Terrain / Mapterhorn (CC BY 4.0) / EGM2008 (NGA)" |
 
+### Local receiver input (not fetched from a service)
+
+The optional Local ADS-B layer and broadcast-FM receiver consume radio samples
+directly from a user-selected RTL-SDR through WebUSB. Samples, decoded audio,
+aircraft messages, and optional receiver location remain browser-local and are
+not proxied, stored, or redistributed by GEV. ADS-B values are unauthenticated
+public broadcasts and may be incomplete, delayed, spoofed, or decoded in error;
+they are not suitable for navigation or operational use.
+
 ### Notes on the live sources
 
 - **Google Maps Platform.** You supply your own API key and are bound by [Google's ToS](https://cloud.google.com/maps-platform/terms). Google Maps Content (tiles, geocodes, places) **may not be cached, stored, rehosted, or committed** — this app only ever uses it live, which is the compliant pattern. The "Google" attribution is displayed on the globe and must stay visible. Restrict your key (see [SECURITY.md](SECURITY.md)).

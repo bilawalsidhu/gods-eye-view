@@ -68,6 +68,8 @@ import radioLayer, {
   radioTunerPointerPosition,
   radioTunerSlot,
 } from './data/radio.js';
+import sdrController from './data/sdr/controller.js';
+import adsbLayer from './data/adsb.js';
 import bikeshareLayer from './data/bikeshare.js';
 import aisLiveVesselsLayer from './data/aisLiveVessels.js';
 import militaryAwarenessLayer from './data/militaryAwareness.js';
@@ -2154,6 +2156,8 @@ export class StyleManager {
     this._cctvUnsubscribe = null;
     this._radioUnsubscribe = null;
     this._radioState = null;
+    this._sdrUnsubscribe = null;
+    this._sdrState = null;
     this._radioCategorySignature = '';
     this._radioTunerStations = [];
     this._radioTunerPool = [];
@@ -2308,6 +2312,18 @@ export class StyleManager {
     this._radioVolumeValue = document.getElementById('radio-volume-value');
     this._radioPlaybackState = document.getElementById('radio-playback-state');
     this._radioStationHomepage = document.getElementById('radio-station-homepage');
+    this._sdrConnectionState = document.getElementById('sdr-connection-state');
+    this._sdrConnectBtn = document.getElementById('sdr-connect-btn');
+    this._sdrLocateBtn = document.getElementById('sdr-locate-btn');
+    this._sdrModeFmBtn = document.getElementById('sdr-mode-fm-btn');
+    this._sdrModeAdsbBtn = document.getElementById('sdr-mode-adsb-btn');
+    this._sdrFrequencyInput = document.getElementById('sdr-frequency-input');
+    this._sdrTuneBtn = document.getElementById('sdr-tune-btn');
+    this._sdrSeekBackBtn = document.getElementById('sdr-seek-back-btn');
+    this._sdrSeekForwardBtn = document.getElementById('sdr-seek-forward-btn');
+    this._sdrVolume = document.getElementById('sdr-volume');
+    this._sdrVolumeValue = document.getElementById('sdr-volume-value');
+    this._sdrStatus = document.getElementById('sdr-status');
     this._globalContextFlightsBtn = document.getElementById('global-context-flights-btn');
     this._globalContextMissionsBtn = document.getElementById('global-context-missions-btn');
     this._contextModeStandby = document.getElementById('context-mode-standby');
@@ -2606,7 +2622,7 @@ export class StyleManager {
 
     // Initialize detection overlay BEFORE style stages so the composite
     // stage is first in the post-process pipeline
-    initDetection(viewer, [trafficLayer, flightsLayer, militaryFlightsLayer, satellitesLayer, cctvLayer, bikeshareLayer, aisLiveVesselsLayer], (modeLabel) => {
+    initDetection(viewer, [trafficLayer, flightsLayer, militaryFlightsLayer, adsbLayer, satellitesLayer, cctvLayer, bikeshareLayer, aisLiveVesselsLayer], (modeLabel) => {
       this._updateDetectionButton(modeLabel);
     });
     initTrackedReadout(viewer);
@@ -4484,6 +4500,8 @@ export class StyleManager {
         this._renderRadioState(state);
       });
     }
+    this._sdrUnsubscribe?.();
+    this._sdrUnsubscribe = sdrController.subscribe((state) => this._renderSdrState(state));
     if (!this._awarenessSelectedHandler) {
       this._awarenessSelectedHandler = (event) => this._persistAwarenessSelection(event, false);
       this._awarenessClearedHandler = (event) => this._persistAwarenessSelection(event, true);
@@ -5637,6 +5655,63 @@ export class StyleManager {
       if (this._radioVolumeValue) this._radioVolumeValue.textContent = `${value}%`;
       this._dataManager?.setLayerParams('radio', { volume: value / 100 }, { origin: 'user' });
     });
+    const stopDirectoryAudio = () => {
+      this._preserveRadioPanelDuringSdrAction = true;
+      try {
+        return radioLayer.stopPlayback({ origin: 'user' });
+      } finally {
+        this._preserveRadioPanelDuringSdrAction = false;
+      }
+    };
+    const setSdrMode = async (mode) => {
+      stopDirectoryAudio();
+      if (mode === 'fm' && this._dataManager?.isEnabled('adsb')) {
+        await this._dataManager.setEnabled('adsb', false, { origin: 'user' });
+      }
+      const changed = await sdrController.setMode(mode);
+      if (changed && mode === 'adsb' && sdrController.getState().connected) {
+        await this._dataManager?.setEnabled('adsb', true, { origin: 'user' });
+      }
+    };
+    this._sdrConnectBtn?.addEventListener('click', async () => {
+      const before = sdrController.getState();
+      if (before.connected) {
+        await sdrController.stop();
+        return;
+      }
+      stopDirectoryAudio();
+      const connected = await sdrController.connect(before.mode);
+      if (connected && before.mode === 'adsb') {
+        await this._dataManager?.setEnabled('adsb', true, { origin: 'user' });
+      }
+    });
+    this._sdrLocateBtn?.addEventListener('click', () => void sdrController.requestReceiverLocation());
+    this._sdrModeFmBtn?.addEventListener('click', () => void setSdrMode('fm'));
+    this._sdrModeAdsbBtn?.addEventListener('click', () => void setSdrMode('adsb'));
+    const tuneSdrFm = () => {
+      stopDirectoryAudio();
+      const mhz = Number(this._sdrFrequencyInput?.value);
+      if (Number.isFinite(mhz)) void sdrController.tuneFm(mhz * 1_000_000);
+    };
+    this._sdrTuneBtn?.addEventListener('click', tuneSdrFm);
+    this._sdrFrequencyInput?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      tuneSdrFm();
+    });
+    this._sdrSeekBackBtn?.addEventListener('click', () => {
+      stopDirectoryAudio();
+      void sdrController.seekFm(-1);
+    });
+    this._sdrSeekForwardBtn?.addEventListener('click', () => {
+      stopDirectoryAudio();
+      void sdrController.seekFm(1);
+    });
+    this._sdrVolume?.addEventListener('input', () => {
+      const value = Number(this._sdrVolume.value);
+      sdrController.setVolume(value / 100);
+      if (this._sdrVolumeValue) this._sdrVolumeValue.textContent = `${value}%`;
+    });
     this._contextRadioMiniPrevBtn?.addEventListener('click', () => cycleRadio(-1));
     this._contextRadioMiniNextBtn?.addEventListener('click', () => cycleRadio(1));
     this._contextRadioMiniPlayBtn?.addEventListener('click', () => void radioLayer.togglePlayback({ origin: 'user' }));
@@ -6080,11 +6155,91 @@ export class StyleManager {
     if (
       !enabled
       && !transitioning
+      && !this._sdrState?.connected
       && !this._preservePanelStateDuringLayerClear
+      && !this._preserveRadioPanelDuringSdrAction
       && !this._radioPanel.classList.contains('collapsed')
     ) {
       this.setPanelCollapsed('radio-panel', true);
     }
+    this._scheduleRightPanelLayout();
+  }
+
+  /** Render the browser-local RTL-SDR controls independently from Internet Radio. */
+  _renderSdrState(state) {
+    if (!state || !this._radioPanel) return;
+    this._sdrState = state;
+    const transitional = state.status === 'connecting' || state.status === 'tuning';
+    const fmActive = state.mode === 'fm';
+    const adsbActive = state.mode === 'adsb';
+    const fmInteractive = state.connected && fmActive && state.status === 'streaming';
+
+    if (this._sdrConnectionState) {
+      this._sdrConnectionState.textContent = state.connected
+        ? (adsbActive ? `${state.aircraft.length} CONTACTS` : 'STREAMING')
+        : state.status.toUpperCase();
+      this._sdrConnectionState.classList.toggle('active', state.connected);
+    }
+    if (this._sdrConnectBtn) {
+      this._sdrConnectBtn.textContent = transitional
+        ? state.status.toUpperCase()
+        : (state.connected ? 'DISCONNECT' : 'CONNECT');
+      this._sdrConnectBtn.disabled = transitional || !state.webUsbSupported;
+      this._sdrConnectBtn.classList.toggle('active', state.connected);
+      this._sdrConnectBtn.setAttribute('aria-pressed', String(state.connected));
+    }
+    for (const [button, active] of [[this._sdrModeFmBtn, fmActive], [this._sdrModeAdsbBtn, adsbActive]]) {
+      button?.classList.toggle('active', active);
+      button?.setAttribute('aria-pressed', String(active));
+      if (button) button.disabled = transitional;
+    }
+    if (this._sdrLocateBtn) {
+      this._sdrLocateBtn.disabled = state.locationStatus === 'requesting';
+      this._sdrLocateBtn.textContent = state.locationStatus === 'requesting'
+        ? 'LOCATING…'
+        : (state.locationStatus === 'ready' ? 'LOCATED' : 'LOCATE');
+      this._sdrLocateBtn.classList.toggle('active', state.locationStatus === 'ready');
+    }
+    if (this._sdrFrequencyInput) {
+      this._sdrFrequencyInput.disabled = !fmActive || transitional;
+      if (document.activeElement !== this._sdrFrequencyInput && fmActive) {
+        this._sdrFrequencyInput.value = (state.frequencyHz / 1_000_000).toFixed(1);
+      }
+    }
+    if (this._sdrTuneBtn) this._sdrTuneBtn.disabled = !state.connected || !fmActive || transitional;
+    if (this._sdrSeekBackBtn) this._sdrSeekBackBtn.disabled = !fmInteractive || state.seeking;
+    if (this._sdrSeekForwardBtn) this._sdrSeekForwardBtn.disabled = !fmInteractive || state.seeking;
+    if (this._sdrVolume && document.activeElement !== this._sdrVolume) {
+      this._sdrVolume.value = String(Math.round(state.volume * 100));
+    }
+    if (this._sdrVolume) this._sdrVolume.disabled = !fmActive;
+    if (this._sdrVolumeValue) this._sdrVolumeValue.textContent = `${Math.round(state.volume * 100)}%`;
+    if (this._sdrStatus) {
+      const positioned = state.aircraft.filter((entry) => (
+        Number.isFinite(entry.latitude) && Number.isFinite(entry.longitude)
+      )).length;
+      const iqStatus = state.samplesPerSecond > 0
+        ? `${(state.samplesPerSecond / 1_000_000).toFixed(2)} MS/s IQ`
+        : 'waiting for IQ';
+      const workerStatus = state.workerBlocks > 0
+        ? `DSP ${state.workerBlocks} blocks`
+        : 'DSP waiting';
+      const rfStatus = Number.isFinite(state.iqLevelDbfs)
+        ? `RF ${state.iqLevelDbfs.toFixed(1)} dBFS`
+        : 'RF --';
+      let detail = state.seeking ? state.seekMessage : (state.seekMessage || state.message);
+      if (adsbActive && state.connected) {
+        detail = `${state.message} · ${iqStatus} · ${workerStatus} · ${rfStatus} · ${positioned}/${state.aircraft.length} positioned · ${state.decodedMessages} messages`;
+      } else if (fmActive && state.connected) {
+        const audioSignal = Number.isFinite(state.audioLevelDbfs)
+          ? `${state.audioLevelDbfs.toFixed(1)} dBFS audio`
+          : 'audio signal --';
+        detail = `${detail} · ${iqStatus} · ${workerStatus} · ${rfStatus} · ${audioSignal} · audio ${state.audioState}`;
+      }
+      this._sdrStatus.textContent = detail;
+      this._sdrStatus.classList.toggle('error', state.status === 'error' || state.status === 'unsupported');
+    }
+    this._radioPanel.classList.toggle('sdr-connected', state.connected);
     this._scheduleRightPanelLayout();
   }
 
@@ -10270,6 +10425,8 @@ export class StyleManager {
     }
     this._radioUnsubscribe?.();
     this._radioUnsubscribe = null;
+    this._sdrUnsubscribe?.();
+    this._sdrUnsubscribe = null;
     this._radioTunerAbort?.abort();
     this._radioTunerAbort = null;
     this._radioTunerBandPinnedForNavigation = false;

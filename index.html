@@ -768,7 +768,7 @@
             </div>
           </div>
         </section>
-        <section id="radio-panel" class="panel-collapsible collapsed" data-panel-id="radio-panel" aria-label="Internet radio companion">
+        <section id="radio-panel" class="panel-collapsible collapsed" data-panel-id="radio-panel" aria-label="Internet radio and local SDR">
           <div class="radio-panel-inner">
             <div class="panel-header">
               <span class="panel-title">RADIO</span>
@@ -821,6 +821,36 @@
               <a href="https://www.radio-browser.info/" target="_blank" rel="noopener noreferrer">DIRECTORY: RADIO BROWSER</a>
             </div>
             <p class="radio-privacy">Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.</p>
+            <div class="sdr-radio-card" aria-label="Local RTL-SDR receiver">
+              <div class="sdr-radio-heading">
+                <strong>LOCAL RTL-SDR</strong>
+                <span id="sdr-connection-state">NO USB</span>
+              </div>
+              <p>Chrome/Edge · WebUSB · one local tuner shared by FM and the ADS-B layer.</p>
+              <div class="sdr-radio-actions">
+                <button id="sdr-connect-btn" class="panel-layer-toggle" type="button">CONNECT</button>
+                <button id="sdr-locate-btn" type="button" title="Use receiver location for faster ADS-B position decoding">LOCATE</button>
+              </div>
+              <div class="sdr-mode-row" role="group" aria-label="RTL-SDR receiver mode">
+                <button id="sdr-mode-fm-btn" class="active" type="button" aria-pressed="true">FM</button>
+                <button id="sdr-mode-adsb-btn" type="button" aria-pressed="false">ADS-B · 1090</button>
+              </div>
+              <div class="sdr-frequency-row">
+                <label for="sdr-frequency-input">FM MHZ</label>
+                <input id="sdr-frequency-input" type="number" min="87.5" max="108" step="0.1" value="98.5" inputmode="decimal" />
+                <button id="sdr-tune-btn" type="button">TUNE</button>
+              </div>
+              <div class="sdr-seek-row" role="group" aria-label="Seek broadcast FM stations">
+                <button id="sdr-seek-back-btn" type="button" disabled>◀ SEEK</button>
+                <button id="sdr-seek-forward-btn" type="button" disabled>SEEK ▶</button>
+              </div>
+              <label class="radio-volume-row" for="sdr-volume">
+                <span>SDR VOL</span>
+                <input id="sdr-volume" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Local SDR volume" />
+                <output id="sdr-volume-value" class="gev-slider-value" for="sdr-volume">80%</output>
+              </label>
+              <div id="sdr-status" class="radio-playback-state" role="status" aria-live="polite">Connect an RTL-SDR to begin.</div>
+            </div>
           </div>
         </section>
       </div>

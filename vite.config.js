@@ -7330,7 +7330,7 @@ function normalizeAisTimestamp(value) {
  * plugins, configures the dev server host/port, and exposes selected
  * API keys to the client as import.meta.env defines.
  */
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   // Load only this checkout's dotenv files. Shell/Keychain values still win,
   // and no sibling workspace is consulted implicitly.
   const loaded = loadEnv(mode, __dirname, '');
@@ -7339,6 +7339,10 @@ export default defineConfig(({ mode }) => {
   }
   const env = { ...process.env };
   return {
+    // A production build may clean its dependency cache while a dev server is
+    // still serving from its own. Keep those processes from invalidating one
+    // another's optimized module URLs.
+    cacheDir: command === 'serve' ? 'node_modules/.vite' : 'node_modules/.vite-build',
     plugins: [
       cesium(),
       openSkyProxy(),
@@ -7361,6 +7365,17 @@ export default defineConfig(({ mode }) => {
       openAiRealtimeProxy(),
       googlePlacesContextProxy(),
     ],
+    optimizeDeps: {
+      // These entries are first reached through a worker or dynamic import.
+      // Pre-bundle them at startup so first use cannot invalidate already-
+      // transformed URLs with Vite's "Outdated Optimize Dep" 504 response.
+      include: [
+        '@jtarrio/signals/demod/demodulator.js',
+        '@jtarrio/signals/demod/modes.js',
+        '@jtarrio/webrtlsdr/rtlsdr.js',
+        'egm96-universal',
+      ],
+    },
     server: {
       host: env.HOST || 'localhost',
       port: parseInt(env.PORT, 10) || 5173,

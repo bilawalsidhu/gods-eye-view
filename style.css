@@ -5700,6 +5700,75 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   color: rgba(190, 230, 230, .48);
   font: 7px/1.4 var(--font-mono);
 }
+.sdr-radio-card {
+  display: grid;
+  gap: 7px;
+  margin-top: 3px;
+  padding: 9px;
+  border: 1px solid rgba(255, 170, 60, .28);
+  border-radius: 7px;
+  background: linear-gradient(180deg, rgba(31, 18, 4, .58), rgba(4, 20, 24, .72));
+}
+.sdr-radio-heading,
+.sdr-radio-actions,
+.sdr-mode-row,
+.sdr-frequency-row,
+.sdr-seek-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sdr-radio-heading { justify-content: space-between; }
+.sdr-radio-heading strong {
+  color: #ffd38a;
+  font: 9px/1 var(--font-mono);
+  letter-spacing: .1em;
+}
+#sdr-connection-state {
+  color: #9e865f;
+  font: 7px/1 var(--font-mono);
+  letter-spacing: .1em;
+}
+#sdr-connection-state.active { color: #74f7c4; }
+.sdr-radio-card > p {
+  margin: 0;
+  color: rgba(213, 230, 225, .58);
+  font: 7px/1.4 var(--font-mono);
+}
+.sdr-radio-card button,
+.sdr-radio-card input[type="number"] {
+  min-height: 28px;
+  border: 1px solid rgba(255, 183, 82, .28);
+  border-radius: 5px;
+  color: #ffd79a;
+  background: rgba(38, 25, 8, .52);
+  font: 8px/1 var(--font-mono);
+}
+.sdr-radio-card button { padding: 6px 8px; cursor: pointer; }
+.sdr-radio-card button:hover:not(:disabled),
+.sdr-radio-card button:focus-visible:not(:disabled),
+.sdr-radio-card button.active {
+  border-color: #ffd38a;
+  color: #fff;
+  outline: none;
+  background: rgba(130, 83, 18, .28);
+}
+.sdr-radio-card button:disabled { opacity: .4; cursor: not-allowed; }
+.sdr-radio-actions > *, .sdr-mode-row > *, .sdr-seek-row > * { flex: 1; }
+.sdr-frequency-row label {
+  color: #9e865f;
+  font: 7px/1 var(--font-mono);
+  letter-spacing: .08em;
+}
+.sdr-frequency-row input[type="number"] {
+  width: 78px;
+  min-width: 0;
+  padding: 5px 7px;
+}
+.sdr-frequency-row button { margin-left: auto; }
+.sdr-radio-card .radio-volume-row { color: #9e865f; }
+.sdr-radio-card .radio-playback-state { color: #ddbe86; }
+.sdr-radio-card .radio-playback-state.error { color: #ff9d8f; }
 #military-awareness-panel {
   width: 100%;
   min-height: 0;

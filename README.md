@@ -179,19 +179,20 @@ Twenty-eight tools, four jobs — the commands below come straight from the prod
 
 ## 🛰️ What's on the Globe
 
-Thirteen live layers. **Ten of them need nothing at all** — no key, no account, no signup.
+Fourteen live layers. **Eleven of them need nothing at all** — no key, no account, no signup.
 
 | Layer | What you get | Source | Auth |
 |-------|--------------|--------|------|
 | 🗺️ **Map Stack** | Google Photorealistic 3D, Bing aerial, OSM | Google / Ion / OSM | 🔴 Google (required) · 🟡 ion for Bing · 🟢 OSM |
 | ✈️ **Live Flights** | Thousands of live aircraft + route history | OpenSky + adsb.lol | 🟢 (🟡 optional for more polling credits) |
+| 📡 **Local ADS-B** | Aircraft received directly from your own 1090 MHz USB tuner, rendered as magenta flight silhouettes | RTL-SDR via WebUSB | 🟢 no API key · hardware required |
 | 🎖️ **Military Flights** | ADS-B military traffic in amber | adsb.lol | 🟢 |
 | 🚢 **Live Vessels** | Thousands of ships worldwide | AISStream | 🟡 |
 | 🛰️ **Satellites** | A roughly 840-object core catalog, color-coded by class with a live legend — the **DENSE** chip drops in the whole Starlink shell | CelesTrak | 🟢 |
 | 🌍 **Earthquakes** | Global seismic activity, last 24h | USGS | 🟢 |
 | 🚗 **Traffic** | Live congestion driving per-vehicle flow at street level — dive below ~8 km and the dots color to real jams. Keyless it's an approximate simulation | TomTom + OSM | 🟢 (🟡 TomTom makes it real — get one) |
 | 📹 **CCTV Mesh** | ~800 public cameras projected *into* the 3D space — Austin · California (Caltrans) · London (TfL). Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs | 🟢 |
-| 📻 **Radio** | Geolocated world radio with an **analog tuner** — drag the needle across up to 750 stations and the globe flies to each broadcaster | Radio Browser / broadcasters | 🟢 |
+| 📻 **Radio** | Geolocated Internet radio plus local broadcast-FM tuning and directional seek with an RTL-SDR | Radio Browser / local RF | 🟢 |
 | 🚲 **Bikeshare** | Live station availability | GBFS | 🟢 |
 | 🔥 **Active Fires** | Live NASA FIRMS detections, trailing 24h | NASA FIRMS | 🟡 |
 | 🚀 **Space Missions** | Rolling 30-day launches with payload, stage, and recovery detail | Launch Library 2 | 🟢 (🟡 optional token raises the allowance) |
@@ -304,6 +305,28 @@ Five keys cover the fully keyed experience. Three currently offer no-cost develo
 | 🟡 | **Launch Library 2** | 🚀 Higher space-missions request allowance (🟢 works without) | [thespacedevs.com](https://thespacedevs.com) |
 
 All of them are worth getting. None of them are required to start.
+
+### Optional local RTL-SDR receiver
+
+No API key is needed for the local receiver. Plug in an RTL2832U device with an
+R820/828-series tuner, open the app on localhost or HTTPS in desktop Chrome or
+Edge, then expand **Radio → Local RTL-SDR** and press **Connect**. WebUSB asks
+for device permission only when this app origin has not already been authorized;
+samples stay on the machine.
+
+The single tuner has two modes:
+
+- **FM** starts at 98.5 MHz with a 2.048 MS/s sample rate, tunes 87.5–108.0 MHz,
+  plays locally demodulated audio, and seeks the nearest directional spectrum
+  peak on the 100 kHz broadcast raster.
+- **ADS-B · 1090** uses a 2.000 MS/s sample rate, decodes CRC-valid Mode S
+  extended squitters, and publishes positioned contacts to the separate
+  **Local ADS-B** globe layer. **Locate** is optional and enables local CPR
+  resolution when no global even/odd pair is available.
+
+WebUSB is not available in Safari or Firefox. On Windows, the dongle may need a
+WinUSB driver, and any native SDR application must release the device before the
+browser can claim it.
 
 ```bash
 # Put keys in .env (see .env.example), or pass them as env vars:

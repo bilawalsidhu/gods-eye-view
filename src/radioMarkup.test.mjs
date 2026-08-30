@@ -6,6 +6,7 @@ import test from 'node:test';
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
 const radio = readFileSync(new URL('./data/radio.js', import.meta.url), 'utf8');
+const localAdsb = readFileSync(new URL('./data/adsb.js', import.meta.url), 'utf8');
 const rocketLaunches = readFileSync(new URL('./data/rocketLaunches.js', import.meta.url), 'utf8');
 const realtime = readFileSync(new URL('./voice/gevRealtime.js', import.meta.url), 'utf8');
 const voice = readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
@@ -187,7 +188,7 @@ test('no unchanged Realtime tool definition drifts silently', () => {
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {
-  for (const id of ['cockpit-radio-volume', 'context-radio-mini-volume', 'radio-volume']) {
+  for (const id of ['cockpit-radio-volume', 'context-radio-mini-volume', 'radio-volume', 'sdr-volume']) {
     assert.match(
       html,
       new RegExp(`id="${id}"[^>]*class="gev-quantitative-slider"[^>]*type="range"`),
@@ -205,6 +206,61 @@ test('Radio volume and mission speed share the Sharpen slider visual language', 
   assert.match(css, /\.gev-quantitative-slider:disabled\s*\{[\s\S]*?opacity: \.42;[\s\S]*?cursor: not-allowed;/);
   assert.match(css, /\.gev-slider-value\s*\{[\s\S]*?color: var\(--accent\);[\s\S]*?font-size: 9px;/);
   assert.doesNotMatch(css, /#space-mission-panel \[data-mission-replay-speed\]::-webkit-slider-thumb/);
+});
+
+test('Local RTL-SDR exposes explicit WebUSB, FM seek, and ADS-B controls', () => {
+  for (const id of [
+    'sdr-connect-btn',
+    'sdr-locate-btn',
+    'sdr-mode-fm-btn',
+    'sdr-mode-adsb-btn',
+    'sdr-frequency-input',
+    'sdr-tune-btn',
+    'sdr-seek-back-btn',
+    'sdr-seek-forward-btn',
+    'sdr-status',
+  ]) {
+    assert.match(html, new RegExp(`id="${id}"`), `${id} is missing`);
+  }
+  assert.match(ui, /sdrController\.connect\(before\.mode\)/);
+  assert.match(ui, /sdrController\.seekFm\(-1\)/);
+  assert.match(ui, /sdrController\.seekFm\(1\)/);
+  assert.match(ui, /setEnabled\('adsb', true, \{ origin: 'user' \}\)/);
+  assert.match(ui, /import adsbLayer from '\.\/data\/adsb\.js';/);
+  assert.match(
+    ui,
+    /initDetection\(viewer, \[[^\]]*militaryFlightsLayer, adsbLayer, satellitesLayer/,
+    'Local ADS-B must participate in the shared callsign and bounding-box renderer',
+  );
+  assert.match(
+    localAdsb,
+    /CONTACT_COLOR = Cesium\.Color\.fromCssColorString\('#ff4fd8'\)/,
+    'locally received aircraft keep their dedicated magenta identity',
+  );
+  assert.match(css, /\.sdr-radio-card\s*\{/);
+});
+
+test('lazy browser dependencies are pre-bundled before first feature activation', () => {
+  assert.match(
+    voice,
+    /cacheDir: command === 'serve' \? 'node_modules\/\.vite' : 'node_modules\/\.vite-build'/,
+    'builds must not clear a running dev server dependency cache',
+  );
+  const start = voice.indexOf('optimizeDeps:');
+  const end = voice.indexOf('\n    server:', start);
+  assert.ok(start >= 0 && end > start, 'Vite optimizeDeps block is missing');
+  const optimized = voice.slice(start, end);
+  for (const dependency of [
+    '@jtarrio/signals/demod/demodulator.js',
+    '@jtarrio/signals/demod/modes.js',
+    '@jtarrio/webrtlsdr/rtlsdr.js',
+    'egm96-universal',
+  ]) {
+    assert.ok(
+      optimized.includes(`'${dependency}'`),
+      `${dependency} must be optimized before its first lazy load`,
+    );
+  }
 });
 
 test('Radio is nested inside Context with separate disclosure and power controls', () => {
