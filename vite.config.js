@@ -741,11 +741,76 @@ export function coalesceProxyRequest(inFlight, key, create) {
 const RADIO_DIRECTORY_CACHE_MS = 45 * 60 * 1000;
 const RADIO_DIRECTORY_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 const RADIO_MIRROR_CACHE_MS = 6 * 60 * 60 * 1000;
-const RADIO_FETCH_TIMEOUT_MS = 12_000;
-const RADIO_RESPONSE_MAX_BYTES = 4 * 1024 * 1024;
-const RADIO_DIRECTORY_LIMIT = 750;
+const RADIO_FETCH_TIMEOUT_MS = 18_000;
+const RADIO_RESPONSE_MAX_BYTES = 10 * 1024 * 1024;
+/** Max stations kept in the merged directory catalog served to the client. */
+export const RADIO_DIRECTORY_LIMIT = 2000;
 const RADIO_CATALOG_MIN_SUCCESSFUL_QUERIES = 5;
-const RADIO_CATALOG_HEALTHY_MIN_STATIONS = Math.ceil(RADIO_DIRECTORY_LIMIT / 2);
+// "Healthy" is about getting a usable catalog, not filling the cap — keep this a
+// fixed floor rather than a ratio of RADIO_DIRECTORY_LIMIT (raising the cap must
+// not retroactively make previously-healthy catalogs count as degraded).
+const RADIO_CATALOG_HEALTHY_MIN_STATIONS = 375;
+// The broad catalog query orders by GLOBAL clickcount, so stations from smaller
+// markets almost never surface. Each ISO-3166-1 alpha-2 code here gets its own
+// "top stations in this country" query, seeded ahead of the popularity fill
+// exactly like the specialist-tag queries — extend freely, each adds one cached
+// upstream request per 45-min catalog refresh.
+export const RADIO_COUNTRY_SEEDS = Object.freeze(['AU', 'NZ', 'IE', 'ZA']);
+
+// Hand-picked stations that are always in the catalog — regardless of upstream
+// popularity, or of whether Radio Browser lists them at all. Each entry is in
+// Radio Browser's own row shape and is run through `normalizeRadioBrowserStation`,
+// so it gets the identical URL-safety / geo / codec / uuid validation and the
+// identical output shape as upstream data. Requirements for an entry:
+//   - `stationuuid`: a STABLE synthetic v4-shaped id, hex only (RADIO_UUID_RE);
+//     the `cc0a7ed0` prefix marks it as curated.
+//   - `url_resolved`: a direct progressive MP3/AAC stream (NOT an HLS `.m3u8` —
+//     the client plays a bare <audio> element; `hls: 1` is rejected upstream too).
+//   - `geo_lat`/`geo_long`, `countrycode`, `codec`, `lastcheckok: 1`.
+export const RADIO_CURATED_STATIONS = Object.freeze([
+  Object.freeze({
+    stationuuid: 'cc0a7ed0-0000-4000-8000-000000000001',
+    name: 'Triple M Gippsland 94.3',
+    // Direct AAC+ (HE-AACv2, ~33 kbps) ICY stream — SCA StreamGuys edge. The
+    // LiSTNR site only exposes the HLS variant; this progressive endpoint plays
+    // in a plain <audio> element and is not geo-locked at the CDN.
+    url_resolved: 'https://sa47.scastream.com.au/3sea_32',
+    homepage: 'https://triplem.listnr.com/gippsland/',
+    countrycode: 'AU',
+    state: 'Victoria',
+    tags: 'rock,classic rock,commercial,gippsland,latrobe valley',
+    language: 'English',
+    codec: 'AAC+',
+    bitrate: 33,
+    hls: 0,
+    lastcheckok: 1,
+    // SCA Traralgon studios — ~15 km east of Moe, the licence area's centre.
+    geo_lat: -38.1953,
+    geo_long: 146.5403,
+  }),
+  Object.freeze({
+    stationuuid: 'cc0a7ed0-0000-4000-8000-000000000002',
+    name: 'Connect FM 89.7 Naracoorte',
+    // 5TCB FM community radio — Naracoorte / Bordertown / Keith, Limestone
+    // Coast SA. 128 kbps MP3 via Caster.fm; the `authn…` token is a stable
+    // per-station stream key (verified constant across fresh page loads), not a
+    // rotating session token — refresh it here if the stream ever 401s.
+    url_resolved: 'https://shaincast.caster.fm:20500/listen.mp3?authn3438c7264d9b341098ec72e054776416',
+    homepage: 'https://5tcbfm.caster.fm/',
+    countrycode: 'AU',
+    state: 'South Australia',
+    tags: 'community radio,local news,naracoorte,limestone coast',
+    language: 'English',
+    codec: 'MP3',
+    bitrate: 128,
+    hls: 0,
+    lastcheckok: 1,
+    // Naracoorte town centre.
+    geo_lat: -36.9576,
+    geo_long: 140.7373,
+  }),
+]);
+
 const RADIO_USER_AGENT = 'GodsEyeView/1.0 (Radio Browser directory client)';
 const RADIO_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RADIO_FALLBACK_MIRRORS = Object.freeze([
@@ -851,6 +916,26 @@ export function normalizeRadioBrowserStation(raw) {
     bitrate: Number.isInteger(bitrate) && bitrate >= 8 && bitrate <= 1024 ? bitrate : null,
     clickCount: Math.max(0, Math.min(10_000_000, Number(raw?.clickcount) || 0)),
   };
+}
+
+let _curatedRadioStationsCache = null;
+
+/**
+ * `RADIO_CURATED_STATIONS` passed through the upstream normalizer. Memoized.
+ * A curated entry that fails validation (bad stream URL, geo, codec, uuid) is
+ * dropped with a warning rather than poisoning the served catalog.
+ * @returns {ReturnType<typeof normalizeRadioBrowserStation>[]}
+ */
+export function normalizeCuratedRadioStations() {
+  if (_curatedRadioStationsCache) return _curatedRadioStationsCache;
+  const normalized = [];
+  for (const raw of RADIO_CURATED_STATIONS) {
+    const station = normalizeRadioBrowserStation(raw);
+    if (station) normalized.push(station);
+    else console.warn(`[radio] curated station rejected by the normalizer: ${raw?.name || raw?.stationuuid || 'unknown'}`);
+  }
+  _curatedRadioStationsCache = normalized;
+  return normalized;
 }
 
 export function publicRadioStation(station) {
@@ -1004,6 +1089,9 @@ export function createRadioProxyMiddleware({ fetchImpl = null, lookupImpl = look
   const catalogInstance = randomUUID();
   let servedStationIds = new Set();
   let refreshPromise = null;
+  // Curated ids exist only in this app — a play-count ping to Radio Browser for
+  // one would just 404. Served (so /click accepts them) but not forwarded.
+  const curatedStationIds = new Set(normalizeCuratedRadioStations().map((station) => station.id));
 
   async function fetchJson(url, maxBytes = RADIO_RESPONSE_MAX_BYTES) {
     const destination = radioProxyDestination(url);
@@ -1064,17 +1152,27 @@ export function createRadioProxyMiddleware({ fetchImpl = null, lookupImpl = look
   }
 
   async function refreshCatalog() {
-    const queries = [null, 'news', 'talk', 'weather', 'emergency', 'scanner', 'aviation', 'marine', 'traffic'];
-    const outcomes = await mapRadioConcurrent(queries, 3, async (tag, index) => {
+    // Index 0 must stay the broad (null-tag) query — the health check and the
+    // 2600-row limit below key off `index === 0`. Tag queries first, then the
+    // per-country seeds (see RADIO_COUNTRY_SEEDS).
+    const queries = [
+      ...[null, 'news', 'talk', 'weather', 'emergency', 'scanner', 'aviation', 'marine', 'traffic']
+        .map((tag) => ({ tag })),
+      ...RADIO_COUNTRY_SEEDS.map((countryCode) => ({ countryCode })),
+    ];
+    const outcomes = await mapRadioConcurrent(queries, 3, async (descriptor, index) => {
+      const tag = descriptor.tag || null;
+      const countryCode = descriptor.countryCode || null;
       const params = new URLSearchParams({
         has_geo_info: 'true',
         is_https: 'true',
         hidebroken: 'true',
         order: 'clickcount',
         reverse: 'true',
-        limit: index === 0 ? '1800' : '220',
+        limit: index === 0 ? '2600' : '280',
       });
       if (tag) params.set('tag', tag);
+      if (countryCode) params.set('countrycode', countryCode);
       try {
         const rows = await fetchPath(`/json/stations/search?${params}`);
         if (!Array.isArray(rows)) throw new Error('Radio Browser catalog payload was not an array');
@@ -1095,11 +1193,17 @@ export function createRadioProxyMiddleware({ fetchImpl = null, lookupImpl = look
         const requestedTagCovered = !requestedTag || stations.some((station) => (
           station.tags.some((stationTag) => stationTag === requestedTag || stationTag.includes(requestedTag))
         ));
+        // A country seed only counts as covered if it actually returned
+        // stations from that country — a mirror that silently ignores the
+        // `countrycode` filter must not prop up catalog health.
+        const requestedCountryCovered = !countryCode
+          || stations.some((station) => station.countryCode === countryCode);
         return {
           // Query coverage is based on accepted rows, not merely a payload that
           // happens to match the upstream schema. Specialist responses must
-          // also contain an accepted station tagged for the requested category.
-          succeeded: stations.length > 0 && requestedTagCovered,
+          // also contain an accepted station tagged for the requested category
+          // (or from the requested country).
+          succeeded: stations.length > 0 && requestedTagCovered && requestedCountryCovered,
           stations,
         };
       } catch {
@@ -1115,22 +1219,35 @@ export function createRadioProxyMiddleware({ fetchImpl = null, lookupImpl = look
       seen.add(station.id);
       selected.push(station);
     };
+    // Curated stations first: they must survive the RADIO_DIRECTORY_LIMIT cap and
+    // stay present even when every upstream query fails. A curated id that also
+    // came back from upstream is deduped here (curated copy wins).
+    const curated = normalizeCuratedRadioStations();
+    const curatedIds = new Set(curated.map((station) => station.id));
+    curated.forEach(take);
     // Seed specialist station-tag queries before popularity fill so operational
     // categories remain represented even when global click charts skew musical.
-    for (const rows of resultSets.slice(1)) rows.slice(0, 45).forEach(take);
+    for (const rows of resultSets.slice(1)) rows.slice(0, 70).forEach(take);
     resultSets.flat().sort((a, b) => b.clickCount - a.clickCount || a.name.localeCompare(b.name)).forEach(take);
     const timestamp = now();
     const successfulQueries = outcomes.filter((outcome) => outcome.succeeded).length;
     const broadQueryHealthy = outcomes[0].succeeded && outcomes[0].stations.length > 0;
+    // Health is a verdict on the UPSTREAM fetch — curated stations we always have
+    // must not let a dead directory look healthy.
+    const upstreamStationCount = selected.reduce(
+      (count, station) => (curatedIds.has(station.id) ? count : count + 1),
+      0,
+    );
     const healthReasons = [];
     if (!broadQueryHealthy) healthReasons.push('broad-query-unhealthy');
     if (successfulQueries < RADIO_CATALOG_MIN_SUCCESSFUL_QUERIES) healthReasons.push('query-coverage-below-policy');
-    if (selected.length < RADIO_CATALOG_HEALTHY_MIN_STATIONS) healthReasons.push('station-coverage-below-policy');
+    if (upstreamStationCount < RADIO_CATALOG_HEALTHY_MIN_STATIONS) healthReasons.push('station-coverage-below-policy');
     const degraded = healthReasons.length > 0;
     const coverage = {
       successfulQueries,
       totalQueries: queries.length,
       stationCount: selected.length,
+      curatedCount: curated.length,
       healthyStationMinimum: RADIO_CATALOG_HEALTHY_MIN_STATIONS,
     };
     const nextCatalog = {
@@ -1149,7 +1266,10 @@ export function createRadioProxyMiddleware({ fetchImpl = null, lookupImpl = look
       error.radioCoverage = coverage;
       throw error;
     }
-    if (degraded && !selected.length) {
+    if (degraded && !upstreamStationCount) {
+      // Upstream returned nothing usable and there is no warm cache. The
+      // curated floor on its own is not a directory — surface the outage
+      // rather than serving a one-station "catalog".
       const error = new Error('Radio Browser catalog refresh returned no usable stations');
       error.radioCatalogDegraded = true;
       error.radioDegradedReason = nextCatalog.degradedReason;
@@ -1240,7 +1360,7 @@ export function createRadioProxyMiddleware({ fetchImpl = null, lookupImpl = look
       }
       res.writeHead(204, { 'Cache-Control': 'no-store' });
       res.end();
-      void fetchPath(`/json/url/${id}`).catch(() => {});
+      if (!curatedStationIds.has(id)) void fetchPath(`/json/url/${id}`).catch(() => {});
       return;
     }
 

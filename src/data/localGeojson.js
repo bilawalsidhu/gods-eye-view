@@ -10,6 +10,7 @@ import {
   setOverlayEntries,
   setOverlaySourceVisible,
 } from '../overlays/worldOverlay.js';
+import { selectInfraLod, applyInfraEvictionGrace } from './localGeojsonLod.js';
 
 const DEFAULT_LABEL_MAX = 900;
 const DEFAULT_LABEL_GRID_PX = 132;
@@ -305,6 +306,28 @@ export function createLocalGeoJsonLayer({
   let _stemGeometryDirty = true;
   let _lastVisibilityUpdate = 0;
   let _destroyed = false;
+  /**
+   * Globe-LOD active set: the record ids allowed to carry a live stem right
+   * now. On a full-earth view all ~5,700 bundled-infra features would
+   * otherwise get per-frame stem geometry + ground-sample work; this bounds
+   * that to the camera-height budget in localGeojsonLod.js. Recomputed only
+   * when the camera moves (`_stemGeometryDirty`). Empty means "not computed
+   * yet" — the first post-enable walk fills it.
+   * @type {Set<string>}
+   */
+  let _activeLodIds = new Set();
+  /** Eviction-grace bookkeeping for `_activeLodIds` (id -> {misses, since}). */
+  let _lodGraceState = new Map();
+  /** Budget cap the most recent camera-height band produced (0 until computed). */
+  let _lastLodBudgetLimit = 0;
+  /**
+   * False until the first post-enable preRender walk has run the LOD
+   * selection. While false the walk treats every record as active (old
+   * behavior); once true, an EMPTY `_activeLodIds` legitimately means "nothing
+   * should carry a stem right now" (e.g. every feature occluded), not "not
+   * computed yet".
+   */
+  let _lodComputed = false;
   let _groundRetryTimer = null;
   /** Consecutive self-armed retries since the last grounding/camera motion. */
   let _groundRetryArms = 0;
@@ -355,6 +378,10 @@ export function createLocalGeoJsonLayer({
   const disableLayer = (viewer) => {
     _enabled = false;
     clearGroundRetryRender();
+    _activeLodIds = new Set();
+    _lodGraceState = new Map();
+    _lastLodBudgetLimit = 0;
+    _lodComputed = false;
     if (_dataSource) _dataSource.show = false;
     _overlayPublisher.hide();
     clearSelectedEntityContextForLayer(id);
@@ -397,6 +424,21 @@ export function createLocalGeoJsonLayer({
       return { count: _count, lastUpdate: _lastUpdate, error: _error };
     },
 
+    /**
+     * Globe-LOD state for QA harnesses (scripts/qa-infra-lod.mjs) and tests.
+     * `active` is how many records currently carry a live stem; `total` is the
+     * full materialized set. `active < total` means the declutter is engaged.
+     * `budgetLimit` is the cap the last camera-height band produced; `computed`
+     * is false until the first post-enable walk has run the selection.
+     * @returns {{total:number, active:number, budgetLimit:number, computed:boolean}}
+     */
+    getLodDiagnostics: () => ({
+      total: _stemRecords.length,
+      active: _activeLodIds.size,
+      budgetLimit: _lastLodBudgetLimit,
+      computed: _lodComputed,
+    }),
+
     enable: async (viewer) => {
       if (_destroyed) return;
       _enabled = true;
@@ -404,6 +446,10 @@ export function createLocalGeoJsonLayer({
       _lastVisibilityUpdate = Number.NEGATIVE_INFINITY;
       _groundRetryArms = 0; // fresh give-up budget per enable-cycle
       _lastGroundSampleCapability = null;
+      _activeLodIds = new Set(); // fresh globe-LOD selection per enable-cycle
+      _lodGraceState = new Map();
+      _lastLodBudgetLimit = 0;
+      _lodComputed = false;
       _overlayPublisher.show();
 
       // 1. Initialize data source
@@ -649,8 +695,55 @@ export function createLocalGeoJsonLayer({
           _lastGroundSampleCapability = canSampleGround;
           let groundRetryPending = false;
           let groundSampleProgress = false;
+
+          // --- Globe-LOD: recompute the active-stem set on camera moves. ---
+          // `_stemGeometryDirty` is set only by moveEnd (and the first enable),
+          // which is exactly when the camera-height budget and per-record
+          // distances can have changed. Without this, all ~5,700 bundled-infra
+          // features run stem trig + Cesium property writes on every move; with
+          // it, only the ~80 (global) to ~420 (regional) budgeted records do.
+          // The occluder test is the same cheap dot product used below.
+          if (refreshStemGeometry && _stemRecords.length > 0) {
+            const cameraHeightM = viewer.camera.positionCartographic?.height;
+            const candidates = new Array(_stemRecords.length);
+            for (let i = 0; i < _stemRecords.length; i++) {
+              const record = _stemRecords[i];
+              candidates[i] = {
+                id: record.id,
+                priority: record.priority,
+                distanceM: Cesium.Cartesian3.distance(cameraPos, record.base),
+                inView: occluder.isPointVisible(record.base),
+              };
+            }
+            const selection = selectInfraLod(candidates, {
+              cameraHeightM,
+              incumbentIds: _activeLodIds,
+            });
+            const grace = applyInfraEvictionGrace({
+              selectedIds: selection.activeIds,
+              builtIds: [..._activeLodIds],
+              graceState: _lodGraceState,
+              nowMs: now,
+              activeLimit: selection.budget.activeLimit,
+            });
+            _activeLodIds = new Set(grace.keepIds);
+            _lodGraceState = grace.graceState;
+            _lastLodBudgetLimit = selection.budget.activeLimit;
+            _lodComputed = true;
+          }
+
           for (let i = 0; i < _stemRecords.length; i++) {
             const record = _stemRecords[i];
+            const isActive = !_lodComputed || _activeLodIds.has(record.id);
+            const isVisible = isActive && occluder.isPointVisible(record.base);
+            if (record.entity.show !== isVisible) record.entity.show = isVisible;
+
+            // Records outside the globe-LOD active set carry no visible stem,
+            // so skip every per-frame cost for them — geometry trig, the
+            // ground-sample GPU readback, overlay-label candidacy. They rejoin
+            // on the next camera move if the budget has room.
+            if (!isActive) continue;
+
             const wasGroundSampled = record.groundSampled;
             if (refreshStemGeometry) {
               updateLocalStemGeometry(viewer, record, now);
@@ -678,8 +771,6 @@ export function createLocalGeoJsonLayer({
                 < GROUND_SAMPLE_MAX_DISTANCE_M) {
               groundRetryPending = true;
             }
-            const isVisible = occluder.isPointVisible(record.base);
-            if (record.entity.show !== isVisible) record.entity.show = isVisible;
             if (isVisible && record.entry) visibleOverlayRecords.push(record);
           }
           _stemGeometryDirty = false;
