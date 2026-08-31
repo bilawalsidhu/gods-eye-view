@@ -1,0 +1,2127 @@
+{
+ "data": {
+  "allAisOnlyVesselsCount": 106,
+  "aisOnlyVessels": [
+   {
+    "id": null,
+    "name": "VAC",
+    "overallLength": 17,
+    "extremeBeam": 6,
+    "aisInformation": {
+     "id": 316001877,
+     "latitude": 91,
+     "longitude": 181,
+     "cog": 360,
+     "heading": 360,
+     "speed": 102.3,
+     "navigationStatus": 5,
+     "vesselType": 0,
+     "destination": "P0RT COLBORNE",
+     "age": "2026-08-21T01:39:21Z",
+     "imoNumber": 0,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "1838",
+    "overallLength": 0,
+    "extremeBeam": 0,
+    "aisInformation": {
+     "id": 316050952,
+     "latitude": 91,
+     "longitude": 181,
+     "cog": 360,
+     "heading": 360,
+     "speed": 102.3,
+     "navigationStatus": 15,
+     "vesselType": 51,
+     "destination": "",
+     "age": "2026-08-14T17:17:12Z",
+     "imoNumber": null,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "HERON",
+    "overallLength": 0,
+    "extremeBeam": 0,
+    "aisInformation": {
+     "id": 368432820,
+     "latitude": 91,
+     "longitude": 181,
+     "cog": 360,
+     "heading": 360,
+     "speed": 102.3,
+     "navigationStatus": 15,
+     "vesselType": 37,
+     "destination": "",
+     "age": "2026-08-22T17:13:14Z",
+     "imoNumber": null,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "WINDQUEST52",
+    "overallLength": 0,
+    "extremeBeam": 0,
+    "aisInformation": {
+     "id": 1072339762,
+     "latitude": 41.887657,
+     "longitude": -87.592027,
+     "cog": 237,
+     "heading": 232,
+     "speed": 8.6,
+     "navigationStatus": 15,
+     "vesselType": 37,
+     "destination": "",
+     "age": "2026-07-07T21:28:05Z",
+     "imoNumber": null,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "ONWA11507",
+    "overallLength": 19,
+    "extremeBeam": 15,
+    "aisInformation": {
+     "id": 9111507,
+     "latitude": 47.586027,
+     "longitude": -52.488997,
+     "cog": 89,
+     "heading": 88,
+     "speed": 5.9,
+     "navigationStatus": 15,
+     "vesselType": 37,
+     "destination": "",
+     "age": "2026-08-02T18:05:55Z",
+     "imoNumber": null,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "QF (ACTUAL)",
+    "overallLength": 124,
+    "extremeBeam": 14,
+    "aisInformation": {
+     "id": 33855412,
+     "latitude": 45.00031,
+     "longitude": -83.337175,
+     "cog": 0,
+     "heading": 61,
+     "speed": 0.7,
+     "navigationStatus": 0,
+     "vesselType": 37,
+     "destination": "THUNDER BAY",
+     "age": "2026-07-23T18:55:15Z",
+     "imoNumber": 9241061,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "BUOY 5 A E 98%",
+    "overallLength": 0,
+    "extremeBeam": 0,
+    "aisInformation": {
+     "id": 420,
+     "latitude": 46.818778,
+     "longitude": -60.295797,
+     "cog": 148,
+     "heading": 147,
+     "speed": 1.9,
+     "navigationStatus": 15,
+     "vesselType": 30,
+     "destination": "",
+     "age": "2026-07-09T17:20:30Z",
+     "imoNumber": null,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "BUOY 3 A E 92%",
+    "overallLength": 0,
+    "extremeBeam": 0,
+    "aisInformation": {
+     "id": 417,
+     "latitude": 46.38156,
+     "longitude": -60.202517,
+     "cog": 65,
+     "heading": 64,
+     "speed": 1.9,
+     "navigationStatus": 15,
+     "vesselType": null,
+     "destination": "",
+     "age": "2026-07-19T09:00:31Z",
+     "imoNumber": null,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "BUOY A9  IL-67%",
+    "overallLength": 0,
+    "extremeBeam": 0,
+    "aisInformation": {
+     "id": 843,
+     "latitude": 47.27611,
+     "longitude": -57.50365,
+     "cog": 335,
+     "heading": 456,
+     "speed": 1.5,
+     "navigationStatus": 15,
+     "vesselType": 0,
+     "destination": "",
+     "age": "2026-07-26T21:49:12Z",
+     "imoNumber": null,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "SALTY BANTER",
+    "overallLength": 14,
+    "extremeBeam": 4,
+    "aisInformation": {
+     "id": 111111111,
+     "latitude": 47.526117,
+     "longitude": -52.988918,
+     "cog": 97,
+     "heading": 97,
+     "speed": 6,
+     "navigationStatus": 5,
+     "vesselType": 37,
+     "destination": "LONG PD",
+     "age": "2026-08-17T22:41:48Z",
+     "imoNumber": 0,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "YANKEEGUNBOAT",
+    "overallLength": 124,
+    "extremeBeam": 30,
+    "aisInformation": {
+     "id": 338557412,
+     "latitude": 45.000597,
+     "longitude": -83.349223,
+     "cog": 0,
+     "heading": 366,
+     "speed": 11.3,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "THUNDERBAY",
+     "age": "2026-07-23T16:36:26Z",
+     "imoNumber": 9241061,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "BUOY 12 IL-75%",
+    "overallLength": 10,
+    "extremeBeam": 10,
+    "aisInformation": {
+     "id": 969,
+     "latitude": 47.191408,
+     "longitude": -57.567857,
+     "cog": 353,
+     "heading": 456,
+     "speed": 0.1,
+     "navigationStatus": 15,
+     "vesselType": 0,
+     "destination": "",
+     "age": "2026-07-25T05:14:00Z",
+     "imoNumber": null,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "CN-FISHBUOY-07-83%",
+    "overallLength": 0,
+    "extremeBeam": 0,
+    "aisInformation": {
+     "id": 100731007,
+     "latitude": 47.380802,
+     "longitude": -57.889465,
+     "cog": 200,
+     "heading": 456,
+     "speed": 7.5,
+     "navigationStatus": 15,
+     "vesselType": 0,
+     "destination": "",
+     "age": "2026-07-11T08:05:35Z",
+     "imoNumber": null,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "KRISTIN J",
+    "overallLength": 21,
+    "extremeBeam": 3,
+    "aisInformation": {
+     "id": 367778090,
+     "latitude": 42.363275,
+     "longitude": -87.822092,
+     "cog": 360,
+     "heading": 360,
+     "speed": 0.1,
+     "navigationStatus": 5,
+     "vesselType": 52,
+     "destination": "",
+     "age": "2026-08-23T10:43:55Z",
+     "imoNumber": 0,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "L'ANSE DU MOULIN",
+    "overallLength": 30,
+    "extremeBeam": 11,
+    "aisInformation": {
+     "id": 316029207,
+     "latitude": 49.253492,
+     "longitude": -68.13312,
+     "cog": 360,
+     "heading": 360,
+     "speed": 102.3,
+     "navigationStatus": 0,
+     "vesselType": 0,
+     "destination": "BAIE-COMEAU",
+     "age": "2026-08-23T10:43:43Z",
+     "imoNumber": 8668248,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "WELLAND",
+    "overallLength": 24,
+    "extremeBeam": 7,
+    "aisInformation": {
+     "id": 316002213,
+     "latitude": 42.983835,
+     "longitude": -82.409705,
+     "cog": 360,
+     "heading": 360,
+     "speed": 0.1,
+     "navigationStatus": 0,
+     "vesselType": 52,
+     "destination": "TUG ASSIST",
+     "age": "2026-08-23T10:43:22Z",
+     "imoNumber": 0,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "MISS LIBBY",
+    "overallLength": 0,
+    "extremeBeam": 0,
+    "aisInformation": {
+     "id": 316008171,
+     "latitude": 42.864765,
+     "longitude": -79.573513,
+     "cog": 360,
+     "heading": 511,
+     "speed": 102.3,
+     "navigationStatus": 15,
+     "vesselType": 33,
+     "destination": "",
+     "age": "2026-08-03T22:28:21Z",
+     "imoNumber": 0,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "LYNSEY LENORE",
+    "overallLength": 19,
+    "extremeBeam": 7,
+    "aisInformation": {
+     "id": 316044859,
+     "latitude": 42.80983,
+     "longitude": -79.134237,
+     "cog": 104,
+     "heading": 104,
+     "speed": 2.7,
+     "navigationStatus": 15,
+     "vesselType": 30,
+     "destination": "",
+     "age": "2026-08-23T10:43:58Z",
+     "imoNumber": null,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "SQUARE ONE",
+    "overallLength": 12,
+    "extremeBeam": 4,
+    "aisInformation": {
+     "id": 316044038,
+     "latitude": 46.783872,
+     "longitude": -71.23464,
+     "cog": 360,
+     "heading": 360,
+     "speed": 0.2,
+     "navigationStatus": 15,
+     "vesselType": 36,
+     "destination": "",
+     "age": "2026-08-23T10:42:51Z",
+     "imoNumber": null,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "LOUSTIC",
+    "overallLength": 0,
+    "extremeBeam": 0,
+    "aisInformation": {
+     "id": 316047042,
+     "latitude": 49.29276,
+     "longitude": -68.047892,
+     "cog": 360,
+     "heading": 360,
+     "speed": 0.1,
+     "navigationStatus": 15,
+     "vesselType": 36,
+     "destination": "",
+     "age": "2026-08-23T10:42:39Z",
+     "imoNumber": null,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "GENERAL",
+    "overallLength": 21,
+    "extremeBeam": 6,
+    "aisInformation": {
+     "id": 367349940,
+     "latitude": 46.94901,
+     "longitude": -90.889688,
+     "cog": 321,
+     "heading": 162,
+     "speed": 0.1,
+     "navigationStatus": 1,
+     "vesselType": 52,
+     "destination": "LITTLE SAND BAY",
+     "age": "2026-08-23T10:41:51Z",
+     "imoNumber": 0,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "MISSOURI",
+    "overallLength": 30,
+    "extremeBeam": 9,
+    "aisInformation": {
+     "id": 366978440,
+     "latitude": 46.779292,
+     "longitude": -92.0948,
+     "cog": 150,
+     "heading": 150,
+     "speed": 0.3,
+     "navigationStatus": 15,
+     "vesselType": 52,
+     "destination": "DULUTH/SUPERIOR",
+     "age": "2026-08-23T10:42:54Z",
+     "imoNumber": 0,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "BEAUMONT HAMEL",
+    "overallLength": 52,
+    "extremeBeam": 15,
+    "aisInformation": {
+     "id": 316003380,
+     "latitude": 49.561283,
+     "longitude": -54.457383,
+     "cog": 250,
+     "heading": 252,
+     "speed": 9.4,
+     "navigationStatus": 5,
+     "vesselType": 65,
+     "destination": "",
+     "age": "2026-08-23T10:43:20Z",
+     "imoNumber": 0,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "GRACE SPARKES",
+    "overallLength": 42,
+    "extremeBeam": 11,
+    "aisInformation": {
+     "id": 316018994,
+     "latitude": 48.727057,
+     "longitude": -53.778007,
+     "cog": 200,
+     "heading": 203,
+     "speed": 11.3,
+     "navigationStatus": 0,
+     "vesselType": 60,
+     "destination": "ST.BRENDAN'S",
+     "age": "2026-08-23T10:43:31Z",
+     "imoNumber": 9578153,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "ALPHONSE DESJARDINS",
+    "overallLength": 66,
+    "extremeBeam": 22,
+    "aisInformation": {
+     "id": 316007848,
+     "latitude": 46.810622,
+     "longitude": -71.188472,
+     "cog": 159,
+     "heading": 178,
+     "speed": 0.3,
+     "navigationStatus": 0,
+     "vesselType": 60,
+     "destination": "R",
+     "age": "2026-08-23T10:43:19Z",
+     "imoNumber": 7109233,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "CSL WELLAND",
+    "overallLength": 226,
+    "extremeBeam": 24,
+    "aisInformation": {
+     "id": 316026695,
+     "latitude": 47.63567,
+     "longitude": -86.906777,
+     "cog": 300,
+     "heading": 302,
+     "speed": 12.4,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "THUNDER BAY",
+     "age": "2026-08-23T10:43:51Z",
+     "imoNumber": 9665279,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "N.A. OSPREY",
+    "overallLength": 30,
+    "extremeBeam": 11,
+    "aisInformation": {
+     "id": 316001093,
+     "latitude": 47.803933,
+     "longitude": -54.007417,
+     "cog": 336,
+     "heading": 84,
+     "speed": 0.1,
+     "navigationStatus": 15,
+     "vesselType": 52,
+     "destination": "CBC",
+     "age": "2026-08-23T10:44:00Z",
+     "imoNumber": 9226346,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "DIDACE-GUEVREMONT",
+    "overallLength": 82,
+    "extremeBeam": 22,
+    "aisInformation": {
+     "id": 316007861,
+     "latitude": 46.058542,
+     "longitude": -73.123462,
+     "cog": 302,
+     "heading": 290,
+     "speed": 4.4,
+     "navigationStatus": 0,
+     "vesselType": 60,
+     "destination": "SOREL",
+     "age": "2026-08-23T10:43:40Z",
+     "imoNumber": 7902269,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "CAPE SPRY",
+    "overallLength": 15,
+    "extremeBeam": 5,
+    "aisInformation": {
+     "id": 316004846,
+     "latitude": 46.347537,
+     "longitude": -62.247795,
+     "cog": 241,
+     "heading": 266,
+     "speed": 0.1,
+     "navigationStatus": 5,
+     "vesselType": 51,
+     "destination": "SOURIS",
+     "age": "2026-08-23T10:41:14Z",
+     "imoNumber": 0,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "JAMES J. VERSLUIS",
+    "overallLength": 0,
+    "extremeBeam": 0,
+    "aisInformation": {
+     "id": 367073840,
+     "latitude": 41.893148,
+     "longitude": -87.608082,
+     "cog": 177,
+     "heading": 85,
+     "speed": 0.1,
+     "navigationStatus": 5,
+     "vesselType": 52,
+     "destination": "CHICAGO",
+     "age": "2026-08-23T10:43:28Z",
+     "imoNumber": 0,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "OCEAN BASQUE2",
+    "overallLength": 0,
+    "extremeBeam": 0,
+    "aisInformation": {
+     "id": 316017206,
+     "latitude": 42.026552,
+     "longitude": -82.601967,
+     "cog": 138,
+     "heading": 138,
+     "speed": 0.1,
+     "navigationStatus": 15,
+     "vesselType": 99,
+     "destination": "SUMMERSIDE",
+     "age": "2026-08-23T10:43:47Z",
+     "imoNumber": 0,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "PRESQUE ISLE",
+    "overallLength": 0,
+    "extremeBeam": 0,
+    "aisInformation": {
+     "id": 367348220,
+     "latitude": 47.261155,
+     "longitude": -90.394738,
+     "cog": 74,
+     "heading": 74,
+     "speed": 11.7,
+     "navigationStatus": 0,
+     "vesselType": 79,
+     "destination": "TWO HARBORS",
+     "age": "2026-08-23T10:43:28Z",
+     "imoNumber": 7303877,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "WASHINGTON",
+    "overallLength": 22,
+    "extremeBeam": 6,
+    "aisInformation": {
+     "id": 367649680,
+     "latitude": 44.509055,
+     "longitude": -88.022083,
+     "cog": 305,
+     "heading": 305,
+     "speed": 0.1,
+     "navigationStatus": 0,
+     "vesselType": 99,
+     "destination": "NASHVILLE TN",
+     "age": "2026-08-23T10:35:33Z",
+     "imoNumber": 0,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "OCEAN A. SIMARD",
+    "overallLength": 28,
+    "extremeBeam": 10,
+    "aisInformation": {
+     "id": 316026824,
+     "latitude": 43.746198,
+     "longitude": -81.717817,
+     "cog": 355,
+     "heading": 219,
+     "speed": 0.1,
+     "navigationStatus": 5,
+     "vesselType": 52,
+     "destination": "GODERICH",
+     "age": "2026-08-23T10:10:29Z",
+     "imoNumber": 8000056,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "HAFNIA DAISY",
+    "overallLength": 184,
+    "extremeBeam": 32,
+    "aisInformation": {
+     "id": 249347000,
+     "latitude": 45.05136,
+     "longitude": -54.68417,
+     "cog": 300,
+     "heading": 299,
+     "speed": 12.9,
+     "navigationStatus": 0,
+     "vesselType": null,
+     "destination": "CAQUE",
+     "age": "2026-08-23T09:46:16Z",
+     "imoNumber": 9709788,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "OCEAN PIERRE JULIEN",
+    "overallLength": 25,
+    "extremeBeam": 8,
+    "aisInformation": {
+     "id": 316024038,
+     "latitude": 45.802747,
+     "longitude": -73.328005,
+     "cog": 222,
+     "heading": 224,
+     "speed": 9.5,
+     "navigationStatus": 0,
+     "vesselType": 52,
+     "destination": "MONTREAL#57",
+     "age": "2026-08-23T10:24:10Z",
+     "imoNumber": 9688142,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "STACY DIANNE",
+    "overallLength": 15,
+    "extremeBeam": 6,
+    "aisInformation": {
+     "id": 367709780,
+     "latitude": 41.626522,
+     "longitude": -88.061835,
+     "cog": 14,
+     "heading": 14,
+     "speed": 0.5,
+     "navigationStatus": 7,
+     "vesselType": 31,
+     "destination": "",
+     "age": "2026-08-22T12:54:55Z",
+     "imoNumber": 0,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "CAPE PROVIDENCE",
+    "overallLength": 15,
+    "extremeBeam": 5,
+    "aisInformation": {
+     "id": 316005375,
+     "latitude": 43.74605,
+     "longitude": -81.725067,
+     "cog": 155,
+     "heading": 208,
+     "speed": 0.1,
+     "navigationStatus": 5,
+     "vesselType": 51,
+     "destination": "GODERICH,ON",
+     "age": "2026-08-23T09:23:31Z",
+     "imoNumber": 0,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "NORTHLAND",
+    "overallLength": 22,
+    "extremeBeam": 8,
+    "aisInformation": {
+     "id": 367709820,
+     "latitude": 41.39803,
+     "longitude": -88.28107,
+     "cog": 264,
+     "heading": 264,
+     "speed": 0.4,
+     "navigationStatus": 0,
+     "vesselType": 31,
+     "destination": "",
+     "age": "2026-08-22T14:12:58Z",
+     "imoNumber": 0,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "WN TWOLAN",
+    "overallLength": 32,
+    "extremeBeam": 8,
+    "aisInformation": {
+     "id": 316003277,
+     "latitude": 51.881047,
+     "longitude": -55.536682,
+     "cog": 7,
+     "heading": 4,
+     "speed": 5.3,
+     "navigationStatus": 0,
+     "vesselType": 52,
+     "destination": "HOPEDALE",
+     "age": "2026-08-22T18:33:32Z",
+     "imoNumber": 538436000,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "RUTH ANASTASIA",
+    "overallLength": 30,
+    "extremeBeam": 10,
+    "aisInformation": {
+     "id": 367787430,
+     "latitude": 41.716803,
+     "longitude": -87.54052,
+     "cog": 233,
+     "heading": 123,
+     "speed": 0.1,
+     "navigationStatus": 0,
+     "vesselType": 52,
+     "destination": "CALUMET HARBOR",
+     "age": "2026-08-22T19:35:53Z",
+     "imoNumber": 8841967,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "LYULIN",
+    "overallLength": 186,
+    "extremeBeam": 24,
+    "aisInformation": {
+     "id": 248938000,
+     "latitude": 51.881213,
+     "longitude": -54.666592,
+     "cog": 76,
+     "heading": 74,
+     "speed": 12.5,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "FIINK",
+     "age": "2026-08-19T22:19:54Z",
+     "imoNumber": 9498248,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "AVA RENEE",
+    "overallLength": 18,
+    "extremeBeam": 7,
+    "aisInformation": {
+     "id": 367325490,
+     "latitude": 41.71689,
+     "longitude": -87.540457,
+     "cog": 119,
+     "heading": 119,
+     "speed": 0.1,
+     "navigationStatus": 0,
+     "vesselType": 31,
+     "destination": "",
+     "age": "2026-08-22T08:56:19Z",
+     "imoNumber": 0,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "FRENCH NAVY SHIP",
+    "overallLength": 0,
+    "extremeBeam": 0,
+    "aisInformation": {
+     "id": 228705000,
+     "latitude": 51.866553,
+     "longitude": -54.384852,
+     "cog": 19,
+     "heading": 19,
+     "speed": 11,
+     "navigationStatus": 0,
+     "vesselType": 35,
+     "destination": "",
+     "age": "2026-08-21T17:05:19Z",
+     "imoNumber": 0,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "RANDY HOOPER",
+    "overallLength": 226,
+    "extremeBeam": 33,
+    "aisInformation": {
+     "id": 366963010,
+     "latitude": 41.340673,
+     "longitude": -88.853158,
+     "cog": 252,
+     "heading": 252,
+     "speed": 5.4,
+     "navigationStatus": 12,
+     "vesselType": 56,
+     "destination": "US^03MM>0VMB",
+     "age": "2026-08-20T01:33:11Z",
+     "imoNumber": 100622755,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "CRT EXPRESS",
+    "overallLength": 30,
+    "extremeBeam": 10,
+    "aisInformation": {
+     "id": 316040782,
+     "latitude": 51.880768,
+     "longitude": -55.878707,
+     "cog": 44,
+     "heading": 42,
+     "speed": 7.1,
+     "navigationStatus": 11,
+     "vesselType": 32,
+     "destination": "CARTWRIGHT",
+     "age": "2026-07-01T14:12:18Z",
+     "imoNumber": 9394026,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "A.LEBLANC",
+    "overallLength": 43,
+    "extremeBeam": 7,
+    "aisInformation": {
+     "id": 316021598,
+     "latitude": 49.246522,
+     "longitude": -67.37305,
+     "cog": 224,
+     "heading": 220,
+     "speed": 5.1,
+     "navigationStatus": 0,
+     "vesselType": 51,
+     "destination": "C&P",
+     "age": "2026-08-01T15:53:04Z",
+     "imoNumber": 9586095,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "MARINE VOYAGER",
+    "overallLength": 30,
+    "extremeBeam": 7,
+    "aisInformation": {
+     "id": 316001298,
+     "latitude": 47.567222,
+     "longitude": -56.73752,
+     "cog": 329,
+     "heading": 335,
+     "speed": 11.2,
+     "navigationStatus": 0,
+     "vesselType": 69,
+     "destination": "FRANCOIS",
+     "age": "2026-08-15T20:11:45Z",
+     "imoNumber": 0,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "NORDIC ORION",
+    "overallLength": 225,
+    "extremeBeam": 32,
+    "aisInformation": {
+     "id": 538009229,
+     "latitude": 64.31323,
+     "longitude": -53.39017,
+     "cog": 342,
+     "heading": 336,
+     "speed": 7,
+     "navigationStatus": 0,
+     "vesselType": null,
+     "destination": "",
+     "age": "2026-07-22T20:50:09Z",
+     "imoNumber": 9529463,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "CCG C12757NL",
+    "overallLength": 70,
+    "extremeBeam": 14,
+    "aisInformation": {
+     "id": 316001002,
+     "latitude": 47.564842,
+     "longitude": -52.689575,
+     "cog": 279,
+     "heading": 269,
+     "speed": 4.6,
+     "navigationStatus": 15,
+     "vesselType": 51,
+     "destination": "",
+     "age": "2026-07-16T13:31:42Z",
+     "imoNumber": null,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "GILLES L II",
+    "overallLength": 24,
+    "extremeBeam": 6,
+    "aisInformation": {
+     "id": 316003286,
+     "latitude": 51.880733,
+     "longitude": -55.247413,
+     "cog": 6,
+     "heading": 6,
+     "speed": 7.2,
+     "navigationStatus": 0,
+     "vesselType": 30,
+     "destination": "",
+     "age": "2026-08-09T11:11:40Z",
+     "imoNumber": 0,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "LEIF ERICSON",
+    "overallLength": 154,
+    "extremeBeam": 24,
+    "aisInformation": {
+     "id": 316001216,
+     "latitude": 47.202038,
+     "longitude": -59.4318,
+     "cog": 212,
+     "heading": 209,
+     "speed": 16.1,
+     "navigationStatus": 0,
+     "vesselType": 60,
+     "destination": "NORTH SYDNEY",
+     "age": "2026-08-23T10:43:54Z",
+     "imoNumber": 8917388,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "USEPA LAKE GUARDIAN",
+    "overallLength": 53,
+    "extremeBeam": 12,
+    "aisInformation": {
+     "id": 338021074,
+     "latitude": 47.2586,
+     "longitude": -86.348217,
+     "cog": 204,
+     "heading": 320,
+     "speed": 0.7,
+     "navigationStatus": 0,
+     "vesselType": 33,
+     "destination": "LAKE SUPERIOR SURVEY",
+     "age": "2026-08-23T10:43:20Z",
+     "imoNumber": 0,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "TELEOST",
+    "overallLength": 63,
+    "extremeBeam": 14,
+    "aisInformation": {
+     "id": 316002140,
+     "latitude": 49.737322,
+     "longitude": -56.004118,
+     "cog": 322,
+     "heading": 323,
+     "speed": 5.2,
+     "navigationStatus": 0,
+     "vesselType": 51,
+     "destination": "SAR PATROL",
+     "age": "2026-08-23T10:43:51Z",
+     "imoNumber": 8714346,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "BEOTHUK SPIRIT",
+    "overallLength": 280,
+    "extremeBeam": 49,
+    "aisInformation": {
+     "id": 316035891,
+     "latitude": 46.772143,
+     "longitude": -53.821963,
+     "cog": 15,
+     "heading": 15,
+     "speed": 8.3,
+     "navigationStatus": 0,
+     "vesselType": 82,
+     "destination": "CA SMB",
+     "age": "2026-08-23T10:44:00Z",
+     "imoNumber": 9780768,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "SARAH DESGAGNES",
+    "overallLength": 147,
+    "extremeBeam": 23,
+    "aisInformation": {
+     "id": 316012308,
+     "latitude": 46.052245,
+     "longitude": -73.129532,
+     "cog": 74,
+     "heading": 72,
+     "speed": 13.2,
+     "navigationStatus": 0,
+     "vesselType": 81,
+     "destination": "MILNE INLET",
+     "age": "2026-08-23T10:43:36Z",
+     "imoNumber": 9352171,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "CTMA VOYAGEUR 2",
+    "overallLength": 122,
+    "extremeBeam": 20,
+    "aisInformation": {
+     "id": 316041062,
+     "latitude": 48.2211,
+     "longitude": -61.87856,
+     "cog": 158,
+     "heading": 156,
+     "speed": 15.3,
+     "navigationStatus": 0,
+     "vesselType": 79,
+     "destination": "CAP-AUX-MEULES",
+     "age": "2026-08-23T10:44:00Z",
+     "imoNumber": 9119402,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "VETERAN",
+    "overallLength": 81,
+    "extremeBeam": 18,
+    "aisInformation": {
+     "id": 316014210,
+     "latitude": 49.558577,
+     "longitude": -54.431995,
+     "cog": 76,
+     "heading": 77,
+     "speed": 12,
+     "navigationStatus": 0,
+     "vesselType": 60,
+     "destination": "FOGO ISLAND",
+     "age": "2026-08-23T10:43:43Z",
+     "imoNumber": 9736901,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "TIM MCKEIL",
+    "overallLength": 32,
+    "extremeBeam": 10,
+    "aisInformation": {
+     "id": 316013860,
+     "latitude": 48.179842,
+     "longitude": -64.91775,
+     "cog": 295,
+     "heading": 230,
+     "speed": 0.1,
+     "navigationStatus": 5,
+     "vesselType": 32,
+     "destination": "PORT DANIEL",
+     "age": "2026-08-23T10:43:46Z",
+     "imoNumber": 901760400,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "DORSET SPIRIT",
+    "overallLength": 280,
+    "extremeBeam": 49,
+    "aisInformation": {
+     "id": 316036463,
+     "latitude": 47.59969,
+     "longitude": -54.025203,
+     "cog": 350,
+     "heading": 350,
+     "speed": 9.6,
+     "navigationStatus": 0,
+     "vesselType": 82,
+     "destination": "WHIFFEN HEAD",
+     "age": "2026-08-23T10:43:36Z",
+     "imoNumber": 9780782,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "PENNANT BAY",
+    "overallLength": 19,
+    "extremeBeam": 6,
+    "aisInformation": {
+     "id": 316035929,
+     "latitude": 51.469575,
+     "longitude": -53.709873,
+     "cog": 260,
+     "heading": 261,
+     "speed": 6.3,
+     "navigationStatus": 0,
+     "vesselType": 51,
+     "destination": "",
+     "age": "2026-08-23T10:44:00Z",
+     "imoNumber": 841103,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "ALGOMA MARINER",
+    "overallLength": 225,
+    "extremeBeam": 23,
+    "aisInformation": {
+     "id": 316014050,
+     "latitude": 45.302957,
+     "longitude": -83.08197,
+     "cog": 161,
+     "heading": 158,
+     "speed": 13.3,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "SAULT STE MARIE",
+     "age": "2026-08-23T10:43:43Z",
+     "imoNumber": 9587893,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "MARINE EAGLE",
+    "overallLength": 25,
+    "extremeBeam": 10,
+    "aisInformation": {
+     "id": 316318000,
+     "latitude": 47.579073,
+     "longitude": -55.920305,
+     "cog": 209,
+     "heading": 213,
+     "speed": 9.8,
+     "navigationStatus": 5,
+     "vesselType": 60,
+     "destination": "",
+     "age": "2026-08-23T10:43:27Z",
+     "imoNumber": 8702068,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "HARVEST SPIRIT",
+    "overallLength": 153,
+    "extremeBeam": 23,
+    "aisInformation": {
+     "id": 316044371,
+     "latitude": 46.26277,
+     "longitude": -72.66685,
+     "cog": 276,
+     "heading": 276,
+     "speed": 10.2,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "CAHAM",
+     "age": "2026-08-23T10:43:47Z",
+     "imoNumber": 9655951,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "SHIPEKU",
+    "overallLength": 17,
+    "extremeBeam": 5,
+    "aisInformation": {
+     "id": 316024176,
+     "latitude": 48.318012,
+     "longitude": -69.415867,
+     "cog": 250,
+     "heading": 49,
+     "speed": 1.5,
+     "navigationStatus": 0,
+     "vesselType": 50,
+     "destination": "LES ESCOUMINS",
+     "age": "2026-08-23T10:43:35Z",
+     "imoNumber": 9980227,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "ATLANTIC PILOT",
+    "overallLength": 19,
+    "extremeBeam": 5,
+    "aisInformation": {
+     "id": 316011535,
+     "latitude": 47.505893,
+     "longitude": -54.058355,
+     "cog": 2,
+     "heading": 359,
+     "speed": 19.7,
+     "navigationStatus": 0,
+     "vesselType": 50,
+     "destination": "PLACENTIA BAY",
+     "age": "2026-08-23T10:43:55Z",
+     "imoNumber": 9464962,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "RJ BALLOTT",
+    "overallLength": 29,
+    "extremeBeam": 29,
+    "aisInformation": {
+     "id": 316001486,
+     "latitude": 48.498353,
+     "longitude": -58.60495,
+     "cog": 90,
+     "heading": 90,
+     "speed": 8.6,
+     "navigationStatus": 0,
+     "vesselType": 32,
+     "destination": "LOWER COVE",
+     "age": "2026-08-23T10:43:48Z",
+     "imoNumber": 5118814,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "PLACENTIA HOPE",
+    "overallLength": 35,
+    "extremeBeam": 13,
+    "aisInformation": {
+     "id": 316274000,
+     "latitude": 47.59851,
+     "longitude": -54.023197,
+     "cog": 349,
+     "heading": 356,
+     "speed": 10.8,
+     "navigationStatus": 5,
+     "vesselType": 52,
+     "destination": "P. BAY",
+     "age": "2026-08-23T10:43:40Z",
+     "imoNumber": 917530300,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "OCEAN K. RUSBY",
+    "overallLength": 30,
+    "extremeBeam": 10,
+    "aisInformation": {
+     "id": 316011810,
+     "latitude": 46.825667,
+     "longitude": -71.201398,
+     "cog": 222,
+     "heading": 52,
+     "speed": 0.6,
+     "navigationStatus": 0,
+     "vesselType": 52,
+     "destination": "QUEBEC",
+     "age": "2026-08-23T10:43:22Z",
+     "imoNumber": 9345556,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "MADELEINE II",
+    "overallLength": 139,
+    "extremeBeam": 28,
+    "aisInformation": {
+     "id": 316016090,
+     "latitude": 47.352965,
+     "longitude": -61.808207,
+     "cog": 119,
+     "heading": 120,
+     "speed": 17.6,
+     "navigationStatus": 0,
+     "vesselType": 69,
+     "destination": "CA CMS - CA SOU",
+     "age": "2026-08-23T10:43:43Z",
+     "imoNumber": 9430105,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "OCEAN CLOVIS T",
+    "overallLength": 29,
+    "extremeBeam": 12,
+    "aisInformation": {
+     "id": 316014140,
+     "latitude": 46.826492,
+     "longitude": -71.199443,
+     "cog": 181,
+     "heading": 342,
+     "speed": 1.3,
+     "navigationStatus": 0,
+     "vesselType": 99,
+     "destination": "QUEBEC CITY",
+     "age": "2026-08-23T10:43:58Z",
+     "imoNumber": 9533036,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "OCEAN HENRY BAIN",
+    "overallLength": 31,
+    "extremeBeam": 10,
+    "aisInformation": {
+     "id": 316009611,
+     "latitude": 46.826593,
+     "longitude": -71.198652,
+     "cog": 172,
+     "heading": 0,
+     "speed": 2.3,
+     "navigationStatus": 0,
+     "vesselType": 31,
+     "destination": "QUEBEC",
+     "age": "2026-08-23T10:44:00Z",
+     "imoNumber": 9420916,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "OCEAN RAYNALD T",
+    "overallLength": 30,
+    "extremeBeam": 10,
+    "aisInformation": {
+     "id": 316014110,
+     "latitude": 46.82444,
+     "longitude": -71.200535,
+     "cog": 225,
+     "heading": 60,
+     "speed": 0.7,
+     "navigationStatus": 15,
+     "vesselType": 52,
+     "destination": "QUEBEC ASS VESSEL",
+     "age": "2026-08-23T10:43:35Z",
+     "imoNumber": 9533048,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "JOS DESCHENES II",
+    "overallLength": 92,
+    "extremeBeam": 27,
+    "aisInformation": {
+     "id": 316038289,
+     "latitude": 48.134745,
+     "longitude": -69.73098,
+     "cog": 205,
+     "heading": 209,
+     "speed": 9.5,
+     "navigationStatus": 0,
+     "vesselType": 60,
+     "destination": "TADOUSSAC/BSC",
+     "age": "2026-08-23T10:43:40Z",
+     "imoNumber": 9703227,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "PRENTISS BROWN",
+    "overallLength": 34,
+    "extremeBeam": 9,
+    "aisInformation": {
+     "id": 367385690,
+     "latitude": 45.330397,
+     "longitude": -81.705992,
+     "cog": 280,
+     "heading": 283,
+     "speed": 8.3,
+     "navigationStatus": 0,
+     "vesselType": 31,
+     "destination": "CHARLEVOIX",
+     "age": "2026-08-23T10:43:40Z",
+     "imoNumber": 7035547,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "KIYI",
+    "overallLength": 33,
+    "extremeBeam": 9,
+    "aisInformation": {
+     "id": 369970030,
+     "latitude": 48.168553,
+     "longitude": -88.433253,
+     "cog": 229,
+     "heading": 228,
+     "speed": 10.1,
+     "navigationStatus": 0,
+     "vesselType": 90,
+     "destination": "MOTT IS ISLE ROYALE",
+     "age": "2026-08-23T10:43:35Z",
+     "imoNumber": 0,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "VLADYKOV",
+    "overallLength": 25,
+    "extremeBeam": 9,
+    "aisInformation": {
+     "id": 316021844,
+     "latitude": 50.309502,
+     "longitude": -55.855583,
+     "cog": 116,
+     "heading": 109,
+     "speed": 8.7,
+     "navigationStatus": 0,
+     "vesselType": 51,
+     "destination": "FLEUR DE LYS",
+     "age": "2026-08-23T10:43:40Z",
+     "imoNumber": 9656149,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "CAPE MERCY",
+    "overallLength": 14,
+    "extremeBeam": 4,
+    "aisInformation": {
+     "id": 316005378,
+     "latitude": 42.781867,
+     "longitude": -80.198037,
+     "cog": 31,
+     "heading": 287,
+     "speed": 0.1,
+     "navigationStatus": 5,
+     "vesselType": 51,
+     "destination": "SEARCH & RESCUE",
+     "age": "2026-08-23T10:42:01Z",
+     "imoNumber": 0,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "ALGOMA INTREPID",
+    "overallLength": 198,
+    "extremeBeam": 24,
+    "aisInformation": {
+     "id": 316043882,
+     "latitude": 42.12898,
+     "longitude": -81.362193,
+     "cog": 249,
+     "heading": 250,
+     "speed": 11.6,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "TOLEDO",
+     "age": "2026-08-23T10:43:59Z",
+     "imoNumber": 9773387,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "ROBERT S. PIERSON",
+    "overallLength": 192,
+    "extremeBeam": 21,
+    "aisInformation": {
+     "id": 316011905,
+     "latitude": 45.327102,
+     "longitude": -81.815293,
+     "cog": 79,
+     "heading": 75,
+     "speed": 6.4,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "FISHER HARBOUR",
+     "age": "2026-08-23T10:43:42Z",
+     "imoNumber": 7366403,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "OLIVE L. MOORE",
+    "overallLength": 222,
+    "extremeBeam": 22,
+    "aisInformation": {
+     "id": 367480250,
+     "latitude": 45.015335,
+     "longitude": -83.32091,
+     "cog": 33,
+     "heading": 309,
+     "speed": 0.1,
+     "navigationStatus": 0,
+     "vesselType": 52,
+     "destination": "STONEPORT",
+     "age": "2026-08-23T10:44:00Z",
+     "imoNumber": 8635227,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "CG SPAR",
+    "overallLength": 68,
+    "extremeBeam": 14,
+    "aisInformation": {
+     "id": 368856000,
+     "latitude": 46.771132,
+     "longitude": -92.091542,
+     "cog": 67,
+     "heading": 67,
+     "speed": 0.1,
+     "navigationStatus": 5,
+     "vesselType": 99,
+     "destination": "DULUTH",
+     "age": "2026-08-23T10:41:11Z",
+     "imoNumber": 9257838,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "DAVID R. SCHANOCK",
+    "overallLength": 23,
+    "extremeBeam": 8,
+    "aisInformation": {
+     "id": 368218980,
+     "latitude": 46.023935,
+     "longitude": -85.379945,
+     "cog": 281,
+     "heading": 286,
+     "speed": 5,
+     "navigationStatus": 11,
+     "vesselType": 31,
+     "destination": "STURGEON BAY",
+     "age": "2026-08-23T10:43:34Z",
+     "imoNumber": 7939638,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "360 COMMANDER",
+    "overallLength": 40,
+    "extremeBeam": 9,
+    "aisInformation": {
+     "id": 316024306,
+     "latitude": 47.482972,
+     "longitude": -56.185233,
+     "cog": 149,
+     "heading": 148,
+     "speed": 8.9,
+     "navigationStatus": 5,
+     "vesselType": 70,
+     "destination": "HARBOUR BRETON",
+     "age": "2026-08-23T10:43:41Z",
+     "imoNumber": 8964264,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "REBECCA LYNN",
+    "overallLength": 37,
+    "extremeBeam": 10,
+    "aisInformation": {
+     "id": 366936810,
+     "latitude": 42.046875,
+     "longitude": -81.589328,
+     "cog": 251,
+     "heading": 251,
+     "speed": 10.3,
+     "navigationStatus": 0,
+     "vesselType": 52,
+     "destination": "DETROIT",
+     "age": "2026-08-23T10:43:26Z",
+     "imoNumber": 6511374,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "NUKUMI",
+    "overallLength": 225,
+    "extremeBeam": 24,
+    "aisInformation": {
+     "id": 316048137,
+     "latitude": 46.980907,
+     "longitude": -59.601432,
+     "cog": 278,
+     "heading": 277,
+     "speed": 11.4,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "GRANDE ENTREE",
+     "age": "2026-08-23T10:43:27Z",
+     "imoNumber": 9914711,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "KAYE E BARKER",
+    "overallLength": 228,
+    "extremeBeam": 21,
+    "aisInformation": {
+     "id": 366904910,
+     "latitude": 43.402993,
+     "longitude": -82.428172,
+     "cog": 176,
+     "heading": 177,
+     "speed": 12.3,
+     "navigationStatus": 5,
+     "vesselType": 70,
+     "destination": "MARQUETTE",
+     "age": "2026-08-23T10:43:40Z",
+     "imoNumber": 5097450,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "PETER FRASER",
+    "overallLength": 40,
+    "extremeBeam": 12,
+    "aisInformation": {
+     "id": 316025359,
+     "latitude": 48.039582,
+     "longitude": -69.406465,
+     "cog": 115,
+     "heading": 312,
+     "speed": 0.1,
+     "navigationStatus": 5,
+     "vesselType": 60,
+     "destination": "QUEBEC",
+     "age": "2026-08-23T10:42:50Z",
+     "imoNumber": 8674778,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "ILE SAINT-OURS",
+    "overallLength": 23,
+    "extremeBeam": 6,
+    "aisInformation": {
+     "id": 316001857,
+     "latitude": 44.218413,
+     "longitude": -76.515035,
+     "cog": 78,
+     "heading": 354,
+     "speed": 0.1,
+     "navigationStatus": 0,
+     "vesselType": 51,
+     "destination": "D",
+     "age": "2026-08-23T10:43:58Z",
+     "imoNumber": 806305,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "ALGOMA CONVEYOR",
+    "overallLength": 226,
+    "extremeBeam": 24,
+    "aisInformation": {
+     "id": 316002280,
+     "latitude": 47.607032,
+     "longitude": -86.9896,
+     "cog": 121,
+     "heading": 120,
+     "speed": 13.1,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "HAMILTON",
+     "age": "2026-08-23T10:43:28Z",
+     "imoNumber": 9619268,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "ALGOMA BUFFALO",
+    "overallLength": 194,
+    "extremeBeam": 21,
+    "aisInformation": {
+     "id": 316036228,
+     "latitude": 44.949037,
+     "longitude": -82.916288,
+     "cog": 346,
+     "heading": 343,
+     "speed": 7.8,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "THESSALON",
+     "age": "2026-08-23T10:44:00Z",
+     "imoNumber": 7620653,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "ALGOMA DISCOVERY",
+    "overallLength": 223,
+    "extremeBeam": 23,
+    "aisInformation": {
+     "id": 316018477,
+     "latitude": 46.648185,
+     "longitude": -71.665712,
+     "cog": 250,
+     "heading": 250,
+     "speed": 11.3,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "HAMILTON",
+     "age": "2026-08-23T10:43:27Z",
+     "imoNumber": 8505848,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "MESABI MINER",
+    "overallLength": 305,
+    "extremeBeam": 32,
+    "aisInformation": {
+     "id": 366904880,
+     "latitude": 47.371248,
+     "longitude": -87.195225,
+     "cog": 291,
+     "heading": 292,
+     "speed": 11.4,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "TWO HARBORS",
+     "age": "2026-08-23T10:43:36Z",
+     "imoNumber": 7390272,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "BB MILLER",
+    "overallLength": 19,
+    "extremeBeam": 6,
+    "aisInformation": {
+     "id": 316042422,
+     "latitude": 42.665232,
+     "longitude": -80.029823,
+     "cog": 8,
+     "heading": 8,
+     "speed": 9,
+     "navigationStatus": 7,
+     "vesselType": 30,
+     "destination": "PORT DOVER",
+     "age": "2026-08-23T10:43:26Z",
+     "imoNumber": 0,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "FEDERAL CARIBOU",
+    "overallLength": 200,
+    "extremeBeam": 23,
+    "aisInformation": {
+     "id": 538006472,
+     "latitude": 48.324588,
+     "longitude": -69.362052,
+     "cog": 246,
+     "heading": 249,
+     "speed": 8.6,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "ESCOUMINS",
+     "age": "2026-08-23T10:43:49Z",
+     "imoNumber": 9671096,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "MONTREAL EXPRESS",
+    "overallLength": 294,
+    "extremeBeam": 32,
+    "aisInformation": {
+     "id": 310750000,
+     "latitude": 50.249628,
+     "longitude": -58.64012,
+     "cog": 44,
+     "heading": 42,
+     "speed": 13.8,
+     "navigationStatus": 0,
+     "vesselType": 79,
+     "destination": "GBSOU",
+     "age": "2026-08-23T10:43:31Z",
+     "imoNumber": 9253741,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "LEONARD S",
+    "overallLength": 24,
+    "extremeBeam": 9,
+    "aisInformation": {
+     "id": 316044696,
+     "latitude": 42.628458,
+     "longitude": -80.02449,
+     "cog": 59,
+     "heading": 59,
+     "speed": 7.3,
+     "navigationStatus": 8,
+     "vesselType": 30,
+     "destination": "",
+     "age": "2026-08-23T10:43:43Z",
+     "imoNumber": 0,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "FERBEC",
+    "overallLength": 188,
+    "extremeBeam": 31,
+    "aisInformation": {
+     "id": 316014340,
+     "latitude": 49.407458,
+     "longitude": -66.875715,
+     "cog": 250,
+     "heading": 251,
+     "speed": 13.8,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "SOREL",
+     "age": "2026-08-23T10:43:27Z",
+     "imoNumber": 9259848,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "OOCL MONTREAL",
+    "overallLength": 294,
+    "extremeBeam": 32,
+    "aisInformation": {
+     "id": 477321000,
+     "latitude": 47.093838,
+     "longitude": -57.849007,
+     "cog": 292,
+     "heading": 292,
+     "speed": 13.2,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "DEHAM > CAMTR",
+     "age": "2026-08-23T10:43:59Z",
+     "imoNumber": 9253739,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "OAKGLEN",
+    "overallLength": 223,
+    "extremeBeam": 23,
+    "aisInformation": {
+     "id": 316013966,
+     "latitude": 45.636977,
+     "longitude": -73.48115,
+     "cog": 135,
+     "heading": 202,
+     "speed": 0.1,
+     "navigationStatus": 1,
+     "vesselType": 70,
+     "destination": "MONTREAL",
+     "age": "2026-08-23T10:41:59Z",
+     "imoNumber": 7901148,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "FEDERAL SABLE",
+    "overallLength": 190,
+    "extremeBeam": 28,
+    "aisInformation": {
+     "id": 538004380,
+     "latitude": 46.335175,
+     "longitude": -72.54247,
+     "cog": 319,
+     "heading": 208,
+     "speed": 0.1,
+     "navigationStatus": 5,
+     "vesselType": 70,
+     "destination": "CATRR",
+     "age": "2026-08-23T10:42:59Z",
+     "imoNumber": 9595888,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "RADIUM YELLOWKNIFE",
+    "overallLength": 12,
+    "extremeBeam": 40,
+    "aisInformation": {
+     "id": 316009423,
+     "latitude": 44.234082,
+     "longitude": -76.474367,
+     "cog": 347,
+     "heading": 354,
+     "speed": 0.1,
+     "navigationStatus": 5,
+     "vesselType": 52,
+     "destination": "KINGSTON",
+     "age": "2026-08-23T10:41:59Z",
+     "imoNumber": 528895600,
+     "accuracyType": "MALFUNCTION"
+    }
+   },
+   {
+    "id": null,
+    "name": "MARAN THULE",
+    "overallLength": 279,
+    "extremeBeam": 49,
+    "aisInformation": {
+     "id": 311001011,
+     "latitude": 46.315287,
+     "longitude": -52.646653,
+     "cog": 90,
+     "heading": 90,
+     "speed": 7.9,
+     "navigationStatus": 0,
+     "vesselType": 80,
+     "destination": "HEBRON O.F.",
+     "age": "2026-08-23T10:43:43Z",
+     "imoNumber": 9895264,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "ALGOMA SAULT",
+    "overallLength": 225,
+    "extremeBeam": 24,
+    "aisInformation": {
+     "id": 316036089,
+     "latitude": 48.036087,
+     "longitude": -87.91091,
+     "cog": 301,
+     "heading": 301,
+     "speed": 11.2,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "THUNDER BAY",
+     "age": "2026-08-23T10:43:42Z",
+     "imoNumber": 9619282,
+     "accuracyType": "HIGH"
+    }
+   },
+   {
+    "id": null,
+    "name": "EF AVA",
+    "overallLength": 130,
+    "extremeBeam": 21,
+    "aisInformation": {
+     "id": 255806123,
+     "latitude": 47.766098,
+     "longitude": -51.825657,
+     "cog": 35,
+     "heading": 34,
+     "speed": 14.4,
+     "navigationStatus": 0,
+     "vesselType": 71,
+     "destination": "ISREY",
+     "age": "2026-08-23T10:43:39Z",
+     "imoNumber": 9389306,
+     "accuracyType": "LOW"
+    }
+   },
+   {
+    "id": null,
+    "name": "OCEANEX AVALON",
+    "overallLength": 149,
+    "extremeBeam": 26,
+    "aisInformation": {
+     "id": 316006074,
+     "latitude": 49.301623,
+     "longitude": -63.942653,
+     "cog": 297,
+     "heading": 297,
+     "speed": 9.3,
+     "navigationStatus": 0,
+     "vesselType": 70,
+     "destination": "CAMTR",
+     "age": "2026-08-23T10:43:26Z",
+     "imoNumber": 9315044,
+     "accuracyType": "HIGH"
+    }
+   }
+  ]
+ }
+}

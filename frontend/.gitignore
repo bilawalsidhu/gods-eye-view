@@ -1,0 +1,17 @@
+# Frontend build and test output. Kept here rather than in the repository root .gitignore
+# so the backend and the frontend do not have to edit the same file.
+coverage/
+playwright-report/
+test-results/
+.playwright/
+# Verification screenshots. An agent comparing cloud coverage across regions wrote 4.3MB of
+# PNGs here on 2026-08-24, untracked and unignored, which one `git add -A` would have put in
+# the history for good. Linters skip images, so the gate stays green and nothing warns you.
+shots/
+# Scratch Playwright harnesses. Four agents on 2026-08-24 independently put a throwaway spec in
+# `e2e/` rather than the session scratchpad, because Playwright needs this config for its
+# baseURL and webServer and running from outside the project is more setup than the file is
+# worth. The convention was fighting the tool, so the tool gives way: `tmp-` specs are
+# untracked here and unlinted below, and `pnpm verify` does not run Playwright at all, so one
+# costs nobody anything. `pnpm e2e` still runs them, which is the point.
+e2e/tmp-*.spec.ts

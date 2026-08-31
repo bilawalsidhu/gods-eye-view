@@ -1,0 +1,10 @@
+# GET  https://kystdatahuset.no/ws/api/ais/realtime/geojson  -> 200, 3,571,020 bytes, application/json
+# HEAD https://kystdatahuset.no/ws/api/ais/realtime/geojson  -> response below (captured 2026-08-20)
+HTTP/1.1 405 Method Not Allowed
+Transfer-Encoding: chunked
+Allow: GET
+Server: Microsoft-IIS/10.0
+X-Powered-By: ASP.NET
+Date: Thu, 20 Aug 2026 18:39:01 GMT
+Strict-Transport-Security: max-age=15552000; includeSubDomains
+

@@ -1,0 +1,44 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.11 87bfad18",
+  "osm3s": {
+    "timestamp_osm_base": "2026-08-19T22:45:51Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+
+{
+  "type": "node",
+  "id": 5071252726,
+  "lat": 51.5050096,
+  "lon": -0.1272472,
+  "tags": {
+    "fee": "yes",
+    "name": "Household Cavalry Museum",
+    "name:ar": "متحف سلاح الفرسان الملكي",
+    "tourism": "museum",
+    "website": "https://householdcavalry.co.uk/museum/",
+    "wheelchair": "yes",
+    "wikidata": "Q99783571"
+  }
+},
+{
+  "type": "node",
+  "id": 5323721988,
+  "lat": 51.5078919,
+  "lon": -0.1253919,
+  "tags": {
+    "fee": "unknown",
+    "level": "-1",
+    "name": "British Optical Association Museum",
+    "note": "Open weekdays, by appointment only (also may be open on Open House London weekend).",
+    "operator": "The College of Optometrists",
+    "phone": "+44 20 7766 4353",
+    "tourism": "museum",
+    "website": "https://www.college-optometrists.org/the-british-optical-association-museum",
+    "wikidata": "Q111983683"
+  }
+}
+
+  ]
+}

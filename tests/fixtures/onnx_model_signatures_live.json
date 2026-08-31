@@ -1,0 +1,302 @@
+{
+ "_recorded": "2026-08-19",
+ "_note": "Measured on the real weights listed in hf_onnx_model_manifests_live.json, loaded with onnxruntime CPUExecutionProvider. ms figures are this machine only.",
+ "host": {
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "python": "3.13.14",
+  "onnxruntime": "1.29.0",
+  "cpu_count": 12
+ },
+ "models": {
+  "minilm_qint8_arm64.onnx": {
+   "role": "sentence embedder",
+   "bytes": 23026053,
+   "sha256": "4278337fd0ff3c68bfb6291042cad8ab363e1d9fbc43dcb499fe91c871902474",
+   "inputs": [
+    {
+     "name": "input_ids",
+     "type": "tensor(int64)",
+     "shape": [
+      "batch_size",
+      "sequence_length"
+     ]
+    },
+    {
+     "name": "attention_mask",
+     "type": "tensor(int64)",
+     "shape": [
+      "batch_size",
+      "sequence_length"
+     ]
+    },
+    {
+     "name": "token_type_ids",
+     "type": "tensor(int64)",
+     "shape": [
+      "batch_size",
+      "sequence_length"
+     ]
+    }
+   ],
+   "outputs": [
+    {
+     "name": "last_hidden_state",
+     "type": "tensor(float)",
+     "shape": [
+      "batch_size",
+      "sequence_length",
+      "384"
+     ]
+    }
+   ]
+  },
+  "clip_text_int8.onnx": {
+   "role": "clip text",
+   "bytes": 64070791,
+   "sha256": "18845f2ccc35223bb7fec403383a131154b11ac0918df25cf51986df5efd3a21",
+   "inputs": [
+    {
+     "name": "input_ids",
+     "type": "tensor(int64)",
+     "shape": [
+      "batch_size",
+      "sequence_length"
+     ]
+    }
+   ],
+   "outputs": [
+    {
+     "name": "text_embeds",
+     "type": "tensor(float)",
+     "shape": [
+      "floor(Flatten_900_o0__d1*batch_size/512)",
+      "512"
+     ]
+    }
+   ]
+  },
+  "clip_vision_int8.onnx": {
+   "role": "clip vision",
+   "bytes": 88648877,
+   "sha256": "0ab0c1b3ace708e539633af1744d5a95247fe4e14d3e08ff197ef82a6cb9bd93",
+   "inputs": [
+    {
+     "name": "pixel_values",
+     "type": "tensor(float)",
+     "shape": [
+      "batch_size",
+      "num_channels",
+      "height",
+      "width"
+     ]
+    }
+   ],
+   "outputs": [
+    {
+     "name": "image_embeds",
+     "type": "tensor(float)",
+     "shape": [
+      "batch_size",
+      "512"
+     ]
+    }
+   ]
+  },
+  "arcfaceresnet100-11-int8.onnx": {
+   "role": "arcface r100 int8",
+   "bytes": 65764892,
+   "sha256": "c625ca68a422418c48aa84f73341337e0a92b111f327909005d1eec07c95f936",
+   "inputs": [
+    {
+     "name": "data",
+     "type": "tensor(float)",
+     "shape": [
+      "1",
+      "3",
+      "112",
+      "112"
+     ]
+    }
+   ],
+   "outputs": [
+    {
+     "name": "fc1",
+     "type": "tensor(float)",
+     "shape": [
+      "1",
+      "512"
+     ]
+    }
+   ]
+  },
+  "whisper_small_encoder_int8.onnx": {
+   "role": "whisper-small encoder",
+   "bytes": 92326127,
+   "sha256": "2601c9eb2d345c5916d4576d36f663a7c96589740fb2273828c48c3fc2c7db75",
+   "inputs": [
+    {
+     "name": "input_features",
+     "type": "tensor(float)",
+     "shape": [
+      "batch_size",
+      "feature_size",
+      "encoder_sequence_length"
+     ]
+    }
+   ],
+   "outputs": [
+    {
+     "name": "last_hidden_state",
+     "type": "tensor(float)",
+     "shape": [
+      "batch_size",
+      "1500",
+      "768"
+     ]
+    }
+   ]
+  },
+  "yunet_2023mar.onnx": {
+   "role": "yunet face detector (5 keypoints)",
+   "bytes": 232589,
+   "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+   "inputs": [
+    {
+     "name": "input",
+     "type": "tensor(float)",
+     "shape": [
+      "1",
+      "3",
+      "640",
+      "640"
+     ]
+    }
+   ],
+   "outputs": [
+    {
+     "name": "cls_8",
+     "type": "tensor(float)",
+     "shape": [
+      "1",
+      "6400",
+      "1"
+     ]
+    },
+    {
+     "name": "cls_16",
+     "type": "tensor(float)",
+     "shape": [
+      "1",
+      "1600",
+      "1"
+     ]
+    },
+    {
+     "name": "cls_32",
+     "type": "tensor(float)",
+     "shape": [
+      "1",
+      "400",
+      "1"
+     ]
+    },
+    {
+     "name": "obj_8",
+     "type": "tensor(float)",
+     "shape": [
+      "1",
+      "6400",
+      "1"
+     ]
+    },
+    {
+     "name": "obj_16",
+     "type": "tensor(float)",
+     "shape": [
+      "1",
+      "1600",
+      "1"
+     ]
+    },
+    {
+     "name": "obj_32",
+     "type": "tensor(float)",
+     "shape": [
+      "1",
+      "400",
+      "1"
+     ]
+    },
+    {
+     "name": "bbox_8",
+     "type": "tensor(float)",
+     "shape": [
+      "1",
+      "6400",
+      "4"
+     ]
+    },
+    {
+     "name": "bbox_16",
+     "type": "tensor(float)",
+     "shape": [
+      "1",
+      "1600",
+      "4"
+     ]
+    },
+    {
+     "name": "bbox_32",
+     "type": "tensor(float)",
+     "shape": [
+      "1",
+      "400",
+      "4"
+     ]
+    },
+    {
+     "name": "kps_8",
+     "type": "tensor(float)",
+     "shape": [
+      "1",
+      "6400",
+      "10"
+     ]
+    },
+    {
+     "name": "kps_16",
+     "type": "tensor(float)",
+     "shape": [
+      "1",
+      "1600",
+      "10"
+     ]
+    },
+    {
+     "name": "kps_32",
+     "type": "tensor(float)",
+     "shape": [
+      "1",
+      "400",
+      "10"
+     ]
+    }
+   ]
+  }
+ },
+ "phash_pin": {
+  "fixture": "commons_thumb_250_live.jpg",
+  "source_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/London_West_Parkside_West_Parkside%2C_Londres_%2820513409425%29.jpg/250px-London_West_Parkside_West_Parkside%2C_Londres_%2820513409425%29.jpg",
+  "licence": "CC BY 2.0",
+  "sha256": "4b5ffb78b6dfb257c2829581837f20465508adab0998769678cdf3b9bb3c2e22",
+  "bytes": 18700,
+  "size": [
+   250,
+   187
+  ],
+  "phash_dct32_8x8_nodc_63bit": 8205997358325077956,
+  "dhash_9x8_64bit": 5951377715155839472,
+  "algorithm": "phash: LANCZOS to 32x32 greyscale, DCT-II both axes via the orthonormal 32x32 matrix, take d[:8,:8], drop the DC term, threshold the remaining 63 at their median, MSB first. dhash: LANCZOS to 9x8 greyscale, bit i = g[r,c+1] > g[r,c], row-major."
+ }
+}

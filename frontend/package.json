@@ -1,0 +1,48 @@
+{
+  "name": "tracker-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@11.17.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "format": "biome format --write .",
+    "format:check": "biome ci .",
+    "lint": "eslint .",
+    "lint:html": "html-validate -c htmlvalidate.config.mjs index.html",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
+    "e2e": "playwright test",
+    "codegen": "openapi-typescript ../openapi.json -o src/types/api.d.ts",
+    "verify": "pnpm format:check && pnpm lint && pnpm lint:html && pnpm typecheck && pnpm test"
+  },
+  "dependencies": {
+    "cesium": "^1.135.0",
+    "satellite.js": "^7.1.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@biomejs/biome": "2.5.9",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.2.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/eslint-plugin": "^1.6.27",
+    "eslint": "^10.8.1",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-no-unsanitized": "^4.1.5",
+    "eslint-plugin-regexp": "^3.2.0",
+    "eslint-plugin-unicorn": "^73.0.0",
+    "html-validate": "^11.8.0",
+    "jsdom": "27.4.0",
+    "openapi-typescript": "^7.9.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "^8.67.0",
+    "vite": "^8.2.1",
+    "vite-plugin-static-copy": "^4.1.1",
+    "vitest": "^4.1.11"
+  }
+}

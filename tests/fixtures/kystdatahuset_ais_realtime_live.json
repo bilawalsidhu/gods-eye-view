@@ -1,0 +1,5188 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.33559,
+      60.13559
+     ],
+     [
+      5.33603,
+      60.13543
+     ],
+     [
+      5.33783,
+      60.13485
+     ],
+     [
+      5.33828,
+      60.1347
+     ],
+     [
+      5.33917,
+      60.1344
+     ],
+     [
+      5.34007,
+      60.1341
+     ],
+     [
+      5.34051,
+      60.13395
+     ],
+     [
+      5.34141,
+      60.13365
+     ],
+     [
+      5.34187,
+      60.13351
+     ],
+     [
+      5.34232,
+      60.13337
+     ],
+     [
+      5.34412,
+      60.13279
+     ],
+     [
+      5.34457,
+      60.13264
+     ],
+     [
+      5.34547,
+      60.13235
+     ],
+     [
+      5.34637,
+      60.13205
+     ],
+     [
+      5.34682,
+      60.13192
+     ],
+     [
+      5.34728,
+      60.13178
+     ],
+     [
+      5.34774,
+      60.13164
+     ],
+     [
+      5.34865,
+      60.13137
+     ],
+     [
+      5.34911,
+      60.13122
+     ],
+     [
+      5.34957,
+      60.13109
+     ],
+     [
+      5.35003,
+      60.13096
+     ],
+     [
+      5.35097,
+      60.13069
+     ],
+     [
+      5.35144,
+      60.13057
+     ],
+     [
+      5.35333,
+      60.13005
+     ],
+     [
+      5.35526,
+      60.12958
+     ],
+     [
+      5.35574,
+      60.12947
+     ],
+     [
+      5.35623,
+      60.12934
+     ],
+     [
+      5.35671,
+      60.12923
+     ],
+     [
+      5.35768,
+      60.129
+     ],
+     [
+      5.35867,
+      60.1288
+     ],
+     [
+      5.36017,
+      60.1285
+     ],
+     [
+      5.36117,
+      60.12829
+     ],
+     [
+      5.36168,
+      60.12821
+     ],
+     [
+      5.36268,
+      60.12801
+     ],
+     [
+      5.36319,
+      60.12791
+     ],
+     [
+      5.36471,
+      60.12764
+     ],
+     [
+      5.36573,
+      60.12747
+     ],
+     [
+      5.36624,
+      60.12739
+     ],
+     [
+      5.36726,
+      60.12721
+     ],
+     [
+      5.36778,
+      60.12712
+     ]
+    ]
+   },
+   "properties": {
+    "id": 40049169,
+    "cog": 108.4,
+    "imo": 9383364,
+    "mmsi": 257175000,
+    "speed": 29.1,
+    "length": 26,
+    "status": 0,
+    "breadth": 8,
+    "draught": 2,
+    "callsign": "JWMA",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "RYGERFONN",
+    "ship_type": 49,
+    "destination": "ROSENDAL-BERGEN T/R",
+    "true_heading": 101,
+    "date_time_utc": "2026-08-23T09:52:36"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      16.67827,
+      68.68568
+     ],
+     [
+      16.67924,
+      68.68626
+     ],
+     [
+      16.68016,
+      68.68683
+     ],
+     [
+      16.68112,
+      68.68741
+     ],
+     [
+      16.68205,
+      68.68797
+     ],
+     [
+      16.68298,
+      68.68855
+     ],
+     [
+      16.6841,
+      68.68925
+     ],
+     [
+      16.68484,
+      68.6897
+     ],
+     [
+      16.68578,
+      68.69028
+     ],
+     [
+      16.68673,
+      68.69086
+     ],
+     [
+      16.6888,
+      68.69213
+     ],
+     [
+      16.69043,
+      68.69318
+     ],
+     [
+      16.69217,
+      68.69434
+     ],
+     [
+      16.69309,
+      68.69493
+     ],
+     [
+      16.69402,
+      68.6955
+     ],
+     [
+      16.6952,
+      68.69618
+     ],
+     [
+      16.696,
+      68.69662
+     ],
+     [
+      16.69798,
+      68.69775
+     ],
+     [
+      16.7001,
+      68.69899
+     ],
+     [
+      16.70086,
+      68.69946
+     ],
+     [
+      16.70184,
+      68.70002
+     ],
+     [
+      16.70281,
+      68.70058
+     ],
+     [
+      16.7038,
+      68.70114
+     ],
+     [
+      16.70583,
+      68.70225
+     ],
+     [
+      16.70709,
+      68.7029
+     ],
+     [
+      16.7079,
+      68.70335
+     ],
+     [
+      16.70891,
+      68.7039
+     ],
+     [
+      16.70992,
+      68.70445
+     ],
+     [
+      16.71113,
+      68.70512
+     ],
+     [
+      16.71214,
+      68.70567
+     ],
+     [
+      16.71395,
+      68.70666
+     ],
+     [
+      16.71494,
+      68.70723
+     ],
+     [
+      16.71593,
+      68.70779
+     ],
+     [
+      16.71786,
+      68.70894
+     ],
+     [
+      16.71978,
+      68.71006
+     ],
+     [
+      16.72076,
+      68.71063
+     ],
+     [
+      16.72174,
+      68.71119
+     ],
+     [
+      16.72277,
+      68.71173
+     ],
+     [
+      16.724,
+      68.7124
+     ],
+     [
+      16.72481,
+      68.71284
+     ]
+    ]
+   },
+   "properties": {
+    "id": 18323225094,
+    "cog": 33.5,
+    "imo": 0,
+    "mmsi": 257022470,
+    "speed": 28.8,
+    "length": 10,
+    "status": 0,
+    "breadth": 3,
+    "draught": 0,
+    "callsign": "LF5931",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "HORNVIKA",
+    "ship_type": 60,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:52:34"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      8.7868,
+      57.5457
+     ],
+     [
+      8.78537,
+      57.5452
+     ],
+     [
+      8.78331,
+      57.5445
+     ],
+     [
+      8.78127,
+      57.54381
+     ],
+     [
+      8.76769,
+      57.53919
+     ],
+     [
+      8.76216,
+      57.53735
+     ],
+     [
+      8.74411,
+      57.5313
+     ],
+     [
+      8.71099,
+      57.52018
+     ],
+     [
+      8.71031,
+      57.51994
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19752977099,
+    "cog": 237.4,
+    "imo": 9552020,
+    "mmsi": 255805989,
+    "speed": 9.3,
+    "length": 100,
+    "status": 0,
+    "breadth": 14,
+    "draught": 6,
+    "callsign": "CQIK9",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "COSTAMAR",
+    "ship_type": 70,
+    "destination": "FIRAU-GBSEA",
+    "true_heading": 240,
+    "date_time_utc": "2026-08-23T09:43:34"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      18.74798,
+      69.67207
+     ],
+     [
+      18.74799,
+      69.67207
+     ]
+    ]
+   },
+   "properties": {
+    "id": 695,
+    "cog": 18.1,
+    "imo": 7825588,
+    "mmsi": 257293400,
+    "speed": 0.0,
+    "length": 40,
+    "status": 5,
+    "breadth": 12,
+    "draught": 4,
+    "callsign": "LJIP",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "KJERRINGOY",
+    "ship_type": 60,
+    "destination": "EIDKJOSEN",
+    "true_heading": 267,
+    "date_time_utc": "2026-08-23T09:43:49"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      26.76924,
+      72.79545
+     ],
+     [
+      26.77029,
+      72.79583
+     ],
+     [
+      26.77099,
+      72.79609
+     ],
+     [
+      26.77371,
+      72.79709
+     ],
+     [
+      26.77448,
+      72.79738
+     ],
+     [
+      26.77535,
+      72.79771
+     ],
+     [
+      26.77622,
+      72.79803
+     ],
+     [
+      26.7806,
+      72.79964
+     ],
+     [
+      26.80771,
+      72.80962
+     ],
+     [
+      26.86064,
+      72.8288
+     ],
+     [
+      26.87013,
+      72.83231
+     ]
+    ]
+   },
+   "properties": {
+    "id": 1615531775,
+    "cog": 38.3,
+    "imo": 9432646,
+    "mmsi": 257736000,
+    "speed": 8.8,
+    "length": 94,
+    "status": 0,
+    "breadth": 17,
+    "draught": 6.5,
+    "callsign": "LASE",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "KV SORTLAND",
+    "ship_type": 55,
+    "destination": "COASTGUARD",
+    "true_heading": 38,
+    "date_time_utc": "2026-08-23T09:44:05"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      7.13104,
+      62.52658
+     ],
+     [
+      7.13097,
+      62.52659
+     ]
+    ]
+   },
+   "properties": {
+    "id": 78554310,
+    "cog": 248.3,
+    "imo": 5377159,
+    "mmsi": 257077600,
+    "speed": 0.0,
+    "length": 25,
+    "status": 5,
+    "breadth": 7,
+    "draught": 4.2,
+    "callsign": "JXXV",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "AMAZON",
+    "ship_type": 31,
+    "destination": "GRONNES/AUKRA",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:44:09"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      16.26415,
+      69.01436
+     ],
+     [
+      16.26441,
+      69.01445
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19710840203,
+    "cog": 59.6,
+    "imo": 0,
+    "mmsi": 941501043,
+    "speed": 0.2,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "ANDOYVAERING B [77%]",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:48:11"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      25.94996,
+      70.97782
+     ],
+     [
+      25.95152,
+      70.98094
+     ],
+     [
+      25.9536,
+      70.9836
+     ],
+     [
+      25.95568,
+      70.98629
+     ],
+     [
+      25.957,
+      70.98959
+     ],
+     [
+      25.95986,
+      70.99223
+     ],
+     [
+      25.96094,
+      70.994
+     ],
+     [
+      25.96003,
+      70.99537
+     ],
+     [
+      25.95927,
+      70.99536
+     ],
+     [
+      25.95862,
+      70.99554
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19591266007,
+    "cog": 310.5,
+    "imo": 0,
+    "mmsi": 585900152,
+    "speed": 0.0,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "THEA MATHILDE  [59%]",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:48:24"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": []
+   },
+   "properties": {
+    "id": 19089395432,
+    "cog": 128.2,
+    "imo": 0,
+    "mmsi": 941500442,
+    "speed": 1.0,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "100",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "WIKEROY SENIOR [95%]",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:50:08"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      14.7554,
+      68.98132
+     ],
+     [
+      14.7554,
+      68.98132
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19365420853,
+    "cog": 0.0,
+    "imo": 0,
+    "mmsi": 585900139,
+    "speed": 1.0,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "BUOY TJ3       [41%]",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:51:03"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      29.08116,
+      70.98294
+     ],
+     [
+      29.07253,
+      70.98208
+     ],
+     [
+      29.06576,
+      70.98129
+     ],
+     [
+      29.06226,
+      70.98321
+     ],
+     [
+      29.06585,
+      70.98586
+     ],
+     [
+      29.06823,
+      70.98586
+     ],
+     [
+      29.07,
+      70.9859
+     ],
+     [
+      29.07305,
+      70.9858
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19681748188,
+    "cog": 99.5,
+    "imo": 0,
+    "mmsi": 585900246,
+    "speed": 0.9,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "BO12345",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "BUOY FRANK     [74%]",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:51:12"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      17.61752,
+      69.56693
+     ],
+     [
+      17.61748,
+      69.56698
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19701232223,
+    "cog": 270.0,
+    "imo": 0,
+    "mmsi": 585900249,
+    "speed": 0.5,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "BO12345",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "BUOY 1 T-66-SE [76%]",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:51:19"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      16.78748,
+      69.1235
+     ],
+     [
+      16.78741,
+      69.12355
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19688748001,
+    "cog": 7.1,
+    "imo": 0,
+    "mmsi": 109120451,
+    "speed": 0.2,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "BUOY 3         [72%]",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:51:20"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      16.75654,
+      69.07823
+     ],
+     [
+      16.75654,
+      69.07845
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19532039620,
+    "cog": 22.6,
+    "imo": 0,
+    "mmsi": 109120450,
+    "speed": 0.2,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "PER IVAR 2     [41%]",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:51:24"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      16.13824,
+      69.0822
+     ],
+     [
+      16.13825,
+      69.08223
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19651160212,
+    "cog": 310.4,
+    "imo": 0,
+    "mmsi": 941501045,
+    "speed": 0.2,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "ANDOYVAERING B [58%]",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:51:33"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      31.52268,
+      70.31985
+     ],
+     [
+      31.52348,
+      70.31959
+     ],
+     [
+      31.5246,
+      70.3197
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19190490043,
+    "cog": 67.6,
+    "imo": 0,
+    "mmsi": 310,
+    "speed": 1.3,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "FLIPPER B4     [95%]",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:51:43"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      17.63023,
+      69.56713
+     ],
+     [
+      17.63021,
+      69.56712
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19701243924,
+    "cog": 287.1,
+    "imo": 0,
+    "mmsi": 585900254,
+    "speed": 0.2,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "BUOY 2 T-66-SE [79%]",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:51:52"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      14.55481,
+      68.93516
+     ],
+     [
+      14.55483,
+      68.93516
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19366668841,
+    "cog": 133.7,
+    "imo": 0,
+    "mmsi": 585900138,
+    "speed": 0.6,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "BUOY TJ2       [74%]",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:52:09"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      17.62051,
+      69.56317
+     ],
+     [
+      17.62031,
+      69.5632
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19701223425,
+    "cog": 273.1,
+    "imo": 0,
+    "mmsi": 585900253,
+    "speed": 0.3,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "BUOY 3 T-66-SE [86%]",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:52:12"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      18.07728,
+      69.53627
+     ],
+     [
+      18.07732,
+      69.5361
+     ],
+     [
+      18.07724,
+      69.53602
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19698405022,
+    "cog": 165.3,
+    "imo": 0,
+    "mmsi": 585900273,
+    "speed": 0.2,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "BUOY SL 1      [60%]",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:52:34"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      18.28174,
+      70.09513
+     ],
+     [
+      18.28171,
+      70.09519
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19729074850,
+    "cog": 140.1,
+    "imo": 0,
+    "mmsi": 109050500,
+    "speed": 1.0,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "NETS 21        [62%]",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:52:36"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      10.23719,
+      63.55616
+     ],
+     [
+      10.23724,
+      63.55611
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19160441584,
+    "cog": 188.0,
+    "imo": 0,
+    "mmsi": 253000106,
+    "speed": 0.0,
+    "length": 6,
+    "status": 0,
+    "breadth": 2,
+    "draught": 0,
+    "callsign": "LXAM5",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "DOLPHIN01 [UNCREWED]",
+    "ship_type": 90,
+    "destination": "",
+    "true_heading": 81,
+    "date_time_utc": "2026-08-23T09:49:38"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": []
+   },
+   "properties": {
+    "id": 1214095659,
+    "cog": 12.0,
+    "imo": 9664627,
+    "mmsi": 538010630,
+    "speed": 0.0,
+    "length": 89,
+    "status": 5,
+    "breadth": 105,
+    "draught": 15,
+    "callsign": "V7A7172",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "NOBLE INTEGRATOR",
+    "ship_type": 0,
+    "destination": "A",
+    "true_heading": 68,
+    "date_time_utc": "2026-08-23T09:43:37.022473"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": []
+   },
+   "properties": {
+    "id": 4666818108,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 257063600,
+    "speed": 0.0,
+    "length": 29,
+    "status": 0,
+    "breadth": 7,
+    "draught": 0,
+    "callsign": "LDRM",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "GRIP MAXIMUS",
+    "ship_type": 80,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:44:06"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": []
+   },
+   "properties": {
+    "id": 829,
+    "cog": 312.8,
+    "imo": 0,
+    "mmsi": 257149120,
+    "speed": 0.0,
+    "length": 18,
+    "status": 5,
+    "breadth": 5,
+    "draught": 2.5,
+    "callsign": "LK3243",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "NERA",
+    "ship_type": 30,
+    "destination": "FISHINGGROUND",
+    "true_heading": 73,
+    "date_time_utc": "2026-08-23T09:44:17"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      1.3052,
+      61.61969
+     ],
+     [
+      1.30515,
+      61.61968
+     ]
+    ]
+   },
+   "properties": {
+    "id": 115444476,
+    "cog": 340.6,
+    "imo": 0,
+    "mmsi": 2320212,
+    "speed": 0.0,
+    "length": 0,
+    "status": 5,
+    "breadth": 0,
+    "draught": 25,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "MAGNUS PLATFOROM",
+    "ship_type": 90,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:50:13.637612"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      10.41551,
+      59.83278
+     ],
+     [
+      10.41552,
+      59.83279
+     ]
+    ]
+   },
+   "properties": {
+    "id": 39049509,
+    "cog": 114.8,
+    "imo": 0,
+    "mmsi": 4747,
+    "speed": 0.0,
+    "length": 30,
+    "status": 5,
+    "breadth": 70,
+    "draught": 0,
+    "callsign": "0",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "MIROS",
+    "ship_type": 0,
+    "destination": "HOME",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:52:14"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": []
+   },
+   "properties": {
+    "id": 19564058791,
+    "cog": 176.2,
+    "imo": 0,
+    "mmsi": 111257514,
+    "speed": 0.0,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "LNOQR",
+    "maneuvre": 0,
+    "ais_class": "Z",
+    "ship_name": "SAR AIRCRAFT CHC SAR",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 0,
+    "date_time_utc": "2026-08-23T09:52:29"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      9.74753,
+      59.01009
+     ],
+     [
+      9.74753,
+      59.01009
+     ]
+    ]
+   },
+   "properties": {
+    "id": 40152373,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 257818700,
+    "speed": 0.0,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "LG9335",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "ROGNSFJORD",
+    "ship_type": 70,
+    "destination": "",
+    "true_heading": 260,
+    "date_time_utc": "2026-08-23T09:43:43"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.72575,
+      58.99132
+     ],
+     [
+      5.72575,
+      58.99132
+     ]
+    ]
+   },
+   "properties": {
+    "id": 39412696,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 258083780,
+    "speed": 0.0,
+    "length": 11,
+    "status": 5,
+    "breadth": 4,
+    "draught": 2,
+    "callsign": "LI4000",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "STIAN",
+    "ship_type": 57,
+    "destination": "STAVANGER",
+    "true_heading": 349,
+    "date_time_utc": "2026-08-23T09:43:43"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      10.48167,
+      59.24166
+     ],
+     [
+      10.48099,
+      59.2418
+     ],
+     [
+      10.47667,
+      59.24
+     ],
+     [
+      10.47388,
+      59.24065
+     ],
+     [
+      10.4714,
+      59.24139
+     ],
+     [
+      10.4706,
+      59.24195
+     ],
+     [
+      10.47011,
+      59.24264
+     ],
+     [
+      10.46997,
+      59.24327
+     ],
+     [
+      10.47006,
+      59.24387
+     ],
+     [
+      10.47006,
+      59.24433
+     ],
+     [
+      10.47022,
+      59.2448
+     ],
+     [
+      10.47095,
+      59.24496
+     ],
+     [
+      10.47113,
+      59.24481
+     ],
+     [
+      10.47114,
+      59.24478
+     ],
+     [
+      10.47167,
+      59.245
+     ]
+    ]
+   },
+   "properties": {
+    "id": 17615863003,
+    "cog": 511.0,
+    "imo": 0,
+    "mmsi": 259038580,
+    "speed": 0.0,
+    "length": 8,
+    "status": 15,
+    "breadth": 5,
+    "draught": 0,
+    "callsign": "LF7857",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "BRANNBATEN VIB",
+    "ship_type": 51,
+    "destination": "",
+    "true_heading": 0,
+    "date_time_utc": "2026-08-23T09:48:20"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      11.93294,
+      65.88316
+     ],
+     [
+      11.93293,
+      65.88317
+     ],
+     [
+      11.93333,
+      65.88333
+     ]
+    ]
+   },
+   "properties": {
+    "id": 7557323363,
+    "cog": 511.0,
+    "imo": 0,
+    "mmsi": 259039050,
+    "speed": 1.0,
+    "length": 11,
+    "status": 15,
+    "breadth": 4,
+    "draught": 0,
+    "callsign": "LH6392",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "VEMUND",
+    "ship_type": 40,
+    "destination": "",
+    "true_heading": 0,
+    "date_time_utc": "2026-08-23T09:50:02"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.27165,
+      59.40846
+     ],
+     [
+      5.27164,
+      59.40846
+     ],
+     [
+      5.27,
+      59.40833
+     ]
+    ]
+   },
+   "properties": {
+    "id": 11941955898,
+    "cog": 511.0,
+    "imo": 0,
+    "mmsi": 257152040,
+    "speed": 0.0,
+    "length": 15,
+    "status": 15,
+    "breadth": 5,
+    "draught": 0,
+    "callsign": "LFFV",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "ROGVAER",
+    "ship_type": 60,
+    "destination": "",
+    "true_heading": 0,
+    "date_time_utc": "2026-08-23T09:51:46"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.23128,
+      59.60709
+     ],
+     [
+      5.23129,
+      59.60709
+     ]
+    ]
+   },
+   "properties": {
+    "id": 626,
+    "cog": 360.0,
+    "imo": 9180322,
+    "mmsi": 259473000,
+    "speed": 102.3,
+    "length": 21,
+    "status": 5,
+    "breadth": 6,
+    "draught": 0,
+    "callsign": "LIZR",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "BERGEN KREDS",
+    "ship_type": 52,
+    "destination": "RING 02016",
+    "true_heading": 37,
+    "date_time_utc": "2026-08-23T09:44:52"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.72183,
+      59.83297
+     ],
+     [
+      5.72183,
+      59.83297
+     ]
+    ]
+   },
+   "properties": {
+    "id": 2305083711,
+    "cog": 360.0,
+    "imo": 29862,
+    "mmsi": 257052800,
+    "speed": 102.3,
+    "length": 18,
+    "status": 5,
+    "breadth": 5,
+    "draught": 0,
+    "callsign": "JWWG",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "TORNEROSE",
+    "ship_type": 60,
+    "destination": "HERNAR",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:45:49"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      10.39269,
+      63.43456
+     ],
+     [
+      10.39273,
+      63.43472
+     ],
+     [
+      10.3924,
+      63.43628
+     ],
+     [
+      10.39228,
+      63.43667
+     ],
+     [
+      10.3918,
+      63.43679
+     ],
+     [
+      10.39106,
+      63.43687
+     ],
+     [
+      10.39066,
+      63.43705
+     ],
+     [
+      10.39044,
+      63.4377
+     ],
+     [
+      10.39035,
+      63.43804
+     ],
+     [
+      10.3903,
+      63.43872
+     ],
+     [
+      10.39031,
+      63.43899
+     ],
+     [
+      10.39029,
+      63.43927
+     ],
+     [
+      10.39026,
+      63.43958
+     ],
+     [
+      10.39021,
+      63.43986
+     ],
+     [
+      10.39009,
+      63.44048
+     ],
+     [
+      10.38993,
+      63.44103
+     ],
+     [
+      10.38974,
+      63.44159
+     ],
+     [
+      10.38968,
+      63.44187
+     ],
+     [
+      10.38966,
+      63.44218
+     ],
+     [
+      10.38966,
+      63.44243
+     ],
+     [
+      10.38968,
+      63.44271
+     ],
+     [
+      10.38975,
+      63.44328
+     ],
+     [
+      10.38976,
+      63.44355
+     ],
+     [
+      10.38974,
+      63.44381
+     ],
+     [
+      10.38969,
+      63.4441
+     ],
+     [
+      10.38953,
+      63.44462
+     ],
+     [
+      10.38946,
+      63.44488
+     ],
+     [
+      10.3894,
+      63.44515
+     ],
+     [
+      10.38935,
+      63.44542
+     ],
+     [
+      10.38917,
+      63.4462
+     ],
+     [
+      10.3891,
+      63.44647
+     ],
+     [
+      10.38901,
+      63.44676
+     ],
+     [
+      10.38857,
+      63.44804
+     ],
+     [
+      10.38836,
+      63.44857
+     ],
+     [
+      10.3879,
+      63.44962
+     ],
+     [
+      10.38725,
+      63.45071
+     ],
+     [
+      10.38648,
+      63.45119
+     ],
+     [
+      10.38626,
+      63.45125
+     ]
+    ]
+   },
+   "properties": {
+    "id": 17689052970,
+    "cog": 310.7,
+    "imo": 0,
+    "mmsi": 257234800,
+    "speed": 3.1,
+    "length": 20,
+    "status": 0,
+    "breadth": 4,
+    "draught": 1,
+    "callsign": "JWQM",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "NIDARHOLM",
+    "ship_type": 99,
+    "destination": "TRONDHEIM-MUNKHOLM",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:43:13"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      15.13116,
+      68.70702
+     ],
+     [
+      15.13117,
+      68.70702
+     ]
+    ]
+   },
+   "properties": {
+    "id": 2007,
+    "cog": 166.6,
+    "imo": 0,
+    "mmsi": 258208450,
+    "speed": 0.0,
+    "length": 10,
+    "status": 0,
+    "breadth": 4,
+    "draught": 0,
+    "callsign": "LG7810",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "LIFJORD",
+    "ship_type": 70,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:43:22"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      15.42,
+      68.69666
+     ],
+     [
+      15.42022,
+      68.69737
+     ],
+     [
+      15.42,
+      68.69666
+     ],
+     [
+      15.42014,
+      68.69736
+     ],
+     [
+      15.42,
+      68.69666
+     ]
+    ]
+   },
+   "properties": {
+    "id": 5945955021,
+    "cog": 165.0,
+    "imo": 0,
+    "mmsi": 259032570,
+    "speed": 4.0,
+    "length": 11,
+    "status": 15,
+    "breadth": 3,
+    "draught": 0,
+    "callsign": "LL5064",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "VA RIB 1",
+    "ship_type": 40,
+    "destination": "",
+    "true_heading": 0,
+    "date_time_utc": "2026-08-23T09:49:20"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      1.38737,
+      57.4501
+     ],
+     [
+      1.38736,
+      57.45009
+     ]
+    ]
+   },
+   "properties": {
+    "id": 112067766,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 232589000,
+    "speed": 0.0,
+    "length": 100,
+    "status": 5,
+    "breadth": 50,
+    "draught": 25.5,
+    "callsign": "GUPN",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "MONTROSE ALPHA",
+    "ship_type": 90,
+    "destination": "MONTROSE",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:51:16.880244"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.33377,
+      59.64713
+     ],
+     [
+      5.33377,
+      59.6471
+     ]
+    ]
+   },
+   "properties": {
+    "id": 7082480406,
+    "cog": 181.5,
+    "imo": 0,
+    "mmsi": 586707071,
+    "speed": 0.6,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "VESTFISK BOUY",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:43:59"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      17.11931,
+      68.83569
+     ],
+     [
+      17.11994,
+      68.83532
+     ],
+     [
+      17.12064,
+      68.83492
+     ],
+     [
+      17.1212,
+      68.83457
+     ],
+     [
+      17.12188,
+      68.83416
+     ],
+     [
+      17.12244,
+      68.83382
+     ],
+     [
+      17.12311,
+      68.8334
+     ],
+     [
+      17.12367,
+      68.83306
+     ],
+     [
+      17.12433,
+      68.83264
+     ],
+     [
+      17.12494,
+      68.83227
+     ],
+     [
+      17.12556,
+      68.83189
+     ],
+     [
+      17.12613,
+      68.83155
+     ],
+     [
+      17.12682,
+      68.83114
+     ],
+     [
+      17.12742,
+      68.83076
+     ],
+     [
+      17.128,
+      68.83037
+     ],
+     [
+      17.12858,
+      68.82998
+     ],
+     [
+      17.12916,
+      68.8296
+     ],
+     [
+      17.12968,
+      68.82925
+     ],
+     [
+      17.13032,
+      68.82883
+     ],
+     [
+      17.13089,
+      68.82844
+     ],
+     [
+      17.13134,
+      68.82812
+     ],
+     [
+      17.13202,
+      68.82765
+     ],
+     [
+      17.1326,
+      68.82726
+     ],
+     [
+      17.13311,
+      68.82691
+     ],
+     [
+      17.13375,
+      68.82648
+     ],
+     [
+      17.13431,
+      68.8261
+     ],
+     [
+      17.13477,
+      68.82578
+     ],
+     [
+      17.13545,
+      68.82531
+     ],
+     [
+      17.13602,
+      68.82492
+     ],
+     [
+      17.13653,
+      68.82457
+     ],
+     [
+      17.13717,
+      68.82414
+     ],
+     [
+      17.13775,
+      68.82375
+     ],
+     [
+      17.13822,
+      68.82345
+     ],
+     [
+      17.13893,
+      68.82298
+     ],
+     [
+      17.14007,
+      68.82225
+     ],
+     [
+      17.14125,
+      68.82143
+     ],
+     [
+      17.14171,
+      68.82111
+     ],
+     [
+      17.1424,
+      68.82065
+     ],
+     [
+      17.14351,
+      68.81991
+     ],
+     [
+      17.14529,
+      68.8188
+     ]
+    ]
+   },
+   "properties": {
+    "id": 7612408408,
+    "cog": 148.5,
+    "imo": 0,
+    "mmsi": 259036280,
+    "speed": 9.6,
+    "length": 15,
+    "status": 0,
+    "breadth": 8,
+    "draught": 0,
+    "callsign": "LH6303",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "",
+    "ship_type": 70,
+    "destination": "",
+    "true_heading": 149,
+    "date_time_utc": "2026-08-23T09:44:55"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      17.25818,
+      69.0369
+     ],
+     [
+      17.2582,
+      69.03688
+     ],
+     [
+      17.25821,
+      69.03688
+     ]
+    ]
+   },
+   "properties": {
+    "id": 14151871791,
+    "cog": 175.1,
+    "imo": 0,
+    "mmsi": 259048560,
+    "speed": 0.0,
+    "length": 24,
+    "status": 0,
+    "breadth": 12,
+    "draught": 0,
+    "callsign": "LFBY",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "",
+    "ship_type": 30,
+    "destination": "",
+    "true_heading": 90,
+    "date_time_utc": "2026-08-23T09:45:11"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      20.38945,
+      69.65072
+     ],
+     [
+      20.38843,
+      69.65179
+     ],
+     [
+      20.38792,
+      69.65189
+     ],
+     [
+      20.38757,
+      69.6519
+     ],
+     [
+      20.38607,
+      69.65193
+     ],
+     [
+      20.38588,
+      69.65198
+     ],
+     [
+      20.38578,
+      69.652
+     ],
+     [
+      20.37863,
+      69.65266
+     ],
+     [
+      20.37842,
+      69.65269
+     ],
+     [
+      20.3769,
+      69.65275
+     ],
+     [
+      20.37672,
+      69.65275
+     ]
+    ]
+   },
+   "properties": {
+    "id": 649,
+    "cog": 284.6,
+    "imo": 0,
+    "mmsi": 257191020,
+    "speed": 1.7,
+    "length": 15,
+    "status": 7,
+    "breadth": 4,
+    "draught": 0,
+    "callsign": "LM2284",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "NORDAVIND",
+    "ship_type": 30,
+    "destination": "TROMSO",
+    "true_heading": 291,
+    "date_time_utc": "2026-08-23T09:44:47"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      17.14125,
+      68.82143
+     ],
+     [
+      17.14171,
+      68.82111
+     ],
+     [
+      17.1424,
+      68.82065
+     ],
+     [
+      17.14351,
+      68.81991
+     ],
+     [
+      17.14529,
+      68.8188
+     ],
+     [
+      17.14728,
+      68.81764
+     ],
+     [
+      17.14801,
+      68.81724
+     ],
+     [
+      17.14866,
+      68.81686
+     ],
+     [
+      17.14919,
+      68.81657
+     ],
+     [
+      17.14992,
+      68.81615
+     ],
+     [
+      17.15065,
+      68.81575
+     ],
+     [
+      17.15126,
+      68.81541
+     ],
+     [
+      17.15202,
+      68.81502
+     ],
+     [
+      17.15273,
+      68.81466
+     ],
+     [
+      17.15329,
+      68.81437
+     ],
+     [
+      17.15406,
+      68.81397
+     ],
+     [
+      17.15483,
+      68.81357
+     ],
+     [
+      17.15547,
+      68.81325
+     ],
+     [
+      17.15625,
+      68.81285
+     ],
+     [
+      17.15698,
+      68.8125
+     ],
+     [
+      17.15758,
+      68.81222
+     ],
+     [
+      17.1584,
+      68.81184
+     ],
+     [
+      17.15922,
+      68.81145
+     ],
+     [
+      17.15989,
+      68.81113
+     ],
+     [
+      17.16071,
+      68.81074
+     ],
+     [
+      17.16147,
+      68.8104
+     ],
+     [
+      17.16218,
+      68.8101
+     ],
+     [
+      17.16297,
+      68.80976
+     ],
+     [
+      17.16384,
+      68.80939
+     ],
+     [
+      17.16466,
+      68.80906
+     ],
+     [
+      17.16704,
+      68.80811
+     ],
+     [
+      17.16786,
+      68.80778
+     ],
+     [
+      17.17121,
+      68.80644
+     ],
+     [
+      17.17284,
+      68.80583
+     ],
+     [
+      17.17378,
+      68.80548
+     ],
+     [
+      17.17463,
+      68.80516
+     ],
+     [
+      17.1755,
+      68.80485
+     ],
+     [
+      17.17714,
+      68.80424
+     ],
+     [
+      17.17987,
+      68.80328
+     ],
+     [
+      17.18074,
+      68.80297
+     ]
+    ]
+   },
+   "properties": {
+    "id": 7575616629,
+    "cog": 134.5,
+    "imo": 33710,
+    "mmsi": 259036280,
+    "speed": 9.6,
+    "length": 15,
+    "status": 0,
+    "breadth": 8,
+    "draught": 3,
+    "callsign": "LH6303",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "AURORA",
+    "ship_type": 70,
+    "destination": "SKJELLESVIKA",
+    "true_heading": 136,
+    "date_time_utc": "2026-08-23T09:52:33"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      10.39874,
+      63.43911
+     ],
+     [
+      10.39868,
+      63.43912
+     ]
+    ]
+   },
+   "properties": {
+    "id": 6386217062,
+    "cog": 0.0,
+    "imo": 0,
+    "mmsi": 257347700,
+    "speed": 0.0,
+    "length": 15,
+    "status": 0,
+    "breadth": 4,
+    "draught": 1.5,
+    "callsign": "LNPT",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "LISE",
+    "ship_type": 50,
+    "destination": "TRONDHEIM PILOT ST",
+    "true_heading": 322,
+    "date_time_utc": "2026-08-23T09:45:05"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      10.39868,
+      63.43915
+     ],
+     [
+      10.39868,
+      63.43915
+     ],
+     [
+      10.39867,
+      63.4392
+     ],
+     [
+      10.39866,
+      63.43917
+     ],
+     [
+      10.39866,
+      63.43916
+     ],
+     [
+      10.39867,
+      63.43916
+     ]
+    ]
+   },
+   "properties": {
+    "id": 11361,
+    "cog": 320.5,
+    "imo": 0,
+    "mmsi": 257347700,
+    "speed": 0.1,
+    "length": 15,
+    "status": 0,
+    "breadth": 4,
+    "draught": 1.5,
+    "callsign": "LNPT",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "LISE",
+    "ship_type": 50,
+    "destination": "TRONDHEIM PILOT ST",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:52:29"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.2683,
+      60.55408
+     ],
+     [
+      5.2683,
+      60.55405
+     ]
+    ]
+   },
+   "properties": {
+    "id": 39101516,
+    "cog": 138.8,
+    "imo": 0,
+    "mmsi": 257060220,
+    "speed": 0.0,
+    "length": 8,
+    "status": 0,
+    "breadth": 4,
+    "draught": 0,
+    "callsign": "LG7558",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "MELIBRA",
+    "ship_type": 51,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:43:44"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      14.48303,
+      68.21149
+     ],
+     [
+      14.48298,
+      68.21156
+     ]
+    ]
+   },
+   "properties": {
+    "id": 348204959,
+    "cog": 0.0,
+    "imo": 0,
+    "mmsi": 257103840,
+    "speed": 0.0,
+    "length": 15,
+    "status": 0,
+    "breadth": 6,
+    "draught": 0,
+    "callsign": "LM8391",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "STAR VIKING",
+    "ship_type": 30,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:43:47"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.43354,
+      66.30598
+     ],
+     [
+      13.43324,
+      66.30466
+     ]
+    ]
+   },
+   "properties": {
+    "id": 2725,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 257076660,
+    "speed": 0.0,
+    "length": 9,
+    "status": 0,
+    "breadth": 3,
+    "draught": 0,
+    "callsign": "LF7520",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "LITSJONA",
+    "ship_type": 60,
+    "destination": "",
+    "true_heading": 176,
+    "date_time_utc": "2026-08-23T09:43:48"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      6.59903,
+      62.45462
+     ],
+     [
+      6.59904,
+      62.45462
+     ]
+    ]
+   },
+   "properties": {
+    "id": 3765,
+    "cog": 184.1,
+    "imo": 0,
+    "mmsi": 257026120,
+    "speed": 0.0,
+    "length": 14,
+    "status": 0,
+    "breadth": 7,
+    "draught": 0,
+    "callsign": "LG8935",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "MARIA",
+    "ship_type": 70,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:43:51"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      8.99599,
+      63.63854
+     ],
+     [
+      8.99599,
+      63.63854
+     ]
+    ]
+   },
+   "properties": {
+    "id": 18883602659,
+    "cog": 308.3,
+    "imo": 0,
+    "mmsi": 257800600,
+    "speed": 0.0,
+    "length": 9,
+    "status": 0,
+    "breadth": 2,
+    "draught": 0,
+    "callsign": "LG9352",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "ZIP",
+    "ship_type": 40,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:43:59"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      7.19206,
+      62.62757
+     ],
+     [
+      7.19204,
+      62.62757
+     ]
+    ]
+   },
+   "properties": {
+    "id": 1929054266,
+    "cog": 211.5,
+    "imo": 0,
+    "mmsi": 257127430,
+    "speed": 0.0,
+    "length": 14,
+    "status": 5,
+    "breadth": 7,
+    "draught": 0,
+    "callsign": "LH3656",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "HEDDA MARIE",
+    "ship_type": 70,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:44:02"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      6.03064,
+      59.47637
+     ],
+     [
+      6.03061,
+      59.47638
+     ]
+    ]
+   },
+   "properties": {
+    "id": 1730882563,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 258081850,
+    "speed": 0.0,
+    "length": 14,
+    "status": 5,
+    "breadth": 6,
+    "draught": 2,
+    "callsign": "LG5349",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "VILDE",
+    "ship_type": 99,
+    "destination": "FISHFARNM",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:44:02"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      8.21992,
+      56.70232
+     ],
+     [
+      8.21992,
+      56.70232
+     ]
+    ]
+   },
+   "properties": {
+    "id": 17724942580,
+    "cog": 16.0,
+    "imo": 9171773,
+    "mmsi": 244510000,
+    "speed": 0.0,
+    "length": 27,
+    "status": 5,
+    "breadth": 8,
+    "draught": 0,
+    "callsign": "PDTV",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "UK57 DANIELLE",
+    "ship_type": 30,
+    "destination": "",
+    "true_heading": 55,
+    "date_time_utc": "2026-08-23T09:44:03"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.07522,
+      67.93824
+     ],
+     [
+      13.07524,
+      67.93824
+     ]
+    ]
+   },
+   "properties": {
+    "id": 334,
+    "cog": 253.9,
+    "imo": 0,
+    "mmsi": 257543500,
+    "speed": 0.0,
+    "length": 21,
+    "status": 0,
+    "breadth": 6,
+    "draught": 0,
+    "callsign": "LMMU",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "ANN-BRITA",
+    "ship_type": 30,
+    "destination": "FISHING GROUNDS",
+    "true_heading": 302,
+    "date_time_utc": "2026-08-23T09:44:04"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.84862,
+      58.93008
+     ],
+     [
+      5.84862,
+      58.9301
+     ]
+    ]
+   },
+   "properties": {
+    "id": 39085884,
+    "cog": 233.9,
+    "imo": 0,
+    "mmsi": 258169500,
+    "speed": 0.0,
+    "length": 17,
+    "status": 0,
+    "breadth": 5,
+    "draught": 0,
+    "callsign": "LMZX",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "KLAS",
+    "ship_type": 53,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:44:05"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      12.63159,
+      66.0225
+     ],
+     [
+      12.63159,
+      66.0225
+     ]
+    ]
+   },
+   "properties": {
+    "id": 8026458891,
+    "cog": 53.0,
+    "imo": 9917220,
+    "mmsi": 257718000,
+    "speed": 0.0,
+    "length": 30,
+    "status": 5,
+    "breadth": 8,
+    "draught": 5,
+    "callsign": "3YBH",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "BOA HUGIN",
+    "ship_type": 52,
+    "destination": "NO SSJ",
+    "true_heading": 253,
+    "date_time_utc": "2026-08-23T09:44:08"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.13996,
+      61.97163
+     ],
+     [
+      5.1399,
+      61.97158
+     ],
+     [
+      5.13997,
+      61.97172
+     ]
+    ]
+   },
+   "properties": {
+    "id": 423777,
+    "cog": 32.5,
+    "imo": 9184457,
+    "mmsi": 259576000,
+    "speed": 0.0,
+    "length": 52,
+    "status": 5,
+    "breadth": 12,
+    "draught": 7,
+    "callsign": "LJPH",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "BAATSFJORD",
+    "ship_type": 30,
+    "destination": "MAALOY",
+    "true_heading": 277,
+    "date_time_utc": "2026-08-23T09:44:19"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      9.41588,
+      58.87717
+     ],
+     [
+      9.41586,
+      58.87719
+     ]
+    ]
+   },
+   "properties": {
+    "id": 139714665,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 257041270,
+    "speed": 0.0,
+    "length": 14,
+    "status": 0,
+    "breadth": 5,
+    "draught": 0,
+    "callsign": "LH2689",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "SALTSTEIN",
+    "ship_type": 70,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:44:19"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      12.24373,
+      66.02267
+     ],
+     [
+      12.24375,
+      66.02267
+     ]
+    ]
+   },
+   "properties": {
+    "id": 18867879957,
+    "cog": 267.7,
+    "imo": 0,
+    "mmsi": 257528900,
+    "speed": 0.0,
+    "length": 12,
+    "status": 5,
+    "breadth": 4,
+    "draught": 0,
+    "callsign": "LK6467",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "FLATOYJENTA",
+    "ship_type": 70,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:44:21"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      7.99836,
+      58.15524
+     ],
+     [
+      7.99839,
+      58.15524
+     ]
+    ]
+   },
+   "properties": {
+    "id": 9174,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 258011290,
+    "speed": 0.0,
+    "length": 14,
+    "status": 0,
+    "breadth": 5,
+    "draught": 0,
+    "callsign": "LF7242",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "OTRA",
+    "ship_type": 51,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:44:23"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      8.5646,
+      63.70937
+     ],
+     [
+      8.56471,
+      63.70937
+     ]
+    ]
+   },
+   "properties": {
+    "id": 17705017135,
+    "cog": 185.3,
+    "imo": 7039426,
+    "mmsi": 257228000,
+    "speed": 0.0,
+    "length": 52,
+    "status": 5,
+    "breadth": 8,
+    "draught": 4,
+    "callsign": "JXGT",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "SCANBIO AURORA",
+    "ship_type": 70,
+    "destination": "FISH FARM",
+    "true_heading": 143,
+    "date_time_utc": "2026-08-23T09:44:29"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.8448,
+      59.14752
+     ],
+     [
+      5.84486,
+      59.14753
+     ]
+    ]
+   },
+   "properties": {
+    "id": 9701426027,
+    "cog": 308.9,
+    "imo": 0,
+    "mmsi": 257910800,
+    "speed": 0.0,
+    "length": 15,
+    "status": 0,
+    "breadth": 10,
+    "draught": 0,
+    "callsign": "LG9228",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "LOKE",
+    "ship_type": 77,
+    "destination": "",
+    "true_heading": 200,
+    "date_time_utc": "2026-08-23T09:44:31"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      16.9824,
+      69.30146
+     ],
+     [
+      16.9824,
+      69.30141
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19213115781,
+    "cog": 0.0,
+    "imo": 0,
+    "mmsi": 259017160,
+    "speed": 0.6,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "LL3745",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "LYKKEN",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:44:42"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.232,
+      59.60743
+     ],
+     [
+      5.23204,
+      59.60742
+     ]
+    ]
+   },
+   "properties": {
+    "id": 1964,
+    "cog": 237.2,
+    "imo": 8953722,
+    "mmsi": 259503000,
+    "speed": 0.0,
+    "length": 28,
+    "status": 1,
+    "breadth": 8,
+    "draught": 5.5,
+    "callsign": "LJDJ",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "VIKAFJORD",
+    "ship_type": 30,
+    "destination": "TLF 91326118",
+    "true_heading": 222,
+    "date_time_utc": "2026-08-23T09:44:56"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      7.7303,
+      63.10824
+     ],
+     [
+      7.73036,
+      63.10825
+     ]
+    ]
+   },
+   "properties": {
+    "id": 88579222,
+    "cog": 333.5,
+    "imo": 9279044,
+    "mmsi": 257414000,
+    "speed": 0.0,
+    "length": 83,
+    "status": 5,
+    "breadth": 13,
+    "draught": 4.2,
+    "callsign": "JXMZ",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "EIDSVAAG SIRIUS",
+    "ship_type": 70,
+    "destination": "KRISTIANSUND",
+    "true_heading": 67,
+    "date_time_utc": "2026-08-23T09:44:57"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      11.24176,
+      58.35827
+     ],
+     [
+      11.24174,
+      58.35827
+     ]
+    ]
+   },
+   "properties": {
+    "id": 39248140,
+    "cog": 71.6,
+    "imo": 0,
+    "mmsi": 219027026,
+    "speed": 0.0,
+    "length": 28,
+    "status": 7,
+    "breadth": 10,
+    "draught": 5,
+    "callsign": "OYHD",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "SKAGERAK",
+    "ship_type": 30,
+    "destination": "SKAGEN",
+    "true_heading": 36,
+    "date_time_utc": "2026-08-23T09:44:59"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      6.15429,
+      62.47477
+     ],
+     [
+      6.15432,
+      62.47476
+     ]
+    ]
+   },
+   "properties": {
+    "id": 422949,
+    "cog": 100.9,
+    "imo": 9801536,
+    "mmsi": 259257000,
+    "speed": 0.0,
+    "length": 35,
+    "status": 5,
+    "breadth": 11,
+    "draught": 2,
+    "callsign": "LECJ",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "GODOEY",
+    "ship_type": 40,
+    "destination": "AALESUND-HAREID",
+    "true_heading": 86,
+    "date_time_utc": "2026-08-23T09:45:05"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      10.83915,
+      64.50537
+     ],
+     [
+      10.83912,
+      64.50538
+     ]
+    ]
+   },
+   "properties": {
+    "id": 9091671392,
+    "cog": 161.5,
+    "imo": 9917232,
+    "mmsi": 257719000,
+    "speed": 0.0,
+    "length": 30,
+    "status": 5,
+    "breadth": 10,
+    "draught": 4.8,
+    "callsign": "3YBI",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "BOA MUNIN",
+    "ship_type": 52,
+    "destination": "FLATANGER",
+    "true_heading": 180,
+    "date_time_utc": "2026-08-23T09:45:06"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      10.59187,
+      59.8974
+     ],
+     [
+      10.59185,
+      59.8974
+     ]
+    ]
+   },
+   "properties": {
+    "id": 72307770,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 257369800,
+    "speed": 0.0,
+    "length": 15,
+    "status": 0,
+    "breadth": 5,
+    "draught": 0,
+    "callsign": "LCWC",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "AXEL",
+    "ship_type": 52,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:45:09"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      8.64743,
+      63.78926
+     ],
+     [
+      8.6474,
+      63.78926
+     ]
+    ]
+   },
+   "properties": {
+    "id": 969,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 257346600,
+    "speed": 0.0,
+    "length": 15,
+    "status": 0,
+    "breadth": 8,
+    "draught": 0,
+    "callsign": "LG 6666",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "VALVAAG",
+    "ship_type": 70,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:45:23"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      12.04699,
+      78.96276
+     ],
+     [
+      12.04729,
+      78.96263
+     ]
+    ]
+   },
+   "properties": {
+    "id": 18000844715,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 983110631,
+    "speed": 0.1,
+    "length": 2,
+    "status": 0,
+    "breadth": 2,
+    "draught": 0,
+    "callsign": "C6IF6",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "SERENISSIMA ZODIAC 2",
+    "ship_type": 60,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:45:26"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      2.567,
+      59.66387
+     ],
+     [
+      2.56696,
+      59.66392
+     ],
+     [
+      2.56693,
+      59.66394
+     ],
+     [
+      2.56687,
+      59.66399
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19652631982,
+    "cog": 307.5,
+    "imo": 9709049,
+    "mmsi": 210422000,
+    "speed": 0.3,
+    "length": 84,
+    "status": 3,
+    "breadth": 19,
+    "draught": 7,
+    "callsign": "5BZS5",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "FRAM PRINCE",
+    "ship_type": 52,
+    "destination": "WEST ELARA",
+    "true_heading": 330,
+    "date_time_utc": "2026-08-23T09:45:28"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.29156,
+      59.91725
+     ],
+     [
+      5.29155,
+      59.91725
+     ]
+    ]
+   },
+   "properties": {
+    "id": 39085064,
+    "cog": 98.2,
+    "imo": 0,
+    "mmsi": 257763700,
+    "speed": 0.0,
+    "length": 14,
+    "status": 0,
+    "breadth": 6,
+    "draught": 0,
+    "callsign": "LG8882",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "KOBBEVIK",
+    "ship_type": 33,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:45:28"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      14.48307,
+      68.21278
+     ],
+     [
+      14.48307,
+      68.21278
+     ]
+    ]
+   },
+   "properties": {
+    "id": 2642203966,
+    "cog": 207.1,
+    "imo": 0,
+    "mmsi": 257130580,
+    "speed": 0.0,
+    "length": 15,
+    "status": 5,
+    "breadth": 6,
+    "draught": 0.8,
+    "callsign": "LF7682",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "OV SKROVA",
+    "ship_type": 75,
+    "destination": "CH 16",
+    "true_heading": 235,
+    "date_time_utc": "2026-08-23T09:45:32"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      10.89276,
+      64.49893
+     ],
+     [
+      10.89278,
+      64.49893
+     ]
+    ]
+   },
+   "properties": {
+    "id": 8334595209,
+    "cog": 319.7,
+    "imo": 0,
+    "mmsi": 259039450,
+    "speed": 0.0,
+    "length": 15,
+    "status": 5,
+    "breadth": 4,
+    "draught": 0,
+    "callsign": "LG7937",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "OCEAN SERVER",
+    "ship_type": 79,
+    "destination": "RORVIK",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:45:37"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      19.67003,
+      69.95482
+     ],
+     [
+      19.67003,
+      69.9548
+     ]
+    ]
+   },
+   "properties": {
+    "id": 3142885473,
+    "cog": 354.9,
+    "imo": 0,
+    "mmsi": 257032800,
+    "speed": 0.0,
+    "length": 15,
+    "status": 5,
+    "breadth": 4,
+    "draught": 0,
+    "callsign": "LLWW",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "OYSKYSS",
+    "ship_type": 60,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:45:38"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.78576,
+      62.21148
+     ],
+     [
+      5.78428,
+      62.21129
+     ],
+     [
+      5.78416,
+      62.21125
+     ],
+     [
+      5.78422,
+      62.21122
+     ]
+    ]
+   },
+   "properties": {
+    "id": 3854682352,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 257022670,
+    "speed": 0.0,
+    "length": 12,
+    "status": 0,
+    "breadth": 5,
+    "draught": 0,
+    "callsign": "LH3731",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "VOLDNES",
+    "ship_type": 70,
+    "destination": "",
+    "true_heading": 143,
+    "date_time_utc": "2026-08-23T09:45:40"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      30.41192,
+      69.73173
+     ],
+     [
+      30.41192,
+      69.73171
+     ]
+    ]
+   },
+   "properties": {
+    "id": 52085163,
+    "cog": 96.8,
+    "imo": 0,
+    "mmsi": 257891900,
+    "speed": 0.0,
+    "length": 11,
+    "status": 0,
+    "breadth": 5,
+    "draught": 0,
+    "callsign": "LK7162",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "NORDOEY",
+    "ship_type": 70,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:45:41"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      19.15067,
+      70.45664
+     ],
+     [
+      19.15031,
+      70.45651
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19480102190,
+    "cog": 210.6,
+    "imo": 0,
+    "mmsi": 586707196,
+    "speed": 0.9,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "FISHING NET BOUY 2",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:45:51"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      15.08002,
+      68.8782
+     ],
+     [
+      15.08002,
+      68.8782
+     ]
+    ]
+   },
+   "properties": {
+    "id": 316,
+    "cog": 232.9,
+    "imo": 0,
+    "mmsi": 257087930,
+    "speed": 0.0,
+    "length": 15,
+    "status": 5,
+    "breadth": 6,
+    "draught": 0,
+    "callsign": "LF6563",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "KVANNHOLMEN",
+    "ship_type": 79,
+    "destination": "BAJP*BHDH5",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:45:58"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      7.7328,
+      63.11366
+     ],
+     [
+      7.73282,
+      63.11366
+     ]
+    ]
+   },
+   "properties": {
+    "id": 1614731914,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 257909600,
+    "speed": 0.0,
+    "length": 30,
+    "status": 5,
+    "breadth": 11,
+    "draught": 2,
+    "callsign": "LK6166",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "HAVNEBRIS",
+    "ship_type": 70,
+    "destination": "SUNNDALSFJORDEN",
+    "true_heading": 212,
+    "date_time_utc": "2026-08-23T09:46:02"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      7.13119,
+      62.85023
+     ],
+     [
+      7.13119,
+      62.85024
+     ]
+    ]
+   },
+   "properties": {
+    "id": 427481,
+    "cog": 98.7,
+    "imo": 0,
+    "mmsi": 257699900,
+    "speed": 0.0,
+    "length": 15,
+    "status": 5,
+    "breadth": 7,
+    "draught": 1.2,
+    "callsign": "LK7128",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "MAXOYE",
+    "ship_type": 34,
+    "destination": "NA",
+    "true_heading": 268,
+    "date_time_utc": "2026-08-23T09:46:03"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.38252,
+      60.55299
+     ],
+     [
+      5.38255,
+      60.55299
+     ]
+    ]
+   },
+   "properties": {
+    "id": 39109385,
+    "cog": 346.3,
+    "imo": 0,
+    "mmsi": 257596700,
+    "speed": 0.0,
+    "length": 15,
+    "status": 0,
+    "breadth": 8,
+    "draught": 0,
+    "callsign": "LG8056",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "TROLLHOLMEN",
+    "ship_type": 30,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:14"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.60266,
+      66.90763
+     ],
+     [
+      13.60263,
+      66.90763
+     ]
+    ]
+   },
+   "properties": {
+    "id": 5459813566,
+    "cog": 63.8,
+    "imo": 0,
+    "mmsi": 257286700,
+    "speed": 0.0,
+    "length": 20,
+    "status": 5,
+    "breadth": 6,
+    "draught": 3,
+    "callsign": "LETZ",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "YARAJENTA",
+    "ship_type": 60,
+    "destination": "STOETT REIPAA",
+    "true_heading": 159,
+    "date_time_utc": "2026-08-23T09:46:15"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      11.22026,
+      58.19746
+     ],
+     [
+      11.22078,
+      58.19731
+     ]
+    ]
+   },
+   "properties": {
+    "id": 18485330894,
+    "cog": 81.4,
+    "imo": 9310355,
+    "mmsi": 255917333,
+    "speed": 0.1,
+    "length": 124,
+    "status": 1,
+    "breadth": 18,
+    "draught": 8.1,
+    "callsign": "CQ2962",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "ZEA AUGUSTA",
+    "ship_type": 89,
+    "destination": "SEHEL>SEBRO",
+    "true_heading": 148,
+    "date_time_utc": "2026-08-23T09:46:17"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.15623,
+      60.09955
+     ],
+     [
+      5.15623,
+      60.09955
+     ]
+    ]
+   },
+   "properties": {
+    "id": 18458064109,
+    "cog": 220.0,
+    "imo": 0,
+    "mmsi": 257148900,
+    "speed": 0.0,
+    "length": 15,
+    "status": 5,
+    "breadth": 10,
+    "draught": 0,
+    "callsign": "LG6498",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "MELAKS",
+    "ship_type": 99,
+    "destination": "",
+    "true_heading": 202,
+    "date_time_utc": "2026-08-23T09:46:18"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.11869,
+      61.50659
+     ],
+     [
+      5.11869,
+      61.50659
+     ]
+    ]
+   },
+   "properties": {
+    "id": 378572768,
+    "cog": 9.3,
+    "imo": 0,
+    "mmsi": 257012330,
+    "speed": 0.0,
+    "length": 14,
+    "status": 5,
+    "breadth": 5,
+    "draught": 1,
+    "callsign": "LF5807",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "GYDA",
+    "ship_type": 79,
+    "destination": "OUT AND ABOUT",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:22"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      15.07062,
+      68.90962
+     ],
+     [
+      15.07057,
+      68.90964
+     ]
+    ]
+   },
+   "properties": {
+    "id": 39120683,
+    "cog": 53.9,
+    "imo": 0,
+    "mmsi": 257479500,
+    "speed": 0.0,
+    "length": 15,
+    "status": 0,
+    "breadth": 8,
+    "draught": 0,
+    "callsign": "LG7419",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "TINDSOY",
+    "ship_type": 33,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:23"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      6.9755,
+      57.95476
+     ],
+     [
+      6.97552,
+      57.95478
+     ]
+    ]
+   },
+   "properties": {
+    "id": 12306897791,
+    "cog": 38.5,
+    "imo": 0,
+    "mmsi": 586706494,
+    "speed": 1.1,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "FISHING BOUY",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:26"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      19.22954,
+      70.39587
+     ],
+     [
+      19.22933,
+      70.39576
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19479571792,
+    "cog": 226.1,
+    "imo": 0,
+    "mmsi": 586707205,
+    "speed": 0.5,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "FISHING NET BOUY 1",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:32"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.30791,
+      59.83856
+     ],
+     [
+      5.30791,
+      59.83855
+     ]
+    ]
+   },
+   "properties": {
+    "id": 657157192,
+    "cog": 6.4,
+    "imo": 0,
+    "mmsi": 258207880,
+    "speed": 0.0,
+    "length": 13,
+    "status": 5,
+    "breadth": 6,
+    "draught": 1.3,
+    "callsign": "LK9818",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "VESTFJORD",
+    "ship_type": 99,
+    "destination": "CH16",
+    "true_heading": 235,
+    "date_time_utc": "2026-08-23T09:46:35"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      27.33654,
+      70.94656
+     ],
+     [
+      27.33652,
+      70.94656
+     ]
+    ]
+   },
+   "properties": {
+    "id": 39773004,
+    "cog": 48.2,
+    "imo": 9859521,
+    "mmsi": 257069830,
+    "speed": 0.0,
+    "length": 21,
+    "status": 0,
+    "breadth": 8,
+    "draught": 0,
+    "callsign": "LFOR",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "RISVIK",
+    "ship_type": 30,
+    "destination": "TLF 90567202",
+    "true_heading": 126,
+    "date_time_utc": "2026-08-23T09:46:36"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      11.16738,
+      64.92676
+     ],
+     [
+      11.16736,
+      64.92677
+     ]
+    ]
+   },
+   "properties": {
+    "id": 4978,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 257026440,
+    "speed": 0.0,
+    "length": 15,
+    "status": 0,
+    "breadth": 5,
+    "draught": 0,
+    "callsign": "LK5809",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "WILLIKSEN SENIOR",
+    "ship_type": 30,
+    "destination": "",
+    "true_heading": 96,
+    "date_time_utc": "2026-08-23T09:46:36"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      17.90866,
+      69.50912
+     ],
+     [
+      17.90871,
+      69.50911
+     ]
+    ]
+   },
+   "properties": {
+    "id": 423788,
+    "cog": 323.4,
+    "imo": 8501086,
+    "mmsi": 259241000,
+    "speed": 0.0,
+    "length": 21,
+    "status": 5,
+    "breadth": 7,
+    "draught": 5,
+    "callsign": "LNFC",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "NORDBANKEN",
+    "ship_type": 30,
+    "destination": "FISKEFELTENE",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:39"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.20768,
+      60.00694
+     ],
+     [
+      5.20779,
+      60.00689
+     ]
+    ]
+   },
+   "properties": {
+    "id": 2291,
+    "cog": 287.7,
+    "imo": 9125633,
+    "mmsi": 259526000,
+    "speed": 0.0,
+    "length": 70,
+    "status": 5,
+    "breadth": 14,
+    "draught": 8,
+    "callsign": "LJOD",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "MANON",
+    "ship_type": 30,
+    "destination": "CH16 FOR INFO",
+    "true_heading": 120,
+    "date_time_utc": "2026-08-23T09:46:40"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      16.54878,
+      68.78349
+     ],
+     [
+      16.54874,
+      68.78349
+     ]
+    ]
+   },
+   "properties": {
+    "id": 1935,
+    "cog": 135.5,
+    "imo": 0,
+    "mmsi": 258290500,
+    "speed": 0.0,
+    "length": 9,
+    "status": 0,
+    "breadth": 4,
+    "draught": 0,
+    "callsign": "LG4060",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "MS DRAUG",
+    "ship_type": 33,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:40"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      12.10316,
+      66.50182
+     ],
+     [
+      12.10322,
+      66.50178
+     ]
+    ]
+   },
+   "properties": {
+    "id": 1875,
+    "cog": 279.4,
+    "imo": 9664471,
+    "mmsi": 258694000,
+    "speed": 0.0,
+    "length": 71,
+    "status": 5,
+    "breadth": 16,
+    "draught": 3.5,
+    "callsign": "LDIP",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "LOVUND",
+    "ship_type": 60,
+    "destination": "TRAENA-STOKKVAGEN",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:41"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.7291,
+      58.97305
+     ],
+     [
+      5.72908,
+      58.97306
+     ]
+    ]
+   },
+   "properties": {
+    "id": 18275425202,
+    "cog": 186.9,
+    "imo": 10799430,
+    "mmsi": 257432460,
+    "speed": 0.0,
+    "length": 32,
+    "status": 5,
+    "breadth": 9,
+    "draught": 0,
+    "callsign": "3YEA",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "RS 178 TBN",
+    "ship_type": 51,
+    "destination": "STAVANGER",
+    "true_heading": 354,
+    "date_time_utc": "2026-08-23T09:46:42"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.06882,
+      60.12668
+     ],
+     [
+      5.06884,
+      60.12669
+     ]
+    ]
+   },
+   "properties": {
+    "id": 12442,
+    "cog": 17.5,
+    "imo": 9773600,
+    "mmsi": 259076000,
+    "speed": 0.0,
+    "length": 79,
+    "status": 5,
+    "breadth": 17,
+    "draught": 7,
+    "callsign": "LDRX",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "SEIHAV",
+    "ship_type": 70,
+    "destination": "FISHFARMS",
+    "true_heading": 28,
+    "date_time_utc": "2026-08-23T09:46:42"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      23.32835,
+      69.97709
+     ],
+     [
+      23.32829,
+      69.97709
+     ]
+    ]
+   },
+   "properties": {
+    "id": 17954658302,
+    "cog": 335.1,
+    "imo": 9605346,
+    "mmsi": 259039000,
+    "speed": 0.0,
+    "length": 24,
+    "status": 5,
+    "breadth": 6,
+    "draught": 1.6,
+    "callsign": "3YSE",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "FALKEFJELL",
+    "ship_type": 45,
+    "destination": "H FEST ALTA",
+    "true_heading": 131,
+    "date_time_utc": "2026-08-23T09:46:44"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.73217,
+      58.97442
+     ],
+     [
+      5.73217,
+      58.97442
+     ]
+    ]
+   },
+   "properties": {
+    "id": 4554,
+    "cog": 15.4,
+    "imo": 0,
+    "mmsi": 257036770,
+    "speed": 0.1,
+    "length": 10,
+    "status": 5,
+    "breadth": 4,
+    "draught": 0,
+    "callsign": "LE4793",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "ELVIS",
+    "ship_type": 90,
+    "destination": "STAVANGER",
+    "true_heading": 330,
+    "date_time_utc": "2026-08-23T09:46:44"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      9.12665,
+      58.64359
+     ],
+     [
+      9.12666,
+      58.64358
+     ]
+    ]
+   },
+   "properties": {
+    "id": 1903338258,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 257796500,
+    "speed": 0.0,
+    "length": 17,
+    "status": 5,
+    "breadth": 4,
+    "draught": 2,
+    "callsign": "LM4596",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "ODD FELLOW",
+    "ship_type": 70,
+    "destination": "GJEVING",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:44"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      23.39689,
+      70.24584
+     ],
+     [
+      23.3969,
+      70.24585
+     ]
+    ]
+   },
+   "properties": {
+    "id": 132686955,
+    "cog": 326.6,
+    "imo": 7817256,
+    "mmsi": 257524500,
+    "speed": 0.0,
+    "length": 33,
+    "status": 5,
+    "breadth": 7,
+    "draught": 4,
+    "callsign": "LIXI",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "HAVSEL",
+    "ship_type": 39,
+    "destination": "TROMSO",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:45"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      29.72151,
+      70.63217
+     ],
+     [
+      29.72155,
+      70.63214
+     ]
+    ]
+   },
+   "properties": {
+    "id": 3923,
+    "cog": 135.8,
+    "imo": 0,
+    "mmsi": 257618500,
+    "speed": 0.0,
+    "length": 15,
+    "status": 0,
+    "breadth": 6,
+    "draught": 0,
+    "callsign": "LK3713",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "MARTIN",
+    "ship_type": 30,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:47"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      9.60759,
+      59.11378
+     ],
+     [
+      9.60763,
+      59.11377
+     ]
+    ]
+   },
+   "properties": {
+    "id": 18530376216,
+    "cog": 9.6,
+    "imo": 9771511,
+    "mmsi": 249551000,
+    "speed": 0.0,
+    "length": 181,
+    "status": 1,
+    "breadth": 26,
+    "draught": 9.1,
+    "callsign": "9HA4281",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "INEOS INVENTION",
+    "ship_type": 80,
+    "destination": "USMAH>NORAF",
+    "true_heading": 6,
+    "date_time_utc": "2026-08-23T09:46:47"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      7.73497,
+      63.1187
+     ],
+     [
+      7.73498,
+      63.1187
+     ]
+    ]
+   },
+   "properties": {
+    "id": 129547076,
+    "cog": 307.7,
+    "imo": 6700652,
+    "mmsi": 257151000,
+    "speed": 0.0,
+    "length": 50,
+    "status": 5,
+    "breadth": 8,
+    "draught": 5,
+    "callsign": "LCKA",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "SOERDYROEY",
+    "ship_type": 90,
+    "destination": "NOKSU",
+    "true_heading": 334,
+    "date_time_utc": "2026-08-23T09:46:52"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      8.58856,
+      63.90433
+     ],
+     [
+      8.5887,
+      63.90447
+     ]
+    ]
+   },
+   "properties": {
+    "id": 23434129,
+    "cog": 48.3,
+    "imo": 0,
+    "mmsi": 257496600,
+    "speed": 0.3,
+    "length": 14,
+    "status": 0,
+    "breadth": 8,
+    "draught": 0,
+    "callsign": "LG 5575",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "STAALBJOERN",
+    "ship_type": 33,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:52"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.31094,
+      60.38718
+     ],
+     [
+      5.31096,
+      60.38715
+     ]
+    ]
+   },
+   "properties": {
+    "id": 17721123410,
+    "cog": 348.8,
+    "imo": 9765483,
+    "mmsi": 257492750,
+    "speed": 0.0,
+    "length": 95,
+    "status": 5,
+    "breadth": 25,
+    "draught": 7.4,
+    "callsign": "3YOH",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "TOR VIKING",
+    "ship_type": 90,
+    "destination": "NOBGO",
+    "true_heading": 313,
+    "date_time_utc": "2026-08-23T09:46:52"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      29.74018,
+      70.07372
+     ],
+     [
+      29.74009,
+      70.07372
+     ]
+    ]
+   },
+   "properties": {
+    "id": 175365930,
+    "cog": 160.4,
+    "imo": 0,
+    "mmsi": 257468600,
+    "speed": 0.0,
+    "length": 15,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "LM7931",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "GOLNES",
+    "ship_type": 30,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:53"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      8.05534,
+      63.31182
+     ],
+     [
+      8.05535,
+      63.31182
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19375090825,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 257708700,
+    "speed": 0.0,
+    "length": 12,
+    "status": 5,
+    "breadth": 6,
+    "draught": 0,
+    "callsign": "LK9972",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "BRAFJORD 2",
+    "ship_type": 70,
+    "destination": "FISHFARMS",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:54"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      7.25186,
+      61.18255
+     ],
+     [
+      7.25186,
+      61.18255
+     ]
+    ]
+   },
+   "properties": {
+    "id": 39100593,
+    "cog": 169.4,
+    "imo": 9237981,
+    "mmsi": 258146000,
+    "speed": 0.1,
+    "length": 50,
+    "status": 5,
+    "breadth": 14,
+    "draught": 3,
+    "callsign": "LLKV",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "HIDRAFERJA",
+    "ship_type": 69,
+    "destination": "KAUPANGER FRONNINGEN",
+    "true_heading": 300,
+    "date_time_utc": "2026-08-23T09:46:55"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      6.17595,
+      62.59918
+     ],
+     [
+      6.17596,
+      62.59918
+     ]
+    ]
+   },
+   "properties": {
+    "id": 103114550,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 257128110,
+    "speed": 0.2,
+    "length": 15,
+    "status": 0,
+    "breadth": 12,
+    "draught": 0,
+    "callsign": "LH5705",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "FOSNA VESTKAPP",
+    "ship_type": 90,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:55"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.36657,
+      59.33383
+     ],
+     [
+      5.36658,
+      59.33382
+     ]
+    ]
+   },
+   "properties": {
+    "id": 112075239,
+    "cog": 17.5,
+    "imo": 0,
+    "mmsi": 257639700,
+    "speed": 0.0,
+    "length": 15,
+    "status": 0,
+    "breadth": 6,
+    "draught": 0,
+    "callsign": "LG8265",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "ASTRID",
+    "ship_type": 70,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:56"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      7.76982,
+      57.98024
+     ],
+     [
+      7.76982,
+      57.98024
+     ]
+    ]
+   },
+   "properties": {
+    "id": 18094568100,
+    "cog": 0.0,
+    "imo": 0,
+    "mmsi": 109080462,
+    "speed": 0.7,
+    "length": 0,
+    "status": 0,
+    "breadth": 0,
+    "draught": 0,
+    "callsign": "",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "FISHING GEAR BOUY 6",
+    "ship_type": 0,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:46:56"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      6.12902,
+      62.49485
+     ],
+     [
+      6.12902,
+      62.49485
+     ]
+    ]
+   },
+   "properties": {
+    "id": 535,
+    "cog": 341.9,
+    "imo": 8871637,
+    "mmsi": 257106400,
+    "speed": 0.0,
+    "length": 32,
+    "status": 5,
+    "breadth": 6,
+    "draught": 2,
+    "callsign": "LHTM",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "GRIP MINNIMUS",
+    "ship_type": 80,
+    "destination": "VALDEROYA",
+    "true_heading": 247,
+    "date_time_utc": "2026-08-23T09:46:58"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      7.6892,
+      63.01837
+     ],
+     [
+      7.68924,
+      63.01836
+     ]
+    ]
+   },
+   "properties": {
+    "id": 101073499,
+    "cog": 360.0,
+    "imo": 0,
+    "mmsi": 258007290,
+    "speed": 0.0,
+    "length": 11,
+    "status": 0,
+    "breadth": 5,
+    "draught": 0,
+    "callsign": "LH4619",
+    "maneuvre": 0,
+    "ais_class": "B",
+    "ship_name": "ANSNES",
+    "ship_type": 33,
+    "destination": "",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:47:00"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      2.56837,
+      59.66221
+     ],
+     [
+      2.56838,
+      59.6622
+     ]
+    ]
+   },
+   "properties": {
+    "id": 112052387,
+    "cog": 0.0,
+    "imo": 8769949,
+    "mmsi": 259783000,
+    "speed": 0.0,
+    "length": 88,
+    "status": 1,
+    "breadth": 88,
+    "draught": 0,
+    "callsign": "LATI",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "WEST ELARA",
+    "ship_type": 90,
+    "destination": "QB",
+    "true_heading": 511,
+    "date_time_utc": "2026-08-23T09:47:02.497378"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.7121,
+      58.98273
+     ],
+     [
+      5.71205,
+      58.98271
+     ]
+    ]
+   },
+   "properties": {
+    "id": 2662587805,
+    "cog": 192.8,
+    "imo": 9462770,
+    "mmsi": 257241000,
+    "speed": 0.0,
+    "length": 85,
+    "status": 5,
+    "breadth": 20,
+    "draught": 5.2,
+    "callsign": "LCAH",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "REM CRUSADER",
+    "ship_type": 70,
+    "destination": "DUSAVIK",
+    "true_heading": 126,
+    "date_time_utc": "2026-08-23T09:47:04"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      5.11834,
+      61.93772
+     ],
+     [
+      5.11835,
+      61.93771
+     ]
+    ]
+   },
+   "properties": {
+    "id": 19669736845,
+    "cog": 327.2,
+    "imo": 0,
+    "mmsi": 231240000,
+    "speed": 0.0,
+    "length": 18,
+    "status": 5,
+    "breadth": 5,
+    "draught": 4,
+    "callsign": "XPSI",
+    "maneuvre": 0,
+    "ais_class": "A",
+    "ship_name": "ANRU",
+    "ship_type": 30,
+    "destination": "MAALOY",
+    "true_heading": 222,
+    "date_time_utc": "2026-08-23T09:47:04"
+   }
+  }
+ ]
+}

@@ -1,0 +1,885 @@
+/*
+ * Dark operational theme, sized to be read from across a room.
+ *
+ * Chrome is greyscale. Every saturated colour in here belongs to an entity class or an
+ * alert, so a red thing on screen always means something.
+ *
+ * **Legibility is a demo requirement, not polish.** This gets shown to people, some of whom
+ * do not see well. Two rules follow, and they pull against each other on purpose.
+ *
+ * Fewer elements, never smaller ones. Anything not needed at rest collapses behind one
+ * control; anything that stays gets bigger. Nothing in our own chrome is under 14px, body
+ * text is 16px, and every pointer target is at least 44px in its smallest dimension. The
+ * floor was 13px until a sweep on 2026-08-23 found exactly one string sitting on it, the
+ * search box's group heading, and brought it up rather than leaving one outlier below the
+ * line everything else respects.
+ *
+ * Panels are opaque. They were 92% over the globe, which made every contrast ratio depend on
+ * whether there was cloud behind it: text-muted measured 8.95:1 on the panel and 6.54:1 over
+ * bright cloud through the credits panel. Measured against the opaque #0e141b, the six text
+ * colours run 8.16:1 (error) to 15.66:1 (text), so all six clear WCAG AAA for body text at
+ * 7:1 with the margin fixed rather than dependent on the map.
+ */
+
+:root {
+  --bg: #05080c;
+  --panel: #0e141b;
+  --panel-edge: #1e2833;
+  --text: #e6edf3;
+  --text-muted: #a8b6c4;
+  --accent: #7cc4ff;
+  --live: #7ee081;
+  --warning: #ffc65c;
+  --error: #ff8a8a;
+  --panel-shadow: 0 2px 18px rgb(0 0 0 / 55%);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  /* 16px, not 14. The old size is where "I cannot see anything" starts. */
+  font-size: 16px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+#globe {
+  position: fixed;
+  inset: 0;
+  display: block;
+}
+
+/*
+ * Cesium's own credit line, bottom left, hidden. This is a duplicate removed, not a credit
+ * dropped, and the difference is the whole reason for the comment.
+ *
+ * Cesium renders a credit for whatever imagery provider it is handed. We hand it exactly one,
+ * `GIBS_CREDIT_TEXT`, and `ui/attribution.ts` owns that constant and also renders it in the
+ * "i" menu. So the same sentence was on screen twice: once in our list behind the "i", and
+ * once as a "Data attribution" link sitting 17px to the right of the "i" button itself.
+ *
+ * Measured 2026-08-23 in a real browser: Cesium's inline text container was **empty**, and
+ * its lightbox held one string, "Imagery courtesy of NASA EOSDIS GIBS", which is character
+ * for character the last row of our own panel. Nothing is reachable through Cesium's control
+ * that is not reachable through ours, so what this rule removes is a second button for the
+ * same list.
+ *
+ * Two rules this must not break. `CreditDisplay.cesiumCredit` in `globe/viewer.ts` is what
+ * drops the ion logo, and it stays: hiding the container is not a substitute, because a
+ * false credit displayed nowhere is still a false credit in the DOM. And any future imagery
+ * provider must take its credit from `ui/attribution.ts` like this one does, or hiding this
+ * container would silently drop a licence condition. The shared constant is the guard.
+ *
+ * **Three classes, and every one of them is load-bearing.** `Viewer.css` ships
+ * `.cesium-viewer .cesium-widget-credits { display: inline }` at specificity (0,2,0), and
+ * Cesium's stylesheet is imported *inside* `globe/viewer.ts`, which `main.ts` imports after
+ * `style.css`. So a one-class rule loses on specificity and a two-class rule ties and then
+ * loses on order, both silently, with the credit still on screen and nothing reporting a
+ * problem. Measured 2026-08-23: both versions failed this rule's own test, and the browser
+ * listed our `display: none` first and Cesium's `display: inline` last. `.cesium-viewer-bottom`
+ * is the real parent, so naming it takes this to (0,3,0) and it wins on specificity whatever
+ * the import order does later. Do not reach for `!important` instead: import order is the
+ * thing that moved, and `!important` hides that rather than settling it.
+ *
+ * This is the same trap the old rule here hit from the other side. It set `font-size: 13px` on
+ * one class against Cesium's (0,2,0) `font-size: 10px`, lost, and was worked around by styling
+ * the inner text container and expand link separately rather than by counting the selectors.
+ */
+.cesium-viewer .cesium-viewer-bottom .cesium-widget-credits {
+  display: none;
+}
+
+/*
+ * 3px, not 2. A focus ring you have to look for is not a focus indicator, and the accent
+ * measures 9.87:1 against the panel so the ring itself is well clear of its surroundings.
+ */
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/*
+ * A layer switch's focus ring goes round the whole row.
+ *
+ * The pointer target is already the entire 354x44 row, because the checkbox sits in a label.
+ * The focus ring was not: measured 2026-08-23 it landed on the 20x20 checkbox, so the same
+ * control had a 354px target for a mouse and a 20px indicator for a keyboard, and the smallest
+ * indicator on screen belonged to the most-used control on it. The comment on the rule above
+ * says a focus ring you have to look for is not a focus indicator, and that applied here.
+ *
+ * `:focus-within` rather than `:has()`, because it is older and universally supported, and the
+ * inner ring is only suppressed under the same selector that adds the outer one. So there is
+ * no state in any browser where the ring is removed and not replaced.
+ */
+.rail-head:focus-within {
+  border-radius: 3px;
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.rail-head:focus-within .rail-switch:focus-visible {
+  outline: none;
+}
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: #17202b;
+  border: 1px solid var(--panel-edge);
+  border-radius: 4px;
+  /* 44px is the smallest a pointer target should be, and this is the only button on screen. */
+  min-height: 44px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #1f2a37;
+}
+
+a {
+  color: var(--accent);
+}
+
+/*
+ * Every disclosure on screen: the credits control, the status banner, a row's notices and
+ * the collapsed group of layers this build cannot draw. One rule so all four are the same
+ * size, the same target and the same keyboard behaviour, and none of them is a div with a
+ * click handler pretending to be a control.
+ */
+summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ dock */
+
+/*
+ * The left column: status above, layer rail below. Both were fixed to the top left, which
+ * put them on top of each other as soon as either grew a line, so they share one scrolling
+ * column instead.
+ */
+.dock {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /*
+   * 24rem rather than 22. Wider at 16px type means fewer wrapped lines, which is less panel
+   * over the globe rather than more, and a reason that wraps four times is a reason nobody
+   * reads.
+   */
+  width: min(24rem, calc(100vw - 32px));
+  /*
+   * Clears the credits control in the bottom left rather than sliding under it. This was
+   * 190px while the credits were a permanently open list, which clipped the rail: with four
+   * layers reporting, the Vessels row's own reason was cut off mid-sentence and the
+   * Satellites row was off the bottom of the column entirely. The control is 44px.
+   */
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  /*
+   * A scrollbar that stays visible, because an invisible overflow is the same as missing
+   * content to anyone who cannot scan a panel quickly.
+   *
+   * Measured 2026-08-23: this column's content is 739px tall with every layer reporting. At a
+   * 1400x800 viewport that overflows its own cap by 35px; at 1440x700, which is a 13-inch
+   * laptop with browser chrome, by 135px, putting the Clouds switch below the fold; at
+   * 1280x620, which is a 720p projector, by 215px, putting Satellites, Cities and Clouds all
+   * below it. The keyboard is fine, and that was checked rather than assumed: tabbing to the
+   * Clouds switch scrolls the column by 215px and brings it into view. What was not fine is
+   * that macOS gives this an overlay scrollbar, so `offsetWidth - clientWidth` measured 0 and
+   * there was no persistent mark on screen saying anything more existed. Three switches, no
+   * cue.
+   *
+   * This is the cue, not the cure. The column is 739px because two thirds of it is
+   * explanation rather than rows, and shortening that is a decision about what the product
+   * says rather than a style fix.
+   */
+  scrollbar-width: thin;
+  scrollbar-color: var(--panel-edge) transparent;
+}
+
+/* ------------------------------------------------------------------ search */
+
+/*
+ * The search panel sits at the top of the dock column and its results expand it downwards,
+ * pushing the status banner and the rail down rather than floating over them. That is
+ * deliberate: the dock is an `overflow-y: auto` column, so an absolutely positioned dropdown
+ * inside it would be clipped by that scroll container rather than overlapping the globe.
+ * Expanding in place cannot clip anything, and the list caps its own height and scrolls.
+ */
+.search {
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  box-shadow: var(--panel-shadow);
+}
+
+.search-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--text);
+  background: #17202b;
+  border: 1px solid var(--panel-edge);
+  border-radius: 4px;
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.search-results {
+  max-height: 22rem;
+  margin: 8px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.search-results[hidden] {
+  display: none;
+}
+
+/* A heading, not a result: `role="presentation"` in the markup, and unpickable here. */
+/*
+ * 14px, not 13. It was the smallest text anywhere in the interface, and the only thing below
+ * the 14px floor every other secondary string sits on. It is a group heading rather than a
+ * fact, so it was not the worst thing on screen, but a one-pixel saving on the one outlier is
+ * not worth having when the audience includes people with poor vision.
+ */
+.search-group {
+  padding: 8px 6px 4px;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.search-group:not(:first-child) {
+  border-top: 1px solid color-mix(in srgb, var(--panel-edge) 60%, transparent);
+}
+
+.search-hit {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 44px;
+  padding: 6px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+/*
+ * The highlight is a background and a left bar, not colour alone, and hover matches the
+ * keyboard state so a mouse and the arrow keys read as the same control.
+ */
+.search-hit[data-highlight="true"],
+.search-hit:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.search-detail {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* A note is the server reason a group could not answer, or that nothing matched. */
+.search-note {
+  padding: 6px 8px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* ------------------------------------------------------------------ status */
+
+.status {
+  padding: 4px 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  box-shadow: var(--panel-shadow);
+}
+
+.status-line {
+  margin: 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The one line that has to be legible at a glance: it is the only thing that says "broken". */
+.status-disclosure > summary {
+  font-weight: 600;
+}
+
+.status-lines {
+  margin-top: 4px;
+  padding-top: 8px;
+  padding-bottom: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--panel-edge) 60%, transparent);
+}
+
+.status-line[data-level="live"] {
+  color: var(--live);
+}
+
+/* A feed that has not polled yet: muted, because it is not a fault and green would claim it is
+   working. #a8b6c4 on #0e141b is 8.80:1, and the desaturation keeps it out of the green/amber/red
+   channel the other three levels share rather than adding a fourth hue to tell apart. */
+.status-line[data-level="idle"] {
+  color: var(--text-muted);
+}
+
+.status-line[data-level="warning"] {
+  color: var(--warning);
+}
+
+.status-line[data-level="error"] {
+  color: var(--error);
+}
+
+/* ------------------------------------------------------------------ layer rail */
+
+.rail {
+  padding: 4px 14px 10px;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  box-shadow: var(--panel-shadow);
+}
+
+.rail-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rail-row {
+  padding: 2px 0;
+}
+
+.rail-row + .rail-row {
+  border-top: 1px solid color-mix(in srgb, var(--panel-edge) 60%, transparent);
+}
+
+/*
+ * The row itself is the target. It is a `label` wrapping the checkbox, so anywhere on these
+ * 44 pixels toggles the layer rather than only a 13px box.
+ */
+.rail-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
+/* A switch, so the row reads as a control. Only rows this build can draw have one. */
+.rail-switch {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/*
+ * The sweep line: what a feed offered against what survived its own checks.
+ *
+ * Muted like the coverage block above it and deliberately not amber. Three reports refused for
+ * every one kept is the drop-and-count discipline working rather than a fault, and colouring it as
+ * a warning would teach a viewer to ignore the colour that does mean something.
+ *
+ * One disclosure rather than a line per reason. Five refusal counts on screen is what this rail
+ * just had removed, and every element here is floored at 44px by the target-size rule, so length
+ * is free and elements are not.
+ */
+.rail-sweep-summary,
+.rail-sweep-list {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.rail-sweep-list {
+  margin: 0;
+  padding: 0 0 0 20px;
+}
+
+/*
+ * The rail's own disclosure, which costs nothing until it is needed.
+ *
+ * Its summary is `display: none` at ordinary heights, so on a tall enough window this adds no
+ * element and no pixel: the rail is exactly what it was. Below the breakpoint the summary appears
+ * and the rows go behind it, which turns a scroll a viewer has no reason to suspect into one
+ * click. That asymmetry is the whole design. A 44px summary permanently on a column already
+ * holding fourteen 44px elements would have been the opposite of the point.
+ */
+.rail-collapse-summary {
+  display: none;
+}
+
+@media (max-height: 760px) {
+  .rail-collapse-summary {
+    display: flex;
+    gap: 8px;
+  }
+
+  /*
+   * The disclosure triangle, drawn rather than inherited.
+   *
+   * `summary { display: flex }` suppresses the default marker in every current browser, which
+   * every other disclosure here gets away with because its text carries the affordance: "(+1
+   * more)" and "2 layers not drawn here" both read as "there is more behind this". "7 layers"
+   * does not, and this one hides every layer switch in the product, so a viewer who does not
+   * think to click it has lost the rail rather than a footnote. Seen on a 620px capture before
+   * this was added: it read as a static label.
+   */
+  .rail-collapse-summary::before {
+    width: 0;
+    height: 0;
+    content: "";
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 6px solid currentcolor;
+  }
+
+  .rail-collapse[open] > .rail-collapse-summary::before {
+    /* Pointing down when open, which is the convention every platform uses. No transition: it
+     * would be the only animation in the product and motion is not free for every viewer. */
+    transform: rotate(90deg);
+  }
+
+  /* The rows scroll inside the disclosure rather than growing the column past its own cap. */
+  .rail-collapse-body {
+    max-height: 50vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--panel-edge) transparent;
+  }
+}
+
+/*
+ * The legend mark. Never squeezed by a long layer name, and never a pointer target: the whole
+ * row is already the target, and a 24px image inside it must not become a second, smaller one.
+ */
+.rail-mark {
+  flex: none;
+  pointer-events: none;
+}
+
+.rail-name {
+  flex: 1;
+}
+
+/*
+ * The number is what a viewer reads off this rail, so it is the largest text in it and it is
+ * not muted. "0 in view of 689" is the honest state of the vessel layer and it has to be
+ * readable without leaning in.
+ */
+.rail-count {
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* State is never colour alone: the row also carries its reason in words. */
+.rail-row[data-state="degraded"] .rail-count,
+.rail-row[data-state="degraded"] .rail-detail,
+.rail-row[data-state="degraded"] .rail-notice-summary,
+.rail-row[data-state="degraded"] .rail-notice-list {
+  color: var(--warning);
+}
+
+.rail-row[data-state="unavailable"] .rail-name {
+  color: var(--text-muted);
+}
+
+.rail-row[data-state="unavailable"] .rail-detail,
+.rail-row[data-state="unavailable"] .rail-notice-summary,
+.rail-row[data-state="unavailable"] .rail-notice-list {
+  color: var(--error);
+}
+
+/*
+ * A reason a layer is empty is the highest-value text on this rail, so it is 14px rather than
+ * the 12px it was. It is the difference between "this is broken" and "this layer's only
+ * keyless provider covers Finnish waters".
+ */
+.rail-detail,
+.rail-notice,
+.rail-coverage {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.rail-coverage {
+  color: var(--text-muted);
+}
+
+.rail-detail[hidden],
+.rail-coverage[hidden] {
+  display: none;
+}
+
+/*
+ * Collapsed provider reasons.
+ *
+ * Two API reasons on the Aircraft row ran to 300 characters each and painted a dozen lines
+ * of amber over the globe, which made a healthy layer carrying 521 aircraft look broken. The
+ * summary carries the first reason and the count of the rest; the full text is inside.
+ */
+.rail-notice-summary {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.rail-notice-list {
+  margin: 2px 0 6px;
+  padding-left: 20px;
+}
+
+.rail-notices[hidden] {
+  display: none;
+}
+
+/*
+ * One line for every layer this build cannot draw, with each reason a click inside it.
+ * Cameras, buildings and places are all "set a key", which is a note to whoever runs this
+ * rather than something a viewer is looking for, and three of them was a third of the rail.
+ */
+.rail-extra {
+  margin-top: 6px;
+  border-top: 1px solid var(--panel-edge);
+}
+
+.rail-extra-summary {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.rail-extra[hidden] {
+  display: none;
+}
+
+/*
+ * Motion is opt-in. The only animated thing in the rail is the row tint on hover, and it
+ * exists solely inside this query, so a reduced-motion setting gets no transition at all
+ * rather than a shorter one.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .rail-row {
+    transition: background-color 120ms ease-out;
+  }
+}
+
+.rail-head:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+/* ------------------------------------------------------------------ card */
+
+.card {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  /*
+   * As tall as its contents, capped at the viewport. Anchoring top and bottom made every
+   * card full height, so a six-field vessel card covered the right of the globe with empty
+   * panel.
+   */
+  max-height: calc(100vh - 24px);
+  /*
+   * 25rem, not 23. Thirty-two pixels of width buy back two kinds of wrapping.
+   *
+   * The value column is the bigger of them and it predates the head icons: `.card-fields` is
+   * `10rem 1fr`, so a 23rem card left about 176px for values and "not resolved (MMSI MID 230)",
+   * "Moored (as broadcast)" and "92.9 min (15.4957 rev/day)" all took two lines. The icon then
+   * added a second, smaller one, by taking 56px and a 10px gap out of a header that also holds
+   * the close button, which pushed the vessel card's "Other type · MMSI 230661000" subtitle onto
+   * a third line.
+   *
+   * Spending 32 pixels of globe on it is deliberate and it does not contradict the complaint
+   * that made the credits a button. That was about a panel covering the globe permanently. A
+   * card is transient: it opens only when someone picks an object and it closes on demand, so
+   * the trade is 32 pixels while it is open against a reader with poor vision parsing a
+   * three-line header. Do not close the gap by shrinking the head icon instead: at 48px the
+   * silhouette is back to the size of a plain globe mark and at 40px below it, which is the
+   * smaller-not-clearer failure the icon size was chosen to avoid.
+   */
+  width: min(25rem, calc(100vw - 24px));
+  overflow-y: auto;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  box-shadow: var(--panel-shadow);
+}
+
+.card[hidden] {
+  display: none;
+}
+
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/*
+ * The icon and the two heading lines, as one block.
+ *
+ * A wrapper rather than putting the icon straight into `.card-head`, because that row is
+ * `space-between` with two children: a third would spread all three across the width and
+ * leave the icon adrift from the title it belongs to.
+ */
+.card-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/*
+ * The icon needs no size here: `globe/icons.ts` bakes the pixel size into the SVG's own width
+ * and height, so the element renders at its intrinsic size and one number governs both. All
+ * this rule does is stop a long callsign squeezing it, because a flex item shrinks by default
+ * and a squashed silhouette is the one thing this icon must not become.
+ */
+.card-icon {
+  flex: none;
+}
+
+.card-title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.card-subtitle {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/*
+ * The follow-mode hint.
+ *
+ * On the card rather than in permanent chrome: a selection is the only time there is
+ * anything to follow, and nothing on screen said the mode existed.
+ */
+.card-hint {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* Alerts get the only red on screen, plus a bar so the state is not colour alone. */
+.card-alert {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  color: var(--error);
+  font-weight: 600;
+  background: #2a0f12;
+  border-left: 4px solid var(--error);
+  border-radius: 3px;
+}
+
+.card-age {
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.card-age[data-severity="amber"] {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.card-age[data-severity="red"] {
+  color: var(--error);
+  font-weight: 600;
+}
+
+/*
+ * The satellite card's computed position, and the only line on any card that is our arithmetic
+ * rather than a feed's report.
+ *
+ * Full text colour rather than the muted grey the age line above it uses, because it is a
+ * measurement being stated and not a caveat about one. No severity colours: staleness is the
+ * element set's business and the age line already carries it, so a second traffic light here
+ * would be grading a propagation that is always a millisecond old.
+ */
+.card-position {
+  margin: 6px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 10rem, not 9: the label column has to hold "Registered owner" at 16px without wrapping. */
+.card-fields {
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  gap: 6px 10px;
+  margin: 14px 0 0;
+}
+
+.card-fields dt {
+  color: var(--text-muted);
+}
+
+.card-fields dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The ownership spine.
+ *
+ * Set apart from the aircraft's own fields by a rule and a heading, because everything above it is
+ * something a receiver reported about an aircraft and everything in it is a join this product made
+ * between an airframe and a company. Running the two together would let a matched company read as
+ * a transponder fact.
+ */
+.card-ownership {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--panel-edge);
+}
+
+.card-ownership-head {
+  margin: 0;
+  font-size: 17px;
+}
+
+/*
+ * What a possible match has not proved.
+ *
+ * The same treatment as an emergency alert, and for the same reason: it is the one line on the card
+ * that changes how everything below it must be read. A real person's name against the wrong company
+ * is the highest-harm output here, so this is not a footnote.
+ */
+.card-ownership-note {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  color: var(--warning);
+  font-weight: 600;
+  background: #2a2210;
+  border-left: 4px solid var(--warning);
+  border-radius: 3px;
+}
+
+/* Why no officer came back, which is a real answer rather than a fault. */
+.card-ownership-absent {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* One officer, separated from the next so two people never read as one. */
+.card-officer {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--panel-edge);
+}
+
+.card-credit {
+  margin-top: 16px;
+  padding-top: 10px;
+  color: var(--text-muted);
+  font-size: 14px;
+  border-top: 1px solid var(--panel-edge);
+}
+
+/* ------------------------------------------------------------------ credits */
+
+/*
+ * The credits control: a small "i" in the bottom corner, specified by Alexander Fanthome on
+ * 2026-08-20. Clicking it shows the attribution.
+ *
+ * Twelve credits with their licence strings was a 970x215 panel across the bottom of the
+ * globe, and the globe is the product. Small here means how much of the globe it covers, not
+ * how hard it is to hit or see: 44px square with a 20px glyph, which is the minimum a pointer
+ * target should be and larger than the text it replaced.
+ *
+ * The container is only a position. The button carries the panel look, and the list is
+ * absolutely positioned above it, so opening the credits does not move the button the user
+ * just aimed at.
+ */
+.credits {
+  position: fixed;
+  bottom: 24px;
+  left: 16px;
+}
+
+.credits > summary {
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 700;
+  font-style: italic;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 50%;
+  box-shadow: var(--panel-shadow);
+  /* No triangle: the glyph is the affordance, and a marker inside a circle reads as a fault. */
+  list-style: none;
+}
+
+.credits > summary::-webkit-details-marker {
+  display: none;
+}
+
+.credits > summary:hover {
+  background: #1f2a37;
+}
+
+/*
+ * Open, the list sits above the button on its own opaque panel, capped and scrolling. Twelve
+ * credits is short; forty would not be.
+ */
+.credits > ul {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: max-content;
+  max-width: min(46rem, calc(100vw - 32px));
+  max-height: 60vh;
+  margin: 0;
+  padding: 12px 16px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.5;
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  box-shadow: var(--panel-shadow);
+}
+
+.credits > ul > li + li {
+  margin-top: 6px;
+}
+
+.attribution-licence {
+  color: var(--text-muted);
+}

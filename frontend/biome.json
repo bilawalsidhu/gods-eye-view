@@ -1,0 +1,31 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.9/schema.json",
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "always"
+    }
+  },
+  "linter": { "enabled": false },
+  "assist": { "enabled": false },
+  "files": {
+    "includes": [
+      "**",
+      "!dist",
+      "!coverage",
+      "!playwright-report",
+      "!test-results",
+      "!.omc",
+      "!.remember",
+      "!e2e/tmp-*.spec.ts",
+      "!src/types/api.d.ts",
+      "!pnpm-lock.yaml"
+    ]
+  }
+}

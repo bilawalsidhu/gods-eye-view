@@ -1,0 +1,5 @@
+{
+ "message": "Missing Header 'x-windy-api-key' with API key",
+ "error": "Forbidden",
+ "statusCode": 403
+}

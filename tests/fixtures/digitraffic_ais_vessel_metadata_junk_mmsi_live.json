@@ -1,0 +1,16 @@
+{
+  "callSign" : "SNWZ",
+  "destination" : "",
+  "draught" : 43,
+  "eta" : 1596,
+  "imo" : 0,
+  "mmsi" : 999999999,
+  "name" : "NATO WARSHIP",
+  "posType" : 1,
+  "referencePointA" : 0,
+  "referencePointB" : 0,
+  "referencePointC" : 0,
+  "referencePointD" : 0,
+  "shipType" : 35,
+  "timestamp" : 1782498136414
+}

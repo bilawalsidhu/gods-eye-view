@@ -1,0 +1,85 @@
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Planet Labs public orbital ephemerides</title>
+</head>
+<body>
+<pre>PLANET LABS PUBLIC ORBITAL EPHEMERIDES
+
+Planet Labs performs orbit determination on its own satellites from GPS and 2-way
+UHF ranging and provides this data publicly in various formats.
+Technical reference: <a href="https://arxiv.org/abs/1509.03270">https://arxiv.org/abs/1509.03270</a>
+
+
+=== 18 SPCS matching ===
+Provides best-guess matching between 18 SPCS CATID and Planet Labs HWID.
+Not always consistant due to 18 SPCS cross-tagging.
+<a href="https://ephemerides.planet-labs.com/18SPCS_matches_v1.txt">https://ephemerides.planet-labs.com/18SPCS_matches_v1.txt</a>
+
+
+=== Operational Status ===
+Provides operational status of Planet Labs satellites.
+
+A Satellite is designated as "Operational" if Planet is currently
+able to maneuver the satellite (either propulsively or via differential drag),
+and/or respond to a conjunction event. Otherwise, it is designated as
+"Nonoperational". A satellite being "operational" does not imply we are actively
+publishing ephemeris for that satellite. We only publish updates to our O/O
+ephemeris when we have sufficient telemetry to generate a high-quality state.
+
+Disclaimer: The information provided is intended to be accurate
+only as of the date of publication and Planet undertakes no obligation to
+update this information to reflect current or future events or circumstances.
+For accurate information with respect to space situational coordination,
+please email orbital-neighbors [at] planet [dot] com if required.
+
+<a href="https://ephemerides.planet-labs.com/operational_status_v1.txt">https://ephemerides.planet-labs.com/operational_status_v1.txt</a>
+
+
+=== TLEs ===
+TLEs are only published for "Operational" (see above) satellites.
+Latest:     <a href="https://ephemerides.planet-labs.com/planet_mc.tle">https://ephemerides.planet-labs.com/planet_mc.tle</a>
+Historical: https://ephemerides.planet-labs.com/planet_mc_YYYYMMDD.tle
+
+
+=== State Vectors ===
+States are only published for "Operational" (see above) satellites.
+Latest:     <a href="https://ephemerides.planet-labs.com/planet.states">https://ephemerides.planet-labs.com/planet.states</a>
+Historical: https://ephemerides.planet-labs.com/planet_YYYYMMDD.states
+
+State vector file format:
+  Col1: Satellite Hardware ID (HWID, a 4-digit hex number)
+  Col2: Epoch in [s] since J2000 epoch Terrestrial Time
+  Col3,4,5: Position in J2000 frame [m]
+  Col6,7,8: Velocity in J2000 frame [m/s]
+  Col9: Drag Ballistic coefficient in [kg/m2]
+  Col10: SRP ballistic coefficient in [kg/m2] (not currently fit)
+
+
+=== Ephemeris predictions ===
+Per-satellite 5-day ephemeris prediction:
+https://ephemerides.planet-labs.com/HWID_oem.txt
+
+SkySat 95-day ephemeris prediction:
+https://ephemerides.planet-labs.com/HWID_long_term_oem.txt
+
+where HWID is the satellite ID (see 18 SPCS matching for HWID-CATID conversions)
+
+
+=== Conjunctions FAQ ===
+If you are a satellite owner/operator and have a conjunction with one of our
+satellites please refer to our <a href="https://ephemerides.planet-labs.com/planet_conjunctions_faq.pdf">Conjunctions FAQ</a>.
+Feel free to reach out if you have additional questions using the contact
+information in the Contact section below.
+
+
+=== License ===
+Copyright © Planet Labs PBC. Orbital ephemerides data provided hereunder is
+licensed under <a href=https://creativecommons.org/licenses/by-nc/4.0/deed.en>CC BY-NC 4.0.</a>
+
+=== Contact ===
+For technical or operational questions, or to request commercial (for-profit)
+permission to redistribute these data, email orbital-neighbors [at] planet [dot] com.
+
+</pre>
+</body></html>

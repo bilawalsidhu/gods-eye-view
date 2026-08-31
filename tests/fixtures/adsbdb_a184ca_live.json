@@ -1,0 +1,17 @@
+{
+    "response": {
+        "aircraft": {
+            "type": "GVI (G650ER)",
+            "icao_type": "GLF5",
+            "manufacturer": "Gulfstream Aerospace",
+            "mode_s": "A184CA",
+            "registration": "N1972",
+            "registered_owner_country_iso_name": "US",
+            "registered_owner_country_name": "United States",
+            "registered_owner_operator_flag_code": "G650",
+            "registered_owner": "Nike Inc",
+            "url_photo": null,
+            "url_photo_thumbnail": null
+        }
+    }
+}

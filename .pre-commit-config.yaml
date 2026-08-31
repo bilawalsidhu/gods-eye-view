@@ -1,0 +1,61 @@
+# mypy is deliberately absent: --strict over src, tests and scripts takes long enough that
+# it would turn every commit into a coffee break. CI runs it and gates the merge.
+# ty is here instead. It finishes in well under a second on this tree, so it catches the
+# obvious type mistakes at commit time without the wait.
+
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  # Pinned to the ruff version in uv.lock (ruff==0.16.3 in pyproject.toml) so the hook and
+  # CI cannot disagree about a rule. Bump both together, never one alone.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.3
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.12.5
+    hooks:
+      # Keeps uv.lock in step with pyproject.toml, because CI runs uv sync --locked and
+      # a drifted lockfile fails the build.
+      - id: uv-lock
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      # tests/fixtures holds byte-for-byte recordings of real upstream responses. Tidying
+      # their whitespace or line endings would make them recordings of something else, so
+      # the whitespace hooks skip them.
+      - id: trailing-whitespace
+        exclude: ^tests/fixtures/
+      - id: end-of-file-fixer
+        exclude: ^tests/fixtures/
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: [--fix=lf]
+        exclude: ^tests/fixtures/
+
+  - repo: local
+    hooks:
+      # Run through uv rather than a pinned hook repo, so the version is whatever uv.lock
+      # resolved (ty==0.0.73) and there is only one place to bump it.
+      - id: ty
+        name: ty check
+        entry: uv run ty check
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      # A change to a route or a contract must arrive with the regenerated schema, or the
+      # frontend's generated types are already wrong by the time the commit lands.
+      - id: openapi-schema
+        name: openapi.json matches the app
+        entry: uv run python scripts/dump_openapi.py --check
+        language: system
+        pass_filenames: false
+        files: ^(src/tracker/|scripts/dump_openapi\.py|openapi\.json)

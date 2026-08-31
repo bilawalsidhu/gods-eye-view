@@ -1,0 +1,501 @@
+{
+ "type": "FeatureCollection",
+ "metadata": {
+  "generated": 1787179614000,
+  "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson",
+  "title": "USGS All Earthquakes, Past Hour",
+  "status": 200,
+  "api": "2.7.0",
+  "count": 12
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 1.86,
+    "place": "78 km NE of Tonopah, Nevada",
+    "time": 1787179002908,
+    "updated": 1787179160047,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nn00923538",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/nn00923538.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "automatic",
+    "tsunami": 0,
+    "sig": 53,
+    "net": "nn",
+    "code": "00923538",
+    "ids": ",nn00923538,",
+    "sources": ",nn,",
+    "types": ",origin,phase-data,",
+    "nst": 10,
+    "dmin": 1.052,
+    "rms": 0.2822,
+    "gap": 173,
+    "magType": "ml",
+    "type": "earthquake",
+    "title": "M 1.9 - 78 km NE of Tonopah, Nevada"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -116.4973,
+     38.4743,
+     0.0106
+    ]
+   },
+   "id": "nn00923538"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 0.96,
+    "place": "9 km NNE of Borrego Springs, CA",
+    "time": 1787178364860,
+    "updated": 1787178573662,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/ci41530696",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/ci41530696.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "automatic",
+    "tsunami": 0,
+    "sig": 14,
+    "net": "ci",
+    "code": "41530696",
+    "ids": ",ci41530696,",
+    "sources": ",ci,",
+    "types": ",nearby-cities,origin,phase-data,",
+    "nst": 46,
+    "dmin": 0.01343,
+    "rms": 0.17,
+    "gap": 50,
+    "magType": "ml",
+    "type": "earthquake",
+    "title": "M 1.0 - 9 km NNE of Borrego Springs, CA"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -116.353166666667,
+     33.3333333333333,
+     10.27
+    ]
+   },
+   "id": "ci41530696"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 0.72,
+    "place": "12 km NNE of Borrego Springs, CA",
+    "time": 1787178033220,
+    "updated": 1787178240579,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/ci41530688",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/ci41530688.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "automatic",
+    "tsunami": 0,
+    "sig": 8,
+    "net": "ci",
+    "code": "41530688",
+    "ids": ",ci41530688,",
+    "sources": ",ci,",
+    "types": ",nearby-cities,origin,phase-data,",
+    "nst": 35,
+    "dmin": 0.02389,
+    "rms": 0.17,
+    "gap": 61,
+    "magType": "ml",
+    "type": "earthquake",
+    "title": "M 0.7 - 12 km NNE of Borrego Springs, CA"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -116.337833333333,
+     33.3588333333333,
+     11.14
+    ]
+   },
+   "id": "ci41530688"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 0.48,
+    "place": "22 km ESE of Little Lake, CA",
+    "time": 1787177009450,
+    "updated": 1787177209366,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/ci41530680",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/ci41530680.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "automatic",
+    "tsunami": 0,
+    "sig": 4,
+    "net": "ci",
+    "code": "41530680",
+    "ids": ",ci41530680,",
+    "sources": ",ci,",
+    "types": ",nearby-cities,origin,phase-data,",
+    "nst": 13,
+    "dmin": 0.08366,
+    "rms": 0.11,
+    "gap": 87,
+    "magType": "ml",
+    "type": "earthquake",
+    "title": "M 0.5 - 22 km ESE of Little Lake, CA"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -117.680833333333,
+     35.865,
+     4.68
+    ]
+   },
+   "id": "ci41530680"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 2.2,
+    "place": "60 km WSW of Nikolski, Alaska",
+    "time": 1787177004295,
+    "updated": 1787177996429,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/aka2026qkneeo",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/aka2026qkneeo.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "reviewed",
+    "tsunami": 0,
+    "sig": 74,
+    "net": "ak",
+    "code": "a2026qkneeo",
+    "ids": ",aka2026qkneeo,",
+    "sources": ",ak,",
+    "types": ",origin,phase-data,",
+    "nst": 14,
+    "dmin": 0.1,
+    "rms": 0.3,
+    "gap": 228,
+    "magType": "ml",
+    "type": "earthquake",
+    "title": "M 2.2 - 60 km WSW of Nikolski, Alaska"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -169.691,
+     52.735,
+     12.8
+    ]
+   },
+   "id": "aka2026qkneeo"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 0.75,
+    "place": "8 km WNW of Cobb, CA",
+    "time": 1787176726570,
+    "updated": 1787176820594,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75421522",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/nc75421522.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "automatic",
+    "tsunami": 0,
+    "sig": 9,
+    "net": "nc",
+    "code": "75421522",
+    "ids": ",nc75421522,",
+    "sources": ",nc,",
+    "types": ",nearby-cities,origin,phase-data,",
+    "nst": 16,
+    "dmin": 0.01409,
+    "rms": 0.02,
+    "gap": 56,
+    "magType": "md",
+    "type": "earthquake",
+    "title": "M 0.8 - 8 km WNW of Cobb, CA"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -122.810165405273,
+     38.8375015258789,
+     2.23000001907349
+    ]
+   },
+   "id": "nc75421522"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 2.1,
+    "place": "80 km SE of Kokhanok, Alaska",
+    "time": 1787176710251,
+    "updated": 1787177883961,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/aka2026qkmzvg",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/aka2026qkmzvg.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "reviewed",
+    "tsunami": 0,
+    "sig": 68,
+    "net": "ak",
+    "code": "a2026qkmzvg",
+    "ids": ",aka2026qkmzvg,",
+    "sources": ",ak,",
+    "types": ",origin,phase-data,",
+    "nst": 48,
+    "dmin": 0.1,
+    "rms": 0.6,
+    "gap": 51,
+    "magType": "ml",
+    "type": "earthquake",
+    "title": "M 2.1 - 80 km SE of Kokhanok, Alaska"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -153.834,
+     58.906,
+     13
+    ]
+   },
+   "id": "aka2026qkmzvg"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 1.2,
+    "place": "23 km SE of Glacier View, Alaska",
+    "time": 1787176640944,
+    "updated": 1787177858024,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/aka2026qkmyxm",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/aka2026qkmyxm.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "reviewed",
+    "tsunami": 0,
+    "sig": 22,
+    "net": "ak",
+    "code": "a2026qkmyxm",
+    "ids": ",aka2026qkmyxm,",
+    "sources": ",ak,",
+    "types": ",origin,phase-data,",
+    "nst": 15,
+    "dmin": 0.2,
+    "rms": 1,
+    "gap": 103,
+    "magType": "ml",
+    "type": "earthquake",
+    "title": "M 1.2 - 23 km SE of Glacier View, Alaska"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -147.331,
+     61.66,
+     23.5
+    ]
+   },
+   "id": "aka2026qkmyxm"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 0.77,
+    "place": "8 km WNW of Cobb, CA",
+    "time": 1787176633160,
+    "updated": 1787176730458,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75421512",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/nc75421512.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "automatic",
+    "tsunami": 0,
+    "sig": 9,
+    "net": "nc",
+    "code": "75421512",
+    "ids": ",nc75421512,",
+    "sources": ",nc,",
+    "types": ",nearby-cities,origin,phase-data,",
+    "nst": 8,
+    "dmin": 0.01328,
+    "rms": 0.03,
+    "gap": 94,
+    "magType": "md",
+    "type": "earthquake",
+    "title": "M 0.8 - 8 km WNW of Cobb, CA"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -122.807334899902,
+     38.8388328552246,
+     1.66999995708466
+    ]
+   },
+   "id": "nc75421512"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 2.02,
+    "place": "8 km WNW of Cobb, CA",
+    "time": 1787176553840,
+    "updated": 1787176789230,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75421507",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/nc75421507.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "automatic",
+    "tsunami": 0,
+    "sig": 63,
+    "net": "nc",
+    "code": "75421507",
+    "ids": ",nc75421507,",
+    "sources": ",nc,",
+    "types": ",focal-mechanism,nearby-cities,origin,phase-data,",
+    "nst": 45,
+    "dmin": 0.01517,
+    "rms": 0.06,
+    "gap": 54,
+    "magType": "md",
+    "type": "earthquake",
+    "title": "M 2.0 - 8 km WNW of Cobb, CA"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -122.807998657227,
+     38.8385009765625,
+     1.94000005722046
+    ]
+   },
+   "id": "nc75421507"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 0.75,
+    "place": "10 km WNW of The Geysers, CA",
+    "time": 1787176302920,
+    "updated": 1787176400518,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75421502",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/nc75421502.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "automatic",
+    "tsunami": 0,
+    "sig": 9,
+    "net": "nc",
+    "code": "75421502",
+    "ids": ",nc75421502,",
+    "sources": ",nc,",
+    "types": ",nearby-cities,origin,phase-data,",
+    "nst": 14,
+    "dmin": 0.002062,
+    "rms": 0.01,
+    "gap": 97,
+    "magType": "md",
+    "type": "earthquake",
+    "title": "M 0.8 - 10 km WNW of The Geysers, CA"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -122.856498718262,
+     38.8255004882812,
+     2.35999989509583
+    ]
+   },
+   "id": "nc75421502"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 2,
+    "place": "150 km SW of Adak, Alaska",
+    "time": 1787176024040,
+    "updated": 1787177779457,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/aka2026qkmqac",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/aka2026qkmqac.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "reviewed",
+    "tsunami": 0,
+    "sig": 62,
+    "net": "ak",
+    "code": "a2026qkmqac",
+    "ids": ",aka2026qkmqac,",
+    "sources": ",ak,",
+    "types": ",origin,phase-data,",
+    "nst": 14,
+    "dmin": 0.5,
+    "rms": 0.3,
+    "gap": 277,
+    "magType": "ml",
+    "type": "earthquake",
+    "title": "M 2.0 - 150 km SW of Adak, Alaska"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -178.448,
+     51.131,
+     30.3
+    ]
+   },
+   "id": "aka2026qkmqac"
+  }
+ ],
+ "bbox": [
+  -178.448,
+  33.333333333333,
+  0.0106,
+  -116.33783333333,
+  61.66,
+  30.3
+ ]
+}
