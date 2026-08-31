@@ -1572,7 +1572,13 @@ Historical planning documents may not match runtime behavior.
 
 ## Runtime Stack
 
-- Vite + CesiumJS app with Google Photorealistic 3D Tiles
+- Vite + CesiumJS app with Google Photorealistic 3D Tiles. Startup loads the
+  tileset directly from Google; if that fails (EEA-billed Google projects get a
+  hard `403` on satellite/3D tiles under the post-2025-07-08 EEA terms) and a
+  Cesium ion token is configured, `Cesium.GoogleMaps.defaultApiKey` is cleared
+  and the load is retried through Cesium ion asset 2275207 — the same Google
+  tileset via Cesium's agreement. Only when both routes fail (or no ion token
+  exists) does the app fall back to the flat Cesium globe.
 - Scene/HUD/style systems in `src/ui.js` and `src/hud.js`
 - Layer management in `src/data/manager.js`
 - Map stack switching in `src/mapStackController.js`

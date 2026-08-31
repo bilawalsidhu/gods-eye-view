@@ -157,9 +157,23 @@ async function init() {
     let tileset = null;
     try {
       // Load Google Photorealistic 3D Tiles
-      tileset = await Cesium.createGooglePhotorealistic3DTileset({
-        onlyUsingWithGoogleGeocoder: true,
-      });
+      try {
+        tileset = await Cesium.createGooglePhotorealistic3DTileset({
+          onlyUsingWithGoogleGeocoder: true,
+        });
+      } catch (directError) {
+        // EEA-billed Google projects get a hard 403 on 3D tiles
+        // (developers.google.com/maps/comms/eea/map-tiles). Cesium ion serves
+        // the same tileset through Cesium's own agreement: clearing the key
+        // makes createGooglePhotorealistic3DTileset use ion asset 2275207,
+        // which needs only Ion.defaultAccessToken.
+        if (!Cesium.Ion.defaultAccessToken) throw directError;
+        console.warn('[Init] Direct Google 3D Tiles failed, retrying via Cesium ion:', directError);
+        Cesium.GoogleMaps.defaultApiKey = undefined;
+        tileset = await Cesium.createGooglePhotorealistic3DTileset({
+          onlyUsingWithGoogleGeocoder: true,
+        });
+      }
       viewer.scene.primitives.add(tileset);
       // NOTE: Cesium World Terrain intentionally disabled — conflicts with Google 3D Tiles at high zoom.
       // Google Photorealistic 3D Tiles provide their own terrain/elevation.

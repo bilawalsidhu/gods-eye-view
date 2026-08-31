@@ -30,6 +30,14 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Fixed
 
+- Photorealistic 3D tiles now load for EEA-billed Google projects. Google
+  returns a hard `403 PERMISSION_DENIED` on satellite and 3D tiles for projects
+  linked to a European Economic Area billing address (post 2025-07-08 EEA
+  terms); startup previously fell back to the flat globe. When the direct
+  request fails and a Cesium ion token is configured, the tileset is retried
+  through Cesium ion (asset 2275207), which serves the same Google
+  Photorealistic 3D Tiles under Cesium's own agreement. Without an ion token,
+  behavior is unchanged.
 - A missing optional FIRMS key no longer turns the complete Environmental
   mission into `LOAD FAILED`. The FIRMS row still reports `KEY REQUIRED`, while
   earthquakes continue to load. Real lifecycle and fetch failures retain
