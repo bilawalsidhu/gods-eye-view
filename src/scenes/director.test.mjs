@@ -17,14 +17,10 @@ import test from 'node:test';
 import { SceneDirector } from './director.js';
 import { SCENE_TRACKING_PARAM_KEYS } from './scenePolicy.js';
 import { SCENE_RECIPES } from './recipes.js';
+import { REGISTERED_LAYER_IDS } from '../data/layerState.js';
 
 /** The layer registry as main.js builds it (src/main.js dataManager.register calls). */
-const REGISTERED = [
-  'flights', 'military', 'earthquakes', 'satellites', 'rocket-launches', 'traffic',
-  'cctv', 'radio', 'bikeshare', 'ais-live-vessels', 'military-installations',
-  'military-awareness', 'local-datacenters', 'local-dams',
-  'telegeography-submarine-cables', 'local-firms',
-];
+const REGISTERED = [...REGISTERED_LAYER_IDS];
 
 /** Layers Space Missions permits while it isolates the globe (contextModePolicy). */
 const SPACE_MISSIONS_ALLOWED = new Set(['rocket-launches', 'satellites', 'radio']);

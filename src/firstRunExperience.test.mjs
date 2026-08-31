@@ -644,20 +644,20 @@ test('the DISPLAY rail starts collapsed on a first run, and a stored choice wins
   );
 });
 
-// ── Voice: instruction-only, tool schema byte-unchanged ─────────────────────
+// ── Voice: instruction mapping + frozen current tool schema ─────────────────
 
-test('the voice TOOL SCHEMA is byte-identical to main — the mission mapping is instructions only', () => {
+test('the voice TOOL SCHEMA matches the frozen current contract — mission mapping stays instructions only', () => {
   const src = fs.readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
   const start = src.indexOf('const GEV_REALTIME_TOOLS = [');
   assert.ok(start > 0, 'GEV_REALTIME_TOOLS must still be a single literal array');
   const end = src.indexOf('\n];\n', start);
   const block = src.slice(start, end + 4);
 
-  assert.equal(block.length, 31104, 'tool schema byte length drifted from the frozen baseline');
+  assert.equal(block.length, 31203, 'tool schema byte length drifted from the frozen baseline');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '3ace199727934e851902e4899c423d549d34d3f53469dcb56f07fc070d3f9d66',
-    'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
+    'bc1ce89b479fddecdddc98d6f5da98429ab63dc0e9de3de7a0b65761a42d2515',
+    'tool schema edits must be deliberate; first-run missions still ride existing tools',
   );
 
   // ...and the mapping that makes them reachable by voice is one instruction

@@ -179,7 +179,7 @@ Twenty-eight tools, four jobs — the commands below come straight from the prod
 
 ## 🛰️ What's on the Globe
 
-Thirteen live layers. **Ten of them need nothing at all** — no key, no account, no signup.
+Fourteen live/data layers. **Ten of them need nothing at all** — no key, no account, no signup.
 
 | Layer | What you get | Source | Auth |
 |-------|--------------|--------|------|
@@ -192,6 +192,7 @@ Thirteen live layers. **Ten of them need nothing at all** — no key, no account
 | 🚗 **Traffic** | Live congestion driving per-vehicle flow at street level — dive below ~8 km and the dots color to real jams. Keyless it's an approximate simulation | TomTom + OSM | 🟢 (🟡 TomTom makes it real — get one) |
 | 📹 **CCTV Mesh** | ~800 public cameras projected *into* the 3D space — Austin · California (Caltrans) · London (TfL). Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs | 🟢 |
 | 📻 **Radio** | Geolocated world radio with an **analog tuner** — drag the needle across up to 750 stations and the globe flies to each broadcaster | Radio Browser / broadcasters | 🟢 |
+| ◇ **AR Experiences** | Map-centered mobile/headset AR hotspots with independently filterable providers and launch links | Geoverse · MeshMap · ARpoise · configured OSCP operators | 🟡 provider configuration; ARpoise gated off by default |
 | 🚲 **Bikeshare** | Live station availability | GBFS | 🟢 |
 | 🔥 **Active Fires** | Live NASA FIRMS detections, trailing 24h | NASA FIRMS | 🟡 |
 | 🚀 **Space Missions** | Rolling 30-day launches with payload, stage, and recovery detail | Launch Library 2 | 🟢 (🟡 optional token raises the allowance) |
@@ -313,6 +314,8 @@ OPENAI_API_KEY="…" AISSTREAM_API_KEY="…" npm run dev -- --host localhost --p
 On macOS you can also keep any key in the Keychain and `./scripts/dev-fresh.sh` pulls them in — the `security add-generic-password` service names are documented in `.env.example`.
 
 OpenSky can run fully anonymous (`OPENSKY_AUTH_MODE=anon`), or import OAuth credentials with `./scripts/opensky-import-client.sh /path/to/credentials.json`.
+
+AR providers are configured independently in `.env`; a deployment can enable any combination of Geoverse, MeshMap, and named Open AR Cloud OSCP operators. Each operator remains its own filter. ARpoise is implemented but stays disabled until its maintainer confirms lightweight directory reuse and rate limits.
 
 ### 💸 What it actually costs
 

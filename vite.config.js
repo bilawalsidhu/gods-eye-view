@@ -18,6 +18,7 @@
  *  13. Weather effects — camera-local Open-Meteo observations without news/geocoding overhead
  *  14. Rocket launches — recent Launch Library 2 mission metadata
  *  15. Radio Browser — public-domain station directory and click counting
+ *  16. AR content — configured Geoverse, MeshMap, ARpoise, and OSCP providers
  *
  * Also exposes Cesium and Google 3D Tiles API keys to the
  * client via `import.meta.env.*` defines.
@@ -61,6 +62,18 @@ import {
   validTerrainResult,
 } from './src/data/terrainHeightsProxy.js';
 import { VOICE_MODELS, isKnownVoiceTier, resolveVoiceModel } from './src/voice/voiceCost.js';
+import { createArContentProxyPlugin } from './src/server/arContentProxy.js';
+import {
+  coalesceProxyRequest,
+  readResponseJsonCapped,
+  readResponseTextCapped,
+} from './src/server/proxyUtils.js';
+
+export {
+  coalesceProxyRequest,
+  readResponseJsonCapped,
+  readResponseTextCapped,
+} from './src/server/proxyUtils.js';
 
 /** Resolve __dirname for ESM context. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -670,69 +683,6 @@ async function readRequestBodyCapped(req, maxBytes) {
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
-}
-
-/**
- * Read a fetch() Response body as text with a hard byte cap. Rejects early on an
- * oversized Content-Length, then streams with a running cap so a chunked or
- * length-omitted response cannot blow past the limit. Throws { code:'RESPONSE_TOO_LARGE' }.
- */
-export async function readResponseTextCapped(response, maxBytes) {
-  const declared = Number(response.headers.get('content-length'));
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    const err = new Error('Upstream response too large');
-    err.code = 'RESPONSE_TOO_LARGE';
-    throw err;
-  }
-  const reader = response.body?.getReader?.();
-  if (!reader) {
-    const text = await response.text();
-    if (Buffer.byteLength(text) > maxBytes) {
-      const err = new Error('Upstream response too large');
-      err.code = 'RESPONSE_TOO_LARGE';
-      throw err;
-    }
-    return text;
-  }
-  const decoder = new TextDecoder();
-  let out = '';
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > maxBytes) {
-      try { await reader.cancel(); } catch { /* no-op */ }
-      const err = new Error('Upstream response too large');
-      err.code = 'RESPONSE_TOO_LARGE';
-      throw err;
-    }
-    out += decoder.decode(value, { stream: true });
-  }
-  out += decoder.decode();
-  return out;
-}
-
-/** Parse a fetch() JSON response only after enforcing a hard byte cap. */
-export async function readResponseJsonCapped(response, maxBytes) {
-  return JSON.parse(await readResponseTextCapped(response, maxBytes));
-}
-
-/**
- * Return the existing promise for a cache key, or create one and remove it
- * only when that exact promise settles.
- */
-export function coalesceProxyRequest(inFlight, key, create) {
-  const existing = inFlight.get(key);
-  if (existing) return { promise: existing, shared: true };
-  let promise;
-  promise = Promise.resolve()
-    .then(create)
-    .finally(() => {
-      if (inFlight.get(key) === promise) inFlight.delete(key);
-    });
-  inFlight.set(key, promise);
-  return { promise, shared: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -5640,10 +5590,11 @@ const GEV_REALTIME_TOOLS = [
         layerId: {
           type: 'string',
           description:
-            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio.',
+            'Common-name mapping for the non-obvious ids: AR/augmented reality → ar-experiences; space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio.',
           enum: [
             'flights',
             'military',
+            'ar-experiences',
             'earthquakes',
             'satellites',
             'rocket-launches',
@@ -5676,6 +5627,7 @@ const GEV_REALTIME_TOOLS = [
           enum: [
             'flights',
             'military',
+            'ar-experiences',
             'earthquakes',
             'satellites',
             'traffic',
@@ -7357,6 +7309,7 @@ export default defineConfig(({ mode }) => {
       gbfsProxy(),
       adsbLolProxy(),
       aisLiveProxy(),
+      createArContentProxyPlugin({ env }),
       trackBackfillProxies(),
       openAiRealtimeProxy(),
       googlePlacesContextProxy(),

@@ -3,6 +3,26 @@
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
+## [Unreleased] — 2026-08-29
+
+### Added
+
+- Added a map-centered AR Experiences layer with independent Geoverse, MeshMap,
+  ARpoise, and configured Open AR Cloud operator filters, explicit provider
+  launch links, a Past toggle, and shareable filter state.
+- Added the same-origin `/api/ar-content` aggregator with normalized provider
+  metadata, dynamic attribution, exact viewport caching, stale-result honesty,
+  bounded upstream responses, rate limiting, and four-wide provider concurrency.
+
+### Security
+
+- Provider credentials remain server-side, configured nearby paths cannot
+  replace their trusted origin, redirects are rejected, and MeshMap records are
+  admitted only when explicitly marked public.
+- ARpoise remains disabled by default pending maintainer reuse and rate-limit
+  confirmation; the integration uses only its raw directory records and deep
+  links, never proxies or redistributes linked Unity assets.
+
 ## [Unreleased] — 2026-08-24
 
 ### Added

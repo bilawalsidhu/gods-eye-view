@@ -1,3 +1,5 @@
+import { parseArProviderSelection } from './arProviderContract.js';
+
 const VALID_DISPOSITIONS = new Set([
   'enabled-only',
   'enabled+options',
@@ -148,6 +150,18 @@ function stringOption(key, token, defaultValue) {
   });
 }
 
+function arProviderSelectionOption(key, token, defaultValue = 'all') {
+  return Object.freeze({
+    key,
+    token,
+    defaultValue,
+    normalize: parseArProviderSelection,
+    // `_` separates compact option assignments, so escape it inside OSCP IDs.
+    encode: (value) => value.replaceAll('_', '~'),
+    decode: (value) => parseArProviderSelection(value.replaceAll('~', '_')),
+  });
+}
+
 function enumOption(key, token, defaultValue, values, codes) {
   const reverse = Object.fromEntries(Object.entries(codes).map(([name, code]) => [code, name]));
   return Object.freeze({
@@ -182,6 +196,10 @@ function integerOption(key, token, defaultValue) {
 }
 
 const OPTION_GROUPS = Object.freeze({
+  'ar-experiences': Object.freeze([
+    arProviderSelectionOption('providers', 'p'),
+    booleanOption('includePast', 'h', false),
+  ]),
   flights: Object.freeze([
     // Product invariant 2026-08-22: the fleet's 3D models are DEFAULT-ON in
     // PROXIMITY mode. Proximity is itself the altitude/count gate — models only
@@ -276,6 +294,7 @@ export const SHARE_TRACKING_RESTORE_POLICIES = Object.freeze({
  */
 export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'ais-live-vessels', token: 'a', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'ar-experiences', token: 'h', disposition: 'enabled+options', optionOwner: 'ar-experiences' }),
   Object.freeze({ id: 'bikeshare', token: 'b', disposition: 'enabled-only' }),
   Object.freeze({ id: 'cctv', token: 'c', disposition: 'enabled+options', optionOwner: 'cctv' }),
   Object.freeze({ id: 'earthquakes', token: 'e', disposition: 'enabled-only' }),

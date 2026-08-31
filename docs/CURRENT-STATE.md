@@ -1,6 +1,26 @@
 # God's Eye View Current State
 
-Updated: August 24, 2026
+Updated: August 29, 2026
+
+> **2026-08-29 — filterable AR Experiences data layer.** The Data Layers panel
+> now exposes one `ar-experiences` layer backed by `src/data/arExperiences.js`
+> and the same-origin `/api/ar-content` aggregator. Geoverse, MeshMap, ARpoise,
+> and every configured Open AR Cloud OSCP operator retain separate provider IDs,
+> chips, attribution, status, and launch links; OSCP is a protocol rather than a
+> synthetic central catalog. Provider and Past choices participate in the
+> versioned layer-state/share contract. Queries use the map camera's viewport
+> center and derived radius, not browser or device geolocation.
+>
+> The server keeps provider credentials private, rejects redirects, caps
+> responses at 2 MB, caches successful exact-view queries for 60 seconds, may
+> serve them stale for 15 minutes, and fetches at most four providers at once.
+> Geoverse and ARpoise disclose their current 5 km effective-radius limit inside
+> wider aggregate queries. MeshMap admits only records explicitly marked
+> `public`. ARpoise uses only `/php/dir/web/porpoise.php` microdegree records and
+> app deep links; it stays disabled by default until lightweight reuse and rate
+> limits are confirmed, and GEV never fetches or redistributes its Unity assets.
+> Niantic VPS remains capability coverage rather than AR experience content and
+> is not represented as a provider in this layer without an authorized feed.
 
 > **2026-08-23 — first-run mission launcher** (`src/firstRunExperience.js`,
 > `#first-run-launcher`, styles at the tail of `style.css`). After startup
@@ -1602,6 +1622,7 @@ its criteria cannot be silently ignored.
 | CCTV | Austin + Caltrans (CA) + TfL London Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
 | Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
 | Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
+| AR Experiences ◇ | Geoverse, MeshMap, ARpoise, configured OSCP operators | `src/data/arExperiences.js` | `/api/ar-content` | 120s + viewport changes |
 | Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Dams ▰ | OpenInfraMap/OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Submarine Cables ◠ | TeleGeography public map (bundled) | `src/data/telegeographySubmarineCables.js` | — | static |

@@ -20,6 +20,7 @@ The golden rule: **secret-bearing API keys stay on the server side.** The dev/pr
 | `OPENAI_API_KEY` | Server only | Browser fetches a short-lived **ephemeral** Realtime session token from `/api/realtime/token`; the real key never ships |
 | `AISSTREAM_API_KEY` | Server only | Server holds the AISStream websocket; browser polls the same-origin `/api/ais-live` cache |
 | OpenSky OAuth (`OPENSKY_CLIENT_ID/SECRET`) | Server only | Server mints + refreshes the token behind `/api/opensky` |
+| `MESHMAP_API_KEY` and configured OSCP keys | Server only | Browser receives normalized public hotspot metadata from `/api/ar-content`; keys and upstream origins stay server-side |
 
 ### Two deliberately client-side keys — restrict them
 
@@ -37,6 +38,7 @@ Never commit real keys. `.env` is gitignored; only `.env.example` (placeholder n
 The data proxies in `vite.config.js` are written so the browser cannot turn the server into an open relay:
 
 - **No arbitrary-URL fetching.** The CCTV frame proxy fetches only server-registered camera/frame URLs — clients cannot pass an upstream URL to fetch (SSRF mitigation). Other proxies target fixed upstream hosts.
+- **AR origins are operator-configured.** `/api/ar-content` accepts only coordinates, radius, provider IDs, and the past-content flag from the browser. Upstream origins and credentials come from server environment configuration, redirects are rejected, responses are size/time bounded, and launch/content URLs are returned as metadata rather than fetched or relayed. Configured nearby paths must be origin-relative and cannot replace their provider origin. Treat `MESHMAP_API_URL` and every `OSCP_INSTANCES_JSON.baseUrl` as trusted deployment configuration.
 - **Radio is not an audio relay.** `/api/radio/stations` contacts only allowlisted Radio Browser HTTPS hosts and paths, rejects redirects, rejects any hostname with a loopback/private/link-local/metadata/non-public A or AAAA result, and pins each TLS connection to a validated address. It returns normalized public HTTPS stream URLs; `/api/radio/click/:uuid` applies the same destination policy and accepts only station IDs from the current bounded catalog. The browser then connects directly to the broadcaster after an explicit playback action, so the broadcaster sees the listener's IP address. GEV never proxies, caches, records, or redistributes audio.
 - **Bounded high-risk paths.** Request bodies and high-volume or attacker-influenced upstream responses are capped where that boundary matters; network paths use explicit timeouts or other bounded lifecycles appropriate to the feed.
 - **Sanitized public failures.** Proxy handlers return controlled error messages instead of credentials or raw internal details.
@@ -49,7 +51,7 @@ The dev server is a **key broker**: every server-side key above is spendable by 
 
 - **Local-only by default.** `./scripts/dev-fresh.sh` (and the Vite config itself) bind to `localhost`, so only your machine can reach the server — and only local names are accepted (`allowedHosts` stays restricted, which also blunts DNS-rebinding tricks).
 - **LAN exposure is an explicit opt-in**: `HOST=0.0.0.0 ./scripts/dev-fresh.sh`. The launcher prints a prominent warning plus your LAN URL. Understand what opting in means: **every device on that network can drive the proxies and spend your OpenAI / Google / OpenSky / AISStream / TomTom / FIRMS quota** for as long as the server runs. Do this only on networks you trust.
-- **App-level throttles (opt-in):** `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` cap the cost-bearing endpoints per client IP per minute (over-limit requests receive a sanitized `429`). They are **per-IP, process-local, in-memory guards** — they reset on restart and are **not billing caps**.
+- **App-level throttles:** `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` optionally cap cost-bearing endpoints; `/api/ar-content` defaults to `GEV_RATELIMIT_AR_PER_MIN=60`. They are **per-IP, process-local, in-memory guards** — they reset on restart and are **not billing caps**.
 - **Provider-side budgets are the real backstop.** For hard spend protection, configure limits where the money is: OpenAI platform usage limits, Google Cloud budget alerts + per-API quotas, and equivalent controls for any other keyed provider.
 
 ## Scope & expectations

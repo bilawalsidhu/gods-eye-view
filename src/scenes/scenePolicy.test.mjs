@@ -39,12 +39,7 @@ function sweepLayerParamKeys() {
 }
 
 /** The layer registry as main.js builds it (src/main.js dataManager.register calls). */
-const REGISTERED = new Set([
-  'flights', 'military', 'earthquakes', 'satellites', 'rocket-launches', 'traffic',
-  'cctv', 'radio', 'bikeshare', 'ais-live-vessels', 'military-installations',
-  'military-awareness', 'local-datacenters', 'local-dams',
-  'telegeography-submarine-cables', 'local-firms',
-]);
+const REGISTERED = new Set(LAYER_STATE_REGISTRY.map(({ id }) => id));
 
 test('a shot only reconciles the layers it declares', () => {
   const plan = sceneLayerPlan({ flights: { enabled: true } }, REGISTERED);
