@@ -79,3 +79,31 @@ test('dev-fresh passes names-only boot provenance before resolving file fallback
   assert.match(source, /put_env GEV_LAUNCHER "dev-fresh"/);
   assert.match(source, /put_env GEV_KEY_SETUP_EXTERNAL_KEYS "\$\{KEY_SETUP_EXTERNAL_KEYS_CSV\}"/);
 });
+
+
+// Stock macOS ships bash 3.2, where expanding an EMPTY array under `set -u`
+// is a fatal "unbound variable" — the `:-` guard on the provenance CSV is what
+// keeps the keyless `dev-fresh.sh` launch alive there. Newer bash never fails
+// this way, so the idiom itself is asserted textually and the block's behavior
+// is exercised for both the keyless and the populated case.
+const bashTest = process.platform === 'win32' ? test.skip : test;
+bashTest('the external-keys provenance block survives set -u keyless and joins names when keys are exported', async () => {
+  const script = await fs.readFile(new URL('../scripts/dev-fresh.sh', import.meta.url), 'utf8');
+  const start = script.indexOf('KEY_SETUP_EXTERNAL_KEYS=()');
+  const csvAt = script.indexOf('KEY_SETUP_EXTERNAL_KEYS_CSV=');
+  const end = script.indexOf('\n', csvAt);
+  assert.ok(start > 0 && csvAt > start && end > csvAt, 'provenance block not found in dev-fresh.sh');
+  const block = script.slice(start, end);
+  assert.match(block, /\$\{KEY_SETUP_EXTERNAL_KEYS\[\*\]:-\}/);
+
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const run = promisify(execFile);
+  const probe = `set -u\n${block}\nprintf '%s' "$KEY_SETUP_EXTERNAL_KEYS_CSV"`;
+  const keyless = await run('bash', ['-c', probe], { env: { PATH: process.env.PATH } });
+  assert.equal(keyless.stdout, '');
+  const keyed = await run('bash', ['-c', probe], {
+    env: { PATH: process.env.PATH, FIRMS_MAP_KEY: 'x', TOMTOM_API_KEY: 'y' },
+  });
+  assert.equal(keyed.stdout, 'FIRMS_MAP_KEY,TOMTOM_API_KEY');
+});

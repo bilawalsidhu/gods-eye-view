@@ -12,6 +12,10 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   the two largest sources and dropped them entirely — leaving roughly a third of
   global detections while reporting each dropped source twice, once as
   successful with its real count and once as failed.
+- `./scripts/dev-fresh.sh` no longer crashes on stock macOS bash 3.2 when no
+  provider keys are exported: expanding the empty external-keys provenance
+  array under `set -u` was fatal there. Launches with exported keys are
+  unchanged.
 
 ### Security
 
