@@ -286,7 +286,7 @@ test('AIS first-connect grace expiry reports failure even without a terminal man
   assert.equal(presentLoadingFeedback(state, unavailable, 300).label, 'LOAD FAILED');
 });
 
-test('an explicitly missing optional key completes the global loading batch honestly', () => {
+test('participant stats failure outranks a simultaneous visibility completion', () => {
   const enabling = aggregateLayerLoading([{
     id: 'ais-live-vessels',
     name: 'AIS Vessels',
@@ -305,31 +305,6 @@ test('an explicitly missing optional key completes the global loading batch hone
   }]);
   state = reduceLoadingFeedback(state, missingKey, 250, {
     type: 'visibility', layerId: 'ais-live-vessels', enabled: true,
-  });
-
-  assert.equal(state.terminal, 'complete');
-  assert.equal(presentLoadingFeedback(state, missingKey, 250).label, 'LOAD COMPLETE');
-});
-
-test('an explicit lifecycle failure still outranks a key-required row', () => {
-  const enabling = aggregateLayerLoading([{
-    id: 'local-firms',
-    name: 'FIRMS Active Fires',
-    lifecycleState: 'enabling',
-    stats: { loading: true },
-  }]);
-  let state = reduceLoadingFeedback(createLoadingFeedbackState(), enabling, 0);
-  state = reduceLoadingFeedback(state, enabling, 200);
-
-  const missingKey = aggregateLayerLoading([{
-    id: 'local-firms',
-    name: 'FIRMS Active Fires',
-    enabled: true,
-    lifecycleState: 'enabled',
-    stats: { loading: false, keyRequired: true, error: 'KEY REQUIRED' },
-  }]);
-  state = reduceLoadingFeedback(state, missingKey, 250, {
-    type: 'visibility-failed', layerId: 'local-firms', error: new Error('lifecycle failed'),
   });
 
   assert.equal(state.terminal, 'error');

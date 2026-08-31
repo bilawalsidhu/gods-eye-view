@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-vessel-datum.mjs — assertion harness for the AIS vessel vertical-datum
- * pass described in docs/CURRENT-STATE.md.
+ * pass (docs/superpowers/specs/2026-07-27-vessel-datum-design.md).
  *
  * Drives the REAL app in headless Chromium against the LIVE AISStream feed
  * and asserts, per port:

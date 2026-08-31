@@ -320,7 +320,6 @@ export function createFirmsHeatmapLayer({
         lastUpdate: _lastUpdate,
         loading: _loading,
         stale: _stale,
-        keyRequired: _keyRequired,
         error: _keyRequired ? 'KEY REQUIRED' : (_stale ? staleText : _error),
         loadingLabel,
       };

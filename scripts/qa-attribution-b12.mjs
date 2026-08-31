@@ -1,7 +1,7 @@
 /**
  * qa-attribution-b12.mjs — visual + state proof for Batch 12 (data attribution).
  *
- * Public attribution checks:
+ * Findings H10 + H11 (docs/pre-ship-audit-2026-07-01.md):
  *   H10 — the Google/Cesium credit MUST stay visible in clean-view AND
  *         recording modes (those are the modes used to record demos).
  *   H11 — every data layer's required attribution must surface in the
@@ -86,6 +86,14 @@ async function main() {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ summary: 'QA globe ready' }),
+      });
+      return;
+    }
+    if (url.origin === APP_ORIGIN && url.pathname === '/api/google/nearby-places') {
+      request.respond({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ places: [] }),
       });
       return;
     }

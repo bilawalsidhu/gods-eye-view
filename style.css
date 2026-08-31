@@ -1234,7 +1234,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 
 .map-stack-chip-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
 }
 
@@ -1273,7 +1273,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 
 @media (max-width: 620px) {
   .map-stack-chip-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -6255,7 +6255,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   /* A fixed 16:9 box with the frame CONTAINED inside it. Providers burn their
      timestamp into a corner (TfL top-left, Austin bottom-left) and the old
      150px-tall box was ~2.2:1, so object-fit: cover ate ~18px off the top and
-     bottom — exactly where those stamps live (field test 2026-07-31).
+     bottom — exactly where those stamps live (owner field test 2026-07-31).
      Sources are not all 16:9 either (a TfL frame measures 352x288), so
      `contain` is what actually guarantees nothing is cut; the ratio just keeps
      the panel height stable as you switch cameras. */
@@ -9160,4 +9160,360 @@ body.scene-playback-mode #first-run-launcher {
   .first-run-arrow { transition: none; }
   /* Scrolling a tile into view must not animate either. */
   .first-run-choices { scroll-behavior: auto; }
+}
+
+/* ============================================================
+   POWER UP — in-app key setup (dev server only, src/keySetup.js)
+   Same voice as the first-run launcher: glass card, cyan trim,
+   mono kickers. The chip retires once every key is configured.
+   ============================================================ */
+
+#key-setup-chip {
+  position: fixed;
+  right: 0.9rem;
+  bottom: 0.9rem;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.7rem;
+  color: rgba(225, 244, 248, 0.92);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.09rem;
+  background: linear-gradient(145deg, rgba(10, 27, 37, 0.92), rgba(7, 13, 22, 0.9));
+  border: 1px solid rgba(54, 220, 255, 0.38);
+  border-radius: 0.42rem;
+  box-shadow:
+    0 0.4rem 1.6rem rgba(0, 0, 0, 0.5),
+    0 0 1.2rem rgba(0, 212, 255, 0.07);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+}
+
+#key-setup-chip:hover,
+#key-setup-chip:focus-visible {
+  background: linear-gradient(145deg, rgba(14, 38, 51, 0.95), rgba(9, 18, 28, 0.93));
+  border-color: rgba(54, 220, 255, 0.7);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+#key-setup-chip .material-symbols-outlined {
+  color: #55dff5;
+  font-size: 0.95rem;
+}
+
+#key-setup-chip[hidden] { display: none; }
+
+#key-setup {
+  position: fixed;
+  z-index: 190; /* above the first-run launcher (175), below attribution (200) */
+  top: 50%;
+  left: 50%;
+  width: min(36rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 1.5rem);
+  max-height: calc(100dvh - 1.5rem);
+  display: flex;
+  flex-direction: column;
+  padding: 1.15rem;
+  overflow: hidden;
+  color: var(--text-primary);
+  background:
+    linear-gradient(145deg, rgba(10, 27, 37, 0.97), rgba(7, 13, 22, 0.95)),
+    rgba(7, 17, 25, 0.96);
+  border: 1px solid rgba(54, 220, 255, 0.42);
+  border-radius: 0.65rem;
+  box-shadow:
+    0 1.4rem 4.5rem rgba(0, 0, 0, 0.72),
+    0 0 2.5rem rgba(0, 212, 255, 0.09),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(28px) saturate(1.25);
+  -webkit-backdrop-filter: blur(28px) saturate(1.25);
+  opacity: 0;
+  transform: translate(-50%, calc(-50% + 0.8rem)) scale(0.985);
+  transition: opacity 220ms ease, transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
+}
+
+/* Same cascade note as the launcher: an author display beats [hidden]. */
+#key-setup[hidden] { display: none; }
+
+#key-setup.visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  pointer-events: auto;
+}
+
+.key-setup-scanline {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(54, 220, 255, 0.8), transparent);
+  box-shadow: 0 0 1rem rgba(54, 220, 255, 0.45);
+  pointer-events: none;
+}
+
+.key-setup-header,
+.key-setup-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: rgba(171, 210, 220, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.1rem;
+  text-transform: uppercase;
+}
+
+.key-setup-kicker { color: rgba(54, 220, 255, 0.86); }
+
+.key-setup-close {
+  display: grid;
+  place-items: center;
+  padding: 0.15rem;
+  color: rgba(171, 210, 220, 0.6);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 0.3rem;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.key-setup-close:hover,
+.key-setup-close:focus-visible {
+  color: rgba(225, 244, 248, 0.95);
+  border-color: rgba(54, 220, 255, 0.5);
+  outline: none;
+}
+
+.key-setup-close .material-symbols-outlined { font-size: 1rem; }
+
+#key-setup h2 {
+  margin-top: 0.6rem;
+  font-family: var(--font-mono);
+  font-size: clamp(1.25rem, 2.4vw, 1.75rem);
+  font-weight: 500;
+  letter-spacing: -0.045rem;
+}
+
+#key-setup-description {
+  max-width: 31rem;
+  margin-top: 0.3rem;
+  color: rgba(215, 231, 235, 0.66);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+#key-setup-description code {
+  padding: 0.05rem 0.25rem;
+  font-size: 0.92em;
+  background: rgba(54, 220, 255, 0.08);
+  border-radius: 0.2rem;
+}
+
+.key-setup-rows {
+  display: grid;
+  gap: 0.42rem;
+  margin-top: 1rem;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(54, 220, 255, 0.45) transparent;
+  scrollbar-gutter: stable;
+}
+
+.key-setup-rows::-webkit-scrollbar { width: 6px; }
+.key-setup-rows::-webkit-scrollbar-thumb {
+  background: rgba(54, 220, 255, 0.45);
+  border-radius: 3px;
+}
+
+.key-setup-row {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.6rem 0.7rem;
+  background: rgba(29, 69, 81, 0.14);
+  border: 1px solid rgba(100, 200, 220, 0.15);
+  border-radius: 0.42rem;
+}
+
+.key-setup-row[data-set='true'] {
+  background: rgba(30, 81, 57, 0.12);
+  border-color: rgba(84, 227, 156, 0.32);
+}
+
+.key-setup-row-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+}
+
+.key-setup-row-head strong {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08rem;
+}
+
+.key-setup-led {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: none;
+  background: rgba(148, 178, 188, 0.35);
+  border-radius: 50%;
+}
+
+.key-setup-row[data-set='true'] .key-setup-led {
+  background: #54e39c;
+  box-shadow: 0 0 0.5rem rgba(84, 227, 156, 0.66);
+}
+
+.key-setup-tier { font-size: 0.55rem; }
+
+.key-setup-exposed {
+  padding: 0.05rem 0.3rem;
+  color: rgba(255, 200, 120, 0.75);
+  font-size: 0.5rem;
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 200, 120, 0.3);
+  border-radius: 0.3rem;
+}
+
+.key-setup-get {
+  margin-left: auto;
+  color: rgba(54, 220, 255, 0.75);
+  font-size: 0.58rem;
+  letter-spacing: 0.08rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.key-setup-get:hover,
+.key-setup-get:focus-visible {
+  color: rgba(54, 220, 255, 1);
+  text-decoration: underline;
+  outline: none;
+}
+
+.key-setup-unlocks {
+  margin: 0;
+  color: rgba(198, 220, 226, 0.6);
+  font-size: 0.66rem;
+}
+
+.key-setup-fields {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.key-setup-fields input {
+  width: 100%;
+  padding: 0.42rem 0.55rem;
+  color: rgba(225, 244, 248, 0.92);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  background: rgba(4, 14, 20, 0.72);
+  border: 1px solid rgba(100, 200, 220, 0.22);
+  border-radius: 0.32rem;
+}
+
+.key-setup-fields input:focus {
+  border-color: rgba(54, 220, 255, 0.65);
+  outline: none;
+}
+
+.key-setup-fields input::placeholder { color: rgba(148, 178, 188, 0.42); }
+
+.key-setup-footer { margin-top: 0.85rem; }
+
+.key-setup-apply {
+  padding: 0.5rem 0.95rem;
+  color: #04141c;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.09rem;
+  background: linear-gradient(180deg, #45e0ff, #1fb9dd);
+  border: none;
+  border-radius: 0.38rem;
+  cursor: pointer;
+  transition: filter var(--transition-fast);
+}
+
+.key-setup-apply:hover,
+.key-setup-apply:focus-visible {
+  filter: brightness(1.08);
+  outline: none;
+}
+
+.key-setup-apply[aria-disabled='true'] {
+  cursor: wait;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.key-setup-note {
+  min-height: 1.1rem;
+  margin-top: 0.5rem;
+  color: rgba(199, 225, 231, 0.62);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  line-height: 1.35;
+}
+
+/* The same exclusive surfaces that hide the launcher hide this surface —
+   nothing about key setup belongs in a recording, a cockpit, or a scene. */
+body.ui-clean-view #key-setup-chip,
+body.recording-mode #key-setup-chip,
+body.cockpit-mode #key-setup-chip,
+body.scene-playback-mode #key-setup-chip,
+body.ui-clean-view #key-setup,
+body.recording-mode #key-setup,
+body.cockpit-mode #key-setup,
+body.scene-playback-mode #key-setup {
+  display: none;
+}
+
+@media (max-width: 620px) {
+  /* Clear the dock. Desktop-first app; this is a courtesy, not a layout. */
+  #key-setup-chip { bottom: 5.8rem; }
+}
+
+/* Provider Settings additions: externally-managed badge + per-row remove. */
+.key-setup-external {
+  padding: 0.05rem 0.3rem;
+  color: rgba(148, 200, 220, 0.7);
+  font-size: 0.5rem;
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+  border: 1px solid rgba(148, 200, 220, 0.28);
+  border-radius: 0.3rem;
+  white-space: nowrap;
+}
+
+.key-setup-remove {
+  justify-self: start;
+  padding: 0.28rem 0.55rem;
+  color: rgba(255, 170, 150, 0.8);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.08rem;
+  background: none;
+  border: 1px solid rgba(255, 170, 150, 0.3);
+  border-radius: 0.32rem;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.key-setup-remove:hover,
+.key-setup-remove:focus-visible {
+  color: rgba(255, 190, 170, 1);
+  border-color: rgba(255, 170, 150, 0.65);
+  outline: none;
 }

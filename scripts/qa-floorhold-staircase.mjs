@@ -7,7 +7,7 @@
  * see the shape of the transition, which is what an owner actually watches: a
  * contact that reaches the right height by way of a jump into midair and a
  * visible stair-step down is wrong even though every individual answer is
- * defensible. An field test found exactly that — planes floating at
+ * defensible. An owner playtest found exactly that — planes floating at
  * terminal gates — and this is the rig that reproduces it.
  *
  * A stationary grounded contact at a cold cell, driven at the 80 ms fleet
@@ -83,7 +83,7 @@ for (const [name, schedule] of SCENARIOS) {
 console.log(`\nSUMMARY (this tree, post-fix)\n${summary.join('\n')}\n`);
 
 // ---------------------------------------------------------------------------
-// F1 — takeoff roll with the on_ground flag FLAPPING (field observation: VIR138M
+// F1 — takeoff roll with the on_ground flag FLAPPING (owner sighting: VIR138M
 // at JFK, 45 kt, "clearly on good ground, then suddenly popped below the
 // ground, then popped back up").
 //

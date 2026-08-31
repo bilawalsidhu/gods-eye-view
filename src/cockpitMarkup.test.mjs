@@ -44,7 +44,7 @@ test('Cockpit has one reset action beside its bottom exit path', () => {
   assert.match(
     css,
     /body\.cockpit-mode #view-switcher \{[\s\S]*?bottom: max\(clamp\(128px, 15vh, 150px\), env\(safe-area-inset-bottom\)\);[\s\S]*?margin-bottom: -95px;/,
-    'Cockpit exit must retain the accepted bottom-center position',
+    'Cockpit exit must retain the owner-approved bottom-center position',
   );
   assert.match(
     css,

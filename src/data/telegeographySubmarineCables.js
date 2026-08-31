@@ -54,8 +54,10 @@ export const CABLE_SWEEP_MOTION_EPSILON_M = 250;
  * layer alone cost ~9.5 ms/frame during camera motion. The depth cue this
  * trades away (photoreal tiles occluding label TEXT at low, city-level
  * cameras) matches the sibling dams/datacenters sources, which shipped
- * host-composited under the same rule; the anchor points/stems remain
- * Cesium-native and depth-tested.
+ * host-composited under the same ruling; the anchor points/stems remain
+ * Cesium-native and depth-tested. See
+ * the world-overlay consolidation design notes ("Depth-testing
+ * decision") for both dated decisions.
  */
 export const CABLE_LABEL_DEPTH_DECISION = Object.freeze({
   option: 2,
@@ -207,7 +209,7 @@ export function createCableOverlayPublisher({
  * real `MAP_STACKS` so the omission is caught loudly.
  */
 const CABLE_GLOBE_STACK_IDS = Object.freeze(
-  new Set(['bing-aerial', 'bing-labels', 'osm']),
+  new Set(['bing-aerial', 'bing-labels', 'esri-imagery', 'osm']),
 );
 
 /**

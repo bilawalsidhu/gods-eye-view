@@ -3,7 +3,7 @@
  * neighborhood boundaries that OSM tags as label-nodes-only (Chinatown, the Marina, the
  * Mission, …). It sits AHEAD of the live-Overpass / synthesis path in the resolver, so
  * covered neighborhoods resolve instantly to a REAL boundary with no network dependency
- * because the live Overpass path is slow and inconsistent for neighborhoods.
+ * (the live-Overpass path is slow/flaky for neighborhoods — see docs/field-test-2-analysis.md).
  *
  * Source-agnostic: each city is a `{name, geometry}` GeoJSON file in
  * `local_data/neighborhoods/`. Swap the file (e.g. to public-domain DataSF) without

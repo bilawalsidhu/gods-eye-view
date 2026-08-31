@@ -60,7 +60,7 @@ export const CARD_PLATE_ALPHA = 0.82;
  * Ambient detection callouts carry a LIGHTER member of the card's backing
  * family: enough plate to hold small mono text against sunlit imagery, not so
  * much that a field of them reads as a wall of boxes. `calloutPlate` sits at
- * ~58% of `CARD_PLATE_ALPHA`; `calloutPlateSpace` is the requested
+ * ~58% of `CARD_PLATE_ALPHA`; `calloutPlateSpace` is the owner-requested
  * "slightly higher opacity so the text pops" for space-tier (satellite)
  * contacts, which sit over the high-albedo lit Earth disc more often than
  * aircraft do.
@@ -80,7 +80,7 @@ export const DETECTION_PLATE_BAND = Object.freeze({ min: 0.5, max: 0.62 });
  * horizon it has no job to do — there is nothing bright and busy to separate
  * the text from — and at full strength it reads as a row of dark boxes pasted
  * on an empty sky, which is the one place the pre-plate bare-text look was
- * already better (field finding, 2026-08-21).
+ * already better (owner field call, 2026-08-21).
  *
  * So the plate is SCALED here rather than replaced: every theme keeps its own
  * hue and its own relative weight, and the sky case lands at a whisper that is

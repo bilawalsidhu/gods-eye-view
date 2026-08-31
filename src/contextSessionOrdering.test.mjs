@@ -271,7 +271,7 @@ test('a lost cross-mode switch says Context is off, and the state agrees', () =>
   // The defect this replaced was the LIE, not the OFF: the transition reported
   // a bare "did not complete" while the operator's Context was silently gone.
   // Text and state are derived from the same verdict so they cannot disagree,
-  // and the failed layer ids survive (the honesty requirement).
+  // and the failed layer ids survive (Manjunath's honesty requirement).
   const setter = src.slice(
     src.indexOf('  async setContextMode(mode, {'),
     src.indexOf('  getCockpitState() {'),

@@ -367,12 +367,11 @@ const STYLE_STATUS_LABELS = {
 /**
  * The tactical detection look: Dense at 75%.
  *
- * Field test 2026-08-18: "detection mode… 75% weighted, with the 16% fade
+ * Owner playtest 2026-08-18: "detection mode… 75% weighted, with the 16% fade
  * and 5% outside, whatever we had. I want that as the default. It should just
  * happen." Fade and outside opacity live in GLOBAL_POST_DEFAULTS, so "whatever
  * we had" still needs nothing here — but they are 7% and 1% now, the outside
- * default having moved 5 → 3 → 1 during final field tuning (2026-08-24).
- * What the quote asked for is the
+ * default having moved 5 → 3 → 1 as the owner locked final tuning after field trials (2026-08-24). What the quote asked for is the
  * baseline of the day, not the two numbers it happened to name.
  *
  * ONE object, shared by the first-load baseline below, by every military style,
@@ -2255,6 +2254,7 @@ export class StyleManager {
     this._scopeFeatherValue = document.getElementById('scope-feather-value');
     this._mapStackChips = document.getElementById('map-stack-chips');
     this._mapStackStatus = document.getElementById('map-stack-status');
+    this._mapStackChangeHandler = null;
     this._cleanViewBtn = document.getElementById('clean-view-toggle');
     this._cleanViewExitBtn = document.getElementById('clean-view-exit');
     this._dataPanel = document.getElementById('data-panel');
@@ -2591,7 +2591,7 @@ export class StyleManager {
       document.getElementById('models3d-mode-all'),
     ];
     // DISPLAY-rail 3D-aircraft toggle (flights layer param). DEFAULT-ON in
-    // PROXIMITY (product invariant 2026-08-22) — mirrors the `models3d` default in
+    // PROXIMITY (owner directive 2026-08-22) — mirrors the `models3d` default in
     // layerState.js and `_models3dEnabled` in both flight layers, and the `active`
     // class the button carries in index.html. A fresh boot skips layer-state
     // restoration, so these initializers are the only thing keeping the lit
@@ -3021,7 +3021,7 @@ export class StyleManager {
   }
 
   /**
-   * Contacts-scoped detection (field test 2026-08-18: "when you click on
+   * Contacts-scoped detection (owner playtest 2026-08-18: "when you click on
    * Contacts, detections should just turn on, and they should stay on in
    * Cockpit or in third-person tracking inside Contacts").
    *
@@ -3052,7 +3052,7 @@ export class StyleManager {
         const state = this.getDetectionState();
         return { mode: state.detectionMode, densityPct: state.densityPct };
       },
-      // Field test: the force-on lands on the tactical look the military
+      // Owner playtest: the force-on lands on the tactical look the military
       // styles apply — the SAME preset object — not on whatever profile the
       // operator last happened to leave detection at.
       applyPreset: () => this._applyDetectionPreset(MILITARY_DETECTION_PRESET),
@@ -3116,7 +3116,7 @@ export class StyleManager {
     this._revealCockpitStyleParameters({ openDisplay: revealParameters });
   }
 
-  /** IR hot-target boost (field test 2026-08-16): under the luminance-
+  /** IR hot-target boost (owner playtest 2026-08-16): under the luminance-
    *  mapped NVG/FLIR looks the 3D fleets flip to flat white so contacts read
    *  HOT instead of vanishing mid-gray; restored when the look exits. The
    *  EFFECTIVE look is Cockpit's vision override while Cockpit is active
@@ -3479,13 +3479,26 @@ export class StyleManager {
   }
 
   /**
-   * Renders the validated map stack chip row from the matching controller
+   * Renders the owner-approved map stack chip row from the matching controller
    * entries. Cesium ion/Bing chips remain keyboard-focusable but unavailable,
    * with an accessible explanation, until a CESIUM_ION_TOKEN is configured.
    * @returns {void}
    */
   _initMapStackControl() {
     if (!this._mapStackChips || !this.mapStackController) return;
+
+    if (!this._mapStackChangeHandler) {
+      // Provider-driven transitions (notably Esri tile-error fallback) do not
+      // pass through `_setMapStack()`. Follow the controller's existing public
+      // event so the lit tile, the status line, AND the durable share state all
+      // describe the rendered source — without the share sync, a silent
+      // fallback leaves copyLink() encoding a stack that is no longer shown.
+      this._mapStackChangeHandler = (event) => {
+        this._renderMapStackState(event.detail);
+        this._syncShareState();
+      };
+      window.addEventListener('gev:map-stack-changed', this._mapStackChangeHandler);
+    }
 
     renderMapStackChips(this._mapStackChips, this.mapStackController.getStacks(), {
       activeId: this.mapStackController.getActiveId(),
@@ -3714,8 +3727,8 @@ export class StyleManager {
    *
    * Deliberately does NOT consult `_detectionUserOverridden` — the CALLER owns
    * that decision. The style path checks it (an explicit Sparse/Off must
-   * survive a style switch); Cockpit entry does not because detection remains
-   * active in Cockpit.
+   * survive a style switch); Cockpit entry does not (owner: detection is on in
+   * the cockpit "regardless").
    * @param {{mode?: string, densityPct?: number}} det Preset detection config.
    * @returns {void}
    */
@@ -4124,7 +4137,7 @@ export class StyleManager {
     // Plain `document.activeElement` is the wrong test — Chromium focuses a
     // <button> on mouse press, so once Map Source moved into this tray a tile
     // CLICK left focus parked inside and the popover never dismissed on
-    // mouse-away (field report; Location, whose input is genuinely
+    // mouse-away (owner field report; Location, whose input is genuinely
     // keyboard-focused when clicked, still dismissed). `:focus-visible` is the
     // platform's own pointer-vs-keyboard focus signal, so a typed-into field
     // still holds the tray open while a clicked tile does not. A browser
@@ -8933,7 +8946,7 @@ export class StyleManager {
         valueDisplay.textContent = val.toFixed(uMeta.max <= 1 ? 2 : 1);
         // Uniform writes don't auto-render under the idle governor —
         // without this the slider visibly does nothing until the next
-        // camera move (review browser finding). (perf wave 2)
+        // camera move (browser finding). (perf wave 2)
         governorRequestRender('style-param-slider');
         this._syncShareState();
       });
@@ -9786,7 +9799,7 @@ export class StyleManager {
    */
   /**
    * Wires the DISPLAY-rail "3D" toggle to the flights layer's `models3d` param.
-   * ON by default in `proximity` mode (product invariant 2026-08-22): the fleet
+   * ON by default in `proximity` mode (owner directive 2026-08-22): the fleet
    * renders as 3D glTF models once the camera is zoomed in past the layer's
    * altitude ceiling, and only the nearest MODEL_MAX in view are admitted, so
    * the default costs nothing at globe scale. `all` is the deliberate opt-in;
@@ -10130,6 +10143,10 @@ export class StyleManager {
     if (this._awarenessClearedHandler) {
       window.removeEventListener('gev:awareness-subject-cleared', this._awarenessClearedHandler);
       this._awarenessClearedHandler = null;
+    }
+    if (this._mapStackChangeHandler) {
+      window.removeEventListener('gev:map-stack-changed', this._mapStackChangeHandler);
+      this._mapStackChangeHandler = null;
     }
     // Invalidate any in-flight Context transaction the same way a newer request
     // would. Without this, a reinstatement already past its awaits could

@@ -1,5 +1,5 @@
 // src/data/renderAltitude.js — pure priority-chain helper for aircraft render
-// altitude.
+// altitude (docs/plans/2026-07-05-entity-height-datum-fix.md Task 6).
 //
 // The globe needs ELLIPSOIDAL height (h = H + N). OpenSky's `geo_altitude`
 // (state-vector index 13) is already WGS84 geometric/ellipsoidal — the
@@ -78,7 +78,7 @@ export function reuseGroundedSurfaceM(currentM, previousM) {
  * contact's cells went cold, and this guess overwrote a height that had been
  * sitting correctly on the mesh — dropping it through the ground until the
  * proxy recovered. With `priorRenderM` present the caller's existing sticky
- * fallback holds that height instead, which is what product behavior requires for:
+ * fallback holds that height instead, which is what the owner asked for:
  * "hold the last known altitude until a fresh one comes in."
  *
  * @param {object} params
