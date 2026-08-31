@@ -1080,7 +1080,7 @@ test('awareness clears are scoped to the selected source layer', () => {
 });
 
 // ===========================================================================
-// BEGIN Contact-readout presence block.
+// BEGIN Contact-readout presence block — fix/context-panel-next-subjects.
 // Integrators: this whole delimited block belongs to the Contact-panel
 // CONTACT LOST work. Keep it intact and keep any concurrent branch's own
 // additions at the END of the file, so the two never collide.
@@ -1483,7 +1483,7 @@ test('production eviction sites actually tag their clears', () => {
 });
 
 // ===========================================================================
-// END Contact-readout presence block.
+// END Contact-readout presence block — fix/context-panel-next-subjects.
 // ===========================================================================
 
 test('cockpit blocks only non-aircraft Context camera flights', () => {

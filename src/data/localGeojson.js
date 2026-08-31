@@ -51,7 +51,7 @@ const DEFAULT_OVERLAY_HOST = Object.freeze({
 });
 
 /**
- * Build the validated local-infrastructure card copy.
+ * Build the owner-approved local-infrastructure card copy.
  * @param {object} properties Unwrapped GeoJSON feature properties.
  * @param {string} layerId Local layer id.
  * @returns {{title:string,details:string[]}}
@@ -317,7 +317,7 @@ export function createLocalGeoJsonLayer({
    * camera is parked. One timer for the whole layer (not per record) — the
    * retry pass walks every record anyway. (perf rebase 2026-08-17)
    *
-   * Two gates keep this from becoming an idle leak (second review):
+   * Two gates keep this from becoming an idle leak (review round 2):
    *   - CAPABILITY: without `scene.sampleHeightSupported` the sample can never
    *     succeed, so a timer here would re-arm on every requested frame,
    *     forever. Records simply stay at ellipsoid height — exactly the

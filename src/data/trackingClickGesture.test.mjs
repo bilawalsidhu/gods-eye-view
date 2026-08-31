@@ -124,7 +124,7 @@ test('civilian and military click handlers apply duration only at the deselect b
   );
 });
 
-test('civilian and military tracked model caps both expose the selected 200 px feel', () => {
+test('civilian and military tracked model caps both expose the owner-selected 200 px feel', () => {
   assert.equal(CIVIL_TRACKED_MODEL_MAX_PX, 200);
   assert.equal(MILITARY_TRACKED_MODEL_MAX_PX, 200);
 });

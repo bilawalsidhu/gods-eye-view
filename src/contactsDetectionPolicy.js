@@ -1,6 +1,6 @@
 // src/contactsDetectionPolicy.js — Contacts-scoped detection policy.
 //
-// Field test 2026-08-18: "when you click on Contacts, detections should just
+// Owner playtest 2026-08-18: "when you click on Contacts, detections should just
 // turn on, and they should stay on in Cockpit or in third-person tracking inside
 // Contacts or inside Cockpit, both… when I leave the Cockpit, detections go off"
 // — that last part being the bug.
@@ -88,7 +88,7 @@ export function contactsDetectionExitPlan(restore, current, styleOwnsDetection =
  *
  * The engine is injected so this is the SAME code the UI runs and the tests
  * exercise, driven against the real `src/data/detection.js` in both. Turning on
- * applies the TACTICAL PRESET the military styles use — field test: "I want
+ * applies the TACTICAL PRESET the military styles use — owner playtest: "I want
  * that as the default. It should just happen" — rather than restoring whatever
  * profile the operator last left detection at.
  *

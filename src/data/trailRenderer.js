@@ -4,7 +4,7 @@
  * 2026-07-06).
  *
  * One trail = one ENTITY polyline. Round 6 replaced the faded per-vertex
- * Primitive for two product invariants from the field:
+ * Primitive for two owner directives from the field:
  *  - "the line must ALWAYS be visible": the Primitive's depthFailAppearance
  *    did not reliably render segments below the photoreal mesh — entity
  *    polylines with `depthFailMaterial` DO (in-repo proof: CCTV's frustum
@@ -36,7 +36,7 @@ let _trailSeq = 0;
 /** @constant {number} Alpha where the trail passes the depth test. */
 const TRAIL_ALPHA = 0.85;
 /** @constant {number} Alpha where the trail is behind/below scene geometry —
- *  still visible, but readable as occluded. */
+ *  visible (owner: never vanish) but readable as occluded. */
 const TRAIL_OCCLUDED_ALPHA = 0.4;
 /** @constant {number} Squared distance (m^2) below which consecutive points are merged. */
 const MIN_SEGMENT_DISTANCE_SQ = 0.01;
@@ -72,10 +72,11 @@ export function createTrail(viewer, { color, width = 2.5 }) {
         positions: new Cesium.CallbackProperty(() => current, false),
         width,
         material: baseColor.withAlpha(TRAIL_ALPHA),
-        // The locked rule (round 6): a segment below the photoreal
+        // The owner-locked rule (round 6): a segment below the photoreal
         // mesh renders dimmed — it must never disappear into the ground.
         depthFailMaterial: baseColor.withAlpha(TRAIL_OCCLUDED_ALPHA),
-        // Round 8: NONE draws straight 3D chords between waypoints — over a
+        // Round 8 (owner: UAL1104's Pacific trail "cutting through the
+        // globe"): NONE draws straight 3D chords between waypoints — over a
         // sparse trans-oceanic trace a single segment spans hundreds of km
         // and tunnels through the planet. GEODESIC subdivides each segment
         // along the curved surface (heights interpolated), so long legs hug

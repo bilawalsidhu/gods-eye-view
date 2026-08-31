@@ -223,7 +223,7 @@ let _uncoveredMode = 'sim';
  * + stop-and-go creep; 'heatline' = congestion corridor polylines; 'both';
  * 'none' = shipped main behavior. Live mode only — the keyless simulation
  * never has `road.flow`, so every jamViz path is unreachable there.
- * Default 'density' — A/B verdict 2026-07-23 (heatline stays available
+ * Default 'density' — owner A/B verdict 2026-07-23 (heatline stays available
  * via setParams).
  * @type {'none'|'density'|'heatline'|'both'}
  */
@@ -270,7 +270,7 @@ let _activeBucketColors = { ...FLOW_BUCKET_COLORS };
 /**
  * @const {number} Minimum base pixel size for COLORED dots while a styled
  * preset is active — residential-road dots spawn at 4 px and vanish into
- * post-FX pixelation; presence is the dots' whole job there (follow-up round
+ * post-FX pixelation; presence is the dots' whole job there (owner round
  * 2). Sim dots and the normal profile keep SIZE_BY_TYPE untouched.
  */
 const STYLED_MIN_BASE_PX = 5;
@@ -1253,7 +1253,7 @@ export function trafficFeedPresentation({
   const mode = liveMode ? 'live' : 'sim';
   if (liveMode && flowError) {
     // One string for both fields. The manager's meta line renders `error` and
-    // drops `loadingLabel` in its error branch, so the SIMULATED copy
+    // drops `loadingLabel` in its error branch, so the owner's SIMULATED copy
     // has to BE the error text or the steady state reverts to a bare
     // "TomTom daily budget reached" that never says what is on screen.
     const degraded = `SIMULATED — ${flowError}`;
@@ -1269,7 +1269,7 @@ export function trafficFeedPresentation({
     };
   }
   // Keyless simulation — one terse line that names the mode and the remedy
-  // (the copy shape). The chip's own progress text carries "working";
+  // (owner's copy shape). The chip's own progress text carries "working";
   // this line must never imply a live feed.
   return {
     mode,
@@ -2351,13 +2351,13 @@ const trafficLayer = {
     if (params.uncoveredRoads === 'sim' || params.uncoveredRoads === 'hide') {
       _uncoveredMode = params.uncoveredRoads;
     }
-    // Jam-viz prototype toggle (A/B): 'none' = shipped main behavior;
+    // Jam-viz prototype toggle (owner A/B): 'none' = shipped main behavior;
     // live mode only, applies on the next camera-driven load like the
     // uncoveredRoads param above.
     if (['none', 'density', 'heatline', 'both'].includes(params.jamViz)) {
       _jamViz = params.jamViz;
     }
-    // Preset-aware dot styling kill switch (A/B): 'off' forces the
+    // Preset-aware dot styling kill switch (owner A/B): 'off' forces the
     // shipped palette under every post-FX preset. Applies immediately via
     // in-place restyle — no refetch — so A/B legs share identical dots.
     if (params.presetDots === 'on' || params.presetDots === 'off') {
@@ -2415,7 +2415,7 @@ const trafficLayer = {
       };
       // Live mode: the detection bracket carries the congestion signal —
       // its canvas sits ABOVE the post-FX chain, so tier colors survive
-      // every preset (follow-up round 2: "bounding boxes do the heavy
+      // every preset (owner round 2: "bounding boxes do the heavy
       // lifting"). Keyless mode sets no tier: contacts keep the stock
       // 'vehicle' bracket and the keyless experience stays untouched.
       if (_liveMode) {

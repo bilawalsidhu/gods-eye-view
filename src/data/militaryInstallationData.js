@@ -13,7 +13,7 @@ const CLASS_BY_MILITARY_TAG = {
 };
 
 /**
- * How an UNNAMED feature reads on the map (field test 2026-08-18: the old
+ * How an UNNAMED feature reads on the map (owner playtest 2026-08-18: the old
  * fallback surfaced "range (10981656305)" — an OSM primary key shown to a human
  * as if it were a place name).
  *

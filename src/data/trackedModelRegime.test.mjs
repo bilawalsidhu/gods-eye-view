@@ -1,11 +1,11 @@
 // src/data/trackedModelRegime.test.mjs
 //
-// Zoom-driven 2D↔3D for the TRACKED contact (product invariant 2026-08-19).
+// Zoom-driven 2D↔3D for the TRACKED contact (owner directive 2026-08-19).
 //
 // Two things are pinned here, and both are behavioural rather than cosmetic:
 //
 //  1. The POLICY — thresholds and hysteresis — as pure math in
-//     trackedModelRegime.js. The enter ceiling is the playtested swap
+//     trackedModelRegime.js. The enter ceiling is the owner's playtested swap
 //     distance, deliberately much NEARER than the fleet ceiling, and the exit
 //     ceiling is deliberately higher than the enter ceiling. A regression that
 //     collapsed the two thresholds back into one would silently reintroduce
@@ -62,8 +62,8 @@ const WELL_INSIDE_M = TRACKED_MODEL_ENTER_ALT_M / 2;
 // 1. Policy: thresholds + hysteresis math
 // ---------------------------------------------------------------------------
 
-test('the tracked 3D takeover sits at the playtested swap distance', () => {
-  // Field test 2026-08-20: an earlier 1_000_000 m ceiling "pops to 3D far
+test('the tracked 3D takeover sits at the owner-playtested swap distance', () => {
+  // Owner playtest 2026-08-20: an earlier 1_000_000 m ceiling "pops to 3D far
   // too early" — 2D still reads correctly at ~600_000 m and the swap belongs at
   // ~150_000 m. These are the numbers the operator judged by eye, so they are
   // pinned literally rather than derived from anything.
@@ -75,7 +75,7 @@ test('the tracked 3D takeover sits at the playtested swap distance', () => {
 });
 
 test('the tracked contact swaps NEARER than the fleet — a recorded inversion, not a bug', () => {
-  // Consequence of the selected threshold, spelled out so it cannot be "tidied
+  // Consequence of the owner's number, spelled out so it cannot be "tidied
   // away": with the DISPLAY-rail 3D toggle ON, camera altitudes between the
   // tracked ceiling and the fleet ceiling draw surrounding contacts as models
   // while the SELECTED one is still a billboard. The fleet pass skips the

@@ -56,3 +56,26 @@ test('an inherited export never masks the value written in the file', async () =
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+test('dev-fresh gives explicit or dotenv Google configuration precedence over Keychain', async () => {
+  const source = await fs.readFile(new URL('../scripts/dev-fresh.sh', import.meta.url), 'utf8');
+  const precedence = source.indexOf('if [[ -n "${GOOGLE_MAPS_API_KEY_ENV}" ]]');
+  const keychainFallback = source.indexOf('elif [[ -n "${GOOGLE_MAPS_API_KEY_KEYCHAIN}" ]]');
+  assert.ok(precedence >= 0 && keychainFallback > precedence);
+});
+
+test('dev-fresh passes names-only boot provenance before resolving file fallbacks', async () => {
+  const source = await fs.readFile(new URL('../scripts/dev-fresh.sh', import.meta.url), 'utf8');
+  const capture = source.indexOf('KEY_SETUP_EXTERNAL_KEYS=()');
+  const dotenvResolution = source.indexOf('GOOGLE_MAPS_API_KEY_ENV="${GOOGLE_MAPS_API_KEY:-}"');
+  assert.ok(capture >= 0 && capture < dotenvResolution, 'parent-shell provenance must be captured first');
+  for (const name of [
+    'GOOGLE_MAPS_API_KEY', 'CESIUM_ION_TOKEN', 'OPENAI_API_KEY', 'AISSTREAM_API_KEY',
+    'FIRMS_MAP_KEY', 'TOMTOM_API_KEY', 'OPENSKY_CLIENT_ID',
+    'OPENSKY_CLIENT_SECRET', 'LL2_API_TOKEN',
+  ]) {
+    assert.match(source, new RegExp(`KEY_SETUP_EXTERNAL_KEYS\\+=\\(${name}\\)`));
+  }
+  assert.match(source, /put_env GEV_LAUNCHER "dev-fresh"/);
+  assert.match(source, /put_env GEV_KEY_SETUP_EXTERNAL_KEYS "\$\{KEY_SETUP_EXTERNAL_KEYS_CSV\}"/);
+});

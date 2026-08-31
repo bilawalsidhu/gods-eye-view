@@ -3,6 +3,43 @@
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
+## [0.1.0] — 2026-08-31 — One-click install, keyless boot, Provider Settings
+
+### Added
+- **One-click install** via Pinokio. Keyless boot lands on a live Esri World
+  Imagery satellite globe with keyless terrain; OSM takes over automatically if
+  Esri is unreachable, and the globe continues without terrain if its source is
+  unavailable.
+- **Provider Settings** (the POWER UP panel): add, replace, or remove API keys
+  inside the app. Credential files are made owner-only before any secret is
+  written — verified on macOS and Windows — and keys configured outside the
+  panel are shown read-only, never rewritten.
+- **Keyless capability responses**: the optional HUD summary and place-search
+  endpoints return a deliberate "not configured" success instead of errors, and
+  never consume rate-limit quota.
+- `.gitattributes` normalizes line endings, so Windows clones pass the full
+  test suite out of the box (#81 — thanks @ethanstoner).
+
+### Changed
+- README rewritten keyless-first around the provider ladder: zero keys → free
+  Cesium ion (eligible personal, non-commercial use) → billing-enabled Google
+  Maps.
+- Browser-built data modules no longer import `node:fs`; a repo-wide boundary
+  scan test keeps it that way (#83 — thanks @ethanstoner).
+- Aircraft-identity voice answers explicitly cover operator, type, and route,
+  and say so plainly when enrichment is unavailable instead of guessing.
+
+### Security
+- Provider Settings answers only local, unproxied requests and disables itself
+  entirely whenever the server is shared. Public datacenter and dam datasets
+  omit contact-oriented fields (see the dataset READMEs).
+
+## Pre-release development history
+
+The dated entries and internal milestone numbers below predate the first
+tagged GitHub Release. They are retained as project history and do not
+represent previously published GitHub Releases.
+
 ## [Unreleased] — 2026-08-24
 
 ### Added

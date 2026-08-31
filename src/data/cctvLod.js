@@ -7,15 +7,16 @@
  * card set, keeps that set stable across small camera moves (eviction
  * grace), and paces static-frame refreshes per source.
  *
- * The engine retains zoom-scaled budgets, distance-ranked in-view selection,
- * an eviction-grace planner, and source-aware refresh cadences, retargeted
- * from the rejected world-space static-plane ring to the
+ * Engine adapted from Manjunath's Part C work (`fix/cctv-part-c-review`):
+ * the zoom-scaled budgets, distance-ranked in-view selection, the
+ * eviction-grace planner, and the source-aware refresh cadences are his,
+ * retargeted from the rejected world-space static-plane ring to the
  * screen-space thumbnail cards (see
- * the ambient-card behavior documented in `docs/CURRENT-STATE.md`).
+ * docs/superpowers/specs/2026-07-29-cctv-ambient-cards-design.md).
  */
 
-// Ambient-card budgets (follow-up round 2, item C: raised 16/24/32 → 20/28/40 —
-// "a lot of empty space"). Tunable as a set, together with the card
+// Ambient-card budgets (owner round 2, item C: raised 16/24/32 → 20/28/40 —
+// "a lot of empty space"). Owner-tunable as a set, together with the card
 // scale waypoints (1,800/6,000/9,500 m, cctvCards.js) and
 // CCTV_CARD_MIN_SEP_PX: budgets say how many cameras HOLD cards, the
 // waypoints and separation say how many fit on screen.
@@ -34,7 +35,7 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
 
 /**
  * Returns the bounded ambient-card budget for the current viewer height.
- * Card counts stay inside the 20..40 range (follow-up round 2): street level
+ * Card counts stay inside the 20..40 range (owner round 2): street level
  * keeps the overlay sparse, metro scale earns the full ring.
  *
  * @param {number} cameraHeightM
@@ -52,7 +53,7 @@ export function cctvLodBudgets(cameraHeightM) {
 }
 
 /**
- * Selection-level incumbency (field test finding 4, 2026-07-29): a
+ * Selection-level incumbency (owner field-test finding 4, 2026-07-29): a
  * camera currently holding a card ranks with its distance discounted by this
  * factor, so a small camera move never batch-swaps the ring — a non-carded
  * camera displaces a carded one only when it is meaningfully (>20%) closer.
@@ -144,17 +145,17 @@ export function blendCenterRankKm(
   return (1 - w) * km + w * spread * fraction;
 }
 
-// Screen-distribution grid (follow-up round 2, item C — "a lot of empty space"):
+// Screen-distribution grid (owner round 2, item C — "a lot of empty space"):
 // pure nearest-first selection clusters winners at screen center (nearest ==
 // most central at typical view pitch) and leaves the periphery bare. The
 // viewport is bucketed into this grid and every occupied cell gets its best
-// candidate before global rank fills the rest. Tunable together with
+// candidate before global rank fills the rest. Owner-tunable together with
 // the budgets above.
 export const CCTV_CARD_GRID_COLS = 5;
 export const CCTV_CARD_GRID_ROWS = 4;
 
 /**
- * Screen-space distribution pass (follow-up round 2, item C). Buckets the
+ * Screen-space distribution pass (owner round 2, item C). Buckets the
  * viewport into a CCTV_CARD_GRID_COLS × CCTV_CARD_GRID_ROWS grid, assigns
  * each candidate to its cell (anchors just outside the viewport clamp to
  * the edge cells), ranks within cells by effective distance (`rankKm` —

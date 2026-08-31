@@ -17,7 +17,7 @@
  *
  * Press Escape or click empty space to deselect a tracked flight — the camera
  * is released IN PLACE (no flyTo), so the user keeps the context they were
- * looking at (product rule 2026-07-02).
+ * looking at (owner decision 2026-07-02).
  */
 import * as Cesium from 'cesium';
 import { aircraftIncludedInNearby } from './aircraftNearbyPolicy.js';
@@ -100,14 +100,14 @@ const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 /** Amber tint for known-military aircraft rendered by this layer (matches the military layer's icon color). */
 const MIL_TINT = Cesium.Color.fromCssColorString('#FFB800');
 
-// --- Ground traffic (product change 2026-07-03: "absolutely we should see planes
+// --- Ground traffic (owner reversal 2026-07-03: "absolutely we should see planes
 // taxiing and landing") -----------------------------------------------------------
 // Present-but-grounded planes are RENDERED instead of being skipped: same class
 // silhouette + rotation pipeline, clickable/trackable/detectable, sticky metadata
 // updating normally. Landing/takeoff is a TRANSITION — the on_ground flip restyles
 // the existing billboard in place, never a removal. Ground planes draw no trails
 // and are excluded from the ambient enrichment sweep (click-to-enrich still
-// works). In 3D mode they take model slots like airborne planes (product rule
+// works). In 3D mode they take model slots like airborne planes (owner decision
 // 2026-07-03 — no air/ground distinction), placed by the one-shot ground snap
 // (see _modelDisplayPosition).
 //
@@ -121,7 +121,7 @@ const MIL_TINT = Cesium.Color.fromCssColorString('#FFB800');
 const GROUND_SCALE = 0.8;
 
 /** Fleet (untracked) billboard tint: amber for known-military, white otherwise.
- *  Ground traffic gets NO special tint (validated behavior 2026-07-03 field test). */
+ *  Ground traffic gets NO special tint (owner verdict 2026-07-03 field test). */
 function _fleetBillboardColor(icao24) {
   return isMilitaryIcao(icao24) ? MIL_TINT : Cesium.Color.WHITE;
 }
@@ -131,7 +131,7 @@ function _fleetBillboardScale(icao24, klass) {
   return (CLASS_SCALE_2D[klass] || 1) * (_flightData.get(icao24)?.onGround ? GROUND_SCALE : 1);
 }
 
-/** Depth-test policy for aircraft billboards. Round 5 (product invariant
+/** Depth-test policy for aircraft billboards. Round 5 (owner directive
  *  2026-07-06: "I just want the planes and their lines to ALWAYS be
  *  visible... evenly applied"): EVERY contact renders depth-test-free at
  *  every distance — grounded, low, and airborne alike. The photoreal mesh
@@ -157,7 +157,7 @@ const MODEL_MIN_PX = 24;        // floor so distant models stay visible WITHOUT 
                                 // min-pixel blob (was 54 — far planes at the All radius became white
                                 // star-bursts); ~matches the 2D icon size so the model↔billboard read is consistent
 const TRACKED_MODEL_MIN_PX = 40; // keep the glTF silhouette comparable to the selected 2D glyph at handoff
-export const TRACKED_MODEL_MAX_PX = 200; // selected close-range tracked-target feel
+export const TRACKED_MODEL_MAX_PX = 200; // owner-selected close-range tracked-target feel
 const MODEL_NATIVE_RADIUS_M = 34.41;
 const MODEL_SCALE = 1;          // airplane.glb is transform-applied and baked to real-world meters
 // Per-mode caps. Each model is its own draw call (no instancing yet), so these bound the frame cost.
@@ -246,7 +246,7 @@ const _modelGen = new Map();
 /** Lifecycle epoch; bumped on destroy so an in-flight load from a PREVIOUS init can't settle
  *  against a new lifecycle's globals (which destroy cleared). Captured by _ensureModel. */
 let _modelEpoch = 0;
-/** DEFAULT-ON in PROXIMITY (product invariant 2026-08-22). A fresh boot never runs
+/** DEFAULT-ON in PROXIMITY (owner directive 2026-08-22). A fresh boot never runs
  *  layer-state restoration, so this initializer — not the codec — is what the app
  *  actually starts with; it must stay in lockstep with the `models3d` default in
  *  `layerState.js` and `this._models3dEnabled` in ui.js, or the DISPLAY rail would
@@ -457,7 +457,7 @@ const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = new Cesium.NearFarScalar(
 );
 
 function _normalBillboardScaleByDistance() {
-  // Preserve the established close-range 3× scale. Any smaller user-visible
+  // Preserve the established close-range 3× scale. Any smaller owner-visible
   // default belongs in a separate evidence-backed proposal.
   return new Cesium.NearFarScalar(1000, 3.0, 8000000, 0.5);
 }
@@ -599,7 +599,7 @@ let _trailBackfillToken = 0;
 const RENDER_DELAY_SEC = 30;
 /** @constant {number} Polls an aircraft may miss before removal (transient OpenSky dropouts). */
 const MISSING_POLL_LIMIT = 3;
-// --- Landed-plane fast cull (field report 2026-07-02: "phantom" planes
+// --- Landed-plane fast cull (owner field report 2026-07-02: "phantom" planes
 // lingered ~2 min at airports after touchdown). OpenSky's on_ground flag LAGS
 // the actual landing, so a landed plane's last airborne-classified fixes show
 // it low + slow on the runway; when such a plane then drops out of the poll,
@@ -652,7 +652,8 @@ function _approxDistanceKm(lat1, lon1, lat2, lon2) {
 function _likelyLanded(icao24) {
   const info = _flightData.get(icao24);
   if (!info) return false;
-  // Round 7: the fast cull only applies to contacts that were AIRBORNE
+  // Round 7 (owner: "fewer planes than OpenSky's own map" + "parked planes
+  // never heal"): the fast cull only applies to contacts that were AIRBORNE
   // this session — its original target, the post-LANDING ghost. OpenSky's
   // ground coverage flaps constantly, so fast-culling every grounded contact
   // put parked planes in an evict/re-enter churn: each re-entry was a
@@ -1579,14 +1580,14 @@ function _noteTrackedModelLoadFailure(url, err) {
 
 /**
  * The TRACKED aircraft's own model regime — DEFAULT-ON, camera-distance driven
- * (product invariant 2026-08-19). Unlike the fleet, this does NOT consult the
+ * (owner directive 2026-08-19). Unlike the fleet, this does NOT consult the
  * DISPLAY-rail `models3d` toggle: the selected contact is a single model, it is
  * what the camera is pointed at, and zooming in on a target should resolve it
  * into an aircraft without the operator arming anything. The toggle keeps
  * owning the FLEET (`_modelRegimeActive`), which is the draw-call budget.
  *
  * Thresholds + hysteresis live in trackedModelRegime.js: enter at
- * TRACKED_MODEL_ENTER_ALT_M (150_000 m — the playtested swap distance,
+ * TRACKED_MODEL_ENTER_ALT_M (150_000 m — the owner's playtested swap distance,
  * deliberately NEARER than the fleet's 800 km ceiling this used to inherit),
  * hand back only above TRACKED_MODEL_EXIT_ALT_M, so orbiting AT the boundary
  * cannot flap billboard↔model. See that module's header for why the tracked
@@ -1897,7 +1898,7 @@ const FLOOR_EASE_EPSILON_M = 0.02;
 /**
  * The floor to stand a grounded contact on while its own cell is unresolved.
  *
- * Product invariant (2026-08-21, after a Re:Earth outage buried a parked contact
+ * Owner directive (2026-08-21, after a Re:Earth outage buried a parked contact
  * at a Texas field): "hold the last known altitude until a fresh one comes in.
  * Never render otherwise." Two tiers, strongest first:
  *  own — a floor this contact's OWN cell resolved to while it stood there.
@@ -1976,7 +1977,7 @@ function _dropHeldFloor(state) {
 /** @constant {number} How long a retired hold stays usable as a rehydration
  *  seed — three poll intervals.
  *
- *  Deleting the state outright was the first cut, and a field observation found
+ *  Deleting the state outright was the first cut, and an owner sighting found
  *  what that costs: VIR138M at JFK, 45 kt down the runway, "clearly on good
  *  ground, then suddenly popped below the ground, then popped back up".
  *  OpenSky's `on_ground` flag is not clean through a rotation — it flaps — and
@@ -2129,7 +2130,7 @@ function _floorGroundedDisplayPosition(icao24, info, pos, modelOwnsVisual, nowMs
     next.heldActive = Number.isFinite(effective);
   }
   // The floor moved DOWN under a contact that was standing on a BORROWED one.
-  // Dropping it by that difference in a single tick is the snap product behavior requires
+  // Dropping it by that difference in a single tick is the snap the owner asked
   // not to have, so approach it instead. Two ways in, and both need it:
   //  - the real floor arrives below the hold (releasing the hold);
   //  - a re-probe finds a LOWER neighbour than the one being held, which the
@@ -2309,12 +2310,6 @@ export function _clearDisplayFloorStateForTest() {
   _displayFloorState.clear();
 }
 
-/** Test hook: drops cached model ground snaps so a browser-harness scenario
- *  cannot inherit another scenario's per-contact measurement. */
-export function _clearGroundSnapStateForTest() {
-  _groundSnap.clear();
-}
-
 /** Spec identity for a LOADED model: URL and scale together (same-URL classes
  *  differ by scale — airliner vs quadjet both ship airplane.glb). */
 const _specKeyFor = (klass) => {
@@ -2341,7 +2336,7 @@ function _syncModelToClass(icao24) {
   }
 }
 
-/** IR hot-target mode (field test 2026-08-16): the NVG/FLIR post-styles
+/** IR hot-target mode (owner playtest 2026-08-16): the NVG/FLIR post-styles
  *  map LUMINANCE, so mid-gray textured models read cold and vanish into
  *  terrain. While a boost style is active every model renders flat white
  *  (hottest); per-spec color/tint restores on style exit. Driven by ui.js
@@ -2679,7 +2674,7 @@ function _fleetTick() {
       // not just at the handoff below, or accumulated conversions would starve
       // ordinary contacts of 3D models. (The handoff guard stays as defence.)
       if (isTr3b(icao)) continue;
-      // Ground planes compete for model slots like everyone else (product rule
+      // Ground planes compete for model slots like everyone else (owner decision
       // 2026-07-03: "3D mode is respected regardless of whether a plane is on the
       // ground or in the air — no distinction"). The cap + nearest-first ordering
       // below already bound airport clusters; grounded placement is handled by the
@@ -2782,7 +2777,7 @@ function _fleetTick() {
       cameraHeightM: camera.positionCartographic?.height,
     });
     _billboardLimbScale.set(bb, treatment.factors.scale);
-    // Two-tier glyph raster (field test 2026-08-16): the billboard atlas
+    // Two-tier glyph raster (owner playtest 2026-08-16): the billboard atlas
     // has no mipmaps, so no single texture stays crisp across the ~25–150
     // device-px range scaleByDistance produces. Swap between the 64 px fleet
     // raster and the 192 px close raster on the billboard's ACTUAL on-screen
@@ -3079,7 +3074,7 @@ async function _backfillTrail(icao24, token, oldestFixEpochSec) {
   // and floor every waypoint at it so low baro segments never dive below the
   // mesh; a no-baro waypoint (predominantly taxi/ground segments in /tracks)
   // sits ON the surface when the floor is known.
-  // Round-2 fix: the
+  // Round-2 fix (owner: "trails suddenly much shorter / not loading"): the
   // resolve is BOUNDED (≤1.2 s), not a blocking await — a cold Re:Earth
   // lookup across a long path could stall the paint for seconds-to-timeout.
   // Paint with whatever cells are warm; the resolve keeps filling the cache
@@ -3891,7 +3886,6 @@ const flightsLayer = {
   // Browser-harness seam: isolates synthetic display-floor scenarios without
   // changing any production lifecycle or cache policy.
   _clearDisplayFloorStateForTest,
-  _clearGroundSnapStateForTest,
   /** @type {number} Polling interval (ms) between update() calls */
   updateInterval: 30000,
 
@@ -4053,7 +4047,7 @@ const flightsLayer = {
    * reconcile them with the billboard collection.
    *
    * Handles HTTP 429 (rate-limit), 401/403 (auth), and transient errors
-   * with exponential-ish backoff.  On success, adds, updates, or removes
+   * with exponential-ish backoff.  On success, adds/updates/removes
    * billboards and position history, triggers lerp blending for the
    * tracked aircraft, and updates its label text.
    *
@@ -4247,7 +4241,7 @@ const flightsLayer = {
         // on_ground surface prior: ONLY synchronous warm-cache reads here —
         // never a per-aircraft network fetch inside the poll loop (see the
         // batch resolve call below, which fills this cache for NEXT poll). A
-        // Round 5 SIMPLIFICATION (product invariant: one floor, evenly applied):
+        // Round 5 SIMPLIFICATION (owner directive: one floor, evenly applied):
         // the grounded surface is the round-4 choke point and nothing else —
         // rendered-mesh cell first, real (never fallback-poisoned) DEM cell
         // second. The old exact-5-decimal warm chain is GONE: it minted a new
@@ -4553,7 +4547,7 @@ const flightsLayer = {
         // is about to delete (billboard restore, DR cache reset), and we must
         // never leave the camera mid-follow with stale tracking state. The
         // camera is then RELEASED IN PLACE — it stays where the follow left
-        // it, fully free (product rule 2026-07-02: no overview flyTo).
+        // it, fully free (owner decision 2026-07-02: no overview flyTo).
         if (icao24 === _trackedIcao) {
           _clearTracking(false, { evicted: true });
         }

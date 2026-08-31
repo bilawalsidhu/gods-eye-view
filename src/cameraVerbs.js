@@ -1,6 +1,6 @@
 /**
  * Camera verbs — the "spy satellite simulator" feel
- * documented in `docs/CURRENT-STATE.md`.
+ * (docs/superpowers/specs/2026-07-23-camera-verbs-fly-route-spec.md).
  *
  * One motion at a time, driven per clock tick. `once` = bounded eased nudge;
  * `continuous` runs until move_camera{stop}, ANY manual camera input on the
@@ -31,7 +31,7 @@ const PITCH_MIN = Cesium.Math.toRadians(-89);
 const PITCH_MAX = Cesium.Math.toRadians(-5);
 
 /* ── Route dolly: cinematic tuning ──────────────────────────────────────────
- * Every knob an maintainer may want to retune lives in this block. The shaping is
+ * Every knob an owner may want to retune lives in this block. The shaping is
  * built from four independent layers, each of which flattens to nothing on its
  * own: a trapezoid speed profile, a banked-turn roll, altitude breathing, and
  * a gaze that leads the path. Under prefers-reduced-motion the last three are
