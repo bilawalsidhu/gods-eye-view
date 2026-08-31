@@ -13,6 +13,13 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   global detections while reporting each dropped source twice, once as
   successful with its real count and once as failed.
 
+### Security
+
+- GBFS proxy body-size cap now measures the response in bytes
+  (`Buffer.byteLength`) instead of JavaScript string length, so the
+  `GBFS_MAX_BODY_BYTES` limit holds for multi-byte payloads and cannot be
+  overrun by non-ASCII upstream responses.
+
 ## [0.1.0] — 2026-08-31 — One-click install, keyless boot, Provider Settings
 
 ### Added
@@ -93,10 +100,6 @@ represent previously published GitHub Releases.
 
 ### Security
 
-- GBFS proxy body-size cap now measures the response in bytes
-  (`Buffer.byteLength`) instead of JavaScript string length, so the
-  `GBFS_MAX_BODY_BYTES` limit holds for multi-byte payloads and cannot be
-  overrun by non-ASCII upstream responses.
 - Production transitive dependencies resolve to patched DOMPurify and
   protobufjs releases without changing the Cesium version or application APIs.
 - Production dependency audit reports no known advisories; remaining audit
