@@ -1,5 +1,5 @@
 // src/data/fireAnchors.test.mjs — DEM ground anchors for rendered FIRMS
-// detections (field finding 2026-07-21: close-zoom fire dots read as
+// detections (owner field finding 2026-07-21: close-zoom fire dots read as
 // buried under high terrain because anchors sat at ellipsoid height 0).
 //
 // Locks the module's two jobs:

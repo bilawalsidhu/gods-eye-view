@@ -1,17 +1,20 @@
 // src/reasonableDefaults.test.mjs
 //
 // What the console looks like the FIRST time it opens — before any share link,
-// before any stored state. The "reasonable defaults" batch (product invariant,
+// before any stored state. The "reasonable defaults" batch (owner directive,
 // 2026-08-22) moved three of them together:
 //
 //   1. 3D aircraft models ON, mode `proximity`.
 //      Pinned in `data/layerState.test.mjs`, next to the coordinator that
 //      actually decides fresh-boot layer state — including the early return that
 //      makes each layer's own initializer the operative default.
-//   2. Scope feather moved to 0% on 2026-08-22, 8% on 2026-08-23, and a soft
-//      11% edge on 2026-08-24. The hard crop is still one drag away and pinned.
+//   2. Scope feather. Owner: "I like to hide feather" set it to 0% on
+//      2026-08-22; the owner revised that to 8% on 2026-08-23 and locked 11%
+//      on 2026-08-24, a soft
+//      edge. The hard crop is still one drag away, and that is pinned too.
 //   3. Detection ON (Dense @ 75%) for EVERY style, Normal included.
-//   4. Detection OUTSIDE opacity 1% (final value, 2026-08-24; 3% on 08-23, 5% before), with
+//      Owner: "detect should also be on by default."
+//   4. Detection OUTSIDE opacity 1% (owner final lock, 2026-08-24; 3% on 08-23, 5% before), with
 //      the slider's `step` at 1 so the range around it is reachable at all.
 //
 // Each pin below has the same three parts, because a default is never one
@@ -73,7 +76,7 @@ function managerForHash(hash) {
 
 test('first run opens with a subtle scope feather, at every surface that decides it', () => {
   assert.equal(SCOPE_FEATHER_RATIO_DEFAULT, 0.11,
-    'final value 2026-08-24, superseding the 08-22 hard-crop and 08-23 8% rulings');
+    'owner final lock 2026-08-24, superseding the 08-22 hard-crop and 08-23 8% rulings');
   assert.equal(getScopeMaskFeather(), 0.11,
     'and the live module starts there, not merely documents it');
 
@@ -141,7 +144,7 @@ test('the subtle default did not weaken the feather control, and 0 is still reac
 
 // ---------------------------------------------------------------------------
 // 2c. Detection Fade — 7% on a first run, at every surface that decides it
-// (final value 2026-08-24; 16% before). Fade is the label/card fading
+// (owner final lock 2026-08-24; 16% before). Fade is the label/card fading
 // band around the keyhole — a different control from the scope-mask feather.
 test('first run opens at 7% detection fade, at every surface that decides it', () => {
   assert.equal(KEYHOLE_LABEL_FEATHER_RATIO, 0.07,
@@ -161,7 +164,7 @@ test('first run opens at 7% detection fade, at every surface that decides it', (
 
 test('first run opens at 1% OUTSIDE opacity, at every surface that decides it', () => {
   assert.equal(KEYHOLE_OUTSIDE_OPACITY_DEFAULT, 0.01,
-    'final value 2026-08-24: the world overlay reads quieter beyond the keyhole');
+    'owner final lock 2026-08-24: the world overlay reads quieter beyond the keyhole');
 
   // Four independent literals decide this on a fresh boot: the engine constant
   // above, the markup and its readout, ui.js's global post defaults, and the

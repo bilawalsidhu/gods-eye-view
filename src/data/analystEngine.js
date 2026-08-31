@@ -3,7 +3,7 @@
  * client-side in the layers ("how many flights over Texas?", "biggest fire
  * near LA?", "which ships are headed to Oakland?").
  *
- * Analyst-query behavior is documented in docs/CURRENT-STATE.md:
+ * Design (owner-ratified, docs/voice-engine-evaluation-2026-07-23.md §5.3):
  *  - ENGINE (this module) is pure query logic over plain record arrays; it
  *    renders nothing. SURFACES (voice narration, panels, detection brackets)
  *    consume the returned result set — the engine/surface seam is the

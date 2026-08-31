@@ -44,12 +44,7 @@ function terminalFromParticipantStats(summary, participantIds) {
   if (!participantIds?.length) return null;
   const participants = new Set(participantIds);
   return summary.records.some((record) => participants.has(record.id)
-    // A deliberately unconfigured optional provider is a truthful terminal
-    // state for that row, not a failed multi-layer mission. The layer keeps
-    // owning its KEY REQUIRED copy; explicit lifecycle failure events still
-    // merge in below and retain error priority.
-    && !record.keyRequired
-    && (record.error || record.unavailable))
+    && (record.error || record.unavailable || record.keyRequired))
     ? 'error'
     : null;
 }

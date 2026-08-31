@@ -113,19 +113,13 @@ function suffixVariants(norm) {
 /** @type {Array|null} flat entry list for listRegions() */
 let _entries = null;
 
-const isNode = typeof process !== 'undefined' && !!process.versions?.node
-  && typeof window === 'undefined';
-
 async function loadPackFile(base) {
-  if (isNode) {
-    const { readFileSync } = await import(/* @vite-ignore */ 'node:fs');
-    const url = new URL(`./local_data/natural_earth/${base}.json`, import.meta.url);
-    return JSON.parse(readFileSync(url, 'utf8'));
-  }
-  // Vite bundles these JSON files as modules (same pattern as neighborhoodPolygons.js)
+  // Vite bundles these JSON files as modules; the import attribute is what Node
+  // needs to load the same files under node:test (same pattern as
+  // neighborhoodPolygons.js). One path, so no node: import reaches the browser.
   const mod = base === 'regions'
-    ? await import('./local_data/natural_earth/regions.json')
-    : await import('./local_data/natural_earth/marine.json');
+    ? await import('./local_data/natural_earth/regions.json', { with: { type: 'json' } })
+    : await import('./local_data/natural_earth/marine.json', { with: { type: 'json' } });
   return mod.default || mod;
 }
 

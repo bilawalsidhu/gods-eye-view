@@ -3,11 +3,11 @@ import { getKeyholeGeometry } from './celestialRing.js';
 /**
  * Scope mask — the app's signature circular viewport treatment, made real.
  *
- * History (2026-08-08 field test): the scope was never implemented.
+ * History (2026-08-08 owner field test): the scope was never implemented.
  * It emerged from six zero-intensity style PostProcessStages whose stacked
  * "identity" passes progressively smeared the starfield into a circular
  * falloff — every grep for a mask came up empty because none existed. The
- * the decision set: draw it explicitly on a canvas, make the edge featherable
+ * owner ruled: draw it explicitly on a canvas, make the edge featherable
  * (like the NVG/FLIR tube masks), and free the six shader passes for real.
  *
  * Implementation: one fixed canvas parented into the viewer container
@@ -19,7 +19,7 @@ import { getKeyholeGeometry } from './celestialRing.js';
  * QUANTIZED terminus-alpha step (see below). No rAF, no per-frame paint, no
  * render-loop coupling.
  *
- * Altitude-adaptive edge terminus (validated 2026-08-17, band retuned the
+ * Altitude-adaptive edge terminus (owner-approved 2026-08-17, band retuned the
  * same day after a field test): the outside fill's terminus alpha is 0.94 only
  * at TRUE full-globe altitude — above 10 Mm, where the relaxed 6% keeps faint
  * stars alive in the corners — and fades QUICKLY to fully opaque black on the
@@ -43,7 +43,7 @@ const SCOPE_OUTSIDE_COLOR = { r: 5, g: 5, b: 8 };
 /**
  * Default edge feather as a fraction of the keyhole radius.
  *
- * 0.11 since 2026-08-24 (final value; 0.08 on 08-23, hard-crop 0 on
+ * 0.11 since 2026-08-24 (owner final lock; 0.08 on 08-23, hard-crop 0 on
  * 08-22 — this supersedes both), REVISING the 2026-08-22 ruling that
  * set it to zero: a subtle soft edge rather than either the hard crop or the
  * retired 35 % halo. The slider is untouched and still spans 0..100; this is
@@ -77,7 +77,7 @@ export const SCOPE_TERMINUS_MAX_PCT = 100;
 export const SCOPE_TERMINUS_ALPHA_NEAR = 1;
 /**
  * Camera height at/above which the terminus stays at SCOPE_OUTSIDE_ALPHA.
- * Retune (2026-08-17 field test): the relaxed 6% corners belong to TRUE
+ * Owner retune (2026-08-17 field test): the relaxed 6% corners belong to TRUE
  * full-globe views only — "the moment we go past roughly 10 million m in
  * altitude, looking at the world, it should start quickly fading into black".
  */
@@ -364,7 +364,7 @@ function draw() {
   const { r, g, b } = SCOPE_OUTSIDE_COLOR;
   if (geo.outerR - geo.innerR < 1) {
     // Zero/near-zero feather: a radial gradient with equal radii is
-    // DEGENERATE in Canvas2D (Chromium paints nothing — review browser
+    // DEGENERATE in Canvas2D (Chromium paints nothing — browser
     // finding). Draw the hard crop explicitly: rect minus circle, evenodd.
     // The hard crop honors the same altitude terminus — a hard edge at city
     // scale must be fully opaque too, not 6% translucent.

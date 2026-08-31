@@ -88,7 +88,7 @@ export function courseBetweenCartesians(from, to, minChordM = 25) {
  *  track only (chord weight 0). ≈30 kt. */
 export const COURSE_TRACK_ONLY_MPS = 15.4;
 /** At/above this displayed ground speed the course source is the chord only
- *  (weight 1) — the field-validated regime; behavior is unchanged there.
+ *  (weight 1) — the regime the owner field-approved; behavior unchanged there.
  *  ≈50 kt. */
 export const COURSE_CHORD_ONLY_MPS = 25.7;
 /** Below this displayed speed neither chord nor reported track means anything

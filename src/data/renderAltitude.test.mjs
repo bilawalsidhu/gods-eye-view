@@ -1,4 +1,5 @@
 // src/data/renderAltitude.test.mjs
+// docs/plans/2026-07-05-entity-height-datum-fix.md Task 6.
 //
 // Locks pickRenderAltitudeM's priority chain — the SINGLE source of truth for
 // where a flights-layer aircraft (and its dead-reckoned/tracked-camera
@@ -182,7 +183,7 @@ test('taxiing aircraft over nonzero terrain resolves every poll after the first 
 
 // ---------------------------------------------------------------------------
 // geoidSurfaceLastResortM — the geoid guess must never outrank what the
-// contact already knows (field incident 2026-08-21: a Re:Earth outage plus
+// contact already knows (owner incident 2026-08-21: a Re:Earth outage plus
 // this guess dropped a parked contact through the mesh at a Texas field).
 // ---------------------------------------------------------------------------
 

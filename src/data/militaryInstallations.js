@@ -309,7 +309,7 @@ function renderRecords() {
  * `resolveGroundFloorCellsBounded` gives up after FLOOR_RESOLVE_DEADLINE_MS so
  * a cold DEM can never hold the dots hostage — but the resolve keeps running
  * and lands seconds later, and without this the records it covers stay pinned
- * at ellipsoid height 0, sitting visibly under the 3D tiles (field test
+ * at ellipsoid height 0, sitting visibly under the 3D tiles (owner playtest
  * 2026-08-18: "orange dots at the bottom").
  *
  * This is the render -> warm -> re-render chain FIRMS already uses, with one

@@ -1,6 +1,6 @@
 /**
  * Idle render governor — the wave-2 flagship of the 2026-08-05 perf
- * investigation and the production idle-render measurements.
+ * investigation.
  *
  * The problem: Cesium's default render loop repaints every vsync forever, so
  * the app burned ~60% GPU + ~54% of a core with ZERO layers enabled and a

@@ -396,7 +396,7 @@ function missionSpy({ contextOk = true, layerResult = () => true, globe = async 
 }
 
 test('the menu is the four owner-ordered missions', () => {
-  // INFRASTRUCTURE was removed after the field tested it: enabling all
+  // INFRASTRUCTURE was removed after the owner playtested it: enabling all
   // three bundled layers at once put ~5,700 entities on a full-earth view and
   // tanked the frame rate. The layers stay reachable by hand and by voice; what
   // went is the one-click globe-scale dump. Restoring the tile needs the
@@ -429,7 +429,7 @@ test('Environmental enables BOTH its feeds and pulls out to the globe', async ()
 });
 
 test('the tile is the FULLY CONFIGURED experience: quakes and fires together', () => {
-  // Product decision, 2026-08-23: the launcher optimizes for the configured app, so
+  // Owner ruling, 2026-08-23: the launcher optimizes for the configured app, so
   // ENVIRONMENTAL means live USGS earthquakes AND NASA FIRMS active fires.
   const environmental = FIRST_RUN_MISSIONS.environmental;
   assert.deepEqual(environmental.layerIds, ['earthquakes', 'local-firms']);
@@ -568,7 +568,7 @@ test('markup, startup ordering and accessibility remain pinned', () => {
   assert.ok(
     html.includes('<p id="first-run-description">It feels like a forbidden cockpit'
       + '—then you realize the sources are public and the data is real.</p>'),
-    'the final first-run line must ship exactly as written',
+    'the owner-authored first-run line must ship exactly as written',
   );
 
   // Menu order is the owner's, read straight off the markup.
@@ -605,7 +605,9 @@ test('markup, startup ordering and accessibility remain pinned', () => {
   assert.match(css, /#first-run-launcher\[hidden\] \{\s*display: none;\s*\}/);
   // Only the mission list may scroll: the heading, checkbox and status line
   // have to stay on screen at every height.
-  assert.match(css, /\.first-run-choices \{[\s\S]*?min-height: 0;[\s\S]*?overflow-y: auto/);
+  const choicesBlock = css.match(/\.first-run-choices \{([^}]*)\}/)?.[1] || '';
+  assert.match(choicesBlock, /min-height: 0;/);
+  assert.match(choicesBlock, /overflow-y: auto;/);
 });
 
 test('the launcher keeps focus, restores it, and never disables the focused button', () => {
@@ -653,10 +655,15 @@ test('the voice TOOL SCHEMA is byte-identical to main — the mission mapping is
   const end = src.indexOf('\n];\n', start);
   const block = src.slice(start, end + 4);
 
-  assert.equal(block.length, 31104, 'tool schema byte length drifted from the frozen baseline');
+  // Re-pinned 2026-08-28: the Provider Settings / Esri release DELIBERATELY
+  // extends set_map_stack's enum with 'esri-imagery' (a real new basemap —
+  // exactly the kind of schema change this pin exists to make loud). The
+  // guarded claim is unchanged: first-run missions ride existing tools, and
+  // any NEW drift from this recorded schema still fails here.
+  assert.equal(block.length, 31189, 'tool schema byte length drifted from the pinned release schema');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '3ace199727934e851902e4899c423d549d34d3f53469dcb56f07fc070d3f9d66',
+    '73aaabdb169a5478893d28688f327a21edd32ed3ec16fc6287bd944ed77beecf',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
 

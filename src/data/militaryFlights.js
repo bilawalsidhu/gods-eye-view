@@ -95,7 +95,7 @@ const MIL_ICON_COLOR = Cesium.Color.fromCssColorString('#FFB800');
 /** @constant {Cesium.Color} Lighter amber tint applied to the actively tracked aircraft */
 const TRACKED_ICON_COLOR = Cesium.Color.fromCssColorString('#FFD166');
 
-// --- Ground traffic (product change 2026-07-03; mirror of flights.js) ---------------
+// --- Ground traffic (owner reversal 2026-07-03; mirror of flights.js) ---------------
 // adsb.lol/readsb flags ground traffic with alt_baro === "ground" (no separate
 // boolean). Such aircraft are RENDERED instead of floating at the 3 km altitude
 // fallback: same silhouette + rotation pipeline, clickable/trackable/detectable,
@@ -105,7 +105,7 @@ const TRACKED_ICON_COLOR = Cesium.Color.fromCssColorString('#FFD166');
 // decision 2026-07-03 — no air/ground distinction), placed by the one-shot
 // ground snap (see _modelDisplayPosition).
 //
-// TINT: full-strength amber, same as airborne (validated behavior 2026-07-03 field
+// TINT: full-strength amber, same as airborne (owner verdict 2026-07-03 field
 // test: the day-1 slate-gray 50%-alpha muted tint was unreadable — "in NYC I can
 // barely see them"). "On the ground" reads from the ×0.8 scale + missing trail;
 // "feed-dropped, coasting" stays the 45%-alpha stale fade.
@@ -113,7 +113,7 @@ const TRACKED_ICON_COLOR = Cesium.Color.fromCssColorString('#FFD166');
 const GROUND_SCALE = 0.8;
 
 /** Depth-test policy for aircraft billboards (mirror of flights.js — see the
- *  full rationale there). Round 5 (product invariant 2026-07-06): EVERY contact
+ *  full rationale there). Round 5 (owner directive 2026-07-06): EVERY contact
  *  renders depth-test-free at every distance — a uniform always-visible rule;
  *  the fleet tick's horizon occluder still removes far-side contacts. */
 function _groundDepthDistance() {
@@ -131,7 +131,7 @@ const JET_MODEL_URL = '/models/jet.glb';
 const MODEL_ALT_CEIL_M = 800000; // m: below this camera altitude, draw 3D models (raised so it's easy to trigger)
 const MODEL_MIN_PX = 24;        // floor so distant models stay visible without ballooning into a min-pixel blob (mirror of flights.js, whose models now share this layer's ~30 m world size)
 const TRACKED_MODEL_MIN_PX = 40; // keep the glTF silhouette comparable to the selected 2D glyph at handoff
-export const TRACKED_MODEL_MAX_PX = 200; // selected close-range tracked-target feel
+export const TRACKED_MODEL_MAX_PX = 200; // owner-selected close-range tracked-target feel
 const MODEL_NATIVE_RADIUS_M = 29.83;
 // jet.glb is transform-applied at real-world scale — native bounding radius
 // 29.83 m at scale 1. ×1 → ~22–43 m aircraft across CLASS_SCALE_3D, matching
@@ -164,14 +164,14 @@ const PLANE_MODEL_URL = '/models/airplane.glb';
 const PLANE_MODEL_SCALE = 1;
 const PLANE_NATIVE_RADIUS_M = 34.41;
 const PLANE_BELLY_OFFSET_NATIVE = 6.719;
-/** Per-class model spec for THIS layer (2026-08-16, field test ask:
+/** Per-class model spec for THIS layer (2026-08-16, owner playtest ask:
  *  military contacts should read as their WEIGHT CLASS, always in this layer's
  *  amber). Real Hangar GLBs serve the classes they cover (meters, nose −X →
  *  180° offset); airliner/quadjet/glider get the shared 747 silhouette
  *  (airplane.glb — C-5M/RC-135-style heavies stop rendering as bizjets);
  *  fastjet and unknown keep jet.glb with the same 180° offset. The MIX tint stays
  *  dominant everywhere — military is amber, tracked is TRACKED_ICON_COLOR,
- *  and the tint must dominate any livery. Specs are
+ *  and the tint must dominate any livery (owner: "stays yellow"). Specs are
  *  static per class — memoized (the fleet pass asks at 12 Hz per model). */
 const _specCache = new Map();
 function _modelSpec(klass) {
@@ -213,7 +213,7 @@ const _modelGen = new Map();
 /** Lifecycle epoch; bumped on destroy so an in-flight load from a PREVIOUS init can't settle
  *  against a new lifecycle's globals (which destroy cleared). Captured by _ensureModel. */
 let _modelEpoch = 0;
-/** DEFAULT-ON in PROXIMITY (product invariant 2026-08-22). A fresh boot never runs
+/** DEFAULT-ON in PROXIMITY (owner directive 2026-08-22). A fresh boot never runs
  *  layer-state restoration, so this initializer — not the codec — is what the app
  *  actually starts with; it must stay in lockstep with the `models3d` default in
  *  `layerState.js` and `this._models3dEnabled` in ui.js, or the DISPLAY rail would
@@ -384,7 +384,7 @@ const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = new Cesium.NearFarScalar(
 
 function _normalBillboardScaleByDistance() {
   // Match commercial flights and preserve the established close-range 3×
-  // default. Smaller user-visible scaling must be proposed separately.
+  // default. Smaller owner-visible scaling must be proposed separately.
   return new Cesium.NearFarScalar(1000, 3.0, 8000000, 0.5);
 }
 
@@ -515,7 +515,7 @@ let _trailBackfillToken = 0;
 const RENDER_DELAY_SEC = 15;
 /** @constant {number} Polls an aircraft may miss before removal (transient adsb.lol dropouts). */
 const MISSING_POLL_LIMIT = 3;
-// --- Landed-plane fast cull (mirror of flights.js; field report
+// --- Landed-plane fast cull (mirror of flights.js; owner field report
 // 2026-07-02: "phantom" planes lingered ~2 min at airports after touchdown).
 // The feed's ground flag lags the actual landing, so a landed plane's last
 // airborne fixes show it low + slow on the runway; when it then drops out of
@@ -1357,11 +1357,11 @@ function _noteTrackedModelLoadFailure(url, err) {
 
 /**
  * The TRACKED aircraft's own model regime — DEFAULT-ON, camera-distance driven
- * (product invariant 2026-08-19). Mirror of flights.js: this does NOT consult the
+ * (owner directive 2026-08-19). Mirror of flights.js: this does NOT consult the
  * DISPLAY-rail `models3d` toggle, which keeps owning the FLEET
  * (`_modelRegimeActive`) and its draw-call budget. Thresholds + hysteresis live
  * in trackedModelRegime.js — enter at TRACKED_MODEL_ENTER_ALT_M (150_000 m, the
- * playtested swap distance, deliberately NEARER than the fleet's 800 km
+ * owner's playtested swap distance, deliberately NEARER than the fleet's 800 km
  * ceiling this used to inherit), hand back only above
  * TRACKED_MODEL_EXIT_ALT_M so a boundary orbit cannot flap billboard↔model.
  * First-person means your own airframe is not drawn in cockpit — the eye sits
@@ -1839,7 +1839,7 @@ function _fleetTick() {
   // 3D-model eligibility: by DISTANCE (mode's add/keep band) with ON-SCREEN PRIORITY under the cap —
   // mirror of flights.js. FOUR visible-first passes: (1) KEEP on-screen modeled; (2) ADD on-screen
   // new in add radius; (3) KEEP off-screen modeled; (4) ADD off-screen new with leftover slots. KEEP
-  // is split by frustum so an off-screen retained model can't starve an on-screen plane (review).
+  // is split by frustum so an off-screen retained model can't starve an on-screen plane (review finding).
   let modelEligible = null;
   if (useModels) {
     const cap = _modelCap();
@@ -1856,7 +1856,7 @@ function _fleetTick() {
       // it must not occupy a CAP SLOT either (mirror of flights.js) — excluded
       // at selection time, not just at the handoff below.
       if (isTr3b(icao)) continue;
-      // Ground planes compete for model slots like everyone else (product rule
+      // Ground planes compete for model slots like everyone else (owner decision
       // 2026-07-03, mirror of flights.js — no air/ground distinction; grounded
       // placement is handled by the one-shot ground snap in _modelDisplayPosition).
       const d2 = Cesium.Cartesian3.distanceSquared(camPos, bb.position);
@@ -2235,7 +2235,7 @@ async function _backfillTrail(icao24, token, oldestFixEpochSec) {
   // 'ground'/null point sits ON the local surface — the old fixed 50 m
   // sentinel rendered ~1.5 km underground at Kirtland AFB (field ~1590 m
   // ellipsoidal) and dragged the whole pattern-work loop with it.
-  // Round-2 fix: the
+  // Round-2 fix (owner: "trails suddenly much shorter / not loading"): the
   // resolve is BOUNDED (≤1.2 s), not a blocking await — a cold Re:Earth
   // lookup across a long path could stall the paint for seconds-to-timeout.
   // Paint with whatever cells are warm; the resolve keeps filling the cache
@@ -3193,7 +3193,7 @@ const militaryFlightsLayer = {
         // is about to delete (billboard restore, DR cache reset), and we must
         // never leave the camera mid-follow with stale tracking state. The
         // camera is then RELEASED IN PLACE — it stays where the follow left
-        // it, fully free (product rule 2026-07-02: no overview flyTo).
+        // it, fully free (owner decision 2026-07-02: no overview flyTo).
         if (icao24 === _trackedIcao) {
           _clearTracking(false, { evicted: true });
         }
@@ -3549,7 +3549,7 @@ const militaryFlightsLayer = {
     // card, in the analyst's answer, and in the Contacts list. Matching only
     // callsigns meant "follow 6606" — and the analyst → track_entity handoff
     // the tool instructions prescribe — answered "nothing matched" for the
-    // very identity the app had just shown (field session 2026-08-21,
+    // very identity the app had just shown (owner field session 2026-08-21,
     // 23:48: three failed track_entity retries before a fallback stuck).
     // Ranking is shared with the flights layer (contactMatch.js) so the two
     // cannot disagree, and it is strictly tiered so a registration can never

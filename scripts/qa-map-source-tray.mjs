@@ -96,9 +96,23 @@ try {
       });
       return;
     }
+    // Share-link navigation asks for optional Google place context. This
+    // harness is about the map-source tray, so keep that unrelated keyed proxy
+    // hermetic and quiet just as the HUD summary is above.
+    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/google/nearby-places') {
+      request.respond({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ places: [] }),
+      });
+      return;
+    }
     request.continue();
   });
-  await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  // This harness owns the Map Source keyboard. Suppress the separate first-run
+  // launcher on every navigation so its Escape/Space handlers cannot turn a
+  // tray assertion into a mission or voice action in a pristine browser.
+  await page.goto(`${appUrl}/?welcome=0`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 60_000 });
   await page.waitForFunction(
     () => document.getElementById('loading-screen')?.classList.contains('hidden'),
@@ -112,9 +126,9 @@ try {
     controls: document.getElementById('control-panel-toggle')?.getAttribute('aria-controls'),
   }));
   check(
-    'exact four-source presentation; the retired left Map Stack panel is gone',
+    'exact five-source presentation; the retired left Map Stack panel is gone',
     JSON.stringify(presentation.ids) === JSON.stringify([
-      'photoreal', 'bing-aerial', 'bing-labels', 'osm',
+      'photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'osm',
     ]) && !presentation.retiredPanel,
     JSON.stringify(presentation),
   );
@@ -122,6 +136,58 @@ try {
     'compact wing is a semantic disclosure',
     presentation.toggleTag === 'BUTTON' && presentation.controls === 'control-panel-popover',
     JSON.stringify(presentation),
+  );
+
+  const esriTileFailureFallback = await page.evaluate(async () => {
+    const styleManager = window.__godsEyeView.styleManager;
+    const controller = styleManager.mapStackController;
+    await styleManager._setMapStack('esri-imagery', { syncShare: false });
+    const provider = controller._activeImageryProvider;
+    const before = {
+      activeId: controller.getActiveId(),
+      creditVisible: document.body.innerText.includes('Powered by Esri'),
+      globeShown: styleManager.viewer.scene.globe.show,
+      hasLayer: Boolean(controller._imageryLayer),
+    };
+    provider?.errorEvent?.raiseEvent?.({ timesRetried: 0 });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const afterOne = controller.getActiveId();
+    provider?.errorEvent?.raiseEvent?.({ timesRetried: 1 });
+    const deadline = performance.now() + 5000;
+    while (controller.getActiveId() !== 'osm' && performance.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    // The controller commits `activeId` before its fallback promise callback
+    // emits the terminal error state that re-syncs the chips. Give that
+    // callback one turn so the DOM assertion observes the completed contract.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const afterTwo = {
+      activeId: controller.getActiveId(),
+      lastError: controller.getState().lastError,
+      creditVisible: document.body.innerText.includes('Powered by Esri'),
+      globeShown: styleManager.viewer.scene.globe.show,
+      hasLayer: Boolean(controller._imageryLayer),
+      active: [...document.querySelectorAll('.map-stack-chip')]
+        .filter((chip) => chip.getAttribute('aria-pressed') === 'true')
+        .map((chip) => chip.dataset.stackId),
+    };
+    await styleManager._setMapStack('esri-imagery', { syncShare: false });
+    return { before, afterOne, afterTwo };
+  });
+  check(
+    'two active Esri tile failures fall back to a rendered, truthful OSM stack',
+    esriTileFailureFallback.before.activeId === 'esri-imagery'
+      && esriTileFailureFallback.before.creditVisible
+      && esriTileFailureFallback.before.globeShown
+      && esriTileFailureFallback.before.hasLayer
+      && esriTileFailureFallback.afterOne === 'esri-imagery'
+      && esriTileFailureFallback.afterTwo.activeId === 'osm'
+      && /tile requests failed; using OSM/i.test(esriTileFailureFallback.afterTwo.lastError)
+      && esriTileFailureFallback.afterTwo.creditVisible === false
+      && esriTileFailureFallback.afterTwo.globeShown
+      && esriTileFailureFallback.afterTwo.hasLayer
+      && JSON.stringify(esriTileFailureFallback.afterTwo.active) === JSON.stringify(['osm']),
+    JSON.stringify(esriTileFailureFallback),
   );
 
   await page.focus('#control-panel-toggle');
@@ -179,13 +245,34 @@ try {
   );
 
   if (forceKeyless) {
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
       const styleManager = window.__godsEyeView.styleManager;
-      window.__qaIonTokenBackup = styleManager.mapStackController.cesiumToken;
-      styleManager.mapStackController.cesiumToken = '';
+      const controller = styleManager.mapStackController;
+      if (controller.googleTileset) controller.googleTileset.show = false;
+      controller.googleTileset = null;
+      controller.cesiumToken = '';
+      await styleManager._setMapStack('osm', { syncShare: false });
       styleManager._initMapStackControl();
     });
+    const keylessState = await page.evaluate(() => {
+      const controller = window.__godsEyeView.styleManager.mapStackController;
+      return {
+        activeId: controller.getActiveId(),
+        hasGoogleTileset: Boolean(controller.googleTileset),
+        hasCesiumIonToken: Boolean(controller.cesiumToken),
+      };
+    });
+    check(
+      'forced-keyless seam removes direct Google and ion sources before restore checks',
+      keylessState.activeId === 'osm'
+        && keylessState.hasGoogleTileset === false
+        && keylessState.hasCesiumIonToken === false,
+      JSON.stringify(keylessState),
+    );
   }
+  const activeBeforeIonAttempt = await page.evaluate(() => (
+    window.__godsEyeView.styleManager.mapStackController.getActiveId()
+  ));
   await page.focus('[data-stack-id="bing-aerial"]');
   const ionAvailable = await page.$eval(
     '[data-stack-id="bing-aerial"]',
@@ -200,6 +287,10 @@ try {
         || Boolean(window.__godsEyeView.styleManager.mapStackController.getState()?.lastError),
       { timeout: 20_000 },
     ).catch(() => {});
+  } else {
+    // A disabled chip must remain inert after the event loop has settled, not
+    // just at the synchronous DOM sample immediately following the click.
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 300)));
   }
   const ionSource = await page.evaluate(() => {
     const chip = document.querySelector('[data-stack-id="bing-aerial"]');
@@ -207,6 +298,7 @@ try {
       focused: document.activeElement === chip,
       ariaDisabled: chip.getAttribute('aria-disabled'),
       ariaLabel: chip.getAttribute('aria-label'),
+      activeId: window.__godsEyeView.styleManager.mapStackController.getActiveId(),
       active: [...document.querySelectorAll('.map-stack-chip')]
         .filter((candidate) => candidate.getAttribute('aria-pressed') === 'true')
         .map((candidate) => candidate.dataset.stackId),
@@ -218,7 +310,8 @@ try {
       ionSource.ariaDisabled === 'true'
         && ionSource.focused
         && /token required/i.test(ionSource.ariaLabel)
-        && JSON.stringify(ionSource.active) === JSON.stringify(['photoreal']),
+        && ionSource.activeId === activeBeforeIonAttempt
+        && JSON.stringify(ionSource.active) === JSON.stringify([activeBeforeIonAttempt]),
       JSON.stringify(ionSource),
     );
   } else {
@@ -226,21 +319,11 @@ try {
       'key-required sources switch normally when the ion token is configured',
       ionSource.focused
         && ionSource.ariaDisabled === 'false'
+        && ionSource.activeId === 'bing-aerial'
         && JSON.stringify(ionSource.active) === JSON.stringify(['bing-aerial']),
       JSON.stringify(ionSource),
     );
   }
-  if (forceKeyless) {
-    // Hand the real token back so every later assertion runs against the same
-    // configuration in both invocations.
-    await page.evaluate(() => {
-      const styleManager = window.__godsEyeView.styleManager;
-      styleManager.mapStackController.cesiumToken = window.__qaIonTokenBackup || '';
-      delete window.__qaIonTokenBackup;
-      styleManager._initMapStackControl();
-    });
-  }
-
   const switching = await page.evaluate(async () => {
     const styleManager = window.__godsEyeView.styleManager;
     const controller = styleManager.mapStackController;
@@ -446,7 +529,7 @@ try {
   // <button> on mouse press, so a close-guard reading plain
   // `document.activeElement` left the tray permanently open once Map Source
   // moved into it — switch a basemap and the popover never went away again
-  // (field report). The pin samples the exact mechanism: focus IS parked
+  // (owner field report). The pin samples the exact mechanism: focus IS parked
   // inside the panel and is NOT `:focus-visible`, and the tray closes anyway.
   const setControlPanelPinned = (wanted) => page.evaluate((want) => {
     const panel = document.getElementById('control-panel');
@@ -605,19 +688,39 @@ try {
   // `MAP_STACKS` (no build carrying it ever shipped publicly, so no link is
   // owed anything) means an old `map=bing-road` link is now simply an
   // unrecognized id, and `setStack()`'s `getStack(id) || getStack('photoreal')`
-  // fallback lands it on Google 3D with that tile lit — never on a hidden fifth
-  // source whose status reads ROAD while no tile is pressed.
+  // fallback requests Google 3D. A keyed run lands there; a keyless run keeps
+  // its truthful OSM recovery. Either way, the active tile must reflect the
+  // rendered source — never a hidden fifth source with a ROAD status.
   await page.setViewport({ width: 1000, height: 900, deviceScaleFactor: 1 });
+  const photorealAvailable = await page.$eval(
+    '[data-stack-id="photoreal"]',
+    (chip) => chip.getAttribute('aria-disabled') !== 'true',
+  );
+  const expectedLegacyActive = photorealAvailable ? 'photoreal' : 'osm';
   for (const legacyId of ['bing-road', 'garbage']) {
-    await page.goto(`${appUrl}#v=2&lat=30.27&lon=-97.74&map=${legacyId}`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 60_000,
-    });
-    await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 60_000 });
-    await page.waitForFunction(
-      () => document.getElementById('loading-screen')?.classList.contains('hidden'),
-      { timeout: 60_000 },
-    );
+    if (forceKeyless) {
+      // Keep the forced-keyless seam alive. A full reload would rebuild the
+      // controller from the keyed server before this in-page override exists,
+      // so drive the same parse/apply startup contract on the current keyless
+      // controller instead.
+      await page.evaluate(async (id) => {
+        const styleManager = window.__godsEyeView.styleManager;
+        history.replaceState(null, '', `?welcome=0#v=2&lat=30.27&lon=-97.74&map=${id}`);
+        const state = styleManager.shareLinkManager.parseInitialHash();
+        await styleManager.shareLinkManager.applyState(state, { applyCamera: false });
+        styleManager.shareLinkManager.completeInitialRestore();
+      }, legacyId);
+    } else {
+      await page.goto(`${appUrl}/?welcome=0#v=2&lat=30.27&lon=-97.74&map=${legacyId}`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 60_000,
+      });
+      await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 60_000 });
+      await page.waitForFunction(
+        () => document.getElementById('loading-screen')?.classList.contains('hidden'),
+        { timeout: 60_000 },
+      );
+    }
     await page.waitForFunction(
       () => window.__godsEyeView.styleManager.mapStackController.getState()?.status !== 'switching',
       { timeout: 20_000 },
@@ -631,10 +734,10 @@ try {
         .map((chip) => chip.dataset.stackId),
     }));
     check(
-      `a map=${legacyId} link restores to photoreal with the photoreal tile lit`,
-      restored.activeId === 'photoreal'
-        && restored.lastError === null
-        && JSON.stringify(restored.pressed) === JSON.stringify(['photoreal']),
+      `a map=${legacyId} link restores to the best available fallback with its tile lit`,
+      restored.activeId === expectedLegacyActive
+        && (photorealAvailable ? restored.lastError === null : /unavailable/i.test(restored.lastError || ''))
+        && JSON.stringify(restored.pressed) === JSON.stringify([expectedLegacyActive]),
       JSON.stringify(restored),
     );
     await page.screenshot({ path: path.join(shotsDir, `legacy-${legacyId}.png`) });

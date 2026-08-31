@@ -26,6 +26,13 @@ export const MAP_STACKS = [
     requiresIon: true,
   },
   {
+    id: 'esri-imagery',
+    label: 'Esri Satellite',
+    shortLabel: 'SAT',
+    kind: 'esri-imagery',
+    requiresIon: false,
+  },
+  {
     id: 'osm',
     label: 'OSM',
     shortLabel: 'OSM',
@@ -36,12 +43,27 @@ export const MAP_STACKS = [
 
 const DEFAULT_OSM_CREDIT = '© OpenStreetMap contributors';
 
+// Esri World Imagery — the keyless satellite basemap and the default keyless
+// landing (a spy-satellite simulator should open on satellite imagery, not a
+// street map). The classic ArcGIS Online tile service answers without a key;
+// attribution is required and the provider carries the service's own credit
+// line. Terms note in DATA_SOURCES.md.
+const ESRI_WORLD_IMAGERY_URL =
+  'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer';
+const ESRI_IMAGERY_CREDIT =
+  'Powered by Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community';
+// The on-screen notice Esri requires when a third-party library draws its
+// service. Rendered via an explicit static credit (see _syncEsriAttribution) —
+// the provider's own `credit` option is ignored for tiled ArcGIS servers.
+const ESRI_ATTRIBUTION_HTML =
+  '<a href="https://www.esri.com" target="_blank" rel="noopener">Powered by Esri</a>';
+
 // Keyless global ellipsoidal terrain (Re:Earth Terrain / Mapterhorn, CC BY 4.0,
 // EGM2008 geoid via NGA) — quantized-mesh 1.0, `ellipsoid` data-type. Fixes
 // regime C (keyless globe stacks previously rendered a flat
-// EllipsoidTerrainProvider — see the height-datum contract in docs/CURRENT-STATE.md
+// EllipsoidTerrainProvider — see docs/superpowers/specs/2026-07-05-entity-height-datum-design.md
 // §1a). Constructed via `.fromUrl()`, never a hand-built `{z}/{x}/{y}.terrain`
-// URL (spec correction, spec §1a).
+// URL (review correction, spec §1a).
 const REEARTH_TERRAIN_URL = 'https://terrain.reearth.land/cesium-mesh/ellipsoid';
 
 /**
@@ -62,8 +84,11 @@ export class MapStackController {
     this.cesiumToken = String(cesiumToken || '').trim();
     this._onChange = onChange;
     this._onError = onError;
-    this._activeId = googleTileset ? initialStack : 'osm';
+    this._activeId = googleTileset ? initialStack : 'esri-imagery';
     this._imageryLayer = null;
+    this._activeImageryProvider = null;
+    this._removeImageryErrorListener = null;
+    this._esriFallbackPending = false;
     this._imageryProviders = new Map();
     this._isSwitching = false;
     this._lastError = null;
@@ -89,7 +114,7 @@ export class MapStackController {
     this._switchGen = 0;
 
     if (!this.getStack(this._activeId) || !this.isStackAvailable(this._activeId)) {
-      this._activeId = googleTileset ? 'photoreal' : 'osm';
+      this._activeId = googleTileset ? 'photoreal' : 'esri-imagery';
     }
   }
 
@@ -171,15 +196,20 @@ export class MapStackController {
     if (!silent) this._emitChange('switching');
 
     try {
+      let activation = null;
       if (stack.kind === 'photoreal') {
         await this._activatePhotoreal(gen);
       } else {
-        await this._activateGlobeStack(stack, gen);
+        activation = await this._activateGlobeStack(stack, gen);
       }
       // A newer switch started while we were awaiting the provider — that call
       // owns the final state now, so don't commit ours or emit a stale 'ready'.
       if (gen !== this._switchGen) return this.getState();
-      this._activeId = stack.id;
+      this._activeId = activation?.effectiveStackId || stack.id;
+      if (activation?.fallbackMessage) {
+        this._lastError = activation.fallbackMessage;
+        this._onError?.(activation.fallbackMessage, stack);
+      }
       // Show/hide of tilesets + imagery swaps need a frame in idle mode;
       // subsequent tile loads self-request via Cesium. (perf wave 2)
       governorRequestRender('map-stack');
@@ -217,6 +247,7 @@ export class MapStackController {
 
   async _activatePhotoreal(gen) {
     this._removeImageryLayer();
+    this._syncEsriAttribution(null); // Esri is no longer on screen.
     if (this.googleTileset) this.googleTileset.show = true;
     this.viewer.scene.globe.show = false;
     // Terrain is left UNTOUCHED here. The photoreal globe is hidden
@@ -234,18 +265,51 @@ export class MapStackController {
   }
 
   async _activateGlobeStack(stack, gen) {
-    const provider = await this._getImageryProvider(stack);
+    const resolution = await this._getImageryProvider(stack);
     // A newer switch started while the provider was resolving — don't touch the
     // scene's imagery layers, the winning switch already owns them (M7).
     if (gen != null && gen !== this._switchGen) return;
     this._removeImageryLayer();
 
-    this._imageryLayer = new Cesium.ImageryLayer(provider);
+    this._imageryLayer = new Cesium.ImageryLayer(resolution.provider);
+    this._activeImageryProvider = resolution.provider;
     this.viewer.imageryLayers.add(this._imageryLayer, 0);
+    this._syncEsriAttribution(resolution.effectiveStackId);
+    this._watchEsriProvider(resolution, gen);
 
     if (this.googleTileset) this.googleTileset.show = false;
     this.viewer.scene.globe.show = true;
     await this._setWorldTerrainEnabled(!!this.cesiumToken, gen);
+    return resolution;
+  }
+
+  /**
+   * Show or hide the required "Powered by Esri" notice with the Esri layer's
+   * own lifecycle.
+   *
+   * This cannot ride on the provider's `credit` option: Cesium IGNORES that
+   * option for tiled ArcGIS MapServer sources, so passing it there displays
+   * nothing and the app would be using the service without the attribution
+   * Esri requires of third-party libraries. It is an ON-SCREEN credit (not the
+   * lightbox, where per-layer data credits live) because that is what the
+   * requirement asks for, and it is removed when another stack takes over so
+   * the globe never claims a source it is not showing.
+   */
+  _syncEsriAttribution(activeStackId) {
+    const creditDisplay = this.viewer?.scene?.frameState?.creditDisplay;
+    if (!creditDisplay) return;
+    const wanted = activeStackId === 'esri-imagery';
+    if (wanted === !!this._esriCreditShown) return;
+    if (!this._esriCredit) {
+      this._esriCredit = new Cesium.Credit(ESRI_ATTRIBUTION_HTML, true);
+    }
+    try {
+      if (wanted) creditDisplay.addStaticCredit(this._esriCredit);
+      else creditDisplay.removeStaticCredit(this._esriCredit);
+      this._esriCreditShown = wanted;
+    } catch {
+      // A Cesium build without static-credit removal must not break switching.
+    }
   }
 
   async _getImageryProvider(stack) {
@@ -254,8 +318,29 @@ export class MapStackController {
     }
 
     let provider;
+    let effectiveStackId = stack.id;
+    let fallbackMessage = null;
     if (stack.kind === 'ion') {
       provider = await Cesium.createWorldImageryAsync({ style: stack.style });
+    } else if (stack.kind === 'esri-imagery') {
+      try {
+        provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(ESRI_WORLD_IMAGERY_URL, {
+          credit: ESRI_IMAGERY_CREDIT,
+          enablePickFeatures: false,
+        });
+      } catch (error) {
+        // The keyless DEFAULT landing must never strand a first run on a blank
+        // globe because Esri is unreachable — fall back to OSM tiles for this
+        // session. (The fallback is cached under this stack id like any other
+        // provider, so the session won't re-probe Esri; a restart does.)
+        console.warn('[MapStack] Esri World Imagery unavailable, falling back to OSM:', error?.message || error);
+        provider = new Cesium.OpenStreetMapImageryProvider({
+          url: 'https://tile.openstreetmap.org/',
+          credit: DEFAULT_OSM_CREDIT,
+        });
+        effectiveStackId = 'osm';
+        fallbackMessage = 'Esri Satellite is unavailable; using OSM';
+      }
     } else if (stack.kind === 'osm') {
       provider = new Cesium.OpenStreetMapImageryProvider({
         url: 'https://tile.openstreetmap.org/',
@@ -265,14 +350,54 @@ export class MapStackController {
       throw new Error(`Unsupported map stack: ${stack.id}`);
     }
 
-    this._imageryProviders.set(stack.id, provider);
-    return provider;
+    const resolution = { provider, effectiveStackId, fallbackMessage };
+    this._imageryProviders.set(stack.id, resolution);
+    if (effectiveStackId === 'osm' && !this._imageryProviders.has('osm')) {
+      this._imageryProviders.set('osm', { provider, effectiveStackId: 'osm', fallbackMessage: null });
+    }
+    return resolution;
+  }
+
+  /**
+   * Esri provider construction can succeed while its first tile requests fail.
+   * Two failures for the active provider trigger the same truthful OSM fallback
+   * as a construction failure; one transient error is left to Cesium's retry.
+   */
+  _watchEsriProvider(resolution, gen) {
+    if (resolution.effectiveStackId !== 'esri-imagery') return;
+    const errorEvent = resolution.provider?.errorEvent;
+    if (!errorEvent?.addEventListener) return;
+    let failures = 0;
+    this._removeImageryErrorListener = errorEvent.addEventListener((error) => {
+      if (gen !== this._switchGen || this._activeImageryProvider !== resolution.provider) return;
+      const retryCount = Number(error?.timesRetried);
+      failures = Number.isInteger(retryCount) && retryCount >= 0
+        ? Math.max(failures + 1, retryCount + 1)
+        : failures + 1;
+      if (failures < 2 || this._esriFallbackPending) return;
+      this._esriFallbackPending = true;
+      const message = 'Esri Satellite tile requests failed; using OSM';
+      this._onError?.(message, this.getStack('esri-imagery'));
+      void this.setStack('osm', { silent: true }).then((state) => {
+        if (state?.activeId === 'osm') {
+          this._lastError = message;
+          this._emitChange('error');
+        }
+      }).finally(() => {
+        this._esriFallbackPending = false;
+      });
+    });
   }
 
   _removeImageryLayer() {
+    if (this._removeImageryErrorListener) {
+      this._removeImageryErrorListener();
+      this._removeImageryErrorListener = null;
+    }
     if (!this._imageryLayer) return;
     this.viewer.imageryLayers.remove(this._imageryLayer, false);
     this._imageryLayer = null;
+    this._activeImageryProvider = null;
   }
 
   /**

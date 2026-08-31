@@ -1,5 +1,6 @@
 /**
- * qa-height-datum.mjs — height/vertical-datum numeric proof harness.
+ * qa-height-datum.mjs — height/vertical-datum fix numeric proof harness
+ * (docs/plans/2026-07-05-entity-height-datum-fix.md Task 8).
  *
  * Scaffold reused verbatim from qa-cctv-v2.mjs: the puppeteer launcher
  * (Chrome executable discovery, headless flags), `QA_BASE_URL` env,
@@ -303,7 +304,7 @@ async function main() {
     // the per-camera ground reads meaningful even mid-drain. The queue drain
     // itself additionally attempts ONE REAL scene.sampleHeight per camera in
     // google-3d regime (Task 5 contract #3/#5 — the ≤1×N invariant
-    // qa-cctv-v2 also locks), and with the full city-packs catalog
+    // qa-cctv-v2 also locks), and at this branch's full city-packs catalog
     // size (800 cameras: 250 Austin + 300 Caltrans + 250 TfL — measured
     // directly probing this harness's own dev server) that can take many
     // minutes under headless SwiftShader (empirically ~2-6s/sample once
@@ -466,7 +467,7 @@ async function main() {
     });
 
     // OpenSky polls on its own interval; give it real time to land a batch
-    // (the layer polls every ~30s per docs/CURRENT-STATE.md).
+    // (the layer polls every ~30s per the documented polling invariant).
     const gotAircraft = await page.waitForFunction(
       () => {
         const mod = window.__godsEyeView.dataManager.layers.get('flights').module;

@@ -332,7 +332,7 @@ test('compact URL omits absent-meaning option state and still resolves to it', (
 });
 
 test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, and the rail agree', async () => {
-  // Product invariant 2026-08-22: the DISPLAY-rail 3D toggle defaults ON with mode
+  // Owner directive 2026-08-22: the DISPLAY-rail 3D toggle defaults ON with mode
   // `proximity`, because proximity is itself the budget — models materialize only
   // below the fleet altitude ceiling and only for the nearest MODEL_MAX in view,
   // so "on" costs nothing at globe scale and `all` stays a deliberate opt-in.

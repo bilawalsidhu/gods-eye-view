@@ -259,7 +259,7 @@ test('annotation fade consumes the actual tracked host paint rectangle after lay
   renderer.destroy();
 });
 
-// ── Partial-add unwind (second review) ───────────────────────────────────────
+// ── Partial-add unwind (review round 2) ───────────────────────────────────────
 //
 // add() inserts the group and records it, then does more live-document work
 // (draw-on wiring, the first projection pass). A throw in that tail used to

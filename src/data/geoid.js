@@ -5,14 +5,15 @@
 // Caltrans/TfL camera priors) give ORTHOMETRIC height (H, "height above mean
 // sea level"). N is the local geoid undulation — the gap between the WGS84
 // ellipsoid and the geoid (~mean sea level) surface, ranging roughly
-// -106..+85 m worldwide. See docs/CURRENT-STATE.md.
+// -106..+85 m worldwide. See docs/plans/2026-07-05-entity-height-datum-fix.md.
 //
-// The implementation uses `egm96-universal` (npm, MIT, embeds the NGA
+// Decision rule (task brief): try `egm96-universal` (npm, MIT, embeds the NGA
 // EGM96 15' grid) as a lazy dynamic import so its ~2.7 MB grid data-chunk
 // never lands in the eager Vite bundle. Only fall back to vendoring the NGA
 // grid ourselves if the package fails tests, isn't browser-safe, or bloats
-// the eager bundle. It passed the browser-safety, accuracy, and bundle checks,
-// so this file is a thin wrapper around it — no vendored fallback is needed.
+// the eager bundle. `egm96-universal` passed all three checks (see the
+// task report), so this file is a thin wrapper around it — no vendored
+// fallback was needed.
 //
 // egm96-universal's `meanSeaLevel(lat, lon)` already returns exactly N in
 // metres (relative to WGS84 ellipsoid) with internal longitude

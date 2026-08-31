@@ -3,18 +3,18 @@
  *
  * The fleet's 3D models stay behind the DISPLAY-rail "3D" toggle (`models3d`)
  * — hundreds of GLBs are a draw-call budget decision the operator owns. Since
- * 2026-08-22 that toggle DEFAULTS ON in `proximity` (product invariant), so the
+ * 2026-08-22 that toggle DEFAULTS ON in `proximity` (owner directive), so the
  * fleet is armed on a fresh boot; proximity is itself the budget, admitting only
  * the nearest MODEL_MAX in view below the fleet ceiling. The contact you have
  * SELECTED is still a separate case: it is exactly one model, it is what the
  * camera is pointed at, and the operator's expectation is that zooming in on a
  * target resolves it into an aircraft. So the tracked contact's handoff is
  * DEFAULT behaviour, driven purely by camera distance and never consulting the
- * toggle at all (product invariant, 2026-08-19).
+ * toggle at all (owner directive, 2026-08-19).
  *
  * Threshold history — the tracked contact used to inherit the fleet ceiling
  * `MODEL_ALT_CEIL_M = 800_000` m, and a first pass raised it to 1_000_000 m to
- * make the airframe arrive sooner. Field test 2026-08-20 rejected that: the
+ * make the airframe arrive sooner. Owner playtest 2026-08-20 rejected that: the
  * model "pops to 3D far too early" — a 26 m airframe held at its minimum pixel
  * size from ~1 Mm out reads as a floating toy, not an aircraft. The ruling is a
  * MUCH closer swap: 2D is correct at ~600_000 m, and the handoff belongs at
@@ -49,7 +49,7 @@
 export const FLEET_MODEL_ALT_CEIL_M = 800_000;
 
 /** Camera altitude (m) at or below which the TRACKED contact takes its 3D model.
- *  Field test ruling 2026-08-20: 2D still reads correctly at ~600_000 m, and
+ *  Owner playtest ruling 2026-08-20: 2D still reads correctly at ~600_000 m, and
  *  the swap belongs at ~150_000 m. */
 export const TRACKED_MODEL_ENTER_ALT_M = 150_000;
 

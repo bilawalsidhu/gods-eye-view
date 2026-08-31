@@ -10,7 +10,7 @@
  * 0.72 / jam 0.49 — under NVG a jam renders DIMMER than free flow. CRT
  * keeps hue but its 5-px pixelation + dithering shred 4–6 px dots.
  *
- * Encoding per profile (validated behavior 2026-07-23 round 2: "just bright
+ * Encoding per profile (owner verdict 2026-07-23 round 2: "just bright
  * dots" — a luminance RAMP failed in the field because dim free-flow dots
  * read as dark holes on NVG-bright roads; classification is the detection
  * brackets' job via `trafficBucketTier`, presence is the dots' job):
