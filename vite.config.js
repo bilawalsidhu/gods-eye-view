@@ -32,6 +32,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import https from 'node:https';
 import { lookup as lookupDns } from 'node:dns/promises';
+import { resolveAllowedHosts } from './src/server/allowedHosts.js';
 import { directionToHeading } from './src/data/directionText.js';
 import {
   isValidTileCoord as isValidTomTomTile,
@@ -7364,10 +7365,9 @@ export default defineConfig(({ mode }) => {
     server: {
       host: env.HOST || 'localhost',
       port: parseInt(env.PORT, 10) || 5173,
-      // When binding to all interfaces, allow any host; otherwise restrict to local names
-      allowedHosts: (env.HOST === '0.0.0.0' || env.HOST === '::')
-        ? true
-        : ['localhost', '127.0.0.1', '.local'],
+      // A wildcard bind only chooses interfaces; it must never disable Vite's
+      // Host-header protection. Add LAN names explicitly via GEV_ALLOWED_HOSTS.
+      allowedHosts: resolveAllowedHosts(env.GEV_ALLOWED_HOSTS),
     },
     // Expose selected API keys to the browser via import.meta.env.*
     define: {
