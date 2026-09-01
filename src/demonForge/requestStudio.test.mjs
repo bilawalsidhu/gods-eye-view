@@ -25,6 +25,17 @@ test('France/EU draft is manual, exact, and does not promise deletion', () => {
   assert.equal('transport' in draft, false);
 });
 
+test('draft creation and approval require an exact candidate URL', () => {
+  assert.throws(
+    () => createFranceEuDraft({ action: 'erasure', controllerName: 'Synthetic Controller', contactRoute: 'https://controller.test/privacy', candidate: { ...candidate, url: ' ' } }),
+    /candidate\.url is required/i,
+  );
+
+  const draft = createFranceEuDraft({ action: 'erasure', controllerName: 'Synthetic Controller', contactRoute: 'https://controller.test/privacy', candidate });
+  draft.candidate.url = '';
+  assert.equal(approveDraft(draft, { actor: 'case-owner' }, validCase(), nowMs).code, 'CANDIDATE_URL_REQUIRED');
+});
+
 test('approval fails closed for missing approval, expired mandates, and unconfirmed candidates', () => {
   const draft = createFranceEuDraft({ action: 'erasure', controllerName: 'Synthetic Controller', contactRoute: 'https://controller.test/privacy', candidate });
   assert.equal(approveDraft(draft, null, validCase(), nowMs).code, 'APPROVAL_REQUIRED');

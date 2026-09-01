@@ -8,11 +8,31 @@ export class LedgerError extends Error {
   }
 }
 
-function canonicalJson(value) {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+function canonicalJson(value, ancestors = new Set()) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new LedgerError('LEDGER_PAYLOAD_INVALID', 'Payload numbers must be finite.');
+    return JSON.stringify(value);
+  }
+  if (typeof value !== 'object') throw new LedgerError('LEDGER_PAYLOAD_INVALID', 'Payload must contain JSON data only.');
+  if (ancestors.has(value)) throw new LedgerError('LEDGER_PAYLOAD_INVALID', 'Payload must not contain cycles.');
 
-  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) {
+      for (let index = 0; index < value.length; index += 1) {
+        if (!Object.hasOwn(value, index)) throw new LedgerError('LEDGER_PAYLOAD_INVALID', 'Payload arrays must not be sparse.');
+      }
+      return `[${value.map((item) => canonicalJson(item, ancestors)).join(',')}]`;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null || Object.getOwnPropertySymbols(value).length > 0) {
+      throw new LedgerError('LEDGER_PAYLOAD_INVALID', 'Payload must contain plain JSON objects only.');
+    }
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key], ancestors)}`).join(',')}}`;
+  } finally {
+    ancestors.delete(value);
+  }
 }
 
 function rightRotate(value, amount) {
@@ -93,7 +113,12 @@ export function verifyLedger(ledger) {
     if (!event || !Number.isInteger(event.sequence)) return invalidLedger('LEDGER_SEQUENCE_MISSING');
     if (event.sequence !== index + 1) return invalidLedger('LEDGER_SEQUENCE_INVALID');
     if (event.previousHash !== previousHash || typeof event.digest !== 'string') return invalidLedger('LEDGER_TAMPERED');
-    if (digestFor(event) !== event.digest) return invalidLedger('LEDGER_TAMPERED');
+    try {
+      if (digestFor(event) !== event.digest) return invalidLedger('LEDGER_TAMPERED');
+    } catch (error) {
+      if (error?.code === 'LEDGER_PAYLOAD_INVALID') return invalidLedger('LEDGER_TAMPERED');
+      throw error;
+    }
     previousHash = event.digest;
   }
   return { ok: true, code: 'LEDGER_VERIFIED' };
@@ -106,6 +131,12 @@ export function appendLedgerEvent(ledger, event, nowMs) {
     throw new LedgerError('LEDGER_EVENT_INVALID', 'Ledger events require a type and actor.');
   }
   if (!Number.isFinite(nowMs)) throw new LedgerError('LEDGER_TIMESTAMP_REQUIRED', 'Ledger events require an explicit timestamp.');
+  try {
+    canonicalJson(event.payload ?? null);
+  } catch (error) {
+    if (error?.code === 'LEDGER_PAYLOAD_INVALID') throw error;
+    throw new LedgerError('LEDGER_PAYLOAD_INVALID', 'Payload must contain JSON data only.');
+  }
 
   const record = {
     sequence: ledger.length + 1,

@@ -26,12 +26,24 @@ function requireHttpsUrl(value) {
   return url.href;
 }
 
+function requireCandidateUrl(candidate) {
+  const candidateUrl = requireText(candidate?.url, 'candidate.url');
+  let url;
+  try {
+    url = new URL(candidateUrl);
+  } catch {
+    throw new TypeError('candidate.url must be an HTTPS URL.');
+  }
+  if (url.protocol !== 'https:') throw new TypeError('candidate.url must be an HTTPS URL.');
+  return candidateUrl;
+}
+
 export function createFranceEuDraft(input = {}) {
   const action = requireText(input.action, 'action');
   const actionLabel = ACTION_LABELS[action] ?? `demande relative à l'action « ${action} »`;
   const controllerName = requireText(input.controllerName, 'controllerName');
   const contactRoute = requireHttpsUrl(input.contactRoute);
-  const candidateUrl = input.candidate?.url ? String(input.candidate.url) : 'URL de l’élément concerné à compléter lors de la revue';
+  const candidateUrl = requireCandidateUrl(input.candidate);
   const body = [
     'BROUILLON — à relire et à valider manuellement avant toute démarche.',
     '',
@@ -61,6 +73,11 @@ export function approveDraft(draft, approval, caseRecord, nowMs) {
     return { ok: false, code: 'APPROVAL_REQUIRED', message: 'Approval requires an explicit actor.' };
   }
   if (!Number.isFinite(nowMs)) return { ok: false, code: 'APPROVAL_TIMESTAMP_REQUIRED', message: 'Approval requires an explicit timestamp.' };
+  try {
+    requireCandidateUrl(draft.candidate);
+  } catch {
+    return { ok: false, code: 'CANDIDATE_URL_REQUIRED', message: 'Approval requires an exact HTTPS candidate URL.' };
+  }
 
   const authorization = canCreateRequest(caseRecord, draft.candidate, 'draft', nowMs);
   if (!authorization.ok) return authorization;
