@@ -7,6 +7,7 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Added
 
+- Documented Demon Forge privacy boundaries: optional local-first operation, external-only Social Analyzer report import, signed mandate requirements, human confirmation, encrypted evidence, manual-only sending via official handoff, France/EU-first policy pack, and the non-legal-advice boundary.
 - Added honest aircraft identity narration: callsign, operator, registration,
   type, and route come only from selected-contact context, and missing operator,
   route, or type enrichment is named explicitly.

@@ -222,6 +222,25 @@ test('Demon Forge opener is hidden by clean-view, cockpit, and recording modes',
   assert.match(cockpitHide, /#demon-forge-open/u);
 });
 
+test('Demon Forge docs keep the boundary language in sync', async () => {
+  const [readme, changelog, currentState] = await Promise.all([
+    readFile(new URL('../../README.md', import.meta.url), 'utf8'),
+    readFile(new URL('../../CHANGELOG.md', import.meta.url), 'utf8'),
+    readFile(new URL('../../docs/CURRENT-STATE.md', import.meta.url), 'utf8'),
+  ]);
+  const docs = `${readme}\n${changelog}\n${currentState}`;
+
+  assert.match(docs, /local-first/u);
+  assert.match(docs, /no automatic request submission/u);
+  assert.match(docs, /signed mandate/u);
+  assert.match(docs, /Social Analyzer report/u);
+  assert.match(docs, /human confirmation/u);
+  assert.match(docs, /encrypted evidence/u);
+  assert.match(docs, /official handoff/u);
+  assert.match(docs, /France\/EU-first/u);
+  assert.match(docs, /not legal advice/u);
+});
+
 test('official route requires durable audit before navigation', async () => {
   let openCalls = 0;
   const document = fakeDocument({ open: () => { openCalls += 1; return {}; } });

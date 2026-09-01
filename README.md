@@ -333,6 +333,8 @@ By default nobody else can reach your server — it binds to localhost. To share
 
 God's Eye View runs on **public data, clear sources, and local-first execution.** No secrets, no private datasets, no mystery scraping — anything involving a private key is brokered server-side. It has the visual grammar of a classified ops room, built entirely from open signals and inspectable code.
 
+Demon Forge follows the same privacy-first discipline, but with a tighter case-management boundary: it is optional and local-first, it imports only a user-selected Social Analyzer report that was generated outside the app, non-self cases require a signed mandate, every candidate needs human confirmation, evidence is stored encrypted, and sending stays manual-only through an official handoff. The first policy pack is France/EU-first, and the request text is operational guidance rather than legal advice.
+
 **The line.** This project models **events, assets, infrastructure, and systems** — aircraft, vessels, satellites, fires, cameras, cities. It does not build features for named-person search, face recognition, or tracking individuals, and pull requests that cross that line won't be merged. People are not a query type here.
 
 **Come build it.** This is the canonical live 3D client from the project that kicked off the recent wave of spatial-intelligence tools — and it's a canvas: the layers here are the signals one person could find and fuse. Add a city pack, a data source, a style, a voice tool. It's the window through which you see the world; bring that window to others.
