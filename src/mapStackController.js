@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { governorRequestRender } from './renderGovernor.js';
+import { keySetupRequirement } from './keySetupCore.mjs';
 
 export const MAP_STACKS = [
   {
@@ -140,9 +141,9 @@ export class MapStackController {
    * @returns {string}
    */
   _unavailableReason(stack) {
-    return stack?.requiresIon
-      ? 'Cesium ion token required for Bing stacks'
-      : `${stack?.label || 'This map stack'} is unavailable`;
+    if (stack?.requiresIon) return keySetupRequirement('cesium-ion');
+    if (stack?.kind === 'photoreal') return keySetupRequirement('google-maps');
+    return `${stack?.label || 'This map stack'} is unavailable`;
   }
 
   getStack(id) {

@@ -8,11 +8,20 @@ import {
   commandCompletedSuccessfully,
   isKeySetupExternallyManaged,
   keySetupStatus,
+  keySetupRequirement,
   knownKeySetupEnvVars,
   parseWindowsUserSid,
   upsertDotenvValues,
   validateKeySetupUpdates,
 } from './keySetupCore.mjs';
+
+test('provider requirements name the registry env vars and next step', () => {
+  assert.equal(
+    keySetupRequirement('cesium-ion'),
+    'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
+  );
+  assert.equal(keySetupRequirement('unknown'), '');
+});
 
 test('the boot provenance snapshot survives in-process Vite config re-evaluation', () => {
   // server.restart() re-evaluates vite.config.js in the SAME process after a

@@ -153,7 +153,7 @@ test('keyless ion stacks stay focusable, aria-disabled, and say why', () => {
   const keyless = CONTROLLER_STACKS.map((stack) => (stack.requiresIon ? {
     ...stack,
     available: false,
-    unavailableReason: 'Cesium ion token required for Bing stacks',
+    unavailableReason: 'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
   } : stack));
   const selected = [];
   renderMapStackChips(container, keyless, {
@@ -167,10 +167,10 @@ test('keyless ion stacks stay focusable, aria-disabled, and say why', () => {
   assert.equal(bingAerial.getAttribute('aria-disabled'), 'true');
   assert.equal(
     bingAerial.getAttribute('aria-label'),
-    'Bing Aerial unavailable: Cesium ion token required for Bing stacks',
+    'Bing Aerial unavailable: Needs CESIUM_ION_TOKEN — add it in Provider Settings',
   );
   assert.ok(bingAerial.classList.contains('unavailable'));
-  assert.equal(bingAerial.title, 'Cesium ion token required for Bing stacks');
+  assert.equal(bingAerial.title, 'Needs CESIUM_ION_TOKEN — add it in Provider Settings');
   assert.equal(chipText(bingAerial), 'Bing Aerial ION');
 
   bingAerial.click();
@@ -186,15 +186,15 @@ test('a non-ion stack that fails never claims an ion token is required', () => {
   const tilesFailed = CONTROLLER_STACKS.map((stack) => (stack.id === 'photoreal' ? {
     ...stack,
     available: false,
-    unavailableReason: 'Google 3D is unavailable',
+    unavailableReason: 'Needs GOOGLE_MAPS_API_KEY — add it in Provider Settings',
   } : stack));
   renderMapStackChips(container, tilesFailed, { activeId: 'osm', doc });
 
   const google = container.children[0];
   assert.equal(google.getAttribute('aria-disabled'), 'true');
-  assert.equal(google.getAttribute('aria-label'), 'Google 3D unavailable: Google 3D is unavailable');
+  assert.equal(google.getAttribute('aria-label'), 'Google 3D unavailable: Needs GOOGLE_MAPS_API_KEY — add it in Provider Settings');
   assert.equal(chipText(google), 'Google 3D', 'no ION badge on a stack that does not need ion');
-  assert.equal(google.title, 'Google 3D is unavailable');
+  assert.equal(google.title, 'Needs GOOGLE_MAPS_API_KEY — add it in Provider Settings');
   assert.equal(chipText(container.children[1]), 'Bing Aerial', 'available ion stacks stay unbadged');
 });
 
@@ -219,8 +219,8 @@ test('models carry the stack\'s own reason and never invent an active chip', () 
     [
       {
         requirement: 'ION',
-        unavailableHint: 'Cesium ion token required',
-        title: 'Cesium ion token required',
+        unavailableHint: 'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
+        title: 'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
       },
       {
         requirement: '',

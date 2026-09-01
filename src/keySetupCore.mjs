@@ -263,6 +263,13 @@ export function knownKeySetupEnvVars() {
   return names;
 }
 
+/** Tooltip guidance for a control gated by one registry entry. */
+export function keySetupRequirement(id) {
+  const entry = KEY_SETUP_KEYS.find((candidate) => candidate.id === id);
+  if (!entry) return '';
+  return `Needs ${entry.envVars.join(' + ')} — add it in Provider Settings`;
+}
+
 /**
  * Decide whether a live provider value belongs to a source outside the store
  * Provider Settings is allowed to edit. `wasExternalAtBoot` carries source
