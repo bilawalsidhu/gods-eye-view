@@ -2,7 +2,7 @@
 
 Updated: August 24, 2026
 
-> **Demon Forge boundary note:** the workspace is optional and local-first, imports only a user-selected Social Analyzer report that was generated outside the app, requires a signed mandate for non-self cases, keeps evidence encrypted, demands human confirmation before any request draft progresses, and has no automatic request submission; sending stays manual-only through an official handoff. The first policy pack is France/EU-first, and the request text is operational guidance rather than legal advice.
+> **Demon Forge boundary note:** the workspace is optional and local-first, imports only a user-selected Social Analyzer report that was generated outside the app, requires a signed mandate for non-self cases, keeps evidence encrypted, demands human confirmation before any request draft progresses, and has no automatic request submission; sending stays manual-only through an official handoff. The first policy pack is France/EU-first, and the request text is not legal advice.
 
 > **2026-08-23 — first-run mission launcher** (`src/firstRunExperience.js`,
 > `#first-run-launcher`, styles at the tail of `style.css`). After startup
