@@ -53,6 +53,8 @@ import {
   normalizeRegionalWeather,
 } from './src/data/regionalBrief.js';
 import { normalizeAdsbLolPointResponse } from './src/data/adsbLolFallback.js';
+import { normalizeSondehubResponse } from './src/data/sondehubFallback.js';
+import { normalizeOgnXmlResponse } from './src/data/ognFallback.js';
 import { createAisStreamAdapter, isRecognizedAisEnvelope } from './src/data/aisStreamAdapter.js';
 import { parseSilenceTimeoutEnv } from './src/data/aisWatchdog.js';
 import { keylessHudSummaryResponse } from './src/hudSummaryResponse.js';
@@ -180,6 +182,21 @@ const ADSBLOL_POINT_CACHE_MS = 12000;
 const ADSBLOL_POINT_CACHE_MAX = 80;
 const ADSBLOL_POINT_RADIUS_NM = 250;
 const ADSBLOL_POINT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+/** Radiosonde (weather balloon) regional cache/in-flight — same anchor-key shape as adsb.lol above. */
+const _sondehubCache = new Map();
+const _sondehubInFlight = new Map();
+const SONDEHUB_CACHE_MS = 30_000; // balloons ascend ~5 m/s; 30s costs <200m of position drift
+const SONDEHUB_CACHE_MAX = 80;
+const SONDEHUB_RADIUS_NM = 250;
+const SONDEHUB_LAST_SECONDS = 3600; // ~1h: covers a full ascent+descent, drops long-landed sondes
+const SONDEHUB_MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+/** Open Glider Network (gliders/paragliders/FLARM traffic) regional cache/in-flight. */
+const _ognCache = new Map();
+const _ognInFlight = new Map();
+const OGN_CACHE_MS = 20_000;
+const OGN_CACHE_MAX = 80;
+const OGN_RADIUS_NM = 250;
+const OGN_MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 // A 200 response can still contain an old OpenSky snapshot. Past this point
 // the viewport-scoped adsb.lol source is more honest and keeps local motion
 // current instead of coasting a stale worldwide frame indefinitely.
@@ -3046,6 +3063,197 @@ async function serveAdsbLolPointFallback(req, res, requestedMode, reason) {
   });
   res.end(fallback.body);
   return true;
+}
+
+/**
+ * Standalone SondeHub regional endpoint: live weather-balloon (radiosonde)
+ * telemetry within `SONDEHUB_RADIUS_NM` of the given anchor.
+ *
+ * SondeHub aggregates volunteer receiver uploads worldwide — the same model
+ * as adsb.lol for aircraft, for a completely different class of airspace
+ * object (a helium/hydrogen balloon under a parachute, not a powered
+ * aircraft). See src/data/sondehubFallback.js for the response shape.
+ */
+async function fetchSondehubRegional(req) {
+  const anchor = adsbLolFallbackAnchor(req);
+  if (!anchor) return null;
+  const roundedLat = Math.round(anchor.latitude * 4) / 4;
+  const roundedLon = Math.round(anchor.longitude * 4) / 4;
+  const cacheKey = `${roundedLat.toFixed(2)},${roundedLon.toFixed(2)}`;
+  const cached = _sondehubCache.get(cacheKey);
+  const now = Date.now();
+  if (cached && now - cached.cachedAt < SONDEHUB_CACHE_MS) {
+    return { ...cached, cacheStatus: 'HIT' };
+  }
+
+  const request = coalesceProxyRequest(_sondehubInFlight, cacheKey, async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    try {
+      const distanceMeters = Math.round(SONDEHUB_RADIUS_NM * 1852);
+      const upstream = await fetch(
+        `https://api.v2.sondehub.org/sondes?lat=${roundedLat}&lon=${roundedLon}`
+        + `&distance=${distanceMeters}&last=${SONDEHUB_LAST_SECONDS}`,
+        {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'gods-eye-view-sondehub-regional/1.0',
+          },
+          signal: controller.signal,
+        },
+      );
+      if (!upstream.ok) throw new Error(`upstream HTTP ${upstream.status}`);
+      const payload = await readResponseJsonCapped(upstream, SONDEHUB_MAX_RESPONSE_BYTES);
+      const normalized = normalizeSondehubResponse(payload);
+      const record = {
+        body: JSON.stringify(normalized),
+        cachedAt: Date.now(),
+        count: normalized.balloons.length,
+      };
+      _sondehubCache.delete(cacheKey);
+      _sondehubCache.set(cacheKey, record);
+      while (_sondehubCache.size > SONDEHUB_CACHE_MAX) {
+        _sondehubCache.delete(_sondehubCache.keys().next().value);
+      }
+      return record;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  });
+  try {
+    const record = await request.promise;
+    return { ...record, cacheStatus: request.shared ? 'INFLIGHT' : 'MISS' };
+  } catch (error) {
+    if (!request.shared && error?.name !== 'AbortError') {
+      console.warn('[SondeHub Balloons]', error?.message || error);
+    }
+    return cached ? { ...cached, cacheStatus: 'STALE' } : null;
+  }
+}
+
+function sondehubBalloonProxy() {
+  return {
+    name: 'sondehub-balloon-proxy',
+    configureServer(server) {
+      server.middlewares.use('/api/sondehub/balloons', async (req, res) => {
+        const result = await fetchSondehubRegional(req);
+        if (!result) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'lat and lon query params are required' }));
+          return;
+        }
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+          'X-Balloon-Source': 'SondeHub',
+          'X-Balloon-Cache': result.cacheStatus,
+          'X-Balloon-Coverage': `${SONDEHUB_RADIUS_NM}nm regional`,
+          'X-Balloon-Count': String(result.count),
+        });
+        res.end(result.body);
+      });
+    },
+  };
+}
+
+/**
+ * Standalone Open Glider Network endpoint: gliders, paragliders, tow planes
+ * and other FLARM/OGN-tracker traffic within `OGN_RADIUS_NM` of the given
+ * anchor — aircraft that mostly carry no ADS-B transponder, so neither
+ * OpenSky nor adsb.lol ever see them. Wraps the same `lxml.php` bounding-box
+ * feed that powers live.glidernet.org. See src/data/ognFallback.js.
+ */
+async function fetchOgnRegional(req) {
+  const anchor = adsbLolFallbackAnchor(req);
+  if (!anchor) return null;
+  const roundedLat = Math.round(anchor.latitude * 4) / 4;
+  const roundedLon = Math.round(anchor.longitude * 4) / 4;
+  const cacheKey = `${roundedLat.toFixed(2)},${roundedLon.toFixed(2)}`;
+  const cached = _ognCache.get(cacheKey);
+  const now = Date.now();
+  if (cached && now - cached.cachedAt < OGN_CACHE_MS) {
+    return { ...cached, cacheStatus: 'HIT' };
+  }
+
+  const request = coalesceProxyRequest(_ognInFlight, cacheKey, async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    try {
+      const radiusKm = OGN_RADIUS_NM * 1.852;
+      const latDeltaDeg = radiusKm / 111.32;
+      // Longitude degrees compress toward the poles; widen the box so the
+      // EAST-WEST reach stays a real `radiusKm`, not a radiusKm at the
+      // equator that shrinks the further from it the anchor sits. Clamped
+      // latitude keeps this finite exactly at the poles (cos(90°) = 0).
+      const clampedLat = Math.min(89, Math.max(-89, roundedLat));
+      const lonDeltaDeg = latDeltaDeg / Math.cos(clampedLat * Math.PI / 180);
+      const params = new URLSearchParams({
+        a: '0',
+        b: String(Math.min(90, roundedLat + latDeltaDeg)),
+        c: String(Math.max(-90, roundedLat - latDeltaDeg)),
+        d: String(roundedLon + lonDeltaDeg),
+        e: String(roundedLon - lonDeltaDeg),
+        z: '7',
+      });
+      const upstream = await fetch(`http://live.glidernet.org/lxml.php?${params}`, {
+        headers: {
+          Accept: 'application/xml,text/xml',
+          'User-Agent': 'gods-eye-view-ogn-regional/1.0',
+        },
+        signal: controller.signal,
+      });
+      if (!upstream.ok) throw new Error(`upstream HTTP ${upstream.status}`);
+      const xmlText = await readResponseTextCapped(upstream, OGN_MAX_RESPONSE_BYTES);
+      const normalized = normalizeOgnXmlResponse(xmlText);
+      const record = {
+        body: JSON.stringify(normalized),
+        cachedAt: Date.now(),
+        count: normalized.aircraft.length,
+      };
+      _ognCache.delete(cacheKey);
+      _ognCache.set(cacheKey, record);
+      while (_ognCache.size > OGN_CACHE_MAX) {
+        _ognCache.delete(_ognCache.keys().next().value);
+      }
+      return record;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  });
+  try {
+    const record = await request.promise;
+    return { ...record, cacheStatus: request.shared ? 'INFLIGHT' : 'MISS' };
+  } catch (error) {
+    if (!request.shared && error?.name !== 'AbortError') {
+      console.warn('[OGN Gliders]', error?.message || error);
+    }
+    return cached ? { ...cached, cacheStatus: 'STALE' } : null;
+  }
+}
+
+function ognGliderProxy() {
+  return {
+    name: 'ogn-glider-proxy',
+    configureServer(server) {
+      server.middlewares.use('/api/ogn/gliders', async (req, res) => {
+        const result = await fetchOgnRegional(req);
+        if (!result) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'lat and lon query params are required' }));
+          return;
+        }
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+          'X-Glider-Source': 'Open Glider Network',
+          'X-Glider-Cache': result.cacheStatus,
+          'X-Glider-Coverage': `${OGN_RADIUS_NM}nm regional`,
+          'X-Glider-Count': String(result.count),
+        });
+        res.end(result.body);
+      });
+    },
+  };
 }
 
 function openSkySourceEpochMs(body) {
@@ -8279,6 +8487,8 @@ export default defineConfig(({ mode }) => {
     plugins: [
       cesium(),
       openSkyProxy(),
+      sondehubBalloonProxy(),
+      ognGliderProxy(),
       celestrakProxy(),
       tomtomProxy(),
       firmsProxy(),

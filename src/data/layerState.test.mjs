@@ -155,8 +155,9 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 16);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 16);
+  // 18: the original 16 plus 'gliders' and 'weather-balloons' (feature/military-multi-feed).
+  assert.equal(REGISTERED_LAYER_IDS.length, 18);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 18);
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.throws(
     () => validateLayerStateRegistry([...LAYER_STATE_REGISTRY, LAYER_STATE_REGISTRY[0]]),
