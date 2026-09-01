@@ -7,14 +7,16 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Added
 
-- The Military Flights layer now merges three `/v2/mil` feeds — adsb.lol,
-  adsb.fi, and airplanes.live — behind `/api/adsblol/mil` instead of adsb.lol
-  alone. The feeds are fetched in parallel (8 s per-feed timeout), unioned by
-  ICAO hex with the freshest position winning, and cached 12 s; a feed that
-  errors or times out is skipped, and a stale cache is served only if all three
-  fail. Each network has its own volunteer receivers, so a contact one misses —
-  or has just dropped — is often still carried by another. Aircraft that
-  transmit no ADS-B at all still appear on none of them.
+- The Military Flights layer now merges two `/v2/mil` feeds — adsb.lol and
+  adsb.fi — behind `/api/adsblol/mil` instead of adsb.lol alone. The feeds are
+  fetched in parallel (8 s per-feed timeout), unioned by ICAO hex with the
+  freshest position winning, and cached 12 s; a feed that errors or times out is
+  skipped, and a stale cache is served only if both fail. Each network has its
+  own volunteer receivers, so a contact one misses — or has just dropped — is
+  often still carried by the other. Aircraft that transmit no ADS-B at all still
+  appear on neither. (airplanes.live and adsb.one were evaluated but now gate
+  their API behind manual approval, so neither is a keyless drop-in;
+  `mergeMilitaryFeeds` still takes any number of feeds.)
 
 ### Fixed
 

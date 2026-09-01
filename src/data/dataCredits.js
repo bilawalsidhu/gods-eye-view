@@ -50,13 +50,6 @@ export const DATA_CREDITS = [
       '(ODbL 1.0)',
   },
   {
-    key: 'airplaneslive',
-    html:
-      'Military flights (merged feed): ' +
-      '<a href="https://airplanes.live" target="_blank" rel="noopener">airplanes.live</a> ' +
-      '(ODbL 1.0)',
-  },
-  {
     key: 'aisstream',
     html:
       'Live vessels (AIS): ' +

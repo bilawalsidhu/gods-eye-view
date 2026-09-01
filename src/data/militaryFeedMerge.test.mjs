@@ -1,7 +1,8 @@
 // Military layer coverage (field report 2026-09-01: a low pass showed on neither
 // the commercial nor the military layer). `/api/adsblol/mil` now fans out to
-// adsb.lol + adsb.fi + airplanes.live and merges by hex, so a contact one
-// volunteer network misses — or has just dropped — is held by another.
+// adsb.lol + adsb.fi and merges by hex, so a contact one volunteer network
+// misses — or has just dropped — is held by the other. `mergeMilitaryFeeds`
+// takes any number of feeds, so some cases below exercise a third.
 // Pure-function tests of the merge, no network.
 //
 // Run with: npm test   (node --test)
@@ -25,13 +26,13 @@ test('feeds are unioned and de-duplicated by hex, case-insensitively', () => {
   const merged = mergeMilitaryFeeds([
     feed('adsb.lol', [row('AE1234'), row('43C6DB')]),
     feed('adsb.fi', [row('ae1234'), row('4CA7B2')]),
-    feed('airplanes.live', [row('4ca7b2')]),
+    feed('extra-feed', [row('4ca7b2')]),
   ]);
   const hexes = merged.ac.map((a) => a.hex.toLowerCase()).sort();
   assert.deepEqual(hexes, ['43c6db', '4ca7b2', 'ae1234']);
   assert.equal(merged.total, 3);
-  assert.deepEqual(merged.sources, ['adsb.lol', 'adsb.fi', 'airplanes.live']);
-  assert.match(merged.msg, /^merged: adsb\.lol, adsb\.fi, airplanes\.live$/);
+  assert.deepEqual(merged.sources, ['adsb.lol', 'adsb.fi', 'extra-feed']);
+  assert.match(merged.msg, /^merged: adsb\.lol, adsb\.fi, extra-feed$/);
 });
 
 test('on a duplicate hex the fresher position wins', () => {
@@ -63,7 +64,7 @@ test('a failed, timed-out, or malformed feed is skipped without sinking the rest
   const merged = mergeMilitaryFeeds([
     { source: 'adsb.lol', ok: false, body: null },
     { source: 'adsb.fi', ok: true, body: { ac: [row('AE4')] } },
-    { source: 'airplanes.live', ok: true, body: { ac: 'not-an-array' } },
+    { source: 'extra-feed', ok: true, body: { ac: 'not-an-array' } },
     null,
   ]);
   assert.equal(merged.ac.length, 1);

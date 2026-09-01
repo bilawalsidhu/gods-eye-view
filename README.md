@@ -251,7 +251,7 @@ Thirteen live layers. **Eleven of them need nothing at all** — no key, no acco
 |-------|--------------|--------|------|
 | 🗺️ **Map Stack** | Esri satellite imagery, Google Photorealistic 3D, OSM, plus additional ion-hosted stacks | Esri / Google / Ion / OSM | 🟢 Esri satellite + OSM · 🟡 ion-hosted Google 3D + world terrain · 🔴 direct Google + place search |
 | ✈️ **Live Flights** | 11,000+ live aircraft + route history | OpenSky + adsb.lol | 🟢 (🟡 optional for more polling credits) |
-| 🎖️ **Military Flights** | ADS-B military traffic in amber, merged from three feeds for wider receiver coverage | adsb.lol + adsb.fi + airplanes.live | 🟢 |
+| 🎖️ **Military Flights** | ADS-B military traffic in amber, merged from two feeds for wider receiver coverage | adsb.lol + adsb.fi | 🟢 |
 | 🚢 **Live Vessels** | Thousands of ships worldwide | AISStream | 🟡 |
 | 🛰️ **Satellites** | 838-object catalog, color-coded by class with a live legend — the **DENSE** chip drops in the whole Starlink shell | CelesTrak | 🟢 |
 | 🌍 **Earthquakes** | Global seismic activity, last 24h | USGS | 🟢 |
@@ -415,7 +415,7 @@ Honest numbers, roughly, as of mid-2026 — always check the provider pricing pa
 
 | | Cost reality |
 |---|---|
-| **🟢 Most layers** | **$0, no signup.** OpenSky anon, USGS, CelesTrak, adsb.lol / adsb.fi / airplanes.live, city CCTV, Radio Browser, GBFS, Launch Library 2, bundled datasets. |
+| **🟢 Most layers** | **$0, no signup.** OpenSky anon, USGS, CelesTrak, adsb.lol / adsb.fi, city CCTV, Radio Browser, GBFS, Launch Library 2, bundled datasets. |
 | **🟡 The free-key tier** | **$0 with a signup.** AISStream, FIRMS, TomTom, OpenSky, plus Cesium ion for eligible personal/non-commercial use. Provider quotas and eligibility still apply. |
 | **🗺️ Google 3D tiles** | **Free through an eligible Cesium ion Community account within its quota; metered through a direct Google key.** Use the direct route for GEV place search or commercial deployment, verify current provider terms, and set budget alerts where billing is enabled. |
 | **🔴 OpenAI voice** | **The one that costs real money — so the app meters it for you.** Realtime audio runs a few cents per active minute; an evening of heavy use is single-digit dollars. A live session-spend readout sits next to the mic, with an STD/MINI model toggle, a $2 warning, and a **$5 hard cap that ends the session**. The voice context window is kept deliberately short too. |

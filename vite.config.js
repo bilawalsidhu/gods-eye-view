@@ -5254,20 +5254,23 @@ function cctvProxy() {
 }
 
 /**
- * Military `/v2/mil` feeds fanned out behind `/api/adsblol/mil`. All three
- * publish the same readsb/tar1090 aircraft schema (`hex`, `lat`, `lon`,
- * `alt_baro`, `alt_geom`, `gs`, `track`, `seen`, `seen_pos`, `t`, `r`, …) in a
+ * Military `/v2/mil` feeds fanned out behind `/api/adsblol/mil`. Both publish
+ * the same readsb/tar1090 aircraft schema (`hex`, `lat`, `lon`, `alt_baro`,
+ * `alt_geom`, `gs`, `track`, `seen`, `seen_pos`, `t`, `r`, …) in a
  * `{ ac: [...] }` envelope, so their rows merge without translation. Each
  * network runs an independent set of volunteer receivers — a plane one misses
- * (or has just dropped) another often still holds.
+ * (or has just dropped) the other often still holds.
  *
  * `adsb.lol` stays first so it wins exact freshness ties (historical default).
+ * airplanes.live and adsb.one are deliberately absent — as of 2026-09 both gate
+ * their API behind manual email approval (HTTP 403 keyless), so neither is a
+ * drop-in keyless feed. `mergeMilitaryFeeds` takes any number of feeds, so an
+ * approved deployment can add one back here.
  * @type {Array<{source: string, url: string}>}
  */
 const MILITARY_MIL_FEEDS = [
   { source: 'adsb.lol', url: 'https://api.adsb.lol/v2/mil' },
   { source: 'adsb.fi', url: 'https://opendata.adsb.fi/api/v2/mil' },
-  { source: 'airplanes.live', url: 'https://api.airplanes.live/v2/mil' },
 ];
 
 /**
