@@ -113,10 +113,13 @@ try {
       for (const id of ids) {
         try { await gev.dataManager.setEnabled(id, true, { origin: 'user' }); } catch { /* reported below */ }
       }
-      const deadline = performance.now() + 60_000;
+      const deadline = performance.now() + 90_000;
       const stat = (id) => gev.dataManager.layers.get(id)?.module?.getStats?.() || {};
+      // Wait on the submarine-cable layer too — its ~2,600 reference stems must
+      // be in the scene before the frame-cost measurement to be an honest
+      // 3-layer number.
       while (performance.now() < deadline) {
-        const done = infraIds.every((id) => {
+        const done = ids.every((id) => {
           const s = stat(id);
           return (s.count || 0) > 0 || s.error;
         });

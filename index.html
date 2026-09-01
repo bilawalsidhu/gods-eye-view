@@ -590,20 +590,29 @@
   <!-- CCTV Coverage Panel -->
   <div id="cctv-panel" class="panel-collapsible collapsed" data-panel-id="cctv-panel">
     <div class="panel-glow"></div>
+    <div id="cctv-resize-handle" class="cctv-resize-handle" data-resize-axis="x" title="Drag to resize the CCTV panel" aria-hidden="true"></div>
     <div class="cctv-panel-inner">
       <div class="panel-header">
         <span class="panel-title">CCTV</span>
         <span class="panel-divider"></span>
         <button class="panel-collapse-btn" data-collapse-target="cctv-panel" title="Collapse panel">+</button>
       </div>
-      <div id="cctv-frame-wrap" class="cctv-frame-wrap">
+      <div id="cctv-frame-wrap" class="cctv-frame-wrap" data-video-status="">
         <img id="cctv-frame" alt="CCTV feed frame" />
+        <!-- YouTube IFrame API injects a player here for place-cam entries. -->
+        <div id="cctv-video" class="cctv-video-mount" hidden></div>
+        <div class="cctv-resize-handle cctv-resize-corner" data-resize-axis="xy" title="Drag to resize the CCTV panel" aria-hidden="true"></div>
       </div>
       <div id="cctv-source-badge" role="status" aria-live="polite">SOURCE · UNKNOWN</div>
       <div id="cctv-meta">Enable CCTV to load camera intersections</div>
       <div class="cctv-controls">
         <button id="cctv-enable-btn" class="scene-btn">CCTV OFF</button>
         <button id="cctv-nearest-btn" class="scene-btn">NEAREST</button>
+        <button id="cctv-open-stream" type="button" class="scene-btn" hidden>▶ OPEN LIVE STREAM</button>
+      </div>
+      <div class="cctv-controls">
+        <button id="cctv-live-only-btn" type="button" class="scene-btn" aria-pressed="false"
+          title="Show only true live-video feeds — hide the traffic cameras that only refresh a still every few minutes">◉ LIVE FEEDS ONLY</button>
       </div>
       <div class="cctv-controls">
         <button id="cctv-prev-btn" class="scene-btn">PREV</button>
@@ -640,6 +649,47 @@
       </div>
       <div class="cctv-summary-label">SCENE SUMMARY</div>
       <div id="cctv-summary">Enable CCTV to start camera-linked intelligence summaries.</div>
+    </div>
+  </div>
+
+  <!-- Satellite Live Feed Panel — opens when a feed-capable satellite is tracked -->
+  <div id="sat-feed-panel" class="panel-collapsible collapsed" data-panel-id="sat-feed-panel">
+    <div class="panel-glow"></div>
+    <div id="sat-feed-resize-handle" class="sat-feed-resize-handle" data-resize-axis="x" title="Drag to resize the feed" aria-hidden="true"></div>
+    <div class="sat-feed-panel-inner">
+      <div class="panel-header">
+        <span class="panel-title">SAT FEED</span>
+        <span class="panel-divider"></span>
+        <button class="panel-collapse-btn" data-collapse-target="sat-feed-panel" title="Collapse panel">+</button>
+      </div>
+      <div id="sat-feed-viewport" class="sat-feed-viewport" data-kind="" data-video-status="">
+        <!-- The YouTube IFrame API injects (and, on teardown, removes) an
+             <iframe> inside this mount; the panel probes a list of candidate
+             streams and keeps the first that plays. -->
+        <div id="sat-feed-video" class="sat-feed-video-mount" hidden></div>
+        <img id="sat-feed-frame" alt="Satellite full-disk frame" hidden />
+        <button id="sat-feed-open-stream" type="button" class="sat-feed-open-stream" hidden>
+          <span class="sat-feed-open-stream-play">▶</span>
+          <span class="sat-feed-open-stream-label">OPEN LIVE STREAM</span>
+          <span class="sat-feed-open-stream-hint">if the inline player stays dark</span>
+        </button>
+        <div class="sat-feed-resize-handle sat-feed-resize-corner" data-resize-axis="xy" title="Drag to resize the feed" aria-hidden="true"></div>
+      </div>
+      <div id="sat-feed-source-badge" role="status" aria-live="polite">SOURCE · —</div>
+      <div id="sat-feed-meta">Track the ISS, GOES-19/-18 or Himawari-9 to open a live feed.</div>
+      <div class="sat-feed-controls">
+        <button id="sat-feed-size-btn" class="scene-btn" title="Resize the feed viewport">SIZE · M</button>
+        <button id="sat-feed-prev-btn" class="scene-btn" title="Previous feed satellite">PREV</button>
+        <button id="sat-feed-next-btn" class="scene-btn" title="Next feed satellite">NEXT</button>
+        <button id="sat-feed-source-toggle" class="scene-btn" hidden title="Switch video source">NASA</button>
+        <button id="sat-feed-popout-btn" class="scene-btn" title="Open the stream in a new tab">POP OUT</button>
+      </div>
+      <div class="sat-feed-controls">
+        <button id="sat-feed-live-only-btn" type="button" class="scene-btn" aria-pressed="false"
+          title="Show only genuine live video (the ISS) — hide the GOES / Himawari full-disk imagery that just refreshes a still every ~10 min">◉ LIVE FEEDS ONLY</button>
+      </div>
+      <div class="sat-feed-summary-label">FEED NOTES</div>
+      <div id="sat-feed-summary">Feeds are public near-real-time sources — not classified, not a completeness guarantee.</div>
     </div>
   </div>
 
@@ -784,7 +834,12 @@
               </select>
             </div>
             <div id="radio-station-card" class="radio-station-card" aria-live="polite">
-              <strong id="radio-station-name">NO STATION SELECTED</strong>
+              <div class="radio-station-heading">
+                <strong id="radio-station-name">NO STATION SELECTED</strong>
+                <button id="radio-favourite-btn" class="radio-favourite-btn" type="button"
+                  aria-pressed="false" aria-label="Save this station to favourites"
+                  title="Save this station to favourites" disabled>☆</button>
+              </div>
               <span id="radio-station-meta">Enable Radio, then choose a globe marker or use next.</span>
               <span id="radio-station-tags"></span>
             </div>
@@ -809,6 +864,14 @@
               <button id="radio-play-btn" type="button" aria-label="Play selected station" disabled>PLAY</button>
               <button id="radio-next-btn" type="button" aria-label="Next filtered station" disabled>NEXT</button>
               <button id="radio-stop-btn" type="button" aria-label="Stop radio playback" disabled>STOP</button>
+            </div>
+            <div id="radio-favourites" class="radio-favourites">
+              <div class="radio-favourites-header">
+                <span>★ FAVOURITES</span>
+                <span id="radio-favourites-count" class="radio-favourites-count">0</span>
+              </div>
+              <ul id="radio-favourites-list" class="radio-favourites-list" aria-label="Saved radio stations"></ul>
+              <p id="radio-favourites-empty" class="radio-favourites-empty">Star a station to keep it here — playable from anywhere on the globe.</p>
             </div>
             <label class="radio-volume-row" for="radio-volume">
               <span>VOLUME</span>

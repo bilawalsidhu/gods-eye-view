@@ -17,6 +17,7 @@ import militaryAwarenessLayer from './data/militaryAwareness.js';
 import localDataLayers from './data/localLayers.js';
 import { LAYER_STATE_REGISTRY } from './data/layerState.js';
 import { registerDataCredits } from './data/dataCredits.js';
+import { SatelliteFeedController } from './satelliteFeedController.js';
 import { SceneDirector } from './scenes/director.js';
 import { initGevVoiceCommands } from './voice/gevRealtime.js';
 import { MapStackController } from './mapStackController.js';
@@ -242,6 +243,12 @@ async function init() {
     dataManager.buildTogglePanel(document.getElementById('data-toggles'));
     styleManager.attachDataManager(dataManager);
 
+    // SAT FEED panel: watches the satellites layer's track/untrack events and
+    // surfaces a live feed (ISS video, or an auto-refreshing full-disk still
+    // for GOES-19/-18 and Himawari-9) for feed-capable satellites.
+    const satelliteFeedController = new SatelliteFeedController();
+    styleManager.attachSatelliteFeedController(satelliteFeedController);
+
     // Initialize deterministic scene playback for social clip capture
     const sceneDirector = new SceneDirector(viewer, styleManager, dataManager);
 
@@ -316,6 +323,7 @@ async function init() {
       styleManager,
       tileset,
       dataManager,
+      satelliteFeedController,
       sceneDirector,
       mapStackController,
       annotations,

@@ -32,9 +32,45 @@ export const MAP_STACKS = [
     kind: 'osm',
     requiresIon: false,
   },
+  {
+    // NASA GIBS near-real-time satellite imagery — keyless global basemap, the
+    // closest thing to "live" imagery the app can show without a paid EO feed.
+    id: 'gibs-nrt',
+    label: 'NASA Imagery',
+    shortLabel: 'NASA',
+    kind: 'gibs',
+    requiresIon: false,
+  },
 ];
 
 const DEFAULT_OSM_CREDIT = '© OpenStreetMap contributors';
+
+// NASA GIBS near-real-time imagery (keyless, CORS-enabled). VIIRS / Suomi-NPP
+// corrected-reflectance true colour: ~250 m native, one daytime pass per
+// location per day, roughly 1.5–3 h behind real time.
+//
+// We deliberately use the EPSG:3857 (Web Mercator) endpoint, NOT EPSG:4326.
+// GIBS's geographic tile matrix sets are an irregular pyramid — 2×1, 3×2, 5×3,
+// 10×5, 20×10, … — which does not double cleanly from level 0 and therefore
+// cannot be described by Cesium's `GeographicTilingScheme` (2×1, 4×2, 8×4, …).
+// Pairing them renders a blank globe: every request above level 0 asks for a
+// tile column/row that maps to the wrong ground area. The EPSG:3857
+// `GoogleMapsCompatible_LevelN` sets ARE standard 256 px power-of-two grids
+// (1×1, 2×2, 4×4, …) that line up exactly with `WebMercatorTilingScheme`.
+const GIBS_WMTS_URL = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/wmts.cgi';
+const GIBS_NRT_LAYER = 'VIIRS_SNPP_CorrectedReflectance_TrueColor';
+const GIBS_NRT_MATRIX_SET = 'GoogleMapsCompatible_Level9';
+const GIBS_NRT_MATRIX_LABELS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+const GIBS_NRT_MAX_LEVEL = 9;
+// VIIRS is a polar orbiter: the CURRENT UTC day's global mosaic is only
+// partially built (GIBS 404s tiles for ground tracks it has not imaged yet),
+// which paints an unusable half-blank globe. The previous UTC day is complete
+// within a few hours of that day ending. Request `now - 30 h` so the date is
+// always "yesterday" through most of the UTC day and "the day before" only in
+// its first ~6 hours — every requested day is fully imaged, and the picture is
+// still at worst ~2 days old ("near real time" for a whole-planet basemap).
+const GIBS_NRT_LATENCY_MS = 30 * 60 * 60 * 1000;
+const GIBS_NRT_CREDIT = 'Imagery: NASA EOSDIS GIBS (VIIRS, Suomi NPP)';
 
 // Keyless global ellipsoidal terrain (Re:Earth Terrain / Mapterhorn, CC BY 4.0,
 // EGM2008 geoid via NGA) — quantized-mesh 1.0, `ellipsoid` data-type. Fixes
@@ -249,6 +285,14 @@ export class MapStackController {
   }
 
   async _getImageryProvider(stack) {
+    // GIBS is date-stamped (TIME dimension), so it is deliberately NOT memoised
+    // in `_imageryProviders`: rebuilding on every activation re-points it at the
+    // current near-real-time date and gives the operator a manual "refresh
+    // imagery" gesture (re-click the chip). Construction does no network I/O.
+    if (stack.kind === 'gibs') {
+      return this._createGibsProvider();
+    }
+
     if (this._imageryProviders.has(stack.id)) {
       return this._imageryProviders.get(stack.id);
     }
@@ -267,6 +311,32 @@ export class MapStackController {
 
     this._imageryProviders.set(stack.id, provider);
     return provider;
+  }
+
+  /**
+   * Builds the NASA GIBS near-real-time imagery provider (VIIRS / Suomi-NPP
+   * corrected-reflectance true colour, EPSG:3857 WMTS, keyless, CORS-enabled).
+   * The `TIME` dimension is pinned to `now - GIBS_NRT_LATENCY_MS` so it rolls
+   * back across the UTC-midnight boundary rather than requesting an empty day.
+   * Web Mercator (not geographic): see the GIBS_WMTS_URL comment for why.
+   * @returns {Cesium.WebMapTileServiceImageryProvider}
+   */
+  _createGibsProvider() {
+    const date = new Date(Date.now() - GIBS_NRT_LATENCY_MS).toISOString().slice(0, 10);
+    return new Cesium.WebMapTileServiceImageryProvider({
+      url: GIBS_WMTS_URL,
+      layer: GIBS_NRT_LAYER,
+      style: 'default',
+      format: 'image/jpeg',
+      tileMatrixSetID: GIBS_NRT_MATRIX_SET,
+      tileMatrixLabels: GIBS_NRT_MATRIX_LABELS,
+      maximumLevel: GIBS_NRT_MAX_LEVEL,
+      tileWidth: 256,
+      tileHeight: 256,
+      tilingScheme: new Cesium.WebMercatorTilingScheme(),
+      dimensions: { TIME: date },
+      credit: new Cesium.Credit(GIBS_NRT_CREDIT, true),
+    });
   }
 
   _removeImageryLayer() {

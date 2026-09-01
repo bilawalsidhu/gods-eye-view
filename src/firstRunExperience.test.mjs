@@ -653,11 +653,14 @@ test('the voice TOOL SCHEMA is byte-identical to main — the mission mapping is
   const end = src.indexOf('\n];\n', start);
   const block = src.slice(start, end + 4);
 
-  assert.equal(block.length, 31104, 'tool schema byte length drifted from the frozen baseline');
+  // Baseline last re-derived when `set_map_stack`'s enum gained the `gibs-nrt`
+  // (NASA near-real-time imagery) basemap — an intentional schema edit, so the
+  // matching entry in radioMarkup.test.mjs's TOUCHED set carries the review.
+  assert.equal(block.length, 31251, 'tool schema byte length drifted from the frozen baseline');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '3ace199727934e851902e4899c423d549d34d3f53469dcb56f07fc070d3f9d66',
-    'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
+    '1a8873e40399a45c24cfdc388f66e1ed5f540226452d17f164ea83f663f9ec1f',
+    'the first-run missions must ride EXISTING tools: no UNREVIEWED schema edit, no cache bust',
   );
 
   // ...and the mapping that makes them reachable by voice is one instruction

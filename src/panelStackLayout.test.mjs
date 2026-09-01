@@ -257,7 +257,7 @@ test('expanded left panels integrate their headers with the container shell', ()
   );
 });
 
-test('Map Source uses four compact tiles in the bottom Visual Presets tray', () => {
+test('Map Source uses five compact tiles in the bottom Visual Presets tray', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
@@ -265,8 +265,8 @@ test('Map Source uses four compact tiles in the bottom Visual Presets tray', () 
   assert.match(html, /id="control-panel"[\s\S]*?class="map-source-section"[\s\S]*?id="map-stack-chips"/);
   assert.match(
     css,
-    /\.map-stack-chip-row\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/,
-    'the desktop source selector keeps all four tiles on one row',
+    /\.map-stack-chip-row\s*\{[\s\S]*?grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\);/,
+    'the desktop source selector keeps all five tiles on one row',
   );
 });
 

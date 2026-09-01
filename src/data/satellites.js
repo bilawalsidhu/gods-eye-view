@@ -32,6 +32,7 @@ import {
 } from './contextStore.js';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
 import { isExplicitLayerStateOrigin } from './layerState.js';
+import { SATELLITE_FEED_IDS } from './satelliteFeeds.js';
 
 /**
  * Satellite Orbits — Real-time positions via CelesTrak TLE + SGP4 propagation.
@@ -110,6 +111,8 @@ const TRACK_VIEW_FROM_HIGH_SCALE = 4; // ≈ 2900 km back for MEO/GEO
  * attribute, so classification costs nothing per frame.
  */
 const POINT_OUTLINE = Cesium.Color.WHITE.withAlpha(0.3);
+/** Ring for satellites that carry a live feed (see data/satelliteFeeds.js). */
+const FEED_MARKER_OUTLINE = Cesium.Color.fromCssColorString('#9defff');
 const _classColor = (group) => Cesium.Color.fromCssColorString(satelliteClassColor(group));
 
 const POINT_STYLES = {
@@ -177,8 +180,18 @@ const POINT_STYLES = {
  * @returns {{ pixelSize: number, color: Cesium.Color, outlineColor: Cesium.Color, outlineWidth: number }}
  */
 function _pointStyleFor(noradId, group) {
-  if (noradId === ISS_NORAD) return POINT_STYLES.iss;
-  return POINT_STYLES[group] || POINT_STYLES.visual;
+  const base = noradId === ISS_NORAD
+    ? POINT_STYLES.iss
+    : (POINT_STYLES[group] || POINT_STYLES.visual);
+  if (!SATELLITE_FEED_IDS.has(noradId)) return base;
+  // Feed-capable satellites get a brighter, slightly larger ring so they read
+  // as "has a live feed" before you click them.
+  return {
+    ...base,
+    pixelSize: base.pixelSize + 2,
+    outlineColor: FEED_MARKER_OUTLINE,
+    outlineWidth: Math.max(base.outlineWidth, 2),
+  };
 }
 
 // Satellite catalog: { noradId → { name, satrec, group } }
@@ -826,6 +839,7 @@ function _contextSubjectMetadata(noradId, position = null) {
       noradId: String(noradId),
       class: satelliteClassLabel(sat.group, { isIss: noradId === ISS_NORAD }),
       altitude: altitudeKm === null ? '' : `${altitudeKm.toLocaleString('en-US')} km`,
+      feed: SATELLITE_FEED_IDS.has(noradId) ? '▶ live feed' : '',
     },
   };
 }

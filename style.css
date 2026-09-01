@@ -1234,7 +1234,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 
 .map-stack-chip-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
 }
 
@@ -1416,6 +1416,7 @@ body.ui-clean-view #control-panel,
 body.ui-clean-view #location-bar,
 body.ui-clean-view #data-panel,
 body.ui-clean-view #cctv-panel,
+body.ui-clean-view #sat-feed-panel,
 body.ui-clean-view #radio-panel,
 body.ui-clean-view #global-context-panel,
 body.ui-clean-view #scene-panel {
@@ -4502,6 +4503,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 }
 #right-context-rail > #pp-toggles,
 #right-context-rail > #cctv-panel,
+#right-context-rail > #sat-feed-panel,
 #right-context-rail > #global-context-panel {
   position: relative;
   inset: auto;
@@ -4518,7 +4520,15 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   max-height: 100%;
   pointer-events: auto;
 }
-#right-context-rail #cctv-panel.collapsed {
+#right-context-rail #sat-feed-panel {
+  /* Width is user-adjustable via the SIZE button; it grows leftward out of the
+     330px rail over the globe. Clamped so it can never run off-screen. */
+  width: min(var(--sat-feed-panel-w, 100%), calc(100vw - 64px));
+  max-height: 100%;
+  pointer-events: auto;
+}
+#right-context-rail #cctv-panel.collapsed,
+#right-context-rail #sat-feed-panel.collapsed {
   width: var(--right-display-collapsed-width);
   margin-left: auto;
 }
@@ -4531,12 +4541,14 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 }
 #right-context-rail > #pp-toggles.collapsed .pp-header-row,
 #right-context-rail #cctv-panel.collapsed .cctv-panel-inner,
+#right-context-rail #sat-feed-panel.collapsed .sat-feed-panel-inner,
 #right-context-rail #global-context-panel.collapsed .global-context-panel-inner {
   height: 50px;
   min-height: 50px;
   box-sizing: border-box;
 }
-#right-context-rail #cctv-panel:not(.collapsed) .cctv-panel-inner {
+#right-context-rail #cctv-panel:not(.collapsed) .cctv-panel-inner,
+#right-context-rail #sat-feed-panel:not(.collapsed) .sat-feed-panel-inner {
   max-height: 100%;
   overflow-y: auto;
   scrollbar-gutter: stable;
@@ -4578,6 +4590,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 }
 #right-context-rail.layout-focus > #pp-toggles:not(.collapsed),
 #right-context-rail.layout-focus > #cctv-panel:not(.collapsed),
+#right-context-rail.layout-focus > #sat-feed-panel:not(.collapsed),
 #right-context-rail.layout-focus > #global-context-panel:not(.collapsed) {
   flex: 0 1 var(--right-panel-allocated-height);
   height: var(--right-panel-allocated-height);
@@ -4591,6 +4604,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   scrollbar-color: rgba(0, 212, 255, 0.4) transparent;
 }
 #right-context-rail.layout-focus > #cctv-panel:not(.collapsed) .cctv-panel-inner,
+#right-context-rail.layout-focus > #sat-feed-panel:not(.collapsed) .sat-feed-panel-inner,
 #right-context-rail.layout-focus > #global-context-panel:not(.collapsed) .global-context-panel-inner {
   height: 100%;
   box-sizing: border-box;
@@ -5497,6 +5511,129 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   font: 8px/1.35 var(--font-mono);
 }
 #radio-station-tags { color: #72dce6; }
+.radio-station-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.radio-favourite-btn {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(65, 220, 231, .28);
+  border-radius: 5px;
+  background: rgba(14, 69, 78, .14);
+  color: #8feaf2;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.radio-favourite-btn:hover:not(:disabled),
+.radio-favourite-btn:focus-visible:not(:disabled) {
+  border-color: #65f7ff;
+  color: #fff;
+  outline: none;
+}
+.radio-favourite-btn:disabled { opacity: .42; cursor: not-allowed; }
+.radio-favourite-btn[aria-pressed="true"] {
+  color: #ffd76a;
+  border-color: rgba(255, 215, 106, .6);
+  background: rgba(255, 215, 106, .12);
+}
+
+/* ── Radio favourites list ─────────────────── */
+.radio-favourites {
+  display: grid;
+  gap: 5px;
+}
+.radio-favourites-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-dim);
+  font: 7px/1 var(--font-mono);
+  letter-spacing: .16em;
+}
+.radio-favourites-count {
+  color: #ffd76a;
+  border: 1px solid rgba(255, 215, 106, .4);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+.radio-favourites-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+  max-height: 168px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.radio-favourites-list:empty { display: none; }
+.radio-favourite-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  border: 1px solid rgba(65, 220, 231, .18);
+  border-radius: 5px;
+  background: rgba(2, 15, 20, .4);
+  color: #cdf6fa;
+  font: 9px/1.2 var(--font-mono);
+  cursor: pointer;
+  text-align: left;
+}
+.radio-favourite-row:hover,
+.radio-favourite-row:focus-visible {
+  border-color: #65f7ff;
+  background: rgba(14, 69, 78, .22);
+  outline: none;
+}
+.radio-favourite-row.is-playing {
+  border-color: rgba(101, 247, 255, .8);
+  box-shadow: 0 0 10px rgba(65, 220, 231, .14);
+}
+.radio-favourite-row .radio-favourite-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.radio-favourite-row .radio-favourite-place {
+  color: var(--text-dim);
+  font-size: 7px;
+  letter-spacing: .08em;
+}
+.radio-favourite-remove {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(255, 120, 120, .35);
+  border-radius: 4px;
+  background: transparent;
+  color: #ff9d8f;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+.radio-favourite-remove:hover,
+.radio-favourite-remove:focus-visible {
+  border-color: #ff7a7a;
+  color: #fff;
+  outline: none;
+}
+.radio-favourites-empty {
+  margin: 0;
+  color: var(--text-dim);
+  font: 7px/1.4 var(--font-mono);
+  letter-spacing: .05em;
+}
+.radio-favourites-list:not(:empty) + .radio-favourites-empty { display: none; }
 .radio-tuner {
   display: grid;
   width: 100%;
@@ -6319,6 +6456,424 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   text-shadow: 0 0 10px rgba(0, 212, 255, 0.18);
 }
 
+/* ── Satellite Live Feed Panel ─────────────── */
+/* Shell mirrors the CCTV panel so it reads as a sibling in the right rail. */
+#sat-feed-panel {
+  --panel-expanded-width: 360px;
+  position: fixed;
+  top: calc(var(--left-stack-top) + var(--left-stack-gap));
+  left: var(--left-stack-x);
+  right: auto;
+  bottom: auto;
+  z-index: 100;
+  width: var(--panel-expanded-width);
+  max-height: calc(100vh - 24px);
+}
+
+#sat-feed-panel .panel-glow {
+  position: absolute;
+  inset: -18px;
+  background: radial-gradient(ellipse at center, rgba(0, 212, 255, 0.16) 0%, transparent 65%);
+  filter: blur(16px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+.sat-feed-panel-inner {
+  position: relative;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 255, 0.46) rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+/* Left-edge drag handle — the panel is pinned to the right, so dragging left
+   grows it over the globe. Sits just outside the panel box, full height. */
+.sat-feed-resize-handle {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  z-index: 5;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.sat-feed-resize-handle::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 40px;
+  border-radius: 999px;
+  background: rgba(0, 212, 255, 0.35);
+  transition: background 140ms ease, height 140ms ease;
+}
+.sat-feed-resize-handle:hover::before,
+#sat-feed-panel.sat-feed-resizing .sat-feed-resize-handle::before {
+  background: rgba(0, 212, 255, 0.85);
+  height: 68px;
+}
+#sat-feed-panel.sat-feed-resizing,
+#sat-feed-panel.sat-feed-resizing * {
+  user-select: none;
+}
+#sat-feed-panel.sat-feed-resizing .sat-feed-video-mount {
+  pointer-events: none; /* don't let the iframe swallow the drag */
+}
+#sat-feed-panel.collapsed .sat-feed-resize-handle {
+  display: none;
+}
+
+/* Bottom-left corner grip on the viewport — drag down/left to grow, up/right
+   to shrink (covers vertical resize as well as the left edge). */
+.sat-feed-resize-corner {
+  left: 0;
+  top: auto;
+  bottom: 0;
+  width: 20px;
+  height: 20px;
+  cursor: nesw-resize;
+}
+.sat-feed-resize-corner::before {
+  content: '';
+  left: 4px;
+  top: auto;
+  bottom: 4px;
+  transform: none;
+  width: 9px;
+  height: 9px;
+  border-left: 2px solid rgba(0, 212, 255, 0.5);
+  border-bottom: 2px solid rgba(0, 212, 255, 0.5);
+  border-radius: 0 0 0 3px;
+  background: none;
+}
+.sat-feed-resize-corner:hover::before,
+#sat-feed-panel.sat-feed-resizing .sat-feed-resize-corner::before {
+  border-color: rgba(0, 212, 255, 0.95);
+  width: 12px;
+  height: 12px;
+}
+
+/* CCTV panel drag-resize — same handles as the SAT FEED panel. It's already
+   position:relative once relocated into #right-context-rail. */
+#right-context-rail #cctv-panel {
+  width: min(var(--cctv-panel-w, 100%), calc(100vw - 64px));
+}
+.cctv-resize-handle {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  z-index: 5;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.cctv-resize-handle::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 40px;
+  border-radius: 999px;
+  background: rgba(0, 212, 255, 0.35);
+  transition: background 140ms ease, height 140ms ease;
+}
+.cctv-resize-handle:hover::before,
+#cctv-panel.cctv-resizing .cctv-resize-handle::before {
+  background: rgba(0, 212, 255, 0.85);
+  height: 68px;
+}
+#cctv-panel.cctv-resizing,
+#cctv-panel.cctv-resizing * {
+  user-select: none;
+}
+#cctv-panel.cctv-resizing .cctv-video-mount,
+#cctv-panel.cctv-resizing #cctv-frame {
+  pointer-events: none;
+}
+#cctv-panel.collapsed .cctv-resize-handle {
+  display: none;
+}
+.cctv-resize-corner {
+  left: 0;
+  top: auto;
+  bottom: 0;
+  width: 20px;
+  height: 20px;
+  cursor: nesw-resize;
+}
+.cctv-resize-corner::before {
+  left: 4px;
+  top: auto;
+  bottom: 4px;
+  transform: none;
+  width: 9px;
+  height: 9px;
+  border-left: 2px solid rgba(0, 212, 255, 0.5);
+  border-bottom: 2px solid rgba(0, 212, 255, 0.5);
+  border-radius: 0 0 0 3px;
+  background: none;
+}
+.cctv-resize-corner:hover::before,
+#cctv-panel.cctv-resizing .cctv-resize-corner::before {
+  border-color: rgba(0, 212, 255, 0.95);
+  width: 12px;
+  height: 12px;
+}
+
+.sat-feed-viewport {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    radial-gradient(circle at 20% 20%, rgba(0, 244, 255, 0.09), transparent 44%),
+    linear-gradient(180deg, rgba(8, 14, 19, 0.88), rgba(4, 7, 11, 0.96));
+  aspect-ratio: var(--sat-feed-aspect, 16 / 9);
+  flex-shrink: 0;
+}
+
+/* "Acquiring" caption until a media element goes .active */
+.sat-feed-viewport:not(.has-media)::before {
+  content: 'ACQUIRING FEED';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 2.2px;
+  color: rgba(145, 237, 255, 0.62);
+  pointer-events: none;
+}
+
+#sat-feed-video,
+#sat-feed-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+#sat-feed-video iframe,
+#cctv-video iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* CCTV place-cam video mount — sits over #cctv-frame in the CCTV panel. */
+.cctv-video-mount {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  z-index: 1;
+}
+.cctv-frame-wrap.cctv-video-mode {
+  aspect-ratio: 16 / 9;
+  min-height: 0;
+}
+/* No verified inline stream id — a quiet hint, no dark overlay. */
+.cctv-frame-wrap.cctv-video-linkout::after {
+  content: '▶  LIVE ON YOUTUBE';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: rgba(145, 237, 255, 0.5);
+  pointer-events: none;
+}
+
+/* Place-cam (YouTube live) mode: pose/projection controls are meaningless. */
+#cctv-panel.placecam-active .cctv-calibration-block,
+#cctv-panel.placecam-active #cctv-coverage-btn,
+#cctv-panel.placecam-active #cctv-auto-hop-btn,
+#cctv-panel.placecam-active #cctv-projection-btn,
+#cctv-panel.placecam-active #cctv-quality-chip,
+#cctv-panel.placecam-active .cctv-summary-label,
+#cctv-panel.placecam-active #cctv-summary {
+  display: none;
+}
+
+#sat-feed-frame {
+  object-fit: contain;
+  background: #04070b;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+#sat-feed-frame.active {
+  opacity: 1;
+}
+
+/* Probe / failure state captions over the player (SAT FEED only — the CCTV
+   place-cam player is never covered by an overlay, just a corner pill). */
+.sat-feed-viewport[data-video-status='searching']::after,
+.sat-feed-viewport[data-video-status='unavailable']::after {
+  content: 'FINDING A WORKING STREAM…';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: rgba(145, 237, 255, 0.6);
+  background: rgba(4, 7, 11, 0.55);
+  pointer-events: none;
+}
+/* The persistent "unavailable" caption + centred CTA are SAT-FEED only — the
+   CCTV place-cam player keeps a small unobtrusive corner pill instead. */
+.sat-feed-viewport[data-video-status='unavailable']::after {
+  content: 'INLINE PLAYER UNAVAILABLE — USE OPEN LIVE STREAM';
+}
+.sat-feed-viewport[data-video-status='unavailable'] .sat-feed-open-stream {
+  border-color: rgba(0, 212, 255, 0.8);
+  background: rgba(0, 212, 255, 0.22);
+}
+
+/* Always-available escape hatch for video feeds: YouTube live embeds are
+   frequently unavailable (embedding disabled, not currently live, or EU
+   consent-gated). This button sits over the player so the real stream is one
+   click away regardless. */
+.sat-feed-open-stream {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  z-index: 2;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 212, 255, 0.4);
+  background: rgba(4, 10, 16, 0.7);
+  color: #9defff;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1.2px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: background 140ms ease, border-color 140ms ease;
+}
+/* Only the hard-failure state promotes the button to a prominent centred call
+   to action; while searching / on the plain-iframe fallback it stays a small
+   corner pill so it never blocks a picture that might be fine. */
+.sat-feed-open-stream .sat-feed-open-stream-hint {
+  display: none;
+}
+.sat-feed-viewport[data-video-status='unavailable'] .sat-feed-open-stream {
+  right: 50%;
+  bottom: 14px;
+  transform: translateX(50%);
+  padding: 6px 12px;
+  font-size: 9px;
+}
+.sat-feed-viewport[data-video-status='unavailable'] .sat-feed-open-stream .sat-feed-open-stream-hint {
+  display: inline;
+}
+.sat-feed-open-stream:hover {
+  background: rgba(0, 212, 255, 0.18);
+  border-color: rgba(0, 212, 255, 0.7);
+}
+/* The bare `display:flex` above outranks the [hidden] UA rule, so honour it
+   explicitly — and get out of the way once a stream is actually playing (the
+   POP OUT button in the controls row still covers "open externally"). */
+.sat-feed-open-stream[hidden],
+:is(.sat-feed-viewport, #cctv-frame-wrap)[data-video-status='playing'] .sat-feed-open-stream {
+  display: none;
+}
+.sat-feed-open-stream-play {
+  font-size: 8px;
+}
+.sat-feed-open-stream-hint {
+  color: var(--text-dim);
+  letter-spacing: 0.6px;
+}
+@media (max-width: 720px) {
+  .sat-feed-open-stream-hint { display: none; }
+}
+
+.sat-feed-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#sat-feed-source-badge {
+  align-self: flex-start;
+  border: 1px solid rgba(0, 212, 255, 0.32);
+  border-radius: 999px;
+  background: rgba(0, 212, 255, 0.09);
+  color: #9defff;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1.3px;
+  padding: 4px 8px;
+}
+
+#sat-feed-meta {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+}
+
+.sat-feed-summary-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1.7px;
+  color: var(--text-dim);
+}
+
+#sat-feed-summary {
+  min-height: 24px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  line-height: 1.45;
+  color: #a8f7ff;
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.18);
+}
+
+#sat-feed-source-toggle.active,
+#sat-feed-live-only-btn.active {
+  border-color: rgba(0, 212, 255, 0.6);
+  background: rgba(0, 212, 255, 0.16);
+  color: var(--accent);
+}
+
 /* ── Scene Director Panel ───────────────────── */
 #scene-panel {
   --panel-expanded-width: 360px;
@@ -6677,6 +7232,12 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 #cctv-panel.collapsed #cctv-meta,
 #cctv-panel.collapsed .cctv-summary-label,
 #cctv-panel.collapsed #cctv-summary,
+#sat-feed-panel.collapsed .sat-feed-viewport,
+#sat-feed-panel.collapsed .sat-feed-controls,
+#sat-feed-panel.collapsed #sat-feed-source-badge,
+#sat-feed-panel.collapsed #sat-feed-meta,
+#sat-feed-panel.collapsed .sat-feed-summary-label,
+#sat-feed-panel.collapsed #sat-feed-summary,
 #scene-panel.collapsed .scene-controls,
 #scene-panel.collapsed .scene-shot-list,
 #scene-panel.collapsed .scene-progress,
@@ -6692,6 +7253,17 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 #cctv-panel.collapsed,
 #scene-panel.collapsed {
   width: var(--left-collapsed-width);
+}
+
+#right-context-rail #sat-feed-panel.collapsed .panel-title {
+  font-size: 8px;
+  letter-spacing: 1.8px;
+}
+#right-context-rail #sat-feed-panel.collapsed .sat-feed-panel-inner {
+  padding-bottom: 10px;
+}
+#right-context-rail #sat-feed-panel.collapsed .panel-header {
+  margin-bottom: 2px;
 }
 
 #global-context-panel #radio-panel.collapsed { width: 100%; }
@@ -6738,6 +7310,7 @@ body.recording-mode #control-panel,
 body.recording-mode #location-bar,
 body.recording-mode #data-panel,
 body.recording-mode #cctv-panel,
+body.recording-mode #sat-feed-panel,
 body.recording-mode #radio-panel,
 body.recording-mode #global-context-panel,
 body.recording-mode #gev-voice-control,
@@ -6939,6 +7512,8 @@ body.scene-playback-mode :is(#clear-selected-layers, #reset-globe-view) {
   #right-context-rail #pp-toggles.collapsed .pp-header-row,
   #right-context-rail #cctv-panel,
   #right-context-rail #cctv-panel.collapsed,
+  #right-context-rail #sat-feed-panel,
+  #right-context-rail #sat-feed-panel.collapsed,
   #right-context-rail #radio-panel,
   #right-context-rail #radio-panel.collapsed,
   #right-context-rail #global-context-panel,

@@ -188,9 +188,11 @@ const CITY_ALIASES = new Map([
 ]);
 
 // Basemap stack vocabulary. Switching requires an explicit stack name
-// ("Bing aerial", "road map", "OSM", "Google 3D") — any "satellite(s)"
-// phrasing ALWAYS means the satellites DATA LAYER, never a basemap; the
-// session instructions carry the decision table.
+// ("Bing aerial", "road map", "OSM", "Google 3D", "NASA imagery") — any
+// "satellite(s)" phrasing ALWAYS means the satellites DATA LAYER, never a
+// basemap; the session instructions carry the decision table. The GIBS
+// near-real-time basemap is therefore reachable only by NASA / "live imagery"
+// phrasings, never by the bare word "satellite".
 //
 // Road phrasings resolve to OSM, the one shipped road basemap. Every alias
 // must name a live `MAP_STACKS` id: an alias for a retired stack would resolve
@@ -214,6 +216,12 @@ const STACK_ALIASES = new Map([
   ['road', 'osm'],
   ['roads', 'osm'],
   ['road map', 'osm'],
+  ['nasa', 'gibs-nrt'],
+  ['nasa imagery', 'gibs-nrt'],
+  ['gibs', 'gibs-nrt'],
+  ['live earth', 'gibs-nrt'],
+  ['live imagery', 'gibs-nrt'],
+  ['near real time', 'gibs-nrt'],
 ]);
 
 /** Search order for track_entity across entity layer families. */
