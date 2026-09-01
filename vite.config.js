@@ -5254,51 +5254,143 @@ function cctvProxy() {
 }
 
 /**
- * Vite plugin: adsb.lol military aircraft proxy with 12 s response cache.
+ * Military `/v2/mil` feeds fanned out behind `/api/adsblol/mil`. All three
+ * publish the same readsb/tar1090 aircraft schema (`hex`, `lat`, `lon`,
+ * `alt_baro`, `alt_geom`, `gs`, `track`, `seen`, `seen_pos`, `t`, `r`, …) in a
+ * `{ ac: [...] }` envelope, so their rows merge without translation. Each
+ * network runs an independent set of volunteer receivers — a plane one misses
+ * (or has just dropped) another often still holds.
  *
- * Proxies GET /api/adsblol/mil to https://api.adsb.lol/v2/mil. On upstream
- * failure, serves a stale cached response if one exists.
+ * `adsb.lol` stays first so it wins exact freshness ties (historical default).
+ * @type {Array<{source: string, url: string}>}
+ */
+const MILITARY_MIL_FEEDS = [
+  { source: 'adsb.lol', url: 'https://api.adsb.lol/v2/mil' },
+  { source: 'adsb.fi', url: 'https://opendata.adsb.fi/api/v2/mil' },
+  { source: 'airplanes.live', url: 'https://api.airplanes.live/v2/mil' },
+];
+
+/**
+ * Seconds since a readsb `/v2/mil` row last had a position. A row with no
+ * finite lat/lon is treated as infinitely stale so a positioned duplicate
+ * always beats it; otherwise `seen_pos` wins, falling back to `seen`.
+ * @param {object} row One aircraft record.
+ * @returns {number} Age in seconds, or `Infinity` when unknown / unpositioned.
+ */
+export function militaryRowPositionAgeSeconds(row) {
+  if (!row || typeof row !== 'object') return Infinity;
+  const lat = Number(row.lat);
+  const lon = Number(row.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return Infinity;
+  const seenPos = Number(row.seen_pos);
+  if (Number.isFinite(seenPos)) return Math.max(0, seenPos);
+  const seen = Number(row.seen);
+  return Number.isFinite(seen) ? Math.max(0, seen) : Infinity;
+}
+
+/**
+ * Merge several `/v2/mil` responses into one readsb-shaped envelope. Aircraft
+ * are keyed by lower-cased `hex`; when the same airframe appears in more than
+ * one feed the row carrying the fresher position wins (see
+ * {@link militaryRowPositionAgeSeconds}), ties broken by feed order. Feeds that
+ * errored, timed out, or returned a non-array `ac` are skipped, not fatal.
+ *
+ * @param {Array<{source: string, ok: boolean, body: any}>} feeds One entry per upstream.
+ * @returns {{ac: object[], total: number, sources: string[], msg: string, now: number}}
+ */
+export function mergeMilitaryFeeds(feeds) {
+  const byHex = new Map();
+  const sources = [];
+  let now = 0;
+  for (const feed of Array.isArray(feeds) ? feeds : []) {
+    if (!feed || !feed.ok || !feed.body || !Array.isArray(feed.body.ac)) continue;
+    sources.push(feed.source);
+    const feedNow = Number(feed.body.now);
+    if (Number.isFinite(feedNow) && feedNow > now) now = feedNow;
+    for (const row of feed.body.ac) {
+      if (!row || typeof row.hex !== 'string') continue;
+      const key = row.hex.trim().toLowerCase();
+      if (!key) continue;
+      const existing = byHex.get(key);
+      if (!existing
+        || militaryRowPositionAgeSeconds(row) < militaryRowPositionAgeSeconds(existing)) {
+        byHex.set(key, row);
+      }
+    }
+  }
+  const ac = [...byHex.values()];
+  return {
+    ac,
+    total: ac.length,
+    sources,
+    msg: sources.length ? `merged: ${sources.join(', ')}` : 'no military feed reachable',
+    now: now || Math.floor(Date.now() / 1000),
+  };
+}
+
+/**
+ * Vite plugin: merged military-aircraft proxy with a 12 s response cache.
+ *
+ * `GET /api/adsblol/mil` fans out to every feed in {@link MILITARY_MIL_FEEDS} in
+ * parallel (8 s per-feed timeout), merges the survivors by hex, and serves the
+ * combined `{ ac: [...] }`. If every feed fails a stale cached body is served
+ * when one exists. The route name is unchanged so `militaryFlights.js` and
+ * `militaryRegistry.js` need no edit.
  *
  * @returns {import('vite').Plugin}
  */
 function adsbLolProxy() {
-  /** @type {string|null} Cached upstream JSON body. */
+  /** @type {string|null} Cached merged JSON body. */
   let _cache = null;
   /** @type {number} Epoch-ms when the cache was populated. */
   let _cacheAt = 0;
   /** Response cache TTL (ms). */
   const CACHE_MS = 12000;
+  /** Per-feed upstream timeout (ms). */
+  const FEED_TIMEOUT_MS = 8000;
+  const UA = 'gods-eye-view/1.0 (+https://github.com/bilawalsidhu/gods-eye-view)';
   return {
-    name: 'adsblol-proxy',
+    name: 'military-flights-proxy',
     configureServer(server) {
       server.middlewares.use('/api/adsblol/mil', async (req, res) => {
-        try {
-          const now = Date.now();
-          if (_cache && now - _cacheAt < CACHE_MS) {
-            res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-ADS-B-Cache': 'HIT' });
-            res.end(_cache);
-            return;
-          }
-          const upstream = await fetch('https://api.adsb.lol/v2/mil', {
-            headers: { 'User-Agent': 'gods-eye-view-adsblol-proxy/1.0' },
-          });
-          const body = await upstream.text();
-          if (upstream.ok) {
-            _cache = body;
-            _cacheAt = now;
-          }
-          res.writeHead(upstream.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-ADS-B-Cache': 'MISS' });
-          res.end(body);
-        } catch (e) {
-          console.error('[adsb.lol Proxy]', e.message);
-          if (_cache) {
-            res.writeHead(200, { 'Content-Type': 'application/json', 'X-ADS-B-Cache': 'STALE' });
-            res.end(_cache);
-            return;
-          }
-          res.writeHead(502, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'ADS-B proxy error' }));
+        const now = Date.now();
+        if (_cache && now - _cacheAt < CACHE_MS) {
+          res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-ADS-B-Cache': 'HIT' });
+          res.end(_cache);
+          return;
         }
+        const settled = await Promise.allSettled(MILITARY_MIL_FEEDS.map(async (feed) => {
+          const upstream = await fetch(feed.url, {
+            headers: { 'User-Agent': UA },
+            signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
+          });
+          return { source: feed.source, ok: upstream.ok, body: upstream.ok ? await upstream.json() : null };
+        }));
+        const feeds = settled.map((result, i) => {
+          if (result.status === 'fulfilled') return result.value;
+          console.error('[military-flights proxy]', MILITARY_MIL_FEEDS[i].source, result.reason?.message || result.reason);
+          return { source: MILITARY_MIL_FEEDS[i].source, ok: false, body: null };
+        });
+        const merged = mergeMilitaryFeeds(feeds);
+        if (merged.sources.length) {
+          _cache = JSON.stringify(merged);
+          _cacheAt = now;
+          res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+            'X-ADS-B-Cache': 'MISS',
+            'X-ADS-B-Sources': merged.sources.join(','),
+          });
+          res.end(_cache);
+          return;
+        }
+        if (_cache) {
+          res.writeHead(200, { 'Content-Type': 'application/json', 'X-ADS-B-Cache': 'STALE' });
+          res.end(_cache);
+          return;
+        }
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'military ADS-B proxy: no feed reachable', ac: [] }));
       });
     },
   };

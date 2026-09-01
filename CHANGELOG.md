@@ -5,6 +5,17 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- The Military Flights layer now merges three `/v2/mil` feeds — adsb.lol,
+  adsb.fi, and airplanes.live — behind `/api/adsblol/mil` instead of adsb.lol
+  alone. The feeds are fetched in parallel (8 s per-feed timeout), unioned by
+  ICAO hex with the freshest position winning, and cached 12 s; a feed that
+  errors or times out is skipped, and a stale cache is served only if all three
+  fail. Each network has its own volunteer receivers, so a contact one misses —
+  or has just dropped — is often still carried by another. Aircraft that
+  transmit no ADS-B at all still appear on none of them.
+
 ### Fixed
 
 - All three VIIRS sources now reach the Active Fires layer. Merging a source's
