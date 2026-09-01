@@ -620,6 +620,148 @@ test('late media errors after replacement or Pause cannot mutate the active stat
   }
 });
 
+test('disabling the Radio layer leaves a live stream audible and its transport controllable', async () => {
+  const originalAudio = globalThis.Audio;
+  const originalFetch = globalThis.fetch;
+  const audioInstances = [];
+  globalThis.Audio = class FakeAudio {
+    constructor() {
+      this.volume = 0.8;
+      this.src = '';
+      this.currentSrc = '';
+      this.listeners = new Map();
+      this.playCalls = 0;
+      this.pauseCalls = 0;
+      audioInstances.push(this);
+    }
+
+    addEventListener(type, listener) { this.listeners.set(type, listener); }
+    pause() { this.pauseCalls += 1; }
+    play() {
+      this.playCalls += 1;
+      this.currentSrc = this.src;
+      return Promise.resolve();
+    }
+    removeAttribute(name) { if (name === 'src') this.src = ''; }
+    load() {}
+  };
+  const stationRows = [
+    {
+      id: '00000000-0000-4000-8000-0000000000a1',
+      name: 'On-air station',
+      lat: 30,
+      lon: -97,
+      streamUrl: 'https://radio.example.com/onair.mp3',
+      homepage: null,
+      tags: ['news'],
+      languages: ['English'],
+      state: 'Texas',
+      country: 'United States',
+      countryCode: 'US',
+      metadataTrust: 'untrusted-community',
+      codec: 'MP3',
+      bitrate: 128,
+    },
+    {
+      id: '00000000-0000-4000-8000-0000000000a2',
+      name: 'Next station',
+      lat: 31,
+      lon: -98,
+      streamUrl: 'https://radio.example.com/next.mp3',
+      homepage: null,
+      tags: ['news'],
+      languages: ['English'],
+      state: 'Texas',
+      country: 'United States',
+      countryCode: 'US',
+      metadataTrust: 'untrusted-community',
+      codec: 'MP3',
+      bitrate: 128,
+    },
+  ];
+  globalThis.fetch = async (url) => String(url).startsWith('/api/radio/click/')
+    ? { ok: true }
+    : {
+      ok: true,
+      json: async () => ({
+        stations: stationRows,
+        updatedAt: new Date().toISOString(),
+        stale: false,
+        degraded: false,
+        acceptedGeneration: 1,
+        catalogInstance: 'qa-instance-a',
+      }),
+    };
+  const viewer = {
+    camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
+    scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
+    dataSources: { add() {}, remove() {} },
+    entities: { add(entity) { return entity; }, remove() {} },
+  };
+
+  radioLayer.destroy();
+  try {
+    radioLayer.init(viewer);
+    radioLayer.enable();
+    await radioLayer.update();
+    radioLayer.setLifecyclePresentation({ lifecycleState: 'enabled', enabled: true, uncertain: false });
+
+    void radioLayer.togglePlayback({ origin: 'user' });
+    for (let i = 0; i < 4; i += 1) await Promise.resolve();
+    const playingAudio = audioInstances.at(-1);
+    let state = radioLayer.getUIState();
+    assert.equal(state.audioState, 'playing');
+    assert.equal(state.playingStationId, stationRows[0].id);
+    const pauseCallsBeforeDisable = playingAudio.pauseCalls;
+
+    // Turning the Radio layer off hides its presentation but must NOT stop audio.
+    radioLayer.disable();
+    state = radioLayer.getUIState();
+    assert.equal(state.enabled, false, 'the layer is off');
+    assert.equal(state.presentationActive, false, 'globe presentation is gone');
+    assert.equal(state.audioState, 'playing', 'the stream is still on air');
+    assert.equal(state.playingStationId, stationRows[0].id, 'still the same station');
+    assert.equal(state.audioDetached, true, 'state reports the stream as detached from the layer');
+    assert.equal(state.transportActive, true, 'transport stays permitted');
+    assert.equal(playingAudio.pauseCalls, pauseCallsBeforeDisable, 'disable did not pause the element');
+    assert.equal(playingAudio.src, stationRows[0].streamUrl, 'disable did not release the stream source');
+
+    // The transport still works with the layer hidden.
+    assert.equal(radioLayer.pause({ origin: 'user' }), true);
+    assert.equal(radioLayer.getUIState().audioState, 'paused');
+    assert.equal(setRadioVolume(0.4), true, 'volume is still adjustable');
+    assert.equal(radioLayer.getUIState().volume, 0.4);
+
+    void radioLayer.togglePlayback({ origin: 'user' });
+    for (let i = 0; i < 4; i += 1) await Promise.resolve();
+    assert.equal(radioLayer.getUIState().audioState, 'playing', 'resume works while detached');
+
+    assert.equal(radioLayer.cycleStation(1), true, 'next station works while detached');
+    for (let i = 0; i < 4; i += 1) await Promise.resolve();
+    assert.equal(radioLayer.getUIState().selected?.id, stationRows[1].id);
+    assert.equal(radioLayer.getUIState().playingStationId, stationRows[1].id);
+
+    // Stopping the stream re-gates the transport to inert.
+    assert.equal(radioLayer.stopPlayback({ origin: 'user' }), true);
+    state = radioLayer.getUIState();
+    assert.equal(state.audioState, 'stopped');
+    assert.equal(state.audioDetached, false);
+    assert.equal(state.transportActive, false);
+    assert.equal(await radioLayer.togglePlayback({ origin: 'user' }), false, 'a hidden, stopped layer cannot resurrect audio');
+
+    // Re-enabling the layer restores presentation; audio stays stopped.
+    radioLayer.enable();
+    state = radioLayer.getUIState();
+    assert.equal(state.presentationActive, true);
+    assert.equal(state.audioState, 'stopped');
+  } finally {
+    radioLayer.destroy();
+    globalThis.fetch = originalFetch;
+    if (originalAudio === undefined) delete globalThis.Audio;
+    else globalThis.Audio = originalAudio;
+  }
+});
+
 test('unusable directory responses preserve warm client state atomically', async () => {
   const originalFetch = globalThis.fetch;
   const now = new Date().toISOString();

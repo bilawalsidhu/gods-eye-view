@@ -6123,9 +6123,15 @@ export class StyleManager {
     const transitioning = lifecycleState === 'enabling' || lifecycleState === 'disabling';
     const uncertain = Boolean(state.lifecycleUncertain);
     const interactive = enabled && !transitioning && !uncertain;
+    // The layer is off but a stream is still on air: its transport (play/pause,
+    // stop, next/prev, volume) stays live even though the globe presentation,
+    // tuner, and filter do not.
+    const audioDetached = Boolean(state.audioDetached);
+    const transportInteractive = interactive || audioDetached;
     const selected = state.selected || null;
     const hasStations = state.filteredCount > 0;
     const activePlayback = ['playing', 'buffering'].includes(state.audioState);
+    const playbackOperable = activePlayback || state.audioState === 'paused';
     document.getElementById('title-bar')?.classList.toggle('radio-broadcasting', state.audioState === 'playing');
     this._radioPanel.classList.toggle('radio-enabled', enabled);
     this._radioPanel.classList.toggle('lifecycle-uncertain', uncertain);
@@ -6249,22 +6255,27 @@ export class StyleManager {
       this._renderRadioFavourites();
     }
 
-    if (this._radioPrevBtn) this._radioPrevBtn.disabled = !interactive || !hasStations;
-    if (this._radioNextBtn) this._radioNextBtn.disabled = !interactive || !hasStations;
-    if (this._contextRadioMiniPrevBtn) this._contextRadioMiniPrevBtn.disabled = !interactive || !hasStations;
-    if (this._contextRadioMiniNextBtn) this._contextRadioMiniNextBtn.disabled = !interactive || !hasStations;
-    if (this._cockpitRadioPrevBtn) this._cockpitRadioPrevBtn.disabled = !interactive || !hasStations;
-    if (this._cockpitRadioNextBtn) this._cockpitRadioNextBtn.disabled = !interactive || !hasStations;
+    const cycleDisabled = !transportInteractive || !hasStations;
+    if (this._radioPrevBtn) this._radioPrevBtn.disabled = cycleDisabled;
+    if (this._radioNextBtn) this._radioNextBtn.disabled = cycleDisabled;
+    if (this._contextRadioMiniPrevBtn) this._contextRadioMiniPrevBtn.disabled = cycleDisabled;
+    if (this._contextRadioMiniNextBtn) this._contextRadioMiniNextBtn.disabled = cycleDisabled;
+    if (this._cockpitRadioPrevBtn) this._cockpitRadioPrevBtn.disabled = cycleDisabled;
+    if (this._cockpitRadioNextBtn) this._cockpitRadioNextBtn.disabled = cycleDisabled;
+    // Pause/resume/stop stay reachable for an on-air stream even with no station
+    // list (the layer is hidden), so the user is never forced to re-enable the
+    // layer just to silence it.
+    const playDisabled = !transportInteractive || (!hasStations && !playbackOperable);
     if (this._radioPlayBtn) {
       const action = activePlayback ? 'Pause' : (state.audioState === 'paused' ? 'Resume' : 'Play');
-      this._radioPlayBtn.disabled = !interactive || !hasStations;
+      this._radioPlayBtn.disabled = playDisabled;
       this._radioPlayBtn.classList.toggle('active', activePlayback);
       this._radioPlayBtn.textContent = action.toUpperCase();
       this._radioPlayBtn.setAttribute('aria-label', `${action} ${selected ? 'selected' : 'nearest'} radio station`);
     }
     if (this._contextRadioMiniPlayBtn) {
       const action = activePlayback ? 'Pause' : (state.audioState === 'paused' ? 'Resume' : 'Play');
-      this._contextRadioMiniPlayBtn.disabled = !interactive || !hasStations;
+      this._contextRadioMiniPlayBtn.disabled = playDisabled;
       this._contextRadioMiniPlayBtn.classList.toggle('active', activePlayback);
       this._contextRadioMiniPlayBtn.textContent = activePlayback ? 'Ⅱ' : '▶';
       this._contextRadioMiniPlayBtn.setAttribute('aria-label', `${action} ${selected ? 'selected' : 'nearest'} radio station`);
@@ -6272,14 +6283,14 @@ export class StyleManager {
     }
     if (this._cockpitRadioPlayBtn) {
       const action = activePlayback ? 'Pause' : (state.audioState === 'paused' ? 'Resume' : 'Play');
-      this._cockpitRadioPlayBtn.disabled = !interactive || !hasStations;
+      this._cockpitRadioPlayBtn.disabled = playDisabled;
       this._cockpitRadioPlayBtn.classList.toggle('active', activePlayback);
       this._cockpitRadioPlayBtn.textContent = activePlayback ? 'Ⅱ' : '▶';
       this._cockpitRadioPlayBtn.setAttribute('aria-label', `${action} ${selected ? 'selected' : 'nearest'} radio station`);
       this._cockpitRadioPlayBtn.title = action;
     }
-    if (this._radioStopBtn) this._radioStopBtn.disabled = !interactive || state.audioState === 'stopped';
-    if (this._radioVolume) this._radioVolume.disabled = !interactive;
+    if (this._radioStopBtn) this._radioStopBtn.disabled = !transportInteractive || state.audioState === 'stopped';
+    if (this._radioVolume) this._radioVolume.disabled = !transportInteractive;
     if (this._radioVolume && document.activeElement !== this._radioVolume) {
       this._radioVolume.value = String(Math.round(state.volume * 100));
       if (this._radioVolumeValue) this._radioVolumeValue.textContent = `${Math.round(state.volume * 100)}%`;
@@ -6287,14 +6298,14 @@ export class StyleManager {
     if (this._contextRadioMiniVolume && document.activeElement !== this._contextRadioMiniVolume) {
       this._contextRadioMiniVolume.value = String(Math.round(state.volume * 100));
     }
-    if (this._contextRadioMiniVolume) this._contextRadioMiniVolume.disabled = !interactive;
+    if (this._contextRadioMiniVolume) this._contextRadioMiniVolume.disabled = !transportInteractive;
     if (this._contextRadioMiniVolumeValue) {
       this._contextRadioMiniVolumeValue.textContent = `${Math.round(state.volume * 100)}%`;
     }
     if (this._cockpitRadioVolume && document.activeElement !== this._cockpitRadioVolume) {
       this._cockpitRadioVolume.value = String(Math.round(state.volume * 100));
     }
-    if (this._cockpitRadioVolume) this._cockpitRadioVolume.disabled = !interactive;
+    if (this._cockpitRadioVolume) this._cockpitRadioVolume.disabled = !transportInteractive;
     if (this._cockpitRadioVolumeValue) {
       this._cockpitRadioVolumeValue.textContent = `${Math.round(state.volume * 100)}%`;
     }
@@ -6321,6 +6332,7 @@ export class StyleManager {
         paused: `Paused ${selected?.name || 'station'}`,
         error: state.audioError || 'Broadcaster stream unavailable',
       };
+      const detachedSuffix = audioDetached ? ' · Radio layer hidden' : '';
       const voiceSuffix = state.voiceDucked
         ? ' · muted during voice interaction'
         : (state.voiceRestoring ? ' · restoring volume after voice' : '');
@@ -6338,15 +6350,18 @@ export class StyleManager {
       const uncertainMessage = uncertain
         ? 'Radio lifecycle is uncertain — use Enable or Disable to reconcile'
         : null;
-      this._radioPlaybackState.textContent = `${uncertainMessage || unavailable || lifecycleMessage || state.error || messages[state.audioState] || 'Ready'}${tuningSuffix}${voiceSuffix}${catalogSuffix}${outsideFilter}`;
+      this._radioPlaybackState.textContent = `${uncertainMessage || unavailable || lifecycleMessage || state.error || messages[state.audioState] || 'Ready'}${tuningSuffix}${detachedSuffix}${voiceSuffix}${catalogSuffix}${outsideFilter}`;
       this._radioPlaybackState.classList.toggle('error', Boolean(uncertainMessage || unavailable || state.error || state.audioState === 'error'));
     }
     if (
       !enabled
       && !transitioning
+      && !audioDetached
       && !this._preservePanelStateDuringLayerClear
       && !this._radioPanel.classList.contains('collapsed')
     ) {
+      // A stream still on air keeps the panel open so its transport stays visible;
+      // it collapses once playback is stopped.
       this.setPanelCollapsed('radio-panel', true);
     }
     this._scheduleRightPanelLayout();
