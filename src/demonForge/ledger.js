@@ -105,23 +105,23 @@ function invalidLedger(code) {
 }
 
 export function verifyLedger(ledger) {
-  if (!Array.isArray(ledger)) return invalidLedger('LEDGER_INVALID');
+  try {
+    if (!Array.isArray(ledger)) return invalidLedger('LEDGER_INVALID');
 
-  let previousHash = null;
-  for (let index = 0; index < ledger.length; index += 1) {
-    const event = ledger[index];
-    if (!event || !Number.isInteger(event.sequence)) return invalidLedger('LEDGER_SEQUENCE_MISSING');
-    if (event.sequence !== index + 1) return invalidLedger('LEDGER_SEQUENCE_INVALID');
-    if (event.previousHash !== previousHash || typeof event.digest !== 'string') return invalidLedger('LEDGER_TAMPERED');
-    try {
+    let previousHash = null;
+    for (let index = 0; index < ledger.length; index += 1) {
+      const event = ledger[index];
+      if (!event || !Number.isInteger(event.sequence)) return invalidLedger('LEDGER_SEQUENCE_MISSING');
+      if (event.sequence !== index + 1) return invalidLedger('LEDGER_SEQUENCE_INVALID');
+      if (event.previousHash !== previousHash || typeof event.digest !== 'string') return invalidLedger('LEDGER_TAMPERED');
       if (digestFor(event) !== event.digest) return invalidLedger('LEDGER_TAMPERED');
-    } catch (error) {
-      if (error?.code === 'LEDGER_PAYLOAD_INVALID') return invalidLedger('LEDGER_TAMPERED');
-      throw error;
+      previousHash = event.digest;
     }
-    previousHash = event.digest;
+    return { ok: true, code: 'LEDGER_VERIFIED' };
+  } catch {
+    // A persisted record that cannot be safely read or canonically hashed is untrustworthy.
+    return invalidLedger('LEDGER_TAMPERED');
   }
-  return { ok: true, code: 'LEDGER_VERIFIED' };
 }
 
 export function appendLedgerEvent(ledger, event, nowMs) {

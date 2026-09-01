@@ -42,3 +42,20 @@ test('ledger rejects cyclic and sparse payloads', () => {
     );
   }
 });
+
+test('ledger verification fails closed for hostile accessors and proxies', () => {
+  const hostileAccessor = {};
+  Object.defineProperty(hostileAccessor, 'synthetic', {
+    enumerable: true,
+    get() { throw new Error('synthetic accessor failure'); },
+  });
+  const hostileProxy = new Proxy({}, {
+    ownKeys() { throw new Error('synthetic proxy failure'); },
+  });
+
+  for (const payload of [hostileAccessor, hostileProxy]) {
+    const ledger = appendLedgerEvent([], { type: 'REQUEST_DRAFTED', actor: 'operator', payload: { safe: true } }, 100);
+    ledger[0].payload = payload;
+    assert.equal(verifyLedger(ledger).code, 'LEDGER_TAMPERED');
+  }
+});
