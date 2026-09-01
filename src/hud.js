@@ -17,6 +17,7 @@ import * as Cesium from 'cesium';
 import { forward as toMGRS } from 'mgrs';
 import { CITY_POIS } from './locations.js';
 import { composeLocalityTag } from './hudLocality.js';
+import { formatLocalClock } from './hudLocalClock.js';
 import { ellipsoidalToMslDisplayM, ensureGeoidReady, geoidHeight } from './data/geoid.js';
 import { getBasemapLabelContext } from './voice/gevActions.js';
 import { isHudSummaryUnconfigured } from './hudSummaryResponse.js';
@@ -76,7 +77,6 @@ export class IntelHUD {
     this._recBlinkState = true;
     this._updateInterval = null;
     this._recBlinkInterval = null;
-    this._timestampInterval = null;
     this._summaryInterval = null;
     this._summaryTypingInterval = null;
     this._latestMetrics = null;
@@ -166,7 +166,7 @@ export class IntelHUD {
 
       <div class="hud-corner hud-top-right">
         <div class="hud-content" style="text-align:right">
-          <div class="hud-rec"><span id="hud-rec-dot">●</span> REC  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div>
+          <div class="hud-rec"><span id="hud-rec-dot">●</span> REC  <span id="hud-local-clock">--:--:--</span> (<span id="hud-local-offset">UTC+0</span>)</div>
           <div class="hud-orbital">ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}</div>
         </div>
         <div class="hud-bracket">┐</div>
@@ -208,17 +208,11 @@ export class IntelHUD {
   }
 
   /**
-   * Start all periodic update timers (timestamp, REC blink, camera
-   * telemetry, semantic summary). Timers run independently at different
-   * cadences and are cleaned up in {@link destroy}.
+   * Start all periodic update timers (REC blink, camera telemetry, semantic
+   * summary). Timers run independently at different cadences and are cleaned
+   * up in {@link destroy}.
    */
   _startTimers() {
-    // Timestamp — every second
-    this._timestampInterval = setInterval(() => {
-      const el = document.getElementById('hud-timestamp');
-      if (el) el.textContent = this._formatUTC();
-    }, 1000);
-
     // REC blink — every 800ms
     this._recBlinkInterval = setInterval(() => {
       this._recBlinkState = !this._recBlinkState;
@@ -237,21 +231,6 @@ export class IntelHUD {
       if (!this._visible) return;
       void this._updateSummary(true);
     }, HUD_SUMMARY_INTERVAL_MS);
-  }
-
-  /**
-   * Format the current wall-clock time as a UTC Zulu string.
-   * @returns {string} Timestamp in `YYYY-MM-DD HH:MM:SSZ` format.
-   */
-  _formatUTC() {
-    const now = new Date();
-    const y = now.getUTCFullYear();
-    const mo = String(now.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(now.getUTCDate()).padStart(2, '0');
-    const h = String(now.getUTCHours()).padStart(2, '0');
-    const mi = String(now.getUTCMinutes()).padStart(2, '0');
-    const s = String(now.getUTCSeconds()).padStart(2, '0');
-    return `${y}-${mo}-${d} ${h}:${mi}:${s}Z`;
   }
 
   /**
@@ -350,6 +329,16 @@ export class IntelHUD {
       const m = String(now.getUTCMinutes()).padStart(2, '0');
       const s = String(now.getUTCSeconds()).padStart(2, '0');
       collEl.textContent = `COLL: ${h}:${m}:${s}Z`;
+    }
+
+    // Local clock at the camera subpoint — a rough solar-time estimate from
+    // longitude (see hudLocalClock.js), not the operator's own timezone.
+    const localClockEl = document.getElementById('hud-local-clock');
+    const localOffsetEl = document.getElementById('hud-local-offset');
+    if (localClockEl || localOffsetEl) {
+      const local = formatLocalClock(Date.now(), lonDeg);
+      if (localClockEl) localClockEl.textContent = local.time;
+      if (localOffsetEl) localOffsetEl.textContent = local.offsetTag;
     }
 
     // Off-nadir angle (ONA): camera pitch of -90 deg is nadir (straight down),
@@ -572,9 +561,9 @@ export class IntelHUD {
     const nearest = this._nearestKnownPoint(m.latDeg, m.lonDeg);
     const band = this._viewBand(m.altM);
     const window = this._viewWindowKm(m.latDeg);
-    // Rough local timezone from longitude (15 deg per hour)
-    const utcOffset = Math.round(m.lonDeg / 15);
-    const localTag = `UTC${utcOffset >= 0 ? '+' : ''}${utcOffset}`;
+    // Rough local timezone from longitude — same estimate the corner LOCAL
+    // clock shows, see hudLocalClock.js.
+    const { offsetTag: localTag } = formatLocalClock(Date.now(), m.lonDeg);
     // Same MSL datum as the corner ALT readout — the two are on screen
     // together, so they must never disagree. The view band above deliberately
     // keeps the ellipsoidal height: its thresholds were tuned against it.
@@ -848,7 +837,6 @@ export class IntelHUD {
   destroy() {
     clearInterval(this._updateInterval);
     clearInterval(this._recBlinkInterval);
-    clearInterval(this._timestampInterval);
     clearInterval(this._summaryInterval);
     clearInterval(this._summaryTypingInterval);
     this.viewer.camera.moveEnd.removeEventListener(this._onCameraMoveEnd);
