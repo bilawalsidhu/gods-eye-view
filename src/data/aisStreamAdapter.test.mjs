@@ -167,7 +167,7 @@ test('P0: a pre-disposal close event cannot erase the post-disposal socket', asy
   assert.deepEqual(context.adapter.debug().generations, [2],
     'the replacement must NOT reuse generation 1');
 
-  // The pre-disposal socket's close finally lands — review's exact interleaving.
+  // The pre-disposal socket's close finally lands — the exact adversarial interleaving.
   first.flushClose();
 
   const debug = context.adapter.debug();

@@ -39,7 +39,7 @@ test('sim/uncovered dots (null bucket) are untouched under EVERY style — keyle
   }
 });
 
-test('mono: EVERY colored dot is a bright white core (follow-up round 2: "just bright dots")', () => {
+test('mono: EVERY colored dot is a bright white core (owner round 2: "just bright dots")', () => {
   for (const s of MONO_STYLES) {
     for (const b of BUCKETS) {
       const rgba = presetDotRgba(s, b);

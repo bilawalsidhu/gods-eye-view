@@ -4,7 +4,7 @@ import * as Cesium from 'cesium';
  * Per-layer data attribution registered into Cesium's credit display.
  *
  * Legal requirement (see DATA_SOURCES.md, findings H10/H11 in
- * every third-party data layer this app can
+ * docs/pre-ship-audit-2026-07-01.md): every third-party data layer this app can
  * display carries its own license and required attribution — ODbL (OSM
  * datacenters/dams, adsb.lol, Overpass roads), CC BY-NC-SA (TeleGeography
  * cables), NASA FIRMS, CelesTrak, USGS, City of Austin, GBFS operators, OpenSky.

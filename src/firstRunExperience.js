@@ -4,7 +4,7 @@
 // would spend optional API quotas, surprise returning operators, and fight share
 // links. A new visitor instead gets one compact, explicit choice after startup.
 //
-// SHOW POLICY (product decision, 2026-08-23). The launcher is NOT one-shot. A new
+// SHOW POLICY (owner ruling, 2026-08-23). The launcher is NOT one-shot. A new
 // operator needs the map explained more than once, so it returns every fresh
 // browser session until they say otherwise:
 //
@@ -25,7 +25,7 @@ export const FIRST_RUN_STORAGE_KEY = 'gev:first-run-mission:v1';
 export const FIRST_RUN_SESSION_KEY = 'gev:first-run-mission-session:v1';
 
 /**
- * Configurable name for the fires/quakes mission. Flip this ONE constant to
+ * Owner-selectable name for the fires/quakes mission. Flip this ONE constant to
  * re-label the tile; the alternates are pre-written so the choice is a taste
  * call at review time, not an edit.
  * @type {'ENVIRONMENTAL'|'EARTH_WATCH'|'ACTIVE_EVENTS'}
@@ -49,7 +49,7 @@ export function environmentalLabel(choice = ENVIRONMENTAL_LABEL_CHOICE) {
 /*
  * MISSION → APP STATE, AND WHAT IT IS ALLOWED TO PERSIST
  * ─────────────────────────────────────────────────────────────────────────────
- * Product decision: picking a mission carries the same weight as clicking the
+ * Owner ruling: picking a mission carries the same weight as clicking the
  * toggles it represents — durable where those clicks are durable — but it must
  * never write a preference the visitor did not effectively choose by picking it.
  * Layer enablement IS durable in this app (`gev:layer-state:v2`, written by
@@ -100,7 +100,7 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
   environmental: Object.freeze({
     kind: 'globe',
     // Live USGS earthquakes AND NASA FIRMS active fires. The launcher optimizes
-    // for the FULLY CONFIGURED experience (product decision, 2026-08-23): the tile
+    // for the FULLY CONFIGURED experience (owner ruling, 2026-08-23): the tile
     // promises both, so it turns on both, and the subcopy in index.html says so.
     //
     // Keyless, FIRMS is honest where it counts — its own layer row reads
@@ -333,7 +333,7 @@ export function initFirstRunExperience({
     return null;
   }
 
-  // The tile name is configurable from one constant, so paint it from the
+  // The tile name is owner-switchable from one constant, so paint it from the
   // module rather than trusting the markup to have been edited to match.
   const environmentalTitle = root.querySelector('[data-first-run-environmental-title]');
   if (environmentalTitle) environmentalTitle.textContent = environmentalLabel().title;

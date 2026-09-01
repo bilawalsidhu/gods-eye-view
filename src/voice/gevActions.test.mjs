@@ -14,7 +14,37 @@ import {
   cctvVoiceFocusOutcome,
   formatTrackedEntityLabel,
   knownRadioLocation,
+  normalizeStackId,
 } from './gevActions.js';
+import { MAP_STACKS } from '../mapStackController.js';
+import { readFileSync } from 'node:fs';
+
+test('every live basemap is reachable by its own id — no enum value without a voice alias', () => {
+  // B1 regression: a stack added to MAP_STACKS (and the set_map_stack enum)
+  // without a matching STACK_ALIASES entry resolves to null and throws
+  // "Unknown map stack" at the controller — a broken voice command for a
+  // shipped basemap. Every live id must self-resolve.
+  for (const stack of MAP_STACKS) {
+    assert.equal(
+      normalizeStackId(stack.id),
+      stack.id,
+      `set_map_stack '${stack.id}' has no self-mapping alias — voice selection would throw`,
+    );
+  }
+  // The Esri phrasings the voice prompt promises must also resolve.
+  assert.equal(normalizeStackId('Esri'), 'esri-imagery');
+  assert.equal(normalizeStackId('esri imagery'), 'esri-imagery');
+  // And the voice tool's enum must equal the set of live ids — no drift either way.
+  const config = readFileSync(new URL('../../vite.config.js', import.meta.url), 'utf8');
+  const enumMatch = config.match(/enum: \[('photoreal'[^\]]*)\],\s*\n\s*description: 'photoreal = Google 3D/);
+  assert.ok(enumMatch, 'set_map_stack enum literal must still be findable');
+  const enumIds = enumMatch[1].split(',').map((s) => s.trim().replace(/^'|'$/g, ''));
+  assert.deepEqual(
+    [...enumIds].sort(),
+    MAP_STACKS.map((s) => s.id).sort(),
+    'the set_map_stack voice enum and MAP_STACKS must name exactly the same basemaps',
+  );
+});
 
 test('track_entity narration names aircraft callsign → registration → icao24', () => {
   const found = { callsign: 'SWA696', registration: 'N123AB', icao24: 'ae1fa4' };
@@ -2774,7 +2804,7 @@ test('a nested Cockpit rollback result is translated too', async () => {
 
 
 /**
- * Front 5 (the live trial, 2026-08-22 01:42-01:44). Contacts was active
+ * Front 5 (owner's live trial, 2026-08-22 01:42-01:44). Contacts was active
  * with contact N546PC as its subject, a DATACENTER sat in the recency slot,
  * and "how many nearby" produced 15 from a radius centred on the datacenter
  * while the panel showed 111. Two causes: the wrong centre, and two different

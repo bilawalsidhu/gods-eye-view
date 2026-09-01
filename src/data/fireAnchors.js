@@ -1,5 +1,5 @@
 // src/data/fireAnchors.js — DEM ground anchors for rendered FIRMS detections
-// (field finding 2026-07-21: at close/oblique zoom over high country,
+// (owner field finding 2026-07-21: at close/oblique zoom over high country,
 // fire dots anchored at ellipsoid height 0 read as buried inside the terrain
 // ~1-2 km below the visible surface).
 //

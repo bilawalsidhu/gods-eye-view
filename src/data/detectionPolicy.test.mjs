@@ -36,7 +36,7 @@ test('the bracket floor anchor mirrors the real keyhole default it is calibrated
 
 test('the default OUTSIDE setting reproduces the approved 0.35 floor exactly', () => {
   // Byte-identical at the default, at every keyhole alpha, with the setting
-  // passed explicitly and with it omitted. This is the accepted look; only
+  // passed explicitly and with it omitted. The owner approved this look; only
   // the off-default range is allowed to change.
   assert.equal(aircraftBracketAlphaFloor(KEYHOLE_OUTSIDE_OPACITY_DEFAULT), AIRCRAFT_BRACKET_ALPHA_FLOOR);
   for (const alpha of [0.01, 0.05, 0.2, 0.34, 0.35, 0.36, 0.7, 1]) {

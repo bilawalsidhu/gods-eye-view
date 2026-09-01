@@ -11,13 +11,13 @@ export const GLOBE_EXIT_CLEARANCE_PX = 12;
 export const CELESTIAL_PLANE_EPSILON = 0.045;
 /** Responsive radial fade band used by every keyhole-aligned text overlay —
  * this is the Detection FADE (label/card fading), NOT the scope-mask feather
- * in scopeMask.js. 0.07 since the 2026-08-24 final value (was 0.16). */
+ * in scopeMask.js. 0.07 since the 2026-08-24 owner final lock (was 0.16). */
 export const KEYHOLE_LABEL_FEATHER_RATIO = 0.07;
 export const KEYHOLE_LABEL_FEATHER_MAX_RATIO = 0.4;
 /**
  * First-run OUTSIDE opacity for keyhole-aligned world overlays.
  *
- * 0.01 since 2026-08-24 (final value; 0.03 on 08-23, 0.05 before). Keep in lockstep with
+ * 0.01 since 2026-08-24 (owner final lock; 0.03 on 08-23, 0.05 before). Keep in lockstep with
  * `#detection-opacity-slider`'s markup value AND readout in index.html,
  * `_detectionOutsideOpacityPct` in sharelink.js,
  * `GLOBAL_POST_DEFAULTS.detectionOutsideOpacityPct` in ui.js, and
@@ -374,7 +374,7 @@ export class CelestialRing {
       // Always mark dirty so a long-hidden interval can't serve stale
       // sun/moon vectors on return — but only request the repaint frame
       // while visible; the visibility-restore request (main.js) picks the
-      // dirty flag up immediately. (review review finding)
+      // dirty flag up immediately. (review finding)
       this._ephemerisDirty = true;
       if (typeof document !== 'undefined' && document.hidden) return;
       governorRequestRender('celestial-ephemeris');
@@ -427,7 +427,7 @@ export class CelestialRing {
     // rendered frames — under the idle render governor an enable (or the
     // clearing disable) must request its frame or the ring never draws at
     // all. Camera motion covers every later repaint; the 60 s ephemeris
-    // timer requests its own. (perf wave 2 fix — field test finding)
+    // timer requests its own. (perf wave 2 fix — owner playtest finding)
     if (this.enabled !== wasEnabled) governorRequestRender('celestial-ring');
     this._root.classList.toggle('disabled', !this.enabled);
     if (!this.enabled) {

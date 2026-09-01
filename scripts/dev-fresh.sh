@@ -23,6 +23,23 @@ CCTV_TFL_ENABLED="${CCTV_TFL_ENABLED:-1}"
 CCTV_TFL_MAX_SOURCES="${CCTV_TFL_MAX_SOURCES:-250}"
 CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-900}"
 
+# Capture which provider credentials genuinely came from the parent shell
+# before this launcher resolves dotenv and Keychain fallbacks. Only names are
+# passed to Vite; values never enter the provenance marker. This lets Provider
+# Settings keep an exported credential read-only even when .env happens to hold
+# the same value, without misclassifying values that dev-fresh loaded from .env.
+KEY_SETUP_EXTERNAL_KEYS=()
+[[ -n "${GOOGLE_MAPS_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(GOOGLE_MAPS_API_KEY)
+[[ -n "${CESIUM_ION_TOKEN:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(CESIUM_ION_TOKEN)
+[[ -n "${OPENAI_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(OPENAI_API_KEY)
+[[ -n "${AISSTREAM_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(AISSTREAM_API_KEY)
+[[ -n "${FIRMS_MAP_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(FIRMS_MAP_KEY)
+[[ -n "${TOMTOM_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(TOMTOM_API_KEY)
+[[ -n "${OPENSKY_CLIENT_ID:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(OPENSKY_CLIENT_ID)
+[[ -n "${OPENSKY_CLIENT_SECRET:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(OPENSKY_CLIENT_SECRET)
+[[ -n "${LL2_API_TOKEN:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(LL2_API_TOKEN)
+KEY_SETUP_EXTERNAL_KEYS_CSV="$(IFS=,; printf '%s' "${KEY_SETUP_EXTERNAL_KEYS[*]:-}")"
+
 if command -v npm >/dev/null 2>&1; then
   DEV_COMMAND=(npm run dev --)
 elif command -v pnpm >/dev/null 2>&1; then
@@ -34,11 +51,8 @@ fi
 
 read_dotenv_value() {
   local variable_name="$1"
-  if [[ ! -f ".env" ]]; then
-    return
-  fi
   if ! command -v node >/dev/null 2>&1; then
-    echo "warning: node not found; cannot parse .env" >&2
+    echo "warning: node not found; cannot parse dotenv files" >&2
     return
   fi
   node scripts/read-dotenv-value.mjs "${variable_name}"
@@ -46,12 +60,12 @@ read_dotenv_value() {
 
 # Vite loads .env for browser build-time configuration, but this launcher needs
 # the Maps key before Vite starts. Preserve a shell-provided value; otherwise
-# read the project-local .env without executing it as shell code.
+# read Vite's project-local dotenv ladder without executing it as shell code.
 GOOGLE_MAPS_API_KEY_ENV="${GOOGLE_MAPS_API_KEY:-}"
 GOOGLE_MAPS_API_KEY_ENV_SOURCE="env"
-if [[ -z "${GOOGLE_MAPS_API_KEY_ENV}" && -f ".env" ]]; then
+if [[ -z "${GOOGLE_MAPS_API_KEY_ENV}" ]]; then
   GOOGLE_MAPS_API_KEY_ENV="$(read_dotenv_value "GOOGLE_MAPS_API_KEY")"
-  GOOGLE_MAPS_API_KEY_ENV_SOURCE=".env"
+  GOOGLE_MAPS_API_KEY_ENV_SOURCE="dotenv"
 fi
 GOOGLE_MAPS_API_KEY_KEYCHAIN=""
 GOOGLE_MAPS_API_KEY_SOURCE=""
@@ -65,18 +79,16 @@ if command -v security >/dev/null 2>&1; then
   done
 fi
 
-if [[ -n "${GOOGLE_MAPS_API_KEY_KEYCHAIN}" ]]; then
-  GOOGLE_MAPS_API_KEY="${GOOGLE_MAPS_API_KEY_KEYCHAIN}"
-elif [[ -n "${GOOGLE_MAPS_API_KEY_ENV}" ]]; then
+if [[ -n "${GOOGLE_MAPS_API_KEY_ENV}" ]]; then
   GOOGLE_MAPS_API_KEY="${GOOGLE_MAPS_API_KEY_ENV}"
   GOOGLE_MAPS_API_KEY_SOURCE="${GOOGLE_MAPS_API_KEY_ENV_SOURCE}"
+elif [[ -n "${GOOGLE_MAPS_API_KEY_KEYCHAIN}" ]]; then
+  GOOGLE_MAPS_API_KEY="${GOOGLE_MAPS_API_KEY_KEYCHAIN}"
 else
   GOOGLE_MAPS_API_KEY=""
 fi
 if [[ -z "${GOOGLE_MAPS_API_KEY}" ]]; then
-  echo "error: Google Maps API key missing."
-  echo "set GOOGLE_MAPS_API_KEY in env, or add Keychain item: service=google-maps-api account=api-key"
-  exit 1
+  GOOGLE_MAPS_API_KEY_SOURCE="not configured"
 fi
 
 read_keychain_secret() {
@@ -312,7 +324,14 @@ case "${OPENSKY_AUTH_MODE}" in
 esac
 [[ -n "${OPENAI_API_KEY}" ]] && echo "OpenAI key (voice + HUD summary): configured" || echo "OpenAI key (voice + HUD summary): not set — GEV MIC disabled"
 [[ -n "${AISSTREAM_API_KEY}" ]] && echo "AISStream key (live vessels): configured" || echo "AISStream key (live vessels): not set — ships layer empty"
-[[ -n "${CESIUM_ION_TOKEN}" ]] && echo "Cesium ion token (Bing map stacks): configured" || echo "Cesium ion token (Bing map stacks): not set — Google 3D/OSM only"
+if [[ -n "${GOOGLE_MAPS_API_KEY}" ]]; then
+  echo "Startup map: Google Photorealistic 3D Tiles (direct)"
+elif [[ -n "${CESIUM_ION_TOKEN}" ]]; then
+  echo "Startup map: Google Photorealistic 3D Tiles (Cesium ion)"
+else
+  echo "Startup map: OpenStreetMap with keyless terrain"
+fi
+[[ -n "${CESIUM_ION_TOKEN}" ]] && echo "Cesium ion token: configured — Google 3D, Bing, and world-terrain stacks available" || echo "Cesium ion token: not set"
 [[ -n "${TOMTOM_API_KEY}" ]] && echo "TomTom key (live traffic flow): configured" || echo "TomTom key (live traffic flow): not set — simulated traffic"
 [[ -n "${FIRMS_MAP_KEY}" ]] && echo "NASA FIRMS key (live fires): configured" || echo "NASA FIRMS key (live fires): not set — fires layer requires a key"
 [[ -n "${LL2_API_TOKEN}" ]] && echo "Launch Library 2 token: configured" || echo "Launch Library 2 token: not set — using public access"
@@ -337,7 +356,7 @@ put_env_if_set() {
   fi
 }
 
-put_env GOOGLE_MAPS_API_KEY "${GOOGLE_MAPS_API_KEY}"
+put_env_if_set GOOGLE_MAPS_API_KEY "${GOOGLE_MAPS_API_KEY}"
 put_env CCTV_AUSTIN_MAX_SOURCES "${CCTV_AUSTIN_MAX_SOURCES}"
 # Empty is the documented Caltrans kill switch, so this one is passed as-is.
 put_env CCTV_CALTRANS_DISTRICTS "${CCTV_CALTRANS_DISTRICTS}"
@@ -358,5 +377,7 @@ put_env_if_set CESIUM_ION_TOKEN "${CESIUM_ION_TOKEN}"
 put_env_if_set TOMTOM_API_KEY "${TOMTOM_API_KEY}"
 put_env_if_set FIRMS_MAP_KEY "${FIRMS_MAP_KEY}"
 put_env_if_set LL2_API_TOKEN "${LL2_API_TOKEN}"
+put_env GEV_LAUNCHER "dev-fresh"
+put_env GEV_KEY_SETUP_EXTERNAL_KEYS "${KEY_SETUP_EXTERNAL_KEYS_CSV}"
 
 env ${DEV_UNSET[@]+"${DEV_UNSET[@]}"} "${DEV_ENV[@]}" "${DEV_COMMAND[@]}" --host "${HOST}" --port "${PORT}" --force

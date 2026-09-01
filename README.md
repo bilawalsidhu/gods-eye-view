@@ -4,7 +4,7 @@
 
 ### A spy-satellite simulator in your browser — then you realize the sources are public and the data is real.
 
-Photorealistic 3D globe. Live aircraft, ships, satellites, earthquakes, traffic, and public cameras, with clearly labeled modeled views where a live feed is unavailable. Hands-free voice control powered by a realtime AI agent.
+Photorealistic 3D globe. Live aircraft, ships, satellites, earthquakes, traffic, and public cameras. Hands-free voice control powered by a realtime AI agent.
 
 *No place left behind.*
 
@@ -14,7 +14,13 @@ Photorealistic 3D globe. Live aircraft, ships, satellites, earthquakes, traffic,
   <img src="docs/media/youtube-popular-videos.png" alt="The God's Eye View video series on YouTube" width="100%">
 </a>
 
-▶️ **From the project behind the viral God's Eye View series** *(formerly WorldView)* — [5M+ on YouTube](https://youtube.com/playlist?list=PL6qSg2I-7_koPbDnSMo0QeeHX_RknA2uv&si=nBGYMoHWQw41v93Q)
+▶️ **From the project behind the viral God's Eye View series** *(formerly WorldView)* — [5M+ on YouTube](https://youtube.com/playlist?list=PL6qSg2I-7_koPbDnSMo0QeeHX_RknA2uv&si=nBGYMoHWQw41v93Q) · [25M+ across socials](https://www.google.com/search?q=god%27s+eye+view)
+
+[![#1 on GitHub Trending](https://img.shields.io/badge/%231_GitHub_Trending-thank_you!-F0A63C?style=flat-square&logo=github)](https://github.com/trending)
+
+🏆 **#1 on GitHub Trending this past week — thank you.** You asked for a one-click install; it's here.
+
+⚡ **No keys, no signup, no config file.** One click through [Pinokio](https://pinokio.computer/) — or `npm install && npm run dev` — and the globe is live: real aircraft, real satellites, real cameras. Keys are power-ups you paste into the app later. **[→ Quick Start](#-quick-start)**
 
 </div>
 
@@ -22,7 +28,7 @@ Photorealistic 3D globe. Live aircraft, ships, satellites, earthquakes, traffic,
 
 <div align="center">
 
-**[Quick Start](#-quick-start) · [First Five Minutes](#-the-first-five-minutes) · [Talk to It](#-talk-to-it) · [What's Live](#-whats-on-the-globe) · [Under the Hood](#-under-the-hood) · [Keys](#-api-keys) · [Costs](#-what-it-actually-costs)**
+**[Quick Start](#-quick-start) · [First Five Minutes](#-the-first-five-minutes) · [Talk to It](#-talk-to-it) · [What's Live](#-whats-on-the-globe) · [Under the Hood](#-under-the-hood) · [Keys & Costs](#-api-keys)**
 
 </div>
 
@@ -36,19 +42,14 @@ Most open-source intelligence is a pile of browser tabs. The signals are abundan
 
 > Half the magic is that it looks like a forbidden cockpit. The other half is that every line of code is inspectable.
 
-The live layers are grounded in public feeds: the airliner crossing your screen is reporting telemetry, the camera is installed at a published location, and the ISS position is propagated from current orbital elements. The client deliberately renders flights one polling interval behind real time so it can interpolate smoothly. Some experiences are modeled rather than live: keyless traffic is labeled as a simulation, camera poses are estimated until calibrated, and launch ascent playback is marked `RECONSTRUCTED ESTIMATE`. Each layer keeps its source and freshness state visible, including partial, delayed, simulated, and unavailable states.
+Most feeds are live; explicitly labeled traffic, camera-pose, and launch
+experiences may be simulated, estimated, or reconstructed.
+
+And it's honest about money: the best free and nearly-free APIs give you the real experience out of the box — then it's yours to extend with bigger, more expensive data sources whenever you're ready.
 
 ---
 
 ## 🎛️ What This Thing Does
-
-<div align="center">
-
-[![YouTube video about the God's Eye View open source release](https://img.youtube.com/vi/GRJaKcXZS94/maxresdefault.jpg)](https://www.youtube.com/watch?v=GRJaKcXZS94)
-
-▶️ **[The full walkthrough of everything below, on YouTube](https://www.youtube.com/watch?v=GRJaKcXZS94)**
-
-</div>
 
 - **🛩️ Cockpit view:** Ride inside a tracked flight — the camera holds the terrain under you all the way down.
 - **📡 Contacts:** A 250 km roster of everything near your target — step through live aircraft and drop into any cockpit.
@@ -65,38 +66,93 @@ The live layers are grounded in public feeds: the airliner crossing your screen 
 
 ---
 
+<div align="center">
+
+[![YouTube video about the God's Eye View open source release](https://img.youtube.com/vi/GRJaKcXZS94/maxresdefault.jpg)](https://www.youtube.com/watch?v=GRJaKcXZS94)
+
+▶️ **[The full walkthrough of everything below, on YouTube](https://www.youtube.com/watch?v=GRJaKcXZS94)**
+
+</div>
+
 ## ⚡ Quick Start
 
-Requires Node.js 24.14.x or 26.x (enforced by `package.json`).
+**Nothing to sign up for to get started.** Both paths below land you in the
+same place: a live satellite globe — keyless Esri World Imagery with keyless
+terrain, and OSM stepping in automatically if Esri is ever unreachable — with
+aircraft, military traffic, satellites, earthquakes, public cameras, radio and
+launches already moving on it. No account, no key, no file to edit.
 
-1. Copy `.env.example` → `.env` and set `GOOGLE_MAPS_API_KEY`.
-2. Install and run:
+**Optional signups, optimal experience.** The keyless globe gets you running;
+a couple of two-minute signups make it spectacular. Want the photorealistic-3D
+cities? A **free Cesium ion token** covers them for eligible personal,
+non-commercial use — no Google account needed; current ion terms and quotas
+apply. Prefer them straight from Google, plus in-app place search? A
+**Google Maps key** is the billing-enabled, metered route — with a surprisingly
+generous free tier ([real numbers](#-api-keys)). Either one pastes straight
+into **Then power it up** below.
+
+### Path 1 — One click, no terminal
+
+1. Install [Pinokio](https://pinokio.computer/).
+2. In **Discover → Download from URL**, paste
+   `https://github.com/bilawalsidhu/gods-eye-view`.
+3. Click **Install**, then **Start**.
+
+That is the whole thing. The launcher verifies Pinokio's runtime, installs the
+locked dependencies, finds a free local port, and opens the app.
+
+### Path 2 — Terminal / coding agent
+
+Requires Node.js 24.14.x or 26.x. Node 25 is usable but EOL; the setup doctor
+warns instead of blocking it.
 
 ```bash
 npm install
-npm run dev -- --host localhost --port 4173
+npm run doctor
+npm run dev
 ```
 
-3. Open **`http://localhost:4173`**. Cold start settles in under two seconds on a recent laptop (median 1.86 s in a point-in-time M5/Chrome capture — [docs/PERFORMANCE.md](docs/PERFORMANCE.md); a comparison baseline, not a hardware requirement). A first-run card offers to stage a mission for you — **Live Contacts**, **Space Missions**, **Environmental** — or leaves you to explore manually.
+Open **`http://localhost:4173`**. Cold start settles in under two seconds on a
+recent laptop (median 1.86 s in a point-in-time M5/Chrome capture —
+[docs/PERFORMANCE.md](docs/PERFORMANCE.md); a comparison baseline, not a hardware
+requirement). A first-run card offers to stage a mission for you — **Live
+Contacts**, **Space Missions**, **Environmental** — or leaves you to explore
+manually.
 
-> [!TIP]
-> **Not a coder? Have an AI do this whole page for you.** A one-click installer is in the works — until then, install a coding agent ([Claude Code](https://claude.com/claude-code), [Codex](https://openai.com/codex/), [Cursor](https://cursor.com), or [Antigravity](https://antigravity.google)) and paste this:
->
-> ```text
-> Clone https://github.com/bilawalsidhu/gods-eye-view and set it up on my machine.
-> Install everything it needs, walk me through getting the required Google Maps API
-> key step by step (plus any optional free keys I want), put the keys in .env, and
-> help me set a billing alert and a usage quota on the Google key so I can't
-> overspend. Then start the dev server and open it in my browser. I'm not a
-> developer — explain what you're doing as you go, and ask me before any step
-> that could cost money.
-> ```
+**macOS shortcut:** `./scripts/dev-fresh.sh` clears the Vite cache and pulls any
+configured keys straight from the Keychain. It starts keyless too.
 
-**That one key is the whole entry fee.** Everything in this README is color-coded — 🟢 needs nothing · 🟡 free key · 🔴 metered — and Google Maps is the only 🔴 you need: it buys the photorealistic planet, and most of the globe lights up 🟢 from there. For typical solo exploring, expect **$0 on most layers** and pocket change on the metered two: Google currently gives **1,000 free 3D-tile sessions a month** — each good for up to three hours of rendering, which is very hard for one person to exhaust — and voice carries a built-in $5 session cap. Full map in [Keys & Costs](#-api-keys), full honest breakdown in [What it actually costs](#-what-it-actually-costs).
+### Then power it up — in the app, not in a file
 
-The dev server binds to **localhost** — your keys stay on your machine. Sharing on a LAN safely is covered in [Sharing an instance](#-sharing-an-instance) and [SECURITY.md](SECURITY.md).
+Keys are upgrades, not prerequisites. When you want one, click the **POWER UP**
+chip in the bottom-right corner: Provider Settings lists every supported key,
+what it switches on, and where to get it. Paste, hit **SAVE KEYS**, and the app
+restarts itself with the new capability on. Once everything is configured the
+chip reads **POWERED UP** — and if a compact layout hides it, `?setup=1`
+reopens the same panel.
 
-**macOS shortcut:** `./scripts/dev-fresh.sh` clears the Vite cache and pulls your keys straight from the Keychain.
+- **Where keys land:** Pinokio → the app's ignored `pinokio/ENVIRONMENT`; a
+  terminal clone → the repo-root `.env`. Either file is made owner-only
+  *before* a secret is written into it, and it never leaves your machine.
+- **Keys you already have stay yours:** values from your shell or the macOS
+  Keychain show as *configured externally* and are read-only to the panel.
+- **What to get first:** the free [Cesium ion](https://cesium.com/ion) token
+  (eligible personal, non-commercial use; current terms and quotas apply) for
+  photorealistic 3D and world terrain; a Google Maps key only for the
+  billing-enabled, metered route + place search; OpenAI when you want to talk
+  to the world. Full map, costs included, in [Keys & Costs](#-api-keys).
+
+> [!WARNING]
+> Do not enter credentials in Pinokio 8.0.40's native **Configure** panel: that
+> release does not save this nested app file correctly, and it logs submitted
+> values. Use Provider Settings inside the app instead. Both file stores are
+> local plaintext; on macOS the Keychain via `./scripts/dev-fresh.sh` remains
+> the stronger option.
+
+The server binds to **localhost** on both paths, and Provider Settings answers
+requests only from your machine. Browser-side keys (Google Maps, Cesium ion)
+must be restricted at their providers — [SECURITY.md](SECURITY.md) shows how,
+and it carries the LAN-sharing rules alongside [Keys & Costs](#-api-keys).
 
 ---
 
@@ -105,11 +161,9 @@ The dev server binds to **localhost** — your keys stay on your machine. Sharin
 No account, no signup. The first-run card will offer to stage a mission for you — or run this gauntlet yourself. Somewhere in these five minutes it stops feeling like a demo:
 
 1. **Light up the sky.** Take the **Live Contacts** mission (or turn on **Flights** yourself) — thousands of live aircraft, gliding on real telemetry, detection mesh already reading the scene. Click one: the camera locks on, a trail draws behind it, and its live telemetry card comes up.
-2. **Take the controls.** Hit **COCKPIT** on your tracked plane and ride it down, switching sensors mid-flight: NVG into Ironbow FLIR. The cockpit carries its own briefing strip — nearby live signals, regional headlines, and real local weather, with an opt-in **WX** mode that renders volumetric clouds from actual observations around your aircraft — and **Contacts** keeps the 250 km roster one click (or one sentence) away: jump plane to plane and fall straight into the next cockpit.
+2. **Take the controls.** Hit **COCKPIT** on your tracked plane and ride it down, switching sensors mid-flight: NVG into Ironbow FLIR.
 
 ![Riding with a live aircraft in cockpit view while switching sensor modes](docs/media/06-cockpit-ar.gif)
-
-![Jumping between live aircraft and falling straight into a cockpit view](docs/media/12-switch-aircraft-cockpit.gif)
 
 3. **Drop into a busy airport.** Search one and descend to the taxiways with **3D** aircraft on — grounded contacts, taxi trails, the whole apron working in real time.
 
@@ -119,22 +173,34 @@ No account, no signup. The first-run card will offer to stage a mission for you 
 
 ![Diving into an Austin intersection with a live public camera projected into the 3D scene](docs/media/03-austin-cctv.gif)
 
-5. **Paint the streets with rush hour.** Turn on **Traffic** and dive below ~8 km — per-vehicle flow colors to the real jams (with a TomTom key; keyless it's a labeled simulation). Then hit **NEAREST** in the CCTV panel and watch the jam through the camera pointed at it.
-
-![Diving from city-scale live congestion straight into an intersection's public camera](docs/media/05-traffic-to-cctv.gif)
-
-6. **Track something in orbit.** Turn on **Satellites** and click the ISS — you ride along at orbital distance, orbit ring and all.
+5. **Track something in orbit.** Turn on **Satellites** and click the ISS — you ride along at orbital distance, orbit ring and all.
 
 ![Tracking the ISS along its orbital path as it crosses over Ukraine](docs/media/14-iss-over-ukraine.gif)
 
-7. **Switch the optics.** Tap `1`–`7` — CRT, NVG, FLIR — and the whole live planet re-renders through a different sensor.
+6. **Switch the optics.** Tap `1`–`7` — CRT, NVG, FLIR — and the whole live planet re-renders through a different sensor.
 
 ![Cycling a dense live globe through CRT, FLIR, and NVG in one continuous view](docs/media/01-style-sweep.gif)
 
-8. **Talk to it** *(needs an OpenAI key)*: *"Take me to LAX and select the nearest airborne aircraft."*
-9. **Come home.** Hit **Reset Globe** — or just say *"zoom out to a globe view."*
+7. **Talk to it** *(needs an OpenAI key)*: *"Take me to LAX and select the nearest airborne aircraft."*
+8. **Come home.** Hit **Reset Globe** — or just say *"zoom out to a globe view."*
 
 **Keyboard:** `1`–`7` visual styles · `H` HUD · `D` detection · `C` cockpit · `Esc` out.
+
+---
+
+## 🛩️ The Cockpit
+
+> Every plane should let you do this.
+
+Real-time cockpit mode, built from live flight data: the camera rides your contact with real terrain holding underneath, all the way down — sensor styles come along for the ride, and **Contacts** keeps the 250 km roster one click away: jump plane to plane and fall straight into the next cockpit.
+
+![Jumping between live aircraft and falling straight into a cockpit view](docs/media/12-switch-aircraft-cockpit.gif)
+
+The cockpit even carries its own briefing strip: nearby live signals, regional headlines, and real local weather — with an opt-in **WX** mode that renders volumetric clouds from actual observations around your aircraft.
+
+![A live military contact ridden through Normal, NVG, and Ironbow FLIR with dense detection](docs/media/start-here/military-cockpit-dense-google-3d.gif)
+
+*Why cockpit mode exists: you're riding a real aircraft over real terrain — and you get to pick which sensor you see the world through.*
 
 ---
 
@@ -169,7 +235,7 @@ Twenty-eight tools, four jobs — the commands below come straight from the prod
 > 🗣️ *"Switch to night vision and turn on the flights layer."* · *"Turn on the camera viewsheds."* · *"Play a news radio station near Austin."* · *"Track that plane."* → *"Enter Cockpit."*
 
 **And the rapid-fire tier** — one sentence each:
-> 🗣️ *"Show me global infrastructure."* (stages the layers and pulls back to the globe) · *"Play Orbital Watch."* (a full cinematic scene) · *"Set detection density to fifty percent."* · *"Next contact — helicopters only."* (mid-cockpit) · *"Show me space missions."* · *"Switch to Bing aerial."* · *"Sharpen the image a touch."* · *"Switch to the tactical layout."* · *"What's turned on right now?"*
+> 🗣️ *"Show me global infrastructure."* (stages the layers and pulls back to the globe) · *"Play Orbital Watch."* (a full cinematic scene) · *"Set detection density to fifty percent."* · *"Next contact — helicopters only."* (mid-cockpit) · *"Show me space missions."* · *"Switch to OSM."* · *"Sharpen the image a touch."* · *"Switch to the tactical layout."* · *"What's turned on right now?"*
 
 ![The globe populating with the world's radio stations as another live layer](docs/media/15-global-radio-layer.gif)
 
@@ -179,15 +245,15 @@ Twenty-eight tools, four jobs — the commands below come straight from the prod
 
 ## 🛰️ What's on the Globe
 
-Thirteen live layers. **Ten of them need nothing at all** — no key, no account, no signup.
+Thirteen live layers. **Eleven of them need nothing at all** — no key, no account, no signup, starting with the satellite basemap you land on. (🟢 nothing · 🟡 free key · 🔴 metered.)
 
 | Layer | What you get | Source | Auth |
 |-------|--------------|--------|------|
-| 🗺️ **Map Stack** | Google Photorealistic 3D, Bing aerial, OSM | Google / Ion / OSM | 🔴 Google (required) · 🟡 ion for Bing · 🟢 OSM |
-| ✈️ **Live Flights** | Thousands of live aircraft + route history | OpenSky + adsb.lol | 🟢 (🟡 optional for more polling credits) |
+| 🗺️ **Map Stack** | Esri satellite imagery, Google Photorealistic 3D, OSM, plus additional ion-hosted stacks | Esri / Google / Ion / OSM | 🟢 Esri satellite + OSM · 🟡 ion-hosted Google 3D + world terrain · 🔴 direct Google + place search |
+| ✈️ **Live Flights** | 11,000+ live aircraft + route history | OpenSky + adsb.lol | 🟢 (🟡 optional for more polling credits) |
 | 🎖️ **Military Flights** | ADS-B military traffic in amber | adsb.lol | 🟢 |
 | 🚢 **Live Vessels** | Thousands of ships worldwide | AISStream | 🟡 |
-| 🛰️ **Satellites** | A roughly 840-object core catalog, color-coded by class with a live legend — the **DENSE** chip drops in the whole Starlink shell | CelesTrak | 🟢 |
+| 🛰️ **Satellites** | 838-object catalog, color-coded by class with a live legend — the **DENSE** chip drops in the whole Starlink shell | CelesTrak | 🟢 |
 | 🌍 **Earthquakes** | Global seismic activity, last 24h | USGS | 🟢 |
 | 🚗 **Traffic** | Live congestion driving per-vehicle flow at street level — dive below ~8 km and the dots color to real jams. Keyless it's an approximate simulation | TomTom + OSM | 🟢 (🟡 TomTom makes it real — get one) |
 | 📹 **CCTV Mesh** | ~800 public cameras projected *into* the 3D space — Austin · California (Caltrans) · London (TfL). Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs | 🟢 |
@@ -197,7 +263,21 @@ Thirteen live layers. **Ten of them need nothing at all** — no key, no account
 | 🚀 **Space Missions** | Rolling 30-day launches with payload, stage, and recovery detail | Launch Library 2 | 🟢 (🟡 optional token raises the allowance) |
 | 🎖️ **Mapped Installations** | Viewport-bounded military-site context from community mapping — incomplete by nature, and labeled that way | OpenStreetMap | 🟢 |
 
+**The basemap ladder — what each tier buys you:**
+
+| You have | The globe you get |
+|---|---|
+| 🟢 Nothing | Esri World Imagery satellite basemap + keyless terrain, in 2D. OSM takes over automatically if Esri is unreachable; if terrain is unavailable the globe continues without it |
+| 🟡 A free Cesium ion token | **Google Photorealistic 3D cities** and world terrain — eligible personal, non-commercial use; current ion terms and quotas apply |
+| 🔴 A Google Maps key | The same 3D direct from Google, plus in-app place search — the billing-enabled, metered route |
+
+![A reconstructed Falcon 9 ascent climbing and curving into its projected orbit](docs/media/08-falcon9-replay.gif)
+
+*The Space Missions layer replaying a Falcon 9 ascent — labeled `RECONSTRUCTED ESTIMATE`, scrubbable 0.25×–4×.*
+
 **Also on the globe:** neighborhood overlays · an optional cockpit WX cloud effect. **Bundled static infrastructure:** Datacenters (4,351), Dams (704), and Submarine Cables (712).
+
+![Diving into the Bahamas and revealing labeled submarine cable routes beneath the globe](docs/media/09-undersea-cables.gif)
 
 **Missing a layer you want?** Open an issue — or add it and send the PR.
 
@@ -220,7 +300,6 @@ Once the basics click, run these:
 | **🚀 Launch replay** | Open **Space Missions**, pick a launch from the last 30 days, and ride the T-minus countdown through ascent to orbit — scrub it at 0.25×–4×. Labeled `RECONSTRUCTED ESTIMATE`, because it is one. |
 | **🪦 Walk the boneyard** | Fly from regional context down into dense, fully resolved rows of retired aircraft. |
 | **🏗️ Orbit Three Gorges** | Sweep the dam and its terrain at a glance — then flip on the **Dams** layer and find 703 more. |
-| **🌊 Trace the backbone** | Dive to the Bahamas with **Submarine Cables** on — labeled routes reveal beneath the water, 712 of them worldwide. |
 
 *🎙️ = voice missions — they need an OpenAI key.*
 
@@ -236,14 +315,6 @@ Once the basics click, run these:
 
 *Walk the boneyard: rows of retired airframes, fully resolved in 3D.*
 
-![A reconstructed Falcon 9 ascent climbing and curving into its projected orbit](docs/media/08-falcon9-replay.gif)
-
-*Launch replay: a Falcon 9 ascent, labeled `RECONSTRUCTED ESTIMATE`, scrubbable 0.25×–4×.*
-
-![Diving into the Bahamas and revealing labeled submarine cable routes beneath the globe](docs/media/09-undersea-cables.gif)
-
-*Trace the backbone: the submarine cable routes under the Bahamas.*
-
 ---
 
 ## 🔧 Under the Hood
@@ -255,7 +326,7 @@ Some of the engineering that makes it feel real rather than like a tech demo:
 - **Honest satellites.** SGP4 propagation with orbit rings that stay locked to their satellites via GMST realignment — no drift, no per-second flicker.
 - **Sits on the real ground.** Entity heights run through a real vertical datum — geoid-aware, sampled against the *rendered* terrain mesh — so aircraft park on aprons and cameras stand on street corners instead of floating.
 - **Spends your quota like it's its own.** The paid feeds run behind cached, budget-governed proxies — an OpenSky credit governor, a TomTom daily tile budget, disk-cached TLEs — so an afternoon of exploring doesn't torch an API allowance.
-- **Local-first key handling.** Secret-bearing providers such as OpenAI, AISStream, OpenSky OAuth, TomTom, and FIRMS are brokered server-side. Proxy destinations are fixed or allowlisted, and the higher-risk paths add bounded requests, timeouts, response caps, and sanitized errors as appropriate. The only provider credentials intentionally exposed to the browser are Google Maps and Cesium ion; restrict both at the provider.
+- **Secure by design.** Every API that touches a private key (OpenAI, AISStream, OpenSky OAuth, camera frames) is brokered through a hardened server-side proxy with SSRF protection, response caps, and sanitized errors. The only keys the browser sees are Google Maps and Cesium ion (restrict both at the provider).
 - **No framework.** Vanilla JavaScript, **CesiumJS**, and **Vite** — plus **Google Photorealistic 3D Tiles** for the planet and the **OpenAI Realtime API** for voice. Fast to read, fast to hack on.
 
 ```
@@ -263,10 +334,11 @@ src/
 ├── main.js                 # Bootstrap: Google 3D tiles, layer registration
 ├── ui.js                   # Runtime UI — panels, HUD, styles, control facade
 ├── hud.js                  # Intelligence HUD + AI scene summary
-├── mapStackController.js   # Google 3D / Bing / OSM switching
+├── keySetup.js             # POWER UP panel — in-app provider keys (dev server only)
+├── mapStackController.js   # Basemap switching — Google 3D / Esri / OSM / ion stacks
 ├── iconOrientation.js      # Screen-projected world-space headings + horizon cull
 ├── voice/                  # OpenAI Realtime session + 28 voice tools
-├── data/                   # One module per layer + management + context store
+├── data/                   # One module per layer + orchestration + context store
 │   └── local_data/         # Bundled datasets (per-folder provenance)
 └── scenes/                 # Cinematic scene director
 ```
@@ -281,36 +353,59 @@ See [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md) for the authoritative runti
 
 Most of the globe is 🟢: flights (anonymous), military traffic, satellites, earthquakes, CCTV, radio, bikeshare, space missions, mapped installations, and every bundled dataset run with **zero keys**.
 
+**And you never have to edit a file to add one.** Click **POWER UP** in the
+bottom-right corner of the running app, paste the key into Provider Settings,
+hit **SAVE KEYS** — the app writes it to its own local store with owner-only
+permissions and restarts itself. Everything below is the map of what each key
+actually buys you.
+
 ### What you need for the good experience
 
-Five keys cover the fully keyed experience. Three currently offer no-cost developer access; Google Maps and OpenAI are usage-metered. Provider prices and allowances change, so use the linked pricing pages before relying on a budget estimate:
+Six keys. Four have a free tier, and the two 🔴 ones are metered:
 
 | | Key | Why | Get it |
 |---|-----|-----|--------|
-| 🔴 | **Google Maps** *(required)* | The photorealistic 3D planet ([Map Tiles API](https://developers.google.com/maps/documentation/tile)) | [Google Cloud Console](https://console.cloud.google.com/) — metered; [check current pricing](https://developers.google.com/maps/billing-and-pricing/pricing) and URL-restrict it |
-| 🔴 | **OpenAI** | 🎙️ The voice experience + AI HUD summary. Want another provider behind the mic? PRs welcome | [platform.openai.com](https://platform.openai.com) — metered; [check current API pricing](https://openai.com/api/pricing/) |
+| 🟡 | **Cesium ion** | 🗺️ Google Photorealistic 3D, world terrain, and additional ion-hosted imagery stacks. The free Community plan is for eligible individual, personal/non-commercial use and has quotas | [cesium.com/ion](https://cesium.com/ion) — use a public `assets:read` token and check current [pricing/eligibility](https://cesium.com/platform/cesium-ion/pricing/) |
+| 🔴 | **Google Maps** | Direct Google Photorealistic 3D + Google place search ([Map Tiles API](https://developers.google.com/maps/documentation/tile)) | [Google Cloud Console](https://console.cloud.google.com/) — URL-restrict it |
+| 🔴 | **OpenAI** | 🎙️ The voice experience + AI HUD summary. The mini model works; the standard model is noticeably smarter. Want Gemini or another provider behind the mic? PRs welcome | [platform.openai.com](https://platform.openai.com) — metered, see costs below |
 | 🟡 | **AISStream** | 🚢 Live global ships | [aisstream.io](https://aisstream.io) — free, seriously, it's a two-minute signup |
 | 🟡 | **NASA FIRMS** | 🔥 Live active fires | [firms.modaps.eosdis.nasa.gov](https://firms.modaps.eosdis.nasa.gov/api/map_key/) — free |
-| 🟡 | **TomTom** | 🚦 Real traffic instead of an approximate simulation | [developer.tomtom.com](https://developer.tomtom.com) — check the current developer allowance for your account |
+| 🟡 | **TomTom** | 🚦 Real traffic instead of an approximate simulation | [developer.tomtom.com](https://developer.tomtom.com) — free tier is plenty, completely worth it |
 
-*What the TomTom key buys you: step 5 of [The First Five Minutes](#-the-first-five-minutes) for real — actual rush-hour density painted on the city instead of an approximate simulation.*
+![Diving from city-scale live congestion straight into an intersection's public camera](docs/media/05-traffic-to-cctv.gif)
+
+*What the TomTom key buys you: rush-hour density painted on the city — then dive from the jam straight into the camera watching it.*
 
 ### Cherry on top
 
 | | Key | Why | Get it |
 |---|-----|-----|--------|
-| 🟡 | **Cesium ion** | 🗺️ Bing imagery map stacks (public `assets:read` token) | [cesium.com/ion](https://cesium.com/ion) — [check the plan that fits your use](https://cesium.com/platform/cesium-ion/pricing/) |
 | 🟡 | **OpenSky** | ✈️ More flight-polling credits (🟢 anonymous works without) | [opensky-network.org](https://opensky-network.org) |
 | 🟡 | **Launch Library 2** | 🚀 Higher space-missions request allowance (🟢 works without) | [thespacedevs.com](https://thespacedevs.com) |
 
 All of them are worth getting. None of them are required to start.
 
+`npm run doctor` reports Node/npm readiness, the primary provider routes, and
+where each configured provider was found without printing credential values.
+On macOS its Keychain-aware result previews `./scripts/dev-fresh.sh`; plain
+`npm run dev` reads only explicit environment and Vite dotenv values. The
+OpenSky summary reports only OAuth client-pair presence, not the resolved
+runtime mode or credential validity; Basic and credentials-file modes remain
+advanced `dev-fresh.sh` configuration.
+
+**If you'd rather not use the panel** — headless boxes, coding agents, scripted setups:
+
 ```bash
 # Put keys in .env (see .env.example), or pass them as env vars:
 OPENAI_API_KEY="…" AISSTREAM_API_KEY="…" npm run dev -- --host localhost --port 4173
-```
 
-On macOS you can also keep any key in the Keychain and `./scripts/dev-fresh.sh` pulls them in — the `security add-generic-password` service names are documented in `.env.example`.
+# On macOS, store any of them in the Keychain and dev-fresh.sh pulls them in:
+security add-generic-password -U -s "google-maps-api" -a "api-key" -w
+security add-generic-password -U -s "openai-api"      -a "api-key" -w
+security add-generic-password -U -s "aisstream-api"   -a "api-key" -w
+security add-generic-password -U -s "firms-map"       -a "map-key" -w
+security add-generic-password -U -s "cesium-ion"      -a "token"   -w
+```
 
 OpenSky can run fully anonymous (`OPENSKY_AUTH_MODE=anon`), or import OAuth credentials with `./scripts/opensky-import-client.sh /path/to/credentials.json`.
 
@@ -321,9 +416,17 @@ Honest numbers, roughly, as of mid-2026 — always check the provider pricing pa
 | | Cost reality |
 |---|---|
 | **🟢 Most layers** | **$0, no signup.** OpenSky anon, USGS, CelesTrak, adsb.lol, city CCTV, Radio Browser, GBFS, Launch Library 2, bundled datasets. |
-| **🟡 Optional developer access** | AISStream, FIRMS, TomTom, Cesium ion, and authenticated OpenSky may offer no-cost access, but limits and permitted uses differ. Cesium ion and OpenSky in particular have plan or use restrictions; verify the current provider terms for your deployment. |
-| **🔴 Google 3D tiles** | More generous than you'd guess: billing counts **root tileset requests** — one buys up to **three hours** of unlimited tile rendering — and the first **1,000 per month are free**, then about **$6 per 1,000** (US pricing; [check the current page](https://developers.google.com/maps/billing-and-pricing/pricing), rates vary by billing region). A solo user rarely leaves the free tier. Still: restrict the key, set quotas, and configure a budget alert before sustained use. |
-| **🔴 OpenAI voice** | Realtime audio is usage-metered and the total depends on the selected model, conversation length, and audio volume. The app shows a live session estimate, warns at $2, and applies a **$5 in-app session cap**; provider-side usage limits remain the billing backstop. |
+| **🟡 The free-key tier** | **$0 with a signup.** AISStream, FIRMS, TomTom, OpenSky, plus Cesium ion for eligible personal/non-commercial use. Provider quotas and eligibility still apply. |
+| **🗺️ Google 3D tiles** | **Free through an eligible Cesium ion Community account within its quota; metered through a direct Google key.** Use the direct route for GEV place search or commercial deployment, verify current provider terms, and set budget alerts where billing is enabled. |
+| **🔴 OpenAI voice** | **The one that costs real money — so the app meters it for you.** Realtime audio runs a few cents per active minute; an evening of heavy use is single-digit dollars. A live session-spend readout sits next to the mic, with an STD/MINI model toggle, a $2 warning, and a **$5 hard cap that ends the session**. The voice context window is kept deliberately short too. |
+
+Google's direct 3D route is surprisingly generous: the first 1,000 Photorealistic
+3D Tiles sessions each month are currently free, and one root request supports
+roughly three hours of rendering. A solo user exploring sparingly can
+realistically stay inside the free usage cap. Billing must still be enabled, so
+restrict the key and set a quota or budget alert. Check Google's
+[current pricing](https://developers.google.com/maps/billing-and-pricing/pricing)
+before relying on these figures.
 
 ### 🧗 The floor is low on purpose
 
@@ -332,6 +435,21 @@ Everything above is the deliberately cheap baseline — enough to get a real tas
 ### 🔒 Sharing an instance
 
 By default nobody else can reach your server — it binds to localhost. To share on your LAN, opt in explicitly (`npm run dev -- --host 0.0.0.0 --port 4173`, or `HOST=0.0.0.0 ./scripts/dev-fresh.sh` on macOS/Linux) — but know that ⚠️ **a LAN-visible server brokers your configured API keys to anyone who can reach it.** Set the per-IP throttles (`GEV_RATELIMIT_OPENAI_PER_MIN`, `GEV_RATELIMIT_GOOGLE_PER_MIN` — see `.env.example`) and, before anything else, **set provider-side budget caps** (Google Cloud budgets, OpenAI usage limits): the throttles are app-level guards, not billing caps. Full threat model in [SECURITY.md](SECURITY.md).
+
+Provider Settings switches itself off whenever the server is shared. The panel
+answers loopback requests only, and any sharing mode disables the surface
+outright rather than trusting the socket — tunnelled traffic reaches the server
+from loopback too, so socket identity can't carry that boundary. Nobody on your
+LAN gets a key-entry form.
+
+Pinokio LAN and Cloudflare sharing are currently unavailable for this launcher.
+The supported Pinokio release can activate sharing again when the Open-action
+URL is registered, and writes a successful tunnel-login passcode into its own
+notification and terminal stream. Before preflight, the launcher rewrites both
+sharing modes to disabled values, clears the child passcode, and pins Pinokio's
+share trigger to a disabled sentinel. The app then starts loopback-only and
+registers the standard Open URL. Use a separate reviewed authentication proxy
+if remote access is required.
 
 ---
 
@@ -345,7 +463,7 @@ God's Eye View runs on **public data, clear sources, and local-first execution.*
 
 **Status:** An evolving open-source client for exploration and learning — a fast, hackable foundation, not a hardened production service. Released under the **[MIT License](LICENSE)**. Bundled and live datasets carry their own terms — see **[DATA_SOURCES.md](DATA_SOURCES.md)**. Security model: **[SECURITY.md](SECURITY.md)**. Want to contribute? **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
-<sub>Media note: Bilawal Sidhu created and owns the 17 capture GIFs on this page. He also published the two README PNGs in the existing public project and authorized their continued inclusion here. Any appearance by Bilawal is included with his permission. These files are project documentation, not MIT-licensed standalone assets. Platform interfaces, trademarks, avatars, data, and third-party imagery visible within them remain subject to their respective owners' terms. See [media provenance](docs/media/README.md) and [source terms](DATA_SOURCES.md).</sub>
+<sub>Media note: the capture GIFs on this page show Google Photorealistic 3D Tiles and live data layers, used promotionally with in-frame attribution; they aren't licensed for standalone reuse. See [media provenance and permissions](docs/media/README.md); full source terms in [DATA_SOURCES.md](DATA_SOURCES.md).</sub>
 
 > [!IMPORTANT]
 > God's Eye View is an exploratory visualization of public and third-party data.

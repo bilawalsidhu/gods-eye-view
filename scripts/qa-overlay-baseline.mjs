@@ -11,10 +11,10 @@
  *   node scripts/qa-overlay-baseline.mjs
  *   node scripts/qa-overlay-baseline.mjs --scene datacenters
  *   node scripts/qa-overlay-baseline.mjs --scene cctv-street,detection-50
- *   node scripts/qa-overlay-baseline.mjs --json overlay-baseline.json
- *   node scripts/qa-overlay-baseline.mjs --screenshots-dir overlay-shots
+ *   node scripts/qa-overlay-baseline.mjs --json /tmp/overlay-baseline.json
+ *   node scripts/qa-overlay-baseline.mjs --screenshots-dir /tmp/overlay-shots
  *   node scripts/qa-overlay-baseline.mjs --hardware-gpu --headful
- *   node scripts/qa-overlay-baseline.mjs --dist-dir gev-dist
+ *   node scripts/qa-overlay-baseline.mjs --dist-dir /tmp/gev-dist
  */
 
 import fs from 'node:fs';

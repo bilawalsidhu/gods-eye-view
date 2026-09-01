@@ -28,7 +28,7 @@ const DEFERRED_DEPENDENCIES = ['ais-live-vessels', 'military-installations'];
 const DEPENDENCIES = [...AIRCRAFT_DEPENDENCIES, ...DEFERRED_DEPENDENCIES];
 const AWARENESS_REFRESH_MS = 750;
 /** @constant {number} Refresh cadence while the camera pose is CHANGING.
- *  Field test 2026-08-18: the Contacts direction arrows and card readouts
+ *  Owner playtest 2026-08-18: the Contacts direction arrows and card readouts
  *  "feel sluggish when you look around" — at the parked 750 ms cadence the
  *  arrows lag the view by up to three quarters of a second. */
 const AWARENESS_MOTION_REFRESH_MS = 175;
@@ -444,7 +444,7 @@ export function buildAwarenessContextSnapshot(results, navigation = {}, { subjec
  * They used to be separate. The panel read live billboard positions through
  * `getNearby` with a 20 000 cap; the analyst re-derived its own answer from
  * last-fix coordinates over a 2 000-record slice. Same question, same centre,
- * two numbers — and in the live trial the spoken answer (15) and the panel
+ * two numbers — and in the owner's trial the spoken answer (15) and the panel
  * (111) disagreed badly enough that the model narrated the difference away.
  * Routing both through here makes them the same number BY CONSTRUCTION, so
  * they cannot drift again.

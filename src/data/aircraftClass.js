@@ -137,7 +137,7 @@ export const CLASS_MODEL_URL = {
   bizjet: '/models/airplane.glb', uav: '/models/airplane.glb',
 };
 
-/** Real per-class GLBs (2026-08-15 Hangar fleet, selected assets; CC-BY 4.0 —
+/** Real per-class GLBs (2026-08-15 Hangar fleet, owner picks; CC-BY 4.0 —
  *  provenance in public/models/README.md). Every asset is vertex-baked to the
  *  airplane.glb convention: Y-up, X = length, Z = span, nose −X (so the layers'
  *  MODEL_HEADING_OFFSET_DEG = 180 applies unchanged), origin at bbox centre,

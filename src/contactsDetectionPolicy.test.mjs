@@ -1,4 +1,4 @@
-// Contacts-scoped detection (field test 2026-08-18: "when you click on
+// Contacts-scoped detection (owner playtest 2026-08-18: "when you click on
 // Contacts, detections should just turn on, and they should stay on in Cockpit
 // or in third-person tracking inside Contacts").
 //
@@ -87,7 +87,7 @@ test('the snapshot carries every field activation mutates, not just the mode', (
   assert.equal(getDetectionMode(), 'OFF');
   assert.equal(getDetectionTuning().densityPct, 25, 'deactivation puts the density back');
 
-  // The pin the user would notice: the next manual enable returns their profile.
+  // The pin the owner would feel: the next manual enable returns their profile.
   cycleDetectionMode();
   assert.equal(getDetectionMode(), 'SPARSE', 'manual enable returns 25%, not the tactical 75%');
   assert.equal(getDetectionTuning().densityPct, 25);
@@ -107,7 +107,7 @@ test('a density-only difference is still a restore worth making', () => {
 });
 
 test('activating Contacts lands on the tactical preset, not the last profile used', () => {
-  // Field test: the Contacts default is the military look, and it "should
+  // Owner playtest: the Contacts default is the military look, and it "should
   // just happen" — so a SPARSE session does NOT drag SPARSE into Contacts.
   setDetectionTuning({ densityPct: 25 });
   startAt('SPARSE');
@@ -159,7 +159,7 @@ test('activating Contacts leaves an already-on profile untouched', () => {
 });
 
 test('detection survives cockpit enter and exit inside a Contacts session', () => {
-  // The observed bug: "when I leave the Cockpit, detections go off".
+  // The owner's actual bug: "when I leave the Cockpit, detections go off".
   // Cockpit is a move WITHIN Contacts and must not touch detection at all, so
   // the only transitions here are the Contacts ones — repeated syncs while the
   // session stays active.

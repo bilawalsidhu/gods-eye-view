@@ -44,7 +44,7 @@ test('Realtime schema exposes the authoritative 28-tool inventory', () => {
 });
 
 test('the counting contract is stated in the Realtime instructions', () => {
-  // Product decision: "near" has one meaning per state, and every count names its
+  // Owner ruling: "near" has one meaning per state, and every count names its
   // scope. Instruction text is the only place the narration rules can live, so
   // it is pinned — a silent trim here is a silent behaviour change.
   const start = voice.indexOf("'COUNTING CONTRACT");
