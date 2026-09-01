@@ -60,7 +60,7 @@ import {
   COURSE_HOLD_SPEED_MPS,
 } from './motionModel.js';
 import { routePlausible } from './routePlausible.js';
-import { isMilitaryIcao, isMilitaryLayerActive, refreshMilitaryRegistryIfStale, onMilitaryLayerActiveChange } from './militaryRegistry.js';
+import { isMilitaryIcao, isFeedMilitaryIcao, noteMilitaryCandidate, isMilitaryLayerActive, refreshMilitaryRegistryIfStale, onMilitaryLayerActiveChange } from './militaryRegistry.js';
 import { formatFlightLevel } from './detectionDraw.js';
 import { createGroundSnap } from './groundSnap.js';
 import { trackedModelZoomActive } from './trackedModelRegime.js';
@@ -826,6 +826,9 @@ function _requestTypeEnrichment(icao24, priority = false) {
     meta.typeCode = data.typeCode || meta.typeCode;
     meta.typeName = data.typeName || meta.typeName;
     meta.registration = data.registration || meta.registration;
+    // A military type designator (C130, F16, …) is decisive — classify now that
+    // it is known, and repaint the billboard amber if this is the first match.
+    const newlyMilitary = noteMilitaryCandidate({ icao24, type: meta.typeCode, callsign: meta.callsign });
     if (meta.typeCode) {
       const klass = classifyAircraft({ typeCode: meta.typeCode, category: meta.category });
       if (klass !== meta.klass) {
@@ -835,6 +838,9 @@ function _requestTypeEnrichment(icao24, priority = false) {
         // Hangar fleet: the class's GLB/scale may have changed — resync the
         // live model, any in-flight load, and the tracked standalone model.
         _syncModelToClass(icao24);
+      } else if (newlyMilitary) {
+        const bb = _billboards.get(icao24);
+        if (bb) _applyFleetBillboardPresentation(icao24, bb);
       }
     }
     if (icao24 === _trackedIcao && _trackedEntity) _updateTrackedLabelModel(icao24);
@@ -3689,7 +3695,7 @@ function _onMilitaryActiveChange(active) {
   if (!_viewer || !_billboardCollection) return;
   if (active) {
     for (const [icao24, bb] of _billboards) {
-      if (!isMilitaryIcao(icao24) || icao24 === _trackedIcao) continue;
+      if (!isFeedMilitaryIcao(icao24) || icao24 === _trackedIcao) continue;
       _billboardCollection.remove(bb);
       _billboards.delete(icao24);
       _releaseModel(icao24); // military-suppression: drop any 3D model too
@@ -4188,11 +4194,17 @@ const flightsLayer = {
         acceptedSnapshotIcaos.add(icao24);
         const onGround = on_ground === true;
 
-        // Known-military aircraft: the dedicated military layer wins
-        // (icon + track + click) while it is enabled — suppress the
-        // OpenSky duplicate entirely (except a currently tracked one,
-        // which hands off on untrack).
-        const isMil = isMilitaryIcao(icao24);
+        // Classify military from the OpenSky row itself — hex allocation or a
+        // military callsign prefix — so aircraft no `/v2/mil` feed tagged still
+        // render amber. (Type-code classification lands later, once the type
+        // enrichment resolves; see `_requestTypeEnrichment`.)
+        noteMilitaryCandidate({ icao24, callsign });
+
+        // FEED-confirmed military: the dedicated military layer wins (icon +
+        // track + click) while it is enabled — suppress the OpenSky duplicate
+        // entirely (except a currently tracked one, which hands off on untrack).
+        // Heuristic-only military is NOT suppressed: that layer can't render it.
+        const isMil = isFeedMilitaryIcao(icao24);
         if (isMil && _militaryLayerSuppresses(icao24)) {
           const dupe = _billboards.get(icao24);
           if (dupe) {
