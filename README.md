@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🌐 God's Eye View
+# 🌐 God's Eye Vieww
 
 ### A spy-satellite simulator in your browser — then you realize the sources are public and the data is real.
 
