@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * scripts/qa-floor-hold.mjs — a grounded contact holds its floor through a
- * terrain-proxy outage (field incident, 2026-08-21).
+ * terrain-proxy outage (owner incident, 2026-08-21).
  *
  * Reproduces the incident end to end against the RENDERED mesh:
  *

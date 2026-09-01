@@ -116,7 +116,7 @@ test('admin types win over area types when both present', () => {
   assert.equal(geocodeNavigationMode(['locality', 'park', 'political']), 'city-overview');
 });
 
-// Natural-region framing heuristic (field test 2026-07-23): "take me to the
+// Natural-region framing heuristic (owner field test 2026-07-23): "take me to the
 // Rocky Mountains" geocodes as natural_feature with a ~2,700 km viewport — framing
 // the whole box flies the camera to space. Region-scale viewports get a capped
 // oblique swath instead; ordinary parks/lakes keep full-viewport framing.
@@ -474,7 +474,7 @@ test('regionFramingPlan: invalid viewports return null', () => {
   assert.equal(regionFramingPlan({ southwest: { lat: NaN, lng: 0 }, northeast: { lat: 1, lng: 1 } }), null);
 });
 
-// Globe-view preset (field test 2026-07-23): "zoom out to a globe view" needs an
+// Globe-view preset (owner field test 2026-07-23): "zoom out to a globe view" needs an
 // ABSOLUTE full-earth framing — the relative zoom tool can never reach it. The preset
 // must sit inside the app's own 'global' view-scale band (>12,000 km camera height,
 // classifyViewScale in gevActions.js) and under the fly_to rangeM ceiling (20,000 km).

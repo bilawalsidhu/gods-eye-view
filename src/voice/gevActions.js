@@ -91,7 +91,7 @@ const NESTED_CONTEXT_RESULT_FIELDS = Object.freeze(['context', 'contextRollback'
  * `set_context_mode` accepts 'contacts' while the mode's internal id is
  * 'flights'. Reporting the internal id back made the model read
  * `mode:'flights'` as "Contacts is off" and refuse to answer from the Contacts
- * window counts sitting in the very same payload (field session
+ * window counts sitting in the very same payload (owner field session
  * 2026-08-21). Secondary fields and nested transition/rollback results are
  * translated too — one leaked internal id is enough to recreate the confusion,
  * and a rollback result is exactly what the model reads when something went
@@ -208,6 +208,10 @@ const STACK_ALIASES = new Map([
   ['bing labels', 'bing-labels'],
   ['labels', 'bing-labels'],
   ['aerial with labels', 'bing-labels'],
+  ['esri-imagery', 'esri-imagery'],
+  ['esri', 'esri-imagery'],
+  ['esri imagery', 'esri-imagery'],
+  ['esri satellite', 'esri-imagery'],
   ['osm', 'osm'],
   ['openstreetmap', 'osm'],
   ['open street map', 'osm'],
@@ -1038,7 +1042,7 @@ function clearAnnotations(annotations) {
   return { ok: true, action: 'clear_annotations' };
 }
 
-function normalizeStackId(value) {
+export function normalizeStackId(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return null;
   return STACK_ALIASES.get(raw) || null;
@@ -3371,7 +3375,7 @@ async function runAnalystQuery(viewer, dataManager, args = {}) {
   // hand this result straight to track_entity, and `id` is a DISPLAY label
   // (callsign, else registration, else hex). A callsign-less contact therefore
   // handed track_entity a tail number the lookup could not resolve, and the
-  // model burned the turn on retries (field session 2026-08-21, 23:48).
+  // model burned the turn on retries (owner field session 2026-08-21, 23:48).
   const items = result.items.map((r) => {
     const compact = { layerKey: r.layerKey, id: r.id };
     for (const k of ['icao24', 'mmsi', 'registration', 'label', 'callsign', 'name', 'altitudeM', 'speedMps', 'speedKts', 'frp', 'magnitude', 'shipType', 'destination', 'operator', 'routeOrigin', 'routeDestination', 'aircraftClass', 'military', 'onGround', 'distanceKm', 'confidence', 'place']) {
@@ -3413,7 +3417,7 @@ async function runAnalystQuery(viewer, dataManager, args = {}) {
   const aircraftQueried = (result.coverage?.layersQueried || [])
     .some((l) => l.layerKey === 'flights' || l.layerKey === 'military');
   // Both numbers, and which one answers the question. The window counts have
-  // ridden along in `contactsWindow` for a while, and the live trial showed
+  // ridden along in `contactsWindow` for a while, and the owner's trial showed
   // that is not enough on its own: with Contacts active and a DATACENTER in
   // the selection slot, the model centred a radius on the datacenter, answered
   // 15, and then explained away the 111 sitting in the same payload ("that

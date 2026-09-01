@@ -92,7 +92,7 @@ export function rankContactMatch({ query, hex = '', callsign = '', registration 
  * (`track_entity`) is a MUTATION fulfilling "follow that one" — returning an
  * ambiguity for the caller to resolve would cost a round-trip mid-demo, and
  * the model's observed response to a non-ok track result is to retry with
- * different guesses rather than to ask (field session 2026-08-21,
+ * different guesses rather than to ask (owner field session 2026-08-21,
  * 23:48). So the lookup always commits. What it owes the caller is STABILITY:
  * hex is unique and always present, so the same query resolves to the same
  * contact for as long as both are loaded, instead of flipping between polls

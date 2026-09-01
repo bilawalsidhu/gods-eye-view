@@ -11,7 +11,7 @@
  *   2. Free-form name/description text ("5TH ST / WEST AVE", "N LAMAR BLVD") is
  *      full of STREET names that merely contain a cardinal word. Reading a bare
  *      "West" there as a facing direction mis-orients the camera with false
- *      confidence (59 of ~1000 Austin cameras hit this — field review
+ *      confidence (59 of ~1000 Austin cameras hit this — owner adversarial review
  *      2026-07-04). There, only explicit travel forms ("WESTBOUND"/"WB") count —
  *      leave `allowBare=false` (the default).
  *

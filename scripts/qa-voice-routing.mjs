@@ -653,7 +653,7 @@ async function runBehaviorLayer() {
       'behavior: Alps overview uses capped swath, not whole-bbox space view',
       `navigationMode=${swathMode} alt=${Math.round(cam.altKm)}km (want swath / <900km)`);
 
-    // (6b) THE field finding: "outline the Alps" must draw the real
+    // (6b) THE owner field finding: "outline the Alps" must draw the real
     // range ring (Natural Earth first-rung, offline → resolves in seconds),
     // not a 60 km² meadow and not a stuck point. Camera is over the Alps
     // from (6), so the proximity gate and the containment guard both pass.

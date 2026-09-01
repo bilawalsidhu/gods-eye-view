@@ -1,8 +1,8 @@
 // MAP STACK chip row — the dropdown's replacement control surface.
 //
-// The product issue was two clicks (open panel → open dropdown) to change
+// The owner's complaint was two clicks (open panel → open dropdown) to change
 // basemap. These tests pin the three things that make the row a faithful swap:
-// it projects the accepted four-source allowlist from the controller's
+// it projects the owner-approved four-source allowlist from the controller's
 // stack data, a click dispatches the same selection the `change` handler used
 // to, and the lit chip tracks controller state rather than the click. Run with:
 // npm test
@@ -66,20 +66,21 @@ const CONTROLLER_STACKS = [
   { id: 'photoreal', label: 'Google 3D', requiresIon: false, available: true, unavailableReason: null },
   { id: 'bing-aerial', label: 'Bing Aerial', requiresIon: true, available: true, unavailableReason: null },
   { id: 'bing-labels', label: 'Bing Labels', requiresIon: true, available: true, unavailableReason: null },
+  { id: 'esri-imagery', label: 'Esri Satellite', requiresIon: false, available: true, unavailableReason: null },
   { id: 'osm', label: 'OSM', requiresIon: false, available: true, unavailableReason: null },
 ];
 
-test('the row renders exactly the four accepted sources', () => {
+test('the row renders exactly the five owner-approved sources', () => {
   const container = makeElement();
   renderMapStackChips(container, CONTROLLER_STACKS, { activeId: 'photoreal', doc });
 
   assert.deepEqual(container.children.map((chip) => chip.dataset.stackId), [
-    'photoreal', 'bing-aerial', 'bing-labels', 'osm',
+    'photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'osm',
   ]);
   assert.deepEqual(container.children.map(chipText), [
-    'Google 3D', 'Bing Aerial', 'Bing Labels', 'OSM',
+    'Google 3D', 'Bing Aerial', 'Bing Labels', 'Esri Satellite', 'OSM',
   ]);
-  assert.deepEqual(PRESENTED_MAP_STACK_IDS, ['photoreal', 'bing-aerial', 'bing-labels', 'osm']);
+  assert.deepEqual(PRESENTED_MAP_STACK_IDS, ['photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'osm']);
   assert.ok(container.children.every((chip) => chip.tagName === 'button' && chip.type === 'button'));
   assert.ok(container.children.every((chip) => chip.classList.contains(MAP_STACK_CHIP_CLASS)));
 });
@@ -87,11 +88,11 @@ test('the row renders exactly the four accepted sources', () => {
 test('internal and future stacks stay outside the approved presentation set', () => {
   const container = makeElement();
   // A future Hybrid stack may land in the controller, but it must not appear
-  // until the accepted presentation allowlist explicitly includes it.
+  // until the owner-approved presentation allowlist explicitly includes it.
   const withHybrid = [...CONTROLLER_STACKS, { id: 'hybrid', label: 'Hybrid', available: true }];
   renderMapStackChips(container, withHybrid, { activeId: 'photoreal', doc });
 
-  assert.equal(container.children.length, 4);
+  assert.equal(container.children.length, 5);
   assert.doesNotMatch(container.children.map(chipText).join(' '), /Hybrid/);
 });
 
@@ -112,9 +113,10 @@ test('clicking a chip dispatches that stack id — the same selection the dropdo
     doc,
   });
 
+  container.children[4].click();
   container.children[3].click();
   container.children[1].click();
-  assert.deepEqual(selected, ['osm', 'bing-aerial']);
+  assert.deepEqual(selected, ['osm', 'esri-imagery', 'bing-aerial']);
 });
 
 test('the active chip is the pressed chip, and exactly one is pressed', () => {
@@ -136,12 +138,12 @@ test('the lit chip tracks controller state, not the click', () => {
   // A rejected/superseded switch reports the stack that is genuinely active.
   syncMapStackChips(container, 'photoreal');
   assert.ok(container.children[0].classList.contains('active'));
-  assert.equal(container.children[3].getAttribute('aria-pressed'), 'false');
+  assert.equal(container.children[4].getAttribute('aria-pressed'), 'false');
 
   // A landed switch moves both the class and the pressed state.
   syncMapStackChips(container, 'osm');
-  assert.ok(container.children[3].classList.contains('active'));
-  assert.equal(container.children[3].getAttribute('aria-pressed'), 'true');
+  assert.ok(container.children[4].classList.contains('active'));
+  assert.equal(container.children[4].getAttribute('aria-pressed'), 'true');
   assert.ok(!container.children[0].classList.contains('active'));
   assert.equal(container.children[0].getAttribute('aria-pressed'), 'false');
 });
@@ -353,5 +355,47 @@ test('the Visual Presets tray owns Map Source and the retired left panel is abse
     ui,
     /_renderMapStackState\(state\) \{[\s\S]*?syncMapStackChips\(this\._mapStackChips, state\.activeId\)/,
     'the active chip must be re-synced from controller state',
+  );
+  assert.match(
+    ui,
+    /window\.addEventListener\('gev:map-stack-changed', this\._mapStackChangeHandler\)/,
+    'provider-driven fallback must re-sync the UI without a user click',
+  );
+  assert.match(
+    ui,
+    /window\.removeEventListener\('gev:map-stack-changed', this\._mapStackChangeHandler\)/,
+    'the provider-driven state listener must be released with StyleManager',
+  );
+});
+
+test('Esri fallbacks report and attribute the imagery source actually rendered', () => {
+  const controller = readFileSync(new URL('./mapStackController.js', import.meta.url), 'utf8');
+  assert.match(
+    controller,
+    /effectiveStackId = 'osm';[\s\S]*?fallbackMessage = 'Esri Satellite is unavailable; using OSM'/,
+    'construction failure must resolve truthfully to OSM',
+  );
+  assert.match(
+    controller,
+    /this\._activeId = activation\?\.effectiveStackId \|\| stack\.id/,
+    'the active chip must follow the effective provider, not the requested stack',
+  );
+  assert.match(
+    controller,
+    /this\._syncEsriAttribution\(resolution\.effectiveStackId\)/,
+    'Esri credit must follow the effective provider',
+  );
+});
+
+test('repeated active Esri tile failures fall back to OSM and one transient does not', () => {
+  const controller = readFileSync(new URL('./mapStackController.js', import.meta.url), 'utf8');
+  assert.match(controller, /let failures = 0/);
+  assert.match(controller, /if \(failures < 2 \|\| this\._esriFallbackPending\) return/);
+  assert.match(controller, /this\.setStack\('osm', \{ silent: true \}\)/);
+  assert.match(controller, /state\?\.activeId === 'osm'[\s\S]*?this\._emitChange\('error'\)/);
+  assert.match(
+    controller,
+    /gen !== this\._switchGen \|\| this\._activeImageryProvider !== resolution\.provider/,
+    'a stale provider error must not replace a newer user selection',
   );
 });

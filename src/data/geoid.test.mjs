@@ -1,4 +1,4 @@
-// src/data/geoid.test.mjs — EGM96 geoid-undulation lookup.
+// src/data/geoid.test.mjs — EGM96 geoid-undulation lookup (docs/plans/2026-07-05-entity-height-datum-fix.md Task 1).
 //
 // Locks the module's public interface (later tasks — aircraft altitude
 // correction, CCTV terrain fallback — call this verbatim):
@@ -7,7 +7,7 @@
 //   orthometricToEllipsoidal(hMslM, latDeg, lonDeg): number  hMslM + N
 //
 // Tolerance is loose (±2.5 m) by design: the bundled grid is EGM96 while the
-// reference values are Re:Earth's EGM2008 — the two
+// plan's "Verified facts" reference values are Re:Earth's EGM2008 — the two
 // models differ by up to ~1 m, and the brief's own tolerance absorbs that
 // spread rather than asserting exact agreement.
 import { test } from 'node:test';
@@ -100,7 +100,7 @@ test('the reported SFO cockpit OSD height turns into a small positive MSL number
   await ensureGeoidReady();
   const n = geoidHeight(SFO.lat, SFO.lon);
   assert.ok(n < -25 && n > -40, `SFO undulation should be strongly negative, got ${n}`);
-  // The screenshot showed ALT: -15m ellipsoidal over the SFO deck.
+  // The owner's screenshot: ALT: -15m ellipsoidal over the SFO deck.
   const displayed = ellipsoidalToMslDisplayM(-15, n);
   assert.ok(
     displayed > 10 && displayed < 25,

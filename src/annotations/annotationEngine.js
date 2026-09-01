@@ -163,7 +163,7 @@ export function createAnnotationEngine({
    * reach — and the next annotate of the same geometry would then stack a fresh
    * mark over the orphan. remove() tolerates partial and absent state, so this
    * is safe to call unconditionally; it must never mask the original failure.
-   * (second review)
+   * (review round 2)
    * @param {object} anno
    * @returns {void}
    */
@@ -1027,7 +1027,7 @@ function pendingAnimation(anno, now) {
 // Region-scale viewports (a mountain range, sea, or desert can span thousands of km)
 // must not launch the assist flight to space: frameAnnotation flies at range × 2.4,
 // so this cap keeps the camera at ≈290 km — the same regional swath scale the
-// fly_to_location natural-region heuristic uses (field test 2026-07-23).
+// fly_to_location natural-region heuristic uses (owner field test 2026-07-23).
 const VIEWPORT_ASSIST_RANGE_CAP_M = 120000;
 
 /** flyTo range from a Places viewport box (low/high lat-lng corners), or null. */
