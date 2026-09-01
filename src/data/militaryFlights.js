@@ -79,8 +79,14 @@ import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor
  * rotation (camera.heading - track) with hysteresis.
  */
 
-/** @constant {string} API endpoint proxied to adsb.lol military feed */
+/** @constant {string} API endpoint — the dev proxy merges adsb.lol + adsb.fi `/v2/mil` */
 const API_URL = '/api/adsblol/mil';
+/**
+ * @constant {string} Human-readable provenance for this layer, shown in the
+ * Contacts panel, the tracked-flight readout, and voice payloads. The proxy at
+ * `API_URL` fans out to both feeds, so the label names both.
+ */
+const MILITARY_SOURCE_LABEL = 'adsb.lol + adsb.fi';
 /** @constant {number} Milliseconds to wait before retrying after a transient error */
 const ERROR_BACKOFF_INTERVAL = 20000;
 /** @constant {number} Longer cooldown (ms) after a 429 rate-limit, mirroring flights.js */
@@ -284,7 +290,7 @@ let _lastTrackingRefreshOutcome = {
   epoch: 0,
   status: 'unavailable',
   ids: new Set(),
-  source: 'adsb.lol',
+  source: MILITARY_SOURCE_LABEL,
 };
 /** @type {Cesium.Entity|null} Entity created for the tracked aircraft (camera follows this) */
 let _trackedEntity = null;
@@ -346,7 +352,7 @@ function _contextSubjectMetadata(icao24) {
     id: icao24,
     layerId: 'military',
     layerName: 'Military Flights',
-    source: 'adsb.lol',
+    source: MILITARY_SOURCE_LABEL,
     label,
     latitude: described.latitude,
     longitude: described.longitude,
@@ -841,7 +847,7 @@ export function _setTrackedMilitaryRefreshStateForTest({
 export function _setMilitaryTrackingRefreshOutcomeForTest({
   status = 'accepted',
   ids = [],
-  source = 'adsb.lol',
+  source = MILITARY_SOURCE_LABEL,
 } = {}) {
   const epoch = ++_trackingRefreshEpoch;
   _lastTrackingRefreshOutcome = {
@@ -2603,7 +2609,7 @@ const militaryFlightsLayer = {
   id: 'military',
   name: 'Military Flights',
   icon: '🎖️',
-  source: 'adsb.lol',
+  source: MILITARY_SOURCE_LABEL,
   /** @type {number} Polling interval in ms between API fetches */
   updateInterval: 15000,
 
@@ -2771,7 +2777,7 @@ const militaryFlightsLayer = {
       epoch: trackingRefreshEpoch,
       status: 'source-unavailable',
       ids: new Set(),
-      source: 'adsb.lol',
+      source: MILITARY_SOURCE_LABEL,
     };
     if (_retryAt && nowMs < _retryAt) {
       _backoff = true;
@@ -3220,7 +3226,7 @@ const militaryFlightsLayer = {
         epoch: trackingRefreshEpoch,
         status: 'accepted',
         ids: currentIcaos,
-        source: 'adsb.lol',
+        source: MILITARY_SOURCE_LABEL,
       };
       console.log(`[Data:Military] Updated: ${_count} aircraft`);
       _applyPendingTrackingRestore();
@@ -3306,7 +3312,7 @@ const militaryFlightsLayer = {
       epoch: _trackingRefreshEpoch,
       status: 'destroyed',
       ids: new Set(),
-      source: 'adsb.lol',
+      source: MILITARY_SOURCE_LABEL,
     };
     _resetTrackedSelectionState(); // next lifecycle re-evaluates against the ENTER ceiling
     _viewer = null;
@@ -3770,7 +3776,7 @@ const militaryFlightsLayer = {
       error: _lastError,
       status: _lastStatus,
       retryInSec,
-      source: 'adsb.lol',
+      source: MILITARY_SOURCE_LABEL,
       fallback: false,
     };
   },

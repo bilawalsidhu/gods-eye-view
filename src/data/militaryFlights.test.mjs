@@ -44,9 +44,9 @@ const FULL_INFO = {
   operator: 'United States Air Force',
 };
 
-test('military stats identify adsb.lol as the primary feed, not a fallback', () => {
+test('military stats identify the merged feed as primary, not a fallback', () => {
   const stats = militaryFlightsLayer.getStats();
-  assert.equal(stats.source, 'adsb.lol');
+  assert.equal(stats.source, 'adsb.lol + adsb.fi');
   assert.equal(stats.fallback, false);
 });
 
