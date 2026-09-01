@@ -141,6 +141,94 @@ test('flights first update forwards caller cancellation into the feed request', 
   }
 });
 
+// State-desync regression (Data Layers panel showed "OFF" next to a live
+// count/FALLBACK meta line for Live Flights): the adsb.lol-regional-merge
+// code added a second await (parsing the regional response body) AFTER the
+// function's last `updateSignal.throwIfAborted()` checkpoint. A caller who
+// aborts while that parse is in flight (e.g. DataLayerManager superseding an
+// enable transaction) got silently ignored — update() resolved instead of
+// rejecting, having already committed `_lastSource`/`_lastCoverage`/billboard
+// state for a transaction the manager had already unwound via disable(). The
+// manager's own post-await `signal.aborted` check still correctly lands
+// `entry.enabled = false`, so the stats chip and the toggle button ended up
+// reporting two different realities from the same cancelled poll.
+test('aborted update during the adsb.lol regional-merge parse does not stealth-commit stats', async () => {
+  const realFetch = globalThis.fetch;
+  const nowSec = Math.floor(Date.now() / 1000);
+  let regionalJsonCalled = false;
+  let resolveRegionalJson;
+  const regionalJsonPromise = new Promise((resolve) => { resolveRegionalJson = resolve; });
+  globalThis.fetch = async (url) => {
+    if (String(url).startsWith('/api/adsblol/regional')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        json: () => {
+          regionalJsonCalled = true;
+          return regionalJsonPromise;
+        },
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => ({
+        time: nowSec,
+        states: [[
+          'aaaaaa', 'ABC123 ', 'United States', nowSec, nowSec,
+          -97.6, 30.3, 10_668, false, 250, 95, 5, null, 10_700,
+          null, null, null, 5,
+        ]],
+      }),
+    };
+  };
+  const viewer = {
+    camera: { positionCartographic: Cesium.Cartographic.fromDegrees(-97.7, 30.2) },
+    scene: {},
+  };
+  // Untracked seed icao24 (absent from both mocked feeds below) purely to give
+  // the poll loop a real billboard collection to add the two NEW contacts
+  // ('aaaaaa' from OpenSky, 'cccccc' from the regional merge) into.
+  _setTrackedFlightRefreshStateForTest({
+    icao24: 'zzzzzz',
+    entity: null,
+    billboard: { show: false },
+    billboardCollection: { show: false, add: (options) => ({ ...options }), remove() {} },
+    viewer,
+    meta: { rawLat: 0, rawLon: 0, onGround: false },
+    tracked: false,
+  });
+  const before = flightsLayer.getStats();
+  const controller = new AbortController();
+  try {
+    const work = flightsLayer.update(viewer, { signal: controller.signal });
+    for (let i = 0; i < 20 && !regionalJsonCalled; i += 1) await Promise.resolve();
+    assert.ok(regionalJsonCalled, 'test setup: update() must reach the regional-body parse');
+    controller.abort();
+    resolveRegionalJson({
+      states: [[
+        'cccccc', 'REG999 ', 'Canada', nowSec, nowSec,
+        -97.5, 30.1, 9_000, false, 200, 10, 0, null, 9_050,
+        null, null, null, 5,
+      ]],
+    });
+    await assert.rejects(work, { name: 'AbortError' });
+    // The exact fields the Data Layers panel reads (manager.js _buildMetaText /
+    // the row's count span) must stay untouched by a cancelled transaction —
+    // `status` alone (a plain diagnostic of "the last HTTP response we saw",
+    // not "we have accepted new data") is allowed to have moved.
+    const after = flightsLayer.getStats();
+    assert.equal(after.count, before.count);
+    assert.equal(after.lastUpdate, before.lastUpdate);
+    assert.equal(after.source, before.source);
+    assert.equal(after.coverage, before.coverage);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
 test('nonempty OpenSky payload with zero usable rows cannot prove share target absence', async () => {
   _setTrackedFlightRefreshStateForTest({
     icao24: 'abc123',

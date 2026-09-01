@@ -322,17 +322,41 @@ let _lastSource = 'OpenSky Network';
 /** @type {string} Completeness boundary for the latest successful snapshot. */
 let _lastCoverage = 'worldwide upstream snapshot';
 
-function _flightApiUrl(viewer) {
+/** Camera subpoint in degrees, or null once (used to build both feed URLs from one read). */
+function _viewerAnchorDeg(viewer) {
   const cartographic = viewer?.camera?.positionCartographic;
-  if (!cartographic) return API_URL;
+  if (!cartographic) return null;
   const latitude = Cesium.Math.toDegrees(cartographic.latitude);
   const longitude = Cesium.Math.toDegrees(cartographic.longitude);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return API_URL;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { latitude, longitude };
+}
+
+function _flightApiUrl(anchor) {
+  if (!anchor) return API_URL;
   const params = new URLSearchParams({
-    lat: latitude.toFixed(4),
-    lon: longitude.toFixed(4),
+    lat: anchor.latitude.toFixed(4),
+    lon: anchor.longitude.toFixed(4),
   });
   return `${API_URL}?${params}`;
+}
+
+const ADSBLOL_REGIONAL_URL = '/api/adsblol/regional';
+
+/**
+ * URL for the standalone adsb.lol regional union feed (see vite.config.js's
+ * adsbLolRegionalProxy), or null when the camera has no valid subpoint yet.
+ * Distinct from `_flightApiUrl`: that one degrades to the unbounded worldwide
+ * OpenSky query without an anchor, but a regional query is meaningless
+ * without one — there is nothing to be regional ABOUT.
+ */
+function _adsbLolRegionalUrl(anchor) {
+  if (!anchor) return null;
+  const params = new URLSearchParams({
+    lat: anchor.latitude.toFixed(4),
+    lon: anchor.longitude.toFixed(4),
+  });
+  return `${ADSBLOL_REGIONAL_URL}?${params}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -4082,7 +4106,17 @@ const flightsLayer = {
       : resourceController.signal;
     try {
       updateSignal.throwIfAborted();
-      const response = await fetch(_flightApiUrl(viewer || _viewer), { signal: updateSignal });
+      const anchor = _viewerAnchorDeg(viewer || _viewer);
+      // Fired alongside OpenSky, not after it: sequencing them would add a
+      // full extra round trip to every poll. A failure here is silently
+      // absorbed at the merge point below — this feed only ever ADDS
+      // coverage, so it must never be able to fail or slow down the primary
+      // OpenSky path that the rest of this function's error handling owns.
+      const regionalUrl = _adsbLolRegionalUrl(anchor);
+      const regionalRequest = regionalUrl
+        ? fetch(regionalUrl, { signal: updateSignal }).catch(() => null)
+        : null;
+      const response = await fetch(_flightApiUrl(anchor), { signal: updateSignal });
       _lastStatus = response.status;
       const responseSource = response.headers.get('x-flight-source');
       const responseCoverage = response.headers.get('x-flight-coverage');
@@ -4164,8 +4198,51 @@ const flightsLayer = {
       _lastError = sourceStale
         ? `Source snapshot ${Math.max(2, Math.round(sourceAgeMs / 60_000))} min old`
         : null;
-      _lastSource = responseSource || 'OpenSky Network';
-      _lastCoverage = responseCoverage || 'worldwide upstream snapshot';
+
+      // Union in adsb.lol's regional community-receiver snapshot: gap-filler
+      // ONLY — OpenSky's own row always wins a shared icao24, since it is the
+      // authenticated primary source the rest of this function's staleness
+      // and error accounting is built around. A failed/slow/empty regional
+      // fetch is invisible here by construction (see the request above).
+      const knownIcaos = new Set(usableStates.map((state) => _normalizeTrackedIcao(state[0])));
+      let regionalAdded = 0;
+      const mergedStates = usableStates.slice();
+      const regionalResponse = regionalRequest ? await regionalRequest : null;
+      // Checked OUTSIDE the try below, not inside: an abort must propagate to
+      // the outer catch the way every other throwIfAborted() in this function
+      // does, not be swallowed as a "malformed regional payload".
+      updateSignal.throwIfAborted();
+      if (regionalResponse?.ok) {
+        let regionalData = null;
+        try {
+          regionalData = await regionalResponse.json();
+        } catch {
+          // Malformed regional payload — OpenSky's own rows are unaffected.
+        }
+        // Checked OUTSIDE the try above, same reasoning as the one before this
+        // block: this second await is a SECOND opportunity for a caller to
+        // abort mid-parse, and it must propagate to the outer catch too —
+        // never be treated as "empty regional data" and let a superseded
+        // transaction go on to commit `_lastSource`/`_lastCoverage`/billboard
+        // state the manager has already unwound via disable().
+        updateSignal.throwIfAborted();
+        const regionalStates = Array.isArray(regionalData?.states) ? regionalData.states : [];
+        for (const state of regionalStates) {
+          if (!_isUsableOpenSkyState(state)) continue;
+          const icao24 = _normalizeTrackedIcao(state[0]);
+          if (!icao24 || knownIcaos.has(icao24)) continue;
+          knownIcaos.add(icao24);
+          mergedStates.push(state);
+          regionalAdded += 1;
+        }
+      }
+
+      _lastSource = regionalAdded > 0
+        ? `${responseSource || 'OpenSky Network'} + adsb.lol regional`
+        : (responseSource || 'OpenSky Network');
+      _lastCoverage = regionalAdded > 0
+        ? `${responseCoverage || 'worldwide upstream snapshot'}, +${regionalAdded} regional`
+        : (responseCoverage || 'worldwide upstream snapshot');
       const currentIcaos = new Set();
       const acceptedSnapshotIcaos = new Set();
       const now = Cesium.JulianDate.now();
@@ -4186,7 +4263,7 @@ const flightsLayer = {
       // Keep military classification fresh while the military layer is off
       refreshMilitaryRegistryIfStale();
 
-      for (const state of usableStates) {
+      for (const state of mergedStates) {
         const [rawIcao24, callsign, origin_country, time_position, last_contact, lon, lat, baro_alt, on_ground, velocity, true_track, , , geo_alt] = state;
         const icao24 = _normalizeTrackedIcao(rawIcao24);
         const category = Number.isFinite(state[17]) ? state[17] : null; // extended=1 emitter category

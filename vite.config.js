@@ -3066,6 +3066,47 @@ async function serveAdsbLolPointFallback(req, res, requestedMode, reason) {
 }
 
 /**
+ * Standalone adsb.lol regional endpoint: a 250 nm community-receiver snapshot
+ * around the given anchor, served on every call rather than only when
+ * OpenSky is stale/rate-limited/down.
+ *
+ * OpenSky's `states/all` is a real-time worldwide dump, but its receiver
+ * network is thin in places adsb.lol's volunteer network covers densely
+ * (Central Europe among them) — low-altitude GA, gliders, and light traffic
+ * that never reach an OpenSky receiver still show up here. `/api/opensky`'s
+ * own fallback path already fetches this same data on failure; this route
+ * exposes it unconditionally so the client can UNION both sources on every
+ * poll instead of only substituting one for the other. Shares
+ * `fetchAdsbLolPointFallback`'s 12 s cache and coalescing, so pairing this
+ * with `/api/opensky` roughly doubles upstream requests to adsb.lol, not to
+ * OpenSky — OpenSky's credit governor and cooldown state are untouched.
+ */
+function adsbLolRegionalProxy() {
+  return {
+    name: 'adsblol-regional-proxy',
+    configureServer(server) {
+      server.middlewares.use('/api/adsblol/regional', async (req, res) => {
+        const fallback = await fetchAdsbLolPointFallback(req);
+        if (!fallback) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'lat and lon query params are required' }));
+          return;
+        }
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+          'X-Flight-Source': 'adsb.lol',
+          'X-Flight-Cache': fallback.cacheStatus,
+          'X-Flight-Coverage': `${ADSBLOL_POINT_RADIUS_NM}nm regional`,
+          'X-Flight-Count': String(fallback.count),
+        });
+        res.end(fallback.body);
+      });
+    },
+  };
+}
+
+/**
  * Standalone SondeHub regional endpoint: live weather-balloon (radiosonde)
  * telemetry within `SONDEHUB_RADIUS_NM` of the given anchor.
  *
@@ -8487,6 +8528,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       cesium(),
       openSkyProxy(),
+      adsbLolRegionalProxy(),
       sondehubBalloonProxy(),
       ognGliderProxy(),
       celestrakProxy(),
