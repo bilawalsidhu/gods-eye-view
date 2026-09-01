@@ -47,3 +47,20 @@ Implemented the Demon Forge workspace as a hidden-by-default, user-opened local 
 ## Commit
 
 Subject: `feat: add Demon Forge local workspace`
+
+## Round 1 review fixes
+
+- Added a session-generation guard immediately after the awaited local `file.text()` call. Closing, locking, destroying, or changing the vault session invalidates the pending import before parsing, rendering, or saving can resume.
+- Expanded close/lock scrubbing to the complete draft surface: action, controller name, official route, approver, passphrase, case ID, file picker, rendered candidates, draft text, and ledger.
+- Made manual official-route navigation fail closed and auditable:
+  - `MANUAL_ROUTE_ATTEMPTED` must be saved successfully in the encrypted vault before `window.open` is called;
+  - a failed durable save prevents navigation;
+  - a null/blocked popup records `MANUAL_ROUTE_BLOCKED` and never claims `MANUAL_ROUTE_OPENED`;
+  - a non-null popup records `MANUAL_ROUTE_OPENED` after the durable pre-navigation event;
+  - session-generation checks prevent a close/lock racing the durable save from opening a route afterward.
+- Completed modal behavior with background `inert`, Tab/Shift+Tab focus trapping, Escape close, inert-state restoration, and focus restoration to the Demon Forge opener.
+- Moved the `DEMON FORGE` opener outside the `Globe actions` navigation landmark and gave it standalone fixed-position styling.
+- Expanded the injected fake-DOM suite to cover stale imports, full control scrubbing on both close and lock, modal inert/focus behavior, durable-save failure before navigation, blocked-popup auditing, and successful audit/navigation ordering.
+- Per task instruction, no test or build command was run for these review fixes.
+
+Round 1 fix commit subject: `fix: harden Demon Forge local workspace`

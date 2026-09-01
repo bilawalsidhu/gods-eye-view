@@ -518,15 +518,37 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 
 /* Demon Forge is an intentionally isolated local case surface. It sits above
    the globe chrome but has no visual or behavioral coupling to the map. */
-#top-center-actions #demon-forge-open {
+#demon-forge-open {
+  position: fixed;
+  top: 32px;
+  right: 24px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: auto;
+  height: 36px;
   min-width: 7.7rem;
   padding: 0 0.75rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
   border-radius: 999px;
+  color: var(--text-secondary);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  cursor: pointer;
   font-family: var(--font-mono);
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.08rem;
+  transition: all var(--transition-fast);
+  outline: none;
+}
+
+#demon-forge-open:hover,
+#demon-forge-open:focus-visible {
+  border-color: var(--glass-border-hover);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .demon-forge-dialog {
@@ -646,7 +668,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   .demon-forge-dialog { inset: 4.5rem 0.5rem 0.5rem; width: auto; }
   .demon-forge-dialog form { grid-template-columns: 1fr; }
   .demon-forge-approval-row { align-items: stretch; flex-direction: column; }
-  #top-center-actions #demon-forge-open { min-width: 2.4rem; max-width: 4.8rem; font-size: 0.48rem; }
+  #demon-forge-open { right: 8px; min-width: 2.4rem; max-width: 4.8rem; font-size: 0.48rem; }
 }
 
 .brand-logo {

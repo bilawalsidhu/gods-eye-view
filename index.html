@@ -37,9 +37,6 @@
 
   <!-- Top-center camera and share actions -->
   <nav id="top-center-actions" aria-label="Globe actions">
-    <button id="demon-forge-open" type="button" aria-controls="demon-forge-dialog" aria-expanded="false" title="Open the local Demon Forge workspace">
-      DEMON FORGE
-    </button>
     <button id="clear-selected-layers" type="button" aria-label="Clear selected data layers" title="Turn off all selected data layers">
       <span class="material-symbols-outlined" aria-hidden="true">layers_clear</span>
     </button>
@@ -50,6 +47,9 @@
       <span class="material-symbols-outlined" aria-hidden="true">public</span>
     </button>
   </nav>
+  <button id="demon-forge-open" type="button" aria-controls="demon-forge-dialog" aria-expanded="false" title="Open the local Demon Forge workspace">
+    DEMON FORGE
+  </button>
   <div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" hidden>
     <span id="global-loading-label">LOADING LIVE DATA</span>
     <span id="global-loading-detail"></span>
@@ -832,7 +832,7 @@
 
   <div id="scene-runtime"></div>
 
-  <aside id="demon-forge-dialog" class="demon-forge-dialog" role="dialog" aria-modal="true" aria-labelledby="demon-forge-title" aria-describedby="demon-forge-description" hidden>
+  <aside id="demon-forge-dialog" class="demon-forge-dialog" role="dialog" aria-modal="true" aria-labelledby="demon-forge-title" aria-describedby="demon-forge-description" tabindex="-1" hidden>
     <header class="demon-forge-header">
       <div>
         <span class="demon-forge-kicker">ISOLATED LOCAL WORKSPACE</span>
@@ -871,7 +871,7 @@
         <h3 id="demon-forge-draft-title">4 · DRAFT</h3>
         <form id="demon-forge-draft-form">
           <label>Action
-            <select name="action">
+            <select id="demon-forge-action" name="action">
               <option value="erasure">Erasure</option>
               <option value="correction">Correction</option>
               <option value="objection">Objection</option>
@@ -879,8 +879,8 @@
               <option value="deindexing">Deindexing</option>
             </select>
           </label>
-          <label>Controller name <input name="controllerName" required /></label>
-          <label>Official HTTPS route <input name="contactRoute" type="url" inputmode="url" required /></label>
+          <label>Controller name <input id="demon-forge-controller-name" name="controllerName" required /></label>
+          <label>Official HTTPS route <input id="demon-forge-contact-route" name="contactRoute" type="url" inputmode="url" required /></label>
           <button type="submit">CREATE LOCAL DRAFT</button>
         </form>
         <pre id="demon-forge-draft-output" class="demon-forge-personal-text"></pre>

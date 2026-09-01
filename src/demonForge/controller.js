@@ -13,6 +13,15 @@ function text(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+const FOCUSABLE_SELECTOR = [
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  'a[href]',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
 export function initDemonForge({ document, vault, now = Date.now }) {
   if (!document || !vault || typeof now !== 'function') {
     throw new TypeError('Demon Forge requires document, vault, and now dependencies.');
@@ -29,6 +38,9 @@ export function initDemonForge({ document, vault, now = Date.now }) {
   const importStatus = requiredElement(document, 'demon-forge-import-status');
   const reviewList = requiredElement(document, 'demon-forge-review-list');
   const draftForm = requiredElement(document, 'demon-forge-draft-form');
+  const actionSelect = requiredElement(document, 'demon-forge-action');
+  const controllerNameInput = requiredElement(document, 'demon-forge-controller-name');
+  const contactRouteInput = requiredElement(document, 'demon-forge-contact-route');
   const draftOutput = requiredElement(document, 'demon-forge-draft-output');
   const approveButton = requiredElement(document, 'demon-forge-approve');
   const approvalActor = requiredElement(document, 'demon-forge-approval-actor');
@@ -43,6 +55,9 @@ export function initDemonForge({ document, vault, now = Date.now }) {
   let currentDraft = null;
   let ledger = [];
   let destroyed = false;
+  let sessionGeneration = 0;
+  let backgroundInert = null;
+  let returnFocus = null;
 
   const listeners = [];
   function listen(target, eventName, handler) {
@@ -63,6 +78,9 @@ export function initDemonForge({ document, vault, now = Date.now }) {
     passphraseInput.value = '';
     caseIdInput.value = '';
     approvalActor.value = '';
+    controllerNameInput.value = '';
+    contactRouteInput.value = '';
+    actionSelect.value = 'erasure';
     importedCandidates = [];
     selectedCandidate = null;
     currentDraft = null;
@@ -71,7 +89,29 @@ export function initDemonForge({ document, vault, now = Date.now }) {
     routeButton.disabled = true;
   }
 
+  function makeBackgroundInert() {
+    if (backgroundInert || !document.body?.children) return;
+    backgroundInert = new Map();
+    for (const element of document.body.children) {
+      if (element === dialog) continue;
+      backgroundInert.set(element, Boolean(element.inert));
+      element.inert = true;
+    }
+  }
+
+  function restoreBackground() {
+    if (!backgroundInert) return;
+    for (const [element, wasInert] of backgroundInert) element.inert = wasInert;
+    backgroundInert = null;
+  }
+
+  function focusableDialogElements() {
+    return Array.from(dialog.querySelectorAll?.(FOCUSABLE_SELECTOR) ?? [])
+      .filter((element) => !element.disabled && !element.hidden);
+  }
+
   async function lockWorkspace(message = 'Workspace locked. Rendered personal text cleared.') {
+    sessionGeneration += 1;
     clearRenderedPersonalText();
     unlocked = false;
     try {
@@ -81,10 +121,16 @@ export function initDemonForge({ document, vault, now = Date.now }) {
     }
   }
 
-  async function saveLocalCase() {
-    if (!unlocked) return;
+  async function saveLocalCase({ required = false } = {}) {
+    if (!unlocked) {
+      if (required) throw new Error('VAULT_LOCKED');
+      return false;
+    }
     const id = text(caseIdInput.value);
-    if (!id) return;
+    if (!id) {
+      if (required) throw new Error('CASE_ID_REQUIRED');
+      return false;
+    }
     await vault.saveCase({
       id,
       status: currentDraft?.status ?? 'review',
@@ -92,6 +138,7 @@ export function initDemonForge({ document, vault, now = Date.now }) {
       draft: currentDraft,
       ledger,
     });
+    return true;
   }
 
   function renderLedger() {
@@ -130,9 +177,11 @@ export function initDemonForge({ document, vault, now = Date.now }) {
   }
 
   function open() {
-    if (destroyed) return;
+    if (destroyed || !dialog.hidden) return;
+    returnFocus = openButton;
     dialog.hidden = false;
     openButton.setAttribute('aria-expanded', 'true');
+    makeBackgroundInert();
     closeButton.focus();
   }
 
@@ -140,8 +189,12 @@ export function initDemonForge({ document, vault, now = Date.now }) {
     if (destroyed) return;
     dialog.hidden = true;
     openButton.setAttribute('aria-expanded', 'false');
-    await lockWorkspace('Workspace closed and locked. Rendered personal text cleared.');
-    openButton.focus();
+    const locking = lockWorkspace('Workspace closed and locked. Rendered personal text cleared.');
+    restoreBackground();
+    const focusTarget = returnFocus || openButton;
+    returnFocus = null;
+    focusTarget.focus();
+    await locking;
   }
 
   function destroy() {
@@ -149,7 +202,11 @@ export function initDemonForge({ document, vault, now = Date.now }) {
     destroyed = true;
     listeners.splice(0).forEach((remove) => remove());
     dialog.hidden = true;
+    sessionGeneration += 1;
     clearRenderedPersonalText();
+    restoreBackground();
+    returnFocus?.focus();
+    returnFocus = null;
     void vault.lock();
   }
 
@@ -157,15 +214,40 @@ export function initDemonForge({ document, vault, now = Date.now }) {
   listen(closeButton, 'click', () => { void close(); });
   listen(lockButton, 'click', () => { void lockWorkspace(); });
   listen(dialog, 'keydown', (event) => {
-    if (event.key !== 'Escape') return;
-    event.preventDefault();
-    void close();
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      void close();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = focusableDialogElements();
+    if (focusable.length === 0) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    const active = document.activeElement;
+    if (event.shiftKey && (active === first || !dialog.contains(active))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+      event.preventDefault();
+      first.focus();
+    }
   });
 
   listen(unlockForm, 'submit', async (event) => {
     event.preventDefault();
+    const unlockGeneration = sessionGeneration;
     try {
       await vault.unlock(passphraseInput.value);
+      if (unlockGeneration !== sessionGeneration || destroyed || dialog.hidden) {
+        await vault.lock();
+        return;
+      }
+      sessionGeneration += 1;
       unlocked = true;
       passphraseInput.value = '';
       setStatus('Encrypted local workspace unlocked.');
@@ -188,8 +270,11 @@ export function initDemonForge({ document, vault, now = Date.now }) {
       fileInput.value = '';
       return;
     }
+    const importGeneration = sessionGeneration;
     try {
-      const report = parseSocialAnalyzerReport(await file.text(), { importedAtMs: now() });
+      const localText = await file.text();
+      if (!unlocked || importGeneration !== sessionGeneration || destroyed) return;
+      const report = parseSocialAnalyzerReport(localText, { importedAtMs: now() });
       importedCandidates = report.candidates;
       selectedCandidate = null;
       currentDraft = null;
@@ -199,6 +284,7 @@ export function initDemonForge({ document, vault, now = Date.now }) {
       renderCandidates();
       await saveLocalCase();
     } catch (error) {
+      if (importGeneration !== sessionGeneration || !unlocked || destroyed) return;
       importStatus.textContent = `Import rejected: ${error?.code || error?.message || 'invalid report'}`;
     }
   });
@@ -250,15 +336,56 @@ export function initDemonForge({ document, vault, now = Date.now }) {
   listen(routeButton, 'click', async () => {
     if (currentDraft?.status !== 'approved' || routeButton.disabled) return;
     const route = currentDraft.contactRoute;
-    window.open(route, '_blank', 'noopener,noreferrer');
+    const actor = currentDraft.approval.actor;
+    const ledgerBeforeAttempt = ledger;
+    const routeGeneration = sessionGeneration;
+    routeButton.disabled = true;
+
+    try {
+      ledger = appendLedgerEvent(ledger, {
+        type: 'MANUAL_ROUTE_ATTEMPTED',
+        actor,
+        payload: { route },
+      }, now());
+      await saveLocalCase({ required: true });
+      if (routeGeneration !== sessionGeneration || !unlocked || destroyed) return;
+    } catch (error) {
+      if (routeGeneration !== sessionGeneration || !unlocked || destroyed) return;
+      ledger = ledgerBeforeAttempt;
+      renderLedger();
+      routeButton.disabled = false;
+      setStatus(`Official route blocked: audit record was not saved (${error?.message || 'storage error'}).`);
+      return;
+    }
+
+    let popup = null;
+    try {
+      popup = window.open(route, '_blank', 'noopener,noreferrer');
+    } catch {
+      popup = null;
+    }
+
+    const ledgerBeforeDecision = ledger;
     ledger = appendLedgerEvent(ledger, {
-      type: 'MANUAL_ROUTE_OPENED',
-      actor: currentDraft.approval.actor,
+      type: popup ? 'MANUAL_ROUTE_OPENED' : 'MANUAL_ROUTE_BLOCKED',
+      actor,
       payload: { route },
     }, now());
-    renderLedger();
-    setStatus('Official route opened manually; local ledger updated. Nothing was sent.');
-    await saveLocalCase();
+    try {
+      await saveLocalCase({ required: true });
+      if (routeGeneration !== sessionGeneration || !unlocked || destroyed) return;
+      renderLedger();
+      setStatus(popup
+        ? 'Official route opened manually; local ledger updated. Nothing was sent.'
+        : 'Official route was blocked by the browser; no request was opened or sent.');
+    } catch (error) {
+      if (routeGeneration !== sessionGeneration || !unlocked || destroyed) return;
+      ledger = ledgerBeforeDecision;
+      renderLedger();
+      setStatus(`Official route audit persistence failed after the browser decision: ${error?.message || 'storage error'}.`);
+    } finally {
+      if (routeGeneration === sessionGeneration && unlocked && !destroyed) routeButton.disabled = false;
+    }
   });
 
   dialog.hidden = true;
