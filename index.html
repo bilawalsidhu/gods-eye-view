@@ -847,10 +847,33 @@
       <section aria-labelledby="demon-forge-authorization-title">
         <h3 id="demon-forge-authorization-title">1 · AUTHORIZATION</h3>
         <form id="demon-forge-unlock-form">
-          <label>Local case ID <input id="demon-forge-case-id" name="caseId" required autocomplete="off" /></label>
           <label>Vault passphrase <input id="demon-forge-passphrase" name="passphrase" type="password" required autocomplete="current-password" /></label>
-          <button type="submit">UNLOCK LOCAL VAULT</button>
+          <button type="submit">AUTHENTICATE LOCAL VAULT</button>
           <button id="demon-forge-lock" type="button">LOCK &amp; CLEAR</button>
+        </form>
+        <form id="demon-forge-case-form">
+          <label>Existing encrypted cases
+            <select id="demon-forge-existing-cases" aria-label="Existing encrypted cases"></select>
+          </label>
+          <button id="demon-forge-case-open" type="button" disabled>OPEN EXISTING CASE</button>
+          <label>Active opaque case ID <input id="demon-forge-case-id" readonly autocomplete="off" /></label>
+          <label>Local title <input id="demon-forge-case-title" autocomplete="off" /></label>
+          <label>Protected-person relationship
+            <select id="demon-forge-case-kind">
+              <option value="self">Self</option>
+              <option value="non_self">Signed mandate</option>
+            </select>
+          </label>
+          <label>Mandate signed at <input id="demon-forge-mandate-signed-at" type="datetime-local" /></label>
+          <label>Mandate validated at <input id="demon-forge-mandate-validated-at" type="datetime-local" /></label>
+          <label>Mandate expires at <input id="demon-forge-mandate-expires-at" type="datetime-local" /></label>
+          <label>Allowed source category
+            <select id="demon-forge-mandate-source-category">
+              <option value="social-profile">Social profile</option>
+            </select>
+          </label>
+          <label>Permitted actions (comma-separated) <input id="demon-forge-mandate-actions" value="erasure,correction,objection,account_closure,deindexing" autocomplete="off" /></label>
+          <button id="demon-forge-case-create" type="button">CREATE AUTHORIZED CASE</button>
         </form>
       </section>
 
@@ -880,14 +903,14 @@
             </select>
           </label>
           <label>Controller name <input id="demon-forge-controller-name" name="controllerName" required /></label>
-          <label>Official HTTPS route <input id="demon-forge-contact-route" name="contactRoute" type="url" inputmode="url" required /></label>
+          <label>HTTPS contact reference (unverified) <input id="demon-forge-contact-route" name="contactRoute" type="url" inputmode="url" required /></label>
           <button type="submit">CREATE LOCAL DRAFT</button>
         </form>
         <pre id="demon-forge-draft-output" class="demon-forge-personal-text"></pre>
         <div class="demon-forge-approval-row">
           <label>Approver <input id="demon-forge-approval-actor" autocomplete="off" /></label>
           <button id="demon-forge-approve" type="button" disabled>APPROVE DRAFT</button>
-          <button id="demon-forge-official-route" type="button" disabled>OPEN OFFICIAL ROUTE</button>
+          <button id="demon-forge-official-route" type="button" disabled>HANDOFF UNAVAILABLE — ROUTE UNVERIFIED</button>
         </div>
       </section>
 

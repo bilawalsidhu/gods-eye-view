@@ -1,6 +1,8 @@
-const MAX_REPORT_TEXT_BYTES = 2 * 1024 * 1024;
+export const MAX_REPORT_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_DETECTED_CANDIDATES = 500;
 const textEncoder = new TextEncoder();
+const ROOT_FIELDS = new Set(['detected', 'unknown', 'failed']);
+const DETECTED_FIELDS = new Set(['site', 'url', 'username', 'rate', 'status']);
 
 function reportImportError(code, message) {
   return new ReportImportError(code, message);
@@ -46,22 +48,46 @@ function normalizeUrl(value) {
   }
 }
 
-function normalizeCandidate(row, index, importedAtMs) {
+function requireKnownFields(value, allowedFields, label) {
+  const unexpected = Object.keys(value).filter((field) => !allowedFields.has(field));
+  if (unexpected.length > 0) {
+    throw reportImportError('UNSUPPORTED_SCHEMA', `${label} contains unexpected fields: ${unexpected.join(', ')}.`);
+  }
+}
+
+function defaultCandidateIdFactory() {
+  if (typeof globalThis.crypto?.randomUUID !== 'function') {
+    throw reportImportError('ID_GENERATION_UNAVAILABLE', 'Secure opaque ID generation is unavailable.');
+  }
+  return globalThis.crypto.randomUUID();
+}
+
+function normalizeCandidate(row, importedAtMs, candidateIdFactory) {
   if (!isPlainObject(row)) {
     throw reportImportError('UNSUPPORTED_SCHEMA', 'Detected entries must be objects.');
   }
+  requireKnownFields(row, DETECTED_FIELDS, 'Detected entry');
 
   const provider = requireSite(row.site);
   const url = normalizeUrl(row.url);
   const confidence = requireConfidence(row.rate);
-  const id = row.id == null ? `${provider}:${index + 1}` : String(row.id);
+  if (row.username != null && typeof row.username !== 'string') {
+    throw reportImportError('UNSUPPORTED_SCHEMA', 'Detected username must be a string when present.');
+  }
+  if (row.status != null && typeof row.status !== 'string') {
+    throw reportImportError('UNSUPPORTED_SCHEMA', 'Detected status must be a string when present.');
+  }
+  const id = candidateIdFactory();
+  if (typeof id !== 'string' || !id.trim()) {
+    throw reportImportError('ID_GENERATION_UNAVAILABLE', 'Opaque candidate ID generation failed.');
+  }
 
   return {
     id,
     sourceCategory: 'social-profile',
     provider,
     url,
-    username: row.username == null ? null : String(row.username),
+    username: row.username == null ? null : row.username,
     confidence,
     status: 'unverified',
     importedAtMs,
@@ -76,12 +102,12 @@ export class ReportImportError extends Error {
   }
 }
 
-export function parseSocialAnalyzerReport(jsonText, { importedAtMs } = {}) {
+export function parseSocialAnalyzerReport(jsonText, { importedAtMs, candidateIdFactory = defaultCandidateIdFactory } = {}) {
   if (typeof jsonText !== 'string') {
     throw new ReportImportError('INVALID_JSON', 'Report text must be a string.');
   }
 
-  if (textEncoder.encode(jsonText).length > MAX_REPORT_TEXT_BYTES) {
+  if (textEncoder.encode(jsonText).length > MAX_REPORT_FILE_BYTES) {
     throw new ReportImportError('REPORT_TOO_LARGE', 'Report text exceeds the 2 MiB cap.');
   }
 
@@ -95,6 +121,13 @@ export function parseSocialAnalyzerReport(jsonText, { importedAtMs } = {}) {
   if (!isPlainObject(report)) {
     throw new ReportImportError('UNSUPPORTED_SCHEMA', 'Report root must be an object.');
   }
+  requireKnownFields(report, ROOT_FIELDS, 'Report root');
+  if (!Number.isInteger(importedAtMs) || importedAtMs < 0) {
+    throw new ReportImportError('INVALID_TIMESTAMP', 'Import timestamp must be a nonnegative integer.');
+  }
+  if (typeof candidateIdFactory !== 'function') {
+    throw new ReportImportError('ID_GENERATION_UNAVAILABLE', 'Opaque candidate ID generation is unavailable.');
+  }
 
   const detected = requireArray(report.detected, 'UNSUPPORTED_SCHEMA', 'detected');
   requireArray(report.unknown, 'UNSUPPORTED_SCHEMA', 'unknown');
@@ -107,6 +140,6 @@ export function parseSocialAnalyzerReport(jsonText, { importedAtMs } = {}) {
   return {
     source: 'social-analyzer',
     importedAtMs,
-    candidates: detected.map((row, index) => normalizeCandidate(row, index, importedAtMs)),
+    candidates: detected.map((row) => normalizeCandidate(row, importedAtMs, candidateIdFactory)),
   };
 }

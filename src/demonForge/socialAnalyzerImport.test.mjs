@@ -6,16 +6,10 @@ test('parses one detected row and discards unknown and failed report data', () =
   const report = {
     detected: [
       {
-        id: 'candidate-1',
         site: 'Example Social',
         url: 'https://example.com/alice',
         username: 'alice',
         rate: 97.5,
-        title: 'Synthetic title',
-        pageText: 'Synthetic page text',
-        metadata: { nested: true },
-        screenshots: ['screenshot-bytes'],
-        extraction: { raw: 'ignored' },
       },
     ],
     unknown: [
@@ -34,15 +28,17 @@ test('parses one detected row and discards unknown and failed report data', () =
         rate: 10,
       },
     ],
-    metadata: { rawReport: true },
   };
 
-  assert.deepEqual(parseSocialAnalyzerReport(JSON.stringify(report), { importedAtMs: 1_700_000_000_000 }), {
+  assert.deepEqual(parseSocialAnalyzerReport(JSON.stringify(report), {
+    importedAtMs: 1_700_000_000_000,
+    candidateIdFactory: () => '018f47f2-6fa8-7b01-9f30-9b6a9e676601',
+  }), {
     source: 'social-analyzer',
     importedAtMs: 1_700_000_000_000,
     candidates: [
       {
-        id: 'candidate-1',
+        id: '018f47f2-6fa8-7b01-9f30-9b6a9e676601',
         sourceCategory: 'social-profile',
         provider: 'Example Social',
         url: 'https://example.com/alice',
@@ -60,6 +56,25 @@ test('rejects malformed shape, unsafe url, and oversize reports', () => {
     () => parseSocialAnalyzerReport(JSON.stringify({ detected: {} }), { importedAtMs: 1 }),
     (error) => error?.code === 'UNSUPPORTED_SCHEMA',
   );
+
+  assert.throws(
+    () => parseSocialAnalyzerReport(JSON.stringify({ detected: [], metadata: {} }), { importedAtMs: 1 }),
+    (error) => error?.code === 'UNSUPPORTED_SCHEMA',
+  );
+
+  assert.throws(
+    () => parseSocialAnalyzerReport(JSON.stringify({
+      detected: [{ site: 'Example Social', url: 'https://example.com/alice', rate: 50, pageText: 'unexpected' }],
+    }), { importedAtMs: 1 }),
+    (error) => error?.code === 'UNSUPPORTED_SCHEMA',
+  );
+
+  for (const importedAtMs of [undefined, NaN, -1, 1.5]) {
+    assert.throws(
+      () => parseSocialAnalyzerReport('{"detected":[]}', { importedAtMs }),
+      (error) => error?.code === 'INVALID_TIMESTAMP',
+    );
+  }
 
   assert.throws(
     () => parseSocialAnalyzerReport(JSON.stringify({ detected: [{ site: 'Example Social', url: 'http://example.com/alice', username: 'alice', rate: 50 }] }), { importedAtMs: 1 }),
@@ -91,7 +106,6 @@ test('does not call fetch or process while parsing', () => {
   const report = JSON.stringify({
     detected: [
       {
-        id: 'candidate-1',
         site: 'Example Social',
         url: 'https://example.com/alice',
         username: 'alice',
@@ -121,12 +135,15 @@ test('does not call fetch or process while parsing', () => {
   });
 
   try {
-    assert.deepEqual(parseSocialAnalyzerReport(report, { importedAtMs: 1_700_000_000_000 }), {
+    assert.deepEqual(parseSocialAnalyzerReport(report, {
+      importedAtMs: 1_700_000_000_000,
+      candidateIdFactory: () => '018f47f2-6fa8-7b01-9f30-9b6a9e676602',
+    }), {
       source: 'social-analyzer',
       importedAtMs: 1_700_000_000_000,
       candidates: [
         {
-          id: 'candidate-1',
+          id: '018f47f2-6fa8-7b01-9f30-9b6a9e676602',
           sourceCategory: 'social-profile',
           provider: 'Example Social',
           url: 'https://example.com/alice',

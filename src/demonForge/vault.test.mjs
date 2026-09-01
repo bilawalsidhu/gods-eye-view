@@ -208,4 +208,40 @@ test('invalid unlock input rejects through the promise contract', async () => {
 
   assert.equal(typeof invalidUnlock?.then, 'function');
   await assert.rejects(invalidUnlock, TypeError);
+  await assert.rejects(vault.unlock('   '), TypeError);
+});
+
+test('an existing case is authenticated before overwrite and keeps append-only history', async () => {
+  const store = createFakeStore();
+  const cryptoApi = createInjectedCrypto();
+  const writer = createDemonForgeVault({ store, cryptoApi, clock: () => 1_700_000_000_000 });
+  await writer.unlock('synthetic passphrase');
+  await writer.saveCase({
+    id: '018f47f2-6fa8-7b01-9f30-9b6a9e676610',
+    ledger: [{ sequence: 1, digest: 'synthetic-first-event' }],
+    workflow: [{ type: 'REQUEST_DRAFTED', draftId: 'synthetic-draft' }],
+  });
+  const originalEnvelope = structuredClone(store.values.get('018f47f2-6fa8-7b01-9f30-9b6a9e676610'));
+
+  const intruder = createDemonForgeVault({ store, cryptoApi, clock: () => 1_700_000_000_001 });
+  await intruder.unlock('wrong passphrase');
+  await assert.rejects(
+    intruder.saveCase({ id: '018f47f2-6fa8-7b01-9f30-9b6a9e676610', ledger: [] }),
+    (error) => error?.code === 'DECRYPTION_FAILED',
+  );
+  assert.deepEqual(store.values.get('018f47f2-6fa8-7b01-9f30-9b6a9e676610'), originalEnvelope);
+
+  await assert.rejects(
+    writer.saveCase({ id: '018f47f2-6fa8-7b01-9f30-9b6a9e676610', ledger: [], workflow: [] }),
+    (error) => error?.code === 'CASE_HISTORY_REWRITE',
+  );
+});
+
+test('create-only persistence refuses an opaque ID collision', async () => {
+  const store = createFakeStore();
+  const vault = createDemonForgeVault({ store, cryptoApi: createInjectedCrypto(), clock: () => 1 });
+  await vault.unlock('synthetic passphrase');
+  const record = { id: '018f47f2-6fa8-7b01-9f30-9b6a9e676611', ledger: [] };
+  await vault.saveCase(record, { create: true });
+  await assert.rejects(vault.saveCase(record, { create: true }), (error) => error?.code === 'CASE_EXISTS');
 });

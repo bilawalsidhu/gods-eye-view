@@ -30,7 +30,8 @@ export function evaluateCaseAuthorization(caseRecord, nowMs) {
   }
 
   const mandate = caseRecord?.mandate;
-  const sourceScopes = Array.isArray(mandate?.sourceScopes) ? mandate.sourceScopes : [];
+  const sourceCategories = Array.isArray(mandate?.sourceCategories) ? mandate.sourceCategories : [];
+  const permittedActions = Array.isArray(mandate?.permittedActions) ? mandate.permittedActions : [];
   const proof = mandate?.proof || {};
 
   if (!mandate) {
@@ -41,8 +42,16 @@ export function evaluateCaseAuthorization(caseRecord, nowMs) {
     return reject('mandate_unverified', 'Mandate must be signed and validated.');
   }
 
-  if (sourceScopes.length === 0) {
-    return reject('mandate_scope_missing', 'Mandate source scopes are required.');
+  if (mandate.revokedAtMs != null && nowMs >= mandate.revokedAtMs) {
+    return reject('mandate_revoked', 'The signed mandate has been revoked.');
+  }
+
+  if (sourceCategories.length === 0) {
+    return reject('mandate_scope_missing', 'Mandate source categories are required.');
+  }
+
+  if (permittedActions.length === 0) {
+    return reject('mandate_action_missing', 'Mandate permitted actions are required.');
   }
 
   if (mandate.expiresAtMs == null || nowMs >= mandate.expiresAtMs) {
@@ -56,8 +65,8 @@ export function canCreateRequest(caseRecord, candidate, action, nowMs) {
   const authorization = evaluateCaseAuthorization(caseRecord, nowMs);
   if (!authorization.ok) return authorization;
 
-  if (action !== REQUEST_STATUS.DRAFT) {
-    return reject('unsupported_action', 'Only draft creation is allowed.');
+  if (typeof action !== 'string' || !action.trim()) {
+    return reject('unsupported_action', 'A request action is required.');
   }
 
   if (!candidate) {
@@ -68,15 +77,20 @@ export function canCreateRequest(caseRecord, candidate, action, nowMs) {
     return reject('candidate_unconfirmed', 'Candidate confirmation is required.');
   }
 
-  const mandateScopes = Array.isArray(caseRecord?.mandate?.sourceScopes) ? caseRecord.mandate.sourceScopes : [];
-  const candidateScope = candidate.sourceScope ?? null;
+  const mandateCategories = Array.isArray(caseRecord?.mandate?.sourceCategories) ? caseRecord.mandate.sourceCategories : [];
+  const permittedActions = Array.isArray(caseRecord?.mandate?.permittedActions) ? caseRecord.mandate.permittedActions : [];
+  const candidateCategory = candidate.sourceCategory ?? null;
 
-  if (caseRecord?.kind === CASE_KIND.NON_SELF && !candidateScope) {
-    return reject('source_scope_missing', 'Candidate source scope is required.');
+  if (caseRecord?.kind === CASE_KIND.NON_SELF && !candidateCategory) {
+    return reject('source_scope_missing', 'Candidate source category is required.');
   }
 
-  if (caseRecord?.kind === CASE_KIND.NON_SELF && !mandateScopes.includes(candidateScope)) {
-    return reject('source_scope_mismatch', 'Candidate source scope is out of bounds.');
+  if (caseRecord?.kind === CASE_KIND.NON_SELF && !mandateCategories.includes(candidateCategory)) {
+    return reject('source_scope_mismatch', 'Candidate source category is out of bounds.');
+  }
+
+  if (caseRecord?.kind === CASE_KIND.NON_SELF && !permittedActions.includes(action)) {
+    return reject('action_scope_mismatch', 'The selected action is outside the signed mandate.');
   }
 
   return accept('request_allowed', 'Draft request is allowed.');

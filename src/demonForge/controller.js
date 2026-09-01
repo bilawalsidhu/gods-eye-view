@@ -1,7 +1,8 @@
-import { appendLedgerEvent } from './ledger.js';
+import { appendLedgerEvent, verifyLedger } from './ledger.js';
+import { canCreateRequest, evaluateCaseAuthorization } from './policy.js';
 import { approveDraft, createFranceEuDraft } from './requestStudio.js';
-import { parseSocialAnalyzerReport } from './socialAnalyzerImport.js';
-import { CANDIDATE_STATUS, createCaseRecord } from './types.js';
+import { MAX_REPORT_FILE_BYTES, parseSocialAnalyzerReport } from './socialAnalyzerImport.js';
+import { CASE_KIND, CANDIDATE_STATUS, createCaseRecord } from './types.js';
 
 function requiredElement(document, id) {
   const element = document.getElementById(id);
@@ -13,6 +14,24 @@ function text(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function dateInputMs(value) {
+  const normalized = text(value);
+  if (!normalized) return null;
+  const result = Date.parse(normalized);
+  return Number.isFinite(result) ? result : null;
+}
+
+function commaList(value) {
+  return [...new Set(text(value).split(',').map((entry) => entry.trim()).filter(Boolean))];
+}
+
+function defaultCreateId() {
+  if (typeof globalThis.crypto?.randomUUID !== 'function') {
+    throw new Error('Secure opaque ID generation is unavailable.');
+  }
+  return globalThis.crypto.randomUUID();
+}
+
 const FOCUSABLE_SELECTOR = [
   'button:not([disabled])',
   'input:not([disabled])',
@@ -22,9 +41,9 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
-export function initDemonForge({ document, vault, now = Date.now }) {
-  if (!document || !vault || typeof now !== 'function') {
-    throw new TypeError('Demon Forge requires document, vault, and now dependencies.');
+export function initDemonForge({ document, vault, now = Date.now, createId = defaultCreateId }) {
+  if (!document || !vault || typeof now !== 'function' || typeof createId !== 'function') {
+    throw new TypeError('Demon Forge requires document, vault, now, and createId dependencies.');
   }
 
   const openButton = requiredElement(document, 'demon-forge-open');
@@ -34,6 +53,16 @@ export function initDemonForge({ document, vault, now = Date.now }) {
   const unlockForm = requiredElement(document, 'demon-forge-unlock-form');
   const passphraseInput = requiredElement(document, 'demon-forge-passphrase');
   const caseIdInput = requiredElement(document, 'demon-forge-case-id');
+  const caseKindInput = requiredElement(document, 'demon-forge-case-kind');
+  const caseTitleInput = requiredElement(document, 'demon-forge-case-title');
+  const caseCreateButton = requiredElement(document, 'demon-forge-case-create');
+  const existingCasesInput = requiredElement(document, 'demon-forge-existing-cases');
+  const caseOpenButton = requiredElement(document, 'demon-forge-case-open');
+  const mandateSignedAtInput = requiredElement(document, 'demon-forge-mandate-signed-at');
+  const mandateValidatedAtInput = requiredElement(document, 'demon-forge-mandate-validated-at');
+  const mandateExpiresAtInput = requiredElement(document, 'demon-forge-mandate-expires-at');
+  const mandateSourceCategoryInput = requiredElement(document, 'demon-forge-mandate-source-category');
+  const mandateActionsInput = requiredElement(document, 'demon-forge-mandate-actions');
   const fileInput = requiredElement(document, 'demon-forge-import-file');
   const importStatus = requiredElement(document, 'demon-forge-import-status');
   const reviewList = requiredElement(document, 'demon-forge-review-list');
@@ -47,13 +76,14 @@ export function initDemonForge({ document, vault, now = Date.now }) {
   const routeButton = requiredElement(document, 'demon-forge-official-route');
   const ledgerOutput = requiredElement(document, 'demon-forge-ledger-output');
   const workspaceStatus = requiredElement(document, 'demon-forge-status');
-  const window = document.defaultView;
 
   let unlocked = false;
+  let activeCase = null;
   let importedCandidates = [];
   let selectedCandidate = null;
   let currentDraft = null;
   let ledger = [];
+  let workflow = [];
   let destroyed = false;
   let sessionGeneration = 0;
   let backgroundInert = null;
@@ -69,14 +99,14 @@ export function initDemonForge({ document, vault, now = Date.now }) {
     workspaceStatus.textContent = message;
   }
 
-  function clearRenderedPersonalText() {
+  function clearCaseState() {
     reviewList.replaceChildren();
     draftOutput.textContent = '';
     ledgerOutput.replaceChildren();
     importStatus.textContent = '';
     fileInput.value = '';
-    passphraseInput.value = '';
     caseIdInput.value = '';
+    caseTitleInput.value = '';
     approvalActor.value = '';
     controllerNameInput.value = '';
     contactRouteInput.value = '';
@@ -85,8 +115,17 @@ export function initDemonForge({ document, vault, now = Date.now }) {
     selectedCandidate = null;
     currentDraft = null;
     ledger = [];
+    workflow = [];
+    activeCase = null;
     approveButton.disabled = true;
     routeButton.disabled = true;
+  }
+
+  function clearRenderedPersonalText() {
+    clearCaseState();
+    passphraseInput.value = '';
+    existingCasesInput.replaceChildren();
+    existingCasesInput.value = '';
   }
 
   function makeBackgroundInert() {
@@ -110,37 +149,6 @@ export function initDemonForge({ document, vault, now = Date.now }) {
       .filter((element) => !element.disabled && !element.hidden);
   }
 
-  async function lockWorkspace(message = 'Workspace locked. Rendered personal text cleared.') {
-    sessionGeneration += 1;
-    clearRenderedPersonalText();
-    unlocked = false;
-    try {
-      await vault.lock();
-    } finally {
-      setStatus(message);
-    }
-  }
-
-  async function saveLocalCase({ required = false } = {}) {
-    if (!unlocked) {
-      if (required) throw new Error('VAULT_LOCKED');
-      return false;
-    }
-    const id = text(caseIdInput.value);
-    if (!id) {
-      if (required) throw new Error('CASE_ID_REQUIRED');
-      return false;
-    }
-    await vault.saveCase({
-      id,
-      status: currentDraft?.status ?? 'review',
-      candidates: importedCandidates,
-      draft: currentDraft,
-      ledger,
-    });
-    return true;
-  }
-
   function renderLedger() {
     ledgerOutput.replaceChildren();
     for (const event of ledger) {
@@ -150,30 +158,135 @@ export function initDemonForge({ document, vault, now = Date.now }) {
     }
   }
 
+  function applyActionScope() {
+    const allowed = activeCase?.kind === CASE_KIND.NON_SELF
+      ? new Set(activeCase.mandate?.permittedActions ?? [])
+      : null;
+    for (const option of actionSelect.options ?? []) {
+      option.disabled = Boolean(allowed && !allowed.has(option.value));
+    }
+    if (allowed && !allowed.has(actionSelect.value)) actionSelect.value = [...allowed][0] ?? '';
+  }
+
+  function caseRecordForSave() {
+    if (!activeCase) throw new Error('CASE_REQUIRED');
+    return {
+      ...activeCase,
+      status: currentDraft?.status ?? (importedCandidates.length > 0 ? 'awaiting review' : 'draft'),
+      candidates: importedCandidates,
+      draft: currentDraft,
+      ledger,
+      workflow,
+    };
+  }
+
+  async function saveActiveCase(options) {
+    const record = caseRecordForSave();
+    await vault.saveCase(record, options);
+    activeCase = record;
+  }
+
+  async function persistEvent(type, actor, payload, options) {
+    const previousLedger = ledger;
+    ledger = appendLedgerEvent(ledger, { type, actor, payload }, now());
+    try {
+      await saveActiveCase(options);
+    } catch (error) {
+      ledger = previousLedger;
+      throw error;
+    }
+    renderLedger();
+  }
+
   function renderCandidates() {
     reviewList.replaceChildren();
     importedCandidates.forEach((candidate, index) => {
       const item = document.createElement('li');
       const description = document.createElement('span');
-      description.textContent = `${candidate.provider}: ${candidate.username || candidate.url} (${candidate.confidence}%)`;
+      description.textContent = `${candidate.provider}: ${candidate.username || candidate.url} (${candidate.confidence}%) · ${candidate.sourceCategory}`;
       const confirm = document.createElement('button');
       confirm.type = 'button';
       confirm.textContent = candidate.status === CANDIDATE_STATUS.CONFIRMED ? 'CONFIRMED' : 'CONFIRM';
       confirm.disabled = candidate.status === CANDIDATE_STATUS.CONFIRMED;
       confirm.addEventListener('click', async () => {
+        if (!activeCase) return;
+        const authorization = evaluateCaseAuthorization(activeCase, now());
+        const allowedCategories = activeCase.mandate?.sourceCategories ?? [];
+        if (!authorization.ok || activeCase.kind === CASE_KIND.NON_SELF && !allowedCategories.includes(candidate.sourceCategory)) {
+          setStatus(`Candidate review blocked: ${authorization.ok ? 'source category is outside the signed mandate.' : authorization.message}`);
+          return;
+        }
+        const previousCandidates = importedCandidates;
+        const previousSelected = selectedCandidate;
+        const previousWorkflow = workflow;
         importedCandidates = importedCandidates.map((entry, candidateIndex) => ({
           ...entry,
           status: candidateIndex === index ? CANDIDATE_STATUS.CONFIRMED : entry.status,
           ...(candidateIndex === index ? { confirmedAtMs: now() } : {}),
         }));
         selectedCandidate = importedCandidates[index];
-        renderCandidates();
-        setStatus('Candidate confirmed locally.');
-        await saveLocalCase();
+        workflow = [...workflow, {
+          type: 'CANDIDATE_CONFIRMED',
+          atMs: selectedCandidate.confirmedAtMs,
+          candidate: selectedCandidate,
+        }];
+        try {
+          await persistEvent('CANDIDATE_CONFIRMED', 'operator', { candidateId: selectedCandidate.id });
+          renderCandidates();
+          setStatus('Candidate confirmed and recorded locally.');
+        } catch (error) {
+          importedCandidates = previousCandidates;
+          selectedCandidate = previousSelected;
+          workflow = previousWorkflow;
+          setStatus(`Candidate confirmation was not saved: ${error?.code || error?.message || 'storage error'}.`);
+        }
       });
       item.append(description, confirm);
       reviewList.append(item);
     });
+  }
+
+  function activateCase(record) {
+    const verified = verifyLedger(record?.ledger ?? []);
+    if (!verified.ok) throw Object.assign(new Error(verified.code), { code: verified.code });
+    activeCase = createCaseRecord(record);
+    importedCandidates = activeCase.candidates;
+    currentDraft = activeCase.draft;
+    ledger = activeCase.ledger;
+    workflow = activeCase.workflow;
+    selectedCandidate = importedCandidates.find((candidate) => candidate.status === CANDIDATE_STATUS.CONFIRMED) ?? null;
+    caseIdInput.value = activeCase.id;
+    caseTitleInput.value = activeCase.title;
+    caseKindInput.value = activeCase.kind;
+    draftOutput.textContent = currentDraft?.body ?? '';
+    approveButton.disabled = currentDraft?.status !== 'draft';
+    routeButton.disabled = true;
+    applyActionScope();
+    renderCandidates();
+    renderLedger();
+  }
+
+  function renderExistingCases(summaries) {
+    existingCasesInput.replaceChildren();
+    for (const summary of summaries) {
+      const option = document.createElement('option');
+      option.value = summary.id;
+      option.textContent = `${summary.id} · ${summary.status ?? 'draft'}`;
+      existingCasesInput.append(option);
+    }
+    existingCasesInput.value = summaries[0]?.id ?? '';
+    caseOpenButton.disabled = summaries.length === 0;
+  }
+
+  async function lockWorkspace(message = 'Workspace locked. Rendered personal text cleared.') {
+    sessionGeneration += 1;
+    clearRenderedPersonalText();
+    unlocked = false;
+    try {
+      await vault.lock();
+    } finally {
+      setStatus(message);
+    }
   }
 
   function open() {
@@ -243,6 +356,7 @@ export function initDemonForge({ document, vault, now = Date.now }) {
     const unlockGeneration = sessionGeneration;
     try {
       await vault.unlock(passphraseInput.value);
+      const summaries = await vault.listCaseSummaries();
       if (unlockGeneration !== sessionGeneration || destroyed || dialog.hidden) {
         await vault.lock();
         return;
@@ -250,16 +364,69 @@ export function initDemonForge({ document, vault, now = Date.now }) {
       sessionGeneration += 1;
       unlocked = true;
       passphraseInput.value = '';
-      setStatus('Encrypted local workspace unlocked.');
+      renderExistingCases(summaries);
+      setStatus(`Encrypted local vault authenticated. ${summaries.length} existing case(s) available.`);
     } catch (error) {
       unlocked = false;
-      setStatus(`Unlock failed: ${error?.code || error?.message || 'unknown error'}`);
+      void vault.lock();
+      setStatus(`Vault authentication failed: ${error?.code || error?.message || 'unknown error'}`);
+    }
+  });
+
+  listen(caseCreateButton, 'click', async () => {
+    if (!unlocked) {
+      setStatus('Authenticate the encrypted local vault first.');
+      return;
+    }
+    try {
+      const kind = caseKindInput.value;
+      const mandate = kind === CASE_KIND.NON_SELF ? {
+        sourceCategories: [text(mandateSourceCategoryInput.value)].filter(Boolean),
+        permittedActions: commaList(mandateActionsInput.value),
+        expiresAtMs: dateInputMs(mandateExpiresAtInput.value),
+        proof: {
+          signedAtMs: dateInputMs(mandateSignedAtInput.value),
+          validatedAtMs: dateInputMs(mandateValidatedAtInput.value),
+        },
+      } : {};
+      const id = createId();
+      if (typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/iu.test(id)) {
+        throw new Error('Secure opaque case ID generation failed.');
+      }
+      activeCase = createCaseRecord({ id, title: text(caseTitleInput.value), kind, mandate });
+      const authorization = evaluateCaseAuthorization(activeCase, now());
+      if (!authorization.ok) throw Object.assign(new Error(authorization.message), { code: authorization.code });
+      ledger = appendLedgerEvent([], { type: 'CASE_CREATED', actor: 'case-owner', payload: { kind } }, now());
+      importedCandidates = [];
+      selectedCandidate = null;
+      currentDraft = null;
+      workflow = [];
+      await saveActiveCase({ create: true });
+      activateCase(activeCase);
+      setStatus('New authorized case created with an opaque local ID.');
+    } catch (error) {
+      clearCaseState();
+      setStatus(`Case creation rejected: ${error?.code || error?.message || 'invalid case'}`);
+    }
+  });
+
+  listen(caseOpenButton, 'click', async () => {
+    if (!unlocked || !text(existingCasesInput.value)) return;
+    try {
+      const record = await vault.loadCase(existingCasesInput.value);
+      if (!record) throw new Error('CASE_NOT_FOUND');
+      activateCase(record);
+      await persistEvent('CASE_OPENED', 'operator', null);
+      setStatus('Existing encrypted case authenticated and restored with its full ledger.');
+    } catch (error) {
+      clearCaseState();
+      setStatus(`Existing case could not be opened: ${error?.code || error?.message || 'invalid case'}`);
     }
   });
 
   listen(fileInput, 'change', async () => {
-    if (!unlocked) {
-      importStatus.textContent = 'Unlock the local workspace first.';
+    if (!unlocked || !activeCase) {
+      importStatus.textContent = 'Authenticate the vault and create or open an authorized case first.';
       fileInput.value = '';
       return;
     }
@@ -270,19 +437,48 @@ export function initDemonForge({ document, vault, now = Date.now }) {
       fileInput.value = '';
       return;
     }
+    if (!Number.isFinite(file.size) || file.size < 0 || file.size > MAX_REPORT_FILE_BYTES) {
+      importStatus.textContent = 'Import rejected: file exceeds the 2 MiB cap or has no trustworthy size.';
+      fileInput.value = '';
+      return;
+    }
+    const authorization = evaluateCaseAuthorization(activeCase, now());
+    if (!authorization.ok) {
+      importStatus.textContent = `Import blocked: ${authorization.message}`;
+      fileInput.value = '';
+      return;
+    }
     const importGeneration = sessionGeneration;
     try {
       const localText = await file.text();
       if (!unlocked || importGeneration !== sessionGeneration || destroyed) return;
-      const report = parseSocialAnalyzerReport(localText, { importedAtMs: now() });
+      const report = parseSocialAnalyzerReport(localText, { importedAtMs: now(), candidateIdFactory: createId });
+      const previousCandidates = importedCandidates;
+      const previousSelected = selectedCandidate;
+      const previousDraft = currentDraft;
+      const previousWorkflow = workflow;
       importedCandidates = report.candidates;
       selectedCandidate = null;
       currentDraft = null;
-      routeButton.disabled = true;
+      workflow = [...workflow, {
+        type: 'REPORT_IMPORTED',
+        atMs: report.importedAtMs,
+        source: report.source,
+        candidates: report.candidates,
+      }];
       approveButton.disabled = true;
-      importStatus.textContent = `${importedCandidates.length} local candidate(s) imported.`;
+      routeButton.disabled = true;
+      try {
+        await persistEvent('REPORT_IMPORTED', 'operator', { candidateCount: importedCandidates.length, source: report.source });
+      } catch (error) {
+        importedCandidates = previousCandidates;
+        selectedCandidate = previousSelected;
+        currentDraft = previousDraft;
+        workflow = previousWorkflow;
+        throw error;
+      }
+      importStatus.textContent = `${importedCandidates.length} local candidate(s) imported and recorded.`;
       renderCandidates();
-      await saveLocalCase();
     } catch (error) {
       if (importGeneration !== sessionGeneration || !unlocked || destroyed) return;
       importStatus.textContent = `Import rejected: ${error?.code || error?.message || 'invalid report'}`;
@@ -291,105 +487,74 @@ export function initDemonForge({ document, vault, now = Date.now }) {
 
   listen(draftForm, 'submit', async (event) => {
     event.preventDefault();
-    if (!unlocked || !selectedCandidate) {
-      setStatus('Unlock the workspace and confirm a candidate first.');
+    if (!unlocked || !activeCase || !selectedCandidate) {
+      setStatus('Open an authorized case and confirm a candidate first.');
       return;
     }
     const fields = new FormData(draftForm);
+    const action = fields.get('action');
+    const permission = canCreateRequest(activeCase, selectedCandidate, action, now());
+    if (!permission.ok) {
+      setStatus(`Draft blocked: ${permission.message}`);
+      return;
+    }
+    const previousDraft = currentDraft;
+    const previousWorkflow = workflow;
     try {
       currentDraft = createFranceEuDraft({
-        action: fields.get('action'),
+        action,
         controllerName: fields.get('controllerName'),
         contactRoute: fields.get('contactRoute'),
         candidate: selectedCandidate,
       });
+      workflow = [...workflow, { type: 'REQUEST_DRAFTED', atMs: now(), draft: currentDraft }];
+      await persistEvent('REQUEST_DRAFTED', 'operator', { action, candidateId: selectedCandidate.id });
       draftOutput.textContent = currentDraft.body;
       approveButton.disabled = false;
       routeButton.disabled = true;
-      setStatus('Draft created locally. Review and approve it explicitly.');
-      await saveLocalCase();
+      setStatus('Draft created locally. Its contact route is unverified and cannot be opened here.');
     } catch (error) {
-      setStatus(`Draft rejected: ${error?.message || 'invalid fields'}`);
+      currentDraft = previousDraft;
+      workflow = previousWorkflow;
+      setStatus(`Draft rejected: ${error?.code || error?.message || 'invalid fields'}`);
     }
   });
 
   listen(approveButton, 'click', async () => {
-    if (!currentDraft) return;
-    const approved = approveDraft(
-      currentDraft,
-      { actor: approvalActor.value },
-      createCaseRecord({ kind: 'self' }),
-      now(),
-    );
+    if (!currentDraft || !activeCase) return;
+    const previousDraft = currentDraft;
+    const previousWorkflow = workflow;
+    const approved = approveDraft(currentDraft, { actor: approvalActor.value }, activeCase, now());
     if (approved?.ok === false) {
       setStatus(`Approval rejected: ${approved.message}`);
       return;
     }
     currentDraft = approved;
-    approveButton.disabled = true;
-    routeButton.disabled = false;
-    draftOutput.textContent = currentDraft.body;
-    setStatus('Draft approved locally. The official route may now be opened manually.');
-    await saveLocalCase();
+    workflow = [...workflow, { type: 'REQUEST_APPROVED', atMs: approved.approval.approvedAtMs, draft: approved }];
+    try {
+      await persistEvent('REQUEST_APPROVED', approved.approval.actor, {
+        action: approved.action,
+        renderedBodyHash: approved.approval.renderedBodyHash,
+      });
+      approveButton.disabled = true;
+      routeButton.disabled = true;
+      draftOutput.textContent = currentDraft.body;
+      setStatus('Draft approved locally. Handoff remains disabled until a verified source directory exists.');
+    } catch (error) {
+      currentDraft = previousDraft;
+      workflow = previousWorkflow;
+      setStatus(`Approval was not saved: ${error?.code || error?.message || 'storage error'}.`);
+    }
   });
 
-  listen(routeButton, 'click', async () => {
-    if (currentDraft?.status !== 'approved' || routeButton.disabled) return;
-    const route = currentDraft.contactRoute;
-    const actor = currentDraft.approval.actor;
-    const ledgerBeforeAttempt = ledger;
-    const routeGeneration = sessionGeneration;
+  listen(routeButton, 'click', () => {
     routeButton.disabled = true;
-
-    try {
-      ledger = appendLedgerEvent(ledger, {
-        type: 'MANUAL_ROUTE_ATTEMPTED',
-        actor,
-        payload: { route },
-      }, now());
-      await saveLocalCase({ required: true });
-      if (routeGeneration !== sessionGeneration || !unlocked || destroyed) return;
-    } catch (error) {
-      if (routeGeneration !== sessionGeneration || !unlocked || destroyed) return;
-      ledger = ledgerBeforeAttempt;
-      renderLedger();
-      routeButton.disabled = false;
-      setStatus(`Official route handoff not attempted: audit record was not saved (${error?.message || 'storage error'}).`);
-      return;
-    }
-
-    let handoffTriggered = true;
-    try {
-      window.open(route, '_blank', 'noopener,noreferrer');
-    } catch {
-      handoffTriggered = false;
-    }
-
-    const ledgerBeforeDecision = ledger;
-    ledger = appendLedgerEvent(ledger, {
-      type: handoffTriggered ? 'MANUAL_ROUTE_HANDOFF_TRIGGERED' : 'MANUAL_ROUTE_HANDOFF_FAILED',
-      actor,
-      payload: { route },
-    }, now());
-    try {
-      await saveLocalCase({ required: true });
-      if (routeGeneration !== sessionGeneration || !unlocked || destroyed) return;
-      renderLedger();
-      setStatus(handoffTriggered
-        ? 'Browser handoff triggered; whether the official route opened is unknown. Nothing was sent.'
-        : 'Browser handoff failed before an official route could be requested. Nothing was sent.');
-    } catch (error) {
-      if (routeGeneration !== sessionGeneration || !unlocked || destroyed) return;
-      ledger = ledgerBeforeDecision;
-      renderLedger();
-      setStatus(`Official route audit persistence failed after the browser decision: ${error?.message || 'storage error'}.`);
-    } finally {
-      if (routeGeneration === sessionGeneration && unlocked && !destroyed) routeButton.disabled = false;
-    }
+    setStatus('Handoff disabled: no verified source directory is available. Nothing was opened or sent.');
   });
 
   dialog.hidden = true;
   openButton.setAttribute('aria-expanded', 'false');
+  caseOpenButton.disabled = true;
   approveButton.disabled = true;
   routeButton.disabled = true;
 

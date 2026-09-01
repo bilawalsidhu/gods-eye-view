@@ -18,7 +18,8 @@ test('expired mandated cases are rejected', () => {
     kind: CASE_KIND.NON_SELF,
     mandate: {
       expiresAtMs: nowMs - 1,
-      sourceScopes: ['local'],
+      sourceCategories: ['social-profile'],
+      permittedActions: ['erasure'],
       proof: {
         signedAtMs: nowMs - 2,
         validatedAtMs: nowMs - 1,
@@ -39,7 +40,8 @@ test('unconfirmed candidates and scope mismatches block draft creation', () => {
     kind: CASE_KIND.NON_SELF,
     mandate: {
       expiresAtMs: nowMs + 60_000,
-      sourceScopes: ['local'],
+      sourceCategories: ['social-profile'],
+      permittedActions: ['erasure'],
       proof: {
         signedAtMs: nowMs - 2,
         validatedAtMs: nowMs - 1,
@@ -49,9 +51,9 @@ test('unconfirmed candidates and scope mismatches block draft creation', () => {
 
   const unconfirmed = {
     status: CANDIDATE_STATUS.UNCONFIRMED,
-    sourceScope: 'local',
+    sourceCategory: 'social-profile',
   };
-  const unconfirmedResult = canCreateRequest(caseRecord, unconfirmed, REQUEST_STATUS.DRAFT, nowMs);
+  const unconfirmedResult = canCreateRequest(caseRecord, unconfirmed, 'erasure', nowMs);
 
   assert.equal(unconfirmedResult.ok, false);
   assert.equal(unconfirmedResult.code, 'candidate_unconfirmed');
@@ -59,9 +61,9 @@ test('unconfirmed candidates and scope mismatches block draft creation', () => {
   const outOfScope = {
     status: CANDIDATE_STATUS.CONFIRMED,
     confirmedAtMs: nowMs - 1,
-    sourceScope: 'external',
+    sourceCategory: 'data-broker',
   };
-  const outOfScopeResult = canCreateRequest(caseRecord, outOfScope, REQUEST_STATUS.DRAFT, nowMs);
+  const outOfScopeResult = canCreateRequest(caseRecord, outOfScope, 'erasure', nowMs);
 
   assert.equal(outOfScopeResult.ok, false);
   assert.equal(outOfScopeResult.code, 'source_scope_mismatch');
@@ -74,7 +76,8 @@ test('self and non-self case kinds stay explicit and non-self mandates need proo
     kind: CASE_KIND.NON_SELF,
     mandate: {
       expiresAtMs: nowMs + 60_000,
-      sourceScopes: ['local'],
+      sourceCategories: ['social-profile'],
+      permittedActions: ['erasure'],
       proof: {
         signedAtMs: nowMs - 2,
         validatedAtMs: nowMs - 1,
@@ -84,7 +87,7 @@ test('self and non-self case kinds stay explicit and non-self mandates need proo
 
   assert.equal(selfCase.kind, CASE_KIND.SELF);
   assert.equal(nonSelfCase.kind, CASE_KIND.NON_SELF);
-  assert.equal(nonSelfCase.mandate.sourceScopes[0], 'local');
+  assert.equal(nonSelfCase.mandate.sourceCategories[0], 'social-profile');
 
   const missingMandate = createCaseRecord({ kind: CASE_KIND.NON_SELF });
   const missingResult = evaluateCaseAuthorization(missingMandate, nowMs);
@@ -95,7 +98,8 @@ test('self and non-self case kinds stay explicit and non-self mandates need proo
     kind: CASE_KIND.NON_SELF,
     mandate: {
       expiresAtMs: nowMs + 60_000,
-      sourceScopes: ['local'],
+      sourceCategories: ['social-profile'],
+      permittedActions: ['erasure'],
       proof: {
         validatedAtMs: nowMs - 1,
       },
@@ -108,9 +112,9 @@ test('self and non-self case kinds stay explicit and non-self mandates need proo
   const rejectedCandidate = {
     status: CANDIDATE_STATUS.REJECTED,
     confirmedAtMs: nowMs - 1,
-    sourceScope: 'local',
+    sourceCategory: 'social-profile',
   };
-  const rejectedResult = canCreateRequest(nonSelfCase, rejectedCandidate, REQUEST_STATUS.DRAFT, nowMs);
+  const rejectedResult = canCreateRequest(nonSelfCase, rejectedCandidate, 'erasure', nowMs);
   assert.equal(rejectedResult.ok, false);
   assert.equal(rejectedResult.code, 'candidate_unconfirmed');
 });
@@ -122,7 +126,8 @@ test('non-self mandates are blocked when unsigned, unvalidated, or out of scope'
     kind: CASE_KIND.NON_SELF,
     mandate: {
       expiresAtMs: nowMs + 60_000,
-      sourceScopes: ['local'],
+      sourceCategories: ['social-profile'],
+      permittedActions: ['erasure'],
       proof: {
         validatedAtMs: nowMs - 1,
       },
@@ -136,7 +141,8 @@ test('non-self mandates are blocked when unsigned, unvalidated, or out of scope'
     kind: CASE_KIND.NON_SELF,
     mandate: {
       expiresAtMs: nowMs + 60_000,
-      sourceScopes: ['local'],
+      sourceCategories: ['social-profile'],
+      permittedActions: ['erasure'],
       proof: {
         signedAtMs: nowMs - 2,
       },
@@ -150,7 +156,8 @@ test('non-self mandates are blocked when unsigned, unvalidated, or out of scope'
     kind: CASE_KIND.NON_SELF,
     mandate: {
       expiresAtMs: nowMs + 60_000,
-      sourceScopes: ['marine'],
+      sourceCategories: ['data-broker'],
+      permittedActions: ['erasure'],
       proof: {
         signedAtMs: nowMs - 2,
         validatedAtMs: nowMs - 1,
@@ -160,11 +167,33 @@ test('non-self mandates are blocked when unsigned, unvalidated, or out of scope'
   const candidate = {
     status: CANDIDATE_STATUS.CONFIRMED,
     confirmedAtMs: nowMs - 1,
-    sourceScope: 'local',
+    sourceCategory: 'social-profile',
   };
-  const scopeExcludedResult = canCreateRequest(scopeExcludedCase, candidate, REQUEST_STATUS.DRAFT, nowMs);
+  const scopeExcludedResult = canCreateRequest(scopeExcludedCase, candidate, 'erasure', nowMs);
   assert.equal(scopeExcludedResult.ok, false);
   assert.equal(scopeExcludedResult.code, 'source_scope_mismatch');
+});
+
+test('mandated cases restrict the selected action and construction requires an explicit kind', () => {
+  const nowMs = 1_700_000_000_000;
+  assert.throws(() => createCaseRecord({}), /case kind/i);
+  const caseRecord = createCaseRecord({
+    kind: CASE_KIND.NON_SELF,
+    mandate: {
+      expiresAtMs: nowMs + 60_000,
+      sourceCategories: ['social-profile'],
+      permittedActions: ['correction'],
+      proof: { signedAtMs: nowMs - 2, validatedAtMs: nowMs - 1 },
+    },
+  });
+  const candidate = {
+    status: CANDIDATE_STATUS.CONFIRMED,
+    confirmedAtMs: nowMs - 1,
+    sourceCategory: 'social-profile',
+  };
+
+  assert.equal(canCreateRequest(caseRecord, candidate, 'erasure', nowMs).code, 'action_scope_mismatch');
+  assert.equal(canCreateRequest(caseRecord, candidate, 'correction', nowMs).ok, true);
 });
 
 test('sent transitions stay fail-closed in V1', () => {

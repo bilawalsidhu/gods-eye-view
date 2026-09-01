@@ -64,6 +64,21 @@ function requireCaseId(caseId) {
   return caseId;
 }
 
+function sameLedgerEvent(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function preservesAppendOnlyHistory(previousRecord, nextRecord) {
+  const previousLedger = Array.isArray(previousRecord?.ledger) ? previousRecord.ledger : [];
+  const nextLedger = Array.isArray(nextRecord?.ledger) ? nextRecord.ledger : [];
+  const previousWorkflow = Array.isArray(previousRecord?.workflow) ? previousRecord.workflow : [];
+  const nextWorkflow = Array.isArray(nextRecord?.workflow) ? nextRecord.workflow : [];
+  return previousLedger.length <= nextLedger.length
+    && previousLedger.every((event, index) => sameLedgerEvent(event, nextLedger[index]))
+    && previousWorkflow.length <= nextWorkflow.length
+    && previousWorkflow.every((entry, index) => JSON.stringify(entry) === JSON.stringify(nextWorkflow[index]));
+}
+
 export function createDemonForgeVault({ store = createIndexedDbCaseStore(), cryptoApi = globalThis.crypto, clock = Date.now } = {}) {
   let passphrase = null;
   let lockGeneration = 0;
@@ -127,16 +142,26 @@ export function createDemonForgeVault({ store = createIndexedDbCaseStore(), cryp
   return Object.freeze({
     unlock(nextPassphrase) {
       return serialize(() => {
-        if (typeof nextPassphrase !== 'string') throw new TypeError('A passphrase is required.');
+        if (typeof nextPassphrase !== 'string' || !nextPassphrase.trim()) throw new TypeError('A passphrase is required.');
         passphrase = nextPassphrase;
         lockGeneration += 1;
       });
     },
 
-    saveCase(caseRecord) {
+    saveCase(caseRecord, { create = false } = {}) {
       return serialize(async () => {
         const session = captureSession();
         const id = requireCaseId(caseRecord?.id);
+        const existingEnvelope = await store.get(id);
+        requireActiveSession(session);
+        if (create && existingEnvelope) throw vaultError('CASE_EXISTS');
+        if (existingEnvelope) {
+          const previousRecord = await decryptCase(existingEnvelope, id, session);
+          requireActiveSession(session);
+          if (!preservesAppendOnlyHistory(previousRecord, caseRecord)) {
+            throw vaultError('CASE_HISTORY_REWRITE');
+          }
+        }
         const record = { ...caseRecord, id, updatedAtMs: clock() };
         const keyMaterial = await deriveVaultKey(session.passphrase, randomBytes(16), cryptoApi);
         const envelope = await encryptJson(keyMaterial, record, randomBytes(12), cryptoApi);

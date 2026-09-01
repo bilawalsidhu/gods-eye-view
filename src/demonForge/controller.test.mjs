@@ -6,6 +6,11 @@ import { initDemonForge } from './controller.js';
 const IDS = [
   'demon-forge-open', 'demon-forge-dialog', 'demon-forge-close', 'demon-forge-lock',
   'demon-forge-unlock-form', 'demon-forge-passphrase', 'demon-forge-case-id',
+  'demon-forge-case-kind', 'demon-forge-case-title', 'demon-forge-case-create',
+  'demon-forge-existing-cases', 'demon-forge-case-open',
+  'demon-forge-mandate-signed-at', 'demon-forge-mandate-validated-at',
+  'demon-forge-mandate-expires-at', 'demon-forge-mandate-source-category',
+  'demon-forge-mandate-actions',
   'demon-forge-import-file', 'demon-forge-import-status', 'demon-forge-review-list',
   'demon-forge-draft-form', 'demon-forge-action', 'demon-forge-controller-name',
   'demon-forge-contact-route', 'demon-forge-draft-output', 'demon-forge-approve',
@@ -81,13 +86,19 @@ function fakeVault() {
     timeline: [],
     failNextSave: false,
     async unlock() {},
-    async saveCase(record) {
+    async listCaseSummaries() { return this.saves.map((record) => ({ id: record.id, status: record.status })); },
+    async loadCase(id) { return this.saves.find((record) => record.id === id) ?? null; },
+    async saveCase(record, options) {
       this.timeline.push('save');
       if (this.failNextSave) {
         this.failNextSave = false;
         throw new Error('disk unavailable');
       }
-      this.saves.push(JSON.parse(JSON.stringify(record)));
+      const saved = JSON.parse(JSON.stringify(record));
+      const existingIndex = this.saves.findIndex((entry) => entry.id === record.id);
+      if (options?.create && existingIndex >= 0) throw Object.assign(new Error('CASE_EXISTS'), { code: 'CASE_EXISTS' });
+      if (existingIndex >= 0) this.saves[existingIndex] = saved;
+      else this.saves.push(saved);
     },
     async lock() { this.locks += 1; },
   };
@@ -101,14 +112,22 @@ async function prepareApprovedDraft(document, vault) {
   };
   try {
     let tick = 100;
-    const controller = initDemonForge({ document, vault, now: () => tick++ });
+    const controller = initDemonForge({
+      document,
+      vault,
+      now: () => tick++,
+      createId: () => '018f47f2-6fa8-7b01-9f30-9b6a9e676620',
+    });
     controller.open();
-    document.element('demon-forge-case-id').value = 'case-1';
     document.element('demon-forge-passphrase').value = 'local secret';
     await document.element('demon-forge-unlock-form').dispatchAsync('submit');
+    document.element('demon-forge-case-kind').value = 'self';
+    document.element('demon-forge-case-title').value = 'Synthetic self case';
+    await document.element('demon-forge-case-create').dispatchAsync('click');
 
     document.element('demon-forge-import-file').files = [{
       type: 'application/json',
+      size: 128,
       async text() {
         return JSON.stringify({ detected: [{ site: 'Example', url: 'https://example.test/profile', username: 'local-user', rate: 99 }] });
       },
@@ -123,7 +142,7 @@ async function prepareApprovedDraft(document, vault) {
     await draftForm.dispatchAsync('submit');
     document.element('demon-forge-approval-actor').value = 'owner';
     await document.element('demon-forge-approve').dispatchAsync('click');
-    assert.equal(document.element('demon-forge-official-route').disabled, false);
+    assert.equal(document.element('demon-forge-official-route').disabled, true);
     return controller;
   } finally {
     globalThis.FormData = originalFormData;
@@ -184,15 +203,21 @@ test('close and lock invalidate awaited local file text before it can repopulate
   for (const action of ['close', 'lock']) {
     const document = fakeDocument();
     const vault = fakeVault();
-    const controller = initDemonForge({ document, vault, now: () => 30 });
+    const controller = initDemonForge({
+      document,
+      vault,
+      now: () => 30,
+      createId: () => '018f47f2-6fa8-7b01-9f30-9b6a9e676623',
+    });
     controller.open();
-    document.element('demon-forge-case-id').value = 'case-stale';
     await document.element('demon-forge-unlock-form').dispatchAsync('submit');
+    document.element('demon-forge-case-kind').value = 'self';
+    await document.element('demon-forge-case-create').dispatchAsync('click');
 
     let resolveText;
     const textReady = new Promise((resolve) => { resolveText = resolve; });
     const fileInput = document.element('demon-forge-import-file');
-    fileInput.files = [{ type: 'application/json', text: () => textReady }];
+    fileInput.files = [{ type: 'application/json', size: 128, text: () => textReady }];
     const importing = fileInput.dispatchAsync('change');
     if (action === 'close') await controller.close();
     else document.element('demon-forge-lock').dispatch('click');
@@ -201,7 +226,8 @@ test('close and lock invalidate awaited local file text before it can repopulate
 
     assert.equal(document.element('demon-forge-review-list').children.length, 0);
     assert.equal(document.element('demon-forge-import-status').textContent, '');
-    assert.equal(vault.saves.length, 0);
+    assert.equal(vault.saves.length, 1);
+    assert.deepEqual(vault.saves[0].ledger.map((event) => event.type), ['CASE_CREATED']);
   }
 });
 
@@ -236,52 +262,96 @@ test('Demon Forge docs keep the boundary language in sync', async () => {
   assert.match(docs, /Social Analyzer report/u);
   assert.match(docs, /human confirmation/u);
   assert.match(docs, /encrypted evidence/u);
-  assert.match(docs, /official handoff/u);
+  assert.match(docs, /verified source directory/u);
+  assert.match(docs, /append-only ledger/u);
+  assert.match(docs, /handoff is disabled/u);
   assert.match(docs, /France\/EU-first/u);
   assert.match(docs, /not legal advice/u);
 });
 
-test('official route requires durable audit before navigation', async () => {
+test('unverified contact routes never enable or invoke a browser handoff', async () => {
   let openCalls = 0;
   const document = fakeDocument({ open: () => { openCalls += 1; return {}; } });
   const vault = fakeVault();
   await prepareApprovedDraft(document, vault);
-  vault.timeline = [];
-  vault.failNextSave = true;
-  await document.element('demon-forge-official-route').dispatchAsync('click');
 
+  assert.equal(document.element('demon-forge-official-route').disabled, true);
+  await document.element('demon-forge-official-route').dispatchAsync('click');
   assert.equal(openCalls, 0);
-  assert.deepEqual(vault.timeline, ['save']);
-  assert.match(document.element('demon-forge-status').textContent, /audit record was not saved/i);
+  assert.match(document.element('demon-forge-status').textContent, /verified source directory/i);
 });
 
-test('noopener handoff return value never claims an actual open or block outcome', async () => {
-  for (const returnValue of [null, {}]) {
-    const vault = fakeVault();
-    const document = fakeDocument({ open: () => { vault.timeline.push('handoff'); return returnValue; } });
-    await prepareApprovedDraft(document, vault);
-    vault.timeline = [];
-    await document.element('demon-forge-official-route').dispatchAsync('click');
-
-    assert.deepEqual(vault.timeline, ['save', 'handoff', 'save']);
-    const eventTypes = vault.saves.at(-1).ledger.map((event) => event.type);
-    assert.deepEqual(eventTypes, ['MANUAL_ROUTE_ATTEMPTED', 'MANUAL_ROUTE_HANDOFF_TRIGGERED']);
-    assert.doesNotMatch(eventTypes.join(','), /OPENED|BLOCKED/u);
-    assert.match(document.element('demon-forge-status').textContent, /whether the official route opened is unknown/i);
-  }
-});
-
-test('a thrown browser handoff is recorded as failed without claiming an open', async () => {
+test('case workflow and ledger are persisted append-only through approval', async () => {
+  const document = fakeDocument();
   const vault = fakeVault();
-  const document = fakeDocument({ open: () => { throw new Error('browser denied call'); } });
   await prepareApprovedDraft(document, vault);
-  vault.timeline = [];
-  await document.element('demon-forge-official-route').dispatchAsync('click');
+  const record = vault.saves.at(-1);
 
-  assert.deepEqual(vault.saves.at(-1).ledger.map((event) => event.type), [
-    'MANUAL_ROUTE_ATTEMPTED', 'MANUAL_ROUTE_HANDOFF_FAILED',
+  assert.deepEqual(record.ledger.map((event) => event.type), [
+    'CASE_CREATED', 'REPORT_IMPORTED', 'CANDIDATE_CONFIRMED', 'REQUEST_DRAFTED', 'REQUEST_APPROVED',
   ]);
-  assert.match(document.element('demon-forge-status').textContent, /handoff failed/i);
+  assert.deepEqual(record.workflow.map((entry) => entry.type), [
+    'REPORT_IMPORTED', 'CANDIDATE_CONFIRMED', 'REQUEST_DRAFTED', 'REQUEST_APPROVED',
+  ]);
+  assert.equal(record.workflow.at(-1).draft.status, 'approved');
+});
+
+test('case creation uses an opaque generated ID and persists mandate-aware scope', async () => {
+  const document = fakeDocument();
+  const vault = fakeVault();
+  const controller = initDemonForge({
+    document,
+    vault,
+    now: () => 1_700_000_000_000,
+    createId: () => '018f47f2-6fa8-7b01-9f30-9b6a9e676621',
+  });
+  controller.open();
+  document.element('demon-forge-passphrase').value = 'synthetic passphrase';
+  await document.element('demon-forge-unlock-form').dispatchAsync('submit');
+  document.element('demon-forge-case-kind').value = 'non_self';
+  document.element('demon-forge-case-title').value = 'Synthetic mandated case';
+  document.element('demon-forge-mandate-signed-at').value = '2023-11-14T21:00';
+  document.element('demon-forge-mandate-validated-at').value = '2023-11-14T21:30';
+  document.element('demon-forge-mandate-expires-at').value = '2023-11-15T23:00';
+  document.element('demon-forge-mandate-source-category').value = 'social-profile';
+  document.element('demon-forge-mandate-actions').value = 'correction';
+  await document.element('demon-forge-case-create').dispatchAsync('click');
+
+  assert.equal(document.element('demon-forge-case-id').value, '018f47f2-6fa8-7b01-9f30-9b6a9e676621');
+  assert.deepEqual(vault.saves[0].mandate.sourceCategories, ['social-profile']);
+  assert.deepEqual(vault.saves[0].mandate.permittedActions, ['correction']);
+  assert.deepEqual(vault.saves[0].ledger.map((event) => event.type), ['CASE_CREATED']);
+});
+
+test('unlock authenticates existing encrypted cases before allowing writes', async () => {
+  const document = fakeDocument();
+  const vault = fakeVault();
+  vault.listCaseSummaries = async () => { throw Object.assign(new Error('DECRYPTION_FAILED'), { code: 'DECRYPTION_FAILED' }); };
+  const controller = initDemonForge({ document, vault, now: () => 10, createId: () => 'never-used' });
+  controller.open();
+  document.element('demon-forge-passphrase').value = 'wrong passphrase';
+  await document.element('demon-forge-unlock-form').dispatchAsync('submit');
+
+  assert.equal(vault.saves.length, 0);
+  assert.match(document.element('demon-forge-status').textContent, /authentication failed/i);
+});
+
+test('file size is rejected before file text is read', async () => {
+  const document = fakeDocument();
+  const vault = fakeVault();
+  const controller = initDemonForge({ document, vault, now: () => 10, createId: () => '018f47f2-6fa8-7b01-9f30-9b6a9e676622' });
+  controller.open();
+  await document.element('demon-forge-unlock-form').dispatchAsync('submit');
+  document.element('demon-forge-case-kind').value = 'self';
+  await document.element('demon-forge-case-create').dispatchAsync('click');
+  let reads = 0;
+  document.element('demon-forge-import-file').files = [{
+    type: 'application/json', size: (2 * 1024 * 1024) + 1, async text() { reads += 1; return '{}'; },
+  }];
+  await document.element('demon-forge-import-file').dispatchAsync('change');
+
+  assert.equal(reads, 0);
+  assert.match(document.element('demon-forge-import-status').textContent, /2 MiB cap/i);
 });
 
 test('Escape close stays local with poisoned fetch and globe globals', () => {

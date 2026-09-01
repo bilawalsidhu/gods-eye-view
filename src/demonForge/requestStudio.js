@@ -50,7 +50,7 @@ export function createFranceEuDraft(input = {}) {
     `Objet : ${actionLabel}`,
     `Responsable du traitement : ${controllerName}`,
     `URL concernée : ${candidateUrl}`,
-    `Voie de contact à utiliser après revue manuelle : ${contactRoute}`,
+    `Référence de contact non vérifiée à contrôler manuellement : ${contactRoute}`,
     '',
     `Je souhaite exercer une ${actionLabel} concernant l’URL indiquée ci-dessus. Merci d’examiner cette demande et de m’indiquer la suite donnée, ainsi que toute limite applicable à ce droit.`,
     'Ce texte est un brouillon opérationnel, pas un envoi automatique ni un avis juridique. Il ne promet pas la suppression complète des données, du compte ou de tous les enregistrements conservés.',
@@ -61,6 +61,7 @@ export function createFranceEuDraft(input = {}) {
     action,
     controllerName,
     contactRoute,
+    routeVerification: 'unverified',
     body,
     approval: null,
     candidate: input.candidate ? { ...input.candidate } : null,
@@ -79,7 +80,7 @@ export function approveDraft(draft, approval, caseRecord, nowMs) {
     return { ok: false, code: 'CANDIDATE_URL_REQUIRED', message: 'Approval requires an exact HTTPS candidate URL.' };
   }
 
-  const authorization = canCreateRequest(caseRecord, draft.candidate, 'draft', nowMs);
+  const authorization = canCreateRequest(caseRecord, draft.candidate, draft.action, nowMs);
   if (!authorization.ok) return authorization;
 
   return {

@@ -4,12 +4,17 @@ import { CASE_KIND, CANDIDATE_STATUS, createCaseRecord } from './types.js';
 import { approveDraft, createFranceEuDraft } from './requestStudio.js';
 
 const nowMs = 1_700_000_000_000;
-const candidate = { status: CANDIDATE_STATUS.CONFIRMED, sourceScope: 'synthetic', url: 'https://example.test/profile' };
+const candidate = { status: CANDIDATE_STATUS.CONFIRMED, sourceCategory: 'social-profile', url: 'https://example.test/profile' };
 
 function validCase(expiresAtMs = nowMs + 1_000) {
   return createCaseRecord({
     kind: CASE_KIND.NON_SELF,
-    mandate: { expiresAtMs, sourceScopes: ['synthetic'], proof: { signedAtMs: nowMs - 2, validatedAtMs: nowMs - 1 } },
+    mandate: {
+      expiresAtMs,
+      sourceCategories: ['social-profile'],
+      permittedActions: ['erasure', 'correction'],
+      proof: { signedAtMs: nowMs - 2, validatedAtMs: nowMs - 1 },
+    },
   });
 }
 
@@ -23,6 +28,7 @@ test('France/EU draft is manual, exact, and does not promise deletion', () => {
   assert.match(draft.body, /brouillon/i);
   assert.doesNotMatch(draft.body, /promet la suppression complète/i);
   assert.equal('transport' in draft, false);
+  assert.equal(draft.routeVerification, 'unverified');
 });
 
 test('draft creation and approval require an exact candidate URL', () => {
