@@ -44,7 +44,7 @@
  *   M3. AGE-OUT RELEASE   — when the tracked plane's fixes stop arriving
  *                           (3 missed polls via the shim), tracking clears and
  *                           the camera is RELEASED IN PLACE: viewer.trackedEntity
- *                           undefined, NO jump (product rule 2026-07-02 —
+ *                           undefined, NO jump (owner decision 2026-07-02 —
  *                           the old ~80 km overview flyTo is gone).
  *
  * And the landing-ghost polish (2026-07-02): a LOW+SLOW (landed) plane that
@@ -53,7 +53,7 @@
  * readout carries a "· STALE" cue while a tracked plane coasts through its
  * missed-poll grace, and drops it when the plane reappears.
  *
- * And the ground-traffic feature (2026-07-03, product change): present-but-
+ * And the ground-traffic feature (2026-07-03, owner reversal): present-but-
  * grounded planes render FULL-STRENGTH in the airborne tint pipeline
  * (white / amber-military; the day-1 gray mute was killed the same day) at
  * ×0.8 scale and stay detectable; the on_ground flip restyles the SAME
@@ -63,7 +63,7 @@
  * Ground billboards render depth-test-free (disableDepthTestDistance = ∞) so
  * the photoreal tile skin can't bury them up close; takeoff restores the test.
  *
- * And GROUND 3D (2026-07-03, product rule LOCKED: "when I have 3D mode —
+ * And GROUND 3D (2026-07-03, owner decision LOCKED: "when I have 3D mode —
  * proximity or all — I want that respected regardless of whether a plane is
  * on the ground or in the air. No distinction."): a synthetic on_ground plane
  * is model-ELIGIBLE and gets a model under the existing cap (both layers); its
@@ -792,7 +792,7 @@ async function main() {
     // the voice tools they never wrote the SHARED context slot that
     // `get_entity_context` reads. So with a plane plainly selected on screen,
     // `{scope:'selected'}` silently downgraded to `'in_view'` and the model
-    // answered "there isn't a plane currently selected" (field session,
+    // answered "there isn't a plane currently selected" (owner field session,
     // 2026-08-21). Drives the real tool runner; costs no model turns.
     // ============================================================
     console.log('\nVoice entity context — a click-selected contact answers scope:selected');
@@ -1128,7 +1128,7 @@ async function main() {
       // `set_context_mode` takes 'contacts', and state surfaces reported the
       // internal id: the model read `mode:'flights'`, concluded Contacts was
       // off, and refused to answer from the Contacts window counts carried in
-      // the same payload (field session, 2026-08-21).
+      // the same payload (owner field session, 2026-08-21).
       // ============================================================
       console.log('\nContext vocabulary — state output speaks the tools\' own words');
       const manualContacts = await evalPage(async () => {
@@ -1889,7 +1889,7 @@ async function main() {
     // ============================================================
     // CHANGE 3 (2026-07-03): ground traffic is a FEATURE. Present-but-
     // grounded planes render FULL-STRENGTH in the airborne tint pipeline
-    // (white / amber-military — validated behavior, same-day reversal of the
+    // (white / amber-military — owner verdict, same-day reversal of the
     // day-1 gray 50%-alpha muted style: "just leave them as white … in NYC
     // I can barely see them") at ×0.8 scale; "on the ground" reads from
     // scale + no trail, never from a fade, so the 45%-alpha stale fade
@@ -1968,7 +1968,7 @@ async function main() {
       };
     });
     const fmtSnap = (s) => (s ? `show=${s.show} scale=${s.scale.toFixed(3)} rgba=(${s.red.toFixed(2)},${s.green.toFixed(2)},${s.blue.toFixed(2)},${s.alpha.toFixed(2)})` : 'missing');
-    // Ground style (validated behavior 2026-07-03): FULL-ALPHA airborne tint —
+    // Ground style (owner verdict 2026-07-03): FULL-ALPHA airborne tint —
     // white in the flights layer, amber (#FFB800) in the military layer —
     // never the 45%-alpha stale fade, never the retired gray mute. The
     // ground cue is the ×0.8 scale (klass default ⇒ base 1.0).
@@ -1992,7 +1992,7 @@ async function main() {
     // Fix 2 (2026-07-03 field test): ground planes VANISHED when zooming into
     // airports — grounded altitudes sit at/below the photoreal tile skin, so the
     // depth test buried the billboard up close (log-depth imprecision let it win
-    // from orbit). RE-PINNED for round 5 (product invariant 2026-07-06: "I just
+    // from orbit). RE-PINNED for round 5 (owner directive 2026-07-06: "I just
     // want the planes and their lines to ALWAYS be visible... evenly
     // applied"): EVERY billboard — grounded, airborne, before and after a
     // ground flip — renders with disableDepthTestDistance = +Infinity. The
@@ -2007,7 +2007,7 @@ async function main() {
       `flights=${ground.groundSnap?.ddtd} mil=${ground.milGroundSnap?.ddtd} takeoff=${ground.airSnap?.ddtd} landing=${ground.groundAgainSnap?.ddtd}`);
 
     // ============================================================
-    // GROUND 3D (2026-07-03, product rule LOCKED): "when I have 3D mode —
+    // GROUND 3D (2026-07-03, owner decision LOCKED): "when I have 3D mode —
     // proximity or all — I want that respected regardless of whether a plane
     // is on the ground or in the air. No distinction."
     //  (a) a synthetic on_ground plane is model-ELIGIBLE (not skipped),
@@ -2067,38 +2067,128 @@ async function main() {
     await ensureGeoidReady();
     const g3dFlGeoidN = geoidHeight(30.2668, -97.7445); // aaa077's lat/lon (Austin)
 
-    const g3dSetup = await evalPage(() => {
-      const gev = window.__godsEyeView;
-      const scene = gev.viewer.scene;
-      const dm = gev.dataManager;
-      // 3D models on (QA param) — the product rule under test.
-      dm.layers.get('flights').module.setParams({ models3d: true });
-      dm.layers.get('military').module.setParams({ models3d: true });
-      // Force the ground snap's tiles-ready gate open (b9b pattern): headless the
-      // Google tileset never finishes streaming, so tilesLoaded stays false.
-      let tilesForced = false;
-      try {
-        if (gev.tileset) {
-          Object.defineProperty(gev.tileset, 'tilesLoaded', { value: true, configurable: true });
-          tilesForced = gev.tileset.tilesLoaded === true;
-        } else {
-          tilesForced = true; // no tileset → groundSnap treats tiles as ready
+    let g3dSetup = null;
+    let g3dPrimaryFailure = null;
+    let g3dCleanupFailure = null;
+    try {
+      g3dSetup = await evalPage(() => {
+        const gev = window.__godsEyeView;
+        const scene = gev.viewer.scene;
+        const dm = gev.dataManager;
+        const flights = dm.layers.get('flights').module;
+        const military = dm.layers.get('military').module;
+        const priorModels3d = {
+          flights: flights.getParams().models3d,
+          military: military.getParams().models3d,
+        };
+        const priorSampleHeight = scene.sampleHeight;
+        // Keep the previous run-wide no-height seam in the page. Functions cannot
+        // cross the Puppeteer serialization boundary, so cleanup restores it from
+        // this private slot instead of deleting the scene's own property.
+        window.__g3dPriorSampleHeight = priorSampleHeight;
+        window.__g3dPriorTilesLoadedDescriptor = gev.tileset
+          ? Object.getOwnPropertyDescriptor(gev.tileset, 'tilesLoaded')
+          : null;
+        try {
+          // 3D models on (QA param) — the owner decision under test.
+          flights.setParams({ models3d: true });
+          military.setParams({ models3d: true });
+          // Force the ground snap's tiles-ready gate open (b9b pattern): headless the
+          // Google tileset never finishes streaming, so tilesLoaded stays false.
+          let tilesForced = false;
+          try {
+            if (gev.tileset) {
+              Object.defineProperty(gev.tileset, 'tilesLoaded', { value: true, configurable: true });
+              tilesForced = gev.tileset.tilesLoaded === true;
+            } else {
+              tilesForced = true; // no tileset → groundSnap treats tiles as ready
+            }
+          } catch { tilesForced = false; }
+          // Deterministic sampleHeight stub + call counter (headless has no real skin).
+          window.__g3dSampleCalls = 0;
+          window.__g3dSampleHits = { flights: 0, military: 0 };
+          const fixturePoints = {
+            flights: { lat: 30.2668, lon: -97.7445 },
+            military: { lat: 30.2685, lon: -97.7470 },
+          };
+          scene.sampleHeight = function (cartographic) {
+            window.__g3dSampleCalls += 1;
+            // Attribute each sample to the fixture's distinct ~111 m mesh cell.
+            // This prevents one successfully sampled contact from satisfying the
+            // two-contact integrity assertion below.
+            const lat = Number(cartographic?.latitude) * 180 / Math.PI;
+            const lon = Number(cartographic?.longitude) * 180 / Math.PI;
+            if (Number.isFinite(lat) && Number.isFinite(lon)) {
+              for (const [layer, target] of Object.entries(fixturePoints)) {
+                const dLat = lat - target.lat;
+                const dLon = (lon - target.lon) * Math.cos(target.lat * Math.PI / 180);
+                // 0.0008° encloses the fixture's rounded 0.001° mesh-cell
+                // sample but cannot overlap the other fixture ~300 m away.
+                if (Math.hypot(dLat, dLon) <= 0.0008) {
+                  window.__g3dSampleHits[layer] += 1;
+                }
+              }
+            }
+            return 187.5;
+          };
+          return { tilesForced, priorModels3d };
+        } catch (error) {
+          // Setup is transactional: once the first fixture mutation lands, every
+          // later setup failure restores each owned seam independently. Return
+          // both outcomes across the page boundary so rollback cannot hide or
+          // replace the primary setup error.
+          const rollbackFailures = [];
+          const attemptRollback = (label, operation) => {
+            try { operation(); } catch (rollbackError) {
+              rollbackFailures.push(`${label}: ${rollbackError?.message || rollbackError}`);
+            }
+          };
+          attemptRollback('restore sampleHeight seam', () => {
+            scene.sampleHeight = priorSampleHeight;
+          });
+          attemptRollback('restore tilesLoaded seam', () => {
+            if (!gev.tileset) return;
+            const prior = window.__g3dPriorTilesLoadedDescriptor;
+            if (prior) Object.defineProperty(gev.tileset, 'tilesLoaded', prior);
+            else delete gev.tileset.tilesLoaded;
+          });
+          attemptRollback('restore flights models3d', () => {
+            flights.setParams({ models3d: priorModels3d.flights });
+          });
+          attemptRollback('restore military models3d', () => {
+            military.setParams({ models3d: priorModels3d.military });
+          });
+          attemptRollback('delete fixture globals', () => {
+            delete window.__g3dPriorSampleHeight;
+            delete window.__g3dPriorTilesLoadedDescriptor;
+            delete window.__g3dSampleCalls;
+            delete window.__g3dSampleHits;
+          });
+          return {
+            setupFailure: error?.message || String(error),
+            rollbackFailures,
+            priorModels3d,
+          };
         }
-      } catch { tilesForced = false; }
-      // Deterministic sampleHeight stub + call counter (headless has no real skin).
-      window.__g3dSampleCalls = 0;
-      scene.sampleHeight = function () {
-        window.__g3dSampleCalls += 1;
-        return 187.5;
-      };
-      return { tilesForced };
-    });
-    record('ground-3d: sampleHeight stub installed + tiles-ready forced', g3dSetup.tilesForced,
-      JSON.stringify(g3dSetup));
+      });
+      if (g3dSetup.setupFailure) {
+        g3dPrimaryFailure = new Error(`ground-3d setup failed: ${g3dSetup.setupFailure}`);
+        if (g3dSetup.rollbackFailures.length > 0) {
+          g3dCleanupFailure = new Error(
+            `ground-3d setup rollback failed: ${g3dSetup.rollbackFailures.join(' | ')}`,
+          );
+        }
+        // Setup rollback already attempted every owned seam. Prevent the
+        // post-setup cleanup from running against deleted fixture globals.
+        g3dSetup = null;
+        throw g3dPrimaryFailure;
+      }
+      record('ground-3d: sampleHeight stub installed + tiles-ready forced', g3dSetup.tilesForced,
+        JSON.stringify(g3dSetup));
 
-    // Ingest one grounded plane per layer, then park the camera 8 km above them
-    // (inside the model regime + add radius; on-screen so they win cap slots).
-    const g3dIngest = await evalPage(async () => {
+      // Ingest one grounded plane per layer, then park the camera 8 km above them
+      // (inside the model regime + add radius; on-screen so they win cap slots).
+      const g3dIngest = await evalPage(async () => {
       const v = window.__godsEyeView.viewer;
       const dm = window.__godsEyeView.dataManager;
       const fl = dm.layers.get('flights').module;
@@ -2136,10 +2226,10 @@ async function main() {
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
       return { flBBRadius: radius(flBB.position), milBBRadius: radius(milBB.position) };
-    });
-    if (g3dIngest.error) {
-      record('ground-3d: grounded synthetics ingested', false, g3dIngest.error);
-    } else {
+      });
+      if (g3dIngest.error) {
+        record('ground-3d: grounded synthetics ingested', false, g3dIngest.error);
+      } else {
       record('ground-3d: grounded synthetics ingested', true,
         `bb radii fl=${g3dIngest.flBBRadius.toFixed(1)} mil=${g3dIngest.milBBRadius.toFixed(1)}`);
 
@@ -2208,6 +2298,7 @@ async function main() {
             flBBShown: findBB('aaa077')?.show ?? null,
             milBBShown: findBB('bbb177')?.show ?? null,
             sampleCalls: window.__g3dSampleCalls,
+            sampleHits: { ...window.__g3dSampleHits },
           };
         });
         // Expected radial delta = (stub + offset) − billboard's rendered altitude.
@@ -2232,6 +2323,11 @@ async function main() {
         record('ground-3d: billboard→model handoff holds on the ground (icons hidden once models render)',
           g3dState.flBBShown === false && g3dState.milBBShown === false,
           `fl bb.show=${g3dState.flBBShown} mil bb.show=${g3dState.milBBShown}`);
+        const bothGroundContactsSampled = g3dState.sampleHits?.flights > 0
+          && g3dState.sampleHits?.military > 0;
+        record('ground-3d: both grounded synthetic contacts reached the sampling seam',
+          bothGroundContactsSampled,
+          `sample hits near distinct fixture cells: flights=${g3dState.sampleHits?.flights ?? 0}, military=${g3dState.sampleHits?.military ?? 0}`);
 
         // ============================================================
         // WELD (2026-08-03): the detection anchor follows the RENDERED aircraft.
@@ -2319,55 +2415,49 @@ async function main() {
             `samples=${w.samples} missing=${w.missing} maxΔ=${w.maxDelta.toFixed(3)} m (tol ${WELD_TOL_M} m)`);
         }
 
-        // (e) one-shot: run ~1.2 s of frames — the count must not grow (a per-frame
-        // sampler would add dozens). TWO bounded one-shot sources (re-pinned
-        // 2 → 4 for the validated round-4 mesh-floor design, 2026-07-06):
-        // groundSnap's model snap (one per grounded plane) and the mesh-floor
-        // CELL probe (one per unique ~111 m cell; the two synthetic grounded
-        // planes occupy distinct cells). FLATNESS across frames is the
-        // load-bearing invariant — the absolute count just pins the fixtures.
+        // (e) one-shot: drive 60 verified render frames. Correct placement above
+        // proves the deterministic sample landed; the exact initial call total is
+        // NOT a contract. A successful ground snap publishes the validated height
+        // into the shared mesh-floor cell, so the later poll-time sampler may
+        // legitimately skip that cell. The load-bearing invariant is bounded
+        // growth across frames, with an explicit guard against a timed-out driver
+        // falsely looking flat.
         const callsBefore = g3dState.sampleCalls;
-        await page.evaluate(async (frames) => {
-          const v = window.__godsEyeView.viewer;
-          await new Promise((res) => {
-            let n = 0;
-            let settled = false;
-            const finish = () => {
-              if (settled) return;
-              settled = true;
-              clearTimeout(timer);
-              stop();
-              res();
-            };
-            const stop = v.scene.postRender.addEventListener(() => {
-              if (++n >= frames) {
-                finish();
-                return;
-              }
-              v.scene.requestRender();
-            });
-            const timer = setTimeout(finish, Math.max(15000, frames * 1500));
-            v.scene.requestRender();
-          });
-        }, 60);
-        await sleep(400);
+        const fleetSampleWindow = await sampleFrames(
+          page, 60, () => window.__g3dSampleCalls,
+        );
         const callsAfter = await evalPage(() => window.__g3dSampleCalls);
-        // Bounded-shape pin (round 5): with the boot-wide "no tiles" stub,
-        // every synthetic contact's cell is unlatched until this group's
-        // 187.5 stub lands, so the absolute count varies with how many
-        // synthetics earlier groups left alive. The INVARIANT is that
-        // sampling is per-poll-bounded and one-shot per cell — a per-frame
-        // sampler would add ~60+ over the frame loop; a mid-window poll
-        // legitimately adds a few cells for moving contacts.
-        record('ground-3d: ground snap + mesh-floor probes are one-shot/per-poll bounded (no per-frame sampling)',
-          callsBefore >= 4 && (callsAfter - callsBefore) <= 8,
-          `sampleHeight calls: after models up=${callsBefore} (≥4: snap + mesh cell per grounded plane), growth over ~60 frames=${callsAfter - callsBefore} (per-frame would be ~60+)`);
+        const fleetFramesComplete = !fleetSampleWindow.timedOut
+          && fleetSampleWindow.values.length === 60;
+        record('ground-3d: fleet sampling window completed all 60 requested frames',
+          fleetFramesComplete,
+          `frames=${fleetSampleWindow.values.length}/60 timedOut=${fleetSampleWindow.timedOut}`);
+        record('ground-3d: fleet ground sampling is one-shot/per-poll bounded (no per-frame sampling)',
+          fleetFramesComplete && bothGroundContactsSampled && (callsAfter - callsBefore) <= 8,
+          `sampleHeight calls: before=${callsBefore}, growth over 60 verified frames=${callsAfter - callsBefore} (per-frame would be ~60+)`);
 
         // (d) TRACKED grounded plane → the standalone tracked model (the owner's
         // "tracked SWA143 at 0 kts stayed a 2D cyan billboard" case).
+        // Start the counter BEFORE ownership changes. The previous guard began
+        // only after ready+shown and could miss a regression that sampled every
+        // render frame while the standalone model was loading.
+        const trackedTransitionCallsBefore = callsAfter;
         await evalPage(() => {
           window.__godsEyeView.dataManager.layers.get('flights').module.trackById('aaa077');
         });
+        const trackedTransitionWindow = await sampleFrames(
+          page, 30, () => window.__g3dSampleCalls,
+        );
+        const trackedTransitionCallsAfter = await evalPage(() => window.__g3dSampleCalls);
+        const trackedTransitionFramesComplete = !trackedTransitionWindow.timedOut
+          && trackedTransitionWindow.values.length === 30;
+        record('ground-3d: tracked loading/ownership sampling window completed all 30 requested frames',
+          trackedTransitionFramesComplete,
+          `frames=${trackedTransitionWindow.values.length}/30 timedOut=${trackedTransitionWindow.timedOut}`);
+        record('ground-3d: tracked loading/ownership ground sampling is bounded (no per-frame sampling)',
+          trackedTransitionFramesComplete
+            && (trackedTransitionCallsAfter - trackedTransitionCallsBefore) <= 8,
+          `sampleHeight growth from before trackById across 30 verified frames=${trackedTransitionCallsAfter - trackedTransitionCallsBefore} (per-frame would be ~30+)`);
         const g3dTrackedUp = await page.waitForFunction(() => {
           const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
           const ti = fl.getTrackedInfo();
@@ -2388,6 +2478,28 @@ async function main() {
         }
         record('ground-3d: TRACKED grounded plane gets the standalone tracked model, ground-snapped',
           g3dTrackedUp && trackedHeightOk, trackedDetail);
+
+        if (g3dTrackedUp) {
+          const trackedReadyCallsBefore = await evalPage(() => window.__g3dSampleCalls);
+          const trackedReadyWindow = await sampleFrames(
+            page, 30, () => window.__g3dSampleCalls,
+          );
+          const trackedReadyCallsAfter = await evalPage(() => window.__g3dSampleCalls);
+          const trackedReadyFramesComplete = !trackedReadyWindow.timedOut
+            && trackedReadyWindow.values.length === 30;
+          record('ground-3d: tracked ready-state sampling window completed all 30 requested frames',
+            trackedReadyFramesComplete,
+            `frames=${trackedReadyWindow.values.length}/30 timedOut=${trackedReadyWindow.timedOut}`);
+          record('ground-3d: tracked ready-state ground sampling is bounded (no per-frame sampling)',
+            trackedReadyFramesComplete
+              && (trackedReadyCallsAfter - trackedReadyCallsBefore) <= 8,
+            `sampleHeight growth over 30 verified ready-state frames=${trackedReadyCallsAfter - trackedReadyCallsBefore} (per-frame would be ~30+)`);
+        } else {
+          record('ground-3d: tracked ready-state sampling window completed all 30 requested frames',
+            false, 'tracked model never became ready+shown');
+          record('ground-3d: tracked ready-state ground sampling is bounded (no per-frame sampling)',
+            false, 'tracked model never became ready+shown');
+        }
 
         // WELD (tracked): the tracked CARD anchors to the model you can see.
         // `gevVisualPosition` is a SEPARATE accessor from `gevDisplayPosition` on
@@ -2443,22 +2555,83 @@ async function main() {
               : 'display accessor returned null this frame (DR cache invalid) — separation not evaluated');
         }
       }
-
-      // Cleanup: untrack, restore sampleHeight, drop the grounded synthetics
-      // (grounded fast-cull removes them after ONE missed poll).
-      await evalPage(async () => {
-        const v = window.__godsEyeView.viewer;
-        const dm = window.__godsEyeView.dataManager;
+      }
+    } catch (error) {
+      // Contain the scenario so a primary fixture failure survives cleanup and
+      // later groups plus the run-wide report still execute.
+      g3dPrimaryFailure = error;
+    } finally {
+      // This group temporarily owns the sampling seam, model toggle, synthetics,
+      // tracking state, and page globals. Release every one on error/timeout as
+      // well as on the happy path so later height-datum scenarios cannot inherit
+      // a deterministic skin or a tracked model from this fixture.
+      if (g3dSetup) {
+        try {
+          const cleanupFailures = await evalPage(async (priorModels3d) => {
+        const gev = window.__godsEyeView;
+        const v = gev.viewer;
+        const dm = gev.dataManager;
         const fl = dm.layers.get('flights').module;
         const mil = dm.layers.get('military').module;
-        fl.stopTracking();
-        delete v.scene.sampleHeight; // restore the prototype implementation
-        window.__SYNTH.flights = window.__SYNTH.flights.filter((f) => f.icao !== 'aaa077');
-        window.__SYNTH.military = window.__SYNTH.military.filter((m) => m.hex !== 'bbb177');
-        await fl.update(v);
-        await mil.update(v);
-      });
+        const failures = [];
+        const attempt = async (label, operation) => {
+          try { await operation(); } catch (error) {
+            failures.push(`${label}: ${error?.message || error}`);
+          }
+        };
+        await attempt('stop tracking', () => fl.stopTracking());
+        await attempt('remove flights synthetic', () => {
+          window.__SYNTH.flights = window.__SYNTH.flights.filter((f) => f.icao !== 'aaa077');
+        });
+        await attempt('remove military synthetic', () => {
+          window.__SYNTH.military = window.__SYNTH.military.filter((m) => m.hex !== 'bbb177');
+        });
+        await attempt('refresh flights', () => fl.update(v));
+        await attempt('refresh military', () => mil.update(v));
+        await attempt('restore sampleHeight seam', () => {
+          v.scene.sampleHeight = window.__g3dPriorSampleHeight;
+        });
+        await attempt('restore tilesLoaded seam', () => {
+          if (!gev.tileset) return;
+          const prior = window.__g3dPriorTilesLoadedDescriptor;
+          if (prior) Object.defineProperty(gev.tileset, 'tilesLoaded', prior);
+          else delete gev.tileset.tilesLoaded;
+        });
+        await attempt('restore flights models3d', () => {
+          fl.setParams({ models3d: priorModels3d.flights });
+        });
+        await attempt('restore military models3d', () => {
+          mil.setParams({ models3d: priorModels3d.military });
+        });
+        await attempt('delete fixture globals', () => {
+          delete window.__g3dPriorSampleHeight;
+          delete window.__g3dPriorTilesLoadedDescriptor;
+          delete window.__g3dFindModel;
+          delete window.__g3dSampleCalls;
+          delete window.__g3dSampleHits;
+        });
+        return failures;
+          }, g3dSetup.priorModels3d);
+          if (cleanupFailures.length > 0) {
+            g3dCleanupFailure = new Error(`ground-3d cleanup failed: ${cleanupFailures.join(' | ')}`);
+          }
+        } catch (error) {
+          // A page-evaluation failure is itself cleanup evidence, but it must
+          // not replace the primary error or abort the remaining harness.
+          g3dCleanupFailure = error;
+        }
+      }
     }
+    record('ground-3d: scenario completed without an unhandled fixture error',
+      g3dPrimaryFailure === null,
+      g3dPrimaryFailure
+        ? `primary failure: ${g3dPrimaryFailure?.message || g3dPrimaryFailure}`
+        : 'primary path completed');
+    record('ground-3d: fixture cleanup completed without errors',
+      g3dCleanupFailure === null,
+      g3dCleanupFailure
+        ? `cleanup failure: ${g3dCleanupFailure?.message || g3dCleanupFailure}`
+        : (g3dSetup ? 'all owned fixture state released' : 'post-setup cleanup not required'));
 
     // ============================================================
     // CHANGE 4 (2026-07-03): arrival rotation freshness. Field test: "planes
@@ -2482,6 +2655,7 @@ async function main() {
     const arrival = await evalPage(async () => {
       const v = window.__godsEyeView.viewer;
       const dm = window.__godsEyeView.dataManager;
+      const { screenProjectedRotation } = await import('/src/data/iconOrientation.js');
       // 3D models OFF for this phase: a model-handed-off billboard is hidden
       // and skips rotation updates entirely — the probes need live billboards
       // (this is also the app's default state the field report came from).
@@ -2539,10 +2713,10 @@ async function main() {
       });
       await nextFrames(3);
       const angDiff = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
-      const probe = async (id) => {
+      const probe = async (id, course) => {
         const bb = findBB(id);
         if (!bb || !bb.show) return { error: `${id} missing/hidden` };
-        const r0 = bb.rotation; // settled reference (camera idle; DR drift is sub-degree over the probe)
+        const r0 = bb.rotation; // settled tamper origin; correctness uses a fresh projection below
         // (a) settle pass: tamper, then raise moveEnd with the camera IDLE —
         // the pose signature is unchanged, so only the moveEnd hook can fix
         // this before the 1 s catch-up.
@@ -2550,6 +2724,10 @@ async function main() {
         v.camera.moveEnd.raiseEvent();
         await nextFrames(2);
         const afterMoveEnd = bb.rotation;
+        // A real-GPU fleet tick can land near the edge of the frame budget and
+        // advance the contact before the probe reads it. Compare with the
+        // production projection at the CURRENT position, not the now-stale r0.
+        const expectedMoveEnd = screenProjectedRotation(v.scene, bb.position, course, null);
         // (b) reveal pass: tamper + hide — the next fleet tick must flip it
         // visible AND correct the nose in that same tick (camera still idle,
         // no moveEnd raised). Diagnostic fields (round 5): record WHICH frame
@@ -2564,13 +2742,21 @@ async function main() {
           if (bb.show && flipFrame === -1) flipFrame = f;
           if (f >= 2 && flipFrame !== -1) break;
         }
+        const expectedReveal = screenProjectedRotation(v.scene, bb.position, course, null);
         const hasModel = !!(window.__g3dFindModel && window.__g3dFindModel(id));
         return {
-          r0, dMoveEnd: angDiff(afterMoveEnd, r0), dReveal: angDiff(bb.rotation, r0),
+          r0,
+          dMoveEnd: angDiff(afterMoveEnd, expectedMoveEnd),
+          dReveal: angDiff(bb.rotation, expectedReveal),
           shown: bb.show, flipFrame, hasModel,
         };
       };
-      return { flights: await probe('aaa002'), military: await probe('bbb101') };
+      const flightCourse = window.__SYNTH.flights.find((f) => f.icao === 'aaa002')?.track ?? 0;
+      const militaryCourse = window.__SYNTH.military.find((m) => m.hex === 'bbb101')?.track ?? 0;
+      return {
+        flights: await probe('aaa002', flightCourse),
+        military: await probe('bbb101', militaryCourse),
+      };
     });
     const fmtArr = (a) => (!a ? `no result (${arrival?.error || 'phase error'})` : a.error ? a.error
       : `settle-err=${(a.dMoveEnd * 180 / Math.PI).toFixed(1)}° reveal-err=${(a.dReveal * 180 / Math.PI).toFixed(1)}° shown=${a.shown} flipFrame=${a.flipFrame} hasModel=${a.hasModel}`);
@@ -2613,8 +2799,9 @@ async function main() {
 
     const dfSetup = await evalPage(async () => {
       const Cesium = await import('/node_modules/cesium/Build/Cesium/index.js');
-      const v = window.__godsEyeView.viewer;
-      const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
+      const gev = window.__godsEyeView;
+      const v = gev.viewer;
+      const fl = gev.dataManager.layers.get('flights').module;
       // Hermetic: the ground-3d group's cleanup restored the REAL sampleHeight,
       // which would let the mesh sampler latch whatever headless GL streams.
       //
@@ -2627,7 +2814,23 @@ async function main() {
       // need, and the COLD case in its own right); a number opens a
       // DETERMINISTIC skin for the scenarios that need a model to draw.
       window.__dfSkinM = null;
-      v.scene.sampleHeight = () => (window.__dfSkinM == null ? undefined : window.__dfSkinM);
+      window.__dfSkinSamples = [];
+      window.__dfPriorTilesLoadedDescriptor = gev.tileset
+        ? Object.getOwnPropertyDescriptor(gev.tileset, 'tilesLoaded')
+        : null;
+      if (gev.tileset) {
+        Object.defineProperty(gev.tileset, 'tilesLoaded', { value: true, configurable: true });
+      }
+      v.scene.sampleHeight = (cartographic) => {
+        if (window.__dfSkinM == null) return undefined;
+        const lat = Cesium.Math.toDegrees(Number(cartographic?.latitude));
+        const lon = Cesium.Math.toDegrees(Number(cartographic?.longitude));
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          window.__dfSkinSamples.push({ lat, lon, h: window.__dfSkinM });
+          if (window.__dfSkinSamples.length > 512) window.__dfSkinSamples.shift();
+        }
+        return window.__dfSkinM;
+      };
       fl.setParams({ models3d: false }); // billboards own the visual (T7 gate open)
       window.__dfFindBB = (id) => {
         let found = null;
@@ -3000,24 +3203,8 @@ async function main() {
           await fl.update(v);
           await window.__dfSettle(600);
         }
-        // The production clamp deliberately keeps a sticky floor cell across
-        // the first 15% of a boundary crossing. A newly warmed adjacent cell
-        // can therefore become readable a frame before the moving sprite is
-        // far enough into it to adopt it. Wait for the observable clamp, as the
-        // seeded-floor case above does, instead of sampling that valid
-        // hysteresis window as a product failure.
-        const clampDeadline = Date.now() + 5000;
-        let bb1 = null;
-        let d1 = null;
-        let spriteFloor = null;
-        do {
-          await window.__dfSettle(250);
-          bb1 = window.__dfFindBB('aaa097');
-          d1 = bb1 ? window.__dfCarto(bb1.position) : null;
-          spriteFloor = d1 ? gf.cachedGroundFloor(d1.lat, d1.lon) : null;
-        } while (Date.now() < clampDeadline
-          && (!Number.isFinite(d1?.h) || !Number.isFinite(spriteFloor)
-            || d1.h < spriteFloor + 1));
+        const bb1 = window.__dfFindBB('aaa097');
+        const d1 = bb1 ? window.__dfCarto(bb1.position) : null;
         return {
           startCold,
           displayCell,
@@ -3028,7 +3215,7 @@ async function main() {
           aheadCell,
           aheadFloor: gf.cachedGroundFloor(aheadCell.lat, aheadCell.lon),
           spriteH: d1 ? d1.h : null,
-          spriteFloor,
+          spriteFloor: d1 ? gf.cachedGroundFloor(d1.lat, d1.lon) : null,
           beforeH: d0.h,
         };
       }, 30.3000, -97.8000);
@@ -3547,22 +3734,12 @@ async function main() {
         fl.setParams({ models3d: true });
         v.scene.requestRender();
         await new Promise((r) => setTimeout(r, 120)); // inside the load window
-        const countRendering = () => {
-          let n = 0;
-          const walk = (coll) => {
-            const len = coll.length;
-            for (let i = 0; i < len; i++) {
-              let p; try { p = coll.get(i); } catch { continue; }
-              if (!p) continue;
-              if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-              if (p.activeAnimations !== undefined && p.minimumPixelSize !== undefined
-                && p.show && p.ready) n += 1;
-            }
-          };
-          walk(v.scene.primitives);
-          return n;
-        };
-        out.renderingModelsDuringLoad = countRendering();
+        // Count only the contact under test. A headful run can legitimately
+        // render unrelated live fleet or military models at the same time;
+        // those say nothing about whether aaa097's loading handoff is still
+        // billboard-owned. The shared helper keys models by their pick id and
+        // uses the production ownership pair (`show && ready`).
+        out.renderingModelsDuringLoad = window.__dfCountModels('aaa097').rendering;
         const entLoad = v.trackedEntity?.position?.getValue(Cesium.JulianDate.now());
         out.trackedSeeded = seededTracked;
         out.trackedLoadH = entLoad ? window.__dfCarto(entLoad).h : null;
@@ -3633,8 +3810,28 @@ async function main() {
           }
         }
         if (!ns) return { skipped: `the app's own flights module was not reachable (tried ${urls.length})` };
-        const bb = window.__dfFindBB('aaa097');
-        if (!bb) return { error: 'aaa097 billboard missing' };
+        // Use a scenario-owned contact so its groundSnap entry is provably cold;
+        // earlier display-floor cases intentionally exercise aaa097's cache.
+        const holdIcao = 'aaa098';
+        const sourceBb = window.__dfFindBB('aaa097');
+        if (!sourceBb) return { error: 'aaa097 source billboard missing' };
+        const source = window.__dfCarto(sourceBb.position);
+        window.__SYNTH.flights = window.__SYNTH.flights.filter((f) => f.icao !== holdIcao);
+        window.__SYNTH.flights.push({
+          icao: holdIcao,
+          callsign: 'HOLD98',
+          lon: source.lon,
+          lat: source.lat,
+          alt: 0,
+          vel: 0,
+          track: 90,
+          onGround: true,
+        });
+        fl.setParams({ models3d: false });
+        await fl.update(v);
+        await window.__dfSettle(600);
+        const bb = window.__dfFindBB(holdIcao);
+        if (!bb) return { error: `${holdIcao} billboard missing` };
         const base = window.__dfCarto(bb.position);
         const basePos = Cesium.Cartesian3.fromDegrees(base.lon, base.lat, base.h);
         // Offered skin: unmistakably not the feed altitude, for the case where
@@ -3643,31 +3840,25 @@ async function main() {
 
         // 1. Open a deterministic skin and let the REAL fleet tick admit, place
         //    and show the model — the arrival path this scenario then interrupts.
-        //    (This contact's snap may already be warm from an earlier scenario,
-        //    in which case the cache answers and the offered skin never fires.
-        //    Either way what the model stands on is a MEASUREMENT, which is the
-        //    only property the hold below is about.)
+        const baseSampleCount = () => window.__dfSkinSamples.filter((sample) => {
+          const dLat = sample.lat - base.lat;
+          const dLon = (sample.lon - base.lon) * Math.cos(base.lat * Math.PI / 180);
+          return Math.hypot(dLat, dLon) <= 0.0002;
+        }).length;
+        const baseSamplesBefore = baseSampleCount();
         window.__dfSkinM = skin;
         fl.setParams({ models3d: true });
-        const up = await window.__dfAwaitTrackedModel('aaa097', 20000);
+        const up = await window.__dfAwaitTrackedModel(holdIcao, 20000);
         if (!up.rendering) {
           window.__dfSkinM = null;
           fl.setParams({ models3d: false });
-          return { skipped: 'no fleet model rendered for aaa097 in this browser' };
+          return { skipped: `no fleet model rendered for ${holdIcao} in this browser` };
         }
-        // The model-availability warm-up above may reuse aaa097's snap from an
-        // earlier display-floor case. That makes this scenario order-dependent:
-        // a later cell can correctly contradict that unrelated measurement and
-        // turn the intended outage hold into a different product rule. Start
-        // this case with its own snap and no independent mesh evidence; the
-        // next handoff must therefore measure the open deterministic skin.
-        fl._clearGroundSnapStateForTest();
-        window.__dfGf._clearMeshFloorCellsForTest();
-        // Re-drive at the position this scenario will measure taxi distance
-        // from. With the scenario-owned caches cold, this fills the snap from
-        // the deterministic skin above rather than inheriting earlier state.
-        const freshOwns = ns._driveFleetModelHandoffForTest({ icao24: 'aaa097', position: basePos, course: 90 });
-        const freshH = window.__dfModelHeight('aaa097');
+        const freshOwns = ns._driveFleetModelHandoffForTest({
+          icao24: holdIcao, position: basePos, course: 90,
+        });
+        const baseSampleHits = baseSampleCount() - baseSamplesBefore;
+        const freshH = window.__dfModelHeight(holdIcao);
 
         // 2. The tiles go away and the contact taxis ~96 m — past the 50 m
         //    resample threshold, inside the hold bound. Every resample from here
@@ -3684,21 +3875,22 @@ async function main() {
         const taxiCarto = window.__dfCarto(taxiPos);
         const baseMeshM = gfns?.cachedMeshFloor?.(baseCarto.lat, baseCarto.lon) ?? null;
         const taxiMeshM = gfns?.cachedMeshFloor?.(taxiCarto.lat, taxiCarto.lon) ?? null;
-        const heldOwns = ns._driveFleetModelHandoffForTest({ icao24: 'aaa097', position: taxiPos, course: 90 });
-        const heldH = window.__dfModelHeight('aaa097');
-        const heldBb = !!window.__dfFindBB('aaa097')?.show;
+        const heldOwns = ns._driveFleetModelHandoffForTest({ icao24: holdIcao, position: taxiPos, course: 90 });
+        const heldH = window.__dfModelHeight(holdIcao);
+        const heldBb = !!window.__dfFindBB(holdIcao)?.show;
 
         // 3. ~385 m out the memory stops describing anywhere this contact has
         //    been. It is released rather than stretched, and the gate takes over.
         const farPos = Cesium.Cartesian3.fromDegrees(base.lon + 0.004, base.lat, base.h);
-        const releasedOwns = ns._driveFleetModelHandoffForTest({ icao24: 'aaa097', position: farPos, course: 90 });
-        const releasedBb = !!window.__dfFindBB('aaa097')?.show;
+        const releasedOwns = ns._driveFleetModelHandoffForTest({ icao24: holdIcao, position: farPos, course: 90 });
+        const releasedBb = !!window.__dfFindBB(holdIcao)?.show;
 
         fl.setParams({ models3d: false });
         await window.__dfSettle(300);
         return {
           freshOwns,
           freshH,
+          baseSampleHits,
           heldOwns,
           heldH,
           heldBb,
@@ -3728,12 +3920,12 @@ async function main() {
           dfHold.error || `taxi ${Number(dfHold.taxiM).toFixed(1)} m (> 50 m invalidate, < 250 m bound), far step ${Number(dfHold.farM).toFixed(1)} m (> 250 m bound)`);
 
         record('display-floor/hold: a taxi-invalidated ground snap holds the model through the resample backoff',
-          !dfHold.error && dfHold.freshOwns === true && dfHold.heldOwns === true
+          !dfHold.error && dfHold.baseSampleHits > 0
+            && dfHold.freshOwns === true && dfHold.heldOwns === true
             && dfHold.heldBb === false
-            && dfHold.taxiMeshM == null
             && Number.isFinite(dfHold.heldH) && Number.isFinite(dfHold.freshH)
             && Math.abs(dfHold.heldH - dfHold.freshH) < 0.5,
-          dfHold.error || `fresh owns=${dfHold.freshOwns} on a MEASURED floor at ${Number(dfHold.freshH).toFixed(1)} m; tiles gone + ${Number(dfHold.taxiM).toFixed(1)} m taxi → owns=${dfHold.heldOwns} at ${Number(dfHold.heldH).toFixed(1)} m, billboard shown=${dfHold.heldBb} (want owns=true, bb=false: no 3D→2D pop). Independent mesh floor: base=${dfHold.baseMeshM == null ? 'cold' : Number(dfHold.baseMeshM).toFixed(1)} m, taxi=${dfHold.taxiMeshM == null ? 'cold' : Number(dfHold.taxiMeshM).toFixed(1)} m`);
+          dfHold.error || `fresh owns=${dfHold.freshOwns} after ${dfHold.baseSampleHits} positive base sample(s), on a MEASURED floor at ${Number(dfHold.freshH).toFixed(1)} m; tiles gone + ${Number(dfHold.taxiM).toFixed(1)} m taxi → owns=${dfHold.heldOwns} at ${Number(dfHold.heldH).toFixed(1)} m, billboard shown=${dfHold.heldBb} (want owns=true, bb=false: no 3D→2D pop). Independent mesh floor: base=${dfHold.baseMeshM == null ? 'cold' : Number(dfHold.baseMeshM).toFixed(1)} m, taxi=${dfHold.taxiMeshM == null ? 'cold' : Number(dfHold.taxiMeshM).toFixed(1)} m`);
 
         record('display-floor/hold: past the drift bound the hold is released and the model is withheld',
           !dfHold.error && dfHold.releasedOwns === false && dfHold.releasedBb === true,
@@ -3746,12 +3938,21 @@ async function main() {
     // Cleanup: drop the synthetics and the seeded cells so nothing leaks into
     // the run-wide console/HTTP checks below.
     await evalPage(async () => {
-      const v = window.__godsEyeView.viewer;
-      const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
+      const gev = window.__godsEyeView;
+      const v = gev.viewer;
+      const fl = gev.dataManager.layers.get('flights').module;
       window.__SYNTH.flights = window.__SYNTH.flights.filter((f) => !/^aaa09/.test(f.icao));
       fl.stopTracking();
       window.__dfGf?._clearMeshFloorCellsForTest();
       delete v.scene.sampleHeight;
+      if (gev.tileset) {
+        const prior = window.__dfPriorTilesLoadedDescriptor;
+        if (prior) Object.defineProperty(gev.tileset, 'tilesLoaded', prior);
+        else delete gev.tileset.tilesLoaded;
+      }
+      delete window.__dfPriorTilesLoadedDescriptor;
+      delete window.__dfSkinSamples;
+      delete window.__dfSkinM;
       await fl.update(v);
     });
 

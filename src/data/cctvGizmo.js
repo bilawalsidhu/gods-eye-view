@@ -2,7 +2,7 @@
  * @module cctvGizmo
  *
  * Direct-manipulation calibration gizmo for the CCTV layer (design:
- * the CCTV calibration contract in `docs/CURRENT-STATE.md`).
+ * docs/superpowers/specs/2026-07-05-cctv-viewshed-gizmo-design.md §3c).
  *
  * Two layers:
  *  - Pure drag math (this top section): ray↔axis closest-point, ray↔plane

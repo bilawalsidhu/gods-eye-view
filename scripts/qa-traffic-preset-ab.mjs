@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-traffic-preset-ab.mjs — A/B screenshot capture for preset-aware
- * traffic dot styling (field finding 2026-07-23: NVG/FLIR/CRT
+ * traffic dot styling (owner field finding 2026-07-23: NVG/FLIR/CRT
  * post-FX crush the green/amber/red congestion coding).
  *
  * For each view, settles the live traffic layer ONCE, then for each
@@ -13,7 +13,7 @@
  * restyles in place, no refetch, so the pair is a true A/B.
  *
  * Views: Mumbai Western Express Hwy (live rush window for jam coverage)
- * + Austin I-35 downtown corridor (common target).
+ * + Austin I-35 downtown corridor (owner's usual target).
  *
  * Shots + per-shot layer stats land in --out
  * (default qa-shots/preset-traffic, gitignored).
@@ -57,7 +57,7 @@ const VIEWS = [
   },
 ];
 /**
- * StyleManager preset names with user-facing labels + expected profile.
+ * StyleManager preset names with owner-facing labels + expected profile.
  * `ironbow` flips the thermal palette uniform (0 = grayscale WHOT,
  * 1 = Ironbow "Predator" ramp) — round 2 requires the dots to read in both.
  */

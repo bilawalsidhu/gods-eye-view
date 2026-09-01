@@ -29,7 +29,7 @@ const MAX_SAMPLES_PER_CALL = 40;
 /** @constant {number} Only cells within this range of the viewer subpoint are
  *  sampled. Round-5 hardening: tightened 40 → 15 km — beyond the streamed
  *  fine-LOD area a probe returns COARSE-tile heights (not undefined), and the
- *  one-shot latch made those permanent (follow-up round 5: grounded planes stuck
+ *  one-shot latch made those permanent (owner round 5: grounded planes stuck
  *  at a uniform wrong height). */
 const MAX_SAMPLE_DIST_KM = 15;
 /** @constant {number} No sampling when the camera is above this height — the
@@ -155,8 +155,9 @@ export function sampleMeshFloorCells(scene, points, { excludeObjects = [], viewe
     // the sample point: walk the tileset tree to the tile containing the
     // coordinate and require its `geometricError` to be below a threshold tied
     // to the accuracy the caller needs, before trusting the sample. That is
-    // feasible and deliberately deferred until rendered-mesh sampling can be
-    // validated consistently across all consumers.
+    // feasible and deliberately deferred — see the P2 in
+    // the project roadmap, which bundles it with the fly_route probe so
+    // one post-launch pass settles rendered-mesh sampling everywhere.
     reportValidatedMeshFloorCell(cell.lat, cell.lon, height);
   }
 }

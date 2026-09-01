@@ -1,6 +1,6 @@
 // src/data/cctv.test.mjs — CCTV v2 pure frustum geometry (computeFrustumGeometry).
 //
-// Locks the CCTV frustum geometry described in docs/CURRENT-STATE.md:
+// Locks the §2a math of docs/plans/2026-07-03-cctv-v2-design.md:
 //   - the far-cap (monitor plane) corners lie ON the plane through capCenter
 //     perpendicular to the frustum view axis (ε < 0.5 m) — this is the geometric
 //     invariant that welds the wireframe corner rays to the plane entity;
@@ -402,7 +402,7 @@ test('ground clamp lifts the CAP CENTER only — the rectangle stays rigid (true
   assert.equal(g.capCenter.alt, floor, 'cap center clamps exactly to the floor');
   // Corners derive rigidly from the lifted center: alt = floor ± cos(pitch)·halfH.
   // The bottom pair sits BELOW the floor (tiles occlude it) — per-corner clamping
-  // is what flattened the wireframe into a fan (field test 2026-07-04).
+  // is what flattened the wireframe into a fan (owner field test 2026-07-04).
   const upVert = Math.cos(toRad(-24)) * g.halfH;
   for (const key of ['tl', 'tr']) {
     assert.ok(Math.abs(g.corners[key].alt - (floor + upVert)) < 1e-6, `${key} alt ${g.corners[key].alt}`);
@@ -415,7 +415,7 @@ test('ground clamp lifts the CAP CENTER only — the rectangle stays rigid (true
 test('clamped pose keeps corner/plane coincidence and the rigid 2·halfW × 2·halfH span', () => {
   // The wireframe corner rays must terminate exactly on the monitor plane's
   // corners AT THE DEFAULT AUSTIN POSE — this is the case that diverged by
-  // ~47.5 m under per-corner clamping (field test 2026-07-04).
+  // ~47.5 m under per-corner clamping (owner field test 2026-07-04).
   const g = computeFrustumGeometry(AUSTIN_FABRICATED_CAMERA, AUSTIN_GROUND);
   const d = viewDir(41, -24);
   const capEnu = enu(g.mount, g.capCenter);
@@ -1090,7 +1090,7 @@ test('heading wrap: heading 350° produces a symmetric cap (left/right corners e
 
 // ---------------------------------------------------------------------------
 // Task 5 — calibration v2 store + CAL badge (design §3b/§3c as amended by the
-// LOCKED product rules §9.2/§9.3: wipe-clean v2 store, panel-only badge).
+// LOCKED owner decisions §9.2/§9.3: wipe-clean v2 store, panel-only badge).
 // ---------------------------------------------------------------------------
 
 /** Minimal in-memory localStorage stand-in for pure store-IO unit tests. */
@@ -1167,7 +1167,7 @@ test('calibration v2: a corrupt v1 key never leaks into the v2 store (v1 is dead
   });
   // v2 key is untouched/empty — v1's presence must have zero effect.
   const restored = readCalibrationStoreV2(storage);
-  assert.equal(restored.size, 0, 'v2 store must start empty — no legacy import (product rule #3, §9.3)');
+  assert.equal(restored.size, 0, 'v2 store must start empty — no legacy import (owner decision #3, §9.3)');
   assert.ok(!restored.has('austin-42'));
 });
 
@@ -1190,7 +1190,7 @@ test('deriveCalBadge: RAW PRIOR for everything else (all Austin Open Data today)
 
 // ---------------------------------------------------------------------------
 // Task 5 (height-datum fix): regime-aware ground resolution pure helpers.
-// the height-datum contract in docs/CURRENT-STATE.md.
+// docs/superpowers/specs/2026-07-05-entity-height-datum-design.md §2.
 // ---------------------------------------------------------------------------
 
 test('surfaceRegimeKey: globe hidden (photoreal) → google-3d; globe visible → terrain-globe', () => {
@@ -1236,7 +1236,7 @@ test('normalizeCoverageMode: garbage keeps the current mode', () => {
   assert.equal(normalizeCoverageMode(3, 'on'), 'on');
 });
 
-// Unchanged-frame signature (white-flash fix, field test 2026-07-30)
+// Unchanged-frame signature (white-flash fix, owner field test 2026-07-30)
 // ---------------------------------------------------------------------------
 
 /** Builds an RGBA buffer from [r,g,b] triples. */

@@ -449,7 +449,7 @@ test('real military track path creates no native label and publishes every cache
  * and then hand that identity to track_entity. The analyst's `id` is a DISPLAY
  * label — callsign, else registration, else hex — while the lookup matched
  * callsigns and hex only, so a callsign-less contact came back as its tail
- * number and "Nothing matched" (field session 2026-08-21, 23:48: three
+ * number and "Nothing matched" (owner field session 2026-08-21, 23:48: three
  * failed retries before a fallback stuck).
  */
 test('a callsign-less contact is findable by the tail number the app displays', () => {

@@ -696,7 +696,7 @@ export function placeFramingViewport(viewport, anchorLat, anchorLng, types = [])
 }
 
 /**
- * Natural-region framing heuristic (field test 2026-07-23). Pure — exported
+ * Natural-region framing heuristic (owner field test 2026-07-23). Pure — exported
  * for unit tests. Given geocode {southwest,northeast} bounds, decide whether to
  * frame the full viewport or a capped oblique swath over the feature's center,
  * looking along the feature's long axis.

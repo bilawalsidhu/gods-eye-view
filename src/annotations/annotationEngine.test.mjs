@@ -575,7 +575,7 @@ test('fresh path: a renderer throw is rolled back the same way', async (t) => {
   );
 });
 
-// ── Rollback must also unwind PARTIAL renderer state (second review) ──────────
+// ── Rollback must also unwind PARTIAL renderer state (review round 2) ──────────
 //
 // The harness above throws on the FIRST statement of add(), so a rollback that
 // only deletes the engine's map entry looked complete. The real renderers build

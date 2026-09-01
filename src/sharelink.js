@@ -108,14 +108,14 @@ export class ShareLinkManager {
     this._detectionAllocation = 'ELASTIC';
     this._detectionFadePct = 7;
     // Mirrors KEYHOLE_OUTSIDE_OPACITY_DEFAULT in celestialRing.js and the
-    // slider's markup value (final value 2026-08-24: 5 -> 3 -> 1). This is the
+    // slider's markup value (owner final lock 2026-08-24: 5 -> 3 -> 1). This is the
     // state the link THIS session generates starts from, so it must match what
     // the session actually renders; the `ko` PARSE fallback below is a separate
     // question and deliberately stays at 5.
     this._detectionOutsideOpacityPct = 1;
     this._celestialRingEnabled = false;
     this._scopeEnabled = true;
-    // Feather opens on a soft 11% scope-mask edge (final value 2026-08-24,
+    // Feather opens on a soft 11% scope-mask edge (owner final lock 2026-08-24,
     // superseding the 08-22 hard-crop and 08-23 8% rulings) — mirrors
     // SCOPE_FEATHER_RATIO_DEFAULT in scopeMask.js and the slider's markup value.
     this._scopeFeatherPct = 11;

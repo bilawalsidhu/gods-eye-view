@@ -140,7 +140,7 @@ const GEO_PROGRESS_NOTIFY_BATCH_LIMIT = 10;
 // Throttle for placeholder repaints — the projection RAF loop must not
 // re-fill a 1080p canvas on every frame while a feed image is still loading.
 const PLACEHOLDER_REPAINT_MS = 750;
-// v1 key is retired dead data (product rule #3, §9.3 — WIPE CLEAN, no
+// v1 key is retired dead data (owner decision #3, §9.3 — WIPE CLEAN, no
 // legacy import): kept here only as a documented constant so nothing ever
 // re-reads it by accident. Exported for the unit suite's "v1 is ignored"
 // assertion; there is NO read path for this key anywhere in the module.
@@ -366,7 +366,7 @@ let _cardFetchMode = 'steady';
  * 20/28/40 tiers resume when loading completes (see refreshAmbientCards).
  */
 const CCTV_AMBIENT_CARD_DRAIN_CAP = 16;
-// Global static-frame pacing (field finding 3): the pacer ticks at the burst
+// Global static-frame pacing (owner finding 3): the pacer ticks at the burst
 // spacing (250 ms) but cardFetchPolicy gates launches — cold fill (selected
 // cards still missing their FIRST frame) allows up to 4 in-flight fetches at
 // 250 ms spacing; steady state keeps the salvaged Part C gate of at most one
@@ -403,7 +403,7 @@ let _projectionOverlayOwnerId = null;
  * thumbnail absent because its monitor plane is the active representation.
  */
 let _activeCameraCardEnabled = false;
-// Hover-summoned card (follow-up round 2, item B): pointing at a cardless camera
+// Hover-summoned card (owner round 2, item B): pointing at a cardless camera
 // icon shows its card immediately as a PINNED entry (budget-exempt, top
 // draw-pass declutter priority).
 /** Min spacing between hover scene.pick calls (event-driven, user gesture). */
@@ -693,7 +693,7 @@ function safeWindowLocalStorage() {
  *
  * v2 entries carry provenance: `{ values: <7-field offsets>, source: 'manual',
  * savedAt: <epoch ms> }`. The v1 key (`CCTV_CALIBRATION_STORAGE_KEY_V1`) is
- * NEVER read here — product rule #3 (§9.3): wipe clean, no legacy import.
+ * NEVER read here — owner decision #3 (§9.3): wipe clean, no legacy import.
  *
  * @param {{getItem:function}|null} [storage] - Injectable storage (defaults
  *   to `window.localStorage`); lets the unit suite test this pure of a DOM.
@@ -1186,7 +1186,7 @@ function buildCatalogFromSources(rawSources) {
  * tileset is present (OSM fallback) this returns true so ground sampling is
  * not permanently blocked.
  *
- * Task 5 (spec correction, spec §2): a HIDDEN tileset (`show === false`,
+ * Task 5 (review correction, spec §2): a HIDDEN tileset (`show === false`,
  * i.e. a globe stack is active) must NOT report ready — Cesium 1.138's
  * the shared sampler can only inspect *visible* 3D tilesets, so a sample taken
  * against the hidden Google tileset would silently miss.
@@ -1456,7 +1456,7 @@ function refreshProjectionTextures(record) {
   // Only swap when the canvas content actually changed since the last swap.
   // Frames land every ~10 s but this runs at 1 Hz — swapping an UNCHANGED
   // canvas re-uploads the texture for nothing, and each material image
-  // reassignment is a flash opportunity on the live plane (field test
+  // reassignment is a flash opportunity on the live plane (owner field test
   // 2026-07-04: intermittent white flashes on the monitor plane).
   if (runtime.canvasStamp === runtime.lastSwappedCanvasStamp) return;
 
@@ -1884,7 +1884,7 @@ function drawProjectionFrame(record) {
       // and a fresh 1920x1080 texture upload; the plane renders its white
       // base color (planeMaterial color = WHITE, alpha .95) for the frame or
       // two Cesium needs to rebind, which IS the periodic white flash from the
-      // field tests (2026-07-04 and 2026-07-30).
+      // owner field tests (2026-07-04 and 2026-07-30).
       const signature = projectionFrameSignature(runtime);
       runtime.drawnImageStamp = runtime.imageStamp;
       if (signature !== null && signature === runtime.lastFrameSignature) {
@@ -2732,7 +2732,7 @@ function refreshHorizonCulling() {
 
 // ---------------------------------------------------------------------------
 // Ambient card tier (2026-07-29 design — spec:
-// docs/CURRENT-STATE.md)
+// docs/superpowers/specs/2026-07-29-cctv-ambient-cards-design.md)
 // ---------------------------------------------------------------------------
 
 /** Returns (creating on demand) the stable frame slot for a camera id. */
@@ -2805,7 +2805,7 @@ function refreshAmbientCards() {
     });
   }
 
-  // Field finding 4: current card holders rank with the 20% incumbency
+  // Owner finding 4: current card holders rank with the 20% incumbency
   // distance discount, so a small camera move never batch-swaps the ring.
   // Item C: passing the viewport dims + per-candidate screen anchors routes
   // the budget fill through the screen-distribution grid, so periphery
@@ -2840,7 +2840,7 @@ function refreshAmbientCards() {
       })),
     { limit: cardLimit }
   );
-  // Field finding 2: grace must never apply to the active camera — drop any
+  // Owner finding 2: grace must never apply to the active camera — drop any
   // lingering grace entry and keep it out of the retained-card baseline.
   if (activeId) {
     _cardIds.delete(activeId);
@@ -2911,7 +2911,7 @@ function pushAmbientCardEntries() {
 }
 
 /**
- * Throttled MOUSE_MOVE hover pass (follow-up round 2, item B): pointing at a
+ * Throttled MOUSE_MOVE hover pass (owner round 2, item B): pointing at a
  * camera icon that has no card summons its card immediately. This is
  * EVENT-DRIVEN picking on a user gesture, not steady-state work — the
  * ≥120 ms throttle caps it at ~8 scene.pick calls/s while the pointer is
@@ -3008,7 +3008,7 @@ function hoverFetchCardFrame(record) {
 }
 
 /**
- * Card-frame pacer tick (field finding 3): launches AT MOST one fetch per
+ * Card-frame pacer tick (owner finding 3): launches AT MOST one fetch per
  * tick, with cardFetchPolicy deciding whether a launch is allowed. Cold fill
  * — any selected card still missing its FIRST frame — bursts up to 4
  * in-flight fetches at 250 ms spacing so arriving in a new area populates
@@ -3592,7 +3592,7 @@ function ensureGizmo() {
 }
 
 /**
- * §9.1 activation obstruction probe (LOCKED product rule): on camera
+ * §9.1 activation obstruction probe (LOCKED owner decision): on camera
  * ACTIVATION only, fire ONE scene.pickFromRay along the frustum axis
  * (mount → cap-center direction). If it hits the tiles closer than the pose
  * range, clamp the plane's effective range just short of the first hit so the
@@ -4362,7 +4362,7 @@ const cctvLayer = {
       // remain eligible for true empty-space deselection.
       const pickedId = resolvePickId(picked);
       if (pickedId !== null) return;
-      // Item A (follow-up round 2): the scene pick found no camera — try the
+      // Item A (owner round 2): the scene pick found no camera — try the
       // painted ambient cards. The cards canvas is pointer-events:none (this
       // handler owns the events), so a click landing on a card's rect selects
       // its camera exactly like a click on the icon. Cesium click positions
@@ -4451,7 +4451,7 @@ const cctvLayer = {
     _removeFocusAppearListener = null;
     stopProjectionLoop();
     stopGeometryLoadQueue();
-    // Ambient cards tear down COMPLETELY on disable (product design point 6):
+    // Ambient cards tear down COMPLETELY on disable (owner design point 6):
     // source entries, pacer timer, in-flight handlers, and caches.
     teardownAmbientCards();
     hideCctvVisuals();

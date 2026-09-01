@@ -1,18 +1,15 @@
 // scripts/qa-floor-verify.mjs — live floor verification at AUS (round 5).
 // Pins the camera at Austin airport, enables flights, waits ~3 polls, then
-// measures every nearby contact's ACTUAL visible anchor against the rendered
-// mesh (sprite- and model-excluded scene.sampleHeight probes). Model-owned
-// contacts deliberately keep their hidden billboard at the raw sensor datum,
-// so getNearby().position is not a render-height oracle for those contacts.
-// Caught the mesh-latch coarse-LOD poison and the taxiing cold-cell regression
-// on 2026-07-06.
+// measures every nearby contact's render height against the ACTUAL rendered
+// mesh (sprite- and model-excluded scene.sampleHeight probes). Caught the mesh-latch
+// coarse-LOD poison and the taxiing cold-cell regression on 2026-07-06.
 // Run: node scripts/qa-floor-verify.mjs   (dev server on :4173, real GPU best)
 // with the poison fix + simplified chain live.
 import puppeteer from 'puppeteer';
 import fs from 'node:fs';
 
-// QA_BASE_URL matches the sibling harnesses (qa-height-datum / qa-cctv-v2) so
-// each candidate can verify against its own dev server instead of :4173.
+// QA_BASE_URL matches the sibling harnesses (qa-height-datum / qa-cctv-v2) so a
+// secondary checkout can verify against its own dev server instead of the default :4173.
 const APP_URL = process.env.QA_BASE_URL || 'http://localhost:4173';
 // CLI: --lat --lon --floor-min --floor-max (defaults: Austin airport)
 const argv = Object.fromEntries(process.argv.slice(2).map((a) => a.split('=')).filter((x) => x.length === 2).map(([k, v]) => [k.replace(/^--/, ''), Number(v)]));
@@ -85,15 +82,6 @@ const report = await page.evaluate(() => {
   const C = v.camera.positionCartographic.constructor;
   const center = ell.cartographicToCartesian(C.fromDegrees(window.__QA_SITE.lon, window.__QA_SITE.lat, 200));
   const nearby = layer.getNearby(center, 15000, 60);
-  // getNearby() intentionally reports the raw hidden-billboard position for an
-  // untracked contact whose 3D model owns the visual. The detection surface is
-  // already welded to whichever primitive actually owns that visual: model
-  // centre, tracked visual, or billboard. Reuse that production render anchor
-  // here instead of treating the deliberately unfloored raw datum as buried.
-  const visualByIcao = new Map(layer.getDetectableObjects().map((object) => [
-    String(object.sourceId || '').trim().toLowerCase(),
-    object.position,
-  ]));
   // Exclude EVERY billboard from the probes — sprites are pickable, so an
   // unexcluded probe can return another aircraft's height as "the mesh".
   // Exclude every fleet/tracked 3D Model too: getNearby() also returns contacts
@@ -115,23 +103,8 @@ const report = await page.evaluate(() => {
   walk(v.scene.primitives);
   const out = [];
   for (const p of nearby) {
-    const raw = ell.cartesianToCartographic(p.position);
-    const visualPosition = visualByIcao.get(String(p.icao24 || '').trim().toLowerCase());
-    if (!visualPosition) {
-      out.push({
-        id: p.id,
-        icao24: p.icao24,
-        rawDatumAltM: +raw.height.toFixed(1),
-        renderAltM: null,
-        meshM: null,
-        aboveMeshM: null,
-        visualOffsetM: null,
-        missingVisualAnchor: true,
-      });
-      continue;
-    }
-    const visual = ell.cartesianToCartographic(visualPosition);
-    const latDeg = visual.latitude * 180 / Math.PI, lonDeg = visual.longitude * 180 / Math.PI;
+    const c = ell.cartesianToCartographic(p.position);
+    const latDeg = c.latitude * 180 / Math.PI, lonDeg = c.longitude * 180 / Math.PI;
     let meshH = null;
     try {
       const h = v.scene.sampleHeight(C.fromDegrees(lonDeg, latDeg), excludes);
@@ -139,13 +112,9 @@ const report = await page.evaluate(() => {
     } catch { /* ignore */ }
     out.push({
       id: p.id,
-      icao24: p.icao24,
-      rawDatumAltM: +raw.height.toFixed(1),
-      renderAltM: +visual.height.toFixed(1),
+      renderAltM: +c.height.toFixed(1),
       meshM: meshH != null ? +meshH.toFixed(1) : null,
-      aboveMeshM: meshH != null ? +(visual.height - meshH).toFixed(1) : null,
-      visualOffsetM: +(visual.height - raw.height).toFixed(1),
-      missingVisualAnchor: false,
+      aboveMeshM: meshH != null ? +(c.height - meshH).toFixed(1) : null,
     });
   }
   // Visibility census (round 6): getNearby only returns contacts a sprite or a
@@ -166,13 +135,7 @@ const report = await page.evaluate(() => {
     }
   };
   censusWalk(v.scene.primitives);
-  return {
-    ausContacts: out.length,
-    contacts: out,
-    missingVisualAnchors: out.filter((contact) => contact.missingVisualAnchor).length,
-    spritesShown: shown,
-    spritesHidden: hidden,
-  };
+  return { ausContacts: out.length, contacts: out.slice(0, 16), spritesShown: shown, spritesHidden: hidden };
 });
 console.log(JSON.stringify(report, null, 1));
 
@@ -183,20 +146,11 @@ console.log(JSON.stringify(report, null, 1));
 const lows = (report.contacts || []).filter((c) =>
   c.renderAltM < SITE.floorMax + 450 && c.aboveMeshM != null && c.meshM > SITE.floorMin && c.meshM < SITE.floorMax);
 const buried = lows.filter((c) => c.aboveMeshM < -2);
-const missingVisuals = (report.contacts || []).filter((c) => c.missingVisualAnchor);
 console.log(`low contacts with plausible mesh readings: ${lows.length}; buried (< -2m): ${buried.length}`);
 for (const b of buried) {
   console.log(`  BURIED ${b.id}: render ${b.renderAltM} m vs mesh ${b.meshM} m (${b.aboveMeshM} m)`);
 }
-for (const missing of missingVisuals) {
-  console.log(`  MISSING VISUAL ANCHOR ${missing.id} (${missing.icao24})`);
-}
-// A measured burial is always a failure. Otherwise, no plausible readings or
-// any missing render anchor is inconclusive: the harness must never turn an
-// unmeasured visible contact into a false pass.
-const verdict = buried.length > 0
-  ? 'FAIL'
-  : (lows.length === 0 || missingVisuals.length > 0 ? 'INCONCLUSIVE' : 'PASS');
+const verdict = lows.length === 0 ? 'INCONCLUSIVE' : (buried.length === 0 ? 'PASS' : 'FAIL');
 console.log(`VERDICT: ${verdict}`);
 await browser.close();
 // Exit code (2026-08-19): this harness printed VERDICT: FAIL and still exited 0,

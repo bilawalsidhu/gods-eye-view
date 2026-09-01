@@ -2,7 +2,7 @@
  * @module cctvViewshed
  *
  * Viewshed presentation for the CCTV layer (design:
- * the CCTV viewshed geometry contract).
+ * docs/superpowers/specs/2026-07-05-cctv-viewshed-gizmo-design.md §3a/§3b).
  *
  * Two responsibilities, both pure of layer state:
  *  - Color identity: a stable per-camera hue (golden-angle spaced over the
@@ -30,7 +30,7 @@ const LINE_ALPHA_ACTIVE = 1.0;
  * Stable hue (degrees, [0, 360)) for a camera's position in the id-sorted
  * catalog. Golden-angle spacing keeps any local cluster of neighbor cameras
  * visually separated; id-sorting makes the assignment deterministic across
- * sessions for a stable catalog (design §3a, open question Q4).
+ * sessions for a stable catalog (design §3a, owner question Q4).
  * @param {number} index - Camera index in the id-sorted catalog.
  * @returns {number} Hue in degrees.
  */

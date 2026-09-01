@@ -1,6 +1,6 @@
 // src/data/cctvLod.test.mjs
-// Pure LOD-engine tests, adapted from earlier Part C suite
-// zoom-scaled card budgets, nearest-first in-view
+// Pure LOD-engine tests, adapted from Manjunath's Part C suite
+// (fix/cctv-part-c-review): zoom-scaled card budgets, nearest-first in-view
 // selection, video exclusion, the eviction-grace planner, and source-aware
 // static-frame pacing.
 import { test } from 'node:test';
@@ -35,7 +35,7 @@ function candidates(count, options = {}) {
 }
 
 test('cctvLodBudgets scales the card budget from 20 to 40 with view height', () => {
-  // Follow-up round 2 (item C): budgets raised 16/24/32 -> 20/28/40.
+  // Owner round 2 (item C): budgets raised 16/24/32 -> 20/28/40.
   assert.equal(CCTV_AMBIENT_CARD_MIN, 20);
   assert.equal(CCTV_AMBIENT_CARD_MID, 28);
   assert.equal(CCTV_AMBIENT_CARD_MAX, 40);
@@ -71,7 +71,7 @@ test('selectCctvLod tolerates malformed candidate rows', () => {
   assert.deepEqual(selected.cardIds, ['cam-ok']);
 });
 
-// ─── Selection-level incumbency (field test finding 4) ────────────────
+// ─── Selection-level incumbency (owner field-test finding 4) ────────────────
 
 test('incumbentRankKm discounts incumbents by the 20% factor', () => {
   assert.equal(incumbentRankKm(10, false), 10);
@@ -121,7 +121,7 @@ test('selectCctvLod: no incumbents means plain nearest-first (unchanged behavior
   assert.deepEqual(plain.cardIds, withEmpty.cardIds);
 });
 
-// ─── distributeCctvCards — screen distribution (follow-up round 2, item C) ──────
+// ─── distributeCctvCards — screen distribution (owner round 2, item C) ──────
 // Grid: 5 cols x 4 rows. At viewW 1000 / viewH 800 each cell is 200x200 px.
 
 test('distributeCctvCards spreads clustered candidates across cells', () => {

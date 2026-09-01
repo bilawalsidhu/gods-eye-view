@@ -198,7 +198,7 @@ const MUTATIONS = [
   },
   {
     // The first cut: delete outright. An on_ground flap through a takeoff roll
-    // then cold-starts the contact under the runway (field observation VIR138M).
+    // then cold-starts the contact under the runway (owner sighting VIR138M).
     defect: 'retiring the hold DELETES it, so an on_ground flap cold-starts',
     edits: [
       {

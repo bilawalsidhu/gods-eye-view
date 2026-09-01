@@ -885,13 +885,13 @@ test('display floor: the cached output is dropped when the floor changes under i
 
 // --- F8: hold the last known floor through a floor-data gap ----------------
 //
-// Field incident 2026-08-21: four `[terrain-heights-proxy] refresh incomplete`
+// Owner incident 2026-08-21: four `[terrain-heights-proxy] refresh incomplete`
 // events in a row (Re:Earth timing out), and a parked contact at a Texas field
 // popped BELOW the photoreal mesh for a few seconds. A cold cell used to mean
 // "no clamp", which is only safe if the un-clamped height is a real reading —
 // and for a grounded contact reporting no altitude it is the geoid, tens of
-// metres under the mesh inland. The product must hold the last known altitude
-// until fresh floor evidence arrives.
+// metres under the mesh inland. Owner: "hold the last known altitude until a
+// fresh one comes in. Never render otherwise."
 
 test('display floor: a cold cell HOLDS the last floor that resolved for this contact', () => {
   _clearDisplayFloorStateForTest();
@@ -1052,7 +1052,7 @@ test('display floor: an on_ground FLAP mid-takeoff-roll never dips below the run
   // from the resolved surface to baro + geoid N — which at a sea-level field IS
   // the geoid. Deleting the hold on the airborne poll made that switch visible:
   // the contact came back grounded with no prior, outrunning its own floor
-  // cells at 23 m/s, and sat under the runway (field observation, VIR138M).
+  // cells at 23 m/s, and sat under the runway (owner sighting, VIR138M).
   const GROUND = -28.5, GEOID = -32.5, LON = -73.78;
   reportMeshFloorCell(40.64, LON, GROUND); // only the cell it STARTED on is warm
   let lat = 40.64;

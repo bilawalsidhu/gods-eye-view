@@ -49,7 +49,7 @@ const has = (pattern) => pattern.test(source);
 
 /** SFO runway 28R touchdown area — the field report's coordinates. */
 const SFO = { latDeg: 37.616, lonDeg: -122.368 };
-/** The ellipsoidal camera height the screenshot reported. */
+/** The ellipsoidal camera height the owner's screenshot reported. */
 const SFO_ELLIPSOIDAL_M = -15;
 
 /**

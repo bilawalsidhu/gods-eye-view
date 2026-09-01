@@ -75,7 +75,7 @@ const PAINT_LANE_INDEX = new Map(WORLD_OVERLAY_PAINT_LANES.map((lane, index) => 
  *
  * The list therefore holds only chrome dense enough to swallow a card. The
  * cockpit's thin translucent line art — rims, arcs, rails, tapes, toplines,
- * readouts — is deliberately ABSENT under the AR-HUD ruling:
+ * readouts — is deliberately ABSENT under the owner's AR-HUD ruling:
  * world-space overlay content renders beneath the cockpit's screen-space HUD,
  * which paints over it by z-order. Those elements are also enormous (the
  * altitude rim is keyhole-tall, the topline viewport-wide), and excluding them
