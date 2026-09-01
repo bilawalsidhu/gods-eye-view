@@ -56,6 +56,27 @@ export const DATA_CREDITS = [
       'Dr. T.S. Kelso',
   },
   {
+    key: 'iss-live-video',
+    html:
+      'ISS live video: ' +
+      '<a href="https://www.nasa.gov/nasatv/" target="_blank" rel="noopener">NASA</a> ' +
+      '(public affairs feed) · 24/7 Earth-view option rebroadcast by Space Videos',
+  },
+  {
+    key: 'goes-fulldisk',
+    html:
+      'GOES-19 / GOES-18 GeoColor full-disk imagery: ' +
+      '<a href="https://www.star.nesdis.noaa.gov/GOES/" target="_blank" rel="noopener">NOAA STAR / NESDIS</a> ' +
+      '(public domain)',
+  },
+  {
+    key: 'himawari-fulldisk',
+    html:
+      'Himawari-9 full-disk imagery: ' +
+      '<a href="https://himawari8.nict.go.jp/" target="_blank" rel="noopener">NICT</a> ' +
+      '(processed from JMA Himawari-9 data)',
+  },
+  {
     key: 'launch-library-2',
     html:
       'Space mission launch, payload &amp; recovery metadata: ' +
@@ -128,6 +149,42 @@ export const DATA_CREDITS = [
       'Contains OS data © Crown copyright and database rights.',
   },
   {
+    key: 'nyc-cctv',
+    html:
+      'CCTV cameras &amp; frames (New York City): NYC DOT — ' +
+      '<a href="https://webcams.nyctmc.org/" target="_blank" rel="noopener">webcams.nyctmc.org</a> ' +
+      '(NYC Open Data Terms of Use)',
+  },
+  {
+    key: 'fotowebcam-at',
+    html:
+      'Weather &amp; landscape webcams (Austria): ' +
+      '<a href="https://www.foto-webcam.eu/" target="_blank" rel="noopener">© foto-webcam.eu</a> ' +
+      '(CC BY-NC 3.0 — non-commercial)',
+  },
+  {
+    key: 'qldtraffic-au',
+    html:
+      'CCTV cameras &amp; frames (Queensland, Australia): © State of Queensland ' +
+      '(<a href="https://qldtraffic.qld.gov.au/" target="_blank" rel="noopener">QLDTraffic</a>) ' +
+      'via <a href="https://queensland.opendatasoft.com/" target="_blank" rel="noopener">queensland.opendatasoft.com</a> (CC BY 4.0)',
+  },
+  {
+    key: 'tfnsw-cctv',
+    html:
+      'CCTV cameras &amp; frames (NSW, Australia): © ' +
+      '<a href="https://opendata.transport.nsw.gov.au/" target="_blank" rel="noopener">Transport for NSW</a> ' +
+      '— Live Traffic NSW (CC BY 4.0)',
+  },
+  {
+    key: 'youtube-placecams',
+    html:
+      'Place webcams (CCTV layer): curated public ' +
+      '<a href="https://www.youtube.com/" target="_blank" rel="noopener">YouTube</a> live streams ' +
+      'operated by explore.org, EarthCam, Skyline Webcams and individual webcam operators. ' +
+      'Stream ids rotate; each entry links to its channel.',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },
@@ -167,6 +224,14 @@ export const DATA_CREDITS = [
       'from NASA’s Fire Information for Resource Management System ' +
       '(<a href="https://earthdata.nasa.gov/firms" target="_blank" rel="noopener">earthdata.nasa.gov/firms</a>), ' +
       'part of NASA’s Earth Observing System Data and Information System (EOSDIS)',
+  },
+  {
+    key: 'gibs-nrt',
+    html:
+      'Near-real-time basemap imagery: NASA EOSDIS Global Imagery Browse ' +
+      'Services (<a href="https://nasa-gibs.github.io/gibs-api-docs/" target="_blank" rel="noopener">GIBS</a>) — ' +
+      'VIIRS Corrected Reflectance true colour (Suomi NPP), part of NASA’s ' +
+      'Earth Observing System Data and Information System (EOSDIS)',
   },
   {
     key: 'telegeography',

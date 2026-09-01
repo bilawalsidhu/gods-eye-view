@@ -1,12 +1,24 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  RADIO_COUNTRY_SEEDS,
+  RADIO_CURATED_STATIONS,
+  RADIO_DIRECTORY_LIMIT,
   createRadioProxyMiddleware,
   isPublicRadioAddress,
+  normalizeCuratedRadioStations,
   normalizeRadioBrowserStation,
   publicRadioStation,
   publicRadioHttpsUrl,
 } from '../../vite.config.js';
+
+// One mirror-discovery call + the shared catalog fan-out (9 tag queries plus
+// one query per RADIO_COUNTRY_SEEDS entry).
+const CATALOG_FETCHES = 1 + 9 + RADIO_COUNTRY_SEEDS.length;
+
+// The always-on curated floor is prepended to every served catalog.
+const CURATED_IDS = new Set(RADIO_CURATED_STATIONS.map((s) => s.stationuuid.toLowerCase()));
+const firstUpstreamStation = (body) => body.stations.find((s) => !CURATED_IDS.has(s.id));
 import { rankRadioStationsForRequest } from './radio.js';
 
 const UUID = '12345678-1234-4234-8234-123456789abc';
@@ -48,6 +60,10 @@ function responseJson(value, status = 200) {
 
 function queryTag(url) {
   return new URL(String(url)).searchParams.get('tag');
+}
+
+function queryCountry(url) {
+  return new URL(String(url)).searchParams.get('countrycode');
 }
 
 function catalogRows(prefix, tags = 'news,jazz', count = 400) {
@@ -128,17 +144,19 @@ test('proxy coalesces refreshes, omits favicons, and counts known stations only'
   assert.equal(first.status, 200);
   assert.equal(second.status, 200);
   const body = JSON.parse(first.body);
-  assert.equal(body.stations.length, 1);
+  // One upstream row (deduped across every query) + the always-on curated floor.
+  assert.equal(body.stations.length, 1 + RADIO_CURATED_STATIONS.length);
+  assert.equal(body.stations.filter((s) => s.id === UUID).length, 1);
   assert.equal(body.acceptedGeneration, null);
   assert.equal('favicon' in body.stations[0], false);
-  assert.equal(fetchCount, 10, 'one discovery plus nine shared catalog queries');
+  assert.equal(fetchCount, CATALOG_FETCHES, 'one discovery plus the shared tag + country catalog queries');
 
   const unknown = await invoke(middleware, '/click/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'POST');
   assert.equal(unknown.status, 404);
   const known = await invoke(middleware, `/click/${UUID}`, 'POST');
   assert.equal(known.status, 204);
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(fetchCount, 11);
+  assert.equal(fetchCount, CATALOG_FETCHES + 1);
 });
 
 test('method and route validation happen before any upstream refresh', async () => {
@@ -307,7 +325,130 @@ test('specialist health credit follows normalized embedded-tag category semantic
   const body = JSON.parse(result.body);
   assert.equal(result.status, 200);
   assert.equal(body.coverage.successfulQueries, 9);
-  assert.equal(body.coverage.stationCount, 400);
+  assert.equal(body.coverage.stationCount, 400 + body.coverage.curatedCount);
+  assert.equal(body.coverage.curatedCount, RADIO_CURATED_STATIONS.length);
+  assert.equal(body.degraded, false);
+});
+
+test('per-country seed queries put small-market stations into the catalog', async () => {
+  const seenCountryQueries = [];
+  const middleware = createProxy({
+    fetchImpl: async (url) => {
+      if (String(url).includes('/json/servers')) return responseJson([{ name: 'de1.api.radio-browser.info' }]);
+      const country = queryCountry(url);
+      if (country) {
+        seenCountryQueries.push(country);
+        // Each seed returns that country's own stations — distinct (hex-valid)
+        // uuids so they cannot be mistaken for a dedupe of the global fill.
+        const slot = (90 + RADIO_COUNTRY_SEEDS.indexOf(country)).toString(16).padStart(2, '0');
+        return responseJson(Array.from({ length: 12 }, (_, i) => station({
+          stationuuid: `${slot}000000-0000-4000-8000-${i.toString(16).padStart(12, '0')}`,
+          name: `${country} Local ${i}`,
+          country: country === 'AU' ? 'Australia' : country,
+          countrycode: country,
+          clickcount: 5,
+        })));
+      }
+      return responseJson(healthyRowsForQuery(url));
+    },
+  });
+
+  const body = JSON.parse((await invoke(middleware, '/stations')).body);
+
+  // Every configured seed was actually requested against the upstream.
+  assert.deepEqual([...seenCountryQueries].sort(), [...RADIO_COUNTRY_SEEDS].sort());
+
+  // Australian stations reached the served catalog…
+  const auStations = body.stations.filter((s) => s.countryCode === 'AU');
+  assert.ok(auStations.length >= 10, `expected AU stations in the catalog, got ${auStations.length}`);
+  // …and so did the other seeds.
+  for (const code of RADIO_COUNTRY_SEEDS) {
+    assert.ok(
+      body.stations.some((s) => s.countryCode === code),
+      `expected at least one ${code} station in the catalog`,
+    );
+  }
+
+  // A successful seed counts toward catalog-health coverage.
+  assert.equal(body.coverage.successfulQueries, 9 + RADIO_COUNTRY_SEEDS.length);
+  assert.equal(body.degraded, false);
+});
+
+test('every shipped curated station survives the upstream normalizer', () => {
+  const normalized = normalizeCuratedRadioStations();
+  assert.equal(
+    normalized.length,
+    RADIO_CURATED_STATIONS.length,
+    'a curated entry was rejected by normalizeRadioBrowserStation — check its uuid / stream url / geo / codec',
+  );
+  for (const station of normalized) {
+    assert.match(station.streamUrl, /^https:\/\//);
+    assert.ok(Number.isFinite(station.lat) && Number.isFinite(station.lon));
+    assert.equal(station.metadataTrust, 'untrusted-community');
+  }
+  // The Triple M Gippsland entry the mechanism was built for.
+  const gippsland = normalized.find((s) => /gippsland/i.test(s.name));
+  assert.ok(gippsland, 'Triple M Gippsland is present');
+  assert.equal(gippsland.countryCode, 'AU');
+  assert.equal(gippsland.streamUrl, 'https://sa47.scastream.com.au/3sea_32');
+});
+
+test('curated stations are in every served catalog and never rescue a dead directory', async () => {
+  const curatedId = RADIO_CURATED_STATIONS[0].stationuuid.toLowerCase();
+
+  // Healthy upstream that never returns the curated station itself.
+  const healthy = createProxy({
+    fetchImpl: async (url) => {
+      if (String(url).includes('/json/servers')) return responseJson([{ name: 'de1.api.radio-browser.info' }]);
+      return responseJson(healthyRowsForQuery(url));
+    },
+  });
+  const body = JSON.parse((await invoke(healthy, '/stations')).body);
+  assert.equal(body.degraded, false);
+  assert.equal(body.coverage.curatedCount, RADIO_CURATED_STATIONS.length);
+  const curated = body.stations.find((s) => s.id === curatedId);
+  assert.ok(curated, 'curated station is in a healthy catalog');
+  assert.equal(curated.id, body.stations[0].id, 'curated stations are prepended');
+  // Healthy upstream (400 rows) + curated, not one displacing the other.
+  assert.equal(body.coverage.stationCount, 400 + RADIO_CURATED_STATIONS.length);
+
+  // A click on a curated id is accepted but NOT forwarded upstream.
+  let forwarded = 0;
+  const clickProxy = createProxy({
+    fetchImpl: async (url) => {
+      if (String(url).includes('/json/servers')) return responseJson([{ name: 'de1.api.radio-browser.info' }]);
+      if (String(url).includes('/json/url/')) { forwarded += 1; return responseJson({ ok: 'true' }); }
+      return responseJson(healthyRowsForQuery(url));
+    },
+  });
+  await invoke(clickProxy, '/stations');
+  const click = await invoke(clickProxy, `/click/${curatedId}`, 'POST');
+  assert.equal(click.status, 204);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(forwarded, 0, 'no play-count ping to Radio Browser for a curated id');
+
+  // Totally dead upstream + no warm cache is still a 503 — curated is a floor,
+  // not a directory.
+  const dead = createProxy({
+    fetchImpl: async (url) => String(url).includes('/json/servers')
+      ? responseJson([{ name: 'de1.api.radio-browser.info' }])
+      : responseJson([]),
+  });
+  assert.equal((await invoke(dead, '/stations')).status, 503);
+});
+
+test('a country seed a mirror silently ignores does not count as covered', async () => {
+  const middleware = createProxy({
+    fetchImpl: async (url) => {
+      if (String(url).includes('/json/servers')) return responseJson([{ name: 'de1.api.radio-browser.info' }]);
+      // The mirror returns US rows regardless of the countrycode filter.
+      return responseJson(healthyRowsForQuery(url));
+    },
+  });
+  const body = JSON.parse((await invoke(middleware, '/stations')).body);
+  // Tag coverage is still healthy; the country seeds return nothing from their
+  // country, so they must NOT inflate the success count.
+  assert.equal(body.coverage.successfulQueries, 9);
   assert.equal(body.degraded, false);
 });
 
@@ -323,12 +464,15 @@ test('a cold partial catalog is explicit degraded data while zero usable rows ar
   const partialResult = await invoke(partial, '/stations');
   const partialBody = JSON.parse(partialResult.body);
   assert.equal(partialResult.status, 200);
-  assert.equal(partialBody.stations.length, 1);
+  // One upstream row survived + the curated floor.
+  assert.equal(partialBody.stations.length, 1 + RADIO_CURATED_STATIONS.length);
   assert.equal(partialBody.stale, false);
   assert.equal(partialBody.degraded, true);
   assert.equal(partialBody.acceptedGeneration, null);
   assert.match(partialBody.degradedReason, /query-coverage-below-policy/);
 
+  // Zero usable UPSTREAM rows and no warm cache is still a 503 — the curated
+  // floor alone is not a directory.
   const empty = createProxy({
     fetchImpl: async (url) => String(url).includes('/json/servers')
       ? responseJson([{ name: 'de1.api.radio-browser.info' }])
@@ -365,22 +509,24 @@ test('catalog generations advance only after healthy admission and survive degra
   const retained = JSON.parse((await invoke(middleware, '/stations')).body);
   assert.equal(retained.acceptedGeneration, 1);
   assert.equal(retained.stale, true);
-  assert.equal(retained.stations[0].id, first.stations[0].id);
+  assert.equal(firstUpstreamStation(retained).id, firstUpstreamStation(first).id);
 
   clock += 46 * 60 * 1000;
   mode = 'healthy-b';
   const recovered = JSON.parse((await invoke(middleware, '/stations')).body);
   assert.equal(recovered.acceptedGeneration, 2);
-  assert.notEqual(recovered.stations[0].id, first.stations[0].id);
+  // The curated floor is pinned at stations[0] across every refresh; the
+  // recovery must still be visible in the upstream content.
+  assert.notEqual(firstUpstreamStation(recovered).id, firstUpstreamStation(first).id);
 });
 
-test('catalog response is hard-capped at 750 normalized stations', async () => {
-  const rows = Array.from({ length: 810 }, (_, index) => station({
+test('catalog response is hard-capped at RADIO_DIRECTORY_LIMIT normalized stations', async () => {
+  const rows = Array.from({ length: RADIO_DIRECTORY_LIMIT + 200 }, (_, index) => station({
     stationuuid: `00000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`,
     name: `Station ${index}`,
     geo_lat: -70 + (index % 140),
     geo_long: -175 + (index % 350),
-    clickcount: 1000 - index,
+    clickcount: 100000 - index,
   }));
   const middleware = createProxy({
     fetchImpl: async (url) => String(url).includes('/json/servers')
@@ -389,7 +535,7 @@ test('catalog response is hard-capped at 750 normalized stations', async () => {
   });
   const result = await invoke(middleware, '/stations');
   assert.equal(result.status, 200);
-  assert.equal(JSON.parse(result.body).stations.length, 750);
+  assert.equal(JSON.parse(result.body).stations.length, RADIO_DIRECTORY_LIMIT);
 });
 
 test('resolved Radio Browser addresses reject local, private, link-local, metadata, and IPv6-local forms', () => {

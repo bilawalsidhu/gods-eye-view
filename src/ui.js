@@ -61,6 +61,7 @@ import flightsLayer from './data/flights.js';
 import militaryFlightsLayer from './data/militaryFlights.js';
 import { isTr3b, toggleTr3b } from './data/tr3bRegistry.js';
 import satellitesLayer from './data/satellites.js';
+import { SATELLITE_FEED_ORDER, SATELLITE_VIDEO_FEED_ORDER } from './data/satelliteFeeds.js';
 import cctvLayer from './data/cctv.js';
 import radioLayer, {
   buildRadioTunerTicks,
@@ -206,6 +207,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'location-bar', pinnable: true },
   { id: 'data-panel' },
   { id: 'cctv-panel' },
+  { id: 'sat-feed-panel' },
   { id: 'radio-panel' },
   { id: 'scene-panel' },
   { id: 'global-context-panel' },
@@ -216,6 +218,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
 const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'data-panel',
   'cctv-panel',
+  'sat-feed-panel',
   'scene-panel',
   'pp-toggles',
   'global-context-panel',
@@ -228,6 +231,30 @@ const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
  */
 const PANEL_POSITION_STORAGE_VERSION = 'v8';
 const DETECTION_ALLOCATION_STORAGE_KEY = 'gev:detection-allocation:v1';
+/**
+ * SAT FEED size presets, expressed as a target *viewport height* in px. The
+ * panel width is then derived from the active feed's aspect ratio, so a 16:9
+ * video and a 1:1 full-disk still both land at the same on-screen height for a
+ * given preset instead of the square feed ballooning.
+ */
+const SAT_FEED_SIZES = Object.freeze([
+  { id: 'S', viewportHeight: 150 },
+  { id: 'M', viewportHeight: 190 },
+  { id: 'L', viewportHeight: 262 },
+  { id: 'XL', viewportHeight: 340 },
+]);
+/** `.sat-feed-panel-inner` left + right padding — panel width minus the viewport width. */
+const SAT_FEED_PANEL_PADDING = 28;
+const SAT_FEED_SIZE_STORAGE_KEY = 'gev:sat-feed-size:v1';
+/** SAT FEED "LIVE FEEDS ONLY" — hide the GOES / Himawari refreshing-still imagery. */
+const SAT_FEED_LIVE_ONLY_STORAGE_KEY = 'gev:sat-feed-live-only:v1';
+/** User-dragged CCTV panel width (px). */
+const CCTV_PANEL_SIZE_STORAGE_KEY = 'gev:cctv-panel-size:v1';
+/** "LIVE FEEDS ONLY" filter — hide the refreshing-still traffic cameras. */
+const CCTV_LIVE_ONLY_STORAGE_KEY = 'gev:cctv-live-only:v1';
+/** Saved radio stations — full directory-shaped records, playable from anywhere. */
+const RADIO_FAVOURITES_STORAGE_KEY = 'gev:radio-favourites:v1';
+const RADIO_FAVOURITES_LIMIT = 64;
 /** Z ladder: panels promote within [100, 139]; voice pill 150, toast 200, clean-view-exit 300. */
 const PANEL_Z_BASE = 100;
 const PANEL_Z_MAX = 139;
@@ -2153,6 +2180,8 @@ export class StyleManager {
     this._cctvUnsubscribe = null;
     this._radioUnsubscribe = null;
     this._radioState = null;
+    /** @type {object[]} Saved radio stations (directory-shaped records). */
+    this._radioFavourites = [];
     this._radioCategorySignature = '';
     this._radioTunerStations = [];
     this._radioTunerPool = [];
@@ -2178,6 +2207,13 @@ export class StyleManager {
     this._lastSeenCctvActiveId = null;
     this._cctvChipHideTimer = null;
     this._cctvChipWasBusy = false;
+    // Satellite live-feed panel state (driven by SatelliteFeedController via
+    // _renderSatFeedState). Auto-expand guard mirrors the CCTV one: the panel
+    // only pops open when the feed subject CHANGES.
+    this._satFeedState = { visible: false };
+    this._lastSeenSatFeedNorad = null;
+    this._satFeedUnsubscribe = null;
+    this._satFeedLiveOnly = false;
     this._leftStackLayoutFrame = null;
     this._leftStackReconsiderAutoCollapse = false;
     this._leftStackResizeObserver = null;
@@ -2260,6 +2296,25 @@ export class StyleManager {
     this._dataPanel = document.getElementById('data-panel');
     this._scenePanel = document.getElementById('scene-panel');
     this._cctvPanel = document.getElementById('cctv-panel');
+    this._satFeedPanel = document.getElementById('sat-feed-panel');
+    this._satFeedViewport = document.getElementById('sat-feed-viewport');
+    this._satFeedVideo = document.getElementById('sat-feed-video');
+    this._satFeedFrame = document.getElementById('sat-feed-frame');
+    this._satFeedSourceBadge = document.getElementById('sat-feed-source-badge');
+    this._satFeedMeta = document.getElementById('sat-feed-meta');
+    this._satFeedSummary = document.getElementById('sat-feed-summary');
+    this._satFeedSourceToggleBtn = document.getElementById('sat-feed-source-toggle');
+    this._satFeedLiveOnlyBtn = document.getElementById('sat-feed-live-only-btn');
+    this._satFeedPrevBtn = document.getElementById('sat-feed-prev-btn');
+    this._satFeedNextBtn = document.getElementById('sat-feed-next-btn');
+    this._satFeedPopoutBtn = document.getElementById('sat-feed-popout-btn');
+    this._satFeedSizeBtn = document.getElementById('sat-feed-size-btn');
+    this._satFeedResizeHandle = document.getElementById('sat-feed-resize-handle');
+    this._satFeedOpenStreamBtn = document.getElementById('sat-feed-open-stream');
+    // Target on-screen height of the feed viewport (px). Panel width is derived
+    // from this + the active feed's aspect ratio. Restored from storage, and
+    // adjustable by the SIZE button (preset steps) or the left-edge drag handle.
+    this._satFeedViewportHeight = 190;
     this._radioPanel = document.getElementById('radio-panel');
     this._contextRadioDock = document.getElementById('context-radio-dock');
     this._contextRadioToggleBtn = document.getElementById('context-radio-toggle-btn');
@@ -2294,6 +2349,10 @@ export class StyleManager {
     this._radioStationName = document.getElementById('radio-station-name');
     this._radioStationMeta = document.getElementById('radio-station-meta');
     this._radioStationTags = document.getElementById('radio-station-tags');
+    this._radioFavouriteBtn = document.getElementById('radio-favourite-btn');
+    this._radioFavouritesList = document.getElementById('radio-favourites-list');
+    this._radioFavouritesCount = document.getElementById('radio-favourites-count');
+    this._radioFavouritesEmpty = document.getElementById('radio-favourites-empty');
     this._radioTuner = document.getElementById('radio-tuner');
     this._radioTunerSlider = document.getElementById('radio-tuner-slider');
     this._radioTunerNeedle = document.getElementById('radio-tuner-needle');
@@ -2346,6 +2405,11 @@ export class StyleManager {
     this._cctvCalibResetBtn = document.getElementById('cctv-calib-reset-btn');
     this._cctvFrame = document.getElementById('cctv-frame');
     this._cctvFrameWrap = document.getElementById('cctv-frame-wrap');
+    this._cctvVideo = document.getElementById('cctv-video');
+    this._cctvOpenStreamBtn = document.getElementById('cctv-open-stream');
+    this._cctvLiveOnlyBtn = document.getElementById('cctv-live-only-btn');
+    this._cctvLiveOnly = false;
+    this._cctvPanelWidth = null; // px; null = default (fills the rail)
     this._cctvFrameRequestToken = 0;
     this._cctvFramePreloader = null;
     this._cctvSourceBadge = document.getElementById('cctv-source-badge');
@@ -2621,7 +2685,9 @@ export class StyleManager {
     this._initLeftPanelAdaptiveLayout();
     this._initRightPanelAdaptiveLayout();
     this._initRadioPanel();
+    this._initRadioFavourites();
     this._initCctvPanel();
+    this._initSatFeedPanel();
     this._initGlobalContextPanel();
     this._initLocationBar();
     this._initShareButton();
@@ -2709,9 +2775,11 @@ export class StyleManager {
     // Keep the parameter panel from overlapping toggle controls.
     this._layoutRightPanels();
     this._syncCctvPanelViewport();
+    this._syncSatFeedPanelViewport();
     this._windowResizeHandler = () => {
       this._scheduleRightPanelLayout({ reconsiderAutoCollapse: true });
       this._syncCctvPanelViewport();
+      this._syncSatFeedPanelViewport();
       this._scheduleLeftPanelLayout({ reconsiderAutoCollapse: true });
     };
     window.addEventListener('resize', this._windowResizeHandler);
@@ -4333,6 +4401,28 @@ export class StyleManager {
   }
 
   /**
+   * Connects the SatelliteFeedController that feeds the SAT FEED panel. Called
+   * once from bootstrap after both objects exist. Mirrors the CCTV wiring: hold
+   * a reference (the panel's source toggle calls back into it), subscribe
+   * `_renderSatFeedState`, and remember the unsubscribe for teardown.
+   * @param {import('./satelliteFeedController.js').SatelliteFeedController|null} controller
+   * @returns {void}
+   */
+  attachSatelliteFeedController(controller) {
+    if (this._satFeedUnsubscribe) {
+      this._satFeedUnsubscribe();
+      this._satFeedUnsubscribe = null;
+    }
+    this._satelliteFeedController = controller || null;
+    if (controller && typeof controller.subscribe === 'function') {
+      // Hand the controller the persisted LIVE FEEDS ONLY pref before we
+      // subscribe, so the first emitted state already reflects it.
+      controller.setLiveOnly?.(this._satFeedLiveOnly);
+      this._satFeedUnsubscribe = controller.subscribe((state) => this._renderSatFeedState(state));
+    }
+  }
+
+  /**
    * Connects the layer data manager for traffic sync, CCTV state subscription,
    * and layer enable/disable operations.
    * @param {object|null} dataManager - The DataManager instance, or null to detach.
@@ -4497,6 +4587,9 @@ export class StyleManager {
         this._renderRadioState(state);
       });
     }
+    // The radio layer may have been destroyed + re-created (which clears its
+    // pin map); re-assert the saved favourites so they stay playable.
+    this._syncRadioFavouritePins?.();
     if (!this._awarenessSelectedHandler) {
       this._awarenessSelectedHandler = (event) => this._persistAwarenessSelection(event, false);
       this._awarenessClearedHandler = (event) => this._persistAwarenessSelection(event, true);
@@ -5862,6 +5955,158 @@ export class StyleManager {
     this._contextRadioToggleBtn.title = `${action} compact Radio controls`;
   }
 
+  /**
+   * Wire the ★ favourite toggle and the FAVOURITES list, then load saved
+   * favourites and render them.
+   * @returns {void}
+   */
+  _initRadioFavourites() {
+    this._radioFavouriteBtn?.addEventListener('click', () => this._toggleRadioFavourite());
+    this._radioFavouritesList?.addEventListener('click', (event) => {
+      const removeBtn = event.target.closest?.('[data-remove-id]');
+      if (removeBtn) {
+        event.stopPropagation();
+        this._removeRadioFavourite(removeBtn.dataset.removeId);
+        return;
+      }
+      const row = event.target.closest?.('[data-station-id]');
+      if (row) {
+        const rec = this._radioFavourites.find((entry) => entry.id === row.dataset.stationId);
+        if (rec) void this._playRadioFavourite(rec);
+      }
+    });
+    this._loadRadioFavourites();
+    this._renderRadioFavourites();
+    this._syncRadioFavouriteButton();
+  }
+
+  /**
+   * Light shape check for a persisted favourite record before it is handed to
+   * `radioLayer.pinStation` (which re-validates fully).
+   * @param {any} rec
+   * @returns {boolean}
+   */
+  _isRadioFavouriteShape(rec) {
+    return Boolean(
+      rec
+      && typeof rec.id === 'string'
+      && typeof rec.name === 'string'
+      && typeof rec.streamUrl === 'string'
+      && Number.isFinite(rec.lat) && Number.isFinite(rec.lon),
+    );
+  }
+
+  /** Load saved favourites from storage into `this._radioFavourites`. */
+  _loadRadioFavourites() {
+    let parsed = null;
+    try { parsed = JSON.parse(localStorage.getItem(RADIO_FAVOURITES_STORAGE_KEY) || '[]'); }
+    catch { parsed = null; }
+    this._radioFavourites = Array.isArray(parsed)
+      ? parsed.filter((rec) => this._isRadioFavouriteShape(rec)).slice(0, RADIO_FAVOURITES_LIMIT)
+      : [];
+    this._syncRadioFavouritePins();
+  }
+
+  _saveRadioFavourites() {
+    try {
+      localStorage.setItem(RADIO_FAVOURITES_STORAGE_KEY, JSON.stringify(this._radioFavourites));
+    } catch { /* best effort */ }
+  }
+
+  /** Pin every saved favourite so it is selectable/playable regardless of view. */
+  _syncRadioFavouritePins() {
+    if (typeof radioLayer.pinStation !== 'function') return;
+    for (const rec of this._radioFavourites) radioLayer.pinStation(rec);
+  }
+
+  _isRadioFavourite(id) {
+    return !!id && this._radioFavourites.some((rec) => rec.id === id);
+  }
+
+  /**
+   * Toggle the currently-selected station's favourite state.
+   * @returns {void}
+   */
+  _toggleRadioFavourite() {
+    const selected = this._radioState?.selected;
+    if (!selected?.id) return;
+    if (this._isRadioFavourite(selected.id)) this._removeRadioFavourite(selected.id);
+    else this._addRadioFavourite(selected);
+  }
+
+  _addRadioFavourite(record) {
+    if (!record?.id || this._isRadioFavourite(record.id)) return;
+    if (radioLayer.pinStation?.(record) === false) return; // rejected by validation
+    this._radioFavourites = [record, ...this._radioFavourites].slice(0, RADIO_FAVOURITES_LIMIT);
+    this._saveRadioFavourites();
+    this._renderRadioFavourites();
+    this._syncRadioFavouriteButton();
+  }
+
+  _removeRadioFavourite(id) {
+    const before = this._radioFavourites.length;
+    this._radioFavourites = this._radioFavourites.filter((rec) => rec.id !== id);
+    if (this._radioFavourites.length === before) return;
+    radioLayer.unpinStation?.(id);
+    this._saveRadioFavourites();
+    this._renderRadioFavourites();
+    this._syncRadioFavouriteButton();
+  }
+
+  /** Enable Radio if needed, then select + play + fly to a favourite. */
+  async _playRadioFavourite(record) {
+    try {
+      await this._dataManager?.setEnabled?.('radio', true, { origin: 'radio-favourites' });
+    } catch { /* enable is best-effort */ }
+    radioLayer.pinStation?.(record);
+    radioLayer.selectStation?.(record.id, { autoplay: true, focus: true, origin: 'user' });
+  }
+
+  /** Update the ★ button pressed-state from the current selection. */
+  _syncRadioFavouriteButton() {
+    const btn = this._radioFavouriteBtn;
+    if (!btn) return;
+    const selected = this._radioState?.selected || null;
+    const fav = !!selected && this._isRadioFavourite(selected.id);
+    btn.disabled = !selected;
+    btn.textContent = fav ? '★' : '☆';
+    btn.setAttribute('aria-pressed', String(fav));
+    btn.setAttribute('aria-label', fav ? 'Remove this station from favourites' : 'Save this station to favourites');
+    btn.title = btn.getAttribute('aria-label');
+  }
+
+  /** Rebuild the FAVOURITES list. */
+  _renderRadioFavourites() {
+    const list = this._radioFavouritesList;
+    if (!list) return;
+    const playingId = this._radioState?.playingStationId || null;
+    list.replaceChildren(...this._radioFavourites.map((rec) => {
+      const li = document.createElement('li');
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'radio-favourite-row';
+      row.dataset.stationId = rec.id;
+      if (rec.id === playingId) row.classList.add('is-playing');
+      const name = document.createElement('span');
+      name.className = 'radio-favourite-name';
+      name.textContent = rec.name;
+      const place = document.createElement('span');
+      place.className = 'radio-favourite-place';
+      place.textContent = [rec.state, rec.countryCode].filter(Boolean).join(' · ');
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'radio-favourite-remove';
+      remove.dataset.removeId = rec.id;
+      remove.textContent = '✕';
+      remove.setAttribute('aria-label', `Remove ${rec.name} from favourites`);
+      row.append(name, place);
+      li.append(row, remove);
+      return li;
+    }));
+    if (this._radioFavouritesCount) this._radioFavouritesCount.textContent = String(this._radioFavourites.length);
+    if (this._radioFavouritesEmpty) this._radioFavouritesEmpty.hidden = this._radioFavourites.length > 0;
+  }
+
   /** Render Radio state without making playback or Context decisions. */
   _renderRadioState(state) {
     if (!state || !this._radioPanel) return;
@@ -5998,6 +6243,12 @@ export class StyleManager {
       else this._radioStationHomepage.removeAttribute('href');
     }
 
+    this._syncRadioFavouriteButton();
+    if (this._radioFavouritesPlayingId !== state.playingStationId) {
+      this._radioFavouritesPlayingId = state.playingStationId;
+      this._renderRadioFavourites();
+    }
+
     if (this._radioPrevBtn) this._radioPrevBtn.disabled = !interactive || !hasStations;
     if (this._radioNextBtn) this._radioNextBtn.disabled = !interactive || !hasStations;
     if (this._contextRadioMiniPrevBtn) this._contextRadioMiniPrevBtn.disabled = !interactive || !hasStations;
@@ -6127,6 +6378,23 @@ export class StyleManager {
     this._cctvEnableBtn?.addEventListener('click', async () => {
       await this._toggleCctvEnabled();
     });
+
+    this._cctvOpenStreamBtn?.addEventListener('click', () => {
+      const url = this._cctvState?.activeCamera?.youtube?.watchUrl;
+      if (url) window.open(url, '_blank', 'noopener');
+    });
+
+    // Drag-to-resize the panel (left edge + bottom-left corner), persisted.
+    let storedW = null;
+    try { storedW = localStorage.getItem(CCTV_PANEL_SIZE_STORAGE_KEY); } catch { /* storage may be blocked */ }
+    const parsedW = Number.parseFloat(storedW);
+    if (Number.isFinite(parsedW) && parsedW >= 240) this._setCctvPanelWidth(parsedW, { persist: false });
+    this._makeCctvResizable();
+
+    // LIVE FEEDS ONLY filter — restore, apply, wire the toggle.
+    try { this._cctvLiveOnly = localStorage.getItem(CCTV_LIVE_ONLY_STORAGE_KEY) === '1'; } catch { /* ignore */ }
+    if (this._cctvLiveOnly) { try { cctvLayer.setParams({ liveOnly: true }); } catch { /* not ready yet */ } }
+    this._cctvLiveOnlyBtn?.addEventListener('click', () => this._toggleCctvLiveOnly());
 
     this._cctvNearestBtn?.addEventListener('click', async () => {
       if (!await this._toggleCctvEnabled(true)) return;
@@ -6522,6 +6790,11 @@ export class StyleManager {
     const enabled = !!state?.enabled && !!this._dataManager?.isEnabled('cctv');
     const activeId = state?.activeCameraId || '';
     const activeCamera = state?.activeCamera || null;
+    // A "place cam" is a curated YouTube live stream (see placeCamSeeds.js) —
+    // it plays as video in this panel and has no pose/frame/calibration.
+    const isYoutubeCam = enabled && activeCamera?.feedType === 'youtube';
+    this._cctvPanel?.classList.toggle('placecam-active', isYoutubeCam);
+    this._renderCctvPlaceCamMedia(isYoutubeCam ? activeCamera : null);
 
     // Auto-expand the panel when the active camera CHANGES to a new non-null
     // id while the layer is enabled. Covers click-on-globe, panel controls,
@@ -6551,10 +6824,14 @@ export class StyleManager {
         || cameras.some((cam, idx) => this._cctvSelect.options[idx]?.value !== cam.id);
       if (shouldRebuild) {
         this._cctvSelect.innerHTML = '';
+        const liveOnly = !!(state?.liveOnly ?? this._cctvLiveOnly);
         for (const camera of cameras) {
           const option = document.createElement('option');
           option.value = camera.id;
-          option.textContent = `${camera.city} · ${camera.name}`;
+          // In LIVE FEEDS ONLY the list is sorted by country — lead with it.
+          option.textContent = liveOnly && camera.country
+            ? `${camera.country} · ${camera.name}`
+            : `${camera.city} · ${camera.name}`;
           this._cctvSelect.appendChild(option);
         }
       }
@@ -6592,6 +6869,17 @@ export class StyleManager {
       this._cctvAutoHopBtn.disabled = !enabled;
     }
 
+    if (this._cctvLiveOnlyBtn) {
+      const liveOnly = state?.liveOnly ?? this._cctvLiveOnly;
+      this._cctvLiveOnly = !!liveOnly;
+      const n = state?.liveFeedCount ?? 0;
+      this._cctvLiveOnlyBtn.classList.toggle('active', this._cctvLiveOnly);
+      this._cctvLiveOnlyBtn.setAttribute('aria-pressed', String(this._cctvLiveOnly));
+      this._cctvLiveOnlyBtn.textContent = this._cctvLiveOnly
+        ? `◉ LIVE FEEDS ONLY · ${n}`
+        : '◉ LIVE FEEDS ONLY';
+    }
+
     if (this._cctvProjectionBtn) {
       const showProjection = state?.showProjection !== false;
       this._cctvProjectionBtn.classList.toggle('active', showProjection);
@@ -6618,7 +6906,13 @@ export class StyleManager {
     this._syncCctvCalReadout(enabled, activeCamera);
 
     if (this._cctvMeta) {
-      if (activeCamera) {
+      if (isYoutubeCam) {
+        const place = `${activeCamera.city}${activeCamera.country ? `, ${activeCamera.country}` : ''}`;
+        const hasInline = (activeCamera.youtube?.videoIds || []).length > 0;
+        this._cctvMeta.textContent = hasInline
+          ? `${place} · YouTube Live`
+          : `${place} · YouTube Live · press OPEN LIVE STREAM`;
+      } else if (activeCamera) {
         const provider = activeCamera.sourceLabel || activeCamera.provider || 'Configured Source';
         const statusMsg = activeCamera.sourceMessage ? ` · ${activeCamera.sourceMessage}` : '';
         const calBadge = activeCamera.calBadge ? this._calBadgeLabel(activeCamera.calBadge) : '';
@@ -6633,7 +6927,7 @@ export class StyleManager {
       }
     }
 
-    if (this._cctvFrame) {
+    if (this._cctvFrame && !isYoutubeCam) {
       const nextSrc = enabled ? activeCamera?.frameUrl : null;
       const nextCameraId = enabled ? (activeCamera?.id || '') : '';
       const cameraChanged = this._cctvFrame.dataset.cameraId !== nextCameraId;
@@ -6652,6 +6946,139 @@ export class StyleManager {
 
     this._syncCctvSourceBadge(activeCamera, enabled);
     this._typeCctvSummary(state?.summary || 'Enable CCTV to start camera-linked intelligence summaries.');
+  }
+
+  /**
+   * Drive the CCTV panel's YouTube player for place-cam entries. Pass the
+   * active place-cam camera object, or null to tear the player down and
+   * restore the still-frame view.
+   * @param {object|null} placeCam
+   * @returns {void}
+   */
+  _renderCctvPlaceCamMedia(placeCam) {
+    if (!this._cctvVideo || !this._cctvFrameWrap) return;
+    if (!placeCam) {
+      if (this._cctvActivePlaceCamId) {
+        this._destroyPanelYouTube(this._cctvVideo);
+        this._cctvActivePlaceCamId = null;
+      }
+      this._cctvVideo.hidden = true;
+      if (this._cctvFrame) this._cctvFrame.hidden = false;
+      this._cctvFrameWrap.classList.remove('cctv-video-mode', 'cctv-video-linkout');
+      this._cctvFrameWrap.dataset.videoStatus = '';
+      if (this._cctvOpenStreamBtn) this._cctvOpenStreamBtn.hidden = true;
+      return;
+    }
+    this._clearCctvFrame?.();
+    if (this._cctvFrame) this._cctvFrame.hidden = true;
+    this._cctvVideo.hidden = false;
+    this._cctvFrameWrap.classList.add('cctv-video-mode');
+    // No verified inline id → the box would just sit dark; show a hint and
+    // lean on the controls-row OPEN LIVE STREAM button.
+    const hasInline = (placeCam.youtube?.videoIds || []).length > 0;
+    this._cctvFrameWrap.classList.toggle('cctv-video-linkout', !hasInline);
+    if (this._cctvOpenStreamBtn) this._cctvOpenStreamBtn.hidden = false;
+    if (this._cctvActivePlaceCamId !== placeCam.id) {
+      this._cctvActivePlaceCamId = placeCam.id;
+      this._playPanelYouTube({
+        mount: this._cctvVideo,
+        viewport: this._cctvFrameWrap,
+        videoIds: placeCam.youtube?.videoIds || [],
+        fallbackUrl: null, // watchUrl is a channel page — not embeddable; OPEN LIVE STREAM handles it
+        title: `${placeCam.name} live`,
+      });
+    }
+  }
+
+  /**
+   * Set the CCTV panel's dragged width (px, clamped to the viewport), persist
+   * it, and re-layout the right rail. `null`/omitted `px` clears the override.
+   * @param {number|null} px
+   * @param {{persist?: boolean}} [opts]
+   * @returns {void}
+   */
+  _setCctvPanelWidth(px, { persist = true } = {}) {
+    if (!this._cctvPanel) return;
+    if (px == null) {
+      this._cctvPanelWidth = null;
+      this._cctvPanel.style.removeProperty('--cctv-panel-w');
+    } else {
+      const max = Math.min(760, Math.round((window.innerWidth || 1200) - 64));
+      this._cctvPanelWidth = Math.max(288, Math.min(max, Math.round(Number(px) || 0)));
+      this._cctvPanel.style.setProperty('--cctv-panel-w', `${this._cctvPanelWidth}px`);
+    }
+    if (persist) {
+      try {
+        if (this._cctvPanelWidth == null) localStorage.removeItem(CCTV_PANEL_SIZE_STORAGE_KEY);
+        else localStorage.setItem(CCTV_PANEL_SIZE_STORAGE_KEY, String(this._cctvPanelWidth));
+      } catch { /* best effort */ }
+    }
+    this._scheduleRightPanelLayout?.({ reconsiderAutoCollapse: true });
+    this._syncCctvPanelViewport?.();
+  }
+
+  /**
+   * Toggle the LIVE FEEDS ONLY filter — hides the refreshing-still traffic
+   * cameras so only true live-video place cams remain (markers, list, and
+   * PREV/NEXT). Persisted. If a still camera is active when the filter turns
+   * on, jumps to the first live feed.
+   * @returns {void}
+   */
+  async _toggleCctvLiveOnly() {
+    if (!await this._toggleCctvEnabled(true)) return;
+    this._cctvLiveOnly = !this._cctvLiveOnly;
+    try { localStorage.setItem(CCTV_LIVE_ONLY_STORAGE_KEY, this._cctvLiveOnly ? '1' : '0'); } catch { /* best effort */ }
+    cctvLayer.setParams({ liveOnly: this._cctvLiveOnly });
+    if (this._cctvLiveOnly && this._cctvState?.activeCamera?.feedType === 'image') {
+      this._runExplicitCctvFocus(
+        () => cctvLayer.cycleCamera(1),
+        (cameraId) => cctvLayer.focusCamera(cameraId, 1.4),
+      );
+    }
+  }
+
+  /**
+   * Left-edge + bottom-left-corner drag handles on the CCTV panel. Dragging
+   * left (or the corner down-left) widens it out of the rail over the globe.
+   * @returns {void}
+   */
+  _makeCctvResizable() {
+    const panel = this._cctvPanel;
+    if (!panel) return;
+    for (const handle of panel.querySelectorAll('.cctv-resize-handle')) {
+      handle.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        try { handle.setPointerCapture(event.pointerId); } catch { /* not fatal */ }
+        const axis = handle.dataset.resizeAxis || 'x';
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const startWidth = panel.getBoundingClientRect().width;
+        panel.classList.add('cctv-resizing');
+        const onMove = (moveEvent) => {
+          const fromLeft = startX - moveEvent.clientX;   // drag left → wider
+          const fromBottom = moveEvent.clientY - startY; // drag down → wider
+          let delta;
+          if (axis === 'y') delta = fromBottom;
+          else if (axis === 'xy') delta = Math.abs(fromLeft) > Math.abs(fromBottom) ? fromLeft : fromBottom;
+          else delta = fromLeft;
+          this._setCctvPanelWidth(startWidth + delta, { persist: false });
+        };
+        const onUp = () => {
+          panel.classList.remove('cctv-resizing');
+          try { handle.releasePointerCapture(event.pointerId); } catch { /* fine */ }
+          handle.removeEventListener('pointermove', onMove);
+          handle.removeEventListener('pointerup', onUp);
+          handle.removeEventListener('pointercancel', onUp);
+          try {
+            localStorage.setItem(CCTV_PANEL_SIZE_STORAGE_KEY, String(this._cctvPanelWidth ?? ''));
+          } catch { /* best effort */ }
+        };
+        handle.addEventListener('pointermove', onMove);
+        handle.addEventListener('pointerup', onUp);
+        handle.addEventListener('pointercancel', onUp);
+      });
+    }
   }
 
   /**
@@ -6777,6 +7204,16 @@ export class StyleManager {
       stack.insertBefore(this._cctvPanel, globalContextPanel);
       this._syncPanelCollapseButton(this._cctvPanel);
     }
+    if (this._satFeedPanel) {
+      this._satFeedPanel.style.removeProperty('top');
+      this._satFeedPanel.style.removeProperty('right');
+      this._satFeedPanel.style.removeProperty('bottom');
+      this._satFeedPanel.style.removeProperty('left');
+      this._satFeedPanel.style.removeProperty('z-index');
+      this._satFeedPanel.classList.remove('panel-draggable', 'panel-dragging');
+      stack.insertBefore(this._satFeedPanel, globalContextPanel);
+      this._syncPanelCollapseButton(this._satFeedPanel);
+    }
     if (this._sliderPanel) {
       this._sliderPanel.style.removeProperty('top');
       this._sliderPanel.style.removeProperty('right');
@@ -6792,7 +7229,7 @@ export class StyleManager {
         this._scheduleRightPanelLayout();
       });
       this._rightStackResizeObserver.observe(stack);
-      for (const panel of [this._ppToggles, this._cctvPanel, globalContextPanel]) {
+      for (const panel of [this._ppToggles, this._cctvPanel, this._satFeedPanel, globalContextPanel]) {
         if (panel) this._rightStackResizeObserver.observe(panel);
       }
       document.querySelectorAll(RIGHT_STACK_OBSTACLE_SELECTOR).forEach((element) => {
@@ -7410,7 +7847,7 @@ export class StyleManager {
    * @returns {void}
    */
   _syncPanelCollapseButton(panelEl) {
-    const isRightRail = ['pp-toggles', 'cctv-panel', 'global-context-panel'].includes(panelEl?.id);
+    const isRightRail = ['pp-toggles', 'cctv-panel', 'sat-feed-panel', 'global-context-panel'].includes(panelEl?.id);
     const collapsed = panelEl.classList.contains('collapsed');
     panelEl.querySelectorAll('.panel-collapse-btn[data-collapse-target]').forEach((btn) => {
       const owner = btn.closest('[data-panel-id], #param-slider-panel');
@@ -7600,6 +8037,9 @@ export class StyleManager {
         if (panelId === 'cctv-panel') {
           this._syncCctvPanelViewport();
         }
+        if (panelId === 'sat-feed-panel') {
+          this._syncSatFeedPanelViewport();
+        }
       };
 
       const onUp = () => {
@@ -7613,6 +8053,9 @@ export class StyleManager {
         this._savePanelPosition(panelId, panelEl);
         if (panelId === 'cctv-panel') {
           this._syncCctvPanelViewport();
+        }
+        if (panelId === 'sat-feed-panel') {
+          this._syncSatFeedPanelViewport();
         }
       };
 
@@ -7755,6 +8198,9 @@ export class StyleManager {
     }
     if (panelId === 'cctv-panel') {
       this._syncCctvPanelViewport();
+    }
+    if (panelId === 'sat-feed-panel') {
+      this._syncSatFeedPanelViewport();
     }
     requestAnimationFrame(() => this._updateCommandDockTrayStack());
     this._scheduleLeftPanelLayout({
@@ -10092,6 +10538,525 @@ export class StyleManager {
     });
   }
 
+  /**
+   * CCTV-panel twin: recompute the SAT FEED panel max-height so a tall stack
+   * scrolls internally instead of overflowing the viewport. No-op while the
+   * panel lives in the right rail (that layout owns its own sizing).
+   * @returns {void}
+   */
+  _syncSatFeedPanelViewport() {
+    if (!this._satFeedPanel) return;
+    const inner = this._satFeedPanel.querySelector('.sat-feed-panel-inner');
+    requestAnimationFrame(() => {
+      if (this._satFeedPanel.parentElement?.id === 'right-context-rail') {
+        this._satFeedPanel.style.maxHeight = '';
+        if (inner) inner.style.maxHeight = '';
+        this._scheduleRightPanelLayout();
+        return;
+      }
+      const rect = this._satFeedPanel.getBoundingClientRect();
+      const availableHeight = Math.max(190, Math.floor(window.innerHeight - rect.top - 12));
+      this._satFeedPanel.style.maxHeight = `${availableHeight}px`;
+      if (inner) inner.style.maxHeight = `${availableHeight}px`;
+    });
+  }
+
+  /**
+   * Wires the SAT FEED panel's own controls. The panel's *content* is pushed
+   * by {@link _renderSatFeedState} (fed by SatelliteFeedController); these
+   * buttons drive source switching, feed-satellite cycling and pop-out.
+   * @returns {void}
+   */
+  _initSatFeedPanel() {
+    if (!this._satFeedPanel) return;
+
+    this._satFeedSourceToggleBtn?.addEventListener('click', () => {
+      const state = this._satFeedState;
+      if (!state?.visible || state.kind !== 'video' || !state.sources?.length) return;
+      const idx = state.sources.findIndex((s) => s.id === state.activeSourceId);
+      const next = state.sources[(idx + 1) % state.sources.length];
+      this._satelliteFeedController?.setVideoSource?.(next.id);
+    });
+
+    // LIVE FEEDS ONLY — restore the stored pref, reflect it on the button, and
+    // wire the toggle. The controller gets the initial value from
+    // attachSatelliteFeedController (it may not be attached yet here).
+    try {
+      this._satFeedLiveOnly = localStorage.getItem(SAT_FEED_LIVE_ONLY_STORAGE_KEY) === '1';
+    } catch { /* storage may be blocked */ }
+    this._syncSatFeedLiveOnlyBtn();
+    this._satFeedLiveOnlyBtn?.addEventListener('click', () => this._toggleSatFeedLiveOnly());
+
+    const cycleFeedSat = async (direction) => {
+      // With LIVE FEEDS ONLY on, PREV/NEXT only walk the genuine live-video
+      // feeds (currently just the ISS) — the imagery sats are skipped.
+      const ids = this._satFeedLiveOnly ? SATELLITE_VIDEO_FEED_ORDER : SATELLITE_FEED_ORDER;
+      if (!ids.length) return;
+      const current = this._satFeedState?.visible ? this._satFeedState.noradId : null;
+      const at = ids.indexOf(current);
+      const start = at < 0 ? (direction > 0 ? 0 : ids.length - 1) : at + direction;
+      const nextId = ids[((start % ids.length) + ids.length) % ids.length];
+      // Route through the satellites layer so the globe camera follows too —
+      // the layer re-emits the awareness event the controller listens for.
+      try {
+        await this._dataManager?.setEnabled?.('satellites', true, { origin: 'sat-feed-panel' });
+      } catch { /* enable is best-effort */ }
+      if (satellitesLayer.trackById?.(nextId, { origin: 'sat-feed-panel' })) return;
+      // The catalog/points can still be loading right after enable — one retry.
+      window.setTimeout(() => satellitesLayer.trackById?.(nextId, { origin: 'sat-feed-panel' }), 900);
+    };
+    this._satFeedPrevBtn?.addEventListener('click', () => { cycleFeedSat(-1); });
+    this._satFeedNextBtn?.addEventListener('click', () => { cycleFeedSat(1); });
+
+    const openStream = () => {
+      const url = this._satFeedState?.watchUrl || this._satFeedState?.mediaUrl;
+      if (url) window.open(url, '_blank', 'noopener');
+    };
+    this._satFeedPopoutBtn?.addEventListener('click', openStream);
+    this._satFeedOpenStreamBtn?.addEventListener('click', openStream);
+
+    // Viewport size — restore the stored target height, then wire the SIZE
+    // button (preset steps) and the left-edge drag handle (free resize).
+    let storedHeight = null;
+    try { storedHeight = localStorage.getItem(SAT_FEED_SIZE_STORAGE_KEY); } catch { /* storage may be blocked */ }
+    const parsedHeight = Number.parseFloat(storedHeight);
+    if (Number.isFinite(parsedHeight) && parsedHeight >= 100) this._satFeedViewportHeight = parsedHeight;
+    this._setSatFeedViewportHeight(this._satFeedViewportHeight, { persist: false });
+    this._satFeedSizeBtn?.addEventListener('click', () => {
+      const heights = SAT_FEED_SIZES.map((s) => s.viewportHeight);
+      const next = heights.find((h) => h > this._satFeedViewportHeight + 4) ?? heights[0];
+      this._setSatFeedViewportHeight(next);
+    });
+    this._makeSatFeedResizable();
+  }
+
+  /**
+   * Flip the SAT FEED "LIVE FEEDS ONLY" filter. Persisted; pushed straight to
+   * the controller, which re-renders the current subject (an imagery feed
+   * collapses to a "hidden" notice; the ISS video is unaffected).
+   * @returns {void}
+   */
+  _toggleSatFeedLiveOnly() {
+    this._satFeedLiveOnly = !this._satFeedLiveOnly;
+    try {
+      localStorage.setItem(SAT_FEED_LIVE_ONLY_STORAGE_KEY, this._satFeedLiveOnly ? '1' : '0');
+    } catch { /* best effort */ }
+    this._syncSatFeedLiveOnlyBtn();
+    this._satelliteFeedController?.setLiveOnly?.(this._satFeedLiveOnly);
+  }
+
+  /** Reflect `_satFeedLiveOnly` on its toggle button. */
+  _syncSatFeedLiveOnlyBtn() {
+    const btn = this._satFeedLiveOnlyBtn;
+    if (!btn) return;
+    btn.classList.toggle('active', this._satFeedLiveOnly);
+    btn.setAttribute('aria-pressed', String(this._satFeedLiveOnly));
+    btn.textContent = this._satFeedLiveOnly ? '◉ LIVE FEEDS ONLY · ON' : '◉ LIVE FEEDS ONLY';
+  }
+
+  /** Nearest / matching SIZE preset for a viewport height, or null if between. */
+  _satFeedSizePresetFor(height) {
+    return SAT_FEED_SIZES.find((s) => Math.abs(s.viewportHeight - height) <= 6) || null;
+  }
+
+  _updateSatFeedSizeButtonLabel() {
+    if (!this._satFeedSizeBtn) return;
+    const preset = this._satFeedSizePresetFor(this._satFeedViewportHeight);
+    this._satFeedSizeBtn.textContent = preset
+      ? `SIZE · ${preset.id}`
+      : `SIZE · ${Math.round(this._satFeedViewportHeight)}`;
+  }
+
+  _persistSatFeedViewportHeight() {
+    try {
+      localStorage.setItem(SAT_FEED_SIZE_STORAGE_KEY, String(Math.round(this._satFeedViewportHeight)));
+    } catch { /* best effort */ }
+  }
+
+  /**
+   * Set the feed viewport's target on-screen height (clamped), re-derive the
+   * panel width for the current aspect, refresh the button label, and re-layout
+   * the right rail.
+   * @param {number} height Target viewport height in px.
+   * @param {{persist?: boolean}} [opts]
+   * @returns {void}
+   */
+  _setSatFeedViewportHeight(height, { persist = true } = {}) {
+    const max = Math.min(560, Math.round((window.innerHeight || 800) * 0.7));
+    this._satFeedViewportHeight = Math.max(120, Math.min(max, Math.round(Number(height) || 190)));
+    this._syncSatFeedPanelWidth();
+    this._updateSatFeedSizeButtonLabel();
+    if (persist) this._persistSatFeedViewportHeight();
+    this._scheduleRightPanelLayout?.({ reconsiderAutoCollapse: true });
+    this._syncSatFeedPanelViewport();
+  }
+
+  /**
+   * Drag-to-resize handles. Each carries `data-resize-axis`:
+   *   x  — left edge: drag left grows the feed
+   *   y  — bottom edge: drag down grows the feed
+   *   xy — bottom-left corner: whichever of the two gestures is larger
+   * All three feed one number (`_satFeedViewportHeight`); width follows from the
+   * active feed's aspect ratio.
+   * @returns {void}
+   */
+  _makeSatFeedResizable() {
+    const panel = this._satFeedPanel;
+    if (!panel) return;
+    for (const handle of panel.querySelectorAll('.sat-feed-resize-handle')) {
+      handle.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        try { handle.setPointerCapture(event.pointerId); } catch { /* not fatal */ }
+        const axis = handle.dataset.resizeAxis || 'x';
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const startHeight = this._satFeedViewportHeight;
+        const ratio = this._satFeedAspectRatio();
+        panel.classList.add('sat-feed-resizing');
+        const onMove = (moveEvent) => {
+          const fromLeft = (startX - moveEvent.clientX) / ratio; // drag left → taller
+          const fromBottom = moveEvent.clientY - startY;         // drag down → taller
+          let delta;
+          if (axis === 'y') delta = fromBottom;
+          else if (axis === 'xy') delta = Math.abs(fromLeft) > Math.abs(fromBottom) ? fromLeft : fromBottom;
+          else delta = fromLeft;
+          this._setSatFeedViewportHeight(startHeight + delta, { persist: false });
+        };
+        const onUp = () => {
+          panel.classList.remove('sat-feed-resizing');
+          try { handle.releasePointerCapture(event.pointerId); } catch { /* fine */ }
+          handle.removeEventListener('pointermove', onMove);
+          handle.removeEventListener('pointerup', onUp);
+          handle.removeEventListener('pointercancel', onUp);
+          this._persistSatFeedViewportHeight();
+        };
+        handle.addEventListener('pointermove', onMove);
+        handle.addEventListener('pointerup', onUp);
+        handle.addEventListener('pointercancel', onUp);
+      });
+    }
+  }
+
+  /**
+   * Apply a SAT FEED viewport size preset. Sets `--sat-feed-panel-w` on the
+   * panel (the CSS clamps it to the viewport and the 16:9 / 1:1 viewport scales
+   * with the width), updates the button label, persists the choice, and nudges
+   * the right-rail stack layout to re-measure.
+   * @param {number} index Index into {@link SAT_FEED_SIZES}.
+   * @param {{persist?: boolean}} [opts]
+   * @returns {void}
+   */
+  /** Aspect ratio (w/h) of the active feed's viewport; defaults to 16:9. */
+  _satFeedAspectRatio() {
+    const [w, h] = String(this._satFeedState?.aspect || '16 / 9')
+      .split('/')
+      .map((n) => Number.parseFloat(n));
+    return Number.isFinite(w) && Number.isFinite(h) && h > 0 ? w / h : 16 / 9;
+  }
+
+  /**
+   * Set `--sat-feed-panel-w` so `this._satFeedViewportHeight` is hit for
+   * whatever aspect the active feed has (16:9 video vs 1:1 full-disk). Call on
+   * size change and whenever the feed kind changes.
+   * @returns {void}
+   */
+  _syncSatFeedPanelWidth() {
+    if (!this._satFeedPanel) return;
+    const height = this._satFeedViewportHeight || 190;
+    const width = Math.round(height * this._satFeedAspectRatio()) + SAT_FEED_PANEL_PADDING;
+    this._satFeedPanel.style.setProperty('--sat-feed-panel-w', `${width}px`);
+  }
+
+  /**
+   * Render the SAT FEED panel from a SatelliteFeedController state object.
+   * Twin of {@link _renderCctvState}: swaps the media element (iframe for
+   * video, img for imagery), updates the badge / meta / summary, and
+   * auto-expands the panel when the feed SUBJECT changes (last-seen guard so a
+   * deliberately-collapsed panel is not re-popped on a routine refresh tick).
+   * A hidden/idle state clears the iframe src so playback and audio stop.
+   * @param {object} state
+   * @returns {void}
+   */
+  _renderSatFeedState(state) {
+    this._satFeedState = state || { visible: false };
+    const visible = !!this._satFeedState.visible;
+
+    // Keep the LIVE FEEDS ONLY button in step with the controller's own view
+    // of the flag (covers a programmatic setLiveOnly, not just button clicks).
+    if (typeof this._satFeedState.liveOnly === 'boolean'
+      && this._satFeedState.liveOnly !== this._satFeedLiveOnly) {
+      this._satFeedLiveOnly = this._satFeedState.liveOnly;
+      this._syncSatFeedLiveOnlyBtn();
+    }
+
+    if (visible) {
+      const norad = this._satFeedState.noradId ?? null;
+      if (norad !== null && norad !== this._lastSeenSatFeedNorad) {
+        this.setPanelCollapsed('sat-feed-panel', false, { explicit: true });
+      }
+      this._lastSeenSatFeedNorad = norad;
+    } else {
+      this._lastSeenSatFeedNorad = null;
+    }
+
+    const viewport = this._satFeedViewport;
+    const video = this._satFeedVideo;
+    const frame = this._satFeedFrame;
+
+    if (!visible) {
+      // Stop the stream: tearing down the player is the only reliable way to
+      // kill a YouTube iframe's playback + audio.
+      this._destroySatFeedVideoPlayer();
+      if (video) video.hidden = true;
+      if (frame) { frame.hidden = true; frame.classList.remove('active'); frame.removeAttribute('src'); }
+      if (viewport) {
+        viewport.dataset.kind = '';
+        viewport.dataset.videoStatus = '';
+        viewport.classList.remove('has-media');
+        viewport.style.removeProperty('--sat-feed-aspect');
+      }
+      if (this._satFeedSourceBadge) this._satFeedSourceBadge.textContent = 'SOURCE · —';
+      if (this._satFeedMeta) this._satFeedMeta.textContent = 'Track the ISS, GOES-19/-18 or Himawari-9 to open a live feed.';
+      if (this._satFeedSummary) this._satFeedSummary.textContent = 'Feeds are public near-real-time sources — not classified, not a completeness guarantee.';
+      if (this._satFeedSourceToggleBtn) this._satFeedSourceToggleBtn.hidden = true;
+      if (this._satFeedOpenStreamBtn) this._satFeedOpenStreamBtn.hidden = true;
+      for (const btn of [this._satFeedPrevBtn, this._satFeedNextBtn, this._satFeedPopoutBtn]) {
+        if (btn) btn.disabled = false;
+      }
+      return;
+    }
+
+    if (this._satFeedState.suppressed) {
+      // LIVE FEEDS ONLY is on and an imagery feed is selected — no media, just
+      // a short notice. Tear the player down and blank the viewport.
+      this._destroySatFeedVideoPlayer();
+      if (video) video.hidden = true;
+      if (frame) { frame.hidden = true; frame.classList.remove('active'); frame.removeAttribute('src'); }
+      if (viewport) {
+        viewport.dataset.kind = '';
+        viewport.dataset.videoStatus = '';
+        viewport.classList.remove('has-media');
+        viewport.style.removeProperty('--sat-feed-aspect');
+      }
+      const name = this._satFeedState.label || 'Imagery';
+      if (this._satFeedSourceBadge) this._satFeedSourceBadge.textContent = `${name} · HIDDEN`.toUpperCase();
+      if (this._satFeedMeta) this._satFeedMeta.textContent = `${name} hidden — LIVE FEEDS ONLY is on`;
+      if (this._satFeedSummary) this._satFeedSummary.textContent = this._satFeedState.note || '';
+      if (this._satFeedSourceToggleBtn) this._satFeedSourceToggleBtn.hidden = true;
+      if (this._satFeedOpenStreamBtn) this._satFeedOpenStreamBtn.hidden = true;
+      for (const btn of [this._satFeedPrevBtn, this._satFeedNextBtn, this._satFeedPopoutBtn]) {
+        if (btn) btn.disabled = false;
+      }
+      return;
+    }
+
+    const { kind, label, mediaUrl, attribution, note, aspect, sources, activeSourceId } = this._satFeedState;
+    if (viewport) {
+      viewport.dataset.kind = kind;
+      viewport.style.setProperty('--sat-feed-aspect', aspect || (kind === 'video' ? '16 / 9' : '1 / 1'));
+      viewport.classList.add('has-media');
+    }
+    // Re-derive the panel width for this feed's shape so the chosen SIZE preset
+    // keeps the same on-screen height whether it's a 16:9 stream or a square
+    // full-disk still.
+    this._syncSatFeedPanelWidth();
+
+    if (kind === 'video') {
+      if (frame) { frame.hidden = true; frame.classList.remove('active'); frame.removeAttribute('src'); }
+      if (video) video.hidden = false;
+      // Probe the candidate streams via the IFrame API and play the first that
+      // works; the OPEN LIVE STREAM button is the always-available escape when
+      // every candidate is embed-blocked / offline / consent-gated.
+      if (this._satFeedOpenStreamBtn) this._satFeedOpenStreamBtn.hidden = false;
+      this._playSatFeedVideo(this._satFeedState.videoIds, mediaUrl);
+    } else {
+      if (this._satFeedOpenStreamBtn) this._satFeedOpenStreamBtn.hidden = true;
+      this._destroySatFeedVideoPlayer();
+      if (video) video.hidden = true;
+      if (viewport) viewport.dataset.videoStatus = '';
+      if (frame) {
+        frame.hidden = false;
+        frame.onload = () => frame.classList.add('active');
+        if (frame.getAttribute('src') !== mediaUrl) {
+          frame.classList.remove('active');
+          frame.src = mediaUrl;
+        } else {
+          frame.classList.add('active');
+        }
+      }
+    }
+
+    if (this._satFeedSourceBadge) {
+      this._satFeedSourceBadge.textContent = `${label || 'FEED'} · ${attribution || 'source'}`.toUpperCase();
+    }
+    if (this._satFeedMeta) {
+      this._satFeedMeta.textContent = kind === 'video'
+        ? `Live video · ${label} · source: ${attribution}`
+        : `Full-disk imagery · ${label} · refreshes every ${Math.round((this._satFeedState.refreshMs || 600000) / 60000)} min`;
+    }
+    if (this._satFeedSummary) this._satFeedSummary.textContent = note || '';
+
+    if (this._satFeedSourceToggleBtn) {
+      const hasChoices = kind === 'video' && Array.isArray(sources) && sources.length > 1;
+      this._satFeedSourceToggleBtn.hidden = !hasChoices;
+      if (hasChoices) {
+        const active = sources.find((s) => s.id === activeSourceId) || sources[0];
+        this._satFeedSourceToggleBtn.textContent = active.label;
+        this._satFeedSourceToggleBtn.classList.toggle('active', activeSourceId === 'earth');
+      }
+    }
+    for (const btn of [this._satFeedPrevBtn, this._satFeedNextBtn, this._satFeedPopoutBtn]) {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  /**
+   * Lazily load the YouTube IFrame Player API (once). Resolves with `window.YT`
+   * or rejects if the script fails / times out (offline, blocked) — callers
+   * then fall back to a plain iframe.
+   * @returns {Promise<any>}
+   */
+  _ensureYouTubeApi() {
+    if (window.YT && window.YT.Player) return Promise.resolve(window.YT);
+    if (this._ytApiPromise) return this._ytApiPromise;
+    this._ytApiPromise = new Promise((resolve, reject) => {
+      const prior = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        if (typeof prior === 'function') { try { prior(); } catch { /* ignore */ } }
+        resolve(window.YT);
+      };
+      const script = document.createElement('script');
+      script.src = 'https://www.youtube.com/iframe_api';
+      script.async = true;
+      script.onerror = () => reject(new Error('YT IFrame API failed to load'));
+      document.head.appendChild(script);
+      window.setTimeout(() => {
+        if (!(window.YT && window.YT.Player)) reject(new Error('YT IFrame API timed out'));
+      }, 10000);
+    });
+    return this._ytApiPromise;
+  }
+
+  /**
+   * Tear down the YT player living inside `mount` (state is stashed on the
+   * element as `__gevYt`), cancelling any in-flight candidate probe.
+   * @param {HTMLElement|null} mount
+   * @returns {void}
+   */
+  _destroyPanelYouTube(mount) {
+    if (!mount) return;
+    const handle = mount.__gevYt;
+    if (handle) {
+      handle.token += 1; // cancel in-flight probes
+      clearTimeout(handle.timer);
+      handle.timer = null;
+      if (handle.player) {
+        try { handle.player.destroy(); } catch { /* ignore */ }
+        handle.player = null;
+      }
+    }
+    mount.innerHTML = '';
+  }
+
+  /** SAT FEED panel's YT video mount. */
+  _destroySatFeedVideoPlayer() {
+    this._destroyPanelYouTube(this._satFeedVideo);
+  }
+
+  /** Plain best-effort iframe when the IFrame API is unavailable. */
+  _injectPlainPanelIframe(mount, url, title = 'Live video') {
+    mount.innerHTML = '';
+    if (!url) return;
+    const frame = document.createElement('iframe');
+    frame.src = url;
+    frame.title = title;
+    frame.allow = 'autoplay; encrypted-media; picture-in-picture';
+    frame.referrerPolicy = 'strict-origin-when-cross-origin';
+    frame.setAttribute('allowfullscreen', '');
+    mount.appendChild(frame);
+  }
+
+  /**
+   * Play the first working candidate stream into `mount` via the YT IFrame API.
+   * Creates a player on a disposable slot, advances to the next id on `onError`
+   * or an 8s no-play timeout, and marks `viewport` `data-video-status` =
+   * searching → playing | plain | unavailable. Falls back to a plain iframe of
+   * `fallbackUrl` when the API can't load or every candidate fails. Shared by
+   * the SAT FEED and CCTV place-cam panels.
+   * @param {{mount: HTMLElement, viewport?: HTMLElement|null, videoIds?: string[], fallbackUrl?: string|null, title?: string}} opts
+   * @returns {void}
+   */
+  _playPanelYouTube({ mount, viewport = null, videoIds = [], fallbackUrl = null, title = 'Live video' }) {
+    if (!mount) return;
+    const handle = mount.__gevYt || (mount.__gevYt = { token: 0, player: null, timer: null });
+    this._destroyPanelYouTube(mount);
+    const token = handle.token;
+    const list = Array.isArray(videoIds) ? videoIds.filter(Boolean) : [];
+    const setStatus = (status) => { if (viewport) viewport.dataset.videoStatus = status; };
+
+    if (!list.length) {
+      this._injectPlainPanelIframe(mount, fallbackUrl, title);
+      setStatus(fallbackUrl ? 'plain' : 'unavailable');
+      return;
+    }
+    setStatus('searching');
+
+    this._ensureYouTubeApi().then((YT) => {
+      if (token !== handle.token) return;
+      let idx = 0;
+      const advance = () => {
+        if (token !== handle.token) return;
+        if (idx >= list.length) {
+          if (fallbackUrl) { this._injectPlainPanelIframe(mount, fallbackUrl, title); setStatus('plain'); }
+          else setStatus('unavailable');
+          return;
+        }
+        const id = list[idx];
+        idx += 1;
+        clearTimeout(handle.timer);
+        handle.timer = window.setTimeout(() => { if (token === handle.token) advance(); }, 8000);
+        if (handle.player) {
+          try { handle.player.loadVideoById(id); } catch { advance(); }
+          return;
+        }
+        mount.innerHTML = '<div></div>';
+        handle.player = new YT.Player(mount.firstElementChild, {
+          host: 'https://www.youtube-nocookie.com',
+          videoId: id,
+          playerVars: { autoplay: 1, mute: 1, playsinline: 1, rel: 0 },
+          events: {
+            onReady: (e) => { try { e.target.mute(); e.target.playVideo(); } catch { /* ignore */ } },
+            onStateChange: (e) => {
+              // 1 PLAYING, 3 BUFFERING → a real stream took hold.
+              if ((e.data === 1 || e.data === 3) && token === handle.token) {
+                clearTimeout(handle.timer);
+                setStatus('playing');
+              }
+            },
+            onError: () => { clearTimeout(handle.timer); advance(); },
+          },
+        });
+      };
+      advance();
+    }).catch(() => {
+      if (token !== handle.token) return;
+      this._injectPlainPanelIframe(mount, fallbackUrl, title);
+      setStatus(fallbackUrl ? 'plain' : 'unavailable');
+    });
+  }
+
+  /** SAT FEED panel wrapper around the shared player. */
+  _playSatFeedVideo(videoIds, fallbackUrl) {
+    this._playPanelYouTube({
+      mount: this._satFeedVideo,
+      viewport: this._satFeedViewport,
+      videoIds,
+      fallbackUrl,
+      title: 'Satellite live video',
+    });
+  }
+
   /** Whether a share link was used to load the page */
   get hasShareState() {
     return !!this._hasShareState;
@@ -10213,6 +11178,12 @@ export class StyleManager {
     }
     this._cctvUnsubscribe?.();
     this._cctvUnsubscribe = null;
+    this._satFeedUnsubscribe?.();
+    this._satFeedUnsubscribe = null;
+    this._satelliteFeedController = null;
+    this._destroySatFeedVideoPlayer();
+    this._destroyPanelYouTube(this._cctvVideo);
+    this._cctvActivePlaceCamId = null;
     this._commandDockTrayObserver?.disconnect?.();
     this._commandDockTrayObserver = null;
     this._draggableResizeObserver?.disconnect();

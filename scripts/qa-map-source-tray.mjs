@@ -126,9 +126,9 @@ try {
     controls: document.getElementById('control-panel-toggle')?.getAttribute('aria-controls'),
   }));
   check(
-    'exact five-source presentation; the retired left Map Stack panel is gone',
+    'exact six-source presentation; the retired left Map Stack panel is gone',
     JSON.stringify(presentation.ids) === JSON.stringify([
-      'photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'osm',
+      'photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'osm', 'gibs-nrt',
     ]) && !presentation.retiredPanel,
     JSON.stringify(presentation),
   );

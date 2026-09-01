@@ -788,11 +788,76 @@ export function coalesceProxyRequest(inFlight, key, create) {
 const RADIO_DIRECTORY_CACHE_MS = 45 * 60 * 1000;
 const RADIO_DIRECTORY_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 const RADIO_MIRROR_CACHE_MS = 6 * 60 * 60 * 1000;
-const RADIO_FETCH_TIMEOUT_MS = 12_000;
-const RADIO_RESPONSE_MAX_BYTES = 4 * 1024 * 1024;
-const RADIO_DIRECTORY_LIMIT = 750;
+const RADIO_FETCH_TIMEOUT_MS = 18_000;
+const RADIO_RESPONSE_MAX_BYTES = 10 * 1024 * 1024;
+/** Max stations kept in the merged directory catalog served to the client. */
+export const RADIO_DIRECTORY_LIMIT = 2000;
 const RADIO_CATALOG_MIN_SUCCESSFUL_QUERIES = 5;
-const RADIO_CATALOG_HEALTHY_MIN_STATIONS = Math.ceil(RADIO_DIRECTORY_LIMIT / 2);
+// "Healthy" is about getting a usable catalog, not filling the cap — keep this a
+// fixed floor rather than a ratio of RADIO_DIRECTORY_LIMIT (raising the cap must
+// not retroactively make previously-healthy catalogs count as degraded).
+const RADIO_CATALOG_HEALTHY_MIN_STATIONS = 375;
+// The broad catalog query orders by GLOBAL clickcount, so stations from smaller
+// markets almost never surface. Each ISO-3166-1 alpha-2 code here gets its own
+// "top stations in this country" query, seeded ahead of the popularity fill
+// exactly like the specialist-tag queries — extend freely, each adds one cached
+// upstream request per 45-min catalog refresh.
+export const RADIO_COUNTRY_SEEDS = Object.freeze(['AU', 'NZ', 'IE', 'ZA']);
+
+// Hand-picked stations that are always in the catalog — regardless of upstream
+// popularity, or of whether Radio Browser lists them at all. Each entry is in
+// Radio Browser's own row shape and is run through `normalizeRadioBrowserStation`,
+// so it gets the identical URL-safety / geo / codec / uuid validation and the
+// identical output shape as upstream data. Requirements for an entry:
+//   - `stationuuid`: a STABLE synthetic v4-shaped id, hex only (RADIO_UUID_RE);
+//     the `cc0a7ed0` prefix marks it as curated.
+//   - `url_resolved`: a direct progressive MP3/AAC stream (NOT an HLS `.m3u8` —
+//     the client plays a bare <audio> element; `hls: 1` is rejected upstream too).
+//   - `geo_lat`/`geo_long`, `countrycode`, `codec`, `lastcheckok: 1`.
+export const RADIO_CURATED_STATIONS = Object.freeze([
+  Object.freeze({
+    stationuuid: 'cc0a7ed0-0000-4000-8000-000000000001',
+    name: 'Triple M Gippsland 94.3',
+    // Direct AAC+ (HE-AACv2, ~33 kbps) ICY stream — SCA StreamGuys edge. The
+    // LiSTNR site only exposes the HLS variant; this progressive endpoint plays
+    // in a plain <audio> element and is not geo-locked at the CDN.
+    url_resolved: 'https://sa47.scastream.com.au/3sea_32',
+    homepage: 'https://triplem.listnr.com/gippsland/',
+    countrycode: 'AU',
+    state: 'Victoria',
+    tags: 'rock,classic rock,commercial,gippsland,latrobe valley',
+    language: 'English',
+    codec: 'AAC+',
+    bitrate: 33,
+    hls: 0,
+    lastcheckok: 1,
+    // SCA Traralgon studios — ~15 km east of Moe, the licence area's centre.
+    geo_lat: -38.1953,
+    geo_long: 146.5403,
+  }),
+  Object.freeze({
+    stationuuid: 'cc0a7ed0-0000-4000-8000-000000000002',
+    name: 'Connect FM 89.7 Naracoorte',
+    // 5TCB FM community radio — Naracoorte / Bordertown / Keith, Limestone
+    // Coast SA. 128 kbps MP3 via Caster.fm; the `authn…` token is a stable
+    // per-station stream key (verified constant across fresh page loads), not a
+    // rotating session token — refresh it here if the stream ever 401s.
+    url_resolved: 'https://shaincast.caster.fm:20500/listen.mp3?authn3438c7264d9b341098ec72e054776416',
+    homepage: 'https://5tcbfm.caster.fm/',
+    countrycode: 'AU',
+    state: 'South Australia',
+    tags: 'community radio,local news,naracoorte,limestone coast',
+    language: 'English',
+    codec: 'MP3',
+    bitrate: 128,
+    hls: 0,
+    lastcheckok: 1,
+    // Naracoorte town centre.
+    geo_lat: -36.9576,
+    geo_long: 140.7373,
+  }),
+]);
+
 const RADIO_USER_AGENT = 'GodsEyeView/1.0 (Radio Browser directory client)';
 const RADIO_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RADIO_FALLBACK_MIRRORS = Object.freeze([
@@ -898,6 +963,26 @@ export function normalizeRadioBrowserStation(raw) {
     bitrate: Number.isInteger(bitrate) && bitrate >= 8 && bitrate <= 1024 ? bitrate : null,
     clickCount: Math.max(0, Math.min(10_000_000, Number(raw?.clickcount) || 0)),
   };
+}
+
+let _curatedRadioStationsCache = null;
+
+/**
+ * `RADIO_CURATED_STATIONS` passed through the upstream normalizer. Memoized.
+ * A curated entry that fails validation (bad stream URL, geo, codec, uuid) is
+ * dropped with a warning rather than poisoning the served catalog.
+ * @returns {ReturnType<typeof normalizeRadioBrowserStation>[]}
+ */
+export function normalizeCuratedRadioStations() {
+  if (_curatedRadioStationsCache) return _curatedRadioStationsCache;
+  const normalized = [];
+  for (const raw of RADIO_CURATED_STATIONS) {
+    const station = normalizeRadioBrowserStation(raw);
+    if (station) normalized.push(station);
+    else console.warn(`[radio] curated station rejected by the normalizer: ${raw?.name || raw?.stationuuid || 'unknown'}`);
+  }
+  _curatedRadioStationsCache = normalized;
+  return normalized;
 }
 
 export function publicRadioStation(station) {
@@ -1051,6 +1136,9 @@ export function createRadioProxyMiddleware({ fetchImpl = null, lookupImpl = look
   const catalogInstance = randomUUID();
   let servedStationIds = new Set();
   let refreshPromise = null;
+  // Curated ids exist only in this app — a play-count ping to Radio Browser for
+  // one would just 404. Served (so /click accepts them) but not forwarded.
+  const curatedStationIds = new Set(normalizeCuratedRadioStations().map((station) => station.id));
 
   async function fetchJson(url, maxBytes = RADIO_RESPONSE_MAX_BYTES) {
     const destination = radioProxyDestination(url);
@@ -1111,17 +1199,27 @@ export function createRadioProxyMiddleware({ fetchImpl = null, lookupImpl = look
   }
 
   async function refreshCatalog() {
-    const queries = [null, 'news', 'talk', 'weather', 'emergency', 'scanner', 'aviation', 'marine', 'traffic'];
-    const outcomes = await mapRadioConcurrent(queries, 3, async (tag, index) => {
+    // Index 0 must stay the broad (null-tag) query — the health check and the
+    // 2600-row limit below key off `index === 0`. Tag queries first, then the
+    // per-country seeds (see RADIO_COUNTRY_SEEDS).
+    const queries = [
+      ...[null, 'news', 'talk', 'weather', 'emergency', 'scanner', 'aviation', 'marine', 'traffic']
+        .map((tag) => ({ tag })),
+      ...RADIO_COUNTRY_SEEDS.map((countryCode) => ({ countryCode })),
+    ];
+    const outcomes = await mapRadioConcurrent(queries, 3, async (descriptor, index) => {
+      const tag = descriptor.tag || null;
+      const countryCode = descriptor.countryCode || null;
       const params = new URLSearchParams({
         has_geo_info: 'true',
         is_https: 'true',
         hidebroken: 'true',
         order: 'clickcount',
         reverse: 'true',
-        limit: index === 0 ? '1800' : '220',
+        limit: index === 0 ? '2600' : '280',
       });
       if (tag) params.set('tag', tag);
+      if (countryCode) params.set('countrycode', countryCode);
       try {
         const rows = await fetchPath(`/json/stations/search?${params}`);
         if (!Array.isArray(rows)) throw new Error('Radio Browser catalog payload was not an array');
@@ -1142,11 +1240,17 @@ export function createRadioProxyMiddleware({ fetchImpl = null, lookupImpl = look
         const requestedTagCovered = !requestedTag || stations.some((station) => (
           station.tags.some((stationTag) => stationTag === requestedTag || stationTag.includes(requestedTag))
         ));
+        // A country seed only counts as covered if it actually returned
+        // stations from that country — a mirror that silently ignores the
+        // `countrycode` filter must not prop up catalog health.
+        const requestedCountryCovered = !countryCode
+          || stations.some((station) => station.countryCode === countryCode);
         return {
           // Query coverage is based on accepted rows, not merely a payload that
           // happens to match the upstream schema. Specialist responses must
-          // also contain an accepted station tagged for the requested category.
-          succeeded: stations.length > 0 && requestedTagCovered,
+          // also contain an accepted station tagged for the requested category
+          // (or from the requested country).
+          succeeded: stations.length > 0 && requestedTagCovered && requestedCountryCovered,
           stations,
         };
       } catch {
@@ -1162,22 +1266,35 @@ export function createRadioProxyMiddleware({ fetchImpl = null, lookupImpl = look
       seen.add(station.id);
       selected.push(station);
     };
+    // Curated stations first: they must survive the RADIO_DIRECTORY_LIMIT cap and
+    // stay present even when every upstream query fails. A curated id that also
+    // came back from upstream is deduped here (curated copy wins).
+    const curated = normalizeCuratedRadioStations();
+    const curatedIds = new Set(curated.map((station) => station.id));
+    curated.forEach(take);
     // Seed specialist station-tag queries before popularity fill so operational
     // categories remain represented even when global click charts skew musical.
-    for (const rows of resultSets.slice(1)) rows.slice(0, 45).forEach(take);
+    for (const rows of resultSets.slice(1)) rows.slice(0, 70).forEach(take);
     resultSets.flat().sort((a, b) => b.clickCount - a.clickCount || a.name.localeCompare(b.name)).forEach(take);
     const timestamp = now();
     const successfulQueries = outcomes.filter((outcome) => outcome.succeeded).length;
     const broadQueryHealthy = outcomes[0].succeeded && outcomes[0].stations.length > 0;
+    // Health is a verdict on the UPSTREAM fetch — curated stations we always have
+    // must not let a dead directory look healthy.
+    const upstreamStationCount = selected.reduce(
+      (count, station) => (curatedIds.has(station.id) ? count : count + 1),
+      0,
+    );
     const healthReasons = [];
     if (!broadQueryHealthy) healthReasons.push('broad-query-unhealthy');
     if (successfulQueries < RADIO_CATALOG_MIN_SUCCESSFUL_QUERIES) healthReasons.push('query-coverage-below-policy');
-    if (selected.length < RADIO_CATALOG_HEALTHY_MIN_STATIONS) healthReasons.push('station-coverage-below-policy');
+    if (upstreamStationCount < RADIO_CATALOG_HEALTHY_MIN_STATIONS) healthReasons.push('station-coverage-below-policy');
     const degraded = healthReasons.length > 0;
     const coverage = {
       successfulQueries,
       totalQueries: queries.length,
       stationCount: selected.length,
+      curatedCount: curated.length,
       healthyStationMinimum: RADIO_CATALOG_HEALTHY_MIN_STATIONS,
     };
     const nextCatalog = {
@@ -1196,7 +1313,10 @@ export function createRadioProxyMiddleware({ fetchImpl = null, lookupImpl = look
       error.radioCoverage = coverage;
       throw error;
     }
-    if (degraded && !selected.length) {
+    if (degraded && !upstreamStationCount) {
+      // Upstream returned nothing usable and there is no warm cache. The
+      // curated floor on its own is not a directory — surface the outage
+      // rather than serving a one-station "catalog".
       const error = new Error('Radio Browser catalog refresh returned no usable stations');
       error.radioCatalogDegraded = true;
       error.radioDegradedReason = nextCatalog.degradedReason;
@@ -1287,7 +1407,7 @@ export function createRadioProxyMiddleware({ fetchImpl = null, lookupImpl = look
       }
       res.writeHead(204, { 'Cache-Control': 'no-store' });
       res.end();
-      void fetchPath(`/json/url/${id}`).catch(() => {});
+      if (!curatedStationIds.has(id)) void fetchPath(`/json/url/${id}`).catch(() => {});
       return;
     }
 
@@ -3468,8 +3588,14 @@ const DEFAULT_CCTV_SOURCE_FILE = 'config/cctv_sources.austin.json';
 const DEFAULT_AUSTIN_ROWS_URL = 'https://data.austintexas.gov/api/views/b4k4-adkb/rows.json?accessType=DOWNLOAD';
 /** Default cap on Austin cameras after distance-based prioritization. */
 const DEFAULT_AUSTIN_MAX_SOURCES = 250;
-/** Global cap on total CCTV sources served by the proxy. */
-const DEFAULT_CCTV_MAX_SOURCES = 900;
+/** Global cap on total CCTV sources served by the proxy. Sized to hold every
+ *  default live pack at its own cap (Austin 250 + Caltrans 300 + TfL 250 +
+ *  NYC 250 + Austria/foto-webcam 200 = 1250) plus headroom for raised per-pack
+ *  caps. When the merged catalog still exceeds this, the packs are round-robin
+ *  interleaved first so the trim thins every geography proportionally rather
+ *  than dropping one entirely. Raise CCTV_MAX_SOURCES to go higher (hard cap
+ *  2000); lower a per-pack cap to change which cameras are dropped first. */
+const DEFAULT_CCTV_MAX_SOURCES = 1800;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
@@ -3490,7 +3616,64 @@ const TFL_JAMCAM_URL = 'https://api.tfl.gov.uk/Place/Type/JamCam';
 const TFL_IMAGE_ORIGIN = 'https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/';
 const DEFAULT_TFL_MAX_SOURCES = 250;
 const LONDON_CENTER = { lat: 51.5074, lon: -0.1278 };
-/** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL) infrequent. Frames are fetched per-request and are unaffected. */
+/** NYC DOT (Traffic Management Center) real-time traffic cameras: one keyless
+ *  JSON list endpoint; each record carries its own frame URL on the same host. */
+const NYC_CCTV_URL = 'https://webcams.nyctmc.org/api/cameras/';
+const NYC_IMAGE_ORIGIN = 'https://webcams.nyctmc.org/';
+const DEFAULT_NYC_MAX_SOURCES = 250;
+/** Prioritization anchors: the two densest NYC camera cores. */
+const NYC_ANCHORS = [
+  { lat: 40.7549, lon: -73.9840 }, // Midtown Manhattan (Times Square)
+  { lat: 40.6923, lon: -73.9875 }, // Downtown Brooklyn
+];
+/** foto-webcam.eu: keyless landscape/weather webcam network across the Alps.
+ *  One JSON metadata endpoint; each record carries its own current-frame URL
+ *  (pinned to FOTOWEBCAM_IMAGE_ORIGIN). Images refresh ~every 30 min. We keep
+ *  only country === 'at' for the Austria pack. Licensed CC BY-NC 3.0 —
+ *  attribution "© foto-webcam.eu" (registered in src/data/dataCredits.js). */
+const FOTOWEBCAM_METADATA_URL = 'https://www.foto-webcam.eu/webcam/include/metadata.php';
+const FOTOWEBCAM_IMAGE_ORIGIN = 'https://www.foto-webcam.eu/';
+const DEFAULT_AT_MAX_SOURCES = 200;
+/** Prioritization anchors: Austria's largest metros + the main Alpine tourism
+ *  belt, so a lowered cap keeps the most-recognizable views. */
+const AUSTRIA_ANCHORS = [
+  { lat: 48.2082, lon: 16.3738 }, // Vienna
+  { lat: 47.2692, lon: 11.4041 }, // Innsbruck
+  { lat: 47.8095, lon: 13.0550 }, // Salzburg
+  { lat: 47.0707, lon: 15.4395 }, // Graz
+];
+/** QLDTraffic (Queensland, Australia) traffic cameras. The agency's own API
+ *  (api.qldtraffic.qld.gov.au) gates webcams behind a key, but the SAME feed is
+ *  re-published un-gated on the state's OpenDataSoft portal — Explore API v2.1,
+ *  fully keyless. Each record carries a direct still-image URL on
+ *  QLDTRAFFIC_IMAGE_ORIGIN and a cardinal `direction`. Licensed CC BY 4.0 —
+ *  attribution "© State of Queensland (QLDTraffic)". */
+const QLDTRAFFIC_EXPORT_URL = 'https://queensland.opendatasoft.com/api/explore/v2.1/catalog/datasets/live-traffic-cameras-gold-coast/exports/json';
+const QLDTRAFFIC_IMAGE_ORIGIN = 'https://cameras.qldtraffic.qld.gov.au/';
+const DEFAULT_AU_MAX_SOURCES = 200;
+/** Prioritization anchors: Queensland's population centres (SE corner + coast). */
+const AUSTRALIA_ANCHORS = [
+  { lat: -27.4698, lon: 153.0251 }, // Brisbane
+  { lat: -28.0167, lon: 153.4000 }, // Gold Coast
+  { lat: -26.6500, lon: 153.0667 }, // Sunshine Coast
+  { lat: -16.9203, lon: 145.7710 }, // Cairns
+];
+/** Transport for NSW Live Traffic Cameras (Sydney + NSW). BYO key — free from
+ *  opendata.transport.nsw.gov.au; the loader is a no-op unless
+ *  NSW_TRANSPORT_API_KEY is set. GeoJSON FeatureCollection: Point geometry, a
+ *  cardinal `direction` (N/S/E/W/N-W/N-E/S-W/S-E), and an `href` JPEG on one of
+ *  NSW_IMAGE_HOSTS (pinned). Licensed CC BY 4.0 — attribution "© Transport for
+ *  NSW". */
+const NSW_CAMERAS_URL = 'https://api.transport.nsw.gov.au/v1/live/cameras';
+const NSW_IMAGE_HOSTS = ['www.livetraffic.com', 'data.livetraffic.com', 'www.rms.nsw.gov.au'];
+const DEFAULT_NSW_MAX_SOURCES = 200;
+/** Prioritization anchors: NSW population centres. */
+const NSW_ANCHORS = [
+  { lat: -33.8688, lon: 151.2093 }, // Sydney CBD
+  { lat: -32.9283, lon: 151.7817 }, // Newcastle
+  { lat: -34.4278, lon: 150.8931 }, // Wollongong
+];
+/** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + Caltrans districts + TfL + NYC + foto-webcam + QLDTraffic + TfNSW) infrequent. Frames are fetched per-request and are unaffected. */
 const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
  * stalled upstream can't leave getCctvSources (and thus every CCTV route)
@@ -4116,6 +4299,302 @@ async function loadTflSourcesFromOpenData() {
 }
 
 /**
+ * Fetch NYC DOT real-time traffic camera records from the Traffic Management
+ * Center feed (webcams.nyctmc.org). Keyless JSON list; every record already
+ * carries a same-host `imageUrl` frame endpoint, pinned to NYC_IMAGE_ORIGIN so
+ * a compromised upstream list can't redirect the proxy off-host. Only
+ * `isOnline === "true"` cameras with finite coords are kept, then
+ * distance-prioritized to CCTV_NYC_MAX_SOURCES around the two densest cores
+ * (Midtown, Downtown Brooklyn). No heading signal in the feed → the same
+ * id-hash fallback / low-confidence treatment as headingless Austin and TfL
+ * cameras. Attribution: "NYC DOT" (registered in src/data/dataCredits.js).
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+async function loadNycSourcesFromOpenData() {
+  try {
+    const resp = await fetch(NYC_CCTV_URL, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS) });
+    if (!resp.ok) {
+      console.warn('[CCTV] NYC DOT camera download failed:', resp.status);
+      return [];
+    }
+    const rows = await resp.json();
+    if (!Array.isArray(rows)) return [];
+
+    const cameras = [];
+    for (const row of rows) {
+      if (String(row?.isOnline).toLowerCase() !== 'true') continue;
+      const lat = toFiniteNumber(row?.latitude);
+      const lon = toFiniteNumber(row?.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      const rawId = String(row?.id || '').trim();
+      if (!rawId) continue;
+      const imageUrl = String(row?.imageUrl || '');
+      if (!imageUrl.startsWith(NYC_IMAGE_ORIGIN)) continue; // official-host pin
+
+      const cameraId = `nyc-${rawId}`;
+      cameras.push({
+        id: cameraId,
+        name: String(row?.name || `NYC Camera ${rawId}`),
+        city: 'New York',
+        cityId: 'nyc',
+        provider: 'NYC DOT',
+        lat,
+        lon,
+        headingDeg: fallbackHeadingFromId(cameraId),
+        headingConfidence: 'low',
+        pitchDeg: -18,
+        fovDeg: 44,
+        rangeM: 145,
+        mountHeightM: 8,
+        groundElevationM: 10, // NYC harbor-plain prior; one-shot snap corrects.
+        feedType: 'image', // still-frame JPEG endpoint; refreshed per request
+        url: imageUrl,
+        snapshotUrl: imageUrl,
+        sourceKind: 'nyc-open-data',
+        license: 'NYC Open Data Terms of Use',
+      });
+    }
+
+    const maxRaw = Number(process.env.CCTV_NYC_MAX_SOURCES || DEFAULT_NYC_MAX_SOURCES);
+    const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(600, Math.floor(maxRaw))) : DEFAULT_NYC_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, NYC_ANCHORS);
+    console.log(`[CCTV] Loaded NYC DOT camera sources: ${cameras.length} online (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] NYC DOT camera download error:', error?.message || error);
+    return [];
+  }
+}
+
+/**
+ * Fetch Austrian landscape/weather webcams from the keyless foto-webcam.eu
+ * metadata feed. The feed spans the Alps; we keep only `country === "at"`,
+ * skipping offline/hidden cams and any whose frame URL is not on the official
+ * host (FOTOWEBCAM_IMAGE_ORIGIN pin). Unlike the traffic packs these carry a
+ * published `direction` (compass heading) and `sector` (horizontal FOV), so
+ * headingConfidence is 'medium' rather than an id-hash guess. Frames refresh
+ * ~every 30 min upstream. Distance-prioritized to CCTV_AT_MAX_SOURCES around
+ * Austria's metros + Alpine tourism belt. Licensed CC BY-NC 3.0 — attribution
+ * "© foto-webcam.eu" (registered in src/data/dataCredits.js).
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+async function loadAustriaSourcesFromFotoWebcam() {
+  try {
+    const resp = await fetch(FOTOWEBCAM_METADATA_URL, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS) });
+    if (!resp.ok) {
+      console.warn('[CCTV] foto-webcam.eu metadata download failed:', resp.status);
+      return [];
+    }
+    const payload = await resp.json();
+    const rows = Array.isArray(payload?.cams) ? payload.cams : [];
+    if (!rows.length) return [];
+
+    const cameras = [];
+    for (const row of rows) {
+      if (String(row?.country || '').toLowerCase() !== 'at') continue;
+      if (row?.offline === true || row?.hidden === true) continue;
+      const lat = toFiniteNumber(row?.latitude);
+      const lon = toFiniteNumber(row?.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      const rawId = String(row?.id || '').trim();
+      if (!rawId) continue;
+      // Use the feed's own current-frame URL verbatim (the ~400px variant): it
+      // is the only size guaranteed to exist for every cam — 800px 404s on some.
+      const frameUrl = String(row?.imgurl || '');
+      if (!frameUrl.startsWith(FOTOWEBCAM_IMAGE_ORIGIN)) continue; // official-host pin
+
+      const heading = toFiniteNumber(row?.direction);
+      const cameraId = `fotowebcam-at-${rawId}`;
+      const sector = toFiniteNumber(row?.sector);
+      const radiusKm = toFiniteNumber(row?.radius_km);
+
+      cameras.push({
+        id: cameraId,
+        name: String(row?.name || row?.title || `foto-webcam ${rawId}`),
+        city: 'Austria',
+        cityId: 'at',
+        provider: 'foto-webcam.eu',
+        lat,
+        lon,
+        headingDeg: Number.isFinite(heading) ? ((heading % 360) + 360) % 360 : fallbackHeadingFromId(cameraId),
+        headingConfidence: Number.isFinite(heading) ? 'medium' : 'low',
+        pitchDeg: -6, // panorama cams look near-level, not down at a road
+        fovDeg: Number.isFinite(sector) && sector >= 10 && sector <= 120 ? sector : 50,
+        rangeM: Number.isFinite(radiusKm) && radiusKm > 0 ? Math.round(radiusKm * 1000) : 4000,
+        mountHeightM: 12,
+        groundElevationM: toFiniteNumber(row?.elevation) || 0, // alpine cam altitude prior
+        feedType: 'image',
+        url: frameUrl,
+        snapshotUrl: frameUrl,
+        sourceKind: 'fotowebcam-open',
+        license: 'foto-webcam.eu — CC BY-NC 3.0',
+      });
+    }
+
+    const maxRaw = Number(process.env.CCTV_AT_MAX_SOURCES || DEFAULT_AT_MAX_SOURCES);
+    const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(600, Math.floor(maxRaw))) : DEFAULT_AT_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, AUSTRIA_ANCHORS);
+    console.log(`[CCTV] Loaded foto-webcam.eu Austria sources: ${cameras.length} online (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] foto-webcam.eu metadata download error:', error?.message || error);
+    return [];
+  }
+}
+
+/**
+ * Fetch Queensland (Australia) traffic cameras from the state's keyless
+ * OpenDataSoft mirror of the QLDTraffic webcam feed. Each record has a
+ * `geo_point_2d` {lat,lon}, a cardinal `direction`, and an `href` still-image
+ * URL on QLDTRAFFIC_IMAGE_ORIGIN (pinned). Skips records with no coords or a
+ * frame URL off-host. Cardinal direction → degrees via directionToHeading
+ * (allowBare — this is a dedicated facing field), so headingConfidence is
+ * 'medium'. Distance-prioritized to CCTV_AU_MAX_SOURCES around the Queensland
+ * population centres. Licensed CC BY 4.0 — attribution "© State of Queensland
+ * (QLDTraffic)" (registered in src/data/dataCredits.js).
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+async function loadAustraliaSourcesFromQldTraffic() {
+  try {
+    const resp = await fetch(QLDTRAFFIC_EXPORT_URL, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS) });
+    if (!resp.ok) {
+      console.warn('[CCTV] QLDTraffic (OpenDataSoft) download failed:', resp.status);
+      return [];
+    }
+    const rows = await resp.json();
+    if (!Array.isArray(rows) || !rows.length) return [];
+
+    const cameras = [];
+    for (const row of rows) {
+      const lat = toFiniteNumber(row?.geo_point_2d?.lat);
+      const lon = toFiniteNumber(row?.geo_point_2d?.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      const rawId = String(row?.id || '').trim();
+      if (!rawId) continue;
+      const frameUrl = String(row?.href || '');
+      if (!frameUrl.startsWith(QLDTRAFFIC_IMAGE_ORIGIN)) continue; // official-host pin
+
+      const heading = directionToHeading(row?.direction, true);
+      const cameraId = `qld-${rawId}`;
+      const town = String(row?.title || '').trim();
+
+      cameras.push({
+        id: cameraId,
+        name: String(row?.view || (town ? `${town} camera ${rawId}` : `QLD camera ${rawId}`)),
+        city: 'Australia',
+        cityId: 'au',
+        provider: 'QLDTraffic (TMR)',
+        lat,
+        lon,
+        headingDeg: Number.isFinite(heading) ? heading : fallbackHeadingFromId(cameraId),
+        headingConfidence: Number.isFinite(heading) ? 'medium' : 'low',
+        pitchDeg: -14,
+        fovDeg: 46,
+        rangeM: 150,
+        mountHeightM: 8,
+        groundElevationM: 0,
+        feedType: 'image',
+        url: frameUrl,
+        snapshotUrl: frameUrl,
+        sourceKind: 'qldtraffic-opendata',
+        license: 'QLDTraffic / State of Queensland — CC BY 4.0',
+      });
+    }
+
+    const maxRaw = Number(process.env.CCTV_AU_MAX_SOURCES || DEFAULT_AU_MAX_SOURCES);
+    const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(600, Math.floor(maxRaw))) : DEFAULT_AU_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, AUSTRALIA_ANCHORS);
+    console.log(`[CCTV] Loaded QLDTraffic (OpenDataSoft) sources: ${cameras.length} cameras (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] QLDTraffic (OpenDataSoft) download error:', error?.message || error);
+    return [];
+  }
+}
+
+/**
+ * Fetch Transport for NSW Live Traffic Cameras (Sydney + NSW). BYO key: this is
+ * a no-op returning [] unless NSW_TRANSPORT_API_KEY is set (free key from
+ * opendata.transport.nsw.gov.au). GeoJSON FeatureCollection — Point geometry
+ * ([lon,lat]), `direction` as a cardinal/intercardinal string (the feed writes
+ * intercardinals hyphenated, "N-W", so the hyphen is stripped before
+ * directionToHeading), and `href` a JPEG URL that must resolve to one of
+ * NSW_IMAGE_HOSTS (http is upgraded to https first). Distance-prioritized to
+ * CCTV_NSW_MAX_SOURCES around Sydney/Newcastle/Wollongong. Licensed CC BY 4.0 —
+ * attribution "© Transport for NSW" (registered in src/data/dataCredits.js).
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+async function loadNswSourcesFromTransport() {
+  const key = String(process.env.NSW_TRANSPORT_API_KEY || '').trim();
+  if (!key) return []; // BYO key — silently skip when unconfigured
+  try {
+    const resp = await fetch(NSW_CAMERAS_URL, {
+      headers: { Accept: 'application/json', Authorization: `apikey ${key}` },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn('[CCTV] Transport for NSW cameras download failed:', resp.status);
+      return [];
+    }
+    const fc = await resp.json();
+    const feats = Array.isArray(fc?.features) ? fc.features : [];
+    if (!feats.length) return [];
+
+    const cameras = [];
+    for (const f of feats) {
+      const coords = f?.geometry?.coordinates;
+      const lon = toFiniteNumber(Array.isArray(coords) ? coords[0] : NaN);
+      const lat = toFiniteNumber(Array.isArray(coords) ? coords[1] : NaN);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      const rawId = String(f?.id || '').trim();
+      if (!rawId) continue;
+      const p = f?.properties || {};
+      const href = String(p.href || '').trim().replace(/^http:\/\//i, 'https://');
+      let host = '';
+      try { host = new URL(href).host.toLowerCase(); } catch { continue; }
+      if (!NSW_IMAGE_HOSTS.includes(host)) continue; // official-host pin
+
+      const heading = directionToHeading(String(p.direction || '').replace(/[-\s]/g, ''), true);
+      const cameraId = `nsw-${rawId}`;
+      cameras.push({
+        id: cameraId,
+        name: String(p.title || p.view || `NSW camera ${rawId}`),
+        city: 'Australia',
+        cityId: 'au',
+        provider: 'Transport for NSW',
+        lat,
+        lon,
+        headingDeg: Number.isFinite(heading) ? heading : fallbackHeadingFromId(cameraId),
+        headingConfidence: Number.isFinite(heading) ? 'medium' : 'low',
+        pitchDeg: -14,
+        fovDeg: 46,
+        rangeM: 150,
+        mountHeightM: 8,
+        groundElevationM: 0,
+        feedType: 'image',
+        url: href,
+        snapshotUrl: href,
+        sourceKind: 'tfnsw-opendata',
+        license: 'Transport for NSW — CC BY 4.0',
+      });
+    }
+
+    const maxRaw = Number(process.env.CCTV_NSW_MAX_SOURCES || DEFAULT_NSW_MAX_SOURCES);
+    const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(600, Math.floor(maxRaw))) : DEFAULT_NSW_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, NSW_ANCHORS);
+    console.log(`[CCTV] Loaded Transport for NSW camera sources: ${cameras.length} cameras (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] Transport for NSW cameras download error:', error?.message || error);
+    return [];
+  }
+}
+
+/**
  * Normalize a raw CCTV source item into a canonical shape with safe defaults.
  *
  * @param {object} item - Raw source from file, env, or Austin Open Data.
@@ -4186,27 +4665,54 @@ async function refreshCctvSources() {
 
   const forceAustin = String(process.env.CCTV_FORCE_AUSTIN || '').trim() === '1';
   const preferAustin = String(process.env.CCTV_PREFER_AUSTIN || '1').trim() !== '0';
-  // Live open-data packs (Austin + Caltrans + TfL) load unless a file/env pack
-  // is configured and live packs aren't forced — same gate that governed the
-  // Austin-only fetch, now governing all three. Each pack fails independently.
+  // Live open-data packs (Austin + Caltrans + TfL + NYC + Austria/foto-webcam)
+  // load unless a file/env pack is configured and live packs aren't forced —
+  // same gate that governed the Austin-only fetch, now governing all five. Each
+  // pack fails independently.
   const needsLiveSources = forceAustin || ((fromFile.length + fromEnv.length) === 0 && preferAustin);
   const tflEnabled = String(process.env.CCTV_TFL_ENABLED || '1').trim() !== '0';
+  const nycEnabled = String(process.env.CCTV_NYC_ENABLED || '1').trim() !== '0';
+  const atEnabled = String(process.env.CCTV_AT_ENABLED || '1').trim() !== '0';
+  const auEnabled = String(process.env.CCTV_AU_ENABLED || '1').trim() !== '0';
+  const nswEnabled = String(process.env.CCTV_NSW_ENABLED || '1').trim() !== '0';
 
   let fromAustin = [];
   let fromCaltrans = [];
   let fromTfl = [];
+  let fromNyc = [];
+  let fromAustria = [];
+  let fromAustralia = [];
+  let fromNsw = [];
   if (needsLiveSources) {
-    const [austinResult, caltransResult, tflResult] = await Promise.allSettled([
+    const [austinResult, caltransResult, tflResult, nycResult, austriaResult, australiaResult, nswResult] = await Promise.allSettled([
       loadAustinSourcesFromOpenData(),
       loadCaltransSourcesFromOpenData(),
       tflEnabled ? loadTflSourcesFromOpenData() : Promise.resolve([]),
+      nycEnabled ? loadNycSourcesFromOpenData() : Promise.resolve([]),
+      atEnabled ? loadAustriaSourcesFromFotoWebcam() : Promise.resolve([]),
+      auEnabled ? loadAustraliaSourcesFromQldTraffic() : Promise.resolve([]),
+      nswEnabled ? loadNswSourcesFromTransport() : Promise.resolve([]),
     ]);
     fromAustin = austinResult.status === 'fulfilled' ? austinResult.value : [];
     fromCaltrans = caltransResult.status === 'fulfilled' ? caltransResult.value : [];
     fromTfl = tflResult.status === 'fulfilled' ? tflResult.value : [];
+    fromNyc = nycResult.status === 'fulfilled' ? nycResult.value : [];
+    fromAustria = austriaResult.status === 'fulfilled' ? austriaResult.value : [];
+    fromAustralia = australiaResult.status === 'fulfilled' ? australiaResult.value : [];
+    fromNsw = nswResult.status === 'fulfilled' ? nswResult.value : [];
   }
-  // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
-  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromFile, ...fromEnv];
+  // Round-robin interleave the live packs (each already self-prioritized to its
+  // own cap) so the global CCTV_MAX_SOURCES trim below thins every geography
+  // proportionally instead of wholesale-dropping whichever pack merges last.
+  const livePacks = [fromAustin, fromCaltrans, fromTfl, fromNyc, fromAustria, fromAustralia, fromNsw].filter((p) => p.length);
+  const interleaved = [];
+  for (let i = 0; livePacks.some((p) => i < p.length); i++) {
+    for (const pack of livePacks) {
+      if (i < pack.length) interleaved.push(pack[i]);
+    }
+  }
+  // File/env sources appended last so their ids win dedupe as deliberate overrides.
+  const merged = [...interleaved, ...fromFile, ...fromEnv];
 
   // Deduplicate by camera ID (last-write wins because of Map.set)
   const byId = new Map();
@@ -4219,7 +4725,7 @@ async function refreshCctvSources() {
 
   const mergedSources = Array.from(byId.values());
   const maxRaw = Number(process.env.CCTV_MAX_SOURCES || DEFAULT_CCTV_MAX_SOURCES);
-  const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(1200, Math.floor(maxRaw))) : DEFAULT_CCTV_MAX_SOURCES;
+  const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(2000, Math.floor(maxRaw))) : DEFAULT_CCTV_MAX_SOURCES;
   if (mergedSources.length > maxCount) {
     console.warn(`[CCTV] source catalog ${mergedSources.length} exceeds cap ${maxCount}; keeping the first ${maxCount} (raise CCTV_MAX_SOURCES or lower a per-pack cap to change which).`);
   }
@@ -4466,9 +4972,9 @@ function cctvProxy() {
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
   /** Cap on health map entries to prevent unbounded growth. Sized to cover the
-   * full served catalog (CCTV_MAX_SOURCES hard-bounds at 1200) so health/status
-   * observability isn't silently evicted for a default 800-camera catalog. */
-  const HEALTH_MAX_ENTRIES = 1200;
+   * full served catalog (CCTV_MAX_SOURCES hard-bounds at 2000) so health/status
+   * observability isn't silently evicted for a large multi-pack catalog. */
+  const HEALTH_MAX_ENTRIES = 2000;
 
   /** Update the health entry for a camera, evicting the oldest entry if at capacity. */
   const setHealth = (cameraId, patch) => {
@@ -5925,8 +6431,8 @@ const GEV_REALTIME_TOOLS = [
       properties: {
         stack: {
           type: 'string',
-          enum: ['photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'osm'],
-          description: 'photoreal = Google 3D. Use bing-aerial only when the user explicitly says "Bing aerial" — "satellite(s)" never means a basemap; only the explicit phrase "Esri" / "Esri imagery" means esri-imagery.',
+          enum: ['photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'osm', 'gibs-nrt'],
+          description: 'photoreal = Google 3D. gibs-nrt = NASA near-real-time satellite imagery basemap ("NASA imagery", "live earth imagery"). Use bing-aerial only when the user explicitly says "Bing aerial" — bare "satellite(s)" never means a basemap, it is the satellites data layer; only the explicit phrase "Esri" / "Esri imagery" means esri-imagery.',
         },
       },
       required: ['stack'],

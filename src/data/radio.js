@@ -164,6 +164,12 @@ let _updatedAt = null;
 let _acceptedCatalogSnapshot = EMPTY_ACCEPTED_CATALOG_SNAPSHOT;
 let _stations = [];
 let _stationById = new Map();
+// Favourite stations pinned by the user. The directory catalog (`_stationById`)
+// only holds stations near the current view, so this parallel map keeps
+// favourites resolvable — selectable and playable — from anywhere on the globe.
+// Frozen `freezeRadioStation` records; capped, drop-oldest.
+const _pinnedById = new Map();
+const RADIO_PINNED_LIMIT = 64;
 let _categories = [];
 let _renderById = new Map();
 let _filter = DEFAULT_RADIO_FILTER;
@@ -1133,7 +1139,8 @@ function markerPosition(station, liftM = MARKER_LIFT_M) {
 }
 
 function selectedStation() {
-  return _selectedId ? _stationById.get(_selectedId) || null : null;
+  if (!_selectedId) return null;
+  return _stationById.get(_selectedId) || _pinnedById.get(_selectedId) || null;
 }
 
 function selectedPresentationStation() {
@@ -1217,6 +1224,7 @@ export function getRadioUIState() {
     updatedAt: _updatedAt,
     filter: _filter,
     categories: _categories,
+    pinnedStationIds: Object.freeze([..._pinnedById.keys()]),
     acceptedCatalogGeneration: _acceptedCatalogSnapshot.generation,
     presentationActive: radioPresentationAllowed(),
     stationCount: _stations.length,
@@ -2252,6 +2260,50 @@ function focusStation(station) {
 }
 
 /** Select a station. Playback occurs only when autoplay is explicitly true. */
+/**
+ * Pin a station so it stays selectable/playable regardless of what the
+ * geolocated directory currently holds. Idempotent. The record must be a full
+ * directory-shaped station (see `freezeRadioStation`) — malformed input is
+ * rejected. Oldest pin is dropped once the cap is reached.
+ * @param {object} record Directory-shaped station.
+ * @returns {boolean} True if the station is now pinned.
+ */
+export function pinRadioStation(record) {
+  if (!isValidRadioDirectoryStation(record)) return false;
+  const frozen = freezeRadioStation(record);
+  _pinnedById.delete(frozen.id); // re-insert so it counts as most-recent
+  _pinnedById.set(frozen.id, frozen);
+  while (_pinnedById.size > RADIO_PINNED_LIMIT) {
+    const oldest = _pinnedById.keys().next().value;
+    if (oldest === _selectedId) break; // never evict what is playing
+    _pinnedById.delete(oldest);
+  }
+  emitState();
+  return true;
+}
+
+/**
+ * Remove a pinned station. Playback keeps running if it was the pinned station
+ * currently playing — only the pin is dropped.
+ * @param {string} id
+ * @returns {boolean} True if a pin was removed.
+ */
+export function unpinRadioStation(id) {
+  const removed = _pinnedById.delete(String(id));
+  if (removed) emitState();
+  return removed;
+}
+
+/** @param {string} id @returns {boolean} */
+export function isRadioStationPinned(id) {
+  return _pinnedById.has(String(id));
+}
+
+/** @returns {string[]} Pinned station ids, oldest-first. */
+export function getPinnedRadioStationIds() {
+  return [..._pinnedById.keys()];
+}
+
 export function selectRadioStation(id, {
   autoplay = false,
   focus = false,
@@ -2260,7 +2312,7 @@ export function selectRadioStation(id, {
   cameraNavigation = null,
 } = {}) {
   if (!radioPresentationAllowed()) return false;
-  const station = _stationById.get(String(id));
+  const station = _stationById.get(String(id)) || _pinnedById.get(String(id));
   if (!station) return false;
   _tuningUnavailableStationId = null;
   if (!radioCameraNavigationOwnsSelection(cameraNavigation, station)) {
@@ -2423,7 +2475,7 @@ function reconcileStations(stations) {
   if (_filter === DEFAULT_RADIO_FILTER && !filterRadioStations(stations, DEFAULT_RADIO_FILTER).length) {
     _filter = 'all';
   }
-  if (_selectedId && !_stationById.has(_selectedId)) {
+  if (_selectedId && !_stationById.has(_selectedId) && !_pinnedById.has(_selectedId)) {
     if (_audioStationId === _selectedId) stopRadioPlayback();
     _selectedId = null;
   }
@@ -2797,6 +2849,7 @@ export const radioLayer = {
     _stations = [];
     _acceptedCatalogSnapshot = EMPTY_ACCEPTED_CATALOG_SNAPSHOT;
     _stationById.clear();
+    _pinnedById.clear();
     _categories = Object.freeze([]);
     _filter = DEFAULT_RADIO_FILTER;
     _renderById.clear();
@@ -2861,6 +2914,10 @@ export const radioLayer = {
   cancelTuning: cancelRadioTuning,
   endTuning: endRadioTuning,
   setFilter: setRadioFilter,
+  pinStation: pinRadioStation,
+  unpinStation: unpinRadioStation,
+  isPinned: isRadioStationPinned,
+  getPinnedStationIds: getPinnedRadioStationIds,
   selectStation: selectRadioStation,
   selectRequestedStation: selectRequestedRadioStation,
   cycleStation: cycleRadioStation,

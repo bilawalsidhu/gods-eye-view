@@ -200,16 +200,17 @@ export function createCableOverlayPublisher({
 
 /**
  * `MAP_STACKS` ids that render imagery on the SHOWN Cesium globe (the ion
- * Bing stacks + OSM). Deliberately an explicit allowlist, not "anything that
- * is not photoreal": an id this module has never heard of is UNKNOWN, and
- * unknown must reach the documented BOTH fallback rather than being asserted
- * onto the terrain surface. A stack added to `MAP_STACKS` without being added
- * here therefore degrades to the safe pre-optimization behavior (visible on
- * every surface) instead of vanishing — and the per-stack unit test walks the
- * real `MAP_STACKS` so the omission is caught loudly.
+ * Bing stacks, OSM, and the NASA GIBS near-real-time imagery stack).
+ * Deliberately an explicit allowlist, not "anything that is not photoreal": an
+ * id this module has never heard of is UNKNOWN, and unknown must reach the
+ * documented BOTH fallback rather than being asserted onto the terrain surface.
+ * A stack added to `MAP_STACKS` without being added here therefore degrades to
+ * the safe pre-optimization behavior (visible on every surface) instead of
+ * vanishing — and the per-stack unit test walks the real `MAP_STACKS` so the
+ * omission is caught loudly.
  */
 const CABLE_GLOBE_STACK_IDS = Object.freeze(
-  new Set(['bing-aerial', 'bing-labels', 'esri-imagery', 'osm']),
+  new Set(['bing-aerial', 'bing-labels', 'esri-imagery', 'osm', 'gibs-nrt']),
 );
 
 /**

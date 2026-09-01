@@ -59,6 +59,7 @@ import {
   setOverlaySourceVisible,
 } from '../overlays/worldOverlay.js';
 import { CITY_POIS } from '../locations.js';
+import { PLACE_CAM_SEEDS } from './placeCamSeeds.js';
 import {
   registerPickOwner,
   resolvePickId,
@@ -259,6 +260,12 @@ const CAMERA_SEEDS = [
 // ---------------------------------------------------------------------------
 const IDLE_CAMERA_COLOR = Cesium.Color.fromCssColorString('#6be8ff').withAlpha(0.88);
 const ACTIVE_CAMERA_COLOR = Cesium.Color.fromCssColorString('#ffd97a').withAlpha(0.95);
+/** Idle tint for YouTube live "place cams" so they read apart from traffic cams. */
+const PLACE_CAM_COLOR = Cesium.Color.fromCssColorString('#ff8de0').withAlpha(0.92);
+/** @param {{feedType?: string}} camera @param {boolean} isActive */
+const cameraMarkerColor = (camera, isActive) => (
+  isActive ? ACTIVE_CAMERA_COLOR : (camera?.feedType === 'youtube' ? PLACE_CAM_COLOR : IDLE_CAMERA_COLOR)
+);
 const IDLE_COVERAGE_COLOR = Cesium.Color.fromCssColorString('#2fe0ff').withAlpha(0.24);
 const IDLE_COVERAGE_CENTER_MUTED = Cesium.Color.fromCssColorString('#2fe0ff').withAlpha(0.2);
 const IDLE_COVERAGE_EDGE_MUTED = Cesium.Color.fromCssColorString('#2fe0ff').withAlpha(0.18);
@@ -281,6 +288,9 @@ let _coverageEntities = [];
 let _projectionEntities = [];
 let _enabled = false;
 let _activeCameraId = null;
+/** When true, only true live-video feeds (place cams) are shown / cycled — the
+ *  refreshing-still traffic cameras are hidden. UI-owned view preference. */
+let _liveOnly = false;
 let _coverageMode = 'on'; // 'off' | 'on' (wireframes) | 'viewshed' (color-coded volumes)
 let _showProjection = true;
 let _autoHop = false;
@@ -574,6 +584,34 @@ function normalizeFeedType(value) {
  */
 function isVideoFeedType(feedType) {
   return feedType === 'mp4' || feedType === 'hls' || feedType === 'webm';
+}
+
+/**
+ * A "place cam": a curated public YouTube live stream (see placeCamSeeds.js).
+ * These render as markers but play only in the panel as an iframe — they carry
+ * no pose, no projected frame, no calibration, and no coverage volume.
+ * @param {{feedType?: string}} camera
+ * @returns {boolean}
+ */
+function isPlaceCam(camera) {
+  return camera?.feedType === 'youtube';
+}
+
+/**
+ * Records eligible for display / cycling under the current LIVE-ONLY filter.
+ * @returns {Object[]}
+ */
+function cctvVisibleRecords() {
+  if (!_liveOnly) return _records;
+  return _records
+    .filter((record) => isPlaceCam(record.camera))
+    .sort((a, b) => {
+      const ac = a.camera;
+      const bc = b.camera;
+      return (ac.country || '').localeCompare(bc.country || '')
+        || (ac.city || '').localeCompare(bc.city || '')
+        || (ac.name || '').localeCompare(bc.name || '');
+    });
 }
 
 /**
@@ -1033,6 +1071,16 @@ function currentViewContext() {
  * passed through ensureCameraPose to populate derived fields.
  * @returns {Object[]} Array of fully-initialized camera objects.
  */
+/** Test seam: the seeded catalog (traffic seeds + YouTube place cams). */
+export function _seedCatalogForTest() {
+  return seedCatalog();
+}
+
+/** Test seam: place-cam predicate. */
+export function _isPlaceCamForTest(camera) {
+  return isPlaceCam(camera);
+}
+
 function seedCatalog() {
   const catalog = [];
   for (const seed of CAMERA_SEEDS) {
@@ -1067,7 +1115,40 @@ function seedCatalog() {
     ensureCameraPose(camera);
     catalog.push(camera);
   }
+  catalog.push(...placeCamCatalogEntries());
   return catalog;
+}
+
+/**
+ * Curated YouTube live "place cams" as catalog entries — markers + panel video
+ * only. They carry no meaningful pose and are skipped by every
+ * frame/projection/calibration/coverage subsystem (see `isPlaceCam`). Appended
+ * to both the seed-only catalog and the backend-merged catalog.
+ * @returns {Object[]}
+ */
+function placeCamCatalogEntries() {
+  return PLACE_CAM_SEEDS.map((seed) => ({
+    id: seed.id,
+    name: seed.label,
+    cityId: null,
+    city: seed.city,
+    country: seed.country,
+    provider: 'YouTube Live',
+    sourceKind: 'placecam',
+    feedType: 'youtube',
+    feedConfigured: true,
+    headingConfidence: 'low',
+    lat: seed.lat,
+    lon: seed.lon,
+    headingDeg: 0,
+    fovDeg: 90,
+    rangeM: 300,
+    mountHeightM: 12,
+    groundElevationM: 0,
+    absoluteHeightM: 12,
+    pitchDeg: -10,
+    youtube: { videoIds: [...seed.videoIds], watchUrl: seed.watchUrl },
+  }));
 }
 
 /**
@@ -1173,6 +1254,10 @@ function buildCatalogFromSources(rawSources) {
     ensureCameraPose(camera);
     catalog.push(camera);
   }
+
+  // Curated YouTube place cams are seed-only (no backend source row), so append
+  // them here too — the backend merge above never reaches them.
+  catalog.push(...placeCamCatalogEntries());
 
   return catalog;
 }
@@ -1764,6 +1849,9 @@ function createProjectionRuntime(record) {
  */
 function ensureProjectionRuntime(record) {
   if (!record) return null;
+  // Place cams have no pose and no projectable frame — they play in the panel
+  // only. Skipping here also short-circuits their frame-refresh and coverage.
+  if (isPlaceCam(record.camera)) return null;
   if (record.projection) return record.projection;
   const runtime = createProjectionRuntime(record);
   record.projection = runtime;
@@ -1984,9 +2072,7 @@ function refreshCctvFocusStyles(nowMs) {
       Cesium.SceneTransforms.worldToWindowCoordinates(scene, position, _scratchFocusScreen)
     ),
     cameraDistanceFor: (position) => Cesium.Cartesian3.distance(camera.positionWC, position),
-    baseColorFor: (record) => (
-      record.camera.id === _activeCameraId ? ACTIVE_CAMERA_COLOR : IDLE_CAMERA_COLOR
-    ),
+    baseColorFor: (record) => cameraMarkerColor(record.camera, record.camera.id === _activeCameraId),
   });
   _activeFocusStyleCount = result.activeCount;
 }
@@ -2725,7 +2811,8 @@ function refreshHorizonCulling() {
   for (const record of _records) {
     const bb = record.billboard;
     if (!bb) continue;
-    const visible = occluder.isPointVisible(bb.position);
+    const visible = occluder.isPointVisible(bb.position)
+      && (!_liveOnly || isPlaceCam(record.camera));
     if (bb.show !== visible) bb.show = visible;
   }
 }
@@ -3230,7 +3317,7 @@ export function refreshCoverageStyles() {
   for (const record of _records) {
     const isActive = record.camera.id === activeId;
     if (record.billboard) {
-      record.billboard.color = isActive ? ACTIVE_CAMERA_COLOR : IDLE_CAMERA_COLOR;
+      record.billboard.color = cameraMarkerColor(record.camera, isActive);
       record.billboard.scale = isActive ? 1.25 : 1.0;
       // disableDepthTestDistance stays POSITIVE_INFINITY for every billboard
       // (set at creation) — see the field-test far-zoom submerge fix there.
@@ -3306,7 +3393,7 @@ function nearestCameraIdToViewer() {
   const lon = Cesium.Math.toDegrees(carto.longitude);
 
   let best = null;
-  for (const record of _records) {
+  for (const record of cctvVisibleRecords()) {
     const distKm = haversineKm(lat, lon, record.camera.lat, record.camera.lon);
     if (!best || distKm < best.distKm) {
       best = { id: record.camera.id, distKm };
@@ -3392,6 +3479,7 @@ function getPublicCameraState(record, activeId = null) {
     id: camera.id,
     name: camera.name,
     city: camera.city,
+    country: camera.country || '',
     provider: camera.provider,
     lat: camera.lat,
     lon: camera.lon,
@@ -3429,11 +3517,15 @@ function getPublicCameraState(record, activeId = null) {
     anchor: camera.anchor ? { ...camera.anchor } : null,
     // Panel-only trust signal (design §3b, amended by LOCKED §9.2/§9.3): no
     // in-world rendering reads this, no score-based quality math backs it.
-    calBadge: deriveCalBadge(camera),
+    calBadge: isPlaceCam(camera) ? 'n/a' : deriveCalBadge(camera),
     poseSource: camera.poseSource || null,
     basePose: camera.basePose ? { ...camera.basePose } : null,
-    frameUrl: frameUrlFor(camera, refreshMs),
-    mediaUrl: mediaUrlFor(camera),
+    frameUrl: isPlaceCam(camera) ? null : frameUrlFor(camera, refreshMs),
+    mediaUrl: isPlaceCam(camera) ? null : mediaUrlFor(camera),
+    // Curated YouTube live stream — the panel plays this in an iframe.
+    youtube: camera.youtube
+      ? { videoIds: [...(camera.youtube.videoIds || [])], watchUrl: camera.youtube.watchUrl || null }
+      : null,
   };
 }
 
@@ -3478,7 +3570,11 @@ function uiState() {
     },
     activeCameraId: activeId,
     activeCamera: active ? getPublicCameraState(active, activeId) : null,
-    cameras: _records.map((record) => getPublicCameraState(record, activeId)),
+    // Under LIVE ONLY the list is the place-cam subset; the panel select and
+    // PREV/NEXT follow it. `liveOnly` lets the panel reflect the toggle state.
+    liveOnly: _liveOnly,
+    liveFeedCount: _records.reduce((n, r) => n + (isPlaceCam(r.camera) ? 1 : 0), 0),
+    cameras: cctvVisibleRecords().map((record) => getPublicCameraState(record, activeId)),
     summary: buildSummaryText(),
   };
   return payload;
@@ -3802,6 +3898,8 @@ export function cctvEmptyClickDeselects(picked, {
  */
 function buildCoverageEntities(record) {
   const { camera } = record;
+  // Place cams carry no real frustum — no coverage wireframe or viewshed.
+  if (isPlaceCam(camera)) return [];
   // Prefer the record's already-refined geometry. Lazy creation commonly
   // happens after the staggered ground pass; recomputing from the catalog
   // prior here would regress the camera to its pre-sampled datum.
@@ -4201,6 +4299,8 @@ const cctvLayer = {
     );
 
     for (const camera of catalog) {
+      // Place cams have no pose and no calibration — panel video only.
+      if (isPlaceCam(camera)) continue;
       const savedEntry = _calibrationById.get(camera.id);
       if (savedEntry) {
         camera.calibration = normalizeCalibration(savedEntry.values);
@@ -4241,7 +4341,7 @@ const cctvLayer = {
         id: camera.id,
         image: CAMERA_ICON,
         position,
-        color: IDLE_CAMERA_COLOR,
+        color: cameraMarkerColor(camera, false),
         width: 24,
         height: 24,
         // Field-test fix (2026-07-06): always-on-top. The old finite value
@@ -4535,6 +4635,7 @@ const cctvLayer = {
     _viewer = null;
     _enabled = false;
     _activeCameraId = null;
+    _liveOnly = false;
     _autoHopSuspended = false;
     // Clear existing subscribers rather than replacing the Set —
     // replacing would silently orphan any unsubscribe() closures
@@ -4576,6 +4677,10 @@ const cctvLayer = {
     if (typeof params.autoHop === 'boolean') {
       _autoHop = params.autoHop;
       if (params.autoHop) _autoHopSuspended = false;
+    }
+    if (typeof params.liveOnly === 'boolean' && params.liveOnly !== _liveOnly) {
+      _liveOnly = params.liveOnly;
+      refreshHorizonCulling();
     }
     if (typeof params.autoHopSec === 'number' && Number.isFinite(params.autoHopSec)) {
       _autoHopSec = clamp(Math.round(params.autoHopSec), MIN_AUTO_HOP_SEC, MAX_AUTO_HOP_SEC);
@@ -4664,6 +4769,7 @@ const cctvLayer = {
       calibrationMode: _calibrationMode,
       autoHop: _autoHop,
       autoHopSec: _autoHopSec,
+      liveOnly: _liveOnly,
       selectedCameraId: active?.camera.id || null,
       calibration: active?.camera ? {
         cameraId: active.camera.id,
@@ -4789,14 +4895,12 @@ const cctvLayer = {
    * @returns {string|null} The newly active camera ID, or null if catalog is empty.
    */
   cycleCamera(step = 1, options = {}) {
-    if (!_records.length) return null;
+    const pool = cctvVisibleRecords();
+    if (!pool.length) return null;
     const current = getActiveRecord();
-    const nextIdx = cctvCycleIndex(
-      _records.findIndex((record) => record === current),
-      step,
-      _records.length,
-    );
-    const nextId = _records[nextIdx].camera.id;
+    const currentIdx = pool.findIndex((record) => record === current);
+    const nextIdx = cctvCycleIndex(currentIdx, step, pool.length);
+    const nextId = pool[nextIdx].camera.id;
     setActiveCamera(nextId);
     if (options.focus) {
       focusCamera(nextId, options.durationSec || 1.8);

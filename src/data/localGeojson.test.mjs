@@ -14,6 +14,7 @@ import {
   selectLocalInfrastructureOverlayCohort,
 } from './localGeojson.js';
 import { layerFeedState } from './manager.js';
+import { INFRA_LOD_ACTIVE_MIN } from './localGeojsonLod.js';
 import {
   installRenderGovernor,
   getRenderGovernorDiagnostics,
@@ -962,4 +963,217 @@ test('after the cap a camera-motion frame still samples, and re-opens the budget
     GROUND_SAMPLE_MAX_ARMED_RETRIES,
     'a grounded record asks for no further frames',
   );
+});
+
+// ── Globe-LOD: bound the active-stem set by camera height ────────────────────
+//
+// createLocalGeoJsonLayer used to give every feature a live stem and walk all
+// of them (geometry trig + Cesium property writes) on every camera move. With
+// three bundled-infra layers that is ~5,700 records on a full-earth view — the
+// frame-rate cliff that got the INFRASTRUCTURE first-run tile cut. The walk
+// now asks src/data/localGeojsonLod.js which records may carry a stem, sized to
+// the camera-height budget, and skips all per-frame cost for the rest.
+
+/**
+ * Harness with N in-view point features and a controllable camera height.
+ * Even-indexed features are named (high label priority), odd ones anonymous.
+ */
+async function createMultiFeatureLodHarness({ featureCount = 150, cameraHeightM = 9_000_000 } = {}) {
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  const preRender = new MockLayerEvent();
+  const moveEnd = new MockLayerEvent();
+  const dataSources = [];
+  const centerLon = -97.7;
+  const centerLat = 30.2;
+  // Polygons, not Points: Cesium's GeoJsonDataSource builds a PinBuilder
+  // billboard for a Point, which needs a DOM canvas the node test env lacks.
+  // The layer takes the polygon's bounding-sphere centre as the stem anchor.
+  const lines = Array.from({ length: featureCount }, (_, i) => {
+    const lon = centerLon + (i % 12) * 0.02;
+    const lat = centerLat + Math.floor(i / 12) * 0.02;
+    return JSON.stringify({
+      type: 'Feature',
+      id: `dc-${i}`,
+      properties: i % 2 === 0
+        ? { name: `Datacenter ${i}`, tags: { name: `Datacenter ${i}`, operator: 'Example Cloud' } }
+        : { tags: {} },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[
+          [lon, lat],
+          [lon + 0.004, lat],
+          [lon + 0.004, lat + 0.004],
+          [lon, lat],
+        ]],
+      },
+    });
+  });
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => lines.join('\n') });
+  globalThis.window = { dispatchEvent() {} };
+
+  const setPos = (m) => {
+    const p = Cesium.Cartesian3.fromDegrees(centerLon, centerLat, m);
+    viewer.camera.positionWC = p;
+    viewer.camera.positionCartographic = Cesium.Cartographic.fromCartesian(p);
+  };
+  const viewer = {
+    selectedEntity: undefined,
+    dataSources: {
+      add(ds) { dataSources.push(ds); return ds; },
+      remove(ds) {
+        const i = dataSources.indexOf(ds);
+        if (i >= 0) dataSources.splice(i, 1);
+        return i >= 0;
+      },
+    },
+    camera: {
+      positionWC: null,
+      positionCartographic: null,
+      frustum: { fov: Math.PI / 3 },
+      moveEnd,
+      flyTo() {},
+    },
+    scene: {
+      canvas: { clientWidth: 1440, clientHeight: 900 },
+      preRender,
+      sampleHeightSupported: false,
+      screenSpaceCameraController: { enableInputs: true },
+      pick() { return null; },
+      requestRender() {},
+    },
+  };
+  setPos(cameraHeightM);
+  const layer = createLocalGeoJsonLayer({
+    id: 'local-datacenters',
+    url: '/lod-fixture.geojsonl',
+    name: 'LOD Datacenters',
+    color: '#00ffff',
+    overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
+    projectToWindow: () => ({ x: 700, y: 450 }),
+    screenSpaceEventHandlerFactory: () => ({ setInputAction() {}, destroy() {} }),
+  });
+  try {
+    await layer.enable(viewer);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  return {
+    layer,
+    viewer,
+    dataSources,
+    preRender,
+    moveEnd,
+    setCameraHeight: setPos,
+    shownCount() {
+      return dataSources[0].entities.values.filter((entity) => entity.show === true).length;
+    },
+    cleanup() {
+      if (originalWindow === undefined) delete globalThis.window;
+      else globalThis.window = originalWindow;
+    },
+  };
+}
+
+test('globe-LOD caps live stems at the camera-height budget and widens as you zoom in', async (t) => {
+  const env = await createMultiFeatureLodHarness({ featureCount: 150, cameraHeightM: 9_000_000 });
+  const clock = installFakeClock(t);
+  t.after(() => {
+    env.layer.destroy(env.viewer);
+    env.cleanup();
+  });
+
+  // Full-earth framing: 150 in-view features, but the global band allows 80.
+  env.preRender.raise();
+  assert.equal(env.dataSources[0].entities.values.length, 150, 'all features are materialized');
+  assert.equal(env.shownCount(), INFRA_LOD_ACTIVE_MIN, 'only the global-band budget carries a stem');
+
+  // Named features (label priority ~1240) outrank anonymous nodes (~60), so
+  // every one of the 75 named features keeps a stem; the 5 remaining budget
+  // slots go to unnamed ones.
+  const shownIds = new Set(
+    env.dataSources[0].entities.values.filter((entity) => entity.show === true).map((entity) => entity.id),
+  );
+  const namedIds = Array.from({ length: 150 }, (_, i) => i).filter((i) => i % 2 === 0).map((i) => `dc-${i}`);
+  assert.ok(namedIds.every((id) => shownIds.has(id)), 'every named feature wins a stem before any unnamed one');
+
+  // Zoom to continental framing: the budget opens to MID (200), so all 150
+  // in-view features now get a stem.
+  env.setCameraHeight(1_000_000);
+  env.moveEnd.raise();
+  clock.advance(500); // clear the 450 ms visibility gate
+  env.preRender.raise();
+  assert.equal(env.shownCount(), 150, 'a closer camera lifts the cap above the in-view count');
+});
+
+test('globe-LOD selection is stable between camera moves (no per-frame churn)', async (t) => {
+  const env = await createMultiFeatureLodHarness({ featureCount: 150, cameraHeightM: 9_000_000 });
+  const clock = installFakeClock(t);
+  t.after(() => {
+    env.layer.destroy(env.viewer);
+    env.cleanup();
+  });
+
+  env.preRender.raise();
+  const firstSet = env.dataSources[0].entities.values
+    .filter((entity) => entity.show === true)
+    .map((entity) => entity.id)
+    .sort();
+  assert.equal(firstSet.length, INFRA_LOD_ACTIVE_MIN);
+
+  // A second walk with no intervening moveEnd must not re-select.
+  clock.advance(500);
+  env.preRender.raise();
+  const secondSet = env.dataSources[0].entities.values
+    .filter((entity) => entity.show === true)
+    .map((entity) => entity.id)
+    .sort();
+  assert.deepEqual(secondSet, firstSet, 'the active set only changes on camera moves');
+});
+
+test('getLodDiagnostics reports the active/total split and the band budget', async (t) => {
+  const env = await createMultiFeatureLodHarness({ featureCount: 150, cameraHeightM: 9_000_000 });
+  const clock = installFakeClock(t);
+  t.after(() => {
+    env.layer.destroy(env.viewer);
+    env.cleanup();
+  });
+
+  assert.deepEqual(env.layer.getLodDiagnostics(), {
+    total: 150, active: 0, budgetLimit: 0, computed: false,
+  }, 'before the first walk: materialized but not yet selected');
+
+  env.preRender.raise();
+  const global = env.layer.getLodDiagnostics();
+  assert.equal(global.total, 150);
+  assert.equal(global.active, INFRA_LOD_ACTIVE_MIN);
+  assert.equal(global.budgetLimit, INFRA_LOD_ACTIVE_MIN);
+  assert.equal(global.computed, true);
+  assert.ok(global.active < global.total, 'active < total means the declutter is engaged');
+
+  env.setCameraHeight(60_000);
+  env.moveEnd.raise();
+  clock.advance(500);
+  env.preRender.raise();
+  const regional = env.layer.getLodDiagnostics();
+  assert.equal(regional.active, 150, 'regional band lifts the cap above the in-view count');
+  assert.ok(regional.budgetLimit >= 150, `regional budget widened (${regional.budgetLimit})`);
+});
+
+test('globe-LOD releases every stem when the layer is disabled', async (t) => {
+  const env = await createMultiFeatureLodHarness({ featureCount: 40, cameraHeightM: 9_000_000 });
+  t.after(() => {
+    env.layer.destroy(env.viewer);
+    env.cleanup();
+  });
+
+  env.preRender.raise();
+  assert.equal(env.shownCount(), 40, 'under-budget: all 40 show');
+
+  env.layer.disable(env.viewer);
+  // The data source is hidden wholesale on disable; re-enabling starts from a
+  // fresh (empty) LOD selection rather than inheriting the old active set.
+  await env.layer.enable(env.viewer);
+  env.preRender.raise();
+  assert.equal(env.shownCount(), 40, 're-enable rebuilds the selection cleanly');
 });
