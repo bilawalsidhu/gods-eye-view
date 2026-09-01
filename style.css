@@ -1562,6 +1562,7 @@ body.ui-clean-view #clean-view-exit {
 body.ui-clean-view #title-bar,
 body.ui-clean-view #style-indicator,
 body.ui-clean-view #top-center-actions,
+body.ui-clean-view #demon-forge-open,
 body.ui-clean-view #global-loading-status,
 body.ui-clean-view #traffic-sync-chip,
 body.ui-clean-view #cctv-sync-chip,
@@ -3992,7 +3993,7 @@ body.cockpit-mode #view-switcher button {
 }
 .cockpit-help span { color: var(--cockpit-accent); }
 body.cockpit-mode :is(
-  #title-bar, #style-indicator, #top-center-actions, #traffic-sync-chip, #cctv-sync-chip,
+  #title-bar, #style-indicator, #top-center-actions, #demon-forge-open, #traffic-sync-chip, #cctv-sync-chip,
   #command-dock,
   #military-awareness-panel, #military-awareness-direction-overlay,
   #cockpit-entry
@@ -6883,6 +6884,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 body.recording-mode #title-bar,
 body.recording-mode #style-indicator,
 body.recording-mode #top-center-actions,
+body.recording-mode #demon-forge-open,
 body.recording-mode #global-loading-status,
 body.recording-mode #traffic-sync-chip,
 body.recording-mode #cctv-sync-chip,

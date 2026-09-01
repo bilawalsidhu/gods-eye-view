@@ -213,6 +213,15 @@ test('Demon Forge opener is outside the Globe actions navigation landmark', asyn
   assert.match(html, /<\/nav>\s*<button id="demon-forge-open"/u);
 });
 
+test('Demon Forge opener is hidden by clean-view, cockpit, and recording modes', async () => {
+  const css = await readFile(new URL('../../style.css', import.meta.url), 'utf8');
+  assert.match(css, /body\.ui-clean-view #demon-forge-open,/u);
+  assert.match(css, /body\.recording-mode #demon-forge-open,/u);
+  const cockpitHide = css.match(/body\.cockpit-mode :is\([\s\S]*?\) \{ display: none !important; \}/u)?.[0];
+  assert.ok(cockpitHide);
+  assert.match(cockpitHide, /#demon-forge-open/u);
+});
+
 test('official route requires durable audit before navigation', async () => {
   let openCalls = 0;
   const document = fakeDocument({ open: () => { openCalls += 1; return {}; } });
@@ -227,33 +236,33 @@ test('official route requires durable audit before navigation', async () => {
   assert.match(document.element('demon-forge-status').textContent, /audit record was not saved/i);
 });
 
-test('blocked popup is audited without a false MANUAL_ROUTE_OPENED claim', async () => {
-  let openCalls = 0;
-  const document = fakeDocument({ open: () => { openCalls += 1; return null; } });
-  const vault = fakeVault();
-  await prepareApprovedDraft(document, vault);
-  vault.timeline = [];
-  await document.element('demon-forge-official-route').dispatchAsync('click');
+test('noopener handoff return value never claims an actual open or block outcome', async () => {
+  for (const returnValue of [null, {}]) {
+    const vault = fakeVault();
+    const document = fakeDocument({ open: () => { vault.timeline.push('handoff'); return returnValue; } });
+    await prepareApprovedDraft(document, vault);
+    vault.timeline = [];
+    await document.element('demon-forge-official-route').dispatchAsync('click');
 
-  assert.equal(openCalls, 1);
-  assert.deepEqual(vault.timeline, ['save', 'save']);
-  const eventTypes = vault.saves.at(-1).ledger.map((event) => event.type);
-  assert.deepEqual(eventTypes, ['MANUAL_ROUTE_ATTEMPTED', 'MANUAL_ROUTE_BLOCKED']);
-  assert.doesNotMatch(eventTypes.join(','), /MANUAL_ROUTE_OPENED/);
-  assert.match(document.element('demon-forge-status').textContent, /blocked by the browser/i);
+    assert.deepEqual(vault.timeline, ['save', 'handoff', 'save']);
+    const eventTypes = vault.saves.at(-1).ledger.map((event) => event.type);
+    assert.deepEqual(eventTypes, ['MANUAL_ROUTE_ATTEMPTED', 'MANUAL_ROUTE_HANDOFF_TRIGGERED']);
+    assert.doesNotMatch(eventTypes.join(','), /OPENED|BLOCKED/u);
+    assert.match(document.element('demon-forge-status').textContent, /whether the official route opened is unknown/i);
+  }
 });
 
-test('successful popup is recorded only after the durable pre-navigation event', async () => {
+test('a thrown browser handoff is recorded as failed without claiming an open', async () => {
   const vault = fakeVault();
-  const document = fakeDocument({ open: () => { vault.timeline.push('open'); return {}; } });
+  const document = fakeDocument({ open: () => { throw new Error('browser denied call'); } });
   await prepareApprovedDraft(document, vault);
   vault.timeline = [];
   await document.element('demon-forge-official-route').dispatchAsync('click');
 
-  assert.deepEqual(vault.timeline, ['save', 'open', 'save']);
   assert.deepEqual(vault.saves.at(-1).ledger.map((event) => event.type), [
-    'MANUAL_ROUTE_ATTEMPTED', 'MANUAL_ROUTE_OPENED',
+    'MANUAL_ROUTE_ATTEMPTED', 'MANUAL_ROUTE_HANDOFF_FAILED',
   ]);
+  assert.match(document.element('demon-forge-status').textContent, /handoff failed/i);
 });
 
 test('Escape close stays local with poisoned fetch and globe globals', () => {

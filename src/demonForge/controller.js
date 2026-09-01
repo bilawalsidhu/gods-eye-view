@@ -354,20 +354,20 @@ export function initDemonForge({ document, vault, now = Date.now }) {
       ledger = ledgerBeforeAttempt;
       renderLedger();
       routeButton.disabled = false;
-      setStatus(`Official route blocked: audit record was not saved (${error?.message || 'storage error'}).`);
+      setStatus(`Official route handoff not attempted: audit record was not saved (${error?.message || 'storage error'}).`);
       return;
     }
 
-    let popup = null;
+    let handoffTriggered = true;
     try {
-      popup = window.open(route, '_blank', 'noopener,noreferrer');
+      window.open(route, '_blank', 'noopener,noreferrer');
     } catch {
-      popup = null;
+      handoffTriggered = false;
     }
 
     const ledgerBeforeDecision = ledger;
     ledger = appendLedgerEvent(ledger, {
-      type: popup ? 'MANUAL_ROUTE_OPENED' : 'MANUAL_ROUTE_BLOCKED',
+      type: handoffTriggered ? 'MANUAL_ROUTE_HANDOFF_TRIGGERED' : 'MANUAL_ROUTE_HANDOFF_FAILED',
       actor,
       payload: { route },
     }, now());
@@ -375,9 +375,9 @@ export function initDemonForge({ document, vault, now = Date.now }) {
       await saveLocalCase({ required: true });
       if (routeGeneration !== sessionGeneration || !unlocked || destroyed) return;
       renderLedger();
-      setStatus(popup
-        ? 'Official route opened manually; local ledger updated. Nothing was sent.'
-        : 'Official route was blocked by the browser; no request was opened or sent.');
+      setStatus(handoffTriggered
+        ? 'Browser handoff triggered; whether the official route opened is unknown. Nothing was sent.'
+        : 'Browser handoff failed before an official route could be requested. Nothing was sent.');
     } catch (error) {
       if (routeGeneration !== sessionGeneration || !unlocked || destroyed) return;
       ledger = ledgerBeforeDecision;

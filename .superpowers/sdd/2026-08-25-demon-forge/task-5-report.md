@@ -64,3 +64,13 @@ Subject: `feat: add Demon Forge local workspace`
 - Per task instruction, no test or build command was run for these review fixes.
 
 Round 1 fix commit subject: `fix: harden Demon Forge local workspace`
+
+## Round 2 review fixes
+
+- Removed all success/blocked interpretation of the `window.open` return value. With `noopener,noreferrer`, both null and non-null returns now produce the same honest `MANUAL_ROUTE_HANDOFF_TRIGGERED` event after the durable `MANUAL_ROUTE_ATTEMPTED` pre-navigation event.
+- The UI now states that the browser handoff was triggered while whether the official route actually opened remains unknown. Only a thrown `window.open` call records `MANUAL_ROUTE_HANDOFF_FAILED`; no path records or displays a claim that the route opened or was popup-blocked.
+- Added `#demon-forge-open` to the clean-view, cockpit, and recording-mode hiding selectors so this standalone launcher follows the same exclusive-surface chrome policy as the former Globe actions location.
+- Updated tests to pin identical null/non-null handoff semantics, thrown-call failure semantics, absence of `OPENED`/`BLOCKED` claims, and static coverage for all three exclusive-mode selectors.
+- Per task instruction, no test or build command was run for these review fixes.
+
+Round 2 fix commit subject: `fix: make Demon Forge handoff outcome honest`
