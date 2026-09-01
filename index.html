@@ -37,6 +37,9 @@
 
   <!-- Top-center camera and share actions -->
   <nav id="top-center-actions" aria-label="Globe actions">
+    <button id="demon-forge-open" type="button" aria-controls="demon-forge-dialog" aria-expanded="false" title="Open the local Demon Forge workspace">
+      DEMON FORGE
+    </button>
     <button id="clear-selected-layers" type="button" aria-label="Clear selected data layers" title="Turn off all selected data layers">
       <span class="material-symbols-outlined" aria-hidden="true">layers_clear</span>
     </button>
@@ -828,6 +831,72 @@
   </aside>
 
   <div id="scene-runtime"></div>
+
+  <aside id="demon-forge-dialog" class="demon-forge-dialog" role="dialog" aria-modal="true" aria-labelledby="demon-forge-title" aria-describedby="demon-forge-description" hidden>
+    <header class="demon-forge-header">
+      <div>
+        <span class="demon-forge-kicker">ISOLATED LOCAL WORKSPACE</span>
+        <h2 id="demon-forge-title">DEMON FORGE</h2>
+      </div>
+      <button id="demon-forge-close" type="button" aria-label="Close and lock Demon Forge">CLOSE</button>
+    </header>
+    <p id="demon-forge-description">Local case workspace. No search or request is sent automatically.</p>
+    <p id="demon-forge-status" class="demon-forge-status" role="status" aria-live="polite">Workspace locked.</p>
+
+    <div class="demon-forge-sections">
+      <section aria-labelledby="demon-forge-authorization-title">
+        <h3 id="demon-forge-authorization-title">1 · AUTHORIZATION</h3>
+        <form id="demon-forge-unlock-form">
+          <label>Local case ID <input id="demon-forge-case-id" name="caseId" required autocomplete="off" /></label>
+          <label>Vault passphrase <input id="demon-forge-passphrase" name="passphrase" type="password" required autocomplete="current-password" /></label>
+          <button type="submit">UNLOCK LOCAL VAULT</button>
+          <button id="demon-forge-lock" type="button">LOCK &amp; CLEAR</button>
+        </form>
+      </section>
+
+      <section aria-labelledby="demon-forge-import-title">
+        <h3 id="demon-forge-import-title">2 · IMPORT</h3>
+        <label>Local Social Analyzer JSON
+          <input id="demon-forge-import-file" type="file" accept="application/json" />
+        </label>
+        <p id="demon-forge-import-status" class="demon-forge-inline-status" aria-live="polite"></p>
+      </section>
+
+      <section aria-labelledby="demon-forge-review-title">
+        <h3 id="demon-forge-review-title">3 · REVIEW</h3>
+        <ul id="demon-forge-review-list" class="demon-forge-review-list"></ul>
+      </section>
+
+      <section aria-labelledby="demon-forge-draft-title">
+        <h3 id="demon-forge-draft-title">4 · DRAFT</h3>
+        <form id="demon-forge-draft-form">
+          <label>Action
+            <select name="action">
+              <option value="erasure">Erasure</option>
+              <option value="correction">Correction</option>
+              <option value="objection">Objection</option>
+              <option value="account_closure">Account closure</option>
+              <option value="deindexing">Deindexing</option>
+            </select>
+          </label>
+          <label>Controller name <input name="controllerName" required /></label>
+          <label>Official HTTPS route <input name="contactRoute" type="url" inputmode="url" required /></label>
+          <button type="submit">CREATE LOCAL DRAFT</button>
+        </form>
+        <pre id="demon-forge-draft-output" class="demon-forge-personal-text"></pre>
+        <div class="demon-forge-approval-row">
+          <label>Approver <input id="demon-forge-approval-actor" autocomplete="off" /></label>
+          <button id="demon-forge-approve" type="button" disabled>APPROVE DRAFT</button>
+          <button id="demon-forge-official-route" type="button" disabled>OPEN OFFICIAL ROUTE</button>
+        </div>
+      </section>
+
+      <section aria-labelledby="demon-forge-ledger-title">
+        <h3 id="demon-forge-ledger-title">5 · LEDGER</h3>
+        <ol id="demon-forge-ledger-output" class="demon-forge-ledger-output"></ol>
+      </section>
+    </div>
+  </aside>
 
   <!-- Explicit mission choice on a fresh session. Live feeds are not auto-enabled
        until the visitor asks; shared links skip this surface entirely. It returns

@@ -32,6 +32,8 @@ import {
 } from './renderGovernor.js';
 import { installScopeMask } from './scopeMask.js';
 import { initFirstRunExperience } from './firstRunExperience.js';
+import { initDemonForge } from './demonForge/controller.js';
+import { createDemonForgeVault } from './demonForge/vault.js';
 
 initLogoGaze();
 
@@ -192,6 +194,11 @@ async function init() {
 
     // Initialize the style manager (post-processing, HUD, locations, share links)
     const styleManager = new StyleManager(viewer, { mapStackController });
+    initDemonForge({
+      document,
+      vault: createDemonForgeVault(),
+      now: Date.now,
+    });
     // The previous multi-canvas weather compositor remains disabled. Cockpit
     // clouds use a separate, capped low-resolution GPU pass that never attaches
     // Cesium fog or post-process stages and is fully stopped in map mode.
