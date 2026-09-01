@@ -7,7 +7,7 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Added
 
-- Documented Demon Forge privacy boundaries: optional local-first operation, external-only Social Analyzer report import, signed mandate requirements, human confirmation, encrypted evidence, manual-only sending via official handoff, France/EU-first policy pack, and the non-legal-advice boundary.
+- Hardened Demon Forge's optional local-first boundary with opaque generated case/candidate IDs, authenticated existing-case updates, explicit signed-mandate source/action scope, strict pre-read report limits, and encrypted append-only ledger persistence. There is no automatic request submission; because no verified source directory ships yet, browser handoff is disabled and contact routes remain unverified drafting references. The France/EU-first text remains not legal advice.
 - Added honest aircraft identity narration: callsign, operator, registration,
   type, and route come only from selected-contact context, and missing operator,
   route, or type enrichment is named explicitly.

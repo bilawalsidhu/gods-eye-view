@@ -1,8 +1,8 @@
 # God's Eye View Current State
 
-Updated: August 24, 2026
+Updated: September 1, 2026
 
-> **Demon Forge boundary note:** the workspace is optional and local-first, imports only a user-selected Social Analyzer report that was generated outside the app, requires a signed mandate for non-self cases, keeps evidence encrypted, demands human confirmation before any request draft progresses, and has no automatic request submission; sending stays manual-only through an official handoff. The first policy pack is France/EU-first, and the request text is not legal advice.
+> **Demon Forge boundary note:** the workspace is optional and local-first, imports only a user-selected Social Analyzer report that was generated outside the app, requires a signed mandate with explicit source categories and permitted actions for non-self cases, keeps evidence and workflow encrypted behind existing-case passphrase authentication, and persists workflow changes in an append-only ledger. Human confirmation is required before any request draft progresses, and there is no automatic request submission. No verified source directory ships in the current build, so browser handoff is disabled and the HTTPS contact field is only an unverified drafting reference. The first policy pack is France/EU-first, and the request text is not legal advice.
 
 > **2026-08-23 — first-run mission launcher** (`src/firstRunExperience.js`,
 > `#first-run-launcher`, styles at the tail of `style.css`). After startup
