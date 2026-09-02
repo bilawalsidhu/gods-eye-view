@@ -67,6 +67,7 @@ import {
   validateKeySetupUpdates,
 } from './src/keySetupCore.mjs';
 import { hardenCredentialFile } from './src/keySetupHardening.mjs';
+import { geminiEntityBriefProxy } from './scripts/gemini-entity-brief-proxy.mjs';
 import {
   fetchTerrainChunkWithRetry,
   parseTerrainPoints,
@@ -7695,6 +7696,7 @@ export default defineConfig(({ mode }) => {
       aisLiveProxy(),
       trackBackfillProxies(),
       openAiRealtimeProxy(),
+      geminiEntityBriefProxy(),
       googlePlacesContextProxy(),
       keySetupEndpoint(),
     ],

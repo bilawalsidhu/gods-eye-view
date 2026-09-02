@@ -2573,18 +2573,17 @@ export function mapAnalystRecord(icao24, info) {
     id: callsign || text(info?.registration) || icao24,
     icao24,
     callsign,
+    registration: text(info?.registration),
     lat: num(info?.rawLat),
     lon: num(info?.rawLon),
-    // altitudeFt is the sticky barometric/MSL aviation field — converted to
-    // meters here for shape parity with the flights layer.
     altitudeM: Number.isFinite(info?.altitudeFt) ? info.altitudeFt * 0.3048 : null,
+    altitudeFt: num(info?.altitudeFt),
     speedMps: num(info?.speedMps),
     heading: num(info?.track),
     verticalRateMps: num(info?.verticalRateMps),
     onGround: info?.onGround === true,
     military: true,
-    // A converted contact reports the class it RENDERS as (mirror of
-    // flights.js), so an analyst filter/superlative agrees with the triangle.
+    type: text(info?.type) || text(info?.klass),
     aircraftClass: tr3bAircraftClass(icao24, text(info?.klass)),
     originCountry: null,
     operator: text(info?.operator),
