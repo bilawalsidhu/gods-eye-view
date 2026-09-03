@@ -17,6 +17,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Existing cached refusals are now ignored immediately, including during
   stale-data fallback. Concurrent identical requests share the same last-good
   fallback when all mirrors refuse, without duplicating upstream requests.
+### Added
+
+- Added regression coverage for the destination preset table: every landmark
+  must lie inside its own destination's `viewBounds`, bounds must not be
+  inverted, coordinates must be on Earth, camera angles must point downward, and
+  `LOCATIONS` must stay derived from `CITY_POIS`.
 
 ## [0.1.1] — 2026-09-01 — Installation and live-data fixes
 
