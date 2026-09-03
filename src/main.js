@@ -32,6 +32,7 @@ import {
 } from './renderGovernor.js';
 import { installScopeMask } from './scopeMask.js';
 import { initFirstRunExperience } from './firstRunExperience.js';
+import { healthNoticeCopy, startLoadingHealthCheck } from './loadingHealth.js';
 
 initLogoGaze();
 
@@ -69,6 +70,16 @@ function describeError(error) {
 async function init() {
   const loadingScreen = document.getElementById('loading-screen');
   const loaderStatus = loadingScreen.querySelector('.loader-status');
+  // Probe every upstream API while the viewer boots. The cover waits for the
+  // roster (bounded by LOADING_HEALTH_TIMEOUT_MS) so a dead feed or a
+  // rejected key is visible before the globe is.
+  const apiHealth = startLoadingHealthCheck({
+    listEl: document.getElementById('loader-health'),
+    summaryEl: document.getElementById('loader-health-summary'),
+    continueEl: document.getElementById('loader-health-continue'),
+  });
+  let apiHealthReport = null;
+  void apiHealth.done.then((report) => { apiHealthReport = report; });
 
   try {
     loaderStatus.textContent = 'Configuring viewer...';
@@ -252,6 +263,7 @@ async function init() {
     // visual/map/panel lanes, and every requested layer have terminated.
     void Promise.all([
       styleManager.initialRestorePromise,
+      apiHealth.done,
       new Promise((resolve) => setTimeout(resolve, 1000)),
     ]).finally(() => {
       loadingScreen.classList.add('hidden');
@@ -265,6 +277,10 @@ async function init() {
         // keyless layers through it, and reaching for styleManager._dataManager
         // would make a private field part of this feature's contract.
         initFirstRunExperience({ styleManager, dataManager });
+        // Anything the cover flagged gets one more surface once the globe is
+        // up, so a fast boot cannot hide a dead feed.
+        const notice = healthNoticeCopy(apiHealthReport?.results, apiHealthReport || {});
+        if (notice) styleManager.notifyStatus(notice.label, { detail: notice.detail, state: notice.state });
       };
       loadingScreen.addEventListener('transitionend', revealFirstRun, { once: true });
       setTimeout(revealFirstRun, 900);

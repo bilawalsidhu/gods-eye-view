@@ -77,6 +77,10 @@ The dev server binds to **localhost** — your keys stay on your machine. Sharin
 
 **macOS shortcut:** `./scripts/dev-fresh.sh` clears the Vite cache and pulls your keys straight from the Keychain.
 
+**macOS app icon:** `npm run app:mac -- --install` builds `God's Eye View.app` into `~/Applications` (drag it to the Dock). Double-click it and it starts the dev server through `dev-fresh.sh`, waits for the port, and opens the console in a chromeless Chrome window; if the server is already running it just opens the window. The bundle bakes in this checkout's path, so rebuild after moving the repo.
+
+**Startup health check:** the loading screen probes every upstream API (Google tile host, Cesium ion, OpenAI, OpenSky, AISStream, CelesTrak, USGS, FIRMS, TomTom, OSM, Open-Meteo, CCTV catalogs, and more) and shows each as LIVE / NO KEY / KEY REJECTED / DOWN before the globe appears. No billable Google call is made. The same report is available at `GET /api/health` (NDJSON stream, or `?format=json`) and from the terminal with `npm run health`.
+
 ---
 
 ## 🕐 The First Five Minutes

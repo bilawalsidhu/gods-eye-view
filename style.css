@@ -874,6 +874,111 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   50% { opacity: 1; }
 }
 
+/* Startup API health roster (see src/loadingHealth.js) */
+.loader-health-summary {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  margin-top: 18px;
+  color: var(--text-dim);
+}
+
+.loader-health-summary[data-tone="good"] { color: #4ef0a8; }
+.loader-health-summary[data-tone="warn"] { color: #f2c14e; }
+.loader-health-summary[data-tone="error"] { color: #ff5c6c; }
+
+.loader-health {
+  list-style: none;
+  margin: 12px auto 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 320px));
+  gap: 3px 28px;
+  max-width: 700px;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+@media (max-width: 640px) {
+  .loader-health { grid-template-columns: minmax(0, 1fr); }
+}
+
+.loader-health-row {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.loader-health-row::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+}
+
+.loader-health-row[data-severity="pending"]::before { animation: pulse 1.2s ease-in-out infinite; }
+.loader-health-row[data-severity="good"] { color: #4ef0a8; }
+.loader-health-row[data-severity="good"]::before { opacity: 1; box-shadow: 0 0 6px currentColor; }
+.loader-health-row[data-severity="warn"] { color: #f2c14e; }
+.loader-health-row[data-severity="warn"]::before { opacity: 1; }
+.loader-health-row[data-severity="error"] { color: #ff5c6c; }
+.loader-health-row[data-severity="error"]::before { opacity: 1; box-shadow: 0 0 6px currentColor; }
+.loader-health-row[data-severity="muted"] { color: var(--text-dim); opacity: 0.7; }
+
+.loader-health-name {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.loader-health-row[data-severity="muted"] .loader-health-name { color: var(--text-dim); }
+
+.loader-health-state { font-weight: 600; }
+
+/* Detail is tooltip-only for healthy rows; problems show their reason. */
+.loader-health-detail { display: none; }
+
+.loader-health-row[data-severity="error"],
+.loader-health-row[data-severity="warn"] {
+  grid-template-columns: 9px minmax(0, 1fr) auto auto;
+}
+
+.loader-health-row[data-severity="error"] .loader-health-detail,
+.loader-health-row[data-severity="warn"] .loader-health-detail {
+  display: inline;
+  opacity: 0.8;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.loader-health-continue {
+  margin-top: 20px;
+  padding: 8px 18px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: var(--text-primary);
+  background: rgba(0, 246, 255, 0.08);
+  border: 1px solid rgba(0, 246, 255, 0.45);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.loader-health-continue:hover,
+.loader-health-continue:focus-visible {
+  background: rgba(0, 246, 255, 0.18);
+  outline: none;
+}
+
 /* ── Post-Processing Toggles ─────────────────── */
 #pp-toggles {
   --pp-expanded-width: var(--display-panel-expanded-width);

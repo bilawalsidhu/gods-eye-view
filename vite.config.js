@@ -53,6 +53,7 @@ import {
 import { normalizeAdsbLolPointResponse } from './src/data/adsbLolFallback.js';
 import { createAisStreamAdapter, isRecognizedAisEnvelope } from './src/data/aisStreamAdapter.js';
 import { parseSilenceTimeoutEnv } from './src/data/aisWatchdog.js';
+import { apiHealthProxy } from './src/data/apiHealth.js';
 import {
   fetchTerrainChunkWithRetry,
   parseTerrainPoints,
@@ -7360,6 +7361,7 @@ export default defineConfig(({ mode }) => {
       trackBackfillProxies(),
       openAiRealtimeProxy(),
       googlePlacesContextProxy(),
+      apiHealthProxy({ getOpenSkyToken }),
     ],
     server: {
       host: env.HOST || 'localhost',

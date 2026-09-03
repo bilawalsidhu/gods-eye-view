@@ -9112,6 +9112,14 @@ export class StyleManager {
     this._globalLoadingDetail.textContent = presentation.detail;
   }
 
+  /**
+   * Public entry to the top-center status banner for startup-time callers
+   * (e.g. the API health roster). Same dwell rules as internal notices.
+   */
+  notifyStatus(message, options = {}) {
+    this._showGlobalStatusNotice(message, options);
+  }
+
   /** Show a message in the universal top-center status banner. */
   _showGlobalStatusNotice(message, options = {}) {
     const now = performance.now();

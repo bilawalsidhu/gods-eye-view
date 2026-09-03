@@ -10,3 +10,4 @@ output/
 .DS_Store
 .gstack/
 3d-models/
+dist-app/
