@@ -126,6 +126,47 @@ test('Windows hardening applies and then verifies the exact restricted DACL', ()
   assert.match(calls[2].args.at(-1), /seen\.Count -ne 3/);
 });
 
+test('Windows hardening isolates the verify PowerShell from a pwsh7-polluted PSModulePath', () => {
+  const calls = [];
+  // Exactly what a side-by-side PowerShell 7 install prepends at startup:
+  // its own user Documents\PowerShell, Program Files\PowerShell, and
+  // Program Files\PowerShell\7 module trees all shadow the 5.1 system path.
+  const pollutedModulePath = [
+    'C:\\Users\\alice\\Documents\\PowerShell\\Modules',
+    'C:\\Program Files\\PowerShell\\Modules',
+    'c:\\program files\\powershell\\7\\Modules',
+    'C:\\Program Files\\WindowsPowerShell\\Modules',
+    'C:\\WINDOWS\\system32\\WindowsPowerShell\\v1.0\\Modules',
+  ].join(';');
+  const result = hardenCredentialFile('C:\\GEV\\ENVIRONMENT.tmp', {
+    platform: 'win32',
+    environment: {
+      SYSTEMROOT: WINDOWS_ROOT,
+      PSModulePath: pollutedModulePath,
+    },
+    fileSystem: windowsFileSystem(),
+    spawn(command, args, options) {
+      calls.push({ command, args, options });
+      if (command.endsWith('\\whoami.exe')) {
+        return { status: 0, signal: null, stdout: `"WORKSTATION\\alice","${USER_SID}"\r\n` };
+      }
+      return { status: 0, signal: null };
+    },
+  });
+  assert.equal(result, true);
+  const verify = calls.find(({ command }) => command.endsWith('powershell.exe'));
+  assert.ok(verify, 'the ACL verify powershell must be spawned');
+  const modulePath = verify.options.env.PSModulePath;
+  // Fail closed: the verification interpreter must never inherit pwsh7's
+  // module trees — a 7.x Microsoft.PowerShell.Security manifest cannot be
+  // autoloaded by 5.1, and an untrusted tree must not shadow Get-Acl at all.
+  assert.ok(!/Documents\\PowerShell\\Modules/i.test(modulePath), 'user pwsh7 module tree must be stripped');
+  assert.ok(!/Program Files\\PowerShell\\Modules/i.test(modulePath), 'Program Files pwsh7 module tree must be stripped');
+  assert.ok(!/Program Files\\PowerShell\\7\\Modules/i.test(modulePath), 'pwsh7 install module tree must be stripped');
+  // ... but the 5.1 system module directory (where Get-Acl lives) must remain.
+  assert.match(modulePath, /System32\\WindowsPowerShell\\v1\.0\\Modules/i);
+});
+
 test('Windows hardening bypasses PATH-shadowed native ACL tools', () => {
   const commands = [];
   const result = hardenCredentialFile('D:\\GEV\\ENVIRONMENT.tmp', {

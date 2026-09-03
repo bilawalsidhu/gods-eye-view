@@ -143,6 +143,19 @@ export function hardenCredentialFile(filepath, {
     // accept only three explicit FullControl allow principals, with inheritance
     // disabled. Any unexpected rule, right, command error, or missing principal
     // fails closed before the secret reaches disk.
+    //
+    // The verify process must load Microsoft.PowerShell.Security (Get-Acl)
+    // from the Windows PowerShell system module tree ONLY. A side-by-side
+    // PowerShell 7 install prepends its own module trees to PSModulePath at
+    // startup; inherited into a 5.1 process, the incompatible 7.x manifest
+    // cannot be autoloaded and the verify step fails. Reset PSModulePath to
+    // the 5.1 system tree derived from the already-validated executable path —
+    // the same fail-closed posture that refuses PATH-shadowed tools above.
+    // Nothing an inheriting environment prepends may steer Get-Acl.
+    const powershellModuleDirectory = path.win32.join(
+      path.win32.dirname(tools.powershell),
+      'Modules',
+    );
     const verified = spawn(tools.powershell, [
       '-NoProfile',
       '-NonInteractive',
@@ -152,6 +165,7 @@ export function hardenCredentialFile(filepath, {
         ...environment,
         GEV_ACL_FILE: filepath,
         GEV_ACL_USER_SID: sid,
+        PSModulePath: powershellModuleDirectory,
       },
       stdio: 'ignore',
       windowsHide: true,
