@@ -2558,13 +2558,22 @@ function sendOverpassResponse(res, payload, cacheStatus = 'MISS') {
  * @param {number} [maxResponseBytes] Endpoint-specific response cap.
  * @returns {Promise<{status:number,body:string,contentType:string,endpoint:string,rateLimited:boolean}>}
  */
-async function fetchOverpassPayload(body, maxResponseBytes = OVERPASS_MAX_RESPONSE_BYTES) {
+/**
+ * `timeoutMs` overrides the shared OVERPASS_TIMEOUT_MS per caller. That constant
+ * is an INTERACTIVE budget — a viewport query a user is waiting on — and must
+ * stay short. A background catalog refresh that runs once every few hours is a
+ * different kind of caller: the CCTV OSM webcam pack scans a whole country for
+ * `man_made=surveillance` and measured ~51 s on the fastest reachable mirror
+ * (2026-08-28), so under the interactive budget it could never succeed at all.
+ * Do not "simplify" this back to the constant.
+ */
+async function fetchOverpassPayload(body, maxResponseBytes = OVERPASS_MAX_RESPONSE_BYTES, timeoutMs = OVERPASS_TIMEOUT_MS) {
   let lastError = null;
   let lastRateLimitPayload = null;
 
   for (const endpoint of OVERPASS_UPSTREAMS) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), OVERPASS_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const upstream = await fetch(endpoint, {
@@ -3468,8 +3477,14 @@ const DEFAULT_CCTV_SOURCE_FILE = 'config/cctv_sources.austin.json';
 const DEFAULT_AUSTIN_ROWS_URL = 'https://data.austintexas.gov/api/views/b4k4-adkb/rows.json?accessType=DOWNLOAD';
 /** Default cap on Austin cameras after distance-based prioritization. */
 const DEFAULT_AUSTIN_MAX_SOURCES = 250;
-/** Global cap on total CCTV sources served by the proxy. */
-const DEFAULT_CCTV_MAX_SOURCES = 900;
+/** Global cap on total CCTV sources served by the proxy.
+ *  Raised 900 -> 1100 on 2026-08-28 when the OSM webcam pack became the fourth
+ *  live pack: the four defaults sum to 950 (250 Austin + 300 Caltrans + 250 TfL
+ *  + 150 OSM) and the cap slices from the FRONT of the merged list, whose tail
+ *  is the file/env pack — so a 900 cap silently dropped the hand-authored
+ *  cameras rather than trimming a live pack. Stays under HEALTH_MAX_ENTRIES
+ *  (1200), which is sized to cover the full served catalog. */
+const DEFAULT_CCTV_MAX_SOURCES = 1100;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
@@ -3490,7 +3505,75 @@ const TFL_JAMCAM_URL = 'https://api.tfl.gov.uk/Place/Type/JamCam';
 const TFL_IMAGE_ORIGIN = 'https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/';
 const DEFAULT_TFL_MAX_SOURCES = 250;
 const LONDON_CENTER = { lat: 51.5074, lon: -0.1278 };
-/** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL) infrequent. Frames are fetched per-request and are unaffected. */
+/**
+ * OSM webcams: the one keyless pack whose upstream is Overpass rather than a
+ * single operator's catalog. `man_made=surveillance` + `contact:webcam` is the
+ * operator's OWN published frame URL, so fetching it is the same act as
+ * fetching an Austin or a TfL frame — no scraping of a viewer page.
+ *
+ * Why it earns its place next to three traffic-camera packs: `camera:direction`
+ * carries a real mapped heading for a large share of these nodes. Austin and
+ * TfL have no heading signal at all and fall back to `fallbackHeadingFromId()`,
+ * an id hash — a number with no relationship to where the camera looks.
+ *
+ * Measured 2026-08-28 for `DE`: 46,129 surveillance nodes, 20,771 with
+ * `camera:direction`, 851 with `contact:webcam`. Of a 40-node sample, 10 were
+ * direct still URLs and 5 of those served a JPEG on the spot. **Roughly half of
+ * what this pack yields is expected to be dead at any moment** — municipal
+ * webcams rot and OSM keeps the old URL. That is health's job, not the
+ * loader's: the first failed frame marks the camera `degraded` via setHealth,
+ * exactly as an offline Caltrans camera is handled. Do NOT add a liveness
+ * sweep here — 150 probes on every 15-minute catalog refresh would be a
+ * per-refresh cost no other pack pays.
+ */
+const DEFAULT_OSM_WEBCAM_AREA = 'DE';
+const DEFAULT_OSM_WEBCAM_MAX_SOURCES = 150;
+/** Overpass answer for this query is a few hundred KB; the 32 MB proxy cap is for boundary geometry. */
+const OSM_WEBCAM_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+/** Hard cap inside the Overpass QL itself, so a mis-scoped area cannot return a country of CCTV. */
+const OSM_WEBCAM_ELEMENT_CAP = 1200;
+/** Prioritization anchors for the default `DE` area: the five largest metros. */
+const OSM_WEBCAM_ANCHORS = [
+  { lat: 52.5200, lon: 13.4050 },  // Berlin
+  { lat: 53.5511, lon: 9.9937 },   // Hamburg
+  { lat: 48.1351, lon: 11.5820 },  // Munich
+  { lat: 50.9375, lon: 6.9603 },   // Cologne
+  { lat: 50.1109, lon: 8.6821 },   // Frankfurt
+];
+/**
+ * Coarse ground prior for OSM webcams. OSM surveillance nodes essentially never
+ * carry `ele`, and unlike Caltrans there is no elevation field to convert. The
+ * client's one-shot ground snap corrects this on 3D-tile stacks; on a keyless
+ * OSM stack the snap misses and this value freezes, so it is set to roughly the
+ * middle of inhabited German terrain rather than to zero.
+ */
+const OSM_WEBCAM_FALLBACK_ELEVATION_M = 120;
+/**
+ * The OSM webcam pack refreshes on its OWN clock, far slower than the 15-minute
+ * catalog TTL, and never on the request path.
+ *
+ * Two facts force this. (1) The query is a country-wide scan for
+ * `man_made=surveillance` and measured ~51 s on the fastest reachable mirror —
+ * awaiting that inside `refreshCctvSources` would make the first
+ * `/api/cctv/sources` after every TTL expiry hang for a minute, for every
+ * client. (2) The data changes on OSM-edit timescales, so re-asking every
+ * 15 minutes would spend a free mirror's budget for nothing.
+ *
+ * So `loadOsmWebcamSources` answers instantly from `_osmWebcamCache` and kicks
+ * the refresh off behind the request. The cost is honest and bounded: a cold
+ * boot serves the catalog with zero OSM cameras, and they appear once the
+ * background pass lands and invalidates the catalog cache.
+ */
+const OSM_WEBCAM_CACHE_MS = 6 * 60 * 60 * 1000;
+/** Above the ~51 s measured worst case, below any sane request patience — this never blocks a response. */
+const OSM_WEBCAM_FETCH_TIMEOUT_MS = 75 * 1000;
+/** @type {Array<object>} Cached OSM webcam pack; served as-is while a refresh runs. */
+let _osmWebcamCache = [];
+/** @type {number} Epoch-ms of the last COMPLETED refresh attempt, success or failure. */
+let _osmWebcamCacheAt = 0;
+/** @type {Promise<Array<object>>|null} In-flight background refresh (single-flight). */
+let _osmWebcamInflight = null;
+/** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + one Overpass query) infrequent. Frames are fetched per-request and are unaffected. */
 const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
  * stalled upstream can't leave getCctvSources (and thus every CCTV route)
@@ -4116,6 +4199,261 @@ async function loadTflSourcesFromOpenData() {
 }
 
 /**
+ * Parse an OSM `camera:direction` value into a compass heading.
+ *
+ * The tag is documented as degrees but is free text in practice, so both forms
+ * appear. Degrees are NOT guaranteed to be in range — `camera:direction=-195`
+ * is live data on the German extract — and a negative heading points the
+ * frustum at nothing, so the numeric branch wraps into [0,360) rather than
+ * trusting the mapper. A compass word falls through to the shared parser with
+ * `allowBare`, which is correct here: this is a dedicated direction field, not
+ * free-form name text.
+ *
+ * @param {string|number} value Raw `camera:direction` tag value.
+ * @returns {number} Heading in degrees [0..360), or NaN if unusable.
+ */
+export function osmCameraDirectionDeg(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return NaN;
+  const numeric = Number(raw);
+  if (raw !== '' && Number.isFinite(numeric)) return ((numeric % 360) + 360) % 360;
+  return directionToHeading(raw, true);
+}
+
+/** Mount-height priors in metres, keyed by OSM `camera:mount`. */
+const OSM_WEBCAM_MOUNT_HEIGHT_M = {
+  ceiling: 6,
+  pole: 6,
+  street_lamp: 7,
+  wall: 8,
+  window: 8,
+  building: 10,
+  roof: 12,
+  mast: 20,
+  tower: 20,
+};
+
+/**
+ * Return a fetchable still-image URL from an OSM `contact:webcam` value, or null.
+ *
+ * Three filters, each for a different reason:
+ *
+ *  1. **Still images only.** Most `contact:webcam` values are landing pages
+ *     (`.php`, `.html`, a YouTube watch URL). Reading the frame off those would
+ *     be scraping; only a URL that IS the image is used.
+ *  2. **No MJPEG.** `axis-cgi/mjpg/video.cgi` answers with an unbounded
+ *     multipart stream. Declared as an `image` feed it would not fail fast —
+ *     the frame proxy would hold the socket to its own timeout on every refresh
+ *     tick, for every such camera.
+ *  3. **Public hosts only.** This catalog is world-editable: anybody can point
+ *     `contact:webcam` at `http://192.168.1.1/x.jpg` or a link-local metadata
+ *     address, and the proxy would fetch it server-side. This is the same
+ *     non-global-target refusal `publicRadioHttpsUrl` applies to Radio Browser
+ *     streams, which arrive from an equally open directory. Plain `http:` IS
+ *     allowed — municipal webcams are routinely TLS-less — so the host check
+ *     carries the whole weight here.
+ *
+ * @param {string} value Raw `contact:webcam` tag value.
+ * @returns {string|null} Normalized absolute URL, or null when unusable.
+ */
+export function osmWebcamStillUrl(value) {
+  let url;
+  try {
+    url = new URL(String(value ?? '').trim());
+  } catch {
+    return null;
+  }
+  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.username || url.password) return null;
+
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+  if (
+    !hostname
+    || hostname === 'localhost'
+    || hostname.endsWith('.localhost')
+    || hostname.endsWith('.local')
+    || isNonGlobalIpv4(hostname)
+    || hostname.includes(':')
+  ) return null;
+
+  const pathname = url.pathname.toLowerCase();
+  if (/mjpe?g/.test(pathname)) return null;
+  const isStill = /\.(jpe?g|png|webp)$/.test(pathname)
+    || /\/(jpeg|jpg|image|snapshot|snap)\.cgi$/.test(pathname);
+  if (!isStill) return null;
+
+  url.hash = '';
+  return url.href;
+}
+
+/**
+ * Convert one Overpass element into a CCTV source record, or null to drop it.
+ *
+ * Pure and export-only so the whole filter — which URLs survive, which heading
+ * a node gets, what a missing `camera:direction` costs — is testable without an
+ * Overpass round trip.
+ *
+ * The pose split is the point of this pack. A node WITH `camera:direction` gets
+ * that heading at `headingConfidence: 'high'` and a narrower, longer-throw
+ * frustum worth aiming; a node without one falls back to `fallbackHeadingFromId`
+ * at `'low'`, the same fabricated personality Austin and TfL use. Nothing here
+ * sets `poseSource: 'curated'` — only the heading is sourced, the rest is prior,
+ * and the CAL badge must keep saying so.
+ *
+ * @param {object} element Overpass element (`node`/`way`/`relation`).
+ * @returns {object|null} Normalized camera source, or null when unusable.
+ */
+export function normalizeOsmWebcamElement(element) {
+  const tags = element?.tags || {};
+  const url = osmWebcamStillUrl(tags['contact:webcam']);
+  if (!url) return null;
+
+  const lat = toFiniteNumber(element?.lat ?? element?.center?.lat, NaN);
+  const lon = toFiniteNumber(element?.lon ?? element?.center?.lon, NaN);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+
+  const osmType = String(element?.type || 'node').toLowerCase();
+  const osmId = String(element?.id ?? '').trim();
+  if (!/^(node|way|relation)$/.test(osmType) || !/^\d+$/.test(osmId)) return null;
+  // Provider-stable id: an OSM object keeps its type+id for life, so a camera's
+  // stored panel position and calibration survive every catalog refresh.
+  const cameraId = `osm-webcam-${osmType}-${osmId}`;
+
+  const heading = osmCameraDirectionDeg(tags['camera:direction']);
+  const hasHeading = Number.isFinite(heading);
+
+  const taggedHeight = toFiniteNumber(tags.height, NaN);
+  const mountHeightM = Number.isFinite(taggedHeight)
+    ? Math.max(6, Math.min(120, taggedHeight))
+    : (OSM_WEBCAM_MOUNT_HEIGHT_M[String(tags['camera:mount'] || '').toLowerCase()] ?? 8);
+
+  const name = String(tags.name || tags.operator || `OSM webcam ${osmId}`).trim();
+  const elevation = toFiniteNumber(tags.ele, NaN);
+
+  return {
+    id: cameraId,
+    name,
+    city: String(tags['addr:city'] || '').trim(),
+    cityId: '',
+    provider: String(tags.operator || 'OpenStreetMap contributors').trim(),
+    lat,
+    lon,
+    headingDeg: hasHeading ? heading : fallbackHeadingFromId(cameraId),
+    headingConfidence: hasHeading ? 'high' : 'low',
+    pitchDeg: hasHeading ? -20 : -15,
+    fovDeg: hasHeading ? 62 : 46,
+    rangeM: hasHeading ? 320 : 220,
+    mountHeightM,
+    groundElevationM: Number.isFinite(elevation)
+      ? Math.max(-100, Math.min(4000, elevation))
+      : OSM_WEBCAM_FALLBACK_ELEVATION_M,
+    feedType: 'image',
+    url,
+    snapshotUrl: url,
+    sourceKind: 'osm-webcam',
+    // Two licences, deliberately named separately: the ODbL covers the CATALOG
+    // (position, direction, the URL itself), never the picture. The frame stays
+    // the operator's under whatever terms they publish it.
+    license: '© OpenStreetMap contributors (ODbL) — frame served under the operator’s own terms',
+  };
+}
+
+/**
+ * Fetch webcams tagged in OpenStreetMap for the configured country (CCTV_OSM_AREA,
+ * ISO 3166-1 alpha-2). Keyless — it reuses the shared Overpass mirror chain and
+ * its rate-limit/runtime-error handling rather than opening a second path to the
+ * same upstream, with a longer per-caller timeout (see fetchOverpassPayload).
+ *
+ * Only nodes whose `contact:webcam` is a fetchable still image survive
+ * (see osmWebcamStillUrl); roughly half of those are expected to be dead at any
+ * moment and are marked `degraded` by health on their first failed frame.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+async function refreshOsmWebcamSources() {
+  const area = String(process.env.CCTV_OSM_AREA || DEFAULT_OSM_WEBCAM_AREA).trim().toUpperCase();
+  // Interpolated into Overpass QL: refuse anything that is not a bare country code.
+  if (!/^[A-Z]{2}$/.test(area)) {
+    console.warn(`[CCTV] ignoring CCTV_OSM_AREA="${area}" — expected an ISO 3166-1 alpha-2 code`);
+    return [];
+  }
+
+  // The QL's own timeout sits below OSM_WEBCAM_FETCH_TIMEOUT_MS so Overpass
+  // gives up and says so, rather than the client aborting a query still running
+  // upstream — an abort teaches the mirror nothing and wastes the work.
+  const ql = `[out:json][timeout:60];area["ISO3166-1"="${area}"][admin_level=2]->.a;nwr(area.a)["man_made"="surveillance"]["contact:webcam"];out tags center ${OSM_WEBCAM_ELEMENT_CAP};`;
+
+  const upstream = await fetchOverpassPayload(
+    `data=${encodeURIComponent(ql)}`,
+    OSM_WEBCAM_MAX_RESPONSE_BYTES,
+    OSM_WEBCAM_FETCH_TIMEOUT_MS,
+  );
+  if (upstream.status >= 400 || upstream.rateLimited || upstream.runtimeError) {
+    throw new Error(`Overpass unavailable (status ${upstream.status})`);
+  }
+  const parsed = JSON.parse(upstream.body);
+  const elements = Array.isArray(parsed?.elements) ? parsed.elements : [];
+
+  const cameras = [];
+  for (const element of elements) {
+    const camera = normalizeOsmWebcamElement(element);
+    if (camera) cameras.push(camera);
+  }
+
+  const maxRaw = Number(process.env.CCTV_OSM_MAX_SOURCES || DEFAULT_OSM_WEBCAM_MAX_SOURCES);
+  const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(600, Math.floor(maxRaw))) : DEFAULT_OSM_WEBCAM_MAX_SOURCES;
+  const prioritized = prioritizeSources(cameras, maxCount, OSM_WEBCAM_ANCHORS);
+  const withHeading = prioritized.filter((camera) => camera.headingConfidence === 'high').length;
+  console.log(`[CCTV] Loaded OSM webcam sources (${area}): ${elements.length} tagged, ${cameras.length} with a usable still URL (using nearest ${prioritized.length}, ${withHeading} with a mapped heading)`);
+  return prioritized;
+}
+
+/**
+ * Return the OSM webcam pack for the current catalog build, refreshing it in the
+ * BACKGROUND when stale. Never awaits the upstream — see OSM_WEBCAM_CACHE_MS for
+ * why this one pack cannot sit on the request path like the other three.
+ *
+ * @returns {Promise<Array<object>>} Whatever the pack currently holds.
+ */
+async function loadOsmWebcamSources() {
+  if (String(process.env.CCTV_OSM_ENABLED ?? '1').trim() === '0') return [];
+
+  const stale = Date.now() - _osmWebcamCacheAt > OSM_WEBCAM_CACHE_MS;
+  if (stale && !_osmWebcamInflight) {
+    const hadNothing = _osmWebcamCache.length === 0;
+    _osmWebcamInflight = refreshOsmWebcamSources()
+      .then((list) => {
+        if (list.length) {
+          _osmWebcamCache = list;
+          // The catalog this refresh was kicked off by has already been built
+          // and cached without these cameras. Invalidating makes the next
+          // /api/cctv/sources rebuild and pick them up, instead of hiding them
+          // for a whole catalog TTL. Guarded on a non-empty result so a failing
+          // pack can never force a four-pack rebuild for nothing.
+          if (hadNothing) _cctvSourceCacheAt = 0;
+        }
+        return list;
+      })
+      .catch((error) => {
+        // Stamping the clock on failure too bounds retry to one attempt per TTL
+        // against a persistently-down Overpass — the same reasoning as the
+        // serve-stale branch in refreshCctvSources.
+        console.warn('[CCTV] OSM webcam refresh failed:', error?.message || error);
+        return _osmWebcamCache;
+      })
+      .finally(() => {
+        _osmWebcamCacheAt = Date.now();
+        _osmWebcamInflight = null;
+      });
+  }
+
+  if (!_osmWebcamCache.length && _osmWebcamInflight) {
+    console.log('[CCTV] OSM webcam pack warming in the background; 0 served this cycle');
+  }
+  return _osmWebcamCache;
+}
+
+/**
  * Normalize a raw CCTV source item into a canonical shape with safe defaults.
  *
  * @param {object} item - Raw source from file, env, or Austin Open Data.
@@ -4195,18 +4533,21 @@ async function refreshCctvSources() {
   let fromAustin = [];
   let fromCaltrans = [];
   let fromTfl = [];
+  let fromOsm = [];
   if (needsLiveSources) {
-    const [austinResult, caltransResult, tflResult] = await Promise.allSettled([
+    const [austinResult, caltransResult, tflResult, osmResult] = await Promise.allSettled([
       loadAustinSourcesFromOpenData(),
       loadCaltransSourcesFromOpenData(),
       tflEnabled ? loadTflSourcesFromOpenData() : Promise.resolve([]),
+      loadOsmWebcamSources(),
     ]);
     fromAustin = austinResult.status === 'fulfilled' ? austinResult.value : [];
     fromCaltrans = caltransResult.status === 'fulfilled' ? caltransResult.value : [];
     fromTfl = tflResult.status === 'fulfilled' ? tflResult.value : [];
+    fromOsm = osmResult.status === 'fulfilled' ? osmResult.value : [];
   }
   // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
-  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromFile, ...fromEnv];
+  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromOsm, ...fromFile, ...fromEnv];
 
   // Deduplicate by camera ID (last-write wins because of Map.set)
   const byId = new Map();
