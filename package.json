@@ -40,7 +40,8 @@
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
-    "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs"
+    "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
+    "smoke:test": "node scripts/test-smoke.mjs"
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",

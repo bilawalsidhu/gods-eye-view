@@ -143,6 +143,18 @@ function buildRow(documentRef, key) {
  * the surface has no business existing (prod build, LAN visitor, no markup).
  */
 export async function initKeySetup({ documentRef = globalThis.document, fetchImpl } = {}) {
+  // Build-time or runtime opt-out: set VITE_DISABLE_KEY_SETUP=true at build
+  // time or set window.__GEV_DISABLE_KEY_SETUP = true in an embed to disable
+  // the entire key setup surface. This ensures production or hardened builds
+  // cannot accidentally expose a key-entry UI.
+  const disableFlag = (typeof import.meta !== 'undefined' && import.meta.env && String(import.meta.env.VITE_DISABLE_KEY_SETUP) === 'true')
+    || globalThis.__GEV_DISABLE_KEY_SETUP === true;
+  if (disableFlag) {
+    try { documentRef.getElementById('key-setup-chip')?.remove(); } catch {}
+    try { documentRef.getElementById('key-setup')?.remove(); } catch {}
+    return null;
+  }
+
   const chip = documentRef?.getElementById?.('key-setup-chip');
   const root = documentRef?.getElementById?.('key-setup');
   if (!chip || !root || root.dataset.initialized === 'true') return null;
