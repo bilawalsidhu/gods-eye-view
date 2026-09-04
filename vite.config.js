@@ -2038,8 +2038,15 @@ function firmsProxy() {
     for (const source of SOURCES) {
       try {
         const records = filterTrailing24h(await fetchSource(key, source), now);
+        // Append element-by-element, NOT `fires.push(...records)`: a single
+        // VIIRS source returns >100k trailing-24h rows, and spreading that as
+        // call arguments overflows the engine's argument limit
+        // ("Maximum call stack size exceeded"), which the catch below then
+        // logged as a fetch failure.
+        for (const record of records) fires.push(record);
+        // Recorded only after the rows actually landed, so a source can never
+        // be reported ok:true with a count whose data never reached `fires`.
         sources.push({ source, count: records.length, ok: true });
-        fires.push(...records);
       } catch (err) {
         console.warn(`[firms-proxy] ${source} fetch failed:`, err?.message || err);
         sources.push({ source, count: 0, ok: false });
