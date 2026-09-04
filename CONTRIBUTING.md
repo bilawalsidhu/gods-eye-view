@@ -59,6 +59,13 @@ The highest-leverage places to jump in:
 4. If you add or change a data source, update [DATA_SOURCES.md](DATA_SOURCES.md) with its license and attribution. **Don't add data you don't have the right to redistribute** — fetch it at runtime instead.
 5. Describe what you changed and how you verified it (screenshots welcome for anything visual).
 
+## Maintainers
+
+God's Eye View is maintained by [Bilawal Sidhu](https://github.com/bilawalsidhu)
+and [Sameh Khamis](https://github.com/samehkhamis) at
+[Halfpixel](https://halfpixel.ai). Either maintainer can review and merge
+contributions.
+
 ## Ground rules
 
 - This is a tool for **public** data. Don't add scraping of sources whose terms forbid it, private/paywalled datasets, or anything that misrepresents public-data inference as authoritative intelligence.
