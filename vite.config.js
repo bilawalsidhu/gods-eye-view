@@ -3512,65 +3512,61 @@ function isVideoFeedType(feedType) {
   return feedType === 'mp4' || feedType === 'webm' || feedType === 'hls';
 }
 
-/** Max accepted length for a file/env CCTV source URL (bytes/chars). */
+// File and env packs are hand written, so check the URLs here.
+// Bad values become empty and the normal fallback takes over.
 const CCTV_SOURCE_URL_MAX_LENGTH = 2048;
 
 /**
- * Sanitize a file/env CCTV source URL.
+ * Clean a camera URL from a file or env pack
  *
- * Live packs build their own pinned https URLs, but hand-written file/env
- * packs pass through `normalizeSourceItem` untouched. A typo there degrades
- * the camera to Street View/synthetic and wastes a registry slot, and a
- * non-https or internal URL would be fetched server-side by the frame/media
- * proxies. Fail soft: return '' so the existing fallback chain applies.
- *
- * @param {*} value - Raw url/snapshotUrl value.
- * @param {string} [cameraId] - Camera id used only for the warn log.
- * @returns {string} Trimmed valid URL, or '' when invalid.
+ * value is the raw url text
+ * cameraId is only used for the warning log
+ * returns the clean url or empty when it should not be fetched
  */
 export function sanitizeCctvSourceUrl(value, cameraId = '') {
   if (typeof value !== 'string') return '';
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  const label = cameraId ? ` for '${cameraId}'` : '';
-  if (trimmed.length > CCTV_SOURCE_URL_MAX_LENGTH) {
-    console.warn(`[CCTV] dropping overlong source URL${label}`);
+  const clean = value.trim();
+  if (!clean) return '';
+  const tag = cameraId ? ` for '${cameraId}'` : '';
+  if (clean.length > CCTV_SOURCE_URL_MAX_LENGTH) {
+    console.warn(`[CCTV] dropping overlong source URL${tag}`);
     return '';
   }
-  if (/\s/.test(trimmed)) {
-    console.warn(`[CCTV] dropping malformed source URL${label}`);
+  if (/\s/.test(clean)) {
+    console.warn(`[CCTV] dropping malformed source URL${tag}`);
     return '';
   }
   let parsed;
   try {
-    parsed = new URL(trimmed);
+    parsed = new URL(clean);
   } catch {
-    console.warn(`[CCTV] dropping malformed source URL${label}`);
+    console.warn(`[CCTV] dropping malformed source URL${tag}`);
     return '';
   }
   if (parsed.username || parsed.password) {
-    console.warn(`[CCTV] dropping source URL with credentials${label}`);
+    console.warn(`[CCTV] dropping source URL with credentials${tag}`);
     return '';
   }
   const protocol = parsed.protocol.toLowerCase();
-  const hostname = parsed.hostname.toLowerCase();
-  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  const host = parsed.hostname.toLowerCase();
+  const local = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  // Local http is fine for dev, anything else has to be https.
   if (protocol === 'http:') {
-    if (!isLocalhost) {
-      console.warn(`[CCTV] dropping non-https source URL${label}`);
+    if (!local) {
+      console.warn(`[CCTV] dropping non-https source URL${tag}`);
       return '';
     }
-    return trimmed;
+    return clean;
   }
   if (protocol !== 'https:') {
-    console.warn(`[CCTV] dropping non-https source URL${label}`);
+    console.warn(`[CCTV] dropping non-https source URL${tag}`);
     return '';
   }
-  if (!hostname || (!isLocalhost && !hostname.includes('.'))) {
-    console.warn(`[CCTV] dropping malformed source URL${label}`);
+  if (!host || (!local && !host.includes('.'))) {
+    console.warn(`[CCTV] dropping malformed source URL${tag}`);
     return '';
   }
-  return trimmed;
+  return clean;
 }
 
 // ---------------------------------------------------------------------------
@@ -4230,15 +4226,10 @@ async function loadTflSourcesFromOpenData() {
 }
 
 /**
- * Normalize a raw CCTV source item into a canonical shape with safe defaults.
+ * Shape a raw pack entry into the form the proxy serves
  *
- * File/env `url`/`snapshotUrl` values are syntax-checked via
- * `sanitizeCctvSourceUrl` (https only, plus localhost http for dev). Invalid
- * values become '' so the frame fallback chain (upstream -> Street View ->
- * synthetic) applies instead of a late fetch failure.
- *
- * @param {object} item - Raw source from file, env, or Austin Open Data.
- * @returns {object} Normalized source with all expected fields populated.
+ * item is the raw entry from file env or live packs
+ * returns the cleaned entry the proxy can use
  */
 export function normalizeSourceItem(item) {
   const source = item && typeof item === 'object' ? item : {};
