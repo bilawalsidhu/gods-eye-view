@@ -1530,6 +1530,11 @@ test('installation summaries disclose viewport-scoped coverage', () => {
 
   const unavailable = summarizeInstallationViewport([], { available: false, stale: false });
   assert.equal(unavailable.reason, 'feed unavailable');
+  const retrying = summarizeInstallationViewport([], { available: false, stats: {
+    statusMessage: 'Overpass temporarily unavailable — retrying in 30s',
+  } });
+  assert.equal(retrying.count, null, 'retrying is not a claim of zero mapped sites');
+  assert.equal(retrying.reason, 'Overpass temporarily unavailable — retrying in 30s');
 });
 
 test('compact Context snapshots retain installation coverage', () => {

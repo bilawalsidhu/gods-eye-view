@@ -1970,6 +1970,9 @@ body.ui-clean-view #scene-runtime.active {
 #global-loading-status[data-state='error'] #global-loading-label,
 #global-loading-status[data-state='error'] #global-loading-detail { color: #ff9b8e; }
 #global-loading-status[data-state='cancelled'] { color: #ffd488; }
+#global-loading-status[data-state='retry'] { border-color: rgba(255, 212, 136, 0.55); }
+#global-loading-status[data-state='retry'] #global-loading-label,
+#global-loading-status[data-state='retry'] #global-loading-detail { color: #ffd488; }
 #global-loading-status[data-state='cancelled'] #global-loading-label,
 #global-loading-status[data-state='cancelled'] #global-loading-detail { color: #ffd488; }
 #global-loading-status[data-state='acquiring'] {

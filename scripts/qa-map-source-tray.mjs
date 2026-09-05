@@ -309,7 +309,8 @@ try {
       'key-required sources stay focusable, explained, and inert when no ion token is configured',
       ionSource.ariaDisabled === 'true'
         && ionSource.focused
-        && /token required/i.test(ionSource.ariaLabel)
+        // #143 names the missing key: "Needs CESIUM_ION_TOKEN — add it in Provider Settings".
+        && /needs [A-Z_]+.*provider settings/i.test(ionSource.ariaLabel)
         && ionSource.activeId === activeBeforeIonAttempt
         && JSON.stringify(ionSource.active) === JSON.stringify([activeBeforeIonAttempt]),
       JSON.stringify(ionSource),
@@ -736,7 +737,9 @@ try {
     check(
       `a map=${legacyId} link restores to the best available fallback with its tile lit`,
       restored.activeId === expectedLegacyActive
-        && (photorealAvailable ? restored.lastError === null : /unavailable/i.test(restored.lastError || ''))
+        // Keyless photoreal now explains itself as "Needs GOOGLE_MAPS_API_KEY — add it in
+        // Provider Settings — or a Cesium ion token …"; a keyed-but-failing route still says "unavailable".
+        && (photorealAvailable ? restored.lastError === null : /needs [A-Z_]+|unavailable/i.test(restored.lastError || ''))
         && JSON.stringify(restored.pressed) === JSON.stringify([expectedLegacyActive]),
       JSON.stringify(restored),
     );

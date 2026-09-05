@@ -2,6 +2,7 @@ import * as Cesium from 'cesium';
 import { governorRequestRender } from '../renderGovernor.js';
 import {
   clearSelectedEntityContextForLayer,
+  getSelectedEntityContext,
   registerEntityContext,
   removeEntityContextsForLayer,
   selectEntityContext,
@@ -17,6 +18,7 @@ import {
 // sequentially so overlapping renders cannot stack requests on the proxy.
 import { warmFireAnchorFloors } from './fireAnchors.js';
 import { normalizeMilitaryInstallations } from './militaryInstallationData.js';
+import { installationFeedback } from './installationFeedback.js';
 import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
 
 const LAYER_ID = 'military-installations';
@@ -74,6 +76,8 @@ const state = {
   retryTimer: null,
   /** Current backoff step for that retry; 0 = next failure starts at the minimum. */
   retryDelayMs: 0,
+  retryAt: 0,
+  failureReason: null,
   moveEndRemove: null,
   clickHandler: null,
   timer: null,
@@ -239,7 +243,13 @@ function renderableRecords() {
   return selected ? [...rendered, selected] : rendered;
 }
 
-function renderRecords() {
+function renderRecords({ claimSelection = false } = {}) {
+  // Context navigation can select another layer without a canvas click.
+  // A delayed floor/data repaint must not steal that newer selection back.
+  const selectedContext = getSelectedEntityContext();
+  if (!claimSelection && state.selectedId && selectedContext && selectedContext.id !== state.selectedId) {
+    state.selectedId = null;
+  }
   // Post-moveEnd debounced fetches commit after the camera settles; the
   // rebuilt entities need one frame in idle mode. (perf wave 2 fix)
   governorRequestRender('installations-render');
@@ -339,7 +349,7 @@ function selectRecord(id) {
   const record = state.recordById.get(id);
   if (!record || !state.dataSource) return false;
   state.selectedId = id;
-  renderRecords();
+  renderRecords({ claimSelection: true });
   // renderRecords drops selectedId when the record produced no entity.
   return state.selectedId === id;
 }
@@ -351,7 +361,16 @@ function installInteraction(viewer) {
     if (!state.enabled) return;
     const picked = viewer.scene.pick(click.position);
     const id = typeof picked?.id?.id === 'string' ? picked.id.id : null;
-    if (id && state.recordById.has(id)) selectRecord(id);
+    if (id && state.recordById.has(id) && id !== state.selectedId) {
+      selectRecord(id);
+    } else if (state.selectedId) {
+      // Clicking the selected site again, empty map, or another contact
+      // releases this layer's selection. Clear only our shared context so a
+      // sibling click handler's newly selected aircraft/site stays intact.
+      state.selectedId = null;
+      clearSelectedEntityContextForLayer(LAYER_ID);
+      renderRecords();
+    }
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 }
 
@@ -379,8 +398,10 @@ function scheduleUnavailableRetry() {
   if (!state.enabled) return;
   clearTimeout(state.retryTimer);
   state.retryDelayMs = installationRetryDelayMs(state.retryDelayMs);
+  state.retryAt = Date.now() + state.retryDelayMs;
   state.retryTimer = setTimeout(() => {
     state.retryTimer = null;
+    state.retryAt = 0;
     if (state.enabled && !state.loading) loadInstallations();
   }, state.retryDelayMs);
 }
@@ -388,6 +409,7 @@ function scheduleUnavailableRetry() {
 function clearUnavailableRetry({ resetBackoff = true } = {}) {
   clearTimeout(state.retryTimer);
   state.retryTimer = null;
+  state.retryAt = 0;
   if (resetBackoff) state.retryDelayMs = 0;
 }
 
@@ -415,13 +437,18 @@ async function loadInstallations() {
   const requestAbort = new AbortController();
   state.abort = requestAbort;
   state.loading = true;
+  clearUnavailableRetry({ resetBackoff: false });
+  // The previous attempt's failure is not the outcome of this new attempt.
+  setInstallationStatus('loading');
   try {
     const fetchInstallations = async (exact) => {
       const query = new URLSearchParams(Object.entries(box).map(([key, value]) => [key, value.toFixed(5)]));
       if (exact) query.set('exact', '1');
       const response = await fetch(`/api/military-installations?${query}`, { signal: requestAbort.signal });
       const body = await response.json();
-      if (!response.ok) throw new Error(body?.error || `Installation feed HTTP ${response.status}`);
+      if (!response.ok) throw Object.assign(new Error(body?.error || `Installation feed HTTP ${response.status}`), {
+        failureReason: ['rate_limited', 'timeout', 'query_failed'].includes(body?.reason) ? body.reason : 'unavailable',
+      });
       return body;
     };
 
@@ -491,6 +518,7 @@ async function loadInstallations() {
     // Even the exact-viewport retry can saturate in a dense area. Say so rather
     // than implying the view is completely surveyed.
     state.saturated = saturated;
+    state.failureReason = null;
     clearUnavailableRetry();
     setInstallationStatus(
       state.records.length ? (state.stale ? 'stale' : 'ready') : 'empty',
@@ -502,6 +530,7 @@ async function loadInstallations() {
     warmInstallationFloors(state.records);
   } catch (error) {
     if (error?.name === 'AbortError') return;
+    state.failureReason = error?.failureReason || 'unavailable';
     setInstallationStatus('unavailable', error?.message || 'Installation context unavailable');
     scheduleUnavailableRetry();
   } finally {
@@ -545,6 +574,8 @@ const militaryInstallationsLayer = {
     if (state.dataSource) state.dataSource.show = false;
     clearSelectedEntityContextForLayer(LAYER_ID);
     state.selectedId = null;
+    state.failureReason = null;
+    setInstallationStatus('idle');
   },
   update() { return loadInstallations(); },
   /** Request a one-shot Google Maps Places search around the current map view. */
@@ -632,6 +663,10 @@ const militaryInstallationsLayer = {
       error: state.error,
       status: state.status,
       loading: state.loading,
+      retryAt: state.retryAt,
+      retrying: state.loading && Boolean(state.failureReason),
+      failureReason: state.failureReason,
+      statusMessage: installationFeedback({ ...state, retrying: state.loading && Boolean(state.failureReason) }),
       loadingLabel: state.loading ? 'loading mapped installation context' : '',
     };
   },

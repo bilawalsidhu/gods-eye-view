@@ -54,7 +54,38 @@ function finiteLongitude(value) {
 function pointFrom(element) {
   const lat = Number(element?.lat ?? element?.center?.lat);
   const longitude = Number(element?.lon ?? element?.center?.lon);
-  return finiteLatitude(lat) && finiteLongitude(longitude) ? { latitude: lat, longitude } : null;
+  if (finiteLatitude(lat) && finiteLongitude(longitude)) return { latitude: lat, longitude };
+
+  // Bounds midpoint fallback (field test 2026-08-28, Warendorf: nothing drawn).
+  // The proxy asks for `out center tags geom`, but Overpass takes the LAST
+  // geometry mode only — `geom` wins and no `center` is ever emitted. Every
+  // way and relation therefore arrived point-less and was dropped here, so the
+  // layer rendered nodes and nothing else (San Diego: 149 of 228 kept, all the
+  // ways and relations gone; Warendorf has no nodes at all, hence an empty
+  // screen over a mapped Bundeswehr barracks). `bounds` accompanies exactly
+  // those elements — including relations, which carry no `geometry` — so it
+  // recovers all of them without touching the query or the footprint path.
+  const bounds = element?.bounds;
+  // JSON nulls, booleans, and empty strings must not coerce to a false 0,0 site.
+  if (![bounds?.minlat, bounds?.minlon, bounds?.maxlat, bounds?.maxlon]
+    .every((value) => typeof value === 'number' && Number.isFinite(value))) return null;
+  const south = Number(bounds?.minlat);
+  const west = Number(bounds?.minlon);
+  const north = Number(bounds?.maxlat);
+  const east = Number(bounds?.maxlon);
+  // Ordering matters as much as range: an inverted or antimeridian-spanning
+  // box midpoints to a plausible-looking point in the wrong ocean, so match
+  // isValidInstallationBoundingBox and refuse it rather than average it.
+  // A single installation footprint is never wider than the request bbox cap
+  // (10°): an ascending box that spans the antimeridian (minlon -179, maxlon
+  // 179) passes the ordering check yet midpoints to longitude 0.
+  if (finiteLatitude(south) && finiteLatitude(north)
+      && finiteLongitude(west) && finiteLongitude(east)
+      && south <= north && west <= east
+      && north - south <= 10 && east - west <= 10) {
+    return { latitude: (south + north) / 2, longitude: (west + east) / 2 };
+  }
+  return null;
 }
 
 function footprintFrom(element) {

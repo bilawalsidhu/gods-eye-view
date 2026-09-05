@@ -2,6 +2,25 @@
 
 Updated: August 24, 2026
 
+## Installations and map-source guidance
+
+- On an uncached Overpass failure, mapped installations keep their existing
+  30–240 second retry backoff. The top status and Contacts row explain the
+  outage and scheduled countdown; an active retry says "Retrying mapped
+  sites" and successful recovery clears the previous error. Known upstream
+  rate limits, timeouts, and query failures are distinguished without exposing
+  raw server errors. Failures from other loading layers retain precedence.
+- Click a selected installation again or click elsewhere on the map to clear
+  its selection. Clearing the installation does not clear another layer's
+  newly selected contact, and refreshes do not revive the cleared site.
+- Installation ways and relations without an explicit center use the midpoint
+  of finite, ordered bounds spanning at most 10 degrees per axis. Explicit
+  coordinates and centers retain precedence; invalid bounds are dropped.
+- Visual-style buttons describe their simulated effects on hover. Unavailable
+  map-source tooltips and toasts share provider guidance: missing credentials
+  point to Provider Settings, while a configured Google 3D route that fails
+  points to restrictions, quota, or connectivity. These hints do not expose keys.
+
 > **2026-08-23 — first-run mission launcher** (`src/firstRunExperience.js`,
 > `#first-run-launcher`, styles at the tail of `style.css`). After startup
 > settles, a fresh session gets one card offering **Live Contacts · Space

@@ -292,9 +292,9 @@ function sourceState(layerId) {
   //     however long the fetch takes. Confirmed live: a held 17 s first fetch
   //     read `enabling` across 34 samples with the panel non-numeric throughout,
   //     and a failing one settled to `enabled` with status 'unavailable'. Its
-  //     getStats() has no `loading` status to offer in any case —
+  //     getStats() also reports loading while a request is in progress —
   //     setInstallationStatus is only ever called with
-  //     zoom-in/ready/stale/empty/unavailable.
+  //     loading/zoom-in/ready/stale/empty/unavailable.
   //   - ais-live-vessels is what the predicate below is FOR. Its enable() and
   //     update() both resolve as soon as the first /api/ais-live poll answers,
   //     so the lifecycle settles to `enabled` — but until the server-side socket
@@ -348,7 +348,9 @@ function isSame(subject, item, prefix, key) {
  */
 export function summarizeInstallationViewport(items, source) {
   const summary = summarizeAwarenessCohortForNavigation(items, source);
-  if (summary.count === null) return summary;
+  if (summary.count === null) return source.stats?.statusMessage
+    ? { ...summary, reason: source.stats.statusMessage }
+    : summary;
   return {
     ...summary,
     reason: summary.count

@@ -6900,6 +6900,12 @@ function trimMilitaryInstallationCache() {
   }
 }
 
+/** Safe, evidence-based reason for an installation upstream failure. */
+export function militaryInstallationFailureReason(error) {
+  if (['rate_limited', 'timeout', 'query_failed'].includes(error?.installationReason)) return error.installationReason;
+  return ['AbortError', 'TimeoutError'].includes(error?.name) ? 'timeout' : 'unavailable';
+}
+
 function militaryInstallationsProxy() {
   async function refresh(box, key) {
     const bbox = `${box.south},${box.west},${box.north},${box.east}`;
@@ -6909,7 +6915,11 @@ function militaryInstallationsProxy() {
       MILITARY_INSTALLATION_MAX_RESPONSE_BYTES,
     );
     if (upstream.status >= 400 || upstream.rateLimited || upstream.runtimeError) {
-      throw new Error('Mapped installation upstream unavailable');
+      throw Object.assign(new Error('Mapped installation upstream unavailable'), {
+        installationReason: upstream.rateLimited ? 'rate_limited'
+          : upstream.status === 504 ? 'timeout'
+            : upstream.runtimeError ? 'query_failed' : 'unavailable',
+      });
     }
     const parsed = JSON.parse(upstream.body);
     const elements = Array.isArray(parsed?.elements)
@@ -7008,7 +7018,7 @@ function militaryInstallationsProxy() {
           return;
         }
         res.writeHead(503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-        res.end(JSON.stringify({ error: 'Mapped installation context is temporarily unavailable' }));
+        res.end(JSON.stringify({ error: 'Mapped installation context is temporarily unavailable', reason: militaryInstallationFailureReason(error) }));
       }
     });
   }

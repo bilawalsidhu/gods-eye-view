@@ -7,6 +7,17 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Fixed
 
+- Mapped-site outages show their scheduled retry countdown and distinguish
+  known Overpass rate limits, timeouts, and query failures. Search feedback no
+  longer claims a refresh succeeded while the layer is unavailable or loading.
+- Mapped installations retain valid ways and relations that provide bounds but
+  no center. Invalid, inverted, and excessively wide bounds are rejected.
+- Clicking a selected installation again or clicking elsewhere clears its
+  selection; later refreshes no longer reclaim it after a click-away.
+- Visual presets explain their effects on hover. Unavailable map sources name
+  missing credentials and Provider Settings, while configured-but-failed
+  Google 3D routes explain the failure without asking for another key.
+
 - The Overpass proxy now rotates to the next mirror on any non-2xx upstream
   response, not only on 5xx. `overpass-api.de` and its `lz4` alias answer 406 to
   the proxy's User-Agent while two of the configured mirrors answer 200 to the

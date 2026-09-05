@@ -23,6 +23,62 @@ import {
   installRenderGovernor,
 } from '../renderGovernor.js';
 import * as Cesium from 'cesium';
+import { registerEntityContext, selectEntityContext, getSelectedEntityContext } from './contextStore.js';
+
+test('clicking a selected installation again or empty map clears it through refresh', async () => {
+  const run = await runInstallationLoad({ elements: [{ type: 'node', id: 42,
+    lat: 30.2, lon: -97.7, tags: { military: 'base', name: 'Site' } }] });
+  try {
+    for (const nextPick of ['osm:node:42', null]) {
+      run.click('osm:node:42');
+      assert.equal(getSelectedEntityContext()?.id, 'osm:node:42');
+      run.click(nextPick);
+      assert.equal(getSelectedEntityContext(), null);
+      await militaryInstallationsLayer.update();
+      assert.equal(getSelectedEntityContext(), null, 'refresh must not resurrect selection');
+      assert.equal(run.entities()[0].point.pixelSize.getValue(), 9);
+    }
+  } finally { run.restore(); }
+});
+
+test('clearing a stale installation highlight does not clear or reclaim another layer selection', async () => {
+  const run = await runInstallationLoad({ elements: [{ type: 'node', id: 42,
+    lat: 30.2, lon: -97.7, tags: { military: 'base', name: 'Site' } }] });
+  try {
+    run.click('osm:node:42');
+    const aircraft = { id: 'aircraft:test' };
+    registerEntityContext(aircraft, { id: aircraft.id, layerId: 'military', label: 'Aircraft' });
+    selectEntityContext(aircraft);
+    await militaryInstallationsLayer.update();
+    assert.equal(getSelectedEntityContext()?.id, aircraft.id, 'non-canvas selection survives a repaint');
+    run.click('osm:node:42');
+    selectEntityContext(aircraft);
+    run.click(aircraft);
+    assert.equal(getSelectedEntityContext()?.id, aircraft.id);
+    await militaryInstallationsLayer.update();
+    assert.equal(getSelectedEntityContext()?.id, aircraft.id);
+  } finally { run.restore(); }
+});
+
+test('switching sites keeps the new selection through refresh and disable clears it', async () => {
+  const run = await runInstallationLoad({ elements: [42, 43].map(id => ({ type: 'node', id,
+    lat: 30.2, lon: -97.7, tags: { military: 'base', name: `Site ${id}` } })) });
+  try {
+    run.click('osm:node:42');
+    run.click('osm:node:43');
+    assert.equal(getSelectedEntityContext()?.id, 'osm:node:43');
+    await militaryInstallationsLayer.update();
+    assert.equal(getSelectedEntityContext()?.id, 'osm:node:43');
+    assert.equal(run.entities().find(e => e.id === 'osm:node:42').point.pixelSize.getValue(), 9);
+    assert.equal(run.entities().find(e => e.id === 'osm:node:43').point.pixelSize.getValue(), 13);
+    militaryInstallationsLayer.disable();
+    run.click('osm:node:42');
+    assert.equal(getSelectedEntityContext(), null, 'disabled layer ignores clicks');
+    militaryInstallationsLayer.enable();
+    await militaryInstallationsLayer.update();
+    assert.equal(getSelectedEntityContext(), null);
+  } finally { run.restore(); }
+});
 
 test('cheap installation distance prefilter is local and antimeridian-safe', () => {
   const oneDegree = approximateSurfaceDistanceM(0, 0, 0, 1);
@@ -233,6 +289,8 @@ async function runInstallationLoad({
   };
   const dataSources = [];
   const cameraFlights = [];
+  let picked = null;
+  let clickAction;
   const viewer = {
     camera: {
       moveEnd: { addEventListener() { return () => {}; } },
@@ -249,7 +307,7 @@ async function runInstallationLoad({
     scene: {
       canvas: { addEventListener() {}, removeEventListener() {} },
       globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-      pick() { return null; },
+      pick() { return picked; },
       // Enough surface for the real render governor to drive this viewer, so
       // one-shot render requests are observable.
       requestRenderMode: false,
@@ -266,7 +324,13 @@ async function runInstallationLoad({
     },
   };
 
-  militaryInstallationsLayer.init(viewer);
+  const originalSetInputAction = Cesium.ScreenSpaceEventHandler.prototype.setInputAction;
+  Cesium.ScreenSpaceEventHandler.prototype.setInputAction = function (action, type, modifier) {
+    if (type === Cesium.ScreenSpaceEventType.LEFT_CLICK) clickAction = action;
+    return originalSetInputAction.call(this, action, type, modifier);
+  };
+  try { militaryInstallationsLayer.init(viewer); }
+  finally { Cesium.ScreenSpaceEventHandler.prototype.setInputAction = originalSetInputAction; }
   installRenderGovernor(viewer);
   militaryInstallationsLayer.enable();
   await militaryInstallationsLayer.update();
@@ -277,6 +341,11 @@ async function runInstallationLoad({
     entities: () => dataSources[0]?.entities?.values || [],
     contextLabels: () => contextEvents,
     stats: () => militaryInstallationsLayer.getStats(),
+    click(target) {
+      const entity = typeof target === 'string' ? dataSources[0].entities.getById(target) : target;
+      picked = entity ? { id: entity } : undefined;
+      clickAction({ position: { x: 0, y: 0 } });
+    },
     renderRequests: () => getRenderGovernorDiagnostics().recentRequests.map((item) => item.reason),
     restore() {
       militaryInstallationsLayer.destroy(viewer);

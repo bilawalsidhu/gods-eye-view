@@ -1,5 +1,20 @@
 import * as Cesium from 'cesium';
 import { governorRequestRender } from './renderGovernor.js';
+import { keySetupRequirement } from './keySetupCore.mjs';
+
+/**
+ * Why Google 3D is unavailable, phrased so the tooltip and toast recommend the
+ * RIGHT fix. With no credentials the fix is a key (or the ion route); with a
+ * key or ion token configured, the tileset failed for another reason —
+ * restrictions, quota, an EEA-billed key, or the network — and telling the
+ * user to add a key they already added is the wrong advice.
+ * @param {boolean} hasCredentials
+ * @returns {string}
+ */
+export function photorealUnavailableReason(hasCredentials) {
+  if (hasCredentials) return 'Google 3D tiles unavailable — check the key\'s API restrictions, quota, or network';
+  return `${keySetupRequirement('google-maps')} — or a Cesium ion token for the ion-hosted route`;
+}
 
 export const MAP_STACKS = [
   {
@@ -140,9 +155,15 @@ export class MapStackController {
    * @returns {string}
    */
   _unavailableReason(stack) {
-    return stack?.requiresIon
-      ? 'Cesium ion token required for Bing stacks'
-      : `${stack?.label || 'This map stack'} is unavailable`;
+    if (stack?.requiresIon) return keySetupRequirement('cesium-ion');
+    if (stack?.kind === 'photoreal') return photorealUnavailableReason(this._hasPhotorealCredentials());
+    return `${stack?.label || 'This map stack'} is unavailable`;
+  }
+
+  /** A direct Google key or an ion token is enough to attempt Google 3D. */
+  _hasPhotorealCredentials() {
+    const googleKey = typeof window !== 'undefined' ? window.__GOOGLE_MAPS_API_KEY__ : '';
+    return Boolean(String(googleKey || '').trim()) || Boolean(String(this.cesiumToken || '').trim());
   }
 
   getStack(id) {

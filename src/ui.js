@@ -4661,9 +4661,9 @@ export class StyleManager {
         const searched = await militaryInstallationsLayer.searchNearby?.();
         if (searched === false) return false;
         const stats = militaryInstallationsLayer.getStats?.();
-        this._showToast(stats?.status === 'zoom-in'
+        this._showToast(stats?.statusMessage || (stats?.status === 'zoom-in'
           ? 'Zoom in to search mapped installations'
-          : 'Nearby installations refreshed');
+          : 'Nearby installations refreshed'));
         return true;
       }, 'Nearby installations could not be refreshed; try again').finally(() => {
         button.disabled = false;
