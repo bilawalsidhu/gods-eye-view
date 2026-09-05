@@ -7,6 +7,10 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Fixed
 
+- File and env CCTV source URLs are syntax-checked when the registry loads.
+  Non-https, malformed, credential-bearing, and overlong values are dropped
+  with a server warning so the camera falls through to the Street View or
+  synthetic frame instead of failing late at fetch time.
 - Mapped-site outages show their scheduled retry countdown and distinguish
   known Overpass rate limits, timeouts, and query failures. Search feedback no
   longer claims a refresh succeeded while the layer is unavailable or loading.

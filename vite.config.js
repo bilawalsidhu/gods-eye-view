@@ -3512,6 +3512,67 @@ function isVideoFeedType(feedType) {
   return feedType === 'mp4' || feedType === 'webm' || feedType === 'hls';
 }
 
+/** Max accepted length for a file/env CCTV source URL (bytes/chars). */
+const CCTV_SOURCE_URL_MAX_LENGTH = 2048;
+
+/**
+ * Sanitize a file/env CCTV source URL.
+ *
+ * Live packs build their own pinned https URLs, but hand-written file/env
+ * packs pass through `normalizeSourceItem` untouched. A typo there degrades
+ * the camera to Street View/synthetic and wastes a registry slot, and a
+ * non-https or internal URL would be fetched server-side by the frame/media
+ * proxies. Fail soft: return '' so the existing fallback chain applies.
+ *
+ * @param {*} value - Raw url/snapshotUrl value.
+ * @param {string} [cameraId] - Camera id used only for the warn log.
+ * @returns {string} Trimmed valid URL, or '' when invalid.
+ */
+export function sanitizeCctvSourceUrl(value, cameraId = '') {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const label = cameraId ? ` for '${cameraId}'` : '';
+  if (trimmed.length > CCTV_SOURCE_URL_MAX_LENGTH) {
+    console.warn(`[CCTV] dropping overlong source URL${label}`);
+    return '';
+  }
+  if (/\s/.test(trimmed)) {
+    console.warn(`[CCTV] dropping malformed source URL${label}`);
+    return '';
+  }
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    console.warn(`[CCTV] dropping malformed source URL${label}`);
+    return '';
+  }
+  if (parsed.username || parsed.password) {
+    console.warn(`[CCTV] dropping source URL with credentials${label}`);
+    return '';
+  }
+  const protocol = parsed.protocol.toLowerCase();
+  const hostname = parsed.hostname.toLowerCase();
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  if (protocol === 'http:') {
+    if (!isLocalhost) {
+      console.warn(`[CCTV] dropping non-https source URL${label}`);
+      return '';
+    }
+    return trimmed;
+  }
+  if (protocol !== 'https:') {
+    console.warn(`[CCTV] dropping non-https source URL${label}`);
+    return '';
+  }
+  if (!hostname || (!isLocalhost && !hostname.includes('.'))) {
+    console.warn(`[CCTV] dropping malformed source URL${label}`);
+    return '';
+  }
+  return trimmed;
+}
+
 // ---------------------------------------------------------------------------
 // CCTV proxy constants and source cache state
 // ---------------------------------------------------------------------------
@@ -4171,36 +4232,43 @@ async function loadTflSourcesFromOpenData() {
 /**
  * Normalize a raw CCTV source item into a canonical shape with safe defaults.
  *
+ * File/env `url`/`snapshotUrl` values are syntax-checked via
+ * `sanitizeCctvSourceUrl` (https only, plus localhost http for dev). Invalid
+ * values become '' so the frame fallback chain (upstream -> Street View ->
+ * synthetic) applies instead of a late fetch failure.
+ *
  * @param {object} item - Raw source from file, env, or Austin Open Data.
  * @returns {object} Normalized source with all expected fields populated.
  */
-function normalizeSourceItem(item) {
+export function normalizeSourceItem(item) {
+  const source = item && typeof item === 'object' ? item : {};
+  const id = String(source.id || '').trim();
   return {
-    id: String(item.id || '').trim(),
-    name: String(item.name || item.id || '').trim(),
-    city: String(item.city || ''),
-    cityId: String(item.cityId || ''),
-    provider: String(item.provider || 'Configured CCTV Source'),
-    lat: toFiniteNumber(item.lat),
-    lon: toFiniteNumber(item.lon),
-    headingDeg: toFiniteNumber(item.headingDeg),
-    headingConfidence: String(item.headingConfidence || item.headingSource || '').toLowerCase(),
-    pitchDeg: toFiniteNumber(item.pitchDeg),
-    fovDeg: toFiniteNumber(item.fovDeg),
-    rangeM: toFiniteNumber(item.rangeM),
-    mountHeightM: toFiniteNumber(item.mountHeightM),
-    groundElevationM: toFiniteNumber(item.groundElevationM),
-    feedType: normalizeFeedType(item.feedType || item.type || ''),
-    url: typeof item.url === 'string' ? item.url : '',
-    snapshotUrl: typeof item.snapshotUrl === 'string' ? item.snapshotUrl : '',
-    license: String(item.license || item.licenseNote || ''),
-    sourceKind: String(item.sourceKind || item.kind || 'configured'),
+    id,
+    name: String(source.name || source.id || '').trim(),
+    city: String(source.city || ''),
+    cityId: String(source.cityId || ''),
+    provider: String(source.provider || 'Configured CCTV Source'),
+    lat: toFiniteNumber(source.lat),
+    lon: toFiniteNumber(source.lon),
+    headingDeg: toFiniteNumber(source.headingDeg),
+    headingConfidence: String(source.headingConfidence || source.headingSource || '').toLowerCase(),
+    pitchDeg: toFiniteNumber(source.pitchDeg),
+    fovDeg: toFiniteNumber(source.fovDeg),
+    rangeM: toFiniteNumber(source.rangeM),
+    mountHeightM: toFiniteNumber(source.mountHeightM),
+    groundElevationM: toFiniteNumber(source.groundElevationM),
+    feedType: normalizeFeedType(source.feedType || source.type || ''),
+    url: sanitizeCctvSourceUrl(source.url, id),
+    snapshotUrl: sanitizeCctvSourceUrl(source.snapshotUrl, id),
+    license: String(source.license || source.licenseNote || ''),
+    sourceKind: String(source.sourceKind || source.kind || 'configured'),
     // Optional CAL badge input (cctv-v2 design §3b/§9.2, additive-only per the
     // global constraints — nothing else in this file changes): hand-authored
     // file/env catalog entries may declare poseSource:'curated' so the panel
     // badge can distinguish them from raw automated priors (e.g. Austin Open
     // Data, which never sets this field). Passed through as-is to the client.
-    poseSource: item.poseSource === 'curated' ? 'curated' : undefined,
+    poseSource: source.poseSource === 'curated' ? 'curated' : undefined,
   };
 }
 
