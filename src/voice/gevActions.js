@@ -18,10 +18,11 @@ import { initCameraVerbs, moveCamera, flyRoute, interruptCameraMotion, adjustOrb
 import { cachedGroundFloor, warmGroundFloor } from '../data/groundFloor.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 import { resolveRegionRingForQuery } from '../annotations/annotationResolver.js';
-import { normalizeRadioCountryInput } from '../data/radioCountry.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
+import { AzureMapsBffClient } from '../azure/mapsClient.js';
 
-const ALLOWED_STYLES = new Set(['normal', 'retro', 'surveillance', 'thermal', 'anime', 'noir', 'snow']);
+const azureMaps = new AzureMapsBffClient({ fetchImpl: (...args) => globalThis.fetch(...args) });
+
 const PANEL_ALIASES = new Map([
   ['data', 'data-panel'],
   ['data layers', 'data-panel'],
@@ -30,14 +31,8 @@ const PANEL_ALIASES = new Map([
   ['data layer menu', 'data-panel'],
   ['locations', 'location-bar'],
   ['location', 'location-bar'],
-  ['styles', 'control-panel'],
-  ['filters', 'control-panel'],
-  ['visual styles', 'control-panel'],
   ['cctv', 'cctv-panel'],
   ['cameras', 'cctv-panel'],
-  ['radio', 'radio-panel'],
-  ['internet radio', 'radio-panel'],
-  ['radio stations', 'radio-panel'],
   ['context', 'global-context-panel'],
   ['context panel', 'global-context-panel'],
   ['global context', 'global-context-panel'],
@@ -54,7 +49,7 @@ const PANEL_ALIASES = new Map([
   ['sources', 'control-panel'],
 ]);
 
-const PANEL_IDS = new Set(['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'global-context-panel', 'scene-panel', 'pp-toggles']);
+const PANEL_IDS = new Set(['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'global-context-panel', 'scene-panel', 'pp-toggles']);
 const CONTEXT_MODE_ALIASES = new Map([
   ['off', 'off'],
   ['none', 'off'],
@@ -62,11 +57,6 @@ const CONTEXT_MODE_ALIASES = new Map([
   ['contacts', 'flights'],
   ['contact', 'flights'],
   ['flights', 'flights'],
-  ['space missions', 'space-missions'],
-  ['space-mission', 'space-missions'],
-  ['space mission', 'space-missions'],
-  ['space-missions', 'space-missions'],
-  ['missions', 'space-missions'],
 ]);
 /**
  * Every model-readable field that carries a context-mode id, and what an
@@ -123,24 +113,6 @@ function withContextModeVocabulary(state) {
   return out;
 }
 
-const COCKPIT_ACTION_ALIASES = new Map([
-  ['next', 'next'],
-  ['previous', 'previous'],
-  ['prev', 'previous'],
-  ['enter', 'enter'],
-  ['exit', 'exit'],
-  ['status', 'status'],
-  ['state', 'status'],
-  ['next military', 'next'],
-  ['next military aircraft', 'next'],
-  ['next helicopter', 'next'],
-  ['next closest', 'next'],
-  ['next closest helicopter', 'next'],
-  ['next closest military', 'next'],
-  ['go to next', 'next'],
-]);
-const COCKPIT_TARGET_LAYERS = new Set(['flights', 'military', 'ais-live-vessels', 'military-installations']);
-
 const LAYER_ALIASES = new Map([
   ['flights', 'flights'],
   ['planes', 'flights'],
@@ -150,18 +122,10 @@ const LAYER_ALIASES = new Map([
   ['earthquakes', 'earthquakes'],
   ['quakes', 'earthquakes'],
   ['satellites', 'satellites'],
-  ['space mission', 'rocket-launches'],
-  ['space missions', 'rocket-launches'],
-  ['missions', 'rocket-launches'],
   ['traffic', 'traffic'],
   ['street traffic', 'traffic'],
   ['cctv', 'cctv'],
   ['cameras', 'cctv'],
-  ['radio', 'radio'],
-  ['internet radio', 'radio'],
-  ['radio stations', 'radio'],
-  ['bikeshare', 'bikeshare'],
-  ['bikes', 'bikeshare'],
   ['ais', 'ais-live-vessels'],
   ['ships', 'ais-live-vessels'],
   ['vessels', 'ais-live-vessels'],
@@ -187,37 +151,22 @@ const CITY_ALIASES = new Map([
   ['washington d.c.', 'dc'],
 ]);
 
-// Basemap stack vocabulary. Switching requires an explicit stack name
-// ("Bing aerial", "road map", "OSM", "Google 3D") — any "satellite(s)"
-// phrasing ALWAYS means the satellites DATA LAYER, never a basemap; the
-// session instructions carry the decision table.
-//
-// Road phrasings resolve to OSM, the one shipped road basemap. Every alias
-// must name a live `MAP_STACKS` id: an alias for a retired stack would resolve
-// cleanly and then fail at the controller with "Unknown map stack", which reads
-// to the operator as a broken command rather than a retired source.
+// Basemap vocabulary. Every alias names a live MAP_STACKS id.
 const STACK_ALIASES = new Map([
-  ['photoreal', 'photoreal'],
-  ['google 3d', 'photoreal'],
-  ['google', 'photoreal'],
-  ['3d', 'photoreal'],
-  ['photorealistic', 'photoreal'],
-  ['bing-aerial', 'bing-aerial'],
-  ['bing aerial', 'bing-aerial'],
-  ['bing-labels', 'bing-labels'],
-  ['bing labels', 'bing-labels'],
-  ['labels', 'bing-labels'],
-  ['aerial with labels', 'bing-labels'],
-  ['esri-imagery', 'esri-imagery'],
-  ['esri', 'esri-imagery'],
-  ['esri imagery', 'esri-imagery'],
-  ['esri satellite', 'esri-imagery'],
+  ['azure-satellite', 'azure-satellite'],
+  ['azure satellite', 'azure-satellite'],
+  ['satellite basemap', 'azure-satellite'],
+  ['azure-hybrid', 'azure-hybrid'],
+  ['azure hybrid', 'azure-hybrid'],
+  ['hybrid', 'azure-hybrid'],
+  ['aerial with labels', 'azure-hybrid'],
+  ['azure-streets', 'azure-streets'],
+  ['azure streets', 'azure-streets'],
+  ['streets', 'azure-streets'],
+  ['road map', 'azure-streets'],
   ['osm', 'osm'],
   ['openstreetmap', 'osm'],
   ['open street map', 'osm'],
-  ['road', 'osm'],
-  ['roads', 'osm'],
-  ['road map', 'osm'],
 ]);
 
 /** Search order for track_entity across entity layer families. */
@@ -324,15 +273,6 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
         throw new Error(`Unknown data layer: ${args.layerId || 'missing'}`);
       }
       if (!dataManager.layers.has(layerId)) {
-        if (layerId === 'radio') {
-          return {
-            ok: false,
-            action: 'set_layer_visibility',
-            layerId,
-            error: 'Radio layer unavailable',
-            ...readLayerLifecycleSummary(dataManager, layerId),
-          };
-        }
         throw new Error(`Unknown data layer: ${args.layerId || 'missing'}`);
       }
       const enabled = Boolean(args.enabled);
@@ -350,9 +290,6 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
           }
         } else {
           changed = await dataManager.setEnabled(layerId, enabled, changeOptions);
-        }
-        if (layerId === 'rocket-launches' || layerId === 'satellites') {
-          await styleManager?._waitForContextLayerSettlement?.();
         }
       } catch (error) {
         changeError = error;
@@ -572,13 +509,6 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
       };
     }
 
-    if (name === 'set_visual_style') {
-      const style = normalizeStyle(args.style);
-      if (!style) throw new Error(`Unknown visual style: ${args.style || 'missing'}`);
-      styleManager.setStyle(style);
-      return { ok: true, action: 'set_visual_style', style };
-    }
-
     if (name === 'set_panel_open') {
       const panelId = normalizePanelId(args.panelId || args.panel);
       if (!panelId) throw new Error(`Unknown panel: ${args.panelId || args.panel || 'missing'}`);
@@ -637,112 +567,6 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
         ...withContextModeVocabulary(result),
         ...(contactsWindow ? { contactsWindow } : {}),
       };
-    }
-
-    if (name === 'control_cockpit') {
-      if (!styleManager?.controlCockpit) {
-        return { ok: false, action: 'control_cockpit', error: 'Cockpit control unavailable' };
-      }
-      const rawAction = args.action || args.command;
-      const action = normalizeCockpitAction(rawAction);
-      const notificationToken = args.notificationToken || null;
-      if (!action) {
-        return {
-          ok: false,
-          action: 'control_cockpit',
-          error: `Unknown cockpit action: ${args.action || args.command || 'missing'}`,
-        };
-      }
-      const inferred = normalizeCockpitNavigationHints(rawAction);
-      const targetLayer = normalizeCockpitTargetLayer(
-        args.targetLayer || inferred.targetLayer || args.layer || args.layerId,
-      );
-      const aircraftClass = normalizeAircraftClassFilter(args.aircraftClass || inferred.aircraftClass || args.type || args.filterType);
-      let contextChangedForEntry = false;
-      let priorContextMode = null;
-      let rollbackTarget = null;
-      if (action === 'enter' && typeof styleManager.setContextMode === 'function') {
-        if (!current()) {
-          return {
-            ok: false,
-            action: 'control_cockpit',
-            cancelled: true,
-            error: 'Cockpit entry was cancelled before it could run',
-            state: styleManager.getCockpitState?.() || null,
-          };
-        }
-        rollbackTarget = styleManager.getAircraftTrackingTarget?.() || null;
-        const contextState = typeof styleManager.getContextModeState === 'function'
-          ? styleManager.getContextModeState()
-          : {};
-        priorContextMode = contextState?.mode || null;
-        const contactsReady = contextState?.mode === 'flights'
-          && contextState?.active !== false
-          && contextState?.changing !== true;
-        if (!contactsReady) {
-          const contextResult = await styleManager.setContextMode('flights', {
-            signal: runOptions.signal,
-            isCurrent: runOptions.isCurrent,
-            // Cockpit entry establishes Contacts as its own precondition. That
-            // is internal choreography, not an operator Context request, so it
-            // must stay inert: claiming here would cancel a pending shared
-            // style/detection restore the operator never overrode.
-            claimVisualAuthority: false,
-          });
-          contextChangedForEntry = contextResult?.ok === true;
-          if (contextResult?.ok !== true || !current()) {
-            const contextRollback = contextChangedForEntry
-              ? await styleManager.setContextMode(priorContextMode, {
-                claimVisualAuthority: false,
-              })
-              : null;
-            return {
-              ok: false,
-              action: 'control_cockpit',
-              cancelled: !current() || Boolean(contextResult?.cancelled),
-              error: contextResult?.error || 'Contacts context could not be established for Cockpit entry',
-              context: contextResult ? withContextModeVocabulary(contextResult) : null,
-              contextRollback: withContextModeVocabulary(contextRollback),
-              state: styleManager.getCockpitState?.() || null,
-            };
-          }
-        }
-      }
-      // Contacts activation can adopt a newer explicit aircraft selection.
-      // Sample only after that transaction settles so an older voice snapshot
-      // cannot overwrite the operator's newer choice.
-      const selectedTarget = action === 'enter'
-        ? selectedCockpitTarget(dataManager)
-        : null;
-      let cockpitResult;
-      try {
-        cockpitResult = await styleManager.controlCockpit(action, {
-          notificationToken,
-          targetLayer,
-          aircraftClass,
-          selectedTarget,
-          rollbackTarget,
-        });
-      } catch (error) {
-        cockpitResult = {
-          ok: false,
-          action: 'control_cockpit',
-          error: error instanceof Error ? error.message : String(error),
-          state: styleManager.getCockpitState?.() || null,
-        };
-      }
-      if (action === 'enter' && cockpitResult?.ok !== true && contextChangedForEntry) {
-        const contextRollback = await styleManager.setContextMode(priorContextMode, {
-          // Undoing this action's own precondition — still choreography.
-          claimVisualAuthority: false,
-          ...(current() ? {
-            signal: runOptions.signal,
-            isCurrent: runOptions.isCurrent,
-          } : {}),
-        });
-        return { ...cockpitResult, contextRollback: withContextModeVocabulary(contextRollback) };
-      }
-      return cockpitResult;
     }
 
     if (name === 'show_data_layers_menu') {
@@ -898,9 +722,6 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
       return controlCctv(dataManager, args, styleManager);
     }
 
-    if (name === 'control_radio') {
-      return controlRadio(viewer, dataManager, args, runOptions);
-    }
 
     if (name === 'track_entity') {
       return trackEntity(viewer, dataManager, styleManager, args);
@@ -924,15 +745,6 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
 
     throw new Error(`Unknown GEV tool: ${name}`);
   };
-}
-
-function selectedCockpitTarget(dataManager) {
-  const selected = getSelectedEntityContext({ dataManager });
-  if (!selected || !['flights', 'military'].includes(selected.layerId)) return null;
-  const module = dataManager?.layers?.get(selected.layerId)?.module;
-  if (!module?.trackById || typeof module.trackById !== 'function') return null;
-  const id = String(selected.id || '').trim();
-  return id ? { layerId: selected.layerId, id } : null;
 }
 
 // Abuse guards: a single tool call may not request more than this many marks,
@@ -1201,402 +1013,6 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
   throw new Error(`Unknown CCTV action: ${args.action || 'missing'}`);
 }
 
-const RADIO_COUNTRY_CENTERS = new Map([
-  ['us', { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' }],
-  ['usa', { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' }],
-  ['united states', { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' }],
-  ['united states of america', { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' }],
-]);
-
-/** Resolve curated cities and common country requests without moving the camera. */
-export function knownRadioLocation(query, locationId = '') {
-  const requestedId = normalizeLocationId(locationId) || normalizeLocationId(query);
-  const city = requestedId ? CITY_POIS[requestedId] : null;
-  if (city) {
-    const bounds = city.viewBounds;
-    return {
-      lat: bounds ? (bounds.southwest.lat + bounds.northeast.lat) / 2 : city.pois[0]?.lat,
-      lon: bounds ? (bounds.southwest.lng + bounds.northeast.lng) / 2 : city.pois[0]?.lon,
-      label: city.name,
-      country: '',
-    };
-  }
-  return RADIO_COUNTRY_CENTERS.get(String(query || '').trim().toLowerCase()) || null;
-}
-
-function radioCoordinatePair(args = {}) {
-  const latitudeProvided = Object.hasOwn(args, 'latitude');
-  const longitudeProvided = Object.hasOwn(args, 'longitude');
-  const provided = latitudeProvided || longitudeProvided;
-  const latitude = args.latitude;
-  const longitude = args.longitude;
-  const valid = latitudeProvided
-    && longitudeProvided
-    && typeof latitude === 'number'
-    && typeof longitude === 'number'
-    && Number.isFinite(latitude)
-    && Number.isFinite(longitude)
-    && latitude >= -90
-    && latitude <= 90
-    && longitude >= -180
-    && longitude <= 180;
-  return { provided, valid, latitude, longitude };
-}
-
-function radioActionIsCurrent(options = {}) {
-  return !options.signal?.aborted
-    && (typeof options.isCurrent !== 'function' || options.isCurrent());
-}
-
-function radioAbortError() {
-  const error = new Error('Radio request was superseded by a newer voice turn');
-  error.name = 'AbortError';
-  return error;
-}
-
-async function resolveRadioLocation(args = {}, coordinates = radioCoordinatePair(args), options = {}) {
-  if (!radioActionIsCurrent(options)) throw radioAbortError();
-  if (coordinates.valid) {
-    const { latitude, longitude } = coordinates;
-    return { lat: latitude, lon: longitude, label: `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`, country: '' };
-  }
-  const query = String(args.locationQuery || '').trim();
-  const known = knownRadioLocation(query, args.locationId);
-  if (known) return known;
-  if (!query) return null;
-  const apiKey = window.__GOOGLE_MAPS_API_KEY__ || import.meta.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) throw new Error('No Google Maps API key available for Radio location search');
-  const controller = new AbortController();
-  const cancelFromTurn = () => controller.abort();
-  if (options.signal?.aborted) throw radioAbortError();
-  options.signal?.addEventListener('abort', cancelFromTurn, { once: true });
-  const timer = setTimeout(() => controller.abort(), 6000);
-  try {
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
-    const response = await fetch(url, { signal: controller.signal });
-    const body = await response.json();
-    if (!radioActionIsCurrent(options)) throw radioAbortError();
-    const result = body.status === 'OK' ? body.results?.[0] : null;
-    if (!result?.geometry?.location) return null;
-    return {
-      lat: result.geometry.location.lat,
-      lon: result.geometry.location.lng,
-      label: result.formatted_address || query,
-      country: '',
-    };
-  } finally {
-    clearTimeout(timer);
-    options.signal?.removeEventListener('abort', cancelFromTurn);
-  }
-}
-
-/** Voice Radio controls over the Radio layer's public player surface. */
-export async function controlRadio(viewer, dataManager, args = {}, options = {}) {
-  const requestedAction = String(args.action || '').trim().toLowerCase();
-  const coordinates = radioCoordinatePair(args);
-  const hasSelectionCriteria = Boolean(
-    args.category
-    || args.locationId
-    || args.locationQuery
-    || coordinates.provided
-    || args.country
-    || args.stationQuery,
-  );
-  // Realtime models can reasonably interpret "play news near Austin" as Play
-  // plus qualifiers. Play cannot honor those qualifiers, so normalize that
-  // equivalent tool shape to Select instead of silently choosing the current
-  // viewport's nearest station.
-  const action = requestedAction === 'play' && hasSelectionCriteria
-    ? 'select'
-    : requestedAction;
-
-  const readRadioLifecycle = () => readLayerLifecycleSummary(dataManager, 'radio');
-
-  const radio = dataManager.layers.get('radio')?.module;
-  if (!radio) {
-    return {
-      ok: false,
-      action: 'control_radio',
-      error: 'Radio layer unavailable',
-      ...readRadioLifecycle(),
-    };
-  }
-  const normalizedCountry = normalizeRadioCountryInput(args.country);
-  let lastIntentOutcome = null;
-  let lastIntentError = null;
-
-  const intentSummary = () => (lastIntentOutcome ? {
-    phase: lastIntentOutcome.phase,
-    cancellationReason: lastIntentOutcome.cancellationReason || null,
-    successorIntentEpoch: lastIntentOutcome.successorIntentEpoch ?? null,
-    successorEnabled: lastIntentOutcome.successorEnabled ?? null,
-    successorOrigin: lastIntentOutcome.successorOrigin ?? null,
-  } : {});
-
-  const cancelled = (summarize) => ({
-    ok: false,
-    action: 'control_radio',
-    cancelled: true,
-    error: 'Radio request was superseded by a newer voice turn',
-    ...intentSummary(),
-    ...summarize(),
-  });
-
-  const radioLifecycleIsSettled = (shouldEnable) => {
-    const lifecycle = readRadioLifecycle();
-    return lifecycle.enabled === shouldEnable
-      && lifecycle.lifecycleState === (shouldEnable ? 'enabled' : 'disabled')
-      && !lifecycle.lifecycleUncertain;
-  };
-
-  const setRadioEnabled = async (shouldEnable) => {
-    lastIntentOutcome = null;
-    lastIntentError = null;
-    if (!radioActionIsCurrent(options)) return false;
-    const enableOptions = { origin: 'voice' };
-    // Both lifecycle directions can await module work. Let the manager own
-    // the complete transaction so barge-in cancels it before a settled
-    // visibility event can record explicit Context intent.
-    if (options.signal) enableOptions.signal = options.signal;
-    let result = false;
-    try {
-      if (typeof dataManager._setEnabledWithIntent === 'function') {
-        const intent = dataManager._setEnabledWithIntent('radio', shouldEnable, enableOptions);
-        result = await intent.promise;
-        if (Number.isInteger(intent.intentEpoch)) {
-          lastIntentOutcome = await dataManager._waitForVisibilityIntent?.('radio', intent.intentEpoch);
-        }
-      } else {
-        result = await dataManager.setEnabled('radio', shouldEnable, enableOptions);
-      }
-    } catch (error) {
-      lastIntentError = error;
-      return false;
-    }
-    if (lastIntentOutcome?.succeeded === false) return false;
-    if (!radioActionIsCurrent(options) && lastIntentOutcome?.succeeded !== true) return false;
-    return result !== false && radioLifecycleIsSettled(shouldEnable);
-  };
-
-  const lifecycleFailure = (message, summarize) => ({
-    ok: false,
-    action: 'control_radio',
-    cancelled: Boolean(lastIntentOutcome?.cancellationReason),
-    error: lastIntentError?.message || message,
-    ...intentSummary(),
-    ...summarize(),
-  });
-
-  const authorizeRadioPlayerMutation = async ({ enableIfOff = false } = {}) => {
-    const lifecycle = readRadioLifecycle();
-    if (radioLifecycleIsSettled(true)) return true;
-    if (
-      !enableIfOff
-      && !lifecycle.enabled
-      && lifecycle.lifecycleState === 'disabled'
-      && !lifecycle.lifecycleUncertain
-    ) return false;
-    const reconciled = await setRadioEnabled(true);
-    return reconciled && radioLifecycleIsSettled(true);
-  };
-
-  const summarize = () => {
-    const state = radio.getUIState?.() || {};
-    return {
-      radioAction: action,
-      ...readRadioLifecycle(),
-      stationId: state.selected?.id || null,
-      category: state.filter || 'all',
-      audioState: state.audioState || 'stopped',
-      volumePct: Math.round((state.volume ?? 0.8) * 100),
-      mutedForVoice: Boolean(state.voiceDucked),
-    };
-  };
-
-  if (!normalizedCountry.valid) {
-    return {
-      ok: false,
-      action: 'control_radio',
-      error: 'Radio country must be a recognized code or country name (80 characters maximum)',
-      ...summarize(),
-    };
-  }
-
-  if (coordinates.provided && !coordinates.valid) {
-    return {
-      ok: false,
-      action: 'control_radio',
-      error: 'Radio coordinates require a complete numeric latitude/longitude pair in range',
-      ...summarize(),
-    };
-  }
-
-  if (!radioActionIsCurrent(options)) return cancelled(summarize);
-
-  if (action === 'enable' || action === 'disable') {
-    const shouldEnable = action === 'enable';
-    const changed = await setRadioEnabled(shouldEnable);
-    if (!radioActionIsCurrent(options) && lastIntentOutcome?.succeeded !== true) return cancelled(summarize);
-    if (!changed) {
-      return lifecycleFailure(
-        `Radio could not be ${shouldEnable ? 'enabled' : 'disabled'}`,
-        summarize,
-      );
-    }
-    return { ok: true, action: 'control_radio', ...summarize() };
-  }
-  if (action === 'status') return { ok: true, action: 'control_radio', ...summarize() };
-  if (action === 'volume') {
-    const volumePct = Number(args.volumePct);
-    if (!Number.isFinite(volumePct) || volumePct < 0 || volumePct > 100) {
-      return { ok: false, action: 'control_radio', error: 'Radio volume must be from 0 to 100', ...summarize() };
-    }
-    const authorized = await authorizeRadioPlayerMutation();
-    if (!radioActionIsCurrent(options)) return cancelled(summarize);
-    if (!authorized) {
-      return lifecycleFailure('Radio must be fully enabled before changing volume', summarize);
-    }
-    if (!radioActionIsCurrent(options)) return cancelled(summarize);
-    const volumeApplied = typeof dataManager.setLayerParams === 'function'
-      ? dataManager.setLayerParams('radio', { volume: volumePct / 100 }, { origin: 'voice' })
-      : radio.setVolume(volumePct / 100);
-    if (volumeApplied === false) {
-      return {
-        ok: false,
-        action: 'control_radio',
-        error: 'Radio must be fully enabled before changing volume',
-        ...summarize(),
-      };
-    }
-    return { ok: true, action: 'control_radio', ...summarize() };
-  }
-  if (action === 'stop') {
-    if (!radioActionIsCurrent(options)) return cancelled(summarize);
-    let stopped = false;
-    try {
-      stopped = await radio.stopPlayback({ origin: 'voice' });
-    } catch (error) {
-      return {
-        ok: false,
-        action: 'control_radio',
-        error: error?.message || 'Radio could not be stopped',
-        ...summarize(),
-      };
-    }
-    if (!radioActionIsCurrent(options)) return cancelled(summarize);
-    if (stopped === false) {
-      return {
-        ok: false,
-        action: 'control_radio',
-        error: 'Radio could not be stopped',
-        ...summarize(),
-      };
-    }
-    return { ok: true, action: 'control_radio', ...summarize() };
-  }
-  if (action === 'pause') {
-    // Pause is a playback-only control. In particular, a Pause sibling must
-    // never resurrect a layer that an explicit Disable just turned off. Keep
-    // its established cancellation authority while an enable is in flight:
-    // the controller commits a successful Pause by aborting that older work.
-    const lifecycle = readRadioLifecycle();
-    if (!lifecycle.enabled && lifecycle.lifecycleState !== 'enabling') {
-      return { ok: true, action: 'control_radio', changed: false, ...summarize() };
-    }
-    if (!radioActionIsCurrent(options)) return cancelled(summarize);
-    const paused = radio.pause?.({ origin: 'voice' }) || false;
-    if (!paused) {
-      return {
-        ok: false,
-        action: 'control_radio',
-        error: 'Radio could not be paused',
-        ...summarize(),
-      };
-    }
-    return { ok: true, action: 'control_radio', changed: true, ...summarize() };
-  }
-  let resolvedLocation = null;
-  if (action === 'select') {
-    try {
-      // Resolve asynchronous user input before enabling Radio. That keeps an
-      // interrupted lookup from mutating layer or station state after barge-in.
-      resolvedLocation = await resolveRadioLocation(args, coordinates, options);
-    } catch (error) {
-      if (error?.name === 'AbortError' || !radioActionIsCurrent(options)) return cancelled(summarize);
-      throw error;
-    }
-    if (!radioActionIsCurrent(options)) return cancelled(summarize);
-    if ((args.locationQuery || args.locationId) && !resolvedLocation) {
-      return { ok: false, action: 'control_radio', error: `Could not resolve Radio location "${args.locationQuery || args.locationId}"`, ...summarize() };
-    }
-  }
-  const authorized = await authorizeRadioPlayerMutation({ enableIfOff: true });
-  if (!radioActionIsCurrent(options)) return cancelled(summarize);
-  if (!authorized) {
-    return lifecycleFailure('Radio could not be enabled', summarize);
-  }
-  const state = radio.getUIState?.() || {};
-  if (!radioActionIsCurrent(options)) return cancelled(summarize);
-  if (!state.stationCount) {
-    return { ok: false, action: 'control_radio', error: state.error || 'No healthy Radio stations are available', ...summarize() };
-  }
-  if (action === 'play' || action === 'resume') {
-    if (!radioActionIsCurrent(options)) return cancelled(summarize);
-    const prepared = state.selected
-      ? true
-      : radio.cycleStation?.(1, { focus: false, autoplay: false });
-    return {
-      ok: Boolean(prepared),
-      action: 'control_radio',
-      radioPlaybackRequested: Boolean(prepared),
-      ...summarize(),
-    };
-  }
-  if (action === 'next' || action === 'previous') {
-    if (!radioActionIsCurrent(options)) return cancelled(summarize);
-    if (args.category) {
-      if (typeof dataManager.setLayerParams === 'function') {
-        dataManager.setLayerParams('radio', { filter: String(args.category) }, { origin: 'voice' });
-      } else {
-        radio.setFilter(String(args.category));
-      }
-    }
-    const selected = radio.cycleStation?.(action === 'next' ? 1 : -1, {
-      focus: false,
-      autoplay: false,
-    });
-    return {
-      ok: Boolean(selected),
-      action: 'control_radio',
-      radioPlaybackRequested: Boolean(selected),
-      ...summarize(),
-    };
-  }
-  if (action === 'select') {
-    const location = resolvedLocation;
-    if (!radioActionIsCurrent(options)) return cancelled(summarize);
-    const station = radio.selectRequestedStation?.({
-      categoryId: String(args.category || 'all'),
-      anchor: location ? { lat: location.lat, lon: location.lon } : null,
-      country: normalizedCountry.empty
-        ? String(location?.country || '')
-        : normalizedCountry.code,
-      stationQuery: String(args.stationQuery || ''),
-    }, { autoplay: false });
-    if (!station) {
-      return { ok: false, action: 'control_radio', error: 'No Radio station matched that location and category', ...summarize() };
-    }
-    return {
-      ok: true,
-      action: 'control_radio',
-      radioPlaybackRequested: true,
-      requestedLocation: location?.label || null,
-      ...summarize(),
-    };
-  }
-  throw new Error(`Unknown Radio action: ${args.action || 'missing'}`);
-}
-
 /**
  * Maps a CCTV focus code to an honest voice-tool result.
  * @param {string|boolean} focusResult CCTV focus result code.
@@ -1616,12 +1032,12 @@ export function cctvVoiceFocusOutcome(focusResult, { cameraSelected = false } = 
         : 'Camera active; tracking holds the view — say untrack first',
     };
   }
-  if (focusResult === CCTV_FOCUS_RESULT.COCKPIT_ACTIVE) {
+  if (focusResult === CCTV_FOCUS_RESULT.DRONE_VIEW_ACTIVE) {
     return {
       ok: false,
       error: cameraSelected
-        ? 'Camera selected; in cockpit — exit cockpit to fly to it'
-        : 'In cockpit — exit cockpit to fly to a camera',
+        ? 'Camera selected; exit Drone View to fly to it'
+        : 'Exit Drone View to fly to a camera',
     };
   }
   return { ok: false, error: 'No active camera to focus' };
@@ -2094,57 +1510,6 @@ function normalizeLayerId(value) {
   return raw;
 }
 
-function normalizeCockpitTargetLayer(value) {
-  const layerId = normalizeLayerId(value);
-  if (!layerId || !COCKPIT_TARGET_LAYERS.has(layerId)) return null;
-  return layerId;
-}
-
-function normalizeCockpitNavigationHints(rawAction) {
-  const raw = String(rawAction || '').trim().toLowerCase();
-  if (!raw) return {};
-
-  const targetLayer = raw.includes('vessel') || raw.includes('ship') || raw.includes('ais')
-    ? 'ais-live-vessels'
-    : raw.includes('installation') || raw.includes('facility') || raw.includes('base')
-      ? 'military-installations'
-      : raw.includes('military')
-        ? 'military'
-        : null;
-
-  const aircraftClass = raw.includes('helicopter') || raw.includes('helo') || raw.includes('chopper')
-    ? 'helicopter'
-    : null;
-
-  return {
-    targetLayer,
-    aircraftClass,
-  };
-}
-
-/**
- * Normalize a spoken/typed aircraft-class filter to the class id the analyst
- * records carry.
- *
- * Every real `classifyAircraft()` id is a single unpunctuated word, so callers
- * already say them exactly and a plain lower-case is enough. The one exception
- * is the TR-3B Easter egg (`tr3b`): people write and say it hyphenated, so
- * "TR-3B" / "tr 3b" / "tr 3 b" would otherwise reach the analyst as a value no
- * record matches. Collapsing spaces and hyphens and comparing against THAT ONE
- * id keeps this surgical — no general alias table, and no other class id
- * collapses to `tr3b`, so nothing else can be caught by it.
- *
- * App-side only: the voice tool schema and the model instructions are
- * untouched, so this costs no prompt-cache churn.
- * @param {*} value Raw class filter from the tool call or an utterance hint.
- * @returns {string|null} Class id, or null when nothing was supplied.
- */
-function normalizeAircraftClassFilter(value) {
-  const raw = String(value || '').trim().toLowerCase();
-  if (!raw) return null;
-  return raw.replace(/[\s-]+/g, '') === TR3B_CLASS ? TR3B_CLASS : raw;
-}
-
 function setPanelOpen(styleManager, panelId, open) {
   if (styleManager && typeof styleManager.setPanelCollapsed === 'function') {
     styleManager.setPanelCollapsed(panelId, !open, { explicit: true });
@@ -2160,29 +1525,6 @@ function normalizeContextMode(value) {
   return CONTEXT_MODE_ALIASES.get(raw) || null;
 }
 
-function normalizeCockpitAction(value) {
-  const raw = String(value || '').trim().toLowerCase();
-  if (!raw) return null;
-
-  const direct = COCKPIT_ACTION_ALIASES.get(raw);
-  if (direct) return direct;
-
-  const normalized = raw
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-    .replace(/\s+/g, ' ');
-  const directNormalized = COCKPIT_ACTION_ALIASES.get(normalized);
-  if (directNormalized) return directNormalized;
-
-  if (/\bprevious\b|\bprev\b/.test(normalized)) return 'previous';
-  if (/\bstatus\b|\bstate\b/.test(normalized)) return 'status';
-  if (/\bexit\b|\bleave\b|\bquit\b/.test(normalized)) return 'exit';
-  if (/\benter\b|\bopen\b|\bstart\b/.test(normalized)) return 'enter';
-  if (/\bnext\b|\bclosest\b|\bnearby\b|\bnearest\b/.test(normalized)) return 'next';
-
-  return null;
-}
-
 function focusDataLayerRow(layerId) {
   const row = document.querySelector(`#data-toggles [data-layer-id="${CSS.escape(layerId)}"]`);
   if (!row) return null;
@@ -2195,15 +1537,6 @@ function focusDataLayerRow(layerId) {
   return { id: layerId, name };
 }
 
-
-function normalizeStyle(value) {
-  const raw = String(value || '').trim().toLowerCase();
-  if (raw === 'filter off' || raw === 'off' || raw === 'default') return 'normal';
-  if (raw === 'night vision' || raw === 'nvg') return 'surveillance';
-  if (raw === 'flir') return 'thermal';
-  if (ALLOWED_STYLES.has(raw)) return raw;
-  return null;
-}
 
 async function flyToRequestedLocation(viewer, args, {
   onStart = null,
@@ -2372,9 +1705,6 @@ function getCurrentViewState(viewer, styleManager, dataManager, sceneDirector = 
         // question can be answered from what they are looking at.
         ...(activeContactsWindow() ? { contactsWindow: activeContactsWindow() } : {}),
       }
-      : null,
-    cockpit: typeof styleManager.getCockpitState === 'function'
-      ? styleManager.getCockpitState()
       : null,
     controls: typeof styleManager.getControlState === 'function' ? styleManager.getControlState() : null,
     scenePlayback: sceneDirector?.getPlaybackStatus?.() || null,
@@ -2642,8 +1972,7 @@ async function getBasemapContext(viewer, viewTarget = null) {
       cachedViewportPlaces
     );
     return {
-      source: 'Google Photorealistic 3D Tiles / Cesium basemap',
-      hasGoogle3DTiles: Boolean(window.__godsEyeView?.tileset),
+      source: window.__godsEyeView?.mapStackController?.getActiveStack?.()?.label || 'Cesium basemap',
       viewScale,
       viewportSamples: samples,
       viewportPlaces,
@@ -2678,8 +2007,7 @@ async function getBasemapContext(viewer, viewTarget = null) {
   const place = resolvedPlace || fallbackPlace;
   const nearbyPlaces = resolvedNearbyPlaces || [];
   return {
-    source: 'Google Photorealistic 3D Tiles / Cesium basemap',
-    hasGoogle3DTiles: Boolean(window.__godsEyeView?.tileset),
+    source: window.__godsEyeView?.mapStackController?.getActiveStack?.()?.label || 'Cesium basemap',
     viewScale,
     viewportSamples: samples,
     viewportPlaces,
@@ -2938,41 +2266,27 @@ function inferCountry(latitude, longitude) {
 }
 
 async function reverseGeocode(latitude, longitude) {
-  const apiKey = window.__GOOGLE_MAPS_API_KEY__;
-  if (!apiKey || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
   const key = reverseGeocodeKey(latitude, longitude);
   if (reverseGeocodeCache.has(key)) return reverseGeocodeCache.get(key);
   if (reverseGeocodeInFlight.has(key)) return reverseGeocodeInFlight.get(key);
 
   const request = (async () => {
     try {
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(`${latitude},${longitude}`)}&key=${apiKey}`;
-      const response = await fetchWithTimeout(url, {}, 5000);
-      const data = await response.json();
-      if (data.status !== 'OK' || !data.results?.length) {
+      const data = await azureMaps.reverseGeocode({ latitude, longitude });
+      if (!data.addresses?.length) {
         reverseGeocodeCache.set(key, null);
         return null;
       }
-
-      const result = data.results[0];
-      const relevantResults = data.results.slice(0, 12);
-      const components = Array.isArray(result.address_components) ? result.address_components : [];
-      const component = (type) => components.find((item) => item.types?.includes(type))?.long_name || null;
-      const labels = uniqueStrings(relevantResults.map((item) => item.formatted_address)).slice(0, 12);
-      const streetLabels = uniqueStrings(relevantResults.flatMap((item) => {
-        const itemComponents = Array.isArray(item.address_components) ? item.address_components : [];
-        return itemComponents
-          .filter((entry) => entry.types?.includes('route'))
-          .map((entry) => entry.long_name);
-      })).slice(0, 12);
+      const result = data.addresses[0];
       const place = {
-        formattedAddress: result.formatted_address || null,
-        locality: component('locality') || component('postal_town') || component('administrative_area_level_2'),
-        region: component('administrative_area_level_1'),
-        country: component('country'),
-        types: result.types || [],
-        labels,
-        streetLabels,
+        formattedAddress: result.formattedAddress || null,
+        locality: result.municipality || null,
+        region: null,
+        country: result.countryCode || null,
+        types: [],
+        labels: uniqueStrings([result.formattedAddress]),
+        streetLabels: [],
       };
       reverseGeocodeCache.set(key, place);
       return place;
@@ -2988,8 +2302,7 @@ async function reverseGeocode(latitude, longitude) {
 
 async function reverseGeocodeViewportSamples(samples, cameraHeightM) {
   if (!shouldReverseGeocodeViewport(cameraHeightM) || !samples.length) return null;
-  // At building scale, center geocoding plus Nearby Places is more precise and
-  // avoids three redundant Google requests.
+  // At building scale, one center reverse-geocode is sufficient.
   if (cameraHeightM <= 10000) return null;
   const prioritySamples = [samples[0], samples[1], samples[2]].filter(Boolean);
   const places = (await Promise.all(prioritySamples.map(async (sample) => {
@@ -3043,33 +2356,10 @@ function summarizeViewportPlaces(places) {
 }
 
 async function fetchNearbyPlaces(latitude, longitude, cameraHeightM) {
-  const radiusM = nearbyPlacesRadiusM(cameraHeightM);
-  const cacheKey = nearbyPlacesCacheKey(latitude, longitude, cameraHeightM);
-  if (nearbyPlacesCache.has(cacheKey)) return nearbyPlacesCache.get(cacheKey);
-  if (nearbyPlacesInFlight.has(cacheKey)) return nearbyPlacesInFlight.get(cacheKey);
-
-  const request = (async () => {
-    try {
-      const params = new URLSearchParams({
-        lat: String(latitude),
-        lon: String(longitude),
-        radiusM: String(radiusM),
-      });
-      const response = await fetchWithTimeout(`/api/google/nearby-places?${params}`, {}, 5000);
-      const data = await response.json().catch(() => null);
-      const places = response.ok && Array.isArray(data?.places)
-      ? data.places.filter((place) => place?.name).slice(0, 12)
-        : [];
-      nearbyPlacesCache.set(cacheKey, places);
-      return places;
-    } catch {
-      return [];
-    } finally {
-      nearbyPlacesInFlight.delete(cacheKey);
-    }
-  })();
-  nearbyPlacesInFlight.set(cacheKey, request);
-  return request;
+  void latitude;
+  void longitude;
+  void cameraHeightM;
+  return [];
 }
 
 function uniqueStrings(values) {
@@ -3079,8 +2369,8 @@ function uniqueStrings(values) {
 }
 
 /**
- * Normalize a feed-sourced label (place/street/POI name from OSM, geocoding,
- * Google Places, etc.) before it enters the voice LLM's scene context.
+ * Normalize a feed-sourced place, street, or POI label before it enters the
+ * voice model's scene context.
  * Collapses newlines/control chars to single spaces and hard-caps length, so
  * crafted map data can't smuggle multi-line "instructions" into the prompt.
  * Defense-in-depth — these are reference labels, not commands.

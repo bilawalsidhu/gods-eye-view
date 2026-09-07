@@ -136,7 +136,7 @@ const _wgs84OneOverRadii = Cesium.Ellipsoid.WGS84.oneOverRadii;
  * CROSSES the ellipsoid on the way there, and the answer is still sky. That is
  * deliberate. A sub-ellipsoid camera is an artifact of the geoid/ellipsoid
  * split, not of being underground: the geoid runs ~34 m below the ellipsoid at
- * JFK, so a cockpit parked on the ramp there sits at −18 m of ellipsoid height
+ * JFK, so a camera parked on the ramp there sits at −18 m of ellipsoid height
  * with the whole rendered world still above it. The ellipsoid that ray crosses
  * is not a surface anyone can see, so intersecting it would answer a question
  * nobody asked; what a label is read against is decided instead by whether it
@@ -216,7 +216,7 @@ export function skyBackdropFactor(cameraPosition, position, featherRad = HORIZON
 
 /**
  * Returns the shared horizon occluder, updated to the camera's position.
- * With the Cesium globe hidden (Google 3D tiles provide the planet) nothing
+ * With the Cesium globe hidden (rendered 3D geometry provide the planet) nothing
  * writes far-side depth, so billboards must be horizon-culled manually.
  * Call once per tick, then test points with occluder.isPointVisible(pos).
  *

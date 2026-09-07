@@ -145,13 +145,7 @@ test('cable overlay publisher owns the production show/publish/hide lifecycle', 
 });
 
 test('cable ground lines classify against exactly the active surface on every stack', () => {
-  // Photorealistic tiles render with the globe hidden — 3D-tile pass only.
-  assert.equal(
-    cableClassificationTypeForStack('photoreal'),
-    Cesium.ClassificationType.CESIUM_3D_TILE,
-  );
-  // Every globe stack renders imagery on the shown globe — terrain pass only.
-  for (const stackId of ['bing-aerial', 'bing-labels', 'esri-imagery', 'osm']) {
+  for (const stackId of ['azure-satellite', 'azure-hybrid', 'azure-streets', 'osm']) {
     assert.equal(
       cableClassificationTypeForStack(stackId),
       Cesium.ClassificationType.TERRAIN,
@@ -159,12 +153,11 @@ test('cable ground lines classify against exactly the active surface on every st
     );
   }
   // Unknown stack → BOTH: visible on every surface, the shipped fallback.
-  // A TRUTHY unknown id must reach it too — "not photoreal" is not the same
+  // A truthy unknown id must reach it too; unknown is not the same
   // claim as "renders on the globe", and asserting TERRAIN for an id this
   // module has never heard of would hide the cables on a future 3D-tile
   // stack instead of degrading to the documented safe behavior.
   assert.equal(cableClassificationTypeForStack('some-future-stack'), Cesium.ClassificationType.BOTH);
-  assert.equal(cableClassificationTypeForStack('photoreal-v2'), Cesium.ClassificationType.BOTH);
   assert.equal(cableClassificationTypeForStack(''), Cesium.ClassificationType.BOTH);
   assert.equal(cableClassificationTypeForStack(undefined), Cesium.ClassificationType.BOTH);
   assert.equal(cableClassificationTypeForStack(null), Cesium.ClassificationType.BOTH);
@@ -181,10 +174,10 @@ test('cable ground lines classify against exactly the active surface on every st
   }
 
   // Boot fires no stack event; the initial value derives from live scene
-  // state exactly like the height-datum listeners: photoreal ⇔ globe hidden.
+  // state exactly like the height-datum listeners.
   assert.equal(
     cableClassificationTypeForScene({ globe: { show: false } }),
-    Cesium.ClassificationType.CESIUM_3D_TILE,
+    Cesium.ClassificationType.BOTH,
   );
   assert.equal(
     cableClassificationTypeForScene({ globe: { show: true } }),
@@ -211,8 +204,8 @@ test('a map-stack change re-classifies every cable line once, and destroy detach
   const listener = listeners.get('gev:map-stack-changed');
   assert.equal(typeof listener, 'function', 'init must subscribe to the stack event');
 
-  listener({ detail: { activeId: 'photoreal', status: 'ready' } });
-  assert.equal(classificationOf(cableEntity), Cesium.ClassificationType.CESIUM_3D_TILE);
+  listener({ detail: { activeId: 'azure-hybrid', status: 'ready' } });
+  assert.equal(classificationOf(cableEntity), Cesium.ClassificationType.TERRAIN);
 
   listener({ detail: { activeId: 'osm', status: 'ready' } });
   assert.equal(classificationOf(cableEntity), Cesium.ClassificationType.TERRAIN);

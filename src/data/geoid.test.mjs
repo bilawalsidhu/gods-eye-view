@@ -25,7 +25,7 @@ const LONDON = { lat: 51.5072, lon: -0.1275, nExpected: 46.1 };
 const AUSTIN = { lat: 30.2672, lon: -97.7431, nExpected: -26.9 };
 const SF = { lat: 37.7749, lon: -122.4194, nExpected: -32.2 };
 const DENVER = { lat: 39.7392, lon: -104.9903, nExpected: -17.3 };
-/** SFO runway 28R touchdown area — the cockpit/OSD field report's coordinates. */
+/** SFO runway 28R touchdown area — the camera/OSD field report's coordinates. */
 const SFO = { lat: 37.616, lon: -122.368 };
 
 test('geoidHeight throws before ensureGeoidReady() has resolved', () => {
@@ -84,7 +84,7 @@ test('geoidHeight wraps longitude consistently (359.87 === -0.13)', async () => 
 
 // ── ellipsoidalToMslDisplayM — the ALT-readout datum correction ─────────────
 //
-// Field report (2026-08-22, cockpit parked at SFO): the camera OSD read
+// Field report (2026-08-22, camera parked at SFO): the camera OSD read
 // "ALT: -15M" because Cesium's camera height is ELLIPSOIDAL and San Francisco
 // sits ~32 m above the geoid's dip under the ellipsoid. Same family as the
 // earlier JFK "ALT: -18M".
@@ -96,7 +96,7 @@ test('the SFO deck case: an ellipsoidal height equal to N reads as 0 m MSL', asy
   assert.equal(ellipsoidalToMslDisplayM(n, n), 0);
 });
 
-test('the reported SFO cockpit OSD height turns into a small positive MSL number', async () => {
+test('the reported SFO camera OSD height turns into a small positive MSL number', async () => {
   await ensureGeoidReady();
   const n = geoidHeight(SFO.lat, SFO.lon);
   assert.ok(n < -25 && n > -40, `SFO undulation should be strongly negative, got ${n}`);

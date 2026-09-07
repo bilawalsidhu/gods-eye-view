@@ -16,7 +16,7 @@ import {
  * lane, which the readout card and Contacts panel consume. These tests pin the
  * OTHER half of that contract: the same click must also reach the shared
  * selection slot, because voice's `get_entity_context {scope:'selected'}` and
- * the Cockpit's selected-target lookup read only this slot. When they did not,
+ * selected-target lookup read only this slot. When they did not,
  * a plainly selected plane answered "there isn't a plane currently selected".
  */
 

@@ -451,7 +451,7 @@ test('lifecycle is idempotent and teardown removes listeners, observers, and DOM
   initWorldOverlay(env.viewer);
   assert.equal(env.postRender.listeners.size, 1);
   assert.equal(env.moveEnd.listeners.size, 1);
-  assert.equal(env.window.listenerCount('gev:cockpit-mode-changed'), 1);
+  assert.equal(env.window.listenerCount('gev:drone-view-changed'), 1);
   assert.equal(env.document.getElementById('world-overlay-root') !== null, true);
   const root = env.document.getElementById('world-overlay-root');
   const surface = env.document.getElementById('world-overlay-detection-surface');
@@ -468,14 +468,14 @@ test('lifecycle is idempotent and teardown removes listeners, observers, and DOM
   );
   assert.match(
     readFileSync(new URL('../../style.css', import.meta.url), 'utf8'),
-    /#world-overlay-detection-surface,\n#world-overlay-canvas \{\n  position: absolute;\n  inset: 0;[\s\S]*?pointer-events: none;/,
+    /#world-overlay-detection-surface,[\s\S]*?#world-overlay-canvas\s*\{\s*position: absolute;\s*inset: 0;[\s\S]*?pointer-events: none;/,
     'both host surfaces share absolute positioning and pointer passthrough',
   );
 
   destroyWorldOverlay();
   assert.equal(env.postRender.listeners.size, 0);
   assert.equal(env.moveEnd.listeners.size, 0);
-  assert.equal(env.window.listenerCount('gev:cockpit-mode-changed'), 0);
+  assert.equal(env.window.listenerCount('gev:drone-view-changed'), 0);
   assert.equal(env.document.getElementById('world-overlay-root'), null);
   assert.equal(env.document.getElementById('world-overlay-detection-surface'), null);
   assert.ok(env.resizeObservers.every((observer) => observer.disconnected));
@@ -1238,7 +1238,7 @@ test('custom lanes without the detection target paint on the shared canvas', () 
 // ── UI exclusion contract ───────────────────────────────────────────────────
 // These replace a single earlier test that fed a FULL-VIEWPORT occluder and
 // asserted `paintedCount === 0` plus a `clip('evenodd')` call. That contract
-// pinned the defect as correct: it is exactly the cockpit failure mode (the
+// pinned the defect as correct: it is exactly the Drone View failure mode (the
 // coalesced chrome union reached 94-98 % of the viewport, deleting every card
 // and clipping detection to nothing), and it blessed the even-odd clip that
 // punched hard-edged voids through the detection field in map view. The
@@ -1407,7 +1407,7 @@ test('a placement is only ever kept under chrome that composites ABOVE the host'
 
   const viewport = { left: 0, top: 0, width: 400, height: 300 };
   // Above the host: unplaceable is still safe, so the card is kept and the panel
-  // simply covers it — the behaviour that fixed the cockpit blackout.
+  // simply covers it — the behaviour that fixed the Drone View blackout.
   assert.equal(paintedUnder([{ id: 'left-panel-stack', rect: viewport }]), 1,
     'chrome above the host keeps the soft preference');
   // Below the host: no placement may overlap it, so the entry is vetoed instead
@@ -1416,61 +1416,6 @@ test('a placement is only ever kept under chrome that composites ABOVE the host'
   // element's own (auto) z-index.
   assert.equal(paintedUnder([{ selector: '.hud-top-left', parent: '#intel-hud', rect: viewport }]), 0,
     'chrome below the host keeps an absolute veto');
-});
-
-test('cockpit keeps its cards and its detection lane, and hides only the tracked readout', () => {
-  // Cockpit-shaped fixture: the two solid cockpit windows at their shipped
-  // bounded geometry (min(340px, 28vw) wide, min(42vh, 410px) tall), bottom
-  // left and bottom right. Previously the twelve cockpit selectors coalesced
-  // into one near-fullscreen rectangle that took every card and all of
-  // Panoptic with it.
-  const env = installMockEnvironment({
-    width: 400,
-    height: 300,
-    dpr: 1,
-    occluders: [
-      { id: 'cockpit-context', rect: { left: 12, top: 174, width: 112, height: 114 } },
-      { id: 'cockpit-signal-stream', rect: { left: 276, top: 174, width: 112, height: 114 } },
-      // The dropped line art, at the geometry that used to swallow the screen:
-      // a viewport-wide topline and a keyhole-tall rim on each side. Present in
-      // the DOM, absent from the inventory, therefore inert. Under the old
-      // 12-selector list these three coalesced with everything else into one
-      // near-fullscreen rectangle.
-      { selector: '.cockpit-topline', inInventory: false, rect: { left: 13, top: 4, width: 374, height: 26 } },
-      { selector: '.cockpit-altitude-rim', inInventory: false, rect: { left: 253, top: 0, width: 57, height: 299 } },
-      { selector: '.cockpit-roll-arc', inInventory: false, rect: { left: 88, top: 2, width: 224, height: 32 } },
-    ],
-  });
-  initWorldOverlay(env.viewer);
-  let uiRectCount = -1;
-  let detectionPaints = 0;
-  registerWorldOverlayPaintLane('detection', (frame) => {
-    detectionPaints++;
-    uiRectCount = frame.uiRectCount;
-  }, {
-    id: 'detection',
-    active: true,
-    target: 'detection',
-  });
-  setOverlayEntries('vessels', [
-    selectedEntry('VESSEL-A', { position: positionAtScreen(200, 90) }),
-    selectedEntry('VESSEL-B', { position: positionAtScreen(120, 130) }),
-  ]);
-  setOverlayEntries('trackedReadout', [selectedEntry('TRACKED')], { hideInCockpit: true });
-
-  env.window.dispatch('gev:cockpit-mode-changed', { detail: { active: true } });
-  env.postRender.raise();
-
-  assert.equal(getWorldOverlayDiagnostics().paintedCount, 2,
-    'both ambient cards survive cockpit entry');
-  assert.ok(getOverlayPaintRect('vessels', 'VESSEL-A'));
-  assert.ok(getOverlayPaintRect('vessels', 'VESSEL-B'));
-  assert.equal(getOverlayPaintRect('trackedReadout', 'TRACKED'), null,
-    'the source-level hideInCockpit rule still hides the tracked readout');
-  assert.equal(detectionPaints, 1, 'Panoptic keeps painting in cockpit');
-  assert.equal(uiRectCount, 2,
-    'only the two solid cockpit windows exclude; the line art contributes nothing');
-  env.cleanup();
 });
 
 test('opt-in anchor separation thins a co-located cohort before the arbiter sees it', () => {
@@ -1509,35 +1454,20 @@ test('opt-in anchor separation thins a co-located cohort before the arbiter sees
   assert.ok(project(112) > 0, 'separation thins the cohort without emptying it');
 });
 
-test('the occluder inventory carries no cockpit line-art chrome', () => {
-  // Source-level disposition pin. Cockpit chrome renders ABOVE the overlay
-  // (#cockpit-hud is z145 against this host's z5/z6), so under the AR-HUD model
-  // world content simply passes beneath it. The rim/topline/arc/rail elements
-  // are also viewport-scale, which is what made them catastrophic as
-  // exclusions. Only the two solid backdrop-filled windows may remain.
-  const cockpitSelectors = WORLD_OVERLAY_OCCLUDER_SELECTORS
-    .filter((selector) => selector.includes('cockpit'));
-  assert.deepEqual(cockpitSelectors, ['#cockpit-context', '#cockpit-signal-stream']);
-  for (const selector of WORLD_OVERLAY_OCCLUDER_SELECTORS) {
-    assert.equal(selector.startsWith('.cockpit-'), false,
-      `${selector} is cockpit line art and must not exclude anything`);
-  }
-});
-
-test('position getters snapshot once per frame and cockpit-gated sources disappear', () => {
+test('position getters snapshot once per frame and Drone View-gated sources disappear', () => {
   const env = installMockEnvironment();
   let getterCalls = 0;
   initWorldOverlay(env.viewer);
   setOverlayEntries('tracked', [selectedEntry('flight', {
     position: () => { getterCalls++; return position(); },
     interactive: true,
-  })], { hideInCockpit: true });
+  })], { hideInDroneView: true });
   env.postRender.raise();
   assert.equal(getterCalls, 1);
   assert.equal(getWorldOverlayDiagnostics().paintedCount, 1);
   env.postRender.raise();
   assert.equal(getterCalls, 2);
-  env.window.dispatch('gev:cockpit-mode-changed', { detail: { active: true } });
+  env.window.dispatch('gev:drone-view-changed', { detail: { active: true } });
   env.postRender.raise();
   assert.equal(getterCalls, 2);
   assert.equal(getWorldOverlayDiagnostics().paintedCount, 0);
@@ -2118,7 +2048,7 @@ test('every exported entry point is inert after destroy', () => {
   assert.equal(env.document.getElementById('world-overlay-detection-surface'), null);
   assert.equal(env.postRender.listeners.size, 0);
   assert.equal(env.moveEnd.listeners.size, 0);
-  assert.equal(env.window.listenerCount('gev:cockpit-mode-changed'), 0);
+  assert.equal(env.window.listenerCount('gev:drone-view-changed'), 0);
   assert.equal(env.window.listenerCount('resize'), 0);
 
   // A later init still produces a fully working host.

@@ -47,8 +47,6 @@ import { aircraftIcon, TRACKED_ICON_PX } from './aircraftIcons.js';
 import {
   isTr3b, tr3bAircraftClass, tr3bConvertedIds, tr3bIconKind, tr3bTypeLabel,
 } from './tr3bRegistry.js';
-import { cockpitContactDotImage } from './cockpitContactDot.js';
-import { nextCockpitNearContacts } from './cockpitAirLod.js';
 import {
   applyTrackedCameraFrame,
   trackedModelScaleForPixelCap,
@@ -134,7 +132,7 @@ function _fleetBillboardScale(icao24, klass) {
 /** Depth-test policy for aircraft billboards. Round 5 (owner directive
  *  2026-07-06: "I just want the planes and their lines to ALWAYS be
  *  visible... evenly applied"): EVERY contact renders depth-test-free at
- *  every distance — grounded, low, and airborne alike. The photoreal mesh
+ *  every distance — grounded, low, and airborne alike. The rendered-mesh mesh
  *  writes depth and residual baro/floor error will always leave some sprite
  *  geometry at or below it; a uniform rule beats the grounded-only /
  *  low-AGL-only conditions that kept leaving classes of contacts buried
@@ -173,7 +171,6 @@ const MODEL_MAX_ALL = 350;      // 'all' cap (everything out to ~the horizon)
 const MODEL_PROX_ADD_M  = 150000;  // proximity: model NEW planes within 150 km
 const MODEL_PROX_KEEP_M = 185000;  // proximity: KEEP modeled planes out to 185 km
 
-const COCKPIT_MODEL_MAX = 60;         // max concurrent GLBs in cockpit (never raises the map cap)
 const MODEL_ALL_ADD_M   = 400000;  // all: model NEW planes within 400 km (~to the horizon)
 const MODEL_ALL_KEEP_M  = 450000;  // all: KEEP modeled planes out to 450 km
 const MODEL_HEADING_OFFSET_DEG = 180; // airplane.glb nose is opposite Cesium heading-0
@@ -266,7 +263,7 @@ const CYAN_TRANSPARENT = Cesium.Color.CYAN.withAlpha(0);
 const _scratchModelHpr = new Cesium.HeadingPitchRoll(0, 0, 0);
 const _scratchModelMtx = new Cesium.Matrix4();
 const _scratchModelBS = new Cesium.BoundingSphere(new Cesium.Cartesian3(), 1.0); // frustum-visibility test
-/** Last limb taper per billboard, retained across class/ground/cockpit repaints. */
+/** Last limb taper per billboard, retained across class and ground repaints. */
 const _billboardLimbScale = new WeakMap();
 
 /** @constant {string} API_URL - Vite proxy endpoint for OpenSky /states/all */
@@ -368,14 +365,6 @@ let _trackedModelLoading = false;
 let _clickHandler = null;
 /** @type {Cesium.Viewer|null} Cached viewer reference */
 let _viewer = null;
-/** Cockpit presentation switches ambient AIR contacts between near aircraft and far dots. */
-let _cockpitContactMode = false;
-/** AIR contacts inside the selected Display range; independent from model admission/load/cap. */
-let _cockpitNearContacts = new Set();
-/** Normalized ICAO24 of the active Cockpit subject, omitted from detection candidates. */
-let _cockpitSubjectId = null;
-/** @type {((event: CustomEvent) => void)|null} */
-let _cockpitModeListener = null;
 
 function _emitAwarenessEvent(type, detail) {
   if (typeof window === 'undefined' || !window.dispatchEvent || typeof CustomEvent === 'undefined') return;
@@ -404,7 +393,7 @@ function _publishTrackedSelection(icao24, origin = 'programmatic') {
 
 /**
  * Describe the selected contact for the shared context slot the voice tools
- * and Cockpit read. Values are the LIVE descriptor, not a selection-time
+ * read. Values are the LIVE descriptor, not a selection-time
  * snapshot, so a long follow never narrates a position the plane has left.
  * @param {string} icao24 Contact identity.
  * @returns {object|null} Context metadata, or null when the contact is gone.
@@ -450,47 +439,19 @@ function _isExplicitTrackingOrigin(origin) {
   return origin === 'user' || origin === 'voice' || origin === 'tool';
 }
 
-const COCKPIT_CONTACT_SIZE_PX = 6;
-const COCKPIT_CIVILIAN_COLOR = Cesium.Color.fromCssColorString('#DCEEFF');
 const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = new Cesium.NearFarScalar(
   1000, 3.0, 8000000, 0.5,
 );
 
 function _normalBillboardScaleByDistance() {
-  // Preserve the established close-range 3× scale. Any smaller owner-visible
-  // default belongs in a separate evidence-backed proposal.
   return new Cesium.NearFarScalar(1000, 3.0, 8000000, 0.5);
 }
 
-function _cockpitBillboardScaleByDistance() {
-  return new Cesium.NearFarScalar(1000, 1.15, 8000000, 0.65);
-}
+const _iconKind = (icao24, klass) => tr3bIconKind(icao24, klass);
 
-/** Sprite kind for one contact's billboard. Identity for every aircraft except
- *  the ones the operator converted into a TR-3B (Easter egg), which draw the
- *  black-triangle glyph — its thermal-reactive variant while an IR style owns
- *  the scene. Routing EVERY `aircraftIcon()` call through this is what makes a
- *  conversion survive the poll reconciler and the two-tier raster swap. */
-const _iconKind = (icao24, klass) => tr3bIconKind(icao24, klass, { hot: _irBoost });
-
-/** Apply the current normal/cockpit visual contract to one owned fleet billboard. */
 function _applyFleetBillboardPresentation(icao24, bb) {
   if (!bb) return;
   const limbScale = _billboardLimbScale.get(bb) ?? 1;
-  const isCockpitContact = _cockpitContactMode && icao24 !== _trackedIcao;
-  const isCockpitNear = isCockpitContact && _cockpitNearContacts.has(icao24);
-  if (isCockpitContact && !isCockpitNear) {
-    const freshnessAlpha = bb.color?.alpha ?? 1;
-    bb.image = cockpitContactDotImage();
-    bb.width = COCKPIT_CONTACT_SIZE_PX;
-    bb.height = COCKPIT_CONTACT_SIZE_PX;
-    bb.scale = limbScale;
-    bb.scaleByDistance = _cockpitBillboardScaleByDistance();
-    bb.color = (isMilitaryIcao(icao24) ? MIL_TINT : COCKPIT_CIVILIAN_COLOR).withAlpha(freshnessAlpha);
-    bb.rotation = 0;
-    return;
-  }
-
   const meta = _flightData.get(icao24);
   bb.image = aircraftIcon(_iconKind(icao24, meta?.klass), bb._gevIconLarge ? TRACKED_ICON_PX : undefined);
   bb.width = icao24 === _trackedIcao ? 24 : 20;
@@ -498,68 +459,6 @@ function _applyFleetBillboardPresentation(icao24, bb) {
   bb.scale = _fleetBillboardScale(icao24, meta?.klass) * limbScale;
   bb.scaleByDistance = _normalBillboardScaleByDistance();
   bb.color = _fleetBillboardColor(icao24).withAlpha(bb.color?.alpha ?? 1);
-}
-
-/**
- * Refresh the Cockpit AIR near/far band without consulting model state.
- * Near contacts keep their 2D aircraft silhouette when 3D is off, loading, or
- * capped; only a ready admitted model may take that silhouette over later.
- */
-function _refreshCockpitNearContacts() {
-  if (!_cockpitContactMode || !_viewer?.camera?.positionWC) {
-    if (_cockpitNearContacts.size) _cockpitNearContacts = new Set();
-    return;
-  }
-  const previous = _cockpitNearContacts;
-  const distancesSquared = [];
-  for (const [icao24, bb] of _billboards) {
-    if (icao24 === _trackedIcao || !bb?.position) continue;
-    distancesSquared.push([
-      icao24,
-      Cesium.Cartesian3.distanceSquared(_viewer.camera.positionWC, bb.position),
-    ]);
-  }
-  const next = nextCockpitNearContacts(
-    previous,
-    distancesSquared,
-    _modelAddDistM(),
-    _modelKeepDistM(),
-  );
-  _cockpitNearContacts = next;
-  let presentationChanged = false;
-  for (const [icao24, bb] of _billboards) {
-    if (previous.has(icao24) === next.has(icao24)) continue;
-    _applyFleetBillboardPresentation(icao24, bb);
-    presentationChanged = true;
-  }
-  if (presentationChanged) _lastCamPoseSig = '';
-}
-
-/** Switch all current and future ambient contacts between silhouettes and cockpit pips. */
-function _setCockpitContactMode(active) {
-  const next = active === true;
-  if (_cockpitContactMode === next) return;
-  _cockpitContactMode = next;
-  if (next) _refreshCockpitNearContacts();
-  else _cockpitNearContacts = new Set();
-  // The collection stays visible in cockpit. Near AIR contacts retain their
-  // aircraft silhouette until a ready model takes over; far contacts are pips.
-  // Never destroy on entry: tearing down hundreds of live glTF instances
-  // synchronously blocked Chrome's renderer into Page Unresponsive.
-  if (_modelCollection) _modelCollection.show = true;
-  _trail?.setVisible(!next);
-  if (_trailHeadEntity) _trailHeadEntity.show = !next;
-  for (const [icao24, bb] of _billboards) _applyFleetBillboardPresentation(icao24, bb);
-  _lastCamPoseSig = '';
-  _lastFleetTickMs = 0;
-}
-
-function _applyCockpitState(detail = {}) {
-  const active = detail?.active === true;
-  _cockpitSubjectId = active
-    ? String(detail?.subjectId || '').trim().toLowerCase() || null
-    : null;
-  _setCockpitContactMode(active);
 }
 
 // ---------------------------------------------------------------------------
@@ -1593,10 +1492,7 @@ function _noteTrackedModelLoadFailure(url, err) {
  * cannot flap billboard↔model. See that module's header for why the tracked
  * contact now goes 3D closer in than the fleet does.
  *
- * In cockpit you are sitting 7 m behind and 2.6 m above your own aircraft's
- * origin, so its ~26 m airframe would fill the visor. First-person means your
- * own airframe is not drawn.
- */
+ *  */
 function _trackedModelRegimeActive() {
   if (_trackedZoomLatchIcao !== _trackedIcao) {
     _trackedZoomLatchIcao = _trackedIcao;
@@ -1605,7 +1501,7 @@ function _trackedModelRegimeActive() {
   // A converted TR-3B has no 3D asset — suppressing the regime keeps its
   // tracked billboard fully opaque (the colour callback reads this too), so
   // the triangle stays the visual all the way in.
-  if (!_trackedIcao || _cockpitContactMode || isTr3b(_trackedIcao)) {
+  if (!_trackedIcao || isTr3b(_trackedIcao)) {
     _trackedZoomLatched = false;
     return false;
   }
@@ -1635,11 +1531,7 @@ function _syncTracked2dRotation() {
  *  SAME value, else 'all' (MODEL_MAX_ALL) would mark planes eligible that _ensureModel then refuses
  *  at the lower MODEL_MAX, silently degrading 'all' to 'proximity'. */
 function _modelCap() {
-  const mapCap = _models3dMode === 'all' ? MODEL_MAX_ALL : MODEL_MAX;
-  // `Math.min` on purpose: cockpit may only ever LOWER the GLB budget. Cockpit is
-  // already the heaviest mode (20 Hz camera setView ahead of scene update, photoreal
-  // retraversal, the cloud pass) and every model is its own draw call.
-  return _cockpitContactMode ? Math.min(COCKPIT_MODEL_MAX, mapCap) : mapCap;
+  return _models3dMode === 'all' ? MODEL_MAX_ALL : MODEL_MAX;
 }
 
 /** Active ADD radius (m) — new planes inside this range get a model. Mode-aware: 'all' reaches far. */
@@ -1680,7 +1572,7 @@ function _groundSampleExclusions() {
 
 /** Position a 3D MODEL renders at. Airborne planes use their dead-reckoned position
  *  verbatim. GROUNDED planes' meta altitude is last-known baro or 0 m — nowhere near
- *  the photoreal tile skin in ellipsoid heights (buried ~100+ m at inland airports,
+ *  the rendered-mesh tile skin in ellipsoid heights (buried ~100+ m at inland airports,
  *  hovering ~30 m at sea-level ones), and unlike the ground billboards a depth-tested
  *  model can't hide behind disableDepthTestDistance. So a modeled grounded plane rides
  *  a ONE-SHOT cached scene.sampleHeight of the skin at its lat/lon (groundSnap.js,
@@ -1742,7 +1634,7 @@ function _driveFleetModelHandoff(icao24, model, bb, pos, course, beforeShow) {
  * no resolved ground to stand on, stays hidden while `bb.show` stays true (the
  * gap-proof handoff: "hand off ONLY once the model renders"), and a tracked model
  * is retained but hidden whenever the model regime is off — 3D disabled, camera
- * zoomed past the ceiling, or cockpit mode. Gating on `has()`/existence therefore
+ * zoomed past the ceiling. Gating on `has()`/existence therefore
  * suppressed the clamp in exactly the states where the BILLBOARD is the visual,
  * putting the burial straight back.
  *
@@ -2336,57 +2228,6 @@ function _syncModelToClass(icao24) {
   }
 }
 
-/** IR hot-target mode (owner playtest 2026-08-16): the NVG/FLIR post-styles
- *  map LUMINANCE, so mid-gray textured models read cold and vanish into
- *  terrain. While a boost style is active every model renders flat white
- *  (hottest); per-spec color/tint restores on style exit. Driven by ui.js
- *  setStyle via the `irBoost` layer param. */
-let _irBoost = false;
-/** Boosted models render UNLIT (owner cockpit-FLIR field rounds, 2026-08-16):
- *  the white tint alone is applied to the MATERIAL, so Cesium still
- *  sun-shades it — near-horizon viewing shows a plane's SIDE, ~90° to a high
- *  sun, so it rendered near-BLACK in FLIR/NVG while sun-lit neighbors glowed.
- *  LightingModel.UNLIT emits the flat white directly, orientation be damned.
- *  CRITICAL (field-verified via scene.pick): assigning customShader to an
- *  already-READY model is a silent no-op — the property sets but the shader
- *  program never rebuilds. The boost therefore flips by RELEASE-AND-RELOAD
- *  (see setParams), so every boosted model gets the shader AT CREATION.
- *  One shared shader instance — stateless, safe across models. */
-const _IR_UNLIT_SHADER = new Cesium.CustomShader({ lightingModel: Cesium.LightingModel.UNLIT });
-/** Flip the whole 3D fleet's boost state by dropping models so the eligibility
- *  pass reloads them with creation-time boost options (both directions — a
- *  boosted model must not stay flat white back in Normal). Destroying 350
- *  GPU-backed models synchronously inside the style handler stalls the render
- *  thread (review P1; same failure the cockpit path documents), so the release
- *  is BATCHED through the fleet tick: each tick drops a bounded slice, showing
- *  each plane's billboard first (gap-proof per plane, no double-image window).
- *  Models are tagged with the boost state they loaded under, so queue entries
- *  whose model already matches the current state (rapid style cycling, or a
- *  reload that already happened) are skipped. In-flight loads are invalidated
- *  immediately (cheap gen bumps); the tracked model is a single primitive and
- *  reloads synchronously. */
-const IR_RELOAD_BATCH = 40;
-let _irReloadQueue = null;
-function _reloadModelsForIrBoost() {
-  _irReloadQueue = [..._models.keys()];
-  for (const icao of _modelPending) {
-    if (!_models.has(icao)) _modelGen.set(icao, (_modelGen.get(icao) || 0) + 1);
-  }
-  _releaseTrackedModel();
-}
-function _drainIrReloadQueue() {
-  if (!_irReloadQueue) return;
-  const batch = _irReloadQueue.splice(0, IR_RELOAD_BATCH);
-  for (const icao of batch) {
-    const model = _models.get(icao);
-    if (!model || model._gevIrBoost === _irBoost) continue; // already right state
-    const bb = _billboards.get(icao);
-    if (bb && icao !== _trackedIcao) bb.show = true;
-    _releaseModel(icao);
-  }
-  if (_irReloadQueue.length === 0) _irReloadQueue = null;
-}
-
 /** Lazily create the glTF model for an aircraft (fire-and-forget; billboard shows until ready). */
 async function _ensureModel(icao24) {
   // Never model the TRACKED aircraft — it owns a separate entity billboard, and the fleet
@@ -2406,7 +2247,6 @@ async function _ensureModel(icao24) {
   // Boost state likewise: the creation options bake it in, so a mid-load
   // toggle must reject too (the reload queue only covers ADMITTED models).
   const specKey = _specKeyFor(_flightData.get(icao24)?.klass);
-  const loadIrBoost = _irBoost;
   try {
     const spec = _modelSpec(_flightData.get(icao24)?.klass);
     model = await Cesium.Model.fromGltfAsync({
@@ -2414,12 +2254,11 @@ async function _ensureModel(icao24) {
       asynchronous: false,
       minimumPixelSize: MODEL_MIN_PX,
       scale: spec.scale,
-      color: _irBoost ? Cesium.Color.WHITE : _modelColor(icao24),
+      color: _modelColor(icao24),
       colorBlendMode: Cesium.ColorBlendMode.MIX,
       // Launch presentation keeps the code-side tint dominant for every approved
       // model; IR boost removes the remaining diffuse hint with flat UNLIT white.
-      colorBlendAmount: _irBoost ? 1.0 : spec.blendAmount,
-      customShader: _irBoost ? _IR_UNLIT_SHADER : undefined,
+      colorBlendAmount: spec.blendAmount,
       id: icao24, // so scene.pick returns the icao for click-to-track
     });
   } catch {
@@ -2436,7 +2275,7 @@ async function _ensureModel(icao24) {
   // load — a release bumped the generation (track/untrack/remove), the layer toggled off / was
   // torn down, the aircraft is gone or now tracked, a model already exists, or the cap filled.
   // Recheck the shared Display 3D toggle and altitude ceiling after the async
-  // load. Cockpit uses the same OFF / Proximity / All contract as map Display.
+  // load. The standard OFF / Proximity / All contract remains authoritative.
   const stale = (_modelGen.get(icao24) || 0) !== gen
     || !_modelRegimeActive() || !_modelCollection || _modelCollection.isDestroyed()
     || !_flightData.has(icao24) || icao24 === _trackedIcao
@@ -2444,7 +2283,7 @@ async function _ensureModel(icao24) {
     // Class reclassified mid-load → this GLB/scale is for the OLD class.
     || _specKeyFor(_flightData.get(icao24)?.klass) !== specKey
     // IR boost flipped mid-load → this model baked the wrong shader/tint.
-    || _irBoost !== loadIrBoost;
+;
   if (stale) {
     try { model.destroy(); } catch { /* already gone */ }
     _cleanupModelGen(icao24); // bound the map
@@ -2454,7 +2293,6 @@ async function _ensureModel(icao24) {
   // protects injected/custom loaders that do not copy the creation option.
   model.id = icao24;
   model._gevSpecKey = specKey; // class-change sync compares against this
-  model._gevIrBoost = loadIrBoost; // boost-flip reload queue compares against this
   // Admitted, not yet the visual. Cesium's default is show=true, which would let
   // an unplaced primitive claim ownership from the billboard for the frames
   // between admission and the next fleet tick (and draw at the identity matrix,
@@ -2493,7 +2331,6 @@ function _cleanupModelGen(icao24) {
 
 /** Remove all live models (toggle-off / zoom-out); billboards take back over next tick. */
 function _releaseModels() {
-  _irReloadQueue = null; // a full release supersedes any pending boost-flip drain
   // Invalidate in-flight loads so a completion after this bulk release can't add a model.
   for (const icao of _modelPending) _modelGen.set(icao, (_modelGen.get(icao) || 0) + 1);
   if (_modelCollection && !_modelCollection.isDestroyed()) {
@@ -2531,18 +2368,16 @@ function _updateTrackedModel() {
     const gen = _trackedModelGen;
     const trackedSpec = _modelSpec(_flightData.get(_trackedIcao)?.klass);
     const trackedKey = _specKeyFor(_flightData.get(_trackedIcao)?.klass);
-    const trackedIrBoost = _irBoost;
-    Cesium.Model.fromGltfAsync({
+      Cesium.Model.fromGltfAsync({
       url: trackedSpec.url,
       asynchronous: false,
       minimumPixelSize: TRACKED_MODEL_MIN_PX,
       scale: trackedSpec.scale,
-      color: _irBoost ? Cesium.Color.WHITE : Cesium.Color.CYAN,
+      color: Cesium.Color.CYAN,
       colorBlendMode: Cesium.ColorBlendMode.MIX,
       // The tracked aircraft uses the same dominant light tint as the fleet;
       // IR boost removes the remaining diffuse hint with flat UNLIT white.
-      colorBlendAmount: _irBoost ? 1.0 : trackedSpec.blendAmount,
-      customShader: _irBoost ? _IR_UNLIT_SHADER : undefined,
+      colorBlendAmount: trackedSpec.blendAmount,
       // Pick id (H1): without it, clicking the very plane being tracked read as
       // EMPTY SPACE (scene.pick → primitive with no id) → an unintended
       // deselect. With the icao, the click handler recognizes it as ours.
@@ -2552,7 +2387,7 @@ function _updateTrackedModel() {
       if (gen !== _trackedModelGen || !_modelCollection || _modelCollection.isDestroyed()) { try { m.destroy(); } catch { /* gone */ } return; }
       // Class reclassified OR boost flipped mid-load (no release ran —
       // _trackedModel was still null): drop the stale asset; driver reloads.
-      if (_specKeyFor(_flightData.get(_trackedIcao)?.klass) !== trackedKey || _irBoost !== trackedIrBoost) {
+      if (_specKeyFor(_flightData.get(_trackedIcao)?.klass) !== trackedKey) {
         try { m.destroy(); } catch { /* gone */ }
         _trackedModelLoading = false;
         return;
@@ -2626,11 +2461,7 @@ function _fleetTick() {
     : 0.08;
   _lastFleetTickMs = nowMs;
 
-  _drainIrReloadQueue(); // bounded per-tick slice of any pending boost-flip reload
-  if (_cockpitContactMode) _refreshCockpitNearContacts();
   const poseSig = cameraPoseSignature(camera);
-  // Only the nearby Cockpit silhouettes need projected course; far dots are
-  // rotation-free. The per-contact gate below keeps the pip path cheap.
   const doRotations = (poseSig !== _lastCamPoseSig || (nowMs - _lastRotPassMs) >= ROTATION_REFRESH_MS);
   if (doRotations) {
     _lastCamPoseSig = poseSig;
@@ -2763,13 +2594,10 @@ function _fleetTick() {
       (bb.width || 20) * (bb.scale || 1) * distanceScale * 0.5,
       (bb.height || 20) * (bb.scale || 1) * distanceScale * 0.5,
     );
-    const isCockpitNear = _cockpitContactMode && _cockpitNearContacts.has(icao24);
-    const baseColor = _cockpitContactMode && !isCockpitNear
-      ? (isMilitaryIcao(icao24) ? MIL_TINT : COCKPIT_CIVILIAN_COLOR)
-      : _fleetBillboardColor(icao24);
+    const baseColor = _fleetBillboardColor(icao24);
     const treatment = applyAircraftBillboardTreatment({
       billboard: bb,
-      baseScale: _cockpitContactMode && !isCockpitNear ? 1 : _fleetBillboardScale(icao24, info?.klass),
+      baseScale: _fleetBillboardScale(icao24, info?.klass),
       baseAlpha: _missingPolls.get(icao24) ? 0.45 : 1,
       baseColor,
       focusFactor: focus.factor,
@@ -2783,7 +2611,7 @@ function _fleetTick() {
     // raster and the 192 px close raster on the billboard's ACTUAL on-screen
     // size — post-treatment bb.scale, so focus/limb recession counts — with
     // hysteresis so zoom oscillation never thrashes the atlas.
-    if (!_cockpitContactMode || isCockpitNear) {
+    {
       const glyphDevPx = (bb.width || 20) * (bb.scale || 1)
         * distanceScale * (globalThis.devicePixelRatio || 1);
       const wantLarge = bb._gevIconLarge ? glyphDevPx > 56 : glyphDevPx > 76;
@@ -2817,7 +2645,7 @@ function _fleetTick() {
     // there is no GLB for it, so the model handoff is suppressed rather than
     // fed a stand-in mesh. The billboard keeps rendering (and keeps satisfying
     // the getNearby/getDetectableObjects `bb.show` visibility guards), so a
-    // converted contact still works in Contacts and Cockpit.
+    // converted contact still works in Contacts.
     if (useModels && dr && modelEligible.has(icao24) && !isTr3b(icao24)) {
       _ensureModel(icao24);
       const model = _models.get(icao24);
@@ -2835,15 +2663,15 @@ function _fleetTick() {
             // white. Boosted models also skip the recession fade: hot targets
             // stay full-strength at any range (billboards keep their normal
             // fade — full-opacity glyph walls read as overwhelming).
-            baseColor: _irBoost ? Cesium.Color.WHITE : _modelColor(icao24),
-            alpha: _irBoost ? 1 : treatment.alpha,
+            baseColor: _modelColor(icao24),
+            alpha: treatment.alpha,
           });
         },
       );
       if (ownsVisual) continue; // skip billboard rotation
     }
 
-    if ((!_cockpitContactMode || isCockpitNear) && (doRotations || revealed)) {
+    if (doRotations || revealed) {
       const rot = screenProjectedRotation(scene, bb.position, course, bb.rotation);
       if (rot !== null && Math.abs(rot - bb.rotation) > 0.002) {
         bb.rotation = rot;
@@ -2864,7 +2692,7 @@ function _describeFlight(icao24) {
   // lifts grounded contacts onto the visible mesh so the sprite you see is not
   // buried; that is a rendering correction, not a measurement. This descriptor
   // feeds query/analyst/subject APIs — `findByQuery` (voice track-by-name),
-  // `getTrackedInfo` (cockpit + readout altitude), `getTrackedSubject`
+  // `getTrackedInfo` (tracked readout altitude), `getTrackedSubject`
   // (proximity counts and distances) — where the honest answer is what the
   // aircraft REPORTED, not where its icon was nudged to avoid clipping tiles.
   // `altitudeM` is therefore the barometric/aviation value and `renderAltitudeM`
@@ -2890,7 +2718,7 @@ function _describeFlight(icao24) {
     position: Cesium.Cartesian3.clone(basePos),
     latitude: Cesium.Math.toDegrees(carto.latitude),
     longitude: Cesium.Math.toDegrees(carto.longitude),
-    // The cockpit instrument reports aviation altitude, not the Cesium
+    // The tracked instrument reports aviation altitude, not the Cesium
     // ellipsoid height of the camera/ground-clamped render position. The
     // latter can be slightly negative over terrain near the surface.
     altitudeM: Number.isFinite(info?.altitude) ? info.altitude : carto.height,
@@ -2901,13 +2729,13 @@ function _describeFlight(icao24) {
     stale: Boolean(_missingPolls.get(icao24) || _backoff),
     airline: info?.airline ?? null,
     // CLASS label follows the TR-3B conversion so every downstream card
-    // (cockpit, Contacts, analyst) agrees with the triangle on screen.
+    // (Contacts and analyst) agrees with the triangle on screen.
     typeName: tr3bTypeLabel(icao24, info?.typeName ?? null),
     typeCode: tr3bTypeLabel(icao24, info?.typeCode ?? null),
     // IDENTITY, deliberately NOT converted: registration is the airframe's tail
     // number and feeds `_contactLabel`'s callsign → registration → hex chain, so
     // a converted contact keeps the label convention every other contact uses.
-    // Trimmed like `callsign` above so every consumer (cockpit readout, voice
+    // Trimmed like `callsign` above so every consumer (tracked readout, voice
     // narration, getTrackedSubject) can use it as a label link without
     // re-guarding a whitespace-only enrichment value.
     registration: _toCleanText(info?.registration) || null,
@@ -2974,7 +2802,7 @@ function _startTrail(icao24) {
   if (!_trail && _viewer) {
     _trail = createTrail(_viewer, { color: TRAIL_COLOR, width: 2.5 });
   }
-  _trail?.setVisible(!_cockpitContactMode);
+  _trail?.setVisible(true);
   // Live head segment: last fix → current dead-reckoned icon, updated every frame via
   // a CallbackProperty (Cesium updates entity-polyline positions cheaply, unlike the
   // trail primitive which fully rebuilds on setPositions). Keeps the head glued to the
@@ -2984,7 +2812,7 @@ function _startTrail(icao24) {
       // 'gev-trail' namespace (round 6): claimed by trailRenderer's pick
       // owner so a click on the head segment never reads as empty space.
       id: `gev-trail:fl-head-${++_trailHeadSeq}`,
-      show: !_cockpitContactMode,
+      show: true,
       polyline: {
         positions: new Cesium.CallbackProperty(() => {
           // Need ≥2 accumulated points: the body draws all-but-newest, so the head must
@@ -3145,7 +2973,7 @@ function _destroyTrail() {
  * @param {object} [options] - Clear origin.
  * @param {boolean} [options.evicted=false] - The contact aged out of the feed
  *   rather than being deselected. Consumers that keep a readout on screen
- *   (the Cockpit Contact panel) hold last-known values for an eviction and
+ *   (the Contact panel) hold last-known values for an eviction and
  *   only tear down on a deliberate clear.
  */
 function _clearTracking(skipViewerUntrack = false, {
@@ -3453,13 +3281,8 @@ export function _applyPendingFlightTrackingRestoreForTest() {
   return _applyPendingTrackingRestore();
 }
 
-/** Set the exact Cockpit subject through the production state transition for focused tests. */
-export function _setCockpitDetectionSubjectForTest(active, subjectId = null) {
-  _applyCockpitState({ active, subjectId });
-}
-
 /** Evaluate the TRACKED contact's zoom regime through the production predicate.
- *  The decision is latch-bearing (default-on, hysteretic, cockpit/TR-3B-suppressed)
+ *  The decision is latch-bearing (default-on, hysteretic, TR-3B-suppressed)
  *  and otherwise only observable through a live scene, so tests drive it here. */
 export function _trackedModelRegimeActiveForTest() {
   return _trackedModelRegimeActive();
@@ -3933,13 +3756,6 @@ const flightsLayer = {
     _trackedIcao = null;
     _resetTrackedSelectionState();
     _trackedEntity = null;
-    _cockpitSubjectId = null;
-    _cockpitContactMode = document.body.classList.contains('cockpit-mode');
-    _cockpitNearContacts = new Set();
-    if (!_cockpitModeListener) {
-      _cockpitModeListener = (event) => _applyCockpitState(event?.detail);
-      window.addEventListener('gev:cockpit-mode-changed', _cockpitModeListener);
-    }
     // Fresh session — full bucket, anchor re-seeded on the first sweep.
     _enrichAmbientBudget = _ambientBudgetKnobs().ceil;
     _enrichAmbientRefillAnchorMs = 0;
@@ -3965,7 +3781,6 @@ const flightsLayer = {
     if (_billboardCollection) _billboardCollection.show = true;
     holdContinuousRender('flights'); // per-frame animator (perf wave 2)
     if (_modelCollection) _modelCollection.show = true;
-    _setCockpitContactMode(document.body.classList.contains('cockpit-mode'));
     // Height-datum fix: warm the geoid grid once per layer-enable. The poll loop
     // only reads geoidHeight() synchronously after this resolves (guarded by
     // _geoidReady) — never awaited per-aircraft, never blocking a poll tick.
@@ -4477,7 +4292,7 @@ const flightsLayer = {
             // freshness × focus × horizon alpha composition.
             bb.color = _fleetBillboardColor(icao24).withAlpha(bb.color?.alpha ?? 1);
           }
-          if (prevMeta?.klass !== meta.klass || groundFlipped || _cockpitContactMode) {
+          if (prevMeta?.klass !== meta.klass || groundFlipped) {
             _applyFleetBillboardPresentation(icao24, bb);
           }
           // Poll-path class change (category updates): same model resync rule
@@ -4496,7 +4311,7 @@ const flightsLayer = {
             color: isTracked ? Cesium.Color.CYAN : _fleetBillboardColor(icao24),
             sizeInMeters: false,
             scaleByDistance: _normalBillboardScaleByDistance(),
-            // Grounded/near-surface planes sit at/below the photoreal tile
+            // Grounded/near-surface planes sit at/below the rendered-mesh tile
             // surface — render them depth-test-free so they never vanish up
             // close (_groundDepthDistance).
             disableDepthTestDistance: _groundDepthDistance(),
@@ -4581,7 +4396,7 @@ const flightsLayer = {
       // read synchronously by NEXT poll's clamp — the military-layer pattern).
       warmGroundFloor(floorWarmPoints);
       // Round 4: sample the RENDERED mesh for those same cells (one-shot per
-      // cell, budget-capped, viewer-proximate, google-3d regime only). Own
+      // cell, budget-capped, viewer-proximate, mesh-surface regime only). Own
       // billboards/models are excluded so a vertical probe can't land on an
       // aircraft instead of the pavement.
       sampleMeshFloorCells(_viewer?.scene, floorWarmPoints, {
@@ -4653,10 +4468,6 @@ const flightsLayer = {
       _milActiveChangeUnsub = null;
     }
     document.removeEventListener('keydown', _onKeyDown);
-    if (_cockpitModeListener) {
-      window.removeEventListener('gev:cockpit-mode-changed', _cockpitModeListener);
-      _cockpitModeListener = null;
-    }
     unregisterPickOwner('flights');
     if (_preRenderRemove) {
       _preRenderRemove();
@@ -4698,9 +4509,6 @@ const flightsLayer = {
     _focusEvidenceIds.clear();
     _count = 0;
     _lastUpdate = null;
-    _cockpitContactMode = false;
-    _cockpitNearContacts = new Set();
-    _cockpitSubjectId = null;
     _trackingRefreshEpoch += 1;
     _lastTrackingRefreshOutcome = {
       epoch: _trackingRefreshEpoch,
@@ -4741,18 +4549,6 @@ const flightsLayer = {
     if ((params.models3dMode === 'proximity' || params.models3dMode === 'all') && params.models3dMode !== _models3dMode) {
       // The next fleet tick re-derives the eligible set under the new cap and releases the overflow.
       _models3dMode = params.models3dMode;
-      if (_cockpitContactMode) {
-        _refreshCockpitNearContacts();
-        _lastFleetTickMs = 0;
-      }
-    }
-    if (typeof params.irBoost === 'boolean' && params.irBoost !== _irBoost) {
-      _irBoost = params.irBoost;
-      _reloadModelsForIrBoost();
-      // Sprites don't reload with the models — swap the TR-3B glyph between its
-      // cold and thermal-reactive variants directly. Bounded by the operator's
-      // own conversions, so this never touches the ordinary fleet.
-      _refreshTr3bForStyle();
     }
     if (Object.hasOwn(params, 'selectedFlightsTrackingId')) {
       const requested = _normalizeTrackedIcao(params.selectedFlightsTrackingId);
@@ -4774,7 +4570,6 @@ const flightsLayer = {
     return {
       models3d: _models3dEnabled,
       models3dMode: _models3dMode,
-      irBoost: _irBoost,
       selectedFlightsTrackingId: _trackedIcao,
     };
   },
@@ -4817,7 +4612,6 @@ const flightsLayer = {
       const shouldTake = ((idx - start) % stride) === 0;
       idx++;
       if (!shouldTake) continue;
-      if (_cockpitContactMode && icao24.toLowerCase() === _cockpitSubjectId) continue;
       const isTracked = icao24 === _trackedIcao;
       // Keep planes rendered as a 3D model (billboard hidden) so the detection box
       // doesn't vanish on the 2D→3D handoff; bb.position stays current while hidden.
@@ -4958,7 +4752,7 @@ const flightsLayer = {
         callsign,
         position: pos,
         distance,
-        // Filter surface: the cockpit next/previous path matches on THIS field
+        // Filter surface: the contact navigation path matches on THIS field
         // (militaryAwareness.aircraftClassMatchesFilter), so a converted contact
         // has to report the class it renders as or a `tr3b` filter skips it.
         aircraftClass: tr3bAircraftClass(icao24, String(info?.klass || '').trim().toLowerCase() || null),
@@ -5105,7 +4899,7 @@ const flightsLayer = {
 
   /** Reapply the canonical follow frame without recreating the selected flight. */
   refocusTrackedById(icao24, { origin = 'programmatic' } = {}) {
-    if (!icao24 || _cockpitContactMode || !_viewer || !_trackedEntity) return false;
+    if (!icao24 || !_viewer || !_trackedEntity) return false;
     let id = String(icao24).trim();
     if (!_billboards.has(id)) id = id.toLowerCase();
     if (
@@ -5279,10 +5073,6 @@ function _installClickHandler(viewer) {
     // select/switch contacts; the destructive empty-space branch below applies
     // the full travel + duration click classifier.
     if (!isTrackingSelectionGesture(gesture)) return;
-    // Cockpit mode owns the camera and keeps the current aircraft as its
-    // first-person reference. A globe click must not fall through to the
-    // normal empty-space deselection path; cockpit has explicit exit controls.
-    if (document.body.classList.contains('cockpit-mode')) return;
     const picked = viewer.scene.pick(click.position);
 
     if (picked) {

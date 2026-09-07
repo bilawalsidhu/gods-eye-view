@@ -1,6 +1,9 @@
 import * as Cesium from 'cesium';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
+import { AzureMapsBffClient, azureMapsRouteGeometry } from '../azure/mapsClient.js';
 import { isRateLimitedOutcome, resolveAnnotationTarget } from './annotationResolver.js';
+
+const azureMaps = new AzureMapsBffClient({ fetchImpl: (...args) => globalThis.fetch(...args) });
 
 // Dev convenience: expose the app's Cesium instance for console/preview probing
 // (single shared module instance — avoids dual-Cesium state bugs when testing).
@@ -413,7 +416,7 @@ export function createAnnotationEngine({
         err.failedTargets = failed;
         throw err;
       }
-      // Real street-following route (OSM/OSRM), mode-aware.
+      // Real street-following route from Azure Maps, mode-aware.
       const mode = normalizeMode(spec.mode);
       const routed = await fetchRoute(resolvedPts.map((p) => [p.lon, p.lat]), mode, signal);
       if (routed) {
@@ -1080,7 +1083,7 @@ function normalizeMode(m) {
   return 'foot';
 }
 
-/** Fetch a real street-following route from the /api/route proxy (OSM/OSRM). */
+/** Fetch a real street-following route from the same-origin Azure Maps BFF. */
 async function fetchRoute(coordPairs, mode, externalSignal) {
   const controller = new AbortController();
   const onAbort = () => controller.abort();
@@ -1090,10 +1093,23 @@ async function fetchRoute(coordPairs, mode, externalSignal) {
   }
   const timer = setTimeout(() => controller.abort(), 13000);
   try {
-    const coords = coordPairs.map(([lon, lat]) => `${lon.toFixed(6)},${lat.toFixed(6)}`).join(';');
-    const res = await fetch(`/api/route?profile=${mode}&coords=${encodeURIComponent(coords)}`, { signal: controller.signal });
-    const data = await res.json();
-    if (data?.ok && Array.isArray(data.geometry) && data.geometry.length >= 2) return data;
+    const data = await azureMaps.route(
+      coordPairs.map(([lon, lat]) => ({ latitude: lat, longitude: lon })),
+      {
+        travelMode: mode === 'foot' ? 'pedestrian' : mode === 'bike' ? 'bicycle' : 'car',
+        traffic: mode === 'car',
+        signal: controller.signal,
+      },
+    );
+    const route = data?.routes?.[0];
+    const geometry = azureMapsRouteGeometry(route);
+    if (geometry.length >= 2) {
+      return {
+        geometry,
+        distanceM: Number(route?.summary?.lengthInMeters),
+        durationS: Number(route?.summary?.travelTimeInSeconds),
+      };
+    }
   } catch { /* routing unavailable / aborted → caller falls back to straight segments */ } finally {
     clearTimeout(timer);
     if (externalSignal) externalSignal.removeEventListener('abort', onAbort);

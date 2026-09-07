@@ -244,7 +244,7 @@ async function main() {
       }
 
       // Visual proof — re-assert the framing (the app's intro flight can land
-      // mid-probe on slow runs), wait for the photoreal tileset, screenshot.
+      // mid-probe on slow runs), wait for the active map stack, screenshot.
       await page.evaluate((p) => {
         const v = window.__godsEyeView.viewer;
         v.camera.cancelFlight?.();

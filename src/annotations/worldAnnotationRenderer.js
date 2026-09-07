@@ -5,15 +5,10 @@ import * as Cesium from 'cesium';
  *
  * Draws annotations as native Cesium entities anchored to lon/lat. Because they
  * live in the 3D scene they track the camera, sit at the right depth, and are
- * occluded by the photoreal buildings the way a real marker would be.
+ * occluded by the terrain globe the way a real marker would be.
  *
- * IMPORTANT — drawing on Google Photorealistic 3D Tiles:
- *   The Cesium globe is hidden, so there is no terrain to clamp to. Ground
- *   geometry (areas, rings, connectors) is draped onto the photoreal tiles with
- *   `classificationType: CESIUM_3D_TILE`; points and labels clamp to the tile
- *   surface with `heightReference: CLAMP_TO_GROUND` (which requires the tileset
- *   to have `enableCollision = true`, set in initAnnotations). This keeps marks
- *   sitting ON the world instead of buried at sea level.
+ * Ground geometry is classified against terrain and points use
+ * `heightReference: CLAMP_TO_GROUND`, keeping marks on Re:Earth terrain.
  *
  * Live alpha (fade in/out) and pulsing are driven by CallbackProperty so they
  * animate every render without the engine touching them per frame.
@@ -30,7 +25,7 @@ const PALETTE = {
   red: '#ff6b6b',
 };
 
-const CLASSIFY = Cesium.ClassificationType.CESIUM_3D_TILE;
+const CLASSIFY = Cesium.ClassificationType.TERRAIN;
 const CLAMP = Cesium.HeightReference.CLAMP_TO_GROUND;
 
 export function createWorldAnnotationRenderer(viewer) {

@@ -16,15 +16,6 @@ npm run doctor
 ./scripts/dev-fresh.sh        # or: npm run dev (keys are optional)
 ```
 
-No key is required to start: the app boots on keyless Esri World Imagery with
-keyless terrain, and OSM takes over automatically if Esri is unreachable.
-Google Maps provides direct photorealistic 3D and place search; Cesium ion
-provides ion-hosted Google 3D plus optional Bing/world-terrain stacks.
-On macOS the launcher pulls optional keys from
-the Keychain; on any platform you can pass them as env vars or use a `.env`.
-People who only want to run the app can instead install the repository directly
-through Pinokio; the terminal path above remains the contributor path.
-
 Open `http://localhost:4173`. Before sending a PR run `npm run build`, `npm test`, and `npm run test:track` (dev server must be up) — **all three must stay green.**
 
 ## Good first contributions
@@ -33,7 +24,9 @@ The highest-leverage places to jump in:
 
 - **🌆 Add a CCTV source pack.** Austin is the reference camera source. Adding another city means a clean public camera catalog with coordinates, attribution, and server-registered frame URLs (the proxy only fetches registered URLs — never client-supplied ones, see [SECURITY.md](SECURITY.md)). City packs are the best first lane.
 - **🛰️ Add or improve a data layer.** Each layer is one self-contained module in `src/data/<layer>.js` implementing the layer interface (`init/enable/disable/update/destroy/getStats`, optional `getDetectableObjects`/`getStats`). Use an existing layer as a template.
-- **🎙️ Extend voice control.** Voice tools are declared server-side (`GEV_REALTIME_TOOLS` in `vite.config.js`) and executed client-side (`src/voice/gevActions.js`). Keep the tool surface tight and the responses honest (confirm only what actually happened).
+- **🎙️ Extend voice control.** Foundry tool declarations live in
+  `src/voice/foundrySession.js` and execute through `src/voice/gevActions.js`.
+  Keep the tool surface tight and responses honest.
 - **🎨 Add a visual style.** Styles are GLSL post-process shaders in `src/styles/`.
 - **🐛 Fix bugs / improve the first-run experience.** See [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
 
@@ -41,7 +34,9 @@ The highest-leverage places to jump in:
 
 - **No framework.** Vanilla JS + [CesiumJS](https://cesium.com/platform/cesiumjs/) + [Vite](https://vitejs.dev/).
 - **UI lives in `src/ui.js`** (panels, HUD, styles, the control facade). **Layer logic lives in `src/data/<layer>.js`.** Keep them separate.
-- **Secrets stay server-side.** Anything needing a private key goes through a Vite proxy in `vite.config.js`. The browser only ever sees the Google Maps key (which you restrict) and ephemeral tokens.
+- **Secrets stay server-side.** Azure Maps and Foundry use
+  `DefaultAzureCredential` in the BFF. The browser receives normalized data,
+  map bytes, and short-lived realtime client secrets only.
 - `docs/CURRENT-STATE.md` is the authoritative runtime reference — read it first.
 
 ## Coding style

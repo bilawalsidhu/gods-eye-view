@@ -1,12 +1,12 @@
 // Contacts-scoped detection (owner playtest 2026-08-18: "when you click on
-// Contacts, detections should just turn on, and they should stay on in Cockpit
+// Contacts, detections should just turn on, and they should stay on in Contact tracking
 // or in third-person tracking inside Contacts").
 //
 // These drive the REAL detection engine (src/data/detection.js) through the
 // REAL transition function ui.js calls — no stand-in for the engine. The one
 // thing a Node test cannot boot is the context-mode transaction itself (Cesium
 // plus the data-manager intent lanes); that wiring is pinned by source
-// assertions here and driven for real in scripts/qa-cockpit-utility.mjs.
+// assertions here and driven for real in scripts/qa-contact tracking-utility.mjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -117,18 +117,9 @@ test('activating Contacts lands on the tactical preset, not the last profile use
   assert.equal(getDetectionTuning().densityPct, MILITARY_PRESET.densityPct);
 });
 
-test('the Contacts preset is the very object the military styles apply', () => {
-  // Reading the numbers out of ui.js is the point: if a style preset changes,
-  // Contacts follows it rather than keeping a stale copy.
+test('Contacts uses the shared tactical detection preset', () => {
   assert.equal(MILITARY_PRESET.mode, 'DENSE');
   assert.equal(MILITARY_PRESET.densityPct, 75);
-  const styles = uiSource.match(/detection: MILITARY_DETECTION_PRESET,/g) || [];
-  assert.equal(styles.length, 3, 'retro, surveillance and thermal all share the one preset object');
-  assert.doesNotMatch(
-    uiSource,
-    /detection: \{ mode: 'dense'/,
-    'no style may keep its own copy of the tactical detection numbers',
-  );
   assert.match(
     uiSource,
     /applyPreset: \(\) => this\._applyDetectionPreset\(MILITARY_DETECTION_PRESET\)/,
@@ -136,18 +127,13 @@ test('the Contacts preset is the very object the military styles apply', () => {
   );
 });
 
-test('the shared preset applier ignores the style override flag — the caller owns it', () => {
+test('the shared preset applier ignores the user override flag', () => {
   const applier = uiSource.slice(
     uiSource.indexOf('_applyDetectionPreset(det) {'),
     uiSource.indexOf('Applies the global post-processing baseline'),
   );
   assert.ok(applier.length > 0);
   assert.doesNotMatch(applier, /_detectionUserOverridden/);
-  // The STYLE path still gates on it; Contacts deliberately does not.
-  assert.match(
-    uiSource,
-    /if \(preset\.detection && !this\._detectionUserOverridden\) \{\s*\n\s*this\._applyDetectionPreset\(preset\.detection\);/,
-  );
 });
 
 test('activating Contacts leaves an already-on profile untouched', () => {
@@ -158,18 +144,13 @@ test('activating Contacts leaves an already-on profile untouched', () => {
   assert.deepEqual(restore, { mode: 'DENSE', densityPct: getDetectionTuning().densityPct });
 });
 
-test('detection survives cockpit enter and exit inside a Contacts session', () => {
-  // The owner's actual bug: "when I leave the Cockpit, detections go off".
-  // Cockpit is a move WITHIN Contacts and must not touch detection at all, so
-  // the only transitions here are the Contacts ones — repeated syncs while the
-  // session stays active.
+test('detection survives repeated synchronization inside a Contacts session', () => {
   startAt('OFF');
   let { restore } = transition(true);
   const insideContacts = getDetectionMode();
   assert.equal(insideContacts, MILITARY_PRESET.mode);
 
-  // Cockpit enter, a vision cycle, third-person tracking, cockpit exit: every
-  // one of these re-runs the context-mode sync with Contacts still active.
+  // Repeated context-mode syncs while Contacts stays active are inert.
   for (let sync = 0; sync < 4; sync += 1) {
     ({ restore } = transition(true, { restore }));
     assert.equal(getDetectionMode(), insideContacts, 'a move within Contacts never changes detection');
@@ -183,7 +164,7 @@ test('a manual detection-off during a Contacts session holds for the session', (
   assert.notEqual(getDetectionMode(), 'OFF');
 
   setDetectionModeByLabel('OFF'); // the operator clicks DETECT
-  // Entering the cockpit after that must NOT re-force.
+  // Repeated synchronization must not re-force.
   ({ restore } = transition(true, { restore }));
   ({ restore } = transition(true, { restore }));
   assert.equal(getDetectionMode(), 'OFF');
@@ -225,7 +206,7 @@ test('a style chosen DURING the session keeps its auto-enable instead of the sna
   // out the style rule — younger than the snapshot — wins.
   startAt('OFF');
   const { restore } = transition(true);
-  setDetectionModeByLabel('DENSE'); // _applyStylePresetDefaults('surveillance')
+  setDetectionModeByLabel('DENSE');
   const result = transition(false, { restore, styleOwnsDetection: true });
   assert.equal(getDetectionMode(), 'DENSE');
   assert.equal(result.changed, false, 'the style rule wins, so nothing is replayed');
@@ -273,17 +254,17 @@ test('re-entrancy is decided by the saved snapshot, not the engine state', () =>
   );
 });
 
-test('detection is wired to the Contacts transaction, and cockpit no longer touches it', () => {
+test('detection is wired only to the Contacts transaction', () => {
   // The trigger lives on the context-mode funnel, gated on the transaction
   // having SETTLED so a failed activation cannot strand detection on.
   const helper = uiSource.slice(
     uiSource.indexOf('_syncContactsDetection() {'),
-    uiSource.indexOf('/** Apply a temporary cockpit-only'),
+    uiSource.indexOf("Configures Cesium's built-in bloom stage"),
   );
   assert.ok(helper.length > 0, 'the Contacts detection helper is present in ui.js');
   assert.match(helper, /if \(this\._contextModeChanging\) return;/, 'fires at settle, not at click');
   assert.match(helper, /active: this\._contextMode === 'flights'/);
-  assert.match(helper, /styleOwnsDetection:\s*!this\._detectionUserOverridden/);
+  assert.match(helper, /styleOwnsDetection:\s*false/);
   assert.doesNotMatch(
     helper.split('styleOwnsDetection')[0],
     /_detectionUserOverridden/,
@@ -291,17 +272,8 @@ test('detection is wired to the Contacts transaction, and cockpit no longer touc
   );
   assert.match(
     uiSource,
-    /this\.cockpitView\?\.syncEntry\(\);[\s\S]{0,220}?this\._syncContactsDetection\(\);/,
-    'called from _syncContextModeButtons, the funnel every _contextMode mutation routes through',
+    /_syncContextModeButtons\(\) \{[\s\S]*?this\._syncContactsDetection\(\);/,
   );
-  // The cockpit vision hook — the old trigger — must be out of the detection
-  // business entirely, or leaving the cockpit turns detections off again.
-  const visionHook = uiSource.slice(
-    uiSource.indexOf('_setCockpitVision(mode, active, { revealParameters = false } = {}) {'),
-    uiSource.indexOf('_syncIrBoost() {'),
-  );
-  assert.ok(visionHook.length > 0, 'the cockpit vision hook is present in ui.js');
-  assert.doesNotMatch(visionHook, /etection/, 'cockpit transitions must not touch detection');
 });
 
 // ---------------------------------------------------------------------------

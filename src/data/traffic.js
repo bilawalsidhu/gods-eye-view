@@ -3,13 +3,6 @@ import { deriveFetchCenter, clampBoundsAroundCenter } from './trafficBounds.js';
 import { fetchFlowForBounds, getFlowSessionStats, resetFlowTileCache } from './flowTiles.js';
 import { matchFlowToRoads } from './flowMatch.js';
 import { flowBucket, flowSpeedScale, flowDensityMult } from './trafficFlowStyle.js';
-import {
-  trafficStyleProfile,
-  presetDotRgba,
-  presetSizeDelta,
-  presetDotOutline,
-  trafficBucketTier,
-} from './trafficPresetStyle.js';
 import { queuePlatoons, locateAlongRoad } from './trafficQueue.js';
 import { registerDynamicCredit, TOMTOM_CREDIT } from './dataCredits.js';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
@@ -246,124 +239,15 @@ let _heatLineCount = 0;
 let _heatSupported = null;
 /** @type {number} Altitude of the last render, for late-flow heat rebuilds. */
 let _lastRenderAltitude = 0;
-/**
- * Active post-FX style (StyleManager preset name), synced from
- * `document.documentElement.dataset.gevStyle` at init and the
- * `gev:style-change` window event thereafter. Drives the preset-aware dot
- * styling (`trafficPresetStyle.js`): NVG/FLIR/noir re-encode congestion in
- * luminance + size (their shaders discard hue), retro/CRT gets saturated
- * hues + a size boost to survive pixelation. 'normal' → shipped palette.
- * @type {string}
- */
-let _stylePreset = 'normal';
-/** @type {'on'|'off'} Kill switch for preset-aware dot styling (A/B). */
-let _presetDots = 'on';
-/** @type {boolean} gev:style-change listener bound (bind once per page). */
-let _styleListenerBound = false;
-/**
- * Effective per-bucket dot colors: preset override when one applies, else
- * the shipped FLOW_BUCKET_COLORS. Rebuilt on style/param change only —
- * spawn/recolor/restyle all read from here, no per-dot allocation.
- * @type {{free:Cesium.Color, slow:Cesium.Color, jam:Cesium.Color}}
- */
 let _activeBucketColors = { ...FLOW_BUCKET_COLORS };
-/**
- * @const {number} Minimum base pixel size for COLORED dots while a styled
- * preset is active — residential-road dots spawn at 4 px and vanish into
- * post-FX pixelation; presence is the dots' whole job there (owner round
- * 2). Sim dots and the normal profile keep SIZE_BY_TYPE untouched.
- */
-const STYLED_MIN_BASE_PX = 5;
-
-/** @returns {boolean} A non-normal preset profile is active and enabled. */
-function presetProfileActive() {
-  return _presetDots === 'on' && trafficStyleProfile(_stylePreset) !== 'normal';
+const baseDotSize = (roadType) => SIZE_BY_TYPE[roadType] || 4;
+const activeSizeDelta = () => 0;
+function applyOutline(point) {
+  point.outlineWidth = 0;
 }
-
-/**
- * Pixel-size delta the active preset adds for a bucket (0 when the kill
- * switch is off or the profile is normal).
- * @param {'free'|'slow'|'jam'|null} bucket - Flow bucket.
- * @returns {number} Pixels to add on top of the shipped sizing.
- */
-function activeSizeDelta(bucket) {
-  return _presetDots === 'on' ? presetSizeDelta(_stylePreset, bucket) : 0;
-}
-
-/**
- * Base pixel size for a dot: shipped SIZE_BY_TYPE, floored at
- * STYLED_MIN_BASE_PX for colored dots while a styled preset is active.
- * @param {string} roadType - OSM highway class.
- * @param {'free'|'slow'|'jam'|null} bucket - Flow bucket (null = sim).
- * @returns {number} Base pixel size before jam/preset deltas.
- */
-function baseDotSize(roadType, bucket) {
-  const base = SIZE_BY_TYPE[roadType] || 4;
-  return (bucket && presetProfileActive()) ? Math.max(base, STYLED_MIN_BASE_PX) : base;
-}
-
-/** Recompute `_activeBucketColors` from the active style + kill switch. */
-function refreshBucketColors() {
-  for (const bucket of ['free', 'slow', 'jam']) {
-    const rgba = _presetDots === 'on' ? presetDotRgba(_stylePreset, bucket) : null;
-    _activeBucketColors[bucket] = rgba
-      ? new Cesium.Color(rgba[0] / 255, rgba[1] / 255, rgba[2] / 255, rgba[3])
-      : FLOW_BUCKET_COLORS[bucket];
-  }
-}
-
-/**
- * Apply the active preset's dark-halo outline to a colored dot (or clear
- * it back to the shipped no-outline state). NVG's auto-gain saturates the
- * scene, so brightness alone cannot separate a dot from a bright road —
- * the dark ring restores local contrast through every luma-mapping shader.
- * @param {Cesium.PointPrimitive} point - The dot primitive.
- * @param {'free'|'slow'|'jam'|null} bucket - Flow bucket (null = sim).
- */
-function applyOutline(point, bucket) {
-  const spec = _presetDots === 'on' ? presetDotOutline(_stylePreset, bucket) : null;
-  if (spec) {
-    point.outlineColor = new Cesium.Color(
-      spec.rgba[0] / 255, spec.rgba[1] / 255, spec.rgba[2] / 255, spec.rgba[3],
-    );
-    point.outlineWidth = spec.width;
-  } else {
-    point.outlineWidth = 0;
-  }
-}
-
-/**
- * Re-apply dot styling in place after a style/param change: colored dots
- * get the (new) effective bucket color and size; sim (white) dots are
- * never touched. No refetch, no respawn — heat-lines rebuild for their
- * per-preset colors.
- */
-function restyleDotsInPlace() {
-  refreshBucketColors();
-  if (!_dots.length && !_heatLineCount) return;
-  for (const dot of _dots) {
-    const bucket = dot.bucket;
-    if (!bucket) continue; // sim/uncovered dots stay byte-identical
-    dot.point.color = _activeBucketColors[bucket];
-    dot.point.pixelSize = baseDotSize(dot.road?.type, bucket)
-      + (bucket === 'jam' ? 1 : 0)
-      + activeSizeDelta(bucket);
-    applyOutline(dot.point, bucket);
-  }
-  rebuildHeatLines(visibleRoadsForAltitude(_roads, _lastRenderAltitude));
-}
-
-/**
- * Adopt a new active style preset (from the gev:style-change event or the
- * dataset read at init) and restyle live dots immediately.
- * @param {string|null|undefined} name - StyleManager preset name.
- */
-function setStylePreset(name) {
-  const next = (typeof name === 'string' && name) ? name : 'normal';
-  if (next === _stylePreset) return;
-  _stylePreset = next;
-  restyleDotsInPlace();
-}
+const trafficBucketTier = (bucket) => (
+  bucket === 'jam' ? 3 : bucket === 'slow' ? 2 : bucket === 'free' ? 1 : 0
+);
 
 /** @returns {boolean} Density/queue/creep prototype active. */
 const jamDensityOn = () => _jamViz === 'density' || _jamViz === 'both';
@@ -774,13 +658,13 @@ function spawnDotsForRoad(road, altitude, budgetCount = null) {
   const bucket = flow ? flowBucket(flow.level) : null;
   // Jam dots get +1px: a red queue should read as a queue at a glance.
   // Preset-aware styling adds its own size delta and floors the base (0 /
-  // no floor under the normal profile) so NVG/FLIR/CRT dots stay PRESENT.
+  // no floor under the normal profile) so distant dots stay present.
   const pixelSize = baseDotSize(road.type, bucket)
     + (bucket === 'jam' ? 1 : 0)
     + activeSizeDelta(bucket);
   const flowColor = bucket ? _activeBucketColors[bucket] : null;
   // Dark-halo outline under styled presets (null = shipped no-outline).
-  const outlineSpec = (bucket && _presetDots === 'on') ? presetDotOutline(_stylePreset, bucket) : null;
+  const outlineSpec = null;
   const outlineColor = outlineSpec
     ? new Cesium.Color(outlineSpec.rgba[0] / 255, outlineSpec.rgba[1] / 255, outlineSpec.rgba[2] / 255, outlineSpec.rgba[3])
     : null;
@@ -1021,7 +905,7 @@ function getViewBounds() {
  * C4 fix: at oblique pitch `computeViewRectangle()` spans toward the horizon,
  * so its midpoint can sit tens of km from what the user is looking at. Instead
  * we pick the ellipsoid under the canvas center (`camera.pickEllipsoid` — this
- * works with the globe hidden under Google 3D tiles, where `scene.globe.pick`
+ * works with the globe hidden under rendered 3D geometry, where `scene.globe.pick`
  * is NOT reliable), fall back to the camera nadir on a sky/horizon look, and
  * pull horizon-gaze hits back to MAX_LOOKAT_PULL_KM from nadir.
  *
@@ -1446,14 +1330,9 @@ function recolorDotsInPlace(label) {
     dot.point.color = bucket ? _activeBucketColors[bucket] : Cesium.Color.WHITE.withAlpha(0.85);
     if (bucket === 'jam') {
       dot.point.pixelSize = baseDotSize(dot.road?.type, bucket) + 1 + activeSizeDelta('jam');
-    } else if (bucket && presetProfileActive()) {
-      // Preset profiles size-floor every bucket; the shipped normal path
-      // keeps its jam-only size touch (byte-identical behavior).
-      dot.point.pixelSize = baseDotSize(dot.road?.type, bucket) + activeSizeDelta(bucket);
     }
     // Late flow can move a dot between buckets — keep the preset halo in
     // step (no-op writes under the normal profile, whose dots have none).
-    if (presetProfileActive()) applyOutline(dot.point, bucket);
     dot.mps = dot.baseMps * (flow ? flowSpeedScale(flow.level) : 1);
     // Late flow tags/untags stop-and-go creep + city-scale prominence the
     // same way it rescales speed. Queue *positions* wait for the next
@@ -1539,19 +1418,14 @@ function rebuildHeatLines(roads) {
       geometry: new Cesium.GroundPolylineGeometry({ positions: c.road.waypoints, width }),
     }));
 
-  // Mono presets (NVG/FLIR/noir) discard hue — heat-lines re-encode in
-  // luminance like the dots: jam = white glow, slow = faint gray.
-  const monoHeat = _presetDots === 'on' && trafficStyleProfile(_stylePreset) === 'mono';
-  const jamLineColor = monoHeat ? Cesium.Color.WHITE : HEAT_JAM_COLOR;
-  const slowLineColor = monoHeat
-    ? new Cesium.Color(0.7, 0.7, 0.7, HEAT_SLOW_COLOR.alpha)
-    : HEAT_SLOW_COLOR;
+  const jamLineColor = HEAT_JAM_COLOR;
+  const slowLineColor = HEAT_SLOW_COLOR;
 
   const jamInstances = instancesFor('jam', HEAT_LINE_JAM_WIDTH);
   if (jamInstances.length) {
     _heatJamPrim = _viewer.scene.groundPrimitives.add(new Cesium.GroundPolylinePrimitive({
       geometryInstances: jamInstances,
-      classificationType: Cesium.ClassificationType.CESIUM_3D_TILE,
+      classificationType: Cesium.ClassificationType.TERRAIN,
       appearance: new Cesium.PolylineMaterialAppearance({
         material: Cesium.Material.fromType('PolylineGlow', {
           color: jamLineColor.withAlpha(HEAT_JAM_BASE_ALPHA),
@@ -1564,7 +1438,7 @@ function rebuildHeatLines(roads) {
   if (slowInstances.length) {
     _heatSlowPrim = _viewer.scene.groundPrimitives.add(new Cesium.GroundPolylinePrimitive({
       geometryInstances: slowInstances,
-      classificationType: Cesium.ClassificationType.CESIUM_3D_TILE,
+      classificationType: Cesium.ClassificationType.TERRAIN,
       appearance: new Cesium.PolylineMaterialAppearance({
         material: Cesium.Material.fromType('Color', { color: slowLineColor }),
       }),
@@ -2217,13 +2091,7 @@ const trafficLayer = {
     // for non-browser contexts; bound once per page (init survives layer
     // destroy/re-register).
     if (typeof window !== 'undefined') {
-      _stylePreset = document?.documentElement?.dataset?.gevStyle || 'normal';
-      if (!_styleListenerBound) {
-        window.addEventListener('gev:style-change', (e) => setStylePreset(e?.detail?.style));
-        _styleListenerBound = true;
-      }
     }
-    refreshBucketColors();
     console.log('[Data:Traffic] Initialized');
   },
 
@@ -2357,15 +2225,6 @@ const trafficLayer = {
     if (['none', 'density', 'heatline', 'both'].includes(params.jamViz)) {
       _jamViz = params.jamViz;
     }
-    // Preset-aware dot styling kill switch (owner A/B): 'off' forces the
-    // shipped palette under every post-FX preset. Applies immediately via
-    // in-place restyle — no refetch — so A/B legs share identical dots.
-    if (params.presetDots === 'on' || params.presetDots === 'off') {
-      if (params.presetDots !== _presetDots) {
-        _presetDots = params.presetDots;
-        restyleDotsInPlace();
-      }
-    }
   },
 
   /**
@@ -2378,7 +2237,6 @@ const trafficLayer = {
       speedScale: _speedScale,
       uncoveredRoads: _uncoveredMode,
       jamViz: _jamViz,
-      presetDots: _presetDots,
     };
   },
 
@@ -2489,8 +2347,6 @@ const trafficLayer = {
       heatLines: _heatLineCount,
       jamViz: _jamViz,
       // Preset-styling diagnostics (additive): active style + profile.
-      stylePreset: _stylePreset,
-      styleProfile: _presetDots === 'on' ? trafficStyleProfile(_stylePreset) : 'normal',
       // Sync-chip text: shown while busy, and flashed on its own for 1.5 s
       // after each completed load (ui.js _updateTrafficSyncChip semantics).
       // The settled flash carries NO progress number beside it — this label's

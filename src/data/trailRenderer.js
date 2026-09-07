@@ -6,7 +6,7 @@
  * One trail = one ENTITY polyline. Round 6 replaced the faded per-vertex
  * Primitive for two owner directives from the field:
  *  - "the line must ALWAYS be visible": the Primitive's depthFailAppearance
- *    did not reliably render segments below the photoreal mesh — entity
+ *    did not reliably render segments below the rendered-mesh mesh — entity
  *    polylines with `depthFailMaterial` DO (in-repo proof: CCTV's frustum
  *    wireframes read through geometry with exactly this), so occluded
  *    segments now draw dimmed instead of vanishing.
@@ -72,7 +72,7 @@ export function createTrail(viewer, { color, width = 2.5 }) {
         positions: new Cesium.CallbackProperty(() => current, false),
         width,
         material: baseColor.withAlpha(TRAIL_ALPHA),
-        // The owner-locked rule (round 6): a segment below the photoreal
+        // The owner-locked rule (round 6): a segment below the rendered-mesh
         // mesh renders dimmed — it must never disappear into the ground.
         depthFailMaterial: baseColor.withAlpha(TRAIL_OCCLUDED_ALPHA),
         // Round 8 (owner: UAL1104's Pacific trail "cutting through the

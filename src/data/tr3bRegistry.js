@@ -31,8 +31,7 @@ export const TR3B_TYPE_LABEL = 'TR-3B';
  * (`airliner`, `fastjet`, …) that every other analyst record uses — the engine
  * treats `aircraftClass` as a free-text field, so this is just one more value
  * to filter and group on, never an enum it has to know about. Deliberately the
- * STYLE-INDEPENDENT id, not the `tr3bHot` sprite variant: a query must return
- * the same answer in FLIR as in Normal.
+ * Style-independent id: a query must always return the same answer.
  */
 export const TR3B_CLASS = 'tr3b';
 
@@ -98,12 +97,11 @@ export function clearTr3bRegistry() {
  * the real class, so a converted 737 keeps a 737's on-screen footprint.
  * @param {string} id ICAO 24-bit address.
  * @param {string|undefined} klass The contact's classifyAircraft() kind.
- * @param {{hot?: boolean}} [options] `hot` = an IR/thermal style is active.
  * @returns {string|undefined} Sprite kind for `aircraftIcon()`.
  */
-export function tr3bIconKind(id, klass, { hot = false } = {}) {
+export function tr3bIconKind(id, klass) {
   if (!isTr3b(id)) return klass;
-  return hot === true ? 'tr3bHot' : 'tr3b';
+  return 'tr3b';
 }
 
 /**

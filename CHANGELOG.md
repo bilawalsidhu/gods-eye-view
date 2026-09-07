@@ -7,17 +7,6 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Fixed
 
-- Mapped-site outages show their scheduled retry countdown and distinguish
-  known Overpass rate limits, timeouts, and query failures. Search feedback no
-  longer claims a refresh succeeded while the layer is unavailable or loading.
-- Mapped installations retain valid ways and relations that provide bounds but
-  no center. Invalid, inverted, and excessively wide bounds are rejected.
-- Clicking a selected installation again or clicking elsewhere clears its
-  selection; later refreshes no longer reclaim it after a click-away.
-- Visual presets explain their effects on hover. Unavailable map sources name
-  missing credentials and Provider Settings, while configured-but-failed
-  Google 3D routes explain the failure without asking for another key.
-
 - The Overpass proxy now rotates to the next mirror on any non-2xx upstream
   response, not only on 5xx. `overpass-api.de` and its `lz4` alias answer 406 to
   the proxy's User-Agent while two of the configured mirrors answer 200 to the
@@ -38,48 +27,14 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Fixed
 
-- Pinokio now recognizes its nested successful-install marker, so a completed
-  one-click install exposes Start instead of returning to Install.
-- The keyless `dev-fresh.sh` startup summary now names Esri World Imagery with
-  keyless terrain and identifies OpenStreetMap as the fallback.
-- All three VIIRS sources now reach the Active Fires layer. Merging a source's
-  detections used argument spread, which exceeds the engine's argument limit on
-  the two largest sources and dropped them entirely — leaving roughly a third of
-  global detections while reporting each dropped source twice, once as
-  successful with its real count and once as failed.
-- `./scripts/dev-fresh.sh` no longer crashes on stock macOS bash 3.2 when no
-  provider keys are exported: expanding the empty external-keys provenance
-  array under `set -u` was fatal there. Launches with exported keys are
-  unchanged.
-
 ### Security
-
-- GBFS proxy body-size cap now measures the response in bytes
-  (`Buffer.byteLength`) instead of JavaScript string length, so the
-  `GBFS_MAX_BODY_BYTES` limit holds for multi-byte payloads and cannot be
-  overrun by non-ASCII upstream responses.
 
 ## [0.1.0] — 2026-08-31 — One-click install, keyless boot, Provider Settings
 
-### Added
-- **One-click install** via Pinokio. Keyless boot lands on a live Esri World
-  Imagery satellite globe with keyless terrain; OSM takes over automatically if
-  Esri is unreachable, and the globe continues without terrain if its source is
-  unavailable.
-- **Provider Settings** (the POWER UP panel): add, replace, or remove API keys
-  inside the app. Credential files are made owner-only before any secret is
-  written — verified on macOS and Windows — and keys configured outside the
-  panel are shown read-only, never rewritten.
-- **Keyless capability responses**: the optional HUD summary and place-search
-  endpoints return a deliberate "not configured" success instead of errors, and
-  never consume rate-limit quota.
-- `.gitattributes` normalizes line endings, so Windows clones pass the full
-  test suite out of the box (#81 — thanks @ethanstoner).
-
 ### Changed
-- README rewritten keyless-first around the provider ladder: zero keys → free
+- Historical setup in that release used a provider ladder of zero keys → free
   Cesium ion (eligible personal, non-commercial use) → billing-enabled Google
-  Maps.
+  Maps. The current runtime uses Azure Maps with an OSM fallback.
 - Browser-built data modules no longer import `node:fs`; a repo-wide boundary
   scan test keeps it that way (#83 — thanks @ethanstoner).
 - Aircraft-identity voice answers explicitly cover operator, type, and route,
@@ -113,8 +68,8 @@ represent previously published GitHub Releases.
 - First-run presentation now opens with Detection `DENSE` at 75%, `ELASTIC`
   allocation, Fade 7%, Outside 1%, scope feather 11%, and aircraft 3D models in
   `PROXIMITY`. Stored state and share links still override these baselines.
-- The 17 selected README GIFs remain unchanged and are documented separately
-  from the two owner-published PNGs.
+- At that point, 17 selected README GIFs were documented separately from the
+  two owner-published PNGs; removed-feature captures were deleted later.
 - Bundled datacenter and dam snapshots now omit contact-oriented fields and
   note values containing email or phone identifiers. Feature geometry, names,
   operator/capacity/river metadata, counts, and ODbL terms are unchanged.
@@ -133,9 +88,10 @@ represent previously published GitHub Releases.
   rear center across headings. Parked aircraft do not draw a moving head
   segment.
 - Grounded aircraft keep validated floor evidence through temporary terrain
-  outages and wait for measured photoreal-surface evidence before a 3D model
+  outages and wait for measured rendered-surface evidence before a 3D model
   takes over from its billboard.
-- Cockpit altitude uses aviation MSL data rather than Cesium render height.
+- The now-removed aircraft view used aviation MSL data rather than Cesium
+  render height.
 
 ### Security
 
@@ -147,11 +103,6 @@ represent previously published GitHub Releases.
 ## [Unreleased] — 2026-08-23
 
 ### Added
-
-- Added a first-run mission launcher for Contacts, Space Missions,
-  Environmental, and manual exploration.
-- Added terrain-validity gating and bounded last-known placement for grounded
-  aircraft models.
 
 ### Changed
 
@@ -165,7 +116,7 @@ represent previously published GitHub Releases.
 
 ### Added
 
-- Added the four-source Map Source tray, share-link v2 state, cockpit/context
+- Added the original Map Source tray, share-link v2 state, aircraft-view/context
   voice parity, MSL altitude readouts, and close-range tracked aircraft models.
 - Added the L9 release-candidate matrix, AIS feed watchdog, voice cost controls,
   satellite classes, and the shared world-overlay host.
@@ -178,7 +129,7 @@ represent previously published GitHub Releases.
   labels, mission labels, and detection presentation under shared allocation and
   lifecycle rules.
 - Reduced idle rendering through the render governor and explicit scope mask.
-- Improved cockpit layout, context restoration, keyless feed honesty, and
+- Improved the former aircraft-view layout, context restoration, feed honesty, and
   aircraft 2D/3D handoffs.
 
 ### Fixed
@@ -193,15 +144,9 @@ represent previously published GitHub Releases.
 
 ### Added
 
-- Added Global Context modes, Cockpit briefing surfaces, Radio context,
-  satellite mission replay, and real per-class aircraft models with adjacent
-  provenance records.
-- Added a shared screen-space overlay system with bounded allocation for labels,
-  cards, callouts, detection brackets, and selected-object presentation.
-
 ### Changed
 
-- Unified right-side product controls and responsive cockpit/map layouts.
+- Unified right-side product controls and responsive aircraft-view/map layouts.
 - Migrated public-safe neighborhood geometry to DataSF and tightened safe local
   development defaults.
 - Improved proxy resilience, annotation outline bounds, CCTV enable pacing,
@@ -229,9 +174,10 @@ represent previously published GitHub Releases.
 
 ### Added
 
-- Added OpenAI Realtime voice control, scene-aware entity context, viewport image
-  grounding, the AI HUD summary, live AIS vessels, infrastructure layers, map
-  source switching, free-text navigation, and server-side data proxies.
+- Added the original OpenAI Realtime voice control (later replaced by Microsoft
+  Foundry), scene-aware entity context, viewport image grounding, the AI HUD
+  summary, live AIS vessels, infrastructure layers, map source switching,
+  free-text navigation, and server-side data proxies.
 - Added hybrid map annotations, 3D aircraft, panoptic detection, tracking
   harnesses, and public data attribution.
 - Added MIT source licensing, security guidance, contribution guidance, data
@@ -245,11 +191,6 @@ represent previously published GitHub Releases.
   keeping only the latest viewport image in conversation context.
 
 ## [0.7.0] — 2026-02-18
-
-- Added the Bikeshare Pulse layer and panoptic label improvements.
-- Improved tracked-item boxes, post-render alignment, and CCTV projection
-  quality.
-- Removed the experimental shift-drag CCTV calibration interaction.
 
 ## [0.6.0] — 2026-02-10
 

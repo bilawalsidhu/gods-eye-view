@@ -393,25 +393,24 @@ test('outline upgrade updates the rendered element in place without remove/add',
   globalThis.requestAnimationFrame = () => 1;
   globalThis.cancelAnimationFrame = () => {};
   globalThis.window = {
-    __GOOGLE_MAPS_API_KEY__: 'unit-test-key',
     setTimeout: globalThis.setTimeout,
     clearTimeout: globalThis.clearTimeout,
   };
   let overpassCall = 0;
   globalThis.fetch = async (url) => {
-    if (String(url).startsWith('https://maps.googleapis.com/')) {
-      return { json: async () => ({
-        status: 'OK',
+    if (String(url).startsWith('/api/azure/maps/search')) {
+      return new Response(JSON.stringify({
         results: [{
-          formatted_address: 'FB-3 Engine Texas Fixture',
-          types: ['administrative_area_level_1', 'political'],
-          address_components: [{
-            long_name: 'FB-3 Engine Texas Fixture',
-            types: ['administrative_area_level_1', 'political'],
-          }],
-          geometry: { location: { lat: 31, lng: -99 } },
+          id: 'fb3',
+          type: 'Geography',
+          name: 'FB-3 Engine Texas Fixture',
+          position: { latitude: 31, longitude: -99 },
+          address: {
+            freeformAddress: 'FB-3 Engine Texas Fixture',
+            entityType: 'CountrySubdivision',
+          },
         }],
-      }) };
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
     assert.equal(String(url), '/api/overpass');
     overpassCall += 1;

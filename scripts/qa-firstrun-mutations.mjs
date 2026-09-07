@@ -121,7 +121,7 @@ const MUTATIONS = [
     to: 'if (closing) return;',
   },
   {
-    defect: 'the launcher stops yielding and fights Cockpit/Scenes for ESC',
+    defect: 'the launcher stops yielding and fights DroneView/Scenes for ESC',
     file: 'module',
     from: 'if (revealed && blocked) yieldToExclusiveSurface();\n    else if (!revealed && !blocked) reveal();',
     to: 'if (!revealed) reveal();',
@@ -133,9 +133,9 @@ const MUTATIONS = [
     to: '/* observer never attached */',
   },
   {
-    defect: 'cockpit drops off the exclusive list and can stack with the launcher',
+    defect: 'drone view drops off the exclusive list and can stack with the launcher',
     file: 'module',
-    from: "export const EXCLUSIVE_SURFACE_CLASSES = Object.freeze([\n  'cockpit-mode',",
+    from: "export const EXCLUSIVE_SURFACE_CLASSES = Object.freeze([\n  'drone-view',",
     to: 'export const EXCLUSIVE_SURFACE_CLASSES = Object.freeze([',
   },
   {
@@ -167,14 +167,6 @@ const MUTATIONS = [
     file: 'module',
     from: '    if (event.defaultPrevented) return;',
     to: '    /* belt removed */',
-  },
-  {
-    // Anchored past the call so it cannot land on the cockpit disclosure's own
-    // stopImmediatePropagation() a few lines below and prove nothing about this.
-    defect: 'the radio disclosure returns to stopPropagation, so one ESC does two things',
-    file: 'ui',
-    from: '      event.stopImmediatePropagation();\n      setRadioDisclosure(false, { returnFocus: true });',
-    to: '      event.stopPropagation();\n      setRadioDisclosure(false, { returnFocus: true });',
   },
   {
     defect: 'the "no timer" decision is deleted, so the next editor re-litigates it blind',
@@ -256,8 +248,8 @@ const MUTATIONS = [
   {
     defect: "the owner-authored first-run line is quietly rewritten",
     file: 'html',
-    from: 'It feels like a forbidden cockpit—then you realize the sources are public and the data is real.',
-    to: "It feels like a forbidden cockpit. It isn't — every feed is public, and every contact is live.",
+    from: 'It feels like a forbidden drone view—then you realize the sources are public and the data is real.',
+    to: "It feels like a forbidden drone view. It isn't — every feed is public, and every contact is live.",
   },
   {
     defect: 'the ledgered global-chip defect loses its pointer to the real fix',
@@ -406,12 +398,6 @@ const MUTATIONS = [
   },
 
   // ── Markup and startup ordering ───────────────────────────────────────────
-  {
-    defect: 'a mission tile is dropped from the menu',
-    file: 'html',
-    from: '      <button type="button" data-first-run-choice="space-missions">',
-    to: '      <button type="button" data-first-run-choice-disabled="space-missions">',
-  },
   {
     defect: 'the menu order stops matching the owner\'s',
     file: 'html',

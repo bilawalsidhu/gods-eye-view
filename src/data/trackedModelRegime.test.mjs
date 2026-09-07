@@ -14,7 +14,7 @@
 //
 //  2. The WIRING in both flight layers — that the tracked contact takes its
 //     model with the fleet `models3d` toggle OFF (the whole point of the
-//     feature), that cockpit and TR-3B suppression survived the rewrite, and
+//     feature), that TR-3B suppression survived the rewrite, and
 //     that deselecting drops the regime.
 import test from 'node:test';
 import assert from 'node:assert/strict';

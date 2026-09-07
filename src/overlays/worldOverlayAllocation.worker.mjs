@@ -38,11 +38,6 @@ import {
   createEarthquakeOverlayEntry,
 } from '../data/earthquakes.js';
 import {
-  BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
-  BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
-  createBikeshareSelectedOverlayEntry,
-} from '../data/bikeshare.js';
-import {
   ISS_OVERLAY_SOURCE_ID,
   ISS_OVERLAY_SOURCE_OPTIONS,
   createIssOverlayEntry,
@@ -52,19 +47,6 @@ import {
   CCTV_PROJECTION_OVERLAY_SOURCE_OPTIONS,
   createCctvProjectionOverlayEntry,
 } from '../data/cctv.js';
-import {
-  createRocketMissionMarkerOverlayEntry,
-  ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
-  ROCKET_MISSION_AMBIENT_OVERLAY_COLLISION_CAPACITY,
-  ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
-} from '../data/rocketLaunches.js';
-import {
-  createRadioClusterOverlayEntry,
-  createRadioSelectedOverlayEntry,
-  RADIO_OVERLAY_COHORT_LIMIT,
-  RADIO_OVERLAY_SOURCE_ID,
-  RADIO_OVERLAY_SOURCE_OPTIONS,
-} from '../data/radio.js';
 import {
   CABLE_OVERLAY_COLLISION_CAPACITY,
   CABLE_OVERLAY_SOURCE_ID,
@@ -656,43 +638,13 @@ function buildPhase5EarthquakesWorkload(count) {
   return workload;
 }
 
-function buildPhase5BikeshareWorkload(count) {
+function buildPhase5SatellitesWorkload(count) {
   const earthquakeCount = LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
     + vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) + 1
     + CCTV_AMBIENT_CARD_MAX + 1 + EARTHQUAKE_OVERLAY_COHORT_LIMIT;
   const expectedCount = earthquakeCount + 1;
-  if (count !== expectedCount) throw new Error(`phase5-bikeshare requires ${expectedCount} entries`);
-  const workload = buildPhase5EarthquakesWorkload(earthquakeCount);
-  const position = new Cesium.Cartesian3(0.12, -0.08, 0);
-  workload.positions.push(position);
-  workload.drifts.push({ baseX: 0.12, baseY: -0.08, phase: 0.7, rate: 0.41 });
-  const entry = createBikeshareSelectedOverlayEntry('allocation:station', {
-    stationId: 'station',
-    stationName: 'CONGRESS & 6TH',
-    bikesAvailable: 7,
-    docksAvailable: 4,
-    capacity: 11,
-    isInstalled: true,
-    isRenting: true,
-    isReturning: true,
-    point: { position },
-  });
-  entry.horizonCull = false;
-  workload.registrations.push({
-    sourceId: BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
-    entries: [entry],
-    options: BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
-  });
-  return workload;
-}
-
-function buildPhase5SatellitesWorkload(count) {
-  const bikeshareCount = LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-    + vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) + 1
-    + CCTV_AMBIENT_CARD_MAX + 1 + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 1;
-  const expectedCount = bikeshareCount + 1;
   if (count !== expectedCount) throw new Error(`phase5-satellites requires ${expectedCount} entries`);
-  const workload = buildPhase5BikeshareWorkload(bikeshareCount);
+  const workload = buildPhase5EarthquakesWorkload(earthquakeCount);
   const position = new Cesium.Cartesian3(-0.42, 0.54, 0);
   workload.positions.push(position);
   workload.drifts.push({ baseX: -0.42, baseY: 0.54, phase: 1.3, rate: 0.62 });
@@ -709,7 +661,7 @@ function buildPhase5SatellitesWorkload(count) {
 function buildPhase5CctvProjectionWorkload(count) {
   const satelliteCount = LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
     + vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) + 1
-    + CCTV_AMBIENT_CARD_MAX + 1 + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 2;
+    + CCTV_AMBIENT_CARD_MAX + 1 + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 1;
   const expectedCount = satelliteCount + 1;
   if (count !== expectedCount) {
     throw new Error(`phase5-cctv-projection requires ${expectedCount} entries`);
@@ -755,115 +707,6 @@ function buildPhase5MilitaryWorkload(count) {
   entry.title = 'RCH451';
   entry.details = ['C17 · 05-8152', 'USAF · 28000 ft · 400 kt'];
   entry.accent = '#ffd166';
-  return workload;
-}
-
-function appendRocketMissionAmbientWorkload(workload, count) {
-  const entries = [];
-  for (let index = 0; index < count; index++) {
-    const column = index % 8;
-    const row = Math.floor(index / 8);
-    const baseX = -0.78 + column * 0.22;
-    const baseY = -0.68 + row * 0.24;
-    const position = new Cesium.Cartesian3(baseX, baseY, 0);
-    workload.positions.push(position);
-    workload.drifts.push({
-      baseX,
-      baseY,
-      phase: index * 0.33,
-      rate: 0.3 + (index % 6) * 0.06,
-    });
-    const entry = createRocketMissionMarkerOverlayEntry({
-      id: `allocation-${index}`,
-      name: `MISSION ${1000 + index} | PAYLOAD`,
-      launchSite: `Launch Complex ${index}`,
-      launchTime: new Date(Date.UTC(2026, 6, 31) - index * 60_000).toISOString(),
-    }, () => position);
-    entry.horizonCull = false;
-    entries.push(entry);
-  }
-  workload.registrations.push({
-    sourceId: ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
-    entries,
-    options: {
-      cohortLimit: ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
-      collisionCapacity: ROCKET_MISSION_AMBIENT_OVERLAY_COLLISION_CAPACITY,
-    },
-  });
-  return workload;
-}
-
-function buildRocketMissionAmbientWorkload(count) {
-  if (count !== ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT) {
-    throw new Error(
-      `rocket-missions requires ${ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT} entries`,
-    );
-  }
-  return appendRocketMissionAmbientWorkload({
-    entries: [],
-    positions: [],
-    drifts: [],
-    registrations: [],
-  }, count);
-}
-
-function buildPhase5RocketMissionWorkload(count) {
-  const phase5Count = LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-    + vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) + 1
-    + CCTV_AMBIENT_CARD_MAX + 1 + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 3;
-  const expectedCount = phase5Count + ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT;
-  if (count !== expectedCount) {
-    throw new Error(`phase5-rockets requires ${expectedCount} entries`);
-  }
-  return appendRocketMissionAmbientWorkload(
-    buildPhase5MilitaryWorkload(phase5Count),
-    ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
-  );
-}
-
-function buildAllLiveRadioWorkload(count) {
-  const phase5Count = LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-    + vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) + 1
-    + CCTV_AMBIENT_CARD_MAX + 1 + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 3
-    + ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT;
-  // 2026-08-18: "every shared-host source" includes the migrated
-  // submarine-cable cohort, so the aggregate exercises cable labels
-  // interacting with Radio/earthquake/mission quotas and allocation.
-  const expectedCount = phase5Count + RADIO_OVERLAY_COHORT_LIMIT + 1
-    + CABLE_REFERENCE_LABEL_WINNER_CAP;
-  if (count !== expectedCount) throw new Error(`all-live-radio requires ${expectedCount} entries`);
-  const workload = buildPhase5RocketMissionWorkload(phase5Count);
-  appendSubmarineCableWorkload(workload, CABLE_REFERENCE_LABEL_WINNER_CAP);
-  const entries = [];
-  for (let index = 0; index < RADIO_OVERLAY_COHORT_LIMIT; index += 1) {
-    const position = new Cesium.Cartesian3(-0.72 + (index % 8) * 0.18, -0.64 + Math.floor(index / 8) * 0.16, 0);
-    workload.positions.push(position);
-    workload.drifts.push({ baseX: position.x, baseY: position.y, phase: index * 0.21, rate: 0.35 });
-    const entry = createRadioClusterOverlayEntry({
-      id: `cluster-${index}`,
-      position: () => position,
-      text: `${3 + index} NEWS`,
-      accent: '#44adff',
-      stationCount: 3 + index,
-    });
-    entry.horizonCull = false;
-    entries.push(entry);
-  }
-  const selectedPosition = new Cesium.Cartesian3(0.08, 0.12, 0);
-  workload.positions.push(selectedPosition);
-  workload.drifts.push({ baseX: selectedPosition.x, baseY: selectedPosition.y, phase: 0.5, rate: 0.4 });
-  const selectedEntry = createRadioSelectedOverlayEntry({
-    id: 'selected',
-    name: 'ALLOCATION RADIO',
-    tags: ['news'],
-  }, () => selectedPosition);
-  selectedEntry.horizonCull = false;
-  entries.push(selectedEntry);
-  workload.registrations.push({
-    sourceId: RADIO_OVERLAY_SOURCE_ID,
-    entries,
-    options: RADIO_OVERLAY_SOURCE_OPTIONS,
-  });
   return workload;
 }
 
@@ -1010,24 +853,16 @@ function main() {
             ? buildPhase4CctvWorkload(ENTRY_COUNT)
             : PROFILE === 'phase5-earthquakes'
               ? buildPhase5EarthquakesWorkload(ENTRY_COUNT)
-              : PROFILE === 'phase5-bikeshare'
-                ? buildPhase5BikeshareWorkload(ENTRY_COUNT)
-                : PROFILE === 'phase5-satellites'
-                  ? buildPhase5SatellitesWorkload(ENTRY_COUNT)
-                  : PROFILE === 'phase5-cctv-projection'
-                    ? buildPhase5CctvProjectionWorkload(ENTRY_COUNT)
-                    : PROFILE === 'phase5-civil'
-                      ? buildPhase5CivilWorkload(ENTRY_COUNT)
-                      : PROFILE === 'phase5-military'
-                        ? buildPhase5MilitaryWorkload(ENTRY_COUNT)
-                        : PROFILE === 'rocket-missions'
-                          ? buildRocketMissionAmbientWorkload(ENTRY_COUNT)
-                          : PROFILE === 'phase5-rockets'
-                            ? buildPhase5RocketMissionWorkload(ENTRY_COUNT)
-                            : PROFILE === 'all-live-radio'
-                              ? buildAllLiveRadioWorkload(ENTRY_COUNT)
-                              : PROFILE === 'submarine-cables'
-                                ? buildSubmarineCablesWorkload(ENTRY_COUNT)
+              : PROFILE === 'phase5-satellites'
+                ? buildPhase5SatellitesWorkload(ENTRY_COUNT)
+                : PROFILE === 'phase5-cctv-projection'
+                  ? buildPhase5CctvProjectionWorkload(ENTRY_COUNT)
+                  : PROFILE === 'phase5-civil'
+                    ? buildPhase5CivilWorkload(ENTRY_COUNT)
+                    : PROFILE === 'phase5-military'
+                      ? buildPhase5MilitaryWorkload(ENTRY_COUNT)
+                      : PROFILE === 'submarine-cables'
+                        ? buildSubmarineCablesWorkload(ENTRY_COUNT)
         : buildWorkload(ENTRY_COUNT);
   const { entries, positions, drifts } = workload;
   const solveIntervalMs = Number(process.env.GEV_ALLOC_SOLVE_MS) || 125;

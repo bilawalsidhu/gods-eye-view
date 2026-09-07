@@ -52,7 +52,7 @@ export const CABLE_SWEEP_MOTION_EPSILON_M = 250;
  * channels per reference entity per frame (5,258 across the 2,629-reference
  * dataset) and re-batched a 160-label `LabelCollection` on every sweep — the
  * layer alone cost ~9.5 ms/frame during camera motion. The depth cue this
- * trades away (photoreal tiles occluding label TEXT at low, city-level
+ * trades away (rendered-mesh tiles occluding label TEXT at low, city-level
  * cameras) matches the sibling dams/datacenters sources, which shipped
  * host-composited under the same ruling; the anchor points/stems remain
  * Cesium-native and depth-tested. See
@@ -199,9 +199,8 @@ export function createCableOverlayPublisher({
 }
 
 /**
- * `MAP_STACKS` ids that render imagery on the SHOWN Cesium globe (the ion
- * Bing stacks + OSM). Deliberately an explicit allowlist, not "anything that
- * is not photoreal": an id this module has never heard of is UNKNOWN, and
+ * `MAP_STACKS` ids that render imagery on the shown Cesium globe. This remains
+ * an explicit allowlist: an id this module has never heard of is unknown, and
  * unknown must reach the documented BOTH fallback rather than being asserted
  * onto the terrain surface. A stack added to `MAP_STACKS` without being added
  * here therefore degrades to the safe pre-optimization behavior (visible on
@@ -209,15 +208,12 @@ export function createCableOverlayPublisher({
  * real `MAP_STACKS` so the omission is caught loudly.
  */
 const CABLE_GLOBE_STACK_IDS = Object.freeze(
-  new Set(['bing-aerial', 'bing-labels', 'esri-imagery', 'osm']),
+  new Set(['azure-satellite', 'azure-hybrid', 'azure-streets', 'osm']),
 );
 
 /**
- * Ground-line classification for one map stack. The photoreal stack renders
- * Google 3D tiles with the Cesium globe HIDDEN, so cable ground lines only
- * need the 3D-tile classification pass there; every other known stack (the
- * bing stacks and osm) renders imagery on the shown globe, so only the
- * terrain pass applies.
+ * Ground-line classification for one map stack. Every shipped stack renders
+ * on the shown terrain globe, so only the terrain pass applies.
  * Classifying against just the active surface halves the batched
  * GroundPolylinePrimitive's emitted command sets. BOTH is the safe fallback
  * for an unknown stack — it renders on every surface, exactly the shipped
@@ -226,7 +222,6 @@ const CABLE_GLOBE_STACK_IDS = Object.freeze(
  * @returns {Cesium.ClassificationType}
  */
 export function cableClassificationTypeForStack(activeId) {
-  if (activeId === 'photoreal') return Cesium.ClassificationType.CESIUM_3D_TILE;
   if (CABLE_GLOBE_STACK_IDS.has(activeId)) return Cesium.ClassificationType.TERRAIN;
   return Cesium.ClassificationType.BOTH;
 }
@@ -235,14 +230,14 @@ export function cableClassificationTypeForStack(activeId) {
  * Derive the active surface from live scene state. The boot-time
  * `setStack(..., { silent: true })` fires no 'gev:map-stack-changed' event,
  * so the initial classification reads the scene the way the height-datum
- * listeners do: the photoreal regime is exactly "globe hidden".
+ * listeners do. A hidden or absent globe is an unknown surface.
  * @param {Cesium.Scene|null|undefined} scene
  * @returns {Cesium.ClassificationType}
  */
 export function cableClassificationTypeForScene(scene) {
   if (!scene?.globe) return Cesium.ClassificationType.BOTH;
   return scene.globe.show === false
-    ? Cesium.ClassificationType.CESIUM_3D_TILE
+    ? Cesium.ClassificationType.BOTH
     : Cesium.ClassificationType.TERRAIN;
 }
 

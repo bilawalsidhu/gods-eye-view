@@ -518,7 +518,7 @@ async function main() {
       window.fetch = (input, init) => {
         const url = typeof input === 'string' ? input : (input && input.url) || '';
         const T = window.__TURN;
-        if (url.includes('/api/openai/hud-summary')) {
+        if (url.includes('/api/azure/foundry/hud-summary')) {
           return Promise.resolve(jsonResponse({ summary: 'Turning-flight QA' }));
         }
         // Serve-time truth: position/track/timestamp all as of (now + offset).
@@ -640,7 +640,7 @@ async function main() {
         return (((hDeg - headingOffsetDeg) % 360) + 360) % 360;
       };
 
-      // Google Photorealistic Tiles can starve SwiftShader's ambient render
+      // Streaming map tiles can starve SwiftShader's ambient render
       // loop below one frame per second. Drive a bounded, fixed-cadence Viewer
       // render loop while sampling instead: it still invokes the production
       // preUpdate/preRender listeners and reads the rendered model matrix, but
@@ -654,9 +654,9 @@ async function main() {
         const priorTilesetShow = tileset?.show;
         v.useDefaultRenderLoop = false;
         // This harness measures the production model-matrix slew, not tile LOD.
-        // Temporarily removing Google 3D Tiles from scene traversal keeps each
+        // Temporarily removing an optional heavy 3D tileset from scene traversal keeps each
         // explicit render below the sampling cadence under SwiftShader. Restore
-        // it before screenshots so the visual evidence remains photoreal.
+        // it before screenshots so the visual evidence remains deterministic.
         if (tileset) tileset.show = false;
         try {
           await new Promise((resolve) => {

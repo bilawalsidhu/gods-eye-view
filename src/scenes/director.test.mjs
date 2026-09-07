@@ -20,14 +20,11 @@ import { SCENE_RECIPES } from './recipes.js';
 
 /** The layer registry as main.js builds it (src/main.js dataManager.register calls). */
 const REGISTERED = [
-  'flights', 'military', 'earthquakes', 'satellites', 'rocket-launches', 'traffic',
-  'cctv', 'radio', 'bikeshare', 'ais-live-vessels', 'military-installations',
+  'flights', 'military', 'earthquakes', 'satellites', 'traffic',
+  'cctv', 'ais-live-vessels', 'military-installations',
   'military-awareness', 'local-datacenters', 'local-dams',
   'telegeography-submarine-cables', 'local-firms',
 ];
-
-/** Layers Space Missions permits while it isolates the globe (contextModePolicy). */
-const SPACE_MISSIONS_ALLOWED = new Set(['rocket-launches', 'satellites', 'radio']);
 
 const PROJECT_FIXTURE = {
   version: 3,
@@ -50,7 +47,7 @@ const PROJECT_FIXTURE = {
         durationSec: 0.2,
         holdSec: 0,
         camera: { lat: -30, lon: 140, alt: 900000, heading: 0, pitch: -40, roll: 0 },
-        visual: { style: 'retro' },
+        visual: { style: 'normal' },
         layers: { traffic: { enabled: true } },
       },
     ],
@@ -234,54 +231,6 @@ test('a shot captured while tracking never re-establishes tracking on playback',
   }
 });
 
-test('a dirty Space Missions state is exited before a recipe applies its layers', async () => {
-  // Space Missions refuses every enable outside its own replay bundle. The old
-  // full-registry walk dismantled it by accident; the sparse policy never does,
-  // so all four Flights Radar enables were refused and reported as success.
-  const style = { contextMode: 'space-missions' };
-  const holder = {};
-  const data = {
-    refuse: (id, on) => on
-      && holder.styleManager?.contextMode === 'space-missions'
-      && !SPACE_MISSIONS_ALLOWED.has(id),
-  };
-  const { director, styleManager, dataManager, restore } = makeDirector({ style, data });
-  holder.styleManager = styleManager;
-  try {
-    const result = await director._applyLayerStates(recipeLayers('flights-radar'));
-
-    assert.deepEqual(styleManager.contextExits, ['off']);
-    assert.equal(styleManager.contextMode, null);
-    assert.deepEqual(result.refused, []);
-    assert.ok(result.applied.includes('flights'));
-    assert.deepEqual(
-      dataManager.setEnabledCalls.filter((call) => call.enabled).map((call) => call.id),
-      ['flights'],
-    );
-  } finally {
-    restore();
-  }
-});
-
-test('Orbital Watch does not compose over a Space Missions replay', async () => {
-  // Orbital Watch declares satellites, which the guard permits — so nothing is
-  // refused and a refusal-only check would pass while rocket-launches stayed
-  // on screen. Playback leaves an isolating mode whether or not it refuses.
-  const { director, styleManager, dataManager, restore } = makeDirector({
-    style: { contextMode: 'space-missions' },
-  });
-  try {
-    await director._applyLayerStates(recipeLayers('orbital-watch'));
-    assert.deepEqual(styleManager.contextExits, ['off']);
-    assert.equal(
-      dataManager.setEnabledCalls.some((call) => call.id === 'rocket-launches'),
-      false,
-      'the recipe never declares rocket-launches; exiting the mode is what clears it',
-    );
-  } finally {
-    restore();
-  }
-});
 
 test('a non-isolating context mode is left alone', async () => {
   for (const contextMode of [null, 'flights']) {
@@ -475,7 +424,7 @@ test('applyVisualState gates the map-stack switch on both sides of its await', (
   // The other half of the contract, and the half these doubles cannot see.
   // ui.js cannot be imported here (its mgrs dependency is CJS), so this pins
   // the structure the way the repo pins other cross-module shape
-  // (cockpitMarkup.test.mjs), while qa-shots/scenes-audit.mjs proves the
+  // while qa-shots/scenes-audit.mjs proves the
   // BEHAVIOUR against the real StyleManager in a browser.
   //
   // Gating only the post-await uniform commit is not enough: the stack switch

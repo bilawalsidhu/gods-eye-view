@@ -41,7 +41,7 @@ export function allocatePanelStackHeights({
  * Solves the accordion corridor's bottom boundary against the obstacles that
  * still limit it.
  *
- * Every painted obstacle limits the corridor. This includes Cockpit CONTACT
+ * Every painted obstacle limits the corridor. This includes fixed context
  * and peripheral HUD surfaces, so reopening a map panel cannot cover them.
  *
  * @param {object} input Corridor measurements.

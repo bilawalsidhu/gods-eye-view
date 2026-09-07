@@ -44,43 +44,9 @@ test('desktop Display participates in Tactical exclusivity without changing mobi
     /panel\.id !== 'pp-toggles' && !panel\.classList\.contains\('collapsed'\)/,
   );
   assert.match(ui, /if \(exclusive && panel\.classList\.contains\('collapsed'\)\) panel\.setAttribute\('aria-hidden', 'true'\)/);
-  assert.match(css, /#right-context-rail\.layout-exclusive > \[data-panel-id\]\.collapsed \{/);
+  assert.match(css, /#right-context-rail\.layout-exclusive > \[data-panel-id\]\.collapsed\s*\{/);
 });
 
-test('explicit Contacts, Space Missions, and Cockpit actions expand Global Context after success', () => {
-  for (const action of ['contacts', 'space-missions', 'cockpit']) {
-    assert.equal(shouldExpandGlobalContextPanel({
-      action,
-      explicitUserAction: true,
-      succeeded: true,
-    }), true, `${action} should reveal its supporting context`);
-  }
-});
-
-test('Cockpit expansion is independent of whether a track was already selected', () => {
-  for (const selectedTrack of [null, 'UAL649']) {
-    assert.equal(shouldExpandGlobalContextPanel({
-      action: 'cockpit',
-      explicitUserAction: true,
-      succeeded: true,
-      selectedTrack,
-    }), true);
-  }
-});
-
-test('restoration and programmatic replay preserve the saved Global Context collapse state', () => {
-  assert.equal(shouldExpandGlobalContextPanel({
-    action: 'contacts',
-    explicitUserAction: false,
-    succeeded: true,
-  }), false);
-  assert.equal(shouldExpandGlobalContextPanel({
-    action: 'space-missions',
-    explicitUserAction: true,
-    succeeded: true,
-    restoring: true,
-  }), false);
-});
 
 test('failed or unrelated actions never expand Global Context', () => {
   assert.equal(shouldExpandGlobalContextPanel({

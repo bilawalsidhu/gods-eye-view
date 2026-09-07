@@ -58,9 +58,7 @@ export function environmentalLabel(choice = ENVIRONMENTAL_LABEL_CHOICE) {
  *   TOUCHED, DURABLE      layer enables for the mission's OWN layers, at
  *                         `origin: 'user'` — identical to clicking those rows.
  *                         Choosing ENVIRONMENTAL *is* choosing those layers.
- *   TOUCHED, DURABLE      the Context panel reveal, but only for the two
- *                         Context missions, exactly as the visible Contacts /
- *                         Space Missions tabs do it. The globe missions open no
+ *   TOUCHED, DURABLE      the Context panel reveal for Contacts. The globe missions open no
  *                         panel at all — nothing there needs explaining, and a
  *                         panel-collapse write is a pref nobody chose.
  *   TOUCHED, SESSION      the camera. Never persisted by anything.
@@ -70,8 +68,7 @@ export function environmentalLabel(choice = ENVIRONMENTAL_LABEL_CHOICE) {
  *                         active. A mission has no opinion.
  *   NOT TOUCHED           `_detectionUserOverridden`. Setting it would mean "the
  *                         operator hand-edited detection" and would silently
- *                         kill the CRT/NVG/FLIR auto-preset contract for the
- *                         whole session. Missions run through setContextMode and
+ *                         alter later detection behavior. Missions run through setContextMode and
  *                         DataManager.setEnabled, neither of which writes it.
  *   NOT TOUCHED           detection allocation (`gev:detection-allocation:v1`),
  *                         3D aircraft models, scope feather. All are defaults or
@@ -80,8 +77,8 @@ export function environmentalLabel(choice = ENVIRONMENTAL_LABEL_CHOICE) {
  *                         `_setModels3dMode`, which default to origin 'user' and
  *                         would persist a 3D choice nobody made.
  *
- * The two Context missions deliberately reuse `styleManager.setContextMode`, the
- * same facade the visible tabs and voice use, so Contacts detection ownership,
+ * The Contacts mission deliberately reuses `styleManager.setContextMode`, the
+ * same facade the visible tab and voice use, so detection ownership,
  * layer isolation and rollback stay in exactly one place.
  */
 
@@ -91,11 +88,6 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
     kind: 'context',
     contextMode: 'contacts',
     busyText: 'Starting live contacts…',
-  }),
-  'space-missions': Object.freeze({
-    kind: 'context',
-    contextMode: 'space-missions',
-    busyText: 'Opening space missions…',
   }),
   environmental: Object.freeze({
     kind: 'globe',
@@ -283,7 +275,7 @@ export async function runFirstRunChoice(choice, { setContextMode, setLayerEnable
  * see the ESC ARBITRATION note on initFirstRunExperience.
  */
 export const EXCLUSIVE_SURFACE_CLASSES = Object.freeze([
-  'cockpit-mode',
+  'drone-view',
   'scene-playback-mode',
   'recording-mode',
   'ui-clean-view',
@@ -446,7 +438,7 @@ export function initFirstRunExperience({
             // setContextMode is also a voice/internal facade and deliberately
             // does not decide panel chrome. This first-run click is an explicit
             // visual choice, so reveal the result exactly as the visible
-            // Contacts / Space Missions tabs do.
+            // Contacts does.
             styleManager.setPanelCollapsed?.('global-context-panel', false, { explicit: true });
           }
           return result;
@@ -502,8 +494,8 @@ export function initFirstRunExperience({
     // it handled (preventDefault) and silences the rest of us on the way past
     // (stopImmediatePropagation). If one of them ever ships only the first half,
     // the mark alone still keeps ONE key to ONE action — which is precisely what
-    // the compact Radio disclosure did with a plain stopPropagation(), a call
-    // that never blocks later listeners on the same document.
+    // an older disclosure did with a plain stopPropagation(), a call that never
+    // blocks later listeners on the same document.
     if (event.defaultPrevented) return;
     if (event.key === 'Escape') {
       // ESC is an exit, not a mission: it must work even mid-flight. The
@@ -572,9 +564,9 @@ export function initFirstRunExperience({
   /*
    * ESC ARBITRATION — the launcher never competes for the key.
    *
-   * Two real defects motivated this. Cockpit registers its capture-phase
+   * Two real defects motivated this. Drone View registers its capture-phase
    * keydown listener at construction, long before this module runs, and calls
-   * stopImmediatePropagation() — so with both up, ESC exited Cockpit BEHIND the
+   * stopImmediatePropagation() — so with both up, ESC exited Drone View BEHIND the
    * card. And a Scene starting merely hid the launcher in CSS while its handler
    * stayed armed, so ESC dismissed an invisible launcher (writing the session
    * flag) while the Scene played on.
@@ -611,7 +603,7 @@ export function initFirstRunExperience({
    *
    * A "reveal anyway after N seconds" timer was considered and rejected. None of
    * the four classes is restored at startup — every one is toggled by a live
-   * action (cockpit entry, a scene run, the recording toggle, the clean-view
+   * action (Drone View entry, a scene run, the recording toggle, the clean-view
    * toggle) — so an already-blocked init is an error path, while a genuinely
    * long recording or clean-view session is completely ordinary. A timer would
    * trade a benign no-show for the launcher punching through a recording in

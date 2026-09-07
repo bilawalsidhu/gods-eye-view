@@ -7,10 +7,7 @@
  * (GSD, NIIRS, ONA), timestamps, and orbital data — all updating in
  * real-time at configurable cadences.
  *
- * The HUD auto-activates when a military-style shader (NVG, FLIR, CRT) is
- * selected and supports three layout variants: tactical, operator, minimal.
- *
- * Color theming is driven by the active shader mode via CSS custom properties.
+ * Supports three layout variants: tactical, operator, minimal.
  */
 
 import * as Cesium from 'cesium';
@@ -19,23 +16,19 @@ import { CITY_POIS } from './locations.js';
 import { composeLocalityTag } from './hudLocality.js';
 import { ellipsoidalToMslDisplayM, ensureGeoidReady, geoidHeight } from './data/geoid.js';
 import { getBasemapLabelContext } from './voice/gevActions.js';
-import { isHudSummaryUnconfigured } from './hudSummaryResponse.js';
+import { FoundryHudSummaryClient } from './azure/foundryClient.js';
 
-/** Color palettes keyed by shader mode; applied as CSS custom properties. */
-const HUD_COLORS = {
-  surveillance: { main: 'rgba(51, 255, 51, 0.8)',  glow: 'rgba(51, 255, 51, 0.5)',  border: 'rgba(51, 255, 51, 0.2)' },
-  thermal:      { main: 'rgba(255, 255, 255, 0.7)', glow: 'rgba(255, 255, 255, 0.4)', border: 'rgba(255, 255, 255, 0.15)' },
-  retro:        { main: 'rgba(255, 170, 0, 0.8)',   glow: 'rgba(255, 170, 0, 0.5)',   border: 'rgba(255, 170, 0, 0.2)' },
-  _default:     { main: 'rgba(0, 255, 255, 0.6)',   glow: 'rgba(0, 255, 255, 0.4)',   border: 'rgba(0, 255, 255, 0.15)' },
+const foundryHud = new FoundryHudSummaryClient();
+
+const HUD_COLOR = {
+  main: 'rgba(0, 255, 255, 0.6)',
+  glow: 'rgba(0, 255, 255, 0.4)',
+  border: 'rgba(0, 255, 255, 0.15)',
 };
-
-/** Shader modes that automatically show the HUD overlay. */
-const MILITARY_STYLES = new Set(['retro', 'surveillance', 'thermal']);
 
 /** Allowed HUD layout variants. */
 const HUD_VARIANTS = new Set(['tactical', 'operator', 'minimal']);
 const HUD_SUMMARY_INTERVAL_MS = 15000;
-const HUD_SUMMARY_URL = '/api/openai/hud-summary';
 
 /**
  * Cell size (degrees) for the ALT readout's geoid-undulation cache. N changes
@@ -333,7 +326,7 @@ export class IntelHUD {
 
     // Altitude — reported as height above MEAN SEA LEVEL. `altM` is the raw
     // ellipsoidal camera height, which reads far below zero wherever the geoid
-    // sits under the ellipsoid: a cockpit parked on the SFO deck (N ≈ -32 m)
+    // sits under the ellipsoid: a camera parked on the SFO deck (N ≈ -32 m)
     // showed "ALT: -15m", and JFK "ALT: -18m". Subtracting N restores the
     // number a viewer expects without touching the camera or any render path.
     const altEl = document.getElementById('hud-alt');
@@ -659,21 +652,18 @@ export class IntelHUD {
     const timeout = window.setTimeout(() => controller.abort(), 5000);
     this._summaryRequest = controller;
     try {
-      const response = await fetch(HUD_SUMMARY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(context),
+      const data = await foundryHud.summarize({
+        prompt: 'Summarize the current geospatial scene in exactly five words.',
+        context,
+        maxCharacters: 160,
         signal: controller.signal,
       });
-      const data = await response.json().catch(() => null);
       if (revision !== this._summaryRevision) return;
-      if (isHudSummaryUnconfigured(response.status, data)) {
+      if (data?.configured === false) {
         this._setSummaryText(fallbackText, animate);
         return;
       }
-      if (!response.ok || !data?.summary) {
-        throw new Error(data?.error || `HTTP ${response.status}`);
-      }
+      if (!data?.summary) throw new Error(data?.error || 'Foundry returned no summary');
       this._setSummaryText(data.summary, animate);
     } catch (error) {
       if (error?.name !== 'AbortError') {
@@ -720,36 +710,26 @@ export class IntelHUD {
   // ── Public API ──────────────────────────
 
   /**
-   * React to a shader-style change. Updates the mode label, HUD color
-   * scheme (via CSS custom properties), and auto-shows/hides the overlay
-   * when in auto mode.
-   * @param {string} styleName - Active style key (e.g. `'surveillance'`,
-   *   `'thermal'`, `'retro'`, `'normal'`).
+   * Keep the HUD aligned with the sole Normal visual style.
    */
   onStyleChange(styleName) {
-    this._currentStyle = styleName;
+    this._currentStyle = 'normal';
 
     // Update mode label
     const modeEl = document.getElementById('hud-mode');
     if (modeEl) {
-      const modeNames = { surveillance: 'NVG', thermal: 'FLIR', retro: 'CRT' };
-      modeEl.textContent = modeNames[styleName] || styleName.toUpperCase();
+      modeEl.textContent = 'NORMAL';
     }
     // Update color scheme
-    const colors = HUD_COLORS[styleName] || HUD_COLORS._default;
     if (this._el) {
-      this._el.style.setProperty('--hud-color', colors.main);
-      this._el.style.setProperty('--hud-glow', colors.glow);
-      this._el.style.setProperty('--hud-border', colors.border);
+      this._el.style.setProperty('--hud-color', HUD_COLOR.main);
+      this._el.style.setProperty('--hud-glow', HUD_COLOR.glow);
+      this._el.style.setProperty('--hud-border', HUD_COLOR.border);
     }
 
     // Auto show/hide
     if (this._autoMode) {
-      if (MILITARY_STYLES.has(styleName)) {
-        this.show();
-      } else {
-        this.hide();
-      }
+      this.hide();
     }
   }
 

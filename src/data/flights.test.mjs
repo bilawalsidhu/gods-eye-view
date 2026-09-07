@@ -563,8 +563,8 @@ test('civil label chain: no callsign and no registration still reads as the ICAO
   }
 });
 
-test('civil label chain: the cockpit descriptor exposes a trimmed registration', () => {
-  // ui.js builds the Cockpit callsign readout as
+test('civil label chain: the tracked descriptor exposes a trimmed registration', () => {
+  // UI readouts build the contact label as
   // `info.callsign || info.registration || info.icao24` off getTrackedInfo(),
   // so an untrimmed " N123AB " would render with its padding and a
   // whitespace-only value would win over the hex.
@@ -801,7 +801,7 @@ test('display floor: a cold display cell leaves the contact where it is', () => 
   assert.equal(out, pos, 'no floor data → no clamp (never invent a surface)');
 });
 
-test('display floor: mesh cells are ignored outside the google-3d regime', () => {
+test('display floor: mesh cells are ignored outside the mesh-surface regime', () => {
   _clearDisplayFloorStateForTest();
   _clearMeshFloorCellsForTest();
   setMeshFloorPreferred(true);
@@ -887,7 +887,7 @@ test('display floor: the cached output is dropped when the floor changes under i
 //
 // Owner incident 2026-08-21: four `[terrain-heights-proxy] refresh incomplete`
 // events in a row (Re:Earth timing out), and a parked contact at a Texas field
-// popped BELOW the photoreal mesh for a few seconds. A cold cell used to mean
+// popped BELOW the rendered-mesh mesh for a few seconds. A cold cell used to mean
 // "no clamp", which is only safe if the un-clamped height is a real reading —
 // and for a grounded contact reporting no altitude it is the geoid, tens of
 // metres under the mesh inland. Owner: "hold the last known altitude until a

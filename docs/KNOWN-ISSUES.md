@@ -68,29 +68,12 @@ Status: Open (owner-accepted 2026-07-08, documented)
 ### Proxy SSRF and error-surface hardening gaps
 Status: Closed as fixed on `main`
 
-Context:
-- Proxy middleware previously allowed broader error/internal surface area and looser upstream handling.
-- Current `main` includes hardened proxy behavior in `vite.config.js`:
-  - CCTV upstream URL no longer accepted from client query params.
-  - Error payloads are sanitized.
-  - OpenSky cache stores successful responses only.
-  - OpenSky token refresh is coalesced.
-  - GBFS/CCTV memory growth is bounded.
-
 Validation target:
 - `vite.config.js`
 
 ---
 
-### NVG vignette edge color bleed
-Status: Closed as fixed in current shader composite
-
-Context:
-- Earlier builds leaked original scene colors near the NVG tube edge.
-- Current composite now masks NVG output with tube falloff before final blend, removing the color edge bleed.
-
 Validation target:
-- `src/styles/surveillance.js`
 
 ---
 

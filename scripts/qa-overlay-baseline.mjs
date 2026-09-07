@@ -51,16 +51,12 @@ const SCENES = Object.freeze([
   { id: 'detection-50', layers: ['flights', 'satellites'], detectionDensity: 50, camera: [-98, 38, 2_500_000, 0, -Math.PI / 2] },
   { id: 'detection-100', layers: ['flights', 'satellites'], detectionDensity: 100, camera: [-98, 38, 2_500_000, 0, -Math.PI / 2] },
   { id: 'tracked-civil-aircraft', layers: ['flights'], trackedFlight: true, camera: [-98, 38, 2_500_000, 0, -Math.PI / 2] },
-  { id: 'missions-selected', layers: ['rocket-launches'], missionSelected: true, camera: [0, 15, 18_000_000, 0, -Math.PI / 2] },
-  { id: 'cockpit-mode', layers: ['flights'], trackedFlight: true, cockpit: true, camera: [-98, 38, 2_500_000, 0, -Math.PI / 2] },
 ]);
 
 const SCENE_ALIASES = Object.freeze({
   'datacenters-dams': 'datacenters+dams',
   cables: 'submarine-cables',
   'tracked-civil': 'tracked-civil-aircraft',
-  missions: 'missions-selected',
-  cockpit: 'cockpit-mode',
 });
 
 const argv = process.argv.slice(2);
@@ -148,14 +144,6 @@ async function installStaticDist(page, distDir) {
         });
         return;
       }
-      if (url.hostname === 'tile.googleapis.com' && url.pathname.includes('/3dtiles/')) {
-        await request.respond({
-          status: 403,
-          contentType: 'application/json',
-          body: JSON.stringify({ error: { message: 'Offline dist capture: Google tiles unavailable' } }),
-        });
-        return;
-      }
       await request.continue();
     } catch {
       try { await request.abort(); } catch { /* request already resolved */ }
@@ -172,7 +160,7 @@ async function installDeterministicDevEndpoints(page) {
       await request.continue();
       return;
     }
-    if (url.pathname === '/api/openai/hud-summary') {
+    if (url.pathname === '/api/azure/foundry/hud-summary') {
       await request.respond({
         status: 200,
         contentType: 'application/json',
@@ -389,7 +377,7 @@ async function readLayerState(page, layerId) {
 async function waitForLayer(page, layerId) {
   const dataBearing = new Set([
     'local-datacenters', 'local-dams', 'telegeography-submarine-cables', 'cctv',
-    'local-firms', 'ais-live-vessels', 'flights', 'satellites', 'rocket-launches',
+    'local-firms', 'ais-live-vessels', 'flights', 'satellites',
   ]);
   if (!dataBearing.has(layerId)) return readLayerState(page, layerId);
   try {
@@ -436,10 +424,6 @@ async function readEntityInventory(page) {
     };
     const labelGroup = (entityId) => {
       const id = String(entityId || '');
-      if (id.startsWith('rocket-launch:')) return 'mission-anchor';
-      if (id.startsWith('rocket-satellite:')) return 'mission-live-or-estimated';
-      if (id.startsWith('rocket-orbit-label:')) return 'mission-orbit';
-      if (id.startsWith('rocket-reentry-label:')) return 'mission-reentry';
       if (id.startsWith('cctv-')) return 'cctv';
       return id.includes(':') ? id.split(':', 1)[0] : '(other)';
     };
@@ -584,16 +568,7 @@ async function prepareDetection(page, densityPct) {
   return null;
 }
 
-async function prepareTrackedFlight(page, cockpit) {
-  if (cockpit) {
-    const contacts = await page.evaluate(() => window.__godsEyeView.styleManager.setContextMode(
-      'contacts',
-      { origin: 'user' },
-    ));
-    if (!contacts?.ok) {
-      return `Contacts activation failed (${contacts?.error || 'unknown error'})`;
-    }
-  }
+async function prepareTrackedFlight(page) {
   const tracked = await page.evaluate(() => {
     const entry = window.__godsEyeView.dataManager.layers.get('flights');
     const layer = entry?.module;
@@ -610,39 +585,6 @@ async function prepareTrackedFlight(page, cockpit) {
     return 'Civil tracking did not create a tracked entity';
   }
   await sleep(2_000);
-  if (!cockpit) return null;
-  const entryAvailable = await page.evaluate(() => {
-    const button = document.getElementById('cockpit-entry');
-    if (!button || button.hidden || button.disabled) return false;
-    button.click();
-    return true;
-  });
-  if (!entryAvailable) return 'Cockpit entry control was unavailable for the tracked aircraft';
-  try {
-    await page.waitForFunction(() => document.body.classList.contains('cockpit-mode'), { timeout: 5_000 });
-  } catch {
-    return 'Cockpit entry control did not enter cockpit mode';
-  }
-  await sleep(2_000);
-  return null;
-}
-
-async function prepareMission(page) {
-  const state = await readLayerState(page, 'rocket-launches');
-  if (!(state?.stats?.count > 0)) return `Mission feed unavailable (${state?.stats?.error || 'no missions'})`;
-  const selected = await page.evaluate(() => {
-    const button = document.querySelector('[data-mission-roster-index="0"]');
-    if (!button) return false;
-    button.click();
-    return true;
-  });
-  if (!selected) return 'Mission roster did not expose a selectable mission';
-  try {
-    await page.waitForFunction(() => String(window.__godsEyeView.viewer.selectedEntity?.id || '').startsWith('rocket-launch:'), { timeout: 10_000 });
-  } catch {
-    return 'Mission selection did not reach the Cesium selected entity';
-  }
-  await sleep(2_000);
   return null;
 }
 
@@ -654,8 +596,7 @@ async function prepareScene(page, scene) {
   if (!skipReason && scene.id === 'firms') skipReason = await prepareFirms(page);
   if (!skipReason && scene.id === 'vessels') skipReason = await prepareVessels(page);
   if (!skipReason && scene.detectionDensity) skipReason = await prepareDetection(page, scene.detectionDensity);
-  if (!skipReason && scene.trackedFlight) skipReason = await prepareTrackedFlight(page, scene.cockpit);
-  if (!skipReason && scene.missionSelected) skipReason = await prepareMission(page);
+  if (!skipReason && scene.trackedFlight) skipReason = await prepareTrackedFlight(page);
   await sleep(DEFAULT_SETTLE_MS);
   return { layerActivations, skipReason };
 }

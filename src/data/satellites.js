@@ -286,7 +286,7 @@ function _classTally() {
 
 /**
  * Satellite preferences may be restored while the layer is disabled (for
- * example, when Space Missions releases its dependency). Preferences must not
+ * example, when a temporary dependency releases the layer). Preferences must not
  * revive render primitives until the layer is explicitly enabled again.
  * @param {boolean} layerEnabled Whether the Satellite layer is enabled.
  * @param {boolean} requestedVisible Whether the current presentation requests visibility.
@@ -1224,7 +1224,7 @@ function _preRenderTick() {
   const now = focusNowMs(Date.now());
 
   const interval = _trackedNorad ? 200 : POSITION_UPDATE_MS;
-  // Space Missions keeps this layer enabled for TLE lookup while deliberately
+  // A temporary consumer can keep this layer enabled for TLE lookup while deliberately
   // hiding its standalone fleet. Do not rebuild hidden point buffers on the
   // one-second propagation cadence: that GPU upload presented as a periodic
   // whole-globe pulse even though the camera remained stationary.
@@ -1248,7 +1248,7 @@ function _preRenderTick() {
   _updatePointFocus(now);
 
   // Hidden standalone orbit primitives do not need GMST matrix writes while
-  // Space Missions draws the selected mission orbit itself.
+  // An external consumer may draw its own selected orbit.
   if (_params.showOrbits && now - _lastRingRotation >= RING_ROTATION_MS) {
     _updateOrbitPathRotations(new Date(now));
     _lastRingRotation = now;
@@ -1864,7 +1864,7 @@ const satellitesLayer = {
           type: 'SAT',
           // Human class ("NAV · GPS"), not the raw CelesTrak tag ("GPS-OPS").
           // The detection canvas composites ABOVE the post-FX chain, so this
-          // is how class survives NVG/FLIR once the dot colors are collapsed.
+          // preserves class readability when dot colors have limited contrast.
           klass: satelliteClassLabel(cat?.group, { isIss: noradId === ISS_NORAD }),
         };
         _detectionObjects.set(noradId, object);
@@ -2086,7 +2086,7 @@ const satellitesLayer = {
       if (catalogChanged) _removeDenseCatalog();
       // Any explicit request for core clears the error, even when the mode did
       // NOT change: a failed dense load already reverted the param to core, so
-      // a Space Missions restore of an already-core snapshot would otherwise
+      // restoring an already-core snapshot would otherwise
       // leave the user staring at a DENSE ✕ they never caused.
       _denseStatus = 'idle';
       _denseError = null;
@@ -2125,7 +2125,7 @@ const satellitesLayer = {
    * a new panel.
    *
    * The chip is stateless — it declares the params to apply and the manager
-   * owns the write, so the Space Missions snapshot/restore path (which drives
+   * owns the write, so a snapshot/restore path (which drives
    * the same `catalog` param) stays the single source of truth and the chip
    * always renders whatever the layer actually has.
    *
@@ -2136,7 +2136,7 @@ const satellitesLayer = {
    * @returns {{ chips: Array<object>, legend: Array<object> }} Row controls.
    */
   getRowControls() {
-    // A dependency owner (Space Missions) borrows this layer for TLE lookup
+    // A dependency owner may borrow this layer for TLE lookup
     // with showPoints:false. Nothing is rendered, so a legend would describe an
     // empty sky and a chip write would be silently reverted by that owner's
     // restore. Surrender the row rather than lie about it.

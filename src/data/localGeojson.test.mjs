@@ -654,7 +654,7 @@ test('a loaded dataset is distinguishable from a dead one', async () => {
 // else ever asks for a frame. The stem grounding retry lives in preRender: if
 // the first sample fails (tiles not yet sampleable) and no frame is scheduled,
 // a parked camera never produces the retry frame and the stem stays at
-// ellipsoid height — buried in, or floating over, the photoreal mesh until the
+// ellipsoid height — buried in, or floating over, the rendered-mesh mesh until the
 // user happens to move. main retried continuously; under the governor the
 // retry must schedule its own frame. (perf rebase 2026-08-17)
 
@@ -680,7 +680,7 @@ test('a failed ground sample schedules the retry frame the idle governor would n
 
   // Close enough that a retry could succeed, on a scene that CAN sample but
   // whose tiles are not sampleable yet — a camera parked over a dam while the
-  // photoreal mesh is still streaming in.
+  // rendered-mesh mesh is still streaming in.
   setCameraAltitude(env, 20_000);
   env.preRender.raise();
 

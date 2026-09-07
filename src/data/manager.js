@@ -783,7 +783,7 @@ export class DataLayerManager {
           clearInterval(entry.intervalId);
           entry.intervalId = null;
         }
-        // Disable immediately so modules with their own AbortController (Radio)
+        // Disable immediately so modules with their own AbortController
         // cancel pending update work at the same turn boundary. A second
         // disable after the current lifecycle await settles closes the race
         // where an asynchronous enable finishes after this callback.

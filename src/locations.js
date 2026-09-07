@@ -1,5 +1,7 @@
 import * as Cesium from 'cesium';
-import { viewportBias, placesNearViewRecovery } from './annotations/annotationResolver.js';
+import { AzureMapsBffClient, azureMapsSearchResultToPlace } from './azure/mapsClient.js';
+
+const azureMaps = new AzureMapsBffClient({ fetchImpl: (...args) => globalThis.fetch(...args) });
 
 /**
  * Points of Interest per city.
@@ -207,7 +209,7 @@ export function flyToLandmark(viewer, lat, lon, options = {}) {
   const sampledHeight = viewer.scene.globe?.getHeight(targetCartographic);
 
   // Use sampled height if available, otherwise fall back to pre-baked city ground elevation.
-  // Google 3D Tiles don't populate globe terrain, so first fly-to always gets the fallback.
+  // Use the curated fallback until Re:Earth terrain has loaded this point.
   const terrainHeight = (sampledHeight != null && sampledHeight > 0) ? sampledHeight : groundElevation;
 
   const bounds = normalizeBuildingBounds(buildingBounds);
@@ -342,46 +344,30 @@ export function findPoiByName(query) {
 export const CANCELLED_SEARCH = Object.freeze({ cancelled: true });
 
 /**
- * Geocode a place name using Google Geocoding API, then fly there at a scale
+ * Search a place through the same-origin Azure Maps BFF, then fly there at a scale
  * appropriate to the request. Countries and cities use their viewport by
  * default; precise landmarks/buildings use close landmark framing.
  */
 export async function searchAndFlyTo(viewer, query, options = {}) {
-  const apiKey = window.__GOOGLE_MAPS_API_KEY__ || import.meta.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) throw new Error('No Google Maps API key available for geocoding');
-
   const beforeFly = typeof options.beforeFly === 'function' ? options.beforeFly : null;
   const mayFly = () => beforeFly === null || beforeFly() !== false;
-
-  // Viewport-biased geocode — the same bias annotationResolver's geocodePlace uses:
-  // "Sixth Street" spoken over Austin must prefer the Sixth Street on screen, not a
-  // same-named road in another city (or the wrong end of town — the W 6th vs E 6th bug).
-  let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
-  const bias = viewportBias(viewer);
-  if (bias) url += `&bounds=${bias}`;
-  const response = await fetch(url);
-  const data = await response.json();
-
-  const result = (data.status === 'OK' && data.results?.length) ? data.results[0] : null;
-  let lat = result?.geometry.location.lat;
-  let lng = result?.geometry.location.lng;
-  let label = result ? result.formatted_address : null;
-  let types = result?.types || [];
-  let viewport = result ? (result.geometry.bounds || result.geometry.viewport) : null;
-
-  // Places-near-view recovery (annotationResolver's twin): a missed geocode, or one
-  // that landed implausibly far from the view centre, snaps back to a view-biased
-  // Places hit within the trust bound — "the Capitol" means the one on screen.
-  const recovered = await placesNearViewRecovery(viewer, query, result ? { lat, lon: lng } : null);
-  if (recovered) {
-    lat = recovered.lat;
-    lng = recovered.lon;
-    label = recovered.label || label || query;
-    types = recovered.types || [];
-    viewport = placesViewportToBounds(recovered.viewport) || viewport;
-  } else if (!result) {
-    return null;
-  }
+  const carto = viewer?.camera?.positionCartographic;
+  const latitude = carto ? Cesium.Math.toDegrees(carto.latitude) : undefined;
+  const longitude = carto ? Cesium.Math.toDegrees(carto.longitude) : undefined;
+  const response = await azureMaps.search(query, {
+    limit: 5,
+    ...(Number.isFinite(latitude) && Number.isFinite(longitude) ? { latitude, longitude } : {}),
+    signal: options.signal,
+  });
+  const result = (response.results || [])
+    .map(azureMapsSearchResultToPlace)
+    .find(Boolean);
+  if (!result) return null;
+  const lat = result.lat;
+  const lng = result.lon;
+  const label = result.label || query;
+  const types = result.types || [];
+  const viewport = null;
 
   const requestedRange = finitePositive(options.range);
   const duration = finitePositive(options.duration) || 3.0;
@@ -479,16 +465,6 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
 
 /** Places {low,high} viewport → the geocode {southwest,northeast} bounds shape
  *  flyToViewportBounds consumes (used when the Places recovery replaces a geocode). */
-function placesViewportToBounds(vp) {
-  const low = vp?.low;
-  const high = vp?.high;
-  if (![low?.latitude, low?.longitude, high?.latitude, high?.longitude].every(Number.isFinite)) return null;
-  return {
-    southwest: { lat: low.latitude, lng: low.longitude },
-    northeast: { lat: high.latitude, lng: high.longitude },
-  };
-}
-
 /**
  * Map a geocode result's `types` to a camera-framing mode. Exported for tests.
  * Parks/campuses/lakes and streets are NOT precise POIs: flying to "Zilker Park" at
@@ -597,7 +573,7 @@ function wrapLongitude(lng) {
 
 /**
  * Diagonal span (km) above which a geocode viewport is bigger than any city, so
- * the off-centre test below is worth applying. Every locality Google returns is
+ * the off-centre test below is worth applying. Every locality result is
  * far under this (the widest measured is Anchorage at ~135 km), so a city can
  * never be gated on span alone.
  */
@@ -728,7 +704,10 @@ export function regionFramingPlan(viewport) {
 }
 
 function defaultRangeForNavigationMode(mode) {
-  // Fallback ranges when the geocode has no usable viewport to frame.
+  // Fallback ranges when the search result has no usable viewport to frame.
+  if (mode === 'region-overview') return 2_000_000;
+  if (mode === 'city-overview') return 30_000;
+  if (mode === 'neighborhood-close') return 5_000;
   if (mode === 'area-overview') return 1400;
   if (mode === 'street-corridor') return 900;
   return 250;

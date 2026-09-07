@@ -34,8 +34,8 @@ const JSON_PATH = path.resolve(getOpt('--json', 'qa-shots/focus-evidence/report.
 const SCREENSHOTS_DIR = path.resolve(getOpt('--screenshots-dir', 'qa-shots/focus-evidence'));
 const HEADFUL = hasFlag('--headful');
 const SMOKE = hasFlag('--smoke');
-const MAP_STACK_IDS = Object.freeze(['photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'osm']);
-const BASEMAP = getOpt('--basemap', 'photoreal');
+const MAP_STACK_IDS = Object.freeze(['azure-satellite', 'azure-hybrid', 'azure-streets', 'osm']);
+const BASEMAP = getOpt('--basemap', 'azure-satellite');
 const VIEWPORT = Object.freeze({ width: 1440, height: 900 });
 const FRAME_COUNT = SMOKE ? 6 : 30;
 const FRAME_MS = 100;
@@ -121,13 +121,11 @@ function shotPath(scenario, frame) {
 async function readTileReadiness(page) {
   return page.evaluate(() => {
     const gev = window.__godsEyeView;
-    const controller = gev.mapStackController;
+    const controller = gev.styleManager?.mapStackController || gev.mapStackController;
     const activeStack = controller?.getActiveId?.() || null;
-    const tileset = controller?.googleTileset || gev.tileset || null;
-    const applicable = activeStack === 'photoreal' && tileset?.show !== false;
     return {
-      tilesSettled: !applicable || tileset?.tilesLoaded === true,
-      tileSettleApplicable: applicable,
+      tilesSettled: gev.viewer.scene.globe.tilesLoaded === true,
+      tileSettleApplicable: true,
       activeStack,
     };
   });
@@ -136,21 +134,9 @@ async function readTileReadiness(page) {
 async function awaitTilesSettled(page, scenario) {
   const result = await page.evaluate(async (timeoutMs) => {
     const gev = window.__godsEyeView;
-    const controller = gev.mapStackController;
+    const controller = gev.styleManager?.mapStackController || gev.mapStackController;
     const activeStack = controller?.getActiveId?.() || null;
-    // The map-stack controller owns the authoritative Google tileset handle;
-    // the bootstrap field is retained only as a compatibility fallback.
-    const tileset = controller?.googleTileset || gev.tileset || null;
-    const applicable = activeStack === 'photoreal' && tileset?.show !== false;
-    if (!applicable) {
-      return {
-        tilesSettled: true,
-        tileSettleApplicable: false,
-        activeStack,
-        timedOut: false,
-      };
-    }
-    if (tileset.tilesLoaded === true) {
+    if (gev.viewer.scene.globe.tilesLoaded === true) {
       return {
         tilesSettled: true,
         tileSettleApplicable: true,
@@ -159,33 +145,25 @@ async function awaitTilesSettled(page, scenario) {
       };
     }
 
-    let allTilesLoadedObserved = false;
-    const removeListener = tileset.allTilesLoaded?.addEventListener?.(() => {
-      allTilesLoadedObserved = true;
-    });
     const deadline = Date.now() + timeoutMs;
-    try {
-      while (Date.now() < deadline) {
-        gev.viewer.scene.render(gev.viewer.clock.currentTime);
-        if (tileset.tilesLoaded === true || allTilesLoadedObserved) {
-          return {
-            tilesSettled: true,
-            tileSettleApplicable: true,
-            activeStack,
-            timedOut: false,
-          };
-        }
-        await new Promise((resolve) => setTimeout(resolve, 100));
+    while (Date.now() < deadline) {
+      gev.viewer.scene.render(gev.viewer.clock.currentTime);
+      if (gev.viewer.scene.globe.tilesLoaded === true) {
+        return {
+          tilesSettled: true,
+          tileSettleApplicable: true,
+          activeStack,
+          timedOut: false,
+        };
       }
-      return {
-        tilesSettled: false,
-        tileSettleApplicable: true,
-        activeStack,
-        timedOut: true,
-      };
-    } finally {
-      if (typeof removeListener === 'function') removeListener();
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
+    return {
+      tilesSettled: false,
+      tileSettleApplicable: true,
+      activeStack,
+      timedOut: true,
+    };
   }, TILE_SETTLE_TIMEOUT_MS);
   const status = result.tilesSettled ? 'settled' : `NOT settled after ${TILE_SETTLE_TIMEOUT_MS / 1000}s`;
   console.log(`    tiles (${scenario}): ${status}`);

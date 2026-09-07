@@ -11,25 +11,13 @@ import { decodeLayerStateParams, encodeLayerStateParams } from './data/layerStat
  * Share Links — URL Hash State Management
  *
  * Encodes camera position + style into the URL hash so links can be shared.
- * Format: #lat=37.77&lon=-122.42&alt=800&heading=0&pitch=-35&style=nvg&bloom=1&bi=84&bv=2&sharpen=0&si=65&hud=tactical&hv=1&dm=BALANCED&dd=50&da=elastic&kf=16&ko=0&cr=0&map=photoreal
+ * Format: #lat=37.77&lon=-122.42&alt=800&heading=0&pitch=-35&style=normal&map=azure-satellite
  */
 
 const DEBOUNCE_MS = 500;
 const LEGACY_BLOOM_FALLBACK = 50;
 
-// Style name mapping: internal → URL-friendly
-const STYLE_TO_URL = {
-  normal: 'normal',
-  retro: 'crt',
-  surveillance: 'nvg',
-  thermal: 'flir',
-  anime: 'anime',
-  noir: 'noir',
-  snow: 'snow',
-};
-
 const SHARE_UI_STATE_PARAM = 'ui';
-const SHARE_STYLE_PARAMS_PARAM = 'sp';
 const SHARE_CREATED_AT_PARAM = 'at';
 
 const SHARE_PANEL_STATE_REGISTRY = Object.freeze([
@@ -37,54 +25,14 @@ const SHARE_PANEL_STATE_REGISTRY = Object.freeze([
   { id: 'location-bar', token: 'l', pinnable: true },
   { id: 'data-panel', token: 'd', pinnable: false },
   { id: 'cctv-panel', token: 'v', pinnable: false },
-  { id: 'radio-panel', token: 'r', pinnable: false },
   { id: 'scene-panel', token: 's', pinnable: false },
   { id: 'global-context-panel', token: 'g', pinnable: false },
   { id: 'pp-toggles', token: 'p', pinnable: false },
-  { id: 'param-slider-panel', token: 'm', pinnable: false },
 ]);
 
 const SHARE_PANEL_STATE_BY_TOKEN = Object.freeze(new Map(
   SHARE_PANEL_STATE_REGISTRY.map((entry) => [entry.token, entry]),
 ));
-
-const URL_TO_STYLE = Object.fromEntries(
-  Object.entries(STYLE_TO_URL).map(([k, v]) => [v, k])
-);
-
-const SHARE_STYLE_PARAM_REGISTRY = Object.freeze({
-  retro: Object.freeze([
-    { key: 'pixelation', token: 'p', min: 1, max: 10 },
-    { key: 'distortion', token: 'd', min: 0, max: 1 },
-    { key: 'instability', token: 'i', min: 0, max: 1 },
-  ]),
-  surveillance: Object.freeze([
-    { key: 'gain', token: 'g', min: 0, max: 1 },
-    { key: 'bloom', token: 'b', min: 0, max: 1 },
-    { key: 'scanlineStr', token: 's', min: 0, max: 1 },
-    { key: 'pixelation', token: 'p', min: 1, max: 6 },
-  ]),
-  thermal: Object.freeze([
-    { key: 'sensitivity', token: 's', min: 0, max: 1 },
-    { key: 'bloom', token: 'b', min: 0, max: 1 },
-    { key: 'mode', token: 'm', min: 0, max: 1 },
-    { key: 'pixelation', token: 'p', min: 1, max: 6 },
-    { key: 'palette', token: 'a', min: 0, max: 1 },
-  ]),
-  anime: Object.freeze([
-    { key: 'saturation', token: 's', min: 0, max: 2 },
-    { key: 'edgeThick', token: 'e', min: 0, max: 1 },
-  ]),
-  noir: Object.freeze([
-    { key: 'contrastAmt', token: 'c', min: 0, max: 2 },
-    { key: 'grainAmt', token: 'g', min: 0, max: 1 },
-    { key: 'vignetteAmt', token: 'v', min: 0, max: 1 },
-  ]),
-  snow: Object.freeze([
-    { key: 'density', token: 'd', min: 0, max: 1 },
-    { key: 'wind', token: 'w', min: 0, max: 1 },
-  ]),
-});
 
 export class ShareLinkManager {
   constructor(viewer, {
@@ -122,10 +70,9 @@ export class ShareLinkManager {
     // null = the altitude-adaptive terminus (the default). A number pins the
     // outside-fill opacity as a percent, 94..100. (`sce`, 2026-08-17)
     this._scopeTerminusPct = null;
-    this._mapStack = 'photoreal';
+    this._mapStack = 'azure-satellite';
     this._layerStateProvider = null;
     this._panelStateProvider = null;
-    this._styleParamStateProvider = null;
     this._initialRestorePending = false;
     this._restoreAuthority = {
       visual: 0,
@@ -174,7 +121,8 @@ export class ShareLinkManager {
       parseOr(params.get('dd'), 50),
       50,
     );
-    const style = URL_TO_STYLE[params.get('style')] || 'normal';
+    // Every removed/unknown historical style restores as Normal.
+    const style = 'normal';
     const decodedLayerState = decodeLayerStateParams(params);
     const state = {
       lat,
@@ -184,7 +132,6 @@ export class ShareLinkManager {
       pitch: parseOr(params.get('pitch'), -35),
       roll: parseOr(params.get('roll'), 0),
       style,
-      styleParams: decodeStyleParamState(params, style),
       bloom: params.get('bloom') === '1',
       sharpen: params.get('sharpen') === '1',
       bloomIntensity: parseOr(params.get('bi'), LEGACY_BLOOM_FALLBACK),
@@ -224,7 +171,7 @@ export class ShareLinkManager {
       scopeTerminusPct: params.has('sce')
         ? clampScopeTerminusPct(params.get('sce'))
         : null,
-      mapStack: params.get('map') || 'photoreal',
+      mapStack: params.get('map') || 'azure-satellite',
       layerState: decodedLayerState,
       layerStateInvalid: params.get('v') === '2'
         && params.has('l')
@@ -326,7 +273,6 @@ export class ShareLinkManager {
         scopeTerminusPct: visualCurrent ? state.scopeTerminusPct : undefined,
         mapStack: mapCurrent ? state.mapStack : undefined,
         panelState,
-        styleParams: visualCurrent ? state.styleParams : undefined,
       });
       restoreStatus = 'applied';
     }
@@ -365,11 +311,6 @@ export class ShareLinkManager {
   /** Install the finalized panel-state source used by URL generation. */
   setPanelStateProvider(provider) {
     this._panelStateProvider = typeof provider === 'function' ? provider : null;
-  }
-
-  /** Install the active visual preset parameter source used by URL generation. */
-  setStyleParamStateProvider(provider) {
-    this._styleParamStateProvider = typeof provider === 'function' ? provider : null;
   }
 
   /** Called only when the durable layer preference model changes. */
@@ -485,7 +426,7 @@ export class ShareLinkManager {
     params.set('heading', Math.round(Cesium.Math.toDegrees(camera.heading)).toString());
     params.set('pitch', Math.round(Cesium.Math.toDegrees(camera.pitch)).toString());
     params.set('roll', Math.round(Cesium.Math.toDegrees(camera.roll)).toString());
-    params.set('style', STYLE_TO_URL[this._currentStyle] || 'normal');
+    params.set('style', 'normal');
     params.set('bloom', this._bloomEnabled ? '1' : '0');
     params.set('sharpen', this._sharpenEnabled ? '1' : '0');
     params.set('bi', Math.round(this._bloomIntensity).toString());
@@ -511,11 +452,6 @@ export class ShareLinkManager {
     const layerState = this._layerStateProvider?.();
     if (layerState) encodeLayerStateParams(params, layerState);
     this._encodePanelStateParam(params, this._panelStateProvider?.());
-    encodeStyleParamState(
-      params,
-      this._currentStyle,
-      this._styleParamStateProvider?.(this._currentStyle),
-    );
 
     // Copy-time metadata is intentionally absent here. `copyLink()` adds a
     // fresh timestamp to its ephemeral URL without aging the live address.
@@ -540,7 +476,6 @@ export class ShareLinkManager {
     this._removeCameraChanged = null;
     this._layerStateProvider = null;
     this._panelStateProvider = null;
-    this._styleParamStateProvider = null;
     this._onRestore = null;
   }
 }
@@ -554,42 +489,6 @@ export function decodeShareCreatedAtMs(params, { nowMs = Date.now() } = {}) {
   const timestampMs = seconds * 1000;
   if (!Number.isSafeInteger(timestampMs) || timestampMs > nowMs) return null;
   return timestampMs;
-}
-
-/** Encode allowlisted parameters for the active visual preset. */
-export function encodeStyleParamState(params, styleName, values) {
-  const registry = SHARE_STYLE_PARAM_REGISTRY[styleName];
-  if (!registry || !values || typeof values !== 'object') {
-    params.delete(SHARE_STYLE_PARAMS_PARAM);
-    return;
-  }
-  const assignments = [];
-  for (const spec of registry) {
-    const numeric = Number(values[spec.key]);
-    if (!Number.isFinite(numeric)) continue;
-    const clamped = Math.max(spec.min, Math.min(spec.max, numeric));
-    assignments.push(`${spec.token}.${Math.round(clamped * 100)}`);
-  }
-  if (assignments.length) params.set(SHARE_STYLE_PARAMS_PARAM, assignments.join('_'));
-  else params.delete(SHARE_STYLE_PARAMS_PARAM);
-}
-
-/** Decode allowlisted parameters for the selected visual preset. */
-export function decodeStyleParamState(params, styleName) {
-  if (params.get('v') !== '2' || !params.has(SHARE_STYLE_PARAMS_PARAM)) return null;
-  const registry = SHARE_STYLE_PARAM_REGISTRY[styleName];
-  if (!registry) return null;
-  const byToken = new Map(registry.map((spec) => [spec.token, spec]));
-  const decoded = {};
-  for (const assignment of String(params.get(SHARE_STYLE_PARAMS_PARAM) || '').split('_')) {
-    const [token, scaledRaw, ...extra] = assignment.split('.');
-    if (extra.length || !/^-?\d+$/.test(scaledRaw || '')) continue;
-    const spec = byToken.get(token);
-    if (!spec) continue;
-    const numeric = Number(scaledRaw) / 100;
-    decoded[spec.key] = Math.max(spec.min, Math.min(spec.max, numeric));
-  }
-  return Object.keys(decoded).length ? decoded : null;
 }
 
 /** Decode the shareable collapsed and pinned state for known panels. */

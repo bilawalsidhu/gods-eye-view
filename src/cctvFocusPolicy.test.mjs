@@ -6,10 +6,10 @@ import {
   runCctvLayerEnableTransition,
 } from './cctvFocusPolicy.js';
 
-test('CCTV layer enable activates nearest without stealing a tracked or cockpit view', () => {
+test('CCTV layer enable activates nearest without stealing a tracked or drone view view', () => {
   for (const ownership of [
-    { trackedEntity: { id: 'tracked-plane' }, cockpitActive: false },
-    { trackedEntity: null, cockpitActive: true },
+    { trackedEntity: { id: 'tracked-plane' }, droneViewActive: false },
+    { trackedEntity: null, droneViewActive: true },
   ]) {
     const calls = [];
     const result = runCctvLayerEnableFocus({
@@ -53,7 +53,7 @@ test('CCTV enable retains a pre-await tracking snapshot when tracking clears dur
   const diagnostics = [];
   const result = await runCctvLayerEnableTransition({
     target: true,
-    readOwnership: () => ({ trackedEntity, cockpitActive: false }),
+    readOwnership: () => ({ trackedEntity, droneViewActive: false }),
     setEnabled: async () => {
       await Promise.resolve();
       trackedEntity = null;
@@ -83,7 +83,7 @@ test('CCTV disable transition does not emit enable-ownership diagnostics', async
 
   const result = await runCctvLayerEnableTransition({
     target: false,
-    readOwnership: () => ({ trackedEntity: { id: 'tracked-plane' }, cockpitActive: false }),
+    readOwnership: () => ({ trackedEntity: { id: 'tracked-plane' }, droneViewActive: false }),
     setEnabled: async (target) => transitions.push(target),
     shouldFocus: () => true,
     activate: () => 'cam-near',

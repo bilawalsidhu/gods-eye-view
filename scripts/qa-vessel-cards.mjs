@@ -4,7 +4,7 @@
  * the shared world-overlay host.
  *
  * Drives the REAL app in headless Chromium, frames a busy port, waits for the
- * photoreal tileset + vessel refresh to settle, and captures a full-viewport
+ * active map stack + vessel refresh to settle, and captures a full-viewport
  * screenshot to the gitignored qa-shots/. Live AISStream data remains the
  * default. An explicit synthetic mode uses the layer's dev-only evidence seam
  * to exercise the production reconciliation/render path when AISStream is open
@@ -290,7 +290,7 @@ async function main() {
         + `artifact provenance=${DATA_PROVENANCE_SLUGS[DATA_MODE]}`,
       );
 
-      // Wait for the photoreal tileset and at least one vessel refresh.
+      // Wait for the active map stack and at least one vessel refresh.
       const settled = await page
         .waitForFunction(() => {
           const gev = window.__godsEyeView;

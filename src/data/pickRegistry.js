@@ -17,7 +17,7 @@ const _owners = new Map();
 /**
  * Resolves a scene.pick() result to a String pick id for the ownership scan.
  *
- * Layers use heterogeneous pick ids: flights/military/bikeshare/CCTV use
+ * Layers use heterogeneous pick ids: flights/military/CCTV use
  * strings, satellites use numeric NORAD catalog ids, live AIS vessels attach
  * the vessel record OBJECT (identity = its `mmsi`), and entity picks surface
  * the Cesium Entity (identity = its string `id`). Everything is coerced to a

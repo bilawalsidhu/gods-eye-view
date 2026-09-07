@@ -28,8 +28,7 @@
  * Coordinate convention:
  *   The equirectangular panorama has longitude 0 (center column) = North,
  *   +90 = East, ±180 = South, -90 = West. Latitude +90 = up (zenith),
- *   -90 = down (nadir). This matches Google Street View convention where
- *   heading 0 = North.
+ *   -90 = down (nadir). Heading 0 = North.
  *
  * Dependencies: sharp (devDependency)
  */

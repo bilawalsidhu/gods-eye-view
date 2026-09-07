@@ -1,9 +1,9 @@
 /**
  * Camera-ownership policy for explicit and deferred navigation.
  *
- * Immediate destinations refuse Cockpit before mutation, then stamp, release,
+ * Immediate destinations refuse an immersive Drone View before mutation, then stamp, release,
  * and fly. Deferred destinations stamp without releasing; after resolution
- * they must recheck the stamp and Cockpit immediately before releasing and
+ * they must recheck the stamp and Drone View immediately before releasing and
  * flying.
  */
 
@@ -71,11 +71,11 @@ export function stampInitialShareGesture(stamp) {
 /**
  * Run an immediate explicit camera navigation.
  * @param {Object} options
- * @returns {*} Navigation result, or false when disposed or Cockpit refuses.
+ * @returns {*} Navigation result, or false when disposed or Drone View refuses.
  */
 export function runExplicitNavigation({
   disposed = false,
-  cockpitActive = false,
+  immersiveViewActive = false,
   noun = 'target',
   showToast,
   stamp,
@@ -83,8 +83,8 @@ export function runExplicitNavigation({
   navigate,
 } = {}) {
   if (disposed) return false;
-  if (cockpitActive) {
-    showToast?.(`Exit cockpit to fly to a ${noun}`);
+  if (immersiveViewActive) {
+    showToast?.(`Exit Drone View to fly to a ${noun}`);
     return false;
   }
   const generation = stamp?.();
@@ -95,18 +95,18 @@ export function runExplicitNavigation({
 /**
  * Accept a deferred navigation intent without releasing the current owner.
  * @param {Object} options
- * @returns {number|false} Generation stamp, or false when disposed or Cockpit refuses.
+ * @returns {number|false} Generation stamp, or false when disposed or Drone View refuses.
  */
 export function beginDeferredNavigation({
   disposed = false,
-  cockpitActive = false,
+  immersiveViewActive = false,
   noun = 'location',
   showToast,
   stamp,
 } = {}) {
   if (disposed) return false;
-  if (cockpitActive) {
-    showToast?.(`Exit cockpit to fly to a ${noun}`);
+  if (immersiveViewActive) {
+    showToast?.(`Exit Drone View to fly to a ${noun}`);
     return false;
   }
   return stamp?.();
@@ -120,14 +120,14 @@ export function beginDeferredNavigation({
 export function reassertNavigationHandoff({
   generation,
   currentGeneration,
-  cockpitActive = false,
+  immersiveViewActive = false,
   disposed = false,
   showToast,
   release,
 } = {}) {
   if (disposed || generation !== currentGeneration) return false;
-  if (cockpitActive) {
-    showToast?.('Exit cockpit to fly to a location');
+  if (immersiveViewActive) {
+    showToast?.('Exit Drone View to fly to a location');
     return false;
   }
   release?.();

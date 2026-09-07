@@ -1,5 +1,5 @@
 // Camera-ownership policy for user-issued destinations. The ORDER is the
-// contract: cockpit refuses before anything is released, the release happens
+// contract: Drone View refuses before anything is released, the release happens
 // before the flight, and a deferred flight retires the moment ANY newer
 // navigation intent claims the camera.
 import { test } from 'node:test';
@@ -54,11 +54,11 @@ function spy(overrides = {}) {
 
 /**
  * The wiring StyleManager applies: one generation counter shared by every
- * explicit navigation intent AND by cockpit taking the camera. Deferred
+ * explicit navigation intent AND by Drone View taking the camera. Deferred
  * flights capture their stamp and recheck it before flying.
  */
 function navigator() {
-  const state = { generation: 0, cockpitActive: false, log: [] };
+  const state = { generation: 0, immersiveViewActive: false, log: [] };
   const stamp = () => { state.generation += 1; return state.generation; };
   const release = () => state.log.push('release');
   const showToast = (text) => state.log.push(`toast:${text}`);
@@ -67,7 +67,7 @@ function navigator() {
     /** One explicit intent that flies immediately. Returns its stamp, or false. */
     navigate(noun) {
       return runExplicitNavigation({
-        cockpitActive: state.cockpitActive,
+        immersiveViewActive: state.immersiveViewActive,
         noun,
         showToast,
         stamp,
@@ -81,7 +81,7 @@ function navigator() {
     /** An intent whose flight resolves later (the geocoded search). */
     startDeferred(noun) {
       return beginDeferredNavigation({
-        cockpitActive: state.cockpitActive,
+        immersiveViewActive: state.immersiveViewActive,
         noun,
         showToast,
         stamp,
@@ -92,25 +92,25 @@ function navigator() {
       const cleared = reassertNavigationHandoff({
         generation,
         currentGeneration: state.generation,
-        cockpitActive: state.cockpitActive,
+        immersiveViewActive: state.immersiveViewActive,
         showToast,
         release,
       });
       if (cleared) state.log.push(`fly:${label}`);
       return cleared;
     },
-    enterCockpit() {
-      // Mirrors CockpitViewController's onCameraTakeover.
+    enterDroneView() {
+      // Mirrors DroneMissionController's onCameraTakeover.
       stamp();
-      state.cockpitActive = true;
+      state.immersiveViewActive = true;
     },
-    exitCockpit() { state.cockpitActive = false; },
+    exitImmersiveView() { state.immersiveViewActive = false; },
   };
 }
 
 test('a free camera is stamped, released, then flown — in that order', () => {
   const s = spy();
-  const result = runExplicitNavigation({ cockpitActive: false, noun: 'location', ...s });
+  const result = runExplicitNavigation({ immersiveViewActive: false, noun: 'location', ...s });
   assert.equal(result, 'flew');
   assert.deepEqual(s.log, ['stamp', 'release', 'navigate']);
 });
@@ -121,26 +121,26 @@ test('the accepted intent hands its stamp to the flight', () => {
   assert.equal(seen, 42, 'a deferred flight needs its stamp to recheck later');
 });
 
-test('cockpit refuses without stamping or releasing anything', () => {
-  // Releasing under cockpit destroys its hidden aircraft entity and the rig
+test('Drone View refuses without stamping or releasing anything', () => {
+  // Releasing under Drone View destroys its simulated drone tracking and the mission view
   // silently exits on the next update — the refusal must come first.
   for (const noun of ['location', 'camera', 'vessel', 'fire']) {
     const s = spy();
-    const result = runExplicitNavigation({ cockpitActive: true, noun, ...s });
+    const result = runExplicitNavigation({ immersiveViewActive: true, noun, ...s });
     assert.equal(result, false);
-    assert.deepEqual(s.log, [`toast:Exit cockpit to fly to a ${noun}`]);
+    assert.deepEqual(s.log, [`toast:Exit Drone View to fly to a ${noun}`]);
   }
 });
 
 test('disposed navigation is inert before any camera or UI mutation', () => {
   const s = spy();
-  const result = runExplicitNavigation({ disposed: true, cockpitActive: true, ...s });
+  const result = runExplicitNavigation({ disposed: true, immersiveViewActive: true, ...s });
   assert.equal(result, false);
   assert.deepEqual(s.log, []);
 });
 
 test('the refusal is a strict false, distinguishable from a flight result', () => {
-  const refused = runExplicitNavigation({ cockpitActive: true, showToast() {} });
+  const refused = runExplicitNavigation({ immersiveViewActive: true, showToast() {} });
   assert.strictEqual(refused, false);
   // A navigate() that legitimately returns undefined is not a refusal.
   assert.strictEqual(runExplicitNavigation({ navigate: () => undefined }), undefined);
@@ -161,7 +161,7 @@ test('deferred intent stamps without releasing a camera owner', () => {
 
 test('disposed deferred intent is inert before stamp or UI mutation', () => {
   const s = spy();
-  assert.equal(beginDeferredNavigation({ disposed: true, cockpitActive: true, ...s }), false);
+  assert.equal(beginDeferredNavigation({ disposed: true, immersiveViewActive: true, ...s }), false);
   assert.deepEqual(s.log, []);
 });
 
@@ -184,18 +184,18 @@ test('deferred handoff: a superseded request neither flies nor releases', () => 
   assert.deepEqual(s.log, [], 'a stale flight must be completely inert');
 });
 
-test('deferred handoff: cockpit taken mid-flight refuses and explains', () => {
+test('deferred handoff: Drone View taken mid-flight refuses and explains', () => {
   const s = spy();
   const ok = reassertNavigationHandoff({
-    generation: 4, currentGeneration: 4, cockpitActive: true, ...s,
+    generation: 4, currentGeneration: 4, immersiveViewActive: true, ...s,
   });
   assert.equal(ok, false);
-  assert.deepEqual(s.log, ['toast:Exit cockpit to fly to a location']);
+  assert.deepEqual(s.log, ['toast:Exit Drone View to fly to a location']);
 });
 
-test('deferred handoff: supersession is checked before cockpit, so it stays silent', () => {
+test('deferred handoff: supersession is checked before Drone View, so it stays silent', () => {
   const s = spy();
-  reassertNavigationHandoff({ generation: 3, currentGeneration: 4, cockpitActive: true, ...s });
+  reassertNavigationHandoff({ generation: 3, currentGeneration: 4, immersiveViewActive: true, ...s });
   assert.deepEqual(s.log, [], 'a stale request must not toast on the user');
 });
 
@@ -227,14 +227,14 @@ test('interleaving: a CCTV focus during a search retires the search', () => {
   assert.ok(!nav.state.log.includes('fly:search'));
 });
 
-test('interleaving: cockpit entered AND exited during a search still retires it', () => {
-  // The cockpit flag is back to false by the time the flight resolves, so only
+test('interleaving: Drone View entered AND exited during a search still retires it', () => {
+  // The Drone View flag is back to false by the time the flight resolves, so only
   // the generation stamped by the takeover can catch this one.
   const nav = navigator();
   const searchGeneration = nav.startDeferred('location');
-  nav.enterCockpit();
-  nav.exitCockpit();
-  assert.equal(nav.state.cockpitActive, false);
+  nav.enterDroneView();
+  nav.exitImmersiveView();
+  assert.equal(nav.state.immersiveViewActive, false);
   assert.equal(nav.resolveDeferred(searchGeneration, 'search'), false);
   assert.deepEqual(nav.state.log, [], 'the deferred search never released');
 });

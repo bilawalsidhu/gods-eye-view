@@ -206,60 +206,6 @@ test('an explicit OUTSIDE opacity still wins over the new default', () => {
 // 3. Detection — on for every style on a first run, Normal included
 // ---------------------------------------------------------------------------
 
-test('first run opens with detection on, in every style, using the one tactical preset', () => {
-  // Normal used to start OFF while only CRT/NVG/FLIR auto-applied the preset.
-  // It is now the baseline for all of them, reusing the SAME frozen object, so
-  // "the tactical look" cannot fork into two definitions.
-  assert.match(uiSource, /const MILITARY_DETECTION_PRESET = Object\.freeze\(\{ mode: 'dense', densityPct: 75 \}\);/,
-    'the tactical look is still Dense @ 75%');
-  const baseline = uiBlock('const GLOBAL_POST_DEFAULTS = {', '\n};');
-  assert.match(baseline, /detectionMode: MILITARY_DETECTION_PRESET\.mode\.toUpperCase\(\),/,
-    'the first-load baseline reads the preset rather than restating it');
-  assert.match(baseline, /detectionDensity: MILITARY_DETECTION_PRESET\.densityPct,/,
-    'density comes from the same object, so the two cannot drift');
-  assert.doesNotMatch(baseline, /detectionMode: 'OFF'/,
-    'the retired OFF baseline is gone, not shadowed');
-
-  // `const` has no hoisted value: the baseline can only READ the preset if the
-  // preset is declared first. Getting this backwards is a startup TDZ crash,
-  // which no other test in the suite would reach.
-  assert.ok(
-    uiSource.indexOf('const MILITARY_DETECTION_PRESET =')
-      < uiSource.indexOf('const GLOBAL_POST_DEFAULTS ='),
-    'MILITARY_DETECTION_PRESET must be declared before the baseline that reads it',
-  );
-});
-
-test('detection-on-by-default is a default, not an operator override', () => {
-  // `_detectionUserOverridden` means the OPERATOR hand-edited detection, and it
-  // suppresses the military-style auto-enable for the rest of the session.
-  // A factory default is not that. If applying the baseline set the flag, a
-  // fresh session would silently lose the style auto-enable behaviour — a
-  // separate landed feature, taken out by an unrelated change.
-  const applyDefaults = uiBlock('  _applyGlobalPostDefaults() {', '\n  }\n');
-  assert.match(applyDefaults, /this\._setDetectionMode\(defaults\.detectionMode\)/,
-    'the baseline still goes through the real detection path');
-  assert.doesNotMatch(applyDefaults, /_detectionUserOverridden/,
-    'applying a factory default must not impersonate an operator edit');
-
-  // And the two halves of the override machinery are still wired: the style
-  // preset consults the flag, and the detection button sets it.
-  assert.match(uiSource, /if \(preset\.detection && !this\._detectionUserOverridden\) \{/,
-    'a style preset still yields to an operator who changed detection by hand');
-  const detectionButton = uiBlock("this._detectionBtn.addEventListener('click'", 'cycleDetectionMode()');
-  assert.match(detectionButton, /this\._detectionUserOverridden = true;/,
-    'and the detection control still claims the override when the operator uses it');
-
-  // Style-switch semantics are unchanged: Normal is still not a preset owner,
-  // so switching TO Normal does not re-apply or clear anything.
-  const stylePresets = uiBlock('const STYLE_PRESET_DEFAULTS = {', '\n};');
-  for (const style of ['retro', 'surveillance', 'thermal']) {
-    assert.match(stylePresets, new RegExp(`\\n  ${style}: \\{`),
-      `${style} still carries its own preset`);
-  }
-  assert.doesNotMatch(stylePresets, /\n  normal: \{/,
-    'Normal gained a default, not a style preset — switching to it still touches nothing');
-});
 
 test('a share link that carries detection OFF still restores OFF', () => {
   // Same rule as the feather: the default governs a session that said nothing.

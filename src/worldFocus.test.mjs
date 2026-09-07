@@ -69,7 +69,7 @@ test('routing hands the request to the UI policy, which owns the flight', () => 
   assert.equal(result, 'flew');
 });
 
-test('a refusing policy (cockpit owns the camera) never reaches the flight', () => {
+test('a refusing immersive-view policy never reaches the flight', () => {
   let flights = 0;
   const result = routeWorldFocusRequest(
     { detail: { kind: 'vessel', id: '123', position: POSITION } },

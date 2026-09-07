@@ -185,34 +185,34 @@ test('the band, not the geometry, is what smooths the crossing', () => {
 
 /**
  * JFK, where the geoid runs about 34 m BELOW the ellipsoid: the ramp sits near
- * −30 m of ellipsoid height and a widebody cockpit reads ALT −18 m. Everyday
+ * −30 m of ellipsoid height and a widebody camera reads ALT −18 m. Everyday
  * ground level at a coastal airport is therefore a camera INSIDE the ellipsoid,
  * which is why this is the scenario the horizon test has to get right.
  */
 const JFK_LON = -73.7781;
 const JFK_LAT = 40.6413;
 const JFK_RAMP_H = -30;
-const jfkCockpit = Cesium.Cartesian3.fromDegrees(JFK_LON, JFK_LAT, -18);
+const jfkCamera = Cesium.Cartesian3.fromDegrees(JFK_LON, JFK_LAT, -18);
 const DEG_PER_M_LAT = 1 / 110_574;
 
 test('below the ellipsoid, a contact against open sky still reads as sky', () => {
-  // The owner's cockpit view: traffic on approach, 8 km out and 900 m up, is
+  // The owner's camera view: traffic on approach, 8 km out and 900 m up, is
   // ~6.5° above eye level — the whole band is 1.09° per side, so this is not a
   // near call. Before the fix a sub-ellipsoid camera fell into the degenerate
   // guard and every one of these came back 0: a row of dark boxes on empty sky.
   const approach = Cesium.Cartesian3.fromDegrees(JFK_LON, JFK_LAT + 8_000 * DEG_PER_M_LAT, 900);
-  assert.equal(skyBackdropFactor(jfkCockpit, approach), 1);
+  assert.equal(skyBackdropFactor(jfkCamera, approach), 1);
   // Straight overhead is the unambiguous case, from under the surface as much
   // as from cruise altitude.
   assert.equal(
-    skyBackdropFactor(jfkCockpit, Cesium.Cartesian3.fromDegrees(JFK_LON, JFK_LAT, 10_000)),
+    skyBackdropFactor(jfkCamera, Cesium.Cartesian3.fromDegrees(JFK_LON, JFK_LAT, 10_000)),
     1,
   );
 });
 
 test('below the ellipsoid, a contact on the ramp still keeps its plate', () => {
   // Sky selectivity must not become "no plates at ground level". An aircraft
-  // 150 m ahead on the ramp sits 12 m below the cockpit — 4.6° under eye level,
+  // 150 m ahead on the ramp sits 12 m below the camera — 4.6° under eye level,
   // four band-widths down — so it is read against apron and keeps the full
   // plate that holds mono text off bright concrete.
   const ramp = Cesium.Cartesian3.fromDegrees(
@@ -220,11 +220,11 @@ test('below the ellipsoid, a contact on the ramp still keeps its plate', () => {
     JFK_LAT + 150 * DEG_PER_M_LAT,
     JFK_RAMP_H,
   );
-  assert.equal(skyBackdropFactor(jfkCockpit, ramp), 0);
-  // And the taxiway further out, still below the cockpit floor.
+  assert.equal(skyBackdropFactor(jfkCamera, ramp), 0);
+  // And the taxiway further out, still below the camera floor.
   assert.equal(
     skyBackdropFactor(
-      jfkCockpit,
+      jfkCamera,
       Cesium.Cartesian3.fromDegrees(JFK_LON, JFK_LAT + 400 * DEG_PER_M_LAT, JFK_RAMP_H - 5),
     ),
     0,

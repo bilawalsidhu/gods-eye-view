@@ -57,7 +57,7 @@ export function selectEntityContext(entity) {
  * selection slot.
  *
  * Selecting a contact is a click-selection like any other — voice's
- * `scope:'selected'` and the Cockpit's selected-target lookup both read this
+ * `scope:'selected'` and selected-target lookup both read this
  * one slot, so a tracking layer that stays out of it is invisible to them
  * even while its readout card is on screen.
  *

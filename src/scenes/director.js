@@ -113,9 +113,6 @@ function normalizeBloomState(rawBloom = {}, { projectVersion = PROJECT_VERSION, 
 function recipeToScene(recipe) {
   const post = recipe.post || {};
   const ui = recipe.ui || {};
-  const styleParams = post.styleParams && typeof post.styleParams === 'object'
-    ? deepClone(post.styleParams)
-    : {};
 
   // Normalize layer targets from the recipe into canonical form
   const layers = {};
@@ -164,7 +161,6 @@ function recipeToScene(recipe) {
         mode: post.detectionMode || 'OFF',
         density: 35,
       },
-      styleParams,
     },
     layers: deepClone(layers),
   }));
@@ -235,7 +231,6 @@ function normalizeShot(rawShot, index = 0, { projectVersion = PROJECT_VERSION } 
         mode: typeof detection.mode === 'string' ? detection.mode : 'OFF',
         density: Math.max(0, Math.min(100, Number.isFinite(Number(detection.density)) ? Number(detection.density) : 35)),
       },
-      styleParams: visual.styleParams && typeof visual.styleParams === 'object' ? deepClone(visual.styleParams) : {},
     },
     layers: Object.fromEntries(
       Object.entries(rawShot?.layers || {}).map(([layerId, value]) => [layerId, normalizeLayerEntry(value)])
@@ -775,15 +770,15 @@ export class SceneDirector {
    * policy, releasing any tracked contact, voice orbit, or in-flight tween
    * first. Two writers on the camera is the documented jitter failure mode
    * (see src/data/trackedCamera.js and the orbit refusal in src/cameraVerbs.js),
-   * and the policy is also where Cockpit gets to refuse.
-   * @returns {boolean} False when the camera is unavailable (Cockpit/disposed).
+   * and the policy is also where Drone View gets to refuse.
+   * @returns {boolean} False when the camera is unavailable (Drone View/disposed).
    */
   _claimCameraOwnership() {
     // Older/headless style managers may predate the facade — proceed then.
     if (typeof this.styleManager?.runImmediateNavigation !== 'function') return true;
     const claimed = this.styleManager.runImmediateNavigation('scene', () => true);
     if (claimed === false) {
-      this._updateStatus('Camera unavailable — exit cockpit first');
+      this._updateStatus('Camera unavailable — exit Drone View first');
       return false;
     }
     return true;
@@ -1104,8 +1099,8 @@ export class SceneDirector {
    * for why undeclared layers are left alone.
    *
    * Two things this pass owes the operator:
-   *  - An isolating Context mode is left FIRST. Space Missions refuses every
-   *    unrelated enable, so a shot applied inside it composes a scene nobody
+   *  - An isolating Context mode is left first so a shot applied inside it
+   *    cannot compose a scene nobody
    *    authored (see _exitIsolatingContextMode).
    *  - A refused layer is reported. setEnabled() answers false when a guard
    *    vetoes the transition; swallowing that answer is how playback came to
@@ -1165,13 +1160,6 @@ export class SceneDirector {
 
   /**
    * Leave a Context mode that isolates the globe, before a shot's layers land.
-   *
-   * Space Missions is the shipped case. It is a destructive-exclusive mode: a
-   * guard refuses every enable outside its own replay bundle, so a recipe that
-   * declares flights/satellites/earthquakes/traffic gets all four refused —
-   * and Orbital Watch, whose satellites the guard does permit, would still
-   * play over the mode's rocket-launches replay it never declared. Either way
-   * the shot is not the composition it describes.
    *
    * The old full-registry reconcile dismantled the mode by accident, as part
    * of forcing every undeclared layer off. Declaring the exit is the honest

@@ -1,7 +1,7 @@
 // src/data/meshFloorSampler.js — rendered-surface (mesh) floor sampling
 // (field-test round 4, 2026-07-06).
 //
-// The visible world in the google-3d regime is the PHOTOGRAMMETRIC MESH,
+// The visible world in the mesh-surface regime is the PHOTOGRAMMETRIC MESH,
 // which sits above the Re:Earth bare-earth DEM (measured ~17 m at the Austin
 // airport apron) — so DEM-floored sprites/trails still buried themselves in
 // the mesh while 3D models (which groundSnap against the mesh) looked right.
@@ -12,7 +12,7 @@
 // tile-load prioritization at the probe point, so sampling is (a) gated to
 // cells NEAR the viewer — where tiles are streamed and where an error is
 // visible at all, (b) capped per call, (c) one-shot per cell for the session,
-// (d) skipped entirely outside the google-3d regime. A returned-undefined
+// (d) skipped entirely outside the mesh-surface regime. A returned-undefined
 // probe (tiles not streamed yet) is NOT latched — it retries on a later call.
 //
 // Sample acceptance is sanity-gated against the DEM prior when warm (a
@@ -39,15 +39,15 @@ const MAX_CAMERA_HEIGHT_M = 25_000;
 /** @type {Cesium.Cartographic} Scratch for probe coordinates. */
 const _scratchProbe = new Cesium.Cartographic();
 
-// Regime tracking: mesh cells only apply while the photoreal (google-3d)
+// Regime tracking: mesh cells only apply while the rendered-mesh (mesh-surface)
 // stack renders. main.js re-dispatches MapStackController.onChange as this
-// CustomEvent; the boot default is photoreal, matching groundFloor's initial
+// CustomEvent; the boot default is rendered-mesh, matching groundFloor's initial
 // preference. Module-scope listener: the module only loads in the browser
 // bundle, and the subscription is idempotent for the app's lifetime.
 if (typeof window !== 'undefined') {
   window.addEventListener('gev:map-stack-changed', (event) => {
     const activeId = event?.detail?.activeId;
-    if (activeId) setMeshFloorPreferred(activeId === 'photoreal');
+    if (activeId) setMeshFloorPreferred(activeId === 'rendered-mesh');
   });
 }
 
@@ -102,7 +102,7 @@ export function sampleMeshFloorCells(scene, points, { excludeObjects = [], viewe
   // Round-5 hardening (the CCTV projectionTilesReady lesson, ported late):
   // while tiles are MID-STREAM a probe returns coarse-LOD heights — real
   // numbers, wildly wrong — and the one-shot latch made them permanent.
-  // Only sample when the visible Google tileset reports tilesLoaded AND the
+  // Only sample when a visible legacy mesh tileset reports tilesLoaded AND the
   // camera is low enough that the streamed LOD near it is fine-grained.
   const camH = scene.camera?.positionCartographic?.height;
   if (!Number.isFinite(camH) || camH > MAX_CAMERA_HEIGHT_M) return;

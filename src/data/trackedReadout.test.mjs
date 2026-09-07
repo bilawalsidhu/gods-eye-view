@@ -150,7 +150,7 @@ test('tracked entity publishes a protected host entry backed by the frame cache'
     assert.equal(entry.collisionGroup, 'ambient-card');
     assert.equal(entry.position(), display);
     assert.equal(publication.options.collisionCapacity, 0);
-    assert.equal(publication.options.hideInCockpit, true);
+    assert.equal(publication.options.hideInDroneView, true);
     assert.equal(getActiveTrackedReadoutId(), 'flights:abc123');
 
     entity.gevLabelModel = { ...entity.gevLabelModel, details: ['FL360 · 455 kts'] };

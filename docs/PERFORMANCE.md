@@ -42,23 +42,12 @@ Cold activation was measured separately from warm option switching. Live object
 counts are included so that future runs can compare source populations before
 attributing a difference to the client.
 
-| Layer | Activation | Source count | Motion / rest | Used JS heap |
-| --- | ---: | ---: | ---: | ---: |
-| CCTV city | 19,608.240 ms | 48 | 60 / 60 FPS | 192.7 MiB |
-| Space Missions (report label: Rocket missions) | 3,581.066 ms | 26 | 60 / 60 FPS | 131.3 MiB |
-| Radio | 3,458.709 ms | 750 | 60 / 60 FPS | 124.8 MiB |
-| Bikeshare | 2,069.498 ms | 633 | 60 / 60 FPS | 157.4 MiB |
-| Datacenters | 817.693 ms | 4,362 | 59.6 / 60 FPS | 328.2 MiB |
-| Flights | 667.671 ms | 247 | 60 / 60 FPS | 118.4 MiB |
-| Submarine cables | 614.727 ms | 2,629 | 60 / 60 FPS | 412.0 MiB |
-| Military Flights | 557.113 ms | 68 | 60 / 60 FPS | 118.4 MiB |
-
 CCTV had the largest cold activation cost in this capture. Submarine cables
 used the most heap, followed by datacenters. Completed single-layer samples
 generally reached 60 FPS, so activation time and heap separate these cases more
 clearly than steady-state frame rate.
 
-## Aircraft, detection, and Cockpit
+## Aircraft and detection
 
 | Scene | Motion / rest |
 | --- | ---: |
@@ -70,7 +59,6 @@ clearly than steady-state frame rate.
 | Detection at 25% | 39.3 / 41.1 FPS |
 | Detection at 50% | 37.4 / 39.8 FPS |
 | Detection at 100% | 34.4 / 35.5 FPS |
-| Cockpit | 49.6 / 49.2 FPS |
 
 The clean detection scenes processed 8,169 to 8,170 observations. Selected
 labels rose from 14 at 25% density to 28 at 50% and 56 at 100%. The aircraft
@@ -79,25 +67,10 @@ rerun received no live aircraft rows.
 
 ## Visual styles and combined stress
 
-| Scene | Motion / rest |
-| --- | ---: |
-| Normal | 60 / 60 FPS |
-| CRT (report label: Retro) | 60 / 60 FPS |
-| NVG (report label: Surveillance) | 60 / 60 FPS |
-| FLIR (report label: Thermal) | 49 / 60 FPS |
-| Anime | 60 / 59.8 FPS |
-| Noir | 47 / 56.6 FPS |
-| Snow | 42.3 / 45.8 FPS |
-| Combined static | 57.6 / 60 FPS |
-| Combined operational | 39.9 / 43.1 FPS |
-
 The combined static scene rendered 11,575 objects, used 872.2 MiB of JavaScript
 heap, and issued 48,665 text draws during motion and 54,106 at rest. The combined
 operational sample contained 3,909 observations and two selected labels, but its
 live aircraft and traffic rows were empty, so it remains a limited stress case.
-
-Snow, Noir, dense detection, and text-heavy combined layers are the clearest
-controlled comparison points for later optimization work.
 
 ## Keyed live sources
 

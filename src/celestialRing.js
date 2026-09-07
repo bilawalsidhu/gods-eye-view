@@ -1,7 +1,7 @@
 import * as Cesium from 'cesium';
 import { governorRequestRender } from './renderGovernor.js';
 
-/** Outer edge of the existing NVG/FLIR keyhole in normalized shader space. */
+/** Outer edge of the circular keyhole in normalized screen space. */
 export const KEYHOLE_OUTER_RADIUS = 1.05;
 /** Clearance required before entering the visible state. */
 export const GLOBE_ENTER_CLEARANCE_PX = 24;
@@ -117,10 +117,6 @@ export function circularAngleDistance(a, b) {
 }
 
 /** The optical celestial treatment is intentionally limited to Normal view. */
-export function isCelestialRingStyleSupported(styleName) {
-  return styleName === 'normal';
-}
-
 /**
  * Resolve a screen-space direction angle. Canvas Y grows downward, so camera-up
  * is inverted. When the celestial vector points almost directly into/out of the

@@ -1066,7 +1066,7 @@ test('vessel interaction wire: id-less 3D Tiles pick deselects and resets the HU
     assert.equal(harness.hud.textContent, 'AIS: --');
     assert.equal(harness.hud.classList.contains('active'), false);
     // Clicking away is a deliberate deselect, not the vessel aging out of the
-    // feed. Consumers that keep a readout on screen (the Cockpit Contact
+    // feed. Consumers that keep a readout on screen (the Contact
     // panel) tear down on 'deliberate' and hold last-known on 'evicted'.
     assert.deepEqual(cleared, [{ layerId: 'ais-live-vessels', reason: 'deliberate' }]);
   } finally {

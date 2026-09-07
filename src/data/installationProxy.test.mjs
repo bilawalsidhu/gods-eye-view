@@ -16,7 +16,6 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   militaryInstallationCacheKey,
-  militaryInstallationFailureReason,
   militaryInstallationDiskFresh,
   militaryInstallationDiskPath,
   migrateMilitaryInstallationEntry,
@@ -28,12 +27,6 @@ import {
 } from '../../vite.config.js';
 
 const DAY_MS = 86_400_000;
-test('installation failure reasons disclose no raw upstream error and do not guess overload', () => {
-  assert.equal(militaryInstallationFailureReason(new Error('private network details')), 'unavailable');
-  assert.equal(militaryInstallationFailureReason({ name: 'AbortError' }), 'timeout');
-  assert.equal(militaryInstallationFailureReason({ installationReason: 'rate_limited' }), 'rate_limited');
-  assert.equal(militaryInstallationFailureReason({ installationReason: 'query_failed' }), 'query_failed');
-});
 const TTL_MS = 30 * DAY_MS;
 
 /** An entry shaped exactly like what the proxy writes. */

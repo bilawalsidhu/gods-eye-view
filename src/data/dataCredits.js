@@ -7,7 +7,7 @@ import * as Cesium from 'cesium';
  * docs/pre-ship-audit-2026-07-01.md): every third-party data layer this app can
  * display carries its own license and required attribution — ODbL (OSM
  * datacenters/dams, adsb.lol, Overpass roads), CC BY-NC-SA (TeleGeography
- * cables), NASA FIRMS, CelesTrak, USGS, City of Austin, GBFS operators, OpenSky.
+ * cables), NASA FIRMS, CelesTrak, USGS, City of Austin, and OpenSky.
  * The MIT code license does NOT cover this data.
  *
  * These credits are registered ONCE at init as STATIC credits with
@@ -56,13 +56,6 @@ export const DATA_CREDITS = [
       'Dr. T.S. Kelso',
   },
   {
-    key: 'launch-library-2',
-    html:
-      'Space mission launch, payload &amp; recovery metadata: ' +
-      '<a href="https://ll.thespacedevs.com/docs/" target="_blank" rel="noopener">Launch Library 2 — The Space Devs</a> ' +
-      '(API documentation and rate limits)',
-  },
-  {
     key: 'usgs',
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
@@ -79,34 +72,6 @@ export const DATA_CREDITS = [
       'Mapped installation context: ' +
       '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
       '(ODbL 1.0; incomplete mapped context)',
-  },
-  {
-    key: 'cockpit-place-osm',
-    html:
-      'Cockpit place context: ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
-      'via Nominatim (ODbL 1.0)',
-  },
-  {
-    key: 'open-meteo',
-    html:
-      'Cockpit current conditions: ' +
-      '<a href="https://open-meteo.com/en/licence" target="_blank" rel="noopener">Weather data by Open-Meteo.com</a> ' +
-      '(CC BY 4.0)',
-  },
-  {
-    key: 'google-news-rss',
-    html:
-      'Cockpit regional headlines: ' +
-      '<a href="https://policies.google.com/terms" target="_blank" rel="noopener">Google News RSS</a> ' +
-      '(location-matched article links; publisher terms apply)',
-  },
-  {
-    key: 'gdelt',
-    html:
-      'Cockpit regional headlines: ' +
-      '<a href="https://www.gdeltproject.org/about.html" target="_blank" rel="noopener">GDELT Project</a> ' +
-      '(location-matched article links; publisher terms apply)',
   },
   {
     key: 'austin-cctv',
@@ -126,17 +91,6 @@ export const DATA_CREDITS = [
       'CCTV cameras &amp; frames (London): ' +
       '<a href="https://tfl.gov.uk/info-for/open-data-users/" target="_blank" rel="noopener">Powered by TfL Open Data</a>. ' +
       'Contains OS data © Crown copyright and database rights.',
-  },
-  {
-    key: 'gbfs',
-    html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
-  },
-  {
-    key: 'radio-browser',
-    html:
-      'Internet-radio station directory: ' +
-      '<a href="https://www.radio-browser.info/" target="_blank" rel="noopener">Radio Browser</a> ' +
-      '(public domain; audio delivered directly by each broadcaster)',
   },
   {
     key: 'reearth-terrain',

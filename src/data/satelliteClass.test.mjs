@@ -129,7 +129,7 @@ test('class colors are distinct, valid, and never borrow the military amber', ()
 });
 
 test('the dense shell stays dimmer than the class it sits among', () => {
-  // NVG/FLIR collapse the scene to Rec.601 luma, and DENSE mode puts thousands
+  // Low-contrast displays can collapse the palette, and DENSE mode puts thousands
   // of COMMS points in the same LEO volume as VISUAL. Luma separation is what
   // keeps the core catalog readable through the dense shell.
   const luma = (hex) => {
@@ -210,7 +210,7 @@ test('the legend drops zero and negative counts', () => {
 
 test('the DENSE row chip is stateless and declares the params to apply', () => {
   // The chip never carries its own state: it declares the params to apply, so
-  // whatever else drives the catalog param (Space Missions capture/restore)
+  // whatever else drives the catalog param
   // stays authoritative. Whether it reads ACTIVE is decided by the dense LOAD,
   // not the param — see the load-lifecycle tests below.
   try {
@@ -350,7 +350,7 @@ test('a 200 that yields no usable satellites is a failure, not a live catalog', 
 });
 
 test('an explicit return to core clears a failure the user never caused', async () => {
-  // Space Missions forces dense; if that load fails it reverts the param to
+  // A temporary consumer can force dense; if that load fails it reverts to
   // core itself. The mission's restore of an already-core snapshot then changes
   // nothing — and used to leave DENSE ✕ latched on the user's row.
   const originalFetch = globalThis.fetch;
@@ -453,7 +453,7 @@ test('a dependency owner hiding the points surrenders the whole row', async () =
     _setDenseCatalogStateForTest({});
     assert.equal(satellitesLayer.getRowControls().chips.length, 1);
 
-    // Space Missions borrows this layer for TLE lookup with showPoints:false.
+    // A temporary consumer can borrow this layer for TLE lookup with showPoints:false.
     satellitesLayer.setParams({ showPoints: false });
     const owned = satellitesLayer.getRowControls();
     assert.deepEqual(owned.chips, [], 'no chip to click while the owner holds the params');

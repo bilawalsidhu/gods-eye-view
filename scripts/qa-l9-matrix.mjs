@@ -126,7 +126,7 @@ function normalizeVerdict(res) {
 
 /** Environment facts discovered in preflight; checks read this. */
 const env = {
-  // FIRMS/TOMTOM/AIS/OPENAI/OPENSKY →
+  // FIRMS/TOMTOM/AIS/FOUNDRY/OPENSKY →
   //   true    key positively present
   //   false   key positively ABSENT (the endpoint said so in its own words)
   //   'error' the status endpoint is unhealthy — key state UNKNOWN, and any
@@ -166,11 +166,8 @@ const CREDIT_EXPECTATIONS = {
   military: /adsb\.lol/i,
   satellites: /CelesTrak/i,
   earthquakes: /Geological Survey|USGS/i,
-  'rocket-launches': /Launch Library|LL2/i,
   traffic: /TomTom|OpenStreetMap/i,
   cctv: /Austin|Caltrans|Transport for London|TfL/i,
-  radio: /Radio Browser/i,
-  bikeshare: /GBFS|bikeshare/i,
   'ais-live-vessels': /AISStream/i,
   'military-installations': /OpenStreetMap/i,
   'local-datacenters': /OpenStreetMap/i,
@@ -331,7 +328,6 @@ const tail = (s, n = 220) => (s || '').trim().split('\n').slice(-3).join(' | ').
 // scoreboard that has trailing garbage on it, or take the first of two
 // contradictory scoreboards — both of which let a broken harness pass.
 const RESULT_RE = /^[^\S\n]*RESULT:[^\S\n]*(\d+)[^\S\n]+passed,[^\S\n]*(\d+)[^\S\n]+failed(?:,[^\S\n]*(\d+)[^\S\n]+(?:skipped|inconclusive))?[^\S\n]*$/gm;
-const COCKPIT_RE = /^[^\S\n]*RESULT:[^\S\n]*(READY|NOT_READY)[^\S\n]*\((\d+)[^\S\n]+failures\)[^\S\n]*$/gm;
 const FLOOR_RE = /^[^\S\n]*VERDICT:[^\S\n]*(PASS|INCONCLUSIVE|FAIL)[^\S\n]*$/gm;
 const OVERLAY_RE = /^[^\S\n]*Summary:[^\S\n]*(\d+)[^\S\n]+measured[^\S\n]*·[^\S\n]*(\d+)[^\S\n]+skipped[^\S\n]*·[^\S\n]*(\d+)[^\S\n]+errors[^\S\n]*$/gm;
 
@@ -404,39 +400,14 @@ function readResultLine({ code, out, err, timedOut }) {
   return pass(detail);
 }
 
-function readCockpit({ code, out, err, timedOut }) {
-  if (timedOut) return fail('timed out');
-  const sole = soleVerdict(COCKPIT_RE, 'RESULT', { out, err });
-  if (sole.verdict) return sole.verdict;
-  const m = sole.matches[0];
-  if (!m) return classifyNoScoreboard('RESULT', { code, out, err });
-  const failures = Number(m[2]);
-  if (m[1] !== 'READY') return fail(`NOT_READY, ${failures} failures`);
-  // READY with a nonzero failure count is self-contradictory output. Reading
-  // only the word and ignoring the number it carries is exactly how a broken
-  // harness passes a gate.
-  if (failures > 0) {
-    return crash(`contradictory harness output: "READY (${failures} failures)" — the verdict and the count disagree, so this check cannot be trusted either way`);
-  }
-  if (code !== 0) return crash(`READY, but the harness exited ${code} after reporting: ${tail(err)}`);
-  return pass('READY, 0 failures');
-}
-
-/**
- * A check may declare KNOWN CONDITIONS: an evidence-gated one-line
- * classification for a non-passing verdict. The note explains a failure; it
- * NEVER changes it. A condition only applies when its pattern is actually
- * present in the harness transcript, so it cannot become a blanket excuse.
- * @param {{status: string}} verdict The verdict to annotate.
- * @param {{when: RegExp, note: string}[]} conditions Declared conditions.
- * @param {string} transcript The harness stdout+stderr.
- * @returns {{status: string}} The same verdict, possibly with `.note`.
- */
-function applyKnownConditions(verdict, conditions, transcript) {
-  if (!verdict || verdict.status === PASS || !Array.isArray(conditions)) return verdict;
-  const hit = conditions.find((c) => c.when.test(transcript || ''));
-  if (hit) verdict.note = hit.note;
-  return verdict;
+function applyKnownConditions(verdict, knownConditions = [], output = '') {
+  if (verdict?.status !== FAIL) return verdict;
+  const condition = knownConditions.find(({ when }) => {
+    if (!(when instanceof RegExp)) return false;
+    when.lastIndex = 0;
+    return when.test(output);
+  });
+  return condition ? { ...verdict, note: condition.note } : verdict;
 }
 
 function readFloorVerdict({ code, out, err, timedOut }) {
@@ -629,7 +600,7 @@ check({
   id: 'A5', group: 'A',
   // Named for what it actually does. It is a KNOWN-PREFIX scan, not a general
   // secret detector — a high-entropy blob with no recognised prefix passes it.
-  desc: 'No tracked .env, and no known-prefix credential literals (OpenAI/Google/AWS/GitHub/Slack/Stripe/private keys)',
+  desc: 'No tracked .env and no known-prefix credential or private-key literals',
   run: async () => {
     const tracked = await sh('git', ['ls-files'], { timeoutMs: 60000 });
     // git ls-files exits non-zero only on real failure — a failed enumeration
@@ -641,8 +612,7 @@ check({
     if (envFiles.length) return fail(`tracked env file(s): ${envFiles.join(', ')}`);
 
     const patterns = [
-      'sk-[A-Za-z0-9]{20,}',                 // OpenAI
-      'AIza[0-9A-Za-z_\\-]{30,}',            // Google
+      'sk-[A-Za-z0-9]{20,}',                 // legacy public-model key shape
       'AKIA[0-9A-Z]{16}',                    // AWS access key id
       'ASIA[0-9A-Z]{16}',                    // AWS session key id
       'gh[pousr]_[A-Za-z0-9]{30,}',          // GitHub tokens
@@ -712,17 +682,21 @@ check({
 });
 
 check({
-  id: 'A9', group: 'A', desc: '.env.example documents LAN opt-in + the cost-control throttles',
+  id: 'A9', group: 'A', desc: '.env.example separates Vite/BFF ports and documents managed Azure access',
   run: async () => {
     const t = readFileSync(resolve(REPO_ROOT, '.env.example'), 'utf8');
     const bits = {
       lan: /HOST=0\.0\.0\.0/.test(t),
-      google: /GEV_RATELIMIT_GOOGLE_PER_MIN/.test(t),
-      openai: /GEV_RATELIMIT_OPENAI_PER_MIN/.test(t),
-      notBilling: /not.*billing cap|billing cap/i.test(t),
+      vite: /^PORT=4173$/m.test(t),
+      bff: /^BFF_PORT=3000$/m.test(t),
+      maps: /^AZURE_MAPS_CLIENT_ID=/m.test(t),
+      foundry: /^FOUNDRY_ENDPOINT=/m.test(t),
+      noLegacyKeys: !/(GOOGLE_MAPS_API_KEY|CESIUM_ION_TOKEN|OPENAI_API_KEY)/.test(t),
     };
     const bad = Object.entries(bits).filter(([, v]) => !v).map(([k]) => k);
-    return bad.length === 0 ? pass('LAN opt-in + both throttles + the not-a-billing-cap caveat') : fail(`missing: ${bad.join(', ')}`);
+    return bad.length === 0
+      ? pass('Vite :4173, BFF :3000, Azure Maps/Foundry configuration, no retired provider keys')
+      : fail(`missing: ${bad.join(', ')}`);
   },
 });
 
@@ -936,28 +910,6 @@ check({
 });
 
 check({
-  id: 'B15', group: 'B', desc: 'Radio directory proxy returns stations (or a labelled degraded state)',
-  run: async () => {
-    const r = await jget('/api/radio/stations?limit=20', { timeoutMs: 45000 });
-    const rows = Array.isArray(r.json) ? r.json.length : (r.json?.stations?.length || 0);
-    if (r.ok && rows > 0) return pass(`${rows} stations`);
-    if (r.status === 503 && r.json?.degraded) return skip(`upstream Radio Browser degraded: ${r.json.degradedReason}`, 'ENV');
-    return fail(`HTTP ${r.status} rows=${rows} ${r.text.slice(0, 100)}`);
-  },
-});
-
-check({
-  id: 'B16', group: 'B', desc: 'Launch Library proxy returns upcoming missions',
-  run: async () => {
-    const r = await jget('/api/launches', { timeoutMs: 45000 });
-    const n = r.json?.results?.length ?? r.json?.launches?.length ?? (Array.isArray(r.json) ? r.json.length : 0);
-    if (r.ok && n > 0) return pass(`${n} launches`);
-    if (r.ok) return skip('proxy up but no upcoming launches listed', 'ENV');
-    return fail(`HTTP ${r.status}`);
-  },
-});
-
-check({
   id: 'B17', group: 'B', desc: 'Terrain height service answers (the height-datum backbone)',
   run: async () => {
     // Contract: points="lon,lat;lon,lat;…" (longitude first).
@@ -993,28 +945,28 @@ check({
 });
 
 check({
-  id: 'B19', group: 'B', desc: 'Realtime token endpoint mints an EPHEMERAL secret and never the raw key',
-  needsKey: 'OPENAI', costly: true,
+  id: 'B19', group: 'B', desc: 'Foundry BFF mints an ephemeral realtime secret without persistent Azure credentials',
+  needsKey: 'FOUNDRY', costly: true,
   run: async () => {
-    const r = await jget('/api/realtime/token', { method: 'POST', timeoutMs: 30000 });
+    const r = await jget('/api/azure/foundry/realtime/client-secret', { method: 'POST', timeoutMs: 30000 });
     if (!r.ok) return fail(`HTTP ${r.status}: ${r.text.slice(0, 120)}`);
     const blob = r.text;
     if (/\bsk-[A-Za-z0-9]{20,}/.test(blob)) return fail('response contains a raw sk- key');
-    return /ek_|client_secret|value/.test(blob)
-      ? pass('ephemeral client secret returned; no raw key in the payload')
+    return r.json?.clientSecret?.value && r.json?.endpoint
+      ? pass('ephemeral client secret and service endpoint returned; no persistent credential in the payload')
       : fail(`unexpected token payload: ${blob.slice(0, 120)}`);
   },
 });
 
 check({
-  id: 'B20', group: 'B', desc: 'Voice without a key fails HONESTLY (503, app unaffected)',
+  id: 'B20', group: 'B', desc: 'Voice without Foundry configuration fails honestly (503, app unaffected)',
   run: async () => {
-    const guard = keyGuard('OPENAI', env.keys.OPENAI);
+    const guard = keyGuard('FOUNDRY', env.keys.FOUNDRY);
     if (guard) return guard;
-    if (env.keys.OPENAI === true) return skip('server HAS an OpenAI key — the keyless path needs an unkeyed server', 'N/A');
-    const r = await jget('/api/realtime/token', { method: 'POST' });
-    return r.status === 503 && /OPENAI_API_KEY is not set/.test(r.text)
-      ? pass('503 "OPENAI_API_KEY is not set"')
+    if (env.keys.FOUNDRY === true) return skip('BFF has Foundry configured; the unavailable path needs an unconfigured BFF', 'N/A');
+    const r = await jget('/api/azure/foundry/realtime/client-secret', { method: 'POST' });
+    return r.status === 503 && /Microsoft Foundry is not configured/i.test(r.text)
+      ? pass('503 names missing Microsoft Foundry configuration')
       : fail(`expected 503, got ${r.status} ${r.text.slice(0, 120)}`);
   },
 });
@@ -1038,14 +990,13 @@ check({
       // negative assertion. The one documented exception is the keyless
       // 503 {status:'missing-key'} from /api/ais-live, which IS its real shape.
       const documentedKeyless = r.status === 503
-        && (r.json?.status === 'missing-key' || r.json?.error === 'no_key' || /OPENAI_API_KEY is not set/.test(r.text));
+        && (r.json?.status === 'missing-key' || r.json?.error === 'no_key');
       if (!r.ok && !documentedKeyless) {
         unscannable.push(`${p} (HTTP ${r.status})`);
         continue;
       }
       const body = r.text.slice(0, 400000);
       if (/\bsk-[A-Za-z0-9]{20,}/.test(body)) leaked.push(`${p}: sk- key`);
-      if (/AIza[0-9A-Za-z_\-]{30,}/.test(body)) leaked.push(`${p}: Google key`);
       if (/(client_secret|api_?key|MAP_KEY)["']?\s*[:=]\s*["'][A-Za-z0-9_\-]{16,}/i.test(body)) leaked.push(`${p}: key-shaped assignment`);
     }
     if (leaked.length) return fail(leaked.join('; '));
@@ -1061,7 +1012,7 @@ check({
 // --list and the scoreboard stay complete.
 const BROWSER_CHECKS = [
   ['C1', 'App boots: viewer + dataManager live, first paint under 60 s'],
-  ['C2', 'Photorealistic 3D basemap attached (globe alive on arrival)'],
+  ['C2', 'Azure/OSM imagery and Cesium globe are alive on arrival'],
   ['C3', 'Boot produces no uncaught page errors'],
   ['C4', 'Flights layer populates with live contacts'],
   ['C5', 'Satellites layer propagates the live catalog'],
@@ -1072,9 +1023,8 @@ const BROWSER_CHECKS = [
   ['C10', 'Traffic: LIVE mode when keyed, clearly-labelled SIMULATION when not'],
   ['C11', 'Bundled layers render: datacenters, dams, submarine cables, installations'],
   ['C12', 'Attribution lightbox lists a credit for every enabled layer'],
-  ['C13', 'Clean-UI keeps the Google/Cesium credit line visible (ToS)'],
+  ['C13', 'Clean-UI keeps the active map/data credit line visible'],
   ['C14', 'No key material reaches browser state, URLs or storage'],
-  ['C15', 'Sensor styles (CRT/NVG/FLIR) apply without moving the camera'],
   ['C16', 'Reset-to-globe control returns the camera to the global band'],
   ['C17', 'Voice surface degrades honestly without a key'],
 ];
@@ -1101,7 +1051,7 @@ check({
       // Evidence-gated: only when its console assertion is the failing one AND
       // the transcript actually shows a 503. Explains, never excuses.
       when: /no console errors[\s\S]{0,300}?503/,
-      note: 'not key-tolerant — its "no console errors" assertion counts the honest keyless 503s (e.g. /api/openai/hud-summary) as errors; expected to PASS on the fully keyed server. Still a FAIL here.',
+      note: 'not configuration-tolerant — its "no console errors" assertion counts an honest unavailable Foundry response as an error; expected to PASS on a fully configured BFF. Still a FAIL here.',
     }],
   }),
 });
@@ -1118,26 +1068,6 @@ check({
   run: harness({ id: 'D6', script: 'qa-attribution-b12.mjs', args: ['--url', APP_URL], timeoutMs: 600000 }),
 });
 check({
-  id: 'D7', group: 'D', desc: 'qa-cockpit-utility — cockpit display/radio layout readiness',
-  heavy: true, parseNote: 'READY/NOT_READY',
-  run: harness({
-    id: 'D7',
-    script: 'qa-cockpit-utility.mjs',
-    parse: readCockpit,
-    timeoutMs: 900000,
-    knownConditions: [{
-      // Narrow and evidence-gated: the console assertion is the failing one AND
-      // the noise is an upstream proxy honestly reporting unavailability.
-      when: /runtime console remains clean[\s\S]{0,400}?503/,
-      note: 'the only failing assertion is "runtime console remains clean", and the noise is honest 503s from an upstream-backed proxy (e.g. /api/military-installations reporting "temporarily unavailable"). Environmental, but still a FAIL: re-run when the upstream recovers before filing anything.',
-    }],
-  }),
-});
-check({
-  id: 'D8', group: 'D', desc: 'qa-radio — worldwide radio browse/play surface',
-  heavy: true, run: harness({ id: 'D8', script: 'qa-radio.mjs', args: ['--url', APP_URL], timeoutMs: 900000 }),
-});
-check({
   id: 'D9', group: 'D', desc: 'qa-floor-verify — grounded contacts sit ON the rendered mesh floor',
   heavy: true,
   run: harness({
@@ -1150,10 +1080,6 @@ check({
       note: 'EXPECTED at main 4f9d99b — the below-mesh fix is not landed, so grounded contacts sit under the floor. Annotated, never green. If fix/below-mesh-contacts has landed, PASS is expected instead and any remaining FAIL (jet-bridge / intra-cell relief residual) is a REAL failure that stays FAIL.',
     }],
   }),
-});
-check({
-  id: 'D10', group: 'D', desc: 'qa-voice-routing (behavior layer) — tool behavior without model turns',
-  heavy: true, run: harness({ id: 'D10', script: 'qa-voice-routing.mjs', args: ['--layer', 'behavior', '--url', APP_URL], timeoutMs: 1500000 }),
 });
 check({
   id: 'D11', group: 'D', desc: 'qa-firms — live fire rendering and interaction', needsKey: 'FIRMS', heavy: true,
@@ -1174,7 +1100,7 @@ check({
 // ─── M · OWNER-EYES (never automated; steps in the runbook) ───────────────
 const MANUAL = [
   ['M1', 'Voice mic round trip 1/3 — "when is the next ISS pass?" (next_iss_pass)'],
-  ['M2', 'Voice mic round trip 2/3 — connect/disconnect twice in one tab + keyed set_context_mode and control_cockpit'],
+  ['M2', 'Voice mic round trip 2/3 — connect/disconnect twice in one tab + keyed set_context_mode'],
   ['M3', 'Voice mic round trip 3/3 — adsbdb enrichment readout on a live tracked flight'],
   ['M4', 'LAN warning path — HOST=0.0.0.0 banner, LAN URL, and a throttled response'],
   ['M5', 'Live AIS vessel one-click camera transfer — requires status=live, not cached rows (never verified against a live feed)'],
@@ -1182,7 +1108,7 @@ const MANUAL = [
   ['M7', 'Grounded + airborne tracked aircraft from 2-3 headings (DISPLAY 3D ON, non-TR-3B subject)'],
   ['M8', 'Voice analyst_query: exact unrounded count + scopeLabel, contactsWindow verbatim, follow-up re-filter'],
   ['M9', 'First-run: the arrival camera feels alive within 30 seconds'],
-  ['M10', 'Sensor styles + Contacts-owned detection (DENSE/75 on activation-from-OFF; Cockpit inert; restore on deactivation)'],
+  ['M10', 'Sensor styles + Contacts-owned detection (DENSE/75 on activation-from-OFF; restore on deactivation)'],
   ['M11', 'Cancelled cross-mode Context switch rests on Context OFF (contextOff + priorMode, no restoration)'],
 ];
 for (const [id, desc] of MANUAL) check({ id, group: 'M', desc, manual: true });
@@ -1410,42 +1336,23 @@ async function runBrowserGroup(record) {
   };
 
   await step('C2', async () => {
-    // The claim is PHOTOREALISTIC 3D, so an ordinary imagery layer is not
-    // evidence: an OSM-only fallback would have satisfied the old OR-chain
-    // while the headline feature was missing.
     const infoR = await mustEval(() => {
       const g = window.__godsEyeView;
-      const prims = g.viewer.scene.primitives;
-      const tilesets = [];
-      for (let i = 0; i < prims.length; i += 1) {
-        const prim = prims.get(i);
-        if (prim?.constructor?.name !== 'Cesium3DTileset') continue;
-        tilesets.push({
-          url: String(prim.resource?.url || prim._url || ''),
-          ready: prim.ready !== false,
-          tilesLoaded: prim.tilesLoaded === true,
-        });
-      }
       return {
-        hasTileset: !!g.tileset,
-        tilesets,
         imagery: g.viewer.imageryLayers?.length ?? 0,
         mapStack: g.styleManager?.getVisualState?.()?.mapStack ?? null,
+        globeShown: g.viewer.scene.globe.show === true,
+        terrain: g.viewer.terrainProvider?.constructor?.name || null,
       };
     });
     if (!infoR.ok) return crash(`could not read the scene graph: ${infoR.reason}`);
     const info = infoR.value;
-    const photoreal = info.tilesets.find((t) => /google|tile\.googleapis|photorealistic|3dtiles/i.test(t.url));
-    if (!info.tilesets.length) {
-      return fail(`no Cesium3DTileset attached (imagery layers=${info.imagery}, mapStack=${info.mapStack}) — the photorealistic globe is absent`);
+    const validStack = ['azure-satellite', 'azure-hybrid', 'azure-streets', 'osm']
+      .includes(info.mapStack);
+    if (!validStack || !info.globeShown || info.imagery < 1 || !info.terrain) {
+      return fail(`mapStack=${info.mapStack}, globe=${info.globeShown}, imagery=${info.imagery}, terrain=${info.terrain}`);
     }
-    if (!photoreal) {
-      return fail(`a 3D tileset is attached but none resolves to Google Photorealistic tiles (urls: ${info.tilesets.map((t) => t.url.slice(0, 60) || '(no url)').join(' | ')}, mapStack=${info.mapStack})`);
-    }
-    if (!photoreal.ready) {
-      return fail(`the photorealistic tileset is attached but not ready (mapStack=${info.mapStack})`);
-    }
-    return pass(`Photorealistic 3D attached and ready (mapStack=${info.mapStack}, ${info.tilesets.length} tileset(s), imagery layers=${info.imagery})`);
+    return pass(`mapStack=${info.mapStack}, imagery layers=${info.imagery}, terrain=${info.terrain}`);
   });
 
   await step('C3', async () => (pageErrors.length === 0
@@ -1874,7 +1781,6 @@ async function runBrowserGroup(record) {
     if (!inPageR.ok) return crash(`could not read browser state for the key-leak scan: ${inPageR.reason}`);
     const inPage = inPageR.value;
     if (/\bsk-[A-Za-z0-9]{20,}/.test(inPage.storage)) leaked.push('localStorage holds an sk- key');
-    if (/AIza[0-9A-Za-z_\-]{30,}/.test(inPage.storage)) leaked.push('localStorage holds a Google key');
     const keyish = requestUrls.filter((u) => u.startsWith(APP_ORIGIN) && /[?&](key|api_?key|token|client_secret)=[A-Za-z0-9_\-]{12,}/i.test(u));
     if (keyish.length) leaked.push(`${keyish.length} same-origin URL(s) carry a key query param: ${keyish[0].slice(0, 90)}`);
     return leaked.length === 0
@@ -1882,54 +1788,13 @@ async function runBrowserGroup(record) {
       : fail(leaked.join('; '));
   });
 
-  await step('C15', async () => {
-    // CRT/NVG/FLIR are DISPLAY LABELS; the real style ids are retro /
-    // surveillance / thermal (src/ui.js STYLE_STATUS_LABELS). Passing the
-    // labels made every call a silent no-op that still "passed" — so assert
-    // the returned visual state actually changed to the requested style.
-    const wanted = [['retro', 'CRT'], ['surveillance', 'NVG'], ['thermal', 'FLIR'], ['normal', 'Normal']];
-    const rR = await mustEval(async (styles) => {
-      const g = window.__godsEyeView;
-      const cam = g.viewer.camera;
-      const before = { x: cam.position.x, y: cam.position.y, z: cam.position.z };
-      const seen = [];
-      for (const [style, label] of styles) {
-        try {
-          g.styleManager.applyVisualState({ style });
-        } catch (e) { seen.push({ style, label, error: String(e?.message || e).slice(0, 80) }); continue; }
-        // eslint-disable-next-line no-await-in-loop
-        await new Promise((res) => setTimeout(res, 700));
-        const vs = g.styleManager.getVisualState?.() ?? null;
-        seen.push({ style, label, observed: vs?.style ?? null, activeStyle: g.styleManager.activeStyle ?? null });
-      }
-      const after = { x: cam.position.x, y: cam.position.y, z: cam.position.z };
-      return { seen, drift: Math.hypot(after.x - before.x, after.y - before.y, after.z - before.z) };
-    }, wanted, 90000);
-    if (!rR.ok) return crash(`could not exercise the style presets: ${rR.reason}`);
-    const r = rR.value;
-
-    const threw = r.seen.filter((s) => s.error);
-    if (threw.length) return fail(`style application threw for: ${threw.map((s) => `${s.style} (${s.error})`).join('; ')}`);
-    const noop = r.seen.filter((s) => s.observed !== s.style);
-    if (noop.length) {
-      return fail(`style did not take effect for: ${noop.map((s) => `${s.label}/${s.style} → getVisualState().style=${s.observed}`).join('; ')} — the call was a no-op`);
-    }
-    if (r.seen.length !== wanted.length) return crash(`only ${r.seen.length}/${wanted.length} styles were exercised`);
-    return r.drift < 1
-      ? pass(`${r.seen.map((s) => `${s.label}→${s.observed}`).join(', ')} each confirmed in getVisualState(); camera drift ${r.drift.toFixed(3)} m`)
-      : fail(`styles applied but the camera moved ${r.drift.toFixed(1)} m while switching`);
-  });
-
   await step('C16', async () => {
     await quiesce();
-    // L6 shipped two entry points into one release route: the map control
-    // (#reset-globe-view) and the cockpit-native one (#cockpit-reset-globe).
     const foundR = await mustEval(() => {
       const el = document.getElementById('reset-globe-view');
       if (!el) return null;
       return {
         label: el.getAttribute('aria-label') || el.title || 'reset-globe-view',
-        cockpitTwin: !!document.getElementById('cockpit-reset-globe'),
       };
     });
     if (!foundR.ok) return crash(`could not look for the reset-to-globe control: ${foundR.reason}`);
@@ -1972,7 +1837,7 @@ async function runBrowserGroup(record) {
       if (altKm > 5000) break;
     }
     return altKm > 5000
-      ? pass(`"${found.label}" ${Math.round(before)} km → ${Math.round(altKm)} km (global band); cockpit twin present=${found.cockpitTwin}`)
+      ? pass(`"${found.label}" ${Math.round(before)} km → ${Math.round(altKm)} km (global band)`)
       : fail(`reset left the camera at ${Math.round(altKm)} km (from ${Math.round(before)} km)`);
   });
 
@@ -1983,20 +1848,18 @@ async function runBrowserGroup(record) {
     // product is wrong.
     if (v.probeError) return crash(`voice snapshot failed, so nothing was verified: ${v.probeError}`);
     if (!v.present) return fail('__gevVoiceCommands never initialised — the voice surface did not load');
-    // Route through keyGuard like every other key consumer: an 'error' state
-    // (status endpoint unhealthy) must FAIL, not slip into an owner-run skip.
-    const guard = keyGuard('OPENAI', env.keys.OPENAI);
+    // Route through keyGuard like every other optional capability: an 'error'
+    // state (status endpoint unhealthy) must FAIL, not become an owner-run skip.
+    const guard = keyGuard('FOUNDRY', env.keys.FOUNDRY);
     if (guard) return guard;
-    if (env.keys.OPENAI === true) {
-      // Never start a session against a keyed server: that is a real Realtime
-      // connection and it costs money. The keyless claim needs a thin server.
-      return skip(`voice surface present (status=${v.status}); the keyless-degradation claim needs an UNKEYED server, and a real mic round trip is owner-run — see runbook M1-M3`, 'OWNER-RUN');
+    if (env.keys.FOUNDRY === true) {
+      // Never start a configured realtime session in an automated matrix.
+      return skip(`voice surface present (status=${v.status}); the unavailable-path claim needs an unconfigured BFF, and a real mic round trip is owner-run`, 'OWNER-RUN');
     }
     if (!v.hasRunner) return fail('voice controller present but exposes no runner');
 
-    // Actually exercise the failure: with no key the token mint 503s, and the
-    // product's job is to SAY SO. "A runner function exists" proved nothing.
-    // (Free: the 503 happens before any session is created.)
+    // Exercise the configuration failure. The BFF rejects before a realtime
+    // session is created, and the UI must surface that honestly.
     const beforeR = await mustEval(() => document.querySelectorAll('#gev-voice-control').length, null, 45000);
     if (!beforeR.ok) return crash(`could not look for the voice control: ${beforeR.reason}`);
     if (!beforeR.value) return fail('#gev-voice-control is absent — the voice surface never rendered');
@@ -2022,16 +1885,17 @@ async function runBrowserGroup(record) {
     }, null, 60000);
     if (!surfacedR.ok) return crash(`could not drive the keyless voice path: ${surfacedR.reason}`);
     const surfaced = surfacedR.value;
-    const saysKey = /OPENAI_API_KEY is not set/i.test(`${surfaced.errorDetail || ''} ${surfaced.recentError?.message || ''}`);
+    const saysConfig = /Microsoft Foundry is not configured|FOUNDRY_NOT_CONFIGURED/i
+      .test(`${surfaced.errorDetail || ''} ${surfaced.recentError?.message || ''}`);
     const saysUnavailable = surfaced.dataStatus === 'error' || /ERROR|UNAVAILABLE/i.test(`${surfaced.status || ''} ${surfaced.detail || ''}`);
     if (!surfaced.appAlive) return fail('the app died when voice was started without a key — a missing optional key must never take the globe down');
     if (!saysUnavailable) {
       return fail(`voice start without a key left the UI at status="${surfaced.status}" detail="${surfaced.detail}" (data-status=${surfaced.dataStatus}) — the 503 never surfaced to the user`);
     }
-    if (!saysKey) {
-      return fail(`voice surfaced an error state (${surfaced.status}) but never named the cause: errorDetail="${surfaced.errorDetail}" recentError=${JSON.stringify(surfaced.recentError)} — expected the OPENAI_API_KEY reason`);
+    if (!saysConfig) {
+      return fail(`voice surfaced an error state (${surfaced.status}) but never named missing Microsoft Foundry configuration: errorDetail="${surfaced.errorDetail}" recentError=${JSON.stringify(surfaced.recentError)}`);
     }
-    return pass(`keyless voice degrades honestly: status="${surfaced.status}", detail="${surfaced.detail}", reason "${surfaced.recentError?.message}"; globe still alive`);
+    return pass(`unconfigured Foundry voice degrades honestly: status="${surfaced.status}", detail="${surfaced.detail}", reason "${surfaced.recentError?.message}"; globe still alive`);
   });
 
   await browser.close();
@@ -2086,18 +1950,13 @@ async function preflight() {
     else if (used === 'anon') env.keys.OPENSKY = false;
     else env.keys.OPENSKY = 'error';
   } catch { env.keys.OPENSKY = 'error'; }
-  if (CHEAP) {
-    // Minting a Realtime token is free, but --cheap promises to touch nothing
-    // cost-bearing; leave OpenAI presence unknown and let its checks skip.
-    env.keys.OPENAI = null;
-  } else {
-    try {
-      const t = await jget('/api/realtime/token', { method: 'POST' });
-      if (t.status === 503 && /OPENAI_API_KEY is not set/.test(t.text)) env.keys.OPENAI = false;
-      else if (t.ok) env.keys.OPENAI = true;
-      else env.keys.OPENAI = 'error';
-    } catch { env.keys.OPENAI = 'error'; }
-  }
+  try {
+    const status = await jget('/api/status');
+    env.keys.FOUNDRY = status.status === 200
+      && typeof status.json?.capabilities?.foundry === 'boolean'
+      ? status.json.capabilities.foundry
+      : 'error';
+  } catch { env.keys.FOUNDRY = 'error'; }
 
   // A Node 24 runtime for the allocation gate (mise/nvm), if one exists.
   const mise = await sh('mise', ['ls', 'node'], { timeoutMs: 20000 });
@@ -2145,8 +2004,8 @@ async function main() {
     console.log(C.r(`  shell  : HTTP ${env.shellStatus} — the target is RESPONDING but erroring. Running the matrix anyway; this is a product failure, not an environment one.`));
   }
   console.log(`  node   : ${process.versions.node}${env.node24 ? C.d(` (Node 24 available: ${env.node24.label})`) : ''}`);
-  console.log(`  keys   : OpenSky ${keyLabel(env.keys.OPENSKY)} · FIRMS ${keyLabel(env.keys.FIRMS)} · TomTom ${keyLabel(env.keys.TOMTOM)} · AISStream ${keyLabel(env.keys.AIS)} · OpenAI ${keyLabel(env.keys.OPENAI)}`);
-  console.log(C.d('  (key presence is read from each proxy\'s own status report; no key value is ever read or logged)\n'));
+  console.log(`  providers: OpenSky ${keyLabel(env.keys.OPENSKY)} · FIRMS ${keyLabel(env.keys.FIRMS)} · TomTom ${keyLabel(env.keys.TOMTOM)} · AISStream ${keyLabel(env.keys.AIS)} · Foundry ${keyLabel(env.keys.FOUNDRY)}`);
+  console.log(C.d('  (availability is read from same-origin status contracts; no credential value is read or logged)\n'));
 
   const record = (c, rawRes, ms) => {
     // Validate before counting: an unrecognised verdict is a runner bug, and a
@@ -2328,9 +2187,9 @@ if (import.meta.url === invokedPath) {
 
 export {
   PASS, PASS_SKIPS, FAIL, CRASH, SKIP, OUTCOMES,
-  normalizeVerdict, classifyNoScoreboard, readResultLine, readCockpit, satisfiesEngines,
+  normalizeVerdict, classifyNoScoreboard, readResultLine, satisfiesEngines,
   isCalibratedAllocationRuntime, trafficFlowInconclusive,
-  soleVerdict, RESULT_RE, COCKPIT_RE, FLOOR_RE,
+  soleVerdict, RESULT_RE, FLOOR_RE,
   readFloorVerdict, keyGuard, applyKnownConditions, requiredCreditFor,
   CREDIT_EXPECTATIONS, CREDIT_EXEMPT_LAYERS,
 };
