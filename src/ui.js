@@ -4069,8 +4069,9 @@ export class StyleManager {
   }
 
   /**
-   * One-time toast when stored v6 panel positions are superseded by the v7
+   * One-time toast when stored legacy panel positions are superseded by the v8
    * layout defaults (positions reset; collapsed states are preserved).
+   * Also purges obsolete position keys from older storage versions (v6/v7).
    * @returns {void}
    */
   _maybeNotifyLayoutReset() {
@@ -4079,7 +4080,13 @@ export class StyleManager {
       if (localStorage.getItem(marker)) return;
       localStorage.setItem(marker, '1');
       const hadOldPositions = Object.keys(localStorage)
-        .some((key) => key.startsWith('godsEyeView.v6.panelPos.'));
+        .some((key) => key.startsWith('godsEyeView.v6.panelPos.') || key.startsWith('godsEyeView.v7.panelPos.'));
+      // Clean up obsolete panel position keys from v6 and v7 so they don't linger in storage
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('godsEyeView.v6.panelPos.') || key.startsWith('godsEyeView.v7.panelPos.')) {
+          localStorage.removeItem(key);
+        }
+      });
       if (hadOldPositions) {
         this._showToast('Panel layout updated — positions reset to new defaults');
       }

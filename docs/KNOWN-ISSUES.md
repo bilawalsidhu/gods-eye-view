@@ -31,19 +31,22 @@ Next iteration candidates:
 ---
 
 ### CCTV panel can appear "missing" after layout refactors
-Status: Open (workaround available)
+Status: Mitigated (layout modernization + updated keys)
 
 Context:
-- Panel positions are persisted in local storage and can restore off-screen after UI changes.
+- Panel positions were historically persisted as floating coordinates in local storage and could restore off-screen after UI layout changes.
+- In current releases:
+  - `cctv-panel` is integrated into the adaptive right-rail stack (`#right-context-rail`) and no longer relies on floating coordinates.
+  - `_maybeNotifyLayoutReset()` in `src/ui.js` recognizes and purges obsolete legacy position keys (`v6` and `v7`).
 
-Workaround:
+Workaround (if manually resetting panel states):
 - In browser console:
-  - `localStorage.removeItem('godsEyeView.v6.panelPos.cctv-panel');`
+  - `localStorage.removeItem('godsEyeView.v8.panelPos.cctv-panel');`
   - `localStorage.removeItem('godsEyeView.v6.panelCollapsed.cctv-panel');`
   - `location.reload();`
 
 Related keys (current versions):
-- Panel positions: `godsEyeView.v7.panelPos.<panel-id>` (re-versioned 2026-06-10)
+- Panel positions: `godsEyeView.v8.panelPos.<panel-id>` (re-versioned for layout updates)
 - Panel collapsed state: `godsEyeView.v6.panelCollapsed.<panel-id>`
 - CCTV calibration: `godsEyeView.cctv.calibration.v2`
 

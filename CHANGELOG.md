@@ -17,6 +17,9 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Visual presets explain their effects on hover. Unavailable map sources name
   missing credentials and Provider Settings, while configured-but-failed
   Google 3D routes explain the failure without asking for another key.
+- Layout reset recognizes both v6 and v7 legacy panel position keys and purges
+  obsolete keys from storage. Documentation and startup scripts now reference
+  active v8 position storage keys.
 
 - The Overpass proxy now rotates to the next mirror on any non-2xx upstream
   response, not only on 5xx. `overpass-api.de` and its `lz4` alias answer 406 to

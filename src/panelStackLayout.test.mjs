@@ -287,3 +287,21 @@ test('expanded right panels highlight the title divider without changing collaps
     /#param-slider-panel:not\(\.collapsed\) \.param-panel-divider\s*\{[\s\S]*?linear-gradient\(90deg, rgb\(0 212 255 \/ 28%\), rgba\(0, 212, 255, 0\.18\) 58%, transparent\);/,
   );
 });
+
+test('layout reset recognizes both v6 and v7 legacy position keys and purges them', () => {
+  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+
+  // Verify legacy v6 and v7 keys are both recognized on layout reset
+  assert.match(
+    ui,
+    /key\.startsWith\('godsEyeView\.v6\.panelPos\.'\)\s*\|\|\s*key\.startsWith\('godsEyeView\.v7\.panelPos\.'\)/,
+    'layout reset detects both v6 and v7 legacy position keys',
+  );
+  assert.match(
+    ui,
+    /localStorage\.removeItem\(key\);/,
+    'legacy keys are actively removed from localStorage',
+  );
+});
+
+
