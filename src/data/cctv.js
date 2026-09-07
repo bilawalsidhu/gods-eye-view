@@ -161,7 +161,7 @@ export const CCTV_FOCUS_RESULT = Object.freeze({
   FOCUSED: 'focused',
   NO_ACTIVE_CAMERA: 'no-active-camera',
   TRACKING_HOLDS_VIEW: 'tracking-holds-view',
-  COCKPIT_ACTIVE: 'cockpit-active',
+  DRONE_VIEW_ACTIVE: 'drone-view-active',
 });
 // §9.1 activation obstruction probe: clamp the plane's effective range to just
 // short of the first pickFromRay hit along the frustum axis, with a floor so a
@@ -323,7 +323,7 @@ let _tilesReadyReenqueued = false;
 let _calibrationMode = false;
 let _gizmo = null;
 let _lastTransientNotifyAt = 0;
-// Cached handle on the active Google Photorealistic 3D Tileset, discovered
+// Cached handle on the active legacy rendered-mesh tileset, discovered
 // lazily from scene.primitives. Shared mesh-floor sampling is gated on its
 // tilesLoaded flag so a coarse-LOD miss is never baked in. Cleared when the
 // tileset is destroyed / the layer tears down.
@@ -534,19 +534,19 @@ function angularDeltaAbs(aDeg, bDeg) {
  * surface regime", collapsed to two keys — ion World Terrain and Re:Earth
  * globe terrain get the same handling):
  *
- *  - `google-3d`     — photoreal stack: globe hidden, the visible Google 3D
+ *  - `mesh-surface`     — legacy rendered-mesh stack with the globe hidden
  *                      tileset IS the surface → one-shot scene sampling refines.
  *  - `terrain-globe` — any globe stack: the Re:Earth point-height prior IS the
  *                      resolution (zero scene queries).
  *
- * Only an explicit `false` (the photoreal stack hides the globe) selects
- * `google-3d`; undefined/null (no viewer / torn down) must fall to the regime
+ * Only an explicit `false` (the rendered-mesh stack hides the globe) selects
+ * `mesh-surface`; undefined/null (no viewer / torn down) must fall to the regime
  * that never touches the scene. Pure — exported for the unit suite.
  * @param {boolean|undefined|null} globeShow - `viewer.scene.globe.show`.
- * @returns {'google-3d'|'terrain-globe'}
+ * @returns {'mesh-surface'|'terrain-globe'}
  */
 export function surfaceRegimeKey(globeShow) {
-  return globeShow === false ? 'google-3d' : 'terrain-globe';
+  return globeShow === false ? 'mesh-surface' : 'terrain-globe';
 }
 
 /**
@@ -1178,7 +1178,7 @@ function buildCatalogFromSources(rawSources) {
 }
 
 /**
- * Reports whether the active Google Photorealistic 3D Tileset (if any) has
+ * Reports whether the active legacy rendered-mesh tileset (if any) has
  * finished loading the tiles in view. Shared mesh-floor sampling is gated on
  * this so a one-shot cell never bakes in a miss from still-streaming tiles.
  * Discovers + caches the tileset lazily from scene
@@ -1189,7 +1189,7 @@ function buildCatalogFromSources(rawSources) {
  * Task 5 (review correction, spec §2): a HIDDEN tileset (`show === false`,
  * i.e. a globe stack is active) must NOT report ready — Cesium 1.138's
  * the shared sampler can only inspect *visible* 3D tilesets, so a sample taken
- * against the hidden Google tileset would silently miss.
+ * against a hidden legacy mesh tileset would silently miss.
  *
  * @returns {boolean} True when tiles are loaded AND visible (or no tileset
  *   exists to wait on).
@@ -1295,11 +1295,11 @@ function planeOrientationFor(camera, capCenterPos) {
 
 /**
  * Task 5: the surface regime the scene is CURRENTLY rendering, derived live
- * from `globe.show` (mapStackController's `_activatePhotoreal` /
+ * from `globe.show` (mapStackController's `_activateRendered-mesh` /
  * `_activateGlobeStack` flip exactly this flag). Reading scene state directly
  * — rather than caching the map-stack id — means the regime is correct even
  * for stack changes this module never got an event for.
- * @returns {'google-3d'|'terrain-globe'}
+ * @returns {'mesh-surface'|'terrain-globe'}
  */
 function currentSurfaceRegime() {
   return surfaceRegimeKey(_viewer?.scene?.globe?.show);
@@ -1336,7 +1336,7 @@ function isGroundResolved(record, regime = currentSurfaceRegime()) {
 /**
  * Ground altitude used for pure geometry recomputes: the given regime's
  * cached resolution (`record.groundSamples[regime]` — a shared mesh/DEM floor
- * in google-3d, the DEM/prior in terrain-globe) when it exists, else the prior
+ * in mesh-surface, the DEM/prior in terrain-globe) when it exists, else the prior
  * itself. Never queries the scene.
  * @param {Object} record - Camera record.
  * @param {string} [regime] - Defaults to the current surface regime.
@@ -2103,7 +2103,7 @@ function applyFrustumGeometry(record, groundAltM) {
  *  - `terrain-globe` (any globe stack): `cachedGroundFloor` returns its DEM
  *    floor because mesh floors are regime-disabled. The exact Re:Earth prior
  *    remains the immediate fallback while that coarse cell warms.
- *  - `google-3d` (photoreal): the shared mesh-floor sampler may refine the
+ *  - `mesh-surface` (rendered-mesh): the shared mesh-floor sampler may refine the
  *    DEM cell once, subject to its existing tiles-ready, distance,
  *    camera-height, and acceptance gates. Geometry reads only
  *    `cachedGroundFloor`, never a CCTV-owned point sample.
@@ -2133,7 +2133,7 @@ function updateRecordGeometry(record, options = {}) {
     return;
   }
 
-  // Photoreal regime. Sampling is delegated to the shared coarse-cell
+  // Rendered-mesh regime. Sampling is delegated to the shared coarse-cell
   // sampler. It remains event-driven, one-shot per cell, and keeps its
   // existing acceptance window; CCTV adds no rooftop rejection policy.
   if (sampleGround && projectionTilesReady()) {
@@ -2152,12 +2152,12 @@ function updateRecordGeometry(record, options = {}) {
   const cachedFloor = cachedGroundFloor(point.lat, point.lon);
   const ground = Number.isFinite(cachedFloor)
     ? cachedFloor
-    : groundAltFor(record, 'google-3d');
+    : groundAltFor(record, 'mesh-surface');
   applyFrustumGeometry(record, ground);
 
-  record.groundResolved['google-3d'] = Number.isFinite(cachedFloor);
+  record.groundResolved['mesh-surface'] = Number.isFinite(cachedFloor);
   if (Number.isFinite(cachedFloor)) {
-    record.groundSamples['google-3d'] = ground;
+    record.groundSamples['mesh-surface'] = ground;
   }
 }
 
@@ -2170,7 +2170,7 @@ function updateRecordGeometry(record, options = {}) {
  *
  * The cached `groundSamples` entries are deliberately KEPT (only the latch is
  * cleared). They are the record's "has ever resolved" memory: the B9c
- * fallback guard in updateRecordGeometry reads the google-3d entry so a
+ * fallback guard in updateRecordGeometry reads the mesh-surface entry so a
  * rearmed camera whose tiles are mid-stream (e.g. select → flyTo →
  * tilesLoaded false) is not yanked back to prior/catalog heights before its
  * fresh shared floor lands. In the terrain-globe regime the re-arm is
@@ -2246,7 +2246,7 @@ async function resolveGroundPriors(catalog) {
  * queries:
  *  - terrain-globe regime: the prior IS the resolution → re-run the
  *    resolution (updateRecordGeometry latches it) for every record.
- *  - google-3d regime: records still awaiting a shared floor move from the
+ *  - mesh-surface regime: records still awaiting a shared floor move from the
  *    catalog fallback onto the exact prior; records already holding a shared
  *    mesh/DEM floor keep it untouched.
  * Guarded per record against a torn-down/re-inited layer (records are only
@@ -2275,7 +2275,7 @@ function applyLateGroundPriors(records, priors) {
       // Prior IS the resolution — re-latch onto the fresh value.
       updateRecordGeometry(record, { sampleGround: false });
       applied += 1;
-    } else if (!Number.isFinite(record.groundSamples['google-3d'])) {
+    } else if (!Number.isFinite(record.groundSamples['mesh-surface'])) {
       // Still awaiting the shared floor: snap interim geometry onto the exact
       // prior (pure recompute; the shared cell may refine later).
       applyFrustumGeometry(record, prior.ellipsoid);
@@ -2289,13 +2289,13 @@ function applyLateGroundPriors(records, priors) {
  * Task 5: surface-regime change handler ('gev:map-stack-changed'
  * CustomEvent, dispatched by main.js from MapStackController.onChange). The
  * surface HEIGHT at a camera differs between regimes (a photogrammetric
- * deck/building-top in google-3d vs bare Re:Earth DEM on globe stacks), so
- * on a REGIME change (photoreal ↔ globe; bing→osm stays 'terrain-globe' and
+ * deck/building-top in mesh-surface vs bare Re:Earth DEM on globe stacks), so
+ * on a REGIME change (rendered-mesh ↔ globe; bing→osm stays 'terrain-globe' and
  * no-ops):
  *  1. every record's geometry recomputes IMMEDIATELY from the new regime's
  *     resolution — cached sample if that regime has one, else the Re:Earth
  *     prior (never blank, zero scene queries);
- *  2. entering google-3d re-arms the one-shot tiles-ready completion latch so
+ *  2. entering mesh-surface re-arms the one-shot tiles-ready completion latch so
  *     update()'s existing event-driven machinery refines records that never
  *     took their sample, through the same staggered queue.
  * Event-driven only — never called on a timer.
@@ -2314,18 +2314,18 @@ function handleMapStackChanged() {
     }
     const ground = groundAltFor(record, regime);
     // Skip the entity rewrite when the applied ground already matches (e.g.
-    // entering google-3d before any sample: prior → prior is a no-op).
+    // entering mesh-surface before any sample: prior → prior is a no-op).
     if (record.frustumGeometry && Math.abs(record.frustumGeometry.groundAltM - ground) < 0.001) {
       continue;
     }
     applyFrustumGeometry(record, ground);
   }
 
-  if (regime === 'google-3d') {
-    // Fresh google-3d session: let update()'s ONE-SHOT completion pass
+  if (regime === 'mesh-surface') {
+    // Fresh mesh-surface session: let update()'s ONE-SHOT completion pass
     // re-enqueue records without an accepted sample once the (re-shown)
     // tileset reports tilesLoaded. Records already sampled in a previous
-    // google-3d session keep their cached resolution — 0 new samples, well
+    // mesh-surface session keep their cached resolution — 0 new samples, well
     // under the ≤1-per-(camera, session) ceiling.
     _tilesReadyReenqueued = false;
   }
@@ -2432,11 +2432,11 @@ export function processCctvGeometryQueueBatch({
  *
  * @param {Object} [ownership={}] Current camera-ownership state.
  * @param {*} [ownership.trackedEntity] Cesium tracked entity, if any.
- * @param {boolean} [ownership.cockpitActive] Whether cockpit owns the camera.
+ * @param {boolean} [ownership.droneViewActive] Whether Drone View owns the camera.
  * @returns {{ batchSize: number, delayMs: number }} Drain pacing.
  */
-export function cctvGeometryDrainPacing({ trackedEntity = null, cockpitActive = false } = {}) {
-  if (trackedEntity || cockpitActive) {
+export function cctvGeometryDrainPacing({ trackedEntity = null, droneViewActive = false } = {}) {
+  if (trackedEntity || droneViewActive) {
     return { batchSize: GEO_TRACKING_BATCH_SIZE, delayMs: GEO_TRACKING_BATCH_DELAY_MS };
   }
   return { batchSize: GEO_LOAD_BATCH_SIZE, delayMs: GEO_LOAD_BATCH_DELAY_MS };
@@ -2444,7 +2444,7 @@ export function cctvGeometryDrainPacing({ trackedEntity = null, cockpitActive = 
 
 /**
  * Processes one tracking-aware geometry-drain batch. Ownership is read inside
- * every call so a mid-drain tracking/cockpit transition changes the very next
+ * every call so a mid-drain tracking/Drone View transition changes the very next
  * batch's size and delay.
  *
  * @param {Object} options Batch inputs.
@@ -2507,8 +2507,8 @@ export function processGeometryBatch() {
     queue: _geoQueue,
     readOwnership: () => ({
       trackedEntity: _viewer.trackedEntity,
-      cockpitActive: typeof document !== 'undefined'
-        && document.body?.classList.contains('cockpit-mode'),
+      droneViewActive: typeof document !== 'undefined'
+        && document.body?.classList.contains('drone-view'),
     }),
     visit: (record) => {
       try {
@@ -2713,7 +2713,7 @@ function rebuildViewshedVolume(record, isActive) {
 /**
  * Field-test fix (2026-07-06): horizon-culls camera billboards, mirroring the
  * flights layer's EllipsoidalOccluder pass. With the Cesium globe hidden
- * (Google-3D regime) nothing writes far-side depth, and the billboards are now
+ * (mesh-surface regime) nothing writes far-side depth, and the billboards are now
  * always-on-top (`disableDepthTestDistance: INFINITY` — the far-zoom submerge
  * fix), so without this pass London's cluster would shine through the planet
  * from a US viewpoint. Pure math over ≤ catalog-size points; runs on
@@ -3418,7 +3418,7 @@ function getPublicCameraState(record, activeId = null) {
     // shared mesh-floor sampler while unrelated catalog cells finish.
     groundMeshSampleRequestCount: record.groundMeshSampleRequestCount || 0,
     // Datum QA seam: expose the immutable Re:Earth ellipsoidal prior
-    // separately from the currently applied frustum ground. Google-3D may
+    // separately from the currently applied frustum ground. mesh-surface may
     // legitimately refine the latter to the rendered mesh, so callers must
     // not infer the prior by subtracting mount height from live geometry.
     groundPriorM: Number.isFinite(record.groundPrior?.ellipsoid)
@@ -4033,14 +4033,14 @@ export function _setCctvCoverageStateForTest({
  * @param {Cesium.Viewer|null} viewer Cesium viewer that owns the camera.
  * @param {Object|null} record CCTV camera runtime record.
  * @param {number} [duration=2.2] - Flight duration in seconds.
- * @returns {'focused'|'no-active-camera'|'tracking-holds-view'|'cockpit-active'} Focus result.
+ * @returns {'focused'|'no-active-camera'|'tracking-holds-view'|'drone-view-active'} Focus result.
  */
 export function focusCctvRecord(viewer, record, duration = 2.2) {
   if (!viewer || !record) return CCTV_FOCUS_RESULT.NO_ACTIVE_CAMERA;
   if (typeof document !== 'undefined'
-    && document.body?.classList.contains('cockpit-mode')) {
-    console.debug('[Data:CCTV] focus ignored while cockpit owns the camera');
-    return CCTV_FOCUS_RESULT.COCKPIT_ACTIVE;
+    && document.body?.classList.contains('drone-view')) {
+    console.debug('[Data:CCTV] focus ignored while Drone View owns the camera');
+    return CCTV_FOCUS_RESULT.DRONE_VIEW_ACTIVE;
   }
   if (viewer.trackedEntity) {
     console.debug('[Data:CCTV] focus ignored while a tracked entity owns the camera');
@@ -4246,7 +4246,7 @@ const cctvLayer = {
         height: 24,
         // Field-test fix (2026-07-06): always-on-top. The old finite value
         // (1800 m) re-engaged the depth test at far zoom, where the COARSE
-        // far-LOD Google-3D mesh sits above the true ground and swallowed
+        // far-LOD mesh-surface mesh sits above the true ground and swallowed
         // ground-anchored icons ("submerged" pills over SF). Far-side-of-globe
         // icons are handled by refreshHorizonCulling() (the flights-layer
         // EllipsoidalOccluder pattern), not by the depth test.
@@ -4271,7 +4271,7 @@ const cctvLayer = {
         //     explicit user select/move, or a surface-regime change — never
         //     on the 10s timer.
         //   groundSamples   — PER-REGIME resolved ground (regime key →
-        //     metres): the accepted one-shot scene sample in google-3d, the
+        //     metres): the accepted one-shot scene sample in mesh-surface, the
         //     mirrored prior in terrain-globe. Kept across re-arms as the
         //     "has ever resolved" memory for the B9c mid-stream guard.
         //   frustumPositions — cached Cartesians for pure recomputes (so
@@ -4479,8 +4479,8 @@ const cctvLayer = {
       _tilesReadyReenqueued = true;
       // Per-regime resolution (Task 5): only records unresolved for the
       // CURRENT surface regime need the completion pass. On globe stacks
-      // projectionTilesReady() is false while a (hidden) Google tileset
-      // exists, so this latch effectively fires for the google-3d regime —
+      // projectionTilesReady() is false while a hidden legacy mesh tileset
+      // exists, so this latch effectively fires for the mesh-surface regime —
       // terrain-globe records resolve from the prior in their drain pass.
       const unresolved = _records.filter((record) => !isGroundResolved(record));
       if (unresolved.length) enqueueGeometryRefresh(unresolved);
@@ -4774,7 +4774,7 @@ const cctvLayer = {
    * Flies the viewer to a specific camera.
    * @param {string} cameraId - Camera ID to focus on.
    * @param {number} [durationSec=2.2] - Flight duration in seconds.
-   * @returns {'focused'|'no-active-camera'|'tracking-holds-view'|'cockpit-active'} Focus result.
+   * @returns {'focused'|'no-active-camera'|'tracking-holds-view'|'drone-view-active'} Focus result.
    */
   focusCamera(cameraId, durationSec = 2.2) {
     return focusCamera(cameraId, durationSec);

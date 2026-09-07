@@ -8,7 +8,7 @@ export const SCENE_RECIPES = [
     id: 'flights-radar',
     title: 'Global Flights Radar',
     durationSec: 30,
-    style: 'retro',
+    style: 'normal',
     ui: { hidePanels: true, hudMode: 'minimal', safeFrame: '16:9' },
     layers: {
       flights: true,
@@ -33,7 +33,7 @@ export const SCENE_RECIPES = [
     id: 'orbital-watch',
     title: 'Orbital Watch',
     durationSec: 32,
-    style: 'surveillance',
+    style: 'normal',
     ui: { hidePanels: true, hudMode: 'full', safeFrame: '16:9' },
     layers: {
       flights: false,
@@ -45,14 +45,6 @@ export const SCENE_RECIPES = [
       bloom: 58,
       sharpen: false,
       detectionMode: 'SPARSE',
-      styleParams: {
-        surveillance: {
-          gain: 0.62,
-          bloom: 0.38,
-          scanlineStr: 0.9,
-          pixelation: 2.1,
-        },
-      },
     },
     cameraPath: [
       { lat: 28.0, lon: -82.0, alt: 22000000, heading: 0, pitch: -82, roll: 0, duration: 7, hold: 1 },
@@ -63,42 +55,10 @@ export const SCENE_RECIPES = [
     ],
   },
   {
-    id: 'thermal-threats',
-    title: 'Thermal Threat Board',
-    durationSec: 26,
-    style: 'thermal',
-    ui: { hidePanels: true, hudMode: 'full', safeFrame: '16:9' },
-    layers: {
-      flights: false,
-      satellites: false,
-      earthquakes: true,
-      traffic: false,
-    },
-    post: {
-      bloom: 72,
-      sharpen: true,
-      detectionMode: 'OFF',
-      styleParams: {
-        thermal: {
-          sensitivity: 0.84,
-          bloom: 0.78,
-          mode: 0.0,
-          pixelation: 1.9,
-        },
-      },
-    },
-    cameraPath: [
-      { lat: 37.0, lon: -121.0, alt: 5200000, heading: 20, pitch: -62, roll: 0, duration: 5, hold: 1 },
-      { lat: 35.7, lon: 140.0, alt: 3100000, heading: 5, pitch: -55, roll: 0, duration: 5, hold: 1 },
-      { lat: -36.8, lon: 174.7, alt: 2600000, heading: -12, pitch: -50, roll: 0, duration: 5, hold: 1 },
-      { lat: 38.0, lon: -10.0, alt: 9000000, heading: 12, pitch: -70, roll: 0, duration: 4, hold: 0 },
-    ],
-  },
-  {
     id: 'city-overload',
     title: 'City Overload',
     durationSec: 30,
-    style: 'surveillance',
+    style: 'normal',
     ui: { hidePanels: true, hudMode: 'minimal', safeFrame: '9:16' },
     layers: {
       flights: true,
@@ -110,14 +70,6 @@ export const SCENE_RECIPES = [
       bloom: 65,
       sharpen: true,
       detectionMode: 'PANOPTIC',
-      styleParams: {
-        surveillance: {
-          gain: 0.68,
-          bloom: 0.42,
-          scanlineStr: 1.0,
-          pixelation: 2.4,
-        },
-      },
     },
     cameraPath: [
       { lat: 40.73, lon: -74.0, alt: 1500000, heading: 25, pitch: -44, roll: 0, duration: 5, hold: 1 },
@@ -131,7 +83,7 @@ export const SCENE_RECIPES = [
     id: 'omniscience-pullback',
     title: 'Omniscience Pullback',
     durationSec: 36,
-    style: 'retro',
+    style: 'normal',
     ui: { hidePanels: true, hudMode: 'full', safeFrame: '16:9' },
     layers: {
       flights: true,
@@ -143,13 +95,6 @@ export const SCENE_RECIPES = [
       bloom: 68,
       sharpen: true,
       detectionMode: 'SPARSE',
-      styleParams: {
-        retro: {
-          pixelation: 4.4,
-          distortion: 0.42,
-          instability: 0.58,
-        },
-      },
     },
     cameraPath: [
       { lat: 35.68, lon: 139.76, alt: 280000, heading: 30, pitch: -26, roll: 0, duration: 5, hold: 1 },

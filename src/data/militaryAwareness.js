@@ -15,7 +15,7 @@ import {
 } from './militaryAwarenessEngine.js';
 import { announceNavigationAuthority } from '../navigationPolicy.js';
 import { celestialScreenAngle, getKeyholeGeometry } from '../celestialRing.js';
-import { bearingBetweenCoordinates } from '../cockpitMath.js';
+import { bearingBetweenCoordinates } from './geoBearing.js';
 import { cameraPoseSignature } from './iconOrientation.js';
 import {
   governorRequestRender,
@@ -63,8 +63,8 @@ const SOURCE_LABEL = {
 
 /**
  * Whether focusing a Context target may take ownership of the camera.
- * Cockpit owns the camera at 20 Hz, so non-aircraft targets remain selectable
- * there but must not start a competing flyTo animation.
+ * Drone View owns the camera, so non-aircraft targets remain selectable there
+ * but must not start a competing flyTo animation.
  *
  * @param {string} layerId Context target layer id.
  * @param {HTMLElement|null} [body=document.body] Document body to inspect.
@@ -72,7 +72,7 @@ const SOURCE_LABEL = {
  */
 export function contextTargetFlyToAllowed(layerId, body = globalThis.document?.body) {
   const nonAircraft = layerId === 'ais-live-vessels' || layerId === 'military-installations';
-  return !nonAircraft || !body?.classList?.contains('cockpit-mode');
+  return !nonAircraft || !body?.classList?.contains('drone-view');
 }
 
 /**
@@ -292,9 +292,9 @@ function sourceState(layerId) {
   //     however long the fetch takes. Confirmed live: a held 17 s first fetch
   //     read `enabling` across 34 samples with the panel non-numeric throughout,
   //     and a failing one settled to `enabled` with status 'unavailable'. Its
-  //     getStats() also reports loading while a request is in progress —
+  //     getStats() has no `loading` status to offer in any case —
   //     setInstallationStatus is only ever called with
-  //     loading/zoom-in/ready/stale/empty/unavailable.
+  //     zoom-in/ready/stale/empty/unavailable.
   //   - ais-live-vessels is what the predicate below is FOR. Its enable() and
   //     update() both resolve as soon as the first /api/ais-live poll answers,
   //     so the lifecycle settles to `enabled` — but until the server-side socket
@@ -348,9 +348,7 @@ function isSame(subject, item, prefix, key) {
  */
 export function summarizeInstallationViewport(items, source) {
   const summary = summarizeAwarenessCohortForNavigation(items, source);
-  if (summary.count === null) return source.stats?.statusMessage
-    ? { ...summary, reason: source.stats.statusMessage }
-    : summary;
+  if (summary.count === null) return summary;
   return {
     ...summary,
     reason: summary.count
@@ -419,7 +417,7 @@ export function buildAwarenessContextSnapshot(results, navigation = {}, { subjec
   if (!results) return null;
   return {
     subject: { ...results.subject },
-    // Whether the subject is still reported by its source. The cockpit Contact
+    // Whether the subject is still reported by its source. The Contact
     // readout holds its last-known values behind a CONTACT LOST cue when this
     // is false, rather than presenting frozen geometry as a live reading.
     subjectPresent: subjectPresent !== false,
@@ -1271,7 +1269,7 @@ function resolveSubjectPosition(subject, { allowCollectionMaterialization = true
           : SUBJECT_PRESENCE.UNCHECKED,
       };
     }
-    // Cockpit already materializes its tracked position on a fixed 20 Hz loop.
+    // Drone View already materializes its tracked position on a fixed loop.
     // If that frame-owned cache is temporarily unavailable, keep the last
     // awareness position instead of allocating/scanning up to 1,000 contacts.
     if (!allowCollectionMaterialization) {
@@ -1356,7 +1354,7 @@ function refreshSelectedSubject(force = false) {
   const nextSourceRevision = sourceRevision(sources);
   const sourceRevisionChanged = nextSourceRevision !== state.sourceRevision;
   const resolved = resolveSubjectPosition(state.subject, {
-    allowCollectionMaterialization: !document.body?.classList?.contains('cockpit-mode') || sourceRevisionChanged,
+    allowCollectionMaterialization: !document.body?.classList?.contains('drone-view') || sourceRevisionChanged,
   });
   if (!resolved) return;
   const { position, presence } = resolved;
@@ -1607,7 +1605,7 @@ async function enableDependencies(activationId = state.activationId) {
     } else {
       // Vessels and mapped installations enrich an already usable aircraft
       // context. Their settlement must never hold the Contacts transaction or
-      // Cockpit gate open, and the activation token prevents a late result
+      // The activation token prevents a late result
       // from repainting or refocusing a newer/closed session.
       pending.then(
         () => refreshAfterDeferredDependency(activationId),

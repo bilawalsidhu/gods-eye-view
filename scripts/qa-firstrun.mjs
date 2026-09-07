@@ -115,7 +115,7 @@ const appState = (page) => page.evaluate(() => {
   const all = dm?.getAll?.() || [];
   for (const id of [
     'local-datacenters', 'local-dams', 'telegeography-submarine-cables',
-    'local-firms', 'earthquakes', 'flights', 'military', 'rocket-launches', 'satellites',
+    'local-firms', 'earthquakes', 'flights', 'military', 'satellites',
   ]) {
     layers[id] = !!dm?.isEnabled?.(id);
     counts[id] = all.find((entry) => entry.id === id)?.stats?.count ?? null;
@@ -208,7 +208,7 @@ const HYGIENE_SECTIONS = ['console'];
 /**
  * ESC arbitration — the two defects that motivated the yield design, plus the
  * yield itself. Driven through the real body classes, because that is exactly
- * what Cockpit and the Scene director set.
+ * what DroneView and the Scene director set.
  */
 async function runArbitrationSection(page, { shots, consoleErrors }) {
   await section('esc-arbitration', async () => {
@@ -264,19 +264,19 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     record('a yielded launcher does not pop back when the scene ends',
       !afterScene.classVisible, `classVisible=${afterScene.classVisible}`);
 
-    // ── Blocker 3 repro: Cockpit engages while the launcher is up ───────────
+    // ── Blocker 3 repro: DroneView engages while the launcher is up ───────────
     await open(page, { query: "?welcome=1", errorSink: consoleErrors });
-    const beforeCockpit = await launcherState();
-    record('the launcher is up before cockpit engages', beforeCockpit.onScreen);
-    await page.evaluate(() => document.body.classList.add('cockpit-mode'));
+    const beforeDroneView = await launcherState();
+    record('the launcher is up before drone view engages', beforeDroneView.onScreen);
+    await page.evaluate(() => document.body.classList.add('drone-view'));
     await sleep(300);
-    const duringCockpit = await launcherState();
+    const duringDroneView = await launcherState();
     record(
-      'cockpit engaging makes the launcher YIELD before it can contest ESC',
-      beforeCockpit.onScreen && !duringCockpit.classVisible,
-      `classVisible=${duringCockpit.classVisible} — cockpit registers its capture listener first, so stacking must never arise`,
+      'drone view engaging makes the launcher YIELD before it can contest ESC',
+      beforeDroneView.onScreen && !duringDroneView.classVisible,
+      `classVisible=${duringDroneView.classVisible} — drone view registers its capture listener first, so stacking must never arise`,
     );
-    await page.evaluate(() => document.body.classList.remove('cockpit-mode'));
+    await page.evaluate(() => document.body.classList.remove('drone-view'));
     await sleep(200);
 
     // ── Blocker repro: a surface that takes the screen with NO class ────────
@@ -354,57 +354,10 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
       `classVisible=${afterUncoveredEsc.classVisible} session=${afterUncoveredEsc.session}`,
     );
 
-    // ── Blocker repro: a control that claims only the KEY ───────────────────
-    // The compact Radio disclosure closes on ESC from a capture listener bound
-    // long before this module exists. It called stopPropagation(), which does
-    // NOT stop later listeners on the same document — so one key closed the
-    // disclosure AND dismissed the launcher. The card is not hiding behind this
-    // one and must not yield to it: the key is simply already spoken for.
-    await open(page, { query: "?welcome=1", errorSink: consoleErrors });
-    const beforeRadio = await launcherState();
-    record('the launcher is up before the radio disclosure opens', beforeRadio.onScreen);
-    const radioOpened = await page.evaluate(() => {
-      document.getElementById('context-radio-toggle-btn')?.click();
-      return !!document.getElementById('context-radio-dock')?.classList.contains('disclosure-open');
-    });
-    await sleep(250);
-    record('the compact Radio disclosure opens', radioOpened);
-    const withRadio = await launcherState();
-    record(
-      'a small disclosure is a key contest, not a screen takeover — no yield',
-      withRadio.classVisible && withRadio.topmost,
-      `classVisible=${withRadio.classVisible} topmost=${withRadio.topmost}`,
-    );
-
-    await page.keyboard.press('Escape');
-    await sleep(400);
-    const radioAfterEsc = await page.evaluate(() => (
-      !!document.getElementById('context-radio-dock')?.classList.contains('disclosure-open')
-    ));
-    const launcherAfterRadioEsc = await launcherState();
-    record('ESC closes the disclosure', radioOpened && !radioAfterEsc,
-      `disclosure still open=${radioAfterEsc}`);
-    record(
-      'that SAME ESC does not also dismiss the launcher',
-      beforeRadio.onScreen && launcherAfterRadioEsc.classVisible
-        && launcherAfterRadioEsc.session !== 'dismissed',
-      `classVisible=${launcherAfterRadioEsc.classVisible} session=${launcherAfterRadioEsc.session} — one key, one action`,
-    );
-    // ...and the NEXT press is the launcher's, so nothing was permanently taken.
-    await page.keyboard.press('Escape');
-    await sleep(600);
-    const escAfterRadioClosed = await launcherState();
-    record(
-      'the next ESC belongs to the launcher again',
-      beforeRadio.onScreen && !escAfterRadioClosed.classVisible
-        && escAfterRadioClosed.session === 'dismissed',
-      `classVisible=${escAfterRadioClosed.classVisible} session=${escAfterRadioClosed.session}`,
-    );
-
     // ── Deferred reveal: a surface already up when the launcher would show ──
     // The class goes on as soon as the app exists, which is well before the
     // launcher's reveal (~T+1.9s), so init genuinely sees a screen it does not
-    // own. Cockpit's own exit() strips this class, so it is re-asserted right up
+    // own. DroneView's own exit() strips this class, so it is re-asserted right up
     // to the check rather than set once and hoped for.
     await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
     // Install the synthetic blocker before any application module can run. A
@@ -412,10 +365,10 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     // DOMContentLoaded and the first page.evaluate(), turning this into the
     // already-covered "surface engages after reveal" case and burning the
     // session flag exactly as that path is designed to do.
-    const earlyCockpitBlocker = await page.evaluateOnNewDocument(() => {
+    const earlyDroneViewBlocker = await page.evaluateOnNewDocument(() => {
       const blockAsSoonAsBodyExists = () => {
         if (!document.body) return false;
-        document.body.classList.add('cockpit-mode');
+        document.body.classList.add('drone-view');
         return true;
       };
       if (blockAsSoonAsBodyExists()) return;
@@ -428,34 +381,34 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     try {
       await page.goto(`${APP_URL}/?welcome=1`, { waitUntil: 'domcontentloaded' });
     } finally {
-      await page.removeScriptToEvaluateOnNewDocument(earlyCockpitBlocker.identifier);
+      await page.removeScriptToEvaluateOnNewDocument(earlyDroneViewBlocker.identifier);
     }
     await page.waitForFunction(() => !!document.body, { timeout: 45000 }).catch(() => {});
-    const holdCockpit = async (ms) => {
+    const holdDroneView = async (ms) => {
       const until = Date.now() + ms;
       while (Date.now() < until) {
-        await page.evaluate(() => document.body?.classList.add('cockpit-mode')).catch(() => {});
+        await page.evaluate(() => document.body?.classList.add('drone-view')).catch(() => {});
         await sleep(200);
       }
     };
-    await holdCockpit(5000);
-    const withCockpitUp = await launcherState();
-    const classHeld = await page.evaluate(() => document.body.classList.contains('cockpit-mode'));
+    await holdDroneView(5000);
+    const withDroneViewUp = await launcherState();
+    const classHeld = await page.evaluate(() => document.body.classList.contains('drone-view'));
     record(
       'the launcher WAITS rather than appearing over a surface already up',
-      classHeld && withCockpitUp.present && !withCockpitUp.classVisible,
-      `cockpitClassHeld=${classHeld} present=${withCockpitUp.present} classVisible=${withCockpitUp.classVisible}`,
+      classHeld && withDroneViewUp.present && !withDroneViewUp.classVisible,
+      `drone viewClassHeld=${classHeld} present=${withDroneViewUp.present} classVisible=${withDroneViewUp.classVisible}`,
     );
     record('waiting does not burn the session flag',
-      withCockpitUp.session !== 'dismissed', `session=${withCockpitUp.session}`);
+      withDroneViewUp.session !== 'dismissed', `session=${withDroneViewUp.session}`);
 
     // ...and appears once that surface clears.
-    await page.evaluate(() => document.body.classList.remove('cockpit-mode'));
+    await page.evaluate(() => document.body.classList.remove('drone-view'));
     await sleep(800);
-    const afterCockpitCleared = await launcherState();
+    const afterDroneViewCleared = await launcherState();
     record('the launcher appears once the surface clears',
-      afterCockpitCleared.onScreen, `onScreen=${afterCockpitCleared.onScreen}`);
-    if (afterCockpitCleared.onScreen) shots.push(await shoot(page, 'arbitration-revealed-after-cockpit'));
+      afterDroneViewCleared.onScreen, `onScreen=${afterDroneViewCleared.onScreen}`);
+    if (afterDroneViewCleared.onScreen) shots.push(await shoot(page, 'arbitration-revealed-after-drone view'));
   });
 }
 
@@ -544,7 +497,7 @@ async function main() {
       const tiles = await page.$$eval('[data-first-run-choice]', (nodes) => nodes.map((n) => n.dataset.firstRunChoice));
       record(
         'four tiles in the owner\'s order',
-        JSON.stringify(tiles) === JSON.stringify(['contacts', 'space-missions', 'environmental', 'explore']),
+        JSON.stringify(tiles) === JSON.stringify(['contacts', 'environmental', 'explore']),
         tiles.join(' · '),
       );
 
@@ -696,15 +649,6 @@ async function main() {
     record('LIVE CONTACTS still leaves the detection override untouched',
       state.detectionOverridden === false, `_detectionUserOverridden=${state.detectionOverridden}`);
     shots.push(await shoot(page, 'mission-contacts'));
-    });
-
-    await section('mission-space', async () => {
-    await open(page, { query: "?welcome=1", errorSink: consoleErrors });
-    await pick(page, 'space-missions');
-    state = await appState(page);
-    record('SPACE MISSIONS activates its context mode', state.contextMode === 'space-missions',
-      `contextMode=${state.contextMode}`);
-    shots.push(await shoot(page, 'mission-space-missions'));
     });
 
     await section('mission-explore', async () => {

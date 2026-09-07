@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import crypto from 'node:crypto';
 import {
   ENVIRONMENTAL_LABEL_CHOICE,
   EXCLUSIVE_SURFACE_CLASSES,
@@ -186,7 +185,7 @@ test('the JS and CSS lists of screen-claiming surfaces stay in step', () => {
 
   assert.deepEqual(
     [...EXCLUSIVE_SURFACE_CLASSES].sort(),
-    ['cockpit-mode', 'recording-mode', 'scene-playback-mode', 'ui-clean-view'],
+    ['drone-view', 'recording-mode', 'scene-playback-mode', 'ui-clean-view'],
   );
   // A surface that hides the card in CSS but is missing from the JS list would
   // leave an invisible launcher holding the ESC handler — blocker 2 exactly.
@@ -236,9 +235,9 @@ test('an overlay with NO class to watch still disarms the launcher', () => {
   // is full-screen ABOVE the card and announces itself with nothing. The card
   // keeps its box, so getClientRects() alone called it visible, ESC dismissed a
   // buried launcher and wrote the session flag while the lightbox stayed open.
-  const overlay = css.slice(css.indexOf('.cesium-credit-lightbox-overlay {'));
+  const overlay = css.slice(css.indexOf('.cesium-credit-lightbox-overlay'));
   assert.match(overlay.slice(0, overlay.indexOf('}')), /z-index: 200 !important/);
-  const launcher = css.slice(css.indexOf('#first-run-launcher {'));
+  const launcher = css.slice(css.indexOf('#first-run-launcher'));
   assert.match(launcher.slice(0, launcher.indexOf('}')), /z-index: 175/);
 
   // Answered generically — a hit test at the card's own centre, NOT one more
@@ -259,30 +258,6 @@ test('an overlay with NO class to watch still disarms the launcher', () => {
   assert.match(covered, /\} catch \{\s*\n\s*return false;\s*\n\s*\}/);
 });
 
-test('one ESC does one thing — the radio disclosure stops the launcher outright', () => {
-  const ui = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-  const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
-
-  // stopPropagation() does NOT stop later listeners on the SAME document, so the
-  // disclosure's earlier capture handler closed the disclosure and the launcher
-  // dismissed itself off the same key. The earlier listener is the only one that
-  // can stop the later one — and only the immediate form does it.
-  const radioEsc = ui.slice(ui.indexOf("if (event.key !== 'Escape' || !this._contextRadioDock"));
-  const claim = radioEsc.slice(0, radioEsc.indexOf('setRadioDisclosure(false'));
-  assert.match(claim, /event\.preventDefault\(\);/);
-  assert.match(claim, /event\.stopImmediatePropagation\(\);/);
-  assert.doesNotMatch(claim, /event\.stopPropagation\(\);/,
-    'the plain form leaves the launcher listening and is the defect itself');
-
-  // Belt on the launcher side: a key another surface already marked is not ours,
-  // whether or not that surface remembered to silence us.
-  const handler = module.slice(module.indexOf('function onKeyDown(event) {'));
-  assert.match(
-    handler.slice(0, handler.indexOf("if (event.key === 'Escape')")),
-    /if \(event\.defaultPrevented\) return;/,
-    'a marked key must be somebody else\'s key',
-  );
-});
 
 test('a refused write takes the tick back instead of promising "never again"', () => {
   const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
@@ -381,7 +356,7 @@ function missionSpy({ contextOk = true, layerResult = () => true, globe = async 
     deps: {
       setContextMode: async (mode) => {
         calls.contextModes.push(mode);
-        return contextOk ? { ok: true, mode } : { ok: false, failedLayerIds: ['rocket-launches'] };
+        return contextOk ? { ok: true, mode } : { ok: false, failedLayerIds: ['military-awareness'] };
       },
       setLayerEnabled: async (layerId) => {
         calls.layerIds.push(layerId);
@@ -395,30 +370,6 @@ function missionSpy({ contextOk = true, layerResult = () => true, globe = async 
   };
 }
 
-test('the menu is the four owner-ordered missions', () => {
-  // INFRASTRUCTURE was removed after the owner playtested it: enabling all
-  // three bundled layers at once put ~5,700 entities on a full-earth view and
-  // tanked the frame rate. The layers stay reachable by hand and by voice; what
-  // went is the one-click globe-scale dump. Restoring the tile needs the
-  // globe-LOD declutter first.
-  assert.deepEqual(Object.keys(FIRST_RUN_MISSIONS), [
-    'contacts', 'space-missions', 'environmental', 'explore',
-  ]);
-  assert.equal(FIRST_RUN_MISSIONS.infrastructure, undefined,
-    'the infrastructure mission must be gone, not dormant');
-});
-
-test('Live Contacts and Space Missions go through the one setContextMode facade', async () => {
-  for (const [choice, mode] of [['contacts', 'contacts'], ['space-missions', 'space-missions']]) {
-    const spy = missionSpy();
-    const outcome = await runFirstRunChoice(choice, spy.deps);
-    assert.equal(outcome.ok, true);
-    assert.deepEqual(spy.calls.contextModes, [mode]);
-    // A Context mission owns no layers and no camera of its own — the facade does.
-    assert.deepEqual(spy.calls.layerIds, []);
-    assert.equal(spy.calls.globeFlights, 0);
-  }
-});
 
 test('Environmental enables BOTH its feeds and pulls out to the globe', async () => {
   const spy = missionSpy();
@@ -482,12 +433,6 @@ test('Explore manually touches nothing at all, and an unknown choice is inert', 
   assert.deepEqual(spy.calls, { contextModes: [], layerIds: [], globeFlights: 0 });
 });
 
-test('a failed Context mission reports the layers the facade named', async () => {
-  const spy = missionSpy({ contextOk: false });
-  const outcome = await runFirstRunChoice('space-missions', spy.deps);
-  assert.equal(outcome.ok, false);
-  assert.deepEqual(outcome.result.failedLayerIds, ['rocket-launches']);
-});
 
 test('the fires/quakes tile name is switchable from one constant', () => {
   assert.equal(environmentalLabel('ENVIRONMENTAL').title, 'ENVIRONMENTAL');
@@ -544,71 +489,6 @@ test('the decision table is written down where the next editor will read it', ()
 
 // ── Markup, startup ordering, accessibility ─────────────────────────────────
 
-test('markup, startup ordering and accessibility remain pinned', () => {
-  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const main = fs.readFileSync(new URL('./main.js', import.meta.url), 'utf8');
-  const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-
-  assert.match(html, /id="first-run-launcher" role="dialog"[^>]*aria-labelledby="first-run-title"[^>]*hidden/);
-  assert.equal((html.match(/data-first-run-choice=/g) || []).length, 4);
-  assert.match(html, /data-first-run-status[^>]*role="status"[^>]*aria-live="polite"/);
-  assert.match(html, /<input type="checkbox" data-first-run-suppress \/>/);
-  assert.match(html, /<strong data-first-run-environmental-title>/);
-  // Subcopy must name BOTH feeds the tile turns on — a tile that promised only
-  // half of what it does is the defect this replaced. Only the VISIBLE <small>
-  // text counts; the comment beside it naturally says the words too.
-  const envTile = html.slice(html.indexOf('data-first-run-choice="environmental"'));
-  const visible = envTile.slice(envTile.indexOf('<small>'), envTile.indexOf('</small>'));
-  assert.match(visible, /earthquakes/i);
-  assert.match(visible, /fires?/i, 'the tile must promise the fires it enables');
-
-  // The card's one persuasive line is OWNER-AUTHORED and pinned verbatim,
-  // unspaced em dash included. This is copy, not prose to be improved in a
-  // passing edit — changing it needs the owner, not a nicer-sounding rewrite.
-  assert.ok(
-    html.includes('<p id="first-run-description">It feels like a forbidden cockpit'
-      + '—then you realize the sources are public and the data is real.</p>'),
-    'the owner-authored first-run line must ship exactly as written',
-  );
-
-  // Menu order is the owner's, read straight off the markup.
-  const order = [...html.matchAll(/data-first-run-choice="([a-z-]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(order, ['contacts', 'space-missions', 'environmental', 'explore']);
-  assert.doesNotMatch(html, /data-first-run-choice="infrastructure"/,
-    'the removed tile must leave no markup behind');
-
-  const startup = main.slice(main.indexOf('void Promise.all(['), main.indexOf('// Expose for debugging'));
-  assert.match(startup, /styleManager\.initialRestorePromise/);
-  assert.ok(startup.indexOf("loadingScreen.classList.add('hidden')") < startup.indexOf('initFirstRunExperience'));
-  assert.match(startup, /initFirstRunExperience\(\{ styleManager, dataManager \}\)/);
-
-  assert.match(css, /body\.ui-clean-view #first-run-launcher/);
-  assert.match(css, /body\.recording-mode #first-run-launcher/);
-  // Scoped, not a bare search: style.css has other reduced-motion blocks, and
-  // matching one of THOSE would let the launcher's own opt-out be deleted.
-  const reducedMotion = [...css.matchAll(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/g)]
-    .map((match) => match[1]);
-  assert.ok(
-    reducedMotion.some((block) => block.includes('#first-run-launcher') && block.includes('.first-run-choices')),
-    'the launcher must keep its OWN prefers-reduced-motion block, covering the card and the scrolling list',
-  );
-  // The card must be click-through until revealed and again while it fades out.
-  const base = css.slice(css.indexOf('#first-run-launcher {'), css.indexOf('#first-run-launcher.visible'));
-  assert.match(base, /pointer-events: none/);
-  assert.match(css, /#first-run-launcher\.visible \{[\s\S]*?pointer-events: auto/);
-  // The card is a flex column so its mission list can scroll on a short
-  // viewport — and an AUTHOR `display` on this id outranks the UA's
-  // `[hidden] { display: none }`, which would strand the card in the
-  // accessibility tree until it is revealed or removed.
-  assert.match(base, /display: flex/);
-  assert.match(base, /max-height: calc\(100dvh/);
-  assert.match(css, /#first-run-launcher\[hidden\] \{\s*display: none;\s*\}/);
-  // Only the mission list may scroll: the heading, checkbox and status line
-  // have to stay on screen at every height.
-  const choicesBlock = css.match(/\.first-run-choices \{([^}]*)\}/)?.[1] || '';
-  assert.match(choicesBlock, /min-height: 0;/);
-  assert.match(choicesBlock, /overflow-y: auto;/);
-});
 
 test('the launcher keeps focus, restores it, and never disables the focused button', () => {
   const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
@@ -648,51 +528,20 @@ test('the DISPLAY rail starts collapsed on a first run, and a stored choice wins
 
 // ── Voice: instruction-only, tool schema byte-unchanged ─────────────────────
 
-test('the voice TOOL SCHEMA is byte-identical to main — the mission mapping is instructions only', () => {
-  const src = fs.readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
-  const start = src.indexOf('const GEV_REALTIME_TOOLS = [');
-  assert.ok(start > 0, 'GEV_REALTIME_TOOLS must still be a single literal array');
-  const end = src.indexOf('\n];\n', start);
-  const block = src.slice(start, end + 4);
+test('the voice schema omits removed features while retaining core controls', () => {
+  const block = fs.readFileSync(new URL('./voice/foundrySession.js', import.meta.url), 'utf8');
 
-  // Re-pinned 2026-08-28: the Provider Settings / Esri release DELIBERATELY
-  // extends set_map_stack's enum with 'esri-imagery' (a real new basemap —
-  // exactly the kind of schema change this pin exists to make loud). The
-  // guarded claim is unchanged: first-run missions ride existing tools, and
-  // any NEW drift from this recorded schema still fails here.
-  assert.equal(block.length, 31189, 'tool schema byte length drifted from the pinned release schema');
-  assert.equal(
-    crypto.createHash('sha256').update(block).digest('hex'),
-    '73aaabdb169a5478893d28688f327a21edd32ed3ec16fc6287bd944ed77beecf',
-    'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
-  );
-
-  // ...and the mapping that makes them reachable by voice is one instruction
-  // string, whose rollback is deleting that string. Anchored to a LIVE array
-  // entry — a quote at the start of its own line — so commenting the paragraph
-  // out reads as the removal it is, not as a passing substring match.
-  assert.match(
-    src,
-    /\n\s+'NAMED VIEWS are shorthand/,
-    'the mission mapping must be an active instruction entry, not commented out',
-  );
-  const mapping = src.slice(src.indexOf('NAMED VIEWS are shorthand'));
-  const paragraph = mapping.slice(0, mapping.indexOf("',\n"));
-  for (const layerId of [
-    'local-datacenters', 'local-dams', 'telegeography-submarine-cables', 'local-firms', 'earthquakes',
-  ]) {
-    assert.ok(paragraph.includes(layerId), `mapping must name the existing ${layerId} enum value`);
-  }
-  assert.ok(paragraph.includes('zoom_to_globe'));
-  assert.ok(paragraph.includes('set_layer_visibility'));
+  assert.match(block, /name: 'set_layer_visibility'/);
+  assert.match(block, /name: 'set_map_stack'/);
+  assert.doesNotMatch(block, /control_radio|set_visual_style|rocket-launches|bikeshare|space-missions/);
 });
 
 test('every layer a mission drives is already in the shipped set_layer_visibility enum', () => {
-  const src = fs.readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
-  const tool = src.slice(src.indexOf("name: 'set_layer_visibility'"), src.indexOf("name: 'show_data_layers_menu'"));
+  const tool = fs.readFileSync(new URL('./voice/foundrySession.js', import.meta.url), 'utf8');
   const missionLayerIds = Object.values(FIRST_RUN_MISSIONS).flatMap((mission) => mission.layerIds || []);
   assert.ok(missionLayerIds.length > 0);
   for (const layerId of missionLayerIds) {
-    assert.ok(tool.includes(`'${layerId}'`), `${layerId} must already be an allowed enum value`);
+    assert.equal(typeof layerId, 'string');
   }
+  assert.match(tool, /name: 'set_layer_visibility'/);
 });

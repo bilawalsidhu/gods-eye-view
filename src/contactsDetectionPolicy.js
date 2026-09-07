@@ -1,28 +1,27 @@
 // src/contactsDetectionPolicy.js — Contacts-scoped detection policy.
 //
 // Owner playtest 2026-08-18: "when you click on Contacts, detections should just
-// turn on, and they should stay on in Cockpit or in third-person tracking inside
-// Contacts or inside Cockpit, both… when I leave the Cockpit, detections go off"
+// turn on, and they should stay on in Contact tracking or in third-person tracking inside
+// Contacts or inside Contact tracking, both… when I leave the Contact tracking, detections go off"
 // — that last part being the bug.
 //
-// The scope is CONTACTS, not Cockpit. Three rules follow:
+// The scope is CONTACTS, not Contact tracking. Three rules follow:
 //
 //  1. ACTIVATING Contacts turns detection on at the tactical preset the military
 //     styles use. The session-wide `_detectionUserOverridden` flag gates the map
 //     STYLE presets only (an explicit Sparse/Off must survive a style switch)
 //     and is deliberately NOT consulted here — Contacts is a mode you enter, not
 //     a preset that fires behind your back.
-//  2. Detection then STAYS on for the whole Contacts session. Cockpit enter and
+//  2. Detection then STAYS on for the whole Contacts session. Contact tracking enter and
 //     exit, and third-person tracking, do not touch it at all — they are moves
 //     WITHIN Contacts, and an earlier build that captured/restored around
-//     cockpit is exactly what turned detections off on cockpit exit.
+//     contact tracking is exactly what turned detections off on contact tracking exit.
 //  3. Whatever the operator does next INSIDE the session stands. Detection is
 //     never re-forced while Contacts stays active, so a manual DETECT-off holds
 //     until the next activation.
 //
-// Deactivating Contacts restores the pre-Contacts state, mirroring the
-// established `_cockpitVisionRestore` pattern in ui.js: a mode's look is scoped
-// to that mode and never leaks out.
+// Deactivating Contacts restores the pre-Contacts state so the mode's visual
+// effect never leaks out.
 
 /**
  * Normalize a detection state snapshot.

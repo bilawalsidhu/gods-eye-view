@@ -8,7 +8,7 @@ import { getKeyholeGeometry } from './celestialRing.js';
  * "identity" passes progressively smeared the starfield into a circular
  * falloff — every grep for a mask came up empty because none existed. The
  * owner ruled: draw it explicitly on a canvas, make the edge featherable
- * (like the NVG/FLIR tube masks), and free the six shader passes for real.
+ * and keep post-processing independent from the mask.
  *
  * Implementation: one fixed canvas parented into the viewer container
  * BELOW the detection surface (z-index 2 < 5) so detection's

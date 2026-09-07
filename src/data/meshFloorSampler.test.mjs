@@ -117,7 +117,7 @@ test('sampler: a high camera or unloaded tiles produce no records at all', async
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), null, 'mid-stream tiles read coarse');
 });
 
-test('sampler: outside the google-3d regime nothing is sampled at all', () => {
+test('sampler: outside the mesh-surface regime nothing is sampled at all', () => {
   reset();
   const cell = nextSite();
   setMeshFloorPreferred(false);

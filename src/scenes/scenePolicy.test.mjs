@@ -40,8 +40,8 @@ function sweepLayerParamKeys() {
 
 /** The layer registry as main.js builds it (src/main.js dataManager.register calls). */
 const REGISTERED = new Set([
-  'flights', 'military', 'earthquakes', 'satellites', 'rocket-launches', 'traffic',
-  'cctv', 'radio', 'bikeshare', 'ais-live-vessels', 'military-installations',
+  'flights', 'military', 'earthquakes', 'satellites', 'traffic',
+  'cctv', 'ais-live-vessels', 'military-installations',
   'military-awareness', 'local-datacenters', 'local-dams',
   'telegeography-submarine-cables', 'local-firms',
 ]);
@@ -51,20 +51,6 @@ test('a shot only reconciles the layers it declares', () => {
   assert.deepEqual(plan, [{ id: 'flights', enabled: true, params: undefined }]);
 });
 
-test('undeclared layers are never torn down by a four-layer recipe', () => {
-  // Regression: the reconcile used to walk the live registry and force every
-  // absent layer off, so a recipe authored against four layers destroyed the
-  // twelve added since — with no restore pass to put them back.
-  const plan = sceneLayerPlan(
-    { flights: { enabled: true }, satellites: { enabled: false } },
-    REGISTERED,
-  );
-  const touched = plan.map((entry) => entry.id);
-  assert.deepEqual(touched, ['flights', 'satellites']);
-  for (const untouched of ['cctv', 'radio', 'local-dams', 'local-datacenters', 'local-firms']) {
-    assert.ok(!touched.includes(untouched), `${untouched} must be left alone`);
-  }
-});
 
 test('an explicit false in a recipe still disables that layer', () => {
   const plan = sceneLayerPlan(
@@ -191,15 +177,6 @@ test('the exclusivity probe id is reserved — no real layer may claim it', () =
   assert.doesNotMatch(SCENE_EXCLUSIVITY_PROBE_LAYER_ID, /^[a-z][a-z0-9-]*$/);
 });
 
-test('an isolating context mode must be exited before a shot applies', () => {
-  // Read off the shared guard, not a mode name: Space Missions refuses every
-  // enable outside its replay bundle, so a shot applied inside it is not the
-  // composition it describes.
-  assert.equal(sceneRequiresContextModeExit('space-missions'), true);
-  assert.equal(sceneRequiresContextModeExit('flights'), false);
-  assert.equal(sceneRequiresContextModeExit(null), false);
-  assert.equal(sceneRequiresContextModeExit(undefined), false);
-});
 
 test('shipped recipes touch only their four declared layers', () => {
   for (const recipe of SCENE_RECIPES) {

@@ -30,10 +30,7 @@
   </div>
 
   <!-- Style indicator -->
-  <div id="style-indicator">
-    <span class="indicator-label">ACTIVE STYLE</span>
-    <span class="indicator-value" id="active-style-name">NORMAL</span>
-  </div>
+  
 
   <!-- Top-center camera and share actions -->
   <nav id="top-center-actions" aria-label="Globe actions">
@@ -45,6 +42,9 @@
     </button>
     <button id="reset-globe-view" type="button" aria-label="Reset to full globe view" title="Reset camera and return to full globe view">
       <span class="material-symbols-outlined" aria-hidden="true">public</span>
+    </button>
+    <button id="drone-planner-open" type="button" aria-label="Open simulated drone mission planner" aria-controls="drone-mission-panel" aria-expanded="false" title="DRONE VIEW · SIMULATED / DEMO mission">
+      <span class="material-symbols-outlined" aria-hidden="true">flight_takeoff</span>
     </button>
   </nav>
   <div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" hidden>
@@ -60,6 +60,92 @@
     <span id="cctv-sync-progress">0/0</span>
   </div>
 
+  <aside id="drone-mission-panel" aria-labelledby="drone-mission-title" hidden>
+    <header class="drone-panel-header">
+      <div>
+        <span>SIMULATED / DEMO ONLY</span>
+        <h2 id="drone-mission-title">DRONE VIEW</h2>
+      </div>
+      <button id="drone-planner-close" type="button" aria-label="Close drone mission planner">×</button>
+    </header>
+    <p class="drone-provenance">Synthetic mission telemetry. Not a live aircraft, command link, or real-world flight.</p>
+
+    <section class="drone-planner-section" aria-labelledby="drone-route-heading">
+      <h3 id="drone-route-heading">MISSION ROUTE</h3>
+      <div class="drone-action-row">
+        <button id="drone-set-launch" type="button">SET LAUNCH</button>
+        <button id="drone-add-waypoint" type="button">ADD WAYPOINT</button>
+        <button id="drone-set-destination" type="button">SET DESTINATION</button>
+      </div>
+      <ol id="drone-route-points" aria-label="Ordered drone route points"></ol>
+      <label class="drone-check-row">
+        <input id="drone-destination-area" type="checkbox" />
+        Destination is an area
+      </label>
+      <label id="drone-radius-row" hidden>
+        Area radius (m)
+        <input id="drone-destination-radius" type="number" min="1" step="10" value="250" />
+      </label>
+      <div class="drone-action-row">
+        <button id="drone-cancel-pick" type="button" disabled>CANCEL PICK</button>
+        <button id="drone-clear-route" type="button">CLEAR</button>
+      </div>
+    </section>
+
+    <section class="drone-planner-section drone-settings" aria-labelledby="drone-profile-heading">
+      <h3 id="drone-profile-heading">TERRAIN-AWARE PROFILE</h3>
+      <label>Minimum clearance AGL (m)<input id="drone-min-clearance" type="number" min="0" step="5" value="60" /></label>
+      <label>Ground speed (m/s)<input id="drone-speed" type="number" min="0.1" step="1" value="15" /></label>
+      <label>Maximum climb (m/s)<input id="drone-max-climb" type="number" min="0.1" step="0.5" value="5" /></label>
+      <label>Maximum descent (m/s)<input id="drone-max-descent" type="number" min="0.1" step="0.5" value="4" /></label>
+      <button id="drone-plan-launch" class="drone-primary" type="button" disabled>REVIEW &amp; LAUNCH</button>
+      <div id="drone-launch-confirmation" class="drone-confirmation" role="alertdialog" aria-label="Confirm simulated drone launch" hidden>
+        <strong>CONFIRM DEMO LAUNCH</strong>
+        <p id="drone-launch-summary"></p>
+        <div class="drone-action-row">
+          <button id="drone-confirm-launch" class="drone-primary" type="button">CONFIRM &amp; SAMPLE TERRAIN</button>
+          <button id="drone-cancel-launch" type="button">CANCEL</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="drone-telemetry" class="drone-planner-section" aria-labelledby="drone-telemetry-heading" hidden>
+      <h3 id="drone-telemetry-heading">SIMULATED TELEMETRY</h3>
+      <progress id="drone-progress" max="1" value="0" aria-label="Mission progress"></progress>
+      <dl class="drone-telemetry-grid">
+        <div><dt>STATE</dt><dd data-drone-telemetry="state">—</dd></div>
+        <div><dt>LEG</dt><dd data-drone-telemetry="leg">—</dd></div>
+        <div><dt>PROGRESS</dt><dd data-drone-telemetry="progress">—</dd></div>
+        <div><dt>ALTITUDE</dt><dd data-drone-telemetry="altitude">—</dd></div>
+        <div><dt>CLEARANCE</dt><dd data-drone-telemetry="clearance">—</dd></div>
+        <div><dt>SPEED</dt><dd data-drone-telemetry="speed">—</dd></div>
+        <div><dt>REMAINING</dt><dd data-drone-telemetry="remaining">—</dd></div>
+        <div><dt>ETA</dt><dd data-drone-telemetry="eta">—</dd></div>
+        <div class="drone-position"><dt>POSITION</dt><dd data-drone-telemetry="position">—</dd></div>
+      </dl>
+      <label>Playback speed
+        <select id="drone-playback-speed">
+          <option value="0.5">0.5×</option>
+          <option value="1" selected>1×</option>
+          <option value="2">2×</option>
+          <option value="4">4×</option>
+        </select>
+      </label>
+      <div class="drone-action-row">
+        <button id="drone-pause" type="button" disabled>PAUSE</button>
+        <button id="drone-abort" type="button" disabled>ABORT</button>
+        <button id="drone-reset" type="button" disabled>RESET</button>
+        <button id="drone-replay" type="button" disabled>REPLAY</button>
+      </div>
+      <div class="drone-action-row">
+        <button id="drone-enter-view" class="drone-primary" type="button" hidden>ENTER DRONE VIEW</button>
+        <button id="drone-exit-view" type="button" hidden>EXIT DRONE VIEW</button>
+      </div>
+      <small>Click the simulated drone on the globe to track it.</small>
+    </section>
+    <p id="drone-mission-status" role="status" aria-live="polite">Select a launch point to begin a DEMO mission.</p>
+  </aside>
+
   <!-- Toast notification -->
   <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
@@ -67,291 +153,6 @@
   <div id="safe-frame-overlay">
     <div id="safe-frame-box"></div>
   </div>
-
-  <!-- Aircraft first-person view. It can be entered from the visible view switcher. -->
-  <section id="cockpit-hud" aria-label="Aircraft cockpit view" hidden>
-    <div class="cockpit-visor-shell" aria-hidden="true">
-      <div class="cockpit-roll-arc">
-        <span style="--slot:-3;--depth:3">−30</span>
-        <span style="--slot:-2;--depth:2">−20</span>
-        <span style="--slot:-1;--depth:1">−10</span>
-        <span class="active" style="--slot:0;--depth:0">0</span>
-        <span style="--slot:1;--depth:1">+10</span>
-        <span style="--slot:2;--depth:2">+20</span>
-        <span style="--slot:3;--depth:3">+30</span>
-      </div>
-      <div class="cockpit-pitch-rail cockpit-pitch-rail-left">
-        <span>+20</span><span>+10</span><span class="active">00</span><span>−10</span><span>−20</span>
-      </div>
-      <div class="cockpit-pitch-rail cockpit-pitch-rail-right">
-        <span>+20</span><span>+10</span><span class="active">00</span><span>−10</span><span>−20</span>
-      </div>
-      <div class="cockpit-horizon-guide">
-        <span></span><small>LEVEL</small><span></span>
-      </div>
-      <div id="cockpit-route-direction" class="cockpit-route-direction" hidden aria-label="Estimated destination direction">
-        <svg class="cockpit-route-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M12 2 4.58 19.93c-.34.83.51 1.63 1.31 1.27L12 18.47l6.11 2.73c.8.36 1.65-.44 1.31-1.27L12 2Z" />
-        </svg>
-        <small id="cockpit-route-direction-label">DEST ---°</small>
-      </div>
-      <div class="cockpit-visor-status cockpit-visor-status-left">OPTICAL PLANE · 01</div>
-      <div class="cockpit-visor-status cockpit-visor-status-right">VISOR LOCK · ACTIVE</div>
-    </div>
-    <div id="cockpit-speed-rim" class="cockpit-altitude-rim cockpit-speed-rim">
-      <span class="cockpit-altitude-rim-label">GROUND SPEED · KTS</span>
-      <div class="cockpit-altitude-rim-rail"></div>
-      <div class="cockpit-altitude-rim-scale">
-        <span data-speed-rim-tick><b></b><i></i></span>
-        <span data-speed-rim-tick><b></b><i></i></span>
-        <span data-speed-rim-tick><b></b><i></i></span>
-        <span data-speed-rim-tick><b></b><i></i></span>
-        <span data-speed-rim-tick><b></b><i></i></span>
-        <span data-speed-rim-tick><b></b><i></i></span>
-        <span data-speed-rim-tick><b></b><i></i></span>
-        <span data-speed-rim-tick><b></b><i></i></span>
-        <span data-speed-rim-tick><b></b><i></i></span>
-      </div>
-      <div class="cockpit-altitude-rim-pointer">
-        <span class="material-symbols-outlined">arrow_right</span>
-        <strong id="cockpit-speed-rim-value">---</strong>
-      </div>
-    </div>
-    <div id="cockpit-altitude-rim" class="cockpit-altitude-rim">
-      <span class="cockpit-altitude-rim-label">ALTITUDE · FT</span>
-      <div class="cockpit-altitude-rim-rail"></div>
-      <div class="cockpit-altitude-rim-scale">
-        <span data-altitude-rim-tick><b></b><i></i></span>
-        <span data-altitude-rim-tick><b></b><i></i></span>
-        <span data-altitude-rim-tick><b></b><i></i></span>
-        <span data-altitude-rim-tick><b></b><i></i></span>
-        <span data-altitude-rim-tick><b></b><i></i></span>
-        <span data-altitude-rim-tick><b></b><i></i></span>
-        <span data-altitude-rim-tick><b></b><i></i></span>
-        <span data-altitude-rim-tick><b></b><i></i></span>
-        <span data-altitude-rim-tick><b></b><i></i></span>
-      </div>
-      <div class="cockpit-altitude-rim-pointer">
-        <strong id="cockpit-altitude-rim-value">-----</strong>
-        <span class="material-symbols-outlined">arrow_left</span>
-      </div>
-    </div>
-    <div class="cockpit-topline">
-      <div>
-        <span class="cockpit-kicker">FIRST PERSON</span>
-        <strong id="cockpit-callsign">AIRCRAFT</strong>
-        <span id="cockpit-aircraft-meta" class="cockpit-aircraft-meta">LIVE TRACK · COURSE ALIGNED</span>
-      </div>
-      <div class="cockpit-vision-controls" role="group" aria-label="Cockpit vision style">
-        <button id="cockpit-vision-previous" class="cockpit-vision-nav" type="button" aria-label="Previous cockpit vision style" title="Previous vision style">
-          <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
-          <small>PREV</small>
-        </button>
-        <button id="cockpit-vision-current" class="cockpit-vision-current" type="button" data-cockpit-vision="optical" aria-label="Current cockpit vision style: NORMAL. Activate for next style." title="Current style: NORMAL — click for next">
-          <small>CURRENT</small>
-          <strong id="cockpit-vision-current-label" aria-live="polite">NORMAL</strong>
-        </button>
-        <button id="cockpit-vision-next" class="cockpit-vision-nav" type="button" aria-label="Next cockpit vision style" title="Next vision style">
-          <small>NEXT</small>
-          <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
-        </button>
-      </div>
-    </div>
-    <div class="cockpit-reticle material-symbols-outlined" aria-hidden="true">my_location</div>
-    <div class="cockpit-compass" aria-label="Current aircraft heading">
-      <div class="cockpit-instrument-row">
-        <div class="cockpit-readout cockpit-speed">
-          <span class="cockpit-readout-label">GROUND SPEED</span>
-          <strong id="cockpit-speed-value">---</strong>
-          <span class="cockpit-readout-unit">KTS</span>
-        </div>
-        <div class="cockpit-heading-value"><span id="cockpit-heading-value">---</span><small>°</small></div>
-        <div class="cockpit-readout cockpit-altitude">
-          <span class="cockpit-readout-label">ALTITUDE</span>
-          <strong id="cockpit-altitude-value">-----</strong>
-          <span class="cockpit-readout-unit">FT</span>
-        </div>
-      </div>
-      <span class="cockpit-heading-caret material-symbols-outlined" aria-hidden="true">arrow_drop_down</span>
-      <div class="cockpit-compass-tape" id="cockpit-compass-tape" aria-hidden="true"></div>
-    </div>
-    <div class="cockpit-position-readout">
-      <span id="cockpit-clock">--:--:--Z</span>
-      <span id="cockpit-position">--° · --°</span>
-    </div>
-    <aside id="cockpit-context" class="cockpit-context-window" aria-label="Contact cockpit summary" hidden>
-      <header class="cockpit-context-header">
-        <div>
-          <span class="cockpit-context-kicker">CONTACT</span>
-          <strong id="cockpit-context-subject">CONTACTS · 250 KM</strong>
-        </div>
-        <nav class="cockpit-context-actions" aria-label="Contact navigation">
-          <button id="cockpit-context-previous" type="button" aria-label="Previous — prior visited contact in the 250 km window" title="Previous — prior visited contact in the 250 km window">
-            <span class="material-symbols-outlined" aria-hidden="true">skip_previous</span>
-          </button>
-          <button id="cockpit-context-next" type="button" aria-label="Next — nearest unvisited contact in the 250 km window" title="Next — nearest unvisited contact in the 250 km window">
-            <span class="material-symbols-outlined" aria-hidden="true">skip_next</span>
-          </button>
-          <button id="cockpit-context-toggle" type="button" aria-label="Collapse Contact panel" aria-expanded="true" title="Collapse contact panel">
-            <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
-          </button>
-        </nav>
-        <span class="cockpit-context-qualifier">CONTEXT ONLY</span>
-      </header>
-      <div class="cockpit-context-cohorts" role="list" aria-label="Nearby cohort counts">
-        <div role="listitem" data-context-cohort="flights"><span>FLT</span><strong>—</strong><small>OpenSky</small></div>
-        <div role="listitem" data-context-cohort="military"><span>MIL</span><strong>—</strong><small>adsb.lol</small></div>
-        <div role="listitem" data-context-cohort="ais-live-vessels"><span>AIS</span><strong>—</strong><small>AISStream</small></div>
-        <div role="listitem" data-context-cohort="military-installations"><span>SITE</span><strong>—</strong><small>OpenStreetMap</small></div>
-      </div>
-      <div class="cockpit-context-nearest">
-        <span id="cockpit-context-direction" class="material-symbols-outlined" aria-hidden="true">navigation</span>
-        <div>
-          <small>NEAREST OBSERVED / MAPPED</small>
-          <strong id="cockpit-context-nearest-label">NO AVAILABLE EXAMPLE</strong>
-        </div>
-        <span id="cockpit-context-bearing">—</span>
-        <span id="cockpit-context-distance">—</span>
-      </div>
-      <footer class="cockpit-context-footer">
-        <span id="cockpit-context-uncertainty">AVAILABLE INPUTS ONLY · NOT AN ALL-CLEAR</span>
-        <button
-          id="cockpit-weather-toggle"
-          class="cockpit-context-weather"
-          type="button"
-          aria-label="Enable cockpit weather effects"
-          aria-pressed="false"
-          title="Enable cockpit weather effects"
-        >
-          <span>WX</span>
-          <strong id="cockpit-weather-state">OFF</strong>
-        </button>
-        <time id="cockpit-context-updated">--:--:--Z</time>
-      </footer>
-    </aside>
-    <aside id="cockpit-signal-stream" class="cockpit-signal-window" aria-label="Cockpit briefing carousel" hidden>
-      <section id="cockpit-route" class="cockpit-route-card" aria-label="Estimated flight plan" hidden>
-        <div class="cockpit-route-heading">
-          <span class="cockpit-route-kicker">ESTIMATED FLIGHT PLAN</span>
-          <small id="cockpit-route-status">ROUTE DATA UNAVAILABLE</small>
-        </div>
-        <div class="cockpit-route-endpoints">
-          <div class="cockpit-route-airport">
-            <span>FROM</span>
-            <strong id="cockpit-route-from">UNKNOWN</strong>
-          </div>
-          <span class="cockpit-route-arrow material-symbols-outlined" aria-hidden="true">east</span>
-          <div class="cockpit-route-airport">
-            <span>TO</span>
-            <strong id="cockpit-route-to">UNKNOWN</strong>
-          </div>
-        </div>
-      </section>
-      <header class="cockpit-signal-header">
-        <div class="cockpit-brief-heading">
-          <span id="cockpit-brief-kicker" class="cockpit-signal-kicker"><i aria-hidden="true"></i> LIVE SIGNALS</span>
-          <strong id="cockpit-brief-subtitle">OBSERVED / MAPPED PINGS</strong>
-        </div>
-        <nav class="cockpit-brief-actions" aria-label="Cockpit briefing controls">
-          <button id="cockpit-brief-previous" type="button" aria-label="Previous briefing page" title="Previous briefing page">
-            <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
-          </button>
-          <span id="cockpit-brief-position" aria-live="polite">1 / 3</span>
-          <button id="cockpit-brief-next" type="button" aria-label="Next briefing page" title="Next briefing page">
-            <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
-          </button>
-          <button
-            id="cockpit-brief-auto"
-            type="button"
-            aria-label="CYCLE OFF"
-            aria-pressed="false"
-            title="Cycle briefing pages automatically every 9 seconds (Signals → News → Local). Pauses while you hover or focus the panel. Live signal data refreshes continuously either way."
-          >CYCLE OFF</button>
-          <button id="cockpit-signal-toggle" type="button" aria-label="Collapse cockpit briefing panel" aria-expanded="true" title="Collapse briefing panel">
-            <span class="material-symbols-outlined" aria-hidden="true">right_panel_close</span>
-          </button>
-        </nav>
-      </header>
-      <div class="cockpit-brief-stage">
-        <section data-cockpit-brief-page="signals" aria-label="Live signals">
-          <ol id="cockpit-signal-list" class="cockpit-signal-list" aria-live="polite"></ol>
-        </section>
-        <section data-cockpit-brief-page="news" aria-label="Latest regional news" hidden>
-          <div id="cockpit-news-status" class="cockpit-brief-status">ACQUIRING REGIONAL NEWS</div>
-          <ol id="cockpit-news-list" class="cockpit-news-list" aria-live="polite"></ol>
-        </section>
-        <section data-cockpit-brief-page="local" aria-label="Location-based information" hidden>
-          <div class="cockpit-local-place">
-            <strong id="cockpit-local-place">RESOLVING REGION</strong>
-            <small id="cockpit-local-coordinates">--</small>
-          </div>
-          <div class="cockpit-local-grid">
-            <div><span>TEMP</span><strong id="cockpit-local-temperature">—</strong><small>OPEN-METEO</small></div>
-            <div><span>WIND</span><strong id="cockpit-local-wind">—</strong><small id="cockpit-local-wind-direction">—</small></div>
-            <div><span>SKY</span><strong id="cockpit-local-condition">UNKNOWN</strong><small id="cockpit-local-cloud">—</small></div>
-            <div><span>PRECIP</span><strong id="cockpit-local-precipitation">—</strong><small>MM</small></div>
-          </div>
-          <a class="cockpit-weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo.com</a>
-        </section>
-      </div>
-      <footer class="cockpit-signal-footer">
-        <span id="cockpit-brief-source">SOURCE-BACKED EVENTS · NO SYNTHETIC NEWS</span>
-        <nav class="cockpit-brief-tabs" aria-label="Cockpit briefing pages">
-          <button type="button" data-cockpit-brief-index="0" aria-label="Show Live Signals" aria-current="true">SIG</button>
-          <button type="button" data-cockpit-brief-index="1" aria-label="Show Regional News">NEWS</button>
-          <button type="button" data-cockpit-brief-index="2" aria-label="Show Local Info">LOCAL</button>
-        </nav>
-      </footer>
-    </aside>
-    <aside id="cockpit-utility-controls" class="cockpit-utility-controls" aria-label="Cockpit display and Radio controls">
-      <div class="cockpit-utility-control">
-        <div class="cockpit-utility-launcher" data-cockpit-launcher="display">
-          <span>DISPLAY</span>
-          <span class="cockpit-utility-divider" aria-hidden="true"></span>
-          <button id="cockpit-display-toggle-btn" class="cockpit-utility-glyph" type="button" aria-expanded="false" aria-controls="cockpit-display-panel" aria-label="Expand Cockpit display options" title="Expand Cockpit display options">◀</button>
-        </div>
-        <div id="cockpit-display-panel" class="cockpit-utility-popover" role="group" aria-label="Cockpit display options" hidden>
-          <div class="cockpit-display-slot" data-cockpit-display-slot="hud"></div>
-          <div class="cockpit-display-slot" data-cockpit-display-slot="detection"></div>
-          <div class="cockpit-display-slot" data-cockpit-display-slot="parameters"></div>
-          <div class="cockpit-display-slot" data-cockpit-display-slot="models3d"></div>
-        </div>
-      </div>
-      <div class="cockpit-utility-control">
-        <div class="cockpit-utility-launcher" data-cockpit-launcher="radio">
-          <span>RADIO</span>
-          <span class="cockpit-utility-divider" aria-hidden="true"></span>
-          <button id="cockpit-radio-toggle-btn" class="cockpit-utility-glyph" type="button" aria-expanded="false" aria-controls="cockpit-radio-panel" aria-label="Expand Cockpit Radio controls" title="Expand Cockpit Radio controls">◀</button>
-        </div>
-        <div id="cockpit-radio-panel" class="cockpit-utility-popover cockpit-radio-compact" role="group" aria-label="Cockpit compact Radio controls" hidden>
-          <strong id="cockpit-radio-station" class="cockpit-radio-station">READY</strong>
-          <button id="cockpit-radio-enable-btn" class="panel-layer-toggle" type="button" aria-pressed="false">ENABLE</button>
-          <div class="cockpit-radio-transport">
-            <button id="cockpit-radio-prev-btn" type="button" aria-label="Previous filtered radio station" disabled>◀◀</button>
-            <button id="cockpit-radio-play-btn" type="button" aria-label="Play selected radio station" disabled>▶</button>
-            <button id="cockpit-radio-next-btn" type="button" aria-label="Next filtered radio station" disabled>▶▶</button>
-          </div>
-          <label class="cockpit-radio-volume" for="cockpit-radio-volume">
-            <span>VOLUME</span>
-            <input id="cockpit-radio-volume" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Cockpit Radio volume" disabled />
-            <output id="cockpit-radio-volume-value" class="gev-slider-value" for="cockpit-radio-volume">80%</output>
-          </label>
-        </div>
-      </div>
-    </aside>
-    <div class="cockpit-help">ESC EXIT <span>·</span> C TOGGLE</div>
-  </section>
-
-  <nav id="view-switcher" aria-label="View switcher">
-    <button id="cockpit-reset-globe" type="button" aria-label="Reset cockpit to full globe view" title="Exit cockpit and return to full globe view" hidden>
-      <span class="material-symbols-outlined" aria-hidden="true">public</span>
-      <span>RESET</span>
-    </button>
-    <button id="map-view-switch" type="button" aria-label="Exit cockpit view" aria-keyshortcuts="Escape C" title="Exit cockpit view" hidden>
-      <span class="material-symbols-outlined" aria-hidden="true">close_fullscreen</span>
-      <span>EXIT COCKPIT</span>
-    </button>
-  </nav>
 
   <!-- Post-processing toggles (top-right) -->
   <div id="pp-toggles" class="panel-collapsible collapsed" data-panel-id="pp-toggles">
@@ -403,14 +204,7 @@
       </div>
     </div>
     <!-- The one shared preset-parameter surface is inserted here at runtime. -->
-    <div id="param-slider-panel">
-      <div class="param-panel-header">
-        <span class="param-panel-title">PARAMETERS</span>
-        <span class="param-panel-divider"></span>
-        <button class="panel-collapse-btn" id="param-panel-collapse-btn" data-collapse-target="param-slider-panel" title="Collapse panel">−</button>
-      </div>
-      <div id="param-sliders"></div>
-    </div>
+    
     <div class="pp-toggle-group">
       <!-- 3D aircraft is DEFAULT-ON in Proximity (owner directive 2026-08-22), so the
            button ships lit and the mode row ships open — the same markup-carries-the-default
@@ -477,57 +271,21 @@
   </div>
   <button id="clean-view-exit" title="Return UI controls">EXIT CLEAN VIEW</button>
 
-  <!-- Unified bottom command dock: locations, voice (injected at runtime), visual presets -->
-  <div id="command-dock" aria-label="Navigation, voice, and visual preset controls">
+  <!-- Unified bottom command dock: locations, voice (injected at runtime), map source -->
+  <div id="command-dock" aria-label="Navigation, voice, and map source controls">
   <!-- Control panel -->
   <div id="control-panel" class="panel-collapsible collapsed">
     <div class="panel-glow"></div>
     <div class="panel-inner">
       <button id="control-panel-toggle" class="panel-header dock-tray-toggle" type="button"
         data-dock-toggle-target="control-panel" aria-expanded="false"
-        aria-controls="control-panel-popover" aria-label="Expand Visual Presets">
-        <span class="panel-title"><span class="dock-label-icon dock-label-icon-presets" aria-hidden="true"></span>VISUAL PRESETS</span>
+        aria-controls="control-panel-popover" aria-label="Expand map sources">
+        <span class="panel-title"><span class="dock-label-icon dock-label-icon-presets" aria-hidden="true"></span>MAP SOURCE</span>
         <span class="panel-divider"></span>
       </button>
       <div id="control-panel-popover" class="dock-popover-content">
-      <button class="dock-pin-btn" data-pin-target="control-panel" type="button" aria-label="Pin visual presets" aria-pressed="false" title="Keep visual presets open"><img src="/pin.svg" alt="" /></button>
-      <div id="style-buttons" class="button-grid">
-        <button class="style-btn active" data-style="normal" title="Show the globe without a visual filter.">
-          <span class="btn-icon">◯</span>
-          <span class="btn-label">Normal</span>
-          <span class="btn-key">1</span>
-        </button>
-        <button class="style-btn" data-style="retro" title="Emulate a green phosphor CRT with scanlines and screen curvature.">
-          <span class="btn-icon">▦</span>
-          <span class="btn-label">CRT</span>
-          <span class="btn-key">2</span>
-        </button>
-        <button class="style-btn" data-style="surveillance" title="Simulate night-vision goggles with green intensification and a tube vignette.">
-          <span class="btn-icon">🌙</span>
-          <span class="btn-label">NVG</span>
-          <span class="btn-key">3</span>
-        </button>
-        <button class="style-btn" data-style="thermal" title="Simulate FLIR-style thermal contrast. Turn up Ironbow for color.">
-          <span class="btn-icon">🌡️</span>
-          <span class="btn-label">FLIR</span>
-          <span class="btn-key">4</span>
-        </button>
-        <button class="style-btn" data-style="anime" title="Apply bright cel-shaded color and illustrated outlines.">
-          <span class="btn-icon">✦</span>
-          <span class="btn-label">Anime</span>
-          <span class="btn-key">5</span>
-        </button>
-        <button class="style-btn" data-style="noir" title="Apply high-contrast monochrome film-noir grading.">
-          <span class="btn-icon">◐</span>
-          <span class="btn-label">Noir</span>
-          <span class="btn-key">6</span>
-        </button>
-        <button class="style-btn" data-style="snow" title="Add a cold, snowy whiteout treatment to the scene.">
-          <span class="btn-icon">❄</span>
-          <span class="btn-label">Snow</span>
-          <span class="btn-key">7</span>
-        </button>
-      </div>
+      <button class="dock-pin-btn" data-pin-target="control-panel" type="button" aria-label="Pin map sources" aria-pressed="false" title="Keep map sources open"><img src="/pin.svg" alt="" /></button>
+      
       <section class="map-source-section" aria-labelledby="map-source-label">
         <div class="map-source-heading">
           <span id="map-source-label">MAP SOURCE</span>
@@ -536,10 +294,7 @@
         <div id="map-stack-chips" class="map-stack-chip-row" role="group" aria-label="Map source"></div>
       </section>
       </div>
-      <div id="style-mini-status" class="panel-mini-status" aria-live="polite">
-        <span class="panel-mini-label">Style</span>
-        <span id="style-mini-value" class="panel-mini-value">NORMAL</span>
-      </div>
+      
     </div>
   </div>
 
@@ -690,36 +445,7 @@
         <div class="panel-header">
           <span class="panel-title">CONTEXT</span>
           <span class="panel-divider"></span>
-          <div id="context-radio-dock" class="context-radio-dock">
-            <button id="context-radio-toggle-btn" class="context-radio-toggle" type="button" aria-expanded="false" aria-controls="context-radio-mini" aria-label="Open compact Radio controls" title="Open compact Radio controls">
-              <span class="material-symbols-outlined" aria-hidden="true">radio</span>
-            </button>
-            <div id="context-radio-mini" class="context-radio-mini" role="group" aria-label="Compact Radio controls" hidden>
-              <div class="context-radio-mini-heading">
-                <span>RADIO</span>
-                <strong id="context-radio-mini-station">RADIO READY</strong>
-                <span class="context-radio-mini-actions">
-                  <button id="context-radio-details-btn" type="button" aria-label="Open detailed Radio controls" aria-expanded="false" aria-controls="radio-panel" title="Open detailed Radio controls">
-                    <span class="material-symbols-outlined" aria-hidden="true">open_in_full</span>
-                  </button>
-                  <button id="context-radio-mini-close-btn" type="button" aria-label="Close compact Radio controls" title="Close compact Radio controls">
-                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
-                  </button>
-                </span>
-              </div>
-              <button id="context-radio-mini-enable-btn" class="panel-layer-toggle" type="button" aria-pressed="false">ENABLE</button>
-              <div class="context-radio-mini-transport">
-                <button id="context-radio-mini-prev-btn" type="button" aria-label="Previous filtered radio station" title="Previous station" disabled>◀◀</button>
-                <button id="context-radio-mini-play-btn" type="button" aria-label="Play selected radio station" title="Play" disabled>▶</button>
-                <button id="context-radio-mini-next-btn" type="button" aria-label="Next filtered radio station" title="Next station" disabled>▶▶</button>
-              </div>
-              <label class="context-radio-mini-volume" for="context-radio-mini-volume">
-                <span>VOLUME</span>
-                <input id="context-radio-mini-volume" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Compact Radio volume" disabled />
-                <output id="context-radio-mini-volume-value" class="gev-slider-value" for="context-radio-mini-volume">80%</output>
-              </label>
-            </div>
-          </div>
+          
           <button class="panel-collapse-btn" data-collapse-target="global-context-panel" title="Expand panel">▶</button>
         </div>
         <div class="global-context-modes" role="tablist" aria-label="Context mode">
@@ -727,21 +453,14 @@
             <span class="material-symbols-outlined" aria-hidden="true">radar</span>
             <span>CONTACTS</span>
           </button>
-          <button id="global-context-missions-btn" class="context-mode-button" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="context-missions-view">
-            <span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span>
-            <span>SPACE MISSIONS</span>
-          </button>
+          
         </div>
         <div id="context-mode-standby" class="context-mode-standby">
           <strong>SELECT CONTEXT</strong>
-          <span>CONTACTS — nearest planes · vessels · sites<br>SPACE MISSIONS — launches &amp; orbital assets</span>
+          <span>CONTACTS — nearest planes · vessels · sites</span>
         </div>
         <section id="context-flights-view" class="context-mode-view" role="tabpanel" aria-labelledby="global-context-flights-btn" hidden>
           <div class="global-context-actions" aria-label="Contact Context actions">
-            <button id="cockpit-entry" type="button" hidden>
-              <span class="material-symbols-outlined" aria-hidden="true">flight</span>
-              <span>COCKPIT</span>
-            </button>
             <button id="installations-search-btn" class="panel-layer-toggle" type="button">SEARCH NEARBY SITES</button>
             <button id="tr3b-toggle" class="tr3b-toggle" type="button" aria-pressed="false" hidden aria-label="Reclassify tracked contact as TR-3B" title="Reclassify as TR-3B">🛸</button>
           </div>
@@ -752,77 +471,8 @@
             </div>
           </aside>
         </section>
-        <section id="context-missions-view" class="context-mode-view" role="tabpanel" aria-labelledby="global-context-missions-btn" hidden>
-          <div id="space-mission-panel-host">
-            <div id="space-mission-roster" class="space-mission-roster" aria-label="Available Space Missions">
-              <div class="space-mission-roster-header">
-                <div>
-                  <strong>AVAILABLE MISSIONS</strong>
-                  <span>SELECT A MISSION TO INSPECT</span>
-                </div>
-                <output data-mission-roster-count>—</output>
-              </div>
-              <div class="space-mission-roster-list" data-mission-roster-list>
-                <div class="space-mission-roster-empty">LOADING 30-DAY MISSION INDEX</div>
-              </div>
-            </div>
-          </div>
-        </section>
-        <section id="radio-panel" class="panel-collapsible collapsed" data-panel-id="radio-panel" aria-label="Internet radio companion">
-          <div class="radio-panel-inner">
-            <div class="panel-header">
-              <span class="panel-title">RADIO</span>
-              <span id="radio-layer-state" class="radio-layer-state">OFF</span>
-              <span class="panel-divider"></span>
-              <button class="panel-collapse-btn" data-collapse-target="radio-panel" title="Expand Radio" aria-label="Expand Radio section">+</button>
-            </div>
-            <div class="radio-directory-row">
-              <button id="radio-enable-btn" class="panel-layer-toggle" type="button" aria-pressed="false">ENABLE</button>
-              <label class="radio-filter-label" for="radio-filter">STATION TAG</label>
-              <select id="radio-filter" aria-label="Filter stations by station tag" disabled>
-                <option value="all">All</option>
-              </select>
-            </div>
-            <div id="radio-station-card" class="radio-station-card" aria-live="polite">
-              <strong id="radio-station-name">NO STATION SELECTED</strong>
-              <span id="radio-station-meta">Enable Radio, then choose a globe marker or use next.</span>
-              <span id="radio-station-tags"></span>
-            </div>
-            <div id="radio-tuner" class="radio-tuner" hidden>
-              <div class="radio-tuner-header">
-                <span id="radio-tuner-band-label">DIRECTORY BAND</span>
-                <output id="radio-tuner-value" for="radio-tuner-slider">DRAG TO TUNE</output>
-              </div>
-              <div class="radio-tuner-dial">
-                <div class="radio-tuner-scale" aria-hidden="true"></div>
-                <div id="radio-tuner-needle" class="radio-tuner-needle" aria-hidden="true"></div>
-                <input id="radio-tuner-slider" type="range" min="0" max="0" step="1" value="0"
-                  aria-label="Tune available internet radio stations" aria-valuetext="No station available" disabled />
-              </div>
-              <div class="radio-tuner-readout">
-                <span id="radio-tuner-station">ALL · DRAG THE NEEDLE</span>
-                <span>SNAPS TO AVAILABLE STATIONS</span>
-              </div>
-            </div>
-            <div class="radio-transport" role="group" aria-label="Radio playback">
-              <button id="radio-prev-btn" type="button" aria-label="Previous filtered station" disabled>PREV</button>
-              <button id="radio-play-btn" type="button" aria-label="Play selected station" disabled>PLAY</button>
-              <button id="radio-next-btn" type="button" aria-label="Next filtered station" disabled>NEXT</button>
-              <button id="radio-stop-btn" type="button" aria-label="Stop radio playback" disabled>STOP</button>
-            </div>
-            <label class="radio-volume-row" for="radio-volume">
-              <span>VOLUME</span>
-              <input id="radio-volume" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Radio volume" />
-              <output id="radio-volume-value" class="gev-slider-value" for="radio-volume">80%</output>
-            </label>
-            <div id="radio-playback-state" class="radio-playback-state" role="status" aria-live="polite">Radio off</div>
-            <div class="radio-links">
-              <a id="radio-station-homepage" href="#" target="_blank" rel="noopener noreferrer" hidden>STATION SITE</a>
-              <a href="https://www.radio-browser.info/" target="_blank" rel="noopener noreferrer">DIRECTORY: RADIO BROWSER</a>
-            </div>
-            <p class="radio-privacy">Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.</p>
-          </div>
-        </section>
+        
+        
       </div>
     </div>
   </aside>
@@ -843,18 +493,14 @@
          — including the unspaced em dash. The arc it has to carry: this looks
          like something you should not have access to → the sources are all
          public → the data is real. Tile subcopy stays purely functional. -->
-    <p id="first-run-description">It feels like a forbidden cockpit—then you realize the sources are public and the data is real.</p>
+    <p id="first-run-description">It feels like a forbidden command center—then you realize the sources are public and the data is real.</p>
     <div class="first-run-choices">
       <button type="button" data-first-run-choice="contacts">
         <span class="material-symbols-outlined" aria-hidden="true">radar</span>
         <span><strong>LIVE CONTACTS</strong><small>Aircraft, vessels and nearby intelligence</small></span>
         <span class="material-symbols-outlined first-run-arrow" aria-hidden="true">arrow_forward</span>
       </button>
-      <button type="button" data-first-run-choice="space-missions">
-        <span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span>
-        <span><strong>SPACE MISSIONS</strong><small>Launches, spacecraft and orbital context</small></span>
-        <span class="material-symbols-outlined first-run-arrow" aria-hidden="true">arrow_forward</span>
-      </button>
+      
       <button type="button" data-first-run-choice="environmental">
         <span class="material-symbols-outlined" aria-hidden="true">local_fire_department</span>
         <!-- Title text is painted from ENVIRONMENTAL_LABEL_CHOICE at init. -->
@@ -882,32 +528,6 @@
     <p class="first-run-note" data-first-run-status role="status" aria-live="polite">Tip: the GEV MIC button in the dock lets you talk to the map.</p>
   </aside>
 
-  <!-- POWER UP — in-app key setup. Dev-server only: src/keySetup.js removes
-       both the chip and this dialog outright when /api/setup/status is not
-       there to answer (prod builds, LAN visitors). Rows are rendered from
-       that payload, so the key registry lives in src/keySetupCore.mjs alone. -->
-  <button id="key-setup-chip" type="button" hidden aria-haspopup="dialog" aria-controls="key-setup">
-    <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
-    <span data-key-setup-chip-label>POWER UP</span>
-  </button>
-  <aside id="key-setup" role="dialog" aria-labelledby="key-setup-title" aria-describedby="key-setup-description" hidden>
-    <div class="key-setup-scanline" aria-hidden="true"></div>
-    <header class="key-setup-header">
-      <span class="key-setup-kicker">GROUND STATION · PROVIDER SETTINGS</span>
-      <button type="button" class="key-setup-close" data-key-setup-close aria-label="Close key setup">
-        <span class="material-symbols-outlined" aria-hidden="true">close</span>
-      </button>
-    </header>
-    <h2 id="key-setup-title">Power up the globe</h2>
-    <p id="key-setup-description">The globe already flies keyless. Every key below switches on another real feed — paste one and it's saved into this app's local configuration, then the server restarts itself. Server-side keys stay on this machine; Google Maps and Cesium ion run in the browser and must be provider-restricted. Keys you configured elsewhere are shown but never touched.</p>
-    <div class="key-setup-rows" data-key-setup-rows></div>
-    <div class="key-setup-footer">
-      <button type="button" class="key-setup-apply" data-key-setup-apply>SAVE KEYS</button>
-      <span class="key-setup-hint">ESC to close</span>
-    </div>
-    <p class="key-setup-note" data-key-setup-status role="status" aria-live="polite">The Google Maps key buys the photorealistic planet — everything else stacks on top.</p>
-  </aside>
-
   <!-- Intelligence HUD Overlay -->
   <div id="intel-hud"></div>
 
@@ -916,7 +536,7 @@
     <div class="loader-content">
       <span class="loader-logo brand-logo" data-logo-gaze data-logo-src="/logo.svg" aria-hidden="true"><img src="/logo.svg" alt="" /></span>
       <h2>GOD'S EYE <span class="title-accent">VIEW</span></h2>
-      <p class="loader-status">Initializing photorealistic world...</p>
+      <p class="loader-status">Initializing terrain and map imagery...</p>
     </div>
   </div>
 

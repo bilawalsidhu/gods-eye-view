@@ -5,7 +5,7 @@
  * at oblique pitch, and centering the fetch box on the RECTANGLE MIDPOINT put
  * road fetches tens of km from what the user is actually looking at. The fetch
  * center is now derived from the camera's look-at ground point
- * (`camera.pickEllipsoid` at canvas center — the globe is hidden under Google
+ * (`camera.pickEllipsoid` at canvas center — the globe may be hidden under legacy geometry
  * 3D tiles, so `scene.globe.pick` is not reliable), falling back to the camera
  * nadir, and pulled back toward nadir when the look-at point is beyond a
  * horizon-gaze cap. Kept Cesium-free so it can be unit-tested with node:test.

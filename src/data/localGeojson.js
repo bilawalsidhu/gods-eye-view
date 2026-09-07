@@ -24,7 +24,7 @@ const LOCAL_OVERLAY_FADE_START_M = 250000;
 const LOCAL_OVERLAY_FADE_START_RATIO = LOCAL_OVERLAY_FADE_START_M / LOCAL_OVERLAY_MAX_DISTANCE_M;
 // Stems are anchored at ellipsoid height 0, but high-elevation features
 // (e.g. dams in river canyons) sit hundreds of meters above the ellipsoid,
-// burying the short close-in stem inside the photoreal mesh. Once the
+// burying the short close-in stem inside the rendered-mesh mesh. Once the
 // camera is near enough for tiles to be loaded, sample the real surface
 // height once per feature and lift the stem onto it.
 const GROUND_SAMPLE_MAX_DISTANCE_M = 75000;
@@ -526,7 +526,7 @@ export function createLocalGeoJsonLayer({
               color: baseColor,
               outlineColor: Cesium.Color.BLACK,
               outlineWidth: 2,
-              // Never depth-cull the anchor against the photoreal mesh —
+              // Never depth-cull the anchor against the rendered-mesh mesh —
               // globe-horizon culling is handled by the pre-render occluder.
               disableDepthTestDistance: Number.POSITIVE_INFINITY,
             });

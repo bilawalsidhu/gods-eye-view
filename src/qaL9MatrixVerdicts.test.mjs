@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   PASS, PASS_SKIPS, FAIL, CRASH, SKIP, OUTCOMES,
-  normalizeVerdict, classifyNoScoreboard, readResultLine, readCockpit,
+  normalizeVerdict, classifyNoScoreboard, readResultLine,
   readFloorVerdict, keyGuard, applyKnownConditions, requiredCreditFor, satisfiesEngines,
   isCalibratedAllocationRuntime, trafficFlowInconclusive,
   CREDIT_EXPECTATIONS, CREDIT_EXEMPT_LAYERS,
@@ -96,14 +96,12 @@ test('a duplicated scoreboard is a crash — which run is it reporting?', () => 
   assert.match(v.detail, /duplicated/i);
 });
 
-test('duplicate cockpit and floor verdicts are crashes too', () => {
-  assert.equal(readCockpit(run({ out: 'RESULT: READY (0 failures)\nRESULT: NOT_READY (2 failures)' })).status, CRASH);
+test('duplicate floor verdicts are crashes', () => {
   assert.equal(readFloorVerdict(run({ out: 'VERDICT: PASS\nVERDICT: FAIL' })).status, CRASH);
 });
 
 test('a single well-formed line still parses, indentation and all', () => {
   assert.equal(readResultLine(run({ out: 'noise\n  RESULT: 8 passed, 0 failed  \nmore noise' })).status, PASS);
-  assert.equal(readCockpit(run({ out: '  RESULT: READY (0 failures)' })).status, PASS);
   assert.equal(readFloorVerdict(run({ out: 'low contacts...\nVERDICT: PASS' })).status, PASS);
 });
 
@@ -157,18 +155,6 @@ test('a traffic result that landed empty keeps failing', () => {
   assert.equal(trafficFlowInconclusive({ mode: 'sim', tilesFetched: 0, loading: true }), false,
     'the keyless branch has its own verdict');
   assert.equal(trafficFlowInconclusive(null), false);
-});
-
-// ── finding 6: contradictory cockpit output ───────────────────────────────
-test('READY with a nonzero failure count is contradictory, not a pass', () => {
-  const v = readCockpit(run({ out: 'RESULT: READY (3 failures)' }));
-  assert.equal(v.status, CRASH);
-  assert.match(v.detail, /contradictory/i);
-});
-
-test('cockpit READY passes only at zero failures', () => {
-  assert.equal(readCockpit(run({ out: 'RESULT: READY (0 failures)' })).status, PASS);
-  assert.equal(readCockpit(run({ out: 'RESULT: NOT_READY (2 failures)' })).status, FAIL);
 });
 
 // ── the floor oracle's preconditions ──────────────────────────────────────

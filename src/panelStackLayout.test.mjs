@@ -8,34 +8,34 @@ import {
   resolvePanelStackCorridor,
 } from './panelStackLayout.js';
 
-// Measured in Cockpit at 1512x790: CONTACT card at y541, HUD corner at y659,
+// Measured in immersive view at 1512x790: CONTACT card at y541, HUD corner at y659,
 // Cesium credits at y758, viewport inset boundary at y758.4. Every surface is
-// a hard boundary even when a standard map panel is reopened in Cockpit.
-const cockpitLane = {
+// a hard boundary even when a standard map panel is reopened in immersive view.
+const immersiveLane = {
   baseBottom: 758.4,
   safeGap: 9.5,
   obstacles: [
-    { top: 541.2, cockpitOverlay: true },
-    { top: 659, cockpitOverlay: true },
-    { top: 758, cockpitOverlay: false },
+    { top: 541.2, immersiveOverlay: true },
+    { top: 659, immersiveOverlay: true },
+    { top: 758, immersiveOverlay: false },
   ],
 };
 
 test('every left-lane obstacle shortens the corridor', () => {
   assert.equal(
-    resolveLeftStackBottomBoundary(cockpitLane),
+    resolveLeftStackBottomBoundary(immersiveLane),
     531.7,
   );
 });
 
-test('an expanded Cockpit panel remains above the Contact and HUD surfaces', () => {
+test('an expanded immersive view panel remains above the Contact and HUD surfaces', () => {
   assert.equal(
-    resolveLeftStackBottomBoundary(cockpitLane),
+    resolveLeftStackBottomBoundary(immersiveLane),
     531.7,
   );
 });
 
-test('the Cesium credit line limits the corridor even in Cockpit', () => {
+test('the Cesium credit line limits the corridor even in immersive view', () => {
   const boundary = resolveLeftStackBottomBoundary({
     baseBottom: 900,
     safeGap: 9.5,
@@ -104,7 +104,7 @@ test('Tactical focus preserves the primary panel and collapses later competitors
   }), [1, 2]);
 });
 
-test('viewport growth retains the aligned corridor when midpoint centering would cross Cockpit panels', () => {
+test('viewport growth retains the aligned corridor when midpoint centering would cross immersive view panels', () => {
   assert.deepEqual(resolvePanelStackCorridor({
     viewportHeight: 1026,
     safeTop: 266.76,
@@ -159,7 +159,6 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
     /panel\.id === this\._rightStackPreferredPanelId[\s\S]*?\[preferredExpandedPanel, \.\.\.expandedPanelsInDomOrder/,
     'the latest explicitly opened right panel must receive primary allocation',
   );
-  assert.match(ui, /panelId === 'radio-panel'[\s\S]*?document\.getElementById\('global-context-panel'\)/);
   assert.match(ui, /focusedExpandedPanel = expandedPanelsInDomOrder\.find\(\(panel\) => panel\.contains\(document\.activeElement\)\)/);
   assert.match(ui, /setAttribute\('aria-expanded', String\(!collapsed\)\)/);
   assert.match(ui, /--left-panel-allocated-height/);
@@ -204,30 +203,8 @@ test('share-panel state excludes responsive collapse and preserves recipient pre
     /_setCommandDockPanelPinState[\s\S]*?if \(syncShare\) this\.shareLinkManager\?\.onPanelStateChange\?\.\(\);/,
     'pin and unpin must update the share hash even when collapse state is unchanged',
   );
-  assert.match(ui, /\{ id: 'param-slider-panel' \}/);
-  assert.match(sharelink, /\{ id: 'param-slider-panel', token: 'm', pinnable: false \}/);
-});
-
-test('parameterized Display presets keep one stable scroll owner', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-
-  assert.match(css, /#pp-toggles:not\(\.collapsed\) > #param-slider-panel\.active\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?max-height:\s*none;[\s\S]*?overflow-y:\s*visible;/);
-  assert.match(ui, /const displayScrollTop = this\._displayPortalScrollRestoreOwner === 'standard'[\s\S]*?this\._standardDisplayScrollTop[\s\S]*?this\._ppToggles\?\.scrollTop \|\| 0/);
-  assert.match(ui, /this\._ppToggles\.scrollTop = Math\.min\(displayScrollTop, maxScrollTop\);/);
-  assert.match(
-    ui,
-    /this\._sliderPanel\.classList\.remove\('active'\);\s*this\._scheduleRightPanelLayout\(\);/,
-  );
-  assert.match(
-    ui,
-    /this\._sliderPanel\.classList\.add\('active'\);\s*this\._scheduleRightPanelLayout\(\);/,
-  );
-  assert.match(
-    css,
-    /\.param-slider\s*\{[\s\S]*?flex:\s*1;[\s\S]*?min-width:\s*0;/,
-    'parameter sliders must shrink before their value column can overflow',
-  );
+  assert.doesNotMatch(ui, /\{ id: 'param-slider-panel' \}/);
+  assert.doesNotMatch(sharelink, /\{ id: 'param-slider-panel'/);
 });
 
 test('expanded Display uses its container shell instead of a nested header card', () => {
@@ -281,9 +258,5 @@ test('expanded right panels highlight the title divider without changing collaps
   assert.match(
     css,
     /#right-context-rail \[data-panel-id\]:not\(\.collapsed\) \.panel-divider\s*\{[\s\S]*?linear-gradient\(90deg, rgb\(0 212 255 \/ 28%\), rgba\(0, 212, 255, 0\.18\) 58%, transparent\)[\s\S]*?box-shadow:\s*0 0 7px rgba\(0, 212, 255, 0\.22\);/,
-  );
-  assert.match(
-    css,
-    /#param-slider-panel:not\(\.collapsed\) \.param-panel-divider\s*\{[\s\S]*?linear-gradient\(90deg, rgb\(0 212 255 \/ 28%\), rgba\(0, 212, 255, 0\.18\) 58%, transparent\);/,
   );
 });

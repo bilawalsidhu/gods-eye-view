@@ -11,7 +11,7 @@ const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui.js'), 'utf8');
 /*
  * Required-attribution keep-out pin.
  *
- * Google Maps Platform and Cesium both require the credit line to stay visible
+ * Map and data providers require the credit line to stay visible
  * whenever their content is on screen, so this pin FAILS CLOSED: any cascade
  * construct it cannot resolve exactly is an explicit failure naming the
  * construct, never a silent skip. An earlier version modelled `bottom` only and
@@ -590,5 +590,5 @@ test('the credit line is never suppressed to make room', () => {
     assert.doesNotMatch(block, /visibility\s*:\s*hidden/, 'the credit must never be hidden');
     assert.doesNotMatch(block, /opacity\s*:\s*0(\D|$)/, 'the credit must never be faded out');
   }
-  assert.match(css, /body\.ui-clean-view #cesium-credits,\s*\n\s*body\.recording-mode #cesium-credits \{[^}]*bottom: 36px;/);
+  assert.match(css, /body\.ui-clean-view #cesium-credits,[\s\S]*?body\.recording-mode #cesium-credits\s*\{[^}]*bottom: 36px;/);
 });

@@ -39,10 +39,10 @@ remain subject to their own licenses and terms. Notably:
   - NASA FIRMS active-fire snapshot: CC0 / U.S. public domain (citation
     requested).
 
-Live sources (Google Maps, OpenSky, adsb.lol, AISStream, CelesTrak, USGS,
-OSM Overpass, City of Austin, GBFS) are fetched at runtime under each
-provider's terms; some (e.g. Google Maps, OpenSky) restrict commercial use
-and require you to supply your own credentials.
+Live sources (Azure Maps, OpenSky, adsb.lol, AISStream, CelesTrak, USGS,
+OSM, Open-Meteo, Google News RSS, City of Austin, Caltrans, and TfL) are
+fetched at runtime under each provider's terms. Some restrict commercial use
+or require separately provisioned access.
 
 In short: the MIT grant does not extend to any third-party data. See
 DATA_SOURCES.md for the full per-source license + attribution summary, and

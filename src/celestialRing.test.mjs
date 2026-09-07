@@ -9,7 +9,6 @@ import {
   earthDiscScreenRadius,
   getKeyholeFadeTuning,
   getKeyholeGeometry,
-  isCelestialRingStyleSupported,
   isFullGlobeInsideKeyhole,
   keyholeLabelAlpha,
   normalizeAngle,
@@ -83,13 +82,6 @@ test('angle normalization wraps both directions', () => {
 test('circular angle distance remains small across the wrap point', () => {
   assert.ok(Math.abs(circularAngleDistance(0.04, Math.PI * 2 - 0.03) - 0.07) < 1e-9);
   assert.ok(Math.abs(circularAngleDistance(0, Math.PI) - Math.PI) < 1e-9);
-});
-
-test('celestial ring is available only in Normal style', () => {
-  assert.equal(isCelestialRingStyleSupported('normal'), true);
-  for (const style of ['retro', 'surveillance', 'thermal', 'anime', 'noir', 'snow']) {
-    assert.equal(isCelestialRingStyleSupported(style), false);
-  }
 });
 
 test('sun and moon bearings are independent rather than forced opposite', () => {

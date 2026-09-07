@@ -58,7 +58,7 @@
  * empty second at all, so the bounded wait expires and FAILS. Quiet that never
  * arrives IS the failure, which is why the timeout is an assertion rather than a
  * fall-through — and it is what keeps this honest if the churn ever stops being a
- * one-shot. It would: when `/api/openai/hud-summary` is unreachable the summary
+ * one-shot. It would: when `/api/azure/foundry/hud-summary` is unreachable the summary
  * stays dirty and re-types every 15 s, so that machine gets a loud repeatable
  * failure here rather than a coin flip.
  *
@@ -322,7 +322,7 @@ try {
   check('real slider mutation while idle renders ≥1 and ≤10 frames', afterMutation.renders >= 1 && afterMutation.renders <= 10, afterMutation);
 
   // ── 2b. animated style cycle: style-anim holds, then releases ─────────
-  await page.evaluate(() => { window.__godsEyeView.styleManager.setStyle('retro'); });
+  await page.evaluate(() => { window.__godsEyeView.styleManager.setStyle('normal'); });
   await new Promise((r) => setTimeout(r, 900)); // crossfade + first ticks
   const dAnim = await diag();
   check('animated style takes the style-anim hold (continuous)', dAnim?.mode === 'continuous' && dAnim.holds.includes('style-anim'), dAnim);

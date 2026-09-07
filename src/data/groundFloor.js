@@ -377,7 +377,7 @@ export function allocateCorridorCells(
 }
 
 // --- Mesh-floor cells (round 4, owner-approved design) ---------------------
-// The Re:Earth DEM is BARE EARTH; the visible world in the google-3d regime
+// The Re:Earth DEM is BARE EARTH; the visible world in the mesh-surface regime
 // is the photogrammetric MESH, which sits above it (measured ~17 m at the
 // Austin airport apron). DEM-flooring therefore still buried sprites/trails
 // inside the mesh. These cells hold the RENDERED surface height, sampled
@@ -388,14 +388,14 @@ export function allocateCorridorCells(
 // the instant global prior/fallback and the sanity gate for samples.
 /** @type {Map<string, number>} coarse cell key -> rendered-surface height (m, ellipsoidal). */
 const _meshCells = new Map();
-/** @type {boolean} Whether mesh cells apply — true only in the google-3d
- *  regime (photoreal stack). On globe stacks the rendered surface IS the
+/** @type {boolean} Whether mesh cells apply — true only in the mesh-surface
+ *  regime (rendered-mesh stack). On globe stacks the rendered surface IS the
  *  terrain provider (Re:Earth on keyless), so the DEM is already correct
  *  there and mesh heights would float. Kept current by meshFloorSampler's
- *  'gev:map-stack-changed' listener. Photoreal is the boot default. */
+ *  'gev:map-stack-changed' listener. Rendered-mesh is the boot default. */
 let _meshPreferred = true;
 
-/** @param {boolean} preferred - google-3d regime active. */
+/** @param {boolean} preferred - mesh-surface regime active. */
 export function setMeshFloorPreferred(preferred) {
   _meshPreferred = !!preferred;
 }
@@ -443,7 +443,7 @@ export function reportValidatedMeshFloorCell(lat, lon, heightM) {
 
 /**
  * Synchronous mesh-cell read — null when the cell is unsampled OR the
- * google-3d regime is inactive (globe stacks must floor on the DEM).
+ * mesh-surface regime is inactive (globe stacks must floor on the DEM).
  * @param {number} lat @param {number} lon
  * @returns {number|null}
  */
@@ -462,7 +462,7 @@ export function _clearMeshFloorCellsForTest() {
 
 /**
  * Synchronous coarse-cell ground read (warm cache only — never a fetch).
- * Prefers the RENDERED-surface mesh cell (google-3d regime) and falls back
+ * Prefers the RENDERED-surface mesh cell (mesh-surface regime) and falls back
  * to the Re:Earth DEM cell — the single choke point every ground-adjacent
  * consumer (fleet clamp, grounded surface chain, trail floors) reads, so
  * they all agree on one surface.

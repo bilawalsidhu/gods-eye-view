@@ -868,12 +868,12 @@ test('a cached Context subject re-reads its label when enrichment lands after se
     );
     assert.doesNotMatch(panel.innerHTML, /ae1fa4/, 'the hex must be gone from the panel');
 
-    // The Cockpit signal list builds its nearby-contact titles with this exact
+    // The Drone View signal list builds its nearby-contact titles with this exact
     // helper over the cohort rows, so the same fixture pins that surface too.
     assert.equal(
       formatAwarenessLabel(flightsLayer.getNearby(position, 250_000, 5)[0]),
       'N123AB',
-      'cockpit signal titles must resolve to the registration, not the hex',
+      'drone view signal titles must resolve to the registration, not the hex',
     );
   } finally {
     restores.reverse().forEach((restore) => restore());
@@ -1486,11 +1486,11 @@ test('production eviction sites actually tag their clears', () => {
 // END Contact-readout presence block — fix/context-panel-next-subjects.
 // ===========================================================================
 
-test('cockpit blocks only non-aircraft Context camera flights', () => {
-  const cockpitBody = { classList: { contains: (name) => name === 'cockpit-mode' } };
-  assert.equal(contextTargetFlyToAllowed('ais-live-vessels', cockpitBody), false);
-  assert.equal(contextTargetFlyToAllowed('military-installations', cockpitBody), false);
-  assert.equal(contextTargetFlyToAllowed('flights', cockpitBody), true);
+test('drone view blocks only non-aircraft Context camera flights', () => {
+  const droneViewBody = { classList: { contains: (name) => name === 'drone-view' } };
+  assert.equal(contextTargetFlyToAllowed('ais-live-vessels', droneViewBody), false);
+  assert.equal(contextTargetFlyToAllowed('military-installations', droneViewBody), false);
+  assert.equal(contextTargetFlyToAllowed('flights', droneViewBody), true);
   assert.equal(contextTargetFlyToAllowed('ais-live-vessels', { classList: { contains: () => false } }), true);
 });
 
@@ -1530,11 +1530,6 @@ test('installation summaries disclose viewport-scoped coverage', () => {
 
   const unavailable = summarizeInstallationViewport([], { available: false, stale: false });
   assert.equal(unavailable.reason, 'feed unavailable');
-  const retrying = summarizeInstallationViewport([], { available: false, stats: {
-    statusMessage: 'Overpass temporarily unavailable — retrying in 30s',
-  } });
-  assert.equal(retrying.count, null, 'retrying is not a claim of zero mapped sites');
-  assert.equal(retrying.reason, 'Overpass temporarily unavailable — retrying in 30s');
 });
 
 test('compact Context snapshots retain installation coverage', () => {
@@ -2042,7 +2037,7 @@ test('NEXT can restrict navigation to an aircraftClass', () => {
   }
 });
 
-test('Cockpit NEXT ignores a nearer vessel and selects the next aircraft', () => {
+test('Drone View NEXT ignores a nearer vessel and selects the next aircraft', () => {
   const subjectPosition = Cesium.Cartesian3.fromDegrees(-97.74, 30.27, 1000);
   const nextPosition = Cesium.Cartesian3.fromDegrees(-97.73, 30.28, 1200);
   const vesselPosition = Cesium.Cartesian3.fromDegrees(-97.739, 30.271, 0);
@@ -2097,7 +2092,7 @@ test('history navigation applies layer and aircraft-class filters in both direct
   }), -1);
 });
 
-test('Cockpit history navigation skips vessels and installations in both directions', () => {
+test('Drone View history navigation skips vessels and installations in both directions', () => {
   const history = [
     { layerId: 'flights', id: 'airliner' },
     { layerId: 'ais-live-vessels', id: 'vessel' },

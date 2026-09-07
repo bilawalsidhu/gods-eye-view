@@ -4,14 +4,15 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { selectMapStartupRoute } from '../src/mapStartup.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-export const CREDENTIALS = Object.freeze([
-  { name: 'GOOGLE_MAPS_API_KEY', label: 'Google Maps', keychain: [['google-maps-api', 'api-key'], ['google-maps-api', 'default'], ['google-maps-api', 'key']] },
-  { name: 'CESIUM_ION_TOKEN', label: 'Cesium ion', keychain: [['cesium-ion', 'token']] },
-  { name: 'OPENAI_API_KEY', label: 'OpenAI voice', keychain: [['openai-api', 'api-key']] },
+export const CONFIGURATION = Object.freeze([
+  { name: 'AZURE_CLIENT_ID', label: 'User-assigned managed identity selector', keychain: [] },
+  { name: 'AZURE_MAPS_CLIENT_ID', label: 'Azure Maps account client ID', keychain: [] },
+  { name: 'FOUNDRY_ENDPOINT', label: 'Microsoft Foundry endpoint', keychain: [] },
+  { name: 'FOUNDRY_REALTIME_DEPLOYMENT', label: 'Foundry realtime deployment', keychain: [] },
+  { name: 'FOUNDRY_HUD_DEPLOYMENT', label: 'Foundry HUD deployment', keychain: [] },
   { name: 'AISSTREAM_API_KEY', label: 'AISStream vessels', keychain: [['aisstream-api', 'api-key']] },
   { name: 'FIRMS_MAP_KEY', label: 'NASA FIRMS fires', keychain: [['firms-map', 'map-key']] },
   { name: 'TOMTOM_API_KEY', label: 'TomTom traffic', keychain: [['tomtom-api', 'api-key']] },
@@ -29,8 +30,8 @@ export const CREDENTIALS = Object.freeze([
       ['client_secret', 'client-secret', 'secret'].map((account) => [service, account])
     )),
   },
-  { name: 'LL2_API_TOKEN', label: 'Launch Library 2', keychain: [] },
 ]);
+export const CREDENTIALS = CONFIGURATION;
 
 export function isConfiguredValue(value) {
   const normalized = String(value || '').trim();
@@ -109,6 +110,32 @@ function hasKeychainItem(service, account) {
   return result.status === 0;
 }
 
+function hasAzureCliSession() {
+  const windows = process.platform === 'win32';
+  const result = spawnSync(windows ? 'az.cmd' : 'az', ['account', 'show', '--output', 'none'], {
+    stdio: 'ignore',
+    shell: windows,
+  });
+  return result.status === 0;
+}
+
+export function detectDefaultAzureCredential({
+  environment = process.env,
+  azureCliLookup = hasAzureCliSession,
+} = {}) {
+  const workloadIdentity = [
+    'AZURE_CLIENT_ID',
+    'AZURE_TENANT_ID',
+    'AZURE_FEDERATED_TOKEN_FILE',
+  ].every((name) => isConfiguredValue(environment[name]));
+  if (workloadIdentity) return { configured: true, source: 'workload identity environment' };
+  if (isConfiguredValue(environment.IDENTITY_ENDPOINT) || isConfiguredValue(environment.MSI_ENDPOINT)) {
+    return { configured: true, source: 'managed identity host' };
+  }
+  if (azureCliLookup()) return { configured: true, source: 'Azure CLI session' };
+  return { configured: false, source: null };
+}
+
 export function resolveCredential(spec, {
   includeKeychain = true,
   authoritativeEnvironment = false,
@@ -126,43 +153,62 @@ export function resolveCredential(spec, {
   return { configured: false, source: null };
 }
 
-export function buildCapabilitySummary(credentials) {
-  const configured = (name) => credentials[name]?.configured === true;
-  const route = selectMapStartupRoute({
-    googleApiKey: configured('GOOGLE_MAPS_API_KEY') ? 'configured' : '',
-    cesiumToken: configured('CESIUM_ION_TOKEN') ? 'configured' : '',
-  });
+export function buildCapabilitySummary(configuration, {
+  azureCredential = { configured: false, source: null },
+  environment = process.env,
+} = {}) {
+  const configured = (name) => configuration[name]?.configured === true;
+  const foundryConfigured = [
+    'FOUNDRY_ENDPOINT',
+    'FOUNDRY_REALTIME_DEPLOYMENT',
+    'FOUNDRY_HUD_DEPLOYMENT',
+  ].every(configured);
+  const vitePort = Number.parseInt(environment.PORT, 10) || 4173;
+  const bffPort = Number.parseInt(environment.BFF_PORT, 10) || 3000;
   return {
-    map: route === 'google-direct'
-      ? 'Google Photorealistic 3D Tiles (direct)'
-      : route === 'google-ion'
-        ? 'Google Photorealistic 3D Tiles through Cesium ion; Bing and world-terrain stacks available'
-        : 'Esri World Imagery (keyless satellite basemap) with keyless terrain',
+    bff: `Fastify BFF :${bffPort}; Vite :${vitePort}`,
+    azureAuth: azureCredential.configured
+      ? `DefaultAzureCredential available through ${azureCredential.source}`
+      : 'DefaultAzureCredential has no detected local source; run az login',
+    map: azureCredential.configured && configured('AZURE_MAPS_CLIENT_ID')
+      ? 'Azure Maps through the same-origin BFF; OSM fallback available'
+      : 'OpenStreetMap fallback (Azure Maps needs DefaultAzureCredential + AZURE_MAPS_CLIENT_ID)',
     flights: configured('OPENSKY_CLIENT_ID') && configured('OPENSKY_CLIENT_SECRET')
       ? 'OpenSky OAuth credentials present (runtime mode and validity not verified)'
       : 'OpenSky OAuth credentials not configured',
-    voice: configured('OPENAI_API_KEY') ? 'available' : 'off until an OpenAI key is added',
+    voice: azureCredential.configured && foundryConfigured
+      ? 'Microsoft Foundry realtime and HUD deployments configured through the BFF'
+      : 'off until DefaultAzureCredential and all Foundry settings are configured',
     vessels: configured('AISSTREAM_API_KEY') ? 'live AISStream feed' : 'off until an AISStream key is added',
     fires: configured('FIRMS_MAP_KEY') ? 'live NASA FIRMS feed' : 'off until a FIRMS key is added',
     traffic: configured('TOMTOM_API_KEY') ? 'live TomTom flow' : 'built-in traffic simulation',
-    missions: configured('LL2_API_TOKEN')
-      ? 'Launch Library 2 token allowance'
-      : 'Launch Library 2 public access',
   };
 }
 
-export function inspectSetup({ includeKeychain = true, authoritativeEnvironment = false } = {}) {
+export function inspectSetup({
+  includeKeychain = true,
+  authoritativeEnvironment = false,
+  environment = process.env,
+  rootDir = ROOT,
+  azureCliLookup = hasAzureCliSession,
+} = {}) {
   const node = classifyNodeVersion();
   const npm = npmProcessSpec();
   const npmResult = spawnSync(npm.command, ['--version'], {
     encoding: 'utf8',
     shell: npm.shell,
   });
-  const credentials = Object.fromEntries(CREDENTIALS.map((spec) => [
+  const credentials = Object.fromEntries(CONFIGURATION.map((spec) => [
     spec.name,
-    resolveCredential(spec, { includeKeychain, authoritativeEnvironment }),
+    resolveCredential(spec, {
+      includeKeychain,
+      authoritativeEnvironment,
+      environment,
+      rootDir,
+    }),
   ]));
-  const dependenciesInstalled = hasRequiredDependencies();
+  const azureCredential = detectDefaultAzureCredential({ environment, azureCliLookup });
+  const dependenciesInstalled = hasRequiredDependencies(rootDir);
   return {
     ready: node.level !== 'error' && npmResult.status === 0 && dependenciesInstalled,
     node: { version: process.versions.node, ...node },
@@ -171,7 +217,8 @@ export function inspectSetup({ includeKeychain = true, authoritativeEnvironment 
       : { available: false, version: null },
     dependenciesInstalled,
     credentials,
-    capabilities: buildCapabilitySummary(credentials),
+    azureCredential,
+    capabilities: buildCapabilitySummary(credentials, { azureCredential, environment }),
   };
 }
 
@@ -194,16 +241,17 @@ export function formatSetupReport(report, { readyMessage } = {}) {
     report.npm.available ? `[OK] npm ${report.npm.version}` : '[ERROR] npm was not found',
     report.dependenciesInstalled ? '[OK] dependencies installed' : '[WARN] dependencies missing; run npm install',
     '',
+    `BFF:     ${report.capabilities.bff}`,
+    `Azure:   ${report.capabilities.azureAuth}`,
     `Map:     ${report.capabilities.map}`,
     `Flights: ${report.capabilities.flights}`,
     `Voice:   ${report.capabilities.voice}`,
     `Vessels: ${report.capabilities.vessels}`,
     `Fires:   ${report.capabilities.fires}`,
     `Traffic: ${report.capabilities.traffic}`,
-    `Missions: ${report.capabilities.missions}`,
     '',
-    'Configured providers:',
-    ...CREDENTIALS.map((spec) => {
+    'Configured services:',
+    ...CONFIGURATION.map((spec) => {
       const state = report.credentials[spec.name];
       return state.configured
         ? `  [OK] ${spec.label} (${state.source})`

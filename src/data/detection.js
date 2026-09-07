@@ -58,7 +58,7 @@ import { detectionBracketOpacity } from './detectionPresentation.js';
  *   - BALANCED — stable mixed-layer label cohort at 50
  *   - DENSE    — broad stable mixed-layer label cohort at 75/100
  *
- * Theming is driven by THEME_MAP presets (retro, surveillance, thermal, default).
+ * Detection uses one provider-independent presentation theme.
  * Density tuning and suspension allow external callers (scene transitions, UI)
  * to throttle or pause rendering without tearing down the overlay.
  */
@@ -104,7 +104,6 @@ const LAYER_WEIGHTS = Object.freeze({
   cctv: 1.1,
   flights: 1,
   satellites: 1,
-  bikeshare: 0.9,
   'ais-live-vessels': 1,
 });
 
@@ -122,9 +121,9 @@ const BILL_FAR_SCALE = 0.5;
  * `traffic.js` — the app's existing convention for a developer-only affordance.
  *
  * The banner ("DENSE VIS:15 SRC:1036 DENS:100% ELASTIC 0.4ms") is engine
- * telemetry, but it painted for every user: CRT/NVG/FLIR auto-enable detection,
- * so an orange debug readout was the first thing a visitor saw, colliding with
- * the cockpit callsign block. It is kept — the same numbers also ship
+ * telemetry, but it painted for every user, so a debug readout was the first
+ * thing a visitor saw, colliding with
+ * the tracked-contact readout. It is kept — the same numbers also ship
  * programmatically via `getDetectionDiagnostics()` — but now defaults OFF and
  * paints only under `?detectDebug=1`.
  *
@@ -261,10 +260,10 @@ let _suspendReason = '';
 let _enableTime = 0;
 /** @type {number} Cached monospace glyph advance width (px); measured once on first draw. */
 let _charWidth = 0;
-/** @type {boolean} Whether Cockpit view currently owns the viewport. */
-let _cockpitActive = false;
+/** @type {boolean} Whether Drone View currently owns the viewport. */
+let _droneViewActive = false;
 /** @type {((event: CustomEvent) => void)|null} */
-let _cockpitModeListener = null;
+let _droneViewModeListener = null;
 
 /**
  * Initializes detection inside the shared world-overlay host and stores
@@ -274,8 +273,8 @@ let _cockpitModeListener = null;
  * @param {Function} onModeChange - Callback invoked with the new mode label string on mode changes.
  */
 export function initDetection(viewer, layers, onModeChange) {
-  if (_cockpitModeListener && typeof window !== 'undefined') {
-    window.removeEventListener('gev:cockpit-mode-changed', _cockpitModeListener);
+  if (_droneViewModeListener && typeof window !== 'undefined') {
+    window.removeEventListener('gev:drone-view-changed', _droneViewModeListener);
   }
   _hostLane?.unregister?.();
   _calloutLane?.unregister?.();
@@ -303,12 +302,12 @@ export function initDetection(viewer, layers, onModeChange) {
     target: 'shared',
   });
   _hostSurface = _hostLane.surface;
-  _cockpitModeListener = (event) => {
-    _cockpitActive = event?.detail?.active === true;
+  _droneViewModeListener = (event) => {
+    _droneViewActive = event?.detail?.active === true;
     _hostLane?.requestPaint();
   };
   if (typeof window !== 'undefined') {
-    window.addEventListener('gev:cockpit-mode-changed', _cockpitModeListener);
+    window.addEventListener('gev:drone-view-changed', _droneViewModeListener);
   }
 
   setDetectionStyle('normal');
@@ -318,11 +317,11 @@ export function initDetection(viewer, layers, onModeChange) {
 
 /** Release the host lane and all retained detection runtime state. */
 export function destroyDetection() {
-  if (_cockpitModeListener && typeof window !== 'undefined') {
-    window.removeEventListener('gev:cockpit-mode-changed', _cockpitModeListener);
+  if (_droneViewModeListener && typeof window !== 'undefined') {
+    window.removeEventListener('gev:drone-view-changed', _droneViewModeListener);
   }
-  _cockpitModeListener = null;
-  _cockpitActive = false;
+  _droneViewModeListener = null;
+  _droneViewActive = false;
   _debugBanner = false;
   if (_hostSurface) _hostSurface.style.display = 'none';
   _hostLane?.unregister?.();
@@ -549,12 +548,11 @@ function _publishDiagnostics() {
 
 /**
  * Switches the visual theme for detection's host paint lane.
- * @param {string} styleName - Theme key from THEME_MAP (e.g. 'retro', 'surveillance', 'thermal').
- *   Falls back to '_default' for unrecognized names.
+ * @param {string} styleName Retained for API compatibility; Normal is always used.
  */
 export function setDetectionStyle(styleName) {
-  _themeName = styleName || 'normal';
-  _theme = THEME_MAP[_themeName] || THEME_MAP._default;
+  _themeName = 'normal';
+  _theme = THEME_MAP._default;
   // Resolve the plate fills once per style change. The callout painter reads
   // these strings directly, so the hot path never builds a colour.
   _platePaint = _theme.calloutPlate || THEME_MAP._default.calloutPlate;
@@ -748,7 +746,7 @@ function _collectDetectableObjects() {
 }
 
 /**
- * Draws a CRT-style scanline overlay across the entire canvas.
+ * Draws a subtle scanline overlay across the entire canvas.
  *
  * The scroll offset comes from the CLOCK, not from `_frameCount`. Those look
  * identical while the scene is rendering — `SCANLINE_STEP_MS` is one 60 fps
@@ -1070,7 +1068,7 @@ function _drawOverlay(frame) {
   // with every arbiter call in this function — so the frame that paints an
   // animation's final state is the same frame that ends its demand.
   const now = Number.isFinite(frame.timestamp) ? frame.timestamp : _nowMs();
-  const bracketPresentationOpacity = detectionBracketOpacity(_cockpitActive);
+  const bracketPresentationOpacity = detectionBracketOpacity(_droneViewActive);
   const shouldSolve = _labelSolveDirty || now - _lastLabelSolveAt >= LABEL_SOLVE_INTERVAL_MS;
   const calloutOcclusionRects = frame.uiRects;
   const selectedIdentities = shouldSolve

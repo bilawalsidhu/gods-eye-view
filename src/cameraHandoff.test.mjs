@@ -10,7 +10,6 @@ const firms = fs.readFileSync(path.join(ROOT, 'src', 'data', 'firmsHeatmap.js'),
 const vessels = fs.readFileSync(path.join(ROOT, 'src', 'data', 'aisLiveVessels.js'), 'utf8');
 const voice = fs.readFileSync(path.join(ROOT, 'src', 'voice', 'gevActions.js'), 'utf8');
 const cameraVerbs = fs.readFileSync(path.join(ROOT, 'src', 'cameraVerbs.js'), 'utf8');
-const cockpitTracking = fs.readFileSync(path.join(ROOT, 'src', 'cockpitTracking.js'), 'utf8');
 
 function body(source, pattern, label) {
   const match = source.match(pattern);
@@ -27,25 +26,6 @@ function ordered(source, needles, label) {
     previous = index;
   }
 }
-
-test('Cockpit takeover invalidates deferred work before camera cancellation', () => {
-  const enter = body(
-    ui,
-    /enter\(\) \{([\s\S]*?)\n  \}\n\n  exit\(/,
-    'Cockpit enter',
-  );
-  ordered(enter, [
-    'if (!info || !entity?.position) return false;',
-    'this.onCameraTakeover?.();',
-    'this.viewer.camera.cancelFlight();',
-    'this.viewer.trackedEntity = undefined;',
-  ], 'Cockpit takeover');
-  assert.match(
-    ui,
-    /onCameraTakeover: \(\) => this\._stampNavigation\(\{ cancelPendingSelection: false \}\),/,
-    'Cockpit retires stale camera work without clearing the aircraft selection it adopts',
-  );
-});
 
 test('one explicit tracking selection clears sibling IDs before publishing its durable replacement', () => {
   const persist = body(
@@ -80,91 +60,6 @@ test('navigation clears dormant tracker IDs without aborting unrelated layer res
   assert.match(stamp, /if \(!passivelyClearedShareSelection && !satellitesLayer\.getTrackedInfo\?\.\(\)\)[\s\S]*?selectedSatTrackingId: null/);
 });
 
-test('voice Cockpit entry reaches the camera only through stamping seams', () => {
-  // Cockpit is the camera-authority VETO HOLDER, not a petitioner: routing
-  // entry through _runExplicitNavigation would make it refuse itself, because
-  // cockpitActive is the state entry is trying to reach. What entry owes the
-  // policy is the STAMP that retires deferred navigation — and the voice path
-  // must not acquire the camera by any route that skips it.
-  //
-  // The transaction has exactly two camera-owner mutations, and each one
-  // stamps:
-  //   1. selectedLayer.trackById(id) -> viewer.trackedEntity
-  //        -> viewer.trackedEntityChanged -> _stampNavigation()
-  //   2. cockpitView.enter() -> onCameraTakeover() -> _stampNavigation()
-  const transaction = body(
-    cockpitTracking,
-    /export function enterCockpitWithTracking\(\{[\s\S]*?\n\}\) \{([\s\S]*?)\n\}\n/,
-    'Cockpit entry transaction',
-  );
-  ordered(transaction, [
-    'if (!selectedLayer.trackById?.(selectedTarget.id, { origin: selectionOrigin })) {',
-    'if (!entryError) entered = Boolean(cockpitView.enter());',
-  ], 'Cockpit entry transaction');
-  // No direct camera control: every mutation goes through a layer tracker or
-  // the cockpit controller, both of which stamp.
-  assert.doesNotMatch(transaction, /\b(?:viewer\.)?camera\s*(?:\.|\[|=)/);
-  assert.doesNotMatch(cockpitTracking, /trackedEntity\s*=/);
-  assert.doesNotMatch(cockpitTracking, /flyTo/);
-
-  // Seam 1: any tracker handoff stamps, so the adoption step is covered.
-  assert.match(
-    ui,
-    /viewer\.trackedEntityChanged\.addEventListener\(\(entity\) => \{\s*if \(entity && !this\._disposed\) this\._stampNavigation\(\{ cancelPendingSelection: false \}\);/,
-    'tracker handoff must stamp',
-  );
-  // Seam 2 is pinned by "Cockpit takeover invalidates deferred work" above.
-  const control = body(
-    ui,
-    /if \(normalized === 'enter'\) \{([\s\S]*?)\n    \}/,
-    'controlCockpit enter branch',
-  );
-  assert.match(control, /enterCockpitWithTracking\(\{/);
-  // A refused entry is reported as a failure, never as silent success.
-  assert.match(control, /ok: entry\.entered,/);
-  assert.match(control, /error: entry\.error,/);
-});
-
-test('voice Cockpit next/previous shares the manual Context navigation path', () => {
-  // The voice verb must not grow a private focus route: manual PREVIOUS/NEXT
-  // and the voice verb both hand off through the owning layer's tracker, which
-  // is what stamps. Divergence here is how a voice-only camera path escapes
-  // the arbiter.
-  assert.match(
-    ui,
-    /this\._listen\(this\.contextPrevious, 'click', \(\) => this\.navigateContext\(-1, \{ origin: 'user' \}\)\);/,
-  );
-  assert.match(
-    ui,
-    /this\._listen\(this\.contextNext, 'click', \(\) => this\.navigateContext\(1, \{ origin: 'user' \}\)\);/,
-  );
-  const funnel = body(
-    ui,
-    /navigateContext\(direction, options = \{\}\) \{([\s\S]*?)\n  \}\n\n  \/\*\* Adopt/,
-    'Cockpit Context navigation funnel',
-  );
-  ordered(funnel, [
-    "const method = direction < 0 ? 'navigatePrevious' : 'navigateNext';",
-    'const navigationOptions = wasActive ? { ...options, aircraftOnly: true } : options;',
-    'militaryAwarenessLayer?.[method]?.(navigationOptions)',
-    'this._adoptTrackedEntity(performance.now());',
-  ], 'Cockpit Context navigation funnel');
-  const navigate = body(
-    ui,
-    /if \(normalized === 'next' \|\| normalized === 'previous'\) \{([\s\S]*?)\n    \}/,
-    'controlCockpit navigation branch',
-  );
-  ordered(navigate, [
-    'this.cockpitView.navigateContext(',
-    "normalized === 'next' ? 1 : -1,",
-  ], 'controlCockpit navigation branch');
-  // No private camera route around the awareness layer.
-  assert.doesNotMatch(navigate, /flyTo|camera|trackById|_runExplicitNavigation/);
-  // An exhausted cohort is an honest failure, not a silent success.
-  assert.match(navigate, /ok: changed,/);
-  assert.match(navigate, /error: changed \? null : 'No further context target was available',/);
-});
-
 test('accepted navigation releases through PR15-aware ownership before flight', () => {
   const run = body(
     ui,
@@ -172,7 +67,7 @@ test('accepted navigation releases through PR15-aware ownership before flight', 
     'explicit navigation',
   );
   ordered(run, [
-    'cockpitActive: !!this.cockpitView?.active',
+    'immersiveViewActive: this._isDroneViewActive()',
     'stamp: () => this._stampNavigation()',
     'release: () => this._releaseFollowCamera(releaseOptions)',
     'navigate,',
@@ -185,7 +80,6 @@ test('accepted navigation releases through PR15-aware ownership before flight', 
   ordered(release, [
     'origin: trackingOrigin',
     'satellitesLayer.stopTracking?.({ origin: trackingOrigin })',
-    'rocketLaunchesLayer.releaseCameraOwnership?.()',
     'this.viewer.trackedEntity = undefined;',
     "interruptCameraMotion('explicit-navigation')",
     'this.viewer.camera.cancelFlight();',
@@ -287,7 +181,7 @@ test('a direct globe gesture retires delayed camera and selection restore only',
   assert.doesNotMatch(stamp, /cancelPendingRestores\(\)/);
 });
 
-test('newer navigation, reset, Cockpit, and teardown share one generation', () => {
+test('newer navigation, reset, Drone View, and teardown share one generation', () => {
   assert.equal((ui.match(/_navigationGeneration \+= 1/g) || []).length, 1);
   const reset = body(ui, /resetToGlobeView\(\) \{([\s\S]*?)\n  \}/, 'reset');
   ordered(reset, [

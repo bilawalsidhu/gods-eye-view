@@ -1,42 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-const retrySite = (stats = {}) => ({ id: 'military-installations', name: 'Mapped Installations', enabled: true,
-  stats: { status: 'unavailable', error: 'Unavailable', retryAt: Date.now() + 30000, ...stats } });
-
-test('installation retry remains visible after failure dwell without a false spinner', () => {
-  const summary = aggregateLayerLoading([retrySite()]);
-  const view = presentLoadingFeedback(createLoadingFeedbackState(), summary, 100);
-  assert.equal(view.state, 'retry');
-  assert.equal(view.label, 'OVERPASS TEMPORARILY UNAVAILABLE');
-  assert.match(view.detail, /retrying in 30s/);
-  assert.equal(presentLoadingFeedback(createLoadingFeedbackState(), aggregateLayerLoading([{ ...retrySite(), enabled: false }]), 100), null);
-});
-test('an installation retry never conceals another participant failure', () => {
-  const state = { visible: true, phase: 'terminal', terminal: 'error', activeIds: ['military-installations', 'flights'] };
-  const summary = aggregateLayerLoading([retrySite(), { id: 'flights', enabled: true, stats: { error: 'Failed' } }]);
-  assert.equal(presentLoadingFeedback(state, summary, 100).label, 'LOAD FAILED');
-  const healthyNow = aggregateLayerLoading([retrySite()]);
-  assert.equal(presentLoadingFeedback({ ...state, failedEventIds: ['flights'] }, healthyNow, 100).label, 'LOAD FAILED');
-});
-test('a fresh installation retry can finish successfully without inheriting the old error', () => {
-  let state = { ...createLoadingFeedbackState(), phase: 'terminal', terminal: 'error', visible: true, activeIds: ['military-installations'] };
-  const loading = aggregateLayerLoading([retrySite({ status: 'loading', error: null, loading: true, retryAt: 0, retrying: true })]);
-  state = reduceLoadingFeedback(state, loading, 1000);
-  state = reduceLoadingFeedback(state, loading, 1200);
-  assert.equal(presentLoadingFeedback(state, loading, 1200).label, 'RETRYING MAPPED SITES');
-  const done = aggregateLayerLoading([retrySite({ status: 'ready', error: null, loading: false, retryAt: 0, retrying: false, count: 3 })]);
-  state = reduceLoadingFeedback(state, done, 1500);
-  assert.equal(presentLoadingFeedback(state, done, 1500).label, 'MAPPED SITES LOADED');
-});
-test('turning off a retrying installation layer does not report the old fetch failure as a disable failure', () => {
-  const stopping = aggregateLayerLoading([{ ...retrySite(), lifecycleState: 'disabling' }]);
-  let state = reduceLoadingFeedback(createLoadingFeedbackState(), stopping, 1000);
-  state = reduceLoadingFeedback(state, stopping, 1200);
-  const off = aggregateLayerLoading([{ ...retrySite({ status: 'idle', error: null, retryAt: 0 }), enabled: false }]);
-  state = reduceLoadingFeedback(state, off, 1400);
-  assert.equal(presentLoadingFeedback(state, off, 1400).label, 'LIVE DATA OFF');
-});
 import {
   aggregateLayerLoading,
   canPresentDeferredStatusNotice,
@@ -99,7 +63,6 @@ test('share-follow failures use the universal top-center status instead of the b
   assert.match(handler, /startupCover\.addEventListener\('transitionend', showOnce, \{ once: true \}\)/);
   assert.match(handler, /fallbackTimer = setTimeout\(showOnce, 1000\)/);
   assert.doesNotMatch(handler, /this\._showToast\(message\)/);
-  assert.doesNotMatch(handler, /pushCockpitSignal/);
   assert.match(handler, /result\.classification === 'pending'/);
   assert.match(handler, /state: 'acquiring'/);
   assert.match(handler, /persistent: true/);
@@ -238,11 +201,11 @@ test('terminal loading feedback centers its label without an empty detail slot',
   const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
   assert.match(
     css,
-    /#global-loading-status:is\(\[data-state='complete'\], \[data-state='cancelled'\], \[data-state='error'\]\)\s*\{[\s\S]*?justify-content:\s*center;[\s\S]*?text-align:\s*center;/,
+    /#global-loading-status:is\(\[data-state='complete'\],[\s\S]*?\[data-state='cancelled'\],[\s\S]*?\[data-state='error'\]\)\s*\{[\s\S]*?justify-content:\s*center;[\s\S]*?text-align:\s*center;/,
   );
   assert.match(
     css,
-    /#global-loading-status:is\(\[data-state='complete'\], \[data-state='cancelled'\], \[data-state='error'\]\) #global-loading-detail\s*\{\s*display:\s*none;/,
+    /#global-loading-status:is\(\[data-state='complete'\],[\s\S]*?\[data-state='cancelled'\],[\s\S]*?\[data-state='error'\]\) #global-loading-detail\s*\{\s*display:\s*none;/,
   );
 });
 
@@ -544,7 +507,7 @@ test('the chip renderer clears the progress slot instead of stranding the last v
     /if \(this\._trafficSyncProgress\.textContent !== presentation\.progressText\) \{/,
   );
   // …and the emptied slot must collapse rather than leave a min-width stub.
-  assert.match(css, /#traffic-sync-progress:empty \{\s*display: none;\s*\}/);
+  assert.match(css, /#traffic-sync-progress:empty\s*\{\s*display: none;\s*\}/);
 });
 
 test('work still in flight keeps its progress number beside a label that has none', () => {

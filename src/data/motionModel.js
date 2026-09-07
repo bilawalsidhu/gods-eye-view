@@ -131,7 +131,7 @@ export function courseSlewCapDps(speedMps, maxDps, minDps = COURSE_MIN_DPS) {
  *
  * A feed may transiently report zero or missing ground speed while consecutive
  * fixes still describe clear movement. The delayed renderer already derives a
- * matching segment speed and course from those fixes, so tracking and cockpit
+ * matching segment speed and course from those fixes, so tracking
  * consumers should prefer that pair over stale poll fields.
  */
 export function displayedKinematics({

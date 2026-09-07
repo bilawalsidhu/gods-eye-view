@@ -22,7 +22,7 @@ import {
 // resolvePickId — canonical String coercion for every layer's pick shape
 // ---------------------------------------------------------------------------
 
-test('resolvePickId: string pick id (flights/military/bikeshare/cctv billboards)', () => {
+test('resolvePickId: string pick id (flights/military/cctv billboards)', () => {
   assert.equal(resolvePickId({ id: 'aaa001' }), 'aaa001');
   assert.equal(resolvePickId({ id: undefined, primitive: { id: 'station:austin:1' } }), 'station:austin:1');
 });
@@ -92,8 +92,8 @@ test('ownership: a throwing predicate never breaks click handling', () => {
 });
 
 test('ownership: unregister removes the predicate', () => {
-  registerPickOwner('bikeshare', (pickedId) => pickedId === 'station:1');
+  registerPickOwner('temporary-layer', (pickedId) => pickedId === 'station:1');
   assert.equal(isOwnedByOtherLayer('flights', 'station:1'), true);
-  unregisterPickOwner('bikeshare');
+  unregisterPickOwner('temporary-layer');
   assert.equal(isOwnedByOtherLayer('flights', 'station:1'), false);
 });

@@ -177,7 +177,7 @@ const measure = () => page.evaluate(async (icao) => {
 }, ICAO);
 
 /** Bare-earth ground truth, fetched SERVER-SIDE so the page's simulated outage
- *  cannot touch it. The photoreal mesh sits ABOVE bare earth, so this is the
+ *  cannot touch it. The rendered terrain sits ABOVE bare earth, so this is the
  *  weaker of the two oracles — but the geoid is ~150 m below it, so burial is
  *  still unmistakable. */
 const truth = new Map();

@@ -295,14 +295,14 @@ test('default COVERAGE refresh materializes the active and visible camera frustu
   }
 });
 
-test('geometry drain pacing yields to tracked and cockpit camera ownership', () => {
+test('geometry drain pacing yields to tracked and drone view camera ownership', () => {
   assert.deepEqual(cctvGeometryDrainPacing(), { batchSize: 4, delayMs: 120 });
   assert.deepEqual(
     cctvGeometryDrainPacing({ trackedEntity: { id: 'flight-1' } }),
     { batchSize: 2, delayMs: 250 },
   );
   assert.deepEqual(
-    cctvGeometryDrainPacing({ cockpitActive: true }),
+    cctvGeometryDrainPacing({ droneViewActive: true }),
     { batchSize: 2, delayMs: 250 },
   );
 
@@ -318,7 +318,7 @@ test('geometry drain rechecks pacing when tracking releases between batches', ()
   const visited = [];
   const runBatch = () => processCctvGeometryDrainBatch({
     queue,
-    readOwnership: () => ({ trackedEntity, cockpitActive: false }),
+    readOwnership: () => ({ trackedEntity, droneViewActive: false }),
     visit: (record) => visited.push(record),
     progress: () => {},
     complete: () => {},
@@ -672,7 +672,7 @@ test('CCTV focus reports when the camera flight starts', () => {
   assert.equal(flyCalls, 1);
 });
 
-test('CCTV focus refuses camera flights while cockpit owns the view', () => {
+test('CCTV focus refuses camera flights while drone view owns the view', () => {
   const originalDocument = globalThis.document;
   let flyCalls = 0;
   const viewer = {
@@ -686,13 +686,13 @@ test('CCTV focus refuses camera flights while cockpit owns the view', () => {
   const originalDebug = console.debug;
   console.debug = () => {};
   globalThis.document = {
-    body: { classList: { contains: (name) => name === 'cockpit-mode' } },
+    body: { classList: { contains: (name) => name === 'drone-view' } },
   };
 
   try {
     assert.equal(
       focusCctvRecord(viewer, record, 1.9),
-      CCTV_FOCUS_RESULT.COCKPIT_ACTIVE,
+      CCTV_FOCUS_RESULT.DRONE_VIEW_ACTIVE,
     );
   } finally {
     console.debug = originalDebug;
@@ -1193,14 +1193,14 @@ test('deriveCalBadge: RAW PRIOR for everything else (all Austin Open Data today)
 // docs/superpowers/specs/2026-07-05-entity-height-datum-design.md §2.
 // ---------------------------------------------------------------------------
 
-test('surfaceRegimeKey: globe hidden (photoreal) → google-3d; globe visible → terrain-globe', () => {
-  assert.equal(surfaceRegimeKey(false), 'google-3d');
+test('surfaceRegimeKey: globe hidden (rendered-mesh) → mesh-surface; globe visible → terrain-globe', () => {
+  assert.equal(surfaceRegimeKey(false), 'mesh-surface');
   assert.equal(surfaceRegimeKey(true), 'terrain-globe');
 });
 
 test('surfaceRegimeKey: unknown globe state (no viewer / no scene) defaults to terrain-globe (never samples)', () => {
   // Only an explicit globe.show === false means the visible surface is the
-  // Google tileset. undefined/null (torn-down viewer) must fall to the
+  // legacy rendered-mesh tileset. undefined/null (torn-down viewer) must fall to the
   // regime that takes ZERO scene queries.
   assert.equal(surfaceRegimeKey(undefined), 'terrain-globe');
   assert.equal(surfaceRegimeKey(null), 'terrain-globe');

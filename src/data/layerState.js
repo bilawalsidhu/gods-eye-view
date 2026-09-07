@@ -30,50 +30,12 @@ export const LAYER_RESTORE_ORIGINS = Object.freeze({
   local: 'local-restore',
 });
 
-const RADIO_FILTER_CODES = Object.freeze({
-  all: 'a',
-  news: 'n',
-  talk: 't',
-  weather: 'w',
-  'public-safety': 'p',
-  'aviation-marine': 'v',
-  'traffic-transit': 'x',
-  music: 'm',
-  other: 'o',
-});
-const RADIO_CODE_FILTERS = Object.freeze(
-  Object.fromEntries(Object.entries(RADIO_FILTER_CODES).map(([key, value]) => [value, key])),
-);
-
 function normalizeBoolean(value) {
   return typeof value === 'boolean' ? value : null;
 }
 
 function normalizeEnum(values, value) {
   return values.includes(value) ? value : null;
-}
-
-export function normalizeRadioFilter(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (Object.hasOwn(RADIO_FILTER_CODES, normalized)) return normalized;
-  if (/^genre:[a-z0-9][a-z0-9 &-]{0,31}$/.test(normalized)) return normalized;
-  return null;
-}
-
-function encodeRadioFilter(value) {
-  return RADIO_FILTER_CODES[value] || `g-${value.slice('genre:'.length)}`;
-}
-
-function decodeRadioFilter(value) {
-  if (Object.hasOwn(RADIO_CODE_FILTERS, value)) return RADIO_CODE_FILTERS[value];
-  if (/^g-[a-z0-9][a-z0-9 &-]{0,31}$/.test(value)) return `genre:${value.slice(2)}`;
-  return null;
-}
-
-function normalizeVolume(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return null;
-  return Math.round(Math.max(0, Math.min(1, numeric)) * 100) / 100;
 }
 
 function booleanOption(key, token, defaultValue, { absentValue = defaultValue } = {}) {
@@ -223,24 +185,6 @@ const OPTION_GROUPS = Object.freeze({
     booleanOption('showProjection', 'p', true),
     booleanOption('autoHop', 'a', false),
   ]),
-  radio: Object.freeze([
-    Object.freeze({
-      key: 'filter',
-      token: 'f',
-      defaultValue: 'all',
-      normalize: normalizeRadioFilter,
-      encode: encodeRadioFilter,
-      decode: decodeRadioFilter,
-    }),
-    Object.freeze({
-      key: 'volume',
-      token: 'v',
-      defaultValue: 0.8,
-      normalize: normalizeVolume,
-      encode: (value) => String(Math.round(value * 100)),
-      decode: (value) => (/^\d{1,3}$/.test(value) ? normalizeVolume(Number(value) / 100) : null),
-    }),
-  ]),
 });
 
 const TRACKING_OPTION_KEY_BY_LAYER = Object.freeze({
@@ -276,7 +220,6 @@ export const SHARE_TRACKING_RESTORE_POLICIES = Object.freeze({
  */
 export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'ais-live-vessels', token: 'a', disposition: 'enabled-only' }),
-  Object.freeze({ id: 'bikeshare', token: 'b', disposition: 'enabled-only' }),
   Object.freeze({ id: 'cctv', token: 'c', disposition: 'enabled+options', optionOwner: 'cctv' }),
   Object.freeze({ id: 'earthquakes', token: 'e', disposition: 'enabled-only' }),
   Object.freeze({ id: 'flights', token: 'f', disposition: 'enabled+options', optionOwner: 'flights' }),
@@ -286,8 +229,6 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'military', token: 'm', disposition: 'enabled+mirrored-options', optionOwner: 'flights' }),
   Object.freeze({ id: 'military-awareness', token: 'g', disposition: 'enabled-only' }),
   Object.freeze({ id: 'military-installations', token: 'i', disposition: 'enabled-only' }),
-  Object.freeze({ id: 'radio', token: 'r', disposition: 'enabled+options', optionOwner: 'radio' }),
-  Object.freeze({ id: 'rocket-launches', token: 'x', disposition: 'enabled-only' }),
   Object.freeze({ id: 'satellites', token: 's', disposition: 'enabled+options', optionOwner: 'satellites' }),
   Object.freeze({ id: 'telegeography-submarine-cables', token: 'u', disposition: 'enabled-only' }),
   Object.freeze({ id: 'traffic', token: 't', disposition: 'enabled-only' }),
@@ -450,11 +391,11 @@ export function decodeLayerStateParams(params) {
   if (rawLayers.length > MAX_ENABLED_LAYERS_CHARS) return null;
   if (rawOptionsField.length > MAX_LAYER_OPTIONS_CHARS) return null;
   const layerTokens = rawLayers.split('.').filter(Boolean);
-  // `l=` is the one valid explicit-empty representation. Any non-empty token
-  // set containing an unknown member rejects the complete layer payload so a
-  // typo or future token cannot silently become an authoritative empty set.
-  if (layerTokens.some((token) => !REGISTRY_BY_TOKEN.has(token))) return null;
-  const enabledLayerIds = layerTokens.map((token) => REGISTRY_BY_TOKEN.get(token).id);
+  // Removed and future layer tokens are ignored so historical share links keep
+  // restoring the retained subset instead of failing the entire payload.
+  const enabledLayerIds = layerTokens
+    .filter((token) => REGISTRY_BY_TOKEN.has(token))
+    .map((token) => REGISTRY_BY_TOKEN.get(token).id);
   const rawOptions = {};
   for (const assignment of rawOptionsField.split('_')) {
     if (!assignment) continue;

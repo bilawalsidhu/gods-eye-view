@@ -1378,7 +1378,7 @@ function cellCullPosition(lon, lat) {
 /**
  * Horizon-cull a billboard collection against an ellipsoid occluder.
  *
- * The Cesium globe is hidden in this app (Google 3D Tiles render the planet),
+ * The Cesium globe is hidden in this app (rendered 3D geometry render the planet),
  * so nothing writes far-side depth — and these sprites are additionally
  * always-on-top (`disableDepthTestDistance: INFINITY`, so a detection is never
  * swallowed by terrain it sits on). Without an explicit occluder pass, fires on

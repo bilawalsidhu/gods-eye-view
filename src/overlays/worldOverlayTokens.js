@@ -97,61 +97,10 @@ export const SKY_PLATE_SCALE = 0.22;
  * surface. `calloutPlate`/`calloutPlateSpace` are the callout backings and are
  * painted on the shared normal-blend canvas; they are deliberately separate
  * tokens so retuning label legibility can never shift the scanline wash.
- * Each keeps its theme's hue so a plate reads as amber/green/thermal chrome
- * rather than a neutral box dropped on top of the sensor image.
+ * The plate stays visually related to the label chrome rather than appearing
+ * as a neutral box dropped on top of the image.
  */
 export const DETECTION_THEME_MAP = Object.freeze({
-  retro: {
-    line: 'rgba(255, 176, 56, 0.88)',
-    label: 'rgba(255, 216, 128, 0.95)',
-    labelBg: 'rgba(30, 12, 0, 0.72)',
-    calloutPlate: 'rgba(30, 12, 0, 0.48)',
-    calloutPlateSpace: 'rgba(30, 12, 0, 0.56)',
-    glow: 'rgba(255, 176, 56, 0.45)',
-    dim: 'rgba(230, 190, 140, 0.62)',
-    cardBorder: 'rgba(255, 210, 150, 0.16)',
-    blend: 'screen',
-    filter: 'contrast(1.08) saturate(1.04)',
-    scanline: 0.085,
-    tiers: {
-      civil: '#ffd27a', military: '#ff8a3c', sea: '#ffc06a', space: '#ffe0a0', vehicle: '#d0a060',
-      veh_jam: '#ff3b30', veh_slow: '#ffb300', veh_free: '#00ff66', veh_nodata: '#c9c9c9',
-    },
-  },
-  surveillance: {
-    line: 'rgba(120, 255, 130, 0.9)',
-    label: 'rgba(225, 255, 210, 0.97)',
-    labelBg: 'rgba(6, 16, 6, 0.78)',
-    calloutPlate: 'rgba(6, 16, 6, 0.48)',
-    calloutPlateSpace: 'rgba(6, 16, 6, 0.56)',
-    glow: 'rgba(120, 255, 120, 0.42)',
-    dim: 'rgba(170, 205, 160, 0.62)',
-    cardBorder: 'rgba(190, 255, 190, 0.18)',
-    blend: 'screen',
-    filter: 'contrast(1.12) saturate(1.12)',
-    scanline: 0.09,
-    tiers: {
-      civil: '#8fe89a', military: '#ff5a47', sea: '#a6f0c0', space: '#9fe8ff', vehicle: '#ffc24a',
-      veh_jam: '#ff4538', veh_slow: '#ffc24a', veh_free: '#45d8ff', veh_nodata: '#dcdcdc',
-    },
-  },
-  thermal: {
-    line: 'rgba(255, 224, 170, 0.95)',
-    label: 'rgba(255, 236, 208, 0.98)',
-    labelBg: 'rgba(20, 20, 20, 0.66)',
-    calloutPlate: 'rgba(20, 20, 20, 0.46)',
-    calloutPlateSpace: 'rgba(20, 20, 20, 0.54)',
-    glow: 'rgba(255, 224, 170, 0.42)',
-    dim: 'rgba(245, 222, 196, 0.74)',
-    cardBorder: 'rgba(255, 255, 255, 0.15)',
-    blend: 'screen',
-    filter: 'contrast(1.1) saturate(1.08)',
-    scanline: 0.04,
-    tiers: {
-      civil: '#ffffff', military: '#ff7a5c', sea: '#ffd0b0', space: '#d0e0ff', vehicle: '#ffcf9f',
-      veh_jam: '#ff4538', veh_slow: '#ffc24a', veh_free: '#2ecc71', veh_nodata: '#d8d8d8',
-    },
-  },
   _default: {
     line: 'rgba(0, 244, 255, 0.9)',
     label: 'rgba(200, 250, 255, 0.97)',

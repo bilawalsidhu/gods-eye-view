@@ -9,8 +9,7 @@
  * next. This script locks the invariants so they can't silently break again.
  *
  * It drives the REAL app (http://localhost:4173) in headless Chromium with the
- * same WebGL launch flags the existing Cesium render harness uses
- * (tools/cesium-render.mjs): --use-gl=angle / --use-angle=swiftshader.
+ * the same deterministic SwiftShader WebGL flags used by the browser QA suite.
  *
  * DETERMINISM: it does NOT depend on live OpenSky / adsb.lol / AISStream
  * (all optional or rate-limited in local QA). Instead it installs a persistent
@@ -61,7 +60,8 @@
  * grounded plane that then vanishes from the feed still fast-culls after one
  * missed poll (both layers; military keys off adsb.lol's alt_baro === "ground").
  * Ground billboards render depth-test-free (disableDepthTestDistance = ∞) so
- * the photoreal tile skin can't bury them up close; takeoff restores the test.
+ * the rendered terrain/imagery surface can't bury them up close; takeoff
+ * restores the test.
  *
  * And GROUND 3D (2026-07-03, owner decision LOCKED: "when I have 3D mode —
  * proximity or all — I want that respected regardless of whether a plane is
@@ -253,7 +253,7 @@ async function main() {
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = new URL(request.url());
-      if (url.origin === APP_ORIGIN && url.pathname === '/api/openai/hud-summary') {
+      if (url.origin === APP_ORIGIN && url.pathname === '/api/azure/foundry/hud-summary') {
         request.respond({
           status: 200,
           contentType: 'application/json',
@@ -393,15 +393,10 @@ async function main() {
             status: 200, headers: { 'Content-Type': 'text/plain' },
           }));
         }
-        // Voice scene context reverse-geocodes the view target and asks Places
-        // for nearby names. Answer both with empty results: the entity-context
-        // assertions are about the SELECTED contact, and a live lookup would
-        // make the run non-hermetic (and bill the owner's Google quota).
-        if (url.hostname === 'maps.googleapis.com' && url.pathname.startsWith('/maps/api/geocode')) {
-          return Promise.resolve(jsonResponse({ status: 'ZERO_RESULTS', results: [] }));
-        }
-        if (isAppRequest && url.pathname === '/api/google/nearby-places') {
-          return Promise.resolve(jsonResponse({ places: [] }));
+        // Voice scene context reverse-geocodes the view target through the
+        // Azure Maps BFF. Keep that unrelated lookup hermetic.
+        if (isAppRequest && url.pathname === '/api/azure/maps/reverse-geocode') {
+          return Promise.resolve(jsonResponse({ addresses: [] }));
         }
         // adsb.lol military: { ac: [ aircraft{} ] }  (must come AFTER /trace check)
         if (isAppRequest && url.pathname === '/api/adsblol/mil') {
@@ -527,7 +522,7 @@ async function main() {
     console.log(`  GLB capability control: ${glbBackendCapable ? 'ready' : 'unavailable'} (${glbControlDetail})`);
 
     // Hermeticity (round 5, 2026-07-06): the mesh-floor sampler probes the
-    // REAL scene once per cell per poll. Under headless GL, Google tiles
+    // REAL scene once per cell per poll. Under headless GL, streamed terrain
     // sometimes stream at the synthetic-plane coords and sometimes don't, so
     // billboard datums varied run-to-run and flaked the ground/arrival
     // groups. Stub sampleHeight to "no tiles anywhere" for the whole run; the
@@ -1990,7 +1985,7 @@ async function main() {
       ground.droppedGone && !ground.milDroppedGone,
       `flights(landed ghost) gone=${ground.droppedGone} military(born parked) gone=${ground.milDroppedGone} (want true/false)`);
     // Fix 2 (2026-07-03 field test): ground planes VANISHED when zooming into
-    // airports — grounded altitudes sit at/below the photoreal tile skin, so the
+    // airports — grounded altitudes sit at/below the rendered terrain surface, so the
     // depth test buried the billboard up close (log-depth imprecision let it win
     // from orbit). RE-PINNED for round 5 (owner directive 2026-07-06: "I just
     // want the planes and their lines to ALWAYS be visible... evenly
@@ -2093,8 +2088,8 @@ async function main() {
           // 3D models on (QA param) — the owner decision under test.
           flights.setParams({ models3d: true });
           military.setParams({ models3d: true });
-          // Force the ground snap's tiles-ready gate open (b9b pattern): headless the
-          // Google tileset never finishes streaming, so tilesLoaded stays false.
+          // Force the optional tiles-ready gate open: a heavy 3D primitive can
+          // remain unsettled indefinitely under headless rendering.
           let tilesForced = false;
           try {
             if (gev.tileset) {
@@ -3478,7 +3473,7 @@ async function main() {
       // The visual/data split is INTENTIONAL: pixels are floored, measurements
       // are not. Pinned so a later "floor everything" pass has to argue with it.
       // Asserted in BOTH regimes — who owns the visual must never change what a
-      // query, the cockpit altimeter, or a proximity count reports.
+      // query, the tracked readout, or a proximity count reports.
       record('display-floor/regime: data APIs report sensor truth in BOTH regimes, floored or not',
         !dfTracked.error
           && Number.isFinite(dfIn.reportedAltM) && Math.abs(dfIn.reportedAltM) < 1

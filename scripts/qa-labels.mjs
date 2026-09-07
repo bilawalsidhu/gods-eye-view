@@ -259,7 +259,7 @@ async function main() {
           ? String(input)
           : input?.url;
         const url = new URL(requestUrl, window.location.href);
-        if (url.origin === appOrigin && url.pathname === '/api/openai/hud-summary') {
+        if (url.origin === appOrigin && url.pathname === '/api/azure/foundry/hud-summary') {
           return Promise.resolve(new Response(JSON.stringify({ summary: 'QA globe ready' }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },

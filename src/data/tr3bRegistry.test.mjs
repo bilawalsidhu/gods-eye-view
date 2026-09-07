@@ -29,8 +29,6 @@ import militaryFlightsLayer, {
   _setTrackedMilitaryRefreshStateForTest,
   mapAnalystRecord as mapMilitaryAnalystRecord,
 } from './militaryFlights.js';
-import { findCompatibleHistoryIndex } from './militaryAwareness.js';
-import { createGevActionRunner } from '../voice/gevActions.js';
 import { ANALYST_LAYERS, createAnalystEngine } from './analystEngine.js';
 
 /** Strip block and line comments so source pins scan CODE, not prose. */
@@ -78,19 +76,16 @@ test('tr3b registry: setTr3b is explicit and idempotent; unusable ids are inert'
   clearTr3bRegistry();
 });
 
-test('tr3b sprite variant: unconverted passes the class through, converted picks by style', () => {
+test('tr3b sprite variant: unconverted passes the class through and converted uses the triangle', () => {
   clearTr3bRegistry();
   // Identity for every ordinary contact — this is what lets the layers route
   // EVERY aircraftIcon() call through the resolver without behaviour change.
   assert.equal(tr3bIconKind('a1b2c3', 'airliner'), 'airliner');
-  assert.equal(tr3bIconKind('a1b2c3', 'helicopter', { hot: true }), 'helicopter');
+  assert.equal(tr3bIconKind('a1b2c3', 'helicopter'), 'helicopter');
   assert.equal(tr3bIconKind('a1b2c3', undefined), undefined);
 
   setTr3b('a1b2c3', true);
-  assert.equal(tr3bIconKind('a1b2c3', 'airliner'), 'tr3b', 'normal styles get the cold triangle');
-  assert.equal(tr3bIconKind('a1b2c3', 'airliner', { hot: false }), 'tr3b');
-  assert.equal(tr3bIconKind('a1b2c3', 'airliner', { hot: true }), 'tr3bHot',
-    'FLIR/NVG/surveillance (irBoost) get the thermal-reactive variant');
+  assert.equal(tr3bIconKind('a1b2c3', 'airliner'), 'tr3b');
   // Class no longer influences the glyph once converted.
   assert.equal(tr3bIconKind('a1b2c3', 'fastjet'), 'tr3b');
   clearTr3bRegistry();
@@ -98,17 +93,13 @@ test('tr3b sprite variant: unconverted passes the class through, converted picks
 
 test('tr3b sprites are real distinct glyphs, not the airliner fallback', () => {
   const cold = aircraftIcon('tr3b');
-  const hot = aircraftIcon('tr3bHot');
   const airliner = aircraftIcon('airliner');
   assert.notEqual(cold, airliner, 'tr3b is a registered kind, not the unknown-kind fallback');
-  assert.notEqual(hot, airliner);
-  assert.notEqual(cold, hot, 'the thermal variant is a separate sprite');
   // Both rasters exist so the tracked billboard can use the crisp 192 px source.
   assert.notEqual(aircraftIcon('tr3b', TRACKED_ICON_PX), cold);
 
   const coldSvg = decodeIcon(cold);
-  const hotSvg = decodeIcon(hot);
-  for (const svg of [coldSvg, hotSvg]) {
+  for (const svg of [coldSvg]) {
     // Nose-up isosceles triangle (apex toward -Y) so the shared screen-projected
     // rotation pipeline points it along the display course like every sprite.
     assert.match(svg, /M0,-38 L 40,30 L -40,30 Z/);
@@ -121,12 +112,6 @@ test('tr3b sprites are real distinct glyphs, not the airliner fallback', () => {
   // Cold: a near-black hull with only subtly visible lights (no pure white).
   assert.match(coldSvg, /fill="#0d1014"/);
   assert.doesNotMatch(coldSvg, /fill="#ffffff"/);
-  // Hot: cold hull, white emitter cores, and a baked glow halo for bloom/FLIR.
-  assert.match(hotSvg, /fill="#0b0e12"/);
-  assert.match(hotSvg, /radialGradient id="tr3bGlow"/);
-  assert.equal((hotSvg.match(/fill="url\(#tr3bGlow\)"/g) || []).length, 4,
-    'all four emitters carry a glow halo');
-  assert.match(hotSvg, /fill="#ffffff"/);
 });
 
 test('tr3b class label overrides the real type only for converted contacts', () => {
@@ -237,12 +222,12 @@ test('both flight layers keep a converted contact 2D and visible (render invaria
     // (2026-08-19), so the suppression moved from a conjunct on
     // `_modelRegimeActive()` to an explicit early return. The invariant is
     // unchanged: a converted contact never reaches the model handoff.
-    assert.match(source, /if \(!_trackedIcao \|\| _cockpitContactMode \|\| isTr3b\(_trackedIcao\)\) \{/,
+    assert.match(source, /if \(!_trackedIcao \|\| isTr3b\(_trackedIcao\)\) \{/,
       `${name}: the standalone tracked model is suppressed for a converted contact`);
 
     // 2. The billboard is never hidden by that suppression — it must keep
     //    satisfying the getNearby/getDetectableObjects visibility guards, so a
-    //    converted contact still works in Contacts and Cockpit.
+    //    converted contact still works in Contacts.
     assert.match(source, /if \(bb && id !== _trackedIcao\) bb\.show = true;|if \(modelled && id !== _trackedIcao\) modelled\.show = true;/,
       `${name}: converting restores the billboard the model handoff had hidden`);
 
@@ -325,8 +310,7 @@ test('conversions are session-scoped and no lifecycle path clears them', async (
 test('analyst records report the class the contact RENDERS as, in both layers', () => {
   clearTr3bRegistry();
   assert.equal(TR3B_CLASS, 'tr3b');
-  // Style-independent on purpose: an analyst answer must not change with FLIR.
-  assert.notEqual(TR3B_CLASS, 'tr3bHot');
+  // Style-independent on purpose.
 
   const civil = { callsign: 'SWA696', klass: 'airliner', rawLat: 30.2, rawLon: -97.7 };
   const mil = { callsign: 'RCH451', klass: 'fastjet', rawLat: 30.2, rawLon: -97.7 };
@@ -418,83 +402,6 @@ test('a converted contact never consumes a 3D model CAP SLOT', async () => {
     assert.match(source, /modelEligible\.size >= cap/,
       `${name}: the cap bounds the candidate-derived eligible set`);
   }
-});
-
-test('cockpit class filter matches a converted contact end to end', async () => {
-  // The chain that was dead-ending: a spoken "TR-3B" is normalized by the voice
-  // layer, then the cockpit next/previous path matches it against the
-  // aircraftClass on getNearby RECORDS — which used to carry the underlying
-  // airframe class, so the filter never matched. Real normalizer + real
-  // getNearby record builder + real filter matcher; only the styleManager glue
-  // (covered by its own ui tests) is stubbed.
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  clearTr3bRegistry();
-  const icao24 = 'abc123';
-  const center = Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 200);
-
-  // 1) Real voice normalization: what the cockpit path actually receives.
-  const seen = [];
-  const runner = createGevActionRunner({
-    viewer: {
-      clock: { onTick: { addEventListener: () => () => {} } },
-      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-      camera: { moveEnd: { addEventListener() {} } },
-    },
-    styleManager: {
-      controlCockpit(action, options) {
-        seen.push(options.aircraftClass);
-        return { ok: true, state: { active: true, navigation: { canNext: true, canPrevious: true, canFocus: true } } };
-      },
-    },
-    dataManager: { layers: new Map(), getAll: () => [] },
-  });
-  await runner('control_cockpit', { action: 'next', aircraftClass: 'TR-3B' });
-  await runner('control_cockpit', { action: 'next', aircraftClass: 'airliner' });
-  const [spokenTr3b, spokenAirliner] = seen;
-  assert.equal(spokenTr3b, TR3B_CLASS);
-  assert.equal(spokenAirliner, 'airliner');
-
-  // 2) Real getNearby record for a real (converted) contact in the layer.
-  const seed = () => _setTrackedFlightRefreshStateForTest({
-    icao24,
-    entity: null,
-    billboard: {
-      position: Cesium.Cartesian3.fromDegrees(-97.71, 30.21, 10_668),
-      color: Cesium.Color.WHITE,
-      show: true,
-    },
-    billboardCollection: { show: true, remove() {} },
-    viewer: { camera: { positionCartographic: null }, scene: {} },
-    tracked: false,
-    meta: { callsign: 'SWA696 ', altitude: 10_668, klass: 'airliner', onGround: false },
-  });
-  const recordFor = () => flightsLayer.getNearby(center, 250_000, 25)
-    .find((r) => r.icao24 === icao24);
-
-  // 3) Real filter matcher over that record, via the exported navigation helper.
-  const matches = (record, aircraftClass) => findCompatibleHistoryIndex(
-    [{ layerId: 'flights', id: icao24 }], -1, 1,
-    { aircraftClass, resolveItem: () => record },
-  ) === 0;
-
-  setTr3b(icao24, true);
-  seed();
-  const converted = recordFor();
-  assert.ok(converted, 'the converted contact is still returned by getNearby');
-  assert.equal(converted.aircraftClass, TR3B_CLASS,
-    'the record reports the class it renders as');
-  assert.equal(matches(converted, spokenTr3b), true,
-    'a spoken "TR-3B" cockpit filter selects the converted contact');
-  assert.equal(matches(converted, spokenAirliner), false,
-    'the converted contact no longer answers to its underlying class');
-
-  setTr3b(icao24, false);
-  seed();
-  const restored = recordFor();
-  assert.equal(restored.aircraftClass, 'airliner', 'unconverting restores the real class');
-  assert.equal(matches(restored, spokenTr3b), false, 'no TR-3B match once restored');
-  assert.equal(matches(restored, spokenAirliner), true, 'the original class filter works again');
-  clearTr3bRegistry();
 });
 
 test('military records and detection cards agree with the conversion', () => {

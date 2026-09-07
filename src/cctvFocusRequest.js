@@ -8,7 +8,7 @@ export const CCTV_ACTIVATION_RESULT = Object.freeze({
 
 /**
  * Activate a camera selected by an in-world user click, then request the UI's
- * cockpit-safe explicit focus path. Programmatic activation and auto-hop do not
+ * immersive-view-safe explicit focus path. Programmatic activation and auto-hop do not
  * call this function, so they cannot emit the request.
  * @param {string} cameraId - Clicked camera ID.
  * @param {(cameraId: string) => string} activate - Discriminated CCTV activation callback.
@@ -49,7 +49,7 @@ export function registerCctvFocusRequestListener(eventTarget, listener) {
 
 /**
  * Route one CCTV world-click request through StyleManager's existing explicit
- * focus policy, preserving tracking release and cockpit refusal behavior.
+ * focus policy, preserving tracking release and Drone View refusal behavior.
  * @param {CustomEvent|Object} event - Focus-request event.
  * @param {(activate: Function, focus: Function) => *} runExplicitFocus - Policy path.
  * @param {(cameraId: string, durationSec: number) => *} focusCamera - CCTV flight callback.

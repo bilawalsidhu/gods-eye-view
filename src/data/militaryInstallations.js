@@ -2,7 +2,6 @@ import * as Cesium from 'cesium';
 import { governorRequestRender } from '../renderGovernor.js';
 import {
   clearSelectedEntityContextForLayer,
-  getSelectedEntityContext,
   registerEntityContext,
   removeEntityContextsForLayer,
   selectEntityContext,
@@ -18,20 +17,17 @@ import {
 // sequentially so overlapping renders cannot stack requests on the proxy.
 import { warmFireAnchorFloors } from './fireAnchors.js';
 import { normalizeMilitaryInstallations } from './militaryInstallationData.js';
-import { installationFeedback } from './installationFeedback.js';
 import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
 
 const LAYER_ID = 'military-installations';
 const REQUEST_DEBOUNCE_MS = 500;
 const MAX_VIEWPORT_DEGREES = 10;
 const MAX_RENDERED = 700;
-const GOOGLE_MILITARY_PLACE_TYPES = new Set(['military_base']);
 const COLOR_BY_CLASS = {
   airfield: '#5aa9ff',
   naval_base: '#48c7d5',
   range: '#d9a85d',
   military_land: '#9ca6b0',
-  places_candidate: '#c58cff',
 };
 const EARTH_MEAN_RADIUS_M = 6371008.8;
 const DISTANCE_PREFILTER_MARGIN_M = 5000;
@@ -76,34 +72,13 @@ const state = {
   retryTimer: null,
   /** Current backoff step for that retry; 0 = next failure starts at the minimum. */
   retryDelayMs: 0,
-  retryAt: 0,
-  failureReason: null,
   moveEndRemove: null,
   clickHandler: null,
   timer: null,
-  googleSearchRequested: false,
 };
 
 function colorFor(record) {
   return Cesium.Color.fromCssColorString(COLOR_BY_CLASS[record.class] || '#9ca6b0');
-}
-
-/**
- * Classify a Places text-search result without turning a name match into a
- * mapped military-land claim. Google currently has no documented military
- * Places type, so ordinary results remain visually distinct candidates; the
- * explicit branch is retained for any source response that does carry one.
- * @param {object} place Google Places result.
- * @returns {string|null} Installation class, or null when not authoritative.
- */
-export function classifyGoogleMilitaryPlace(place) {
-  const types = new Set([
-    place?.primaryType,
-    ...(Array.isArray(place?.types) ? place.types : []),
-  ].map((value) => String(value || '').trim().toLowerCase()).filter(Boolean));
-  return [...types].some((type) => GOOGLE_MILITARY_PLACE_TYPES.has(type))
-    ? 'military_land'
-    : 'places_candidate';
 }
 
 /** @param {object} record @returns {string} Human-readable source attribution. */
@@ -243,13 +218,7 @@ function renderableRecords() {
   return selected ? [...rendered, selected] : rendered;
 }
 
-function renderRecords({ claimSelection = false } = {}) {
-  // Context navigation can select another layer without a canvas click.
-  // A delayed floor/data repaint must not steal that newer selection back.
-  const selectedContext = getSelectedEntityContext();
-  if (!claimSelection && state.selectedId && selectedContext && selectedContext.id !== state.selectedId) {
-    state.selectedId = null;
-  }
+function renderRecords() {
   // Post-moveEnd debounced fetches commit after the camera settles; the
   // rebuilt entities need one frame in idle mode. (perf wave 2 fix)
   governorRequestRender('installations-render');
@@ -349,7 +318,7 @@ function selectRecord(id) {
   const record = state.recordById.get(id);
   if (!record || !state.dataSource) return false;
   state.selectedId = id;
-  renderRecords({ claimSelection: true });
+  renderRecords();
   // renderRecords drops selectedId when the record produced no entity.
   return state.selectedId === id;
 }
@@ -361,16 +330,7 @@ function installInteraction(viewer) {
     if (!state.enabled) return;
     const picked = viewer.scene.pick(click.position);
     const id = typeof picked?.id?.id === 'string' ? picked.id.id : null;
-    if (id && state.recordById.has(id) && id !== state.selectedId) {
-      selectRecord(id);
-    } else if (state.selectedId) {
-      // Clicking the selected site again, empty map, or another contact
-      // releases this layer's selection. Clear only our shared context so a
-      // sibling click handler's newly selected aircraft/site stays intact.
-      state.selectedId = null;
-      clearSelectedEntityContextForLayer(LAYER_ID);
-      renderRecords();
-    }
+    if (id && state.recordById.has(id)) selectRecord(id);
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 }
 
@@ -398,10 +358,8 @@ function scheduleUnavailableRetry() {
   if (!state.enabled) return;
   clearTimeout(state.retryTimer);
   state.retryDelayMs = installationRetryDelayMs(state.retryDelayMs);
-  state.retryAt = Date.now() + state.retryDelayMs;
   state.retryTimer = setTimeout(() => {
     state.retryTimer = null;
-    state.retryAt = 0;
     if (state.enabled && !state.loading) loadInstallations();
   }, state.retryDelayMs);
 }
@@ -409,7 +367,6 @@ function scheduleUnavailableRetry() {
 function clearUnavailableRetry({ resetBackoff = true } = {}) {
   clearTimeout(state.retryTimer);
   state.retryTimer = null;
-  state.retryAt = 0;
   if (resetBackoff) state.retryDelayMs = 0;
 }
 
@@ -437,18 +394,13 @@ async function loadInstallations() {
   const requestAbort = new AbortController();
   state.abort = requestAbort;
   state.loading = true;
-  clearUnavailableRetry({ resetBackoff: false });
-  // The previous attempt's failure is not the outcome of this new attempt.
-  setInstallationStatus('loading');
   try {
     const fetchInstallations = async (exact) => {
       const query = new URLSearchParams(Object.entries(box).map(([key, value]) => [key, value.toFixed(5)]));
       if (exact) query.set('exact', '1');
       const response = await fetch(`/api/military-installations?${query}`, { signal: requestAbort.signal });
       const body = await response.json();
-      if (!response.ok) throw Object.assign(new Error(body?.error || `Installation feed HTTP ${response.status}`), {
-        failureReason: ['rate_limited', 'timeout', 'query_failed'].includes(body?.reason) ? body.reason : 'unavailable',
-      });
+      if (!response.ok) throw new Error(body?.error || `Installation feed HTTP ${response.status}`);
       return body;
     };
 
@@ -466,46 +418,6 @@ async function loadInstallations() {
     // was actually asked for so nothing off-screen reaches the map or the
     // "current viewport only" context claim.
     const records = normalized.records.filter((record) => installationWithinViewport(record, box));
-    let placesError = null;
-    if (state.googleSearchRequested) {
-      state.googleSearchRequested = false;
-      const latitude = (box.south + box.north) / 2;
-      const longitude = (box.west + box.east) / 2;
-      const radiusM = Math.min(50000, Math.max(1000, Math.round(Math.max(box.north - box.south, box.east - box.west) * 55_000)));
-      try {
-        const placesResponse = await fetch(`/api/google/text-search?${new URLSearchParams({
-          q: 'military installation', lat: latitude.toFixed(5), lon: longitude.toFixed(5), radiusM: String(radiusM),
-        })}`, { signal: requestAbort.signal });
-        const placesPayload = await placesResponse.json();
-        if (!placesResponse.ok) throw new Error(placesPayload?.error || `Google Places HTTP ${placesResponse.status}`);
-        const seen = new Set(records.map((record) => `${record.name.toLowerCase()}|${record.latitude.toFixed(3)}|${record.longitude.toFixed(3)}`));
-        for (const place of Array.isArray(placesPayload?.places) ? placesPayload.places : []) {
-          if (!place?.id || !place?.name || !Number.isFinite(place.latitude) || !Number.isFinite(place.longitude)) continue;
-          const placeClass = classifyGoogleMilitaryPlace(place);
-          const signature = `${String(place.name).toLowerCase()}|${place.latitude.toFixed(3)}|${place.longitude.toFixed(3)}`;
-          if (seen.has(signature)) continue;
-          seen.add(signature);
-          const retrievedAt = new Date().toISOString();
-          records.push({
-            id: `google:${place.id}`,
-            kind: placeClass === 'military_land' ? 'installation' : 'place_candidate',
-            class: placeClass,
-            name: String(place.name).trim(),
-            latitude: place.latitude,
-            longitude: place.longitude,
-            footprint: null,
-            primaryType: place.primaryType || null,
-            placeTypes: Array.isArray(place.types) ? place.types : [],
-            sources: [{ name: 'Google Maps Places', id: place.id, retrievedAt }],
-            validation: 'unreviewed',
-            retrievedAt,
-          });
-        }
-      } catch (error) {
-        if (error?.name === 'AbortError') return;
-        placesError = 'Google Places search unavailable; showing mapped sites';
-      }
-    }
     await resolveGroundFloorCellsBounded(records.map((record) => ({
       lat: record.latitude,
       lon: record.longitude,
@@ -518,19 +430,17 @@ async function loadInstallations() {
     // Even the exact-viewport retry can saturate in a dense area. Say so rather
     // than implying the view is completely surveyed.
     state.saturated = saturated;
-    state.failureReason = null;
     clearUnavailableRetry();
     setInstallationStatus(
       state.records.length ? (state.stale ? 'stale' : 'ready') : 'empty',
       payload.status === 'stale'
         ? 'Serving cached mapped context'
-        : (saturated ? 'Too many mapped sites in view to list them all' : placesError),
+        : (saturated ? 'Too many mapped sites in view to list them all' : null),
     );
     renderRecords();
     warmInstallationFloors(state.records);
   } catch (error) {
     if (error?.name === 'AbortError') return;
-    state.failureReason = error?.failureReason || 'unavailable';
     setInstallationStatus('unavailable', error?.message || 'Installation context unavailable');
     scheduleUnavailableRetry();
   } finally {
@@ -546,7 +456,7 @@ const militaryInstallationsLayer = {
   id: LAYER_ID,
   name: 'Mapped Installations',
   icon: '⌖',
-  source: 'OpenStreetMap + optional Google Maps Places',
+  source: 'OpenStreetMap',
   updateInterval: 0,
   statsRefreshInterval: 1000,
   init(viewer) {
@@ -574,15 +484,8 @@ const militaryInstallationsLayer = {
     if (state.dataSource) state.dataSource.show = false;
     clearSelectedEntityContextForLayer(LAYER_ID);
     state.selectedId = null;
-    state.failureReason = null;
-    setInstallationStatus('idle');
   },
   update() { return loadInstallations(); },
-  /** Request a one-shot Google Maps Places search around the current map view. */
-  searchNearby() {
-    state.googleSearchRequested = true;
-    return loadInstallations();
-  },
   destroy(viewer) {
     this.disable();
     state.moveEndRemove?.();
@@ -663,10 +566,6 @@ const militaryInstallationsLayer = {
       error: state.error,
       status: state.status,
       loading: state.loading,
-      retryAt: state.retryAt,
-      retrying: state.loading && Boolean(state.failureReason),
-      failureReason: state.failureReason,
-      statusMessage: installationFeedback({ ...state, retrying: state.loading && Boolean(state.failureReason) }),
       loadingLabel: state.loading ? 'loading mapped installation context' : '',
     };
   },

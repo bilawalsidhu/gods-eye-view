@@ -3,26 +3,11 @@ import assert from 'node:assert/strict';
 import createViteConfig, {
   adsbLolFallbackAnchor,
   coalesceProxyRequest,
-  launchLibraryRequestHeaders,
-  keylessGooglePlacesResponse,
-  LL2_CACHE_TTL_MS,
   readResponseJsonCapped,
   regionalBriefHasAnySource,
   validMilitaryInstallationBox,
   validRegionalPoint,
 } from '../../vite.config.js';
-
-test('missing Google place context is a quiet keyless capability, not a 503', () => {
-  assert.deepEqual(keylessGooglePlacesResponse(undefined), {
-    statusCode: 200,
-    payload: { configured: false, error: null, places: [] },
-  });
-  assert.deepEqual(keylessGooglePlacesResponse('   '), {
-    statusCode: 200,
-    payload: { configured: false, error: null, places: [] },
-  });
-  assert.equal(keylessGooglePlacesResponse('configured-key'), null);
-});
 
 test('regional proxy rejects absent and blank coordinates instead of coercing them to zero', () => {
   assert.equal(validRegionalPoint(new URLSearchParams('longitude=12.5')), null);
@@ -47,7 +32,6 @@ test('new data proxies install the same routes in dev and preview servers', () =
   const config = createViteConfig({ mode: 'test' });
   const byName = new Map(config.plugins.map((plugin) => [plugin.name, plugin]));
   for (const name of [
-    'rocket-launches-proxy',
     'military-installations-proxy',
     'regional-brief-proxy',
     'weather-effects-proxy',
@@ -55,15 +39,6 @@ test('new data proxies install the same routes in dev and preview servers', () =
     assert.equal(typeof byName.get(name)?.configureServer, 'function', `${name} dev hook`);
     assert.equal(typeof byName.get(name)?.configurePreviewServer, 'function', `${name} preview hook`);
   }
-});
-
-test('Launch Library uses a 15-minute cache and optional server-side token header', () => {
-  assert.equal(LL2_CACHE_TTL_MS, 15 * 60_000);
-  assert.deepEqual(launchLibraryRequestHeaders(''), { Accept: 'application/json' });
-  assert.deepEqual(launchLibraryRequestHeaders(' secret '), {
-    Accept: 'application/json',
-    Authorization: 'Token secret',
-  });
 });
 
 test('proxy request coalescing shares one per-key refresh and clears it after settlement', async () => {

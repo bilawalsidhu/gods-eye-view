@@ -2,7 +2,7 @@
  * groundSnap.js — one-shot cached ground-height snap for MODELED grounded aircraft.
  *
  * Why: a parked/taxiing plane's feed altitude is last-known baro or 0 m — nowhere
- * near the photoreal tile skin in ellipsoid heights (buried ~100+ m at inland
+ * near the rendered-mesh tile skin in ellipsoid heights (buried ~100+ m at inland
  * airports like AUS, floating ~30 m at sea-level fields like SFO, where the geoid
  * sits below the ellipsoid). A 3D model placed at the meta altitude therefore
  * renders inside the tiles or hovering above them. Billboards dodge this with
@@ -132,7 +132,7 @@ const SAMPLE_BUDGET_PER_WINDOW = 4;
 const SAMPLE_WINDOW_MS = 250;
 
 /**
- * True when the active photoreal tileset has finished streaming the tiles in
+ * True when the active rendered-mesh tileset has finished streaming the tiles in
  * view (cctv.js's projectionTilesReady pattern: first Cesium3DTileset found in
  * scene.primitives, duck-typed via its boolean tilesLoaded). Sampling before
  * that both blows the frame budget on forced synchronous loads and produces

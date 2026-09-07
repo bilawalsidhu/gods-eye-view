@@ -223,7 +223,7 @@ async function main() {
       window.fetch = (input, init) => {
         const url = typeof input === 'string' ? input : (input && input.url) || '';
         const S = window.__SPR;
-        if (url.includes('/api/openai/hud-summary')) {
+        if (url.includes('/api/azure/foundry/hud-summary')) {
           return Promise.resolve(jsonResponse({ summary: 'Aircraft scale QA' }));
         }
         const nowSec = Date.now() / 1000 + (S.timeOffsetSec || 0);

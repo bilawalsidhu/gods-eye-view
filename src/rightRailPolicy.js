@@ -13,8 +13,6 @@ export function shouldHideCollapsedRightPanels({ hudVariant, hasExpandedPanel })
 
 const GLOBAL_CONTEXT_EXPLICIT_ACTIONS = new Set([
   'contacts',
-  'space-missions',
-  'cockpit',
 ]);
 
 /**
@@ -23,11 +21,8 @@ const GLOBAL_CONTEXT_EXPLICIT_ACTIONS = new Set([
  * session or replaying saved state must preserve the saved collapsed state,
  * and a failed transition must leave the prior panel state untouched.
  *
- * Whether an aircraft is already selected is deliberately irrelevant: an
- * explicit Cockpit action still reveals the context that supports that track.
- *
  * @param {object} input Action outcome and coordination state.
- * @param {'contacts'|'space-missions'|'cockpit'|string} input.action Completed action.
+ * @param {'contacts'|string} input.action Completed action.
  * @param {boolean} input.explicitUserAction Whether the user directly requested it.
  * @param {boolean} input.succeeded Whether the requested transition completed.
  * @param {boolean} [input.restoring=false] Whether saved/session state is being restored.

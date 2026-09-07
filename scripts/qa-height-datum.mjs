@@ -2,10 +2,9 @@
  * qa-height-datum.mjs — height/vertical-datum fix numeric proof harness
  * (docs/plans/2026-07-05-entity-height-datum-fix.md Task 8).
  *
- * Scaffold reused verbatim from qa-cctv-v2.mjs: the puppeteer launcher
- * (Chrome executable discovery, headless flags), `QA_BASE_URL` env,
- * `record()`/tally pattern, and the Google-Maps-key-injection dev-server
- * recipe documented in its header comment. See that file for the reasoning
+ * Scaffold reused from qa-cctv-v2.mjs: the puppeteer launcher (Chrome
+ * executable discovery, headless flags), `QA_BASE_URL` env, and
+ * `record()`/tally pattern. See that file for the reasoning
  * behind the launch flags and the SwiftShader caveats they share.
  *
  * Unlike qa-cctv-v2 (frustum GEOMETRY / raycast-count invariants), this
@@ -23,13 +22,10 @@
  *      authoritative Re:Earth ellipsoidal value fetched through the app's
  *      OWN `/api/terrain/heights` proxy (not a second upstream call — the
  *      proxy IS the oracle here, matching Task 2/3's contract). Keeping the
- *      prior separate is essential because Google-3D can legitimately refine
- *      the rendered ground to the photogrammetric mesh while the immutable
- *      Re:Earth prior remains the fallback/datum reference. The prior check is
- *      `|groundPriorM - reearthEllipsoid| < 6m`. Google-3D after
- *      the one-shot snap: London/Austin active-camera ground must fall in
- *      the brief's bands (tileset-vs-DEM legitimately differs by building
- *      height, so bands not exact-match).
+ *      prior separate is essential because the rendered ground can refine
+ *      independently while the immutable Re:Earth prior remains the
+ *      fallback/datum reference. The prior check is
+ *      `|groundPriorM - reearthEllipsoid| < 6m`.
  *
  *   2. Aircraft — sample >=10 live aircraft via the flights layer's public
  *      API. `renderAltitudeM` isn't exposed as a named field on any public
@@ -78,8 +74,8 @@
  * Upstream-dependent assertions (live Re:Earth `/api/terrain/heights`, live
  * OpenSky aircraft) are marked INCONCLUSIVE — not FAIL — when the upstream
  * is unreachable this run, mirroring qa-cctv-v2's tiles-timeout handling.
- * GL-dependent tile settling (the Google-3D one-shot ground snap actually
- * completing under headless SwiftShader) is likewise inconclusive-on-timeout.
+ * GL-dependent terrain settling under headless SwiftShader is likewise
+ * inconclusive-on-timeout.
  *
  * Run:  QA_BASE_URL=http://localhost:4300 node scripts/qa-height-datum.mjs
  *
@@ -140,32 +136,6 @@ function record(name, ok, detail) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-/**
- * Waits for the scene's 3D tileset to report tilesLoaded===true. Copied from
- * qa-cctv-v2.mjs (see its header comment for why this must be re-awaited
- * fresh before each action that depends on a REAL ground sample, not
- * reused from an earlier wait).
- * @param {import('puppeteer').Page} page
- * @param {number} [timeoutMs=15000]
- * @returns {Promise<boolean>}
- */
-function waitForTilesLoaded(page, timeoutMs = 15000) {
-  return page.waitForFunction(
-    () => {
-      const scene = window.__godsEyeView.viewer.scene;
-      const prims = scene.primitives;
-      for (let i = 0; i < prims.length; i++) {
-        const p = prims.get(i);
-        if (p && p.constructor && p.constructor.name === 'Cesium3DTileset') {
-          return p.tilesLoaded === true;
-        }
-      }
-      return true;
-    },
-    { timeout: timeoutMs }
-  ).then(() => true).catch(() => false);
-}
 
 /**
  * Reads a camera's placed mount-point cartographic height off its
@@ -412,50 +382,6 @@ async function main() {
     }
     console.log('');
 
-    // -----------------------------------------------------------------------
-    // Google-3D band check: activate the London and Austin cameras nearest
-    // the viewer (mirrors qa-cctv-v2's focusNearest activation pattern),
-    // wait for the one-shot ground snap to complete (tilesLoaded gate), then
-    // assert the ACTIVE camera's ground falls in the brief's band. Bands
-    // (not exact) because the Google tileset surface legitimately differs
-    // from the Re:Earth DEM by building height once the snap refines it.
-    // -----------------------------------------------------------------------
-    console.log('Checking Google-3D active-camera ground BANDS (post-snap)...');
-    async function checkActiveCameraBand(cityLabel, targetCamId, band) {
-      await page.evaluate((id) => {
-        window.__godsEyeView.dataManager.layers.get('cctv').module.selectCamera(id, { focus: true, durationSec: 0.1 });
-      }, targetCamId);
-      await sleep(600);
-      const tilesReady = await waitForTilesLoaded(page, 30000);
-      // Give the one-shot completion pass a beat to land even after tiles
-      // report ready (update() ticks on its own interval — see cctv.js).
-      await sleep(1500);
-      const geom = await readCameraGround(page, targetCamId);
-      if (!tilesReady) {
-        record(`${cityLabel} active camera (${targetCamId}) google-3d ground ∈ [${band[0]},${band[1]}]m`, null,
-          `tiles never reported loaded within 30s under headless GL — environmental, inconclusive (recordGround=${geom?.groundM?.toFixed?.(1) ?? 'n/a'}m)`);
-        return;
-      }
-      if (!geom || !Number.isFinite(geom.groundM)) {
-        record(`${cityLabel} active camera (${targetCamId}) google-3d ground ∈ [${band[0]},${band[1]}]m`, false, 'ground unreadable');
-        return;
-      }
-      const inBand = geom.groundM >= band[0] && geom.groundM <= band[1];
-      record(`${cityLabel} active camera (${targetCamId}) google-3d ground ∈ [${band[0]},${band[1]}]m`, inBand,
-        `recordGround=${geom.groundM.toFixed(1)}m`);
-    }
-
-    if (londonCams.length) {
-      await checkActiveCameraBand('London', londonCams[0].id, [45, 75]);
-    } else {
-      record('London active camera google-3d ground ∈ [45,75]m', null, 'no London camera available to test');
-    }
-    if (austinCams.length) {
-      await checkActiveCameraBand('Austin', austinCams[0].id, [110, 135]);
-    } else {
-      record('Austin active camera google-3d ground ∈ [110,135]m', null, 'no Austin camera available to test');
-    }
-
     // =========================================================================
     // Group 2: Aircraft render altitude
     // =========================================================================
@@ -627,8 +553,7 @@ async function main() {
     // Group 3: Regime C re-resolve
     // =========================================================================
     console.log('Switching map stack to keyless OSM (regime C)...');
-    // Grab a London camera's ground BEFORE the switch (still whatever regime
-    // we were in — Google-3D, given the app's default).
+    // Grab a London camera's ground before the source switch.
     const regimeCTargetId = londonCams[0]?.id || austinCams[0]?.id || allCameras[0]?.id;
     const groundBeforeSwitch = regimeCTargetId ? await readCameraGround(page, regimeCTargetId) : null;
 
@@ -636,15 +561,9 @@ async function main() {
       await window.__godsEyeView.mapStackController.setStack('osm');
     });
     // Real (non-flat) terrain loads ASYNCHRONOUSLY on a globe stack, and by two
-    // different code paths depending on whether a Cesium Ion token is present:
-    //   - NO token  → keyless Re:Earth `CesiumTerrainProvider` via a DIRECT
-    //                 assignment (synchronous — ready immediately).
-    //   - token     → Cesium World Terrain via `scene.setTerrain(...)`, whose
-    //                 provider resolves in the background: `viewer.terrainProvider`
-    //                 is transiently `null` until the World Terrain layer.json
-    //                 loads (can exceed 1.5 s under SwiftShader), THEN becomes a
-    //                 `CesiumTerrainProvider`.
-    // Either way the END STATE is a real `CesiumTerrainProvider`, never the flat
+    // code path: keyless Re:Earth `CesiumTerrainProvider`, installed
+    // asynchronously by the map-stack controller. The expected end state is a
+    // real `CesiumTerrainProvider`, not the flat
     // `EllipsoidTerrainProvider` regime C used to be stuck on. Poll for that end
     // state instead of a fixed sleep (a fixed sleep races the async World Terrain
     // load — the old failure mode). Report whatever it settled on.

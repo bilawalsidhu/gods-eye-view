@@ -1,22 +1,22 @@
 /**
  * Activates the nearest CCTV record on layer enable and flies only when no
- * aircraft tracker or cockpit camera owns the view.
+ * tracked entity or immersive Drone View owns the view.
  * @param {Object} options Layer-enable focus inputs.
  * @param {*} options.trackedEntity Current Cesium tracked entity, if any.
- * @param {boolean} options.cockpitActive Whether cockpit mode owns the camera.
+ * @param {boolean} options.droneViewActive Whether Drone View owns the camera.
  * @param {() => (string|null)} options.activate Nearest-camera activation.
  * @param {(cameraId: string) => *} options.fly Optional camera flight.
  * @returns {*} Activated camera ID for a held view, or the flight result.
  */
 export function runCctvLayerEnableFocus({
   trackedEntity = null,
-  cockpitActive = false,
+  droneViewActive = false,
   activate,
   fly,
 } = {}) {
   const cameraId = activate?.();
   if (!cameraId) return false;
-  if (trackedEntity || cockpitActive) return cameraId;
+  if (trackedEntity || droneViewActive) return cameraId;
   return fly?.(cameraId);
 }
 
@@ -25,12 +25,12 @@ export function runCctvLayerEnableFocus({
  * chain. Either observation suppresses the optional CCTV focus flight.
  * @param {Object} [before={}] Ownership immediately before the await.
  * @param {Object} [after={}] Ownership immediately after the await.
- * @returns {{ trackedEntity: *, cockpitActive: boolean }} Conservative ownership.
+ * @returns {{ trackedEntity: *, droneViewActive: boolean }} Conservative ownership.
  */
 export function mergeCctvEnableOwnership(before = {}, after = {}) {
   return {
     trackedEntity: before.trackedEntity || after.trackedEntity || null,
-    cockpitActive: !!(before.cockpitActive || after.cockpitActive),
+    droneViewActive: !!(before.droneViewActive || after.droneViewActive),
   };
 }
 
@@ -41,7 +41,7 @@ export function mergeCctvEnableOwnership(before = {}, after = {}) {
  * @param {Object} options Transition dependencies.
  * @param {boolean} options.target Requested enabled state.
  * @param {(target: boolean) => Promise<*>} options.setEnabled Layer transition.
- * @param {() => Object} options.readOwnership Current tracked/cockpit state.
+ * @param {() => Object} options.readOwnership Current tracked/Drone View state.
  * @param {() => boolean} options.shouldFocus Post-transition focus predicate.
  * @param {() => (string|null)} options.activate Nearest-camera activation.
  * @param {(cameraId: string) => *} options.fly Optional camera flight.
@@ -61,7 +61,7 @@ export async function runCctvLayerEnableTransition({
   if (target === true) {
     debug?.('[UI:CCTV] ownership before setEnabled await', {
       trackedId: ownershipBefore.trackedEntity?.id ?? null,
-      cockpitActive: !!ownershipBefore.cockpitActive,
+      droneViewActive: !!ownershipBefore.droneViewActive,
     });
   }
   await setEnabled?.(target);
@@ -69,7 +69,7 @@ export async function runCctvLayerEnableTransition({
   if (target === true) {
     debug?.('[UI:CCTV] ownership after setEnabled await', {
       trackedId: ownershipAfter.trackedEntity?.id ?? null,
-      cockpitActive: !!ownershipAfter.cockpitActive,
+      droneViewActive: !!ownershipAfter.droneViewActive,
     });
   }
   if (!target || !shouldFocus?.()) return null;

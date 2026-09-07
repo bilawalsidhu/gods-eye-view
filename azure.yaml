@@ -1,0 +1,15 @@
+name: satview
+metadata:
+  template: satview-aca@0.1.0
+infra:
+  provider: bicep
+  path: infra
+services:
+  web:
+    project: .
+    host: containerapp
+    language: js
+    resourceName: ${SERVICE_WEB_NAME}
+    docker:
+      path: ./Dockerfile
+      context: .
