@@ -4,10 +4,10 @@
 > This is a **manual field-test scenario script** for the June-2026 whiteboard +
 > tracking work. The AUTOMATED gates live elsewhere: `npm test` (unit),
 > `npm run test:track` (tracking invariants), and the headless harnesses under
-> `scripts/qa-*.mjs` — see [docs/CURRENT-STATE.md](docs/CURRENT-STATE.md) for the full test surface.
+> `scripts/qa-*.mjs` — together these are the full automated test surface.
 
-This guide covers the hardened annotation and tracking behavior. Record a voice
-note + screenshots as you go; each scenario
+This guide covers the work hardened over **4 adversarial-review batches** on
+`feat/annotate-hybrid`. Record a voice note + screenshots as you go; each scenario
 lists what **✅ pass** looks like and (where it applies) the **❌ old bug** it replaces.
 
 ## Focus/horizon moving evidence

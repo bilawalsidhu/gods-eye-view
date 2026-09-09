@@ -149,7 +149,7 @@ async function createRealLocalLayerHarness({
   };
 }
 
-test('local infrastructure card copy uses the validated source fields', () => {
+test('local infrastructure card copy uses the owner-approved source fields', () => {
   assert.deepEqual(localInfrastructureOverlayCopy({
     tags: {
       name: 'DFW-1',
@@ -740,7 +740,7 @@ test('disable cancels a pending ground-retry render', async (t) => {
   );
 });
 
-// ── The retry must be able to STOP (second review) ───────────────────────────
+// ── The retry must be able to STOP (review round 2) ───────────────────────────
 //
 // The retry above arms itself off its own requested frame, so anything that
 // makes the sample permanently impossible turns it into a perpetual-motion

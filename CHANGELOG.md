@@ -3,6 +3,99 @@
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
+## [Unreleased]
+
+### Fixed
+
+- Mapped-site outages show their scheduled retry countdown and distinguish
+  known Overpass rate limits, timeouts, and query failures. Search feedback no
+  longer claims a refresh succeeded while the layer is unavailable or loading.
+- Mapped installations retain valid ways and relations that provide bounds but
+  no center. Invalid, inverted, and excessively wide bounds are rejected.
+- Clicking a selected installation again or clicking elsewhere clears its
+  selection; later refreshes no longer reclaim it after a click-away.
+- Visual presets explain their effects on hover. Unavailable map sources name
+  missing credentials and Provider Settings, while configured-but-failed
+  Google 3D routes explain the failure without asking for another key.
+
+- The Overpass proxy now rotates to the next mirror on any non-2xx upstream
+  response, not only on 5xx. `overpass-api.de` and its `lz4` alias answer 406 to
+  the proxy's User-Agent while two of the configured mirrors answer 200 to the
+  identical request, so the fan-out stopped at the first refusal with healthy
+  mirrors untried. The refusal was also cached to memory and disk and served as
+  data — boundary-class queries hold a month-long TTL — which affected every
+  Overpass-backed feature: road geometry, annotation outlines and place lookup.
+- Existing cached refusals are now ignored immediately, including during
+  stale-data fallback. Concurrent identical requests share the same last-good
+  fallback when all mirrors refuse, without duplicating upstream requests.
+
+## [0.1.1] — 2026-09-01 — Installation and live-data fixes
+
+### Changed
+
+- Tightened the README opening around keyless setup, source freshness, modeled
+  experiences, and the accessibility of the provider stack.
+
+### Fixed
+
+- Pinokio now recognizes its nested successful-install marker, so a completed
+  one-click install exposes Start instead of returning to Install.
+- The keyless `dev-fresh.sh` startup summary now names Esri World Imagery with
+  keyless terrain and identifies OpenStreetMap as the fallback.
+- All three VIIRS sources now reach the Active Fires layer. Merging a source's
+  detections used argument spread, which exceeds the engine's argument limit on
+  the two largest sources and dropped them entirely — leaving roughly a third of
+  global detections while reporting each dropped source twice, once as
+  successful with its real count and once as failed.
+- `./scripts/dev-fresh.sh` no longer crashes on stock macOS bash 3.2 when no
+  provider keys are exported: expanding the empty external-keys provenance
+  array under `set -u` was fatal there. Launches with exported keys are
+  unchanged.
+
+### Security
+
+- GBFS proxy body-size cap now measures the response in bytes
+  (`Buffer.byteLength`) instead of JavaScript string length, so the
+  `GBFS_MAX_BODY_BYTES` limit holds for multi-byte payloads and cannot be
+  overrun by non-ASCII upstream responses.
+
+## [0.1.0] — 2026-08-31 — One-click install, keyless boot, Provider Settings
+
+### Added
+- **One-click install** via Pinokio. Keyless boot lands on a live Esri World
+  Imagery satellite globe with keyless terrain; OSM takes over automatically if
+  Esri is unreachable, and the globe continues without terrain if its source is
+  unavailable.
+- **Provider Settings** (the POWER UP panel): add, replace, or remove API keys
+  inside the app. Credential files are made owner-only before any secret is
+  written — verified on macOS and Windows — and keys configured outside the
+  panel are shown read-only, never rewritten.
+- **Keyless capability responses**: the optional HUD summary and place-search
+  endpoints return a deliberate "not configured" success instead of errors, and
+  never consume rate-limit quota.
+- `.gitattributes` normalizes line endings, so Windows clones pass the full
+  test suite out of the box (#81 — thanks @ethanstoner).
+
+### Changed
+- README rewritten keyless-first around the provider ladder: zero keys → free
+  Cesium ion (eligible personal, non-commercial use) → billing-enabled Google
+  Maps.
+- Browser-built data modules no longer import `node:fs`; a repo-wide boundary
+  scan test keeps it that way (#83 — thanks @ethanstoner).
+- Aircraft-identity voice answers explicitly cover operator, type, and route,
+  and say so plainly when enrichment is unavailable instead of guessing.
+
+### Security
+- Provider Settings answers only local, unproxied requests and disables itself
+  entirely whenever the server is shared. Public datacenter and dam datasets
+  omit contact-oriented fields (see the dataset READMEs).
+
+## Pre-release development history
+
+The dated entries and internal milestone numbers below predate the first
+tagged GitHub Release. They are retained as project history and do not
+represent previously published GitHub Releases.
+
 ## [Unreleased] — 2026-08-24
 
 ### Added

@@ -19,6 +19,7 @@ import { CITY_POIS } from './locations.js';
 import { composeLocalityTag } from './hudLocality.js';
 import { ellipsoidalToMslDisplayM, ensureGeoidReady, geoidHeight } from './data/geoid.js';
 import { getBasemapLabelContext } from './voice/gevActions.js';
+import { isHudSummaryUnconfigured } from './hudSummaryResponse.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
@@ -665,10 +666,14 @@ export class IntelHUD {
         signal: controller.signal,
       });
       const data = await response.json().catch(() => null);
+      if (revision !== this._summaryRevision) return;
+      if (isHudSummaryUnconfigured(response.status, data)) {
+        this._setSummaryText(fallbackText, animate);
+        return;
+      }
       if (!response.ok || !data?.summary) {
         throw new Error(data?.error || `HTTP ${response.status}`);
       }
-      if (revision !== this._summaryRevision) return;
       this._setSummaryText(data.summary, animate);
     } catch (error) {
       if (error?.name !== 'AbortError') {

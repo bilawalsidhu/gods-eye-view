@@ -1,7 +1,7 @@
 {
   "name": "gods-eye-view",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A real-time intelligence console for planet Earth — photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
   "type": "module",
   "license": "MIT",
@@ -32,6 +32,7 @@
     "visualization"
   ],
   "scripts": {
+    "doctor": "node scripts/setup-doctor.mjs",
     "dev": "vite",
     "dev:secure": "./scripts/dev-secure.sh",
     "opensky:import": "./scripts/opensky-import-client.sh",

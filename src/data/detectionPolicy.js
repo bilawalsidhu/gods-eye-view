@@ -30,7 +30,7 @@ export const AIRCRAFT_BRACKET_ALPHA_FLOOR = 0.35;
  * stays a pure policy module with no Cesium dependency; detectionPolicy.test.mjs
  * imports the real constant and pins the two together so they cannot drift.
  *
- * It MOVES WITH THE DEFAULT (0.05 → 0.03 → 0.01; final value 2026-08-24).
+ * It MOVES WITH THE DEFAULT (0.05 → 0.03 → 0.01; owner final lock 2026-08-24).
  * That pin is the tripwire
  * for exactly this change, and the decision it forces is which of two things the
  * approval attaches to: the bracket BRIGHTNESS, or the slider POSITION. It is

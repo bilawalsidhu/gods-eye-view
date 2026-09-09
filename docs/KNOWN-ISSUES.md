@@ -4,8 +4,7 @@ Updated: July 8, 2026
 
 This file tracks active runtime issues only.
 
-This file records current known issues; historical planning material is not part
-of the public release.
+For the roadmap and open backlog, see the repository issue tracker.
 
 ---
 
@@ -50,8 +49,8 @@ Related keys (current versions):
 
 ---
 
-### Height-datum residuals
-Status: Open (accepted 2026-07-08, documented)
+### Height-datum residuals (branch `feat/height-datum`, pending merge)
+Status: Open (owner-accepted 2026-07-08, documented)
 
 - **Cold-start floor latency:** at a freshly-visited airport, grounded/low aircraft
   float low for ~1–2 poll cycles (30–60 s) and rise as terrain floors resolve;
@@ -60,7 +59,7 @@ Status: Open (accepted 2026-07-08, documented)
   data renders at the geoid for ≤1 poll until its floor cell warms.
 - Full context, improvement ideas, and the verification oracle
   (`scripts/qa-floor-verify.mjs`):
-  the height-datum section in `docs/CURRENT-STATE.md`.
+  `docs/superpowers/reports/2026-07-08-height-datum-handover.md`.
 
 ---
 

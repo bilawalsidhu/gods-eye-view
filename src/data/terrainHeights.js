@@ -1,4 +1,5 @@
-// src/data/terrainHeights.js — batched, cached client terrain-height resolver.
+// src/data/terrainHeights.js — batched, cached client terrain-height resolver
+// (docs/plans/2026-07-05-entity-height-datum-fix.md Task 3).
 //
 // Resolves ELLIPSOIDAL ground height per (lat, lon) via the server-side
 // `/api/terrain/heights` proxy (Task 2 — Re:Earth `heights.json`, disk-cached,

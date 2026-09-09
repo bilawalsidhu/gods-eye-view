@@ -1,5 +1,5 @@
 // src/data/terrainHeights.test.mjs — batched, cached client terrain-height
-// resolver.
+// resolver (docs/plans/2026-07-05-entity-height-datum-fix.md Task 3).
 //
 // Locks the module's public interface (Task 5/6 call it verbatim):
 //   resolveEllipsoidalGround(coords: [{lat, lon, sourceOrthometricM?}])
@@ -22,7 +22,7 @@ import {
 } from './terrainHeights.js';
 
 const AUSTIN = { lat: 30.2672, lon: -97.7431 };
-const AUSTIN_GEOID_N = -26.9; // Cross-checked against Re:Earth reference data.
+const AUSTIN_GEOID_N = -26.9; // docs/plans/2026-07-05-entity-height-datum-fix.md verified facts
 
 /** Installs a fake fetch for the duration of `fn`, restoring the original after. */
 async function withFakeFetch(fakeFetch, fn) {

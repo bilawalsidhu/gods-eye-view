@@ -763,8 +763,8 @@ test('the trail head grows continuously across the envelope, never in one step',
 // heading then rotated into world space, putting the trail out to one side and
 // flipping which side as the course changed.
 //
-// A single-heading harness cannot catch this: at one heading a wrongly-framed
-// offset can coincidentally point
+// A single-heading harness cannot catch this, which is exactly how it reached
+// the owner: at one heading a wrongly-framed offset can coincidentally point
 // aft. So this sweeps headings and every shipped asset, and asserts the
 // property directly — the anchor lies in the model's longitudinal/vertical
 // plane, with NO lateral component.

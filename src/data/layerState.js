@@ -183,7 +183,7 @@ function integerOption(key, token, defaultValue) {
 
 const OPTION_GROUPS = Object.freeze({
   flights: Object.freeze([
-    // Product invariant 2026-08-22: the fleet's 3D models are DEFAULT-ON in
+    // Owner directive 2026-08-22: the fleet's 3D models are DEFAULT-ON in
     // PROXIMITY mode. Proximity is itself the altitude/count gate — models only
     // materialize once the camera is close enough and only for the nearest
     // contacts in view — so "on" costs nothing at globe scale, and an operator

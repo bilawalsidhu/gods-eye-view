@@ -12,10 +12,18 @@ cd gods-eye-view
 nvm install 24.14.0
 nvm use 24.14.0
 npm install
-./scripts/dev-fresh.sh        # or: GOOGLE_MAPS_API_KEY="…" npm run dev
+npm run doctor
+./scripts/dev-fresh.sh        # or: npm run dev (keys are optional)
 ```
 
-You need a **Google Maps API key** with the Map Tiles API enabled (see the [README](README.md#-api-keys)). Most data layers work with no other accounts. On macOS the launcher pulls keys from the Keychain; on any platform you can pass them as env vars or use a `.env` (copy `.env.example`).
+No key is required to start: the app boots on keyless Esri World Imagery with
+keyless terrain, and OSM takes over automatically if Esri is unreachable.
+Google Maps provides direct photorealistic 3D and place search; Cesium ion
+provides ion-hosted Google 3D plus optional Bing/world-terrain stacks.
+On macOS the launcher pulls optional keys from
+the Keychain; on any platform you can pass them as env vars or use a `.env`.
+People who only want to run the app can instead install the repository directly
+through Pinokio; the terminal path above remains the contributor path.
 
 Open `http://localhost:4173`. Before sending a PR run `npm run build`, `npm test`, and `npm run test:track` (dev server must be up) — **all three must stay green.**
 
@@ -50,6 +58,13 @@ The highest-leverage places to jump in:
 3. If you change runtime behavior, update `docs/CURRENT-STATE.md` and `CHANGELOG.md` in the same PR.
 4. If you add or change a data source, update [DATA_SOURCES.md](DATA_SOURCES.md) with its license and attribution. **Don't add data you don't have the right to redistribute** — fetch it at runtime instead.
 5. Describe what you changed and how you verified it (screenshots welcome for anything visual).
+
+## Maintainers
+
+God's Eye View is maintained by [Bilawal Sidhu](https://github.com/bilawalsidhu)
+and [Sameh Khamis](https://github.com/samehkhamis) at
+[Halfpixel](https://halfpixel.ai). Either maintainer can review and merge
+contributions.
 
 ## Ground rules
 
