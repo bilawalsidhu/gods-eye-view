@@ -7,6 +7,11 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Fixed
 
+- Radio country filtering and voice country requests now resolve common English
+  names and exonyms that `Intl.DisplayNames`' primary label omits, so requests
+  like "play radio in Turkey" no longer fail closed (Turkey → Türkiye, plus
+  Myanmar/Burma, UAE, Holland, Swaziland, East Timor, Cabo Verde, Vatican).
+  Ambiguous names such as a bare "Congo" or "Korea" still fail closed.
 - Mapped-site outages show their scheduled retry countdown and distinguish
   known Overpass rate limits, timeouts, and query failures. Search feedback no
   longer claims a refresh succeeded while the layer is unavailable or loading.

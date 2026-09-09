@@ -1684,9 +1684,11 @@ preserves object identity for an idempotent repeat of the same generation, and
 degrades without replacement if a fresh response presents an older generation.
 Snapshot records mark community metadata as untrusted, and Radio tool results
 omit station names so directory text never becomes model instruction context.
-One bounded country parser maps recognized ISO codes and English/common names
-through proxy metadata and final station selection, while malformed, non-ISO,
-control-containing, and oversized inputs fail closed. Literal or resolved
+One bounded country parser maps recognized ISO codes and English/common names —
+including widely used exonyms the Intl display label omits (Turkey, Holland,
+Burma, and similar) — through proxy metadata and final station selection, while
+malformed, non-ISO, control-containing, ambiguous, and oversized inputs fail
+closed. Literal or resolved
 non-global IPv4/IPv6 targets are refused. Destroy fully releases the Radio audio
 session, voice ducking/restoration, request state, filter, selection, volume,
 accepted snapshot, and feed telemetry before re-initialization; monotonic
