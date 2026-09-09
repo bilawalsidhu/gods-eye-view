@@ -128,6 +128,30 @@ export const DATA_CREDITS = [
       'Contains OS data © Crown copyright and database rights.',
   },
   {
+    key: 'traffic-scotland-cctv',
+    html:
+      'CCTV cameras &amp; frames (Scotland): ' +
+      '<a href="https://www.traffic.gov.scot/traffic-cameras" target="_blank" rel="noopener">Traffic Scotland</a> ' +
+      '(Transport Scotland, on behalf of the Scottish Ministers) — traffic.gov.scot',
+  },
+  {
+    key: 'pkc-cctv',
+    html:
+      'CCTV cameras &amp; frames (Perth &amp; Kinross): ' +
+      '<a href="https://www.pkc.gov.uk/trafficcameras" target="_blank" rel="noopener">Perth &amp; Kinross Council</a>',
+  },
+  {
+    key: 'scotland-mountain-webcams',
+    html:
+      'Mountain &amp; ski webcams (Scotland), courtesy of their operators: ' +
+      '<a href="https://www.cairngormmountain.co.uk/live-webcams/" target="_blank" rel="noopener">Cairngorm Mountain</a>, ' +
+      '<a href="https://www.glencoemountain.co.uk/webcams" target="_blank" rel="noopener">Glencoe Mountain Resort</a> / ' +
+      '<a href="https://www.winterhighland.info/" target="_blank" rel="noopener">Winterhighland</a>, ' +
+      '<a href="https://www.ski-glenshee.co.uk/Webcam" target="_blank" rel="noopener">Glenshee Ski Centre</a>, ' +
+      '<a href="https://www.deesideglidingclub.co.uk/" target="_blank" rel="noopener">Deeside Gliding Club</a>, ' +
+      '<a href="https://aboutfortwilliam.com/webcams/ben-nevis-and-fort-william" target="_blank" rel="noopener">About Fort William</a>',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },

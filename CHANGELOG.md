@@ -5,6 +5,19 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- CCTV: Traffic Scotland trunk-road cameras (Edinburgh, Glasgow and the rest of
+  the Scottish network) join Austin, Caltrans and TfL as a keyless default
+  source. Frames are decoded from the public site's per-site fragments and
+  cached server-side for four minutes; `CCTV_TRAFFIC_SCOTLAND_ENABLED=0`
+  disables the pack and `CCTV_TRAFFIC_SCOTLAND_MAX_SOURCES` caps it.
+- CCTV: a bundled, hand-curated Scotland pack adds Perth & Kinross Council's
+  23 road cameras and 22 mountain and ski webcams (Cairngorm, Glencoe,
+  Glenshee, Aboyne, Ben Nevis, Leadhills). Curated packs load alongside the
+  live sources, carry each operator's stated refresh cadence, and can be
+  switched off with `CCTV_BUNDLED_PACKS_ENABLED=0`.
+
 ### Fixed
 
 - Mapped-site outages show their scheduled retry countdown and distinguish

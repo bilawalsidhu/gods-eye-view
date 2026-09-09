@@ -1618,7 +1618,7 @@ its criteria cannot be silently ignored.
 | Satellites | CelesTrak | `src/data/satellites.js` | `/api/celestrak` | 120s |
 | Space Missions (30d) | Launch Library 2 + CelesTrak | `src/data/rocketLaunches.js` | `/api/launches` + `/api/celestrak/active` | 5 min |
 | Traffic | OSM Overpass (+ optional TomTom live flow) | `src/data/traffic.js` | `/api/overpass` + `/api/tomtom` | viewport-driven |
-| CCTV | Austin + Caltrans (CA) + TfL London Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
+| CCTV | Austin + Caltrans (CA) + TfL London Open Data + Traffic Scotland + bundled curated packs (Perth & Kinross, Scottish mountain webcams) + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
 | Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
 | Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
 | Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |
@@ -1967,7 +1967,18 @@ silently demoting every later lookup for the session.
   default 36 → 250, hard bound 300), filtered to `camera_status === TURNED_ON` (~815 live of
   1,003 rows). City packs (2026-07-04): Caltrans (districts 4/7/11/3 — SF, LA, San Diego,
   Sacramento; cap 300) and TfL London JamCams (cap 250) join Austin (cap 250) as keyless default
-  sources — ~800 cameras total, all RAW PRIOR poses, stills-first.
+  sources — ~800 cameras total, all RAW PRIOR poses, stills-first. Traffic Scotland (2026-09-08):
+  the public site's `/tsis/cameras` JSON (415 sites, 500 views, coordinates) becomes one camera
+  per view (`ts-<view id>`, cap 300 nearest Edinburgh/Glasgow, `CCTV_TRAFFIC_SCOTLAND_*`), and
+  because its stills only exist as base64 data URIs inside a per-site HTML fragment, the proxy
+  decodes them server-side (`fetchTrafficScotlandFrame`), caches each site's views for 4 min,
+  and serves stale on a failed refresh. Bundled curated packs (2026-09-09): `BUNDLED_CCTV_PACK_FILES`
+  (`config/cctv_sources.scotland.curated.json`, 23 Perth & Kinross Council road cams + 22 mountain/ski
+  webcams) load as additive peers of the live packs via `loadBundledCuratedSources` — unlike
+  `CCTV_SOURCES_FILE` they never suppress the live packs; `CCTV_BUNDLED_PACKS_ENABLED=0` skips them.
+  Sources may now carry `frameRefreshMs` (server → `/sources` → client `staticFrameRefreshMs`), so a
+  pack states its operator's cadence instead of relying on the provider-name table.
+  `CCTV_MAX_SOURCES` default rose 900 → 1,100 → 1,150 to fit.
 - **CCTV v3 UX — viewshed + calibration gizmo** (built 2026-07-05 and field
   validated 2026-07-21): the COVERAGE toggle is a
   tri-state cycle `OFF → ON → VIEWSHED`; viewshed mode renders each visible camera's frustum

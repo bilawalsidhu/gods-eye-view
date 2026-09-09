@@ -31,6 +31,9 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
   'austin transportation & public works': 5 * 60 * 1000,
   'transport for london': 3 * 60 * 1000,
   caltrans: 3 * 60 * 1000,
+  // Traffic Scotland republishes stills every ~5 min in the central belt and
+  // ~20 min on rural routes; the proxy caches decoded frames for 4 min.
+  'traffic scotland': 5 * 60 * 1000,
 });
 
 /**

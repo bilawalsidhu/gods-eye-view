@@ -3517,12 +3517,23 @@ function isVideoFeedType(feedType) {
 // ---------------------------------------------------------------------------
 /** Path to the optional static CCTV source list (JSON array). */
 const DEFAULT_CCTV_SOURCE_FILE = 'config/cctv_sources.austin.json';
+/** Hand-authored packs that ship with the repo and load as peers of the live
+ * open-data packs (same gate, same kill-switch style): cameras whose operators
+ * publish a plain still-image URL but no machine-readable catalog, so their
+ * positions and poses are curated by hand. Each file is a JSON array in the
+ * CCTV_SOURCES_FILE shape. `CCTV_BUNDLED_PACKS_ENABLED=0` skips them all. */
+const BUNDLED_CCTV_PACK_FILES = Object.freeze([
+  'config/cctv_sources.scotland.curated.json', // Perth & Kinross Council road cams + Scottish mountain/ski webcams
+]);
 /** Austin Open Data portal endpoint for traffic camera records. */
 const DEFAULT_AUSTIN_ROWS_URL = 'https://data.austintexas.gov/api/views/b4k4-adkb/rows.json?accessType=DOWNLOAD';
 /** Default cap on Austin cameras after distance-based prioritization. */
 const DEFAULT_AUSTIN_MAX_SOURCES = 250;
-/** Global cap on total CCTV sources served by the proxy. */
-const DEFAULT_CCTV_MAX_SOURCES = 900;
+/** Global cap on total CCTV sources served by the proxy. Sized to the sum of
+ * the default per-pack caps (Austin 250 + Caltrans 300 + TfL 250 + Traffic
+ * Scotland 300) plus the bundled curated packs (~45) so no default pack is
+ * silently truncated. */
+const DEFAULT_CCTV_MAX_SOURCES = 1150;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
@@ -3543,6 +3554,29 @@ const TFL_JAMCAM_URL = 'https://api.tfl.gov.uk/Place/Type/JamCam';
 const TFL_IMAGE_ORIGIN = 'https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/';
 const DEFAULT_TFL_MAX_SOURCES = 250;
 const LONDON_CENTER = { lat: 51.5074, lon: -0.1278 };
+/** Traffic Scotland (Transport Scotland trunk-road cameras). The public site
+ * serves a keyless JSON catalog with coordinates, and one HTML fragment per
+ * SITE whose `<img>` tags carry the current stills as base64 data URIs. Both
+ * are the endpoints the public website itself uses, not a documented API; the
+ * documented developer route is a registered FTP service. Frames are decoded
+ * and cached per site (see fetchTrafficScotlandFrame) so one upstream request
+ * serves every view at a site for one cache window. */
+const TRAFFIC_SCOTLAND_CAMERAS_URL = 'https://www.traffic.gov.scot/tsis/cameras';
+const TRAFFIC_SCOTLAND_FRAME_ORIGIN = 'https://www.traffic.gov.scot/tsis/camerahtml';
+const DEFAULT_TRAFFIC_SCOTLAND_MAX_SOURCES = 300;
+/** Prioritization anchors: Edinburgh and Glasgow centres — the central belt
+ * holds roughly two thirds of the ~500 published views. */
+const SCOTLAND_ANCHORS = [
+  { lat: 55.9533, lon: -3.1883 }, // Edinburgh
+  { lat: 55.8642, lon: -4.2518 }, // Glasgow
+];
+/** Traffic Scotland publishes new stills about every 5 min in the Edinburgh /
+ * Glasgow area and about every 20 min elsewhere; a 4 min server cache keeps
+ * the active 10 s client refresh from re-downloading an unchanged fragment. */
+export const TRAFFIC_SCOTLAND_FRAME_CACHE_MS = 4 * 60 * 1000;
+const TRAFFIC_SCOTLAND_FRAME_CACHE_MAX_SITES = 600;
+/** A two-view fragment is ~16 KB; anything near this cap is not a camera page. */
+const TRAFFIC_SCOTLAND_FRAGMENT_MAX_BYTES = 4 * 1024 * 1024;
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL) infrequent. Frames are fetched per-request and are unaffected. */
 const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
@@ -3607,6 +3641,48 @@ function loadSourcesFromFile() {
     console.warn('[CCTV] failed to read source file:', resolved, error?.message || error);
     return [];
   }
+}
+
+/**
+ * Load the repo's bundled curated CCTV packs (BUNDLED_CCTV_PACK_FILES).
+ *
+ * Unlike CCTV_SOURCES_FILE these never suppress the live packs — they are
+ * additive defaults. Every entry must carry an https(?) image URL and finite
+ * coordinates; anything else is dropped here so a hand-edit mistake degrades
+ * to a missing camera, not a broken catalog. Each file fails independently.
+ *
+ * @param {object} [options]
+ * @param {readonly string[]} [options.files=BUNDLED_CCTV_PACK_FILES] - Injectable for tests.
+ * @param {NodeJS.ProcessEnv} [options.env=process.env] - Injectable for tests.
+ * @returns {Array<object>} Raw source objects ready for normalizeSourceItem.
+ */
+export function loadBundledCuratedSources({ files = BUNDLED_CCTV_PACK_FILES, env = process.env } = {}) {
+  if (String(env.CCTV_BUNDLED_PACKS_ENABLED || '1').trim() === '0') return [];
+  const sources = [];
+  for (const file of files) {
+    const resolved = path.isAbsolute(file) ? file : path.resolve(__dirname, file);
+    try {
+      const parsed = JSON.parse(fs.readFileSync(resolved, 'utf8'));
+      if (!Array.isArray(parsed)) {
+        console.warn('[CCTV] bundled pack is not a JSON array:', file);
+        continue;
+      }
+      let kept = 0;
+      for (const item of parsed) {
+        if (!item || typeof item !== 'object') continue;
+        const id = String(item.id || '').trim();
+        const url = typeof item.url === 'string' ? item.url.trim() : '';
+        if (!id || !/^https?:\/\//i.test(url)) continue;
+        if (!Number.isFinite(toFiniteNumber(item.lat)) || !Number.isFinite(toFiniteNumber(item.lon))) continue;
+        sources.push(item);
+        kept += 1;
+      }
+      console.log(`[CCTV] Loaded bundled pack ${path.basename(file)}: ${kept} cameras`);
+    } catch (error) {
+      console.warn('[CCTV] failed to read bundled pack:', file, error?.message || error);
+    }
+  }
+  return sources;
 }
 
 /**
@@ -4169,6 +4245,239 @@ async function loadTflSourcesFromOpenData() {
 }
 
 /**
+ * Load Traffic Scotland trunk-road cameras from the public site's camera catalog.
+ *
+ * Each catalog row is a SITE (`sid`) with coordinates and a comma-separated
+ * list of image ids (`images`, e.g. `"143,144"` for a north/south pair). Every
+ * image id becomes one camera so each view gets its own frame, pose, and
+ * calibration. Frames are not direct image URLs (see fetchTrafficScotlandFrame):
+ * `snapshotUrl` carries the site fragment URL and the camera id carries the
+ * view id, and the proxy resolves the pair server-side.
+ *
+ * @param {object} [options]
+ * @param {typeof fetch} [options.fetchImpl=fetch] - Injectable for unit tests only.
+ * @returns {Promise<object[]>} Normalizable camera sources, nearest-first to the anchors.
+ */
+export async function loadTrafficScotlandSourcesFromOpenData({ fetchImpl = fetch } = {}) {
+  try {
+    const resp = await fetchImpl(TRAFFIC_SCOTLAND_CAMERAS_URL, {
+      headers: { Accept: 'application/json', 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn('[CCTV] Traffic Scotland catalog download failed:', resp.status);
+      return [];
+    }
+    const payload = await resp.json();
+    const rows = Array.isArray(payload?.results) ? payload.results : [];
+
+    const cameras = [];
+    const seenIds = new Set();
+    for (const row of rows) {
+      const sid = String(row?.sid ?? '').trim();
+      if (!/^\d+$/.test(sid)) continue;
+      const lat = toFiniteNumber(row?.lat);
+      const lon = toFiniteNumber(row?.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      // Scotland bbox sanity gate (Shetland to the Solway; Western Isles to the east coast).
+      if (lat < 54.5 || lat > 61 || lon < -8.5 || lon > -0.5) continue;
+      const title = String(row?.title || '').replace(/\s+/g, ' ').trim() || `Traffic Scotland site ${sid}`;
+      const views = String(row?.images ?? '')
+        .split(',')
+        .map((token) => token.trim())
+        .filter((token) => /^\d+$/.test(token));
+      if (!views.length) continue;
+      const frameUrl = `${TRAFFIC_SCOTLAND_FRAME_ORIGIN}?sid=${sid}`;
+
+      views.forEach((tid, index) => {
+        const cameraId = `ts-${tid}`;
+        if (seenIds.has(cameraId)) return;
+        seenIds.add(cameraId);
+        cameras.push({
+          id: cameraId,
+          name: views.length > 1 ? `${title} (cam ${index + 1})` : title,
+          city: 'Scotland',
+          cityId: '',
+          provider: 'Traffic Scotland',
+          lat,
+          lon,
+          // The catalog carries no facing; multi-view labels ("... North" /
+          // "... South") only exist inside the frame fragment. Id-hash prior,
+          // corrected by manual calibration like every other live pack.
+          headingDeg: fallbackHeadingFromId(cameraId),
+          headingConfidence: 'low',
+          // Roadside masts over a trunk road / motorway: lower and flatter than
+          // an urban pole camera, looking along the carriageway.
+          pitchDeg: -14,
+          fovDeg: 48,
+          rangeM: 260,
+          mountHeightM: 10,
+          groundElevationM: 60, // central-belt prior; the terrain lookup corrects it.
+          feedType: 'image',
+          url: frameUrl,
+          snapshotUrl: frameUrl,
+          sourceKind: 'traffic-scotland',
+          license: 'Traffic Scotland (Transport Scotland) — traffic.gov.scot',
+        });
+      });
+    }
+
+    const maxRaw = Number(process.env.CCTV_TRAFFIC_SCOTLAND_MAX_SOURCES || DEFAULT_TRAFFIC_SCOTLAND_MAX_SOURCES);
+    const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(600, Math.floor(maxRaw))) : DEFAULT_TRAFFIC_SCOTLAND_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, SCOTLAND_ANCHORS);
+    console.log(`[CCTV] Loaded Traffic Scotland sources: ${cameras.length} views at ${rows.length} sites (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] Traffic Scotland catalog download error:', error?.message || error);
+    return [];
+  }
+}
+
+/**
+ * Resolve the Traffic Scotland site/view pair a registered source points at.
+ *
+ * Only sources the loader above produced qualify: the kind must match, the id
+ * must be `ts-<view id>`, and the snapshot URL must sit on the official
+ * fragment origin. Anything else (file/env packs, other providers) returns
+ * null and takes the ordinary image path.
+ *
+ * @param {object} source - Normalized CCTV source.
+ * @returns {{sid:string,tid:string}|null}
+ */
+export function trafficScotlandFrameRef(source) {
+  if (!source || source.sourceKind !== 'traffic-scotland') return null;
+  const tid = /^ts-(\d+)$/.exec(String(source.id || ''))?.[1];
+  if (!tid) return null;
+  const snapshot = String(source.snapshotUrl || source.url || '');
+  if (!snapshot.startsWith(`${TRAFFIC_SCOTLAND_FRAME_ORIGIN}?`)) return null;
+  let sid = '';
+  try {
+    sid = new URL(snapshot).searchParams.get('sid') || '';
+  } catch {
+    return null;
+  }
+  if (!/^\d+$/.test(sid)) return null;
+  return { sid, tid };
+}
+
+/**
+ * Extract every embedded still from a Traffic Scotland site fragment.
+ *
+ * The fragment is `<div class="camera-image" tid="N"><img src="data:image/jpeg;base64,…">`
+ * once per view (hidden views included). Only raster data URIs are accepted and
+ * the decoded bytes must start like a JPEG or PNG — the fragment is third-party
+ * HTML and nothing else in it is trusted.
+ *
+ * @param {string} html
+ * @returns {Map<string,{body:Buffer,contentType:string}>} keyed by view id.
+ */
+export function parseTrafficScotlandFrameFragment(html) {
+  const frames = new Map();
+  const pattern = /<div\b[^>]*\bclass="camera-image"[^>]*\btid="(\d+)"[^>]*>\s*<img\b[^>]*\bsrc="data:image\/(jpeg|jpg|png);base64,([A-Za-z0-9+/=]+)"/g;
+  for (const match of String(html || '').matchAll(pattern)) {
+    const [, tid, subtype, base64] = match;
+    const body = Buffer.from(base64, 'base64');
+    const isJpeg = body.length > 4 && body[0] === 0xff && body[1] === 0xd8;
+    const isPng = body.length > 8 && body[0] === 0x89 && body[1] === 0x50 && body[2] === 0x4e && body[3] === 0x47;
+    if (!isJpeg && !isPng) continue;
+    frames.set(tid, {
+      body,
+      contentType: isPng ? 'image/png' : 'image/jpeg',
+    });
+  }
+  return frames;
+}
+
+/** @type {Map<string,{at:number,frames:Map<string,{body:Buffer,contentType:string}>}>} site id -> decoded views */
+const _trafficScotlandFrameCache = new Map();
+/** @type {Map<string,Promise<Map<string,{body:Buffer,contentType:string}>|null>>} site id -> in-flight fragment fetch */
+const _trafficScotlandFrameInflight = new Map();
+
+async function fetchTrafficScotlandSiteFrames(sid, { fetchImpl, timeoutMs }) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort(new DOMException('Traffic Scotland frame fetch timed out', 'TimeoutError'));
+  }, timeoutMs);
+  try {
+    const upstream = await fetchImpl(`${TRAFFIC_SCOTLAND_FRAME_ORIGIN}?sid=${encodeURIComponent(sid)}`, {
+      headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0', Accept: 'text/html' },
+      signal: controller.signal,
+    });
+    const contentType = upstream.headers.get('content-type') || '';
+    if (!upstream.ok || !contentType.includes('text/html')) return null;
+    const { tooLarge, text } = await readCappedResponseText(upstream, TRAFFIC_SCOTLAND_FRAGMENT_MAX_BYTES);
+    if (tooLarge) return null;
+    return parseTrafficScotlandFrameFragment(text);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Fetch one Traffic Scotland view within the frame-refresh budget.
+ *
+ * Mirrors fetchCctvImageFromUpstream's contract (`{ok, body, contentType}` or
+ * null so the caller falls through to Street View / synthetic), but the
+ * upstream is an HTML fragment carrying every view at the site, so the decoded
+ * set is cached per site for `cacheMs` and shared across concurrent requests.
+ * When a refresh fails but a stale set exists, the stale frame is served —
+ * the site's own images are only replaced every 5–20 min anyway.
+ *
+ * @param {object} source - Normalized CCTV source (see trafficScotlandFrameRef).
+ * @param {object} [options]
+ * @param {typeof fetch} [options.fetchImpl=fetch]
+ * @param {number} [options.timeoutMs=CCTV_FRAME_FETCH_TIMEOUT_MS]
+ * @param {number} [options.nowMs=Date.now()] - Injectable clock for cache tests.
+ * @param {number} [options.cacheMs=TRAFFIC_SCOTLAND_FRAME_CACHE_MS]
+ * @returns {Promise<{ok:true,body:Buffer,contentType:string,cached:boolean,stale:boolean}|null>}
+ */
+export async function fetchTrafficScotlandFrame(source, {
+  fetchImpl = fetch,
+  timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS,
+  nowMs = Date.now(),
+  cacheMs = TRAFFIC_SCOTLAND_FRAME_CACHE_MS,
+} = {}) {
+  const ref = trafficScotlandFrameRef(source);
+  if (!ref) return null;
+  const { sid, tid } = ref;
+  const toResult = (hit, cached, stale) => (hit
+    ? { ok: true, body: hit.body, contentType: hit.contentType, cached, stale }
+    : null);
+
+  const cached = _trafficScotlandFrameCache.get(sid);
+  if (cached && nowMs - cached.at < cacheMs) {
+    return toResult(cached.frames.get(tid), true, false);
+  }
+
+  let inflight = _trafficScotlandFrameInflight.get(sid);
+  if (!inflight) {
+    inflight = fetchTrafficScotlandSiteFrames(sid, { fetchImpl, timeoutMs })
+      .then((frames) => {
+        if (frames && frames.size > 0) {
+          if (_trafficScotlandFrameCache.size >= TRAFFIC_SCOTLAND_FRAME_CACHE_MAX_SITES) {
+            const oldest = _trafficScotlandFrameCache.keys().next().value;
+            if (oldest !== undefined) _trafficScotlandFrameCache.delete(oldest);
+          }
+          _trafficScotlandFrameCache.delete(sid);
+          _trafficScotlandFrameCache.set(sid, { at: nowMs, frames });
+        }
+        return frames;
+      })
+      .finally(() => {
+        _trafficScotlandFrameInflight.delete(sid);
+      });
+    _trafficScotlandFrameInflight.set(sid, inflight);
+  }
+
+  const frames = await inflight;
+  const fresh = frames?.get(tid);
+  if (fresh) return toResult(fresh, false, false);
+  return toResult(cached?.frames.get(tid), true, true);
+}
+
+/**
  * Normalize a raw CCTV source item into a canonical shape with safe defaults.
  *
  * @param {object} item - Raw source from file, env, or Austin Open Data.
@@ -4195,6 +4504,9 @@ function normalizeSourceItem(item) {
     snapshotUrl: typeof item.snapshotUrl === 'string' ? item.snapshotUrl : '',
     license: String(item.license || item.licenseNote || ''),
     sourceKind: String(item.sourceKind || item.kind || 'configured'),
+    // Optional per-camera still cadence hint (ms). Curated packs set it from
+    // the operator's stated update interval; the client bounds it (60 s..20 min).
+    frameRefreshMs: toFiniteNumber(item.frameRefreshMs),
     // Optional CAL badge input (cctv-v2 design §3b/§9.2, additive-only per the
     // global constraints — nothing else in this file changes): hand-authored
     // file/env catalog entries may declare poseSource:'curated' so the panel
@@ -4239,27 +4551,34 @@ async function refreshCctvSources() {
 
   const forceAustin = String(process.env.CCTV_FORCE_AUSTIN || '').trim() === '1';
   const preferAustin = String(process.env.CCTV_PREFER_AUSTIN || '1').trim() !== '0';
-  // Live open-data packs (Austin + Caltrans + TfL) load unless a file/env pack
-  // is configured and live packs aren't forced — same gate that governed the
-  // Austin-only fetch, now governing all three. Each pack fails independently.
+  // Live open-data packs (Austin + Caltrans + TfL + Traffic Scotland) load
+  // unless a file/env pack is configured and live packs aren't forced — same
+  // gate that governed the Austin-only fetch, now governing all four. Each
+  // pack fails independently.
   const needsLiveSources = forceAustin || ((fromFile.length + fromEnv.length) === 0 && preferAustin);
   const tflEnabled = String(process.env.CCTV_TFL_ENABLED || '1').trim() !== '0';
+  const trafficScotlandEnabled = String(process.env.CCTV_TRAFFIC_SCOTLAND_ENABLED || '1').trim() !== '0';
 
   let fromAustin = [];
   let fromCaltrans = [];
   let fromTfl = [];
+  let fromTrafficScotland = [];
+  let fromBundled = [];
   if (needsLiveSources) {
-    const [austinResult, caltransResult, tflResult] = await Promise.allSettled([
+    fromBundled = loadBundledCuratedSources();
+    const [austinResult, caltransResult, tflResult, trafficScotlandResult] = await Promise.allSettled([
       loadAustinSourcesFromOpenData(),
       loadCaltransSourcesFromOpenData(),
       tflEnabled ? loadTflSourcesFromOpenData() : Promise.resolve([]),
+      trafficScotlandEnabled ? loadTrafficScotlandSourcesFromOpenData() : Promise.resolve([]),
     ]);
     fromAustin = austinResult.status === 'fulfilled' ? austinResult.value : [];
     fromCaltrans = caltransResult.status === 'fulfilled' ? caltransResult.value : [];
     fromTfl = tflResult.status === 'fulfilled' ? tflResult.value : [];
+    fromTrafficScotland = trafficScotlandResult.status === 'fulfilled' ? trafficScotlandResult.value : [];
   }
   // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
-  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromFile, ...fromEnv];
+  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromTrafficScotland, ...fromBundled, ...fromFile, ...fromEnv];
 
   // Deduplicate by camera ID (last-write wins because of Map.set)
   const byId = new Map();
@@ -4621,6 +4940,7 @@ function cctvProxy() {
                 sourceKind: source.sourceKind || (source.url ? 'configured' : 'fallback'),
                 poseSource: source.poseSource,
                 license: source.license,
+                frameRefreshMs: Number.isFinite(source.frameRefreshMs) ? source.frameRefreshMs : undefined,
               })),
             };
             res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -4658,6 +4978,36 @@ function cctvProxy() {
               });
               res.writeHead(404, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
               res.end(JSON.stringify({ error: 'No media URL configured for this camera' }));
+              return;
+            }
+
+            // Traffic Scotland registers an HTML fragment as its upstream; the
+            // still has to be decoded out of it rather than piped through.
+            if (trafficScotlandFrameRef(source)) {
+              const frame = await fetchTrafficScotlandFrame(source);
+              if (frame?.ok) {
+                setHealth(cameraId, {
+                  status: 'ok',
+                  sourceKind: 'snapshot',
+                  label: source.provider,
+                  message: frame.stale ? 'Snapshot feed connected (stale frame)' : 'Snapshot feed connected',
+                });
+                res.writeHead(200, {
+                  'Content-Type': frame.contentType,
+                  'Cache-Control': 'no-store',
+                  'X-CCTV-Source': 'upstream-image',
+                });
+                res.end(frame.body);
+                return;
+              }
+              setHealth(cameraId, {
+                status: 'degraded',
+                sourceKind: 'upstream',
+                label: source.provider,
+                message: 'Traffic Scotland frame unavailable',
+              });
+              res.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+              res.end(JSON.stringify({ error: 'Media proxy failed' }));
               return;
             }
 
@@ -4736,7 +5086,9 @@ function cctvProxy() {
             source?.snapshotUrl
             || (!isVideoFeedType(normalizeFeedType(source?.feedType)) ? source?.url : '');
 
-          const upstreamImage = await fetchCctvImageFromUpstream(upstreamCandidate);
+          const upstreamImage = trafficScotlandFrameRef(source)
+            ? await fetchTrafficScotlandFrame(source)
+            : await fetchCctvImageFromUpstream(upstreamCandidate);
           if (upstreamImage?.ok) {
             setHealth(cameraId, {
               status: 'ok',

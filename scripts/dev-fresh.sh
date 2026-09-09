@@ -11,9 +11,10 @@ PORT="${PORT:-4173}"
 HOST="${HOST:-localhost}"
 # CCTV source packs (all keyless): Austin (~815 live upstream), Caltrans
 # districts 4,7,11,3 = SF/LA/San Diego/Sacramento (~1,860 live upstream),
-# TfL London JamCams (~870 live upstream). Caps keep the densest cores per
-# pack; override per-run for lighter/heavier loads. Kill switches:
-# CCTV_CALTRANS_DISTRICTS='' and CCTV_TFL_ENABLED=0.
+# TfL London JamCams (~870 live upstream), Traffic Scotland trunk-road cameras
+# (~500 views upstream). Caps keep the densest cores per pack; override per-run
+# for lighter/heavier loads. Kill switches: CCTV_CALTRANS_DISTRICTS='',
+# CCTV_TFL_ENABLED=0 and CCTV_TRAFFIC_SCOTLAND_ENABLED=0.
 CCTV_AUSTIN_MAX_SOURCES="${CCTV_AUSTIN_MAX_SOURCES:-250}"
 # Use `-` not `:-` so an explicit empty string (the documented kill switch)
 # is preserved rather than replaced by the default. Still set-u-safe when unset.
@@ -21,7 +22,11 @@ CCTV_CALTRANS_DISTRICTS="${CCTV_CALTRANS_DISTRICTS-4,7,11,3}"
 CCTV_CALTRANS_MAX_SOURCES="${CCTV_CALTRANS_MAX_SOURCES:-300}"
 CCTV_TFL_ENABLED="${CCTV_TFL_ENABLED:-1}"
 CCTV_TFL_MAX_SOURCES="${CCTV_TFL_MAX_SOURCES:-250}"
-CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-900}"
+CCTV_TRAFFIC_SCOTLAND_ENABLED="${CCTV_TRAFFIC_SCOTLAND_ENABLED:-1}"
+CCTV_TRAFFIC_SCOTLAND_MAX_SOURCES="${CCTV_TRAFFIC_SCOTLAND_MAX_SOURCES:-300}"
+# Repo-bundled hand-curated packs (Perth & Kinross road cams, Scottish mountain webcams).
+CCTV_BUNDLED_PACKS_ENABLED="${CCTV_BUNDLED_PACKS_ENABLED:-1}"
+CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-1150}"
 
 # Capture which provider credentials genuinely came from the parent shell
 # before this launcher resolves dotenv and Keychain fallbacks. Only names are
@@ -364,6 +369,9 @@ put_env CCTV_CALTRANS_MAX_SOURCES "${CCTV_CALTRANS_MAX_SOURCES}"
 put_env CCTV_TFL_ENABLED "${CCTV_TFL_ENABLED}"
 put_env CCTV_TFL_MAX_SOURCES "${CCTV_TFL_MAX_SOURCES}"
 put_env_if_set TFL_APP_KEY "${TFL_APP_KEY:-}"
+put_env CCTV_TRAFFIC_SCOTLAND_ENABLED "${CCTV_TRAFFIC_SCOTLAND_ENABLED}"
+put_env CCTV_TRAFFIC_SCOTLAND_MAX_SOURCES "${CCTV_TRAFFIC_SCOTLAND_MAX_SOURCES}"
+put_env CCTV_BUNDLED_PACKS_ENABLED "${CCTV_BUNDLED_PACKS_ENABLED}"
 put_env CCTV_MAX_SOURCES "${CCTV_MAX_SOURCES}"
 put_env OPENSKY_AUTH_MODE "${OPENSKY_AUTH_MODE}"
 put_env_if_set OPENSKY_CREDENTIALS_FILE "${OPENSKY_CREDENTIALS_FILE}"

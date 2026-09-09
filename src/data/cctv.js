@@ -1170,6 +1170,9 @@ function buildCatalogFromSources(rawSources) {
       license: String(source.license || source.licenseNote || ''),
       poseSource,
     };
+    // Operator-stated still cadence (curated packs); staticFrameRefreshMs bounds it.
+    const frameRefreshMs = safeNumber(source.frameRefreshMs, NaN);
+    if (Number.isFinite(frameRefreshMs) && frameRefreshMs > 0) camera.frameRefreshMs = frameRefreshMs;
     ensureCameraPose(camera);
     catalog.push(camera);
   }
