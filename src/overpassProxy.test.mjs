@@ -11,7 +11,13 @@ import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import createViteConfig, { fetchOverpassPayload, overpassPayloadIsData, readOverpassDisk } from '../vite.config.js';
+import createViteConfig, {
+  fetchOsmMapRoadPayload,
+  fetchOverpassPayload,
+  overpassPayloadIsData,
+  parseOsmMapRoads,
+  readOverpassDisk,
+} from '../vite.config.js';
 
 const ENDPOINTS = ['https://a.example/api', 'https://b.example/api', 'https://c.example/api'];
 
@@ -38,6 +44,49 @@ const run = (byUrl) => {
 };
 
 const DATA = { status: 200, body: '{"elements":[]}' };
+
+const OSM_ROAD_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="test">
+  <node id="1" lat="-3.7600" lon="-38.4900" />
+  <node id="2" lat="-3.7590" lon="-38.4890" />
+  <node id="3" lat="-3.7580" lon="-38.4880" />
+  <way id="101">
+    <nd ref="1"/><nd ref="2"/><nd ref="3"/>
+    <tag k="highway" v="primary"/><tag k="oneway" v="yes"/>
+  </way>
+  <way id="102">
+    <nd ref="1"/><nd ref="3"/>
+    <tag k="highway" v="residential"/>
+  </way>
+</osm>`;
+
+test('OSM map XML converts referenced nodes into traffic road geometry', () => {
+  const payload = parseOsmMapRoads(OSM_ROAD_XML, new Set(['primary']));
+  assert.equal(payload.elements.length, 1);
+  assert.equal(payload.elements[0].id, '101');
+  assert.equal(payload.elements[0].tags.highway, 'primary');
+  assert.equal(payload.elements[0].tags.oneway, 'yes');
+  assert.deepEqual(payload.elements[0].geometry, [
+    { lat: -3.76, lon: -38.49 },
+    { lat: -3.759, lon: -38.489 },
+    { lat: -3.758, lon: -38.488 },
+  ]);
+});
+
+test('OSM map road fallback requests the traffic bbox and returns Overpass-shaped JSON', async () => {
+  let requestedUrl = null;
+  const query = '[out:json][timeout:12];(way["highway"~"^(motorway|trunk|primary|secondary)$"](-3.7609,-38.4967,-3.7540,-38.4827););out geom qt;';
+  const payload = await fetchOsmMapRoadPayload(`data=${encodeURIComponent(query)}`, 1e6, {
+    fetchImpl: async (url) => {
+      requestedUrl = String(url);
+      return new Response(OSM_ROAD_XML, { status: 200, headers: { 'content-type': 'application/xml' } });
+    },
+  });
+  assert.equal(payload.status, 200);
+  assert.equal(payload.endpoint, 'https://api.openstreetmap.org/api/0.6/map');
+  assert.match(requestedUrl, /bbox=-38\.4967%2C-3\.7609%2C-38\.4827%2C-3\.754/);
+  assert.equal(JSON.parse(payload.body).elements.length, 1);
+});
 
 test('disk cache rejects old refusals for fresh and stale reads but preserves last-good data', async () => {
   const key = `overpass-cache-regression-${randomUUID()}`;

@@ -198,6 +198,8 @@ const OVERPASS_UPSTREAMS = [
   // Verified: planet coverage (Texas query), CORS *, ~5-20 s cold latency.
   'https://overpass.private.coffee/api/interpreter',
 ];
+/** Standard OSM map endpoint used as a bounded road-geometry fallback. */
+const OSM_MAP_ENDPOINT = 'https://api.openstreetmap.org/api/0.6/map';
 /**
  * TTL for FRESH cached Overpass responses (ms). Road geometry is static for
  * months — the original 45 s TTL forced a public-mirror round-trip on nearly
@@ -221,6 +223,8 @@ const OVERPASS_BOUNDARY_DISK_TTL_MS = 30 * 86_400_000;
 const OVERPASS_DISK_DIR = path.join(process.cwd(), '.gev-cache', 'overpass');
 /** Per-upstream fetch timeout (ms). */
 const OVERPASS_TIMEOUT_MS = 22000;
+/** OSM map fallback timeout (ms). */
+const OSM_MAP_TIMEOUT_MS = 12000;
 /** Max entries in the Overpass response cache (LRU-like, oldest evicted first). */
 const OVERPASS_CACHE_MAX_ENTRIES = 120;
 /** @type {Map<string,{status:number,body:string,contentType:string,endpoint:string,cachedAt:number}>} */
@@ -2573,6 +2577,165 @@ export function overpassPayloadIsData(payload) {
     && !payload.runtimeError;
 }
 
+const TRAFFIC_ROAD_HIGHWAYS = new Set([
+  'motorway', 'trunk', 'primary', 'secondary',
+  'tertiary', 'residential', 'unclassified',
+]);
+
+/**
+ * Extract the bounded road query shape emitted by src/data/traffic.js. The
+ * standard OSM map endpoint cannot execute arbitrary Overpass QL, so the
+ * fallback is deliberately limited to this exact highway+bbox form.
+ */
+function trafficRoadQuerySpec(body) {
+  let query;
+  try {
+    query = new URLSearchParams(String(body || '')).get('data');
+  } catch {
+    return null;
+  }
+  if (!query) return null;
+
+  const match = query.match(
+    /way\s*\[\s*"highway"\s*~\s*"\^\(([^\"]+)\)\$"\s*\]\s*\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)\s*;/i,
+  );
+  if (!match) return null;
+
+  const highways = match[1].split('|');
+  if (
+    highways.length === 0
+    || highways.some((highway) => !TRAFFIC_ROAD_HIGHWAYS.has(highway))
+  ) return null;
+
+  const south = Number(match[2]);
+  const west = Number(match[3]);
+  const north = Number(match[4]);
+  const east = Number(match[5]);
+  if (
+    ![south, west, north, east].every(Number.isFinite)
+    || south >= north
+    || west >= east
+    || south < -90 || north > 90
+    || west < -180 || east > 180
+    || north - south > OVERPASS_MAX_BBOX_DEG
+    || east - west > OVERPASS_MAX_BBOX_DEG
+  ) return null;
+
+  return { south, west, north, east, highways: new Set(highways) };
+}
+
+/** Decode the five XML entities that can occur in OSM attributes. */
+function decodeOsmXmlAttribute(value) {
+  return String(value || '')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&');
+}
+
+/** Read one standard double-quoted XML attribute from an element fragment. */
+function osmXmlAttribute(fragment, name) {
+  const match = String(fragment || '').match(new RegExp(`\\b${name}="([^"]*)"`));
+  return match ? decodeOsmXmlAttribute(match[1]) : null;
+}
+
+/**
+ * Convert the bounded OSM `/api/0.6/map` XML response into the Overpass-like
+ * `{elements:[{type:'way', tags, geometry}]}` shape consumed by traffic.js.
+ * The endpoint returns every referenced node alongside each way, so no extra
+ * node requests are necessary.
+ */
+export function parseOsmMapRoads(xml, highways = TRAFFIC_ROAD_HIGHWAYS) {
+  const nodes = new Map();
+  const source = String(xml || '');
+
+  for (const match of source.matchAll(/<node\b([^>]*?)\/>/g)) {
+    const id = osmXmlAttribute(match[1], 'id');
+    const lat = Number(osmXmlAttribute(match[1], 'lat'));
+    const lon = Number(osmXmlAttribute(match[1], 'lon'));
+    if (id && Number.isFinite(lat) && Number.isFinite(lon)) {
+      nodes.set(id, { lat, lon });
+    }
+  }
+
+  const elements = [];
+  for (const match of source.matchAll(/<way\b([^>]*)>([\s\S]*?)<\/way>/g)) {
+    const wayId = osmXmlAttribute(match[1], 'id');
+    const body = match[2];
+    const tags = {};
+    for (const tagMatch of body.matchAll(/<tag\b([^>]*?)\/>/g)) {
+      const key = osmXmlAttribute(tagMatch[1], 'k');
+      if (key) tags[key] = osmXmlAttribute(tagMatch[1], 'v') || '';
+    }
+    if (!wayId || !highways.has(tags.highway)) continue;
+
+    const geometry = [];
+    for (const ndMatch of body.matchAll(/<nd\b([^>]*?)\/>/g)) {
+      const node = nodes.get(osmXmlAttribute(ndMatch[1], 'ref'));
+      if (node) geometry.push(node);
+    }
+    if (geometry.length < 2) continue;
+    elements.push({ type: 'way', id: wayId, tags, geometry });
+  }
+
+  return { version: 0.6, generator: 'gods-eye-view-osm-map-fallback', elements };
+}
+
+/**
+ * Fetch traffic road geometry from the standard OSM map API. Returns null for
+ * non-traffic Overpass queries so the generic Overpass proxy remains unchanged.
+ */
+export async function fetchOsmMapRoadPayload(body, maxResponseBytes = OVERPASS_MAX_RESPONSE_BYTES, {
+  fetchImpl = fetch,
+  readBody = readResponseTextCapped,
+} = {}) {
+  const spec = trafficRoadQuerySpec(body);
+  if (!spec) return null;
+
+  const url = new URL(OSM_MAP_ENDPOINT);
+  url.searchParams.set('bbox', `${spec.west},${spec.south},${spec.east},${spec.north}`);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), OSM_MAP_TIMEOUT_MS);
+  try {
+    const upstream = await fetchImpl(url, {
+      headers: {
+        Accept: 'application/xml',
+        'User-Agent': 'gods-eye-view-osm-map/1.0 (local traffic layer)',
+      },
+      signal: controller.signal,
+    });
+    const responseBody = await readBody(upstream, maxResponseBytes);
+    if (!upstream.ok) throw new Error(`OSM map returned ${upstream.status}`);
+    if (!/<osm\b/i.test(responseBody)) throw new Error('OSM map returned invalid XML');
+    const payload = parseOsmMapRoads(responseBody, spec.highways);
+    return {
+      status: 200,
+      body: JSON.stringify(payload),
+      contentType: 'application/json',
+      endpoint: OSM_MAP_ENDPOINT,
+      rateLimited: false,
+      runtimeError: false,
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/** Traffic gets a fast bounded OSM map path, with generic Overpass as fallback. */
+async function fetchTrafficRoadGeometry(body) {
+  try {
+    const payload = await fetchOsmMapRoadPayload(body);
+    if (payload) {
+      console.log('[Overpass Proxy] traffic roads via OSM map API');
+      return payload;
+    }
+  } catch (error) {
+    console.warn('[Overpass Proxy] OSM map traffic path failed:', error?.message || error);
+  }
+  return fetchOverpassPayload(body);
+}
+
 /**
  * Try each mirror once, retaining response-size and per-mirror timeout caps.
  * Refusals and body-level failures rotate; total failure returns the last
@@ -2757,7 +2920,7 @@ function overpassProxy() {
             return;
           }
           _overpassConcurrent += 1;
-          const requestPromise = fetchOverpassPayload(safeBody)
+          const requestPromise = fetchTrafficRoadGeometry(safeBody)
             .then((payload) => {
               // Only a 2xx is data. `< 500` cached every 4xx, so one mirror's
               // refusal was written to memory AND disk — and boundary-class
