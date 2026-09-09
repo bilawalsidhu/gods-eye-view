@@ -147,3 +147,53 @@ export function resolvePanelStackCorridor({
 
   return { safeTop: top, safeBottom: bottom };
 }
+
+/**
+ * Clamps a panel's left/top coordinate so it remains safely bounded inside the
+ * viewport corridor, with fallback dimensions when measurements are 0 or unrendered.
+ *
+ * @param {object} input Coordinate and dimension parameters.
+ * @param {number} input.left Desired left position in px.
+ * @param {number} input.top Desired top position in px.
+ * @param {number} [input.width] Measured panel width in px.
+ * @param {number} [input.height] Measured panel height in px.
+ * @param {number} input.viewportWidth Current window/viewport inner width.
+ * @param {number} input.viewportHeight Current window/viewport inner height.
+ * @param {number} [input.inset=6] Minimum distance from viewport edge in px.
+ * @param {number} [input.fallbackWidth=320] Default width when measurement is unavailable or 0.
+ * @param {number} [input.fallbackHeight=200] Default height when measurement is unavailable or 0.
+ * @returns {{ left: number, top: number }} Safe bounded coordinates.
+ */
+export function clampPanelToViewport({
+  left,
+  top,
+  width,
+  height,
+  viewportWidth,
+  viewportHeight,
+  inset = 6,
+  fallbackWidth = 320,
+  fallbackHeight = 200,
+}) {
+  const safeInset = Math.max(0, Number(inset) || 0);
+  const vw = Math.max(1, Number(viewportWidth) || 1);
+  const vh = Math.max(1, Number(viewportHeight) || 1);
+
+  const rawWidth = Number(width);
+  const w = (Number.isFinite(rawWidth) && rawWidth > 0) ? rawWidth : fallbackWidth;
+
+  const rawHeight = Number(height);
+  const h = (Number.isFinite(rawHeight) && rawHeight > 0) ? rawHeight : fallbackHeight;
+
+  const maxLeft = Math.max(safeInset, vw - w - safeInset);
+  const maxTop = Math.max(safeInset, vh - h - safeInset);
+
+  const targetLeft = Number.isFinite(Number(left)) ? Number(left) : safeInset;
+  const targetTop = Number.isFinite(Number(top)) ? Number(top) : safeInset;
+
+  return {
+    left: Math.round(Math.max(safeInset, Math.min(maxLeft, targetLeft))),
+    top: Math.round(Math.max(safeInset, Math.min(maxTop, targetTop))),
+  };
+}
+

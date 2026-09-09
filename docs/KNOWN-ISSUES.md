@@ -30,25 +30,6 @@ Next iteration candidates:
 
 ---
 
-### CCTV panel can appear "missing" after layout refactors
-Status: Open (workaround available)
-
-Context:
-- Panel positions are persisted in local storage and can restore off-screen after UI changes.
-
-Workaround:
-- In browser console:
-  - `localStorage.removeItem('godsEyeView.v6.panelPos.cctv-panel');`
-  - `localStorage.removeItem('godsEyeView.v6.panelCollapsed.cctv-panel');`
-  - `location.reload();`
-
-Related keys (current versions):
-- Panel positions: `godsEyeView.v7.panelPos.<panel-id>` (re-versioned 2026-06-10)
-- Panel collapsed state: `godsEyeView.v6.panelCollapsed.<panel-id>`
-- CCTV calibration: `godsEyeView.cctv.calibration.v2`
-
----
-
 ### Height-datum residuals (branch `feat/height-datum`, pending merge)
 Status: Open (owner-accepted 2026-07-08, documented)
 
@@ -64,6 +45,21 @@ Status: Open (owner-accepted 2026-07-08, documented)
 ---
 
 ## Closed / Intentional (for clarity)
+
+### CCTV and draggable panel off-screen restoration after layout changes
+Status: Closed as fixed on `main`
+
+Context:
+- Panel positions previously restored without minimum dimension fallbacks, which could
+  leave panels off-screen when measured before CSS layout completed or after window resizing.
+- Clamping now uses self-healing bounded coordinates (`clampPanelToViewport`), falls back to
+  non-zero intrinsic dimensions, reclamps on window resize, and automatically purges legacy
+  `v6`/`v7` coordinates on startup.
+
+Validation target:
+- `src/ui.js`, `src/panelStackLayout.js`
+
+---
 
 ### Proxy SSRF and error-surface hardening gaps
 Status: Closed as fixed on `main`

@@ -112,6 +112,7 @@ import {
 } from './rightRailPolicy.js';
 import {
   allocatePanelStackHeights,
+  clampPanelToViewport,
   panelStackAutoCollapseIndices,
   resolveLeftStackBottomBoundary,
   resolvePanelStackCorridor,
@@ -2713,6 +2714,7 @@ export class StyleManager {
       this._scheduleRightPanelLayout({ reconsiderAutoCollapse: true });
       this._syncCctvPanelViewport();
       this._scheduleLeftPanelLayout({ reconsiderAutoCollapse: true });
+      this._reclampDraggablePanels();
     };
     window.addEventListener('resize', this._windowResizeHandler);
     // The loading-chip ticker is stopped while the tab is hidden (it can do no
@@ -2929,12 +2931,21 @@ export class StyleManager {
    * @returns {void}
    */
   _reclampDraggablePanels() {
-    const el = this._ppToggles;
-    if (!el || !el.style.top || el.style.top === 'auto') return;
-    const top = parseInt(el.style.top, 10);
-    if (!Number.isFinite(top)) return;
-    el.style.top = `${this._clampToViewport(0, top, el).top}px`;
-    this._pinPanelToRight(el);
+    const panels = [this._ppToggles, this._cctvPanel].filter(Boolean);
+    for (const el of panels) {
+      if (!el || !el.style.top || el.style.top === 'auto') continue;
+      const top = parseInt(el.style.top, 10);
+      const left = parseInt(el.style.left, 10);
+      if (!Number.isFinite(top)) continue;
+      const currentLeft = Number.isFinite(left) ? left : 0;
+      const clamped = this._clampToViewport(currentLeft, top, el);
+      el.style.top = `${clamped.top}px`;
+      if (el === this._ppToggles) {
+        this._pinPanelToRight(el);
+      } else if (Number.isFinite(left) && el.style.left !== 'auto') {
+        el.style.left = `${clamped.left}px`;
+      }
+    }
   }
 
   /**
@@ -4078,9 +4089,19 @@ export class StyleManager {
       const marker = `godsEyeView.${PANEL_POSITION_STORAGE_VERSION}.layoutResetNotified`;
       if (localStorage.getItem(marker)) return;
       localStorage.setItem(marker, '1');
-      const hadOldPositions = Object.keys(localStorage)
-        .some((key) => key.startsWith('godsEyeView.v6.panelPos.'));
-      if (hadOldPositions) {
+      const legacyKeys = Object.keys(localStorage).filter((key) =>
+        key.startsWith('godsEyeView.v6.panelPos.') ||
+        key.startsWith('godsEyeView.v7.panelPos.') ||
+        key === 'godsEyeView.v6.panelCollapsed.cctv-panel'
+      );
+      if (legacyKeys.length > 0) {
+        for (const key of legacyKeys) {
+          try {
+            localStorage.removeItem(key);
+          } catch {
+            // ignore
+          }
+        }
         this._showToast('Panel layout updated — positions reset to new defaults');
       }
     } catch {
@@ -7498,13 +7519,25 @@ export class StyleManager {
    * @returns {{left:number, top:number}}
    */
   _clampToViewport(left, top, panelEl) {
-    const rect = panelEl.getBoundingClientRect();
-    const maxLeft = Math.max(6, window.innerWidth - rect.width - 6);
-    const maxTop = Math.max(6, window.innerHeight - rect.height - 6);
-    return {
-      left: Math.max(6, Math.min(maxLeft, left)),
-      top: Math.max(6, Math.min(maxTop, top)),
-    };
+    const rect = panelEl?.getBoundingClientRect?.();
+    const width = (rect && rect.width > 0)
+      ? rect.width
+      : (panelEl?.offsetWidth > 0 ? panelEl.offsetWidth : 320);
+    const height = (rect && rect.height > 0)
+      ? rect.height
+      : (panelEl?.offsetHeight > 0 ? panelEl.offsetHeight : 200);
+
+    return clampPanelToViewport({
+      left,
+      top,
+      width,
+      height,
+      viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1920,
+      viewportHeight: typeof window !== 'undefined' ? window.innerHeight : 1080,
+      inset: 6,
+      fallbackWidth: 320,
+      fallbackHeight: 200,
+    });
   }
 
   /**
