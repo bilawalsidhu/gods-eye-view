@@ -5,6 +5,13 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- Global Conflict Events layer (`warscope-events`): WarScope/GDELT points via
+  same-origin `/api/warscope/events` only (fixed upstream host, cache + rate
+  limit). Zoomed-in cards show title and an outbound publisher link — no
+  Open Graph scrape or image proxy.
+
 ### Fixed
 
 - Mapped-site outages show their scheduled retry countdown and distinguish
