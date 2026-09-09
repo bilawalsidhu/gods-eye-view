@@ -5,6 +5,13 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- DISPLAY ▸ Draw: draw on the world by hand. Pick Area, Line or Pin, click the
+  vertices, double-click or press Enter to finish, label and colour it. Drawn
+  shapes go through the same annotation engine as spoken ones, so they render
+  with the whiteboard look, persist, export to GeoJSON and clear with the board.
+
 ### Fixed
 
 - Mapped-site outages show their scheduled retry countdown and distinguish

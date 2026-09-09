@@ -1847,7 +1847,7 @@ export async function placesNearViewRecovery(viewer, query, geocoded = null, sig
  * fallback: the agent indicates a spot in the viewport screenshot when it can't
  * name the place, and we anchor the mark to the actual world point under it.
  */
-function pickWorldFromScreen(viewer, nx, ny) {
+export function pickWorldFromScreen(viewer, nx, ny) {
   const scene = viewer?.scene;
   if (!scene) return null;
   const canvas = scene.canvas;
@@ -1889,7 +1889,7 @@ function pickWorldFromScreen(viewer, nx, ny) {
  * the Google 3D tiles, so we try to clamp onto the photoreal tile surface; if
  * the tiles for that spot aren't loaded we fall back to the ellipsoid (0).
  */
-function sampleGroundHeight(viewer, lon, lat) {
+export function sampleGroundHeight(viewer, lon, lat) {
   const scene = viewer?.scene;
   if (!scene) return 0;
   try {

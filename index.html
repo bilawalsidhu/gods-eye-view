@@ -445,6 +445,31 @@
       </div>
     </div>
     <div class="pp-toggle-group">
+      <button class="pp-toggle-btn" id="draw-toggle" title="Draw on the world — click vertices, double-click or Enter to finish, Esc to cancel" aria-pressed="false">
+        <span class="pp-icon material-symbols-outlined" aria-hidden="true">draw</span>
+        <span class="pp-label">Draw</span>
+      </button>
+      <div class="pp-slider-row" id="draw-mode-row">
+        <span class="pp-slider-mini-label">Shape</span>
+        <div class="pp-mode-seg" role="radiogroup" aria-label="Shape to draw">
+          <button class="pp-mode-btn active" data-shape="area" role="radio" aria-checked="true">Area</button>
+          <button class="pp-mode-btn" data-shape="line" role="radio" aria-checked="false">Line</button>
+          <button class="pp-mode-btn" data-shape="pin" role="radio" aria-checked="false">Pin</button>
+        </div>
+      </div>
+      <div class="pp-slider-row" id="draw-label-row">
+        <input type="text" class="pp-text-input" id="draw-label-input" maxlength="120" placeholder="Label (optional)" aria-label="Label for the drawn shape" autocomplete="off" spellcheck="false">
+        <select class="pp-select draw-color-select" id="draw-color-select" aria-label="Colour of the drawn shape">
+          <option value="primary">Primary</option>
+          <option value="amber">Amber</option>
+          <option value="cyan">Cyan</option>
+          <option value="green">Green</option>
+          <option value="red">Red</option>
+        </select>
+        <span class="draw-hint" id="draw-hint" aria-live="polite"></span>
+      </div>
+    </div>
+    <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="celestial-toggle" title="Celestial ring — reveal the full globe" aria-pressed="false">
         <span class="pp-icon material-symbols-outlined" aria-hidden="true">flare</span>
         <span class="pp-label">Celestial</span>
