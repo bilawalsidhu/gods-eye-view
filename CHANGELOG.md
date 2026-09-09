@@ -7,6 +7,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Fixed
 
+- Street Traffic no longer remains in `SYNCING ROAD NETWORK` when the public
+  Overpass mirrors are unavailable. Exact bounded traffic road queries now use
+  OpenStreetMap's standard map endpoint first, translate its XML response into
+  the existing Overpass-shaped payload, and retain the generic Overpass mirror
+  rotation as a fallback. TomTom flow tiles and their attribution remain
+  unchanged.
 - Mapped-site outages show their scheduled retry countdown and distinguish
   known Overpass rate limits, timeouts, and query failures. Search feedback no
   longer claims a refresh succeeded while the layer is unavailable or loading.

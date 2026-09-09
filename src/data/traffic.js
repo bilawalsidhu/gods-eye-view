@@ -18,15 +18,17 @@ import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor
  * @file Street Traffic — animated dots along OSM road polylines, colored by
  * live TomTom congestion when a key is configured.
  *
- * Road geometry: OSM Overpass API (free, no auth). Fetches road polylines for
- * the camera viewport, spawns PointPrimitives that lerp along pre-computed
- * Cartesian3 waypoints. Camera-gated: only active below ~8 km altitude.
+ * Road geometry: OpenStreetMap's standard map endpoint for bounded traffic
+ * queries, with the server-side Overpass proxy as fallback. Fetches road
+ * polylines for the camera viewport, spawns PointPrimitives that lerp along
+ * pre-computed Cartesian3 waypoints. Camera-gated: only active below ~8 km
+ * altitude.
  *
  * Two modes (decided once per session via `/api/tomtom/status`):
  *  - `sim` (keyless default): white dots at hardcoded per-road-class speeds —
  *    the original simulation, byte-identical behavior.
  *  - `live`: TomTom flow tiles (`flowTiles.js`) are matched onto the same
- *    Overpass roads (`flowMatch.js`); matched roads color/slow/densify their
+ *    OSM roads (`flowMatch.js`); matched roads color/slow/densify their
  *    dots by real congestion (`trafficFlowStyle.js`), closed roads spawn no
  *    dots, and unmatched roads keep the simulated white.
  *

@@ -2030,6 +2030,7 @@ silently demoting every later lookup for the session.
 - `/api/overpass` fans out across four public mirrors. `overpassPayloadIsData()` governs cache reads, writes, and stale fallback: only a 2xx that is neither rate-limited nor a body-level runtime error qualifies. Previously stored refusals are ignored on both fresh and stale reads, so upgrading does not require manually clearing the disk cache.
 - HTTP refusals such as 406 now rotate alongside the existing network, rate-limit, and runtime-error cases. A refusal from one mirror no longer prevents reaching healthy alternatives or persists under the seven-day road/month-long boundary cache TTLs. Concurrent identical queries share one mirror sequence; if it fails, both the initiating and joined callers can use the same last-good data.
 - A refusal every mirror agrees on is still reported with the first mirror's status and body, so a genuinely malformed query says what upstream said — but only after every mirror has had the chance to answer it. `fetchOverpassPayload` takes injectable endpoints and fetch so the rotation is tested without a live mirror (`src/overpassProxy.test.mjs`).
+- Street Traffic's exact bounded highway queries take a separate 12-second path through OpenStreetMap's standard `/api/0.6/map` endpoint. The server parses its XML nodes, ways, and tags into the existing Overpass-shaped road payload, so `traffic.js` and TomTom matching do not need a second client contract. If the OSM map request fails — or the query is not the traffic shape — the established four-mirror Overpass path remains the fallback; generic Overpass-backed features are unchanged.
 
 ### Share-link v2 layer state (August 2026)
 
@@ -2543,10 +2544,11 @@ easier to meet (detection is now on more often), but does not create it.
   is configured (env or Keychain `tomtom-api`/`api-key`), which enables `live` mode:
   TomTom flow vector tiles via the budget-governed `/api/tomtom` proxy
   (`.gev-cache/tomtom/`, 120 s TTL, `TOMTOM_DAILY_TILE_BUDGET` default 40k/day),
-  decoded client-side (`flowTiles.js`), matched onto Overpass roads
+  decoded client-side (`flowTiles.js`), matched onto OSM roads
   (`flowMatch.js`), and rendered as green/amber/red dot color + speed/density
   scaling (`trafficFlowStyle.js`); closures spawn no dots; unmatched roads stay
-  white. Road fetch bounds center on the camera look-at point (`trafficBounds.js`).
+  white. Road fetch bounds center on the camera look-at point (`trafficBounds.js`);
+  the proxy uses the bounded OSM map path before falling back to Overpass.
 - Development captures opened with `?trafficDebug=1` mint an interaction anchor
   from the exact `camera.changed` event that arms each debounced load, then emit
   scheduling-correlated User Timing entries for production `response.json`, road
