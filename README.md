@@ -133,6 +133,30 @@ See [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 **macOS shortcut:** `./scripts/dev-fresh.sh` clears the Vite cache and pulls any
 configured keys straight from the Keychain. It starts keyless too.
 
+### Path 3 — Docker
+
+No Node install needed; the container publishes the same dev server.
+
+```bash
+git clone https://github.com/bilawalsidhu/gods-eye-view.git
+cd gods-eye-view
+docker compose up
+```
+
+Open **`http://localhost:4173`** as above. The repo is bind-mounted, so keys you
+paste into Provider Settings persist in your host `.env` and source edits still
+hot-reload. The container binds `0.0.0.0` *inside* the container, but the port
+is published to `127.0.0.1` only, so the default matches the native one: nobody
+else can reach your server. Widening that mapping puts you under
+[Sharing an instance](#-sharing-an-instance) — keys and all.
+
+`node_modules` deliberately stays inside the image, so it survives in an
+anonymous volume across restarts: after a `git pull` that changes dependencies,
+recreate it with `docker compose down -v && docker compose up --build`. The
+image also skips Puppeteer's Chromium download, which keeps it small but leaves
+`npm run test:track` to the host — `npm run build` and `npm test` run fine in
+the container.
+
 ### Then power it up — in the app, not in a file
 
 Keys are upgrades, not prerequisites. When you want one, click the **POWER UP**

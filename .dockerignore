@@ -1,0 +1,6 @@
+node_modules
+.git
+.env
+.gev-cache
+.gev-logs
+dist
