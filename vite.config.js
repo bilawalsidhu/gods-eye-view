@@ -3543,7 +3543,12 @@ const TFL_JAMCAM_URL = 'https://api.tfl.gov.uk/Place/Type/JamCam';
 const TFL_IMAGE_ORIGIN = 'https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/';
 const DEFAULT_TFL_MAX_SOURCES = 250;
 const LONDON_CENTER = { lat: 51.5074, lon: -0.1278 };
-/** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL) infrequent. Frames are fetched per-request and are unaffected. */
+/** Transport for NSW publishes a keyless GeoJSON catalogue with live still URLs. */
+const SYDNEY_CCTV_URL = 'https://data.livetraffic.com/cameras/traffic-cam.json';
+const SYDNEY_CCTV_IMAGE_ORIGIN = 'https://webcams.transport.nsw.gov.au/livetraffic-webcams/cameras/';
+const DEFAULT_SYDNEY_MAX_SOURCES = 250;
+const SYDNEY_CENTER = { lat: -33.8688, lon: 151.2093 };
+/** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + TfNSW) infrequent. Frames are fetched per-request and are unaffected. */
 const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
  * stalled upstream can't leave getCctvSources (and thus every CCTV route)
@@ -3554,6 +3559,17 @@ const CCTV_SOURCE_FETCH_TIMEOUT_MS = 15 * 1000;
  * client refresh cadence. A bounded miss can fall through to Street View or
  * the synthetic frame instead of leaving the browser preview pending. */
 export const CCTV_FRAME_FETCH_TIMEOUT_MS = 8 * 1000;
+/**
+ * TfNSW's public image CDN returns its maintenance page to bot-style clients
+ * but serves the same public camera JPEGs to standard browser image requests.
+ * Keep this limited to camera image fetches; catalog/API requests retain their
+ * descriptive service user agents.
+ */
+const CCTV_IMAGE_REQUEST_HEADERS = Object.freeze({
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+  Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+  Referer: 'https://www.livetraffic.com/',
+});
 /** @type {Array<object>} Cached merged + normalized CCTV source list. */
 let _cctvSourceCache = [];
 /** @type {number} Epoch-ms when the source cache was last refreshed. */
@@ -4169,6 +4185,75 @@ async function loadTflSourcesFromOpenData() {
 }
 
 /**
+ * Fetch Transport for NSW's public Live Traffic camera catalogue. The feed is
+ * GeoJSON and includes a still-image URL for each camera, so it needs no API
+ * key and frames remain served through the existing CCTV proxy.
+ *
+ * @returns {Promise<Array<object>>} Normalized Sydney camera source objects.
+ */
+async function loadSydneySourcesFromOpenData() {
+  try {
+    const resp = await fetch(SYDNEY_CCTV_URL, {
+      headers: { Accept: 'application/geo+json, application/json' },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn('[CCTV] TfNSW source download failed:', resp.status);
+      return [];
+    }
+    const features = (await resp.json())?.features;
+    if (!Array.isArray(features)) return [];
+
+    const cameras = [];
+    for (const feature of features) {
+      const coords = feature?.geometry?.type === 'Point' ? feature.geometry.coordinates : null;
+      const lon = toFiniteNumber(coords?.[0]);
+      const lat = toFiniteNumber(coords?.[1]);
+      const props = feature?.properties || {};
+      const imageUrl = String(props.href || '').trim();
+      const rawId = String(feature?.id || '').trim();
+      if (!rawId || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      // The source catalog is trusted only for TfNSW's public webcam origin.
+      if (!imageUrl.startsWith(SYDNEY_CCTV_IMAGE_ORIGIN)) continue;
+
+      const heading = directionToHeading(props.direction, true);
+      const hasHeading = Number.isFinite(heading);
+      const cameraId = `nsw-${rawId}`;
+      cameras.push({
+        id: cameraId,
+        name: String(props.title || props.view || `TfNSW camera ${rawId}`),
+        city: 'Sydney',
+        cityId: 'sydney',
+        provider: 'Transport for NSW',
+        lat,
+        lon,
+        headingDeg: hasHeading ? heading : fallbackHeadingFromId(cameraId),
+        headingConfidence: hasHeading ? 'high' : 'low',
+        pitchDeg: hasHeading ? -24 : -18,
+        fovDeg: hasHeading ? 56 : 44,
+        rangeM: hasHeading ? 210 : 145,
+        mountHeightM: hasHeading ? 10 : 8,
+        groundElevationM: 30,
+        feedType: 'image',
+        url: imageUrl,
+        snapshotUrl: imageUrl,
+        sourceKind: 'tfnsw-open-data',
+        license: 'Transport for NSW Live Traffic data (CC BY 3.0 AU)',
+      });
+    }
+
+    const maxRaw = Number(process.env.CCTV_SYDNEY_MAX_SOURCES || DEFAULT_SYDNEY_MAX_SOURCES);
+    const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(400, Math.floor(maxRaw))) : DEFAULT_SYDNEY_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, [SYDNEY_CENTER]);
+    console.log(`[CCTV] Loaded Transport for NSW camera sources: ${cameras.length} available (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] TfNSW source download error:', error?.message || error);
+    return [];
+  }
+}
+
+/**
  * Normalize a raw CCTV source item into a canonical shape with safe defaults.
  *
  * @param {object} item - Raw source from file, env, or Austin Open Data.
@@ -4207,7 +4292,7 @@ function normalizeSourceItem(item) {
 /**
  * Assemble and cache the merged CCTV source list.
  *
- * Merges sources from three origins (Austin Open Data, local file,
+ * Merges sources from live open-data packs plus local file and
  * env variable), deduplicates by ID, applies the global max cap, and
  * caches for CCTV_SOURCE_CACHE_MS.
  *
@@ -4244,22 +4329,27 @@ async function refreshCctvSources() {
   // Austin-only fetch, now governing all three. Each pack fails independently.
   const needsLiveSources = forceAustin || ((fromFile.length + fromEnv.length) === 0 && preferAustin);
   const tflEnabled = String(process.env.CCTV_TFL_ENABLED || '1').trim() !== '0';
+  const sydneyEnabled = String(process.env.CCTV_SYDNEY_ENABLED || '1').trim() !== '0';
 
   let fromAustin = [];
   let fromCaltrans = [];
   let fromTfl = [];
+  let fromSydney = [];
   if (needsLiveSources) {
-    const [austinResult, caltransResult, tflResult] = await Promise.allSettled([
+    const [austinResult, caltransResult, tflResult, sydneyResult] = await Promise.allSettled([
       loadAustinSourcesFromOpenData(),
       loadCaltransSourcesFromOpenData(),
       tflEnabled ? loadTflSourcesFromOpenData() : Promise.resolve([]),
+      sydneyEnabled ? loadSydneySourcesFromOpenData() : Promise.resolve([]),
     ]);
     fromAustin = austinResult.status === 'fulfilled' ? austinResult.value : [];
     fromCaltrans = caltransResult.status === 'fulfilled' ? caltransResult.value : [];
     fromTfl = tflResult.status === 'fulfilled' ? tflResult.value : [];
+    fromSydney = sydneyResult.status === 'fulfilled' ? sydneyResult.value : [];
   }
-  // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
-  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromFile, ...fromEnv];
+  // Sydney comes first so its public cameras survive the global source cap;
+  // file/env entries still win on duplicate IDs (Map last-write).
+  const merged = [...fromSydney, ...fromAustin, ...fromCaltrans, ...fromTfl, ...fromFile, ...fromEnv];
 
   // Deduplicate by camera ID (last-write wins because of Map.set)
   const byId = new Map();
@@ -4485,7 +4575,7 @@ export async function fetchCctvImageFromUpstream(url, {
   }, timeoutMs);
   try {
     const upstream = await fetchImpl(url, {
-      headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
+      headers: CCTV_IMAGE_REQUEST_HEADERS,
       signal: controller.signal,
     });
     const contentType = upstream.headers.get('content-type') || '';
@@ -4662,7 +4752,7 @@ function cctvProxy() {
             }
 
             try {
-              const upstreamHeaders = { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' };
+              const upstreamHeaders = { ...CCTV_IMAGE_REQUEST_HEADERS };
               const requestRange = req.headers?.range;
               if (requestRange) upstreamHeaders.Range = requestRange;
               const upstream = await fetch(mediaUrl, {

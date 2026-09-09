@@ -128,6 +128,13 @@ export const DATA_CREDITS = [
       'Contains OS data © Crown copyright and database rights.',
   },
   {
+    key: 'tfnsw-cctv',
+    html:
+      'CCTV cameras &amp; frames (Sydney): ' +
+      '<a href="https://opendata.transport.nsw.gov.au/dataset/live-traffic-cameras" target="_blank" rel="noopener">Transport for NSW Live Traffic</a> ' +
+      '(CC BY 3.0 AU).',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },

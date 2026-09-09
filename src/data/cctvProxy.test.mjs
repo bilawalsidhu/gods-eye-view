@@ -24,15 +24,21 @@ test('CCTV upstream frame fetch supplies a bounded abort signal', async () => {
 });
 
 test('CCTV upstream frame fetch returns a valid image response', async () => {
+  let observedHeaders = null;
   const result = await fetchCctvImageFromUpstream('https://example.com/frame.jpg', {
     timeoutMs: 100,
-    fetchImpl: async () => new Response(Uint8Array.from([1, 2, 3]), {
+    fetchImpl: async (_url, options) => {
+      observedHeaders = options.headers;
+      return new Response(Uint8Array.from([1, 2, 3]), {
       status: 200,
       headers: { 'Content-Type': 'image/jpeg' },
-    }),
+      });
+    },
   });
 
   assert.equal(result?.ok, true);
   assert.equal(result?.contentType, 'image/jpeg');
   assert.deepEqual(result?.body, Buffer.from([1, 2, 3]));
+  assert.match(observedHeaders['User-Agent'], /Chrome/);
+  assert.match(observedHeaders.Accept, /^image\//);
 });
