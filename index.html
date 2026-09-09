@@ -455,6 +455,19 @@
       <span class="pp-label">Clean UI</span>
     </button>
     <div class="pp-toggle-group">
+      <button class="pp-toggle-btn" id="deck-controls-toggle" title="Steam Deck / gamepad camera controls" aria-pressed="false">
+        <span class="pp-icon">&#x25C9;</span>
+        <span class="pp-label">Gamepad</span>
+      </button>
+      <div class="pp-slider-row visible" id="deck-controls-slider-row">
+        <span class="pp-slider-mini-label">On</span>
+        <label class="pp-switch" for="deck-controls-switch">
+          <input type="checkbox" id="deck-controls-switch" role="switch" aria-label="Enable gamepad controls" />
+          <span class="pp-switch-ui" aria-hidden="true"></span>
+        </label>
+      </div>
+    </div>
+    <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="bloom-toggle" title="Bloom / Glow">
         <span class="pp-icon">&#x2728;</span>
         <span class="pp-label">Bloom</span>

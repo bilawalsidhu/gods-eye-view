@@ -1056,6 +1056,57 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   display: flex;
 }
 
+.pp-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  cursor: pointer;
+}
+
+.pp-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.pp-switch-ui {
+  width: 32px;
+  height: 16px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  position: relative;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.pp-switch-ui::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #d8ece6;
+  transition: transform 0.15s ease;
+}
+
+.pp-switch input:checked + .pp-switch-ui {
+  background: rgba(31, 143, 109, 0.85);
+  border-color: rgba(125, 255, 200, 0.45);
+}
+
+.pp-switch input:checked + .pp-switch-ui::after {
+  transform: translateX(16px);
+}
+
+.pp-switch input:focus-visible + .pp-switch-ui {
+  outline: 1px solid rgba(125, 255, 200, 0.7);
+  outline-offset: 2px;
+}
+
 .pp-toggle-group .pp-toggle-btn {
   transition: all var(--transition-fast), border-radius var(--transition-fast);
 }
@@ -9520,3 +9571,89 @@ body.scene-playback-mode #key-setup {
   border-color: rgba(255, 170, 150, 0.65);
   outline: none;
 }
+/* Steam Deck / gamepad controls */
+#deck-reticle {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 1200;
+  opacity: 0.75;
+}
+
+#deck-reticle .deck-reticle-h,
+#deck-reticle .deck-reticle-v {
+  position: absolute;
+  background: rgba(120, 255, 200, 0.85);
+  box-shadow: 0 0 8px rgba(80, 220, 180, 0.45);
+}
+
+#deck-reticle .deck-reticle-h {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  transform: translateY(-50%);
+}
+
+#deck-reticle .deck-reticle-v {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+}
+
+#deck-controls-help {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1200;
+  min-width: 180px;
+  padding: 10px 12px;
+  border: 1px solid rgba(120, 255, 200, 0.35);
+  background: rgba(8, 14, 18, 0.82);
+  color: rgba(220, 245, 240, 0.92);
+  font: 11px/1.35 'JetBrains Mono', monospace;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+#deck-controls-help .deck-controls-title {
+  margin-bottom: 6px;
+  color: rgba(120, 255, 200, 0.95);
+  font-weight: 600;
+}
+
+#deck-controls-help .deck-controls-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  opacity: 0.9;
+}
+
+#deck-controls-help .deck-controls-note {
+  display: block;
+  margin-top: 6px;
+  font-size: 10px;
+  line-height: 1.35;
+  opacity: 0.82;
+}
+
+body.deck-controls-active #cesiumContainer {
+  cursor: none;
+}
+
+@media (max-width: 900px) {
+  #deck-controls-help {
+    right: 8px;
+    bottom: 8px;
+    font-size: 10px;
+    min-width: 150px;
+  }
+}
+

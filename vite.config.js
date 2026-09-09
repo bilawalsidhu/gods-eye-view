@@ -7788,6 +7788,8 @@ export default defineConfig(({ mode }) => {
     define: {
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(env.GOOGLE_MAPS_API_KEY),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(env.CESIUM_ION_TOKEN),
+      // Gamepad / Steam Deck controls default on; set GEV_DECK_CONTROLS=0 to default off.
+      'import.meta.env.GEV_DECK_CONTROLS': JSON.stringify(env.GEV_DECK_CONTROLS === '0' ? '0' : '1'),
     },
     build: {
       // The Cesium engine bundle is inherently large; raise the warning ceiling
