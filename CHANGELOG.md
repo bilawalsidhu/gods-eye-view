@@ -5,6 +5,13 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- Guided visual tours (`src/tours/`): authored Rome / Paris / Tokyo walkthroughs
+  with beat clock, popup controls, and voice `control_tour` (play / pause /
+  next / prev / random / autoplay). Catalog and routing via `toursProxy`; no
+  AI tour generation in this PR.
+
 ### Fixed
 
 - Mapped-site outages show their scheduled retry countdown and distinguish

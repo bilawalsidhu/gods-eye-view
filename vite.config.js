@@ -75,6 +75,7 @@ import {
   validTerrainResult,
 } from './src/data/terrainHeightsProxy.js';
 import { VOICE_MODELS, isKnownVoiceTier, resolveVoiceModel } from './src/voice/voiceCost.js';
+import { toursProxy } from './src/tours/toursProxy.mjs';
 
 /** Resolve __dirname for ESM context. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -5230,7 +5231,8 @@ export function openAiRealtimeProxy() {
             'For requests like "show me the datacenter layers", open the data layers menu and focus the matching layer row; do not enable the layer unless the user asks to turn it on.',
             'For questions like "what am I looking at?", "what is in view?", "what is this?", "that selected thing", nearby datacenter, dam, cable, ship, or current view contents, call get_entity_context first, then answer from the returned scene/entity context.',
             'For "what is this aircraft?" answers, read the callsign, operator, registration, type, and route only from get_entity_context selected.properties. Treat route, routeOrigin, and routeDestination as the only authoritative route fields. Every aircraft identity answer MUST explicitly cover operator, type, and route. When a route is present, repeat its endpoint codes exactly; do not expand airport codes into city names. For a missing field say exactly "Operator details are unavailable", "Aircraft type is unavailable", or "Route details are unavailable" as applicable. Never silently omit missing enrichment or infer it from the callsign.',
-            'While a camera motion or route flight is active, a bare "stop" means move_camera{motion:stop} — NOT control_scene and NOT stop_tracking (those need explicit words like "stop the scene" / "stop tracking"). If move_camera stop returns stopped:false and an entity is being tracked, call stop_tracking next — the user means "stop whatever is moving". Flying somewhere while tracking automatically stops the tracking (the result says so): mention it briefly.',
+            'While a guided tour is playing, a bare "stop" means control_tour{action:stop}. Tours default to gallery mode: "next" / "go back" use control_tour next/prev (wraps). "Sit back" / "play by itself" / "autoplay" uses control_tour{action:autoplay, enabled:true}. "pause the tour" stops the tour voice (and pauses Autoplay if it is on). "continue" / "resume" uses resume. Surprise me / pick a random tour uses control_tour{action:random} — only tours already on disk (Rome/Paris/Tokyo and any others saved).',
+            'While a camera motion or route flight is active AND no tour is playing, a bare "stop" means move_camera{motion:stop} — NOT control_scene and NOT stop_tracking (those need explicit words like "stop the scene" / "stop tracking"). If move_camera stop returns stopped:false and an entity is being tracked, call stop_tracking next — the user means "stop whatever is moving". Flying somewhere while tracking automatically stops the tracking (the result says so): mention it briefly.',
             'For camera-motion requests — "orbit around this", "pan left", "tilt up", "stop moving" — call move_camera. For "fly the route" over a drawn route, call fly_route. Confirm with the RESULTING state ("Orbiting slowly", "Flying the route").',
             'analyst_query ANSWERS questions; it never moves the camera or starts tracking. For requests to FOLLOW or TRACK a specific aircraft/ship, call track_entity (get_entity_context first when the target is ambiguous), never analyst_query as the final or only action. For "follow/track the nearest aircraft", first call analyst_query with the aircraft layer(s), sortBy=distance, and limit=1, then call track_entity with the returned aircraft identity in the same turn. The lookup alone does not fulfill a follow/track command.',
             'For a request to enable an aircraft layer and SELECT or FIND the nearest/closest aircraft near a named place — for example, "Turn on flights and select the closest aircraft to Austin" — call select_nearest_aircraft once. It atomically turns on the requested aircraft layer first, waits for location arrival, refreshes that layer for the destination viewport, filters out landed/on-ground records, and selects the nearest airborne result. A healthy fallback feed is valid data: report the returned feed source briefly, never call it an enable failure. Do not also call fly_to_location, set_layer_visibility, analyst_query, track_entity, set_context_mode, or control_cockpit for the same request. SELECT/FIND never implies Contacts or Cockpit unless the user explicitly asks for either mode.',
@@ -5265,7 +5267,7 @@ export function openAiRealtimeProxy() {
             'For visual filter requests, call set_visual_style with one of the allowed style IDs.',
             'Disambiguation table — basemap vs layer vs style: basemap switching requires an explicit stack name — "Bing aerial" means set_map_stack bing-aerial, "aerial with labels" means bing-labels, "OSM"/"road map" means osm, "Esri"/"Esri imagery" means esri-imagery, "Google 3D"/"photorealistic" means photoreal. Any mention of "satellite" or "satellites" ALWAYS means the satellites DATA LAYER via set_layer_visibility, never a basemap. "surveillance"/"night vision"/"thermal" are visual STYLES via set_visual_style.',
             'HUD requests ("hud on/off", "switch to operator/minimal/tactical layout") use set_hud. Detection requests ("detection on", "dense mode", "balanced mode", "sparse mode", "set density to 25", "use weighted allocation") use set_detection. Density snaps to 0/25/50/75/100 and derives Sparse/Balanced/Dense; panoptic is a legacy alias for Dense.',
-            'Bloom/sharpen requests use set_post_processing. Scene requests ("play orbital watch", "stop the scene", "what scenes are there") use control_scene. CCTV camera requests ("next camera", "nearest camera", "select the Congress camera", "show coverage") use control_cctv — the CCTV layer must be enabled first.',
+            'Bloom/sharpen requests use set_post_processing. Scene requests ("play orbital watch", "stop the scene", "what scenes are there") use control_scene. Guided visual tours ("show me a tour of Rome", "pause the tour", "surprise me") use control_tour — play saved tours only (Rome/Paris/Tokyo and others on disk); surprise = random; there is no tour generation. CCTV camera requests ("next camera", "nearest camera", "select the Congress camera", "show coverage") use control_cctv — the CCTV layer must be enabled first.',
             'Radio playback requests use control_radio. "Turn on/start the radio" means action=play; action=enable only reveals Radio markers and must be reserved for explicit "show/enable the Radio layer/markers" requests. After a prepared playback result, briefly confirm any other completed actions and say "Turning on the radio"—never claim it is already playing. The client keeps Radio muted until playback is verified, then closes voice before restoring Radio volume. Examples: "play news near Austin" → select category=news locationId=austin; "play US news" → select category=news country=US; "Radio volume 30" → volume; pause/resume/stop/next/previous use the matching action. Radio selection never moves the camera.',
             '"Track/follow <something specific>" (a callsign, ship name, satellite name) uses track_entity. "Take me to the biggest fire" uses track_entity with query "biggest fire" (the fires layer must be enabled). Bare "orbit" means camera orbit of the current landmark. "Stop following/tracking" uses stop_tracking.',
             '"Show me which planes are overhead"/"frame the ships"/"show me the satellites above" use frame_overhead with the matching target.',
@@ -6022,6 +6024,23 @@ const GEV_REALTIME_TOOLS = [
       properties: {
         action: { type: 'string', enum: ['list', 'play', 'stop', 'next', 'status'] },
         sceneId: { type: 'string', description: 'Scene id or (partial) title for play.' },
+      },
+      required: ['action'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'control_tour',
+    description: 'Guided visual tour playback. Default is gallery: play starts the first beat and waits; next/prev seek beats (wrap) and start that beat\'s voice. Autoplay (off by default) advances on a timer; pause stops spoken audio; resume re-narrates the current beat. Surprise me uses random (saved tours only).',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        action: { type: 'string', enum: ['list', 'play', 'pause', 'resume', 'stop', 'next', 'prev', 'status', 'random', 'autoplay'] },
+        tourId: { type: 'string', description: 'Tour id or city name for play, e.g. rome.' },
+        city: { type: 'string', description: 'City or place name for play when tourId is unknown.' },
+        query: { type: 'string', description: 'Free-form play query such as Rome or Paris.' },
+        enabled: { type: 'boolean', description: 'For action=autoplay: true to sit-back auto-advance, false for gallery seek.' },
       },
       required: ['action'],
     },
@@ -7760,6 +7779,7 @@ export default defineConfig(({ mode }) => {
       openAiRealtimeProxy(),
       googlePlacesContextProxy(),
       keySetupEndpoint(),
+      toursProxy(),
     ],
     server: {
       host: env.HOST || 'localhost',

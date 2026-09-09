@@ -18,6 +18,7 @@ import localDataLayers from './data/localLayers.js';
 import { LAYER_STATE_REGISTRY } from './data/layerState.js';
 import { registerDataCredits } from './data/dataCredits.js';
 import { SceneDirector } from './scenes/director.js';
+import { TourEngine } from './tours/tourEngine.js';
 import { initGevVoiceCommands } from './voice/gevRealtime.js';
 import { MapStackController } from './mapStackController.js';
 import { initAnnotations } from './annotations/index.js';
@@ -245,6 +246,10 @@ async function init() {
     // Initialize the voice "whiteboard" annotation engine (world-space renderer)
     const annotations = initAnnotations({ viewer, tileset });
 
+    // Guided tours: camera playback + establish annotations
+    const tourEngine = new TourEngine(viewer, styleManager, { annotations });
+    window.__gevTourEngine = tourEngine;
+
     // Keep startup chrome truthful: a share is not restored until camera,
     // visual/map/panel lanes, and every requested layer have terminated.
     void Promise.all([
@@ -319,6 +324,7 @@ async function init() {
       tileset,
       dataManager,
       sceneDirector,
+      tourEngine,
       mapStackController,
       annotations,
       weatherEffects,
@@ -326,7 +332,7 @@ async function init() {
       getRenderGovernorDiagnostics,
       requestRender: governorRequestRender,
     };
-    window.__godsEyeView.voiceCommands = initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector, annotations });
+    window.__godsEyeView.voiceCommands = initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector, annotations, tourEngine });
 
   } catch (error) {
     console.error("God's Eye View initialization failed:", error);

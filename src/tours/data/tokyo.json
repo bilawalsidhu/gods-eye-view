@@ -1,0 +1,96 @@
+{
+  "id": "tokyo",
+  "title": "Tokyo: Tower, Palace, Old Town",
+  "city": "Tokyo",
+  "cityId": "tokyo",
+  "durationTargetSec": 112,
+  "beats": [
+    {
+      "id": "tokyo-establish",
+      "kind": "establish",
+      "title": "Approaching Tokyo",
+      "durationSec": 8,
+      "script": "Tokyo. This pass jumps clusters: a 1958 broadcast tower, the imperial moat, Asakusa's oldest temple, then the tower that replaced the first one's job.",
+      "place": { "name": "Tokyo", "lat": 35.6586, "lon": 139.7454 },
+      "camera": { "mode": "flyTo", "lat": 35.68, "lon": 139.77, "alt": 12000, "heading": 40, "pitch": -38, "durationSec": 12, "approachSec": 12, "spaceAlt": 32000000 }
+    },
+    {
+      "id": "tokyo-tower",
+      "kind": "hold",
+      "title": "Tokyo Tower",
+      "durationSec": 14,
+      "script": "Tokyo Tower, 1958. Three hundred thirty-three metres. Eiffel as the model, painted orange and white for aviation. For decades this was the city's broadcast mast.",
+      "place": { "name": "Tokyo Tower", "lat": 35.6586, "lon": 139.7454 },
+      "camera": { "mode": "orbitHold", "lat": 35.6586, "lon": 139.7454, "rangeM": 850, "heading": 20, "pitch": -22, "buildingHeight": 110 }
+    },
+    {
+      "id": "tokyo-to-palace",
+      "kind": "transit",
+      "title": "Metro to the palace",
+      "durationSec": 6,
+      "script": "A short subway ride north to the palace moat, and the city turns to walls and pine.",
+      "scriptVariations": [
+        "We take the train across the ward rather than crawl the surface streets, arriving at the East Gardens.",
+        "A few stops on the metro and the inner city becomes a castle site."
+      ],
+      "travel": { "mode": "transit", "fromPlace": "Tokyo Tower", "toPlace": "Imperial Palace" },
+      "camera": { "mode": "routeDolly", "compressToSec": 6 },
+      "place": { "name": "Imperial Palace", "lat": 35.6852, "lon": 139.7528 }
+    },
+    {
+      "id": "tokyo-palace",
+      "kind": "hold",
+      "title": "Imperial Palace",
+      "durationSec": 14,
+      "script": "The Imperial Palace sits on Edo Castle. The East Gardens are public. The inner palace is still the Emperor's — a moated blank in the middle of the capital.",
+      "place": { "name": "Imperial Palace", "lat": 35.6852, "lon": 139.7528 },
+      "camera": { "mode": "lookAt", "lat": 35.6852, "lon": 139.7528, "rangeM": 900, "heading": 0, "pitch": -32, "buildingHeight": 20 }
+    },
+    {
+      "id": "tokyo-to-sensoji",
+      "kind": "transit",
+      "title": "Train to Asakusa",
+      "durationSec": 6,
+      "script": "Another rail hop east toward Asakusa — the old town the towers were built to look over.",
+      "scriptVariations": [
+        "We change lines toward the river and Senso-ji's gate.",
+        "The next cluster is a temple town: a few stops on the train to Asakusa."
+      ],
+      "travel": { "mode": "transit", "fromPlace": "Imperial Palace", "toPlace": "Senso-ji" },
+      "camera": { "mode": "routeDolly", "compressToSec": 6 },
+      "place": { "name": "Senso-ji", "lat": 35.7148, "lon": 139.7967 }
+    },
+    {
+      "id": "tokyo-sensoji",
+      "kind": "hold",
+      "title": "Senso-ji",
+      "durationSec": 16,
+      "script": "Senso-ji, Tokyo's oldest temple. Legend puts its founding in 628. Nakamise is the approach — a market street aimed at the gate like an arrow.",
+      "place": { "name": "Senso-ji", "lat": 35.7148, "lon": 139.7967 },
+      "camera": { "mode": "lookAt", "lat": 35.7148, "lon": 139.7967, "rangeM": 450, "heading": 0, "pitch": -18, "buildingHeight": 30 }
+    },
+    {
+      "id": "tokyo-to-skytree",
+      "kind": "transit",
+      "title": "Hop to Skytree",
+      "durationSec": 5,
+      "script": "A short hop to Skytree — walk, taxi, or one train. The new mast is already in the skyline.",
+      "scriptVariations": [
+        "One more rail stop and the 2012 tower fills the east.",
+        "We stay close: Skytree is the next landmark over the Sumida."
+      ],
+      "travel": { "mode": "transit", "fromPlace": "Senso-ji", "toPlace": "Tokyo Skytree" },
+      "camera": { "mode": "routeDolly", "compressToSec": 5 },
+      "place": { "name": "Tokyo Skytree", "lat": 35.7101, "lon": 139.8107 }
+    },
+    {
+      "id": "tokyo-skytree",
+      "kind": "hold",
+      "title": "Tokyo Skytree",
+      "durationSec": 16,
+      "script": "Tokyo Skytree, 2012. Six hundred thirty-four metres. Japan's tallest structure, and the broadcast tower that took Tokyo Tower's job.",
+      "place": { "name": "Tokyo Skytree", "lat": 35.7101, "lon": 139.8107 },
+      "camera": { "mode": "lookAt", "lat": 35.7101, "lon": 139.8107, "rangeM": 900, "heading": 220, "pitch": -20, "buildingHeight": 200 }
+    }
+  ]
+}

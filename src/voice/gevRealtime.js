@@ -193,14 +193,14 @@ export function silenceRadioForVoice({ duckRadio, pauseRadio } = {}) {
  */
 const SUPERSEDED_RESPONSE_MEMORY = 8;
 
-export function initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector = null, annotations = null }) {
+export function initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector = null, annotations = null, tourEngine = null }) {
   if (window.__gevVoiceCommands && typeof window.__gevVoiceCommands.stop === 'function') {
     window.__gevVoiceCommands.stop({ removeUi: true });
   }
-  const runner = createGevActionRunner({ viewer, styleManager, dataManager, sceneDirector, annotations });
+  const runner = createGevActionRunner({ viewer, styleManager, dataManager, sceneDirector, annotations, tourEngine });
   const ui = createVoiceControl({ reset: true });
   const radioLayer = dataManager?.layers?.get('radio')?.module || null;
-  const controller = new GevRealtimeController({ runner, ui, radioLayer, dataManager });
+  const controller = new GevRealtimeController({ runner, ui, radioLayer, dataManager, tourEngine });
   // Deferred annotation outlines finish AFTER their tool result returned. Feed the
   // final outcome (resolved / failed) into the conversation so the model can honestly
   // confirm — or correct — what it narrated about a boundary it never saw land.
@@ -208,6 +208,10 @@ export function initGevVoiceCommands({ viewer, styleManager, dataManager, sceneD
     controller.annotationEventUnsubscribe = annotations.onOutlineEvent((evt) => {
       controller.notifyMapEvent({ type: 'map_annotation_outline', ...evt });
     });
+  }
+  if (tourEngine) {
+    tourEngine.speakBeat = (beat) => controller.narrateTourBeat(beat);
+    tourEngine.stopTourVoice = () => controller.cancelTourNarration();
   }
   controller.buttonHandler = () => {
     if (shouldIgnoreVoiceButtonClick(controller.spaceKeyHeld)) return;
@@ -226,11 +230,12 @@ export function initGevVoiceCommands({ viewer, styleManager, dataManager, sceneD
 }
 
 export class GevRealtimeController {
-  constructor({ runner, ui, radioLayer = null, dataManager = null }) {
+  constructor({ runner, ui, radioLayer = null, dataManager = null, tourEngine = null }) {
     this.runner = runner;
     this.ui = ui;
     this.radioLayer = radioLayer;
     this.dataManager = dataManager;
+    this.tourEngine = tourEngine;
     this.radioVoiceDucked = false;
     this.pc = null;
     this.dc = null;
@@ -999,6 +1004,30 @@ export class GevRealtimeController {
     if (!sent) this.responseCreatePending = false;
   }
 
+  narrateTourBeat(beat) {
+    if (!this.dc || this.dc.readyState !== 'open') return false;
+    if (this.tourEngine?.paused) return false;
+    this.notifyMapEvent({ type: 'tour_beat', ...beat });
+    this.queueResponseCreate(
+      'A tour_beat system item was just added. Narrate that beat using the script field as your spoken guide. Stay close to those words. Do not mention tools, JSON, or that you are reading a script.',
+    );
+    return true;
+  }
+
+  /**
+   * Stop in-flight tour narration (UI pause, seek, barge-in). Realtime cannot
+   * resume a cancelled utterance; callers re-speak the beat on resume.
+   */
+  cancelTourNarration() {
+    this.pendingResponseInstructions = null;
+    if (this.dc?.readyState === 'open' && (this.responseActive || this.responseCreatePending)) {
+      this.sendRealtimeEvent({ type: 'response.cancel' }, 'client.response_cancel.tour');
+    }
+    this.supersedeActiveResponseForUserTurn();
+    this.responseCreatePending = false;
+    return true;
+  }
+
   async handleRealtimeEvent(event) {
     let payload = null;
     try {
@@ -1064,6 +1093,10 @@ export class GevRealtimeController {
       this.pendingResponseInstructions = null;
       this.cancelRadioHandoff({ abortTools: true });
       this.setVoiceSpeaker('user');
+      if (this.tourEngine?.running && !this.tourEngine.paused) {
+        this.cancelTourNarration();
+        this.tourEngine.pause('barge-in');
+      }
     }
     this.updateResponseState(payload);
     // The spend cap may have just ended the session from inside the usage
@@ -2026,6 +2059,42 @@ function hasStructuredViewIdentity(result) {
 }
 
 function responseInstructionForToolResult(result) {
+  if (result?.action === 'control_tour') {
+    if (result.empty || (!result.ok && /no saved tour/i.test(String(result.error || '')))) {
+      return 'Say there is no saved tour for that place. Suggest Rome, Paris, or Tokyo, or ask them to list available tours. Do not claim a tour started.';
+    }
+    if (result.random && result.ok) {
+      return 'Name the surprise pick out loud using the returned title or city. Do not read speakScript — a tour_beat item will carry the first narration.';
+    }
+    if (result.ok && result.loadingSpoken) {
+      if (result.autoplay) {
+        return 'Say one short line that the tour is starting and they can sit back — Autoplay is on. Do not read speakScript; a tour_beat item will carry the narration.';
+      }
+      return 'Say one short line that the tour is ready. They can seek beats with next and previous; Autoplay is off unless they ask for it. Do not read speakScript; a tour_beat item will carry the narration.';
+    }
+    if (result.ok && result.speakScript) {
+      return 'Name the tour in one short clause using the returned title or city. Do not read speakScript; a tour_beat item will carry the narration.';
+    }
+    if (result.ok && result.paused) {
+      return 'Briefly confirm the tour voice is paused. Do not continue the beat script.';
+    }
+    if (result.ok && result.seek) {
+      return 'Do not narrate. A tour_beat item will carry this stop. At most name the beat title in a few words.';
+    }
+    if (result.ok && result.autoplay === true && result.action === 'control_tour') {
+      return 'Briefly confirm Autoplay is on. Do not read speakScript.';
+    }
+    if (result.ok && result.autoplay === false && result.running) {
+      return 'Briefly confirm Autoplay is off and they can seek beats. Do not read speakScript.';
+    }
+    if (result.ok && result.running === false) {
+      return 'Briefly confirm the tour stopped.';
+    }
+    if (result.ok) {
+      return 'Briefly confirm the tour action using the returned title. Do not invent stops that are not in the result.';
+    }
+    return `Tell the user the tour did not start and briefly state this error: ${result.error || 'unknown tour error'}. Suggest Rome, Paris, Tokyo, or list if the tour was missing.`;
+  }
   if (result?.action === 'control_radio' && result.radioPlaybackSuppressed) {
     if (result.audioState === 'paused') {
       return 'Briefly confirm the completed Radio action, then say that Radio remains paused as requested. Do not say the request was cancelled or that Radio is playing.';
