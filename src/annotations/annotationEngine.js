@@ -1,7 +1,7 @@
 import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
-import { isRateLimitedOutcome, resolveAnnotationTarget } from './annotationResolver.js';
+import { isRateLimitedOutcome, resolveAnnotationTarget, sampleGroundHeight } from './annotationResolver.js';
 
 // Dev convenience: expose the app's Cesium instance for console/preview probing
 // (single shared module instance — avoids dual-Cesium state bugs when testing).
@@ -387,6 +387,9 @@ export function createAnnotationEngine({
 
   async function resolveSpec(spec, signal, allowDistant = false) {
     const type = normalizeType(spec?.type);
+    // MANUAL geometry (drawTool.js): the person clicked the vertices, so there is
+    // nothing to resolve. Same record shapes as a resolved spec, source 'manual'.
+    if (isManualSpec(spec, type)) return resolveManualSpec(spec, type, viewer);
     if (type === 'route') {
       const points = Array.isArray(spec.points) ? spec.points : [];
       if (points.length < 2) throw new Error('a route needs at least 2 waypoints');
@@ -1103,6 +1106,49 @@ function round5(n) {
   return Number.isFinite(n) ? Math.round(n * 1e5) / 1e5 : null;
 }
 
+/** A spec whose geometry was supplied by hand (drawTool.js) rather than by a name. */
+function isManualSpec(spec, type) {
+  if (!spec || spec.manual !== true) return false;
+  if (type === 'route') return Array.isArray(spec.path) && spec.path.length >= 2;
+  if (type === 'area') return Array.isArray(spec.ring) && spec.ring.length >= 3;
+  return Number.isFinite(Number(spec.latitude)) && Number.isFinite(Number(spec.longitude));
+}
+
+/** [lon, lat] pairs or {lon, lat} objects → [lon, lat] pairs, invalid entries dropped. */
+function manualPairs(list) {
+  return (Array.isArray(list) ? list : [])
+    .map((p) => (Array.isArray(p) ? [Number(p[0]), Number(p[1])] : [Number(p?.lon ?? p?.longitude), Number(p?.lat ?? p?.latitude)]))
+    .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180);
+}
+
+/**
+ * Resolve a hand-drawn spec without any fetch. An area keeps its ring as a real
+ * (not synthesized) outline so it drapes solid; a line is a `route` with mode
+ * 'manual', its length as distance and no travel time; a pin is a point.
+ */
+function resolveManualSpec(spec, type, viewer) {
+  if (type === 'route') {
+    const pts = manualPairs(spec.path).map(([lon, lat]) => ({ lon, lat, height: 0 }));
+    if (pts.length < 2) throw new Error('a drawn line needs at least 2 points');
+    let distanceM = 0;
+    for (let i = 1; i < pts.length; i += 1) distanceM += greatCircleM(pts[i - 1], pts[i]);
+    return { path: pts, distanceM, durationS: null, mode: 'manual', source: 'manual', fallback: false };
+  }
+  if (type === 'area') {
+    const ring = manualPairs(spec.ring);
+    if (ring.length < 3) throw new Error('a drawn area needs at least 3 points');
+    const lon = ring.reduce((a, p) => a + p[0], 0) / ring.length;
+    const lat = ring.reduce((a, p) => a + p[1], 0) / ring.length;
+    return {
+      lon, lat, height: sampleGroundHeight(viewer, lon, lat),
+      ring, footprintKind: 'area', buildingHeight: null, synthesized: false, source: 'manual',
+    };
+  }
+  const lon = Number(spec.longitude);
+  const lat = Number(spec.latitude);
+  return { lon, lat, height: sampleGroundHeight(viewer, lon, lat), ring: null, source: 'manual' };
+}
+
 function normalizeMode(m) {
   const t = String(m || '').toLowerCase();
   if (t === 'car' || t === 'drive' || t === 'driving') return 'car';
@@ -1138,6 +1184,7 @@ function composeRouteLabel(baseLabel, distM, durS, mode, fallback) {
   if (!dist) return baseLabel;
   const min = Number.isFinite(durS) ? Math.max(1, Math.round(durS / 60)) : null;
   const word = mode === 'car' ? 'drive' : mode === 'bike' ? 'ride' : 'walk';
+  if (mode === 'manual') return baseLabel ? `${baseLabel} — ${dist}` : dist;
   // Fallback = routing was unavailable, so we drew a straight line: label it as a
   // direct line with no travel time (never claim an "X min walk" we didn't compute).
   let metrics;

@@ -2226,6 +2226,11 @@ export function createAnnotationResolver({
     return {
       lat: Cesium.Math.toDegrees(carto.latitude),
       lon: Cesium.Math.toDegrees(carto.longitude),
+      // The height the pick actually landed on — a roof, a hillside, or 0 on
+      // the ellipsoid. Callers that only want a coordinate ignore it; the draw
+      // tool's live preview needs it, or the rubber band sinks to sea level
+      // while the pointer is on a hill.
+      height: Number.isFinite(carto.height) ? carto.height : 0,
     };
   }
 
@@ -2331,5 +2336,12 @@ export function createAnnotationResolver({
     viewportBias,
     placesNearViewRecovery,
     resolveRegionRingForQuery,
+    // Scene helpers, not resolution: the manual draw tool turns a click into a
+    // world point with the same depth-aware cascade the agent's pixel fallback
+    // uses, and the engine samples the surface under a hand-placed mark. Both
+    // are exposed so there is ONE pick cascade in the app, not a second one
+    // written beside it.
+    pickWorldFromScreen,
+    sampleGroundHeight,
   };
 }

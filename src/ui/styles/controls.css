@@ -822,6 +822,46 @@
   outline: none;
 }
 
+/* DISPLAY ▸ Draw: shape segment, label field, colour, and the one-line hint */
+#draw-mode-row {
+  min-width: 184px;
+}
+#draw-label-row {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.pp-text-input {
+  flex: 1 1 110px;
+  min-width: 0;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  padding: 2px 6px;
+  outline: none;
+}
+.pp-text-input:focus {
+  border-color: var(--accent);
+}
+.draw-color-select {
+  flex: 0 0 74px;
+}
+.draw-hint {
+  flex-basis: 100%;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.6px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+body.gev-drawing #cesiumContainer canvas {
+  cursor: crosshair;
+}
+
 /* Proximity / All segmented control under the 3D toggle */
 #models3d-mode-row {
   min-width: 184px;
