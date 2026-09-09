@@ -66,6 +66,7 @@ import {
   upsertDotenvValues,
   validateKeySetupUpdates,
 } from './src/keySetupCore.mjs';
+import { admitSameSiteRequest } from './src/localRequestGate.mjs';
 import { hardenCredentialFile } from './src/keySetupHardening.mjs';
 import {
   fetchTerrainChunkWithRetry,
@@ -5055,6 +5056,33 @@ function trackBackfillProxies() {
 }
 
 /**
+ * Cross-site request gate for the cost-bearing and log endpoints. Mirrors the
+ * credential-panel `admit` helper (below) but feeds the request to the pure,
+ * unit-tested `admitSameSiteRequest` in src/localRequestGate.mjs. Returns true
+ * when it has already responded 403 (caller returns); false when the request is
+ * admitted and the handler should continue. Refuses cross-site browser requests
+ * (foreign/opaque Origin, or Sec-Fetch-Site other than same-origin/none, or
+ * reverse-proxy headers) while keeping loopback non-browser tools and the LAN
+ * opt-in working.
+ */
+const admitSameSite = (req, res) => {
+  const verdict = admitSameSiteRequest({
+    method: req.method,
+    hostHeader: req.headers?.host,
+    protocol: req.socket?.encrypted ? 'https:' : 'http:',
+    origin: req.headers?.origin,
+    secFetchSite: req.headers?.['sec-fetch-site'],
+    proxyHeaders: req.headers || {},
+  });
+  if (verdict.ok) return false;
+  res.statusCode = verdict.status;
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Cache-Control', 'no-store');
+  res.end(JSON.stringify({ error: verdict.error }));
+  return true;
+};
+
+/**
  * Vite plugin: OpenAI Realtime ephemeral client secret.
  *
  * Keeps OPENAI_API_KEY server-side while the browser connects to the
@@ -5069,6 +5097,7 @@ export function openAiRealtimeProxy() {
         res.end(JSON.stringify({ error: 'Method not allowed' }));
         return;
       }
+      if (admitSameSite(req, res)) return;
 
       const apiKey = process.env.OPENAI_API_KEY;
       const keyless = keylessHudSummaryResponse(apiKey);
@@ -5131,6 +5160,7 @@ export function openAiRealtimeProxy() {
         res.end(JSON.stringify({ error: 'Method not allowed' }));
         return;
       }
+      if (admitSameSite(req, res)) return;
 
       try {
         const body = await readRequestBody(req, REALTIME_DEBUG_LOG_MAX_BYTES);
@@ -5156,6 +5186,7 @@ export function openAiRealtimeProxy() {
         res.end(JSON.stringify({ error: 'Method not allowed' }));
         return;
       }
+      if (admitSameSite(req, res)) return;
 
       // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). No-op when unset.
       if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
@@ -5400,6 +5431,7 @@ export function googlePlacesContextProxy() {
         res.end(JSON.stringify({ error: 'Method not allowed', places: [] }));
         return;
       }
+      if (admitSameSite(req, res)) return;
 
       // Keyless place context has no provider cost, so it resolves before the
       // paid-endpoint limiter can consume or exhaust quota (mirrors the HUD
@@ -7722,6 +7754,32 @@ function keySetupEndpoint() {
 }
 
 /**
+ * Content-Security-Policy applied to every document the dev/preview server
+ * serves. Held in one constant so dev and preview cannot drift. No inline
+ * script and no foreign script origin is permitted. 'unsafe-eval' is required:
+ * Knockout (bundled inside @cesium/widgets) resolves the global object with
+ * `(0, eval)("this")` at module load, and without it the Cesium widget never
+ * initializes (verified in headless Chrome). It also covers Cesium's WASM
+ * decoders. Widen any other directive only if a real violation appears.
+ */
+const LOCAL_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https:",
+  "media-src 'self' blob: https:",
+  "connect-src 'self' https: wss: ws:",
+  "worker-src 'self' blob:",
+  "child-src 'self' blob:",
+  "manifest-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+/**
  * Main Vite configuration factory.
  *
  * Loads .env files via Vite's loadEnv, registers Cesium + local proxy
@@ -7781,7 +7839,15 @@ export default defineConfig(({ mode }) => {
       // serves, which is what makes that attack impossible rather than unlikely.
       headers: {
         'X-Frame-Options': 'DENY',
-        'Content-Security-Policy': "frame-ancestors 'none'",
+        'Content-Security-Policy': LOCAL_CSP,
+      },
+    },
+    // The preview server serves the same documents, so it carries the same
+    // framing + CSP hardening (one LOCAL_CSP constant, no drift).
+    preview: {
+      headers: {
+        'X-Frame-Options': 'DENY',
+        'Content-Security-Policy': LOCAL_CSP,
       },
     },
     // Expose selected API keys to the browser via import.meta.env.*

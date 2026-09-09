@@ -28,7 +28,7 @@ These are designed to be used directly in the browser (like a Mapbox public toke
 1. **Google Maps API key** — loads Photorealistic 3D Tiles directly and powers GEV place search. **Restrict it** (HTTP referrer + API restriction to the required Google APIs) in the Google Cloud Console. An unrestricted key in a public deployment can be abused and billed to you.
 2. **Cesium ion token** (`CESIUM_ION_TOKEN`, optional — for ion-hosted Google Photorealistic 3D Tiles, Bing world imagery, and world terrain) — used as `Cesium.Ion.defaultAccessToken` client-side. Use a public **`assets:read`** token with **URL restrictions** for any hosted deployment. The Community plan has eligibility and usage limits; a public token is not a secret, but it can still consume the account's quota.
 
-> The Vite `define` block in `vite.config.js` controls exactly what reaches the client: only these two keys plus two non-secret CCTV feature flags. Everything else stays server-side.
+> The Vite `define` block in `vite.config.js` controls exactly what reaches the client: only these two keys. Everything else stays server-side.
 
 Never commit real keys. `.env` is gitignored; only `.env.example` (placeholder names) is tracked. On macOS `dev-fresh.sh` can read keys from the Keychain; plain Vite uses env vars or a local `.env`, and Pinokio uses its ignored app `ENVIRONMENT` file.
 
@@ -52,6 +52,8 @@ The data proxies in `vite.config.js` are written so the browser cannot turn the 
 - **Sanitized errors** — internal error details are not echoed back to clients.
 - **Coalesced OAuth refresh** and cached successful responses only (OpenSky).
 - **Redacted debug logging.** The voice debug log (`.gev-logs/`, gitignored) strips API keys, bearer tokens, client secrets, and image data URLs before writing.
+- **Cross-site gate on cost/log endpoints.** The cost-bearing (`/api/realtime/token`, `/api/openai/hud-summary`, `/api/google/nearby-places`) and log (`/api/realtime/debug-log`) endpoints refuse cross-site browser requests: a foreign or opaque `Origin`, a `Sec-Fetch-Site` other than `same-origin`/`none` (this is what blocks an `<img>`/navigation that carries no `Origin`), or any reverse-proxy/CDN forwarding header returns `403`. Non-browser loopback tools (the repo QA harnesses POST the token endpoint with no `Origin`) and the explicit `HOST=0.0.0.0` LAN opt-in keep working — the gate deliberately does not require a loopback remote address; that stricter requirement belongs only to the credential panel (`admitKeySetupRequest`).
+- **Full Content-Security-Policy.** The dev and preview servers send a real CSP (`script-src 'self' 'unsafe-eval'`: no inline script and no script from any other origin), alongside the existing `X-Frame-Options: DENY` and `frame-ancestors 'none'`. `'unsafe-eval'` stays because Knockout, bundled inside Cesium's widgets package, resolves the global object with `eval` at load time and the globe does not initialize without it; styles permit `'unsafe-inline'` and Google Fonts because Vite's dev client injects `<style>` elements.
 
 ## Network exposure — the operator threat model
 
