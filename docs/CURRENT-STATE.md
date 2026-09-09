@@ -1,6 +1,15 @@
 # God's Eye View Current State
 
-Updated: August 24, 2026
+Updated: September 8, 2026
+
+## WarScope conflict events
+
+- `warscope-events` is a Data Layers toggle for global GDELT-backed conflict
+  points. The Vite middleware exposes only `/api/warscope/events` against the
+  fixed host `https://warscope.net` (clamped query params, ~10 min memory
+  cache, serve-stale, per-IP rate limit). There is no `/api/warscope/preview`
+  or `/api/warscope/image`. Zoomed-in overlay cards expand to title, WarScope
+  metadata, and an outbound publisher source link.
 
 ## Installations and map-source guidance
 
@@ -1615,6 +1624,7 @@ its criteria cannot be silently ignored.
 | Live AIS Vessels 🚢 | AISStream websocket | `src/data/aisLiveVessels.js` | `/api/ais-live` | 60s (+800ms visibility pass) |
 | Mapped Installations ⌖ | OpenStreetMap mapped context; on-demand Google Maps Places supplement | `src/data/militaryInstallations.js` | `/api/military-installations`, `/api/google/text-search` | viewport-driven + user search; while unavailable, auto-retry 30 s → 240 s backoff |
 | Earthquakes | USGS | `src/data/earthquakes.js` | — | 60s |
+| Global Conflict Events | WarScope / GDELT | `src/data/warscopeEvents.js` | `/api/warscope/events` | 10 min |
 | Satellites | CelesTrak | `src/data/satellites.js` | `/api/celestrak` | 120s |
 | Space Missions (30d) | Launch Library 2 + CelesTrak | `src/data/rocketLaunches.js` | `/api/launches` + `/api/celestrak/active` | 5 min |
 | Traffic | OSM Overpass (+ optional TomTom live flow) | `src/data/traffic.js` | `/api/overpass` + `/api/tomtom` | viewport-driven |
