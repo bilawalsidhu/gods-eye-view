@@ -4,6 +4,7 @@ import { noirShader } from '../styles/noir.js';
 import { snowShader } from '../styles/snow.js';
 import { nightVisionShader } from '../styles/surveillance.js';
 import { thermalShader } from '../styles/thermal.js';
+import { sonarShader } from '../styles/sonar.js';
 import { BLOOM_INTENSITY_DEFAULT } from '../bloom.js';
 
 /** Duration (ms) for shader intensity crossfade between style presets. */
@@ -16,6 +17,7 @@ export const STYLES = {
   anime: animeShader,
   noir: noirShader,
   snow: snowShader,
+  sonar: sonarShader,
 };
 
 /**

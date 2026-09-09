@@ -203,7 +203,7 @@ Choose a first-run mission, or try these in order. The GIFs show Google Photorea
 7. **Talk to it** *(needs an OpenAI key)*: *"Take me to LAX and select the nearest airborne aircraft."*
 8. **Come home.** Hit **Reset Globe** — or just say *"zoom out to a globe view."*
 
-**Keyboard:** `1`–`7` visual styles · `H` HUD · `D` detection · `C` cockpit · `Esc` out.
+**Keyboard:** `1`–`8` visual styles · `H` HUD · `D` detection · `C` cockpit · `Esc` out.
 
 ---
 

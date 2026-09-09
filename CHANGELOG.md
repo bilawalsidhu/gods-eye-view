@@ -71,6 +71,11 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Extract shared surface keyboard handling for the welcome launcher and Provider
   Settings, preserving Tab/Escape behavior and releasing the listener on teardown.
 
+### Added
+
+- Tactical Naval Sonar visual style (`Key 8`) with dynamic rotating acoustic sweep,
+  phosphor persistence decay trail, concentric range rings, and acoustic gain controls.
+
 ### Security
 
 - Validate configured Google Places coordinates and text queries before rate
@@ -80,7 +85,6 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 
 - Cancel the active location lookup when its controls are disposed.
-
 
 ### Fixed
 

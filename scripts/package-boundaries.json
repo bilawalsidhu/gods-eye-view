@@ -312,7 +312,8 @@
       "src/styles/thermal.js",
       "src/styles/anime.js",
       "src/styles/noir.js",
-      "src/styles/snow.js"
+      "src/styles/snow.js",
+      "src/styles/sonar.js"
     ],
     "external": ["cesium"]
   },
@@ -453,6 +454,7 @@
       "src/styles/noir.js",
       "src/styles/retro.js",
       "src/styles/snow.js",
+      "src/styles/sonar.js",
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",

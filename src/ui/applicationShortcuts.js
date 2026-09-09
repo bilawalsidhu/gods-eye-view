@@ -6,6 +6,7 @@ const STYLE_KEYS = Object.freeze({
   5: 'anime',
   6: 'noir',
   7: 'snow',
+  8: 'sonar',
 });
 
 /**

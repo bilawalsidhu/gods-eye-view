@@ -87,7 +87,7 @@ test('circular angle distance remains small across the wrap point', () => {
 
 test('celestial ring is available only in Normal style', () => {
   assert.equal(isCelestialRingStyleSupported('normal'), true);
-  for (const style of ['retro', 'surveillance', 'thermal', 'anime', 'noir', 'snow']) {
+  for (const style of ['retro', 'surveillance', 'thermal', 'anime', 'noir', 'snow', 'sonar']) {
     assert.equal(isCelestialRingStyleSupported(style), false);
   }
 });

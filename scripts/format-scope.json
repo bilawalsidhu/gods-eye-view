@@ -148,6 +148,7 @@
   "src/styles/anime.js",
   "src/styles/noir.js",
   "src/styles/snow.js",
+  "src/styles/sonar.js",
   "scripts/qa-visual-effects.mjs",
   "src/ui/mapSource.js",
   "src/ui/mapSourceControls.js",
