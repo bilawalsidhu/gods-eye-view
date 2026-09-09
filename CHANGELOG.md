@@ -5,6 +5,15 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- CCTV mesh now includes an **Ontario 511 (MTO)** city pack: ~250 public
+  traffic cameras across Ontario (anchored on Toronto and Ottawa), fetched
+  keylessly from the `511on.ca` developer API with frames served through the
+  existing CCTV proxy. Licensed under the Open Government Licence – Ontario
+  (attribution registered in the Data attribution popover). Toggle with
+  `CCTV_ONTARIO_ENABLED` / cap with `CCTV_ONTARIO_MAX_SOURCES`.
+
 ### Fixed
 
 - Mapped-site outages show their scheduled retry countdown and distinguish

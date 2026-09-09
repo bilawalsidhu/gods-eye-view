@@ -128,6 +128,13 @@ export const DATA_CREDITS = [
       'Contains OS data © Crown copyright and database rights.',
   },
   {
+    key: 'ontario511-cctv',
+    html:
+      'CCTV cameras &amp; frames (Ontario): ' +
+      '<a href="https://511on.ca" target="_blank" rel="noopener">Ontario 511 (MTO)</a> — ' +
+      'Contains information licensed under the Open Government Licence – Ontario.',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },

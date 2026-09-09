@@ -3543,6 +3543,17 @@ const TFL_JAMCAM_URL = 'https://api.tfl.gov.uk/Place/Type/JamCam';
 const TFL_IMAGE_ORIGIN = 'https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/';
 const DEFAULT_TFL_MAX_SOURCES = 250;
 const LONDON_CENTER = { lat: 51.5074, lon: -0.1278 };
+/** Ontario 511 (MTO) CCTV: one keyless province-wide list endpoint; each still
+ *  frame is a direct image on 511on.ca (JPEG, occasionally PNG). Open
+ *  Government Licence – Ontario. */
+const ONTARIO511_CCTV_URL = 'https://511on.ca/api/v2/get/cameras';
+const ONTARIO511_IMAGE_ORIGIN = 'https://511on.ca/map/Cctv/';
+const DEFAULT_ONTARIO511_MAX_SOURCES = 250;
+/** Prioritization anchors: the two largest Ontario metros the feed covers. */
+const ONTARIO_ANCHORS = [
+  { lat: 43.6532, lon: -79.3832 }, // Toronto
+  { lat: 45.4215, lon: -75.6972 }, // Ottawa
+];
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL) infrequent. Frames are fetched per-request and are unaffected. */
 const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
@@ -4169,6 +4180,112 @@ async function loadTflSourcesFromOpenData() {
 }
 
 /**
+ * Normalize one Ontario 511 camera record into a canonical CCTV source, or
+ * null to skip it. Pure (no I/O) so it is unit-testable. Keeps only cameras
+ * with finite coords and an ENABLED view whose still-image URL sits on the
+ * official 511on.ca host (defense-in-depth origin pin, mirroring Caltrans/TfL:
+ * the proxy only ever fetches catalog URLs, and this pins the catalog host).
+ * Ontario's feed reports no camera heading (Direction is "Unknown" across the
+ * whole province), so the pose starts from the id-hash prior at low confidence
+ * — the client's one-shot ground snap + manual gizmo own the truth.
+ *
+ * @param {object} raw - One element of the /api/v2/get/cameras array.
+ * @returns {object|null} Normalized source, or null when unusable.
+ */
+export function normalizeOntario511Camera(raw) {
+  // Coordinates must be genuine finite numbers. Number()/toFiniteNumber would
+  // coerce null and '' to 0 (a null-island "0,0"), so reject non-number input
+  // outright — the Ontario feed always sends numeric lat/lon.
+  const lat = raw?.Latitude;
+  const lon = raw?.Longitude;
+  if (typeof lat !== 'number' || !Number.isFinite(lat)
+    || typeof lon !== 'number' || !Number.isFinite(lon)) return null;
+
+  const views = Array.isArray(raw?.Views) ? raw.Views : [];
+  const view = views.find((v) =>
+    String(v?.Status).toLowerCase() === 'enabled'
+    && String(v?.Url || '').startsWith(ONTARIO511_IMAGE_ORIGIN));
+  if (!view) return null;
+
+  const rawId = String(raw?.Id ?? '').trim();
+  if (!rawId) return null;
+  const cameraId = `on-${rawId}`;
+
+  // raw.Direction is a dedicated field, but the feed leaves it "Unknown"
+  // province-wide; parse it defensively, then fall back to the id-hash prior.
+  const heading = directionToHeading(raw?.Direction, true);
+  const hasHeading = Number.isFinite(heading);
+  const location = String(raw?.Location || '').trim();
+  const roadway = String(raw?.Roadway || '').trim();
+  const name = location || (roadway ? `${roadway} — Ontario 511` : `Ontario 511 Camera ${rawId}`);
+
+  return {
+    id: cameraId,
+    name,
+    city: 'Ontario',
+    cityId: 'ontario',
+    provider: 'Ontario 511 (MTO)',
+    lat,
+    lon,
+    headingDeg: hasHeading ? heading : fallbackHeadingFromId(cameraId),
+    headingConfidence: hasHeading ? 'high' : 'low',
+    // Same two fabricated pose personalities as Austin/Caltrans (design §1a):
+    // RAW PRIOR starting points; the client's one-shot ground snap + manual
+    // calibration own the truth.
+    pitchDeg: hasHeading ? -24 : -18,
+    fovDeg: hasHeading ? 56 : 44,
+    rangeM: hasHeading ? 210 : 145,
+    mountHeightM: hasHeading ? 10 : 8,
+    groundElevationM: 100, // Southern-Ontario prior; one-shot snap corrects it.
+    feedType: 'image',
+    url: String(view.Url),
+    snapshotUrl: String(view.Url),
+    sourceKind: 'ontario511-open-data',
+    license: 'Contains information licensed under the Open Government Licence – Ontario',
+  };
+}
+
+/**
+ * Fetch Ontario 511 (MTO) CCTV cameras — one keyless, province-wide list
+ * endpoint; each still frame is a direct image on 511on.ca (JPEG, occasionally
+ * a PNG placeholder; CloudFront, ~20 s cache). Only enabled cameras with finite
+ * coords and an official-host image
+ * URL are kept, then distance-prioritized to the Toronto/Ottawa anchors. The
+ * 15-min source cache keeps list hits far below the API's 10-calls/60 s throttle.
+ * Attribution: "Open Government Licence – Ontario" (registered in
+ * src/data/dataCredits.js). CCTV_ONTARIO_MAX_SOURCES caps the served count;
+ * CCTV_ONTARIO_ENABLED=0 disables the pack.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+async function loadOntario511SourcesFromOpenData() {
+  try {
+    const resp = await fetch(ONTARIO511_CCTV_URL, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS) });
+    if (!resp.ok) {
+      console.warn('[CCTV] Ontario 511 download failed:', resp.status);
+      return [];
+    }
+    const rows = await resp.json();
+    if (!Array.isArray(rows)) return [];
+
+    const cameras = [];
+    for (const raw of rows) {
+      const camera = normalizeOntario511Camera(raw);
+      if (camera) cameras.push(camera);
+    }
+
+    const maxRaw = Number(process.env.CCTV_ONTARIO_MAX_SOURCES || DEFAULT_ONTARIO511_MAX_SOURCES);
+    const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(600, Math.floor(maxRaw))) : DEFAULT_ONTARIO511_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, ONTARIO_ANCHORS);
+    console.log(`[CCTV] Loaded Ontario 511 camera sources: ${cameras.length} enabled (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] Ontario 511 download error:', error?.message || error);
+    return [];
+  }
+}
+
+/**
  * Normalize a raw CCTV source item into a canonical shape with safe defaults.
  *
  * @param {object} item - Raw source from file, env, or Austin Open Data.
@@ -4244,22 +4361,26 @@ async function refreshCctvSources() {
   // Austin-only fetch, now governing all three. Each pack fails independently.
   const needsLiveSources = forceAustin || ((fromFile.length + fromEnv.length) === 0 && preferAustin);
   const tflEnabled = String(process.env.CCTV_TFL_ENABLED || '1').trim() !== '0';
+  const ontarioEnabled = String(process.env.CCTV_ONTARIO_ENABLED || '1').trim() !== '0';
 
   let fromAustin = [];
   let fromCaltrans = [];
   let fromTfl = [];
+  let fromOntario = [];
   if (needsLiveSources) {
-    const [austinResult, caltransResult, tflResult] = await Promise.allSettled([
+    const [austinResult, caltransResult, tflResult, ontarioResult] = await Promise.allSettled([
       loadAustinSourcesFromOpenData(),
       loadCaltransSourcesFromOpenData(),
       tflEnabled ? loadTflSourcesFromOpenData() : Promise.resolve([]),
+      ontarioEnabled ? loadOntario511SourcesFromOpenData() : Promise.resolve([]),
     ]);
     fromAustin = austinResult.status === 'fulfilled' ? austinResult.value : [];
     fromCaltrans = caltransResult.status === 'fulfilled' ? caltransResult.value : [];
     fromTfl = tflResult.status === 'fulfilled' ? tflResult.value : [];
+    fromOntario = ontarioResult.status === 'fulfilled' ? ontarioResult.value : [];
   }
   // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
-  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromFile, ...fromEnv];
+  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromOntario, ...fromFile, ...fromEnv];
 
   // Deduplicate by camera ID (last-write wins because of Map.set)
   const byId = new Map();
