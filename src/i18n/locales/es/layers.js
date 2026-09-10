@@ -346,6 +346,7 @@ export default {
   'satellites.denseTitleAdd': 'Add the full Starlink broadband shell (thousands of extra points)',
   'satellites.denseTitleLoading': 'Loading the Starlink shell…',
   'satellites.denseTitleFailed': 'Starlink {detail} — click to retry',
+  'satellites.loadFailed': 'load failed',
   'satellites.denseTitleActive': 'Showing the full Starlink shell — click for the core catalog only',
   'satellites.class.station': 'STATION',
   'satellites.class.stationBlurb': 'Crewed stations and their visiting vehicles',

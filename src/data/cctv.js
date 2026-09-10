@@ -46,6 +46,7 @@
  * plus CCTV-specific methods (selectCamera, cycleCamera, focusNearest, etc.).
  */
 import * as Cesium from 'cesium';
+import { t } from '../i18n/index.js';
 import { registerSpriteCollection, restoreSpriteOrder } from './spriteOrder.js';
 import {
   CCTV_ACTIVATION_RESULT,
@@ -3349,8 +3350,8 @@ function buildSummaryText() {
   const active = getActiveRecord();
   if (!active) {
     return _records.length
-      ? `${_records.length} CAMERAS STANDING BY · NO CAMERA SELECTED · CLICK A CAMERA TO ACTIVATE`
-      : 'No cameras available in catalog.';
+      ? t('layers.cctv.summary.standingBy', { count: _records.length })
+      : t('layers.cctv.summary.empty');
   }
 
   const area = sectorAreaKm2(active.camera.rangeM, active.camera.fovDeg);
@@ -3361,17 +3362,17 @@ function buildSummaryText() {
   const calBadge = deriveCalBadge(active.camera);
 
   return [
-    `${active.camera.city.toUpperCase()} CCTV`,
+    t('layers.cctv.summary.city', { city: active.camera.city.toUpperCase() }),
     `${active.camera.name.toUpperCase()}`,
-    `HDG ${Math.round(active.camera.headingDeg)}°`,
-    `FOV ${Math.round(active.camera.fovDeg)}°`,
-    `COVERAGE ${area.toFixed(2)}km²`,
-    overlapCount > 0 ? `OVERLAP ${overlapCount} cams` : 'ISOLATED VIEW',
-    `PROJ ${_showProjection ? 'MONITOR' : 'OFF'}`,
-    _coverageMode === 'viewshed' ? 'VIEWSHED' : null,
-    `CAL ${calBadge.replace('-', ' ').toUpperCase()}`,
-    health?.sourceKind ? `SRC ${String(health.sourceKind).toUpperCase()}` : `SRC ${String(active.camera.feedType || 'image').toUpperCase()}`,
-    `${viewBand.toUpperCase()} CONTEXT`,
+    t('layers.cctv.summary.hdg', { value: Math.round(active.camera.headingDeg) }),
+    t('layers.cctv.summary.fov', { value: Math.round(active.camera.fovDeg) }),
+    t('layers.cctv.summary.coverage', { value: area.toFixed(2) }),
+    overlapCount > 0 ? t('layers.cctv.summary.overlap', { count: overlapCount }) : t('layers.cctv.summary.isolated'),
+    _showProjection ? t('layers.cctv.summary.projMonitor') : t('layers.cctv.summary.projOff'),
+    _coverageMode === 'viewshed' ? t('layers.cctv.summary.viewshed') : null,
+    t('layers.cctv.summary.cal', { value: calBadge.replace('-', ' ').toUpperCase() }),
+    health?.sourceKind ? t('layers.cctv.summary.src', { value: String(health.sourceKind).toUpperCase() }) : t('layers.cctv.summary.src', { value: String(active.camera.feedType || 'image').toUpperCase() }),
+    t('layers.cctv.summary.context', { value: viewBand.toUpperCase() }),
   ].filter(Boolean).join(' · ');
 }
 
