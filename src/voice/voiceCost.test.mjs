@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DEFAULT_VOICE_TIER,
+  LOCAL_VOICE_MODEL,
   VOICE_COST_LIMIT_OFF,
   VOICE_COST_LIMITS,
   VOICE_MODELS,
@@ -460,6 +461,15 @@ test('F3: a known model id resolves to its own rate table', () => {
   assert.equal(resolveVoiceModelById('gpt-realtime-2').tier, 'standard');
   assert.equal(resolveVoiceModelById('gpt-realtime-2.1-mini').tier, 'mini');
   assert.equal(resolveVoiceModelById('gpt-realtime-2').recognized, true);
+});
+
+test('local realtime model is recognized with zero provider rates', () => {
+  const resolved = resolveVoiceModelById(LOCAL_VOICE_MODEL.id);
+  assert.equal(resolved.recognized, true);
+  assert.equal(Object.values(resolved.rates).every((rate) => rate === 0), true);
+  const tracker = createVoiceCostTracker({ modelId: LOCAL_VOICE_MODEL.id });
+  assert.equal(tracker.record(FULL_USAGE).totalUsd, 0);
+  assert.equal(tracker.state().capReached, false);
 });
 
 test('F3: an unrecognised model id bills at the most expensive known rates', () => {

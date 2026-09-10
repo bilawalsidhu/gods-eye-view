@@ -198,7 +198,7 @@ Choose a first-run mission, or try these in order. The GIFs show Google Photorea
 
 ![Cycling a dense live globe through CRT, FLIR, and NVG in one continuous view](docs/media/01-style-sweep.gif)
 
-7. **Talk to it** *(needs an OpenAI key)*: *"Take me to LAX and select the nearest airborne aircraft."*
+7. **Talk to it** *(OpenAI key or [local voice](docs/local-voice.md))*: *"Take me to LAX and select the nearest airborne aircraft."*
 8. **Come home.** Hit **Reset Globe** — or just say *"zoom out to a globe view."*
 
 **Keyboard:** `1`–`7` visual styles · `H` HUD · `D` detection · `C` cockpit · `Esc` out.
@@ -223,7 +223,11 @@ The cockpit even carries its own briefing strip: nearby live signals, regional h
 
 ## 🎙️ Talk to It
 
-> Voice needs an **OpenAI key**. Without one the entire app still runs — the mic button just reports voice is unavailable. The same key drives the **AI HUD summary**: a terse, five-word intelligence-style readout of the current view that regenerates as you move.
+> Voice can use an **OpenAI key** or a fully local LocalAI pipeline on Apple
+> Silicon. Without either, the rest of the app still runs. The OpenAI key also
+> drives the **AI HUD summary**: a terse, five-word intelligence-style readout
+> of the current view that regenerates as you move. See
+> [Local voice on Apple Silicon](docs/local-voice.md) for the self-hosted setup.
 
 Click **GEV MIC**, grant the microphone, and just talk. This is more than a voice-controlled remote:
 
@@ -231,7 +235,7 @@ Click **GEV MIC**, grant the microphone, and just talk. This is more than a voic
 - **🎯 Entity Q&A.** Click any plane, ship, or datacenter and ask *"what's this?"* It answers using the object's live telemetry.
 - **👁️ Visual grounding.** At street level, it reads a viewport screenshot to identify legible signage and building names, and is instructed never to hallucinate labels.
 - **🎬 Cinematic framing.** *"Show me the planes overhead"* pulls the camera back, angles it, and frames the live traffic like a director.
-- **🔒 Honest and secure.** The agent only confirms actions that succeeded. Your `OPENAI_API_KEY` never touches the browser; the client only gets a short-lived session token.
+- **🔒 Honest and secure.** The agent only confirms actions that succeeded. Your `OPENAI_API_KEY` never touches the browser; the client only gets a short-lived session token. In LOCAL mode, VAD, STT, MiniCPM5, and Kokoro all run through LocalAI on your machine.
 
 Twenty-eight tools, four jobs — the commands below come straight from the product's voice test suite and tool playbook:
 
@@ -318,7 +322,7 @@ Once the basics click, run these:
 | **🪦 Walk the boneyard** | Fly from regional context down into dense, fully resolved rows of retired aircraft. |
 | **🏗️ Orbit Three Gorges** | Sweep the dam and its terrain at a glance — then flip on the **Dams** layer and find 703 more. |
 
-*🎙️ = voice missions — they need an OpenAI key.*
+*🎙️ = voice missions — use an OpenAI key or the [local voice profile](docs/local-voice.md).*
 
 ![Resolving a selected aircraft's recent flight path into stacked 3D loops above the terrain](docs/media/07-helicopter-loops.gif)
 
@@ -344,7 +348,7 @@ How the globe handles live data:
 - **Sits on the real ground.** Entity heights run through a real vertical datum — geoid-aware, sampled against the *rendered* terrain mesh — so aircraft park on aprons and cameras stand on street corners instead of floating.
 - **Caching and request budgets.** An OpenSky credit governor, a TomTom daily tile budget, and disk-cached TLEs reduce repeated requests. These controls do not replace provider quotas or billing controls.
 - **Server-side credentials.** Every API that touches a private key (OpenAI, AISStream, OpenSky OAuth, camera frames) is brokered through a hardened server-side proxy with SSRF protection, response caps, and sanitized errors. The only keys the browser sees are Google Maps and Cesium ion (restrict both at the provider).
-- **No framework.** Vanilla JavaScript, **CesiumJS**, and **Vite** — plus **Google Photorealistic 3D Tiles** for the planet and the **OpenAI Realtime API** for voice. Fast to read, fast to hack on.
+- **No framework.** Vanilla JavaScript, **CesiumJS**, and **Vite** — plus **Google Photorealistic 3D Tiles** for the planet and a cloud or local Realtime voice provider. Fast to read, fast to hack on.
 
 ```
 src/
@@ -353,7 +357,7 @@ src/
 ├── hud.js                  # Intelligence HUD + AI scene summary
 ├── keySetup.js             # POWER UP panel — in-app provider keys (dev server only)
 ├── mapStackController.js   # Basemap switching — Google 3D / Esri / OSM / ion stacks
-├── voice/                  # OpenAI Realtime session + 28 voice tools
+├── voice/                  # Cloud/local Realtime session + 28 voice tools
 ├── data/                   # One module per layer + orchestration + context store
 │   ├── iconOrientation.js  # Screen-projected headings + horizon cull
 │   └── local_data/         # Bundled datasets (per-folder provenance)

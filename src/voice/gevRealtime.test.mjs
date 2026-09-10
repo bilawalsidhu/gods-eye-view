@@ -22,9 +22,11 @@ import {
   shouldHandlePushToTalkKeyDown,
   shouldIgnoreVoiceButtonClick,
   shouldStopVoiceAfterRadioTool,
+  readStoredVoiceProvider,
   readStoredVoiceTier,
   readStoredVoiceLimits,
   writeStoredVoiceTier,
+  writeStoredVoiceProvider,
   writeStoredVoiceLimits,
 } from './gevRealtime.js';
 import { createVoiceCostTracker } from './voiceCost.js';
@@ -2591,6 +2593,14 @@ test('voice tier round-trips through storage', () => {
   assert.equal(readStoredVoiceTier(storage), 'standard');
 });
 
+test('voice provider round-trips through storage and rejects unknown values', () => {
+  const storage = fakeVoiceStorage();
+  assert.equal(writeStoredVoiceProvider('local', storage), 'local');
+  assert.equal(readStoredVoiceProvider(storage), 'local');
+  assert.equal(writeStoredVoiceProvider('unknown', storage), 'openai');
+  assert.equal(readStoredVoiceProvider(storage), 'openai');
+});
+
 test('an unset or hand-edited tier reads back as standard', () => {
   assert.equal(readStoredVoiceTier(fakeVoiceStorage()), 'standard');
   assert.equal(
@@ -2867,6 +2877,7 @@ test('F5: teardown always closes the channel, in one step', () => {
   let closed = false;
   let pcClosed = false;
   controller.responseActive = true;
+  controller.pendingSessionUpdate = { instructions: 'local' };
   controller.dc = { readyState: 'open', send() {}, close() { closed = true; } };
   controller.pc = { close() { pcClosed = true; } };
   controller.stop();
@@ -2874,6 +2885,7 @@ test('F5: teardown always closes the channel, in one step', () => {
   assert.equal(pcClosed, true, 'peer connection closed');
   assert.equal(controller.dc, null);
   assert.equal(controller.pc, null);
+  assert.equal(controller.pendingSessionUpdate, null, 'a failed local start cannot update the next cloud session');
 });
 
 test('F5: a response in flight at teardown marks the accounting INCOMPLETE', () => {
@@ -3098,6 +3110,26 @@ test('CONTROL: a live response’s function call is dispatched normally', async 
   controller.updateResponseState({ type: 'response.created', response: { id: 'resp_live' } });
   await controller.handleRealtimeEvent(lateToolEvent('resp_live', 'call_live'));
   assert.deepEqual(dispatched, ['fly_to_location'], 'the guard must not block ordinary tool calls');
+});
+
+test('a failed local tool requests one unclassified correction', async () => {
+  const { controller } = toolDispatchController();
+  const sent = [];
+  controller.voiceProvider = 'local';
+  controller.runner = async () => ({ ok: false, action: 'fly_to_location', error: 'Nothing matched' });
+  controller.sendRealtimeEvent = (payload, label) => {
+    sent.push({ payload, label });
+    return true;
+  };
+  controller.updateResponseState({ type: 'response.created', response: { id: 'resp_fail' } });
+  await controller.handleRealtimeEvent(lateToolEvent('resp_fail', 'call_fail'));
+  controller.updateResponseState({
+    type: 'response.done',
+    response: { id: 'resp_fail', status: 'completed' },
+  });
+
+  const correction = sent.find(({ label }) => label === 'client.response_create.tool_followup');
+  assert.equal(correction?.payload?.response?.localai_classifier?.enabled, false);
 });
 
 test('a typed command supersedes the old response, so its late tools never fire', async () => {

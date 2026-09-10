@@ -5,7 +5,24 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- Voice can switch between OpenAI Realtime and a self-hosted LocalAI Realtime
+  pipeline from the mic panel. The Apple Silicon reference profile combines
+  Silero VAD, Parakeet STT, MiniCPM5-2B MLX 4-bit, and Kokoro TTS, with a
+  repeatable setup/check command and the same 28 GEV tools.
+
+### Changed
+
+- Local voice sessions are excluded from OpenAI spend limits, wait for the
+  pipeline to preload, and use the configured pipeline output limit after tool
+  calls instead of the previous client-side 80-token cap.
+
 ### Fixed
+
+- Local MiniCPM tool markup is converted to structured function calls without
+  reaching speech output, and disabling model thinking now reaches the MLX chat
+  template as `enable_thinking=false`.
 
 - Mapped-site outages show their scheduled retry countdown and distinguish
   known Overpass rate limits, timeouts, and query failures. Search feedback no

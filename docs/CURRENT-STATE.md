@@ -1,6 +1,26 @@
 # God's Eye View Current State
 
-Updated: August 24, 2026
+Updated: September 10, 2026
+
+## Local Realtime voice
+
+- The mic panel stores a CLOUD/LOCAL provider choice. CLOUD keeps the existing
+  OpenAI Realtime session and STD/MINI pricing controls. LOCAL hides those
+  pricing controls, reports backend startup and preload state, and runs the
+  same voice instructions and 28 tools against LocalAI's WebRTC endpoint.
+- The Apple Silicon reference profile uses Silero VAD, Parakeet Realtime EOU
+  120M STT, MiniCPM5-2B MLX 4-bit, and Kokoro TTS. `npm run
+  voice:local:setup` installs the profile; `npm run voice:local:check` verifies
+  it without mutation. Reasoning is disabled in the shipped profile.
+- LocalAI signalling is relayed through the dev server to avoid browser CORS
+  configuration and to translate the raw SDP offer into LocalAI 4.9.0's JSON
+  request shape. Media still uses the negotiated WebRTC connection.
+- GEV starts only loopback LocalAI targets and owns only the child process it
+  created. Remote targets must already be running. A spawned child is stopped
+  with the dev server.
+- MiniCPM function markup is filtered before TTS while the unmodified output is
+  parsed into structured tool calls. Tool-result follow-ups use the backend's
+  configured output budget; there is no client-side 80-token limit.
 
 ## Installations and map-source guidance
 

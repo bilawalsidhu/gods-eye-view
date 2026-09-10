@@ -38,6 +38,8 @@
     "opensky:import": "./scripts/opensky-import-client.sh",
     "build": "vite build",
     "preview": "vite preview",
+    "voice:local:setup": "node scripts/setup-local-voice.mjs",
+    "voice:local:check": "node scripts/setup-local-voice.mjs --check",
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs"

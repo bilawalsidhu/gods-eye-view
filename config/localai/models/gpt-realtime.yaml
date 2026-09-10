@@ -1,0 +1,21 @@
+# God's Eye View — low-latency local voice pipeline.
+name: gpt-realtime
+pipeline:
+  vad: silero-vad-ggml
+  transcription: parakeet-cpp-realtime_eou_120m-v1
+  llm: minicpm5-2b-mlx
+  tts: kokoro
+
+  disable_thinking: true
+  max_history_items: 4
+
+  turn_detection:
+    type: semantic_vad
+    eagerness: high
+    retranscribe: false
+
+  streaming:
+    transcription: true
+    llm: true
+    tts: false
+    clause_chunking: false

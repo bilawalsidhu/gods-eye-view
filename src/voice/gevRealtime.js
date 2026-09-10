@@ -11,6 +11,13 @@ import {
 } from './voiceCost.js';
 
 const TOKEN_URL = '/api/realtime/token';
+const LOCAL_BACKEND_URL = '/api/realtime/local-backend';
+/** How often to re-ask while the local backend warms up. */
+const LOCAL_BACKEND_POLL_MS = 2000;
+/** How long a session start will wait for a cold local backend before failing. */
+const LOCAL_BACKEND_START_TIMEOUT_MS = 180000;
+/** Default (OpenAI) Realtime destination. Overridden per-session by the
+ *  token endpoint's `callsUrl` when a self-hosted provider is configured. */
 const REALTIME_CALLS_URL = 'https://api.openai.com/v1/realtime/calls';
 const STATUS = {
   idle: 'OFF',
@@ -37,6 +44,13 @@ const DEBUG_LOG_URL = '/api/realtime/debug-log';
 // the neighbouring ERROR_STORAGE_KEY predates it).
 const VOICE_TIER_STORAGE_KEY = 'godsEyeView.voiceCost.tier';
 const VOICE_LIMITS_STORAGE_KEY = 'godsEyeView.voiceCost.limits';
+const VOICE_PROVIDER_STORAGE_KEY = 'godsEyeView.voice.provider';
+/** Voice backends the UI can select between. */
+export const VOICE_PROVIDERS = Object.freeze(['openai', 'local']);
+const CONFIGURED_VOICE_PROVIDER = String(import.meta.env?.GEV_VOICE_PROVIDER || '').toLowerCase();
+export const DEFAULT_VOICE_PROVIDER = VOICE_PROVIDERS.includes(CONFIGURED_VOICE_PROVIDER)
+  ? CONFIGURED_VOICE_PROVIDER
+  : 'openai';
 // The input meter is intentionally stricter than the assistant-output meter:
 // microphones carry room tone even after browser noise suppression, whereas the
 // incoming Realtime stream is already clean speech audio.
@@ -71,6 +85,32 @@ export function writeStoredVoiceTier(tier, storage) {
   const resolved = resolveVoiceModel(tier).tier;
   try {
     voiceStorage(storage)?.setItem(VOICE_TIER_STORAGE_KEY, resolved);
+  } catch {
+    /* best effort */
+  }
+  return resolved;
+}
+
+/**
+ * Read the persisted voice provider ('openai' | 'local').
+ *
+ * Total, like readStoredVoiceTier: a hand-edited or corrupt entry resolves to
+ * the default rather than reaching the server as an unknown provider name.
+ */
+export function readStoredVoiceProvider(storage) {
+  try {
+    const raw = voiceStorage(storage)?.getItem(VOICE_PROVIDER_STORAGE_KEY);
+    return VOICE_PROVIDERS.includes(raw) ? raw : DEFAULT_VOICE_PROVIDER;
+  } catch {
+    return DEFAULT_VOICE_PROVIDER;
+  }
+}
+
+/** Persist the voice provider. Never throws. Returns what was actually stored. */
+export function writeStoredVoiceProvider(provider, storage) {
+  const resolved = VOICE_PROVIDERS.includes(provider) ? provider : DEFAULT_VOICE_PROVIDER;
+  try {
+    voiceStorage(storage)?.setItem(VOICE_PROVIDER_STORAGE_KEY, resolved);
   } catch {
     /* best effort */
   }
@@ -219,7 +259,24 @@ export function initGevVoiceCommands({ viewer, styleManager, dataManager, sceneD
     controller.tierHandler = () => controller.toggleVoiceTier();
     ui.tierButton.addEventListener('click', controller.tierHandler);
   }
+  if (ui.providerButton) {
+    controller.providerHandler = () => controller.toggleVoiceProvider();
+    ui.providerButton.addEventListener('click', controller.providerHandler);
+  }
   controller.syncCostUi();
+  controller.syncProviderUi();
+  // Persisted LOCAL: report the backend's real state on load. Deliberately a
+  // GET — opening the app should not spawn a multi-GB process on its own; the
+  // toggle is the explicit gesture that does that.
+  if (controller.voiceProvider === 'local') {
+    fetch(LOCAL_BACKEND_URL, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        controller.setLocalBackendState(d?.state || 'unavailable', d?.detail || '');
+        if (d?.state === 'starting') controller.watchLocalBackend();
+      })
+      .catch(() => { /* leave the button unannotated */ });
+  }
   controller.bindPushToTalkShortcut();
   window.__gevVoiceCommands = controller;
   return controller;
@@ -249,6 +306,7 @@ export class GevRealtimeController {
     this.responseActive = false;
     this.responseCreatePending = false;
     this.userTurnPending = false;
+    this.pendingSessionUpdate = null;
     this.pendingResponseInstructions = null;
     this.pendingUserTextResponse = false;
     this.activeResponseId = null;
@@ -274,6 +332,7 @@ export class GevRealtimeController {
     // reason. Limits are read once here and re-read at each start().
     this.voiceTier = readStoredVoiceTier();
     this.voiceLimits = readStoredVoiceLimits();
+    this.voiceProvider = readStoredVoiceProvider();
     this.costTracker = createVoiceCostTracker({
       tier: this.voiceTier,
       limits: this.voiceLimits,
@@ -306,6 +365,8 @@ export class GevRealtimeController {
     this.radioVisibilityUnsubscribe = null;
     this.pushToTalkMode = false;
     this.pushToTalkKeyHeld = false;
+    this.localBackendState = null;
+    this.localBackendPollTimer = null;
     this.spaceKeyHeld = false;
     this.shortcutKeyDownHandler = null;
     this.shortcutKeyUpHandler = null;
@@ -356,6 +417,7 @@ export class GevRealtimeController {
     // — this is what "applies next session" means.
     this.voiceTier = readStoredVoiceTier();
     this.voiceLimits = readStoredVoiceLimits();
+    this.voiceProvider = readStoredVoiceProvider();
     this.costCapStopped = false;
     // Provisional meter (tier-priced) so the readout shows $0.00 while
     // connecting. It is REPLACED below with one bound to the model the server
@@ -365,6 +427,19 @@ export class GevRealtimeController {
       limits: this.voiceLimits,
     });
     this.syncCostUi();
+    // A local backend must be UP before the handshake, not merely selected.
+    // Clicking the mic with LOCAL remembered from a previous run used to go
+    // straight to the SDP post and surface a raw 502; starting the backend is
+    // part of starting a session, so wait for it here with live progress.
+    if (this.voiceProvider === 'local') {
+      const ready = await this.awaitLocalBackendReady(epoch);
+      if (epoch !== this.startEpoch) return;
+      if (!ready.ok) {
+        this.setStatus('error', ready.detail || 'Local backend unavailable');
+        this.reportError('Local voice backend', new Error(ready.detail || 'Local backend unavailable'));
+        return;
+      }
+    }
     this.setStatus('connecting', 'Requesting microphone');
     this.debugLog('session.starting', {
       epoch,
@@ -374,7 +449,7 @@ export class GevRealtimeController {
     let localStream = null;
     let localPc = null;
     try {
-      const minted = await fetchRealtimeToken(this.voiceTier);
+      const minted = await fetchRealtimeToken(this.voiceTier, this.voiceProvider);
       const token = minted.token;
       if (this.abandonStart(epoch, { localStream, localPc })) return;
       // Bind the session meter to the model actually served. An env override
@@ -448,6 +523,16 @@ export class GevRealtimeController {
       const dataChannel = this.pc.createDataChannel('oai-events');
       this.dc = dataChannel;
       dataChannel.addEventListener('open', () => {
+        // Providers that mint no session (local) need instructions + tools
+        // pushed over the channel. Sent FIRST so the very first user turn
+        // already has the tools available.
+        if (this.pendingSessionUpdate) {
+          this.sendRealtimeEvent({
+            type: 'session.update',
+            session: this.pendingSessionUpdate,
+          }, 'client.session.update');
+          this.pendingSessionUpdate = null;
+        }
         const detail = this.pushToTalkMode
           ? (this.pushToTalkKeyHeld ? 'Release Space to send' : 'Hold Space to talk')
           : 'Ask or command';
@@ -475,7 +560,13 @@ export class GevRealtimeController {
         sdpLength: offer.sdp?.length || 0,
         connection: this.connectionDiagnostics(),
       });
-      const sdpResponse = await fetch(REALTIME_CALLS_URL, {
+      // The token endpoint owns provider selection: OpenAI mints an ephemeral
+      // token and omits callsUrl (we fall back to the constant); a self-hosted
+      // Realtime endpoint returns its own callsUrl instead. Same SDP handshake
+      // either way, so nothing below this line is provider-aware.
+      const callsUrl = minted.callsUrl || REALTIME_CALLS_URL;
+      this.pendingSessionUpdate = minted.sessionUpdate || null;
+      const sdpResponse = await fetch(callsUrl, {
         method: 'POST',
         body: offer.sdp,
         headers: {
@@ -834,6 +925,7 @@ export class GevRealtimeController {
     this.responseActive = false;
     this.responseCreatePending = false;
     this.userTurnPending = false;
+    this.pendingSessionUpdate = null;
     this.pendingResponseInstructions = null;
     this.pendingUserTextResponse = false;
     this.activeResponseId = null;
@@ -855,6 +947,11 @@ export class GevRealtimeController {
     if (removeUi && this.ui?.tierButton && this.tierHandler) {
       this.ui.tierButton.removeEventListener('click', this.tierHandler);
       this.tierHandler = null;
+    }
+    this.stopWatchingLocalBackend();
+    if (removeUi && this.ui?.providerButton && this.providerHandler) {
+      this.ui.providerButton.removeEventListener('click', this.providerHandler);
+      this.providerHandler = null;
     }
     if (removeUi) {
       if (this.shortcutKeyDownHandler) document.removeEventListener('keydown', this.shortcutKeyDownHandler);
@@ -1352,7 +1449,7 @@ export class GevRealtimeController {
         this.debugLog('viewport_context.failed', { error: error?.message || String(error) });
       }
       // Keep the Radio handoff wording authoritative even when another tool
-      // result follows Radio in the same multi-intent response.
+      // result follows it.
       this.queueResponseCreate(responseInstructionForToolResult(
         this.pendingRadioPlaybackResult || lastResult,
       ));
@@ -1840,6 +1937,152 @@ export class GevRealtimeController {
   }
 
   /**
+   * Flip CLOUD (OpenAI) <-> LOCAL (self-hosted Realtime endpoint).
+   *
+   * Same next-session semantics as the tier toggle: the destination is fixed
+   * when the token is fetched and the SDP offer is posted, so a live session is
+   * left running rather than torn down mid-sentence.
+   */
+  toggleVoiceProvider() {
+    return this.setVoiceProvider(this.voiceProvider === 'local' ? 'openai' : 'local');
+  }
+
+  /** Set the voice provider and persist it as the NEXT-session preference. */
+  setVoiceProvider(provider) {
+    this.voiceProvider = writeStoredVoiceProvider(provider);
+    this.syncProviderUi();
+    if (this.voiceProvider === 'local') this.ensureLocalBackend();
+    else this.stopWatchingLocalBackend();
+    // The cost meter is an OpenAI-billing concept; local sessions are free, so
+    // refresh it once settled to preview the right numbers for the selection.
+    if (this.isVoiceSessionSettled()) this.syncCostUi();
+    if (this.isActive() && this.ui?.detail) {
+      this.setStatus(this.status, `${this.voiceProvider.toUpperCase()} applies next session`);
+    }
+    return this.voiceProvider;
+  }
+
+  /**
+   * Block a starting session until the local backend can actually serve it.
+   *
+   * Reports progress through the normal status line ("Starting local backend…
+   * 12s") so a multi-GB cold start reads as work in progress rather than a hang,
+   * and fails with the backend's own reason instead of a raw proxy 502.
+   *
+   * @param {number} epoch the start() attempt this belongs to; a superseded
+   *        attempt stops polling instead of racing the session that replaced it.
+   */
+  async awaitLocalBackendReady(epoch) {
+    const deadline = Date.now() + LOCAL_BACKEND_START_TIMEOUT_MS;
+    let method = 'POST'; // first call starts it; later calls just observe
+    while (Date.now() < deadline) {
+      if (epoch !== this.startEpoch) return { ok: false, detail: 'superseded' };
+      let data = null;
+      try {
+        const res = await fetch(LOCAL_BACKEND_URL, { method, cache: 'no-store' });
+        data = await res.json().catch(() => null);
+      } catch (error) {
+        return { ok: false, detail: `Local backend unreachable: ${error?.message || error}` };
+      }
+      method = 'GET';
+      const state = data?.state || 'unavailable';
+      this.setLocalBackendState(state, data?.detail || '');
+      if (state === 'ready') return { ok: true };
+      if (state === 'unavailable' || state === 'stopped') {
+        return { ok: false, detail: data?.detail || 'Local backend could not be started' };
+      }
+      this.setStatus('connecting', data?.detail || 'Starting local backend…');
+      await new Promise((resolve) => setTimeout(resolve, LOCAL_BACKEND_POLL_MS));
+    }
+    return { ok: false, detail: 'Local backend did not become ready in time' };
+  }
+
+  /**
+   * Ask the server to bring the local backend up, then poll until it is ready.
+   *
+   * A cold start loads VAD, transcription, an LLM and TTS — several GB — so the
+   * honest thing is to say so and keep saying so, rather than let the user click
+   * the mic into a connection that cannot succeed yet.
+   */
+  async ensureLocalBackend() {
+    this.stopWatchingLocalBackend();
+    this.setLocalBackendState('starting', 'Starting local backend…');
+    try {
+      const res = await fetch(LOCAL_BACKEND_URL, { method: 'POST', cache: 'no-store' });
+      const data = await res.json().catch(() => null);
+      this.setLocalBackendState(data?.state || 'unavailable', data?.detail || '');
+      if (data?.state === 'starting') this.watchLocalBackend();
+    } catch (error) {
+      this.setLocalBackendState('unavailable', error?.message || 'Local backend unreachable');
+    }
+  }
+
+  /** Poll the status endpoint until it settles on ready/stopped/unavailable. */
+  watchLocalBackend() {
+    this.stopWatchingLocalBackend();
+    this.localBackendPollTimer = setInterval(async () => {
+      // A switch back to CLOUD mid-warmup must not keep polling forever.
+      if (this.voiceProvider !== 'local') {
+        this.stopWatchingLocalBackend();
+        return;
+      }
+      try {
+        const res = await fetch(LOCAL_BACKEND_URL, { cache: 'no-store' });
+        const data = await res.json().catch(() => null);
+        const state = data?.state || 'unavailable';
+        this.setLocalBackendState(state, data?.detail || '');
+        if (state !== 'starting') this.stopWatchingLocalBackend();
+      } catch {
+        /* transient — the next tick retries */
+      }
+    }, LOCAL_BACKEND_POLL_MS);
+  }
+
+  stopWatchingLocalBackend() {
+    if (this.localBackendPollTimer) {
+      clearInterval(this.localBackendPollTimer);
+      this.localBackendPollTimer = null;
+    }
+  }
+
+  /** Record the backend state and repaint. */
+  setLocalBackendState(state, detail = '') {
+    this.localBackendState = { state, detail };
+    this.syncProviderUi();
+    // Don't overwrite a live session's own status line with backend chatter.
+    if (!this.isActive() && this.ui?.detail && this.voiceProvider === 'local' && detail) {
+      this.ui.detail.textContent = detail.toUpperCase();
+    }
+  }
+
+  /**
+   * Paint the provider button and hide the tier toggle when it cannot apply.
+   * STANDARD/MINI selects between two OpenAI-priced models; on a local backend
+   * the served model comes from the pipeline config, so the control would be
+   * inert and its cost readout meaningless.
+   */
+  syncProviderUi() {
+    const isLocal = this.voiceProvider === 'local';
+    if (this.ui?.providerButton) {
+      const backend = isLocal ? (this.localBackendState?.state || null) : null;
+      const suffix = { starting: '…', ready: '', stopped: ' !', unavailable: ' !' };
+      this.ui.providerButton.textContent = isLocal
+        ? `LOCAL${suffix[backend] ?? ''}`
+        : 'CLOUD';
+      this.ui.providerButton.setAttribute('aria-pressed', isLocal ? 'true' : 'false');
+      // dataset drives the colour: warming is not an error, but a backend that
+      // failed to start must not look the same as one that is ready.
+      if (backend) this.ui.providerButton.dataset.backend = backend;
+      else delete this.ui.providerButton.dataset.backend;
+      this.ui.providerButton.title = isLocal
+        ? `Voice backend: LOCAL — ${this.localBackendState?.detail || 'self-hosted Realtime endpoint'}. Click for OpenAI`
+        : 'Voice backend: CLOUD (OpenAI Realtime) — click for local';
+    }
+    if (this.ui?.tierButton) this.ui.tierButton.hidden = isLocal;
+    if (this.ui?.costValue) this.ui.costValue.hidden = isLocal;
+  }
+
+  /**
    * Update the spend thresholds ({warnUsd, capUsd}) and persist them.
    * Exposed for the settings surface and for tests; no new panel.
    *
@@ -1994,9 +2237,17 @@ export class GevRealtimeController {
     const instructions = this.pendingResponseInstructions;
     this.pendingResponseInstructions = null;
     this.responseCreatePending = true;
+    const response = { instructions };
+    if (this.voiceProvider === 'local') {
+      // Keep LocalAI in its native audio modality so the configured Kokoro TTS
+      // returns speech over the negotiated WebRTC audio track.
+      response.tools = [];
+      response.tool_choice = 'none';
+      response.localai_classifier = { enabled: false };
+    }
     const sent = this.sendRealtimeEvent({
       type: 'response.create',
-      response: { instructions },
+      response,
     }, 'client.response_create.tool_followup');
     if (!sent) this.responseCreatePending = false;
   }
@@ -2311,8 +2562,13 @@ function isNearlyBlackFrame(ctx, width, height) {
  * point a tier at any model id. The caller prices against the returned id, not
  * against its own tier assumption.
  */
-async function fetchRealtimeToken(tier = DEFAULT_VOICE_TIER) {
-  const url = `${TOKEN_URL}?tier=${encodeURIComponent(resolveVoiceModel(tier).tier)}`;
+async function fetchRealtimeToken(tier = DEFAULT_VOICE_TIER, provider = DEFAULT_VOICE_PROVIDER) {
+  // `provider` is the UI selection and OVERRIDES the server's GEV_VOICE_PROVIDER
+  // env default, so switching backends never needs a dev-server restart. An
+  // unknown value is normalised away here rather than reaching the endpoint.
+  const selected = VOICE_PROVIDERS.includes(provider) ? provider : DEFAULT_VOICE_PROVIDER;
+  const url = `${TOKEN_URL}?tier=${encodeURIComponent(resolveVoiceModel(tier).tier)}`
+    + `&provider=${encodeURIComponent(selected)}`;
   const response = await fetch(url, { cache: 'no-store' });
   const data = await response.json().catch(() => null);
   // Server echo first (authoritative, always present); the minted session
@@ -2332,7 +2588,13 @@ async function fetchRealtimeToken(tier = DEFAULT_VOICE_TIER) {
   }
   const token = data?.value || data?.client_secret?.value || data?.client_secret;
   if (!token) throw new Error('Realtime token response did not include a client secret');
-  return { token, model: servedModel, tier: servedTier };
+  return {
+    token,
+    model: servedModel,
+    tier: servedTier,
+    callsUrl: data?.callsUrl || null,
+    sessionUpdate: data?.sessionUpdate || null,
+  };
 }
 
 function extractFunctionCalls(event) {
@@ -2555,6 +2817,7 @@ function createVoiceControl({ reset = false } = {}) {
         <div class="gev-voice-kicker">AI AGENT</div>
         <div id="gev-voice-status">OFF</div>
         <div class="gev-voice-cost">
+          <button id="gev-voice-provider" class="gev-voice-tier-btn" type="button" aria-pressed="false" title="Voice backend — applies next session">CLOUD</button>
           <button id="gev-voice-tier" class="gev-voice-tier-btn" type="button" aria-pressed="false" title="Voice model tier — applies next session">STD</button>
           <span id="gev-voice-cost-value" class="gev-voice-cost-value" data-level="ok" title="Estimated session cost">~$0.00</span>
         </div>
@@ -2605,6 +2868,7 @@ function createVoiceControl({ reset = false } = {}) {
     helpDetail: root.querySelector('.gev-voice-help-detail'),
     errorDetail: root.querySelector('#gev-voice-error-detail'),
     tierButton: root.querySelector('#gev-voice-tier'),
+    providerButton: root.querySelector('#gev-voice-provider'),
     costValue: root.querySelector('#gev-voice-cost-value'),
   };
 }
