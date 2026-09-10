@@ -86,8 +86,19 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      # The FIRMS WASM heat renderer lives in public/wasm/ (gitignored build
+      # artifact) and is loaded at runtime by src/data/firmsHeatTexture.js —
+      # rebuild it before vite copies public/ into dist so the shipped bundle
+      # keeps the WASM path (the app falls back to entity cells without it).
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked
       - name: Install
         run: npm ci
+      - name: Build FIRMS WASM renderer
+        run: npm run build:wasm
       - name: Production build
         run: npm run build
       - name: Archive dist

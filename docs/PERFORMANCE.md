@@ -173,6 +173,40 @@ candidate (its 100k-heat-disc math is main-thread JS today); a second
 candidate must first appear in a future profile of a workload these scenes do
 not yet cover (e.g. AIS bulk normalization on low-end hardware).
 
+## FIRMS heat-texture A/B (2026-09-10, same container)
+The WASM splat path (`rust/firms-renderer/`, wired 2026-09-10) replaces the
+per-cell rectangle entities of the FIRMS `global`/`regional` LOD bands with
+ONE textured ground rectangle. A/B via `scripts/profile-runtime.mjs --scene
+firms` / `--scene firmsEntities` (the second runs with `?firmsWasm=0`),
+against the dev server serving REAL NASA data (37,437 detections in the
+trailing 24 h — keyless public-source mode of the `/api/firms` proxy):
+
+| Scene | band | cells | ground primitives | splat pass | fps (12 s) | idle% |
+|---|---|---|---|---|---|---|
+| firmsEntities | global | ~1800 (top-N) | ~1800 entities | — | 3.2 | 63 |
+| firms | global | ~1800 (top-N) | **1** (1024x540 tex) | 42.6 ms | 1.3 | 65 |
+| firmsEntities | regional | 527 | 527 entities | — | 4.9 | — |
+| firms | regional | 527 | **1** (673x283 tex) | 14.8 ms | 4.2 | — |
+
+Reading, honestly:
+- **The structural win is real but SwiftShader cannot reward it.** Ground
+  primitives → 1 is a draw-call/geometry-count reduction; software
+  rasterization is fill-rate-bound, so fps is statistically unchanged (the
+  deltas above are within run-to-run noise, both paths ~63–65% idle). On
+  hardware GL, where draw-call count is first-order, this is the win the
+  architecture change buys.
+- **The WASM generation cost is proven small**: one 14.8 ms (regional) /
+  42.6 ms (global, capped 1024-wide texture) splat pass per rebuild — not
+  per frame — well inside a frame budget on real hardware.
+- Verification set (headless Chrome, dev server): underlay entity present
+  and canvas-backed; texture pixels non-blank (2.6% of texels alpha > 12 at
+  the regional view); `getStats().renderer` flips 'entities' →
+  'wasm-texture'; `?firmsWasm=0` forces the entity path; 13 new unit tests
+  pin the layout/splat-input math. WebGL screenshots of the globe surface
+  are black in this container (software GL + `preserveDrawingBuffer:false`
+  compositing artifact) — content was verified by canvas pixel probe, not
+  by screenshot.
+
 ## Controls for a future capture
 Use the same controls before attributing a difference to the application:
 

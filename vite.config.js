@@ -2005,6 +2005,9 @@ function firmsProxy() {
   let diskChecked = false;
   /** @type {?Promise<?{at: number, sources: Array<object>, fires: Array<object>}>} single-flight refresh */
   let inflight = null;
+  /** Same, for the keyless public source (kept separate so a keyed request
+   * never consumes a public refresh's result or vice versa). */
+  let inflightPublic = null;
   /** @type {?{at: number, transactions: ?{used: number, limit: number}}} mapkey_status cache */
   let statusCache = null;
   /** @type {?Promise<?{used: number, limit: number}>} */
@@ -2047,6 +2050,31 @@ function firmsProxy() {
   }
 
   /**
+   * Keyless source: NASA's public (no MAP_KEY) rolling 24h SNPP VIIRS global
+   * CSV. Same NRT record schema as the keyed area API (column order differs —
+   * the parser indexes by header name — `confidence` spells out low/nominal/
+   * high, which normalizeConfidence already accepts). Quota-free, so it backs
+   * the layer with real data when no MAP_KEY is configured; 503 no_key becomes
+   * the last-resort failure only when this is unreachable too.
+   */
+  const PUBLIC_SOURCE_URL =
+    'https://firms.modaps.eosdis.nasa.gov/data/active_fire/suomi-npp-viirs-c2/csv/SUOMI_VIIRS_C2_Global_24h.csv';
+
+  async function refreshPublic() {
+    const now = Date.now();
+    const res = await fetch(PUBLIC_SOURCE_URL, { signal: AbortSignal.timeout(60_000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const records = filterTrailing24h(parseFirmsCsv(await res.text()) ?? [], now);
+    if (!records.length) throw new Error('public FIRMS CSV parsed to zero rows');
+    return {
+      at: now,
+      mode: 'public',
+      sources: [{ source: 'VIIRS_SNPP_24h_public', count: records.length, ok: true, keyless: true }],
+      fires: records,
+    };
+  }
+
+  /**
    * Refresh all sources sequentially (quota courtesy — never in parallel).
    * Partial success (≥1 source ok) still produces a cacheable entry with the
    * failed sources marked ok:false; total failure throws so the caller can
@@ -2073,7 +2101,7 @@ function firmsProxy() {
       }
     }
     if (!sources.some((s) => s.ok)) throw new Error('all FIRMS sources failed');
-    return { at: now, sources, fires };
+    return { at: now, mode: 'keyed', sources, fires };
   }
 
   /**
@@ -2138,7 +2166,15 @@ function firmsProxy() {
 
           if (subPath === '/status') {
             if (!key) {
-              sendJson(200, { hasKey: false, lastFetch: null, count: null, stale: false, ttlMs: TTL_MS, transactions: null });
+              sendJson(200, {
+                hasKey: false,
+                keyless: true,
+                lastFetch: mem && mem.mode === 'public' ? mem.at : null,
+                count: mem && mem.mode === 'public' ? mem.fires.length : null,
+                stale: mem && mem.mode === 'public' ? Date.now() - mem.at >= TTL_MS : false,
+                ttlMs: TTL_MS,
+                transactions: null,
+              });
               return;
             }
             const transactions = await getTransactions(key);
@@ -2154,11 +2190,40 @@ function firmsProxy() {
           }
 
           if (!key) {
-            sendJson(503, { error: 'no_key' });
+            // No MAP_KEY: serve the public-source cache while fresh, else
+            // refresh it single-flight. 503 no_key is now the LAST resort —
+            // only when the public endpoint is unreachable too.
+            const publicEntry = mem && mem.mode === 'public' ? mem : null;
+            if (publicEntry && Date.now() - publicEntry.at < TTL_MS) {
+              sendJson(200, buildPayload(publicEntry, false));
+              return;
+            }
+            if (!inflightPublic) {
+              inflightPublic = refreshPublic()
+                .then(async (fresh) => {
+                  mem = fresh;
+                  await writeDisk(fresh);
+                  return fresh;
+                })
+                .catch((err) => {
+                  console.warn(`[firms-proxy] public refresh failed (${err?.message || err}) — serving cache if any`);
+                  return null;
+                })
+                .finally(() => { inflightPublic = null; });
+            }
+            const pendingPublic = inflightPublic;
+            const freshPublic = await pendingPublic;
+            if (freshPublic) {
+              sendJson(200, buildPayload(freshPublic, false));
+            } else if (publicEntry) {
+              sendJson(200, buildPayload(publicEntry, true)); // public endpoint down — stale beats empty
+            } else {
+              sendJson(503, { error: 'no_key' });
+            }
             return;
           }
 
-          const entry = mem;
+          const entry = mem && (mem.mode === 'keyed' || !mem.mode) ? mem : null;
           if (entry && Date.now() - entry.at < TTL_MS) {
             sendJson(200, buildPayload(entry, false));
             return;
@@ -2185,6 +2250,10 @@ function firmsProxy() {
             sendJson(200, buildPayload(fresh, false));
           } else if (entry) {
             sendJson(200, buildPayload(entry, true)); // upstream down — stale beats empty
+          } else if (mem && mem.mode === 'public') {
+            // Keyed refresh failed but a real (keyless-source) cache exists —
+            // still live fire data, and a far better answer than a 502.
+            sendJson(200, buildPayload(mem, true));
           } else {
             sendJson(502, { error: 'firms fetch failed and no cache available' });
           }

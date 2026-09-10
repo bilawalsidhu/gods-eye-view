@@ -18,6 +18,14 @@ import {
   unregisterPickOwner,
 } from './pickRegistry.js';
 import { adaptFirmsRecords } from './firmsAdapt.js';
+import {
+  buildSplatInputs,
+  computeHeatTextureLayout,
+  lastRendererError,
+  loadHeatRenderer,
+  renderHeatTexture,
+  wasmHeatRenderingEnabled,
+} from './firmsHeatTexture.js';
 import { fireAnchorHeight, warmFireAnchorFloors } from './fireAnchors.js';
 import { horizonOccluder } from './iconOrientation.js';
 import {
@@ -80,6 +88,9 @@ const LABEL_VIEW_MARGIN_PX = 16;
 const CULL_LIFT_THRESHOLD_M = 10;
 /** Height of the lifted occlusion-test point (flights uses the same 12 m). */
 const CULL_LIFT_M = 12;
+/** Entity id of the WASM splat-texture underlay that replaces the per-cell
+ * rectangles when the heat renderer is available (see renderCells). */
+const HEAT_UNDERLAY_ID = 'firms-heat-underlay';
 
 /** Color stops shared by cell heat fills and detection glow sprites. */
 const DETECTION_COLOR_STOPS = [
@@ -185,6 +196,19 @@ export function createFirmsHeatmapLayer({
    * @type {Map<number, Array<Object>>}
    */
   const _cellCacheByGrid = new Map();
+  /**
+   * Incremented on every render rebuild. The async WASM texture upgrade
+   * captures the serial when it starts and abandons itself if a newer rebuild
+   * (or destroy) has happened by the time the splat pass resolves — otherwise
+   * a slow first load could paint a stale texture over a newer entity render.
+   */
+  let _renderSerial = 0;
+  /** How the current cells render is displayed: 'entities' | 'wasm-texture'. */
+  let _cellRenderer = null;
+  /** Last WASM splat-pass duration, ms (rounded to 0.1) — diagnostics/QA. */
+  let _lastWasmRenderMs = null;
+  /** Texture dimensions of the current underlay, "WxH" — diagnostics/QA. */
+  let _lastTextureSize = null;
   /** Camera idle snapshot so the throttled LOD check is ~free when parked. */
   let _camSnapValid = false;
   const _camPos = new Cesium.Cartesian3();
@@ -292,6 +316,10 @@ export function createFirmsHeatmapLayer({
       _fireByCardId.clear();
       _cullPositions.length = 0;
       _camSnapValid = false;
+      _renderSerial += 1; // abort any in-flight WASM texture upgrade
+      _cellRenderer = null;
+      _lastWasmRenderMs = null;
+      _lastTextureSize = null;
     },
 
     /**
@@ -325,6 +353,13 @@ export function createFirmsHeatmapLayer({
         keyRequired: _keyRequired,
         error: _keyRequired ? 'KEY REQUIRED' : (_stale ? staleText : _error),
         loadingLabel,
+        // Cells-band display path + WASM diagnostics (QA asserts on these):
+        // 'entities' = legacy per-cell rectangles, 'wasm-texture' = splat
+        // underlay. `wasmError` is the last glue-load failure, if any.
+        renderer: _cellRenderer,
+        wasmRenderMs: _lastWasmRenderMs,
+        textureSize: _lastTextureSize,
+        wasmError: wasmHeatRenderingEnabled() ? lastRendererError() : 'disabled (?firmsWasm=0)',
       };
     },
 
@@ -502,6 +537,7 @@ export function createFirmsHeatmapLayer({
     const lod = LOD_LEVELS[lodIndex];
     const viewRect = computeViewRect();
     if (!force && lodIndex === _currentLodIndex && !viewChangedEnough(viewRect)) return false;
+    _renderSerial += 1; // invalidates any in-flight WASM texture upgrade
     _currentLodIndex = lodIndex;
     _currentLodId = lod.id;
     _lastViewRect = viewRect ? Cesium.Rectangle.clone(viewRect) : null;
@@ -568,10 +604,17 @@ export function createFirmsHeatmapLayer({
   }
 
   /**
-   * Render aggregated heat cells (global/regional bands) as ground-clamped
-   * rectangles. Cell labels do NOT live on the entities anymore — they go
-   * through the same unclamped, screen-space-decluttered label pipeline as
-   * detections (see {@link rebuildAmbientLabels}).
+   * Render aggregated heat cells (global/regional bands). Cell labels do NOT
+   * live on the entities anymore — they go through the same unclamped,
+   * screen-space-decluttered label pipeline as detections (see
+   * {@link rebuildAmbientLabels}).
+   *
+   * Base render is the legacy path: one ground-clamped rectangle entity per
+   * cell (bounded by the LOD cell cap). When the WASM heat renderer is
+   * available, {@link upgradeCellsToHeatTexture} then replaces those
+   * rectangles with ONE splat-texture underlay (N ground primitives → 1);
+   * any failure leaves the entity render standing, so the legacy path is
+   * both the fallback and the first paint.
    * @param {Array<Object>} cells - Aggregated cells, heat-sorted descending.
    * @param {Object} lod - Active LOD descriptor.
    * @param {?Object} bounds - Padded view bounds in degrees, or null.
@@ -583,7 +626,17 @@ export function createFirmsHeatmapLayer({
     _pickIndexById.clear();
     _cullPositions.length = 0;
     _cellCount = cells.length;
-    const maxScore = Math.max(1, ...cells.map(heatScore));
+    _cellRenderer = 'entities';
+    _lastWasmRenderMs = null;
+    _lastTextureSize = null;
+
+    // Loop, not spread — mirrors buildSplatInputs' note about the V8
+    // spread-argument limit that bit this codebase once already.
+    let maxScore = 1;
+    for (const cell of cells) {
+      const score = heatScore(cell);
+      if (score > maxScore) maxScore = score;
+    }
 
     _labelCandidates = [];
     _labelLodDistance = lod.labelDistance;
@@ -630,6 +683,77 @@ export function createFirmsHeatmapLayer({
 
     rebuildAmbientLabels();
     refreshContextRegistrations(topFiresWithinBounds(bounds));
+
+    if (wasmHeatRenderingEnabled() && cells.length > 1) {
+      upgradeCellsToHeatTexture(cells, lod, bounds);
+    }
+  }
+
+  /**
+   * Replace the just-rendered cell rectangles with one WASM-splat heat
+   * texture on a single ground rectangle. Runs async (dynamic WASM import)
+   * AFTER the synchronous entity render, which remains visible until the
+   * texture lands and stands entirely if anything fails. Every step
+   * re-checks the render serial and layer state, so a camera move, LOD
+   * change, disable, or destroy mid-flight aborts the stale upgrade.
+   *
+   * The splat inputs use the SAME capped/clipped cell list and the SAME
+   * normalized intensity as the entity render, so heat ordering and coverage
+   * are identical — only the per-pixel presentation differs (continuous
+   * field vs hard-edged grid, orange ramp vs yellow→red stops).
+   * @param {Array<Object>} cells - Aggregated cells, heat-sorted descending.
+   * @param {Object} lod - Active LOD descriptor.
+   * @param {?Object} bounds - Padded view bounds in degrees, or null.
+   */
+  async function upgradeCellsToHeatTexture(cells, lod, bounds) {
+    const serial = _renderSerial;
+    const renderer = await loadHeatRenderer();
+    if (!renderer || serial !== _renderSerial || _destroyed || !_enabled || !_viewer || !_dataSource) return;
+    // The camera may have changed LOD band while the module loaded.
+    if (_currentLodId !== lod.id) return;
+
+    const layout = computeHeatTextureLayout(bounds, lod.gridDegrees);
+    const inputs = buildSplatInputs(cells, lod, bounds);
+    if (!layout || !inputs) return;
+
+    const startedAt = performance.now();
+    let painted = null;
+    try {
+      painted = renderHeatTexture(renderer, inputs, layout);
+    } catch (error) {
+      console.warn(`[Data:${id}] WASM heat render failed, keeping entity cells:`, error);
+      return;
+    }
+    if (!painted || serial !== _renderSerial || _destroyed || !_enabled || !_dataSource) return;
+
+    _dataSource.entities.removeAll(); // cell rectangles out, texture in
+    // Anti-meridian: Cesium expresses a crossing rectangle as west > east, so
+    // the east coordinate is the RAW bounds value (e.g. -175), not the
+    // unwrapped west+span the texture math uses.
+    _dataSource.entities.add({
+      id: HEAT_UNDERLAY_ID,
+      name: 'FIRMS heat field',
+      rectangle: {
+        coordinates: Cesium.Rectangle.fromDegrees(
+          layout.west,
+          Math.max(-90, layout.south),
+          bounds ? bounds.east : 180,
+          Math.min(90, layout.south + layout.latSpan)
+        ),
+        material: new Cesium.ImageMaterialProperty({
+          image: painted.canvas,
+          // Texture alpha encodes raw heat; 0.7 scales it to the legacy
+          // entity path's max cell alpha (0.16 + 1.0 * 0.5 ≈ 0.66).
+          color: Cesium.Color.WHITE.withAlpha(0.7),
+          transparent: true,
+        }),
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+      },
+    });
+    _cellRenderer = 'wasm-texture';
+    _lastWasmRenderMs = Math.round((performance.now() - startedAt) * 10) / 10;
+    _lastTextureSize = `${layout.width}x${layout.height}`;
+    governorRequestRender('firms-heat-texture');
   }
 
   /**

@@ -191,17 +191,26 @@ Order of work, cheapest-first:
       `innerHTML` rebuild, and the uncapped world-overlay backing-store DPR.
       Each must land with a before/after capture from
       `scripts/profile-runtime.mjs` or a workstation trace.
-- [ ] WASM candidates, only where profiling proves the JS is the bottleneck:
-      the FIRMS heatmap renderer (`rust/firms-renderer/` — the crate is
-      implemented and builds; `render_heatmap(lons, lats, brights, viewport)`
-      returns an alpha-encoded RGBA buffer) and potentially SGP4 batch
-      propagation for dense catalogs. SIMD only for splatting/inner loops
-      that are already vectorizable. The FIRMS wiring is a visual-output
-      change: it must land with runtime verification on a machine that can
-      run the app, behind a JS fallback — not blind. Profiling verdict so
-      far (2026-09-10): the covered scenes are Cesium-internal and readback
-      bound — FIRMS remains the only proven candidate; SGP4 needs a
-      dense-catalog scene added to the profiler before it qualifies.
+- [x] WASM: FIRMS heat renderer wired (2026-09-10). `rust/firms-renderer/`
+      renders the cells-band aggregation (`global`/`regional` LODs) as ONE
+      Gaussian-splat texture on a single ground rectangle via
+      `src/data/firmsHeatTexture.js`, replacing ≤3600 per-cell rectangle
+      entities (N ground primitives → 1). The legacy entity render stays as
+      first paint + automatic fallback (any load/render failure,
+      `?firmsWasm=0`). Runtime-verified in headless Chrome against REAL NASA
+      data through the dev proxy (37,437 detections): 527 cells → 1 entity,
+      splat pass 14.8 ms regional / 42.6 ms global; 13 unit tests pin the
+      layout/splat math; A/B numbers in
+      [PERFORMANCE.md](PERFORMANCE.md) ("FIRMS heat-texture A/B") —
+      including the honest caveat that software rendering cannot reward the
+      draw-call reduction (fps unchanged; the win is hardware-GL draw-call
+      count + a proven-cheap generation cost). The proxy gained a keyless
+      source (NASA's public 24h SNPP VIIRS CSV) so the layer works without a
+      MAP_KEY and CI/QA exercise it for free.
+- [ ] WASM candidate 2 — SGP4 batch propagation for dense catalogs: NOT
+      wired. Needs a dense-catalog scene added to `profile-runtime.mjs`
+      before it qualifies (same bar the FIRMS work met). SIMD only for
+      splatting/inner loops that are already vectorizable.
 - [ ] Concurrency: audit every `await`-in-loop over large cohorts for
       parallelizable fan-out; verify the workers are actually parallel on the
       paths that matter (visibility, projection, label solve).

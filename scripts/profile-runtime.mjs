@@ -343,7 +343,86 @@ const SCENES = {
     const snap = await snapshot(page);
     return { name: 'idle', ...snap, ...fps, profile: await stopProfiler(cdp, 'idle') };
   },
+
+  /**
+   * FIRMS cells band at global view. Runs against the dev server's real
+   * FIRMS proxy (keyless mode serves NASA's public 24h VIIRS CSV; keyed mode
+   * uses the MAP_KEY — either way the data is real, nothing here is mocked).
+   *
+   * Two variants isolate the render path under test:
+   *   firms           — default: WASM splat texture replaces the per-cell
+   *                     rectangles once the module loads (getStats().renderer
+   *                     reports 'wasm-texture').
+   *   firms-entities  — `?firmsWasm=0` forces the legacy per-cell rectangle
+   *                     entity path (the fallback and the A/B baseline).
+   * The pair is the before/after capture docs/PLAN.md Phase 5 requires for
+   * the FIRMS WASM candidate.
+   */
+  async firms(page, cdp) {
+    return firmsScene(page, cdp, 'firms', '');
+  },
+
+  async firmsEntities(page, cdp) {
+    return firmsScene(page, cdp, 'firms-entities', '?firmsWasm=0');
+  },
 };
+
+/** Shared driver for the two FIRMS scenes (see SCENES.firms). */
+async function firmsScene(page, cdp, name, query) {
+  await page.goto(`${BASE_URL}/${query}`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  await page.waitForFunction(
+    () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.dataManager,
+    { timeout: 90_000, polling: 200 },
+  );
+  await sleep(3_000);
+  const enabled = await enableLayers(page, ['local-firms']);
+  // Park at global altitude — the `global` cells band (2° grid, ≤1800 cells).
+  // The app's boot/home camera FLIGHT animates the camera every frame and
+  // overrides a one-shot setView (observed: camera settles back to the 600 m
+  // home view), so re-issue the view on an interval until the height sticks.
+  await page.evaluate(() => {
+    const viewer = window.__godsEyeView.viewer;
+    const C3 = viewer.camera.positionWC.constructor;
+    const apply = () => viewer.camera.setView({ destination: C3.fromDegrees(20, 15, 2.2e7) });
+    apply();
+    let tries = 0;
+    window.__gevGlobalHold = setInterval(() => {
+      tries += 1;
+      if (viewer.camera.positionCartographic.height > 9.0e6 || tries > 20) {
+        clearInterval(window.__gevGlobalHold);
+        window.__gevGlobalHold = null;
+        return;
+      }
+      apply();
+    }, 700);
+  });
+  // Wait until real fires are loaded and rendered (the keyless proxy fetch
+  // can take a few seconds the first time; it is cached to disk afterwards).
+  const loaded = await withTimeout(page.waitForFunction(() => {
+    const stats = window.__godsEyeView?.dataManager?.layers?.get?.('local-firms')?.module?.getStats?.();
+    return stats && stats.count > 0 && stats.cells > 0;
+  }, { timeout: 60_000, polling: 500 }).then(() => true).catch(() => false), 65_000, 'firms load');
+  // Give the async WASM upgrade a beat to land after the entity first paint.
+  await sleep(5_000);
+  // Make sure the boot flight's hold is released before sampling FPS.
+  await page.evaluate(() => {
+    if (window.__gevGlobalHold) { clearInterval(window.__gevGlobalHold); window.__gevGlobalHold = null; }
+  });
+  const stats = await page.evaluate(() => {
+    const s = window.__godsEyeView?.dataManager?.layers?.get?.('local-firms')?.module?.getStats?.() || {};
+    return {
+      count: s.count,
+      cells: s.cells,
+      renderer: s.renderer,
+      wasmRenderMs: s.wasmRenderMs,
+      textureSize: s.textureSize,
+      wasmError: s.wasmError,
+    };
+  });
+  const fps = await sampleFps(page, 12_000);
+  const snap = await snapshot(page);
+  return { name, firmsLoaded: loaded, firms: stats, layerEnable: enabled, ...snap, ...fps, profile: await stopProfiler(cdp, name) };
+}
 
 // CDP sampling profiler -------------------------------------------------------
 

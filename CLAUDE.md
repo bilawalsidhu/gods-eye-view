@@ -117,9 +117,9 @@ Use plain filenames — `node --test` silently skips bracketed paths like `[[pat
 
 CI (`.github/workflows/ci.yml`) runs lint + the full suite (with `GEV_REQUIRE_ALLOCATION_GATE=1`) + build on every push/PR.
 
-Force AIS refresh for testing:
-```bash
-window.__godsEyeView?.dataManager?._getLayer?.('ais-live-vessels')?._loadLivePositionsForTest?.()
+Force AIS refresh for testing (layer modules live at `dataManager.layers.get(id).module` — there is no `_getLayer` helper):
+```js
+window.__godsEyeView?.dataManager?.layers?.get?.('ais-live-vessels')?.module?._loadLivePositionsForTest?.()
 ```
 
 QA scripts under `scripts/qa-*.mjs` use Puppeteer for visual/behavioral testing and require a running dev server on port 4173.
@@ -182,13 +182,19 @@ redundant horizon culling on stationary camera. Cache invalidated on AIS session
 ## Rust / WASM (`rust/`)
 
 Optional performance acceleration via WebAssembly:
-- `rust/firms-renderer/` — FIRMS heatmap renderer (Gaussian splatting in WASM).
-  The crate is implemented and builds, but is **not wired into the app yet**:
-  there is no `public/wasm/` output and `firmsHeatmap.js` does not reference
-  it. Its API is `render_heatmap(lons, lats, brights, width, height, bbox)`
-  returning an RGBA buffer whose alpha channel encodes intensity, plus
-  `version()`.
-- Build: `cd rust/firms-renderer && wasm-pack build --target web --out-dir ../../public/wasm/firms-renderer`
-- Wiring it (dynamic `import()` in `firmsHeatmap.js` with a JS fallback) is
-  tracked in `docs/PLAN.md` Phase 5 — it is a visual-output change, so it must
-  land with runtime verification, not blind.
+- `rust/firms-renderer/` — FIRMS heat renderer (Gaussian splatting in WASM),
+  WIRED into the cells LOD bands (`global`/`regional`): `src/data/firmsHeatmap.js`
+  renders the legacy per-cell rectangle entities first (fallback + first
+  paint), then `src/data/firmsHeatTexture.js` replaces them with ONE
+  splat-texture ground rectangle via `render_heatmap(lons, lats, brights,
+  width, height, bbox)` — N ground primitives → 1. Any load/render failure,
+  or `?firmsWasm=0`, keeps the entity path. `getStats()` reports `renderer`
+  ('entities' | 'wasm-texture'), `wasmRenderMs`, `textureSize`, `wasmError`.
+- Build: `npm run build:wasm` (wasm-pack → `public/wasm/firms-renderer/`,
+  gitignored; CI's build job regenerates it before `vite build`).
+- Verified (2026-09-10, headless Chrome + dev server): real NASA data
+  (37,437 detections), regional band 527 cells → 1 entity, splat pass
+  14.8 ms regional / 42.6 ms global; numbers in `docs/PERFORMANCE.md`.
+- Next WASM candidate (NOT wired): SGP4 batch propagation for dense satellite
+  catalogs — requires a dense-catalog profiler scene first (docs/PLAN.md
+  Phase 5).
