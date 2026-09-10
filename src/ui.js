@@ -4191,16 +4191,35 @@ export class StyleManager {
     });
 
     const focusMapSource = () => {
-      if (panelId !== 'control-panel') return;
-      panelEl.querySelector('.map-stack-chip.active, .map-stack-chip')?.focus?.({ preventScroll: true });
+      if (panelId !== 'control-panel') return null;
+      const chip = panelEl.querySelector('.map-stack-chip.active, .map-stack-chip');
+      chip?.focus?.({ preventScroll: true });
+      // Report whether the hand-off actually landed. focus() on an element
+      // whose computed visibility is still 'hidden' is a SILENT no-op —
+      // activeElement never moves and nothing retries. The caller uses this
+      // to keep trying until the tray's fade-in completes.
+      return document.activeElement === chip ? chip : null;
     };
+
+    // The tray fades in behind a ~180 ms visibility transition while this
+    // focus hand-off used to fire once at a fixed 240 ms — on a slow enough
+    // machine the fade hadn't finished, focus() no-op'd, and keyboard access
+    // to the tray was gone (a11y PR #171 / issue #54). Fix the hand-off
+    // rather than tuning the delay: retry on a short cadence, bounded.
+    const MAP_SOURCE_FOCUS_RETRY_MS = 30;
+    const MAP_SOURCE_FOCUS_DEADLINE_MS = 720;
 
     const scheduleMapSourceFocus = () => {
       clearTimeout(disclosureFocusTimer);
-      disclosureFocusTimer = window.setTimeout(() => {
+      const startedAt = performance.now();
+      const attempt = () => {
         disclosureFocusTimer = null;
-        if (!panelEl.classList.contains('collapsed')) focusMapSource();
-      }, 240);
+        if (panelEl.classList.contains('collapsed')) return;
+        if (focusMapSource()) return;
+        if (performance.now() - startedAt >= MAP_SOURCE_FOCUS_DEADLINE_MS) return;
+        disclosureFocusTimer = window.setTimeout(attempt, MAP_SOURCE_FOCUS_RETRY_MS);
+      };
+      disclosureFocusTimer = window.setTimeout(attempt, MAP_SOURCE_FOCUS_RETRY_MS);
     };
 
     const toggleDisclosure = ({ focusSource = false } = {}) => {

@@ -96,11 +96,13 @@ function cityLoader(city) {
     loader = createRetryableLoader(async () => {
       let fc;
       if (isNode) {
-        // node:test path — plain dynamic JSON import needs an import attribute in Node,
-        // so read the file directly (same dual-path pattern as naturalEarthRegions.js).
-        const { readFileSync } = await import(/* @vite-ignore */ 'node:fs');
+        // node:test path — a plain dynamic JSON import needs an import
+        // attribute in Node, so pass one explicitly instead of reading the
+        // file via node:fs (which the browser build then externalizes and
+        // warns about; upstream issue #34 / PR #112).
         const url = new URL(`./local_data/neighborhoods/${city.id}.json`, import.meta.url);
-        fc = JSON.parse(readFileSync(url, 'utf8'));
+        const mod = await import(/* @vite-ignore */ url.href, { with: { type: 'json' } });
+        fc = mod.default || mod;
       } else {
         // Vite bundles the JSON file as a module.
         const mod = await city.loader();

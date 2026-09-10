@@ -114,8 +114,66 @@ must not be compared directly with the foreground-controlled scenes above.
 These populations change continuously. A future comparison must record the
 live counts again and match the focus conditions.
 
-## Controls for a future capture
+## Software-rendered CPU profile (repeatable instrument)
 
+The captures above were one-shot, hardware-rendered, and not reproducible from
+the repository. `scripts/profile-runtime.mjs` is the repeatable instrument:
+it drives the real app in headless Chrome (SwiftShader software GL in CI-like
+environments) through four scenes — `boot`, `storm` (heavy layers + scripted
+camera orbit), `detection` (synthetic fleet + detection density 100%), and
+`idle` — sampling rAF cadence, `longtask` entries, JS heap, and a CDP sampling
+profiler per scene.
+
+Results below are from 10 September 2026 against the Vite dev server,
+1440 × 900, software GL (SwiftShader). **Absolute FPS from this environment is
+not comparable to the hardware table above.** The portable signals are the CPU
+self-time rankings, long-task counts, and heap.
+
+| Scene | Viewer ready | Long tasks (n / total / max) | Heap | FPS | Dominant self-time |
+| --- | ---: | --- | ---: | ---: | --- |
+| boot | 2.4 s (DCL 3.5 s, load 5.7 s) | 13 / 6.1 s / 1.77 s | 68 MB | 5.2 | shader compile/link + context/texture init (Cesium `ShaderProgram`, `Context`, `texImage2D`) |
+| storm | — | 45 / 343 s / 79.9 s | 479 MB | 0.3 | `readPixels` (framebuffer readback) — 90.3% of samples |
+| detection (700 aircraft, density 100%) | — | 16 / 3.2 s / 0.71 s | 76 MB | 7.1 | 79% idle; Cesium render; app code not in top 10 |
+| idle (parked camera) | — | 17 / 3.3 s / 0.71 s | 71 MB | 7.4 | 94% idle — render governor holds; residual HUD/telemetry timers only |
+
+Findings, ranked by actionability:
+
+1. **Boot is initialization-bound, not logic-bound.** The only application
+   code in the boot top-10 is `celestialRing._clear` (repeated canvas clears
+   per postRender while the globe is not framed — fixed by an idempotence
+   guard) and the egm96 geoid parse. Everything else is first-render shader
+   compilation and texture upload. Shader-cache friendliness (stable shader
+   permutations) matters more than any JS micro-optimization on this path.
+2. **The worst jank source found is a synchronous depth readback on a UI
+   timer.** `getBasemapLabelContext` (HUD AI-summary context, 15 s cadence and
+   camera-settle prewarm) → `getViewTargetCartographic` → `scene.pickPosition`
+   → `readPixels`. In the storm profile a single readback stalled the main
+   thread for up to 79.9 s under software GL; on hardware the same call is a
+   pipeline-flushing synchronous read that lands at the worst possible moment
+   (during or right after camera motion). Instrumented rate: 4 calls / 60 s of
+   continuous orbit — cost is per-call, not per-frequency. Label context does
+   not need tile-accurate depth: the ellipsoid fallback is sufficient there.
+3. **Detection at maximum density is healthy.** With 700 synthetic aircraft
+   and density 100%, the main thread is 79% idle and the longest task is
+   708 ms (first solve). The projection-worker + label-arbiter architecture is
+   doing its job; no rewrite candidate here.
+4. **Idle honors the render-governor contract** (94% idle, no app-code frames
+   in the top 10) — the remaining cost is HUD/telemetry timers, matching the
+   known poll-timer list (250 ms / 500 ms / 60 ms).
+5. **Layer storm heap** reached 479 MB with static + live layers enabled on
+   top of photoreal tiles. Any future "enable everything" preset needs a heap
+   budget check; `scoreSatelliteNameMatch` (satellite search) was the largest
+   non-Cesium self-time entry, which is expected during catalog load.
+
+WASM implication (docs/PLAN.md Phase 5): nothing in these profiles supports
+moving per-frame app logic to WASM. The hot paths are (a) Cesium-internal
+render initialization and (b) a synchronous GPU readback — neither is a JS
+arithmetic bottleneck. The FIRMS splat renderer remains the only proven WASM
+candidate (its 100k-heat-disc math is main-thread JS today); a second
+candidate must first appear in a future profile of a workload these scenes do
+not yet cover (e.g. AIS bulk normalization on low-end hardware).
+
+## Controls for a future capture
 Use the same controls before attributing a difference to the application:
 
 1. Record the exact GPU renderer and reject software-rendered or unavailable GPU

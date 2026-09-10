@@ -59,7 +59,10 @@ export default [
 
   {
     languageOptions: {
-      ecmaVersion: 2023,
+      // 'latest': the codebase targets Node 24 + evergreen browsers and uses
+      // syntax newer than a pinned year — e.g. dynamic import attributes
+      // (`import(x, { with: { type: 'json' } })`) in the data loaders.
+      ecmaVersion: 'latest',
       sourceType: 'module',
       globals: {
         ...globals.browser,

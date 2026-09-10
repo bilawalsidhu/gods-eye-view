@@ -177,18 +177,43 @@ export function createEarthquakesLayer({ overlayHost = DEFAULT_OVERLAY_HOST } = 
         return false;
       }
 
+      // Build the COMPLETE replacement set before touching the live
+      // collection. Clearing first meant a malformed row throwing mid-loop
+      // left the layer empty until the next good poll (an entity that was
+      // on screen vanishes with no error surfaced). Malformed rows are
+      // skipped and counted; a feed where nothing parsed keeps last-good.
+      const specs = [];
+      let malformed = 0;
+
+      for (const feature of geojson.features) {
+        const coordinates = Array.isArray(feature?.geometry?.coordinates)
+          ? feature.geometry.coordinates
+          : null;
+        const lon = Number(coordinates?.[0]);
+        const lat = Number(coordinates?.[1]);
+        const depthKm = Number(coordinates?.[2]);
+        const mag = Number(feature?.properties?.mag);
+
+        if (!Number.isFinite(lon) || !Number.isFinite(lat) || !Number.isFinite(mag)) {
+          malformed++;
+          continue;
+        }
+        if (mag < 2.5) continue; // Skip micro-quakes
+
+        specs.push({ lon, lat, depthKm, mag, feature });
+      }
+
+      if (!specs.length && geojson.features.length) {
+        _lastError = 'Malformed USGS response';
+        console.warn(`[Data:Earthquakes] Discarded feed: all ${geojson.features.length} rows malformed`);
+        return false;
+      }
+
       _dataSource.entities.removeAll();
       let count = 0;
       const overlayEntries = [];
 
-      for (const feature of geojson.features) {
-        const [lon, lat, depthKm] = feature.geometry.coordinates;
-        const mag = feature.properties.mag;
-        const place = feature.properties.place;
-        const time = feature.properties.time;
-
-        if (mag < 2.5) continue; // Skip micro-quakes
-
+      for (const { lon, lat, depthKm, mag, feature } of specs) {
         count++;
         const baseRadius = Math.pow(2, mag) * 1000;
         const color = depthColor(depthKm || 0);
@@ -197,7 +222,9 @@ export function createEarthquakesLayer({ overlayHost = DEFAULT_OVERLAY_HOST } = 
         const outlineAlpha = isSignificant ? 1.0 : 0.8;
 
         const position = Cesium.Cartesian3.fromDegrees(lon, lat);
-        const stableId = feature.id || `event-${count}`;
+        const place = feature?.properties?.place;
+        const time = feature?.properties?.time;
+        const stableId = feature?.id || `event-${count}`;
         _dataSource.entities.add({
           id: `earthquake:${stableId}`,
           position,
@@ -216,7 +243,7 @@ export function createEarthquakesLayer({ overlayHost = DEFAULT_OVERLAY_HOST } = 
           },
           properties: {
             // Analyst seam (additive): the USGS event id (e.g. "us7000abcd").
-            usgsId: feature.id ?? null,
+            usgsId: feature?.id ?? null,
             mag,
             place,
             time,
@@ -229,6 +256,10 @@ export function createEarthquakesLayer({ overlayHost = DEFAULT_OVERLAY_HOST } = 
           magnitude: mag,
           accent: color.toCssColorString(),
         }));
+      }
+
+      if (malformed) {
+        console.warn(`[Data:Earthquakes] Skipped ${malformed} malformed USGS rows`);
       }
 
       if (_enabled) {

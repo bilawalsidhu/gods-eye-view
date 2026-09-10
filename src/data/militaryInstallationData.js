@@ -54,7 +54,23 @@ function finiteLongitude(value) {
 function pointFrom(element) {
   const lat = Number(element?.lat ?? element?.center?.lat);
   const longitude = Number(element?.lon ?? element?.center?.lon);
-  return finiteLatitude(lat) && finiteLongitude(longitude) ? { latitude: lat, longitude } : null;
+  if (finiteLatitude(lat) && finiteLongitude(longitude)) return { latitude: lat, longitude };
+  // Overpass `out ... geom` honours only the LAST geometry mode, so ways and
+  // relations arrive with `bounds` but no `center` — every one of them used
+  // to be dropped silently here (measured upstream: 149/228 kept over San
+  // Diego, 0 over Warendorf). The bbox midpoint is the honest fallback for a
+  // point-seam consumer; a half-filled or inverted box is dropped rather
+  // than averaged into a plausible-looking lie.
+  const south = Number(element?.bounds?.minlat);
+  const west = Number(element?.bounds?.minlon);
+  const north = Number(element?.bounds?.maxlat);
+  const east = Number(element?.bounds?.maxlon);
+  if (![south, west, north, east].every(Number.isFinite)) return null;
+  if (south > north || west > east) return null;
+  const midLatitude = (south + north) / 2;
+  const midLongitude = (west + east) / 2;
+  if (!finiteLatitude(midLatitude) || !finiteLongitude(midLongitude)) return null;
+  return { latitude: midLatitude, longitude: midLongitude };
 }
 
 function footprintFrom(element) {

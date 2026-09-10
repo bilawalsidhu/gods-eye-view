@@ -522,8 +522,10 @@ export class CelestialRing {
         canvas.width = bw;
         canvas.height = bh;
       }
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
+      // CSS-size writes only when they change: _resize runs on every throttled
+      // frame and unconditional style writes still cost a style-recalc pass.
+      if (canvas.style.width !== `${width}px`) canvas.style.width = `${width}px`;
+      if (canvas.style.height !== `${height}px`) canvas.style.height = `${height}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
     this._renderScale = dpr;
@@ -630,7 +632,14 @@ export class CelestialRing {
     this._root.dataset.globeVisible = String(nextVisible);
     this._root.dataset.ephemerisUpdates = String(this._ephemerisUpdateCount);
     if (!nextVisible || !disc) {
-      this._clear();
+      // Idempotence guard: while parked on a non-full-globe view this branch
+      // runs on every throttled frame, and an unconditional _clear() repeats
+      // two clearRects + a style write per frame forever (it was visible in
+      // every runtime profile, including idle). Clear once, then the render
+      // keys below stay empty until something actually paints again.
+      if (this.visible || this._sunRenderKey || this._moonRenderKey || this._outlineRenderKey) {
+        this._clear();
+      }
       this._debug = { enabled: true, visible: false, disc };
       if (!this._focusInProgress) this._autoDisable();
       return;

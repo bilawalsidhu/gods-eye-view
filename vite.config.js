@@ -2058,8 +2058,14 @@ function firmsProxy() {
     for (const source of SOURCES) {
       try {
         const records = filterTrailing24h(await fetchSource(key, source), now);
+        // Append element-by-element: a global VIIRS sweep returns ~131k rows
+        // and `push(...records)` throws RangeError past V8's ~124k argument
+        // limit — inside this try, so a healthy source would be misreported
+        // as failed and its rows silently dropped (upstream PR #181/#156).
+        for (const record of records) fires.push(record);
+        // Bookkeeping moves AFTER the rows land: a source is only ok:true
+        // once its records are actually in the merged array.
         sources.push({ source, count: records.length, ok: true });
-        fires.push(...records);
       } catch (err) {
         console.warn(`[firms-proxy] ${source} fetch failed:`, err?.message || err);
         sources.push({ source, count: 0, ok: false });
@@ -3368,6 +3374,10 @@ function gbfsProxy() {
           try {
             upstream = await fetch(upstreamUrl.toString(), {
               method: 'GET',
+              redirect: 'manual',
+              // redirect:'manual' keeps the host/path allowlist authoritative:
+              // with default redirect handling, an allowed feed could redirect
+              // anywhere and this proxy would relay its body (upstream #30).
               headers: {
                 Accept: 'application/json',
                 'User-Agent': 'gods-eye-view-gbfs-proxy/1.0',
@@ -3378,19 +3388,32 @@ function gbfsProxy() {
             clearTimeout(timeoutId);
           }
 
-          // Limit response size to prevent memory exhaustion from malicious upstream
-          const GBFS_MAX_BODY_BYTES = 5 * 1024 * 1024; // 5 MB
-          const contentLength = Number(upstream.headers.get('content-length'));
-          if (Number.isFinite(contentLength) && contentLength > GBFS_MAX_BODY_BYTES) {
+          // No redirect following: the allowlist applies to the exact host we
+          // validated, and a survey of all 64 registered feeds found none that
+          // redirect. A 3xx is refused rather than relayed.
+          if (upstream.status >= 300 && upstream.status < 400) {
             res.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-            res.end(JSON.stringify({ error: 'GBFS upstream response too large' }));
+            res.end(JSON.stringify({ error: 'GBFS upstream redirects are not followed' }));
             return;
           }
-          const body = await upstream.text();
-          if (body.length > GBFS_MAX_BODY_BYTES) {
-            res.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-            res.end(JSON.stringify({ error: 'GBFS upstream response too large' }));
-            return;
+
+          // Cap the body WHILE STREAMING (hard byte cap): the previous
+          // content-length pre-check missed chunked/omitted-length responses,
+          // and the string `.length` fallback compared UTF-16 code units to a
+          // byte limit only after the full decode it exists to prevent
+          // (upstream #31/#32). readResponseTextCapped cancels the read the
+          // moment the running byte count passes the cap.
+          const GBFS_MAX_BODY_BYTES = 5 * 1024 * 1024; // 5 MB
+          let body;
+          try {
+            body = await readResponseTextCapped(upstream, GBFS_MAX_BODY_BYTES);
+          } catch (error) {
+            if (error?.code === 'RESPONSE_TOO_LARGE') {
+              res.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+              res.end(JSON.stringify({ error: 'GBFS upstream response too large' }));
+              return;
+            }
+            throw error;
           }
           const contentType = upstream.headers.get('content-type') || 'application/json';
           res.writeHead(upstream.status, {
@@ -4378,10 +4401,14 @@ function googlePlacesContextProxy() {
       const latitude = Number(requestUrl.searchParams.get('lat'));
       const longitude = Number(requestUrl.searchParams.get('lon'));
       const radiusM = Math.max(50, Math.min(50000, Number(requestUrl.searchParams.get('radiusM')) || 4000));
-      if (!textQuery || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      // Range-validate, not just finite-validate: lat=999 is finite but an
+      // invalid latitude for the Places API (upstream audit #19).
+      const validLatitude = Number.isFinite(latitude) && latitude >= -90 && latitude <= 90;
+      const validLongitude = Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
+      if (!textQuery || !validLatitude || !validLongitude) {
         res.statusCode = 400;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'q, lat and lon are required', places: [] }));
+        res.end(JSON.stringify({ error: 'q, lat and lon are required (lat in [-90,90], lon in [-180,180])', places: [] }));
         return;
       }
 

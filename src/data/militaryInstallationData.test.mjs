@@ -74,3 +74,61 @@ test('accepts only small non-dateline request bboxes', () => {
   assert.equal(isValidInstallationBoundingBox({ south: -1, west: 179, north: 1, east: -179 }), false);
   assert.equal(isValidInstallationBoundingBox({ south: -20, west: 0, north: 20, east: 1 }), false);
 });
+
+// ── Bounds-midpoint fallback (Overpass `out geom` omits `center`) ────────────
+// Overpass honours only the LAST geometry mode in `out center tags geom`, so
+// ways/relations arrive with `bounds` (and geometry) but no center point —
+// and every one of them used to be dropped silently here. A barracks mapped
+// as a way rendered as an empty screen with no error anywhere.
+test('a way with bounds but no center derives its point from the bbox midpoint', () => {
+  const result = normalizeMilitaryInstallations({ elements: [
+    {
+      type: 'way',
+      id: 1001,
+      bounds: { minlat: 50.0, minlon: 8.0, maxlat: 50.02, maxlon: 8.04 },
+      tags: { military: 'barracks', name: 'Warendorf Depot' },
+    },
+  ] });
+  assert.equal(result.records.length, 1, 'way must not be dropped for lacking a center');
+  // 50.01 lands as 50.010000000000005 in IEEE-754 — compare to full precision
+  // of what the midpoint actually is, not a decimal idealization.
+  assert.ok(Math.abs(result.records[0].latitude - 50.01) < 1e-9);
+  assert.ok(Math.abs(result.records[0].longitude - 8.02) < 1e-9);
+});
+
+test('an explicit center still wins over the bounds midpoint', () => {
+  const result = normalizeMilitaryInstallations({ elements: [
+    {
+      type: 'way',
+      id: 1002,
+      center: { lat: 32.7, lon: -117.1 },
+      bounds: { minlat: 32.0, minlon: -118.0, maxlat: 33.0, maxlon: -116.0 },
+      tags: { military: 'airfield', name: 'Explicit Center Wins' },
+    },
+  ] });
+  assert.equal(result.records.length, 1);
+  assert.equal(result.records[0].latitude, 32.7);
+  assert.equal(result.records[0].longitude, -117.1);
+});
+
+test('a half-filled or inverted bounds box is dropped, not averaged into a bad point', () => {
+  const result = normalizeMilitaryInstallations({ elements: [
+    {
+      type: 'way', id: 1003,
+      bounds: { minlat: 50.0, minlon: 8.0, maxlon: 8.04 },
+      tags: { military: 'barracks' },
+    },
+    {
+      type: 'way', id: 1004,
+      bounds: { minlat: 51.0, minlon: 8.0, maxlat: 50.0, maxlon: 8.04 },
+      tags: { military: 'barracks' },
+    },
+    {
+      type: 'way', id: 1005,
+      bounds: { minlat: 91.0, minlon: 8.0, maxlat: 92.0, maxlon: 8.04 },
+      tags: { military: 'barracks' },
+    },
+  ] });
+  assert.deepEqual(result.records, [], 'no plausible-looking lies from broken boxes');
+  assert.equal(result.droppedCount, 3);
+});

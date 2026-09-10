@@ -118,9 +118,13 @@ const isNode = typeof process !== 'undefined' && Boolean(process.versions?.node)
 
 async function loadPackFile(base) {
   if (isNode) {
-    const { readFileSync } = await import(/* @vite-ignore */ 'node:fs');
+    // Import attribute instead of node:fs readFileSync — a plain dynamic JSON
+    // import needs one in Node, and keeping node:fs out of this module keeps
+    // it out of the browser bundle's externalization warnings (upstream
+    // issue #34 / PR #112).
     const url = new URL(`./local_data/natural_earth/${base}.json`, import.meta.url);
-    return JSON.parse(readFileSync(url, 'utf8'));
+    const mod = await import(/* @vite-ignore */ url.href, { with: { type: 'json' } });
+    return mod.default || mod;
   }
   // Vite bundles these JSON files as modules (same pattern as neighborhoodPolygons.js)
   const mod = base === 'regions'

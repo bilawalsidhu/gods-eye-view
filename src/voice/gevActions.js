@@ -1894,7 +1894,11 @@ function collectTrackedEntities(dataManager) {
 export async function getBasemapLabelContext(viewer) {
   const samples = sampleViewportCartographics(viewer);
   const cameraHeightM = viewer.camera.positionCartographic.height;
-  const target = getViewTargetCartographic(viewer);
+  // surfaceOnly: this feeds place-label text for the HUD summary, where
+  // tile-accurate depth is worthless and the pickPosition stage forces a
+  // synchronous depth-buffer readback — the worst main-thread stall found in
+  // runtime profiling (docs/PERFORMANCE.md, software-rendered CPU profile).
+  const target = getViewTargetCartographic(viewer, { surfaceOnly: true });
   if (!target) {
     return {
       placeLabels: [],
@@ -2777,22 +2781,27 @@ function coarseBasemapPlace(viewScale, latitude, longitude, inferredCountry = nu
   };
 }
 
-function getViewTargetCartographic(viewer) {
+function getViewTargetCartographic(viewer, options = {}) {
+  // The cache is scoped by pick mode: a surfaceOnly (ellipsoid-level) answer
+  // must never be served to a depth-precision caller within the TTL, and a
+  // depth answer cached here must not mask the readback savings for the
+  // surfaceOnly path.
+  const surfaceOnly = Boolean(options.surfaceOnly);
+  const cacheKey = surfaceOnly ? 'surface' : 'depth';
   const signature = cameraViewSignature(viewer);
   const cached = viewTargetCache.get(viewer);
-  if (cached?.signature === signature && performance.now() - cached.cachedAt < 2500) {
-    return cached.target;
+  if (cached?.signature === signature && cacheKey in cached
+    && performance.now() - cached.cachedAt < 2500) {
+    return cached[cacheKey];
   }
-  const position = getViewTargetCartesian(viewer);
+  const position = getViewTargetCartesian(viewer, options);
   // `fromCartesian` still returns undefined for a point too near the ellipsoid
   // center to project; normalize that to the same "no target" null the callers
   // already handle for a missed pick.
   const target = position ? (Cesium.Cartographic.fromCartesian(position) || null) : null;
-  viewTargetCache.set(viewer, {
-    signature,
-    target,
-    cachedAt: performance.now(),
-  });
+  const entry = cached?.signature === signature ? cached : { signature, cachedAt: performance.now() };
+  entry[cacheKey] = target;
+  viewTargetCache.set(viewer, entry);
   return target;
 }
 
@@ -2815,8 +2824,14 @@ function cameraViewSignature(viewer) {
  * converting one of those throws deep inside Cesium. A degenerate pick is a
  * MISSED pick, so it falls through to the next stage rather than poisoning
  * every caller downstream.
+ *
+ * `options.surfaceOnly` skips the `scene.pickPosition` stage entirely. That
+ * stage reads the depth buffer back synchronously (a full pipeline flush),
+ * which runtime profiling flagged as the app's worst main-thread stall; callers
+ * that only need "where is the view centered" at label/basemap precision pass
+ * surfaceOnly and get the zero-readback ellipsoid/globe stages instead.
  */
-function getViewTargetCartesian(viewer) {
+function getViewTargetCartesian(viewer, options = {}) {
   const scene = viewer.scene;
   const canvas = scene.canvas;
   const width = canvas.clientWidth || canvas.width || 0;
@@ -2824,7 +2839,7 @@ function getViewTargetCartesian(viewer) {
   const center = new Cesium.Cartesian2(width / 2, height / 2);
   let position = null;
 
-  if (scene.pickPositionSupported && typeof scene.pickPosition === 'function') {
+  if (!options.surfaceOnly && scene.pickPositionSupported && typeof scene.pickPosition === 'function') {
     try {
       position = scene.pickPosition(center);
     } catch {

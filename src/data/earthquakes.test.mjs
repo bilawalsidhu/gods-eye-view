@@ -338,3 +338,94 @@ test('earthquake refresh reports failure and clears it only after a successful r
     layer.destroy(viewer);
   }
 });
+
+// ── Replacement-swap safety: a bad row must never empty the layer ────────────
+// The update path used to `removeAll()` BEFORE iterating the feed, so any
+// throw mid-loop (malformed geometry, non-numeric magnitude) left the layer
+// silently empty until the next good poll. The replacement set is now built
+// and validated first; the live collection only swaps after it exists.
+test('a malformed row is skipped, not fatal — remaining events still render', async () => {
+  const originalFetch = globalThis.fetch;
+  const dataSources = [];
+  const viewer = {
+    dataSources: {
+      add(dataSource) { dataSources.push(dataSource); return dataSource; },
+      remove() { return true; },
+    },
+  };
+  const layer = createEarthquakesLayer({
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  try {
+    layer.init(viewer);
+    layer.enable(viewer);
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        features: [
+          { id: 'bad-1', geometry: { coordinates: null }, properties: { mag: 5.0 } },
+          { id: 'bad-2', geometry: { coordinates: ['not-a-number', 61.0, 10] }, properties: { mag: 5.0 } },
+          { id: 'bad-3', geometry: { coordinates: [-150.4, 61.0, 10] }, properties: { mag: null } },
+          { id: 'good-1', geometry: { coordinates: [-150.41, 61.02, 41.7] }, properties: { mag: 5.24, place: 'Good One' } },
+        ],
+      }),
+    });
+    assert.equal(await layer.update(viewer), true);
+    const entities = dataSources[0].entities.values;
+    assert.equal(entities.length, 1, 'only the well-formed row survives');
+    assert.equal(entities[0].id, 'earthquake:good-1');
+    assert.equal(layer.getStats().count, 1);
+    assert.equal(layer.getStats().error, null);
+  } finally {
+    globalThis.fetch = originalFetch;
+    layer.destroy(viewer);
+  }
+});
+
+test('an all-malformed feed fails the update and preserves the last-good entities', async () => {
+  const originalFetch = globalThis.fetch;
+  const dataSources = [];
+  const viewer = {
+    dataSources: {
+      add(dataSource) { dataSources.push(dataSource); return dataSource; },
+      remove() { return true; },
+    },
+  };
+  const layer = createEarthquakesLayer({
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  try {
+    layer.init(viewer);
+    layer.enable(viewer);
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        features: [
+          { id: 'us-good', geometry: { coordinates: [-150.41, 61.02, 41.7] }, properties: { mag: 5.24 } },
+        ],
+      }),
+    });
+    assert.equal(await layer.update(viewer), true);
+    assert.equal(dataSources[0].entities.values.length, 1);
+
+    // Now a feed that parses as JSON but where every row is malformed. The
+    // previous entities must survive: this update reports failure and the
+    // live collection is untouched.
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        features: [
+          { id: 'bad-1', geometry: {}, properties: {} },
+          { id: 'bad-2', geometry: { coordinates: [0, 0] }, properties: { mag: 'high' } },
+        ],
+      }),
+    });
+    assert.equal(await layer.update(viewer), false);
+    assert.equal(layer.getStats().error, 'Malformed USGS response');
+    assert.equal(dataSources[0].entities.values.length, 1, 'last-good entities preserved');
+    assert.equal(layer.getStats().count, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    layer.destroy(viewer);
+  }
+});
