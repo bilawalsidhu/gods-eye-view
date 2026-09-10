@@ -366,10 +366,22 @@ acting — the audit described upstream's tree):
       `src/ui.js`), and note the formatter constraint (PR #227): ~86 tests
       assert source text, so a repo-wide format pass requires re-pinning
       them first.
-- [ ] `track-regression.mjs` ground probe: pin no absolute `sampleHeight`
-      count (deterministically 3 vs the expected ≥4 on upstream; cold-cache
-      terrain timeout) and add the timed-out-driver guard so a timeout can't
-      read as "flat" (issue #44, PR #171's approach).
+- [x] `track-regression.mjs` harness integrity (2026-09-10 sweep, verified
+      100/100 in a software-GL environment): the military synthetic-fleet
+      shim pointed at `/api/adsblol/mil` (the registry endpoint) while the
+      layer polls `/api/adsblol` — the fleet under test was never synthetic
+      and the jitter/pull-out/orphan invariants silently skipped offline;
+      the TLE-mutation phases now purge the `tleCache.js` localStorage keys
+      the browser cache (added after the harness was written) would have
+      served instead of the shimmed refresh; the `sampleHeight` bound drops
+      the absolute-count pin (cold-cache terrain deterministically yields 3)
+      and guards on frames-actually-ran so a timed-out driver can't read as
+      "flat"; keyless-Google-tile 400s join the benign-noise filter; and all
+      keyboard interactions wait on state (with bounded retries) instead of
+      fixed sleeps — same treatment applied to `qa-map-source-tray.mjs`
+      (4/4 stable) plus a `checkSkip` path for Google-key-bound assertions.
+      The macOS-only `--use-angle=metal` default that broke every `qa-*`
+      script on Linux moved into `scripts/lib/webglLaunchArgs.mjs`.
 - [ ] Accessible-name invariant test (PR #216): every `<input>` in
       `index.html` carries `aria-label`, `aria-labelledby`, or an associated
       `<label>` — feeds Phase 4.
