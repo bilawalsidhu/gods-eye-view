@@ -17,7 +17,7 @@ const CITY_FILES = [
   { id: 'san-francisco', bbox: [-122.55, 37.70, -122.35, 37.84], loader: () => import('./local_data/neighborhoods/san-francisco.json') },
 ];
 
-const isNode = typeof process !== 'undefined' && !!process.versions?.node
+const isNode = typeof process !== 'undefined' && Boolean(process.versions?.node)
   && typeof window === 'undefined';
 
 /**
@@ -164,7 +164,7 @@ export async function lookupNeighborhoodRing(lat, lon, matchName) {
     const containRing = containingOuterRing(f, lon, lat);
     const ring = containRing || largestOuterRing(f.geometry);
     if (!ring) continue;
-    const cand = { ring, name: f.properties.name, contains: !!containRing, fwordCount: fWords.length };
+    const cand = { ring, name: f.properties.name, contains: Boolean(containRing), fwordCount: fWords.length };
     // Prefer a feature that CONTAINS the point, then the most specific name (most words).
     if (!best
       || (cand.contains && !best.contains)

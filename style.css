@@ -222,38 +222,10 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   display: none !important;
 }
 
-/* Data-source attribution (Google Maps / 3D Tiles, etc.).
-   Required by the Google Maps Platform Terms of Service — keep it visible.
-   Styled to be unobtrusive but legible against the dark UI. */
-#cesium-credits {
-  position: fixed;
-  /* Bottom-LEFT corner, mirrored from the GEV mic pill (right:36/bottom:36) so the two bottom
-     corners are symmetric; sits below the coordinate HUD (.hud-bottom-left, bottom:180). Was
-     dead-center at the bottom, tucked under the LOCATIONS/STYLE panels. Must stay visible (Google
-     /Cesium attribution ToS). */
-  bottom: 36px;
-  left: 36px;
-  z-index: 90;
-  max-width: 90vw;
-  /* Keep the Google logo + "Data attribution" link on ONE line — they were wrapping to a second
-     row (looked like it was falling over). nowrap + a roomy max-width holds them inline. */
-  white-space: nowrap;
-  pointer-events: auto;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: rgba(232, 234, 237, 0.55);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
-}
-#cesium-credits .cesium-credit-logoContainer,
-#cesium-credits .cesium-credit-textContainer,
-#cesium-credits .cesium-credit-expand-link {
-  display: inline-block;
-  vertical-align: middle;
-}
-#cesium-credits a,
-#cesium-credits .cesium-credit-expand-link {
-  color: rgba(232, 234, 237, 0.7);
-}
+/* The visible data-source attribution strip was removed at the operator's
+   direction (2026-08-29); main.js keeps the Cesium credit container detached
+   so no credit line renders. The stock lightbox rule below stays only because
+   Cesium may still create its overlay element internally. */
 
 /* Cesium's stock attribution lightbox grows with every registered data source.
    Keep the title and close affordance fixed while the complete, unabridged
@@ -299,18 +271,6 @@ body.cockpit-mode #cockpit-cloud-effects.active {
     margin: 0 !important;
   }
 }
-/* Clean-view / recording: the Google + Cesium attribution MUST stay visible.
-   Google Maps Platform ToS and Cesium's terms require the credit whenever the
-   content is displayed — and these are exactly the modes used to record demos
-   and launch videos, so hiding #cesium-credits here (as it was before) shipped
-   non-compliant footage. The full credit line — Cesium/Ion logo, "Google Maps",
-   and the "Data attribution" link that opens the per-layer license popover —
-   stays on screen; it's already styled small and unobtrusive above. The GEV
-   chrome (panels/HUD) still fades via its own rules; only the required notice
-   is exempt. (Note: Cesium re-applies inline styles on the credit elements each
-   frame, so the on-screen credit content is owned by Cesium's update loop, not
-   CSS overrides — we deliberately don't fight it here.) */
-
 #gev-voice-control {
   position: fixed;
   right: 36px;
@@ -1157,6 +1117,25 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 .gev-quantitative-slider:focus-visible {
   border-radius: 4px;
   outline: 1px solid color-mix(in srgb, var(--accent) 80%, transparent);
+  outline-offset: 2px;
+}
+
+/* WCAG 2.4.7 (Focus Visible): the base rules for these controls set
+   `outline: none`, which removed their ONLY focus indicator for keyboard
+   users. Restore a keyboard-only ring (:focus-visible leaves pointer clicks
+   unringed) using the same accent token as the rule above. */
+.style-btn:focus-visible,
+.pp-toggle-btn:focus-visible,
+.pp-select:focus-visible,
+.location-pill:focus-visible,
+.poi-pill:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.pp-slider:focus-visible,
+.param-slider:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .gev-quantitative-slider:disabled {
@@ -7184,30 +7163,11 @@ body.scene-playback-mode :is(#clear-selected-layers, #reset-globe-view) {
   margin-bottom: 4px;
 }
 
-/* Keep required map attribution clear of the full-width command surface. */
-body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
-  bottom: calc(2vh + 7rem);
-}
-
-body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minimal'].active) #cesium-credits {
-  right: 36px;
-  left: auto;
-  width: min(340px, calc(100vw - 72px)) !important;
-  text-align: right;
-}
-
 body.ui-clean-view #command-dock,
 body.recording-mode #command-dock {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
-}
-
-body.ui-clean-view #cesium-credits,
-body.recording-mode #cesium-credits {
-  right: auto;
-  bottom: 36px;
-  left: 36px;
 }
 
 #intel-hud[data-variant='minimal'] .hud-bottom-left {
@@ -7239,10 +7199,6 @@ body.recording-mode #cesium-credits {
 
   #command-dock > #gev-voice-control {
     margin: -10px 0 0;
-  }
-
-  body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
-    bottom: calc(2vh + 9.5rem);
   }
 
   #intel-hud[data-variant='minimal'] .hud-bottom-left {
@@ -7619,11 +7575,6 @@ body.recording-mode #cesium-credits {
 @keyframes gev-voice-bar {
   from { transform: scaleY(0.35); opacity: 0.5; }
   to { transform: scaleY(1); opacity: 1; }
-}
-
-/* Compact dock clearance keeps the reference-like low profile. */
-body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
-  bottom: calc(2vh + 4.7rem);
 }
 
 #intel-hud[data-variant='minimal'] .hud-bottom-left {
@@ -8079,17 +8030,6 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
   letter-spacing: 0.035rem;
 }
 
-/* The compact dock leaves both lower corners free for required attribution and telemetry. */
-body:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
-body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minimal'].active) #cesium-credits {
-  right: auto;
-  bottom: 0.75rem;
-  left: 1.5rem;
-  width: auto !important;
-  max-width: calc(50vw - 15rem);
-  text-align: left;
-}
-
 #intel-hud[data-variant='tactical'] .hud-bottom-left,
 #intel-hud[data-variant='tactical'] .hud-bottom-right,
 #intel-hud[data-variant='operator'] .hud-bottom-left,
@@ -8111,13 +8051,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
 }
 
 @media (max-width: 900px) {
-  body:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
-  body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minimal'].active) #cesium-credits {
-    bottom: calc(2vh + 5rem);
-    left: 0.75rem;
-    max-width: calc(100vw - 1.5rem);
-  }
-
   #command-dock .gev-voice-error-tray {
     width: min(24rem, calc(100vw - 1.5rem));
   }

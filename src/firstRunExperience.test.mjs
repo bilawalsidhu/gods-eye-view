@@ -646,8 +646,8 @@ test('the DISPLAY rail starts collapsed on a first run, and a stored choice wins
 
 // ── Voice: instruction-only, tool schema byte-unchanged ─────────────────────
 
-test('the voice TOOL SCHEMA is byte-identical to main — the mission mapping is instructions only', () => {
-  const src = fs.readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
+test('the voice TOOL SCHEMA is byte-identical to the shared session module — the mission mapping is instructions only', () => {
+  const src = fs.readFileSync(new URL('./voice/realtimeSession.js', import.meta.url), 'utf8');
   const start = src.indexOf('const GEV_REALTIME_TOOLS = [');
   assert.ok(start > 0, 'GEV_REALTIME_TOOLS must still be a single literal array');
   const end = src.indexOf('\n];\n', start);
@@ -681,7 +681,7 @@ test('the voice TOOL SCHEMA is byte-identical to main — the mission mapping is
 });
 
 test('every layer a mission drives is already in the shipped set_layer_visibility enum', () => {
-  const src = fs.readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
+  const src = fs.readFileSync(new URL('./voice/realtimeSession.js', import.meta.url), 'utf8');
   const tool = src.slice(src.indexOf("name: 'set_layer_visibility'"), src.indexOf("name: 'show_data_layers_menu'"));
   const missionLayerIds = Object.values(FIRST_RUN_MISSIONS).flatMap((mission) => mission.layerIds || []);
   assert.ok(missionLayerIds.length > 0);

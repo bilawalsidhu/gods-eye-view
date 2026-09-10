@@ -379,11 +379,11 @@ export function createLocalGeoJsonLayer({
     updateInterval: 0,
     statsRefreshInterval: 1000,
 
-    init: async (viewer) => {
+    init: async (_viewer) => {
       // DataLayerManager calls this once
     },
     
-    update: async (viewer) => {
+    update: async (_viewer) => {
       // DataLayerManager calls this when enabled
     },
     

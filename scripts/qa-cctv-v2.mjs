@@ -616,8 +616,8 @@ async function main() {
     const allPolylinesPresent = ['ray-tl', 'ray-tr', 'ray-br', 'ray-bl', 'cap'].every((r) => Array.isArray(geomInfo.poly[r]));
     record('all 5 frustum polyline entities exist for the active camera', allPolylinesPresent,
       Object.keys(geomInfo.poly).map((k) => `${k}=${geomInfo.poly[k] ? 'ok' : 'MISSING'}`).join(', '));
-    record('plane + plane-label entities exist for the active camera', !!geomInfo.plane && geomInfo.hasLabel,
-      `plane=${!!geomInfo.plane} label=${geomInfo.hasLabel} show=${geomInfo.planeShow}`);
+    record('plane + plane-label entities exist for the active camera', Boolean(geomInfo.plane) && geomInfo.hasLabel,
+      `plane=${Boolean(geomInfo.plane)} label=${geomInfo.hasLabel} show=${geomInfo.planeShow}`);
 
     // Plane corner positions must coincide with the 4 corner-ray endpoints
     // (ε < 0.5m) — but ONLY when the frustum doesn't hit the ground clamp
@@ -659,7 +659,7 @@ async function main() {
         await sleep(400);
         geomForCorners = await page.evaluate(`(function(camId){ ${SERIALIZE_GEOM_SRC} return serializeGeom(camId); })(${JSON.stringify(activeId)})`);
         const dimsAfter = geomForCorners.plane ? JSON.stringify(geomForCorners.plane.dimensions) : null;
-        patchGeometryApplied = !!dimsAfter && dimsAfter !== dimsBefore;
+        patchGeometryApplied = Boolean(dimsAfter) && dimsAfter !== dimsBefore;
       }
     }
     record('calibration patch geometry landed (test setup, not an app assertion)', patchGeometryApplied,
@@ -798,7 +798,7 @@ async function main() {
       const map = raw ? JSON.parse(raw) : {};
       return map[camId] || null;
     }, activeId);
-    record('v2 localStorage key written with source:manual + savedAt on SAVE', !!(storeEntry && storeEntry.source === 'manual' && Number.isFinite(storeEntry.savedAt)),
+    record('v2 localStorage key written with source:manual + savedAt on SAVE', Boolean(storeEntry && storeEntry.source === 'manual' && Number.isFinite(storeEntry.savedAt)),
       storeEntry ? `source=${storeEntry.source} savedAt=${storeEntry.savedAt}` : 'no entry written');
 
     const afterSave = await page.evaluate((camId) => {
@@ -865,13 +865,13 @@ async function main() {
     const materialInfo = await page.evaluate((camId) => {
       const viewer = window.__godsEyeView.viewer;
       const time = viewer.clock.currentTime;
-      const planeEnt = viewer.entities.getById('cctv-' + camId + '-plane');
+      const planeEnt = viewer.entities.getById(`cctv-${  camId  }-plane`);
       const mat = planeEnt?.plane?.material;
       const image = mat?.image;
       const resolved = image && typeof image.getValue === 'function' ? image.getValue(time) : image;
       return {
-        hasMaterial: !!mat,
-        hasImage: !!resolved,
+        hasMaterial: Boolean(mat),
+        hasImage: Boolean(resolved),
         tagName: resolved?.tagName || null,
         show: planeEnt?.show,
       };
@@ -895,7 +895,7 @@ async function main() {
     // Panel <img> src and the plane's frame fetch share the same
     // /api/cctv/frame/<id> URL family (same endpoint + camera id segment).
     const panelImgSrc = await page.evaluate(() => document.getElementById('cctv-frame')?.getAttribute('src') || null);
-    const sameFamily = !!panelImgSrc && panelImgSrc.includes(`/api/cctv/frame/${encodeURIComponent(activeId)}`);
+    const sameFamily = Boolean(panelImgSrc) && panelImgSrc.includes(`/api/cctv/frame/${encodeURIComponent(activeId)}`);
     record('panel <img> and plane share the same /api/cctv/frame/<id> URL family', sameFamily,
       `panelSrc=${panelImgSrc}`);
 
@@ -932,7 +932,7 @@ async function main() {
       }
       return null;
     });
-    record('true-empty canvas target is available (no scene owner or CCTV card)', !!emptyClickPoint,
+    record('true-empty canvas target is available (no scene owner or CCTV card)', Boolean(emptyClickPoint),
       emptyClickPoint ? `canvas=(${emptyClickPoint.canvasX},${emptyClickPoint.canvasY})` : 'no clean canvas point found');
 
     const clickEvidenceSetup = await page.evaluate(() => {
@@ -1129,7 +1129,7 @@ async function main() {
       };
     });
     record('real true-empty canvas click publishes one active-to-null transition',
-      !!emptyClickPoint
+      Boolean(emptyClickPoint)
         && firstEmptyClick.activeId === null
         && firstEmptyClick.enabled === true
         && firstEmptyClick.transitions === firstEmptyClick.baselineTransitions + 1
@@ -1137,7 +1137,7 @@ async function main() {
         && firstEmptyClick.lastTransition?.[1] === null,
       `active=${firstEmptyClick.activeId} enabled=${firstEmptyClick.enabled} transitions=${firstEmptyClick.transitions - firstEmptyClick.baselineTransitions}`);
     record('real true-empty deselection preserves pose/tracking and emits no focus request',
-      !!emptyClickPoint && firstEmptyClick.poseSame && firstEmptyClick.focusEvents === 0,
+      Boolean(emptyClickPoint) && firstEmptyClick.poseSame && firstEmptyClick.focusEvents === 0,
       `poseSame=${firstEmptyClick.poseSame} focus=${firstEmptyClick.focusEvents}`);
 
     if (emptyClickPoint) {
@@ -1157,7 +1157,7 @@ async function main() {
       };
     });
     record('repeat true-empty canvas click is null-idempotent',
-      !!emptyClickPoint
+      Boolean(emptyClickPoint)
         && repeatEmptyClick.activeId === null
         && repeatEmptyClick.transitions === repeatEmptyClick.baselineTransitions + 1
         && repeatEmptyClick.focusEvents === 0,
@@ -1171,7 +1171,7 @@ async function main() {
       return mod.getUIState().activeCameraId;
     });
     record('explicit NEXT resumes from null at the first catalog camera',
-      typeof resumedId === 'string' && !!resumedId,
+      typeof resumedId === 'string' && Boolean(resumedId),
       `active=${resumedId}`);
 
     // =========================================================================
@@ -1272,7 +1272,7 @@ async function main() {
       mod.setParams({ calibrationMode: true });
       const viewer = window.__godsEyeView.viewer;
       return parts.map((p) => {
-        const e = viewer.entities.getById('cctv-gizmo-' + p);
+        const e = viewer.entities.getById(`cctv-gizmo-${  p}`);
         return e ? (e.show ? 'shown' : 'hidden') : 'missing';
       });
     }, GIZMO_PARTS);
@@ -1464,7 +1464,7 @@ async function main() {
       mod.setParams({ calibration: { reset: true } });
       const viewer = window.__godsEyeView.viewer;
       return parts.map((p) => {
-        const e = viewer.entities.getById('cctv-gizmo-' + p);
+        const e = viewer.entities.getById(`cctv-gizmo-${  p}`);
         return e ? (e.show ? 'shown' : 'hidden') : 'missing';
       });
     }, GIZMO_PARTS);
@@ -1491,12 +1491,12 @@ async function main() {
     await browser.close();
   }
 
-  console.log('\n' + '─'.repeat(60));
+  console.log(`\n${  '─'.repeat(60)}`);
   const pass = results.filter((r) => r.ok === true).length;
   const fail = results.filter((r) => r.ok === false).length;
   const inconclusive = results.filter((r) => r.ok === null).length;
   console.log(`  RESULT: ${pass} passed, ${fail} failed, ${inconclusive} inconclusive`);
-  console.log('─'.repeat(60) + '\n');
+  console.log(`${'─'.repeat(60)  }\n`);
   process.exit(exitCode);
 }
 

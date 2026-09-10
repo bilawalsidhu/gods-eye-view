@@ -34,10 +34,6 @@
 import puppeteer from 'puppeteer';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(__dirname, '..');
 
 const argv = process.argv.slice(2);
 const getOpt = (name, dflt) => {
@@ -129,7 +125,7 @@ async function captureLayerControl(page, layerId, filename) {
   await page.waitForFunction((id) => {
     const element = document.querySelector(`[data-layer-id="${id}"]`);
     const rect = element?.getBoundingClientRect();
-    return !!rect && rect.width > 0 && rect.height > 0;
+    return Boolean(rect) && rect.width > 0 && rect.height > 0;
   }, { timeout: 5_000 }, layerId);
   await sleep(100);
   await row.screenshot({ path: path.join(ARTIFACT_DIR, filename) });
@@ -558,9 +554,9 @@ async function main() {
   const pass = results.filter((r) => r.ok === true).length;
   const fail = results.filter((r) => r.ok === false).length;
   const inconclusive = results.filter((r) => r.ok === null).length;
-  console.log('\n' + '─'.repeat(60));
+  console.log(`\n${  '─'.repeat(60)}`);
   console.log(`  RESULT: ${pass} passed, ${fail} failed, ${inconclusive} inconclusive`);
-  console.log('─'.repeat(60) + '\n');
+  console.log(`${'─'.repeat(60)  }\n`);
   process.exit(exitCode || (fail > 0 ? 1 : 0));
 }
 

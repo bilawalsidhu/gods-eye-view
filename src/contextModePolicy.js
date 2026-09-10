@@ -4,7 +4,7 @@ const CONTEXT_DEPENDENCIES = Object.freeze({
 });
 const CONTEXT_COMPANIONS = new Set(['radio']);
 /** Return whether an origin represents a direct user choice on this route. */
-export function isExplicitUserIntentOrigin(origin, layerId = null) {
+export function isExplicitUserIntentOrigin(origin, _layerId = null) {
   return origin === 'user' || origin === 'voice';
 }
 

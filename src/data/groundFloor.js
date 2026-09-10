@@ -397,7 +397,7 @@ let _meshPreferred = true;
 
 /** @param {boolean} preferred - google-3d regime active. */
 export function setMeshFloorPreferred(preferred) {
-  _meshPreferred = !!preferred;
+  _meshPreferred = Boolean(preferred);
 }
 
 /** @returns {boolean} Whether mesh-floor cells currently apply. */

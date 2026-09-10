@@ -442,13 +442,13 @@
       </button>
       <div class="pp-slider-row visible" id="scope-slider-row">
         <span class="pp-slider-mini-label">Feather</span>
-        <!-- Feather starts at an 11% soft scope-mask edge (final value
-             2026-08-24, superseding the 08-22 hard-crop and 08-23 8% rulings);
+        <!-- Feather starts at a 100% fully-feathered scope-mask edge
+             (operator ruling 2026-08-29, superseding the 08-24 11% ruling);
              mirrors SCOPE_FEATHER_RATIO_DEFAULT in src/scopeMask.js. Feather
              softens the black mask edge; label fading is the separate Fade
              slider. -->
-        <input type="range" class="pp-slider" id="scope-feather-slider" min="0" max="100" value="11" title="Scope edge feather as a percentage of the keyhole radius" />
-        <span class="pp-slider-value" id="scope-feather-value">11%</span>
+        <input type="range" class="pp-slider" id="scope-feather-slider" min="0" max="100" value="100" title="Scope edge feather as a percentage of the keyhole radius" aria-label="Scope edge feather" />
+        <span class="pp-slider-value" id="scope-feather-value">100%</span>
       </div>
     </div>
     <div class="pp-toggle-group">
@@ -458,26 +458,26 @@
       </button>
     </div>
     <button class="pp-toggle-btn" id="clean-view-toggle" title="Hide UI chrome">
-      <span class="pp-icon">&#x25A1;</span>
+      <span class="pp-icon" aria-hidden="true">&#x25A1;</span>
       <span class="pp-label">Clean UI</span>
     </button>
     <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="bloom-toggle" title="Bloom / Glow">
-        <span class="pp-icon">&#x2728;</span>
+        <span class="pp-icon" aria-hidden="true">&#x2728;</span>
         <span class="pp-label">Bloom</span>
       </button>
       <div class="pp-slider-row" id="bloom-slider-row">
-        <input type="range" class="pp-slider" id="bloom-intensity-slider" min="0" max="200" value="0" />
+        <input type="range" class="pp-slider" id="bloom-intensity-slider" min="0" max="200" value="0" aria-label="Bloom intensity" />
         <span class="pp-slider-value" id="bloom-intensity-value">0%</span>
       </div>
     </div>
     <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="sharpen-toggle" title="Sharpening">
-        <span class="pp-icon">&#x1F50D;</span>
+        <span class="pp-icon" aria-hidden="true">&#x1F50D;</span>
         <span class="pp-label">Sharpen</span>
       </button>
       <div class="pp-slider-row" id="sharpen-slider-row">
-        <input type="range" class="pp-slider" id="sharpen-intensity-slider" min="0" max="100" value="49" />
+        <input type="range" class="pp-slider" id="sharpen-intensity-slider" min="0" max="100" value="49" aria-label="Sharpening intensity" />
         <span class="pp-slider-value" id="sharpen-intensity-value">49%</span>
       </div>
     </div>
@@ -499,12 +499,12 @@
       <div id="control-panel-popover" class="dock-popover-content">
       <button class="dock-pin-btn" data-pin-target="control-panel" type="button" aria-label="Pin visual presets" aria-pressed="false" title="Keep visual presets open"><img src="/pin.svg" alt="" /></button>
       <div id="style-buttons" class="button-grid">
-        <button class="style-btn active" data-style="normal">
+        <button class="style-btn" data-style="normal">
           <span class="btn-icon">◯</span>
           <span class="btn-label">Normal</span>
           <span class="btn-key">1</span>
         </button>
-        <button class="style-btn" data-style="retro">
+        <button class="style-btn active" data-style="retro">
           <span class="btn-icon">▦</span>
           <span class="btn-label">CRT</span>
           <span class="btn-key">2</span>
@@ -545,7 +545,7 @@
       </div>
       <div id="style-mini-status" class="panel-mini-status" aria-live="polite">
         <span class="panel-mini-label">Style</span>
-        <span id="style-mini-value" class="panel-mini-value">NORMAL</span>
+        <span id="style-mini-value" class="panel-mini-value">CRT</span>
       </div>
     </div>
   </div>
@@ -569,10 +569,10 @@
         <div class="location-city-row">
           <div id="location-pills" class="location-pills"></div>
           <div class="location-search-wrap">
-            <button id="search-toggle" class="search-toggle-btn" title="Search any location">
-              <span>&#x1F50E;</span>
+            <button id="search-toggle" class="search-toggle-btn" title="Search any location" aria-label="Search any location">
+              <span aria-hidden="true">&#x1F50E;</span>
             </button>
-            <input type="text" id="location-search" placeholder="Search any location..." autocomplete="off" spellcheck="false" />
+            <input type="text" id="location-search" placeholder="Search any location..." aria-label="Search any location" autocomplete="off" spellcheck="false" />
           </div>
         </div>
       </div>
@@ -902,6 +902,5 @@
   </div>
 
   <script type="module" src="/src/main.js"></script>
-  <script type="module" src="/src/react/index.tsx"></script>
 </body>
 </html>

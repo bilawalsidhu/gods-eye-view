@@ -405,9 +405,9 @@ async function main() {
 
     console.log('\n  Ground-height table (city, camera, rendered ground, stored prior, Re:Earth ellipsoid):');
     for (const row of groundRows) {
-      console.log(`    ${row.label.padEnd(8)} ${row.id.padEnd(24)} rendered=${row.groundM.toFixed(1)}m` +
-        (row.priorM !== null ? ` prior=${row.priorM.toFixed(1)}m` : ' prior=N/A') +
-        (row.reearthM !== null ? ` reearth=${row.reearthM.toFixed(1)}m` : ' reearth=N/A'));
+      console.log(`    ${row.label.padEnd(8)} ${row.id.padEnd(24)} rendered=${row.groundM.toFixed(1)}m${ 
+        row.priorM !== null ? ` prior=${row.priorM.toFixed(1)}m` : ' prior=N/A' 
+        }${row.reearthM !== null ? ` reearth=${row.reearthM.toFixed(1)}m` : ' reearth=N/A'}`);
     }
     console.log('');
 
@@ -613,7 +613,7 @@ async function main() {
       record('no aircraft renders at the 0m sentinel while terrain ground is far from 0m (datum-miss fingerprint)',
         underTerrainChecked > 0 ? sentinelViolations === 0 : null,
         underTerrainChecked > 0
-          ? `${sentinelViolations} violation(s) out of ${underTerrainChecked} checked${underTerrainDetails.length ? ': ' + underTerrainDetails.slice(0, 3).join(' | ') : ''}`
+          ? `${sentinelViolations} violation(s) out of ${underTerrainChecked} checked${underTerrainDetails.length ? `: ${  underTerrainDetails.slice(0, 3).join(' | ')}` : ''}`
           : 'Re:Earth proxy unreachable for every sampled point this run — INCONCLUSIVE');
       if (ambiguousUnderTerrain > 0) {
         record('other under-terrain readings (non-zero, ambiguous — may be legit climb/descent near an airport)',
@@ -652,7 +652,7 @@ async function main() {
       await page.waitForFunction(() => {
         const p = window.__godsEyeView?.viewer?.terrainProvider;
         const name = p && p.constructor && p.constructor.name;
-        return !!name && name !== 'EllipsoidTerrainProvider';
+        return Boolean(name) && name !== 'EllipsoidTerrainProvider';
       }, { timeout: 12000, polling: 250 });
     } catch { /* timed out — fall through and report the settled ctor below */ }
     terrainCtor = await page.evaluate(() => {
@@ -711,12 +711,12 @@ async function main() {
     await browser.close();
   }
 
-  console.log('\n' + '─'.repeat(60));
+  console.log(`\n${  '─'.repeat(60)}`);
   const pass = results.filter((r) => r.ok === true).length;
   const fail = results.filter((r) => r.ok === false).length;
   const inconclusive = results.filter((r) => r.ok === null).length;
   console.log(`  RESULT: ${pass} passed, ${fail} failed, ${inconclusive} inconclusive`);
-  console.log('─'.repeat(60) + '\n');
+  console.log(`${'─'.repeat(60)  }\n`);
   process.exit(exitCode);
 }
 

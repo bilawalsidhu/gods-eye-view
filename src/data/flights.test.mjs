@@ -1463,3 +1463,137 @@ test('display floor: two contacts on the same cell get their own outputs', () =>
   assert.notEqual(a, b, 'a shared scratch would hand both contacts the same object');
   assert.ok(Math.abs(_floorCarto(a).height - _floorCarto(b).height) < 0.05);
 });
+
+// ---------------------------------------------------------------------------
+// adsbdb enrichment rides the browser localStorage cache (localCache.js).
+// The dev proxy answers repeat lookups from disk forever, negatives included;
+// a static deployment has no disk, so the browser carries that tier instead:
+// an answered key must never re-hit adsbdb in a LATER session, and a
+// not-found answer is authoritative for the TTL just like a found one.
+// ---------------------------------------------------------------------------
+
+function stubCacheStorage() {
+  const map = new Map();
+  return {
+    get length() { return map.size; },
+    key: (i) => [...map.keys()][i] ?? null,
+    getItem: (k) => (map.has(k) ? map.get(k) : null),
+    setItem: (k, v) => { map.set(k, String(v)); },
+    removeItem: (k) => { map.delete(k); },
+  };
+}
+
+test('adsbdb enrichment answers a later session from the browser cache, not the network', async () => {
+  // Import by the SAME specifier flights.js uses — a query-suffixed import
+  // would mint a second module instance whose storage this test can't reach.
+  const { setLocalCacheStorage, readLocalCache } = await import('./localCache.js');
+  setLocalCacheStorage(stubCacheStorage());
+  const ICAO = 'cae770';
+  const payload = { found: true, typeCode: 'B738', typeName: 'Boeing 737-800', registration: 'N837DN' };
+  let adsbdbHits = 0;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('/api/adsbdb/type/')) {
+      adsbdbHits += 1;
+      return { ok: true, status: 200, json: async () => payload };
+    }
+    return { ok: true, status: 200, json: async () => ({ time: 0, states: [] }) };
+  };
+  try {
+    // Session 1: a cold lookup goes to the network once and persists.
+    const first = await import('./flights.js?adsbdb-session-1');
+    assert.deepEqual(await first._runEnrichJobForTest(`t:${ICAO}`, `/api/adsbdb/type/${ICAO}`), payload);
+    assert.equal(adsbdbHits, 1, 'a cold key fetches exactly once');
+    assert.equal(readLocalCache(`adsbdb:t:${ICAO}`).hit, true, 'the answer was persisted');
+
+    // Session 2 (fresh module state = fresh page): the same key is answered
+    // from the cache and never touches the network.
+    const second = await import('./flights.js?adsbdb-session-2');
+    assert.deepEqual(await second._runEnrichJobForTest(`t:${ICAO}`, `/api/adsbdb/type/${ICAO}`), payload);
+    assert.equal(adsbdbHits, 1, 'a cached key costs zero network round-trips');
+  } finally {
+    globalThis.fetch = realFetch;
+    setLocalCacheStorage(null);
+  }
+});
+
+test('adsbdb enrichment caches a not-found answer too — no repeated misses per session', async () => {
+  const { setLocalCacheStorage, readLocalCache } = await import('./localCache.js');
+  setLocalCacheStorage(stubCacheStorage());
+  const CS = 'ZZZ9999';
+  let routeHits = 0;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    routeHits += 1;
+    return { ok: true, status: 200, json: async () => ({ found: false }) };
+  };
+  try {
+    const first = await import('./flights.js?adsbdb-neg-1');
+    assert.deepEqual(
+      await first._runEnrichJobForTest(`r:${CS}`, `/api/adsbdb/route/${CS}`),
+      { found: false },
+      'a negative is delivered as-is, never fabricated into a route',
+    );
+    const second = await import('./flights.js?adsbdb-neg-2');
+    assert.deepEqual(await second._runEnrichJobForTest(`r:${CS}`, `/api/adsbdb/route/${CS}`), { found: false });
+    assert.equal(routeHits, 1, 'the negative was cached, so the retry costs no request');
+    assert.deepEqual(readLocalCache(`adsbdb:r:${CS}`).value, { found: false },
+      'the stored entry is the negative payload itself');
+  } finally {
+    globalThis.fetch = realFetch;
+    setLocalCacheStorage(null);
+  }
+});
+
+test('tracked place context: the readout gains an "over <place>" line from the browser cache', async (t) => {
+  const { setLocalCacheStorage, readLocalCache } = await import('./localCache.js');
+  const map = new Map();
+  setLocalCacheStorage({
+    get length() { return map.size; },
+    key: (i) => [...map.keys()][i] ?? null,
+    getItem: (k) => (map.has(k) ? map.get(k) : null),
+    setItem: (k, v) => { map.set(k, String(v)); },
+    removeItem: (k) => { map.delete(k); },
+  });
+  let placeHits = 0;
+  const realFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = realFetch; setLocalCacheStorage(null); });
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('/api/openzenith/reverse-geocode')) {
+      placeHits += 1;
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          place: {
+            display_name: 'Somewhere, Austin, Travis County, Texas, United States',
+            address: { city: 'Austin', state: 'Texas', country: 'United States' },
+          },
+          location: { lat: 30.2, lon: -97.7 },
+        }),
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({ time: 0, states: [] }) };
+  };
+
+  // Fresh module instance = fresh contact maps, like a new page.
+  const mod = await import('./flights.js?place-ctx=1');
+  mod._addFlightTrackingCandidateForTest({
+    icao24: 'cae771',
+    meta: { callsign: 'SWA123', klass: 'airliner', rawLat: 30.201, rawLon: -97.704 },
+    billboard: { show: false },
+  });
+  const meta = await mod._requestPlaceContextForTest('cae771');
+  assert.ok(meta, 'contact still registered after the lookup');
+  assert.equal(meta.placeLabel, 'over Austin, Texas');
+
+  // The answer was persisted by ~100 m cell: a second contact over the SAME
+  // cell costs the network nothing.
+  mod._addFlightTrackingCandidateForTest({
+    icao24: 'cae772',
+    meta: { callsign: 'SWA456', klass: 'airliner', rawLat: 30.2009, rawLon: -97.7041 },
+    billboard: { show: false },
+  });
+  await mod._requestPlaceContextForTest('cae772');
+  assert.equal(placeHits, 1, 'the second lookup in the same cell is a cache hit');
+  assert.ok(readLocalCache('oz:rg:30.201:-97.704').hit, 'the cell entry is in localStorage');
+});

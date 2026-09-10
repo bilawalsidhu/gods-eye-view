@@ -1106,11 +1106,11 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
       activeCameraId: ui.activeCameraId || null,
       activeCamera: ui.activeCamera?.name || ui.activeCamera?.id || null,
       cameraCount: Array.isArray(ui.cameras) ? ui.cameras.length : (ui.count || 0),
-      showCoverage: !!ui.showCoverage,
+      showCoverage: Boolean(ui.showCoverage),
       coverageMode: ui.coverageMode || (ui.showCoverage ? 'on' : 'off'),
-      showProjection: !!ui.showProjection,
-      calibrationMode: !!ui.calibrationMode,
-      autoHop: !!ui.autoHop,
+      showProjection: Boolean(ui.showProjection),
+      calibrationMode: Boolean(ui.calibrationMode),
+      autoHop: Boolean(ui.autoHop),
     };
   };
 
@@ -1133,7 +1133,7 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
       action: 'control_cctv',
       selected: match.name || match.id,
       ...summarize(),
-      ...cctvVoiceFocusOutcome(focusResult, { cameraSelected: !!selected }),
+      ...cctvVoiceFocusOutcome(focusResult, { cameraSelected: Boolean(selected) }),
     };
   }
   if (action === 'next' || action === 'prev') {
@@ -1145,7 +1145,7 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
     return {
       action: 'control_cctv',
       ...summarize(),
-      ...cctvVoiceFocusOutcome(focusResult, { cameraSelected: !!nextId }),
+      ...cctvVoiceFocusOutcome(focusResult, { cameraSelected: Boolean(nextId) }),
     };
   }
   if (action === 'nearest') {
@@ -1157,7 +1157,7 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
     return {
       action: 'control_cctv',
       ...summarize(),
-      ...cctvVoiceFocusOutcome(focusResult, { cameraSelected: !!nearestId }),
+      ...cctvVoiceFocusOutcome(focusResult, { cameraSelected: Boolean(nearestId) }),
     };
   }
   if (action === 'focus') {
@@ -1702,14 +1702,14 @@ async function trackEntity(viewer, dataManager, styleManager, args = {}) {
     return runManagedVoiceNavigation(styleManager, family.kind, 'track_entity', () => {
       let trackedOk = false;
       if (family.kind === 'vessel') {
-        trackedOk = !!module.selectById?.(found.mmsi);
+        trackedOk = Boolean(module.selectById?.(found.mmsi));
         flyToLandmark(viewer, found.latitude, found.longitude, {
           range: 6000, pitch: -45, heading: 0, buildingHeight: 0, duration: 2.0,
         });
       } else if (family.kind === 'satellite') {
-        trackedOk = !!module.trackById?.(found.noradId, { origin: 'voice' });
+        trackedOk = Boolean(module.trackById?.(found.noradId, { origin: 'voice' }));
       } else {
-        trackedOk = !!module.trackById?.(found.icao24, { origin: 'voice' });
+        trackedOk = Boolean(module.trackById?.(found.icao24, { origin: 'voice' }));
       }
 
       return {
@@ -3157,7 +3157,7 @@ function dominantValue(values) {
   };
 }
 
-function summarizeEntity(viewer, entity, { includeProperties = false } = {}) {
+function _summarizeEntity(viewer, entity, { includeProperties = false } = {}) {
   const now = Cesium.JulianDate.now();
   if (entity.__gevContextId) {
     const store = window.__gevContextStore;

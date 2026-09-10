@@ -26,13 +26,31 @@
  */
 
 import fs from 'node:fs';
+import { handleOpenZenithRequest } from './functions/api/openzenith/_handler.js';
 import { promises as fsp } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import https from 'node:https';
 import { lookup as lookupDns } from 'node:dns/promises';
-import { directionToHeading } from './src/data/directionText.js';
+// CCTV subsystem: catalog assembly, feed types, and the frame fallback chain
+// are shared verbatim with the production Pages Function
+// (`functions/api/cctv/[[path]].js`). Only the Node-specific pieces (config-file
+// reads, Node stream piping) stay in this file.
+import {
+  DEFAULT_CCTV_SOURCE_FILE,
+  buildMediaPassthrough,
+  buildStreamPayload,
+  buildSyntheticCctvSvg,
+  createCctvHealthTracker,
+  fetchCctvImageFromUpstream,
+  getCctvSources,
+  haversineKm,
+  isVideoFeedType,
+  normalizeFeedType,
+  parseConfiguredSourcesFromEnv,
+  streetViewFallback,
+} from './src/data/cctvSources.js';
 import {
   isValidTileCoord as isValidTomTomTile,
   utcDayKey as tomtomUtcDayKey,
@@ -59,7 +77,19 @@ import {
   terrainPointKey,
   validTerrainResult,
 } from './src/data/terrainHeightsProxy.js';
-import { VOICE_MODELS, isKnownVoiceTier, resolveVoiceModel } from './src/voice/voiceCost.js';
+import { isKnownVoiceTier, resolveVoiceModel } from './src/voice/voiceCost.js';
+import {
+  OPENAI_HUD_SUMMARY_MODEL_DEFAULT,
+  OPENAI_REALTIME_CONTEXT_RETENTION_DEFAULT,
+  OPENAI_REALTIME_CONTEXT_TOKENS_DEFAULT,
+  OPENAI_REALTIME_MODEL_DEFAULT,
+  OPENAI_REALTIME_MODEL_MINI_DEFAULT,
+  OPENAI_REALTIME_REASONING_DEFAULT,
+  OPENAI_REALTIME_VOICE_DEFAULT,
+  buildRealtimeSessionConfig,
+  extractOpenAiResponseText,
+  toFiveWordHudSummary,
+} from './src/voice/realtimeSession.js';
 
 /** Resolve __dirname for ESM context. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -724,8 +754,7 @@ export async function readResponseJsonCapped(response, maxBytes) {
 export function coalesceProxyRequest(inFlight, key, create) {
   const existing = inFlight.get(key);
   if (existing) return { promise: existing, shared: true };
-  let promise;
-  promise = Promise.resolve()
+  const promise = Promise.resolve()
     .then(create)
     .finally(() => {
       if (inFlight.get(key) === promise) inFlight.delete(key);
@@ -754,6 +783,7 @@ const RADIO_FALLBACK_MIRRORS = Object.freeze([
 ]);
 
 function cleanRadioText(value, maxLength) {
+  // eslint-disable-next-line no-control-regex -- the match exists to strip control characters from upstream text
   return String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLength).trim();
 }
 
@@ -1314,15 +1344,6 @@ const AISSTREAM_DOWN_RETRY_MS = 900_000;
 const AISSTREAM_AUTH_PROBE_MS = 3_600_000;
 /** How often the watchdog re-evaluates without request traffic. */
 const AISSTREAM_TICK_MS = 15_000;
-// Sourced from the shared voice-model registry so the client's cost estimate
-// can never be computed against a different model than the session runs on.
-const OPENAI_REALTIME_MODEL_DEFAULT = VOICE_MODELS.standard.id;
-const OPENAI_REALTIME_MODEL_MINI_DEFAULT = VOICE_MODELS.mini.id;
-const OPENAI_REALTIME_VOICE_DEFAULT = 'marin';
-const OPENAI_REALTIME_REASONING_DEFAULT = 'low';
-const OPENAI_REALTIME_CONTEXT_TOKENS_DEFAULT = 3000;
-const OPENAI_REALTIME_CONTEXT_RETENTION_DEFAULT = 0.5;
-const OPENAI_HUD_SUMMARY_MODEL_DEFAULT = 'gpt-5-nano';
 const REALTIME_DEBUG_LOG_DIR = path.join(__dirname, '.gev-logs');
 const REALTIME_DEBUG_LOG_FILE = path.join(REALTIME_DEBUG_LOG_DIR, 'realtime-conversations.jsonl');
 const REALTIME_DEBUG_LOG_MAX_BYTES = 8 * 1024 * 1024;
@@ -2316,6 +2337,50 @@ function terrainHeightsProxy() {
           send(500, { error: `terrain heights proxy error: ${err?.message || err}` });
         }
       });
+    },
+  };
+}
+
+/**
+ * `/api/openzenith/*` dev middleware — a thin Node→web bridge onto the SAME
+ * handler the production Pages Function uses
+ * (`functions/api/openzenith/_handler.js`), so dev and production cannot
+ * drift: one allowlist, one validation, one cache implementation. There is
+ * deliberately no local logic here to test; the handler's own test file
+ * covers the contract, and the bridge is exercised by the dev-server QA.
+ */
+function openZenithProxy() {
+  const handle = (req, res) => {
+    // Connect strips the mount prefix from req.url; the handler slices the
+    // full `/api/openzenith/` pathname, so put it back.
+    const request = new Request(`http://localhost/api/openzenith${req.url}`, {
+      method: req.method,
+      headers: { Accept: String(req.headers.accept || 'application/json') },
+    });
+    handleOpenZenithRequest(request, process.env).then(async (response) => {
+      const headers = {};
+      response.headers.forEach((value, name) => { headers[name] = value; });
+      res.writeHead(response.status, headers);
+      if (req.method === 'HEAD' || !response.body) {
+        res.end();
+        return;
+      }
+      const reader = response.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        res.write(Buffer.from(value));
+      }
+      res.end();
+    }).catch(() => {
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'OpenZenith proxy bridge failed' }));
+    });
+  };
+  return {
+    name: 'openzenith-proxy',
+    configureServer(server) {
+      server.middlewares.use('/api/openzenith', handle);
     },
   };
 }
@@ -3350,908 +3415,6 @@ function gbfsProxy() {
   };
 }
 
-/**
- * FNV-1a 32-bit hash of a string, used to derive deterministic pseudo-random
- * values (e.g. hue for synthetic SVG billboards, fallback heading angles).
- *
- * @param {string} text
- * @returns {number} Unsigned 32-bit hash.
- */
-function hashSeed(text) {
-  let h = 2166136261 >>> 0; // FNV offset basis
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 16777619); // FNV prime
-  }
-  return h >>> 0;
-}
-
-/**
- * Escape special XML/HTML characters for safe embedding in SVG text nodes.
- *
- * @param {string} text
- * @returns {string}
- */
-function escapeXml(text) {
-  return String(text || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-/**
- * Canonicalize a CCTV feed type string to one of:
- * 'image', 'mjpeg', 'mp4', 'webm', 'hls', or pass-through.
- *
- * @param {string} value - Raw feed type (e.g. 'jpeg', 'mjpg', 'video', 'stream').
- * @returns {string} Normalized feed type.
- */
-function normalizeFeedType(value) {
-  const raw = String(value || '').trim().toLowerCase();
-  if (!raw) return 'image';
-  if (raw === 'jpeg' || raw === 'jpg' || raw === 'png') return 'image';
-  if (raw === 'mjpg') return 'mjpeg';
-  if (raw === 'video') return 'mp4';
-  if (raw === 'stream') return 'hls';
-  return raw;
-}
-
-/**
- * Check whether a normalized feed type represents streaming video.
- *
- * @param {string} feedType
- * @returns {boolean}
- */
-function isVideoFeedType(feedType) {
-  return feedType === 'mp4' || feedType === 'webm' || feedType === 'hls';
-}
-
-// ---------------------------------------------------------------------------
-// CCTV proxy constants and source cache state
-// ---------------------------------------------------------------------------
-/** Path to the optional static CCTV source list (JSON array). */
-const DEFAULT_CCTV_SOURCE_FILE = 'config/cctv_sources.austin.json';
-/** Austin Open Data portal endpoint for traffic camera records. */
-const DEFAULT_AUSTIN_ROWS_URL = 'https://data.austintexas.gov/api/views/b4k4-adkb/rows.json?accessType=DOWNLOAD';
-/** Default cap on Austin cameras after distance-based prioritization. */
-const DEFAULT_AUSTIN_MAX_SOURCES = 250;
-/** Global cap on total CCTV sources served by the proxy. */
-const DEFAULT_CCTV_MAX_SOURCES = 900;
-/** Reference point for Austin camera prioritization (Congress & 6th). */
-const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
-/** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
-const CALTRANS_CCTV_URL = (district) =>
-  `https://cwwp2.dot.ca.gov/data/d${district}/cctv/cctvStatusD${String(district).padStart(2, '0')}.json`;
-/** Districts fetched by default: SF Bay (4), LA (7), San Diego (11), Sacramento (3). */
-const DEFAULT_CALTRANS_DISTRICTS = '4,7,11,3';
-const DEFAULT_CALTRANS_MAX_SOURCES = 300;
-/** Prioritization anchors: downtown cores of the four default metros. */
-const CALTRANS_ANCHORS = [
-  { lat: 37.7793, lon: -122.4193 }, // San Francisco
-  { lat: 34.0537, lon: -118.2428 }, // Los Angeles
-  { lat: 32.7157, lon: -117.1611 }, // San Diego
-  { lat: 38.5816, lon: -121.4944 }, // Sacramento
-];
-/** TfL JamCams: one keyless list endpoint; frames live on a public S3 bucket. */
-const TFL_JAMCAM_URL = 'https://api.tfl.gov.uk/Place/Type/JamCam';
-const TFL_IMAGE_ORIGIN = 'https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/';
-const DEFAULT_TFL_MAX_SOURCES = 250;
-const LONDON_CENTER = { lat: 51.5074, lon: -0.1278 };
-/** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL) infrequent. Frames are fetched per-request and are unaffected. */
-const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
-/** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
- * stalled upstream can't leave getCctvSources (and thus every CCTV route)
- * pending forever — a hung fetch aborts, the loader returns [], and
- * serve-stale/other packs take over. */
-const CCTV_SOURCE_FETCH_TIMEOUT_MS = 15 * 1000;
-/** Individual CCTV image fetches must settle before the active 10-second
- * client refresh cadence. A bounded miss can fall through to Street View or
- * the synthetic frame instead of leaving the browser preview pending. */
-export const CCTV_FRAME_FETCH_TIMEOUT_MS = 8 * 1000;
-/** @type {Array<object>} Cached merged + normalized CCTV source list. */
-let _cctvSourceCache = [];
-/** @type {number} Epoch-ms when the source cache was last refreshed. */
-let _cctvSourceCacheAt = 0;
-/** @type {Promise<Array<object>>|null} In-flight refresh, shared by concurrent
- * callers so a post-TTL burst launches ONE refetch, not one per request. */
-let _cctvSourceInflight = null;
-
-/**
- * Coerce a value to a finite number, returning fallback if NaN/Infinity.
- *
- * @param {*} value
- * @param {number} [fallback=NaN]
- * @returns {number}
- */
-function toFiniteNumber(value, fallback = NaN) {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : fallback;
-}
-
-/**
- * Normalize a column/field name to a lowercase snake_case key.
- *
- * @param {string} text
- * @returns {string}
- */
-function normalizeKey(text) {
-  return String(text || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-}
-
-/**
- * Load CCTV sources from a local JSON file (CCTV_SOURCES_FILE env or default).
- *
- * @returns {Array<object>} Array of raw source objects, or [] on error.
- */
-function loadSourcesFromFile() {
-  const sourceFile = process.env.CCTV_SOURCES_FILE || DEFAULT_CCTV_SOURCE_FILE;
-  const resolved = path.isAbsolute(sourceFile)
-    ? sourceFile
-    : path.resolve(__dirname, sourceFile);
-  try {
-    if (!fs.existsSync(resolved)) return [];
-    const raw = fs.readFileSync(resolved, 'utf8');
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.warn('[CCTV] failed to read source file:', resolved, error?.message || error);
-    return [];
-  }
-}
-
-/**
- * Load CCTV sources from the CCTV_SOURCES_JSON env variable (inline JSON).
- *
- * @returns {Array<object>} Array of raw source objects, or [] if unset/invalid.
- */
-function loadSourcesFromEnv() {
-  const raw = process.env.CCTV_SOURCES_JSON;
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-
-/**
- * Parse a WKT POINT string (e.g. "POINT(-97.74 30.27)") into lat/lon.
- *
- * WKT uses (lon lat) order; returned object uses {lat, lon}.
- *
- * @param {string} value
- * @returns {{lat:number, lon:number}}
- */
-function parsePointString(value) {
-  const match = String(value || '').match(/POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i);
-  if (!match) return { lat: NaN, lon: NaN };
-  return {
-    lon: toFiniteNumber(match[1]),
-    lat: toFiniteNumber(match[2]),
-  };
-}
-
-/**
- * Extract lat/lon from a variety of coordinate representations.
- *
- * Handles WKT POINT strings, and objects with latitude/lat/y or
- * longitude/lon/lng/x properties (various casing).
- *
- * @param {string|object|null} value
- * @returns {{lat:number, lon:number}}
- */
-function coerceLatLon(value) {
-  if (!value) return { lat: NaN, lon: NaN };
-
-  if (typeof value === 'string') {
-    return parsePointString(value);
-  }
-
-  if (typeof value !== 'object') {
-    return { lat: NaN, lon: NaN };
-  }
-
-  const lat = toFiniteNumber(
-    value.latitude ?? value.lat ?? value.y ?? value.Latitude ?? value.Lat,
-    NaN
-  );
-  const lon = toFiniteNumber(
-    value.longitude ?? value.lon ?? value.lng ?? value.x ?? value.Longitude ?? value.Lon,
-    NaN
-  );
-  return { lat, lon };
-}
-
-/**
- * Extract geographic coordinates from an Austin Open Data camera record.
- *
- * Tries several candidate fields (location, coordinates, the_geom,
- * point, geocoded_column) via coerceLatLon, then falls back to
- * explicit latitude/longitude scalar fields.
- *
- * @param {object} record - Flattened camera record.
- * @returns {{lat:number, lon:number}}
- */
-function extractAustinCoords(record) {
-  const candidates = [
-    record.location,
-    record.coordinates,
-    record.the_geom,
-    record.point,
-    record.geocoded_column,
-  ];
-  for (const candidate of candidates) {
-    const parsed = coerceLatLon(candidate);
-    if (Number.isFinite(parsed.lat) && Number.isFinite(parsed.lon)) return parsed;
-  }
-
-  const lat = toFiniteNumber(
-    record.latitude ?? record.lat ?? record.camera_latitude ?? record.location_latitude,
-    NaN
-  );
-  const lon = toFiniteNumber(
-    record.longitude ?? record.lon ?? record.lng ?? record.camera_longitude ?? record.location_longitude,
-    NaN
-  );
-  return { lat, lon };
-}
-
-/**
- * Extract a numeric camera ID from an Austin Open Data record.
- *
- * Tries well-known field names first, then scans any field whose key
- * contains "camera"/"cam"/"device" + "id".
- *
- * @param {object} record - Flattened camera record.
- * @returns {string} Numeric ID string, or '' if none found.
- */
-function extractAustinCameraId(record) {
-  const preferredKeys = [
-    'camera_id',
-    'cameraid',
-    'cam_id',
-    'device_id',
-    'intersection_id',
-    'id',
-  ];
-  for (const key of preferredKeys) {
-    const value = record[key];
-    if (value == null) continue;
-    const asText = String(value).trim();
-    if (!asText) continue;
-    if (/^\d+$/.test(asText)) return asText;
-  }
-
-  for (const [key, value] of Object.entries(record)) {
-    if (!/camera|cam|device/.test(key)) continue;
-    if (!/id/.test(key)) continue;
-    const asText = String(value || '').trim();
-    if (!asText) continue;
-    if (/^\d+$/.test(asText)) return asText;
-  }
-
-  return '';
-}
-
-/**
- * Extract a human-readable camera name from an Austin record.
- *
- * @param {object} record - Flattened camera record.
- * @param {string} cameraId - Fallback identifier if no name field found.
- * @returns {string}
- */
-function extractAustinName(record, cameraId) {
-  const preferredKeys = [
-    'camera_name',
-    'location_name',
-    'intersection_name',
-    'location',
-    'cross_street',
-    'description',
-    'name',
-  ];
-  for (const key of preferredKeys) {
-    const value = record[key];
-    if (typeof value !== 'string') continue;
-    const text = value.trim();
-    if (text) return text;
-  }
-  return `Austin Camera ${cameraId}`;
-}
-
-/**
- * Extract camera heading (compass bearing) from an Austin record.
- *
- * Tries explicit numeric heading fields first, then direction-keyword
- * fields, then infers from the camera name/description text.
- *
- * @param {object} record - Flattened camera record.
- * @returns {number} Heading in degrees [0..360), or NaN if unknown.
- */
-function extractAustinHeading(record) {
-  const direct = toFiniteNumber(record.heading_deg ?? record.heading ?? record.bearing, NaN);
-  if (Number.isFinite(direct)) return ((direct % 360) + 360) % 360;
-
-  // Dedicated direction fields: bare cardinal words ("West") are real facings.
-  const directionKeys = ['direction', 'travel_direction', 'facing', 'facing_direction'];
-  for (const key of directionKeys) {
-    const heading = directionToHeading(record[key], true);
-    if (Number.isFinite(heading)) return heading;
-  }
-
-  // Free-form name/intersection text: only explicit travel forms ("WESTBOUND"/
-  // "WB") count — a bare "West" here is a street name ("5TH ST / WEST AVE"), not
-  // a facing, and must not promote the camera to a false high-confidence heading.
-  const nameProbe = [
-    record.camera_name,
-    record.location_name,
-    record.intersection_name,
-    record.location,
-    record.cross_street,
-    record.description,
-    record.name,
-  ].filter(Boolean).join(' ');
-  const inferred = directionToHeading(nameProbe);
-  if (Number.isFinite(inferred)) return inferred;
-
-  return NaN;
-}
-
-/**
- * Bounding-box sanity check: is this coordinate plausibly in the Austin metro area?
- *
- * @param {number} lat
- * @param {number} lon
- * @returns {boolean}
- */
-function isLikelyAustinCoordinate(lat, lon) {
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
-  return lat >= 30.02 && lat <= 30.58 && lon >= -98.12 && lon <= -97.40;
-}
-
-/**
- * Derive a deterministic fallback heading from a camera ID hash.
- *
- * Produces one of 16 evenly-spaced compass directions (0, 22.5, 45, ...).
- *
- * @param {string} cameraId
- * @returns {number} Heading in degrees [0..360).
- */
-function fallbackHeadingFromId(cameraId) {
-  return (hashSeed(String(cameraId)) % 16) * 22.5;
-}
-
-/**
- * Convert a Socrata rows.json array row into a keyed object using column metadata.
- *
- * @param {Array} row - Array of cell values from the Socrata payload.
- * @param {Array<{fieldName?:string, name?:string}>} columns - Column descriptors.
- * @returns {object} Keyed record with normalized snake_case keys.
- */
-function rowArrayToObject(row, columns) {
-  const record = {};
-  for (let idx = 0; idx < columns.length; idx++) {
-    const col = columns[idx];
-    const key = normalizeKey(col.fieldName || col.name || `col_${idx}`);
-    if (!key) continue;
-    record[key] = row[idx];
-  }
-  return record;
-}
-
-/**
- * Haversine great-circle distance between two WGS-84 points.
- *
- * @param {number} lat1 - Latitude of point A (degrees).
- * @param {number} lon1 - Longitude of point A (degrees).
- * @param {number} lat2 - Latitude of point B (degrees).
- * @param {number} lon2 - Longitude of point B (degrees).
- * @returns {number} Distance in kilometers.
- */
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const toRad = (value) => value * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-/**
- * Distance-prioritizes cameras to a cap: keeps the maxCount cameras closest
- * to ANY of the given anchor points (min distance over anchors), tie-broken
- * by original array order. Used by every live source pack (Austin: one
- * downtown anchor; Caltrans: one anchor per major CA metro; TfL: central
- * London) so a cap always keeps the densest, most interesting cores.
- *
- * @param {Array<object>} cameras - Normalized camera source objects.
- * @param {number} maxCount - Cap (<=0 or >= length disables).
- * @param {Array<{lat:number,lon:number}>} anchors - At least one anchor.
- * @returns {Array<object>} Capped, priority-ordered camera list.
- */
-function prioritizeSources(cameras, maxCount, anchors) {
-  const list = Array.isArray(cameras) ? cameras : [];
-  const anchorList = (Array.isArray(anchors) ? anchors : []).filter(
-    (a) => Number.isFinite(a?.lat) && Number.isFinite(a?.lon)
-  );
-  if (!Number.isFinite(maxCount) || maxCount <= 0 || list.length <= maxCount || !anchorList.length) {
-    return list;
-  }
-
-  const scored = list.map((camera, idx) => {
-    const lat = Number(camera?.lat);
-    const lon = Number(camera?.lon);
-    const distKm = Number.isFinite(lat) && Number.isFinite(lon)
-      ? Math.min(...anchorList.map((a) => haversineKm(lat, lon, a.lat, a.lon)))
-      : Number.POSITIVE_INFINITY;
-    return { camera, idx, distKm };
-  });
-
-  scored.sort((a, b) => {
-    if (a.distKm !== b.distKm) return a.distKm - b.distKm;
-    return a.idx - b.idx;
-  });
-
-  return scored.slice(0, maxCount).map((entry) => entry.camera);
-}
-
-/**
- * Fetch and parse Austin traffic camera records from the city Open Data portal.
- *
- * Downloads the Socrata rows.json payload, converts each row to a keyed
- * record, extracts camera ID / coords / heading / name, validates against
- * the Austin bounding box, deduplicates by ID, then distance-prioritizes
- * to stay within CCTV_AUSTIN_MAX_SOURCES.
- *
- * @returns {Promise<Array<object>>} Normalized camera source objects.
- */
-async function loadAustinSourcesFromOpenData() {
-  const endpoint = process.env.CCTV_AUSTIN_ROWS_URL || DEFAULT_AUSTIN_ROWS_URL;
-  try {
-    const resp = await fetch(endpoint, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS) });
-    if (!resp.ok) {
-      console.warn('[CCTV] Austin source download failed:', resp.status);
-      return [];
-    }
-    const payload = await resp.json();
-    const columns = Array.isArray(payload?.meta?.view?.columns) ? payload.meta.view.columns : [];
-    const rows = Array.isArray(payload?.data) ? payload.data : [];
-    if (!columns.length || !rows.length) return [];
-
-    const cameras = [];
-    for (const row of rows) {
-      if (!Array.isArray(row)) continue;
-      const record = rowArrayToObject(row, columns);
-      const cameraId = extractAustinCameraId(record);
-      if (!cameraId) continue;
-
-      // Only live cameras: the dataset carries DESIRED (planned, not built),
-      // REMOVED and VOID rows whose frame URLs never resolve — those cameras
-      // would render as permanent Street View / synthetic fallbacks. Tolerate
-      // a missing column (keep the row) so a schema change fails open.
-      const status = String(record.camera_status || '').trim().toUpperCase();
-      if (status && status !== 'TURNED_ON') continue;
-
-      const { lat, lon } = extractAustinCoords(record);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-      if (!isLikelyAustinCoordinate(lat, lon)) continue;
-
-      const extractedHeading = extractAustinHeading(record);
-      const hasHeading = Number.isFinite(extractedHeading);
-      const headingDeg = hasHeading ? extractedHeading : fallbackHeadingFromId(cameraId);
-      cameras.push({
-        id: cameraId,
-        name: extractAustinName(record, cameraId),
-        city: 'Austin',
-        cityId: 'austin',
-        provider: 'Austin Transportation & Public Works',
-        lat,
-        lon,
-        headingDeg,
-        headingConfidence: hasHeading ? 'high' : 'low',
-        pitchDeg: hasHeading ? -24 : -18,
-        fovDeg: hasHeading ? 56 : 44,
-        rangeM: hasHeading ? 210 : 145,
-        mountHeightM: hasHeading ? 10 : 8,
-        groundElevationM: 150,
-        feedType: 'image',
-        url: `https://cctv.austinmobility.io/image/${encodeURIComponent(cameraId)}.jpg`,
-        snapshotUrl: `https://cctv.austinmobility.io/image/${encodeURIComponent(cameraId)}.jpg`,
-        sourceKind: 'austin-open-data',
-        license: 'Public city traffic camera frame',
-      });
-    }
-
-    const unique = Array.from(new Map(cameras.map((camera) => [camera.id, camera])).values());
-    const maxRaw = Number(process.env.CCTV_AUSTIN_MAX_SOURCES || DEFAULT_AUSTIN_MAX_SOURCES);
-    const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(300, Math.floor(maxRaw))) : DEFAULT_AUSTIN_MAX_SOURCES;
-    const prioritized = prioritizeSources(unique, maxCount, [AUSTIN_DOWNTOWN]);
-    if (prioritized.length < unique.length) {
-      console.log(`[CCTV] Loaded Austin camera sources: ${unique.length} (using nearest ${prioritized.length})`);
-    } else {
-      console.log('[CCTV] Loaded Austin camera sources:', prioritized.length);
-    }
-    return prioritized;
-  } catch (error) {
-    console.warn('[CCTV] Austin source download error:', error?.message || error);
-    return [];
-  }
-}
-
-/**
- * Fetch Caltrans CCTV cameras for the configured districts (CCTV_CALTRANS_DISTRICTS,
- * comma-separated 1..12; empty string disables the pack). One official JSON feed per
- * district, identical schema statewide; keyless. Only inService cameras with finite
- * coords and a cwwp2.dot.ca.gov https image URL are kept (the image-URL origin check
- * is defense-in-depth: the proxy only ever fetches catalog URLs, and this pins the
- * catalog to the official host). Districts fetch in parallel and fail independently
- * (Promise.allSettled) — one district outage never darkens the others.
- *
- * @returns {Promise<Array<object>>} Normalized camera source objects.
- */
-async function loadCaltransSourcesFromOpenData() {
-  const districtsRaw = process.env.CCTV_CALTRANS_DISTRICTS ?? DEFAULT_CALTRANS_DISTRICTS;
-  const districts = String(districtsRaw)
-    .split(',')
-    .map((token) => Number(token.trim()))
-    .filter((n) => Number.isInteger(n) && n >= 1 && n <= 12);
-  if (!districts.length) return [];
-
-  const settled = await Promise.allSettled(
-    districts.map(async (district) => {
-      const resp = await fetch(CALTRANS_CCTV_URL(district), { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS) });
-      if (!resp.ok) throw new Error(`D${district} HTTP ${resp.status}`);
-      const payload = await resp.json();
-      const rows = Array.isArray(payload?.data) ? payload.data : [];
-      return { district, rows };
-    })
-  );
-
-  const cameras = [];
-  for (const result of settled) {
-    if (result.status !== 'fulfilled') {
-      console.warn('[CCTV] Caltrans district fetch failed:', result.reason?.message || result.reason);
-      continue;
-    }
-    const { district, rows } = result.value;
-    for (const row of rows) {
-      const cctv = row?.cctv;
-      if (!cctv || String(cctv.inService).toLowerCase() !== 'true') continue;
-      const loc = cctv.location || {};
-      const lat = toFiniteNumber(loc.latitude);
-      const lon = toFiniteNumber(loc.longitude);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-
-      const imageUrl = String(cctv.imageData?.static?.currentImageURL || '');
-      // Official-host pin (see JSDoc). Also drops records with no still image.
-      if (!imageUrl.startsWith('https://cwwp2.dot.ca.gov/')) continue;
-
-      const locationName = String(loc.locationName || '').trim();
-      // Leading token of locationName is the stable camera code ("TV102 -- I-580 : …").
-      const codeMatch = /^([A-Za-z0-9_-]+)\s*--/.exec(locationName);
-      const code = (codeMatch ? codeMatch[1] : `x${cameras.length}`).toLowerCase();
-      const cameraId = `ca-d${district}-${code}`;
-
-      // loc.direction is a dedicated field ("West", "South") → allow bare words.
-      const heading = directionToHeading(loc.direction, true);
-      const hasHeading = Number.isFinite(heading);
-      const label = locationName.replace(/^([A-Za-z0-9_-]+)\s*--\s*/, '') || `Caltrans D${district} ${code}`;
-      cameras.push({
-        id: cameraId,
-        name: loc.nearbyPlace ? `${label} (${loc.nearbyPlace})` : label,
-        city: String(loc.nearbyPlace || `Caltrans D${district}`),
-        cityId: `ca-d${district}`,
-        provider: 'Caltrans',
-        lat,
-        lon,
-        headingDeg: hasHeading ? heading : fallbackHeadingFromId(cameraId),
-        headingConfidence: hasHeading ? 'high' : 'low',
-        // Same two fabricated pose personalities as Austin (design §1a): these are
-        // RAW PRIOR starting points; the client's one-shot ground snap + manual
-        // calibration own the truth.
-        pitchDeg: hasHeading ? -24 : -18,
-        fovDeg: hasHeading ? 56 : 44,
-        rangeM: hasHeading ? 210 : 145,
-        mountHeightM: hasHeading ? 10 : 8,
-        // loc.elevation is reported in FEET (verified: D3 maxes at 7427 ft ≈
-        // 2264 m for the Sierra passes — as metres that would top Mt Whitney).
-        // Convert to metres and clamp to a sane CA-roads range so an occasional
-        // garbage upstream value can't fling a camera kilometres up. Prior only:
-        // the client one-shot snap corrects it on 3D-tile stacks — but on a
-        // no-tileset stack (keyless OSM) the snap misses and this height freezes,
-        // so it must be right-ish on its own.
-        groundElevationM: (() => {
-          const ft = toFiniteNumber(loc.elevation, NaN);
-          return Number.isFinite(ft) ? Math.max(-100, Math.min(4000, ft * 0.3048)) : 150;
-        })(),
-        feedType: 'image',
-        url: imageUrl,
-        snapshotUrl: imageUrl,
-        sourceKind: 'caltrans-open-data',
-        license: 'Public Caltrans highway camera frame',
-      });
-    }
-  }
-
-  const maxRaw = Number(process.env.CCTV_CALTRANS_MAX_SOURCES || DEFAULT_CALTRANS_MAX_SOURCES);
-  const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(600, Math.floor(maxRaw))) : DEFAULT_CALTRANS_MAX_SOURCES;
-  const prioritized = prioritizeSources(cameras, maxCount, CALTRANS_ANCHORS);
-  console.log(`[CCTV] Loaded Caltrans camera sources: ${cameras.length} inService (using nearest ${prioritized.length})`);
-  return prioritized;
-}
-
-/**
- * Fetch TfL JamCams (London). Keyless: the optional TFL_APP_KEY only raises the
- * list-endpoint rate limit (frames come from TfL's public S3 bucket, which is not
- * rate-limited); the 15-min source cache keeps list hits far below anonymous
- * limits anyway. Only `available === "true"` cameras with finite coords and an
- * image URL on the official bucket are kept. Attribution: "Powered by TfL Open
- * Data" (registered in src/data/dataCredits.js).
- *
- * @returns {Promise<Array<object>>} Normalized camera source objects.
- */
-async function loadTflSourcesFromOpenData() {
-  try {
-    const appKey = String(process.env.TFL_APP_KEY || '').trim();
-    const url = appKey ? `${TFL_JAMCAM_URL}?app_key=${encodeURIComponent(appKey)}` : TFL_JAMCAM_URL;
-    const resp = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS) });
-    if (!resp.ok) {
-      console.warn('[CCTV] TfL JamCam download failed:', resp.status);
-      return [];
-    }
-    const places = await resp.json();
-    if (!Array.isArray(places)) return [];
-
-    const cameras = [];
-    for (const place of places) {
-      const props = {};
-      for (const p of place?.additionalProperties || []) {
-        if (p?.key) props[p.key] = p.value;
-      }
-      if (String(props.available).toLowerCase() !== 'true') continue;
-      const lat = toFiniteNumber(place?.lat);
-      const lon = toFiniteNumber(place?.lon);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-      const imageUrl = String(props.imageUrl || '');
-      if (!imageUrl.startsWith(TFL_IMAGE_ORIGIN)) continue; // official-bucket pin
-
-      // "JamCams_00002.00865" → "tfl-00002.00865" (provider-stable id).
-      const rawId = String(place?.id || '').replace(/^JamCams_/, '');
-      if (!rawId) continue;
-      const cameraId = `tfl-${rawId}`;
-
-      cameras.push({
-        id: cameraId,
-        name: String(place?.commonName || `JamCam ${rawId}`),
-        city: 'London',
-        cityId: 'london',
-        provider: 'Transport for London',
-        lat,
-        lon,
-        // No heading signal at all in JamCam data → id-hash fallback, low
-        // confidence personality (same as headingless Austin cameras).
-        headingDeg: fallbackHeadingFromId(cameraId),
-        headingConfidence: 'low',
-        pitchDeg: -18,
-        fovDeg: 44,
-        rangeM: 145,
-        mountHeightM: 8,
-        groundElevationM: 15, // Thames-basin prior; one-shot snap corrects.
-        feedType: 'image', // stills-first (product rule); props.videoUrl deliberately unused
-        url: imageUrl,
-        snapshotUrl: imageUrl,
-        sourceKind: 'tfl-open-data',
-        license: 'Powered by TfL Open Data',
-      });
-    }
-
-    const maxRaw = Number(process.env.CCTV_TFL_MAX_SOURCES || DEFAULT_TFL_MAX_SOURCES);
-    const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(600, Math.floor(maxRaw))) : DEFAULT_TFL_MAX_SOURCES;
-    const prioritized = prioritizeSources(cameras, maxCount, [LONDON_CENTER]);
-    console.log(`[CCTV] Loaded TfL JamCam sources: ${cameras.length} available (using nearest ${prioritized.length})`);
-    return prioritized;
-  } catch (error) {
-    console.warn('[CCTV] TfL JamCam download error:', error?.message || error);
-    return [];
-  }
-}
-
-/**
- * Normalize a raw CCTV source item into a canonical shape with safe defaults.
- *
- * @param {object} item - Raw source from file, env, or Austin Open Data.
- * @returns {object} Normalized source with all expected fields populated.
- */
-function normalizeSourceItem(item) {
-  return {
-    id: String(item.id || '').trim(),
-    name: String(item.name || item.id || '').trim(),
-    city: String(item.city || ''),
-    cityId: String(item.cityId || ''),
-    provider: String(item.provider || 'Configured CCTV Source'),
-    lat: toFiniteNumber(item.lat),
-    lon: toFiniteNumber(item.lon),
-    headingDeg: toFiniteNumber(item.headingDeg),
-    headingConfidence: String(item.headingConfidence || item.headingSource || '').toLowerCase(),
-    pitchDeg: toFiniteNumber(item.pitchDeg),
-    fovDeg: toFiniteNumber(item.fovDeg),
-    rangeM: toFiniteNumber(item.rangeM),
-    mountHeightM: toFiniteNumber(item.mountHeightM),
-    groundElevationM: toFiniteNumber(item.groundElevationM),
-    feedType: normalizeFeedType(item.feedType || item.type || ''),
-    url: typeof item.url === 'string' ? item.url : '',
-    snapshotUrl: typeof item.snapshotUrl === 'string' ? item.snapshotUrl : '',
-    license: String(item.license || item.licenseNote || ''),
-    sourceKind: String(item.sourceKind || item.kind || 'configured'),
-    // Optional CAL badge input (cctv-v2 design §3b/§9.2, additive-only per the
-    // global constraints — nothing else in this file changes): hand-authored
-    // file/env catalog entries may declare poseSource:'curated' so the panel
-    // badge can distinguish them from raw automated priors (e.g. Austin Open
-    // Data, which never sets this field). Passed through as-is to the client.
-    poseSource: item.poseSource === 'curated' ? 'curated' : undefined,
-  };
-}
-
-/**
- * Assemble and cache the merged CCTV source list.
- *
- * Merges sources from three origins (Austin Open Data, local file,
- * env variable), deduplicates by ID, applies the global max cap, and
- * caches for CCTV_SOURCE_CACHE_MS.
- *
- * @returns {Promise<Array<object>>} Deduplicated, capped source list.
- */
-async function getCctvSources() {
-  const now = Date.now();
-  if (_cctvSourceCache.length && now - _cctvSourceCacheAt <= CCTV_SOURCE_CACHE_MS) {
-    return _cctvSourceCache;
-  }
-  // Single-flight: a burst of requests arriving past the TTL shares ONE refresh
-  // instead of each launching the full multi-provider refetch. The `.finally`
-  // clears the ref so the next post-TTL cycle starts fresh.
-  if (_cctvSourceInflight) return _cctvSourceInflight;
-  _cctvSourceInflight = refreshCctvSources().finally(() => { _cctvSourceInflight = null; });
-  return _cctvSourceInflight;
-}
-
-/**
- * Assemble and cache the merged CCTV source list from file/env + live packs.
- * Always resolves (loaders self-catch to []); on a fully-empty refresh with a
- * good prior catalog it serves stale rather than blanking the CCTV layer.
- *
- * @returns {Promise<Array<object>>} Deduplicated, capped source list.
- */
-async function refreshCctvSources() {
-  const fromFile = loadSourcesFromFile();
-  const fromEnv = loadSourcesFromEnv();
-
-  const forceAustin = String(process.env.CCTV_FORCE_AUSTIN || '').trim() === '1';
-  const preferAustin = String(process.env.CCTV_PREFER_AUSTIN || '1').trim() !== '0';
-  // Live open-data packs (Austin + Caltrans + TfL) load unless a file/env pack
-  // is configured and live packs aren't forced — same gate that governed the
-  // Austin-only fetch, now governing all three. Each pack fails independently.
-  const needsLiveSources = forceAustin || ((fromFile.length + fromEnv.length) === 0 && preferAustin);
-  const tflEnabled = String(process.env.CCTV_TFL_ENABLED || '1').trim() !== '0';
-
-  let fromAustin = [];
-  let fromCaltrans = [];
-  let fromTfl = [];
-  if (needsLiveSources) {
-    const [austinResult, caltransResult, tflResult] = await Promise.allSettled([
-      loadAustinSourcesFromOpenData(),
-      loadCaltransSourcesFromOpenData(),
-      tflEnabled ? loadTflSourcesFromOpenData() : Promise.resolve([]),
-    ]);
-    fromAustin = austinResult.status === 'fulfilled' ? austinResult.value : [];
-    fromCaltrans = caltransResult.status === 'fulfilled' ? caltransResult.value : [];
-    fromTfl = tflResult.status === 'fulfilled' ? tflResult.value : [];
-  }
-  // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
-  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromFile, ...fromEnv];
-
-  // Deduplicate by camera ID (last-write wins because of Map.set)
-  const byId = new Map();
-  for (const item of merged) {
-    if (!item || typeof item !== 'object') continue;
-    const normalized = normalizeSourceItem(item);
-    if (!normalized.id) continue;
-    byId.set(normalized.id, normalized);
-  }
-
-  const mergedSources = Array.from(byId.values());
-  const maxRaw = Number(process.env.CCTV_MAX_SOURCES || DEFAULT_CCTV_MAX_SOURCES);
-  const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(1200, Math.floor(maxRaw))) : DEFAULT_CCTV_MAX_SOURCES;
-  if (mergedSources.length > maxCount) {
-    console.warn(`[CCTV] source catalog ${mergedSources.length} exceeds cap ${maxCount}; keeping the first ${maxCount} (raise CCTV_MAX_SOURCES or lower a per-pack cap to change which).`);
-  }
-  const capped = mergedSources.length > maxCount ? mergedSources.slice(0, maxCount) : mergedSources;
-  if (capped.length > 0 || _cctvSourceCache.length === 0) {
-    _cctvSourceCache = capped;
-  } else {
-    // Every source came back empty (all live packs timed out / upstream outage)
-    // but a good catalog is already cached — serve it stale rather than blanking
-    // every CCTV route. Advancing the timestamp waits one TTL before retrying,
-    // which (with single-flight) bounds load on a persistently-down upstream.
-    console.warn(`[CCTV] source refresh returned empty; serving ${_cctvSourceCache.length} stale cameras`);
-  }
-  _cctvSourceCacheAt = Date.now();
-  return _cctvSourceCache;
-}
-
-/**
- * Generate a synthetic SVG billboard image for a CCTV camera placeholder.
- *
- * Produces a 960x540 SVG with a deterministic gradient (hue derived from
- * camera ID hash), scanline overlay, HUD-style grid, and text labels
- * showing camera name, city, ID, status, and current timestamp. Used
- * when no upstream image or Street View fallback is available.
- *
- * @param {object} opts
- * @param {string} opts.cameraId
- * @param {string} opts.label
- * @param {string} [opts.city]
- * @param {string} [opts.status]
- * @returns {string} SVG markup string.
- */
-function buildSyntheticCctvSvg({ cameraId, label, city, status }) {
-  const seed = hashSeed(`${cameraId}:${label}:${city}`);
-  const hue = seed % 360;
-  const hue2 = (hue + 46) % 360;
-  const now = new Date();
-  const ts = now.toISOString().replace('T', ' ').replace('Z', 'Z').slice(0, 20);
-  const safeLabel = escapeXml(label);
-  const safeCity = escapeXml(city || 'GLOBAL GRID');
-  const safeId = escapeXml(cameraId);
-  const safeStatus = escapeXml(status || 'SYNTHETIC');
-
-  return `
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="hsl(${hue}, 35%, 10%)" />
-      <stop offset="60%" stop-color="hsl(${hue2}, 42%, 6%)" />
-      <stop offset="100%" stop-color="#020509" />
-    </linearGradient>
-    <radialGradient id="flare" cx="0.22" cy="0.24" r="0.78">
-      <stop offset="0%" stop-color="hsla(${hue2}, 100%, 65%, 0.35)" />
-      <stop offset="100%" stop-color="hsla(${hue2}, 100%, 40%, 0)" />
-    </radialGradient>
-    <pattern id="scan" width="8" height="8" patternUnits="userSpaceOnUse">
-      <rect width="8" height="8" fill="transparent" />
-      <rect y="0" width="8" height="1" fill="rgba(255,255,255,0.08)" />
-      <rect y="4" width="8" height="1" fill="rgba(255,255,255,0.05)" />
-    </pattern>
-  </defs>
-  <rect width="960" height="540" fill="url(#bg)" />
-  <rect width="960" height="540" fill="url(#flare)" />
-  <rect width="960" height="540" fill="url(#scan)" />
-  <g stroke="rgba(123,233,255,0.25)" stroke-width="1" fill="none">
-    <path d="M60 460 Q300 300 520 420 T900 320" />
-    <path d="M100 160 Q340 40 620 130 T920 90" />
-    <path d="M20 280 Q220 230 390 270 T760 250" />
-  </g>
-  <g fill="none" stroke="rgba(180,248,255,0.2)" stroke-width="1">
-    <rect x="70" y="80" width="820" height="380" rx="8" />
-    <line x1="70" y1="270" x2="890" y2="270" />
-    <line x1="480" y1="80" x2="480" y2="460" />
-  </g>
-  <g fill="#9cefff" font-family="JetBrains Mono, monospace" text-transform="uppercase">
-    <text x="74" y="54" font-size="16" letter-spacing="2">CCTV FEED PLACEHOLDER</text>
-    <text x="74" y="512" font-size="14" letter-spacing="1.5">${safeLabel} · ${safeCity}</text>
-    <text x="646" y="512" font-size="13" letter-spacing="1.2">${safeId}</text>
-    <text x="704" y="54" font-size="15" letter-spacing="2">${escapeXml(ts)}</text>
-    <text x="74" y="486" font-size="13" letter-spacing="1.3">${safeStatus}</text>
-  </g>
-</svg>`.trim();
-}
 
 /**
  * Coerce a fetch() response body to a Node.js Readable stream.
@@ -4270,18 +3433,6 @@ function toReadable(body) {
   return null;
 }
 
-/**
- * Pipe an upstream fetch Response (image or video) to the client HTTP response.
- *
- * Forwards Content-Type, Content-Length, Content-Range, Accept-Ranges, and
- * Cache-Control headers from the upstream. Falls back to buffered arrayBuffer
- * if the body is not streamable.
- *
- * @param {import('http').ServerResponse} res
- * @param {Response} upstream - fetch() Response object.
- * @param {object} [opts]
- * @param {string} [opts.sourceHeader='upstream'] - Value for X-CCTV-Source header.
- */
 /**
  * Read a fetch Response body as text while enforcing a hard byte cap during
  * the read — so a malicious or buggy upstream that streams an unbounded body
@@ -4316,91 +3467,38 @@ async function readCappedResponseText(upstream, maxBytes) {
   return { tooLarge: false, text };
 }
 
-async function proxyMediaResponse(res, upstream, { sourceHeader = 'upstream' } = {}) {
-  const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
-  const cacheControl = upstream.headers.get('cache-control') || 'no-store';
-  const contentLength = upstream.headers.get('content-length');
-  const contentRange = upstream.headers.get('content-range');
-  const acceptRanges = upstream.headers.get('accept-ranges');
-  const headers = {
-    'Content-Type': contentType,
-    'Cache-Control': cacheControl,
-    'X-CCTV-Source': sourceHeader,
-  };
-  if (contentLength) headers['Content-Length'] = contentLength;
-  if (contentRange) headers['Content-Range'] = contentRange;
-  if (acceptRanges) headers['Accept-Ranges'] = acceptRanges;
-
-  // Cheap defense: reject an upstream that DECLARES an oversized fixed body.
-  // Live MJPEG/HLS streams are unbounded by design and send no content-length,
-  // so they pipe normally (piping streams to the client, never buffering).
-  const MEDIA_DECLARED_CAP_BYTES = 64 * 1024 * 1024;
-  if (Number.isFinite(Number(contentLength)) && Number(contentLength) > MEDIA_DECLARED_CAP_BYTES) {
-    res.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-    res.end(JSON.stringify({ error: 'Upstream media exceeds size cap' }));
-    try { await upstream.body?.cancel(); } catch { /* no-op */ }
-    return;
-  }
-
-  res.writeHead(upstream.status, headers);
-
-  const stream = toReadable(upstream.body);
-  if (!stream) {
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    res.end(buf);
-    return;
-  }
-
-  stream.on('error', () => {
-    if (!res.writableEnded) res.end();
-  });
-  stream.pipe(res);
-}
-
 /**
- * Fetch one upstream CCTV image within the frame-refresh budget.
+ * Load CCTV sources from a local JSON file (CCTV_SOURCES_FILE env or default).
+ * Node-only (needs `fs`), so it never moved to `src/data/cctvSources.js` — the
+ * result is injected into `getCctvSources({ configuredSources })` instead.
  *
- * A timeout is treated like every other upstream miss so the caller can
- * continue through the Street View and synthetic fallback chain. `fetchImpl`
- * and `timeoutMs` are injectable only to keep the timeout contract unit-testable.
- *
- * @param {string} url - Server-registered upstream image URL.
- * @param {object} [options]
- * @param {typeof fetch} [options.fetchImpl=fetch] - Fetch implementation.
- * @param {number} [options.timeoutMs=CCTV_FRAME_FETCH_TIMEOUT_MS] - Abort timeout.
- * @returns {Promise<{ok:true,body:Buffer,contentType:string}|null>}
+ * @returns {Array<object>} Array of raw source objects, or [] on error.
  */
-export async function fetchCctvImageFromUpstream(url, {
-  fetchImpl = fetch,
-  timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS,
-} = {}) {
-  if (!url || !/^https?:\/\//i.test(url)) return null;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    controller.abort(new DOMException('CCTV upstream frame fetch timed out', 'TimeoutError'));
-  }, timeoutMs);
+function loadSourcesFromFile() {
+  const sourceFile = process.env.CCTV_SOURCES_FILE || DEFAULT_CCTV_SOURCE_FILE;
+  const resolved = path.isAbsolute(sourceFile)
+    ? sourceFile
+    : path.resolve(__dirname, sourceFile);
   try {
-    const upstream = await fetchImpl(url, {
-      headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
-      signal: controller.signal,
-    });
-    const contentType = upstream.headers.get('content-type') || '';
-    if (!upstream.ok || !contentType.startsWith('image/')) return null;
-    return {
-      ok: true,
-      body: Buffer.from(await upstream.arrayBuffer()),
-      contentType,
-    };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeoutId);
+    if (!fs.existsSync(resolved)) return [];
+    const raw = fs.readFileSync(resolved, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn('[CCTV] failed to read source file:', resolved, error?.message || error);
+    return [];
   }
 }
 
 /**
  * Vite plugin: CCTV camera proxy with source registry, frame/media serving,
  * fallback chain (upstream -> Street View -> synthetic SVG), and health tracking.
+ *
+ * The subsystem itself (catalog loading, feed-type normalization, frame
+ * fallback chain, health tracker) lives in `src/data/cctvSources.js`, shared
+ * with the production Pages Function `functions/api/cctv/[[path]].js`. What
+ * stays here is only what needs Node: reading the config-file catalog from
+ * disk and piping upstream media into the Node response.
  *
  * Endpoints:
  *   GET /api/cctv/sources        — list all registered camera sources
@@ -4412,79 +3510,31 @@ export async function fetchCctvImageFromUpstream(url, {
  * @returns {import('vite').Plugin}
  */
 function cctvProxy() {
-  /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
-  const health = new Map();
-  /** Cap on health map entries to prevent unbounded growth. Sized to cover the
-   * full served catalog (CCTV_MAX_SOURCES hard-bounds at 1200) so health/status
-   * observability isn't silently evicted for a default 800-camera catalog. */
-  const HEALTH_MAX_ENTRIES = 1200;
+  const { setHealth, listHealth } = createCctvHealthTracker();
 
-  /** Update the health entry for a camera, evicting the oldest entry if at capacity. */
-  const setHealth = (cameraId, patch) => {
-    // Evict oldest entries if the health map grows beyond the cap
-    if (!health.has(cameraId) && health.size >= HEALTH_MAX_ENTRIES) {
-      const oldest = health.keys().next().value;
-      health.delete(oldest);
+  /** Pipe an upstream media Response into the Node client response. */
+  const proxyMediaResponse = async (res, upstream, { sourceHeader = 'upstream' } = {}) => {
+    const passthrough = buildMediaPassthrough(upstream, { sourceHeader });
+    if (!passthrough.ok) {
+      res.writeHead(passthrough.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ error: passthrough.error }));
+      try { await upstream.body?.cancel(); } catch { /* no-op */ }
+      return;
     }
-    const prev = health.get(cameraId) || {};
-    health.set(cameraId, {
-      id: cameraId,
-      status: patch.status || prev.status || 'unknown',
-      sourceKind: patch.sourceKind || prev.sourceKind || 'unknown',
-      label: patch.label || prev.label || '',
-      message: patch.message || prev.message || '',
-      updatedAt: Date.now(),
+
+    res.writeHead(passthrough.status, passthrough.headers);
+
+    const stream = toReadable(upstream.body);
+    if (!stream) {
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      res.end(buf);
+      return;
+    }
+
+    stream.on('error', () => {
+      if (!res.writableEnded) res.end();
     });
-  };
-
-  /** Snapshot all camera health entries as an array. */
-  const listHealth = () => Array.from(health.values());
-
-  /** Build a JSON payload describing stream info (feedType, URLs) for a camera. */
-  const buildStreamPayload = (source, cameraId) => {
-    const feedType = normalizeFeedType(source?.feedType || 'image');
-    return {
-      id: cameraId,
-      feedType,
-      mediaUrl: isVideoFeedType(feedType)
-        ? `/api/cctv/media/${encodeURIComponent(cameraId)}`
-        : null,
-      frameUrl: `/api/cctv/frame/${encodeURIComponent(cameraId)}`,
-      provider: source?.provider || '',
-      sourceKind: source?.sourceKind || (source?.url ? 'configured' : 'fallback'),
-    };
-  };
-
-  /** Fetch a Google Street View static image as a fallback frame. Requires GOOGLE_MAPS_API_KEY. */
-  const streetViewFallback = async ({ lat, lon, heading, fov, pitch }) => {
-    const streetViewKey = process.env.GOOGLE_MAPS_API_KEY;
-    if (!streetViewKey || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    try {
-      const sv = new URL('https://maps.googleapis.com/maps/api/streetview');
-      sv.searchParams.set('size', '960x540');
-      sv.searchParams.set('location', `${lat},${lon}`);
-      sv.searchParams.set('heading', String(Number.isFinite(heading) ? heading : 0));
-      sv.searchParams.set('fov', String(Number.isFinite(fov) ? Math.max(20, Math.min(120, fov)) : 80));
-      sv.searchParams.set('pitch', String(Number.isFinite(pitch) ? Math.max(-40, Math.min(20, pitch)) : 0));
-      sv.searchParams.set('source', 'outdoor');
-      sv.searchParams.set('return_error_code', 'true');
-      sv.searchParams.set('key', streetViewKey);
-
-      const svResp = await fetch(sv.toString(), {
-        headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
-        signal: AbortSignal.timeout(CCTV_FRAME_FETCH_TIMEOUT_MS),
-      });
-      const svType = svResp.headers.get('content-type') || '';
-      if (!svResp.ok || !svType.startsWith('image/')) return null;
-
-      return {
-        ok: true,
-        body: Buffer.from(await svResp.arrayBuffer()),
-        contentType: svType,
-      };
-    } catch {
-      return null;
-    }
+    stream.pipe(res);
   };
 
   return {
@@ -4492,7 +3542,16 @@ function cctvProxy() {
     configureServer(server) {
       server.middlewares.use('/api/cctv', async (req, res) => {
         try {
-          const sources = await getCctvSources();
+          // Sources come from the config file + CCTV_SOURCES_JSON (both need
+          // Node here), while the catalog assembly, live packs, and caps run in
+          // the shared module.
+          const sources = await getCctvSources({
+            configuredSources: [
+              ...loadSourcesFromFile(),
+              ...parseConfiguredSourcesFromEnv(process.env.CCTV_SOURCES_JSON),
+            ],
+            env: process.env,
+          });
           const sourceById = new Map(sources.map((source) => [source.id, source]));
           const url = new URL(req.url || '/', 'http://localhost');
 
@@ -4649,7 +3708,14 @@ function cctvProxy() {
             return;
           }
 
-          const sv = await streetViewFallback({ lat, lon, heading, fov, pitch });
+          const sv = await streetViewFallback({
+            lat,
+            lon,
+            heading,
+            fov,
+            pitch,
+            apiKey: process.env.GOOGLE_MAPS_API_KEY,
+          });
           if (sv?.ok) {
             setHealth(cameraId, {
               status: 'degraded',
@@ -4909,7 +3975,7 @@ function trackBackfillProxies() {
           `https://opensky-network.org/api/tracks/all?icao24=${icao24}&time=0`,
           token ? { Authorization: `Bearer ${token}` } : {}
         );
-      } catch (error) {
+      } catch {
         res.statusCode = 502;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ error: 'OpenSky track fetch failed' }));
@@ -4931,7 +3997,7 @@ function trackBackfillProxies() {
           `lol:${hex}`,
           `https://adsb.lol/data/traces/${hex.slice(-2)}/trace_full_${hex}.json`
         );
-      } catch (error) {
+      } catch {
         res.statusCode = 502;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ error: 'adsb.lol trace fetch failed' }));
@@ -5088,98 +4154,13 @@ function openAiRealtimeProxy() {
         0.1,
         Math.min(1, Number(process.env.OPENAI_REALTIME_CONTEXT_RETENTION) || OPENAI_REALTIME_CONTEXT_RETENTION_DEFAULT)
       );
-      const sessionConfig = {
-        session: {
-          type: 'realtime',
-          model,
-          reasoning: { effort },
-          truncation: {
-            type: 'retention_ratio',
-            retention_ratio: contextRetentionRatio,
-            token_limits: {
-              post_instructions: contextTokenLimit,
-            },
-          },
-          audio: {
-            input: {
-              noise_reduction: { type: 'near_field' },
-              turn_detection: {
-                type: 'semantic_vad',
-                eagerness: 'low',
-                create_response: true,
-                interrupt_response: false,
-              },
-            },
-            output: { voice },
-          },
-          instructions: [
-            "You are GEV Voice Control, a concise voice controller for a Cesium geospatial app called God's Eye View.",
-            'Have a natural spoken conversation with the user while the mic session is active.',
-            'Do not require a wake phrase. Treat direct commands like "zoom into London" or "open datacenters" as GEV control requests.',
-            'Only control the app by calling the provided tools. Never invent tool names or arguments.',
-            'Call tools only for clear GEV control, navigation, visual-style, layer, or app-state requests. For ordinary conversation, answer normally without tools.',
-            'For requests to open, show, reveal, or focus a menu/panel, call set_panel_open or show_data_layers_menu. "Open Context" means only set_panel_open{panelId:"global-context-panel",open:true}; it does not activate a Context sub-mode. "Open Contacts" means set_context_mode{mode:"contacts"}; that action expands the parent Context panel before activating Contacts.',
-            'For requests like "show me the datacenter layers", open the data layers menu and focus the matching layer row; do not enable the layer unless the user asks to turn it on.',
-            'For questions like "what am I looking at?", "what is in view?", "what is this?", "that selected thing", nearby datacenter, dam, cable, ship, or current view contents, call get_entity_context first, then answer from the returned scene/entity context.',
-            'For "what is this aircraft?" answers, read the callsign, operator, registration, type, and route only from get_entity_context selected.properties. Treat route, routeOrigin, and routeDestination as the only authoritative route fields. Every aircraft identity answer MUST explicitly cover operator, type, and route. When a route is present, repeat its endpoint codes exactly; do not expand airport codes into city names. For a missing field say exactly "Operator details are unavailable", "Aircraft type is unavailable", or "Route details are unavailable" as applicable. Never silently omit missing enrichment or infer it from the callsign.',
-            'While a camera motion or route flight is active, a bare "stop" means move_camera{motion:stop} — NOT control_scene and NOT stop_tracking (those need explicit words like "stop the scene" / "stop tracking"). If move_camera stop returns stopped:false and an entity is being tracked, call stop_tracking next — the user means "stop whatever is moving". Flying somewhere while tracking automatically stops the tracking (the result says so): mention it briefly.',
-            'For camera-motion requests — "orbit around this", "pan left", "tilt up", "stop moving" — call move_camera. For "fly the route" over a drawn route, call fly_route. Confirm with the RESULTING state ("Orbiting slowly", "Flying the route").',
-            'analyst_query ANSWERS questions; it never moves the camera or starts tracking. For requests to FOLLOW or TRACK a specific aircraft/ship, call track_entity (get_entity_context first when the target is ambiguous), never analyst_query as the final or only action. For "follow/track the nearest aircraft", first call analyst_query with the aircraft layer(s), sortBy=distance, and limit=1, then call track_entity with the returned aircraft identity in the same turn. The lookup alone does not fulfill a follow/track command.',
-            'For a request to enable an aircraft layer and SELECT or FIND the nearest/closest aircraft near a named place — for example, "Turn on flights and select the closest aircraft to Austin" — call select_nearest_aircraft once. It atomically turns on the requested aircraft layer first, waits for location arrival, refreshes that layer for the destination viewport, filters out landed/on-ground records, and selects the nearest airborne result. A healthy fallback feed is valid data: report the returned feed source briefly, never call it an enable failure. Do not also call fly_to_location, set_layer_visibility, analyst_query, track_entity, set_context_mode, or control_cockpit for the same request. SELECT/FIND never implies Contacts or Cockpit unless the user explicitly asks for either mode.',
-            'For ANALYTICAL questions about layer data — how many / which / fastest / highest / biggest / nearest flights, ships, fires, or earthquakes ("how many flights over Texas", "biggest fire near LA", "which ships are headed to Oakland", "anything above 40,000 feet") — call analyst_query, not get_entity_context. Narrate the count plus two or three notable examples by name, and reflect the result\'s coverage note honestly: the answer covers data loaded by enabled layers, not the whole world. If the needed layer is disabled, say so and offer to enable it. For follow-ups about the same set ("which of THOSE is closest?"), call analyst_query with followUp=true and only the new filter/sort.',
-            'COUNTING CONTRACT — what "near" means. (1) While Contacts is ACTIVE, "near / nearby / how many aircraft" means the Contacts window: answer from contactsWindow in the tool result — those are the exact numbers on the user\'s panel. set_context_mode, analyst_query, and get_current_view_state carry it after Contacts settles. For "Open Contacts and tell me how many aircraft are within 250 km", call set_context_mode{mode:"contacts"} first and answer from contactsWindow.aircraft; do not answer from a pre-Contacts analyst query. analyst_query\'s own count measures currently-loaded records and is usually lower; never give it as the window count. CENTER PRECEDENCE for a nearby/how-many ask, in order: an explicit place in the question ("over Texas", "near Austin") always wins and ignores Contacts state; else the CONTACTS SUBJECT when Contacts is active and has one — a selected datacenter, dam, fire, or cable does NOT silently become the center; else an entity the user explicitly names ("around this datacenter"); else the current view, said aloud ("nothing is selected, so this is the current view"). With Contacts active but NO subject yet, use the view and say so; never read an empty panel. (2) With Contacts OFF, "nearby" means in view; "near <place>" means a radius around that place. (3) EVERY count names its scope in words — "42 in your window", "8 in view", "about 30 within 250 km of Austin" — never a bare number; analyst_query returns scopeLabel for exactly this. Two different numbers with named scopes are not a contradiction; say both if asked. (4) State counts VERBATIM — never estimate, round, or hedge ("a few", "less than a dozen"): if a tool returns 46, say 46. (5) When it matters, add once: counts cover loaded data, and the flights layer loads where you look.',
-            'While Cockpit is active, navigate with control_cockpit (next/previous, optionally targetLayer or aircraftClass). track_entity and fly_to_location are REFUSED by design while Cockpit owns the camera — that refusal is correct, not an error to retry. To go somewhere else, exit Cockpit first. control_cockpit enter establishes Contacts itself, so do not call set_context_mode before or after it.',
-            'When the target layer is unknown, OMIT layerId in track_entity so it searches all enabled layers. Passing the wrong layerId ("flights" for a military contact) returns "Nothing matched" even though the contact is loaded.',
-            'If get_entity_context has no selected object or overlay entities, use its basemap context: Google Photorealistic 3D Tiles/Cesium source, center target coordinates, reverse-geocoded place, camera altitude, active style, and enabled layers. Do not say there is nothing unless the basemap target is also unavailable.',
-            'If basemap context includes knownLandmarks, prefer the nearest known landmark by name for "what am I looking at" answers. For example, if knownLandmarks includes Eiffel Tower, say Eiffel Tower.',
-            'At local zoom, use basemap nearbyPlaces, place.labels, viewportPlaces.visibleLabels, and viewportPlaces.streetLabels to identify the building, premises, roads, and named places visible around the screen target.',
-            'If basemap context includes viewportPlaces, prefer dominantCountry, dominantRegion, and dominantLocality over raw coordinates.',
-            'When basemap context includes viewportSamples or an inferred country, trust that over a single reverse-geocoded address. If most samples indicate Iran, say Iran, not the United States.',
-            'When a viewport screenshot is attached after get_entity_context, read clearly legible street, building, and place labels from it and combine them with structured label context. Respect scene viewScale: at global/continental/regional scale, avoid naming a precise street/city from one center pixel.',
-            'Do not mention disabled layers or stale selections.',
-            'When a request requires a tool call, do not speak in the same response as the tool call. Call the tool first.',
-            'When a single user request contains MULTIPLE changes (e.g. "switch to operator layout, use balanced detection at density 50, and switch to Bing aerial"), call ALL the corresponding tools — multiple tool calls in sequence — before speaking. Never confirm a partial subset. If a later tool fails, say which parts succeeded and which failed.',
-            'After receiving tool output, speak exactly one short confirmation. Do not repeat the confirmation.',
-            'For "show/open/turn on" layer requests, enable the matching layer. For "hide/close/turn off", disable it.',
-            // INSTRUCTION-ONLY mapping for the two globe-scale named views.
-            //
-            // Both are BROADER than the first-run tiles on purpose. A person
-            // naming layers out loud has chosen them; a tile is a first
-            // impression handed to a stranger. So voice keeps fires in the
-            // environmental view and keeps infrastructure entirely, while the
-            // launcher's ENVIRONMENTAL tile is quakes-only and has no
-            // infrastructure tile at all. See src/firstRunExperience.js for why.
-            //
-            // Fully expressible with tools that already exist, so
-            // GEV_REALTIME_TOOLS is deliberately untouched — deleting this one
-            // string is the whole rollback.
-            'NAMED VIEWS are shorthand for tool calls you already have — there is no "mode" tool for them. Treat ONLY these as the shorthand: "infrastructure mode" / "the infrastructure view" / "show me global infrastructure" means three set_layer_visibility calls (local-datacenters, local-dams, telegeography-submarine-cables) plus zoom_to_globe; "environmental mode" / "earth watch" / "active events", said as the name of a view, means set_layer_visibility for local-firms and earthquakes plus zoom_to_globe. Anything vaguer is NOT this shorthand — an open-ended question about the world or the news is an ordinary question: answer it, or use analyst_query over the layers already on. Never switch a whole view on to answer a question nobody asked to see. When you do run one, make every call before speaking, then give one confirmation naming the resulting state; if the fires layer comes back unavailable because no FIRMS key is configured, say so plainly — the earthquakes still loaded. "Live contacts" and "space missions" are NOT this pattern: they stay set_context_mode{mode:"contacts"} and set_context_mode{mode:"space-missions"}.',
-            'For visual filter requests, call set_visual_style with one of the allowed style IDs.',
-            'Disambiguation table — basemap vs layer vs style: basemap switching requires an explicit stack name — "Bing aerial" means set_map_stack bing-aerial, "aerial with labels" means bing-labels, "OSM"/"road map" means osm, "Google 3D"/"photorealistic" means photoreal. Any mention of "satellite" or "satellites" ALWAYS means the satellites DATA LAYER via set_layer_visibility, never a basemap. "surveillance"/"night vision"/"thermal" are visual STYLES via set_visual_style.',
-            'HUD requests ("hud on/off", "switch to operator/minimal/tactical layout") use set_hud. Detection requests ("detection on", "dense mode", "balanced mode", "sparse mode", "set density to 25", "use weighted allocation") use set_detection. Density snaps to 0/25/50/75/100 and derives Sparse/Balanced/Dense; panoptic is a legacy alias for Dense.',
-            'Bloom/sharpen requests use set_post_processing. Scene requests ("play orbital watch", "stop the scene", "what scenes are there") use control_scene. CCTV camera requests ("next camera", "nearest camera", "select the Congress camera", "show coverage") use control_cctv — the CCTV layer must be enabled first.',
-            'Radio playback requests use control_radio. "Turn on/start the radio" means action=play; action=enable only reveals Radio markers and must be reserved for explicit "show/enable the Radio layer/markers" requests. After a prepared playback result, briefly confirm any other completed actions and say "Turning on the radio"—never claim it is already playing. The client keeps Radio muted until playback is verified, then closes voice before restoring Radio volume. Examples: "play news near Austin" → select category=news locationId=austin; "play US news" → select category=news country=US; "Radio volume 30" → volume; pause/resume/stop/next/previous use the matching action. Radio selection never moves the camera.',
-            '"Track/follow <something specific>" (a callsign, ship name, satellite name) uses track_entity. "Take me to the biggest fire" uses track_entity with query "biggest fire" (the fires layer must be enabled). Bare "orbit" means camera orbit of the current landmark. "Stop following/tracking" uses stop_tracking.',
-            '"Show me which planes are overhead"/"frame the ships"/"show me the satellites above" use frame_overhead with the matching target.',
-            "After frame_overhead, speak ONLY from the tool result's count field — e.g. 'Framed fourteen aircraft, labels on'; never reassess or second-guess the count aloud.",
-            'Confirmations echo the RESULTING state, never the request: "HUD operator layout", "Density twenty-five percent", "Bing aerial imagery", "Tracking UAL428", "Framed fourteen aircraft". On ok=false, state the failure plainly: "Nothing matched UAL999", "No ships within 120 kilometers". Never claim an action without ok=true in the tool result.',
-            'For destination requests such as "take me to Italy", "go to NYC", or "show me the Eiffel Tower", call fly_to_location. Prefer known city IDs when available; otherwise pass the plain place query.',
-            'Navigation-only requests ("take me to X", "go to X", "fly to X") are NOT descriptions: call fly_to_location alone and do NOT also call annotate_map, unless the user explicitly asks to mark the place or you go on to explain specific places there. Never drop a point pin on a region-scale natural feature (a mountain range, desert, sea, or forest) — a single point in the middle of the Rockies is meaningless. If the user explicitly asks to mark such a region, prefer type=area.',
-            'For country and city destinations, omit rangeM so GEV frames the whole country or city in view. For landmarks and buildings, omit rangeM so GEV chooses a close landmark view.',
-            'Only supply rangeM when the user asks for a particular numeric height, distance, closer view, or wider view.',
-            'For relative requests such as "zoom out a little", "pull back", "zoom in more", or "get closer", always call adjust_camera_zoom. But "globe view", "whole earth", "the whole planet", or "zoom all the way out" is an ABSOLUTE framing: call zoom_to_globe once instead — repeated adjust_camera_zoom calls can never reach the globe. Never claim the camera moved without the tool returning ok=true.',
-            'Keep spoken confirmations short, e.g. "Opening datacenters" or "Flying to London".',
-            'WHITEBOARD THE WORLD: whenever you describe or explain a specific place, building, campus, district, boundary, or a spatial relationship between places, call annotate_map to mark it visually as you talk — like sketching on the map. To call out a specific building, campus, compound, park, or district, use type=area (it traces and encloses the real footprint — a building gets a glowing volume, a district gets a draped outline). Use type=highlight only for a transient pulse on a precise spot that has no meaningful footprint, and type=pin to drop a labeled marker. Examples: "what is the Palace of Fine Arts?" → an AREA on it; "the old military base next to it" → an AREA on the Presidio; "ILM is right here" → a pin; "it sits next to the Marina" → an arrow from one to the other. Prefer place NAMES so the app resolves real positions and outlines; never invent coordinates or pixel locations.',
-            'On every annotation, also set entityKind to what the thing IS when you know it: building (one structure), compound (campus/grounds/mall/park), district (neighborhood/area of a city), street (a named road), or point_feature (a monument, statue, memorial, plaque, fountain, or other small point landmark). entityKind is a FACT about the target, independent of the mark type you chose — monuments and statues are point_feature even when you use type=area; the app then anchors them as precise points instead of guessing at a footprint.',
-            'Use a single annotate_map call with several annotations when you are describing multiple related places at once. Set flyTo true only when the user is not already looking at the place; if every mark in a call lands off-screen the app auto-frames them, so when unsure leave flyTo false. Do NOT say out loud that you are drawing, highlighting, or annotating — just speak naturally about the places while the marks appear. ANNOTATIONS ACCUMULATE AND PERSIST — keep adding marks as you explore; you can fly around, change topic, and jump between far-apart places and the marks STAY, so the user can build up the map and show people things. Do NOT clear on your own initiative: never pass clearPrevious, and call clear_annotations ONLY when the user EXPLICITLY asks to clear or reset the map.',
-            'If an annotate_map result has partial:true or any failedLabels, do not pretend those places appeared — briefly work into your narration that you could not pinpoint them (e.g. "I couldn\'t place X"). If a route comes back as a direct line (no street route was found), describe it as a straight-line distance, not a walking/driving time. If an annotate_map result has capped:true, the map is full — ASK the user whether to clear before drawing more; do not clear unprompted. outlinePending:true is NOT a failure, but it is also NOT an outline: the anchor mark is placed and the boundary is still being traced in the background. Narrate it in progress — e.g. "tracing the boundary now" — and NEVER state the outline is already drawn or visible; it may yet come back as just a point. A later system item of type map_annotation_outline reports the final outcome per mark (status resolved or failed, with its label): use it to quietly confirm, or to correct yourself if you implied a boundary that stayed a point — an honest miss beats a misleading guess.',
-            'PREFER NAMES. Only when you cannot name or geocode a place but you can clearly SEE the exact spot in the most recent viewport screenshot, fall back to screenX/screenY (normalized 0..1 from that image) to point at it; the app converts the pixel to a real world point. Never use screenX/screenY for something you could name.',
-            'PATHS vs DISTANCES: for "walking/driving route from A to B" (or through several stops), use type=route with the ordered points and the matching mode (walking/driving/cycling) — the app draws the real street-following path on the map and reports distance and travel time, which you can read aloud. For "how far is X from Y", "is it nearby", or "X is next to Y", use type=arrow between the two — it draws a floating connector and shows the straight-line distance. Do NOT use route for a simple distance/proximity question.',
-          ].join('\n'),
-          tools: GEV_REALTIME_TOOLS,
-          tool_choice: 'auto',
-        },
-      };
+      const sessionConfig = buildRealtimeSessionConfig({
+        model,
+        voice,
+        effort,
+        contextTokenLimit,
+        contextRetentionRatio,
+      });
 
       try {
         const response = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
@@ -5221,28 +4202,6 @@ function openAiRealtimeProxy() {
       install(server.middlewares);
     },
   };
-}
-
-function extractOpenAiResponseText(data) {
-  if (typeof data?.output_text === 'string' && data.output_text.trim()) {
-    return data.output_text.trim();
-  }
-  if (!Array.isArray(data?.output)) return '';
-  return data.output
-    .flatMap((item) => Array.isArray(item?.content) ? item.content : [])
-    .map((part) => part?.text || part?.output_text || '')
-    .join(' ')
-    .trim();
-}
-
-function toFiveWordHudSummary(value) {
-  return String(value || '')
-    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 5)
-    .join(' ');
 }
 
 function readRequestBody(req, maxBytes = 1024 * 1024) {
@@ -5365,7 +4324,7 @@ function googlePlacesContextProxy() {
             return true;
           })
           .sort((a, b) => b.contextPriority - a.contextPriority || a.distanceM - b.distanceM)
-          .map(({ contextPriority, ...place }) => place)
+          .map(({ contextPriority: _contextPriority, ...place }) => place)
           .slice(0, 20) : [];
 
         res.statusCode = response.ok ? 200 : response.status;
@@ -5530,629 +4489,6 @@ function approximateDistanceM(latA, lonA, latB, lonB) {
   ));
 }
 
-const GEV_REALTIME_TOOLS = [
-  {
-    type: 'function',
-    name: 'fly_to_location',
-    description: "Fly the God's Eye View camera to a known city, geocoded country/region/city/landmark, or explicit WGS84 coordinate. Countries/cities frame the whole place; landmarks/buildings use close framing.",
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        locationId: {
-          type: 'string',
-          enum: ['austin', 'sf', 'nyc', 'tokyo', 'london', 'paris', 'dubai', 'dc'],
-          description: 'Known city preset ID. Use when the requested place matches one of these cities.',
-        },
-        query: {
-          type: 'string',
-          description: 'Plain place search query, e.g. "London", "Eiffel Tower", or "Dubai Marina".',
-        },
-        latitude: { type: 'number', minimum: -90, maximum: 90 },
-        longitude: { type: 'number', minimum: -180, maximum: 180 },
-        viewMode: {
-          type: 'string',
-          enum: ['close', 'overview'],
-          description: 'Optional framing intent. Usually omit this; GEV infers whole-place framing for countries/cities and close framing for landmarks.',
-        },
-        rangeM: {
-          type: 'number',
-          minimum: 100,
-          maximum: 20000000,
-          description: 'Optional camera range from the target in meters. Omit it for automatic whole-country/whole-city or close-landmark framing; provide it only when the user explicitly requests a numeric height or distance.',
-        },
-        waitForArrival: {
-          type: 'boolean',
-          description: 'Set true when a later tool depends on the destination viewport. The result then waits for the camera flight and returns arrived=true; cancellation returns ok=false.',
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    name: 'select_nearest_aircraft',
-    description: 'Atomically fly to a place, wait for arrival, enable and load Flights or Military Flights in that viewport, exclude on-ground records, and select/follow the nearest airborne aircraft. Healthy fallback feeds remain usable and are reported in the result. This does not open Contacts or Cockpit.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        layerId: {
-          type: 'string',
-          enum: ['flights', 'military'],
-          description: 'Aircraft layer to enable and search. Use flights unless the user explicitly asks for military aircraft.',
-        },
-        locationId: {
-          type: 'string',
-          enum: ['austin', 'sf', 'nyc', 'tokyo', 'london', 'paris', 'dubai', 'dc'],
-          description: 'Known city preset ID when the place matches one of these cities.',
-        },
-        locationQuery: {
-          type: 'string',
-          maxLength: 160,
-          description: 'Free-form destination when no locationId matches.',
-        },
-        latitude: { type: 'number', minimum: -90, maximum: 90 },
-        longitude: { type: 'number', minimum: -180, maximum: 180 },
-      },
-      required: ['layerId'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'adjust_camera_zoom',
-    description: 'Move the current Cesium camera closer to or farther from what it is presently looking at. Use for relative zoom requests without changing location.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        direction: {
-          type: 'string',
-          enum: ['in', 'out'],
-        },
-        amount: {
-          type: 'string',
-          enum: ['little', 'medium', 'lot'],
-          description: 'Use little for phrases like "a bit" or "a little", medium for ordinary zoom requests, and lot for "way out/in".',
-        },
-      },
-      required: ['direction', 'amount'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'zoom_to_globe',
-    description: 'Pull the camera out to an ABSOLUTE full-Earth globe view (~18,000 km altitude, the whole planet in frame), keeping the current region centered. Use for "globe view", "whole earth", "see the planet", "zoom all the way out". Never use adjust_camera_zoom for these — its relative steps cannot reach the globe.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {},
-    },
-  },
-  {
-    type: 'function',
-    name: 'set_layer_visibility',
-    description: "Enable or disable one registered God's Eye View data layer.",
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        layerId: {
-          type: 'string',
-          description:
-            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio.',
-          enum: [
-            'flights',
-            'military',
-            'earthquakes',
-            'satellites',
-            'rocket-launches',
-            'traffic',
-            'cctv',
-            'radio',
-            'bikeshare',
-            'ais-live-vessels',
-            'local-datacenters',
-            'local-dams',
-            'telegeography-submarine-cables',
-            'local-firms',
-          ],
-        },
-        enabled: { type: 'boolean' },
-      },
-      required: ['layerId', 'enabled'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'show_data_layers_menu',
-    description: 'Open the data layers dropdown/menu and optionally scroll to a specific layer row without toggling it.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        layerId: {
-          type: 'string',
-          enum: [
-            'flights',
-            'military',
-            'earthquakes',
-            'satellites',
-            'traffic',
-            'cctv',
-            'radio',
-            'bikeshare',
-            'ais-live-vessels',
-            'local-datacenters',
-            'local-dams',
-            'telegeography-submarine-cables',
-            'local-firms',
-          ],
-          description: 'Optional layer row to scroll into view and highlight.',
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    name: 'set_panel_open',
-    description: 'Open or close a GEV UI panel/dropdown.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        panelId: {
-          type: 'string',
-          enum: ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'pp-toggles', 'global-context-panel'],
-        },
-        open: { type: 'boolean' },
-      },
-      required: ['panelId', 'open'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'set_context_mode',
-    description: 'Enter or exit the Global Context sub-mode used by Contacts and Space Missions. Use Contacts only when the user explicitly requests Contacts, and Space Missions only when explicitly requested. A request to open the parent Context panel alone uses set_panel_open and must not activate either sub-mode. Selecting an aircraft does not imply Context.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        mode: {
-          type: 'string',
-          enum: ['off', 'contacts', 'flights', 'space-missions', 'missions'],
-          description: 'Use off to exit context mode.',
-        },
-      },
-      required: ['mode'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'control_cockpit',
-    description: 'Read or control Cockpit when the user explicitly requests Cockpit: establish Contacts and enter from a selected or tracked aircraft; exit; or navigate nearby Contacts with optional filters. Selecting or viewing an aircraft alone must not enter Cockpit.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        action: {
-          type: 'string',
-          enum: ['enter', 'exit', 'previous', 'next', 'prev', 'status'],
-          description: 'previous/next (or prev) navigates through nearby contacts in Cockpit context.',
-        },
-        targetLayer: {
-          type: 'string',
-          enum: ['flights', 'military', 'ais-live-vessels', 'military-installations'],
-          description: 'Optional contact layer filter for next/previous (for example military for a military-only cycle).',
-        },
-        aircraftClass: {
-          type: 'string',
-          description: 'Optional aircraft class filter (for example helicopter) when using next/previous navigation.',
-        },
-      },
-      required: ['action'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'set_visual_style',
-    description: "Set the active God's Eye View visual filter/style.",
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        style: {
-          type: 'string',
-          enum: ['normal', 'retro', 'surveillance', 'thermal', 'anime', 'noir', 'snow'],
-        },
-      },
-      required: ['style'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'get_entity_context',
-    description: 'Get current GEV scene context, including basemap/3D-tile target context, selected entity metadata if active, and entities currently visible in the camera view.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        scope: {
-          type: 'string',
-          enum: ['auto', 'selected', 'in_view'],
-          description: 'Use auto by default. selected returns the clicked/selected entity; in_view returns visible entities near the screen center.',
-        },
-        layerId: {
-          type: 'string',
-          enum: [
-            'local-datacenters',
-            'local-dams',
-            'telegeography-submarine-cables',
-            'local-firms',
-          ],
-          description: 'Optional layer filter for visible entity context.',
-        },
-        limit: {
-          type: 'number',
-          minimum: 1,
-          maximum: 12,
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    name: 'get_current_view_state',
-    description: 'Read the current camera, style, Context, Cockpit, HUD, detection, map stack, post-processing, scene-playback, tracked-entity, and layer state before choosing another action.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {},
-    },
-  },
-  {
-    type: 'function',
-    name: 'set_hud',
-    description: 'Control the intelligence HUD overlay: visibility and/or layout variant.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        visible: { type: 'string', enum: ['on', 'off', 'auto'], description: 'auto restores style-driven show/hide.' },
-        layout: { type: 'string', enum: ['tactical', 'operator', 'minimal'] },
-      },
-    },
-  },
-  {
-    type: 'function',
-    name: 'set_detection',
-    description: 'Control the detection overlay: on/off, density-derived Sparse/Balanced/Dense profile, and Elastic/Weighted layer allocation.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        enabled: { type: 'boolean', description: 'false turns detection OFF; true restores the current density-derived profile.' },
-        mode: { type: 'string', enum: ['sparse', 'balanced', 'dense'] },
-        densityPct: { type: 'number', description: 'Density snaps to 0, 25, 50, 75, or 100 and derives the active profile.' },
-        allocationStrategy: { type: 'string', enum: ['elastic', 'weighted'], description: 'Elastic splits evenly then lends unused slots; Weighted follows demand and semantic weight.' },
-      },
-    },
-  },
-  {
-    type: 'function',
-    name: 'set_map_stack',
-    description: 'Switch the basemap/imagery stack (NOT the satellites data layer and NOT a visual style filter).',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        stack: {
-          type: 'string',
-          enum: ['photoreal', 'bing-aerial', 'bing-labels', 'osm'],
-          description: 'photoreal = Google 3D. Use bing-aerial only when the user explicitly says "Bing aerial" — "satellite(s)" never means a basemap.',
-        },
-      },
-      required: ['stack'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'set_post_processing',
-    description: 'Control bloom and sharpen post-processing toggles and intensities.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        bloom: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            enabled: { type: 'boolean' },
-            intensityPct: { type: 'number', description: '0-200 (UI percent).' },
-          },
-        },
-        sharpen: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            enabled: { type: 'boolean' },
-            intensityPct: { type: 'number', description: '0-100 (UI percent).' },
-          },
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    name: 'control_scene',
-    description: 'Cinematic scene playback: list scenes, play one scene by name, stop, advance, or read status. Play starts a single named scene and returns immediately.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        action: { type: 'string', enum: ['list', 'play', 'stop', 'next', 'status'] },
-        sceneId: { type: 'string', description: 'Scene id or (partial) title for play.' },
-      },
-      required: ['action'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'control_cctv',
-    description: 'CCTV camera operations: enable/disable the layer, select a camera by name, next/prev/nearest/focus, toggle coverage wedges / projection overlay / auto-hop, "viewshed" for color-coded per-camera coverage volumes, and "adjust" for the on-camera calibration gizmo.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        action: { type: 'string', enum: ['enable', 'disable', 'select', 'next', 'prev', 'nearest', 'focus', 'coverage', 'viewshed', 'adjust', 'projection', 'autohop'] },
-        cameraQuery: { type: 'string', description: 'Camera name or id for select.' },
-        enabled: { type: 'boolean', description: 'Explicit on/off for coverage/viewshed/adjust/projection/autohop; omit to toggle.' },
-      },
-      required: ['action'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'control_radio',
-    description: 'Control Internet Radio playback without moving the map. Use select whenever the request includes a station category, name, country, coordinates, or nearby place—even when the user says play. Use play only for an unqualified "turn on/start the radio" request so the current or nearest station begins. Enable only reveals the Radio layer/markers without audio. Also supports disable, resume, pause, stop, next/previous, volume, and status.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        action: {
-          type: 'string',
-          enum: ['enable', 'disable', 'play', 'resume', 'pause', 'stop', 'next', 'previous', 'volume', 'select', 'status'],
-          description: 'Use select for any request qualified by category, station, country, coordinates, or place. Use play only for an unqualified turn on/start/listen request. Use enable only when the user explicitly asks to show or enable the Radio layer or its markers without requesting audio.',
-        },
-        volumePct: { type: 'number', minimum: 0, maximum: 100, description: 'Required for volume; sets the persistent Radio playback volume.' },
-        category: {
-          type: 'string',
-          enum: ['all', 'news', 'talk', 'weather', 'public-safety', 'aviation-marine', 'traffic-transit', 'music'],
-          description: 'Station category for select/next/previous. When the user requests playback with a category, action must be select, not play.',
-        },
-        locationId: {
-          type: 'string',
-          enum: ['austin', 'sf', 'nyc', 'tokyo', 'london', 'paris', 'dubai', 'dc'],
-          description: 'Known nearby-city anchor for select.',
-        },
-        locationQuery: { type: 'string', maxLength: 120, description: 'Place to search near, such as "Austin, Texas" or "Seattle". Selection does not fly the camera.' },
-        latitude: { type: 'number', minimum: -90, maximum: 90 },
-        longitude: { type: 'number', minimum: -180, maximum: 180 },
-        country: { type: 'string', maxLength: 80, description: 'Country code or name filter, for example US or United States.' },
-        stationQuery: { type: 'string', maxLength: 120, description: 'Optional station name/tag substring.' },
-      },
-      required: ['action'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'track_entity',
-    description: 'Find and follow a specific aircraft (callsign/ICAO hex), ship (name/MMSI), or satellite (name/NORAD id) on enabled layers. Camera follows the entity.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        query: { type: 'string', description: 'Callsign, ship name, satellite name, ICAO hex, MMSI, or NORAD id.' },
-        layerId: { type: 'string', description: 'Optional layer hint: flights | military | ais-live-vessels | satellites.' },
-      },
-      required: ['query'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'stop_tracking',
-    description: 'Stop following the tracked aircraft/satellite and clear any selected vessel.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {},
-    },
-  },
-  {
-    type: 'function',
-    name: 'frame_overhead',
-    description: 'Cinematically frame entities near the current view: pulls the camera back and angles it so nearby aircraft, ships, or satellites are visible together.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        target: { type: 'string', enum: ['flights', 'military', 'satellites', 'vessels'] },
-        radiusKm: { type: 'number', description: 'Search radius around the view target. Defaults: 150 aircraft, 120 ships, 3000 satellites.' },
-      },
-      required: ['target'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'annotate_map',
-    description: "Draw annotations on the 3D map to visually point out what you are talking about — like sketching on a whiteboard over the world. Use this whenever you mention a specific place, building, campus, boundary, district, or a relationship between two places, so the user can SEE what you mean. Give place NAMES (preferred) or explicit lat/lng; the app resolves them to real-world positions and real building/area outlines — never guess pixel positions. Call this as you begin describing something, and you may mark several places in one call.",
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        annotations: {
-          type: 'array',
-          description: 'One or more things to mark. Mark multiple related places together when describing them as a group.',
-          minItems: 1,
-          maxItems: 24,
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              type: {
-                type: 'string',
-                enum: ['pin', 'highlight', 'area', 'arrow', 'route', 'label'],
-                description: 'pin = planted marker at a spot; highlight = pulsing ring drawing the eye to a point; area = trace the outline of a building/campus/compound/district; arrow = a connector from one place to another (use target as the origin and toTarget as the destination); route = a path through several waypoints (use the points array); label = a floating text callout.',
-              },
-              target: { type: 'string', maxLength: 200, description: 'Place name to resolve, e.g. "Palace of Fine Arts, San Francisco", "the Pentagon", "Presidio of San Francisco". Preferred over coordinates. For a specific monument/statue/feature that sits within a larger landmark, use its OWN name + city ("Tejano Monument, Austin", "Texas African American History Memorial, Austin") — do NOT phrase it as "X at the Texas State Capitol", which makes the geocoder collapse several of them onto the same centroid so they stack on one spot.' },
-              points: {
-                type: 'array',
-                description: 'For type=route: 2+ ordered waypoints the path passes through, each a place name (or coordinates / screen point).',
-                minItems: 2,
-                maxItems: 12,
-                items: {
-                  type: 'object',
-                  additionalProperties: false,
-                  properties: {
-                    target: { type: 'string', maxLength: 200, description: 'Waypoint place name.' },
-                    latitude: { type: 'number', minimum: -90, maximum: 90 },
-                    longitude: { type: 'number', minimum: -180, maximum: 180 },
-                    screenX: { type: 'number', minimum: 0, maximum: 1 },
-                    screenY: { type: 'number', minimum: 0, maximum: 1 },
-                  },
-                },
-              },
-              mode: {
-                type: 'string',
-                enum: ['walking', 'driving', 'cycling'],
-                description: 'For type=route: travel mode for a real street-following route (the app returns distance + time). Pick from the verb the user used ("walk" → walking, "drive" → driving). Defaults to walking.',
-              },
-              latitude: { type: 'number', minimum: -90, maximum: 90, description: 'Explicit latitude (use only if no good place name exists).' },
-              longitude: { type: 'number', minimum: -180, maximum: 180 },
-              toTarget: { type: 'string', maxLength: 200, description: 'For type=arrow: the destination place name.' },
-              toLatitude: { type: 'number', minimum: -90, maximum: 90 },
-              toLongitude: { type: 'number', minimum: -180, maximum: 180 },
-              label: { type: 'string', maxLength: 120, description: 'Short caption shown on the map (a few words). Optional.' },
-              color: {
-                type: 'string',
-                enum: ['primary', 'amber', 'cyan', 'green', 'red'],
-                description: 'Accent color. primary = neutral, amber = point of interest, cyan = infrastructure, green = confirmed/safe, red = alert.',
-              },
-              footprint: { type: 'boolean', description: 'For type=area/highlight: trace the real building or campus outline from map data. Defaults true for area.' },
-              intent: { type: 'string', enum: ['the_thing', 'around_the_thing'], description: 'For type=area: "the_thing" (default) outlines the place itself (its footprint/boundary); "around_the_thing" highlights a surrounding zone (a buffered radius around it). Infer from phrasing: "the Capitol"/"show me X" → the_thing; "around/near/by X" or "the area around X" → around_the_thing.' },
-              entityKind: { type: 'string', enum: ['building', 'compound', 'district', 'street', 'point_feature'], description: 'What KIND of thing the target IS — a fact, not a style choice: building = one structure; compound = campus/grounds/mall/park; district = neighborhood or area of a city; street = a named road/corridor; point_feature = monument/statue/memorial/plaque/fountain or other small point landmark. Set it whenever you know it — it routes the resolver to the right footprint source (point_feature anchors monuments as precise points instead of adopting a nearby building outline).' },
-              screenX: { type: 'number', minimum: 0, maximum: 1, description: 'Fallback only: when you cannot name/geocode the place but can SEE it in the latest viewport screenshot, the normalized horizontal position (0=left, 1=right) of the spot. The app converts it back to a real world point under that pixel.' },
-              screenY: { type: 'number', minimum: 0, maximum: 1, description: 'Fallback only: normalized vertical position (0=top, 1=bottom) of the spot in the latest viewport screenshot.' },
-              toScreenX: { type: 'number', minimum: 0, maximum: 1, description: 'For type=arrow: normalized x of the arrow destination from the screenshot (pixel fallback).' },
-              toScreenY: { type: 'number', minimum: 0, maximum: 1, description: 'For type=arrow: normalized y of the arrow destination from the screenshot (pixel fallback).' },
-            },
-            required: ['type'],
-          },
-        },
-        flyTo: { type: 'boolean', description: 'Also move the camera to frame the first annotation. Default false — leave false if the user is already looking at the spot.' },
-        persist: { type: 'boolean', description: 'Keep annotations until cleared (true, default) or let them auto-fade after ~20s (false).' },
-      },
-      required: ['annotations'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'clear_annotations',
-    description: 'Erase ALL map annotations previously drawn with annotate_map. Call this ONLY when the user EXPLICITLY asks to clear or reset the map. Annotations accumulate and persist across navigation and topic changes by design — never clear on your own initiative.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {},
-    },
-  },
-  {
-    type: 'function',
-    name: 'move_camera',
-    description: 'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate — one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs. Say the RESULTING state when confirming ("Orbiting slowly").',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        motion: { type: 'string', enum: ['orbit', 'pan', 'tilt', 'rotate', 'stop'] },
-        direction: { type: 'string', enum: ['left', 'right', 'up', 'down'], description: 'Required except for orbit (defaults right/clockwise) and stop.' },
-        speed: { type: 'string', enum: ['slow', 'normal', 'fast'] },
-        mode: { type: 'string', enum: ['once', 'continuous'], description: 'once = bounded eased nudge (default); continuous = until stop/manual input.' },
-      },
-      required: ['motion'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'fly_route',
-    description: 'Cinematic dolly along an EXISTING route annotation (drawn earlier with annotate_map type=route) — flies the street-following path from start to end. Omit label for the newest route. If no route is drawn, this fails with guidance: draw the route first.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        label: { type: 'string', description: 'Match an existing route mark by (partial) label.' },
-        speed: { type: 'string', enum: ['slow', 'normal', 'fast'] },
-      },
-    },
-  },
-  {
-    type: 'function',
-    name: 'analyst_query',
-    description: 'Answer questions ABOUT the data currently loaded on the map — counts, lists, superlatives, and attribute filters over live layers (flights, military, ships, fires, earthquakes). Examples: "how many flights over Texas", "biggest fire near LA", "which ships are headed to Oakland", "anything above 40,000 feet", "fastest thing in view". Queries ONLY client-side data from ENABLED layers — if the needed layer is off, say so and offer to enable it. For a follow-up about the previous answer\'s set ("which of those is closest?"), set followUp=true and send only the new filters/sort.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        layers: {
-          type: 'array',
-          items: { type: 'string', enum: ['flights', 'military', 'ais-live-vessels', 'local-firms', 'earthquakes'] },
-          description: 'Layers to query. fires/wildfires → local-firms; ships/vessels → ais-live-vessels.',
-        },
-        scope: {
-          type: 'object',
-          additionalProperties: false,
-          description: 'Spatial scope. Default: view (near the camera). Use kind=region for "over Texas"-style asks; kind=anywhere for global questions.',
-          properties: {
-            kind: { type: 'string', enum: ['view', 'region', 'radius', 'anywhere'] },
-            name: { type: 'string', description: 'For kind=region: a state/country ("Texas", "France") or a named natural region ("the Alps", "Gulf of Mexico").' },
-            km: { type: 'number', description: 'For kind=radius.' },
-            center: { type: 'object', additionalProperties: false, properties: { lat: { type: 'number' }, lon: { type: 'number' } } },
-          },
-        },
-        filters: {
-          type: 'array',
-          description: 'Attribute predicates, ANDed. ALTITUDE IS METERS (40,000 ft = 12192). Fields: altitudeM, speedMps, military, onGround, aircraftClass, callsign, operator, routeOrigin, routeDestination, originCountry (flights); speedKts, shipType, destination (ships); frp, confidence (fires); magnitude, depthKm, place (earthquakes).',
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              field: { type: 'string' },
-              op: { type: 'string', enum: ['gt', 'gte', 'lt', 'lte', 'eq', 'neq', 'contains'] },
-              value: {},
-            },
-            required: ['field', 'op', 'value'],
-          },
-        },
-        sortBy: { type: 'string', description: 'Field to rank by, or "distance" for nearest-first.' },
-        sortDir: { type: 'string', enum: ['asc', 'desc'] },
-        limit: { type: 'number' },
-        followUp: { type: 'boolean', description: 'true = re-query the PREVIOUS result set instead of fresh data.' },
-      },
-    },
-  },
-  {
-    type: 'function',
-    name: 'next_iss_pass',
-    description: "When the user asks when the ISS / the space station will next fly over: returns the next visible ISS pass for the current camera location (or an explicit lat/lon) — rise time (ISO + minutes from now), rise compass direction, peak elevation, and duration. Requires the satellites layer to have loaded its catalog at least once this session; if it hasn't, tell the user to enable the satellites layer and try again.",
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        latitude: { type: 'number', minimum: -90, maximum: 90, description: 'Optional observer latitude. Omit to use the current camera position.' },
-        longitude: { type: 'number', minimum: -180, maximum: 180, description: 'Optional observer longitude. Omit to use the current camera position.' },
-        minElevationDeg: { type: 'number', minimum: 5, maximum: 60, description: 'Minimum peak elevation (deg) to count as a pass. Default 10.' },
-      },
-    },
-  },
-];
 
 /**
  * Load the `ws` constructor once.
@@ -6862,7 +5198,7 @@ function militaryInstallationsProxy() {
           'X-Military-Installations': request.shared ? 'INFLIGHT' : 'MISS',
         });
         res.end(JSON.stringify(payload));
-      } catch (error) {
+      } catch {
         if (cached && now - cached.cachedAt <= MILITARY_INSTALLATION_STALE_MS) {
           res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Military-Installations': 'STALE' });
           res.end(JSON.stringify({ ...cached.payload, status: 'stale' }));
@@ -7351,6 +5687,7 @@ export default defineConfig(({ mode }) => {
       rocketLaunchesProxy(),
       terrainHeightsProxy(),
       adsbdbProxy(),
+      openZenithProxy(),
       overpassProxy(),
       militaryInstallationsProxy(),
       regionalBriefProxy(),

@@ -149,8 +149,8 @@ export class MapStackController {
   isStackAvailable(id) {
     const stack = this.getStack(id);
     if (!stack) return false;
-    if (stack.kind === 'photoreal') return !!this.googleTileset;
-    if (stack.requiresIon) return !!this.cesiumToken;
+    if (stack.kind === 'photoreal') return Boolean(this.googleTileset);
+    if (stack.requiresIon) return Boolean(this.cesiumToken);
     return true;
   }
 
@@ -211,7 +211,7 @@ export class MapStackController {
       stacks: this.getStacks(),
       status,
       lastError: this._lastError,
-      hasCesiumIonToken: !!this.cesiumToken,
+      hasCesiumIonToken: Boolean(this.cesiumToken),
     };
   }
 
@@ -245,7 +245,7 @@ export class MapStackController {
 
     if (this.googleTileset) this.googleTileset.show = false;
     this.viewer.scene.globe.show = true;
-    await this._setWorldTerrainEnabled(!!this.cesiumToken, gen);
+    await this._setWorldTerrainEnabled(Boolean(this.cesiumToken), gen);
   }
 
   async _getImageryProvider(stack) {

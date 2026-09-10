@@ -726,7 +726,7 @@ async function main() {
 
     const flModelUp = await page.waitForFunction((icao) => {
       const m = window.__findTrackedModel(icao);
-      return !!(m && m.ready && m.show);
+      return Boolean(m && m.ready && m.show);
     }, { timeout: 40000, polling: 250 }, TURN.flights[0].icao).then(() => true).catch(() => false);
     record('flights: tracked 3D model rendered (ready+shown)', flModelUp, flModelUp ? 'model up' : 'model never became ready');
     if (!flModelUp) { finish(); return; }
@@ -812,7 +812,7 @@ async function main() {
 
     const milModelUp = await page.waitForFunction((hex) => {
       const m = window.__findTrackedModel(hex);
-      return !!(m && m.ready && m.show);
+      return Boolean(m && m.ready && m.show);
     }, { timeout: 40000, polling: 250 }, TURN.military[0].hex).then(() => true).catch(() => false);
     record('military: tracked 3D model rendered (ready+shown)', milModelUp, milModelUp ? 'model up' : 'model never became ready');
     if (milModelUp) {
@@ -877,7 +877,7 @@ async function main() {
       }, icao);
       const up = await page.waitForFunction((id) => {
         const m = window.__findTrackedModel(id);
-        return !!(m && m.ready && m.show);
+        return Boolean(m && m.ready && m.show);
       }, { timeout: 40000, polling: 250 }, icao).then(() => true).catch(() => false);
       record(`${label}: tracked 3D model rendered (ready+shown)`, up, up ? 'model up' : 'model never became ready');
       return up;
@@ -966,7 +966,7 @@ async function main() {
     const heliTracked = await page.waitForFunction((icao) => {
       const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
       const ti = fl.getTrackedInfo();
-      return !!(ti && ti.icao24 === icao && window.__godsEyeView.viewer.trackedEntity);
+      return Boolean(ti && ti.icao24 === icao && window.__godsEyeView.viewer.trackedEntity);
     }, { timeout: 15000, polling: 250 }, TURN.heli65.icao).then(() => true).catch(() => false);
     record('heli65: tracking engaged (2D billboard mode)', heliTracked,
       heliTracked ? 'tracked' : 'tracking never engaged');

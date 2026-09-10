@@ -1,7 +1,7 @@
 /**
  * @license
  * Cesium - https://github.com/CesiumGS/cesium
- * Version 1.124
+ * Version 1.144.0
  *
  * Copyright 2011-2022 Cesium Contributors
  *
@@ -23,4 +23,4 @@
  * See https://github.com/CesiumGS/cesium/blob/main/LICENSE.md for full licensing details.
  */
 
-import{a as i}from"./chunk-SYY6FTAS.js";import"./chunk-MWSGYAUE.js";import"./chunk-5CC3QRYS.js";import"./chunk-34ULWVZF.js";import"./chunk-24JYWT5N.js";import"./chunk-LH3SUUXG.js";import"./chunk-K2M3OJ7Z.js";import"./chunk-M3A6SPGI.js";import"./chunk-D5HNP2LB.js";import{a as t,d as c}from"./chunk-S4VBGY2U.js";import"./chunk-UCTPWOTZ.js";import"./chunk-54PMPXZ4.js";import"./chunk-R62IKKEC.js";import"./chunk-N3A5CZ2S.js";import"./chunk-G75U3WZT.js";import{e as o}from"./chunk-3THTQ4QB.js";function a(r,n){return o(n)&&(r=i.unpack(r,n)),r._center=t.clone(r._center),r._ellipsoid=c.clone(r._ellipsoid),i.createGeometry(r)}var p=a;export{p as default};
+import{a as i}from"./chunk-YPTGYRJK.js";import"./chunk-IHTR4QEI.js";import"./chunk-3BERLVP2.js";import"./chunk-CVUC3Z4F.js";import"./chunk-WF6KNLYB.js";import"./chunk-VGKISNF5.js";import"./chunk-VPJRLZMB.js";import"./chunk-635BMVFD.js";import"./chunk-Y7Z6CVXH.js";import"./chunk-HHFPYI7Q.js";import"./chunk-SSZI3JCE.js";import"./chunk-LP5YXEIX.js";import"./chunk-AMKKUAL3.js";import{c}from"./chunk-WORPNHJT.js";import{a as t}from"./chunk-SWCW4GSU.js";import"./chunk-PZM5FOOW.js";import"./chunk-3MNKUQ6L.js";import{f as o}from"./chunk-J4SK6SKL.js";function a(r,n){return o(n)&&(r=i.unpack(r,n)),r._center=t.clone(r._center),r._ellipsoid=c.clone(r._ellipsoid),i.createGeometry(r)}var p=a;export{p as default};

@@ -325,11 +325,11 @@ function candidateCompare(a, b, states, now) {
   // A stateless candidate is never lifetime-pinned: its source shipped as a
   // per-frame rebuild, so it must be free to lose its slot the moment something
   // better wants it. Plain incumbency ordering below still applies.
-  const aPinned = !!aState?.selected && a.stateless !== true && now - aState.selectedAt < MIN_LIFETIME_MS;
-  const bPinned = !!bState?.selected && b.stateless !== true && now - bState.selectedAt < MIN_LIFETIME_MS;
+  const aPinned = Boolean(aState?.selected) && a.stateless !== true && now - aState.selectedAt < MIN_LIFETIME_MS;
+  const bPinned = Boolean(bState?.selected) && b.stateless !== true && now - bState.selectedAt < MIN_LIFETIME_MS;
   if (aPinned !== bPinned) return aPinned ? -1 : 1;
-  const aIncumbent = !!aState?.selected;
-  const bIncumbent = !!bState?.selected;
+  const aIncumbent = Boolean(aState?.selected);
+  const bIncumbent = Boolean(bState?.selected);
   if (aIncumbent !== bIncumbent) return aIncumbent ? -1 : 1;
   const aPriority = Number(a.priority) || 0;
   const bPriority = Number(b.priority) || 0;

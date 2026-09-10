@@ -56,7 +56,7 @@ const camPin = async () => page.evaluate(() => {
   v.camera.setView({ destination: v.scene.globe.ellipsoid.cartographicToCartesian(C.fromDegrees(window.__QA_SITE.lon, window.__QA_SITE.lat, 3000)) });
   v.camera.moveEnd.raiseEvent();
   const c = v.camera.positionCartographic;
-  return { lat: +(c.latitude * 180 / Math.PI).toFixed(3), lon: +(c.longitude * 180 / Math.PI).toFixed(3), h: Math.round(c.height) };
+  return { lat: Number((c.latitude * 180 / Math.PI).toFixed(3)), lon: Number((c.longitude * 180 / Math.PI).toFixed(3)), h: Math.round(c.height) };
 });
 console.log('camera pinned:', JSON.stringify(await camPin()));
 await page.evaluate(async () => { await window.__godsEyeView.dataManager.toggle('flights'); });
@@ -69,7 +69,7 @@ const ready = await page.evaluate(() => {
   const prims = v.scene.primitives;
   for (let i = 0; i < prims.length; i++) {
     const p = prims.get(i);
-    if (p && p.tilesLoaded !== undefined && p.show) return { tilesLoaded: !!p.tilesLoaded };
+    if (p && p.tilesLoaded !== undefined && p.show) return { tilesLoaded: Boolean(p.tilesLoaded) };
   }
   return { tilesLoaded: null };
 });
@@ -121,7 +121,7 @@ const report = await page.evaluate(() => {
       out.push({
         id: p.id,
         icao24: p.icao24,
-        rawDatumAltM: +raw.height.toFixed(1),
+        rawDatumAltM: Number(raw.height.toFixed(1)),
         renderAltM: null,
         meshM: null,
         aboveMeshM: null,
@@ -140,11 +140,11 @@ const report = await page.evaluate(() => {
     out.push({
       id: p.id,
       icao24: p.icao24,
-      rawDatumAltM: +raw.height.toFixed(1),
-      renderAltM: +visual.height.toFixed(1),
-      meshM: meshH != null ? +meshH.toFixed(1) : null,
-      aboveMeshM: meshH != null ? +(visual.height - meshH).toFixed(1) : null,
-      visualOffsetM: +(visual.height - raw.height).toFixed(1),
+      rawDatumAltM: Number(raw.height.toFixed(1)),
+      renderAltM: Number(visual.height.toFixed(1)),
+      meshM: meshH != null ? Number(meshH.toFixed(1)) : null,
+      aboveMeshM: meshH != null ? Number((visual.height - meshH).toFixed(1)) : null,
+      visualOffsetM: Number((visual.height - raw.height).toFixed(1)),
       missingVisualAnchor: false,
     });
   }

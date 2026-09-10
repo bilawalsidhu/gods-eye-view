@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { governorRequestRender } from '../renderGovernor.js';
 import {
   DETECTION_ENABLE_FADE_MS,
@@ -41,7 +40,6 @@ import {
   detectionHorizontalSector,
   labelBudgetFor,
   normalizeAllocationStrategy,
-  normalizeProfile,
   profileForDensity,
   viewScaleForAltitude,
 } from './detectionPolicy.js';
@@ -287,7 +285,7 @@ let _projectionRequestId = 0;
 function getProjectionWorker() {
   if (!_projectionWorker && typeof Worker !== 'undefined') {
     _projectionWorker = new Worker(
-      new URL('../workers/detectionProjection.worker.ts', import.meta.url),
+      new URL('../workers/detectionProjection.worker.js', import.meta.url),
       { type: 'module' },
     );
     _projectionWorker.onmessage = (e) => {
@@ -1255,7 +1253,7 @@ function _drawOverlay(frame) {
         projectedObjects[i] = {
           id: i,
           type: obj.type,
-          skipLabel: !!obj.skipLabel,
+          skipLabel: Boolean(obj.skipLabel),
           position: pos ? { x: pos.x, y: pos.y, z: pos.z } : null,
         };
       }

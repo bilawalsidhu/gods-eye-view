@@ -81,7 +81,7 @@ const apiEndpoints = {
   terrain:          `${API_BASE}/api/terrain`,
   weather:          `${API_BASE}/api/weather`,
   radio:            `${API_BASE}/api/radio`,
-  rocketLaunches:   `${API_BASE}/api/rocket-launches`,
+  rocketLaunches:   `${API_BASE}/api/launches`,
   militaryInstallations: `${API_BASE}/api/military-installations`,
   regionalBrief:    `${API_BASE}/api/regional-brief`,
 };

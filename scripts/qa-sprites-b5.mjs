@@ -112,7 +112,7 @@ const SPRITES = {
   // codes, which OpenSky lacks — the military row covers those.)
   flights: [
     { icao: 'caa001', callsign: 'FL-LGT', lon0: ROW_LON0 + 0 * ROW_STEP_DEG, lat0: 30.32, courseDeg: 0, speedMps: 80, altM: 2500, category: 2 },
-    { icao: 'caa002', callsign: 'FL-AIR', lon0: ROW_LON0 + 1 * ROW_STEP_DEG, lat0: 30.32, courseDeg: 0, speedMps: 80, altM: 2600, category: 4 },
+    { icao: 'caa002', callsign: 'FL-AIR', lon0: ROW_LON0 + Number(ROW_STEP_DEG), lat0: 30.32, courseDeg: 0, speedMps: 80, altM: 2600, category: 4 },
     { icao: 'caa003', callsign: 'FL-WID', lon0: ROW_LON0 + 2 * ROW_STEP_DEG, lat0: 30.32, courseDeg: 0, speedMps: 80, altM: 2700, category: 6 },
     { icao: 'caa004', callsign: 'FL-FJ',  lon0: ROW_LON0 + 3 * ROW_STEP_DEG, lat0: 30.32, courseDeg: 90, speedMps: 80, altM: 2800, category: 7 },
     { icao: 'caa005', callsign: 'FL-HEL', lon0: ROW_LON0 + 4 * ROW_STEP_DEG, lat0: 30.32, courseDeg: 0, speedMps: 40, altM: 1200, category: 8 },
@@ -124,7 +124,7 @@ const SPRITES = {
   ],
   military: [
     { hex: 'dda001', flight: 'ML-LGT',  t: 'C172', lon0: ROW_LON0 + 0 * ROW_STEP_DEG, lat0: 30.28, courseDeg: 0, speedMps: 60, altFt: 9000 },
-    { hex: 'dda002', flight: 'ML-GLD',  t: 'DISC', lon0: ROW_LON0 + 1 * ROW_STEP_DEG, lat0: 30.28, courseDeg: 0, speedMps: 40, altFt: 8000 },
+    { hex: 'dda002', flight: 'ML-GLD',  t: 'DISC', lon0: ROW_LON0 + Number(ROW_STEP_DEG), lat0: 30.28, courseDeg: 0, speedMps: 40, altFt: 8000 },
     { hex: 'dda003', flight: 'ML-TPR',  t: 'C130', lon0: ROW_LON0 + 2 * ROW_STEP_DEG, lat0: 30.28, courseDeg: 0, speedMps: 80, altFt: 10000 },
     { hex: 'dda004', flight: 'ML-AIR',  t: 'A320', lon0: ROW_LON0 + 3 * ROW_STEP_DEG, lat0: 30.28, courseDeg: 0, speedMps: 80, altFt: 11000 },
     { hex: 'dda005', flight: 'ML-WID',  t: 'C17',  lon0: ROW_LON0 + 4 * ROW_STEP_DEG, lat0: 30.28, courseDeg: 0, speedMps: 80, altFt: 12000 },
@@ -375,8 +375,8 @@ async function main() {
     console.log('\nB2 — per-class billboard glyph + scale');
     const bbs = await page.evaluate(() => window.__collectBillboards());
     const bbById = new Map(bbs.map((b) => [b.id, b]));
-    let glyphBad = [];
-    let scaleBad = [];
+    const glyphBad = [];
+    const scaleBad = [];
     for (const [id, klass] of expectedFlights) {
       const bb = bbById.get(id);
       const wantImg = aircraftIcon(klass);

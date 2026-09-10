@@ -26,7 +26,7 @@ try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 860 });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__godsEyeView?.viewer, { timeout: 90_000 });
+  await page.waitForFunction(() => Boolean(window.__godsEyeView?.viewer), { timeout: 90_000 });
   await new Promise((r) => setTimeout(r, 12_000));
   await page.evaluate(async (layerId) => {
     const gev = window.__godsEyeView;

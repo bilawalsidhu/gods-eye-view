@@ -38,7 +38,7 @@ const APP_URL = process.env.QA_BASE_URL || 'http://localhost:4173';
 const argv = Object.fromEntries(process.argv.slice(2)
   .map((a) => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? true]));
 const ANGLE = String(argv.angle || 'metal');
-const HEADFUL = !!argv.headful;
+const HEADFUL = Boolean(argv.headful);
 // Austin airport apron by default — the site qa-floor-verify pins, where the
 // mesh sits ~150 m above the geoid and burial is unmistakable.
 const SITE = {
@@ -159,7 +159,7 @@ const measure = () => page.evaluate(async (icao) => {
   let mesh = null;
   for (let attempt = 0; attempt < 10 && mesh == null; attempt += 1) {
     await pump();
-    for (const [pLat, pLon] of [[lat, lon], [+lat.toFixed(3), +lon.toFixed(3)]]) {
+    for (const [pLat, pLon] of [[lat, lon], [Number(lat.toFixed(3)), Number(lon.toFixed(3))]]) {
       for (const exclude of [[...sprites, ...models], []]) {
         try {
           const h = v.scene.sampleHeight(C.fromDegrees(pLon, pLat, 0), exclude);
@@ -172,7 +172,7 @@ const measure = () => page.evaluate(async (icao) => {
   }
   return {
     spriteH: carto.height, meshH: mesh, shown: bb.show === true,
-    lat: +lat.toFixed(5), lon: +lon.toFixed(5), terrain: { ...window.__TERRAIN },
+    lat: Number(lat.toFixed(5)), lon: Number(lon.toFixed(5)), terrain: { ...window.__TERRAIN },
   };
 }, ICAO);
 
@@ -203,8 +203,8 @@ async function sample(phase, note) {
   const dem = await demTruth(m.lat, m.lon);
   const row = {
     phase, note, ...m, demH: dem,
-    meshClearM: m.meshH != null ? +(m.spriteH - m.meshH).toFixed(2) : null,
-    demClearM: dem != null ? +(m.spriteH - dem).toFixed(2) : null,
+    meshClearM: m.meshH != null ? Number((m.spriteH - m.meshH).toFixed(2)) : null,
+    demClearM: dem != null ? Number((m.spriteH - dem).toFixed(2)) : null,
   };
   samples.push(row);
   console.log(`  ${phase} ${note}: @${m.lat},${m.lon} sprite=${m.spriteH.toFixed(1)}`

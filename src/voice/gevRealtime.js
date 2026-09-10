@@ -1,7 +1,6 @@
 import { createGevActionRunner, readLayerLifecycleSummary } from './gevActions.js';
 import {
   DEFAULT_VOICE_TIER,
-  VOICE_COST_LIMITS,
   createVoiceCostTracker,
   formatCostUsd,
   isKnownVoiceTier,
@@ -1792,8 +1791,8 @@ export class GevRealtimeController {
       this.ui.costValue.dataset.level = state.level;
       this.ui.costValue.title =
         `Estimated session cost on ${state.modelId} — ${state.responses} response(s). ` +
-        `Warns at ${formatCostUsd(state.warnUsd)}, ends the session at ${formatCostUsd(state.capUsd)}.`
-        + (state.note ? ` ${state.note}` : '');
+        `Warns at ${formatCostUsd(state.warnUsd)}, ends the session at ${formatCostUsd(state.capUsd)}.${
+         state.note ? ` ${state.note}` : ''}`;
     }
   }
 

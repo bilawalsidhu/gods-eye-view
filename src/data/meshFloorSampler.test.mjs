@@ -30,7 +30,7 @@ import {
 /** Distinct site per test — terrainHeights' cache is module-global and warm
  *  entries are permanent, so tests must not share coordinates. */
 let siteLat = 40.0;
-const nextSite = () => ({ lat: +(siteLat += 0.05).toFixed(3), lon: -97.66 });
+const nextSite = () => ({ lat: Number((siteLat += 0.05).toFixed(3)), lon: -97.66 });
 
 /** Seeds a REAL ('reearth') DEM prior for a cell through the real resolver. */
 async function seedDem(cell, ellipsoid) {

@@ -50,8 +50,6 @@ import { apiEndpoints } from '../config/apiEndpoints.js';
 
 const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 
-import { getCached, setCached, CACHE_KEYS } from './layerCache.js';
-
 /** Camera pose signature at the last vessel rotation pass. */
 let _lastCamPoseSig = '';
 /** Camera position WC at the last occluder computation — null if no occluder cached. */
@@ -86,7 +84,7 @@ let _workerPendingId = -1;
 function getVisibilityWorker() {
   if (!_visibilityWorker) {
     _visibilityWorker = new Worker(
-      new URL('../workers/aisVisibility.worker.ts', import.meta.url),
+      new URL('../workers/aisVisibility.worker.js', import.meta.url),
       { type: 'module' }
     );
     _visibilityWorker.onmessage = (e) => {
@@ -141,29 +139,14 @@ const DEFAULT_API_URL = apiEndpoints.aisLive;
 const DEFAULT_RENDER_ROWS = 12000;
 const DEFAULT_ACTIVE_LABELS = 900;
 const REFRESH_MS = 60000;
-/** Adaptive refresh: altitude bands drive poll rate. Street-level = faster updates. */
-const AIS_REFRESH_MS = {
-  street: 20_000,    // < 50km   — 20s (close-in vessel traffic moves fast)
-  city:   30_000,   // < 150km  — 30s
-  regional: 45_000, // < 500km  — 45s
-  global:  60_000,  // default  — 60s
-};
+/** Altitude bands for the adaptive-refresh watcher: crossing into a closer
+ * band triggers an immediate poll (cadence itself stays manager-armed). */
 const AIS_REFRESH_ALT_THRESHOLDS = {
   street:   50_000,
   city:    150_000,
   regional: 500_000,
 };
 
-/**
- * Get the adaptive refresh interval (ms) for the current camera altitude.
- * Street-level zoom = faster updates.
- */
-function aisRefreshIntervalForAltitude(altitudeM) {
-  if (altitudeM < AIS_REFRESH_ALT_THRESHOLDS.street) return AIS_REFRESH_MS.street;
-  if (altitudeM < AIS_REFRESH_ALT_THRESHOLDS.city)   return AIS_REFRESH_MS.city;
-  if (altitudeM < AIS_REFRESH_ALT_THRESHOLDS.regional) return AIS_REFRESH_MS.regional;
-  return AIS_REFRESH_MS.global;
-}
 /** Bounded wait for the first accepted vessel position in one enabled session. */
 export const AIS_FIRST_CONNECT_GRACE_MS = 30000;
 const AIS_FIRST_CONNECT_LABEL = 'awaiting first AIS position…';
@@ -1379,7 +1362,7 @@ function shipIcon(record, selected) {
       <path d="M0,-14 L11,10 L4,7 L0,14 L-4,7 L-11,10 Z" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linejoin="round"/>
     </g>
   </svg>`;
-  const icon = 'data:image/svg+xml;base64,' + btoa(svg);
+  const icon = `data:image/svg+xml;base64,${  btoa(svg)}`;
   shipIconCache.set(key, icon);
   return icon;
 }
@@ -1907,7 +1890,7 @@ function startSelectedVesselTrail(record) {
 async function backfillVesselTrail(mmsi, token) {
   let samples = null;
   try {
-    const response = await fetch('/api/ais-live/track?mmsi=' + encodeURIComponent(mmsi), {
+    const response = await fetch(`/api/ais-live/track?mmsi=${  encodeURIComponent(mmsi)}`, {
       signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) return;

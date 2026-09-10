@@ -64,7 +64,7 @@ function _visibleTilesetLoaded(scene) {
     for (let i = 0; i < prims.length; i++) {
       const p = prims.get(i);
       if (p instanceof Cesium.Cesium3DTileset && p.show) {
-        return !!p.tilesLoaded;
+        return Boolean(p.tilesLoaded);
       }
     }
   } catch { /* mid-teardown */ }

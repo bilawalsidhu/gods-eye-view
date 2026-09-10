@@ -80,18 +80,22 @@ async function cardCanvasInk(page) {
     const diagnostics = window.__gevWorldOverlay?.getDiagnostics?.();
     const painted = diagnostics?.paintedBySource?.firms || 0;
     const entries = diagnostics?.entriesBySource?.firms || 0;
-    if (!canvas) return {
-      present: false, ink: 0, painted, entries,
-      candidates: diagnostics?.candidateCount || 0,
-      projected: diagnostics?.projectedCount || 0,
-    };
+    if (!canvas) {
+      return {
+        present: false, ink: 0, painted, entries,
+        candidates: diagnostics?.candidateCount || 0,
+        projected: diagnostics?.projectedCount || 0,
+      };
+    }
     const ctx = canvas.getContext('2d');
     const { width, height } = canvas;
-    if (!width || !height) return {
-      present: true, ink: 0, painted, entries,
-      candidates: diagnostics?.candidateCount || 0,
-      projected: diagnostics?.projectedCount || 0,
-    };
+    if (!width || !height) {
+      return {
+        present: true, ink: 0, painted, entries,
+        candidates: diagnostics?.candidateCount || 0,
+        projected: diagnostics?.projectedCount || 0,
+      };
+    }
     const data = ctx.getImageData(0, 0, width, height).data;
     let ink = 0;
     for (let i = 3; i < data.length; i += 4) if (data[i] > 8) ink++;
@@ -471,10 +475,10 @@ async function main() {
 
   const pass = results.filter((r) => r.ok === true).length;
   const fail = results.filter((r) => r.ok === false).length;
-  console.log('\n' + '─'.repeat(60));
+  console.log(`\n${  '─'.repeat(60)}`);
   console.log(`  RESULT: ${pass} passed, ${fail} failed`);
   console.log(`  Shots : ${SHOTS_DIR}/firms-*.png`);
-  console.log('─'.repeat(60) + '\n');
+  console.log(`${'─'.repeat(60)  }\n`);
   process.exit(exitCode || (fail > 0 ? 1 : 0));
 }
 

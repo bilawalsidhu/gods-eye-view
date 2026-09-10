@@ -299,7 +299,7 @@ export function createGroundSnap() {
     const misses = entry ? entry.misses : 0;
     const miss = () => {
       // A held measurement survives the miss — only the retry schedule moves.
-      const held = !!(entry && entry.held && entry.h != null && entry.samplePos);
+      const held = Boolean(entry && entry.held && entry.h != null && entry.samplePos);
       const next = {
         h: held ? entry.h : null,
         samplePos: held ? entry.samplePos : null,

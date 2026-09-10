@@ -32,9 +32,6 @@
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CELL_SIZE_PX = 32;
-const DENSE_THRESHOLD = 0.9;
-const COOLDOWN_MS = 1200;
-const FADE_IN_MS = 150;
 
 // ─── Spatial hash ─────────────────────────────────────────────────────────────
 
@@ -93,11 +90,11 @@ function firstOrderedPlacement(candidate, sticky) {
     { corner: 'NW', px: x - w, py: y },
     { corner: 'SE', px: x + w, py: y + h },
     { corner: 'SW', px: x - w, py: y + h },
-    { corner: 'E', px: x + w, py },
+    { corner: 'E', px: x + w, py: y + h / 2 },
     { corner: 'W', px: x - w, py: y + h / 2 },
     { corner: 'N', px: x + w / 2, py: y },
     { corner: 'S', px: x + w / 2, py: y + h },
-    { corner: 'C', px, py: y + h / 2 }, // centered fallback
+    { corner: 'C', px: x + w / 2, py: y + h / 2 }, // centered fallback
   ];
   const useCorner = sticky ?? corners[0].corner;
   const idx = corners.findIndex(c => c.corner === useCorner);
@@ -163,11 +160,10 @@ function solveLabels(candidates, options, selectedKeysSet) {
     strategy = 'ELASTIC',
     layerWeights = {},
     demandByLayer = {},
-    now = Date.now(),
+    now: _now = Date.now(),
     preserveIncumbents = true,
   } = options;
 
-  const stamp = (Math.random() * 0xFFFFFF) | 0;
   const spatial = makeSpatial();
 
   // Filter and group by layer

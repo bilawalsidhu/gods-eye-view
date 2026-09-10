@@ -2566,7 +2566,7 @@ function createPrewarmHarness({ pickPosition, positionCartographic } = {}) {
       },
     },
   };
-  return { viewer, calls, fireMoveEnd: () => moveEndListener?.(), hasListener: () => !!moveEndListener };
+  return { viewer, calls, fireMoveEnd: () => moveEndListener?.(), hasListener: () => Boolean(moveEndListener) };
 }
 
 /** Drive the prewarm's debounce + idle callback by hand, deterministically. */

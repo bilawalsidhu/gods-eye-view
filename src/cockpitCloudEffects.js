@@ -226,7 +226,7 @@ export class CockpitCloudEffectsController {
   }
 
   setEnabled(enabled) {
-    const next = !!enabled;
+    const next = Boolean(enabled);
     this.enabled = next;
     try {
       localStorage.setItem(WEATHER_ENABLED_STORAGE_KEY, next ? '1' : '0');

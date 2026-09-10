@@ -428,7 +428,7 @@ test('the render-governor gate covers the parked case, with teeth on the painter
 test('aircraft brackets stay prompt because the aircraft layers hold the render loop', async () => {
   for (const file of ['./flights.js', './militaryFlights.js']) {
     const source = await readFile(new URL(file, import.meta.url), 'utf8');
-    const enable = /\n  enable\([\s\S]*?\n  \},/.exec(source)?.[0];
+    const enable = /\n {2}enable\([\s\S]*?\n {2}\},/.exec(source)?.[0];
     assert.ok(enable, `${file}: enable() is still identifiable`);
     assert.match(
       enable,

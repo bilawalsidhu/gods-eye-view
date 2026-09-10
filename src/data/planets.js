@@ -3,7 +3,6 @@
  *
  * Uses analytical Keplerian orbital mechanics (no external dependency beyond
  * Cesium). Each planet is rendered as a scaled ellipsoid + name label.
- * Orbital paths are drawn as closed polylines.
  *
  * Orbital elements reference: J2000 mean equatorial elements.
  */
@@ -37,17 +36,6 @@ const PLANET_ELEMENTS = new Map([
 
 // ─── Planet Display Metadata ───────────────────────────────────────────────────
 
-/** Equatorial radius in meters (used for ellipsoid shape and label scale). */
-const PLANET_RADII_M = {
-  mercury: 2_439_700,
-  venus:   6_051_800,
-  mars:    3_389_500,
-  jupiter: 71_492_680,
-  saturn:  60_267_000,
-  uranus:  25_559_000,
-  neptune: 24_764_000,
-};
-
 /** Visual display radius in meters — intentionally slightly larger for visibility. */
 const PLANET_DISPLAY_RADII_M = {
   mercury: 8_000_000,
@@ -69,34 +57,18 @@ const PLANET_COLORS = {
   neptune: new Cesium.Color(0.29, 0.44, 0.87, 0.95),
 };
 
-const PLANET_GLOW_COLORS = {
-  mercury: new Cesium.Color(0.5, 0.5, 0.5, 0.3),
-  venus:   new Cesium.Color(0.8, 0.6, 0.3, 0.3),
-  mars:    new Cesium.Color(0.9, 0.3, 0.1, 0.3),
-  jupiter: new Cesium.Color(0.9, 0.6, 0.2, 0.3),
-  saturn:  new Cesium.Color(0.9, 0.8, 0.6, 0.3),
-  uranus:  new Cesium.Color(0.3, 0.5, 0.7, 0.3),
-  neptune: new Cesium.Color(0.2, 0.3, 0.9, 0.3),
-};
-
 // ─── Module State ─────────────────────────────────────────────────────────────
 
 let _viewer = null;
 let _enabled = false;
-let _params = { showOrbits: true, showLabels: true };
-let _entities = new Map();   // planetId → Cesium.Entity
-let _orbitPrimitives = new Map(); // planetId → Cesium.PolylineCollection
+const _params = { showLabels: true };
+const _entities = new Map();   // planetId → Cesium.Entity
 let _preRenderRemover = null;
-let _icrfToFixed = new Cesium.Matrix3();
-let _tempMatrix = new Cesium.Matrix3();
-let _eciPos = new Cesium.Cartesian3();
-let _fixedPos = new Cesium.Cartesian3();
 
 // ─── Orbital Mechanics ───────────────────────────────────────────────────────
 
 const J2000_JD = 2451545.0; // Julian Date of J2000.0
 const TWO_PI = 2 * Math.PI;
-const GAMMA = 0.917436; // sin(Ω₀)·cos(i₀) simplified for Earth's obliquity
 
 /**
  * Solve Kepler's equation M = E - e·sin(E) via Newton-Raphson iteration.
@@ -246,68 +218,12 @@ function moonEcefPosition(time) {
   return Cesium.Cartesian3.multiplyByScalar(fixed, 1000, new Cesium.Cartesian3()); // m
 }
 
-/**
- * Compute orbital path points for a planet (ECEF, meters).
- * Returns ~180 points around a full orbit.
- * @param {string} planetId
- * @param {Cesium.JulianDate} time
- * @returns {Cesium.Cartesian3[]}
- */
-function computeOrbitPoints(planetId, time) {
-  const el = PLANET_ELEMENTS.get(planetId);
-  if (!el) return [];
-
-  const jd = Cesium.JulianDate.toDate(time).getTime() / 86400000.0 + 2440587.5;
-  const points = [];
-  const STEPS = 180;
-
-  for (let k = 0; k <= STEPS; k++) {
-    const M_k = (k / STEPS) * TWO_PI;
-    const E = solveKepler(M_k, el.e);
-    const cosE = Math.cos(E);
-    const sinE = Math.sin(E);
-    const trueAnom = 2 * Math.atan2(Math.sqrt(1 + el.e) * sinE, Math.sqrt(1 - el.e) * cosE);
-    const r = el.a * (1 - el.e * cosE);
-    const u = el.omega + trueAnom;
-
-    const cosU = Math.cos(u);
-    const sinU = Math.sin(u);
-    const { OmegaEarth, obliquity } = earthOrientationAtJd(jd);
-    const sinO = Math.sin(el.Omega - OmegaEarth);
-    const cosO = Math.cos(el.Omega - OmegaEarth);
-    const sinI = Math.sin(el.i);
-    const cosI = Math.cos(el.i);
-
-    const x_orb = r * (cosO * cosU - sinO * sinU * cosI);
-    const y_orb = r * (sinO * cosU + cosO * sinU * cosI);
-    const z_orb = r * sinU * sinI;
-
-    const x_eci = x_orb;
-    const y_eci = y_orb * cosObl + z_orb * sinObl;
-    const z_eci = -y_orb * sinObl + z_orb * cosObl;
-
-    const T = (jd - J2000_JD) / 36525.0;
-    const gmstDeg = 280.46061837 + 360.98564736629 * (jd - J2000_JD)
-      + 0.000387933 * T * T - T * T * T / 38710000.0;
-    const gmst = (gmstDeg % 360) * Math.PI / 180;
-    const cg = Math.cos(gmst);
-    const sg = Math.sin(gmst);
-
-    points.push(new Cesium.Cartesian3(
-      (x_eci * cg - y_eci * sg) * 1000,
-      (x_eci * sg + y_eci * cg) * 1000,
-      z_eci * 1000,
-    ));
-  }
-  return points;
-}
-
 // ─── Layer Interface ─────────────────────────────────────────────────────────
 
 const REFRESH_MS = 60_000; // Update ephemeris every 60s
 
 let _lastEphemerisUpdate = 0;
-let _cachedPositions = new Map(); // planetId → Cesium.Cartesian3
+const _cachedPositions = new Map(); // planetId → Cesium.Cartesian3
 
 function _updateEphemeris(julianDate) {
   const now = Cesium.JulianDate.toMilliseconds(julianDate);
@@ -350,15 +266,13 @@ const planetsLayer = {
     _viewer = viewer;
     _enabled = false;
     _entities.clear();
-    _orbitPrimitives.clear();
     _cachedPositions.clear();
     _lastEphemerisUpdate = 0;
 
     // Create entity for each planet
-    for (const [planetId, el] of PLANET_ELEMENTS) {
+    for (const planetId of PLANET_ELEMENTS.keys()) {
       const displayRadius = PLANET_DISPLAY_RADII_M[planetId];
       const color = PLANET_COLORS[planetId];
-      const glowColor = PLANET_GLOW_COLORS[planetId];
       const radii = new Cesium.Cartesian3(displayRadius, displayRadius, displayRadius);
 
       const entity = _viewer.entities.add({
@@ -428,26 +342,16 @@ const planetsLayer = {
       entity.show = true;
     }
 
-    // Show orbit paths
-    if (_params.showOrbits) {
-      for (const primitive of _orbitPrimitives.values()) {
-        primitive.show = true;
-      }
-    }
-
     // Immediate ephemeris update
     _updateEphemeris(viewer.clock.currentTime);
   },
 
-  disable(viewer) {
+  disable(_viewer) {
     _enabled = false;
     releaseContinuousRender('planets');
 
     for (const entity of _entities.values()) {
       entity.show = false;
-    }
-    for (const primitive of _orbitPrimitives.values()) {
-      primitive.show = false;
     }
   },
 
@@ -457,24 +361,14 @@ const planetsLayer = {
       _preRenderRemover = null;
     }
     for (const entity of _entities.values()) {
-      _viewer.entities.remove(entity);
+      viewer.entities.remove(entity);
     }
     _entities.clear();
-    for (const primitive of _orbitPrimitives.values()) {
-      _viewer.scene.primitives.remove(primitive);
-    }
-    _orbitPrimitives.clear();
     _cachedPositions.clear();
     _viewer = null;
   },
 
-  setParams(params = {}, { origin = 'programmatic' } = {}) {
-    if ('showOrbits' in params) {
-      _params.showOrbits = params.showOrbits;
-      for (const primitive of _orbitPrimitives.values()) {
-        primitive.show = _params.showOrbits && _enabled;
-      }
-    }
+  setParams(params = {}, { origin: _origin = 'programmatic' } = {}) {
     if ('showLabels' in params) {
       _params.showLabels = params.showLabels;
       for (const entity of _entities.values()) {

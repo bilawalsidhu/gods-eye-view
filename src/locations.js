@@ -914,7 +914,7 @@ function selectBuildingBounds(elements, targetLat, targetLon, query) {
   }
   if (!candidates.length) return null;
   candidates.sort((a, b) => b.score - a.score);
-  const { score, ...best } = candidates[0];
+  const { score: _score, ...best } = candidates[0];
   return best;
 }
 

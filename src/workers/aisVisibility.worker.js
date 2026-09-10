@@ -82,20 +82,6 @@ function isPointVisible(camX, camY, camZ, px, py, pz) {
   return dot > threshold;
 }
 
-/**
- * Compute screen-projected rotation for a vessel.
- * Simple heading projection: returns the rotation angle in radians.
- *
- * @param {number} camHeading  — camera heading in radians
- * @param {number} vesselCourseDeg — vessel course in degrees
- * @returns {number} rotation in radians
- */
-function computeVesselRotation(camHeading, vesselCourseDeg) {
-  // Difference between vessel heading and camera heading
-  let diff = ((vesselCourseDeg - camHeading + 180) % 360) - 180;
-  return diff * (Math.PI / 180);
-}
-
 self.onmessage = (e) => {
   const { positions, cameraPosition, requestId } = e.data;
 

@@ -1042,8 +1042,8 @@ check({
       }
       const body = r.text.slice(0, 400000);
       if (/\bsk-[A-Za-z0-9]{20,}/.test(body)) leaked.push(`${p}: sk- key`);
-      if (/AIza[0-9A-Za-z_\-]{30,}/.test(body)) leaked.push(`${p}: Google key`);
-      if (/(client_secret|api_?key|MAP_KEY)["']?\s*[:=]\s*["'][A-Za-z0-9_\-]{16,}/i.test(body)) leaked.push(`${p}: key-shaped assignment`);
+      if (/AIza[0-9A-Za-z_-]{30,}/.test(body)) leaked.push(`${p}: Google key`);
+      if (/(client_secret|api_?key|MAP_KEY)["']?\s*[:=]\s*["'][A-Za-z0-9_-]{16,}/i.test(body)) leaked.push(`${p}: key-shaped assignment`);
     }
     if (leaked.length) return fail(leaked.join('; '));
     if (unscannable.length) {
@@ -1276,7 +1276,7 @@ async function runBrowserGroup(record) {
       // Optimize Dep" and the module graph never evaluates. One reload after
       // the optimizer settles clears it; three strikes is a real failure.
       const stale = consoleErrors.some((e) => /Outdated Optimize Dep|504/.test(e));
-      bootNote = stale ? 'vite dep re-optimization (504) on attempt ' + attempt : `attempt ${attempt} timed out`;
+      bootNote = stale ? `vite dep re-optimization (504) on attempt ${  attempt}` : `attempt ${attempt} timed out`;
       await new Promise((r) => setTimeout(r, 5000));
     }
   }
@@ -1355,9 +1355,9 @@ async function runBrowserGroup(record) {
     let stats = null;
     let lifecycleState = null;
     for (let i = 0; i < maxSec; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
+       
       await new Promise((r) => setTimeout(r, 1000));
-      // eslint-disable-next-line no-await-in-loop
+       
       const snap = await evalBounded((id) => {
         const dm = window.__godsEyeView.dataManager;
         const mod = dm.layers.get(id)?.module;
@@ -1395,7 +1395,7 @@ async function runBrowserGroup(record) {
       for (const id of heavy) {
         if (!dm.layers.has(id)) continue;
         try {
-          // eslint-disable-next-line no-await-in-loop
+           
           await Promise.race([dm.setEnabled(id, false, { origin: 'user' }), new Promise((r) => setTimeout(r, 3000))]);
         } catch { /* teardown is best-effort */ }
       }
@@ -1421,7 +1421,7 @@ async function runBrowserGroup(record) {
         });
       }
       return {
-        hasTileset: !!g.tileset,
+        hasTileset: Boolean(g.tileset),
         tilesets,
         imagery: g.viewer.imageryLayers?.length ?? 0,
         mapStack: g.styleManager?.getVisualState?.()?.mapStack ?? null,
@@ -1455,7 +1455,7 @@ async function runBrowserGroup(record) {
     if (!vc) return { present: false };
     let diag = null;
     try { diag = vc.getDiagnostics?.(); } catch { /* never started */ }
-    return { present: true, active: !!vc.isActive?.(), status: diag?.status ?? null, hasRunner: typeof vc.runner === 'function' };
+    return { present: true, active: Boolean(vc.isActive?.()), status: diag?.status ?? null, hasRunner: typeof vc.runner === 'function' };
   }, null, 30000);
   const voiceSnapshot = voiceSnapshotR.ok ? voiceSnapshotR.value : { probeError: voiceSnapshotR.reason };
 
@@ -1466,7 +1466,7 @@ async function runBrowserGroup(record) {
     const src = String(s.source || '');
     return /adsb\.lol/i.test(src)
       ? skip(`${s.count} contacts but via the adsb.lol FALLBACK (source=${src}) — OpenSky credentials needed for the live claim`, 'OWNER-RUN')
-      : pass(`${s.count} contacts, source=${src || 'OpenSky'}, stale=${!!s.stale}`);
+      : pass(`${s.count} contacts, source=${src || 'OpenSky'}, stale=${Boolean(s.stale)}`);
   });
 
   await step('C5', async () => {
@@ -1488,13 +1488,13 @@ async function runBrowserGroup(record) {
     // assert both — "healthy frame loop" is the claim, so it is the assertion.
     let ui = null;
     for (let i = 0; i < 30; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
+       
       ui = await evalBounded(() => {
         const st = window.__godsEyeView.dataManager.layers.get('cctv')?.module?.getUIState?.();
         return st ? { count: st.count, loading: st.loading, ambient: st.ambientCards, error: st.error } : null;
       }, null) || ui;
       if (ui && ui.count > 0 && (ui.ambient?.count || 0) > 0 && (ui.ambient?.frameFetches || 0) > 0) break;
-      // eslint-disable-next-line no-await-in-loop
+       
       await new Promise((res) => setTimeout(res, 1000));
     }
     if (!ui) return fail('cctv module exposed no UI state');
@@ -1624,7 +1624,7 @@ async function runBrowserGroup(record) {
     // be in flight — that is how a full pass produced tiles=0 on a build whose
     // isolated re-run coloured 3,891 dots.)
     if (trafficFlowInconclusive(s)) {
-      return crash(`traffic's flow fetch had not landed when the 45 s budget expired: tiles=0, loading=${!!s.loading}, label="${String(s.loadingLabel || '').slice(0, 40)}", road dots=${s.count ?? 0} — this check could not determine whether live flow renders, so it verified nothing`);
+      return crash(`traffic's flow fetch had not landed when the 45 s budget expired: tiles=0, loading=${Boolean(s.loading)}, label="${String(s.loadingLabel || '').slice(0, 40)}", road dots=${s.count ?? 0} — this check could not determine whether live flow renders, so it verified nothing`);
     }
     return fail(`mode=${s.mode} tiles=${s.tilesFetched} coverage=${s.flowCoveragePct} colored=${colored}`);
   });
@@ -1648,7 +1648,7 @@ async function runBrowserGroup(record) {
     const stillLoading = [];
     let loadNote = '';
     for (const id of bundled) {
-      // eslint-disable-next-line no-await-in-loop
+       
       const r = await settle(id, 45);
       const s = r.stats || {};
       const label = id.replace(/^local-|^telegeography-/, '');
@@ -1676,7 +1676,7 @@ async function runBrowserGroup(record) {
       for (const label of contested) {
         const id = bundled.find((b2) => b2.replace(/^local-|^telegeography-/, '') === label);
         if (!id) continue;
-        // eslint-disable-next-line no-await-in-loop
+         
         const r2 = await settle(id, 45);
         retried.push(`${label}=${r2.stats?.count ?? 0}`);
       }
@@ -1722,7 +1722,7 @@ async function runBrowserGroup(record) {
     for (let i = 0; i < 40; i += 1) {
       if (ms.count > 0) break;
       if (ms.error && !/zoom.?in/i.test(String(ms.error))) break;
-      // eslint-disable-next-line no-await-in-loop
+       
       const snap = await evalBounded(() => {
         const dm = window.__godsEyeView.dataManager;
         // Nudge the viewport-driven reload: the layer reloads on camera settle.
@@ -1730,7 +1730,7 @@ async function runBrowserGroup(record) {
         return dm.layers.get('military-installations')?.module?.getStats?.() ?? null;
       }, null, 10000);
       if (snap) ms = snap;
-      // eslint-disable-next-line no-await-in-loop
+       
       await new Promise((r) => setTimeout(r, 1000));
     }
     if (mi.missing) return fail(`military-installations layer is not registered [bundled: ${out.join(', ')}]`);
@@ -1764,7 +1764,7 @@ async function runBrowserGroup(record) {
     const SELF_ARM = ['flights', 'satellites', 'earthquakes', 'telegeography-submarine-cables'];
     if (armed.length === 0) {
       for (const id of SELF_ARM) {
-        // eslint-disable-next-line no-await-in-loop
+         
         await settle(id, 25);
       }
       const nowOn = (await evalBounded(() => [...(window.__godsEyeView.dataManager.getEnabledLayerIds?.() || [])], null, 20000)) || [];
@@ -1820,7 +1820,7 @@ async function runBrowserGroup(record) {
       // measuring, or a healthy credit reads as 0x0.
       for (let i = 0; i < 4; i += 1) {
         viewer.scene.requestRender();
-        // eslint-disable-next-line no-await-in-loop
+         
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       }
       await new Promise((r) => setTimeout(r, 1200));
@@ -1829,11 +1829,11 @@ async function runBrowserGroup(record) {
       const rect = el?.getBoundingClientRect();
       const out = {
         clean: document.body.classList.contains('ui-clean-view'),
-        present: !!el,
+        present: Boolean(el),
         display: cs?.display, visibility: cs?.visibility, opacity: cs?.opacity,
         w: rect?.width, h: rect?.height,
         text: (el?.textContent || '').trim().slice(0, 80),
-        hasLogo: !!el?.querySelector('.cesium-credit-logoContainer, img'),
+        hasLogo: Boolean(el?.querySelector('.cesium-credit-logoContainer, img')),
         // The container itself can measure 0x0 while its positioned children
         // paint — report the largest child box so the number means something.
         childBox: [...(el?.querySelectorAll('*') || [])]
@@ -1868,8 +1868,8 @@ async function runBrowserGroup(record) {
     if (!inPageR.ok) return crash(`could not read browser state for the key-leak scan: ${inPageR.reason}`);
     const inPage = inPageR.value;
     if (/\bsk-[A-Za-z0-9]{20,}/.test(inPage.storage)) leaked.push('localStorage holds an sk- key');
-    if (/AIza[0-9A-Za-z_\-]{30,}/.test(inPage.storage)) leaked.push('localStorage holds a Google key');
-    const keyish = requestUrls.filter((u) => u.startsWith(APP_ORIGIN) && /[?&](key|api_?key|token|client_secret)=[A-Za-z0-9_\-]{12,}/i.test(u));
+    if (/AIza[0-9A-Za-z_-]{30,}/.test(inPage.storage)) leaked.push('localStorage holds a Google key');
+    const keyish = requestUrls.filter((u) => u.startsWith(APP_ORIGIN) && /[?&](key|api_?key|token|client_secret)=[A-Za-z0-9_-]{12,}/i.test(u));
     if (keyish.length) leaked.push(`${keyish.length} same-origin URL(s) carry a key query param: ${keyish[0].slice(0, 90)}`);
     return leaked.length === 0
       ? pass(`${requestUrls.length} requests + localStorage scanned, no credential material`)
@@ -1891,7 +1891,7 @@ async function runBrowserGroup(record) {
         try {
           g.styleManager.applyVisualState({ style });
         } catch (e) { seen.push({ style, label, error: String(e?.message || e).slice(0, 80) }); continue; }
-        // eslint-disable-next-line no-await-in-loop
+         
         await new Promise((res) => setTimeout(res, 700));
         const vs = g.styleManager.getVisualState?.() ?? null;
         seen.push({ style, label, observed: vs?.style ?? null, activeStyle: g.styleManager.activeStyle ?? null });
@@ -1923,7 +1923,7 @@ async function runBrowserGroup(record) {
       if (!el) return null;
       return {
         label: el.getAttribute('aria-label') || el.title || 'reset-globe-view',
-        cockpitTwin: !!document.getElementById('cockpit-reset-globe'),
+        cockpitTwin: Boolean(document.getElementById('cockpit-reset-globe')),
       };
     });
     if (!foundR.ok) return crash(`could not look for the reset-to-globe control: ${foundR.reason}`);
@@ -1959,9 +1959,9 @@ async function runBrowserGroup(record) {
     if (!clickR.value?.clicked) return fail(`the reset control could not be clicked: ${clickR.value?.reason}`);
     let altKm = before;
     for (let i = 0; i < 15; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
+       
       await new Promise((r) => setTimeout(r, 1000));
-      // eslint-disable-next-line no-await-in-loop
+       
       altKm = (await evalBounded(() => window.__godsEyeView.viewer.camera.positionCartographic.height / 1000, null, 20000)) ?? altKm;
       if (altKm > 5000) break;
     }
@@ -1998,7 +1998,7 @@ async function runBrowserGroup(record) {
       const vc = window.__gevVoiceCommands;
       try { await vc.start?.(); } catch { /* the rejection is the point */ }
       for (let i = 0; i < 20; i += 1) {
-        // eslint-disable-next-line no-await-in-loop
+         
         await new Promise((r) => setTimeout(r, 500));
         const status = document.getElementById('gev-voice-status')?.textContent?.trim() || '';
         if (status && status !== 'CONNECTING') break;
@@ -2011,7 +2011,7 @@ async function runBrowserGroup(record) {
         errorDetail: document.getElementById('gev-voice-error-detail')?.textContent?.trim() || null,
         dataStatus: document.getElementById('gev-voice-control')?.dataset?.status || null,
         recentError: diag?.recentErrors?.[0] ? { source: diag.recentErrors[0].source, message: diag.recentErrors[0].message } : null,
-        appAlive: !!window.__godsEyeView?.viewer,
+        appAlive: Boolean(window.__godsEyeView?.viewer),
       };
     }, null, 60000);
     if (!surfacedR.ok) return crash(`could not drive the keyless voice path: ${surfacedR.reason}`);
@@ -2258,7 +2258,7 @@ async function main() {
   const x = byStatus(CRASH).length;
   const s = byStatus(SKIP).length;
 
-  console.log(`\n${C.b('  ── L9 SCOREBOARD ' + '─'.repeat(52))}`);
+  console.log(`\n${C.b(`  ── L9 SCOREBOARD ${  '─'.repeat(52)}`)}`);
   for (const g of ['A', 'B', 'C', 'D', 'M']) {
     const rows = results.filter((r) => r.group === g);
     if (!rows.length) continue;

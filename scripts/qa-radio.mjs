@@ -764,7 +764,7 @@ async function main() {
               if (outcome === 'reject') throw new Error(`QA ${phase} rejection`);
               return false;
             }
-            shouldEnable ? enabled.add(layerId) : enabled.delete(layerId);
+            if (shouldEnable) enabled.add(layerId); else enabled.delete(layerId);
             return true;
           };
           const result = await styleManager._runUserFacingContextAction(
@@ -842,7 +842,7 @@ async function main() {
                 if (outcome === 'reject') throw new Error('QA direct isolation rejection');
                 return false;
               }
-              shouldEnable ? enabled.add(candidateId) : enabled.delete(candidateId);
+              if (shouldEnable) enabled.add(candidateId); else enabled.delete(candidateId);
               return true;
             };
             const reason = await dataManager._visibilityBlockReason({
@@ -891,7 +891,7 @@ async function main() {
             params: {},
           };
           dataManager.setEnabled = async (candidateId, shouldEnable) => {
-            shouldEnable ? enabled.add(candidateId) : enabled.delete(candidateId);
+            if (shouldEnable) enabled.add(candidateId); else enabled.delete(candidateId);
             return true;
           };
           styleManager._handleContextLayerChange({
@@ -928,7 +928,7 @@ async function main() {
           };
           dataManager.setEnabled = async (candidateId, shouldEnable) => {
             if (candidateId === 'local-datacenters' && shouldEnable) return false;
-            shouldEnable ? enabled.add(candidateId) : enabled.delete(candidateId);
+            if (shouldEnable) enabled.add(candidateId); else enabled.delete(candidateId);
             return true;
           };
           styleManager._handleContextLayerChange({
@@ -1071,9 +1071,9 @@ async function main() {
           if (layerId === 'military-installations' && shouldEnable) enabled.add(layerId);
           return true;
         };
-        if (installations) installations.searchNearby = async () => {
+        if (installations) {installations.searchNearby = async () => {
           throw new Error('QA installation search rejection');
-        };
+        };}
         document.getElementById('installations-search-btn').click();
         await new Promise((resolve) => setTimeout(resolve, 50));
         const installationRejectionMessage = document.getElementById('toast').textContent;
@@ -1230,8 +1230,6 @@ async function main() {
     const clusterBadge = await page.evaluate(async () => {
       const viewer = window.__godsEyeView.viewer;
       const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
-      const { distanceFade } = await import('/src/overlays/worldOverlayDraw.js');
-      const { radioStationIdFromPick } = await import('/src/data/radio.js');
       const baselineSolveRevision = getWorldOverlayDiagnostics().solveRevision;
       const source = Array.from({ length: viewer.dataSources.length }, (_, index) => viewer.dataSources.get(index))
         .find((item) => item.name === 'Radio stations');
@@ -1794,7 +1792,7 @@ async function main() {
           for (const key of Object.keys(stack.dataset)) delete stack.dataset[key];
           Object.assign(stack.dataset, state.dataset);
         }
-        prior.focusId && document.getElementById(prior.focusId)?.focus({ preventScroll: true });
+        if (prior.focusId) document.getElementById(prior.focusId)?.focus({ preventScroll: true });
         const panelsRestored = Object.entries(prior.panels).every(([id, state]) => {
           const panel = document.getElementById(id);
           return panel.className === state.className
@@ -1920,7 +1918,7 @@ async function main() {
       manager._setHudVariant(prior.hudVariant);
       manager.hud.setMode(prior.hudMode);
       manager._updateHudButtonState();
-      prior.focusId && document.getElementById(prior.focusId)?.focus({ preventScroll: true });
+      if (prior.focusId) document.getElementById(prior.focusId)?.focus({ preventScroll: true });
       return cases;
     });
     check(
@@ -2305,7 +2303,7 @@ async function main() {
         localStorage.clear();
         for (const [key, value] of Object.entries(prior.storage)) localStorage.setItem(key, value);
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        prior.focusId && document.getElementById(prior.focusId)?.focus({ preventScroll: true });
+        if (prior.focusId) document.getElementById(prior.focusId)?.focus({ preventScroll: true });
         result.restoredExactly = document.body.className === prior.bodyClassName
           && manager.cockpitView.active === prior.cockpitActive
           && manager.cockpitView.update === realCockpitUpdate

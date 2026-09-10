@@ -1156,7 +1156,7 @@ test('Pause and Stop preserve independent dedicated and generic Radio ON across 
               const sent = [];
               const visibility = [];
               const trace = [];
-              let dataManager;
+              const dataManager = new DataLayerManager({});
               const runPhase = (phase) => async () => {
                 trace.push(`${phase}:start`);
                 if (phase === heldPhase) {
@@ -1192,7 +1192,6 @@ test('Pause and Stop preserve independent dedicated and generic Radio ON across 
                   return controlSucceeds;
                 },
               };
-              dataManager = new DataLayerManager({});
               dataManager.register(radioLayer);
               dataManager.subscribe((change) => {
                 if (change.type === 'visibility') visibility.push(change.enabled);
@@ -1694,7 +1693,7 @@ test('failed same-response Stop preserves Select auto-enable held inside real ma
     audioState: 'playing',
     volume: 0.8,
   };
-  let dataManager;
+  const dataManager = new DataLayerManager({});
   const radioLayer = {
     id: 'radio',
     name: 'Radio',
@@ -1729,7 +1728,6 @@ test('failed same-response Stop preserves Select auto-enable held inside real ma
       return state.selected;
     },
   };
-  dataManager = new DataLayerManager({});
   dataManager.register(radioLayer);
   const ui = {
     root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
@@ -1947,7 +1945,7 @@ test('direct user Radio OFF aborts an in-flight voice enable before settled publ
   const initStarted = new Promise((resolve) => { markInitStarted = resolve; });
   const sent = [];
   const visibility = [];
-  let dataManager;
+  const dataManager = new DataLayerManager({});
   const state = { selected: null, audioState: 'stopped', volume: 0.8 };
   const radioLayer = {
     id: 'radio',
@@ -1971,7 +1969,6 @@ test('direct user Radio OFF aborts an in-flight voice enable before settled publ
       return state.selected;
     },
   };
-  dataManager = new DataLayerManager({});
   dataManager.register(radioLayer);
   dataManager.subscribe((change) => {
     if (change.type === 'visibility') visibility.push(`${change.origin}:${change.enabled}`);
@@ -2033,7 +2030,7 @@ test('direct user Radio OFF freezes a prepared handoff until disable success or 
       const disableGate = new Promise((resolve) => { releaseDisable = resolve; });
       const disableStarted = new Promise((resolve) => { markDisableStarted = resolve; });
       const trace = [];
-      let dataManager;
+      const dataManager = new DataLayerManager({});
       const radioLayer = {
         id: 'radio',
         name: 'Radio',
@@ -2064,7 +2061,6 @@ test('direct user Radio OFF freezes a prepared handoff until disable success or 
           return true;
         },
       };
-      dataManager = new DataLayerManager({});
       dataManager.register(radioLayer);
       await dataManager.setEnabled('radio', true);
       const ui = {
@@ -2481,10 +2477,10 @@ test('estimateDataUrlBytes is safe on non-strings', () => {
 test('estimateDataUrlBytes flags a payload over the 200KB ceiling', () => {
   const LIMIT = 200 * 1024;
   // ~300 KB of base64 (each char ~0.75 bytes) decodes well over the ceiling.
-  const big = 'data:image/jpeg;base64,' + 'A'.repeat(300 * 1024);
+  const big = `data:image/jpeg;base64,${  'A'.repeat(300 * 1024)}`;
   assert.ok(estimateDataUrlBytes(big) > LIMIT);
   // A small one stays under.
-  const small = 'data:image/jpeg;base64,' + 'A'.repeat(1024);
+  const small = `data:image/jpeg;base64,${  'A'.repeat(1024)}`;
   assert.ok(estimateDataUrlBytes(small) < LIMIT);
 });
 

@@ -84,7 +84,7 @@ function candidateIds(layer) {
 }
 
 test('Cockpit lifecycle publishes one normalized aircraft identity to both detection owners', () => {
-  const dispatcher = /dispatchCockpitModeChanged\(active, info = null\) \{[\s\S]*?\n  \}/
+  const dispatcher = /dispatchCockpitModeChanged\(active, info = null\) \{[\s\S]*?\n {2}\}/
     .exec(UI_SOURCE)?.[0];
   assert.ok(dispatcher, 'Cockpit event dispatcher is defined');
   assert.match(dispatcher, /info\?\.icao24/);

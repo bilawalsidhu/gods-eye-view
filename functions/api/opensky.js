@@ -36,7 +36,7 @@ export async function onRequest({ request, env }) {
       'User-Agent': 'gods-eye-view/1.0 (+https://github.com/bilawalsidhu/gods-eye-view)',
     };
     if (env.OPENSKY_USERNAME && env.OPENSKY_PASSWORD) {
-      headers['Authorization'] = `Basic ${btoa(env.OPENSKY_USERNAME + ':' + env.OPENSKY_PASSWORD)}`;
+      headers['Authorization'] = `Basic ${btoa(`${env.OPENSKY_USERNAME}:${env.OPENSKY_PASSWORD}`)}`;
     }
 
     console.log('[/api/opensky] fetching:', url.toString().substring(0, 100));
@@ -45,7 +45,7 @@ export async function onRequest({ request, env }) {
     return proxyResponse(res);
   } catch (err) {
     console.error('[/api/opensky] error:', err.message, err.cause);
-    return errorResponse('OpenSky proxy error: ' + err.message, 500);
+    return errorResponse(`OpenSky proxy error: ${err.message}`, 500);
   }
 }
 

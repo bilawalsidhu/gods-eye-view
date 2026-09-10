@@ -17,6 +17,10 @@
   "engines": {
     "node": ">=24.14.0 <25 || >=26 <27"
   },
+  "overrides": {
+    "@cesium/engine": "26.2.0",
+    "@cesium/widgets": "16.1.1"
+  },
   "keywords": [
     "cesium",
     "3d-globe",
@@ -37,15 +41,15 @@
     "opensky:import": "./scripts/opensky-import-client.sh",
     "build": "node scripts/copy-cesium-assets.mjs && vite build",
     "preview": "vite preview",
+    "lint": "eslint . --max-warnings 0",
     "test": "node scripts/run-unit-tests.mjs",
+    "test:coverage": "node scripts/run-unit-tests.mjs --coverage",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs"
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.5",
-    "cesium": "^1.124.0",
+    "cesium": "1.144.0",
     "egm96-universal": "^1.1.1",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
@@ -54,11 +58,16 @@
     "satellite.js": "^6.0.2"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
     "@zip.js/zip.js": "^2.7.44",
+    "axe-core": "^4.13.0",
+    "eslint": "^9.39.5",
+    "globals": "^17.11.0",
     "playwright": "^1.62.1",
     "puppeteer": "^24.37.5",
-    "sharp": "^0.34.5",
-    "tsx": "^4.23.12",
+    "sharp": "^0.35.4",
     "typescript": "^7.0.2",
     "vite": "^6.0.0",
     "vite-plugin-pwa": "^0.21.1",

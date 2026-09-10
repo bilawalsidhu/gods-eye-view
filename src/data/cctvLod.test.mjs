@@ -211,7 +211,7 @@ test('selectCctvLod with viewport dims routes the fill through screen distributi
   assert.ok(selected.cardIds.includes('periphery'), 'periphery cell holds a card');
   // Without screen info the original nearest-first cap applies unchanged.
   const plain = selectCctvLod(
-    [...clustered, periphery].map(({ sx, sy, ...rest }) => rest),
+    [...clustered, periphery].map(({ sx: _sx, sy: _sy, ...rest }) => rest),
     { cameraHeightM: 500 }
   );
   assert.equal(plain.cardIds.includes('periphery'), false);
@@ -302,7 +302,7 @@ test('center weighting deterministically favors center without starving peripher
   assert.deepEqual(reordered.cardIds, selected.cardIds, 'input order cannot affect winners or ordering');
 
   const legacy = selectCctvLod(
-    [...edge, ...center].map(({ sx, sy, ...candidate }) => candidate),
+    [...edge, ...center].map(({ sx: _sx, sy: _sy, ...candidate }) => candidate),
     { cameraHeightM: 500 },
   );
   assert.equal(legacy.cardIds.filter((id) => id.startsWith('center-')).length, 0);

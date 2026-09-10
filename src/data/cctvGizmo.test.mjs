@@ -74,7 +74,7 @@ test('ringAngle: quadrant sweep in the (basisA, basisB) frame', () => {
   const center = c3(0, 0, 0);
   const a = c3(1, 0, 0);
   const b = c3(0, 1, 0);
-  assert.ok(Math.abs(ringAngle(c3(5, 0, 0), center, a, b) - 0) < 1e-9);
+  assert.ok(Math.abs(Number(ringAngle(c3(5, 0, 0), center, a, b))) < 1e-9);
   assert.ok(Math.abs(ringAngle(c3(0, 5, 0), center, a, b) - Math.PI / 2) < 1e-9);
   assert.ok(Math.abs(Math.abs(ringAngle(c3(-5, 0, 0), center, a, b)) - Math.PI) < 1e-9);
   assert.ok(Math.abs(ringAngle(c3(0, -5, 0), center, a, b) + Math.PI / 2) < 1e-9);

@@ -476,8 +476,8 @@ export async function resolveAnnotationTarget({
   if (trace.query) {
     console.log(
       `[Resolver] "${trace.query}": places=${trace.places} geocode=${trace.geocode} `
-      + `osmSnap=${trace.osmSnap} → FINAL source=${source} ${lat.toFixed(5)},${lon.toFixed(5)}`
-      + (footprint && deferFootprint ? ' (outline pending)' : ''),
+      + `osmSnap=${trace.osmSnap} → FINAL source=${source} ${lat.toFixed(5)},${lon.toFixed(5)}${
+       footprint && deferFootprint ? ' (outline pending)' : ''}`,
     );
   }
   return {
@@ -1417,7 +1417,7 @@ export function isGroundsLikeAsk(target, label, entityKind) {
  */
 const monumentInflight = new Map(); // centerKey → in-flight sweep promise (batch dedup)
 
-async function fetchLocalMonument(lat, lon, query, signal) {
+async function fetchLocalMonument(lat, lon, query, _signal) {
   const centerKey = `${lat.toFixed(2)},${lon.toFixed(2)}`; // ~1 km buckets — grounds monuments share one
   let features = cacheRead(monumentCache, centerKey);
   if (features === undefined) {

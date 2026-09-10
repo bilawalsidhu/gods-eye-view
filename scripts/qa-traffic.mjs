@@ -306,10 +306,10 @@ async function main() {
   const pass = results.filter((r) => r.ok === true).length;
   const fail = results.filter((r) => r.ok === false).length;
   const inconclusive = results.filter((r) => r.ok === null).length;
-  console.log('\n' + '─'.repeat(60));
+  console.log(`\n${  '─'.repeat(60)}`);
   console.log(`  RESULT: ${pass} passed, ${fail} failed, ${inconclusive} inconclusive`);
   console.log(`  Shots : ${SHOTS_DIR}/traffic-*.png`);
-  console.log('─'.repeat(60) + '\n');
+  console.log(`${'─'.repeat(60)  }\n`);
   process.exit(exitCode || (fail > 0 ? 1 : 0));
 }
 

@@ -14,7 +14,7 @@
 // full engine, so we exercise the exact Cesium call it makes).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Transforms, Matrix4, Cartesian3, HeadingPitchRoll, Ellipsoid } from '@cesium/engine';
+import { Transforms, Matrix4, Cartesian3, HeadingPitchRoll, Ellipsoid } from 'cesium';
 
 const HPR = new HeadingPitchRoll(0, 0, 0);
 const SF = Cartesian3.fromDegrees(-122.4, 37.7, 10000);

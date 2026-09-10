@@ -83,7 +83,7 @@ export function createLoadingFeedbackState() {
 }
 
 /** Create a top-center status notice, optionally persistent until explicitly cleared. */
-export function createGlobalStatusNotice(message, nowMs = 0, {
+export function createGlobalStatusNotice(message, _nowMs = 0, {
   state = 'error',
   detail = '',
   persistent = false,
@@ -94,7 +94,7 @@ export function createGlobalStatusNotice(message, nowMs = 0, {
     state,
     label,
     detail: String(detail || '').trim(),
-    persistent: !!persistent,
+    persistent: Boolean(persistent),
     dwellMs: persistent ? null : LOADING_FAILURE_DWELL_MS,
     // A finite notice starts its dwell only when it first wins presentation.
     // Otherwise a higher-priority manager failure could consume the whole

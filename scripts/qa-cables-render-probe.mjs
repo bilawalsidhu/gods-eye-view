@@ -31,7 +31,7 @@ try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 860 });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__godsEyeView?.viewer, { timeout: 90_000 });
+  await page.waitForFunction(() => Boolean(window.__godsEyeView?.viewer), { timeout: 90_000 });
   await new Promise((r) => setTimeout(r, 12_000));
 
   await page.evaluate(async () => {
@@ -51,8 +51,8 @@ try {
   await new Promise((r) => setTimeout(r, 5_000));
 
   const stats = (values) => ({
-    mean: +(values.reduce((s, v) => s + v, 0) / Math.max(1, values.length)).toFixed(2),
-    max: +Math.max(...values).toFixed(2),
+    mean: Number((values.reduce((s, v) => s + v, 0) / Math.max(1, values.length)).toFixed(2)),
+    max: Number(Math.max(...values).toFixed(2)),
   });
 
   const measure = async (label, enabled) => {

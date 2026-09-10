@@ -147,7 +147,7 @@ export function createEarthquakesLayer({ overlayHost = DEFAULT_OVERLAY_HOST } = 
     console.log('[Data:Earthquakes] Initialized');
   },
 
-  enable(viewer) {
+  enable(_viewer) {
     _enabled = true;
     // No continuous-render hold: the discs are static geometry now, so the
     // layer has no per-frame animator to keep the render loop alive for.
@@ -155,14 +155,14 @@ export function createEarthquakesLayer({ overlayHost = DEFAULT_OVERLAY_HOST } = 
     overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, true);
   },
 
-  disable(viewer) {
+  disable(_viewer) {
     _enabled = false;
     if (_dataSource) _dataSource.show = false;
     overlayHost.clearSource(EARTHQUAKE_OVERLAY_SOURCE_ID);
     overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
   },
 
-  async update(viewer) {
+  async update(_viewer) {
     try {
       const response = await fetch(API_URL);
       if (!response.ok) {

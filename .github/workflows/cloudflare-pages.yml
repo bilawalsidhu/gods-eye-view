@@ -1,3 +1,9 @@
+# Deploy to Cloudflare Pages.
+#
+# Quality gates (lint / test / coverage / build) live in ci.yml — this
+# workflow only builds the release artifact again (fresh env) and ships it.
+# A deploy therefore never happens without ci.yml having run on the same
+# commit (branch protection can enforce this; see docs/RUNBOOK.md).
 name: Deploy to Cloudflare Pages
 
 on:
@@ -11,7 +17,7 @@ env:
 
 jobs:
   deploy:
-    name: Deploy to Cloudflare Pages
+    name: Build and deploy to Cloudflare Pages
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -37,7 +43,7 @@ jobs:
           # Expose env vars for the build.
           # VITE_-prefixed vars are exposed to the browser via vite.config.js define.
           # Non-VITE_ secrets (API keys for the Vite proxy) are not needed at build time —
-          # they are injected at runtime by Cloudflare Pages from the dashboard / _vars.
+          # they are injected at runtime by the Pages Functions from the dashboard / _vars.
           VITE_GOOGLE_MAPS_API_KEY: ${{ vars.VITE_GOOGLE_MAPS_API_KEY }}
           VITE_CESIUM_ION_TOKEN: ${{ vars.VITE_CESIUM_ION_TOKEN }}
 
@@ -65,59 +71,3 @@ jobs:
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
           wranglerVersion: "4"
           # Auto-assigned preview URL via CF_PAGES_URL output
-
-  # Separate job for Workers — Cloudflare Workers deploy independently
-  deploy-workers:
-    name: Deploy Cloudflare Workers
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cloudflare-workers
-    permissions:
-      contents: read
-      deployments: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: cloudflare-workers/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type check
-        run: npm run check
-
-      - name: Deploy Workers (production only)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: npm run deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-  test:
-    name: Unit tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run tests
-        run: npm test
-        env:
-          PUPPETEER_SKIP_DOWNLOAD: "true"

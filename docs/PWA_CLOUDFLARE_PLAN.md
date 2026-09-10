@@ -1,5 +1,16 @@
 # PWA + Cloudflare Pages Deployment Plan
 
+> **STATUS: SUPERSEDED (2026-09-10).** This was the local working plan for the
+> Cloudflare deployment push. The production API story it proposed — a
+> separately-deployed Cloudflare Workers proxy — was replaced by **Cloudflare
+> Pages Functions** (`functions/api/**`), which ship with the site, are
+> same-origin, and run in the repo's unit suite. The `cloudflare-workers/`
+> subproject this plan created was removed (never route-bound, untested,
+> duplicated the Pages Functions). The PWA portions of this plan (service
+> worker, manifest, offline) ARE current work — see docs/PLAN.md. Kept for
+> historical context only; do not execute this plan as written.
+
+
 ## Overview
 
 Migrate God's Eye View from a Vite dev-server-centric architecture to a production PWA deployable on Cloudflare Pages with Cloudflare Workers as the API proxy layer. The app is currently a client-side-rendered (CSR) Vite SPA with 15 server-side proxy endpoints baked into `vite.config.js`. This plan replaces those endpoints with Cloudflare Workers, adds a service worker + manifest for PWA capabilities, and optionally introduces TypeScript and React incrementally.

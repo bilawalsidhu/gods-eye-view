@@ -125,17 +125,16 @@ async function init() {
       selectionIndicator: false,
       infoBox: false,
       baseLayer: false,
-      // Visible attribution container — Google Maps / 3D Tiles credits are
-      // required by Google's Terms of Service, so they must be shown (styled
-      // subtly via #cesium-credits). The credit line stays visible in
-      // clean-view AND recording modes too (ToS requires attribution while the
-      // content is displayed — those are the exact modes used to record
-      // demos), including the "Data attribution" link that opens the per-layer
-      // license popover.
+      // Detached credit container — the operator removed the visible
+      // attribution strip (2026-08-29), so this element is never appended to
+      // the document and no credit line renders, in normal or recording
+      // modes. NOTE: Google Maps Platform ToS requires visible attribution
+      // for Photorealistic 3D Tiles; this is an operator decision recorded
+      // here deliberately. Cesium still receives a valid container — it just
+      // stays out of the layout.
       creditContainer: (() => {
         const el = document.createElement('div');
         el.id = 'cesium-credits';
-        document.body.appendChild(el);
         return el;
       })(),
       msaaSamples: 4,

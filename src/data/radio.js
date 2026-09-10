@@ -165,7 +165,7 @@ let _acceptedCatalogSnapshot = EMPTY_ACCEPTED_CATALOG_SNAPSHOT;
 let _stations = [];
 let _stationById = new Map();
 let _categories = [];
-let _renderById = new Map();
+const _renderById = new Map();
 let _filter = DEFAULT_RADIO_FILTER;
 let _selectedId = null;
 let _selectedEntity = null;
@@ -271,6 +271,7 @@ function isValidRadioDirectoryStation(station) {
     typeof value === 'string'
     && value.length <= maxLength
     && (allowEmpty || value.trim().length > 0)
+    // eslint-disable-next-line no-control-regex -- matching control characters IS the point: they must be rejected
     && !/[\u0000-\u001f\u007f]/.test(value)
     && value === value.trim()
     && !/\s{2,}/.test(value)
@@ -2356,7 +2357,7 @@ function updateRenderVisibility({ force = true } = {}) {
   _horizonScanCount += 1;
   const occluder = horizonOccluder(_viewer.camera);
   let visibilityChanged = false;
-  for (const [id, record] of _renderById) {
+  for (const [_id, record] of _renderById) {
     const matches = stationMatchesRadioCategory(record.station, _filter);
     const visible = matches && occluder.isPointVisible(record.position);
     if (record.entity.show !== visible) visibilityChanged = true;

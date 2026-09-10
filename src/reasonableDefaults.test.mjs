@@ -8,8 +8,9 @@
 //      Pinned in `data/layerState.test.mjs`, next to the coordinator that
 //      actually decides fresh-boot layer state — including the early return that
 //      makes each layer's own initializer the operative default.
-//   2. Scope feather moved to 0% on 2026-08-22, 8% on 2026-08-23, and a soft
-//      11% edge on 2026-08-24. The hard crop is still one drag away and pinned.
+//   2. Scope feather moved to 0% on 2026-08-22, 8% on 2026-08-23, a soft 11%
+//      edge on 2026-08-24, and a fully-feathered 100% edge on 2026-08-29.
+//      The hard crop is still one drag away and pinned.
 //   3. Detection ON (Dense @ 75%) for EVERY style, Normal included.
 //   4. Detection OUTSIDE opacity 1% (final value, 2026-08-24; 3% on 08-23, 5% before), with
 //      the slider's `step` at 1 so the range around it is reachable at all.
@@ -71,23 +72,23 @@ function managerForHash(hash) {
 // 2. Scope feather — a subtle soft edge on a first run
 // ---------------------------------------------------------------------------
 
-test('first run opens with a subtle scope feather, at every surface that decides it', () => {
-  assert.equal(SCOPE_FEATHER_RATIO_DEFAULT, 0.11,
-    'final value 2026-08-24, superseding the 08-22 hard-crop and 08-23 8% rulings');
-  assert.equal(getScopeMaskFeather(), 0.11,
+test('first run opens with a fully-feathered scope, at every surface that decides it', () => {
+  assert.equal(SCOPE_FEATHER_RATIO_DEFAULT, 1,
+    'operator ruling 2026-08-29, superseding the 08-24 11% ruling');
+  assert.equal(getScopeMaskFeather(), 1,
     'and the live module starts there, not merely documents it');
 
   // The slider and its readout are the same default rendered as markup — a
   // fresh boot applies no restore, so a stale value here would show one number
   // over a mask drawn at another.
-  assert.match(indexHtml, /id="scope-feather-slider"[^>]*\svalue="11"/,
-    'index.html: the feather slider ships at 11');
-  assert.match(indexHtml, /id="scope-feather-value"[^>]*>11%</,
+  assert.match(indexHtml, /id="scope-feather-slider"[^>]*\svalue="100"/,
+    'index.html: the feather slider ships at 100');
+  assert.match(indexHtml, /id="scope-feather-value"[^>]*>100%</,
     'index.html: and its readout agrees with the handle');
 
   // The link this session generates must describe the mask this session draws,
   // for the window before the first _syncShareState.
-  assert.match(shareSource, /this\._scopeFeatherPct = 11;/,
+  assert.match(shareSource, /this\._scopeFeatherPct = 100;/,
     'sharelink.js: the generator starts from the same value the mask starts at');
 });
 
@@ -121,8 +122,8 @@ test('the subtle default did not weaken the feather control, and 0 is still reac
       assert.ok(Math.abs((geo.outerR - geo.innerR) - keyholeR * ratio) < 1e-9,
         `feather ${ratio} must still widen the band to that fraction of the keyhole`);
     }
-    // The new default is a real, narrow band — not the hard crop, and nowhere
-    // near the retired 35 % halo.
+    // The new default is the full band — the feather spans the whole keyhole
+    // radius, the opposite extreme from the retired hard-crop default.
     setScopeMaskFeather(SCOPE_FEATHER_RATIO_DEFAULT);
     const soft = scopeMaskGeometry(1200, 900);
     const keyholeR = 900 * 0.5 * KEYHOLE_OUTER_RADIUS;
@@ -137,6 +138,60 @@ test('the subtle default did not weaken the feather control, and 0 is still reac
   } finally {
     setScopeMaskFeather(previous);
   }
+});
+
+// ---------------------------------------------------------------------------
+// 2d. Visual preset — first run opens in CRT (operator ruling 2026-08-29).
+// Applied through the real setStyle path so the retro preset, tray state,
+// HUD tone, and share generator all observe one honest style switch.
+
+test('first run opens in CRT, at every surface that decides it', () => {
+  // The constructor must go through setStyle — not merely set the field —
+  // so the retro stage, preset defaults, HUD, and tray all engage for real.
+  assert.match(uiSource, /this\.setStyle\('retro', \{ applyPreset: true, revealParameters: false, restore: true \}\);/,
+    'ui.js: the first-run CRT default goes through the real setStyle path');
+  assert.match(uiSource, /`restore: true` skips the restore-lane claim/,
+    'ui.js: the default documents why it skips the restore-lane claim');
+
+  // Markup is the first paint: the tray and mini readout must already show
+  // CRT before any script runs, matching the engine's first-run state.
+  assert.match(indexHtml, /<button class="style-btn active" data-style="retro">/,
+    'index.html: the CRT preset button ships active');
+  assert.doesNotMatch(indexHtml, /<button class="style-btn active" data-style="normal">/,
+    'index.html: Normal no longer ships as the active preset');
+  assert.match(indexHtml, /id="style-mini-value"[^>]*>CRT</,
+    'index.html: the style mini readout agrees with the tray');
+
+  // A link that predates the style field restores what ITS author saw —
+  // Normal — which now requires the restore path to travel retro → normal.
+  assert.match(shareSource, /URL_TO_STYLE\[params\.get\('style'\)\] \|\| 'normal'/,
+    'sharelink.js: the style parse fallback still restores the Normal era');
+  assert.match(uiSource, /style !== 'ai-edit' && style !== this\.activeStyle/,
+    'ui.js: an explicit Normal link still restores Normal over the CRT default');
+});
+
+// ---------------------------------------------------------------------------
+// 2e. Attribution strip — removed at the operator's direction (2026-08-29).
+// The visible credit line is gone; the pin flips from keep-out to keep-removed
+// so it cannot silently reappear, and the old clearance pin that enforced
+// visibility was retired with it (src/creditAttribution.test.mjs, git history).
+
+test('the attribution strip stays removed, at every surface that rendered it', () => {
+  const mainSource = fs.readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+  const containerStart = mainSource.indexOf('// Detached credit container');
+  const creditContainer = mainSource.slice(
+    containerStart,
+    mainSource.indexOf('})(),', containerStart),
+  );
+  assert.ok(creditContainer.length > 0, 'main.js: the creditContainer IIFE is still present');
+  assert.doesNotMatch(creditContainer, /document\.body\.appendChild/,
+    'main.js: the credit container must never be appended to the document');
+  assert.match(creditContainer, /operator removed the visible/,
+    'main.js: the removal carries its ToS caveat so the choice stays discoverable');
+
+  const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(css, /#cesium-credits \{/,
+    'style.css: no positioning rule may bring the detached strip back');
 });
 
 // ---------------------------------------------------------------------------
@@ -254,7 +309,7 @@ test('detection-on-by-default is a default, not an operator override', () => {
     assert.match(stylePresets, new RegExp(`\\n  ${style}: \\{`),
       `${style} still carries its own preset`);
   }
-  assert.doesNotMatch(stylePresets, /\n  normal: \{/,
+  assert.doesNotMatch(stylePresets, /\n {2}normal: \{/,
     'Normal gained a default, not a style preset — switching to it still touches nothing');
 });
 

@@ -285,7 +285,7 @@ export function createCalibrationGizmo({ viewer, getActiveRecord, applyPatch, en
     }
     const mount = positions.mount;
     const axes = enuAxes(mount);
-    const { forwardHoriz, right, view } = viewAxesFor(camera.headingDeg, camera.pitchDeg, axes);
+    const { forwardHoriz } = viewAxesFor(camera.headingDeg, camera.pitchDeg, axes);
     const rangeM = Math.max(1, Number(camera.rangeM) || 1);
     const radius = Math.min(RING_RADIUS_MAX_M, Math.max(RING_RADIUS_MIN_M, rangeM * RING_RADIUS_FACTOR));
     const arrowLen = radius * ARROW_LENGTH_FACTOR;
@@ -544,7 +544,7 @@ export function createCalibrationGizmo({ viewer, getActiveRecord, applyPatch, en
 
   return {
     setEnabled(value) {
-      enabled = !!value;
+      enabled = Boolean(value);
       if (!enabled) {
         if (drag) endDrag();
         setHovered(null);
@@ -563,7 +563,7 @@ export function createCalibrationGizmo({ viewer, getActiveRecord, applyPatch, en
       entities.clear();
       setCursor('');
     },
-    isDragging: () => !!drag,
+    isDragging: () => Boolean(drag),
     isEnabled: () => enabled,
   };
 }

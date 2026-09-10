@@ -55,7 +55,7 @@ for (const [name, schedule] of SCENARIOS) {
   _clearDisplayFloorStateForTest(); _clearMeshFloorCellsForTest(); setMeshFloorPreferred(true);
   const pos = Cesium.Cartesian3.fromDegrees(LON, LAT, START);
   const samples = [];
-  let pending = [...schedule];
+  const pending = [...schedule];
   for (let t = 0; t <= 12000; t += 80) {
     while (pending.length && pending[0][0] <= t) pending.shift()[1]();
     const out = _floorGroundedDisplayPositionForTest({ onGround: true }, pos, false, name, 1000 + t);

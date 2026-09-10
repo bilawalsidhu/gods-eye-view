@@ -21,6 +21,8 @@
  */
 import * as Cesium from 'cesium';
 import { aircraftIncludedInNearby } from './aircraftNearbyPolicy.js';
+import { readLocalCache, trimLocalCache, writeLocalCache } from './localCache.js';
+import { reverseGeocodePlace } from './openzenith.js';
 import { registerPickOwner, unregisterPickOwner, isOwnedByOtherLayer, resolvePickId } from './pickRegistry.js';
 import {
   registerSpriteCollection,
@@ -65,7 +67,7 @@ import { formatFlightLevel } from './detectionDraw.js';
 import { createGroundSnap } from './groundSnap.js';
 import { trackedModelZoomActive } from './trackedModelRegime.js';
 import { geoidSurfaceLastResortM, pickRenderAltitudeM } from './renderAltitude.js';
-import { allocateCorridorCells, cachedGroundFloor, cachedMeshFloor, coarseFloorCoord, corridorFloorCells, displayFloorHeightM, floorAltitudeM, neighborFloorM, stickyFloorCell, warmGroundFloor, resolveGroundFloorCellsBounded, GROUND_FLOOR_LIFT_M } from './groundFloor.js';
+import { allocateCorridorCells, cachedGroundFloor, coarseFloorCoord, corridorFloorCells, displayFloorHeightM, floorAltitudeM, neighborFloorM, stickyFloorCell, warmGroundFloor, resolveGroundFloorCellsBounded, GROUND_FLOOR_LIFT_M } from './groundFloor.js';
 import { sampleMeshFloorCells } from './meshFloorSampler.js';
 import { ensureGeoidReady, geoidHeight } from './geoid.js';
 import {
@@ -323,8 +325,6 @@ let _backoff = false;
 let _retryAt = 0;
 /** @type {string|null} Human-readable error string shown in stats chip */
 let _lastError = null;
-/** Camera altitude band for adaptive refresh */
-let _lastRefreshBand = null;
 const _activeUpdateControllers = new Set();
 
 function _abortActiveUpdates() {
@@ -801,10 +801,16 @@ const COURSE_SLEW_DT_MAX_SEC = 0.25;
 // sessions never re-hit adsbdb). Each key is requested at most once per
 // session. Priority jobs (tracked plane, model-eligible planes) jump the
 // queue; the ambient fleet sweep (below) fills the back at poll cadence.
+// In a static deployment there is no server disk, so the BROWSER carries
+// that cache instead: localStorage via localCache.js, one entry per key
+// (negatives included — a plane that has no route today won't tomorrow),
+// 30-day TTL (registrations/types/routes are near-immutable).
 // ---------------------------------------------------------------------------
 const ENRICH_MAX_INFLIGHT = 4;
 /** Min ms between request dispatches — the drip that bounds the fan-out to ≤5/s. */
 const ENRICH_DISPATCH_GAP_MS = 200;
+/** Browser-cache TTL for one adsbdb type/route answer (see block comment). */
+const ENRICH_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 let _enrichActive = 0;
 let _enrichLastDispatchMs = 0;
 /** @type {ReturnType<typeof setTimeout>|null} pending drip wake-up */
@@ -815,7 +821,7 @@ const _enrichSeen = new Set();
 function _enqueueEnrich(key, url, onData, priority = false) {
   if (_enrichSeen.has(key)) return;
   _enrichSeen.add(key);
-  const job = { url, onData };
+  const job = { url, cacheKey: `adsbdb:${key}`, onData };
   // Priority (tracked / model-eligible) goes to the FRONT so a deep ambient
   // backlog can never delay the plane the user just clicked or zoomed into.
   if (priority) _enrichQueue.unshift(job); else _enrichQueue.push(job);
@@ -834,15 +840,46 @@ function _drainEnrich() {
       }
       return;
     }
-    _enrichLastDispatchMs = Date.now();
     const job = _enrichQueue.shift();
+    // Browser cache first: a hit answers synchronously and costs no dispatch
+    // slot or drip budget (only real fetches pace against the gap). Delivered
+    // found OR negative — same contract as the network branch.
+    const cached = readLocalCache(job.cacheKey);
+    if (cached.hit) {
+      if (cached.value) job.onData(cached.value);
+      continue;
+    }
+    _enrichLastDispatchMs = Date.now();
     _enrichActive += 1;
     fetch(job.url)
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (data && data.found) job.onData(data); })
+      .then((data) => {
+        if (!data) return;
+        // Persist before delivering, matching the dev proxy's write-on-answer
+        // (negatives included). Failure to persist is silent by contract.
+        if (writeLocalCache(job.cacheKey, data, { ttlMs: ENRICH_CACHE_TTL_MS })) trimLocalCache();
+        // Delivered for found AND negative answers — both production handlers
+        // no-op on absent fields, and delivering negatives keeps the test seam
+        // able to observe a settled job.
+        job.onData(data);
+      })
       .catch(() => { /* enrichment never surfaces errors */ })
       .finally(() => { _enrichActive -= 1; _drainEnrich(); });
   }
+}
+
+/**
+ * Test seam: run one enrichment job through the production queue, drip,
+ * browser-cache and persistence path. Resolves with the answered payload
+ * (found or negative) once the job settles.
+ *
+ * @param {string} key Enrichment key (`t:<icao24>` / `r:<callsign>`)
+ * @param {string} url Proxy URL to fetch
+ * @returns {Promise<object>} Settled payload, or `null` when the job never
+ *   answers (network error).
+ */
+export function _runEnrichJobForTest(key, url) {
+  return new Promise((resolve) => _enqueueEnrich(key, url, resolve, true));
 }
 
 function _requestTypeEnrichment(icao24, priority = false) {
@@ -878,6 +915,32 @@ function _requestRouteEnrichment(icao24) {
     if (data.origin && data.destination) meta.route = { origin: data.origin, destination: data.destination };
     if (icao24 === _trackedIcao && _trackedEntity) _updateTrackedLabelModel(icao24);
   }, true); // route lookups only fire for the TRACKED plane — front of the queue
+}
+
+/**
+ * Ground context for the tracked readout: ONE OpenZenith reverse-geocode of
+ * the contact's last known position, re-rendering the label with an
+ * "over <city>, <state>" line when it resolves. Browser-cached by ~100 m
+ * cell for 30 d (openzenith.js); failures and addressless cells (open water)
+ * stay silent — this line is garnish, never worth an error surface.
+ * @param {string} icao24
+ */
+async function _requestPlaceContext(icao24) {
+  const info = _flightData.get(icao24);
+  if (!Number.isFinite(info?.rawLat) || !Number.isFinite(info?.rawLon)) return;
+  const place = await reverseGeocodePlace(info.rawLat, info.rawLon);
+  const meta = _flightData.get(icao24);
+  if (!meta) return; // evicted while the lookup was in flight
+  if (place?.label) meta.placeLabel = `over ${place.label}`;
+  if (icao24 === _trackedIcao && _trackedEntity && meta.placeLabel) {
+    _updateTrackedLabelModel(icao24);
+  }
+  return meta;
+}
+
+/** Test seam: drive the tracked-target place lookup without a viewer. */
+export function _requestPlaceContextForTest(icao24) {
+  return _requestPlaceContext(icao24);
 }
 
 // ---------------------------------------------------------------------------
@@ -1811,7 +1874,7 @@ function _modelOwnsVisual(icao24) {
  * everything else — admission, an unresolved ground, a not-yet-ready glTF, the
  * limb cull, a regime exit — only ever clears it. */
 function _modelIsRendering(model) {
-  return !!model && model.ready === true && model.show === true;
+  return Boolean(model) && model.ready === true && model.show === true;
 }
 
 /** @type {Cesium.Cartographic} Scratch for the grounded display-floor read. */
@@ -2820,7 +2883,7 @@ function _fleetTick() {
       const glyphDevPx = (bb.width || 20) * (bb.scale || 1)
         * distanceScale * (globalThis.devicePixelRatio || 1);
       const wantLarge = bb._gevIconLarge ? glyphDevPx > 56 : glyphDevPx > 76;
-      if (wantLarge !== !!bb._gevIconLarge) {
+      if (wantLarge !== Boolean(bb._gevIconLarge)) {
         bb._gevIconLarge = wantLarge;
         bb.image = aircraftIcon(_iconKind(icao24, info?.klass), wantLarge ? TRACKED_ICON_PX : undefined);
       }
@@ -3074,7 +3137,7 @@ function _startTrail(icao24) {
 async function _backfillTrail(icao24, token, oldestFixEpochSec) {
   let path = null;
   try {
-    const response = await fetch('/api/opensky-track?icao24=' + encodeURIComponent(icao24), {
+    const response = await fetch(`/api/opensky-track?icao24=${  encodeURIComponent(icao24)}`, {
       signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) return;
@@ -3315,6 +3378,9 @@ function _trackedLabelText(icao24) {
   const spd = info.velocity ? `${Math.round(info.velocity * 1.944)} kts` : '';
   const stale = (_missingPolls.get(icao24) || _backoff) ? 'STALE' : '';
   const lines = [[cs, fl, spd, stale].filter(Boolean).join(' · ')];
+  // Ground context under the track: "over Austin, Texas" from the OpenZenith
+  // reverse-geocode, resolved once per contact (browser-cached 30 d by cell).
+  if (info.placeLabel) lines.push(info.placeLabel);
   // Converted contacts report their class as TR-3B and nothing else — the
   // operator/type identity is exactly what the Easter egg is replacing.
   const ident = isTr3b(icao24)
@@ -3690,6 +3756,7 @@ function _trackFlight(icao24, { origin = 'programmatic' } = {}) {
   // starts one.
   _requestTypeEnrichment(icao24, true); // tracked plane — front of the enrichment queue
   _requestRouteEnrichment(icao24);
+  _requestPlaceContext(icao24);
   // Round 2 (owner): grounded contacts get trails too — a landed-but-taxiing
   // aircraft's history is retrievable on select. Grounded flights positions
   // are already surface-clamped (the surfaceM chain), so seeds/appends drape.
@@ -4041,7 +4108,7 @@ const flightsLayer = {
    * Also clears any active flight tracking so the camera is released.
    * @param {Cesium.Viewer} viewer
    */
-  disable(viewer) {
+  disable(_viewer) {
     _abortActiveUpdates();
     _cancelPendingTrackingRestore();
     if (_billboardCollection) _billboardCollection.show = false;
@@ -4196,7 +4263,6 @@ const flightsLayer = {
       _lastCoverage = responseCoverage || 'worldwide upstream snapshot';
       const currentIcaos = new Set();
       const acceptedSnapshotIcaos = new Set();
-      const now = Cesium.JulianDate.now();
       // Field-test round 3 (2026-07-06, Austin fleet-underground): viewer
       // subpoint + collected floor cells for the viewer-proximate low-contact
       // clamp below — one carto read per poll, one batch warm after the loop.
@@ -4373,7 +4439,7 @@ const flightsLayer = {
 
         const position = Cesium.Cartesian3.fromDegrees(lon, lat, renderAltitudeM);
         // Landing/takeoff transition: the on_ground flip restyles IN PLACE.
-        const groundFlipped = !!prevMeta && (prevMeta.onGround === true) !== onGround;
+        const groundFlipped = Boolean(prevMeta) && (prevMeta.onGround === true) !== onGround;
         // Either flip direction retires the model's ground snap: a departing plane
         // flies free of it, a landing plane earns a fresh sample where it rolls out.
         if (groundFlipped) _groundSnap.forget(icao24);
@@ -4962,7 +5028,6 @@ const flightsLayer = {
       : 50;
     const maxRange = Number.isFinite(range) && range > 0 ? range : Number.POSITIVE_INFINITY;
 
-    const now = Cesium.JulianDate.now();
     const nearby = [];
 
     for (const [icao24, bb] of _billboards) {
@@ -5078,7 +5143,7 @@ const flightsLayer = {
     const limit = Number.isFinite(maxCount) ? Math.max(1, Math.floor(maxCount)) : 2000;
     const result = [];
     for (const [icao24, info] of _flightData) {
-      const routeOk = !!info?.route && _routeIsPlausible(icao24, info.route);
+      const routeOk = Boolean(info?.route) && _routeIsPlausible(icao24, info.route);
       result.push(mapAnalystRecord(icao24, info, { military: isMilitaryIcao(icao24), routeOk }));
       if (result.length >= limit) break;
     }
@@ -5182,7 +5247,7 @@ const flightsLayer = {
     if (!_trackedIcao) return null;
     const described = _describeFlight(_trackedIcao);
     if (!described) return null;
-    const { position, ...rest } = described;
+    const { position: _position, ...rest } = described;
     return rest;
   },
 

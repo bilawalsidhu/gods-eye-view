@@ -13,6 +13,7 @@ import {
   publishFocusTargetFromCachedPosition,
 } from './focusDeemphasis.js';
 import { refreshTrackedReadout } from './trackedReadout.js';
+import { readCachedTle, writeCachedTle } from './tleCache.js';
 import {
   satelliteClassColor,
   satelliteClassLabel,
@@ -1100,6 +1101,10 @@ async function _loadDenseCatalog({ signal = null } = {}) {
       return { status: 'source-unavailable', reason: `feed unavailable (${res.status})` };
     }
     const text = await res.text();
+    // Persist for the next session when the catalog is small enough (see
+    // tleCache.js) — the dense file usually isn't, and the write refuses
+    // silently, which is the correct outcome for a megabyte of text.
+    writeCachedTle(DENSE_GROUP_PATH, text);
     loadSignal.throwIfAborted();
     if (token !== _denseLoadToken || _params.catalog !== 'dense') {
       return { status: 'superseded', reason: 'dense-load-superseded' };
@@ -1588,7 +1593,7 @@ const satellitesLayer = {
     _applyPendingTrackingRestore();
   },
 
-  disable(viewer) {
+  disable(_viewer) {
     _abortActiveUpdates();
     _cancelPendingTrackingRestore();
     _enabled = false;
@@ -1629,12 +1634,21 @@ const satellitesLayer = {
     try {
       updateSignal.throwIfAborted();
       // Load all core groups in parallel; a failed/empty group degrades
-      // gracefully (parseTLE of an upstream error body yields []).
+      // gracefully (parseTLE of an upstream error body yields []). Each group
+      // is answered from the browser's 6 h TLE cache when it can be — a
+      // repeat session costs CelesTrak nothing.
       const results = await Promise.all(CATALOG_GROUPS.map(async (groupDef) => {
         try {
+          const cachedText = readCachedTle(groupDef.path);
+          if (cachedText) {
+            const cachedEntries = parseTLE(cachedText);
+            if (cachedEntries.length > 0) return { ...groupDef, entries: cachedEntries, ok: true };
+          }
           const res = await fetch(`/api/celestrak/${groupDef.path}`, { signal: updateSignal });
           if (!res.ok) return { ...groupDef, entries: [], ok: false };
-          const entries = parseTLE(await res.text());
+          const text = await res.text();
+          writeCachedTle(groupDef.path, text);
+          const entries = parseTLE(text);
           updateSignal.throwIfAborted();
           return { ...groupDef, entries, ok: entries.length > 0 };
         } catch (error) {

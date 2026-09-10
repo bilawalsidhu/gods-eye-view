@@ -79,7 +79,6 @@ import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor
  * rotation (camera.heading - track) with hysteresis.
  */
 
-import { apiEndpoints } from '../config/apiEndpoints.js';
 
 /** @constant {string} API endpoint proxied to adsb.lol military feed */
 const API_URL = '/api/adsblol';
@@ -1512,7 +1511,7 @@ function _modelOwnsVisual(icao24) {
  *  everything else — admission, unresolved ground, an unready glTF, the limb cull,
  *  a regime exit — only ever clears it. Mirror of flights.js. */
 function _modelIsRendering(model) {
-  return !!model && model.ready === true && model.show === true;
+  return Boolean(model) && model.ready === true && model.show === true;
 }
 
 /** Spec identity for a LOADED model — mirror of flights.js: URL and scale
@@ -1948,7 +1947,7 @@ function _fleetTick() {
       const glyphDevPx = (bb.width || 20) * (bb.scale || 1)
         * distanceScale * (globalThis.devicePixelRatio || 1);
       const wantLarge = bb._gevIconLarge ? glyphDevPx > 56 : glyphDevPx > 76;
-      if (wantLarge !== !!bb._gevIconLarge) {
+      if (wantLarge !== Boolean(bb._gevIconLarge)) {
         bb._gevIconLarge = wantLarge;
         bb.image = aircraftIcon(_iconKind(icao24, _flightData.get(icao24)?.klass), wantLarge ? TRACKED_ICON_PX : undefined);
       }
@@ -2199,7 +2198,7 @@ async function _backfillTrail(icao24, token, oldestFixEpochSec) {
   let baseEpochSec = null;
   let trace = null;
   try {
-    const response = await fetch('/api/adsblol/trace?hex=' + encodeURIComponent(icao24), {
+    const response = await fetch(`/api/adsblol/trace?hex=${  encodeURIComponent(icao24)}`, {
       signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) return;
@@ -2712,7 +2711,7 @@ const militaryFlightsLayer = {
    * so clicks do not get intercepted while the layer is off.
    * @param {Cesium.Viewer} viewer - The Cesium viewer instance
    */
-  disable(viewer) {
+  disable(_viewer) {
     _abortActiveUpdates();
     _cancelPendingTrackingRestore();
     if (_billboardCollection) _billboardCollection.show = false;
@@ -2970,7 +2969,7 @@ const militaryFlightsLayer = {
 
         const position = Cesium.Cartesian3.fromDegrees(lon, lat, renderAltitudeM);
         // Landing/takeoff transition: the ground flip restyles IN PLACE.
-        const groundFlipped = !!prevMeta && (prevMeta.onGround === true) !== onGround;
+        const groundFlipped = Boolean(prevMeta) && (prevMeta.onGround === true) !== onGround;
         // Either flip direction retires the model's ground snap: a departing plane
         // flies free of it, a landing plane earns a fresh sample where it rolls out.
         if (groundFlipped) _groundSnap.forget(icao24);
@@ -3123,7 +3122,6 @@ const militaryFlightsLayer = {
         // If this is the tracked aircraft, update label text
         // (position updates automatically via dead-reckoning CallbackProperty)
         if (isTracked && _trackedEntity) {
-          const info = _flightData.get(icao24);
           _updateTrackedLabelModel(icao24);
         }
       }
@@ -3404,7 +3402,6 @@ const militaryFlightsLayer = {
       : 50;
     const maxRange = Number.isFinite(range) && range > 0 ? range : Number.POSITIVE_INFINITY;
 
-    const now = Cesium.JulianDate.now();
     const nearby = [];
 
     for (const [icao24, bb] of _billboards) {
@@ -3735,7 +3732,7 @@ const militaryFlightsLayer = {
     if (!_trackedIcao) return null;
     const described = _describeFlight(_trackedIcao);
     if (!described) return null;
-    const { position, ...rest } = described;
+    const { position: _position, ...rest } = described;
     return rest;
   },
 

@@ -927,8 +927,9 @@ function installWireHarness(picked, stateOverrides = {}) {
     return next;
   };
   const trackedEntityChanged = makeCesiumEvent();
+  const preRender = makeCesiumEvent();
   const viewer = {
-    scene: { pick: () => picked },
+    scene: { pick: () => picked, preRender },
     trackedEntity: undefined,
     trackedEntityChanged,
   };

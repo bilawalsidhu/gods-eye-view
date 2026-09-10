@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   CCTV_FRAME_FETCH_TIMEOUT_MS,
   fetchCctvImageFromUpstream,
-} from '../../vite.config.js';
+} from './cctvSources.js';
 
 test('CCTV upstream frame fetch supplies a bounded abort signal', async () => {
   let observedSignal = null;
@@ -34,5 +34,8 @@ test('CCTV upstream frame fetch returns a valid image response', async () => {
 
   assert.equal(result?.ok, true);
   assert.equal(result?.contentType, 'image/jpeg');
-  assert.deepEqual(result?.body, Buffer.from([1, 2, 3]));
+  // Uint8Array (not Buffer) so the shared module stays worker-safe; Node's
+  // res.end() and the Workers Response constructor both take it verbatim.
+  assert.deepEqual(result?.body, new Uint8Array([1, 2, 3]));
+  assert.equal(result?.body.byteLength, 3);
 });

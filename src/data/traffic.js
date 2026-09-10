@@ -159,7 +159,7 @@ let _enabled = false;
 /** @type {Function|null} Disposer returned by preRender event subscription */
 let _preRenderRemover = null;
 /** @type {Function|null} Disposer returned by camera.changed event subscription */
-let _cameraRemover = null;
+const _cameraRemover = null;
 /** @type {ReturnType<typeof setTimeout>|null} Debounce timer for camera-change fetch */
 let _fetchTimeout = null;
 /** @type {{south:number,west:number,north:number,east:number}|null} Last fetched clamped bounds */
@@ -266,7 +266,7 @@ let _styleListenerBound = false;
  * spawn/recolor/restyle all read from here, no per-dot allocation.
  * @type {{free:Cesium.Color, slow:Cesium.Color, jam:Cesium.Color}}
  */
-let _activeBucketColors = { ...FLOW_BUCKET_COLORS };
+const _activeBucketColors = { ...FLOW_BUCKET_COLORS };
 /**
  * @const {number} Minimum base pixel size for COLORED dots while a styled
  * preset is active — residential-road dots spawn at 4 px and vanish into

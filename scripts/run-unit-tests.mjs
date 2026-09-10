@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 
 export const ALLOCATION_TEST_FILES = Object.freeze([
   'src/data/focusAllocations.test.mjs',
@@ -23,7 +23,9 @@ export function assertNode24AllocationRuntime(version = process.versions.node) {
 
 /** Discover repository unit tests in stable path order. */
 export function discoverUnitTestFiles(root = process.cwd()) {
-  const sourceRoot = path.join(root, 'src');
+  // src/ (app + co-located tests) and functions/ (Pages Functions, which run
+  // in workerd in production and under plain Node here) both carry tests.
+  const testRoots = ['src', 'functions'].map((dir) => path.join(root, dir));
   const files = [];
   const visit = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -34,7 +36,7 @@ export function discoverUnitTestFiles(root = process.cwd()) {
       }
     }
   };
-  visit(sourceRoot);
+  for (const testRoot of testRoots) visit(testRoot);
   return files.sort();
 }
 
@@ -60,13 +62,8 @@ export function allocationTestArgs(file) {
   return ['--expose-gc', '--test', '--test-concurrency=1', file];
 }
 
-/** Path to tsx (handles TypeScript imports in test files). */
-const TSX = path.join(process.cwd(), 'node_modules', '.bin', 'tsx');
-
 function runTests(args) {
-  // Use tsx to handle TypeScript imports in test files.
-  // tsx transpiles .ts sources on the fly so Node's test runner can load them.
-  const result = spawnSync(TSX, args, {
+  const result = spawnSync(process.execPath, args, {
     cwd: process.cwd(),
     stdio: 'inherit',
     env: process.env,
@@ -75,9 +72,16 @@ function runTests(args) {
   return result.status ?? 1;
 }
 
-export function runUnitTests() {
+export function runUnitTests({ coverage = false } = {}) {
   const plan = buildUnitTestPlan(discoverUnitTestFiles());
-  const parallelStatus = runTests(['--test', ...plan.parallel]);
+  // Coverage comes from Node's built-in reporter over the parallel battery
+  // (`npm run test:coverage`). The GC-bracketed allocation probes run without
+  // it: they measure allocations, not code coverage, and the reporter's
+  // overhead would contaminate the budgets they exist to protect.
+  const parallelArgs = coverage
+    ? ['--test', '--experimental-test-coverage', ...plan.parallel]
+    : ['--test', ...plan.parallel];
+  const parallelStatus = runTests(parallelArgs);
   if (parallelStatus !== 0) return parallelStatus;
 
   // The GC-bracketed budgets are calibrated on Node 24 and are meaningless on
@@ -104,4 +108,6 @@ export function runUnitTests() {
 }
 
 const invokedPath = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : '';
-if (import.meta.url === invokedPath) process.exitCode = runUnitTests();
+if (import.meta.url === invokedPath) {
+  process.exitCode = runUnitTests({ coverage: process.argv.includes('--coverage') });
+}
