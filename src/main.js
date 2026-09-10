@@ -10,6 +10,7 @@ import rocketLaunchesLayer from './data/rocketLaunches.js';
 import trafficLayer from './data/traffic.js';
 import cctvLayer from './data/cctv.js';
 import radioLayer from './data/radio.js';
+import webReceiversLayer from './data/webReceivers.js';
 import bikeshareLayer from './data/bikeshare.js';
 import aisLiveVesselsLayer from './data/aisLiveVessels.js';
 import militaryInstallationsLayer from './data/militaryInstallations.js';
@@ -216,6 +217,7 @@ async function init() {
     dataManager.register(trafficLayer);
     dataManager.register(cctvLayer);
     dataManager.register(radioLayer);
+    dataManager.register(webReceiversLayer);
     dataManager.register(bikeshareLayer);
     dataManager.register(aisLiveVesselsLayer);
     dataManager.register(militaryInstallationsLayer);

@@ -644,6 +644,66 @@
   </div>
 
   <!-- Scene Director Panel -->
+  <section id="web-receivers-panel" class="panel-collapsible collapsed" data-panel-id="web-receivers-panel" aria-label="Web receivers companion">
+    <div class="radio-panel-inner web-receivers-inner">
+      <div class="panel-header">
+        <span class="panel-title">WEB RECEIVERS</span>
+        <span id="web-receivers-layer-state" class="radio-layer-state">OFF</span>
+        <span class="panel-divider"></span>
+        <button class="panel-collapse-btn" data-collapse-target="web-receivers-panel" title="Expand Web Receivers" aria-label="Expand Web Receivers section">+</button>
+      </div>
+      <div class="radio-directory-row web-receivers-filter-row">
+        <button id="web-receivers-enable-btn" class="panel-layer-toggle" type="button" aria-pressed="false">ENABLE</button>
+        <select id="web-receivers-type" aria-label="Filter receivers by type" disabled>
+          <option value="all">All receivers</option>
+        </select>
+        <select id="web-receivers-band" aria-label="Filter receivers by band" disabled>
+          <option value="all">All bands</option>
+        </select>
+      </div>
+      <div id="web-receivers-card" class="radio-station-card" aria-live="polite">
+        <strong id="web-receivers-name">NO RECEIVER SELECTED</strong>
+        <span id="web-receivers-meta">Enable Web Receivers, then click a marker — or ask for receivers near a place.</span>
+        <span id="web-receivers-bands"></span>
+      </div>
+      <div class="web-receivers-tune-row" role="group" aria-label="Tune the selected receiver">
+        <input id="web-receivers-freq" type="text" inputmode="decimal" placeholder="kHz · e.g. 14233" aria-label="Frequency in kHz" disabled />
+        <select id="web-receivers-mode" aria-label="Demodulation mode" disabled>
+          <option value="">AUTO</option>
+          <option value="usb">USB</option>
+          <option value="lsb">LSB</option>
+          <option value="am">AM</option>
+          <option value="cw">CW</option>
+          <option value="nfm">NFM</option>
+          <option value="wfm">WFM</option>
+        </select>
+        <button id="web-receivers-tune-btn" type="button" aria-label="Tune the selected receiver" disabled>TUNE</button>
+        <button id="web-receivers-open-btn" type="button" aria-label="Open the selected receiver in a new tab" disabled>OPEN</button>
+      </div>
+      <div class="web-receivers-tune-row web-receivers-spectrum-row" role="group" aria-label="Show a spectrum range on the selected receiver">
+        <span class="web-receivers-row-label">SPECTRUM</span>
+        <input id="web-receivers-spec-from" type="text" inputmode="decimal" placeholder="from kHz" aria-label="Spectrum range start in kHz" disabled />
+        <input id="web-receivers-spec-to" type="text" inputmode="decimal" placeholder="to kHz" aria-label="Spectrum range end in kHz" disabled />
+        <button id="web-receivers-spec-btn" type="button" aria-label="Show the spectrum range on the selected receiver without audio" disabled>SHOW</button>
+      </div>
+      <div id="web-receivers-dock" class="web-receivers-dock" hidden>
+        <div class="web-receivers-dock-bar">
+          <span id="web-receivers-dock-label">—</span>
+          <a id="web-receivers-dock-link" href="#" target="_blank" rel="noopener noreferrer">NEW TAB</a>
+          <button id="web-receivers-dock-min" type="button" aria-label="Minimize the receiver dock" aria-pressed="false" title="Minimize">▾</button>
+          <button id="web-receivers-dock-close" type="button" aria-label="Close the receiver dock">×</button>
+        </div>
+        <iframe id="web-receivers-frame" title="Web receiver" referrerpolicy="no-referrer" allow="autoplay" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>
+        <p id="web-receivers-dock-note" class="radio-privacy" hidden></p>
+      </div>
+      <div id="web-receivers-status" class="radio-playback-state" role="status" aria-live="polite">Web receivers off</div>
+      <div class="radio-links">
+        <a href="https://www.receiverbook.de/" target="_blank" rel="noopener noreferrer">DIRECTORY: RECEIVERBOOK</a>
+        <a href="http://rx.linkfanel.net/" target="_blank" rel="noopener noreferrer">KIWISDR MAP</a>
+      </div>
+      <p class="radio-privacy">Tuning loads the receiver operator's own web page. Your IP is visible to that receiver; its terms and user limits apply.</p>
+    </div>
+  </section>
   <div id="scene-panel" class="panel-collapsible collapsed" data-panel-id="scene-panel">
     <div class="panel-glow"></div>
     <div class="scene-panel-inner">

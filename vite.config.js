@@ -18,6 +18,7 @@
  *  13. Weather effects — camera-local Open-Meteo observations without news/geocoding overhead
  *  14. Rocket launches — recent Launch Library 2 mission metadata
  *  15. Radio Browser — public-domain station directory and click counting
+ *  16. Web receivers — KiwiSDR / WebSDR / OpenWebRX directory (Receiverbook + KiwiSDR feed)
  *
  * Also exposes Cesium and Google 3D Tiles API keys to the
  * client via `import.meta.env.*` defines.
@@ -32,6 +33,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { Readable } from 'node:stream';
+import http from 'node:http';
 import https from 'node:https';
 import { lookup as lookupDns } from 'node:dns/promises';
 import { directionToHeading } from './src/data/directionText.js';
@@ -47,6 +49,7 @@ import { createRequire } from 'node:module';
 import { defineConfig, loadEnv } from 'vite';
 import cesium from 'vite-plugin-cesium';
 import { normalizeRadioCountryInput } from './src/data/radioCountry.js';
+import { coverageFlags as webReceiverCoverageFlags, parseBandsFromText as parseWebReceiverBands } from './src/data/webReceiverTuning.js';
 import {
   normalizeRegionalArticles,
   normalizeRegionalPlace,
@@ -1311,6 +1314,351 @@ function radioBrowserProxy() {
   };
   return {
     name: 'radio-browser-proxy',
+    configureServer: install,
+    configurePreviewServer: install,
+  };
+}
+// ---------------------------------------------------------------------------
+// Web receivers (KiwiSDR / WebSDR / OpenWebRX) directory proxy
+//
+// Two server-registered upstreams, never client-supplied URLs:
+//   - Receiverbook's map page embeds `var receivers = [...]` with every listed
+//     OpenWebRX / WebSDR / KiwiSDR site (label, coordinates, receiver URLs).
+//   - The community KiwiSDR map feed (dyatlov map maker instance) carries the
+//     dynamic KiwiSDR data: band coverage, user slots, antenna, online state.
+// websdr.org's own list forbids reuse without permission and is NOT fetched.
+// The merged catalog is what the Web Receivers layer and the voice tools see;
+// tuning happens in the user's browser against the receiver's own page.
+// ---------------------------------------------------------------------------
+const WEB_RECEIVERS_CACHE_MS = 30 * 60 * 1000;
+const WEB_RECEIVERS_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+const WEB_RECEIVERS_FETCH_TIMEOUT_MS = 15_000;
+const WEB_RECEIVERS_RESPONSE_MAX_BYTES = 3 * 1024 * 1024;
+const WEB_RECEIVERS_MIN_CATALOG = 50;
+const WEB_RECEIVERS_USER_AGENT = 'GodsEyeView/1.0 (web receiver directory client)';
+const WEB_RECEIVERS_SOURCES = Object.freeze({
+  receiverbook: 'https://www.receiverbook.de/map',
+  kiwisdr: 'http://rx.linkfanel.net/kiwisdr_com.js',
+});
+const WEB_RECEIVER_TYPE_BY_LABEL = Object.freeze({ openwebrx: 'openwebrx', websdr: 'websdr', kiwisdr: 'kiwisdr' });
+
+/** Return a normalized public http(s) receiver URL, or null for private/odd targets. */
+export function publicWebReceiverUrl(value) {
+  let url;
+  try {
+    url = new URL(String(value ?? '').trim());
+  } catch {
+    return null;
+  }
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.username || url.password || !hostname) return null;
+  if (
+    hostname === 'localhost'
+    || hostname.endsWith('.localhost')
+    || hostname.endsWith('.local')
+    || hostname.endsWith('.internal')
+    || !hostname.includes('.')
+    || isNonGlobalIpv4(hostname)
+    || hostname.includes(':')
+  ) return null;
+  url.hostname = hostname;
+  url.hash = '';
+  url.search = '';
+  if (!url.pathname.endsWith('/')) url.pathname += '/';
+  return url.href;
+}
+
+/** Stable receiver id: hash of host, port and path. */
+export function webReceiverId(url) {
+  const parsed = new URL(url);
+  const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+  return createHash('sha256').update(`${parsed.hostname}:${port}${parsed.pathname}`).digest('hex').slice(0, 12);
+}
+
+function webReceiverLatLon(lat, lon) {
+  const latitude = Number(lat);
+  const longitude = Number(lon);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
+  if (latitude === 0 && longitude === 0) return null;
+  return { lat: Number(latitude.toFixed(5)), lon: Number(longitude.toFixed(5)) };
+}
+
+/** Parse Receiverbook's map page into normalized receiver rows. */
+export function normalizeReceiverbookSites(html) {
+  const text = String(html ?? '');
+  const start = text.indexOf('var receivers = ');
+  if (start < 0) throw new Error('Receiverbook map data not found');
+  const open = text.indexOf('[', start);
+  let depth = 0;
+  let end = -1;
+  let inString = false;
+  for (let index = open; index >= 0 && index < text.length; index += 1) {
+    const char = text[index];
+    if (inString) {
+      if (char === '\\') index += 1;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') inString = true;
+    else if (char === '[') depth += 1;
+    else if (char === ']') {
+      depth -= 1;
+      if (depth === 0) { end = index; break; }
+    }
+  }
+  if (open < 0 || end < 0) throw new Error('Receiverbook map data is truncated');
+  const sites = JSON.parse(text.slice(open, end + 1));
+  const rows = [];
+  for (const site of Array.isArray(sites) ? sites : []) {
+    const coordinates = site?.location?.coordinates;
+    const position = Array.isArray(coordinates) ? webReceiverLatLon(coordinates[1], coordinates[0]) : null;
+    if (!position) continue;
+    const siteLabel = cleanRadioText(site?.label, 160);
+    for (const entry of Array.isArray(site?.receivers) ? site.receivers : []) {
+      const type = WEB_RECEIVER_TYPE_BY_LABEL[String(entry?.type || '').toLowerCase()];
+      const url = publicWebReceiverUrl(entry?.url);
+      if (!type || !url) continue;
+      const name = cleanRadioText(entry?.label, 160) || siteLabel || new URL(url).hostname;
+      rows.push({
+        id: webReceiverId(url),
+        type,
+        name,
+        site: siteLabel,
+        url,
+        lat: position.lat,
+        lon: position.lon,
+        bands: parseWebReceiverBands(`${name} ${siteLabel}`),
+        users: null,
+        usersMax: null,
+        online: null,
+        antenna: '',
+        sources: ['receiverbook'],
+      });
+    }
+  }
+  return rows;
+}
+
+/** Parse the community KiwiSDR feed (`var kiwisdr_com = [...]`) into normalized rows. */
+export function normalizeKiwiSdrRows(js) {
+  const text = String(js ?? '');
+  const open = text.indexOf('[');
+  const end = text.lastIndexOf(']');
+  if (open < 0 || end <= open) throw new Error('KiwiSDR feed data not found');
+  // The feed is JavaScript, not JSON: it ends with a trailing comma before `]`.
+  const entries = JSON.parse(text.slice(open, end + 1).replace(/,(\s*[\]}])/g, '$1'));
+  const rows = [];
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    const url = publicWebReceiverUrl(entry?.url);
+    if (!url) continue;
+    const gps = String(entry?.gps || '').match(/\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)/);
+    const position = gps ? webReceiverLatLon(gps[1], gps[2]) : null;
+    if (!position) continue;
+    const bandsMatch = String(entry?.bands || '').match(/^(\d+)-(\d+)$/);
+    const bands = [];
+    if (bandsMatch) {
+      const lowHz = Number(bandsMatch[1]);
+      const highHz = Number(bandsMatch[2]);
+      if (highHz > lowHz) bands.push({ lowHz, highHz, label: `${Math.round(lowHz / 1e6)}–${Math.round(highHz / 1e6)} MHz` });
+    }
+    const users = Number(entry?.users);
+    const usersMax = Number(entry?.users_max);
+    const status = String(entry?.status || '').toLowerCase();
+    rows.push({
+      id: webReceiverId(url),
+      type: 'kiwisdr',
+      name: cleanRadioText(entry?.name, 160) || new URL(url).hostname,
+      site: cleanRadioText(entry?.loc, 160),
+      url,
+      lat: position.lat,
+      lon: position.lon,
+      bands,
+      users: Number.isFinite(users) ? users : null,
+      usersMax: Number.isFinite(usersMax) ? usersMax : null,
+      online: status === 'active' && String(entry?.offline || 'no').toLowerCase() !== 'yes',
+      antenna: cleanRadioText(entry?.antenna, 160),
+      sources: ['kiwisdr'],
+    });
+  }
+  return rows;
+}
+
+/** Merge the directories: Receiverbook is the catalog, the KiwiSDR feed enriches and extends it. */
+export function mergeWebReceivers({ receiverbook = [], kiwisdr = [] } = {}) {
+  const byId = new Map();
+  for (const row of receiverbook) byId.set(row.id, { ...row, bands: [...row.bands], sources: [...row.sources] });
+  for (const row of kiwisdr) {
+    const existing = byId.get(row.id);
+    if (!existing) {
+      byId.set(row.id, { ...row, bands: [...row.bands], sources: [...row.sources] });
+      continue;
+    }
+    existing.type = 'kiwisdr';
+    existing.bands = row.bands.length ? [...row.bands] : existing.bands;
+    existing.users = row.users;
+    existing.usersMax = row.usersMax;
+    existing.online = row.online;
+    existing.antenna = row.antenna || existing.antenna;
+    if (!existing.site && row.site) existing.site = row.site;
+    existing.sources = [...new Set([...existing.sources, ...row.sources])];
+  }
+  return [...byId.values()]
+    .map((row) => ({ ...row, coverage: webReceiverCoverageFlags(row.bands) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function webReceiversDestination(value) {
+  const href = String(value ?? '');
+  return Object.values(WEB_RECEIVERS_SOURCES).includes(href) ? new URL(href) : null;
+}
+
+function fetchPinnedWebReceiversResponse(url, options, addresses) {
+  const transport = url.protocol === 'https:' ? https : http;
+  return new Promise((resolve, reject) => {
+    const address = addresses[0];
+    const request = transport.request(url, {
+      method: 'GET',
+      headers: options.headers,
+      signal: options.signal,
+      lookup(_hostname, lookupOptions, callback) {
+        if (lookupOptions?.all) callback(null, addresses);
+        else callback(null, address.address, address.family);
+      },
+    }, (response) => {
+      const headers = new Headers();
+      for (const [name, value] of Object.entries(response.headers)) {
+        if (Array.isArray(value)) value.forEach((item) => headers.append(name, item));
+        else if (value !== undefined) headers.set(name, String(value));
+      }
+      resolve(new Response(Readable.toWeb(response), {
+        status: response.statusCode || 500,
+        statusText: response.statusMessage || '',
+        headers,
+      }));
+    });
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+/** Create the testable Connect middleware backing `/api/web-receivers`. */
+export function createWebReceiversProxyMiddleware({ fetchImpl = null, lookupImpl = lookupDns, now = Date.now } = {}) {
+  let catalogCache = null;
+  let refreshPromise = null;
+
+  async function fetchText(url) {
+    const destination = webReceiversDestination(url);
+    if (!destination) throw new Error('Web receiver directory destination is not permitted');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), WEB_RECEIVERS_FETCH_TIMEOUT_MS);
+    try {
+      const addresses = await resolveRadioProxyAddresses(destination.hostname, lookupImpl);
+      const options = {
+        headers: { Accept: 'text/html, application/javascript, text/plain', 'User-Agent': WEB_RECEIVERS_USER_AGENT },
+        signal: controller.signal,
+        redirect: 'manual',
+      };
+      const response = fetchImpl
+        ? await fetchImpl(destination.href, options)
+        : await fetchPinnedWebReceiversResponse(destination, options, addresses);
+      if (response.status >= 300 && response.status < 400) {
+        try { await response.body?.cancel?.(); } catch { /* no-op */ }
+        throw new Error('Web receiver directory redirects are refused');
+      }
+      if (!response.ok) throw new Error(`Web receiver directory returned ${response.status}`);
+      return readResponseTextCapped(response, WEB_RECEIVERS_RESPONSE_MAX_BYTES);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function refreshCatalog() {
+    const [receiverbookOutcome, kiwiOutcome] = await Promise.allSettled([
+      fetchText(WEB_RECEIVERS_SOURCES.receiverbook).then(normalizeReceiverbookSites),
+      fetchText(WEB_RECEIVERS_SOURCES.kiwisdr).then(normalizeKiwiSdrRows),
+    ]);
+    const summarize = (outcome) => (outcome.status === 'fulfilled'
+      ? { ok: true, count: outcome.value.length, error: null }
+      : { ok: false, count: 0, error: cleanRadioText(outcome.reason?.message, 200) || 'failed' });
+    const sources = { receiverbook: summarize(receiverbookOutcome), kiwisdr: summarize(kiwiOutcome) };
+    const receivers = mergeWebReceivers({
+      receiverbook: receiverbookOutcome.status === 'fulfilled' ? receiverbookOutcome.value : [],
+      kiwisdr: kiwiOutcome.status === 'fulfilled' ? kiwiOutcome.value : [],
+    });
+    if (receivers.length < WEB_RECEIVERS_MIN_CATALOG) {
+      const error = new Error(`Web receiver directories answered with only ${receivers.length} receivers`);
+      error.webReceiversSources = sources;
+      throw error;
+    }
+    catalogCache = {
+      receivers,
+      sources,
+      degraded: !(sources.receiverbook.ok && sources.kiwisdr.ok),
+      updatedAt: new Date(now()).toISOString(),
+      cachedAt: now(),
+    };
+    return catalogCache;
+  }
+
+  async function getCatalog() {
+    if (catalogCache && now() - catalogCache.cachedAt < WEB_RECEIVERS_CACHE_MS) {
+      return { ...catalogCache, stale: false };
+    }
+    if (!refreshPromise) refreshPromise = refreshCatalog().finally(() => { refreshPromise = null; });
+    try {
+      return { ...await refreshPromise, stale: false };
+    } catch (error) {
+      if (catalogCache && now() - catalogCache.cachedAt <= WEB_RECEIVERS_STALE_MS) {
+        return { ...catalogCache, stale: true, degraded: true, degradedReason: cleanRadioText(error?.message, 200) };
+      }
+      throw error;
+    }
+  }
+
+  function sendJson(res, status, body) {
+    res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify(body));
+  }
+
+  return async function webReceiversProxyMiddleware(req, res) {
+    const requestUrl = new URL(req.url || '/', 'http://localhost');
+    if (requestUrl.pathname !== '/catalog') {
+      sendJson(res, 404, { error: 'Unknown web receiver route' });
+      return;
+    }
+    if (req.method !== 'GET') {
+      res.writeHead(405, { Allow: 'GET', 'Cache-Control': 'no-store' });
+      res.end();
+      return;
+    }
+    try {
+      const catalog = await getCatalog();
+      sendJson(res, 200, {
+        receivers: catalog.receivers,
+        updatedAt: catalog.updatedAt,
+        stale: catalog.stale,
+        degraded: Boolean(catalog.degraded),
+        degradedReason: catalog.degradedReason || null,
+        sources: catalog.sources,
+      });
+    } catch (error) {
+      sendJson(res, 503, {
+        error: 'Web receiver directory is temporarily unavailable',
+        degraded: true,
+        sources: error?.webReceiversSources || null,
+      });
+    }
+  };
+}
+
+function webReceiversProxy() {
+  const middleware = createWebReceiversProxyMiddleware();
+  const install = (server) => {
+    server.middlewares.use('/api/web-receivers', middleware);
+  };
+  return {
+    name: 'web-receivers-proxy',
     configureServer: install,
     configurePreviewServer: install,
   };
@@ -5266,6 +5614,7 @@ export function openAiRealtimeProxy() {
             'Disambiguation table — basemap vs layer vs style: basemap switching requires an explicit stack name — "Bing aerial" means set_map_stack bing-aerial, "aerial with labels" means bing-labels, "OSM"/"road map" means osm, "Esri"/"Esri imagery" means esri-imagery, "Google 3D"/"photorealistic" means photoreal. Any mention of "satellite" or "satellites" ALWAYS means the satellites DATA LAYER via set_layer_visibility, never a basemap. "surveillance"/"night vision"/"thermal" are visual STYLES via set_visual_style.',
             'HUD requests ("hud on/off", "switch to operator/minimal/tactical layout") use set_hud. Detection requests ("detection on", "dense mode", "balanced mode", "sparse mode", "set density to 25", "use weighted allocation") use set_detection. Density snaps to 0/25/50/75/100 and derives Sparse/Balanced/Dense; panoptic is a legacy alias for Dense.',
             'Bloom/sharpen requests use set_post_processing. Scene requests ("play orbital watch", "stop the scene", "what scenes are there") use control_scene. CCTV camera requests ("next camera", "nearest camera", "select the Congress camera", "show coverage") use control_cctv — the CCTV layer must be enabled first.',
+            'WEB RECEIVERS are internet-controllable SDRs (KiwiSDR, WebSDR, OpenWebRX), not internet radio. "Show me the web receivers / SDRs around X", "which receivers near Y cover shortwave / 20 meters / 14233 kHz" → find_web_receivers (it enables the layer, highlights and frames the results; narrate two or three by name with distance and coverage, and say when a receiver reports full user slots). "Tune to 14233 kHz USB on this receiver", "listen to 7055 LSB on the nearest KiwiSDR" → tune_web_receiver with frequencyKhz (kHz, so 14.233 MHz is 14233) and mode; it loads the receiver page in the panel dock — the audio comes from the receiver itself. If the result says covers:false, say the receiver does not publish coverage of that frequency but the page was opened anyway. "Show me the RF spectrum / waterfall from 10 to 15 MHz around X", "let me see the 20 meter band without listening" → show_rf_spectrum with startKhz/stopKhz (or centerKhz + spanKhz); it opens a silent, zoomed waterfall on a KiwiSDR when one covers the range. If the result says muted:false, tell the user that receiver will play audio because its page cannot be muted from a link, and mention the note.',
             'Radio playback requests use control_radio. "Turn on/start the radio" means action=play; action=enable only reveals Radio markers and must be reserved for explicit "show/enable the Radio layer/markers" requests. After a prepared playback result, briefly confirm any other completed actions and say "Turning on the radio"—never claim it is already playing. The client keeps Radio muted until playback is verified, then closes voice before restoring Radio volume. Examples: "play news near Austin" → select category=news locationId=austin; "play US news" → select category=news country=US; "Radio volume 30" → volume; pause/resume/stop/next/previous use the matching action. Radio selection never moves the camera.',
             '"Track/follow <something specific>" (a callsign, ship name, satellite name) uses track_entity. "Take me to the biggest fire" uses track_entity with query "biggest fire" (the fires layer must be enabled). Bare "orbit" means camera orbit of the current landmark. "Stop following/tracking" uses stop_tracking.',
             '"Show me which planes are overhead"/"frame the ships"/"show me the satellites above" use frame_overhead with the matching target.',
@@ -5770,7 +6119,7 @@ const GEV_REALTIME_TOOLS = [
         layerId: {
           type: 'string',
           description:
-            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio.',
+            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio; web receivers/SDRs/KiwiSDR/WebSDR/OpenWebRX/online receivers → web-receivers.',
           enum: [
             'flights',
             'military',
@@ -5780,6 +6129,7 @@ const GEV_REALTIME_TOOLS = [
             'traffic',
             'cctv',
             'radio',
+            'web-receivers',
             'bikeshare',
             'ais-live-vessels',
             'local-datacenters',
@@ -5811,6 +6161,7 @@ const GEV_REALTIME_TOOLS = [
             'traffic',
             'cctv',
             'radio',
+            'web-receivers',
             'bikeshare',
             'ais-live-vessels',
             'local-datacenters',
@@ -6072,6 +6423,73 @@ const GEV_REALTIME_TOOLS = [
         stationQuery: { type: 'string', maxLength: 120, description: 'Optional station name/tag substring.' },
       },
       required: ['action'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'find_web_receivers',
+    description: 'Find internet-controllable radio receivers (KiwiSDR, WebSDR, OpenWebRX) near a place or the current view, optionally only those covering a frequency or band. Enables the Web Receivers layer if needed, highlights the results on the globe and frames them. Use for requests like "show me web receivers around Berlin", "which SDRs near me cover 20 meters", "find a shortwave receiver in Japan".',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        locationQuery: { type: 'string', maxLength: 120, description: 'Place to search around, e.g. "Berlin" or "Texas". Omit to use the current view center.' },
+        locationId: { type: 'string', enum: ['austin', 'sf', 'nyc', 'tokyo', 'london', 'paris', 'dubai', 'dc'], description: 'Known city anchor.' },
+        latitude: { type: 'number', minimum: -90, maximum: 90 },
+        longitude: { type: 'number', minimum: -180, maximum: 180 },
+        frequencyKhz: { type: 'number', minimum: 1, maximum: 10000000, description: 'Frequency the receiver must cover, in kHz (14233 for 14.233 MHz).' },
+        band: { type: 'string', enum: ['all', 'lf-mw', 'hf', 'vhf', 'uhf'], description: 'Band family filter: hf = shortwave 1.6–30 MHz, lf-mw = long/medium wave, vhf, uhf.' },
+        receiverType: { type: 'string', enum: ['all', 'kiwisdr', 'websdr', 'openwebrx'] },
+        limit: { type: 'integer', minimum: 1, maximum: 20 },
+        frameResults: { type: 'boolean', description: 'Fly the camera to frame the results (default true).' },
+      },
+      required: [],
+    },
+  },
+  {
+    type: 'function',
+    name: 'tune_web_receiver',
+    description: 'Tune a web receiver (KiwiSDR / WebSDR / OpenWebRX) to a frequency and mode and open it in the Web Receivers panel dock. Target the selected receiver, one by name/id from a previous find_web_receivers result, or the nearest one covering the frequency around a place. Examples: "tune to 14233 kHz USB on this receiver", "listen to 7055 LSB on the Twente WebSDR", "open the nearest KiwiSDR on 5 MHz AM".',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        receiverId: { type: 'string', maxLength: 40, description: 'Receiver id from find_web_receivers.' },
+        receiverQuery: { type: 'string', maxLength: 120, description: 'Receiver name, site or host substring.' },
+        target: { type: 'string', enum: ['selected', 'nearest'], description: 'selected = the receiver currently selected on the globe/panel (default); nearest = nearest receiver covering the frequency around the place or view.' },
+        frequencyKhz: { type: 'number', minimum: 1, maximum: 10000000, description: 'Frequency in kHz, e.g. 14233 or 7055.5.' },
+        mode: { type: 'string', enum: ['usb', 'lsb', 'am', 'cw', 'nfm', 'wfm'], description: 'Demodulation. Omit to let GEV pick the usual mode for the band.' },
+        locationQuery: { type: 'string', maxLength: 120 },
+        locationId: { type: 'string', enum: ['austin', 'sf', 'nyc', 'tokyo', 'london', 'paris', 'dubai', 'dc'] },
+        latitude: { type: 'number', minimum: -90, maximum: 90 },
+        longitude: { type: 'number', minimum: -180, maximum: 180 },
+        openIn: { type: 'string', enum: ['dock', 'tab'], description: 'dock = embed the receiver page in the Web Receivers panel (default); tab = open a new browser tab.' },
+      },
+      required: ['frequencyKhz'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'show_rf_spectrum',
+    description: 'Show the RF spectrum (waterfall) of a frequency range on a web receiver WITHOUT tuning in audibly — e.g. "show me the RF spectrum from 10 to 15 MHz around here", "let me see the 40 meter band on that receiver". Picks the selected receiver, a named one, or the nearest receiver covering the whole range (KiwiSDRs preferred because their page can be zoomed and muted from the URL) and opens it in the Web Receivers panel dock. Give the range as startKhz/stopKhz, or centerKhz plus spanKhz.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        startKhz: { type: 'number', minimum: 1, maximum: 10000000, description: 'Lower edge in kHz (10 MHz = 10000).' },
+        stopKhz: { type: 'number', minimum: 1, maximum: 10000000, description: 'Upper edge in kHz (15 MHz = 15000).' },
+        centerKhz: { type: 'number', minimum: 1, maximum: 10000000, description: 'Alternative to start/stop: centre frequency in kHz.' },
+        spanKhz: { type: 'number', minimum: 1, maximum: 40000, description: 'Alternative to start/stop: total span in kHz around centerKhz.' },
+        receiverId: { type: 'string', maxLength: 40, description: 'Receiver id from find_web_receivers.' },
+        receiverQuery: { type: 'string', maxLength: 120, description: 'Receiver name, site or host substring.' },
+        target: { type: 'string', enum: ['selected', 'nearest'], description: 'selected = the receiver currently selected (default when one is); nearest = nearest receiver covering the range around the place or view.' },
+        locationQuery: { type: 'string', maxLength: 120 },
+        locationId: { type: 'string', enum: ['austin', 'sf', 'nyc', 'tokyo', 'london', 'paris', 'dubai', 'dc'] },
+        latitude: { type: 'number', minimum: -90, maximum: 90 },
+        longitude: { type: 'number', minimum: -180, maximum: 180 },
+        openIn: { type: 'string', enum: ['dock', 'tab'] },
+      },
+      required: [],
     },
   },
   {
@@ -7753,6 +8171,7 @@ export default defineConfig(({ mode }) => {
       weatherEffectsProxy(),
       cctvProxy(),
       radioBrowserProxy(),
+      webReceiversProxy(),
       gbfsProxy(),
       adsbLolProxy(),
       aisLiveProxy(),

@@ -5,6 +5,26 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- **Web Receivers layer.** Internet-controllable radio receivers — KiwiSDR,
+  WebSDR and OpenWebRX — as a globe layer, sourced from Receiverbook and the
+  community KiwiSDR map feed through a same-origin broker. Markers are colored
+  by receiver family; the companion panel filters by family and band, shows
+  coverage, user slots and antenna for the selected receiver, and tunes it by
+  frequency and mode into an embedded dock (or a new tab). Two voice tools:
+  `find_web_receivers` ("show me the SDRs around Berlin that cover 20 meters")
+  highlights and frames matching receivers; `tune_web_receiver` ("tune to
+  14233 kHz USB on this receiver") opens the receiver page already tuned;
+  `show_rf_spectrum` ("show me the RF spectrum from 10 to 15 MHz around
+  here") opens a silent, zoomed waterfall of the range on a KiwiSDR — the
+  panel's SPECTRUM row does the same by hand. WebSDR and OpenWebRX pages
+  cannot be muted or zoomed from a link, so a spectrum view on them is
+  reported as audio-on. The dock can be minimized (the receiver keeps
+  running) or closed, and GEV reclaims keyboard focus while a receiver page
+  boots so voice push-to-talk keeps working. Audio and control stay between
+  the browser and the receiver operator.
+
 ### Fixed
 
 - Mapped-site outages show their scheduled retry countdown and distinguish

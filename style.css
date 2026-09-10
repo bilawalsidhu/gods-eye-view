@@ -9520,3 +9520,90 @@ body.scene-playback-mode #key-setup {
   border-color: rgba(255, 170, 150, 0.65);
   outline: none;
 }
+
+/* ── Web Receivers companion panel ─────────────────────────────────────── */
+.web-receivers-filter-row select { min-width: 0; flex: 1 1 40%; }
+.web-receivers-tune-row {
+  display: flex; gap: 6px; align-items: center; padding: 6px 0 2px;
+}
+.web-receivers-tune-row input {
+  flex: 1 1 96px; min-width: 0; background: rgba(4, 18, 26, 0.9); color: #cbeaf5;
+  border: 1px solid rgba(101, 247, 255, 0.28); border-radius: 4px; padding: 5px 7px;
+  font: 12px var(--font-digital, monospace); letter-spacing: 0.04em;
+}
+.web-receivers-tune-row select { flex: 0 0 auto; }
+.web-receivers-tune-row button {
+  flex: 0 0 auto; background: rgba(101, 247, 255, 0.12); color: #65f7ff;
+  border: 1px solid rgba(101, 247, 255, 0.35); border-radius: 4px; padding: 5px 9px;
+  font-size: 11px; letter-spacing: 0.08em; cursor: pointer;
+}
+.web-receivers-tune-row button:hover:not(:disabled) { background: rgba(101, 247, 255, 0.24); }
+.web-receivers-tune-row button:disabled, .web-receivers-tune-row input:disabled, .web-receivers-tune-row select:disabled { opacity: 0.45; cursor: default; }
+.web-receivers-dock { margin: 6px 0 4px; border: 1px solid rgba(101, 247, 255, 0.28); border-radius: 6px; overflow: hidden; background: #000; }
+.web-receivers-dock-bar {
+  display: flex; align-items: center; gap: 8px; padding: 4px 8px;
+  background: rgba(4, 18, 26, 0.95); font-size: 11px; letter-spacing: 0.06em; color: #9fdfe9;
+}
+.web-receivers-dock-bar span { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.web-receivers-dock-bar a { color: #65f7ff; text-decoration: none; }
+.web-receivers-dock-bar button { background: none; border: 0; color: #9fdfe9; font-size: 16px; line-height: 1; cursor: pointer; padding: 0 2px; }
+#web-receivers-frame { display: block; width: 100%; height: 420px; border: 0; background: #000; }
+#web-receivers-frame[hidden] { display: none; }
+.web-receivers-filter-row { grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); }
+.web-receivers-filter-row select { min-width: 0; }
+
+/* Web Receivers selects share the Radio filter look; the dock link never wraps. */
+#web-receivers-type, #web-receivers-band, #web-receivers-mode {
+  min-width: 0;
+  padding: 7px 24px 7px 8px;
+  border: 1px solid rgba(65, 220, 231, .28);
+  border-radius: 5px;
+  color: #c5faff;
+  background: rgba(5, 24, 31, .88);
+  font: 9px/1.2 var(--font-mono);
+}
+.web-receivers-dock-bar a { white-space: nowrap; }
+.web-receivers-spectrum-row { padding-top: 2px; }
+.web-receivers-row-label { flex: 0 0 auto; font-size: 9px; letter-spacing: 0.12em; color: var(--text-dim, #6fa2ad); }
+.web-receivers-spectrum-row input { flex: 1 1 64px; }
+
+/* ── Web Receivers in the left stack: same layout contract as CCTV ─────── */
+#web-receivers-panel {
+  --panel-expanded-width: 360px;
+  position: fixed;
+  top: var(--left-stack-top);
+  left: var(--left-stack-x);
+  right: auto;
+  bottom: auto;
+  z-index: 100;
+  width: var(--panel-expanded-width);
+  max-height: calc(100vh - 24px);
+}
+#left-panel-stack > #web-receivers-panel {
+  position: relative; top: auto; right: auto; bottom: auto; left: auto; z-index: auto;
+  max-height: none; flex: 0 0 auto; min-height: 0; pointer-events: auto; order: 3;
+}
+#left-panel-stack > #web-receivers-panel:not(.collapsed) {
+  box-sizing: border-box;
+  flex: 0 1 var(--left-panel-allocated-height, auto);
+  height: var(--left-panel-allocated-height, auto);
+  max-height: var(--left-panel-allocated-height, 100%);
+}
+#left-panel-stack.layout-tail > #web-receivers-panel:not(.collapsed) {
+  box-sizing: border-box;
+  flex: 0 0 var(--left-panel-allocated-height);
+  height: var(--left-panel-allocated-height);
+  max-height: var(--left-panel-allocated-height);
+}
+#web-receivers-panel .web-receivers-inner { box-sizing: border-box; width: 100%; min-width: 0; }
+#left-panel-stack > #web-receivers-panel:not(.collapsed) .web-receivers-inner {
+  height: 100%; max-height: 100%; overflow-y: auto; overflow-x: hidden;
+}
+#web-receivers-panel.collapsed { width: var(--left-collapsed-width); }
+#web-receivers-panel.collapsed .web-receivers-inner > :not(.panel-header) { display: none !important; }
+#web-receivers-name, #web-receivers-meta, #web-receivers-bands { white-space: normal; overflow-wrap: anywhere; }
+#web-receivers-dock-label { min-width: 0; }
+#web-receivers-frame { height: 340px; }
+.web-receivers-dock.minimized #web-receivers-frame,
+.web-receivers-dock.minimized #web-receivers-dock-note { display: none; }
+.web-receivers-dock-bar button { flex: 0 0 auto; }

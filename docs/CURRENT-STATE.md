@@ -2611,3 +2611,40 @@ Replay transport uses one Play/Pause toggle plus Cancel. During ascent only the 
 ## Maintenance Rule
 
 When runtime behavior or architecture changes, update this file in the same change set as code updates.
+
+## Web Receivers layer
+
+> - **What it is:** internet-controllable SDR receivers (KiwiSDR, WebSDR,
+>   OpenWebRX) as a globe layer with a companion panel, registered as
+>   `web-receivers` (share token `h`, `enabled-only`; panel token `w`). A Context
+>   companion like Radio: toggling it never exits Context.
+> - **Directory:** `/api/web-receivers/catalog` (vite.config.js) merges
+>   Receiverbook's map data with the community KiwiSDR feed; 30-minute cache,
+>   seven-day stale fallback, pinned/validated outbound requests, no
+>   client-supplied URLs. websdr.org's list is deliberately not used (no-reuse
+>   notice). Rows carry `type`, `bands` (published for KiwiSDR, inferred from
+>   labels otherwise), `users`/`usersMax`, `online`, `antenna`, `sources`.
+> - **Layer (`src/data/webReceivers.js`):** points colored by family, cluster
+>   styling, a selection ring + label, `find()` (rank by online → coverage →
+>   free slots → distance, highlights results), `tune()` (builds the family
+>   specific URL via `src/data/webReceiverTuning.js` and records `lastTune`),
+>   `frame()`/`flyTo()`. Clicking a marker selects it and opens the panel.
+> - **Panel (`#web-receivers-panel`):** enable toggle, family/band filters,
+>   receiver card, frequency (kHz) + mode + TUNE/OPEN, and a dock that embeds
+>   the tuned receiver page in an iframe. On an https origin a plain-http
+>   receiver cannot be embedded; the dock says so and offers NEW TAB instead.
+> - **Voice:** `find_web_receivers` (place/coordinates/current view, optional
+>   frequency kHz, band, family; enables the layer, highlights + frames
+>   results) and `tune_web_receiver` (selected / by id or name / nearest
+>   covering the frequency; dock or tab), and `show_rf_spectrum` (a range as
+>   startKhz/stopKhz or centerKhz+spanKhz; selected / named / nearest receiver
+>   covering the whole range with KiwiSDRs preferred). All return `covers`;
+>   the spectrum tool also returns `muted` — true only for KiwiSDR, whose page
+>   takes `z=` zoom, `sp=1` spectrum panel and `mute=1` in the URL; WebSDR and
+>   OpenWebRX are tuned to the range centre with audio on and a `note`.
+>   The panel's SPECTRUM row (from/to kHz + SHOW) is the manual equivalent.
+>- **Proof:** `npm test` covers the parser/merge/proxy (`webReceiversProxy.test.mjs`)
+>   and the tuning helpers (`webReceiverTuning.test.mjs`);
+>   `node scripts/qa-web-receivers.mjs --url http://localhost:4173` drives the
+>   live layer, panel, dock and both voice tools headlessly without contacting
+>   any receiver.

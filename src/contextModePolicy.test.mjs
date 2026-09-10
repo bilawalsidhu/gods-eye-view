@@ -300,11 +300,11 @@ test('Radio remains an independent companion across Context transitions', () => 
 test('each Context mode exposes only its shell and dependencies', () => {
   assert.deepEqual(
     [...contextAllowedLayerIds(null)],
-    ['military-awareness', 'radio'],
+    ['military-awareness', 'radio', 'web-receivers'],
   );
   assert.deepEqual(
     [...contextAllowedLayerIds('space-missions')],
-    ['rocket-launches', 'satellites', 'radio'],
+    ['rocket-launches', 'satellites', 'radio', 'web-receivers'],
   );
 });
 
