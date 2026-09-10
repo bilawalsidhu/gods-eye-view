@@ -79,7 +79,9 @@ keys there — layer-row status copy belongs in `layers.*`.
 ## Parity flip (post-stage-4 gate)
 
 `src/i18n/catalog.test.mjs` enforces: es ⊆ en, placeholder-name parity, and
-plural-shape parity per shared key. When stage-4 translation completes, flip
+plural-shape parity per shared key. **FLIPPED (stage-3 completion, commit c91a923):** strict exact-parity is now
+the default (`GEV_I18N_REQUIRE_FULL_ES_PARITY=0` opts out). Originally: when
+stage-4 translation completes, flip
 `REQUIRE_FULL_ES_PARITY` in that file to `true` (or run CI with
 `GEV_I18N_REQUIRE_FULL_ES_PARITY=1` to preview) — the gate then demands exact
 en/es key-set equality so a forgotten translation cannot ship behind the
