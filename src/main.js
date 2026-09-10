@@ -34,6 +34,8 @@ import { installScopeMask } from './scopeMask.js';
 import { initFirstRunExperience } from './firstRunExperience.js';
 import { initKeySetup } from './keySetup.js';
 import { loadPhotorealisticTileset } from './mapStartup.js';
+import { AtcRadioSystem } from './data/atcRadio.js';
+import { AtcRadioCard } from './data/atcRadioCard.js';
 
 initLogoGaze();
 
@@ -327,6 +329,58 @@ async function init() {
       requestRender: governorRequestRender,
     };
     window.__godsEyeView.voiceCommands = initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector, annotations });
+
+    const atcRadio = new AtcRadioSystem({ viewer });
+    const atcRadioCard = new AtcRadioCard({ atcRadio });
+
+    let lastAtcUpdateTime = 0;
+    viewer.scene.preRender.addEventListener(() => {
+      if (!viewer.trackedEntity) return;
+      const now = performance.now();
+      if (now - lastAtcUpdateTime < 500) return;
+      lastAtcUpdateTime = now;
+
+      try {
+        const aircraft = styleManager.cockpitView?.readAircraftInfo?.();
+        if (aircraft && Number.isFinite(aircraft.latitude) && Number.isFinite(aircraft.longitude)) {
+          atcRadio.updateAircraftTelemetry({
+            lat: aircraft.latitude,
+            lon: aircraft.longitude,
+            altitudeM: aircraft.altitudeM,
+            velocityMps: aircraft.velocityMps,
+            onGround: aircraft.onGround,
+            callsign: aircraft.callsign || aircraft.icao24,
+          });
+        }
+      } catch (err) {
+        console.warn('[ATC Radio] PreRender telemetry update error:', err);
+      }
+    });
+
+    viewer.trackedEntityChanged.addEventListener(() => {
+      try {
+        const aircraft = styleManager.cockpitView?.readAircraftInfo?.();
+        if (aircraft) {
+          atcRadioCard.show();
+          atcRadio.updateAircraftTelemetry({
+            lat: aircraft.latitude,
+            lon: aircraft.longitude,
+            altitudeM: aircraft.altitudeM,
+            velocityMps: aircraft.velocityMps,
+            onGround: aircraft.onGround,
+            callsign: aircraft.callsign || aircraft.icao24,
+          });
+        } else {
+          atcRadioCard.hide();
+          atcRadio.clearAircraftTelemetry();
+        }
+      } catch (err) {
+        console.warn('[ATC Radio] Tracked entity change error:', err);
+      }
+    });
+
+    window.__godsEyeView.atcRadio = atcRadio;
+    window.__godsEyeView.atcRadioCard = atcRadioCard;
 
   } catch (error) {
     console.error("God's Eye View initialization failed:", error);
