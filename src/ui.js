@@ -3631,7 +3631,7 @@ export class StyleManager {
       const stack = state.activeStack;
       const label = state.status === 'switching'
         ? '...'
-        : (stack?.shortLabel || stack?.label || 'MAP');
+        : (stack?.shortLabel || stack?.label || t('cockpit.presets.mapStackFallback'));
       this._mapStackStatus.textContent = label;
       this._mapStackStatus.classList.toggle('warn', !!state.lastError);
     }
@@ -3987,7 +3987,7 @@ export class StyleManager {
       clearTimeout(this._cctvChipHideTimer);
       this._cctvChipHideTimer = null;
       this._cctvChipWasBusy = true;
-      setSplitFlapText(this._cctvSyncLabel, 'loading frames');
+      setSplitFlapText(this._cctvSyncLabel, t('cockpit.cctv.syncLoadingFrames'));
       // The counter is left plain on purpose: it ticks every few frames
       // during a grid load, and flapping it would read as a slot machine.
       this._cctvSyncProgress.textContent = `${loaded}/${total}`;
@@ -3998,7 +3998,7 @@ export class StyleManager {
     if (this._cctvChipWasBusy && enabled && total > 0) {
       // Load just completed — flash the final count, then auto-hide.
       this._cctvChipWasBusy = false;
-      setSplitFlapText(this._cctvSyncLabel, 'camera grid ready');
+      setSplitFlapText(this._cctvSyncLabel, t('cockpit.cctv.syncGridReady'));
       this._cctvSyncProgress.textContent = `${total}/${total}`;
       this._cctvSyncChip.classList.add('visible');
       clearTimeout(this._cctvChipHideTimer);
@@ -4244,7 +4244,7 @@ export class StyleManager {
       const hadOldPositions = Object.keys(localStorage)
         .some((key) => key.startsWith('godsEyeView.v6.panelPos.'));
       if (hadOldPositions) {
-        this._showToast('Panel layout updated — positions reset to new defaults');
+        this._showToast(t('cockpit.panel.layoutResetToast'));
       }
     } catch {
       // storage unavailable
@@ -4616,7 +4616,11 @@ export class StyleManager {
             } catch (restoreError) {
               console.warn(`[Context] ${change.layerId} rollback failed`, restoreError);
             }
-            return `${entryMode === 'space-missions' ? 'Space Missions' : 'Context'} could not start because another layer did not stop cleanly`;
+            return t('cockpit.context.toastStartBlocked', {
+              mode: entryMode === 'space-missions'
+                ? t('cockpit.context.modeSpaceMissions')
+                : t('cockpit.context.modeContext'),
+            });
           } finally {
             if (ownsNotificationToken) {
               this._userFacingContextNotificationTokens.delete(notificationToken);
@@ -4703,9 +4707,11 @@ export class StyleManager {
     if (result.classification === 'pending') {
       this._shareTrackingNoticeGeneration += 1;
       this._shareTrackingAcquiringKey = trackingKey;
-      this._showGlobalStatusNotice('ACQUIRING', {
+      this._showGlobalStatusNotice(t('cockpit.status.acquiring'), {
         state: 'acquiring',
-        detail: `SHARED ${String(result.label || 'SUBJECT').toUpperCase()}`,
+        detail: t('cockpit.status.sharedSubjectDetail', {
+          subject: String(result.label || t('cockpit.status.subjectFallback')).toUpperCase(),
+        }),
         persistent: true,
       });
       return;
@@ -4725,12 +4731,12 @@ export class StyleManager {
     const noticeGeneration = ownsAcquiringNotice
       ? this._shareTrackingNoticeGeneration
       : ++this._shareTrackingNoticeGeneration;
-    const subject = result.label || 'entity';
+    const subject = result.label || t('cockpit.status.subjectFallback');
     const message = result.classification === 'expired'
-      ? `Shared ${subject} follow expired`
+      ? t('cockpit.status.sharedFollowExpired', { subject })
       : result.classification === 'source-unavailable'
-        ? `Shared ${subject} could not be restored — feed unavailable`
-        : `Shared ${subject} is unavailable`;
+        ? t('cockpit.status.sharedRestoreFailed', { subject })
+        : t('cockpit.status.sharedUnavailable', { subject });
     const showAfterStartupCover = () => {
       requestAnimationFrame(() => {
         if (!canPresentDeferredStatusNotice(
@@ -4785,7 +4791,7 @@ export class StyleManager {
           nextMode,
           { notificationToken },
         ),
-        'Contacts could not complete the requested transition; try again',
+        t('cockpit.context.toastTransitionFailedContacts'),
       ).then((succeeded) => {
         if (nextMode && shouldExpandGlobalContextPanel({
           action: 'contacts',
@@ -4802,7 +4808,7 @@ export class StyleManager {
           nextMode,
           { notificationToken },
         ),
-        'Space Missions could not complete the requested transition; try again',
+        t('cockpit.context.toastTransitionFailedMissions'),
       ).then((succeeded) => {
         if (nextMode && shouldExpandGlobalContextPanel({
           action: 'space-missions',
@@ -4825,10 +4831,10 @@ export class StyleManager {
         if (searched === false) return false;
         const stats = militaryInstallationsLayer.getStats?.();
         this._showToast(stats?.statusMessage || (stats?.status === 'zoom-in'
-          ? 'Zoom in to search mapped installations'
-          : 'Nearby installations refreshed'));
+          ? t('cockpit.context.toastZoomToSearch')
+          : t('cockpit.context.toastInstallationsRefreshed')));
         return true;
-      }, 'Nearby installations could not be refreshed; try again').finally(() => {
+      }, t('cockpit.context.toastInstallationsRefreshFailed')).finally(() => {
         button.disabled = false;
       });
     });
@@ -4836,8 +4842,8 @@ export class StyleManager {
 
   async _runUserFacingContextAction(
     operation,
-    message = 'Context could not restore every layer; try again',
-    { falseIsFailure = true } = {},
+    message = t('cockpit.context.toastRestoreFailed'),
+    { falseIsFailure = true, localizedMessage = null } = {},
   ) {
     const notificationToken = Symbol('user-facing-context-action');
     this._userFacingContextNotificationTokens.add(notificationToken);
@@ -4847,7 +4853,7 @@ export class StyleManager {
         falseIsFailure,
         onFailure: (error) => {
           console.warn('[Context] user-facing transition failed', error);
-          this._showToast(message);
+          this._showToast(localizedMessage || message);
         },
       });
     } finally {
@@ -5321,13 +5327,16 @@ export class StyleManager {
     }
     if (change?.type === 'visibility-blocked') {
       if (!this._userFacingContextNotificationTokens.has(change.notificationToken)) {
-        this._showToast(change.reason || 'That layer is unavailable in the current Context mode');
+        this._showToast(change.reason || t('cockpit.context.toastLayerUnavailable'));
       }
       this._syncContextModeButtons();
       return;
     }
     if (change?.type === 'visibility-failed') {
-      const failureMessage = `${change.layerId} could not ${change.enabled ? 'start' : 'stop'} cleanly`;
+      const failureMessage = t('cockpit.context.toastLayerLifecycleFailed', {
+        layerId: change.layerId,
+        action: change.enabled ? t('cockpit.context.actionStart') : t('cockpit.context.actionStop'),
+      });
       // A failed direct Context-shell START has already had its siblings
       // cleared by the visibility guard. Wait outside the synchronous manager
       // notification for this queue to settle, then reconcile the complete
@@ -5704,7 +5713,16 @@ export class StyleManager {
             origin: 'user',
             notificationToken,
           }),
+          // Lifecycle toast copy: the English template below is pinned
+          // verbatim by contextSessionOrdering.test.mjs, so it stays the
+          // argument and localizedMessage rewrites it at the toast boundary
+          // (identical value under 'en').
           `Radio could not ${enabling ? 'start' : 'stop'} cleanly`,
+          {
+            localizedMessage: t('cockpit.radio.toastLifecycleFailed', {
+              action: enabling ? t('cockpit.context.actionStart') : t('cockpit.context.actionStop'),
+            }),
+          },
         );
         if (toggled === false) return;
         if (enabling && trigger === this._radioEnableBtn
@@ -6378,7 +6396,7 @@ export class StyleManager {
         selectedCameraId: cameraId,
         calibration: { cameraId, save: true },
       }, { origin: 'user' });
-      this._showToast('CCTV calibration saved');
+      this._showToast(t('cockpit.cctv.toastCalibrationSaved'));
     });
 
     this._cctvCalibResetBtn?.addEventListener('click', () => {
@@ -6540,7 +6558,7 @@ export class StyleManager {
         reset: true,
       },
     }, { origin: 'user' });
-    this._showToast('CCTV calibration reset');
+    this._showToast(t('cockpit.cctv.toastCalibrationReset'));
   }
 
   /**
@@ -6632,7 +6650,7 @@ export class StyleManager {
    */
   async _toggleCctvEnabled(forceState) {
     if (!this._dataManager || !this._dataManager.layers?.has('cctv')) {
-      this._showToast('CCTV layer unavailable');
+      this._showToast(t('cockpit.cctv.toastLayerUnavailable'));
       return false;
     }
     const enabled = this._dataManager.isEnabled('cctv');
@@ -9495,12 +9513,12 @@ export class StyleManager {
             this._collapsePOIRow();
             this._updateLocationMiniStatus();
           } else {
-            this._showToast('Location not found');
+            this._showToast(t('cockpit.location.toastNotFound'));
           }
         } catch (err) {
           console.error('[Search] Geocoding failed:', err);
           if (this._disposed || generation !== this._navigationGeneration) return;
-          this._showToast('Search failed');
+          this._showToast(t('cockpit.location.toastSearchFailed'));
         } finally {
           this._settleLocationSearchUi(generation);
         }
@@ -9763,7 +9781,7 @@ export class StyleManager {
    */
   _toggleOrbit() {
     if (!this._currentTarget) {
-      this._showToast('Fly to a POI first');
+      this._showToast(t('cockpit.location.toastFlyToPoiFirst'));
       return;
     }
 
@@ -9828,7 +9846,7 @@ export class StyleManager {
     this._globalContextFlightsBtn && (this._globalContextFlightsBtn.disabled = true);
     this._globalContextMissionsBtn && (this._globalContextMissionsBtn.disabled = true);
     this._clearSelectedLayersBtn.disabled = true;
-    this._clearSelectedLayersBtn.setAttribute('aria-label', 'Clearing selected data layers');
+    this._clearSelectedLayersBtn.setAttribute('aria-label', t('cockpit.actions.clearLayersBusyAria'));
 
     const managerOperation = this._dataManager.clearSelectedLayers({
       origin: 'user',
@@ -9837,16 +9855,16 @@ export class StyleManager {
     this._clearSelectedLayersManagerPromise = managerOperation;
     const operation = managerOperation.then((result) => {
       if (result.targetIds.length === 0) {
-        this._showToast('No selected data layers');
+        this._showToast(t('layers.clear.toast.noneSelected'));
       } else if (result.notClearedIds.length > 0) {
-        this._showToast(`${result.notClearedIds.length} data layer${result.notClearedIds.length === 1 ? '' : 's'} could not be cleared`);
+        this._showToast(t('layers.clear.toast.notCleared', { count: result.notClearedIds.length }));
       } else {
-        this._showToast(`Cleared ${result.clearedIds.length} data layer${result.clearedIds.length === 1 ? '' : 's'}`);
+        this._showToast(t('layers.clear.toast.cleared', { count: result.clearedIds.length }));
       }
       return result;
     }).catch((error) => {
       console.warn('[Data] clear selected layers failed', error);
-      this._showToast('Selected data layers could not be cleared');
+      this._showToast(t('cockpit.actions.clearLayersFailedToast'));
       return {
         targetIds: [],
         items: [],
@@ -9863,7 +9881,7 @@ export class StyleManager {
         this._globalContextMissionsBtn && (this._globalContextMissionsBtn.disabled = false);
       }
       this._clearSelectedLayersBtn.disabled = false;
-      this._clearSelectedLayersBtn.setAttribute('aria-label', 'Clear selected data layers');
+      this._clearSelectedLayersBtn.setAttribute('aria-label', t('shell.actions.clearLayers.ariaLabel'));
       this._preservePanelStateDuringLayerClear = false;
       this._clearSelectedLayersManagerPromise = null;
       this._clearSelectedLayersPromise = null;
@@ -9947,7 +9965,7 @@ export class StyleManager {
   _initShareButton() {
     this._shareBtn.addEventListener('click', async () => {
       const success = await this.shareLinkManager.copyLink();
-      this._showToast(success ? 'Link copied!' : 'Copy failed');
+      this._showToast(success ? t('cockpit.share.toastCopied') : t('cockpit.share.toastCopyFailed'));
     });
   }
 
