@@ -15,6 +15,7 @@
 import * as Cesium from 'cesium';
 import { SCENE_RECIPES } from './recipes.js';
 import { sceneLayerPlan, sceneRequiresContextModeExit } from './scenePolicy.js';
+import { t } from '../i18n/index.js';
 import {
   BLOOM_INTENSITY_DEFAULT,
   BLOOM_SCALE_VERSION,
@@ -57,6 +58,31 @@ function uid(prefix) {
  */
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+// Built-in recipe DISPLAY names. Recipe ids, the URL 'scene' param, stored
+// project titles, and voice-matching titles all stay English (keep-English
+// boundary + persisted data); only the presentation of an UNRENAMED built-in
+// localizes, so an operator's renamed scene is never masked by the catalog.
+const RECIPE_TITLE_KEYS = Object.freeze({
+  'flights-radar': 'setup.scenes.recipe.flightsRadar',
+  'orbital-watch': 'setup.scenes.recipe.orbitalWatch',
+  'thermal-threats': 'setup.scenes.recipe.thermalThreats',
+  'city-overload': 'setup.scenes.recipe.cityOverload',
+  'omniscience-pullback': 'setup.scenes.recipe.omnisciencePullback',
+});
+
+/**
+ * Display title for a scene: the localized recipe name while the stored title
+ * still matches the built-in verbatim, the stored title otherwise.
+ * @param {{id?: string, title?: string}} scene
+ * @returns {string}
+ */
+function displaySceneTitle(scene) {
+  const key = RECIPE_TITLE_KEYS[scene?.id];
+  if (!key) return scene?.title || '';
+  const builtin = SCENE_RECIPES.find((recipe) => recipe.id === scene.id);
+  return scene.title === builtin?.title ? t(key) : scene.title;
 }
 
 /**
@@ -458,7 +484,7 @@ export class SceneDirector {
     for (const scene of this._project.scenes) {
       const option = document.createElement('option');
       option.value = scene.id;
-      option.textContent = scene.title;
+      option.textContent = displaySceneTitle(scene);
       this._sceneSelect.appendChild(option);
     }
 
@@ -952,7 +978,7 @@ export class SceneDirector {
         this._renderShotList();
 
         this._updateStatus(`Running ${idx + 1}/${queue.length}: ${scene.title} / ${shot.title}`);
-        this._updateRuntime(`${scene.title} · ${shot.title}`);
+        this._updateRuntime(`${displaySceneTitle(scene)} · ${shot.title}`);
 
         this._logEvent('shot_start', {
           sceneId: scene.id,
