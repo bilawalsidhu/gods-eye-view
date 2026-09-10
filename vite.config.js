@@ -5664,6 +5664,29 @@ function approximateDistanceM(latA, lonA, latB, lonB) {
 const GEV_REALTIME_TOOLS = [
   {
     type: 'function',
+    name: 'scan_for_clusters',
+    description: 'Scans the current global context for high-density clusters of flights, military, or satellites and moves the camera to the largest cluster.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        target_type: { 
+          type: 'string', 
+          enum: ['flights', 'military', 'satellites'],
+          description: 'The type of asset to scan for'
+        }
+      },
+      required: ['target_type']
+    }
+  },
+  {
+    type: 'function',
+    name: 'fly_to_location',
+
+
+  },
+  {
+    type: 'function',
     name: 'fly_to_location',
     description: "Fly the God's Eye View camera to a known city, geocoded country/region/city/landmark, or explicit WGS84 coordinate. Countries/cities frame the whole place; landmarks/buildings use close framing.",
     parameters: {

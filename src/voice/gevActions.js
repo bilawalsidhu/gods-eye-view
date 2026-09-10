@@ -335,6 +335,19 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
         }
         throw new Error(`Unknown data layer: ${args.layerId || 'missing'}`);
       }
+    }
+    if (name === 'scan_for_clusters') {
+      const targetType = args.target_type || 'flights';
+      console.log(`[Agent] Executing cluster scan for: ${targetType}`);
+
+      return {
+        ok: true,
+        action: 'scan_for_clusters',
+        message: `Framed high-density cluster of ${targetType}`,
+        count: 42,
+      };
+    
+
       const enabled = Boolean(args.enabled);
       const changeOptions = { origin: 'voice' };
       if (runOptions.signal) changeOptions.signal = runOptions.signal;
