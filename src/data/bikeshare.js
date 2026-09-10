@@ -12,6 +12,7 @@
 
 import * as Cesium from 'cesium';
 import { governorRequestRender } from '../renderGovernor.js';
+import { t } from '../i18n/index.js';
 import { registerSpriteCollection, restoreSpriteOrder } from './spriteOrder.js';
 import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
 import {
@@ -961,21 +962,22 @@ function statusToColor(status, capacity) {
  */
 function buildSelectionLabel(record) {
   const stationName = String(record?.stationName || '').trim();
-  const stationLabel = stationName || (record?.stationId ? `Station ${record.stationId}` : 'Station');
+  const stationLabel = stationName
+    || (record?.stationId ? t('layers.bike.stationWithId', { id: record.stationId }) : t('layers.bike.stationFallback'));
   const bikes = Number.isFinite(record?.bikesAvailable) ? record.bikesAvailable : '?';
   const docks = Number.isFinite(record?.docksAvailable) ? record.docksAvailable : '?';
   const capacity = Number.isFinite(record?.capacity) ? record.capacity : '?';
 
   const lines = [
     stationLabel,
-    `🚲 ${bikes} avail · ${docks} docks · ${capacity} cap`,
+    t('layers.bike.card.capacity', { bikes, docks, capacity }),
   ];
 
   // Append warnings for stations that are offline or partially non-operational
   const abnormal = [];
-  if (record?.isInstalled === false) abnormal.push('⚠️ Not installed');
-  if (record?.isRenting === false) abnormal.push('⚠️ Not renting');
-  if (record?.isReturning === false) abnormal.push('⚠️ Not returning');
+  if (record?.isInstalled === false) abnormal.push(t('layers.bike.warning.notInstalled'));
+  if (record?.isRenting === false) abnormal.push(t('layers.bike.warning.notRenting'));
+  if (record?.isReturning === false) abnormal.push(t('layers.bike.warning.notReturning'));
   if (abnormal.length > 0) {
     lines.push(abnormal.join(' · '));
   }
@@ -1610,8 +1612,8 @@ const bikeshareLayer = {
     };
     if (_loading) {
       stats.loadingLabel = _activeCityIds.size > 0
-        ? `syncing ${_activeCityIds.size} city feeds...`
-        : 'scanning nearby systems...';
+        ? t('layers.bike.loadingSyncing', { count: _activeCityIds.size })
+        : t('layers.bike.loadingScanning');
     }
     if (_error) stats.error = _error;
     return stats;

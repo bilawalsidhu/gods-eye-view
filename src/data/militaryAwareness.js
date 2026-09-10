@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../i18n/index.js';
 import flightsLayer from './flights.js';
 import militaryFlightsLayer from './militaryFlights.js';
 import aisLiveVesselsLayer from './aisLiveVessels.js';
@@ -258,8 +259,8 @@ function ensurePanel() {
 function hidePanel() {
   if (state.panel) {
     const markup = `<div class="military-awareness-standby">
-      <strong>${state.enabled ? 'CONTEXT READY' : 'GLOBAL CONTEXT OFF'}</strong>
-      <span>${state.enabled ? 'SELECT A FLIGHT, VESSEL, OR MAPPED INSTALLATION' : 'ENABLE TO LOAD OBSERVED / MAPPED PROXIMITY'}</span>
+      <strong>${state.enabled ? t('layers.awareness.standbyReady') : t('layers.awareness.standbyOff')}</strong>
+      <span>${state.enabled ? t('layers.awareness.standbySelect') : t('layers.awareness.standbyEnable')}</span>
     </div>`;
     state.panel.hidden = false;
     if (state.panelMarkup !== markup) {
@@ -492,14 +493,14 @@ function evaluateSubject(subject, sourceStates = collectSourceStates()) {
     evaluatedAt: Date.now(),
     radiusM: AWARENESS_RADIUS_M,
     cohorts: [
-      { id: 'flights', label: 'Flights', source: flightsState.stats.source || SOURCE_LABEL.flights, summary: summarizeAwarenessCohortForNavigation(flights, flightsState) },
-      { id: 'military', label: 'Military flights', source: militaryState.stats.source || SOURCE_LABEL.military, summary: summarizeAwarenessCohortForNavigation(military, militaryState) },
-      { id: 'ais-live-vessels', label: 'AIS vessels', source: vesselsState.stats.source || SOURCE_LABEL['ais-live-vessels'], summary: summarizeAwarenessCohortForNavigation(vessels, vesselsState) },
+      { id: 'flights', label: t('layers.awareness.cohort.flights'), source: flightsState.stats.source || SOURCE_LABEL.flights, summary: summarizeAwarenessCohortForNavigation(flights, flightsState) },
+      { id: 'military', label: t('layers.awareness.cohort.military'), source: militaryState.stats.source || SOURCE_LABEL.military, summary: summarizeAwarenessCohortForNavigation(military, militaryState) },
+      { id: 'ais-live-vessels', label: t('layers.awareness.cohort.vessels'), source: vesselsState.stats.source || SOURCE_LABEL['ais-live-vessels'], summary: summarizeAwarenessCohortForNavigation(vessels, vesselsState) },
       {
         id: 'military-installations',
-        label: 'Mapped installations',
+        label: t('layers.awareness.cohort.installations'),
         source: installationsState.stats.source || SOURCE_LABEL['military-installations'],
-        coverage: 'CURRENT VIEWPORT ONLY',
+        coverage: t('layers.awareness.coverage.viewport'),
         summary: summarizeInstallationViewport(installations, installationsState),
       },
     ],
@@ -514,10 +515,10 @@ function rowHtml(cohort) {
     const label = formatAwarenessLabel(item);
     const targetId = item.icao24 || item.mmsi || item.id;
     if (!targetId) {
-      return `<li><span class="military-awareness-target unavailable" aria-label="Unavailable">${escapeHtml(label)} <span>${formatAwarenessDistance(item.distanceM)}</span></span></li>`;
+      return `<li><span class="military-awareness-target unavailable" aria-label="${t('layers.awareness.unavailableAria')}">${escapeHtml(label)} <span>${formatAwarenessDistance(item.distanceM)}</span></span></li>`;
     }
-    const accessibleLabel = label === '—' ? 'Unavailable' : label;
-    return `<li><button type="button" class="military-awareness-target" data-awareness-layer="${escapeHtml(cohort.id)}" data-awareness-id="${escapeHtml(targetId)}" aria-label="Focus ${escapeHtml(accessibleLabel)}">${escapeHtml(label)} <span>${formatAwarenessDistance(item.distanceM)}</span></button></li>`;
+    const accessibleLabel = label === '—' ? t('layers.awareness.unavailableAria') : label;
+    return `<li><button type="button" class="military-awareness-target" data-awareness-layer="${escapeHtml(cohort.id)}" data-awareness-id="${escapeHtml(targetId)}" aria-label="${escapeHtml(t('layers.awareness.focusAria', { label: accessibleLabel }))}">${escapeHtml(label)} <span>${formatAwarenessDistance(item.distanceM)}</span></button></li>`;
   }).join('');
   const pageCount = Math.max(1, Math.ceil(summary.nearest.length / AWARENESS_PAGE_SIZE));
   const pageLabel = pageCount > 1 ? ` · ${Math.floor(page / AWARENESS_PAGE_SIZE) + 1}/${pageCount}` : '';
@@ -967,10 +968,10 @@ export function findCompatibleHistoryIndex(history, startIndex, direction, {
 
 function navigationControlsHtml() {
   const canPrevious = state.navigationIndex > 0;
-  return `<div class="military-awareness-controls" role="group" aria-label="Global Context navigation">
-    <button type="button" data-awareness-action="previous" title="Previous — prior visited contact in the 250 km window"${canPrevious ? '' : ' disabled'}>PREVIOUS</button>
-    <button type="button" data-awareness-action="focus">FOCUS</button>
-    <button type="button" data-awareness-action="next" title="Next — nearest unvisited contact in the 250 km window"${canNavigateNext() ? '' : ' disabled'}>NEXT</button>
+  return `<div class="military-awareness-controls" role="group" aria-label="${t('layers.awareness.controlsAria')}">
+    <button type="button" data-awareness-action="previous" title="${t('layers.awareness.previousTitle')}"${canPrevious ? '' : ' disabled'}>${t('layers.awareness.previous')}</button>
+    <button type="button" data-awareness-action="focus">${t('layers.awareness.focus')}</button>
+    <button type="button" data-awareness-action="next" title="${t('layers.awareness.nextTitle')}"${canNavigateNext() ? '' : ' disabled'}>${t('layers.awareness.next')}</button>
   </div>`;
 }
 
@@ -993,7 +994,7 @@ function renderResults() {
   const markup = `<div class="military-awareness-subject">${escapeHtml(subject.label)} · ${formatAwarenessDistance(AWARENESS_RADIUS_M)} FLIGHT / VESSEL WINDOW</div>
     ${navigationControlsHtml()}
     ${cohorts.map(rowHtml).join('')}
-    <p class="military-awareness-note">Open-source mapped/observed context. Missing broadcasts, unloaded map areas, or unmapped sites are not evidence of absence.</p>`;
+    <p class="military-awareness-note">${t('layers.awareness.note')}</p>`;
   panel.hidden = false;
   if (state.panelMarkup !== markup) {
     panel.innerHTML = markup;
@@ -1115,7 +1116,7 @@ function updateDirectionOverlay() {
   const cameraHeading = state.viewer.camera.heading || 0;
   const headingDeg = (Math.round(Cesium.Math.toDegrees(cameraHeading)) + 360) % 360;
   state.compassRing.style.setProperty('--compass-rotation', `${-headingDeg}deg`);
-  state.compassHeading.textContent = `HDG ${String(headingDeg).padStart(3, '0')}°`;
+  state.compassHeading.textContent = t('layers.awareness.hdg', { value: String(headingDeg).padStart(3, '0') });
   state.compassHeading.style.left = `${geometry.centerX}px`;
   state.compassHeading.style.top = `${geometry.centerY - compassRadius + 39}px`;
   for (const label of state.compassLabels) {
@@ -1169,8 +1170,8 @@ function updateDirectionOverlay() {
         Cesium.Math.toDegrees(targetCartographic.longitude),
       )
       : null;
-    const bearingText = Number.isFinite(bearing) ? `BRG ${String(Math.round(bearing)).padStart(3, '0')}°` : 'BRG —';
-    const courseText = Number.isFinite(item.track) ? ` · CRS ${String(Math.round(item.track)).padStart(3, '0')}°` : '';
+    const bearingText = Number.isFinite(bearing) ? t('layers.awareness.brg', { value: String(Math.round(bearing)).padStart(3, '0') }) : t('layers.awareness.brgUnknown');
+    const courseText = Number.isFinite(item.track) ? ` · ${t('layers.awareness.crs', { value: String(Math.round(item.track)).padStart(3, '0') })}` : '';
     marker._label.textContent = `${label} · ${formatAwarenessDistance(item.distanceM)}\n${bearingText}${courseText}`;
     marker.hidden = false;
   }

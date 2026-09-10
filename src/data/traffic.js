@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { deriveFetchCenter, clampBoundsAroundCenter } from './trafficBounds.js';
+import { t } from '../i18n/index.js';
 import { fetchFlowForBounds, getFlowSessionStats, resetFlowTileCache } from './flowTiles.js';
 import { matchFlowToRoads } from './flowMatch.js';
 import { flowBucket, flowSpeedScale, flowDensityMult } from './trafficFlowStyle.js';
@@ -1264,8 +1265,8 @@ export function trafficFeedPresentation({
       mode,
       error: null,
       loadingLabel: fetching
-        ? 'syncing LIVE traffic flow'
-        : `LIVE · TomTom flow · ${coveragePct}% cov`,
+        ? t('layers.traffic.loadingSyncing')
+        : t('layers.traffic.liveCoverage', { percent: coveragePct }),
     };
   }
   // Keyless simulation — one terse line that names the mode and the remedy
@@ -1275,8 +1276,8 @@ export function trafficFeedPresentation({
     mode,
     error: null,
     loadingLabel: statusUnavailable
-      ? 'SIMULATED — traffic service unreachable'
-      : 'SIMULATED — add TomTom key for live',
+      ? t('layers.traffic.simUnavailable')
+      : t('layers.traffic.simKeyless'),
   };
 }
 

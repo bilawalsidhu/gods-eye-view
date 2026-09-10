@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../i18n/index.js';
 import { governorRequestRender } from '../renderGovernor.js';
 import {
   clearSelectedEntityContextForLayer,
@@ -283,7 +284,7 @@ function renderRecords({ claimSelection = false } = {}) {
     entity.gevTrackedId = `installations:${record.id}`;
     entity.gevDisplayPosition = () => displayPosition;
     entity.gevLabelModel = {
-      title: record.name || 'MAPPED INSTALLATION',
+      title: record.name || t('layers.installations.fallbackTitle'),
       details: [String(record.class || 'installation').replaceAll('_', ' ').toUpperCase()],
       accent: COLOR_BY_CLASS[record.class] || '#9ca6b0',
     };
@@ -667,7 +668,7 @@ const militaryInstallationsLayer = {
       retrying: state.loading && Boolean(state.failureReason),
       failureReason: state.failureReason,
       statusMessage: installationFeedback({ ...state, retrying: state.loading && Boolean(state.failureReason) }),
-      loadingLabel: state.loading ? 'loading mapped installation context' : '',
+      loadingLabel: state.loading ? t('layers.installations.loading') : '',
     };
   },
 };

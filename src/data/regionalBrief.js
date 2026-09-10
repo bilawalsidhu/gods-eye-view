@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js';
+
 const MAX_ARTICLES = 5;
 
 function cleanText(value, maxLength = 180) {
@@ -93,18 +95,18 @@ export function normalizeRegionalWeather(payload) {
 /** Translate the WMO weather code used by Open-Meteo into concise cockpit copy. */
 export function weatherCodeLabel(code) {
   const value = Number(code);
-  if (!Number.isFinite(value)) return 'CONDITIONS UNKNOWN';
-  if (value === 0) return 'CLEAR';
-  if ([1, 2].includes(value)) return 'PARTLY CLOUDY';
-  if (value === 3) return 'OVERCAST';
-  if ([45, 48].includes(value)) return 'FOG';
-  if (value >= 51 && value <= 57) return 'DRIZZLE';
-  if (value >= 61 && value <= 67) return 'RAIN';
-  if (value >= 71 && value <= 77) return 'SNOW';
-  if (value >= 80 && value <= 82) return 'RAIN SHOWERS';
-  if (value >= 85 && value <= 86) return 'SNOW SHOWERS';
-  if (value >= 95) return 'THUNDERSTORM';
-  return 'MIXED CONDITIONS';
+  if (!Number.isFinite(value)) return t('layers.weather.conditionsUnknown');
+  if (value === 0) return t('layers.weather.clear');
+  if ([1, 2].includes(value)) return t('layers.weather.partlyCloudy');
+  if (value === 3) return t('layers.weather.overcast');
+  if ([45, 48].includes(value)) return t('layers.weather.fog');
+  if (value >= 51 && value <= 57) return t('layers.weather.drizzle');
+  if (value >= 61 && value <= 67) return t('layers.weather.rain');
+  if (value >= 71 && value <= 77) return t('layers.weather.snow');
+  if (value >= 80 && value <= 82) return t('layers.weather.rainShowers');
+  if (value >= 85 && value <= 86) return t('layers.weather.snowShowers');
+  if (value >= 95) return t('layers.weather.thunderstorm');
+  return t('layers.weather.mixed');
 }
 
 /** Great-circle distance used to avoid refetching a regional brief every animation frame. */

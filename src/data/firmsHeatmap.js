@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { governorRequestRender } from '../renderGovernor.js';
+import { t } from '../i18n/index.js';
 import {
   registerSpriteCollection,
   restoreSpriteOrder,
@@ -301,18 +302,18 @@ export function createFirmsHeatmapLayer({
      */
     getStats() {
       const now = Date.now();
-      const staleText = _lastUpdate ? `STALE · cached ${formatAge(now - _lastUpdate) || '<1h'}` : 'STALE';
+      const staleText = _lastUpdate ? t('layers.firms.staleCached', { age: formatAge(now - _lastUpdate) || '<1h' }) : t('layers.status.stale');
       let loadingLabel = '';
       if (_loading) {
-        loadingLabel = _fires.length ? 'refreshing...' : 'loading...';
+        loadingLabel = _fires.length ? t('layers.meta.refreshing') : t('layers.meta.loading');
       } else if (_keyRequired) {
-        loadingLabel = 'KEY REQUIRED';
+        loadingLabel = t('layers.firms.keyRequired');
       } else if (_stale) {
         loadingLabel = staleText;
       } else if (_error) {
         loadingLabel = _error;
       } else if (_lastUpdate) {
-        loadingLabel = `LIVE · updated ${formatAgoMinutes(now - _lastUpdate)}`;
+        loadingLabel = t('layers.firms.liveUpdated', { age: formatAgoMinutes(now - _lastUpdate) });
       }
       return {
         count: _count,
@@ -320,7 +321,7 @@ export function createFirmsHeatmapLayer({
         lastUpdate: _lastUpdate,
         loading: _loading,
         stale: _stale,
-        error: _keyRequired ? 'KEY REQUIRED' : (_stale ? staleText : _error),
+        error: _keyRequired ? t('layers.firms.keyRequired') : (_stale ? staleText : _error),
         loadingLabel,
       };
     },
@@ -796,7 +797,7 @@ export function createFirmsHeatmapLayer({
         if (!card.interactive) return card;
         return {
           ...card,
-          accessibilityLabel: `Focus fire detection ${card.title}, ${card.details.join(', ')}`,
+          accessibilityLabel: t('layers.firms.card.focusAria', { title: card.title, details: card.details.join(', ') }),
           activate: () => {
             const fire = _fireByCardId.get(card.id);
             if (!fire) return false;
@@ -1440,13 +1441,13 @@ function screenSeparated(accepted, screen) {
  * @returns {Object} firmsLabels entry.
  */
 export function buildSelectedFireCard(fire, nowMs) {
-  const meta = [`${confidenceBucket(fire.confidence)} conf`];
+  const meta = [t('layers.firms.card.confSuffix', { value: confidenceBucket(fire.confidence) })];
   if (fire.acqMs > 0) {
     const age = formatAge(nowMs - fire.acqMs);
-    if (age) meta.push(`${age} ago`);
+    if (age) meta.push(t('layers.firms.card.ageSuffix', { value: age }));
   }
   const sat = satelliteShortName(fire.satellite);
-  meta.push(sat ? `${fire.sensor || 'VIIRS'} ${sat}` : (fire.sensor || 'sensor n/a'));
+  meta.push(sat ? `${fire.sensor || 'VIIRS'} ${sat}` : (fire.sensor || t('layers.firms.card.sensorUnavailable')));
   return {
     id: `selected-fire:${fireDetectionKey(fire)}`,
     actionable: true,
@@ -1455,10 +1456,10 @@ export function buildSelectedFireCard(fire, nowMs) {
     cullPosition: fireCullPosition(fire),
     gapPx: frpPixelSize(fire.frp),
     accent: accentForSeverity(detectionColorStop(fire).name),
-    title: `FIRE · ${formatFrp(fire.frp)} MW`,
+    title: t('layers.firms.card.fire', { frp: formatFrp(fire.frp) }),
     details: [
       meta.join(' · '),
-      formatLatLon(fire.lat, fire.lon) + (fire.night ? ' · NIGHT' : ''),
+      formatLatLon(fire.lat, fire.lon) + (fire.night ? ` · ${t('layers.firms.card.night')}` : ''),
     ],
     selected: true,
     priority: Number.MAX_SAFE_INTEGER,
@@ -1490,7 +1491,7 @@ export function buildFireCard(candidate, nowMs) {
     cullPosition: candidate.cullPosition || candidate.position,
     gapPx: frpPixelSize(fire.frp),
     accent: accentForSeverity(detectionColorStop(fire).name),
-    title: `▲ ${formatFrp(fire.frp)} MW`,
+    title: t('layers.firms.card.ambient', { frp: formatFrp(fire.frp) }),
     details: [meta.join(' · ')],
     selected: false,
     priority: Number(fire.frp) || 0,
@@ -1507,11 +1508,11 @@ export function buildFireCard(candidate, nowMs) {
  */
 export function buildCellCard(candidate, nowMs) {
   const cell = candidate.cell;
-  const noun = cell.count === 1 ? 'FIRE' : 'FIRES';
-  const parts = [`max ${formatFrp(cell.maxFrp)} MW`];
+  const noun = cell.count === 1 ? t('layers.firms.card.fireNoun') : t('layers.firms.card.firesNoun');
+  const parts = [t('layers.firms.card.maxFrp', { value: formatFrp(cell.maxFrp) })];
   if (cell.newestAcqMs > 0) {
     const age = formatAge(nowMs - cell.newestAcqMs);
-    if (age) parts.push(`new ${age}`);
+    if (age) parts.push(t('layers.firms.card.newAge', { value: age }));
   }
   return {
     id: `cell:${cell.latCell ?? 'x'}:${cell.lonCell ?? 'x'}`,
@@ -1592,11 +1593,11 @@ function formatAge(deltaMs) {
 
 /** Millisecond delta → "<1m ago" / "Xm ago" / "Xh ago" (fresh-feed readout). */
 function formatAgoMinutes(deltaMs) {
-  if (!Number.isFinite(deltaMs) || deltaMs < 0) return 'just now';
+  if (!Number.isFinite(deltaMs) || deltaMs < 0) return t('layers.meta.justNow');
   const minutes = Math.floor(deltaMs / 60000);
-  if (minutes < 1) return '<1m ago';
-  if (minutes < 90) return `${minutes}m ago`;
-  return `${Math.round(minutes / 60)}h ago`;
+  if (minutes < 1) return t('layers.firms.underMinuteAgo');
+  if (minutes < 90) return t('layers.meta.minutesAgo', { count: minutes });
+  return t('layers.meta.hoursAgo', { count: Math.round(minutes / 60) });
 }
 
 /** Normalized 0..1 confidence → low/nominal/high display bucket. */

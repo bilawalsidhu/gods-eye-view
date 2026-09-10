@@ -431,4 +431,65 @@ export default {
   // _renderMapStackState(): status chip fallback when no stack label resolves
   // (stack names themselves are keep-English provider/stack ids).
   'presets.mapStackFallback': 'MAP',
+
+  // ── Phase-3 runtime extraction batch 4: awareness / CCTV / Radio panels ───
+  // (radio.* and cctv.* state values that layers.js already seeds are reused
+  // cross-namespace; these are the runtime-only siblings and compositions.)
+
+  // _applyRuntimeStaticHeaderText(): the key-only standby description span
+  // (both mode descriptions in one span split by a literal <br> in phase 2).
+  'context.standbyContactsDesc': 'CONTACTS — nearest planes · vessels · sites',
+  'context.standbyMissionsDesc': 'SPACE MISSIONS — launches & orbital assets',
+  // _syncContextRadioLauncherState(): close-state sibling of the seeded
+  // context.radioToggleAriaLabel ('Open compact Radio controls').
+  'context.radioToggleCloseAriaLabel': 'Close compact Radio controls',
+  'context.toastMissionsCancelRestoreFailed': 'Space Missions cancellation could not restore the previous layer state',
+  // Cockpit utility disclosures: collapse-state siblings of the seeded
+  // utility.*ToggleAriaLabel expand keys.
+  'utility.displayToggleCollapseAriaLabel': 'Collapse Cockpit display options',
+  'utility.radioToggleCollapseAriaLabel': 'Collapse Cockpit Radio controls',
+
+  // Radio panel runtime states (state-sibling keys so no state can leak
+  // English later; lifecycle enum labels reuse layers.status.*).
+  'radio.stateSync': 'SYNC',
+  'radio.tunerCategoryBand': '{category} BAND',
+  'radio.tunerNoStations': 'NO STATIONS',
+  'radio.tunerStationAria': '{name}, station {index} of {total}',
+  'radio.tunerNoStationAria': 'No station available',
+  'radio.tunerOffAir': 'OFF AIR',
+  'radio.tunerStationUnavailable': 'STATION UNAVAILABLE',
+  'radio.actionPlay': 'Play',
+  'radio.actionPause': 'Pause',
+  'radio.actionResume': 'Resume',
+  'radio.targetSelected': 'selected',
+  'radio.targetNearest': 'nearest',
+  'radio.playStateAria': '{action} {target} radio station',
+  'radio.miniStateUncertain': 'RADIO STATE UNCERTAIN',
+  'radio.miniSyncingDirectory': 'SYNCING DIRECTORY',
+  'radio.stationSyncing': 'SYNCING',
+  'radio.stationFallback': 'station',
+  'radio.playbackReadyFallback': 'Ready',
+
+  // CCTV panel runtime states (layers.cctv.* seeded keys reused where they
+  // match; these are the runtime-only compositions and flipped states).
+  'cctv.coverageViewshedOn': 'VIEWSHED ON',
+  'cctv.frameLoading': 'FRAME · LOADING',
+  'cctv.frameUnavailable': 'FRAME · UNAVAILABLE',
+  'cctv.calChipEdited': 'CAL · EDITED (UNSAVED)',
+  'cctv.calChipTemplate': 'CAL · {badge}',
+  'cctv.calBadgeCalibrated': 'CALIBRATED',
+  'cctv.calBadgeCurated': 'CURATED',
+  'cctv.calBadgeRawPrior': 'RAW PRIOR',
+  'cctv.metaProjectionMonitor': 'MONITOR',
+  'cctv.metaProjectionOff': 'OFF',
+  'cctv.metaTemplate': '{city} · HDG {heading} · FOV {fov} · RANGE {range}m · {projection}{calBadge} · {provider}{status}',
+  'cctv.metaCamerasClick': {
+    one: '{count} camera loaded · click a camera to activate',
+    other: '{count} cameras loaded · click a camera to activate',
+  },
+  'cctv.metaCamerasEnable': {
+    one: '{count} camera loaded · enable CCTV to activate',
+    other: '{count} cameras loaded · enable CCTV to activate',
+  },
+  'cctv.summaryNoneAvailable': 'No summary available.',
 };

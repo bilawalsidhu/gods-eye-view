@@ -423,7 +423,6 @@ export default {
   'awareness.next': 'NEXT',
   'awareness.previousTitle': 'Previous — prior visited contact in the 250 km window',
   'awareness.nextTitle': 'Next — nearest unvisited contact in the 250 km window',
-  'awareness.subjectWindow': '{label} · {distance} FLIGHT / VESSEL WINDOW',
   'awareness.note': 'Open-source mapped/observed context. Missing broadcasts, unloaded map areas, or unmapped sites are not evidence of absence.',
   'awareness.unavailableAria': 'Unavailable',
   'awareness.focusAria': 'Focus {label}',
