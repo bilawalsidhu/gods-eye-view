@@ -34,6 +34,15 @@ import { installScopeMask } from './scopeMask.js';
 import { initFirstRunExperience } from './firstRunExperience.js';
 import { initKeySetup } from './keySetup.js';
 import { loadPhotorealisticTileset } from './mapStartup.js';
+import { resolveLocale, applyDocumentLanguage } from './i18n/locale.js';
+import { setLocale } from './i18n/index.js';
+
+// Locale is resolved before any UI initialization so <html lang>/<html dir>
+// and every catalog lookup agree from the first painted frame. Phase 1 wires
+// metadata only — no selector, no translated copy, zero visible change.
+const activeLocale = resolveLocale();
+setLocale(activeLocale);
+applyDocumentLanguage(document, activeLocale);
 
 initLogoGaze();
 
