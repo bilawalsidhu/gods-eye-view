@@ -77,6 +77,10 @@ import {
 import { VOICE_MODELS, isKnownVoiceTier, resolveVoiceModel } from './src/voice/voiceCost.js';
 import { requestSecurityPlugin } from './server/requestSecurity.mjs';
 import { createDebugLogWriter, DEBUG_REQUEST_MAX_BYTES } from './server/debugLog.mjs';
+import {
+  FRAME_MAX_BYTES, cancelResponse, mediaContentType, pipeMediaResponse,
+  readResponseBytesCapped, upstreamLifetime,
+} from './server/proxySafety.mjs';
 
 /** Resolve __dirname for ESM context. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -3348,11 +3352,12 @@ function gbfsCacheControl(pathname) {
  *
  * @returns {import('vite').Plugin}
  */
-function gbfsProxy() {
+export function gbfsProxy({ fetchImpl = fetch, timeoutMs = GBFS_PROXY_TIMEOUT_MS } = {}) {
   return {
     name: 'gbfs-proxy',
     configureServer(server) {
       server.middlewares.use('/api/gbfs', async (req, res) => {
+        const lifetime = upstreamLifetime(req, res, timeoutMs);
         try {
           if (req.method !== 'GET') {
             res.writeHead(405, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -3386,7 +3391,8 @@ function gbfsProxy() {
             return;
           }
 
-          if (upstreamUrl.protocol !== 'https:') {
+          if (upstreamUrl.protocol !== 'https:' || upstreamUrl.username || upstreamUrl.password
+            || upstreamUrl.port || upstreamUrl.hash) {
             res.writeHead(400, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
             res.end(JSON.stringify({ error: 'Only https GBFS targets are allowed' }));
             return;
@@ -3404,37 +3410,19 @@ function gbfsProxy() {
             return;
           }
 
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), GBFS_PROXY_TIMEOUT_MS);
-          let upstream;
-          try {
-            upstream = await fetch(upstreamUrl.toString(), {
-              method: 'GET',
-              headers: {
-                Accept: 'application/json',
-                'User-Agent': 'gods-eye-view-gbfs-proxy/1.0',
-              },
-              signal: controller.signal,
-            });
-          } finally {
-            clearTimeout(timeoutId);
+          const upstream = await fetchImpl(upstreamUrl.toString(), {
+            method: 'GET', redirect: 'error', signal: lifetime.signal,
+            headers: { Accept: 'application/json', 'User-Agent': 'gods-eye-view-gbfs-proxy/1.0' },
+          });
+          if (!upstream.ok) {
+            await cancelResponse(upstream);
+            throw new Error('GBFS upstream request failed');
           }
-
-          // Limit response size to prevent memory exhaustion from malicious upstream
-          const GBFS_MAX_BODY_BYTES = 5 * 1024 * 1024; // 5 MB
-          const contentLength = Number(upstream.headers.get('content-length'));
-          if (Number.isFinite(contentLength) && contentLength > GBFS_MAX_BODY_BYTES) {
-            res.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-            res.end(JSON.stringify({ error: 'GBFS upstream response too large' }));
-            return;
-          }
-          const body = await upstream.text();
-          if (Buffer.byteLength(body, 'utf8') > GBFS_MAX_BODY_BYTES) {
-            res.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-            res.end(JSON.stringify({ error: 'GBFS upstream response too large' }));
-            return;
-          }
-          const contentType = upstream.headers.get('content-type') || 'application/json';
+          const bytes = await readResponseBytesCapped(upstream, 5 * 1024 * 1024);
+          const data = JSON.parse(bytes.toString('utf8'));
+          if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Invalid GBFS JSON');
+          const body = JSON.stringify(data);
+          const contentType = 'application/json; charset=utf-8';
           res.writeHead(upstream.status, {
             'Content-Type': contentType,
             'Cache-Control': gbfsCacheControl(upstreamUrl.pathname),
@@ -3442,15 +3430,13 @@ function gbfsProxy() {
             'X-GBFS-Cache': 'MISS',
           });
           res.end(body);
-        } catch (error) {
-          if (error?.name === 'AbortError') {
-            res.writeHead(504, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-            res.end(JSON.stringify({ error: 'GBFS upstream timeout' }));
-            return;
-          }
-          console.error('[GBFS Proxy]', error?.message || String(error));
-          res.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-          res.end(JSON.stringify({ error: 'GBFS proxy error' }));
+        } catch {
+          if (res.destroyed) return;
+          const status = lifetime.signal.aborted ? 504 : 502;
+          res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+          res.end(JSON.stringify({ error: status === 504 ? 'GBFS upstream timeout' : 'GBFS proxy error' }));
+        } finally {
+          lifetime.dispose();
         }
       });
     },
@@ -4361,35 +4347,6 @@ function buildSyntheticCctvSvg({ cameraId, label, city, status }) {
 }
 
 /**
- * Coerce a fetch() response body to a Node.js Readable stream.
- *
- * Handles both Node-native streams (.pipe) and web ReadableStreams (.getReader).
- *
- * @param {ReadableStream|NodeJS.ReadableStream|null} body
- * @returns {import('stream').Readable|null}
- */
-function toReadable(body) {
-  if (!body) return null;
-  if (typeof body.pipe === 'function') return body;
-  if (typeof body.getReader === 'function') {
-    return Readable.fromWeb(body);
-  }
-  return null;
-}
-
-/**
- * Pipe an upstream fetch Response (image or video) to the client HTTP response.
- *
- * Forwards Content-Type, Content-Length, Content-Range, Accept-Ranges, and
- * Cache-Control headers from the upstream. Falls back to buffered arrayBuffer
- * if the body is not streamable.
- *
- * @param {import('http').ServerResponse} res
- * @param {Response} upstream - fetch() Response object.
- * @param {object} [opts]
- * @param {string} [opts.sourceHeader='upstream'] - Value for X-CCTV-Source header.
- */
-/**
  * Read a fetch Response body as text while enforcing a hard byte cap during
  * the read — so a malicious or buggy upstream that streams an unbounded body
  * (no/oversized Content-Length, chunked) can't OOM the proxy. Returns
@@ -4423,47 +4380,6 @@ async function readCappedResponseText(upstream, maxBytes) {
   return { tooLarge: false, text };
 }
 
-async function proxyMediaResponse(res, upstream, { sourceHeader = 'upstream' } = {}) {
-  const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
-  const cacheControl = upstream.headers.get('cache-control') || 'no-store';
-  const contentLength = upstream.headers.get('content-length');
-  const contentRange = upstream.headers.get('content-range');
-  const acceptRanges = upstream.headers.get('accept-ranges');
-  const headers = {
-    'Content-Type': contentType,
-    'Cache-Control': cacheControl,
-    'X-CCTV-Source': sourceHeader,
-  };
-  if (contentLength) headers['Content-Length'] = contentLength;
-  if (contentRange) headers['Content-Range'] = contentRange;
-  if (acceptRanges) headers['Accept-Ranges'] = acceptRanges;
-
-  // Cheap defense: reject an upstream that DECLARES an oversized fixed body.
-  // Live MJPEG/HLS streams are unbounded by design and send no content-length,
-  // so they pipe normally (piping streams to the client, never buffering).
-  const MEDIA_DECLARED_CAP_BYTES = 64 * 1024 * 1024;
-  if (Number.isFinite(Number(contentLength)) && Number(contentLength) > MEDIA_DECLARED_CAP_BYTES) {
-    res.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-    res.end(JSON.stringify({ error: 'Upstream media exceeds size cap' }));
-    try { await upstream.body?.cancel(); } catch { /* no-op */ }
-    return;
-  }
-
-  res.writeHead(upstream.status, headers);
-
-  const stream = toReadable(upstream.body);
-  if (!stream) {
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    res.end(buf);
-    return;
-  }
-
-  stream.on('error', () => {
-    if (!res.writableEnded) res.end();
-  });
-  stream.pipe(res);
-}
-
 /**
  * Fetch one upstream CCTV image within the frame-refresh budget.
  *
@@ -4480,6 +4396,7 @@ async function proxyMediaResponse(res, upstream, { sourceHeader = 'upstream' } =
 export async function fetchCctvImageFromUpstream(url, {
   fetchImpl = fetch,
   timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS,
+  signal,
 } = {}) {
   if (!url || !/^https?:\/\//i.test(url)) return null;
   const controller = new AbortController();
@@ -4489,13 +4406,14 @@ export async function fetchCctvImageFromUpstream(url, {
   try {
     const upstream = await fetchImpl(url, {
       headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
-      signal: controller.signal,
+      signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
+      redirect: 'error',
     });
-    const contentType = upstream.headers.get('content-type') || '';
-    if (!upstream.ok || !contentType.startsWith('image/')) return null;
+    const contentType = mediaContentType(upstream.headers.get('content-type'), { imageOnly: true });
+    if (!upstream.ok || !contentType) { await cancelResponse(upstream); return null; }
     return {
       ok: true,
-      body: Buffer.from(await upstream.arrayBuffer()),
+      body: await readResponseBytesCapped(upstream, FRAME_MAX_BYTES),
       contentType,
     };
   } catch {
@@ -4518,7 +4436,7 @@ export async function fetchCctvImageFromUpstream(url, {
  *
  * @returns {import('vite').Plugin}
  */
-function cctvProxy() {
+export function cctvProxy({ getSources = getCctvSources } = {}) {
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
   /** Cap on health map entries to prevent unbounded growth. Sized to cover the
@@ -4563,7 +4481,7 @@ function cctvProxy() {
   };
 
   /** Fetch a Google Street View static image as a fallback frame. Requires GOOGLE_MAPS_API_KEY. */
-  const streetViewFallback = async ({ lat, lon, heading, fov, pitch }) => {
+  const streetViewFallback = async ({ lat, lon, heading, fov, pitch, signal }) => {
     const streetViewKey = process.env.GOOGLE_MAPS_API_KEY;
     if (!streetViewKey || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
     try {
@@ -4577,18 +4495,7 @@ function cctvProxy() {
       sv.searchParams.set('return_error_code', 'true');
       sv.searchParams.set('key', streetViewKey);
 
-      const svResp = await fetch(sv.toString(), {
-        headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
-        signal: AbortSignal.timeout(CCTV_FRAME_FETCH_TIMEOUT_MS),
-      });
-      const svType = svResp.headers.get('content-type') || '';
-      if (!svResp.ok || !svType.startsWith('image/')) return null;
-
-      return {
-        ok: true,
-        body: Buffer.from(await svResp.arrayBuffer()),
-        contentType: svType,
-      };
+      return await fetchCctvImageFromUpstream(sv.toString(), { signal });
     } catch {
       return null;
     }
@@ -4598,8 +4505,16 @@ function cctvProxy() {
     name: 'cctv-proxy',
     configureServer(server) {
       server.middlewares.use('/api/cctv', async (req, res) => {
+        if (req.method !== 'GET') {
+          res.writeHead(405, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Method not allowed' }));
+          return;
+        }
+        // Each media connection lasts at most one minute; clients may reconnect.
+        const lifetime = upstreamLifetime(req, res, 60_000);
         try {
-          const sources = await getCctvSources();
+          const sources = await getSources();
+          if (lifetime.signal.aborted) { res.destroy(); return; }
           const sourceById = new Map(sources.map((source) => [source.id, source]));
           const url = new URL(req.url || '/', 'http://localhost');
 
@@ -4665,14 +4580,15 @@ function cctvProxy() {
             }
 
             try {
-              const upstreamHeaders = { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' };
+              const upstreamHeaders = { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0', 'Accept-Encoding': 'identity' };
               const requestRange = req.headers?.range;
               if (requestRange) upstreamHeaders.Range = requestRange;
               const upstream = await fetch(mediaUrl, {
-                headers: upstreamHeaders,
+                headers: upstreamHeaders, redirect: 'error', signal: lifetime.signal,
               });
               const contentType = upstream.headers.get('content-type') || '';
               if (!upstream.ok) {
+                await cancelResponse(upstream);
                 setHealth(cameraId, {
                   status: 'degraded',
                   sourceKind: 'upstream',
@@ -4684,13 +4600,15 @@ function cctvProxy() {
                 return;
               }
 
-              if (isVideoFeedType(feedType) && !(contentType.startsWith('video/') || contentType.includes('mpegurl'))) {
+              if (!mediaContentType(contentType)) {
                 setHealth(cameraId, {
                   status: 'degraded',
                   sourceKind: 'upstream',
                   label: source?.provider || 'Configured source',
-                  message: `Unexpected media type ${contentType || 'unknown'}`,
+                  message: 'Unsupported upstream media type',
                 });
+                await cancelResponse(upstream);
+                throw new Error('Unsupported upstream media type');
               } else {
                 setHealth(cameraId, {
                   status: 'ok',
@@ -4700,7 +4618,8 @@ function cctvProxy() {
                 });
               }
 
-              await proxyMediaResponse(res, upstream, {
+              await pipeMediaResponse(res, upstream, {
+                signal: lifetime.signal,
                 sourceHeader: isVideoFeedType(feedType) ? 'live-media' : 'upstream-image',
               });
               return;
@@ -4709,8 +4628,9 @@ function cctvProxy() {
                 status: 'degraded',
                 sourceKind: 'upstream',
                 label: source?.provider || 'Configured source',
-                message: error?.message || 'Media fetch failed',
+                message: 'Media fetch failed',
               });
+              if (res.headersSent || res.destroyed) { res.destroy(); return; }
               res.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
               res.end(JSON.stringify({ error: 'Media proxy failed' }));
               return;
@@ -4739,7 +4659,8 @@ function cctvProxy() {
             source?.snapshotUrl
             || (!isVideoFeedType(normalizeFeedType(source?.feedType)) ? source?.url : '');
 
-          const upstreamImage = await fetchCctvImageFromUpstream(upstreamCandidate);
+          const upstreamImage = await fetchCctvImageFromUpstream(upstreamCandidate, { signal: lifetime.signal });
+          if (lifetime.signal.aborted) { res.destroy(); return; }
           if (upstreamImage?.ok) {
             setHealth(cameraId, {
               status: 'ok',
@@ -4756,7 +4677,8 @@ function cctvProxy() {
             return;
           }
 
-          const sv = await streetViewFallback({ lat, lon, heading, fov, pitch });
+          const sv = await streetViewFallback({ lat, lon, heading, fov, pitch, signal: lifetime.signal });
+          if (lifetime.signal.aborted) { res.destroy(); return; }
           if (sv?.ok) {
             setHealth(cameraId, {
               status: 'degraded',
@@ -4794,9 +4716,11 @@ function cctvProxy() {
           });
           res.end(svg);
         } catch (error) {
-          console.error('[CCTV Proxy]', error?.message || String(error));
+          if (res.headersSent || res.destroyed) { res.destroy(); return; }
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'CCTV proxy error' }));
+        } finally {
+          lifetime.dispose();
         }
       });
     },
