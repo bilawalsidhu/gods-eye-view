@@ -29,6 +29,21 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   stale-data fallback. Concurrent identical requests share the same last-good
   fallback when all mirrors refuse, without duplicating upstream requests.
 
+### Security
+
+- The CCTV media proxy no longer forwards a client `Range` header verbatim to
+  the upstream camera source (#27). Values are parsed and canonicalized; a
+  single `bytes=` range passes through and an explicit span is bounded to the
+  64 MB body cap the relay already enforces, while multi-range, malformed,
+  inverted, non-`bytes` and unsafe-integer values are ignored per RFC 7233
+  §3.1 and the request proceeds without a `Range`. Multi-range previously made
+  the upstream answer `multipart/byteranges`, a body the relay's
+  `Content-Length` cap cannot account for. A value containing CRLF also made
+  the outbound `fetch` throw, which returned 502 and recorded the client's raw
+  string as that camera's `/api/cctv/health` message — letting any local
+  caller flip a camera to `degraded` and place chosen text in the health
+  report. Ordinary video seeking (`bytes=500-`, `bytes=-500`) is unchanged.
+
 ## [0.1.1] — 2026-09-01 — Installation and live-data fixes
 
 ### Changed

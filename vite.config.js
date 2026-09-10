@@ -3554,6 +3554,15 @@ const CCTV_SOURCE_FETCH_TIMEOUT_MS = 15 * 1000;
  * client refresh cadence. A bounded miss can fall through to Street View or
  * the synthetic frame instead of leaving the browser preview pending. */
 export const CCTV_FRAME_FETCH_TIMEOUT_MS = 8 * 1000;
+/**
+ * Largest fixed media body the proxy will relay, and the ceiling a client
+ * `Range` may ask for. One constant for both: a Range wider than the body cap
+ * could only ever end in the 502 that cap raises, so clamping the span to it
+ * turns a guaranteed failure into ordinary partial content.
+ */
+const MEDIA_DECLARED_CAP_BYTES = 64 * 1024 * 1024;
+/** Digits allowed per Range position — bounds parse cost and absurd offsets. */
+const RANGE_MAX_DIGITS = 16;
 /** @type {Array<object>} Cached merged + normalized CCTV source list. */
 let _cctvSourceCache = [];
 /** @type {number} Epoch-ms when the source cache was last refreshed. */
@@ -4438,7 +4447,6 @@ async function proxyMediaResponse(res, upstream, { sourceHeader = 'upstream' } =
   // Cheap defense: reject an upstream that DECLARES an oversized fixed body.
   // Live MJPEG/HLS streams are unbounded by design and send no content-length,
   // so they pipe normally (piping streams to the client, never buffering).
-  const MEDIA_DECLARED_CAP_BYTES = 64 * 1024 * 1024;
   if (Number.isFinite(Number(contentLength)) && Number(contentLength) > MEDIA_DECLARED_CAP_BYTES) {
     res.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify({ error: 'Upstream media exceeds size cap' }));
@@ -4500,6 +4508,62 @@ export async function fetchCctvImageFromUpstream(url, {
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+/**
+ * Validate and canonicalize a client `Range` header before it is forwarded to
+ * a CCTV upstream.
+ *
+ * The media route relays whatever the browser sent, verbatim, to a third-party
+ * host. That hands an unvalidated client string to an outbound request and, in
+ * the multi-range case, makes the upstream answer `multipart/byteranges` — a
+ * body the relay's `Content-Length` cap cannot reason about and the caller
+ * never asked to handle.
+ *
+ * Anything not a single, well-formed `bytes=` range is DROPPED rather than
+ * rejected with a 416: RFC 7233 §3.1 says a server ignores a Range it cannot
+ * satisfy or understand, so the request simply proceeds as an ordinary full
+ * GET. Accepted forms are `bytes=<first>-<last>`, `bytes=<first>-` and
+ * `bytes=-<suffix>`; an explicit span longer than MEDIA_DECLARED_CAP_BYTES is
+ * clamped to it. Open-ended and suffix forms pass through unclamped — they
+ * ask for no more than a plain GET would already return, and clamping them
+ * would break seeking in the video feeds this route exists to serve.
+ *
+ * @param {*} value - Raw `req.headers.range`.
+ * @returns {string} Canonical `bytes=...` value, or '' to send no Range.
+ */
+export function sanitizeCctvRangeHeader(value) {
+  if (typeof value !== 'string') return '';
+  const raw = value.trim();
+  if (!raw) return '';
+
+  // Unit is case-insensitive (RFC 7233 §2.1); `bytes` is the only unit the
+  // proxy understands. Reject multi-range outright — see the JSDoc.
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(raw);
+  if (!match) return '';
+
+  const [, firstText, lastText] = match;
+  if (firstText.length > RANGE_MAX_DIGITS || lastText.length > RANGE_MAX_DIGITS) return '';
+  // "bytes=-" carries neither position and is meaningless.
+  if (!firstText && !lastText) return '';
+
+  // Suffix form: the final N bytes. N === 0 is unsatisfiable by definition.
+  if (!firstText) {
+    const suffix = Number(lastText);
+    if (!Number.isSafeInteger(suffix) || suffix <= 0) return '';
+    return `bytes=-${suffix}`;
+  }
+
+  const first = Number(firstText);
+  if (!Number.isSafeInteger(first) || first < 0) return '';
+
+  // Open-ended: everything from `first` on. No wider than a plain GET.
+  if (!lastText) return `bytes=${first}-`;
+
+  const last = Number(lastText);
+  if (!Number.isSafeInteger(last) || last < first) return '';
+  const clampedLast = Math.min(last, first + MEDIA_DECLARED_CAP_BYTES - 1);
+  return `bytes=${first}-${clampedLast}`;
 }
 
 /**
@@ -4663,7 +4727,9 @@ function cctvProxy() {
 
             try {
               const upstreamHeaders = { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' };
-              const requestRange = req.headers?.range;
+              // Never forward the client's Range verbatim — validate, bound,
+              // and drop anything malformed or multi-range.
+              const requestRange = sanitizeCctvRangeHeader(req.headers?.range);
               if (requestRange) upstreamHeaders.Range = requestRange;
               const upstream = await fetch(mediaUrl, {
                 headers: upstreamHeaders,
