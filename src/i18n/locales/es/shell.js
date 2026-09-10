@@ -24,4 +24,16 @@ export default {
   'actions.share.ariaLabel': 'Copy share link',
   'actions.resetView.ariaLabel': 'Reset to full globe view',
   'panels.dataLayers': 'DATA LAYERS',
+  'panels.collapseTitle': 'Collapse panel',
+
+  // Phase-2 static markup extraction (mirrors locales/en/shell.js appendix).
+  'dock.ariaLabel': 'Navigation, voice, and visual preset controls',
+  'actions.navAriaLabel': 'Globe actions',
+  'actions.share.title': 'Copy share link',
+  'actions.resetView.title': 'Reset camera and return to full globe view',
+  'status.framesLoading': 'loading frames',
+
+  'locale.groupAriaLabel': 'Language',
+  'locale.english.ariaLabel': 'Switch to English',
+  'locale.spanish.ariaLabel': 'Switch to Spanish',
 };

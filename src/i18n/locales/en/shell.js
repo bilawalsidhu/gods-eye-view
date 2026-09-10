@@ -33,4 +33,23 @@ export default {
   'actions.resetView.ariaLabel': 'Reset to full globe view',
   // index.html #data-toggles panel header
   'panels.dataLayers': 'DATA LAYERS',
+  // index.html .panel-collapse-btn on #data-panel
+  'panels.collapseTitle': 'Collapse panel',
+
+  // ── Phase-2 static markup extraction (index.html), appended ──────────────
+  // index.html #command-dock nav region
+  'dock.ariaLabel': 'Navigation, voice, and visual preset controls',
+  // index.html #top-center-actions nav
+  'actions.navAriaLabel': 'Globe actions',
+  'actions.share.title': 'Copy share link',
+  'actions.resetView.title': 'Reset camera and return to full globe view',
+  // index.html #cctv-sync-label (initial); src/ui.js setSplitFlapText() fallback
+  'status.framesLoading': 'loading frames',
+
+  // Locale selector (index.html #control-panel tray). Static EN|ES buttons here;
+  // the click → persistLocaleAndReload wiring belongs to the phase-3 core-ui
+  // worker, which owns the pressed-state sync.
+  'locale.groupAriaLabel': 'Language',
+  'locale.english.ariaLabel': 'Switch to English',
+  'locale.spanish.ariaLabel': 'Switch to Spanish',
 };
