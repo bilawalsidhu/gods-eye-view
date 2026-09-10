@@ -61,6 +61,7 @@ import { filterTrailing24h, parseFirmsCsv } from './src/data/firmsCsv.js';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { defineConfig, loadEnv } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 import { normalizeRadioCountryInput } from './src/data/radioCountry.js';
 import {
   normalizeRegionalArticles,
@@ -5727,6 +5728,95 @@ export default defineConfig(({ mode }) => {
       trackBackfillProxies(),
       openAiRealtimeProxy(),
       googlePlacesContextProxy(),
+      // ── PWA (CSR-first + offline-capable shell) ────────────────────────────
+      // Generates the service worker (workbox) and registers it in the client
+      // (main.js listens for `controllerchange` to show the update banner).
+      // Precache policy: the APP SHELL ONLY. The 19 MB of lazy feature chunks
+      // and datasets (egm96, regions, datacenters, …) stay on-demand and are
+      // picked up by the runtime caches below — the bundle-budget work in
+      // docs/PLAN.md Phase 7 decides what graduates to precache, not this
+      // list. Cesium's copied /cesium/ tree (9 MB) is likewise runtime-cached
+      // per file instead of precached.
+      VitePWA({
+        registerType: 'autoUpdate',
+        injectRegister: 'auto',
+        // public/manifest.json is the manifest source of truth (already
+        // linked from index.html); don't generate a competing one.
+        manifest: false,
+        includeAssets: ['icons/*.png', 'icon.svg', 'logo.svg', 'mic.svg', 'location.svg'],
+        workbox: {
+          globPatterns: ['index.html', 'assets/index-*.js', 'assets/*.css'],
+          // The shell's index chunk is ~5.8 MB; the default 2 MiB cap would
+          // silently drop it from its own precache.
+          maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+          navigateFallback: '/index.html',
+          navigateFallbackDenylist: [/^\/api\//],
+          runtimeCaching: [
+            {
+              // Cesium Workers/Assets/ThirdParty (copied to /cesium/ at
+              // build): immutable per release — cache-first per file with a
+              // generous LRU. purgeOnQuotaError keeps a full disk from
+              // wedging the whole app.
+              urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.startsWith('/cesium/'),
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'gev-cesium-assets',
+                expiration: { maxEntries: 80, maxAgeSeconds: 30 * 24 * 3600, purgeOnQuotaError: true },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+            {
+              // Lazy feature chunks + datasets: stale-while-revalidate so a
+              // second visit is instant and offline-capable without taxing
+              // the first visit.
+              urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.startsWith('/assets/'),
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'gev-lazy-assets',
+                expiration: { maxEntries: 60, maxAgeSeconds: 30 * 24 * 3600, purgeOnQuotaError: true },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+            {
+              // Live layer APIs: network-first with a short timeout — fresh
+              // when online, last-known data instead of an error offline.
+              // Only GET routes match (workbox default); token-minting POSTs
+              // are never cached.
+              urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.startsWith('/api/'),
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'gev-live-api',
+                networkTimeoutSeconds: 4,
+                expiration: { maxEntries: 120, maxAgeSeconds: 6 * 3600, purgeOnQuotaError: true },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+            {
+              // Google Fonts stylesheets and font binaries.
+              urlPattern: ({ url }) => url.origin === 'https://fonts.googleapis.com',
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'gev-fonts-css',
+                expiration: { maxEntries: 12, maxAgeSeconds: 30 * 24 * 3600, purgeOnQuotaError: true },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+            {
+              urlPattern: ({ url }) => url.origin === 'https://fonts.gstatic.com',
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'gev-fonts',
+                expiration: { maxEntries: 30, maxAgeSeconds: 365 * 24 * 3600, purgeOnQuotaError: true },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+          ],
+        },
+        // The dev server runs the real middlewares; an SW in dev would make
+        // proxy behavior order-dependent. The PWA contract is verified
+        // against `vite preview` of the real build instead.
+        devOptions: { enabled: false },
+      }),
     ],
     server: {
       host: env.HOST || 'localhost',
