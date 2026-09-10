@@ -275,6 +275,7 @@ Thirteen layers and map sources. **Eleven have a keyless path.** Some offer addi
 | 🚗 **Traffic** | Simulated vehicles on OSM roads. With TomTom, live flow speeds drive the simulation and congestion colors below ~8 km; individual vehicle positions are not live observations | TomTom + OSM | 🟢 simulation · 🟡 live flow speeds |
 | 📹 **CCTV Mesh** | ~800 public cameras projected *into* the 3D space — Austin · California (Caltrans) · London (TfL). Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs | 🟢 |
 | 📻 **Radio** | Geolocated world radio with an **analog tuner** — drag the needle across up to 750 stations and the globe flies to each broadcaster | Radio Browser / broadcasters | 🟢 |
+| 📡 **Web Receivers** | KiwiSDR, WebSDR and OpenWebRX receivers you can **tune from the globe** — pick one, enter a frequency and mode, and the receiver page opens already tuned; or watch a **silent waterfall** of any range. *"Which SDRs near Tokyo cover 20 meters?"* · *"Show me the RF spectrum from 10 to 15 MHz around here."* | Receiverbook / KiwiSDR map feed / receiver operators | 🟢 |
 | 🚲 **Bikeshare** | Live station availability | GBFS | 🟢 |
 | 🔥 **Active Fires** | Live NASA FIRMS detections, trailing 24h | NASA FIRMS | 🟡 |
 | 🚀 **Space Missions** | Rolling 30-day launches with payload, stage, and recovery detail | Launch Library 2 | 🟢 (🟡 optional token raises the allowance) |

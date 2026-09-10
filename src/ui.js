@@ -68,6 +68,8 @@ import radioLayer, {
   radioTunerPointerPosition,
   radioTunerSlot,
 } from './data/radio.js';
+import webReceiversLayer from './data/webReceivers.js';
+import { parseFrequencyHz } from './data/webReceiverTuning.js';
 import bikeshareLayer from './data/bikeshare.js';
 import aisLiveVesselsLayer from './data/aisLiveVessels.js';
 import militaryAwarenessLayer from './data/militaryAwareness.js';
@@ -207,6 +209,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'data-panel' },
   { id: 'cctv-panel' },
   { id: 'radio-panel' },
+  { id: 'web-receivers-panel' },
   { id: 'scene-panel' },
   { id: 'global-context-panel' },
   { id: 'pp-toggles' },
@@ -220,6 +223,7 @@ const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'pp-toggles',
   'global-context-panel',
   'radio-panel',
+  'web-receivers-panel',
 ]);
 /**
  * Position keys are versioned separately from collapsed-state keys so layout
@@ -2261,6 +2265,29 @@ export class StyleManager {
     this._scenePanel = document.getElementById('scene-panel');
     this._cctvPanel = document.getElementById('cctv-panel');
     this._radioPanel = document.getElementById('radio-panel');
+    this._webReceiversPanel = document.getElementById('web-receivers-panel');
+    this._webReceiversLayerState = document.getElementById('web-receivers-layer-state');
+    this._webReceiversEnableBtn = document.getElementById('web-receivers-enable-btn');
+    this._webReceiversType = document.getElementById('web-receivers-type');
+    this._webReceiversBand = document.getElementById('web-receivers-band');
+    this._webReceiversName = document.getElementById('web-receivers-name');
+    this._webReceiversMeta = document.getElementById('web-receivers-meta');
+    this._webReceiversBands = document.getElementById('web-receivers-bands');
+    this._webReceiversFreq = document.getElementById('web-receivers-freq');
+    this._webReceiversMode = document.getElementById('web-receivers-mode');
+    this._webReceiversTuneBtn = document.getElementById('web-receivers-tune-btn');
+    this._webReceiversOpenBtn = document.getElementById('web-receivers-open-btn');
+    this._webReceiversSpecFrom = document.getElementById('web-receivers-spec-from');
+    this._webReceiversSpecTo = document.getElementById('web-receivers-spec-to');
+    this._webReceiversSpecBtn = document.getElementById('web-receivers-spec-btn');
+    this._webReceiversDock = document.getElementById('web-receivers-dock');
+    this._webReceiversDockLabel = document.getElementById('web-receivers-dock-label');
+    this._webReceiversDockLink = document.getElementById('web-receivers-dock-link');
+    this._webReceiversDockClose = document.getElementById('web-receivers-dock-close');
+    this._webReceiversDockMin = document.getElementById('web-receivers-dock-min');
+    this._webReceiversFrame = document.getElementById('web-receivers-frame');
+    this._webReceiversDockNote = document.getElementById('web-receivers-dock-note');
+    this._webReceiversStatus = document.getElementById('web-receivers-status');
     this._contextRadioDock = document.getElementById('context-radio-dock');
     this._contextRadioToggleBtn = document.getElementById('context-radio-toggle-btn');
     this._contextRadioMini = document.getElementById('context-radio-mini');
@@ -2621,6 +2648,7 @@ export class StyleManager {
     this._initLeftPanelAdaptiveLayout();
     this._initRightPanelAdaptiveLayout();
     this._initRadioPanel();
+    this._initWebReceiversPanel();
     this._initCctvPanel();
     this._initGlobalContextPanel();
     this._initLocationBar();
@@ -4497,6 +4525,15 @@ export class StyleManager {
         this._renderRadioState(state);
       });
     }
+    if (this._webReceiversUnsubscribe) {
+      this._webReceiversUnsubscribe();
+      this._webReceiversUnsubscribe = null;
+    }
+    if (typeof webReceiversLayer.subscribe === 'function') {
+      this._webReceiversUnsubscribe = webReceiversLayer.subscribe((state) => {
+        this._renderWebReceiversState(state);
+      });
+    }
     if (!this._awarenessSelectedHandler) {
       this._awarenessSelectedHandler = (event) => this._persistAwarenessSelection(event, false);
       this._awarenessClearedHandler = (event) => this._persistAwarenessSelection(event, true);
@@ -5090,6 +5127,14 @@ export class StyleManager {
   }
 
   _handleContextLayerChange(change) {
+    if (change?.layerId === 'web-receivers' && [
+      'visibility-transition',
+      'visibility',
+      'visibility-cancelled',
+      'visibility-failed',
+    ].includes(change.type)) {
+      this._renderWebReceiversState(webReceiversLayer.getUIState());
+    }
     if (change?.layerId === 'radio' && [
       'visibility-transition',
       'visibility',
@@ -5863,6 +5908,287 @@ export class StyleManager {
   }
 
   /** Render Radio state without making playback or Context decisions. */
+  /** Web Receivers companion panel: enable toggle, filters, tune row, and the receiver dock. */
+  _initWebReceiversPanel() {
+    if (!this._webReceiversPanel) return;
+    const toggle = async () => {
+      if (!this._dataManager?.layers?.has('web-receivers')) return;
+      const enabling = !this._dataManager.isEnabled('web-receivers');
+      const trigger = this._webReceiversEnableBtn;
+      if (trigger) trigger.disabled = true;
+      try {
+        await this._runUserFacingContextAction(
+          (notificationToken) => this._dataManager.setEnabled('web-receivers', enabling, {
+            origin: 'user',
+            notificationToken,
+          }),
+          `Web Receivers could not ${enabling ? 'start' : 'stop'} cleanly`,
+        );
+      } finally {
+        if (trigger) trigger.disabled = false;
+      }
+    };
+    this._webReceiversEnableBtn?.addEventListener('click', () => void toggle());
+    this._webReceiversType?.addEventListener('change', () => {
+      webReceiversLayer.setFilter({ type: this._webReceiversType.value });
+    });
+    this._webReceiversBand?.addEventListener('change', () => {
+      webReceiversLayer.setFilter({ band: this._webReceiversBand.value });
+    });
+    const tuneSelected = () => {
+      const receiver = webReceiversLayer.getUIState().selected;
+      if (!receiver) return;
+      const hz = parseFrequencyHz(this._webReceiversFreq?.value || '', 'khz');
+      if (hz === null) {
+        if (this._webReceiversStatus) this._webReceiversStatus.textContent = 'Enter a frequency in kHz, e.g. 14233';
+        this._webReceiversFreq?.focus({ preventScroll: true });
+        return;
+      }
+      const result = webReceiversLayer.tune({ receiverId: receiver.id, hz, mode: this._webReceiversMode?.value || null });
+      if (!result.ok) {
+        if (this._webReceiversStatus) this._webReceiversStatus.textContent = result.error;
+        return;
+      }
+      this._openWebReceiverDock(result.url, `${receiver.name} · ${result.frequencyLabel} ${result.mode.toUpperCase()}`);
+    };
+    this._webReceiversTuneBtn?.addEventListener('click', tuneSelected);
+    this._webReceiversFreq?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        tuneSelected();
+      }
+    });
+    this._webReceiversOpenBtn?.addEventListener('click', () => {
+      const receiver = webReceiversLayer.getUIState().selected;
+      if (receiver) window.open(receiver.url, '_blank', 'noopener');
+    });
+    const showSpectrumSelected = () => {
+      const receiver = webReceiversLayer.getUIState().selected;
+      if (!receiver) return;
+      const lowHz = parseFrequencyHz(this._webReceiversSpecFrom?.value || '', 'khz');
+      const highHz = parseFrequencyHz(this._webReceiversSpecTo?.value || '', 'khz');
+      if (lowHz === null || highHz === null || highHz <= lowHz) {
+        if (this._webReceiversStatus) this._webReceiversStatus.textContent = 'Enter a range in kHz, e.g. 10000 to 15000';
+        (lowHz === null ? this._webReceiversSpecFrom : this._webReceiversSpecTo)?.focus({ preventScroll: true });
+        return;
+      }
+      const result = webReceiversLayer.showSpectrum({ receiverId: receiver.id, lowHz, highHz });
+      if (!result.ok) {
+        if (this._webReceiversStatus) this._webReceiversStatus.textContent = result.error;
+        return;
+      }
+      this._openWebReceiverDock(result.url, `${receiver.name} · spectrum ${result.rangeLabel}${result.muted ? ' · muted' : ' · audio on'}`);
+    };
+    this._webReceiversSpecBtn?.addEventListener('click', showSpectrumSelected);
+    for (const input of [this._webReceiversSpecFrom, this._webReceiversSpecTo]) {
+      input?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          showSpectrumSelected();
+        }
+      });
+    }
+    // A receiver page (OpenWebRX in particular) grabs keyboard focus while it
+    // boots inside the dock, which silently takes the space bar away from
+    // voice push-to-talk. Reclaim focus for GEV during that load phase; a
+    // deliberate click into the dock afterwards is left alone.
+    this._webReceiversDock?.addEventListener('pointerdown', () => { this._webReceiversDockUserFocused = true; }, true);
+    this._webReceiversDock?.addEventListener('focusin', () => { this._webReceiversDockUserFocused = true; });
+    window.addEventListener('blur', () => {
+      if (!this._webReceiversFrame || document.activeElement !== this._webReceiversFrame) return;
+      if (this._webReceiversDockUserFocused || !this._webReceiversFocusGuardUntil) return;
+      if (Date.now() > this._webReceiversFocusGuardUntil) return;
+      setTimeout(() => this._reclaimFocusFromWebReceiverDock(), 0);
+    });
+    this._webReceiversDockClose?.addEventListener('click', () => this._closeWebReceiverDock());
+    this._webReceiversDockMin?.addEventListener('click', () => {
+      const minimized = !this._webReceiversDock.classList.contains('minimized');
+      this._setWebReceiverDockMinimized(minimized);
+    });
+    document.addEventListener('gev:web-receiver-selected', () => {
+      this.setPanelCollapsed('web-receivers-panel', false, { explicit: true });
+    });
+    document.addEventListener('gev:web-receiver-tune', (event) => {
+      const detail = event?.detail || {};
+      if (!detail.url) return;
+      const state = webReceiversLayer.getUIState();
+      const last = state.lastTune;
+      const label = last
+        ? (last.kind === 'spectrum'
+          ? `${last.receiverName} · spectrum ${last.frequencyLabel}${last.muted ? ' · muted' : ' · audio on'}`
+          : `${last.receiverName} · ${last.frequencyLabel} ${String(last.mode).toUpperCase()}`)
+        : detail.url;
+      if (detail.openIn === 'tab') {
+        this.setPanelCollapsed('web-receivers-panel', false, { explicit: true });
+        if (this._webReceiversStatus) this._webReceiversStatus.textContent = `Opened ${label} in a new tab`;
+        return;
+      }
+      this._openWebReceiverDock(detail.url, label);
+    });
+  }
+
+  _openWebReceiverDock(url, label) {
+    if (!this._webReceiversDock || !this._webReceiversFrame) return;
+    this.setPanelCollapsed('web-receivers-panel', false, { explicit: true });
+    this._webReceiversDock.hidden = false;
+    this._setWebReceiverDockMinimized(false);
+    if (this._webReceiversDockLabel) this._webReceiversDockLabel.textContent = label || url;
+    if (this._webReceiversDockLink) this._webReceiversDockLink.href = url;
+    const mixedContent = typeof window !== 'undefined'
+      && window.location?.protocol === 'https:'
+      && /^http:/i.test(url);
+    if (mixedContent) {
+      this._webReceiversFrame.removeAttribute('src');
+      this._webReceiversFrame.hidden = true;
+      if (this._webReceiversDockNote) {
+        this._webReceiversDockNote.hidden = false;
+        this._webReceiversDockNote.textContent = 'This receiver is served over plain http, which an https page cannot embed. Use NEW TAB to open it.';
+      }
+      if (this._webReceiversStatus) this._webReceiversStatus.textContent = `Tuned ${label} — open it in a new tab`;
+      return;
+    }
+    this._webReceiversFrame.hidden = false;
+    if (this._webReceiversDockNote) this._webReceiversDockNote.hidden = true;
+    if (this._webReceiversFrame.getAttribute('src') !== url) {
+      this._webReceiversFrame.src = url;
+      this._armWebReceiverFocusGuard();
+    }
+    if (this._webReceiversStatus) this._webReceiversStatus.textContent = `Tuned ${label}`;
+  }
+
+  /** Keep keyboard focus with GEV for a few seconds after a receiver page loads. */
+  _armWebReceiverFocusGuard() {
+    this._webReceiversDockUserFocused = false;
+    this._webReceiversFocusGuardUntil = Date.now() + 8000;
+    if (this._webReceiversFocusGuardTimer) clearInterval(this._webReceiversFocusGuardTimer);
+    this._webReceiversFocusGuardTimer = setInterval(() => {
+      if (Date.now() > this._webReceiversFocusGuardUntil || this._webReceiversDockUserFocused) {
+        clearInterval(this._webReceiversFocusGuardTimer);
+        this._webReceiversFocusGuardTimer = null;
+        return;
+      }
+      if (document.activeElement === this._webReceiversFrame) this._reclaimFocusFromWebReceiverDock();
+    }, 250);
+  }
+
+  _reclaimFocusFromWebReceiverDock() {
+    const frame = this._webReceiversFrame;
+    if (!frame || document.activeElement !== frame) return;
+    try { frame.blur(); } catch { /* cross-origin frames still blur */ }
+    const home = document.getElementById('cesiumContainer') || document.body;
+    if (home && !home.hasAttribute('tabindex')) home.setAttribute('tabindex', '-1');
+    try { window.focus(); home?.focus({ preventScroll: true }); } catch { /* focus is best effort */ }
+  }
+
+  /** Hide the receiver frame but keep it loaded (a muted waterfall keeps streaming). */
+  _setWebReceiverDockMinimized(minimized) {
+    if (!this._webReceiversDock) return;
+    this._webReceiversDock.classList.toggle('minimized', Boolean(minimized));
+    if (this._webReceiversDockMin) {
+      this._webReceiversDockMin.textContent = minimized ? '▴' : '▾';
+      this._webReceiversDockMin.setAttribute('aria-pressed', String(Boolean(minimized)));
+      const action = minimized ? 'Restore' : 'Minimize';
+      this._webReceiversDockMin.setAttribute('aria-label', `${action} the receiver dock`);
+      this._webReceiversDockMin.title = action;
+    }
+    this._scheduleLeftPanelLayout?.({ reconsiderAutoCollapse: true });
+  }
+
+  _closeWebReceiverDock() {
+    if (!this._webReceiversDock) return;
+    this._setWebReceiverDockMinimized(false);
+    this._webReceiversDock.hidden = true;
+    this._webReceiversFrame?.removeAttribute('src');
+    if (this._webReceiversFocusGuardTimer) clearInterval(this._webReceiversFocusGuardTimer);
+    this._webReceiversFocusGuardTimer = null;
+    this._webReceiversFocusGuardUntil = 0;
+    if (this._webReceiversStatus) this._webReceiversStatus.textContent = 'Receiver dock closed';
+  }
+
+  _renderWebReceiversState(state) {
+    if (!state || !this._webReceiversPanel) return;
+    const lifecycle = this._dataManager?.getLayerLifecycleState?.('web-receivers') || null;
+    const lifecycleState = lifecycle?.lifecycleState || (state.enabled ? 'enabled' : 'disabled');
+    const enabled = lifecycle ? Boolean(lifecycle.enabled) : Boolean(state.enabled);
+    const transitioning = lifecycleState === 'enabling' || lifecycleState === 'disabling';
+    const uncertain = Boolean(lifecycle?.uncertain);
+    const interactive = enabled && !transitioning && !uncertain;
+    this._webReceiversPanel.classList.toggle('radio-enabled', enabled);
+    this._webReceiversLayerState?.classList.toggle('active', enabled);
+    if (this._webReceiversLayerState) {
+      this._webReceiversLayerState.textContent = transitioning
+        ? lifecycleState.toUpperCase()
+        : (uncertain ? 'UNCERTAIN' : (state.loading ? 'SYNC' : (enabled ? `${state.filteredCount}/${state.receiverCount}` : 'OFF')));
+    }
+    if (this._webReceiversEnableBtn) {
+      this._webReceiversEnableBtn.classList.toggle('active', enabled);
+      this._webReceiversEnableBtn.setAttribute('aria-pressed', String(enabled));
+      this._webReceiversEnableBtn.textContent = transitioning
+        ? lifecycleState.toUpperCase()
+        : (uncertain ? 'RECONCILE' : (enabled ? 'DISABLE' : 'ENABLE'));
+    }
+    const fillSelect = (select, entries, current) => {
+      if (!select) return;
+      const wanted = entries.map((entry) => `${entry.id}|${entry.label}`).join(',');
+      if (select.dataset.options !== wanted) {
+        select.innerHTML = '';
+        for (const entry of entries) {
+          const option = document.createElement('option');
+          option.value = entry.id;
+          option.textContent = entry.label;
+          select.appendChild(option);
+        }
+        select.dataset.options = wanted;
+      }
+      if (select.value !== current) select.value = current;
+      select.disabled = !interactive;
+    };
+    fillSelect(this._webReceiversType, state.filters?.types || [], state.filter?.type || 'all');
+    fillSelect(this._webReceiversBand, state.filters?.bands || [], state.filter?.band || 'all');
+    const receiver = state.selected;
+    if (this._webReceiversName) {
+      this._webReceiversName.textContent = receiver ? receiver.name.toUpperCase() : 'NO RECEIVER SELECTED';
+    }
+    if (this._webReceiversMeta) {
+      if (receiver) {
+        const slots = receiver.users !== null && receiver.usersMax !== null
+          ? ` · ${receiver.users}/${receiver.usersMax} users${receiver.users >= receiver.usersMax ? ' (FULL)' : ''}`
+          : '';
+        const online = receiver.online === false ? ' · OFFLINE' : '';
+        this._webReceiversMeta.textContent = `${receiver.typeLabel}${receiver.site ? ` · ${receiver.site}` : ''}${slots}${online}`;
+      } else {
+        this._webReceiversMeta.textContent = enabled
+          ? 'Click a marker, or ask for receivers near a place.'
+          : 'Enable Web Receivers, then click a marker — or ask for receivers near a place.';
+      }
+    }
+    if (this._webReceiversBands) {
+      this._webReceiversBands.textContent = receiver
+        ? `${state.selectedBands}${receiver.antenna ? ` · ${receiver.antenna}` : ''}`
+        : '';
+    }
+    const canTune = interactive && Boolean(receiver);
+    for (const control of [
+      this._webReceiversFreq, this._webReceiversMode, this._webReceiversTuneBtn, this._webReceiversOpenBtn,
+      this._webReceiversSpecFrom, this._webReceiversSpecTo, this._webReceiversSpecBtn,
+    ]) {
+      if (control) control.disabled = !canTune;
+    }
+    if (this._webReceiversFreq && state.lastTune && state.lastTune.kind !== 'spectrum' && !this._webReceiversFreq.value) {
+      this._webReceiversFreq.value = String(state.lastTune.hz / 1000);
+    }
+    if (state.lastTune?.kind === 'spectrum') {
+      if (this._webReceiversSpecFrom && !this._webReceiversSpecFrom.value) this._webReceiversSpecFrom.value = String(state.lastTune.lowHz / 1000);
+      if (this._webReceiversSpecTo && !this._webReceiversSpecTo.value) this._webReceiversSpecTo.value = String(state.lastTune.highHz / 1000);
+    }
+    if (this._webReceiversStatus && !receiver) {
+      this._webReceiversStatus.textContent = enabled
+        ? (state.loading ? 'Loading receiver directory…' : (state.error ? state.error : `${state.filteredCount} receivers shown${state.stale ? ' (stale directory)' : ''}`))
+        : 'Web receivers off';
+    }
+    if (!enabled) this._closeWebReceiverDock();
+  }
+
   _renderRadioState(state) {
     if (!state || !this._radioPanel) return;
     const lifecycle = this._dataManager?.getLayerLifecycleState?.('radio') || null;

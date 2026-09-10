@@ -21,15 +21,18 @@ function realtimeTools() {
   return new Function(`return ${literal};`)();
 }
 
-test('Realtime schema exposes the authoritative 28-tool inventory', () => {
+test('Realtime schema exposes the authoritative 31-tool inventory', () => {
   const tools = realtimeTools();
-  assert.equal(tools.length, 28);
+  assert.equal(tools.length, 31);
   const names = tools.map((tool) => tool.name);
-  assert.equal(new Set(names).size, 28, 'tool names are unique');
+  assert.equal(new Set(names).size, 31, 'tool names are unique');
   assert.ok(names.includes('set_context_mode'));
   assert.ok(names.includes('control_cockpit'));
   assert.ok(names.includes('select_nearest_aircraft'));
   assert.ok(names.includes('control_radio'));
+  assert.ok(names.includes('find_web_receivers'));
+  assert.ok(names.includes('tune_web_receiver'));
+  assert.ok(names.includes('show_rf_spectrum'));
   // Every tool closes its parameter object: an open schema lets the model
   // invent arguments the runner silently drops.
   for (const tool of tools) {
@@ -174,16 +177,22 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'fly_to_location',
     'select_nearest_aircraft',
     'set_map_stack',
+    // Web Receivers layer: the layer-id enums grew, and two tools were added.
+    'set_layer_visibility',
+    'show_data_layers_menu',
+    'find_web_receivers',
+    'tune_web_receiver',
+    'show_rf_spectrum',
   ]);
   const unchanged = realtimeTools()
     .filter((tool) => !TOUCHED.has(tool.name))
     .sort((a, b) => a.name.localeCompare(b.name));
-  assert.equal(unchanged.length, 21);
+  assert.equal(unchanged.length, 19);
   const digest = createHash('sha256')
     .update(JSON.stringify(unchanged))
     .digest('hex')
     .slice(0, 16);
-  assert.equal(digest, '802ed694b8887b88', 'an unchanged Realtime tool definition drifted');
+  assert.equal(digest, 'bec5d5804021d11d', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {

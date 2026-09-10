@@ -2,7 +2,7 @@ const CONTEXT_DEPENDENCIES = Object.freeze({
   flights: new Set(['military-awareness', 'flights', 'military', 'ais-live-vessels', 'military-installations']),
   'space-missions': new Set(['rocket-launches', 'satellites']),
 });
-const CONTEXT_COMPANIONS = new Set(['radio']);
+const CONTEXT_COMPANIONS = new Set(['radio', 'web-receivers']);
 /** Return whether an origin represents a direct user choice on this route. */
 export function isExplicitUserIntentOrigin(origin, layerId = null) {
   return origin === 'user' || origin === 'voice';

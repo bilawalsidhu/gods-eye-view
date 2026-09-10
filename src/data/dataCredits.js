@@ -139,6 +139,14 @@ export const DATA_CREDITS = [
       '(public domain; audio delivered directly by each broadcaster)',
   },
   {
+    key: 'web-receivers',
+    html:
+      'Web receiver directory: ' +
+      '<a href="https://www.receiverbook.de/" target="_blank" rel="noopener">Receiverbook</a> and the ' +
+      '<a href="http://rx.linkfanel.net/" target="_blank" rel="noopener">KiwiSDR community map feed</a> ' +
+      '(directory metadata only; each receiver page is loaded directly from its operator)',
+  },
+  {
     key: 'reearth-terrain',
     html:
       'Terrain (keyless globe stacks): ' +
