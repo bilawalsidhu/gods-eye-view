@@ -108,8 +108,8 @@ test('the installed keyless HUD route stays successful after the voice quota is 
     assert.equal(typeof token, 'function');
     assert.equal(typeof hud, 'function');
 
-    const firstToken = await invokeRoute(token);
-    const secondToken = await invokeRoute(token);
+    const firstToken = await invokeRoute(token, { method: 'POST' });
+    const secondToken = await invokeRoute(token, { method: 'POST' });
     assert.equal(firstToken.statusCode, 503);
     assert.deepEqual(firstToken.body, { error: 'OPENAI_API_KEY is not set' });
     assert.equal(secondToken.statusCode, 429);

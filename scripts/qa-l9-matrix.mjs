@@ -276,7 +276,10 @@ async function jget(path, { method = 'GET', timeoutMs = 25000, body = null } = {
   const res = await fetch(`${APP_URL}${path}`, {
     method,
     signal: AbortSignal.timeout(timeoutMs),
-    ...(body ? { body, headers: { 'Content-Type': 'application/json' } } : {}),
+    ...(method === 'POST' ? {
+      body: body ?? '{}',
+      headers: { Origin: new URL(APP_URL).origin, 'Content-Type': 'application/json' },
+    } : body ? { body, headers: { 'Content-Type': 'application/json' } } : {}),
   });
   const text = await res.text();
   let json = null;

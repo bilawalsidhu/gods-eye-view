@@ -75,6 +75,8 @@ import {
   validTerrainResult,
 } from './src/data/terrainHeightsProxy.js';
 import { VOICE_MODELS, isKnownVoiceTier, resolveVoiceModel } from './src/voice/voiceCost.js';
+import { requestSecurityPlugin } from './server/requestSecurity.mjs';
+import { createDebugLogWriter, DEBUG_REQUEST_MAX_BYTES } from './server/debugLog.mjs';
 
 /** Resolve __dirname for ESM context. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1380,9 +1382,10 @@ const OPENAI_REALTIME_REASONING_DEFAULT = 'low';
 const OPENAI_REALTIME_CONTEXT_TOKENS_DEFAULT = 3000;
 const OPENAI_REALTIME_CONTEXT_RETENTION_DEFAULT = 0.5;
 const OPENAI_HUD_SUMMARY_MODEL_DEFAULT = 'gpt-5-nano';
-const REALTIME_DEBUG_LOG_DIR = path.join(__dirname, '.gev-logs');
-const REALTIME_DEBUG_LOG_FILE = path.join(REALTIME_DEBUG_LOG_DIR, 'realtime-conversations.jsonl');
-const REALTIME_DEBUG_LOG_MAX_BYTES = 8 * 1024 * 1024;
+const writeDebugLog = globalThis.__GEV_DEBUG_LOG_WRITER ??= createDebugLogWriter({
+  onCreated: (file) => console.info(`[GEV] Debug log: ${file}`),
+});
+const debugLogRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 120, globalMax: 120 });
 
 /**
  * @type {ReturnType<typeof createAisStreamAdapter>|null}
@@ -5131,26 +5134,27 @@ export function openAiRealtimeProxy() {
         res.end(JSON.stringify({ error: 'Method not allowed' }));
         return;
       }
-
+      if (process.env.GEV_DEBUG_LOG !== '1') {
+        res.statusCode = 204;
+        res.end();
+        return;
+      }
+      if (!enforceOptInRateLimit(debugLogRateLimiter, req, res)) return;
       try {
-        const body = await readRequestBody(req, REALTIME_DEBUG_LOG_MAX_BYTES);
+        const body = await readRequestBody(req, DEBUG_REQUEST_MAX_BYTES);
         const record = JSON.parse(body || '{}');
-        fs.mkdirSync(REALTIME_DEBUG_LOG_DIR, { recursive: true });
-        fs.appendFileSync(REALTIME_DEBUG_LOG_FILE, `${JSON.stringify({
-          loggedAt: new Date().toISOString(),
-          ...record,
-        })}\n`);
+        await writeDebugLog(record);
         res.statusCode = 204;
         res.end();
       } catch (error) {
         res.statusCode = 400;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: error?.message || 'Failed to write Realtime debug log' }));
+        res.end(JSON.stringify({ error: 'Debug log record could not be stored' }));
       }
     });
 
     middlewares.use('/api/realtime/token', async (req, res) => {
-      if (req.method !== 'GET' && req.method !== 'POST') {
+      if (req.method !== 'POST') {
         res.statusCode = 405;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ error: 'Method not allowed' }));
@@ -7736,9 +7740,10 @@ export default defineConfig(({ mode }) => {
     if (process.env[key] === undefined) process.env[key] = val;
   }
   const env = { ...process.env };
-  const localAllowedHosts = ['localhost', '127.0.0.1', '.local'];
+  const localAllowedHosts = ['localhost', '127.0.0.1', '[::1]'];
   return {
     plugins: [
+      requestSecurityPlugin(),
       cesium(),
       openSkyProxy(),
       celestrakProxy(),
@@ -7764,13 +7769,10 @@ export default defineConfig(({ mode }) => {
     server: {
       host: env.HOST || 'localhost',
       port: parseInt(env.PORT, 10) || 4173,
-      // When binding to all interfaces, allow any host; otherwise restrict to local names
-      allowedHosts: (env.HOST === '0.0.0.0' || env.HOST === '::')
-        ? true
-        : localAllowedHosts,
+      allowedHosts: localAllowedHosts,
       fs: {
         // Pinokio keeps optional credentials in this ignored local file.
-        deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/ENVIRONMENT'],
+        deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/ENVIRONMENT', '**/.gev-logs/**'],
       },
       // Framing protection belongs on the APP DOCUMENT, not on API responses:
       // a browser evaluates frame-ancestors against the framed page's own

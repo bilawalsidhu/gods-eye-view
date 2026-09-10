@@ -186,7 +186,10 @@ const PHRASES = [
 
 /** Mint a session via the app's own endpoint. */
 async function mintSession() {
-  const res = await fetch(`${APP_URL}/api/realtime/token`, { method: 'POST' });
+  const res = await fetch(`${APP_URL}/api/realtime/token`, {
+    method: 'POST', body: '{}',
+    headers: { Origin: new URL(APP_URL).origin, 'Content-Type': 'application/json' },
+  });
   if (!res.ok) throw new Error(`token mint failed: ${res.status} ${(await res.text()).slice(0, 120)}`);
   const body = await res.json();
   const value = body?.value || body?.client_secret?.value;

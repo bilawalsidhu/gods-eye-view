@@ -7,7 +7,7 @@ cd "$ROOT_DIR"
 PORT="${PORT:-4173}"
 # Local-only by default: the dev server brokers configured API keys, so it
 # should not be reachable from the network unless explicitly requested.
-# Set HOST=0.0.0.0 to opt in to LAN exposure (a warning is printed).
+# Only direct loopback access is supported.
 HOST="${HOST:-localhost}"
 # CCTV source packs (all keyless): Austin (~815 live upstream), Caltrans
 # districts 4,7,11,3 = SF/LA/San Diego/Sacramento (~1,860 live upstream),
@@ -249,37 +249,11 @@ rm -rf node_modules/.vite
 echo "Starting fresh God's Eye View dev server..."
 case "${HOST}" in
   localhost|127.0.0.1|::1)
-    echo "Local-only mode: reachable at http://localhost:${PORT}/ (set HOST=0.0.0.0 for LAN)"
+    echo "Local-only mode: reachable at http://localhost:${PORT}/"
     ;;
   *)
-    LAN_IP=""
-    if command -v ipconfig >/dev/null 2>&1; then
-      # macOS: first active interface wins
-      for iface in en0 en1; do
-        LAN_IP="$(ipconfig getifaddr "${iface}" 2>/dev/null || true)"
-        [[ -n "${LAN_IP}" ]] && break
-      done
-    elif command -v hostname >/dev/null 2>&1; then
-      # Linux: hostname -I lists addresses; take the first
-      LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
-    fi
-    echo ""
-    echo "!! =============================================================="
-    echo "!! WARNING: HOST=${HOST} — network-exposed mode."
-    echo "!! This dev server brokers your configured API keys (OpenAI,"
-    echo "!! OpenSky, AISStream, TomTom, FIRMS, LL2, Google) to ANYONE who can"
-    echo "!! reach it on the network. Use only on networks you trust."
-    echo "!! Consider the opt-in per-IP throttles GEV_RATELIMIT_OPENAI_PER_MIN"
-    echo "!! and GEV_RATELIMIT_GOOGLE_PER_MIN (see .env.example) — and note"
-    echo "!! they are NOT billing caps; set provider-side budget alerts too."
-    if [[ -n "${LAN_IP}" ]]; then
-      echo "!! LAN URL: http://${LAN_IP}:${PORT}/"
-    else
-      echo "!! LAN URL: http://<this-machine-ip>:${PORT}/"
-    fi
-    echo "!! =============================================================="
-    echo ""
-    echo "URL (this machine): http://localhost:${PORT}/"
+    echo "Unsupported HOST=${HOST}: only localhost, 127.0.0.1, or ::1 is allowed." >&2
+    exit 1
     ;;
 esac
 echo "Google Maps key source: ${GOOGLE_MAPS_API_KEY_SOURCE}"
