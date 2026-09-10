@@ -1,0 +1,18 @@
+# Never bake secrets or local state into the image.
+.env
+.env.*
+# Keys are injected at runtime via compose env_file / environment.
+
+# Version control and agent/tooling state.
+.git
+.gitattributes
+.pi
+ai_docs
+
+# Heavy, serve-irrelevant content.
+docs
+node_modules
+
+# Local scratch / OS noise.
+.DS_Store
+*.log

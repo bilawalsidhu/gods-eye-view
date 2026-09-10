@@ -1,0 +1,31 @@
+# God's Eye View — isolated single-container setup.
+#
+# Isolation guarantees vs. other containers on this host:
+#   - own compose project ("gods-eye-view") → own bridge network; no external
+#     networks joined, nothing shared with polygonia/supabase/glpi/intel-room stacks
+#   - ports published ONLY on the loopback interface (default 127.0.0.1:5273,
+#     override with GEV_PORT); no 0.0.0.0 exposure
+#   - unique container name (gev-app); no host volumes mounted
+#   - restart: "no" — never resurrects on Docker daemon restart
+#
+# API keys: optionally create .env at the repo root (copy from .env.example).
+# compose passes it into the container at runtime; it is never baked into the
+# image (.dockerignore). The app degrades gracefully when keys are absent.
+
+name: gods-eye-view
+
+services:
+  gev-app:
+    build: .
+    image: gev-app:local
+    container_name: gev-app
+    init: true
+    ports:
+      - "127.0.0.1:${GEV_PORT:-5273}:4173"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOST: 0.0.0.0
+      PORT: "4173"
+    restart: "no"
