@@ -133,10 +133,10 @@ test('t() selects one/other plural variants per locale through Intl.PluralRules'
   assert.equal(t('layers.clear.toast.notCleared', { count: 1 }),
     '1 data layer could not be cleared');
   pinLocale('es');
-  // es seeds still hold English values (stage-3 seed); what is under test is
-  // es plural category selection, which shares the one/other shape with en.
-  assert.equal(t('layers.clear.toast.cleared', { count: 1 }), 'Cleared 1 data layer');
-  assert.equal(t('layers.clear.toast.cleared', { count: 3 }), 'Cleared 3 data layers');
+  // es holds translated values since stage-3 translation; what is under test
+  // is es plural category selection through the real es catalog values.
+  assert.equal(t('layers.clear.toast.cleared', { count: 1 }), 'Se limpió 1 capa de datos');
+  assert.equal(t('layers.clear.toast.cleared', { count: 3 }), 'Se limpiaron 3 capas de datos');
 });
 
 test('a missing key returns the key itself and never warns outside dev builds', () => {
