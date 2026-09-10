@@ -5,6 +5,15 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- TxDOT highway cameras join the CCTV mesh as a fourth keyless source pack,
+  adding Texas coverage beyond the existing City of Austin cameras. Districts
+  default to Austin, San Antonio, Houston, Dallas, and Fort Worth
+  (`CCTV_TXDOT_DISTRICTS` selects others; 25 exist statewide, ~4,370 cameras).
+  Only cameras reporting `Device Online` are registered, so a dark device shows
+  the usual fallback instead of a frame that is months stale.
+
 ### Fixed
 
 - Mapped-site outages show their scheduled retry countdown and distinguish

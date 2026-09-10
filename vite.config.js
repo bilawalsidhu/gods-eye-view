@@ -18,6 +18,7 @@
  *  13. Weather effects — camera-local Open-Meteo observations without news/geocoding overhead
  *  14. Rocket launches — recent Launch Library 2 mission metadata
  *  15. Radio Browser — public-domain station directory and click counting
+ *  16. TxDOT ITS — Texas highway cameras (keyless, base64-JPEG snapshots)
  *
  * Also exposes Cesium and Google 3D Tiles API keys to the
  * client via `import.meta.env.*` defines.
@@ -3543,7 +3544,48 @@ const TFL_JAMCAM_URL = 'https://api.tfl.gov.uk/Place/Type/JamCam';
 const TFL_IMAGE_ORIGIN = 'https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/';
 const DEFAULT_TFL_MAX_SOURCES = 250;
 const LONDON_CENTER = { lat: 51.5074, lon: -0.1278 };
-/** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL) infrequent. Frames are fetched per-request and are unaffected. */
+/** TxDOT ITS: one keyless JSON catalog per district (25 districts statewide). */
+const TXDOT_ORIGIN = 'https://its.txdot.gov';
+const TXDOT_CCTV_STATUS_URL = (district) =>
+  `${TXDOT_ORIGIN}/its/DistrictIts/GetCctvStatusListByDistrict?districtCode=${encodeURIComponent(district)}`;
+/** Per-camera frame. Returns JSON `{snippet:<base64 jpeg>}`, not an image body —
+ * fetchCctvImageFromUpstream decodes it (see decodeTxdotSnapshotPayload). The
+ * whole-district snapshot list endpoint exists too, but it is a ~14 MB response
+ * carrying every frame at once; per-camera keeps the frame budget per-request. */
+const TXDOT_CCTV_SNAPSHOT_URL = (icdId, district) =>
+  `${TXDOT_ORIGIN}/its/DistrictIts/GetCctvSnapshotByIcdId?icdId=${encodeURIComponent(icdId)}`
+  + `&districtCode=${encodeURIComponent(district)}`;
+/** Valid TxDOT district codes (the ITS map's own districtCodes list). */
+const TXDOT_DISTRICTS = new Set([
+  'ABL', 'AMA', 'ATL', 'AUS', 'BMT', 'BWD', 'BRY', 'CHS', 'CRP', 'DAL', 'ELP', 'FTW', 'HOU',
+  'LRD', 'LBB', 'LFK', 'ODA', 'PAR', 'PHR', 'SJT', 'SAT', 'TYL', 'WAC', 'WFS', 'YKM',
+]);
+/** Districts fetched by default: the five largest metro catalogs. All 25 would be
+ * ~4,370 cameras — far past any sane cap — so this mirrors the Caltrans default of
+ * a metro subset, overridable with CCTV_TXDOT_DISTRICTS. */
+const DEFAULT_TXDOT_DISTRICTS = 'AUS,SAT,HOU,DAL,FTW';
+const DEFAULT_TXDOT_MAX_SOURCES = 300;
+/** Prioritization anchors: downtown cores of the default districts. */
+const TXDOT_ANCHORS = [
+  { lat: 30.2672, lon: -97.7431 }, // Austin
+  { lat: 29.4241, lon: -98.4936 }, // San Antonio
+  { lat: 29.7604, lon: -95.3698 }, // Houston
+  { lat: 32.7767, lon: -96.7970 }, // Dallas
+  { lat: 32.7555, lon: -97.3308 }, // Fort Worth
+];
+/** Ground-elevation priors in metres, by district. The TxDOT payload carries no
+ * elevation at all, and on a keyless (no-tileset) stack the client's one-shot
+ * ground snap never fires — so this frozen prior is the only height a camera
+ * gets there. Texas spans sea level (Houston/Beaumont) to ~1,140 m (El Paso),
+ * so one global default would be badly wrong at both ends. */
+const TXDOT_DISTRICT_ELEVATION_M = {
+  ABL: 520, AMA: 1099, ATL: 105, AUS: 149, BMT: 5, BWD: 425, BRY: 111, CHS: 250,
+  CRP: 7, DAL: 131, ELP: 1140, FTW: 199, HOU: 15, LRD: 132, LBB: 992, LFK: 91,
+  ODA: 890, PAR: 185, PHR: 30, SJT: 585, SAT: 198, TYL: 165, WAC: 143, WFS: 289,
+  YKM: 70,
+};
+const TXDOT_DEFAULT_ELEVATION_M = 150;
+/** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + 5 TxDOT districts) infrequent. Frames are fetched per-request and are unaffected. */
 const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
  * stalled upstream can't leave getCctvSources (and thus every CCTV route)
@@ -4169,6 +4211,146 @@ async function loadTflSourcesFromOpenData() {
 }
 
 /**
+ * Normalize one TxDOT district catalog into camera source objects.
+ *
+ * Split out from the fetch so the shape handling is unit-testable without a
+ * network round trip.
+ *
+ * The payload nests cameras under `roadwayCctvStatuses`, keyed by roadway name
+ * ("IH-35", "SH-130 Toll"), each holding a list of camera records. Only
+ * "Device Online" cameras with finite coordinates are kept — offline/errored
+ * devices still return a stale frame from months or years ago, which is worse
+ * than the synthetic placeholder because it looks live.
+ *
+ * @param {object} payload - Parsed GetCctvStatusListByDistrict response.
+ * @param {string} district - TxDOT district code (e.g. "AUS").
+ * @returns {Array<object>} Normalized camera source objects.
+ */
+export function normalizeTxdotDistrictPayload(payload, district) {
+  const byRoadway = payload?.roadwayCctvStatuses;
+  if (!byRoadway || typeof byRoadway !== 'object') return [];
+  const groundElevationM = TXDOT_DISTRICT_ELEVATION_M[district] ?? TXDOT_DEFAULT_ELEVATION_M;
+  const cameras = [];
+  const seen = new Set();
+
+  for (const rows of Object.values(byRoadway)) {
+    if (!Array.isArray(rows)) continue;
+    for (const row of rows) {
+      if (String(row?.statusDescription || '') !== 'Device Online') continue;
+      // Coordinates must be present as numbers. Guarding on toFiniteNumber
+      // alone is not enough: Number(null) and Number('') are both 0, which
+      // would silently drop the camera on null island off the coast of Africa.
+      const lat = typeof row?.latitude === 'number' ? row.latitude : NaN;
+      const lon = typeof row?.longitude === 'number' ? row.longitude : NaN;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      if (lat === 0 && lon === 0) continue;
+
+      // icd_Id is the device key the snapshot endpoint takes, and is unique
+      // within a district. A camera can appear under more than one roadway
+      // grouping (an interchange belongs to both routes), so dedupe on it.
+      const icdId = String(row?.icd_Id || '').trim();
+      if (!icdId || seen.has(icdId)) continue;
+      seen.add(icdId);
+
+      const name = String(row?.name || icdId).trim();
+      // Heading comes from an explicit travel token in the NAME ("US-290 EB"),
+      // parsed in strict mode — bare cardinals are refused because Texas route
+      // names are full of them ("N Lamar", "West Ave").
+      //
+      // Deliberately NOT from row.dirDescription / equipLoc.direction: that is
+      // the ROADWAY's canonical direction, not the camera's facing. In the
+      // Austin district it reads "North" for 249 of 282 cameras, including
+      // every camera on an east-west highway. Feeding it to directionToHeading
+      // with allowBare would point ~88% of the pack due north with high
+      // confidence — the exact false-confidence failure directionText.js
+      // documents. ~7% of cameras carry a real token; the rest take the
+      // id-hash fallback at low confidence, same as headingless Austin/TfL.
+      const heading = directionToHeading(name, false);
+      const hasHeading = Number.isFinite(heading);
+      const cameraId = `txdot-${district.toLowerCase()}-${hashSeed(icdId).toString(36)}`;
+
+      cameras.push({
+        id: cameraId,
+        name,
+        city: String(row?.equipLoc?.roadway || district),
+        cityId: `tx-${district.toLowerCase()}`,
+        provider: 'TxDOT',
+        lat,
+        lon,
+        headingDeg: hasHeading ? heading : fallbackHeadingFromId(cameraId),
+        headingConfidence: hasHeading ? 'high' : 'low',
+        // Same two fabricated pose personalities as Austin/Caltrans (design
+        // §1a): RAW PRIORS only — the client's one-shot ground snap and manual
+        // calibration own the truth wherever a tileset exists.
+        pitchDeg: hasHeading ? -24 : -18,
+        fovDeg: hasHeading ? 56 : 44,
+        rangeM: hasHeading ? 210 : 145,
+        // TxDOT mounts run tall on highway poles and mast arms.
+        mountHeightM: hasHeading ? 12 : 10,
+        groundElevationM,
+        feedType: 'image',
+        url: TXDOT_CCTV_SNAPSHOT_URL(icdId, district),
+        snapshotUrl: TXDOT_CCTV_SNAPSHOT_URL(icdId, district),
+        sourceKind: 'txdot-its',
+        license: 'Texas Department of Transportation — its.txdot.gov',
+      });
+    }
+  }
+  return cameras;
+}
+
+/**
+ * Fetch TxDOT ITS highway cameras (Texas), keyless.
+ *
+ * Districts come from CCTV_TXDOT_DISTRICTS (comma-separated codes; empty string
+ * disables the pack). One official JSON catalog per district, identical schema
+ * statewide. Districts fetch in parallel and fail independently
+ * (Promise.allSettled) — one district outage never darkens the others.
+ *
+ * Frames are NOT plain image URLs: the snapshot endpoint returns JSON carrying a
+ * base64 JPEG, decoded in fetchCctvImageFromUpstream. Frames observed ~1 minute
+ * behind wall clock.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+async function loadTxdotSourcesFromOpenData() {
+  const districtsRaw = process.env.CCTV_TXDOT_DISTRICTS ?? DEFAULT_TXDOT_DISTRICTS;
+  const districts = String(districtsRaw)
+    .split(',')
+    .map((token) => token.trim().toUpperCase())
+    .filter((code) => TXDOT_DISTRICTS.has(code));
+  if (!districts.length) return [];
+
+  const settled = await Promise.allSettled(
+    districts.map(async (district) => {
+      const resp = await fetch(TXDOT_CCTV_STATUS_URL(district), {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+      });
+      if (!resp.ok) throw new Error(`${district} HTTP ${resp.status}`);
+      return { district, payload: await resp.json() };
+    })
+  );
+
+  const cameras = [];
+  for (const result of settled) {
+    if (result.status !== 'fulfilled') {
+      console.warn('[CCTV] TxDOT district fetch failed:', result.reason?.message || result.reason);
+      continue;
+    }
+    cameras.push(...normalizeTxdotDistrictPayload(result.value.payload, result.value.district));
+  }
+
+  const maxRaw = Number(process.env.CCTV_TXDOT_MAX_SOURCES || DEFAULT_TXDOT_MAX_SOURCES);
+  const maxCount = Number.isFinite(maxRaw)
+    ? Math.max(8, Math.min(600, Math.floor(maxRaw)))
+    : DEFAULT_TXDOT_MAX_SOURCES;
+  const prioritized = prioritizeSources(cameras, maxCount, TXDOT_ANCHORS);
+  console.log(`[CCTV] Loaded TxDOT camera sources: ${cameras.length} online (using nearest ${prioritized.length})`);
+  return prioritized;
+}
+
+/**
  * Normalize a raw CCTV source item into a canonical shape with safe defaults.
  *
  * @param {object} item - Raw source from file, env, or Austin Open Data.
@@ -4239,27 +4421,36 @@ async function refreshCctvSources() {
 
   const forceAustin = String(process.env.CCTV_FORCE_AUSTIN || '').trim() === '1';
   const preferAustin = String(process.env.CCTV_PREFER_AUSTIN || '1').trim() !== '0';
-  // Live open-data packs (Austin + Caltrans + TfL) load unless a file/env pack
+  // Live open-data packs (Austin + Caltrans + TfL + TxDOT) load unless a file/env pack
   // is configured and live packs aren't forced — same gate that governed the
-  // Austin-only fetch, now governing all three. Each pack fails independently.
+  // Austin-only fetch, now governing all four. Each pack fails independently.
   const needsLiveSources = forceAustin || ((fromFile.length + fromEnv.length) === 0 && preferAustin);
   const tflEnabled = String(process.env.CCTV_TFL_ENABLED || '1').trim() !== '0';
+  const txdotEnabled = String(process.env.CCTV_TXDOT_ENABLED || '1').trim() !== '0';
 
   let fromAustin = [];
   let fromCaltrans = [];
   let fromTfl = [];
+  let fromTxdot = [];
   if (needsLiveSources) {
-    const [austinResult, caltransResult, tflResult] = await Promise.allSettled([
+    const [austinResult, caltransResult, tflResult, txdotResult] = await Promise.allSettled([
       loadAustinSourcesFromOpenData(),
       loadCaltransSourcesFromOpenData(),
       tflEnabled ? loadTflSourcesFromOpenData() : Promise.resolve([]),
+      txdotEnabled ? loadTxdotSourcesFromOpenData() : Promise.resolve([]),
     ]);
     fromAustin = austinResult.status === 'fulfilled' ? austinResult.value : [];
     fromCaltrans = caltransResult.status === 'fulfilled' ? caltransResult.value : [];
     fromTfl = tflResult.status === 'fulfilled' ? tflResult.value : [];
+    fromTxdot = txdotResult.status === 'fulfilled' ? txdotResult.value : [];
   }
   // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
-  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromFile, ...fromEnv];
+  //
+  // Pack order also decides who loses to the global CCTV_MAX_SOURCES cap below,
+  // because the cap is a plain slice: TxDOT, last in this array, is the pack
+  // truncated when the catalog outgrows it. Every pack is distance-sorted before
+  // it arrives here, so the survivors are still the cameras nearest a metro core.
+  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromTxdot, ...fromFile, ...fromEnv];
 
   // Deduplicate by camera ID (last-write wins because of Map.set)
   const byId = new Map();
@@ -4462,11 +4653,50 @@ async function proxyMediaResponse(res, upstream, { sourceHeader = 'upstream' } =
 }
 
 /**
+ * Decode a TxDOT ITS snapshot response into JPEG bytes.
+ *
+ * The endpoint answers `200 application/json` with `{snippet:"<base64 jpeg>"}`
+ * rather than an image body. A camera that is registered but has no current
+ * frame answers `null` or `{snippet:null}` — both are ordinary misses, so the
+ * caller falls through to Street View like any other upstream failure.
+ *
+ * Validates the JPEG SOI marker (FF D8 FF) before returning, so a truncated or
+ * non-image payload can't be served to the browser as `image/jpeg`.
+ *
+ * @param {string} text - Raw JSON response body.
+ * @returns {{ok:true,body:Buffer,contentType:string}|null} Decoded frame, or null.
+ */
+export function decodeTxdotSnapshotPayload(text) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const snippet = typeof parsed?.snippet === 'string' ? parsed.snippet.trim() : '';
+  if (!snippet) return null;
+  let body;
+  try {
+    body = Buffer.from(snippet, 'base64');
+  } catch {
+    return null;
+  }
+  // Base64 decoding never throws on junk, so verify the JPEG magic instead.
+  if (body.length < 4 || body[0] !== 0xff || body[1] !== 0xd8 || body[2] !== 0xff) return null;
+  return { ok: true, body, contentType: 'image/jpeg' };
+}
+
+/**
  * Fetch one upstream CCTV image within the frame-refresh budget.
  *
  * A timeout is treated like every other upstream miss so the caller can
  * continue through the Street View and synthetic fallback chain. `fetchImpl`
  * and `timeoutMs` are injectable only to keep the timeout contract unit-testable.
+ *
+ * Most providers answer with an image body. TxDOT ITS instead answers JSON
+ * wrapping a base64 JPEG; that shape is decoded only for responses from the
+ * official TxDOT origin, so no other upstream can talk this proxy into
+ * treating a JSON body as an image.
  *
  * @param {string} url - Server-registered upstream image URL.
  * @param {object} [options]
@@ -4489,7 +4719,11 @@ export async function fetchCctvImageFromUpstream(url, {
       signal: controller.signal,
     });
     const contentType = upstream.headers.get('content-type') || '';
-    if (!upstream.ok || !contentType.startsWith('image/')) return null;
+    if (!upstream.ok) return null;
+    if (contentType.includes('json') && url.startsWith(`${TXDOT_ORIGIN}/`)) {
+      return decodeTxdotSnapshotPayload(await upstream.text());
+    }
+    if (!contentType.startsWith('image/')) return null;
     return {
       ok: true,
       body: Buffer.from(await upstream.arrayBuffer()),

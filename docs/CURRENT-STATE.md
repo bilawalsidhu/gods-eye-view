@@ -1618,7 +1618,7 @@ its criteria cannot be silently ignored.
 | Satellites | CelesTrak | `src/data/satellites.js` | `/api/celestrak` | 120s |
 | Space Missions (30d) | Launch Library 2 + CelesTrak | `src/data/rocketLaunches.js` | `/api/launches` + `/api/celestrak/active` | 5 min |
 | Traffic | OSM Overpass (+ optional TomTom live flow) | `src/data/traffic.js` | `/api/overpass` + `/api/tomtom` | viewport-driven |
-| CCTV | Austin + Caltrans (CA) + TfL London Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
+| CCTV | Austin + Caltrans (CA) + TfL London + TxDOT (TX) Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
 | Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
 | Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
 | Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |
@@ -1967,7 +1967,18 @@ silently demoting every later lookup for the session.
   default 36 → 250, hard bound 300), filtered to `camera_status === TURNED_ON` (~815 live of
   1,003 rows). City packs (2026-07-04): Caltrans (districts 4/7/11/3 — SF, LA, San Diego,
   Sacramento; cap 300) and TfL London JamCams (cap 250) join Austin (cap 250) as keyless default
-  sources — ~800 cameras total, all RAW PRIOR poses, stills-first.
+  sources — ~800 cameras total, all RAW PRIOR poses, stills-first. TxDOT ITS (2026-09-10)
+  adds a fourth keyless pack: Texas highway cameras, districts AUS/SAT/HOU/DAL/FTW by
+  default (`CCTV_TXDOT_DISTRICTS`, cap 300 via `CCTV_TXDOT_MAX_SOURCES`, `CCTV_TXDOT_ENABLED=0`
+  disables). 25 districts exist statewide (~4,370 cameras, ~4,060 online); only
+  `Device Online` rows register, because offline TxDOT devices keep serving a stale
+  frame that can be years old. Frames arrive as base64 JPEG inside a JSON body —
+  `decodeTxdotSnapshotPayload()` unwraps it, and `fetchCctvImageFromUpstream()` accepts
+  that shape ONLY from the official `its.txdot.gov` origin. Heading is parsed from an
+  explicit travel token in the camera name in STRICT mode (~7% of rows); the payload's
+  `dirDescription` is the ROADWAY's direction, not the camera's facing (249 of 282 Austin
+  rows read "North"), so it is deliberately unused — feeding it to `directionToHeading`
+  with `allowBare` would point most of the pack due north with high confidence.
 - **CCTV v3 UX — viewshed + calibration gizmo** (built 2026-07-05 and field
   validated 2026-07-21): the COVERAGE toggle is a
   tri-state cycle `OFF → ON → VIEWSHED`; viewshed mode renders each visible camera's frustum
@@ -2000,7 +2011,7 @@ silently demoting every later lookup for the session.
   2026-08-02): the LOD-selected nearby static cameras (20/28/40 by zoom,
   `cctvLod.js`) get **screen-space thumbnail cards** through the shared world-overlay host
   showing paced static frames — reselection on `camera.moveEnd` only, at most one frame fetch
-  per second layer-wide, per-source cadences (Austin 5 min, TfL/Caltrans 3 min). Zero-flicker:
+  per second layer-wide, per-source cadences (Austin 5 min, TfL/Caltrans/TxDOT 3 min). Zero-flicker:
   a card renders nothing until its first frame, a drawn frame persists through failed fetches,
   and eviction grace (2-pass/5 s) stops budget-edge churn. Camera icons stay visible at every
   zoom. Eligible candidates are filtered to in-view stills with valid IDs,

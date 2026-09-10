@@ -31,6 +31,8 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
   'austin transportation & public works': 5 * 60 * 1000,
   'transport for london': 3 * 60 * 1000,
   caltrans: 3 * 60 * 1000,
+  // TxDOT publishes roughly once a minute; 3 min matches the other highway packs.
+  txdot: 3 * 60 * 1000,
 });
 
 /**
