@@ -750,7 +750,7 @@ export function createAnnotationEngine({
       synthesized: Boolean(resolved.synthesized), // approximate buffered area → dashed render
       // Progressive outline: the anchor is placed, the footprint is still resolving —
       // the upgrade task fills ring/kind in place when it lands. Transient render state
-      // (not serialized to GeoJSON).
+      // (not persisted).
       pendingOutline: typeof resolved.resolveOutline === 'function',
       // Which THING + SHAPE was asked for — the dedup identity while geometry is still
       // pending (see findDuplicate). targetKey is the normalized place name with trailing
