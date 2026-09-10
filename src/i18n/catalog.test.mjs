@@ -18,7 +18,9 @@ import { SUPPORTED_LOCALES } from './locale.js';
  * in es, so a forgotten translation can no longer ship behind the English
  * fallback. The flip is recorded in ai_docs/i18n-ownership.md.
  */
-const REQUIRE_FULL_ES_PARITY = process.env.GEV_I18N_REQUIRE_FULL_ES_PARITY === '1';
+// Flipped to strict by the integrator on stage-3 completion: all four es
+// catalogs are fully translated (shell/cockpit/layers/setup).
+const REQUIRE_FULL_ES_PARITY = process.env.GEV_I18N_REQUIRE_FULL_ES_PARITY !== '0';
 
 const PLACEHOLDER_PATTERN = /\{([A-Za-z0-9_]+)\}/g;
 
