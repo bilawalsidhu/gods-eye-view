@@ -16,6 +16,7 @@ import {
 import {
   applyVesselOverlayPolicy,
   accentForVesselType,
+  displayVesselType,
   VESSEL_CARD_FADE_DISTANCE_M,
   VESSEL_LABEL_GRID_PX,
   VESSEL_OVERLAY_SOURCE_ID,
@@ -30,6 +31,7 @@ import {
   setOverlaySourceVisible,
 } from '../overlays/worldOverlay.js';
 import { ensureGeoidReady, geoidHeight } from './geoid.js';
+import { t } from '../i18n/index.js';
 import {
   registerSpriteCollection,
   restoreSpriteOrder,
@@ -58,7 +60,11 @@ const DEFAULT_ACTIVE_LABELS = 900;
 const REFRESH_MS = 60000;
 /** Bounded wait for the first accepted vessel position in one enabled session. */
 export const AIS_FIRST_CONNECT_GRACE_MS = 30000;
-const AIS_FIRST_CONNECT_LABEL = 'awaiting first AIS position…';
+// Resolved through t() at each use site: loading labels render through the
+// manager meta line, so they must track the active locale, not import time.
+function aisFirstConnectLabel() {
+  return t('layers.vessel.awaitingFirstPosition');
+}
 const VISIBILITY_UPDATE_MS = 800;
 /** Focus alpha alone samples faster inside the existing preRender pass. */
 const FOCUS_UPDATE_MS = 80;
@@ -650,7 +656,7 @@ const aisLiveVesselsLayer = {
       lastUpdate: state.lastUpdate,
       loading: state.loading || waitingForFirstPosition,
       loadingLabel: waitingForFirstPosition
-        ? AIS_FIRST_CONNECT_LABEL
+        ? aisFirstConnectLabel()
         : state.loadingLabel,
       error: state.error,
       stale: state.stale,
@@ -789,7 +795,7 @@ function beginAisSession() {
   state.firstConnectStartedAt = startedAt;
   state.firstConnectDeadline = startedAt + AIS_FIRST_CONNECT_GRACE_MS;
   state.error = null;
-  state.loadingLabel = AIS_FIRST_CONNECT_LABEL;
+  state.loadingLabel = aisFirstConnectLabel();
   scheduleFirstConnectExpiry(sessionId, AIS_FIRST_CONNECT_GRACE_MS);
 }
 
@@ -838,7 +844,7 @@ function markAisUnavailable(reason) {
 async function loadLivePositions(viewer) {
   if (!viewer || state.loading) return;
   state.loading = true;
-  state.loadingLabel = state.loaded ? 'refreshing...' : 'loading...';
+  state.loadingLabel = state.loaded ? t('layers.firms.refreshing') : t('layers.meta.loading');
   const requestController = new AbortController();
   const requestSessionId = state.sessionId;
   state.abort = requestController;
@@ -880,7 +886,7 @@ async function loadLivePositions(viewer) {
     if (state.abort === requestController && state.sessionId === requestSessionId) {
       state.loading = false;
       state.loadingLabel = state.firstConnectPhase === 'loading'
-        ? AIS_FIRST_CONNECT_LABEL
+        ? aisFirstConnectLabel()
         : '';
       state.abort = null;
     }
@@ -918,7 +924,7 @@ function applyAisFeedSnapshot(viewer, payload) {
       && isGraceEligibleTransport(snapshot.transportStatus)
     ) {
       state.error = null;
-      state.loadingLabel = AIS_FIRST_CONNECT_LABEL;
+      state.loadingLabel = aisFirstConnectLabel();
       return { reconciled: false, ...snapshot };
     }
     if (state.firstConnectPhase === 'loading') {
@@ -1789,9 +1795,13 @@ function updateSelectedVesselHud(record) {
   const stale = (record.missedRefreshes || 0) > 0;
   el.classList.add('active');
   el.textContent = [
-    `AIS: ${trimHudValue(record.name, 32)}`,
-    `${trimHudValue(record.type || 'VESSEL', 24)}  SPD: ${formatSpeed(record.speed)}  HDG: ${formatHeading(record.heading ?? record.course)}`,
-    `MMSI: ${record.mmsi || '--'}  ${formatPositionTime(record)}${stale ? '  · STALE' : ''}`,
+    t('layers.vessel.hudName', { name: trimHudValue(record.name, 32) }),
+    t('layers.vessel.hudTypeLine', {
+      type: trimHudValue(record.type || t('layers.vessel.fallback'), 24),
+      speed: formatSpeed(record.speed),
+      heading: formatHeading(record.heading ?? record.course),
+    }),
+    `MMSI: ${record.mmsi || '--'}  ${formatPositionTime(record)}${stale ? `  · ${t('layers.status.stale')}` : ''}`,
   ].join('\n');
 }
 
@@ -1799,7 +1809,7 @@ function resetSelectedVesselHud() {
   const el = document.getElementById('hud-ais-vessel');
   if (!el) return;
   el.classList.remove('active');
-  el.textContent = 'AIS: --';
+  el.textContent = t('layers.vessel.hudIdle');
 }
 
 function trimHudValue(value, maxLength) {
@@ -1846,14 +1856,14 @@ export function buildVesselCard(record) {
 export function buildSelectedVesselCard(record) {
   const direction = record.heading ?? record.course;
   const details = [[
-    vesselTypeShort(record) || 'VESSEL',
+    vesselTypeShort(record) || t('layers.vessel.fallback'),
     formatSpeed(record.speed),
     Number.isFinite(direction) ? `${Math.round(direction)}°` : '--°',
   ].join(' · ')];
   const destination = String(record.destination || '').trim();
   if (destination) details.push(`→ ${trimHudValue(destination, 24)}`);
   const stale = (record.missedRefreshes || 0) > 0;
-  details.push(`MMSI ${record.mmsi || '--'} · ${formatPositionTime(record)}${stale ? ' · STALE' : ''}`);
+  details.push(`MMSI ${record.mmsi || '--'} · ${formatPositionTime(record)}${stale ? ` · ${t('layers.status.stale')}` : ''}`);
   return {
     id: vesselOverlayEntryId(record),
     actionable: Boolean(record?.mmsi),
@@ -1879,7 +1889,7 @@ function vesselOverlayEntryId(record) {
 
 /** Uppercased, card-width-bounded AIS type (empty string when unknown). */
 function vesselTypeShort(record) {
-  return normalizeVesselType(record.type).toUpperCase().slice(0, 14);
+  return displayVesselType(record.type).toUpperCase().slice(0, 14);
 }
 
 /**
@@ -1904,7 +1914,7 @@ export function cardScreenSeparated(accepted, screen, minSepPx) {
 function displayVesselName(record) {
   const name = String(record.name || '').trim();
   if (name && name !== 'VESSEL' && name !== record.mmsi) return name;
-  return record.mmsi ? `MMSI ${record.mmsi}` : 'VESSEL';
+  return record.mmsi ? `MMSI ${record.mmsi}` : t('layers.vessel.fallback');
 }
 
 function formatSpeed(speed) {
@@ -1916,10 +1926,10 @@ function formatHeading(heading) {
 }
 
 function formatPositionTime(record) {
-  if (!record.lastPositionUtc) return 'POS: LIVE';
+  if (!record.lastPositionUtc) return t('layers.vessel.posLive');
   const date = new Date(record.lastPositionUtc);
-  if (Number.isNaN(date.getTime())) return 'POS: LIVE';
-  return `POS: ${date.toISOString().slice(11, 19)}Z`;
+  if (Number.isNaN(date.getTime())) return t('layers.vessel.posLive');
+  return t('layers.vessel.posAt', { time: date.toISOString().slice(11, 19) });
 }
 
 function setVisible(show) {

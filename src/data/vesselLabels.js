@@ -4,6 +4,8 @@
  * after the vessel cards moved out of their dedicated canvas renderer.
  */
 
+import { t } from '../i18n/index.js';
+
 export const VESSEL_OVERLAY_SOURCE_ID = 'ais-live-vessels';
 /** Existing selector grid size; one ambient winner is retained per cell. */
 export const VESSEL_LABEL_GRID_PX = 118;
@@ -36,6 +38,43 @@ const NUMERIC_TYPE_SPECIALS = {
 const NUMERIC_TYPE_FAMILIES = {
   4: 'HIGH-SPEED', 6: 'PASSENGER', 7: 'CARGO', 8: 'TANKER', 9: 'OTHER',
 };
+
+// Display keys for the normalized English type tokens above. The tokens stay
+// machine values — TYPE_STYLES matches on them and tests pin them — so card
+// text translates only through this map at the presentation boundary.
+const TYPE_DISPLAY_KEYS = Object.freeze({
+  'FISHING': 'layers.vessel.type.fishing',
+  'TOWING': 'layers.vessel.type.towing',
+  'DREDGER': 'layers.vessel.type.dredger',
+  'DIVE OPS': 'layers.vessel.type.diveOps',
+  'MILITARY': 'layers.vessel.type.military',
+  'SAILING': 'layers.vessel.type.sailing',
+  'PLEASURE': 'layers.vessel.type.pleasure',
+  'PILOT': 'layers.vessel.type.pilot',
+  'SAR': 'layers.vessel.type.sar',
+  'TUG': 'layers.vessel.type.tug',
+  'PORT TENDER': 'layers.vessel.type.portTender',
+  'ANTI-POLLUTION': 'layers.vessel.type.antiPollution',
+  'LAW ENFORCE': 'layers.vessel.type.lawEnforce',
+  'MEDICAL': 'layers.vessel.type.medical',
+  'HIGH-SPEED': 'layers.vessel.type.highSpeed',
+  'PASSENGER': 'layers.vessel.type.passenger',
+  'CARGO': 'layers.vessel.type.cargo',
+  'TANKER': 'layers.vessel.type.tanker',
+  'OTHER': 'layers.vessel.type.other',
+});
+
+/**
+ * Card-display form of a normalized AIS type: known tokens translate through
+ * the catalog; free-text types and unknown codes render unchanged.
+ * @param {string} type Raw AIS type.
+ * @returns {string}
+ */
+export function displayVesselType(type) {
+  const normalized = normalizeVesselType(type);
+  const key = TYPE_DISPLAY_KEYS[normalized.toUpperCase()];
+  return key ? t(key) : normalized;
+}
 
 /**
  * Resolve an AIS type to display text: bare numeric ship-type codes map to

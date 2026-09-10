@@ -335,4 +335,53 @@ export default {
   'brief.wind.dirUnknown': 'DIR UNKNOWN',
   'brief.cloudTemplate': 'CLOUD {pct}%',
   'brief.cloudUnknown': 'CLOUD UNKNOWN',
+
+  // ── Phase-3 runtime extraction batch 3: toasts, loading helpers, map tray ─
+  // UNTRANSLATED STAGE-3 SEED: same keys and English values as en/cockpit.js
+  // until stage 4.
+
+  // Panel-chrome + share/location toasts.
+  'panel.layoutResetToast': 'Panel layout updated — positions reset to new defaults',
+  'share.toastCopied': 'Link copied!',
+  'share.toastCopyFailed': 'Copy failed',
+  'location.toastNotFound': 'Location not found',
+  'location.toastSearchFailed': 'Search failed',
+  'location.toastFlyToPoiFirst': 'Fly to a POI first',
+  'actions.clearLayersBusyAria': 'Clearing selected data layers',
+  'actions.clearLayersFailedToast': 'Selected data layers could not be cleared',
+
+  // Global status chip notices (_handleShareTrackingRestoreStatus).
+  'status.acquiring': 'ACQUIRING',
+  'status.subjectFallback': 'entity',
+  'status.sharedSubjectDetail': 'SHARED {subject}',
+  'status.sharedFollowExpired': 'Shared {subject} follow expired',
+  'status.sharedRestoreFailed': 'Shared {subject} could not be restored — feed unavailable',
+  'status.sharedUnavailable': 'Shared {subject} is unavailable',
+
+  // Context mode user-facing action failures.
+  'context.modeContext': 'Context',
+  'context.modeSpaceMissions': 'Space Missions',
+  'context.toastStartBlocked': '{mode} could not start because another layer did not stop cleanly',
+  'context.toastTransitionFailedContacts': 'Contacts could not complete the requested transition; try again',
+  'context.toastTransitionFailedMissions': 'Space Missions could not complete the requested transition; try again',
+  'context.toastInstallationsRefreshFailed': 'Nearby installations could not be refreshed; try again',
+  'context.toastRestoreFailed': 'Context could not restore every layer; try again',
+  'context.toastZoomToSearch': 'Zoom in to search mapped installations',
+  'context.toastInstallationsRefreshed': 'Nearby installations refreshed',
+  'context.toastLayerUnavailable': 'That layer is unavailable in the current Context mode',
+  'context.actionStart': 'start',
+  'context.actionStop': 'stop',
+  'context.toastLayerLifecycleFailed': '{layerId} could not {action} cleanly',
+  'radio.toastLifecycleFailed': 'Radio could not {action} cleanly',
+
+  // CCTV sync chip captions + calibration/availability toasts.
+  'cctv.syncLoadingFrames': 'loading frames',
+  'cctv.syncGridReady': 'camera grid ready',
+  'cctv.toastCalibrationSaved': 'CCTV calibration saved',
+  'cctv.toastCalibrationReset': 'CCTV calibration reset',
+  'cctv.toastLayerUnavailable': 'CCTV layer unavailable',
+
+  // _renderMapStackState(): status chip fallback when no stack label resolves
+  // (stack names themselves are keep-English provider/stack ids).
+  'presets.mapStackFallback': 'MAP',
 };

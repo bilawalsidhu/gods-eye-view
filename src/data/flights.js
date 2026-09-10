@@ -41,6 +41,7 @@ import {
   cameraPoseSignature,
 } from './iconOrientation.js';
 import { stickyText, stickyNumber } from './aircraftMeta.js';
+import { t } from '../i18n/index.js';
 import { classifyAircraft, CLASS_SCALE_2D, CLASS_SCALE_3D, CLASS_MODEL_URL, CLASS_MODEL_REAL } from './aircraftClass.js';
 import { modelAnchorWorld, modelVisualAnchor, trailAnchorForModel, trailHeadStart, visualCenterForModel } from './modelVisualAnchor.js';
 import { aircraftIcon, TRACKED_ICON_PX } from './aircraftIcons.js';
@@ -3280,7 +3281,7 @@ function _trackedLabelText(icao24) {
   const altFt = Math.round((info.altitude || 0) * 3.28084);
   const fl = altFt >= 18000 ? `FL${Math.round(altFt / 100)}` : `${altFt} ft`;
   const spd = info.velocity ? `${Math.round(info.velocity * 1.944)} kts` : '';
-  const stale = (_missingPolls.get(icao24) || _backoff) ? 'STALE' : '';
+  const stale = (_missingPolls.get(icao24) || _backoff) ? t('layers.status.stale') : '';
   const lines = [[cs, fl, spd, stale].filter(Boolean).join(' · ')];
   // Converted contacts report their class as TR-3B and nothing else — the
   // operator/type identity is exactly what the Easter egg is replacing.

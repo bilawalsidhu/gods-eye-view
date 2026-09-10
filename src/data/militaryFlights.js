@@ -54,6 +54,7 @@ import {
   applyAircraftModelTreatment,
 } from './aircraftRecession.js';
 import { refreshTrackedReadout, trackedLabelModelFromText } from './trackedReadout.js';
+import { t } from '../i18n/index.js';
 import {
   clearTrackedSubjectContext,
   refreshTrackedSubjectContext,
@@ -666,7 +667,7 @@ function _toCleanText(value) {
  * @returns {string} Formatted altitude string (e.g. "35000 ft" or "Alt unknown")
  */
 function _formatAltitude(altitudeFt) {
-  if (!Number.isFinite(altitudeFt)) return 'Alt unknown';
+  if (!Number.isFinite(altitudeFt)) return t('layers.readout.altUnknown');
   return `${Math.round(altitudeFt)} ft`;
 }
 
@@ -702,13 +703,13 @@ function _likelyLanded(icao24) {
  * @returns {string} Newline-separated label text
  */
 function _buildTrackedLabel(info, icao24) {
-  const stale = (_missingPolls.get(icao24) || _backoff) ? ' · STALE' : '';
+  const stale = (_missingPolls.get(icao24) || _backoff) ? ` · ${t('layers.status.stale')}` : '';
   const callsign = (_toCleanText(info?.callsign) || _toCleanText(info?.registration) || icao24) + stale;
   // Converted contacts report their class as TR-3B — that override is exactly
   // what the Easter egg replaces the real type with.
-  const type = tr3bTypeLabel(icao24, _toCleanText(info?.type) || 'Type unknown');
-  const registration = _toCleanText(info?.registration) || 'Reg unknown';
-  const operator = _toCleanText(info?.operator) || 'Operator unknown';
+  const type = tr3bTypeLabel(icao24, _toCleanText(info?.type) || t('layers.readout.typeUnknown'));
+  const registration = _toCleanText(info?.registration) || t('layers.readout.regUnknown');
+  const operator = _toCleanText(info?.operator) || t('layers.readout.operatorUnknown');
   const altitude = _formatAltitude(info?.altitudeFt);
   const speedKt = info?.speedMps ? Math.round(info.speedMps * 1.944) : null;
   const tail = speedKt ? `${altitude} · ${speedKt} kt` : altitude;

@@ -162,6 +162,7 @@ export default {
   'vessel.hudIdle': 'AIS: --',
   'vessel.hudName': 'AIS: {name}',
   'vessel.hudTypeLine': '{type}  SPD: {speed}  HDG: {heading}',
+  'vessel.awaitingFirstPosition': 'awaiting first AIS position…',
 
   // index.html CCTV panel flipped-state siblings (runtime writers live in
   // src/ui.js, owned by core-ui — these keys are the layers-surface half of
@@ -358,7 +359,7 @@ export default {
   'satellites.class.commsBlurb': 'Broadband constellation shell — shown only in DENSE mode',
 
   // src/data/firmsHeatmap.js stats labels + fire/cell cards.
-  'firms.refreshing': 'refreshing...',
+  'meta.refreshing': 'refreshing...',
   'firms.keyRequired': 'KEY REQUIRED',
   'firms.staleCached': 'STALE · cached {age}',
   'firms.liveUpdated': 'LIVE · updated {age}',
