@@ -7,6 +7,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Fixed
 
+- On Windows, saving keys from Provider Settings no longer fails with "could
+  not restrict the credential file to your account" when the app was started
+  from PowerShell 7. The ACL verifier now runs Windows PowerShell with a
+  pinned built-in module path instead of inheriting the parent's
+  `PSModulePath`, which listed PowerShell 7 module folders that Windows
+  PowerShell cannot load.
 - Mapped-site outages show their scheduled retry countdown and distinguish
   known Overpass rate limits, timeouts, and query failures. Search feedback no
   longer claims a refresh succeeded while the layer is unavailable or loading.

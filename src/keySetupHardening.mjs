@@ -64,6 +64,17 @@ function resolveWindowsNativeTools(environment, fileSystem, architecture) {
       'powershell.exe',
     ),
   };
+  // The only module the verifier needs (Microsoft.PowerShell.Security) ships
+  // in the built-in Windows PowerShell module directory. Always System32, even
+  // under a 32-bit host: the spawned powershell.exe is the native 64-bit one
+  // and resolves System32 itself; Sysnative is only a 32-bit-process alias.
+  const powershellModules = path.win32.join(
+    systemRoot,
+    'System32',
+    'WindowsPowerShell',
+    'v1.0',
+    'Modules',
+  );
 
   try {
     const realpath = fileSystem.realpathSync.native || fileSystem.realpathSync;
@@ -86,7 +97,7 @@ function resolveWindowsNativeTools(environment, fileSystem, architecture) {
   } catch {
     return null;
   }
-  return expected;
+  return { ...expected, powershellModules };
 }
 
 /**
@@ -143,6 +154,14 @@ export function hardenCredentialFile(filepath, {
     // accept only three explicit FullControl allow principals, with inheritance
     // disabled. Any unexpected rule, right, command error, or missing principal
     // fails closed before the secret reaches disk.
+    //
+    // PSModulePath is pinned to the built-in Windows PowerShell module
+    // directory rather than inherited. A parent PowerShell 7 session exports a
+    // PSModulePath that lists its own module folders first; Windows PowerShell
+    // 5.1 then resolves Microsoft.PowerShell.Security to the PowerShell 7 copy,
+    // cannot load it, and Get-Acl fails — turning every panel save launched
+    // from pwsh into a false "could not restrict" failure. Pinning also keeps
+    // user-writable module directories out of the verifier's search path.
     const verified = spawn(tools.powershell, [
       '-NoProfile',
       '-NonInteractive',
@@ -150,6 +169,7 @@ export function hardenCredentialFile(filepath, {
     ], {
       env: {
         ...environment,
+        PSModulePath: tools.powershellModules,
         GEV_ACL_FILE: filepath,
         GEV_ACL_USER_SID: sid,
       },

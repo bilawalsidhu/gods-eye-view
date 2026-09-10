@@ -126,6 +126,60 @@ test('Windows hardening applies and then verifies the exact restricted DACL', ()
   assert.match(calls[2].args.at(-1), /seen\.Count -ne 3/);
 });
 
+test('Windows verifier pins PSModulePath to the built-in Windows PowerShell modules', () => {
+  const calls = [];
+  const pwsh7ModulePath = [
+    'C:\\Users\\alice\\Documents\\PowerShell\\Modules',
+    'C:\\Program Files\\PowerShell\\Modules',
+    'C:\\Program Files\\PowerShell\\7\\Modules',
+    `${WINDOWS_ROOT}\\system32\\WindowsPowerShell\\v1.0\\Modules`,
+  ].join(';');
+  const result = hardenCredentialFile('C:\\GEV\\.env.tmp', {
+    platform: 'win32',
+    environment: { SYSTEMROOT: WINDOWS_ROOT, PSModulePath: pwsh7ModulePath, KEEP: 'yes' },
+    fileSystem: windowsFileSystem(),
+    spawn(command, args, options) {
+      calls.push({ command, args, options });
+      if (command.endsWith('\\whoami.exe')) {
+        return { status: 0, signal: null, stdout: `"WORKSTATION\\alice","${USER_SID}"\r\n` };
+      }
+      return { status: 0, signal: null };
+    },
+  });
+  assert.equal(result, true);
+  const verifier = calls.find(({ command }) => command.endsWith('\\powershell.exe'));
+  assert.equal(
+    verifier.options.env.PSModulePath,
+    `${WINDOWS_ROOT}\\System32\\WindowsPowerShell\\v1.0\\Modules`,
+    'a parent pwsh 7 PSModulePath must never reach Windows PowerShell 5.1',
+  );
+  assert.equal(verifier.options.env.KEEP, 'yes', 'other inherited variables stay intact');
+});
+
+test('32-bit Windows verifier still pins PSModulePath under System32, not Sysnative', () => {
+  const calls = [];
+  const result = hardenCredentialFile('C:\\GEV\\.env.tmp', {
+    platform: 'win32',
+    architecture: 'ia32',
+    environment: { SYSTEMROOT: WINDOWS_ROOT },
+    fileSystem: windowsFileSystem({ systemDirectory: 'Sysnative' }),
+    spawn(command, args, options) {
+      calls.push({ command, args, options });
+      if (command.endsWith('\\whoami.exe')) {
+        return { status: 0, signal: null, stdout: `"WORKSTATION\\alice","${USER_SID}"\r\n` };
+      }
+      return { status: 0, signal: null };
+    },
+  });
+  assert.equal(result, true);
+  const verifier = calls.find(({ command }) => command.endsWith('\\powershell.exe'));
+  assert.equal(verifier.command, `${WINDOWS_ROOT}\\Sysnative\\WindowsPowerShell\\v1.0\\powershell.exe`);
+  assert.equal(
+    verifier.options.env.PSModulePath,
+    `${WINDOWS_ROOT}\\System32\\WindowsPowerShell\\v1.0\\Modules`,
+  );
+});
+
 test('Windows hardening bypasses PATH-shadowed native ACL tools', () => {
   const commands = [];
   const result = hardenCredentialFile('D:\\GEV\\ENVIRONMENT.tmp', {
