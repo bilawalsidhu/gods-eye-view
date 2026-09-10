@@ -1580,7 +1580,9 @@ Historical planning documents may not match runtime behavior.
 - Voice map whiteboard annotations in `src/annotations/`
 - 3D aircraft/model tracking surfaces in `src/data/flights.js` and `src/data/militaryFlights.js`
 - Detection overlay and tracked-target readout in `src/data/detection.js`, `src/data/detectionDraw.js`, and `src/data/trackedReadout.js`
-- Proxy middleware and API wiring in `vite.config.js`
+- Proxy middleware and API wiring in `vite.config.js` (dev) with the Cloudflare Pages Functions mirror in `functions/api/` (production); the two must keep identical contracts
+- PWA: `vite-plugin-pwa` precache + service worker (offline CSR boot shell)
+- FIRMS 100k-point renderer in Rust→WASM (`rust/firms-renderer/`, served from `public/wasm/`, loaded dynamically by `src/data/firmsHeatmap.js`)
 
 ### Active Data Layers in Runtime
 
@@ -1592,7 +1594,7 @@ its criteria cannot be silently ignored.
 | Layer | Source | File | Proxy | Update Interval |
 |-------|--------|------|-------|-----------------|
 | Live Flights ✈️ | OpenSky Network; bounded adsb.lol regional fallback | `src/data/flights.js` | `/api/opensky` (OAuth + fallback) | 30s |
-| Military Flights 🎖️ | adsb.lol /v2/mil | `src/data/militaryFlights.js` | `/api/adsblol/mil` | 15s |
+| Military Flights 🎖️ | adsb.lol /v2/mil | `src/data/militaryFlights.js` | `/api/adsblol` (layer); `/api/adsblol/mil` (known-mil registry) | 15s |
 | Live AIS Vessels 🚢 | AISStream websocket | `src/data/aisLiveVessels.js` | `/api/ais-live` | 60s (+800ms visibility pass) |
 | Mapped Installations ⌖ | OpenStreetMap mapped context; on-demand Google Maps Places supplement | `src/data/militaryInstallations.js` | `/api/military-installations`, `/api/google/text-search` | viewport-driven + user search; while unavailable, auto-retry 30 s → 240 s backoff |
 | Earthquakes | USGS | `src/data/earthquakes.js` | — | 60s |
@@ -2565,7 +2567,8 @@ Replay transport uses one Play/Pause toggle plus Cancel. During ascent only the 
 - `tools/streetview-headings.mjs`: heading sweep capture; supports neighbor traversal.
 - `tools/pano-pinhole.mjs`: equirectangular-to-pinhole reprojection.
 - `tools/sat-ortho.mjs`: Map Tiles ortho stitch and centered crop with georef corners.
-- `scripts/track-regression.mjs`: headless real-app regression harness for aircraft tracking/model/detection invariants (`npm run test:track`).
+- `scripts/track-regression.mjs`: headless real-app regression harness for aircraft tracking/model/detection invariants (`npm run test:track`). Its synthetic fleet shims BOTH `/api/adsblol` and `/api/adsblol/mil`, and its catalog phases purge the `tleCache.js` localStorage tier so shimmed TLE mutations actually reach the layer.
+- `scripts/lib/webglLaunchArgs.mjs`: shared Chrome launch args for every browser harness — `--use-angle=metal` on macOS, ANGLE/SwiftShader elsewhere (`--enable-unsafe-swiftshader` required from Chrome 137). Harnesses must not hard-code a platform-specific ANGLE backend.
 - `scripts/qa-map-source-tray.mjs`: browser proof for the four-source Map Source
   tray — presentation, keyboard disclosure, responsive bounds, unpinned
   auto-dismiss, ACQUIRING status, and retired/unknown stack-id restore

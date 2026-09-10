@@ -3,7 +3,74 @@
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
-## [Unreleased] — 2026-08-29
+## [0.7.0] — 2026-09-10
+
+### Added
+
+- Added a PWA surface (`vite-plugin-pwa`): precached app shell + service
+  worker so the globe client boots offline-first; precache manifest excludes
+  what can lazy-load.
+- Added the FIRMS 100k-point renderer in Rust compiled to WASM
+  (`rust/firms-renderer/`, Gaussian-splat style accumulation), bundled under
+  `public/wasm/firms-renderer/` and loaded dynamically by the FIRMS layer,
+  with a canvas fallback when WASM is unavailable.
+- Added production Pages Functions for FIRMS (`functions/api/firms.js`:
+  keyed 3-source sweep with post-filter tallies, Cache API freshness, and
+  stale-on-upstream-failure) and TomTom flow tiles
+  (`functions/api/tomtom.js`: dev-parity routes, tile bounds validation,
+  120 s single-flight cache, per-isolate daily budget serving stale tiles
+  over budget, and a no-key-in-any-response invariant).
+
+### Security
+
+- Replaced the open `/api/tomtom` forwarder — it relayed ANY path on
+  api.tomtom.com with the account key appended and a nonexistent upstream
+  path (an open, billable proxy that was also simply broken).
+- `/api/realtime/token` is now POST-only with an Origin-host same-origin
+  guard (dev middleware, Pages Function, and client aligned): a cross-site
+  simple GET could previously mint billable OpenAI sessions with no
+  preflight.
+- `/api/realtime/debug-log` no longer lets a client-supplied `loggedAt`
+  spoof the server timestamp (record nested, line built with
+  `JSON.stringify`) and sits behind the opt-in rate limiter.
+- Layer-toggle panel rows are built with `textContent` instead of
+  `innerHTML` interpolation.
+
+### Accessibility
+
+- CCTV ambient cards enter the world-overlay accessible mirror
+  (`accessibilityLabel` + `activate`).
+- The boot fly-in respects `prefers-reduced-motion` (shared helper).
+- Voice button state is carried by `aria-pressed` and a `role="status"`
+  live region; orbit indicator state is text-carried before the class
+  toggle inside a live region; the scene-shot label is a real `<button>`.
+- Global keyboard shortcuts ignore Ctrl/Meta/Alt; `--text-dim` raised to
+  5.3:1 (WCAG AA); 7–8 px telemetry text bumped to 9 px; clipped mirror
+  buttons get an un-clipped `:focus-visible` style.
+
+### Fixed
+
+- Fixed the military flights layer ingesting nothing in dev: it polls bare
+  `/api/adsblol`, but only `/api/adsblol/mil` had a dev middleware, so the
+  SPA fallback answered the layer with `index.html`. The dev server now
+  serves the same cached feed on both paths (Pages already did via
+  `functions/api/adsblol.ts`).
+- Fixed every `qa-*` browser harness on Linux: Chrome was launched with
+  the macOS-only `--use-angle=metal`, leaving WebGL uninitialized. The
+  platform choice now lives in `scripts/lib/webglLaunchArgs.mjs`.
+- Fixed track-regression harness integrity (`100 passed / 0 failed / 0
+  skipped`): the military synthetic-fleet shim pointed at the registry
+  endpoint instead of the layer's feed, the TLE browser cache served
+  catalog phases instead of the shimmed mutations, the `sampleHeight`
+  bound pinned an environment-dependent absolute count, and keyboard
+  interactions raced fixed sleeps (same treatment for the Map Source tray
+  QA, now 4/4 stable, with honest environment-bound skips).
+- Removed verified-dead code (8 unused exports, the orphaned
+  `labelSolve.worker.js`, the dead `flyToPreset` preset table) and
+  corrected doc drift in `CLAUDE.md`, `apiEndpoints.js`, and this file's
+  previous entries (see `docs/PLAN.md` Phase 7 for the full ledger).
+
+## [Unreleased]
 
 ### Added
 
