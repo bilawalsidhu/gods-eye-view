@@ -31,6 +31,12 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
   'austin transportation & public works': 5 * 60 * 1000,
   'transport for london': 3 * 60 * 1000,
   caltrans: 3 * 60 * 1000,
+  // Amsterdam publishes camera POSITIONS but no imagery, so this pack's frame
+  // is always a fallback — a Street View still or the synthetic placeholder,
+  // neither of which changes between refreshes. The 5-minute default would
+  // re-bill a Street View Static request per camera to fetch the same picture,
+  // so this pack sits at the cadence ceiling instead.
+  'gemeente amsterdam': 20 * 60 * 1000,
 });
 
 /**

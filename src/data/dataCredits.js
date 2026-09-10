@@ -128,6 +128,13 @@ export const DATA_CREDITS = [
       'Contains OS data © Crown copyright and database rights.',
   },
   {
+    key: 'amsterdam-cctv',
+    html:
+      'CCTV camera positions (Amsterdam — no public frames): ' +
+      'Gemeente Amsterdam, Verkeer en Openbare Ruimte — ' +
+      '<a href="https://api.data.amsterdam.nl/v1/docs/datasets/verkeersinformatiesystemen.html" target="_blank" rel="noopener">data.amsterdam.nl</a>',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },

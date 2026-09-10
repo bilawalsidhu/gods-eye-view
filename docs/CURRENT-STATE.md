@@ -1618,7 +1618,7 @@ its criteria cannot be silently ignored.
 | Satellites | CelesTrak | `src/data/satellites.js` | `/api/celestrak` | 120s |
 | Space Missions (30d) | Launch Library 2 + CelesTrak | `src/data/rocketLaunches.js` | `/api/launches` + `/api/celestrak/active` | 5 min |
 | Traffic | OSM Overpass (+ optional TomTom live flow) | `src/data/traffic.js` | `/api/overpass` + `/api/tomtom` | viewport-driven |
-| CCTV | Austin + Caltrans (CA) + TfL London Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
+| CCTV | Austin + Caltrans (CA) + TfL London Open Data + Amsterdam camera register (positions only) + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
 | Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
 | Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
 | Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |
@@ -1968,6 +1968,39 @@ silently demoting every later lookup for the session.
   1,003 rows). City packs (2026-07-04): Caltrans (districts 4/7/11/3 — SF, LA, San Diego,
   Sacramento; cap 300) and TfL London JamCams (cap 250) join Austin (cap 250) as keyless default
   sources — ~800 cameras total, all RAW PRIOR poses, stills-first.
+- **Amsterdam camera register (2026-09-10) — the first POSITIONS-ONLY city
+  pack.** `loadAmsterdamSourcesFromOpenData` reads Gemeente Amsterdam's
+  keyless DSO-API asset register filtered to `objectSoort=Camera` (~390 rows:
+  mast traffic cameras plus the travel-time / environmental-zone / S100-ring
+  ANPR network), capped to the 250 nearest Dam square. Off with
+  `CCTV_AMSTERDAM_ENABLED=0`; optional `AMSTERDAM_DATA_API_KEY` rides as
+  `X-Api-Key` ahead of that platform's announced move to mandatory keys.
+  Two wire details are load-bearing: the request must ask for
+  `Accept: application/hal+json` (a plain `application/json` earns a 406 even
+  with `_format=json`), and `Accept-Crs: EPSG:4326` — the register is natively
+  Rijksdriehoek, whose six-figure metre coordinates would otherwise be read as
+  degrees. `isLikelyAmsterdamCoordinate` is the datum guard behind that
+  header: if the negotiation ever breaks the pack empties rather than
+  scattering cameras into the Atlantic. The register carries no bearing for
+  any camera, so every row takes the same headingless low-confidence RAW PRIOR
+  personality as TfL (id-hash heading, −18°/44°/145 m/8 m) and an ORTHOMETRIC
+  `groundElevationM: 2` for the polder city.
+  **Unlike every other pack these cameras have no frame URL** — Amsterdam
+  publishes where its public cameras are, not what they see — so `/api/cctv/frame`
+  falls through to Street View (keyed) or the synthetic `NO UPSTREAM CONFIGURED`
+  placeholder (keyless), and `/api/cctv/health` reports
+  `degraded`/`streetview`/`synthetic`. Nothing in the pack claims a live feed.
+  Because that fallback frame never changes between refreshes, the provider
+  registers at the 20-minute cadence ceiling in `cctvLod.js`
+  (`PROVIDER_STATIC_REFRESH_MS`) rather than the 5-minute default — at the
+  default, an ambient card ring over Amsterdam re-bills one Street View Static
+  request per camera to fetch the identical picture.
+  The live feeds that do exist around Amsterdam (Rijkswaterstaat's A10/A4/A9
+  cameras) are deliberately unused: their host serves `robots.txt: Disallow: /`
+  and 401s without a forged `Referer`. Adding the pack lifts the merged catalog
+  to 1050, so the default `CCTV_MAX_SOURCES` moves 900 → 1150 — the global cap
+  keeps the FIRST N of an ordered merge, so a cap under the per-pack sum
+  silently truncates the last pack in.
 - **CCTV v3 UX — viewshed + calibration gizmo** (built 2026-07-05 and field
   validated 2026-07-21): the COVERAGE toggle is a
   tri-state cycle `OFF → ON → VIEWSHED`; viewshed mode renders each visible camera's frustum
