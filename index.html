@@ -182,7 +182,7 @@
     <aside id="cockpit-context" class="cockpit-context-window" aria-label="Contact cockpit summary" data-i18n-aria-label="cockpit.context.panelAriaLabel" hidden>
       <header class="cockpit-context-header">
         <div>
-          <span class="cockpit-context-kicker" data-i18n="cockpit.context.kicker">CONTACT</span>
+          <span class="cockpit-context-kicker">CONTACT</span>
           <strong id="cockpit-context-subject" data-i18n="cockpit.context.subjectWindow">CONTACTS · 250 KM</strong>
         </div>
         <nav class="cockpit-context-actions" aria-label="Contact navigation" data-i18n-aria-label="cockpit.context.navAriaLabel">
@@ -252,7 +252,7 @@
       <header class="cockpit-signal-header">
         <div class="cockpit-brief-heading">
           <span id="cockpit-brief-kicker" class="cockpit-signal-kicker"><i aria-hidden="true"></i> LIVE SIGNALS</span>
-          <strong id="cockpit-brief-subtitle">OBSERVED / MAPPED PINGS</strong>
+          <strong id="cockpit-brief-subtitle" data-i18n="cockpit.brief.subtitle">OBSERVED / MAPPED PINGS</strong>
         </div>
         <nav class="cockpit-brief-actions" aria-label="Cockpit briefing controls" data-i18n-aria-label="cockpit.brief.actionsAriaLabel">
           <button id="cockpit-brief-previous" type="button" aria-label="Previous briefing page" title="Previous briefing page" data-i18n-aria-label="cockpit.brief.previousAriaLabel" data-i18n-title="cockpit.brief.previousTitle">
@@ -493,6 +493,14 @@
         <span class="panel-title"><span class="dock-label-icon dock-label-icon-presets" aria-hidden="true"></span>VISUAL PRESETS</span>
         <span class="panel-divider"></span>
       </button>
+      <!-- Language selector: STATIC MARKUP ONLY (phase 2). The click →
+           persistLocaleAndReload wiring and pressed-state sync belong to the
+           phase-3 core-ui worker; aria-pressed reflects the English default
+           until that sync lands. -->
+      <div class="dock-locale-switch" role="group" data-i18n-aria-label="shell.locale.groupAriaLabel">
+        <button type="button" class="dock-locale-btn active" data-locale="en" aria-pressed="true" data-i18n-aria-label="shell.locale.english.ariaLabel">EN</button>
+        <button type="button" class="dock-locale-btn" data-locale="es" aria-pressed="false" data-i18n-aria-label="shell.locale.spanish.ariaLabel">ES</button>
+      </div>
       <div id="control-panel-popover" class="dock-popover-content">
       <button class="dock-pin-btn" data-pin-target="control-panel" type="button" aria-label="Pin visual presets" aria-pressed="false" title="Keep visual presets open" data-i18n-aria-label="cockpit.presets.pinAriaLabel" data-i18n-title="cockpit.presets.pinTitle"><img src="/pin.svg" alt="" /></button>
       <div id="style-buttons" class="button-grid">
@@ -847,7 +855,7 @@
          — including the unspaced em dash. The arc it has to carry: this looks
          like something you should not have access to → the sources are all
          public → the data is real. Tile subcopy stays purely functional. -->
-    <p id="first-run-description" data-i18n="setup.firstRun.description">It feels like a forbidden cockpit—then you realize the sources are public and the data is real.</p>
+    <p id="first-run-description">It feels like a forbidden cockpit—then you realize the sources are public and the data is real.</p>
     <div class="first-run-choices">
       <button type="button" data-first-run-choice="contacts">
         <span class="material-symbols-outlined" aria-hidden="true">radar</span>

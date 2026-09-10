@@ -121,6 +121,34 @@ markup; `<namespace>.<flow>.<state>` for runtime states; plurals as
 `{ one, other }` objects with a `{count}` placeholder; interpolation with
 `{camelCase}` names.
 
+### Runtime-only static sites (phase-2 exceptions)
+
+These index.html strings have catalog keys but NO static `data-i18n*`
+attribute: an existing exact-string test pins the tag verbatim, so the
+runtime write is the only legal localization point. The phase-3 surface
+worker wires these keys at the runtime write and updates the pinning test in
+the same commit.
+
+| Key | Static site | Pinned by | Runtime localization point |
+| --- | --- | --- | --- |
+| `cockpit.context.kicker` | `.cockpit-context-kicker` (185) | `cockpitMarkup.test.mjs` (`class="cockpit-context-kicker">CONTACT<`) | `ui.js` cockpit context renderer |
+| `setup.firstRun.description` | `#first-run-description` (850) | `firstRunExperience.test.mjs` (owner-verbatim line) | `firstRunExperience.js` description write |
+
+Other key-only sites (nested markup or pinned literals, value seeded, no
+attribute): `cockpit.presets.title` (dock-label-icon span),
+`cockpit.presets.mapSourceLabel` + `cockpit.presets.mapSourceChipsAriaLabel`
+(`mapStackChips.test.mjs` pins), `cockpit.display.title`
+(`panelStackLayout.test.mjs` pins), `cockpit.brief.kicker` (live-dot `<i>`),
+`cockpit.location.toolbarLabel` (dock-label-icon span),
+`layers.radio.bandLabel` (`radioMarkup.test.mjs` pins).
+
+Deferred to phase-3 core-ui (no key yet, static site carries markup the
+attribute write would destroy): `#context-mode-standby` description text —
+one span holding BOTH mode descriptions split by a literal `<br>`; split it
+into two keys at the runtime write. `.cockpit-help` (`ESC EXIT · C TOGGLE`)
+— keyboard-key syntax around a styled separator span; treat keys as machine
+values and localize only the words if at all.
+
 ## Keep-English boundary (never catalog these)
 
 - **Internal layer IDs and registry keys** — `military-installations`,
