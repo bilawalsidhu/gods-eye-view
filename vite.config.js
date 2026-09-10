@@ -3560,12 +3560,22 @@ const TXDOT_DISTRICTS = new Set([
   'ABL', 'AMA', 'ATL', 'AUS', 'BMT', 'BWD', 'BRY', 'CHS', 'CRP', 'DAL', 'ELP', 'FTW', 'HOU',
   'LRD', 'LBB', 'LFK', 'ODA', 'PAR', 'PHR', 'SJT', 'SAT', 'TYL', 'WAC', 'WFS', 'YKM',
 ]);
-/** Districts fetched by default: the five largest metro catalogs. All 25 would be
- * ~4,370 cameras — far past any sane cap — so this mirrors the Caltrans default of
- * a metro subset, overridable with CCTV_TXDOT_DISTRICTS. */
-const DEFAULT_TXDOT_DISTRICTS = 'AUS,SAT,HOU,DAL,FTW';
+/** Districts fetched by default: Austin only.
+ *
+ * Austin is this project's reference camera city — the default source file is
+ * `config/cctv_sources.austin.json`, the Austin pack anchors on AUSTIN_DOWNTOWN,
+ * and CCTV_FORCE_AUSTIN exists to pin to it. A statewide default works against
+ * that: the whole-Texas catalog is ~4,370 cameras, and because per-pack
+ * prioritization is nearest-to-any-anchor, Dallas's dense downtown cluster wins
+ * most slots — measured 47 Dallas against 4 Austin. Austin's own district
+ * (~253 online) is the useful default; CCTV_TXDOT_DISTRICTS opens up the rest
+ * ("AUS,SAT,HOU,DAL,FTW" for the five big metros, or any of the 25 codes). */
+const DEFAULT_TXDOT_DISTRICTS = 'AUS';
 const DEFAULT_TXDOT_MAX_SOURCES = 300;
-/** Prioritization anchors: downtown cores of the default districts. */
+/** Prioritization anchors: downtown cores of the metro districts a user can
+ * select. Only the anchors for fetched districts ever matter — cameras rank by
+ * distance to the NEAREST anchor, so listing all five keeps a widened
+ * CCTV_TXDOT_DISTRICTS ranking sensibly instead of against Austin alone. */
 const TXDOT_ANCHORS = [
   { lat: 30.2672, lon: -97.7431 }, // Austin
   { lat: 29.4241, lon: -98.4936 }, // San Antonio
@@ -4447,10 +4457,18 @@ async function refreshCctvSources() {
   // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
   //
   // Pack order also decides who loses to the global CCTV_MAX_SOURCES cap below,
-  // because the cap is a plain slice: TxDOT, last in this array, is the pack
-  // truncated when the catalog outgrows it. Every pack is distance-sorted before
-  // it arrives here, so the survivors are still the cameras nearest a metro core.
-  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromTxdot, ...fromFile, ...fromEnv];
+  // because that cap is a plain slice. The two AUSTIN-AREA packs therefore come
+  // first: the city's own cameras, then TxDOT's Austin-district highway cameras.
+  // Austin is the reference city, so it must not be the coverage that thins when
+  // the catalog outgrows the cap — before this ordering the Texas pack sat last
+  // and landed 4 Austin cameras out of 100 surviving rows.
+  //
+  // At defaults the catalog is ~1,050 against a 900 cap, so ~150 rows are cut
+  // from the tail (TfL). They are still the right ones to lose — every pack is
+  // distance-sorted before it arrives here, so survivors are the cameras nearest
+  // a metro core. Raising CCTV_MAX_SOURCES toward its 1200 bound seats every
+  // pack in full; lowering a per-pack cap rebalances without raising the total.
+  const merged = [...fromAustin, ...fromTxdot, ...fromCaltrans, ...fromTfl, ...fromFile, ...fromEnv];
 
   // Deduplicate by camera ID (last-write wins because of Map.set)
   const byId = new Map();

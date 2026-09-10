@@ -1968,9 +1968,16 @@ silently demoting every later lookup for the session.
   1,003 rows). City packs (2026-07-04): Caltrans (districts 4/7/11/3 — SF, LA, San Diego,
   Sacramento; cap 300) and TfL London JamCams (cap 250) join Austin (cap 250) as keyless default
   sources — ~800 cameras total, all RAW PRIOR poses, stills-first. TxDOT ITS (2026-09-10)
-  adds a fourth keyless pack: Texas highway cameras, districts AUS/SAT/HOU/DAL/FTW by
-  default (`CCTV_TXDOT_DISTRICTS`, cap 300 via `CCTV_TXDOT_MAX_SOURCES`, `CCTV_TXDOT_ENABLED=0`
-  disables). 25 districts exist statewide (~4,370 cameras, ~4,060 online); only
+  adds a fourth keyless pack: Texas highway cameras, **Austin district by default**
+  (`CCTV_TXDOT_DISTRICTS`, cap 300 via `CCTV_TXDOT_MAX_SOURCES`, `CCTV_TXDOT_ENABLED=0`
+  disables) — ~250 highway cameras that roughly DOUBLE Austin-area coverage alongside
+  the ~250 city cameras. A statewide default was rejected: per-pack prioritization is
+  nearest-to-any-anchor, so Dallas's dense downtown cluster took 47 slots against
+  Austin's 4. Merge order now places both Austin-area packs FIRST, so the reference
+  city never thins when the catalog outgrows `CCTV_MAX_SOURCES` (900 default, 1200
+  ceiling); at defaults the ~150-row trim falls on the TfL tail, and
+  `CCTV_MAX_SOURCES=1100` seats all four packs whole (1,054 rows).
+  25 districts exist statewide (~4,370 cameras, ~4,060 online); only
   `Device Online` rows register, because offline TxDOT devices keep serving a stale
   frame that can be years old. Frames arrive as base64 JPEG inside a JSON body —
   `decodeTxdotSnapshotPayload()` unwraps it, and `fetchCctvImageFromUpstream()` accepts

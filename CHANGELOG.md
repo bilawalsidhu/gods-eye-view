@@ -8,11 +8,18 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 ### Added
 
 - TxDOT highway cameras join the CCTV mesh as a fourth keyless source pack,
-  adding Texas coverage beyond the existing City of Austin cameras. Districts
-  default to Austin, San Antonio, Houston, Dallas, and Fort Worth
-  (`CCTV_TXDOT_DISTRICTS` selects others; 25 exist statewide, ~4,370 cameras).
-  Only cameras reporting `Device Online` are registered, so a dark device shows
-  the usual fallback instead of a frame that is months stale.
+  roughly doubling Austin-area coverage (~250 city cameras plus ~250 TxDOT
+  highway cameras). The district defaults to Austin; `CCTV_TXDOT_DISTRICTS`
+  selects others (25 exist statewide, ~4,370 cameras). Only cameras reporting
+  `Device Online` are registered, so a dark device shows the usual fallback
+  instead of a frame that is months stale.
+
+### Changed
+
+- Austin-area camera packs now claim registry slots before other metros, so the
+  reference city keeps full coverage when the catalog outgrows
+  `CCTV_MAX_SOURCES`. At default caps the London pack absorbs the trim; raising
+  `CCTV_MAX_SOURCES` (1200 ceiling) seats every pack in full.
 
 ### Fixed
 
