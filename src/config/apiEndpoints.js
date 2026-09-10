@@ -5,8 +5,8 @@
  *
  * Strategy:
  *  - In development (npm run dev): uses the local Vite proxy at /api/*
- *    The Vite dev server proxies /api/* requests to individual backend services
- *    running locally (wrangler dev on port 8787) or directly to upstream APIs.
+ *    The Vite dev server implements /api/* as native middlewares
+ *    (see vite.config.js) that broker keys and forward to upstream APIs.
  *    This keeps dev working without any external infrastructure.
  *
  *  - In production (npm run build → deployed to Cloudflare Pages):

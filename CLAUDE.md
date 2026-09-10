@@ -53,6 +53,7 @@ Each live layer is a separate module. All layers implement a common registration
 | Military flights | `militaryFlights.js` | adsb.lol |
 | Vessels | `aisLiveVessels.js` | AISStream (WebSocket) |
 | Satellites | `satellites.js` | CelesTrak (SGP4 propagation) |
+| Planets | `planets.js` | Computed ephemeris |
 | Earthquakes | `earthquakes.js` | USGS |
 | Traffic | `traffic.js` | TomTom tiles |
 | CCTV | `cctv.js` | City APIs (Austin, Caltrans, TfL) |
@@ -60,11 +61,14 @@ Each live layer is a separate module. All layers implement a common registration
 | Bikeshare | `bikeshare.js` | GBFS feeds |
 | Fire detection | `firmsHeatmap.js` | NASA FIRMS |
 | Rocket launches | `rocketLaunches.js` | Launch Library 2 |
+| Military installations | `militaryInstallations.js` | Overpass + Google Places (via proxy) |
+| Military awareness | `militaryAwareness.js` | Cross-layer fusion (adsb.lol/AIS/Overpass) |
 
-Bundled static data in `src/data/local_data/`: datacenters, dams, submarine cables.
+Bundled static data in `src/data/local_data/`: datacenters, dams, submarine cables, Natural Earth regions, neighborhoods.
 
 ### Voice System (`src/voice/`)
-- `gevRealtime.js` — OpenAI Realtime session management, 28 voice tools
+- `realtimeSession.js` — The 28 frozen voice-tool schemas + shared session config builder (used by both the dev proxy and the Pages Function)
+- `gevRealtime.js` — OpenAI Realtime session management (WebRTC, state machine, UI)
 - `gevActions.js` — Tool implementations (camera control, layer management, annotation)
 - `voiceCost.js` — Model selection and cost tracking
 
@@ -90,7 +94,7 @@ Voice whiteboard for drawing on the 3D world:
 Renders styled screen-space bounding boxes (brackets + callout labels) over tracked objects.
 Five-stop density profiles (OFF/SPARSE/BALANCED/DENSE). Uses a Canvas2D overlay on top of
 Cesium with a shared world-overlay host/lane architecture. The arbiter-based label placement
-runs on a 500ms throttle. Debug with `?detectDebug=1`.
+runs on a 125ms throttle (`LABEL_SOLVE_INTERVAL_MS`). Debug with `?detectDebug=1`.
 
 ### Overlays (`src/overlays/`)
 World-overlay host (`worldOverlay.js`) manages a z-ordered stack of canvas paint lanes.

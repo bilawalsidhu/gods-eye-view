@@ -268,6 +268,53 @@ Fixed here (2026-09-10):
 - [x] `node:fs` branches replaced with JSON import attributes in
       `naturalEarthRegions.js` / `neighborhoodPolygons.js` (PRs #112/#34).
 
+Deep review sweep (2026-09-10, three-agent pass: security / code-quality /
+accessibility), fixed here:
+
+- [x] `functions/api/tomtom` — the old `.ts` forwarder relayed ANY path on
+      api.tomtom.com with the account key appended (open, billable proxy,
+      `ACAO:*`) and built a nonexistent upstream path, so the flow layer was
+      broken on Pages anyway. Replaced with a full dev-parity rewrite:
+      `/status` + `/flow/{z}/{x}/{y}.pbf` routes, `isValidTileCoord` bounds
+      check, 120 s TTL cache with single-flight, per-isolate daily budget
+      (`TOMTOM_DAILY_TILE_BUDGET`, default 40 000, UTC rollover) that serves
+      stale tiles rather than a dead layer, empty-body = failed fetch, and a
+      no-key-in-any-response invariant. 11 tests.
+- [x] `/api/realtime/token` CSRF — a cross-site `<img>`/form GET could mint
+      billable OpenAI sessions (no preflight on simple requests). Now
+      POST-only + Origin-host same-origin guard, mirrored in the dev
+      middleware and the client (`gevRealtime.js` sends POST). 9 tests.
+- [x] `/api/realtime/debug-log` — client-supplied `loggedAt` could spoof the
+      server timestamp (spread into the log line). Now nested
+      `{loggedAt, record}` and behind the opt-in limiter
+      (`GEV_RATELIMIT_OPENAI_PER_MIN` → 429 + Retry-After), dev middleware
+      mirrored. Tests pin the nested shape and the spoof rejection.
+- [x] Layer-toggle panel `innerHTML` interpolation of layer names →
+      `textContent` (`manager.js`).
+- [x] Dead code removal (every ref verified before deletion — substring
+      greps lie: `flyToPreset` vs `flyToPresetLocation`): `resetAircraft-
+      RecessionParams`, `AIS_WATCHDOG_STATUSES`, `DENSITY_STOPS`,
+      `_normalizeName` alias, `isRadioCountryCode`, `getSceneRecipeById`,
+      `VOICE_MODEL_RATES_VERIFIED_ON`, `resetFocusDeemphasisParams`,
+      camera.js `flyToPreset`/`CAMERA_PRESETS`, and the orphaned
+      `labelSolve.worker.js` (262 lines, zero refs).
+- [x] CLAUDE.md drift: layer table missing planets/military installations/
+      military awareness rows, `local_data` list, voice-system description
+      (`realtimeSession.js` owns the frozen tool schemas), detection throttle
+      500 ms → 125 ms `LABEL_SOLVE_INTERVAL_MS`. Stale "wrangler dev on port
+      8787" claim removed from `apiEndpoints.js`; lying `.gitignore` entry
+      for tracked `wrangler.toml` removed.
+- [x] Accessibility batch: CCTV ambient cards gained `accessibilityLabel` +
+      `activate` so they enter the world-overlay accessible mirror; boot
+      fly-in (`flyToAustin`) respects `prefers-reduced-motion` (shared
+      helper from `cameraVerbs.js`); `--text-dim` raised to 5.3:1 (AA);
+      `.scene-shot-label` is now a real `<button>` (keyboard-reachable);
+      clipped mirror buttons get an un-clipped `:focus-visible` style;
+      `#intel-hud` marked `aria-hidden` (decorative telemetry duplicate);
+      voice button state carried by `aria-pressed` + a `role="status"`
+      live region; global keydown shortcuts ignore Ctrl/Meta/Alt combos;
+      orbit indicator text set before class toggle inside a live region.
+
 Open backlog, cheapest-first (re-verify each against this tree before
 acting — the audit described upstream's tree):
 
@@ -286,15 +333,19 @@ acting — the audit described upstream's tree):
       backing-store DPR (`worldOverlay.js`, ~19 MB at DPR 2). Each with a
       before/after measurement.
 - [ ] Security gate for key-bearing endpoints (PR #242, issues #16–#18,
-      #22–#24): same-site request gate for `/api/realtime/token`,
-      `/api/openai/hud-summary`, `/api/google/nearby-places`,
-      `/api/realtime/debug-log`; default-on rate limiting for exposed
-      deployments; server-side redaction/shape validation for debug-log
-      instead of browser-side. Note the CSP trap PR #242 verified: Knockout
+      #22–#24): REMAINING after the 2026-09-10 sweep — same-site request
+      gate for `/api/openai/hud-summary` and `/api/google/nearby-places`
+      (token + debug-log are done); default-on rate limiting for exposed
+      deployments (the opt-in `GEV_RATELIMIT_*` pattern exists); server-side
+      redaction/shape validation for debug-log beyond the nesting fix.
+      Note the CSP trap PR #242 verified: Knockout
       inside `@cesium/widgets` needs `'unsafe-eval'` in `script-src` or the
       widget never initializes. Extract the middleware out of
       `vite.config.js` (issue #41) first so these are testable per-module.
-      Apply the same review to `functions/api/**` (the audit never saw it).
+      The `functions/api/**` review happened (sweep above): tomtom forwarder
+      replaced, firms/ais-live/token/debug-log hardened; remaining
+      functions need the body-cap/bbox-clamp treatment (see backlog item
+      on Overpass/military-installations).
 - [ ] Split server-side Google key from the browser key (PR #110, issue #33):
       optional `GOOGLE_MAPS_SERVER_API_KEY` read as
       `SERVER_KEY || BROWSER_KEY` so a single-key setup keeps working.
