@@ -1,4 +1,5 @@
 import { governorRequestRender } from '../renderGovernor.js';
+import { keySetupRequirement } from '../keySetupCore.mjs';
 import { markDetectionSourcesChanged } from './detection.js';
 function cloneLayerParams(value) {
   if (Array.isArray(value)) return value.map(cloneLayerParams);
@@ -62,6 +63,28 @@ function refreshFailureFromStats(stats, label) {
     return new Error(`${label} refresh unavailable`);
   }
   return null;
+}
+
+/**
+ * Tooltip for a control that a missing provider key is holding back (#143).
+ *
+ * The registry in `keySetupCore.mjs` already owns what each key is called and
+ * which env vars enable it, so a layer only declares WHICH key it needs
+ * (`requiresKeyId`, the registry id — see `getAll()`) and reports
+ * `stats.keyRequired` while that key is absent. Naming the env var turns an
+ * unexplained dead control into a next step ("Needs FIRMS_MAP_KEY — add it in
+ * Provider Settings").
+ *
+ * An unnamed or unknown key returns '' rather than guessing: guidance that
+ * names the wrong env var sends the operator to the wrong provider.
+ *
+ * @param {object} [layer] Row from {@link DataLayerManager#getAll}.
+ * @returns {string} Tooltip text, or '' when no key guidance applies.
+ */
+export function layerKeyRequirementTooltip(layer = {}) {
+  if (layer?.stats?.keyRequired !== true) return '';
+  const requiresKeyId = String(layer.requiresKeyId || '').trim();
+  return requiresKeyId ? keySetupRequirement(requiresKeyId) : '';
 }
 
 /**
@@ -1923,6 +1946,10 @@ export class DataLayerManager {
         icon: entry.module.icon,
         source: entry.module.source,
         showInTogglePanel: entry.module.showInTogglePanel !== false,
+        // Registry id of the provider key this layer needs, if any (mirrors
+        // `showInTogglePanel`). The layer reports `stats.keyRequired` while
+        // that key is absent; the tooltip that names it is built from this id.
+        requiresKeyId: entry.module.requiresKeyId || null,
         enabled: entry.enabled,
         lifecycleState: entry.lifecycleState,
         lifecycleUncertain: entry.lifecycleUncertain,
@@ -2271,6 +2298,10 @@ export class DataLayerManager {
       ? layer.lifecycleState.toUpperCase()
       : (uncertain ? 'UNCERTAIN' : (layer.enabled ? FEED_STATE_LABELS[feedState] : 'OFF'));
     button.setAttribute('aria-label', `${layer.name}: ${button.textContent}`);
+    // Name the missing key on the control itself (#143): a row that reads
+    // "KEY REQUIRED" without saying WHICH key leaves the operator with a dead
+    // control and no next step. Empty when the layer needs no key, or has one.
+    button.title = layerKeyRequirementTooltip(layer);
   }
 
   _formatCount(n) {

@@ -11,7 +11,7 @@
 // headless. Run with: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DataLayerManager, layerFeedState } from './manager.js';
+import { DataLayerManager, layerFeedState, layerKeyRequirementTooltip } from './manager.js';
 import {
   contextSnapshotLayerIds,
   shouldCaptureContextSession,
@@ -1856,6 +1856,84 @@ test('layer metadata names degraded state instead of presenting an ordinary age'
       lastUpdate: 1,
     },
   }), 'UNAVAILABLE · CelesTrak · CelesTrak unreachable');
+});
+
+// #143 part 2 — a control a missing provider key holds back must name the
+// key. The registry in keySetupCore.mjs already knows every key's env vars, so
+// the manager only has to ask it; the layer declares WHICH key it needs.
+test('a key-gated layer names the missing key instead of leaving a dead control unexplained', () => {
+  const mgr = new DataLayerManager({});
+  assert.equal(
+    layerKeyRequirementTooltip({ requiresKeyId: 'firms', stats: { keyRequired: true } }),
+    'Needs FIRMS_MAP_KEY — add it in Provider Settings',
+  );
+  // A layer reporting a healthy feed never carries key guidance.
+  assert.equal(layerKeyRequirementTooltip({ requiresKeyId: 'firms', stats: { keyRequired: false } }), '');
+  assert.equal(layerKeyRequirementTooltip({ requiresKeyId: 'firms', stats: {} }), '');
+  // No declared key (or an id the registry does not know) must never invent a
+  // key name: guidance that names the wrong env var is worse than none.
+  assert.equal(layerKeyRequirementTooltip({ stats: { keyRequired: true } }), '');
+  assert.equal(layerKeyRequirementTooltip({ requiresKeyId: 'not-a-key', stats: { keyRequired: true } }), '');
+  assert.equal(layerKeyRequirementTooltip({}), '');
+  assert.equal(layerKeyRequirementTooltip(), '');
+  assert.equal(mgr._buildMetaText({ source: 'NASA FIRMS', stats: { keyRequired: true } }).includes('KEY'), false);
+});
+
+test('the toggle button carries the key guidance, and drops it once the key is configured', () => {
+  const mgr = new DataLayerManager({});
+  const makeButton = () => ({
+    classList: { toggle() {} },
+    dataset: {},
+    disabled: false,
+    textContent: '',
+    title: '',
+    setAttribute() {},
+  });
+
+  const gated = makeButton();
+  mgr._syncToggleButton(gated, {
+    name: 'Wildfires',
+    source: 'NASA FIRMS',
+    enabled: true,
+    lifecycleState: 'enabled',
+    requiresKeyId: 'firms',
+    stats: { keyRequired: true, count: 0, lastUpdate: null },
+  });
+  assert.equal(gated.title, 'Needs FIRMS_MAP_KEY — add it in Provider Settings');
+
+  const configured = makeButton();
+  mgr._syncToggleButton(configured, {
+    name: 'Wildfires',
+    source: 'NASA FIRMS',
+    enabled: true,
+    lifecycleState: 'enabled',
+    requiresKeyId: 'firms',
+    stats: { keyRequired: false, count: 42, lastUpdate: Date.now() },
+  });
+  assert.equal(configured.title, '', 'a configured key leaves no stale guidance on the control');
+});
+
+test('the row shape publishes a layer\'s declared key so the tooltip can be built', async () => {
+  const mgr = new DataLayerManager({});
+  mgr.register({
+    id: 'gated-layer',
+    name: 'Gated',
+    icon: '',
+    source: 'test',
+    requiresKeyId: 'firms',
+    async init() {},
+    enable() {},
+    disable() {},
+    async update() {},
+    getStats() { return { count: 0, lastUpdate: null, keyRequired: true }; },
+  });
+  // Stats only surface once the layer is initialized (_moduleStats returns an
+  // empty shape otherwise), so the row must be read after a real enable — the
+  // same path the panel takes for an operator who just switched the layer on.
+  await mgr.setEnabled('gated-layer', true, { origin: 'user' });
+  const row = mgr.getAll().find((layer) => layer.id === 'gated-layer');
+  assert.equal(row.requiresKeyId, 'firms');
+  assert.equal(layerKeyRequirementTooltip(row), 'Needs FIRMS_MAP_KEY — add it in Provider Settings');
 });
 
 test('uncertain lifecycle state overrides ordinary feed status without disabling reconciliation', () => {

@@ -193,6 +193,11 @@ export function createFirmsHeatmapLayer({
     name,
     icon,
     source,
+    // The one data-layer control a provider key gates: the proxy answers
+    // 503 {error:'no_key'} without FIRMS_MAP_KEY. Declared here as a
+    // KEY_SETUP_KEYS registry id (not an env-var string) so the data panel can
+    // name the key on the control via `layerKeyRequirementTooltip` (#143).
+    requiresKeyId: 'firms',
     // Live layer: the manager calls update() every 10 minutes while enabled,
     // which refetches through the /api/firms proxy (the proxy's 30 min TTL —
     // not this interval — is what protects the upstream FIRMS quota).
@@ -320,6 +325,11 @@ export function createFirmsHeatmapLayer({
         lastUpdate: _lastUpdate,
         loading: _loading,
         stale: _stale,
+        // Machine-readable keyless state, ahead of the human strings below.
+        // loadingFeedback.js and the data panel both read `keyRequired`, and
+        // without it "no FIRMS_MAP_KEY configured" is indistinguishable from a
+        // broken feed — the row reads as a fault instead of a next step (#143).
+        keyRequired: _keyRequired,
         error: _keyRequired ? 'KEY REQUIRED' : (_stale ? staleText : _error),
         loadingLabel,
       };
