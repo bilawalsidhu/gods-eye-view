@@ -4184,12 +4184,17 @@ function openAiRealtimeProxy() {
       }
 
       try {
+        // Opt-in per-IP throttle (Pages parity — the voice endpoints share
+        // GEV_RATELIMIT_OPENAI_PER_MIN). No-op when unset.
+        if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
         const body = await readRequestBody(req, REALTIME_DEBUG_LOG_MAX_BYTES);
         const record = JSON.parse(body || '{}');
         fs.mkdirSync(REALTIME_DEBUG_LOG_DIR, { recursive: true });
+        // Nested under `record` (Pages parity): a spread would let a
+        // client-supplied `loggedAt` override the server timestamp.
         fs.appendFileSync(REALTIME_DEBUG_LOG_FILE, `${JSON.stringify({
           loggedAt: new Date().toISOString(),
-          ...record,
+          record,
         })}\n`);
         res.statusCode = 204;
         res.end();
@@ -4201,10 +4206,23 @@ function openAiRealtimeProxy() {
     });
 
     middlewares.use('/api/realtime/token', async (req, res) => {
-      if (req.method !== 'GET' && req.method !== 'POST') {
+      if (req.method !== 'POST') {
         res.statusCode = 405;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ error: 'Method not allowed' }));
+        return;
+      }
+
+      // Same-origin guard (Pages parity): browsers attach Origin to every
+      // POST, so a cross-site drive-by mint is rejected outright. Absent
+      // Origin = non-browser client — allowed, throttled by the opt-in
+      // limiter instead.
+      const origin = req.headers.origin;
+      const hostOf = (value) => { try { return new URL(value).host; } catch { return ''; } };
+      if (origin && hostOf(origin) !== hostOf(`http://${req.headers.host || 'localhost'}`)) {
+        res.statusCode = 403;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'cross-origin token requests are rejected' }));
         return;
       }
 
