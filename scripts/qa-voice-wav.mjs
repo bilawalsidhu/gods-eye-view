@@ -32,8 +32,6 @@ const browser = await puppeteer.launch({
   headless: 'new',
   executablePath: puppeteer.executablePath(),
   args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
     '--disable-dev-shm-usage',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',

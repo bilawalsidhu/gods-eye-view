@@ -1216,7 +1216,7 @@ async function runBrowserGroup(record) {
     // page's main thread past puppeteer's 180 s default and turn a healthy
     // layer into a bogus "probe threw" FAIL.
     protocolTimeout: 420000,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--use-gl=angle', '--use-angle=swiftshader',
+    args: ['--use-gl=angle', '--use-angle=swiftshader',
       '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
       // C17 drives the keyless voice path, which asks for a microphone before
       // it mints a token. A fake device + auto-granted permission keeps the

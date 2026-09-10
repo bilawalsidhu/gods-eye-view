@@ -263,12 +263,9 @@ async function main() {
     browser = await puppeteer.launch({
       headless: 'new',
       args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
         '--use-gl=angle',
         '--use-angle=swiftshader',
         '--disable-dev-shm-usage',
-        '--disable-web-security',
         '--disable-background-timer-throttling',
         '--disable-renderer-backgrounding',
       ],

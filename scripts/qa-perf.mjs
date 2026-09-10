@@ -88,8 +88,6 @@ const browser = await puppeteer.launch({
   headless: 'new',
   protocolTimeout: 300_000,
   args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
     '--window-size=1440,900',
     // Never let background/occlusion throttling freeze rAF or timers — the
     // measurements below depend on an honest frame clock.

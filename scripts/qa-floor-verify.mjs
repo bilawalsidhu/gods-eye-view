@@ -32,7 +32,7 @@ const chrome = [
 
 const browser = await puppeteer.launch({
   headless: 'new', executablePath: chrome,
-  args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist', '--no-sandbox'],
+  args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage();
 await page.setViewport({ width: 1400, height: 900 });

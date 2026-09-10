@@ -642,8 +642,6 @@ async function main() {
     protocolTimeout: 300000,
     args: [
       ...(HEADFUL ? [] : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader']),
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',

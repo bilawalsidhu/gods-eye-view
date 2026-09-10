@@ -74,7 +74,7 @@ async function main() {
   const browser = await puppeteer.launch({
     headless: 'new',
     ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    args: [],
   });
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });

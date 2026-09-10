@@ -848,8 +848,6 @@ async function main() {
     headless: HEADFUL ? false : 'new',
     args: [
       ...(HARDWARE_GPU ? [] : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader']),
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
@@ -903,8 +901,8 @@ async function main() {
       gpuMode: HARDWARE_GPU ? 'hardware' : 'swiftshader',
       chromeExecutable: CHROME_EXECUTABLE,
       chromeArgs: HARDWARE_GPU
-        ? ['--no-sandbox']
-        : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader', '--no-sandbox'],
+        ? []
+        : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader'],
       sampleMs: SAMPLE_MS,
       captureMode: DIST_DIR ? `static-dist:${path.resolve(DIST_DIR)}` : 'dev-server',
     };

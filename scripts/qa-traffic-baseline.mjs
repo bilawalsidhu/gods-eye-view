@@ -301,8 +301,6 @@ async function main() {
     headless: HEADFUL ? false : 'new',
     ...(executablePath ? { executablePath } : {}),
     args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',

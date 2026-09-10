@@ -21,7 +21,7 @@ const browser = await puppeteer.launch({
   headless: 'new',
   protocolTimeout: 300_000,
   args: [
-    '--no-sandbox', '--disable-setuid-sandbox', '--window-size=1440,900',
+    '--window-size=1440,900',
     '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding',
     '--disable-background-timer-throttling',
   ],

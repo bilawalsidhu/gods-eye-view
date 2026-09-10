@@ -5,10 +5,17 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 PORT="${PORT:-4173}"
-# Local-only by default: the dev server brokers configured API keys, so it
-# should not be reachable from the network unless explicitly requested.
 # Only direct loopback access is supported.
 HOST="${HOST:-localhost}"
+case "${HOST}" in
+  localhost|127.0.0.1|::1) ;;
+  *) echo "Unsupported HOST=${HOST}: only loopback is allowed." >&2; exit 1 ;;
+esac
+if [[ ! "${PORT}" =~ ^[1-9][0-9]{0,4}$ ]] || (( PORT > 65535 )); then
+  echo "PORT must be an integer from 1 to 65535." >&2
+  exit 1
+fi
+
 # CCTV source packs (all keyless): Austin (~815 live upstream), Caltrans
 # districts 4,7,11,3 = SF/LA/San Diego/Sacramento (~1,860 live upstream),
 # TfL London JamCams (~870 live upstream). Caps keep the densest cores per
@@ -230,32 +237,17 @@ if ! grep -q "dataManager.register(cctvLayer)" src/main.js; then
   exit 1
 fi
 
-echo "Stopping all existing God's Eye View dev servers..."
-pkill -f "${ROOT_DIR}/node_modules/.bin/vite" >/dev/null 2>&1 || true
-pkill -f "${ROOT_DIR}/node_modules/vite/bin/vite.js" >/dev/null 2>&1 || true
-
-# Also clear the requested port in case it is held by a stale wrapper or a
-# server started through a different package-manager command.
-if command -v lsof >/dev/null 2>&1; then
-  PIDS="$(lsof -tiTCP:${PORT} -sTCP:LISTEN 2>/dev/null || true)"
-  if [[ -n "${PIDS}" ]]; then
-    echo "${PIDS}" | xargs kill -9 >/dev/null 2>&1 || true
-  fi
+# Refuse an occupied port; its owner may be an unrelated process.
+if command -v lsof >/dev/null 2>&1 && lsof -tiTCP:"${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "Port ${PORT} is already in use. Stop its server explicitly or choose another PORT." >&2
+  exit 1
 fi
 
 echo "Clearing Vite cache..."
 rm -rf node_modules/.vite
 
 echo "Starting fresh God's Eye View dev server..."
-case "${HOST}" in
-  localhost|127.0.0.1|::1)
-    echo "Local-only mode: reachable at http://localhost:${PORT}/"
-    ;;
-  *)
-    echo "Unsupported HOST=${HOST}: only localhost, 127.0.0.1, or ::1 is allowed." >&2
-    exit 1
-    ;;
-esac
+echo "Local-only mode: reachable at http://localhost:${PORT}/"
 echo "Google Maps key source: ${GOOGLE_MAPS_API_KEY_SOURCE}"
 echo "Tip: after server starts, hard refresh browser (Cmd+Shift+R)."
 echo "If panels are still missing, run this once in browser console:"
@@ -354,4 +346,4 @@ put_env_if_set LL2_API_TOKEN "${LL2_API_TOKEN}"
 put_env GEV_LAUNCHER "dev-fresh"
 put_env GEV_KEY_SETUP_EXTERNAL_KEYS "${KEY_SETUP_EXTERNAL_KEYS_CSV}"
 
-env ${DEV_UNSET[@]+"${DEV_UNSET[@]}"} "${DEV_ENV[@]}" "${DEV_COMMAND[@]}" --host "${HOST}" --port "${PORT}" --force
+env ${DEV_UNSET[@]+"${DEV_UNSET[@]}"} "${DEV_ENV[@]}" "${DEV_COMMAND[@]}" --host "${HOST}" --port "${PORT}" --strictPort --force

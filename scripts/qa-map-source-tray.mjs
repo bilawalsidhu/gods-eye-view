@@ -29,7 +29,7 @@ fs.mkdirSync(shotsDir, { recursive: true });
 const browser = await puppeteer.launch({
   headless: headful ? false : 'new',
   executablePath,
-  args: ['--use-angle=metal', '--enable-gpu', '--no-sandbox'],
+  args: ['--use-angle=metal', '--enable-gpu'],
 });
 const page = await browser.newPage();
 const failures = [];

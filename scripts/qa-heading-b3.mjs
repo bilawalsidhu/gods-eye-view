@@ -451,11 +451,8 @@ async function main() {
     headless: HEADFUL ? false : 'new',
     ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
     args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
       ...(HEADFUL ? [] : ['--use-gl=angle', '--use-angle=swiftshader']),
       '--disable-dev-shm-usage',
-      '--disable-web-security',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
       '--window-size=1280,800',

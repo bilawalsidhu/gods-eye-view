@@ -220,8 +220,6 @@ async function main() {
     headless: HEADFUL ? false : 'new',
     ...(executablePath ? { executablePath } : {}),
     args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
       ...(SWIFTSHADER
         ? ['--use-gl=angle', '--use-angle=swiftshader']
         : ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist']),

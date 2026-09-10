@@ -380,12 +380,9 @@ async function runBehaviorLayer() {
     headless: 'new',
     ...(CHROME_EXECUTABLE ? { executablePath: CHROME_EXECUTABLE } : {}),
     args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
       '--use-gl=angle',
       '--use-angle=swiftshader',
       '--disable-dev-shm-usage',
-      '--disable-web-security',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
       '--window-size=1500,950',

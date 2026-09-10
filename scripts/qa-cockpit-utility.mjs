@@ -20,7 +20,7 @@ const executablePath = chromeCandidates.find((candidate) => fs.existsSync(candid
 const browser = await puppeteer.launch({
   headless: headful ? false : 'new',
   ...(executablePath ? { executablePath } : {}),
-  args: ['--use-angle=metal', '--enable-gpu', '--no-sandbox'],
+  args: ['--use-angle=metal', '--enable-gpu'],
 });
 const page = await browser.newPage();
 const failures = [];

@@ -72,6 +72,36 @@ The dev server is a **key broker**: every server-side key above is spendable by 
   sharing value is therefore discarded rather than honored, and GEV starts on
   loopback only. Keep provider-side quotas as the spend backstop; remote access is not supported.
 
+## Optional development tools
+
+`scripts/dev-fresh.sh` refuses an occupied port and uses Vite's `--strictPort`.
+Stop an existing server explicitly before restarting it; the launcher does not
+terminate processes based on their listening port.
+
+QA scripts and `tools/cesium-render.mjs` keep Chromium's sandbox and browser
+same-origin checks enabled. Run them as an ordinary user in an environment that
+supports Chromium's sandbox. Provider CORS failures should be fixed at the
+provider or through an appropriate application proxy.
+
+`node scripts/shot-sink.mjs` starts an optional screenshot receiver on
+`127.0.0.1:4399`. It accepts the exact origin `http://localhost:4173`; set
+`GEV_SHOT_ORIGIN` to another loopback origin if needed. The terminal prints a
+random bearer token valid for that run. From the application's browser console:
+
+```js
+await fetch('http://127.0.0.1:4399/save?name=shot1', {
+  method: 'POST',
+  headers: { Authorization: 'Bearer <token printed by the sink>' },
+  body: document.querySelector('canvas').toDataURL('image/png'),
+});
+```
+
+The sink accepts PNG/JPEG data URLs, caps each request at 12 MiB and 15 seconds,
+and allows at most four active uploads. Its `qa-shots/height-datum` directory is
+limited to 128 files and 256 MiB, including files retained across restarts.
+Existing files are never overwritten. Remove screenshots when no longer needed
+and stop the receiver when finished.
+
 ## Scope & expectations
 
 - The Vite server is a **local development/preview** server without remote authentication. Keep it on loopback.

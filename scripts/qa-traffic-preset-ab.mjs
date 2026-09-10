@@ -161,8 +161,8 @@ async function main() {
     headless: 'new',
     ...(findChromeExecutable() ? { executablePath: findChromeExecutable() } : {}),
     args: [
-      '--no-sandbox', '--disable-setuid-sandbox', '--use-gl=angle', '--use-angle=swiftshader',
-      '--disable-dev-shm-usage', '--disable-web-security',
+      '--use-gl=angle', '--use-angle=swiftshader',
+      '--disable-dev-shm-usage',
       '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
       '--window-size=1600,900',
     ],

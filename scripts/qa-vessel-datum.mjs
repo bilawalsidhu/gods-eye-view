@@ -153,8 +153,6 @@ async function main() {
     headless: 'new',
     ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
     args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
       '--use-gl=angle',
       '--use-angle=swiftshader',
       '--disable-dev-shm-usage',

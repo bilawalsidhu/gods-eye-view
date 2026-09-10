@@ -61,8 +61,6 @@ const browser = await puppeteer.launch({
   headless: 'new',
   ...(CHROME_EXECUTABLE ? { executablePath: CHROME_EXECUTABLE } : {}),
   args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
     // Real GPU when the host has one: the dolly is frame-rate independent, but
     // a higher sample rate makes the roll and the ease ramps far easier to see.
     ...(process.platform === 'darwin'
