@@ -36,4 +36,15 @@ export default {
   'locale.groupAriaLabel': 'Language',
   'locale.english.ariaLabel': 'Switch to English',
   'locale.spanish.ariaLabel': 'Switch to Spanish',
+
+  // Phase-3 runtime extraction (mirrors locales/en/shell.js appendix).
+  'loading.status.tilesGoogle': 'Loading Google 3D Tiles...',
+  'loading.status.tilesKeyless': 'Loading the keyless globe...',
+  'loading.status.systems': 'Initializing systems...',
+  'status.liveDataOff': 'LIVE DATA OFF',
+  'status.mappedSitesLoaded': 'MAPPED SITES LOADED',
+  'status.retryingMappedSites': 'RETRYING MAPPED SITES',
+  'status.fetchingMappedSites': 'FETCHING MAPPED SITES',
+  'status.turningOffLiveData': 'TURNING OFF LIVE DATA',
+  'status.refreshingLiveData': 'REFRESHING LIVE DATA',
 };

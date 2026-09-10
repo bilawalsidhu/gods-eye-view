@@ -63,4 +63,81 @@ export default {
   'scenes.import': 'IMPORT',
   'scenes.runLog': 'RUN LOG',
   'scenes.statusReady': 'Ready',
+
+  // ── Phase-3 runtime extraction (support surfaces), appended ───────────────
+
+  // src/firstRunExperience.js — mission busy lines and status/error copy.
+  // {detail} is the failed layer-id list (machine values, kept raw).
+  'firstRun.busy.contacts': 'Starting live contacts…',
+  'firstRun.busy.spaceMissions': 'Opening space missions…',
+  'firstRun.busy.environmental': 'Scanning active events…',
+  'firstRun.busy.working': 'Working…',
+  'firstRun.status.failed': 'Could not open that mission{detail}. Retry or explore manually.',
+  'firstRun.status.storageBlocked': 'This browser is blocking storage, so that could not be saved.',
+  // The environmental tile is painted at init from ENVIRONMENTAL_LABEL_CHOICE;
+  // the subcopy names BOTH feeds (pinned verbatim by firstRunExperience.test.mjs).
+  'firstRun.choice.environmentalSub': 'Live earthquakes and active fires, from USGS and NASA',
+  'firstRun.environmentalTitle.environmental': 'ENVIRONMENTAL',
+  'firstRun.environmentalTitle.earthWatch': 'EARTH WATCH',
+  'firstRun.environmentalTitle.activeEvents': 'ACTIVE EVENTS',
+
+  // src/keySetup.js — chip counter, status line, and remove confirm.
+  'keySetup.chipWaiting': { one: 'POWER UP · {count} KEY WAITING', other: 'POWER UP · {count} KEYS WAITING' },
+  'keySetup.chipReady': 'POWERED UP',
+  'keySetup.status.saveFailed': 'Save failed ({status}).',
+  'keySetup.status.saveFailedDetail': 'Save failed: {detail}',
+  'keySetup.status.pasteFirst': 'Paste at least one key first.',
+  'keySetup.status.saved': 'Saved to {store}. Restarting — this page reloads itself.',
+  'keySetup.status.removed': 'Removed from {store}. Restarting — this page reloads itself.',
+  'keySetup.store.pinokio': 'your app configuration',
+  'keySetup.store.env': 'your local .env',
+  'keySetup.confirm.remove': 'Remove this key from your saved configuration?',
+
+  // src/mapStackChips.js — unavailable-chip tooltip and aria templates.
+  'mapStack.fallbackName': 'This map stack',
+  'mapStack.unavailableReason': '{label} is unavailable',
+  'mapStack.unavailableAriaLabel': '{label} unavailable: {hint}',
+
+  // src/scenes/director.js — built-in recipe DISPLAY names only. Recipe ids
+  // and the URL 'scene' param stay English; stored/renamed project titles are
+  // user data and render verbatim.
+  'scenes.recipe.flightsRadar': 'Global Flights Radar',
+  'scenes.recipe.orbitalWatch': 'Orbital Watch',
+  'scenes.recipe.thermalThreats': 'Thermal Threat Board',
+  'scenes.recipe.cityOverload': 'City Overload',
+  'scenes.recipe.omnisciencePullback': 'Omniscience Pullback',
+
+  // src/voice/gevRealtime.js — mic chrome and connection/execution STATUS
+  // text. Status enum keys (idle/connecting/…) are machine values; tool
+  // names/schemas and model-facing results stay English (keep-English
+  // boundary). Tier badges STD/MINI and the MIC/ON-OFF mic label stay machine
+  // identifiers this phase.
+  'voice.status.idle': 'OFF',
+  'voice.status.connecting': 'CONNECTING',
+  'voice.status.listening': 'LISTENING',
+  'voice.status.executing': 'EXECUTING',
+  'voice.status.error': 'ERROR',
+  'voice.status.sessionCostCap': 'Session ended — cost cap {cost}',
+  'voice.detail.standby': 'VOICE STANDBY',
+  'voice.detail.active': 'VOICE ACTIVE',
+  'voice.detail.unavailable': 'VOICE UNAVAILABLE',
+  'voice.detail.microphoneUnavailable': 'WebRTC microphone support unavailable',
+  'voice.detail.requestingMicrophone': 'Requesting microphone',
+  'voice.detail.holdSpaceTalk': 'Hold Space to talk',
+  'voice.detail.releaseSpaceSend': 'Release Space to send',
+  'voice.detail.askOrCommand': 'Ask or command',
+  'voice.detail.voiceOff': 'Voice off',
+  'voice.detail.runningCommand': 'Running command',
+  'voice.detail.radioDidNotStart': 'Radio did not start',
+  'voice.hint.default': 'Hold Space to speak · click mic to toggle voice',
+  'voice.error.sessionStart': 'Voice session could not be started.',
+  'voice.error.trayTitle': 'VOICE SYSTEM ERROR',
+  'voice.error.dismiss': 'DISMISS',
+  'voice.error.hint': 'Check microphone permission and network access, then try again.',
+  'voice.kicker.agent': 'AI AGENT',
+  'voice.kicker.control': 'VOICE CONTROL',
+  'voice.tier.appliesNextSession': '{tier} applies next session',
+  'voice.tier.buttonTitle': 'Voice model tier — applies next session',
+  'voice.cost.buttonTitle': 'Estimated session cost',
+  'voice.button.ariaLabel': 'Voice control — hold Space to speak; click to toggle voice',
 };

@@ -52,4 +52,19 @@ export default {
   'locale.groupAriaLabel': 'Language',
   'locale.english.ariaLabel': 'Switch to English',
   'locale.spanish.ariaLabel': 'Switch to Spanish',
+
+  // ── Phase-3 runtime extraction (support worker), appended ─────────────────
+  // src/main.js init() loaderStatus write sites without a phase-1/2 key.
+  'loading.status.tilesGoogle': 'Loading Google 3D Tiles...',
+  'loading.status.tilesKeyless': 'Loading the keyless globe...',
+  'loading.status.systems': 'Initializing systems...',
+  // src/loadingFeedback.js presentLoadingFeedback() labels beyond the phase-1
+  // seeds. 'OpenStreetMap · Overpass' detail strings are provider names and
+  // stay verbatim at the call site.
+  'status.liveDataOff': 'LIVE DATA OFF',
+  'status.mappedSitesLoaded': 'MAPPED SITES LOADED',
+  'status.retryingMappedSites': 'RETRYING MAPPED SITES',
+  'status.fetchingMappedSites': 'FETCHING MAPPED SITES',
+  'status.turningOffLiveData': 'TURNING OFF LIVE DATA',
+  'status.refreshingLiveData': 'REFRESHING LIVE DATA',
 };
