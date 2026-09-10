@@ -1271,6 +1271,75 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   display: none;
 }
 
+/* ── Dock language selector (EN | ES) ──────────────────────────────
+   Phase-2 MARKUP-ONLY hook (ai_docs/i18n-implementation-plan.md): the two
+   buttons carry no listeners. The phase-3 core-ui worker wires click →
+   persistLocaleAndReload and syncs .active/aria-pressed from the resolved
+   locale. Scoped to the dock tray strip: the header toggle and the selector
+   share one row, so the control is visible in the collapsed tray (the default
+   dock state) instead of hiding inside the popover. The popover is absolutely
+   positioned and the mini-status is display:none here, so the flex row only
+   lays out the header + selector. */
+#command-dock #control-panel .panel-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#command-dock #control-panel .panel-inner > .panel-header {
+  flex: 1;
+  min-width: 0;
+  /* The dock's stacked-tray header margin would push the row off-center. */
+  margin: 0;
+}
+
+.dock-locale-switch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dock-locale-btn {
+  padding: 3px 7px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1.2px;
+  cursor: pointer;
+  /* Explicit property list, NOT `transition: all` — same outline-parking
+     hazard the map-stack chips document above. */
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+  outline: none;
+}
+
+.dock-locale-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--glass-border-hover);
+}
+
+.dock-locale-btn:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--accent) 80%, transparent);
+  outline-offset: 1px;
+}
+
+.dock-locale-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.15);
+}
+
 @media (max-width: 620px) {
   .map-stack-chip-row {
     grid-template-columns: repeat(3, minmax(0, 1fr));
