@@ -35,14 +35,17 @@ import { initFirstRunExperience } from './firstRunExperience.js';
 import { initKeySetup } from './keySetup.js';
 import { loadPhotorealisticTileset } from './mapStartup.js';
 import { resolveLocale, applyDocumentLanguage } from './i18n/locale.js';
-import { setLocale } from './i18n/index.js';
+import { applyDocumentTranslations, setLocale, t } from './i18n/index.js';
 
 // Locale is resolved before any UI initialization so <html lang>/<html dir>
-// and every catalog lookup agree from the first painted frame. Phase 1 wires
-// metadata only — no selector, no translated copy, zero visible change.
+// and every catalog lookup agree from the first painted frame. Phase 3 wires
+// the static markup too: module scripts execute after parsing, so the DOM is
+// ready here and every data-i18n* element honors the resolved locale without
+// a reload.
 const activeLocale = resolveLocale();
 setLocale(activeLocale);
 applyDocumentLanguage(document, activeLocale);
+applyDocumentTranslations(document);
 
 initLogoGaze();
 
@@ -82,7 +85,7 @@ async function init() {
   const loaderStatus = loadingScreen.querySelector('.loader-status');
 
   try {
-    loaderStatus.textContent = 'Configuring viewer...';
+    loaderStatus.textContent = t('shell.loading.status.configuring');
 
     // A direct Google key provides Google 3D plus GEV place search. Cesium ion
     // can host the same 3D tiles and also powers Bing/world-terrain stacks.
@@ -154,9 +157,9 @@ async function init() {
     viewer.scene.skyAtmosphere.saturationShift = -0.12;
     viewer.scene.skyAtmosphere.brightnessShift = -0.08;
 
-    loaderStatus.textContent = googleApiKey || cesiumToken
-      ? 'Loading Google 3D Tiles...'
-      : 'Loading the keyless globe...';
+    loaderStatus.textContent = t(googleApiKey || cesiumToken
+      ? 'shell.loading.status.tilesGoogle'
+      : 'shell.loading.status.tilesKeyless');
     const photoreal = await loadPhotorealisticTileset(Cesium, {
       googleApiKey,
       cesiumToken,
@@ -173,12 +176,12 @@ async function init() {
         const tileError = photoreal.errors.at(-1);
         console.warn('[Init] Google 3D Tiles unavailable, using the keyless globe:', tileError);
         const tileErrorDetail = describeError(tileError);
-        loaderStatus.textContent = `Google 3D Tiles unavailable (${tileErrorDetail}). Loading the keyless globe...`;
+        loaderStatus.textContent = t('shell.loading.status.tilesUnavailable', { detail: tileErrorDetail });
       }
       viewer.scene.globe.show = true;
     }
 
-    loaderStatus.textContent = 'Initializing systems...';
+    loaderStatus.textContent = t('shell.loading.status.systems');
 
     const mapStackController = new MapStackController(viewer, {
       googleTileset: tileset,
@@ -206,10 +209,10 @@ async function init() {
 
     // If no share link state, do default fly-to Austin
     if (!styleManager.hasShareState) {
-      loaderStatus.textContent = 'Flying to Austin, TX...';
+      loaderStatus.textContent = t('shell.loading.status.flying');
       flyToAustin(viewer);
     } else {
-      loaderStatus.textContent = 'Restoring shared view...';
+      loaderStatus.textContent = t('shell.loading.status.restoring');
     }
 
     // Initialize data layer manager
