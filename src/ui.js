@@ -14,6 +14,7 @@ import {
 } from './bloom.js';
 import { LOCATIONS, CITY_POIS, GLOBE_VIEW, flyToGlobeView, flyToPresetLocation, flyToPOI, searchAndFlyTo } from './locations.js';
 import { locationMiniStatus } from './locationStatus.js';
+import { getLocale, persistLocaleAndReload, t } from './i18n/index.js';
 import { interruptCameraMotion } from './cameraVerbs.js';
 import {
   aircraftTrackingTarget,
@@ -364,6 +365,14 @@ const STYLE_STATUS_LABELS = {
   noir: 'NOIR',
   snow: 'SNOW',
 };
+/**
+ * locationStatus.js sentinel outputs used as localized-rewrite triggers for
+ * the collapsed LOCATION mini-status. Built by calling the module with no
+ * real data, so the comparisons track that module's copy without restating
+ * English strings here. Resolved destinations (place names) stay verbatim.
+ */
+const LOCATION_MINI_EMPTY = Object.freeze(locationMiniStatus());
+const LOCATION_MINI_SEARCHED_PLACEHOLDER = Object.freeze(locationMiniStatus({ searchedLabel: '·' }));
 /**
  * The tactical detection look: Dense at 75%.
  *
@@ -3958,7 +3967,70 @@ export class StyleManager {
     this._initAutoHoverPanel('location-bar', { openDelayMs: 140, closeDelayMs: 420 });
     this._initCommandDockPins();
     this._initCommandDockTrayMetrics();
+    this._initLocaleSelector();
+    this._applyRuntimeStaticHeaderText();
     this._maybeNotifyLayoutReset();
+  }
+
+  /**
+   * Wires the command-dock EN|ES locale switch (phase-3 core-ui). Pressed
+   * state is synced from the resolved locale at boot; a click persists the
+   * choice and reloads the page, so no live re-apply of document translations
+   * is needed here (persistLocaleAndReload strips ?lang and keeps the hash).
+   * @returns {void}
+   */
+  _initLocaleSelector() {
+    const buttons = document.querySelectorAll('#control-panel .dock-locale-btn');
+    if (!buttons.length) return;
+    const active = getLocale();
+    buttons.forEach((button) => {
+      const isActive = button.dataset.locale === active;
+      button.classList.toggle('active', isActive);
+      button.setAttribute('aria-pressed', String(isActive));
+      button.addEventListener('click', () => {
+        persistLocaleAndReload(button.dataset.locale);
+      });
+    });
+  }
+
+  /**
+   * Rewrites a header's trailing text node in place, preserving the leading
+   * dock-label-icon span that a textContent write would destroy (the phase-2
+   * "key-only" headers: .panel-title / .pp-header-label share their element
+   * with the icon, so no data-i18n attribute could target them — see
+   * ai_docs/i18n-ownership.md, runtime-only static sites).
+   * @param {Element|null} element
+   * @param {string} text
+   * @returns {void}
+   */
+  _setHeaderText(element, text) {
+    if (!element) return;
+    const textNode = Array.from(element.childNodes)
+      .reverse()
+      .find((node) => node.nodeType === Node.TEXT_NODE && node.nodeValue?.trim());
+    if (textNode) textNode.nodeValue = text;
+    else element.textContent = text;
+  }
+
+  /**
+   * Localizes the key-only dock/panel headers at boot: VISUAL PRESETS,
+   * LOCATION, and the DISPLAY rail label. English output is byte-identical to
+   * the static markup these replace.
+   * @returns {void}
+   */
+  _applyRuntimeStaticHeaderText() {
+    this._setHeaderText(
+      document.querySelector('#control-panel .panel-title'),
+      t('cockpit.presets.title'),
+    );
+    this._setHeaderText(
+      document.querySelector('#location-bar .location-toolbar-label'),
+      t('cockpit.location.toolbarLabel'),
+    );
+    this._setHeaderText(
+      document.querySelector('#pp-toggles .pp-header-label'),
+      t('cockpit.display.title'),
+    );
   }
 
   /**
@@ -7421,23 +7493,24 @@ export class StyleManager {
         btn.textContent = collapsed ? '+' : '−';
       }
       btn.setAttribute('aria-expanded', String(!collapsed));
-      const panelName = panelEl.querySelector('.panel-title, .pp-header-label')?.textContent?.trim() || 'panel';
-      const action = collapsed ? 'Expand' : 'Collapse';
-      btn.title = `${action} ${panelName}`;
-      btn.setAttribute('aria-label', `${action} ${panelName}`);
+      const panelName = panelEl.querySelector('.panel-title, .pp-header-label')?.textContent?.trim() || t('cockpit.panel.fallbackName');
+      const titleKey = collapsed ? 'cockpit.panel.expandTitle' : 'cockpit.panel.collapseTitle';
+      btn.title = t(titleKey, { name: panelName });
+      btn.setAttribute('aria-label', t(titleKey, { name: panelName }));
       if (panelEl.id === 'radio-panel') {
-        const action = collapsed ? 'Expand' : 'Collapse';
-        btn.title = `${action} Radio`;
-        btn.setAttribute('aria-label', `${action} Radio section`);
+        // Expand state reuses the layers.* keys seeded on the static button;
+        // the collapse state is runtime-only, so it owns cockpit.* keys.
+        btn.title = t(collapsed ? 'layers.radio.expandTitle' : 'cockpit.panel.radioCollapseTitle');
+        btn.setAttribute('aria-label', t(collapsed ? 'layers.radio.expandAriaLabel' : 'cockpit.panel.radioCollapseAria'));
       }
     });
     const dockToggle = panelEl.querySelector(`[data-dock-toggle-target="${panelEl.id}"]`);
     if (dockToggle) {
-      const panelName = panelEl.querySelector('.panel-title')?.textContent?.trim() || 'panel';
-      const action = collapsed ? 'Expand' : 'Collapse';
+      const panelName = panelEl.querySelector('.panel-title')?.textContent?.trim() || t('cockpit.panel.fallbackName');
+      const titleKey = collapsed ? 'cockpit.panel.expandTitle' : 'cockpit.panel.collapseTitle';
       dockToggle.setAttribute('aria-expanded', String(!collapsed));
-      dockToggle.setAttribute('aria-label', `${action} ${panelName}`);
-      dockToggle.title = `${action} ${panelName}`;
+      dockToggle.setAttribute('aria-label', t(titleKey, { name: panelName }));
+      dockToggle.title = t(titleKey, { name: panelName });
     }
     if (panelEl.id === 'radio-panel' && this._contextRadioDetailsBtn) {
       this._contextRadioDetailsBtn.setAttribute('aria-expanded', String(!collapsed));
@@ -9553,8 +9626,19 @@ export class StyleManager {
       currentPoi: this._currentPoi,
       searchedLabel: this._searchedLocationLabel,
     });
-    this._locationMiniCity.textContent = lines.city;
-    this._locationMiniPoi.textContent = lines.poi;
+    // The initial/placeholder states get catalog keys at the writer so a
+    // non-English boot never leaks the English sentinels back over the
+    // localized static readout (resolved place names stay verbatim data).
+    this._locationMiniCity.textContent = lines.city === LOCATION_MINI_EMPTY.city
+      ? t('cockpit.location.miniCityInitial')
+      : lines.city;
+    if (lines.poi === LOCATION_MINI_EMPTY.poi) {
+      this._locationMiniPoi.textContent = t('cockpit.location.miniPoiInitial');
+    } else if (lines.poi === LOCATION_MINI_SEARCHED_PLACEHOLDER.poi) {
+      this._locationMiniPoi.textContent = t('cockpit.location.miniSearchedPlaceholder');
+    } else {
+      this._locationMiniPoi.textContent = lines.poi;
+    }
   }
 
   /**

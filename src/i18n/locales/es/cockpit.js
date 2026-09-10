@@ -210,4 +210,23 @@ export default {
   'radio.nextAriaLabel': 'Next filtered radio station',
   'radio.volumeLabel': 'VOLUME',
   'radio.volumeAriaLabel': 'Cockpit Radio volume',
+
+  // ── Phase-3 runtime extraction (src/ui.js), appended ─────────────────────
+  // UNTRANSLATED STAGE-3 SEED: same keys as en/cockpit.js, same English
+  // values until stage 4.
+
+  // _syncPanelCollapseButton(): composed panel collapse titles. {name} is the
+  // panel's own (already localized) .panel-title text.
+  'panel.expandTitle': 'Expand {name}',
+  'panel.collapseTitle': 'Collapse {name}',
+  // Fallback when a panel ships no .panel-title/.pp-header-label node.
+  'panel.fallbackName': 'panel',
+  // Radio panel collapse state; the expand state reuses the layers.radio.*
+  // keys seeded on the static button in phase 2.
+  'panel.radioCollapseTitle': 'Collapse Radio',
+  'panel.radioCollapseAria': 'Collapse Radio section',
+  // _updateLocationMiniStatus(): runtime rewrite of the collapsed LOCATION
+  // readout's single-segment search fallback (initial-state keys
+  // location.miniCityInitial/miniPoiInitial were seeded in phase 2).
+  'location.miniSearchedPlaceholder': 'Searched location',
 };
