@@ -1,0 +1,7 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "4173:4173"
