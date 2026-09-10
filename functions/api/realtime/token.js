@@ -12,13 +12,14 @@
  * byte-identical sessions apart from the resolved env parameters.
  *
  * Contract (identical to dev):
- *   GET|POST ?tier=standard|mini → passthrough of the upstream client-secret
- *                                  response, plus X-GEV-Voice-Tier /
- *                                  X-GEV-Voice-Model echo headers (and
- *                                  X-GEV-Voice-Tier-Fallback when a bogus
- *                                  tier was downgraded to standard)
+ *   POST ?tier=standard|mini    → passthrough of the upstream client-secret
+ *                                 response, plus X-GEV-Voice-Tier /
+ *                                 X-GEV-Voice-Model echo headers (and
+ *                                 X-GEV-Voice-Tier-Fallback when a bogus
+ *                                 tier was downgraded to standard)
  *   missing OPENAI_API_KEY      → 503 { error: 'OPENAI_API_KEY is not set' }
  *   other methods               → 405 { error: 'Method not allowed' }
+ *   cross-origin Origin header  → 403 { error: 'cross-origin token requests are rejected' }
  *   fetch failure               → 502 { error }
  *
  * Env: OPENAI_API_KEY (required); optional overrides OPENAI_REALTIME_MODEL,
@@ -47,10 +48,31 @@ import {
 /** Built once per isolate and reused, so the per-IP window state persists. */
 const openAiLimiter = createCachedOptInLimiter();
 
+/** Host of a URL string, '' when unparseable (an invalid Origin never matches). */
+function hostOf(value) {
+  try {
+    return new URL(value).host;
+  } catch {
+    return '';
+  }
+}
+
 export async function onRequest(context) {
   const { env, request } = context;
 
-  if (request.method !== 'GET' && request.method !== 'POST') return methodNotAllowed();
+  // POST-only: a cross-site GET is a CORS "simple request" (no preflight), so
+  // any web page could otherwise make a visitor's browser mint a billable
+  // Realtime session drive-by. The side effect is the asset; the minted
+  // secret itself never crossed origins (no ACAO header) even before this.
+  if (request.method !== 'POST') return methodNotAllowed();
+
+  // Same-origin guard. Browsers attach Origin to every POST; absent Origin
+  // means a non-browser client (curl, agents) — allowed, throttled by the
+  // opt-in limiter below instead.
+  const origin = request.headers.get('Origin');
+  if (origin && hostOf(origin) !== hostOf(request.url)) {
+    return jsonResponse({ error: 'cross-origin token requests are rejected' }, { status: 403 });
+  }
 
   // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). No-op when unset.
   if (!allowRequest(openAiLimiter(env.GEV_RATELIMIT_OPENAI_PER_MIN), request)) {

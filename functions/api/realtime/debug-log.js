@@ -23,19 +23,37 @@
  *   oversized/invalid    → 400 { error }
  */
 import { REALTIME_DEBUG_LOG_MAX_BYTES } from '../../../src/voice/realtimeSession.js';
-import { jsonResponse, methodNotAllowed, readJsonBody } from '../../_lib.js';
+import {
+  allowRequest,
+  createCachedOptInLimiter,
+  jsonResponse,
+  methodNotAllowed,
+  readJsonBody,
+} from '../../_lib.js';
+
+/** Built once per isolate and reused, so the per-IP window state persists. */
+const logLimiter = createCachedOptInLimiter();
 
 export async function onRequest(context) {
-  const { request } = context;
+  const { env, request } = context;
 
   if (request.method !== 'POST') return methodNotAllowed();
+
+  // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN — the voice
+  // endpoints share one knob). No-op when unset. Without it this is a free
+  // unauthenticated log-write primitive.
+  if (!allowRequest(logLimiter(env?.GEV_RATELIMIT_OPENAI_PER_MIN), request)) {
+    return new Response(null, { status: 429, headers: { 'Retry-After': '5' } });
+  }
 
   const body = await readJsonBody(request, REALTIME_DEBUG_LOG_MAX_BYTES);
   if (!body.ok) return jsonResponse({ error: body.error }, { status: body.status });
 
   // One JSON line per record — the same line the dev middleware appends to
-  // .gev-logs/realtime-conversations.jsonl.
-  console.log(JSON.stringify({ loggedAt: new Date().toISOString(), ...body.value }));
+  // .gev-logs/realtime-conversations.jsonl. The record is NESTED under
+  // `record`, never spread: a spread would let a client-supplied `loggedAt`
+  // key override the server timestamp and corrupt the tail ordering.
+  console.log(JSON.stringify({ loggedAt: new Date().toISOString(), record: body.value }));
 
   return new Response(null, { status: 204 });
 }

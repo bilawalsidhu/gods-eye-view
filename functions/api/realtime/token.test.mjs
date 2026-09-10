@@ -8,10 +8,43 @@ const ctx = (request, env = {}) => ({ request, env });
 
 const url = (query = '') => `https://example.com/api/realtime/token${query}`;
 
-test('unsupported methods get the dev 405 shape', async () => {
-  const res = await onRequest(ctx(new Request(url(), { method: 'DELETE' })));
-  assert.equal(res.status, 405);
-  assert.deepEqual(await res.json(), { error: 'Method not allowed' });
+test('unsupported methods get the dev 405 shape — including GET', async () => {
+  for (const method of ['GET', 'DELETE']) {
+    const res = await onRequest(ctx(new Request(url(), { method })));
+    assert.equal(res.status, 405, method);
+    assert.deepEqual(await res.json(), { error: 'Method not allowed' });
+  }
+});
+
+test('a cross-site Origin header is rejected before anything billable happens', async () => {
+  const calls = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (...args) => { calls.push(args); throw new Error('no'); };
+  try {
+    const res = await onRequest(ctx(new Request(url(), {
+      method: 'POST',
+      headers: { Origin: 'https://evil.example' },
+    }), { OPENAI_API_KEY: 'k' }));
+    assert.equal(res.status, 403);
+    assert.deepEqual(await res.json(), { error: 'cross-origin token requests are rejected' });
+    assert.equal(calls.length, 0, 'the drive-by mint never reaches OpenAI');
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('a same-origin POST carries Origin and is allowed through', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => new Response('{"value":"tok"}', { status: 200 });
+  try {
+    const res = await onRequest(ctx(new Request(url(), {
+      method: 'POST',
+      headers: { Origin: 'https://example.com' },
+    }), { OPENAI_API_KEY: 'k' }));
+    assert.equal(res.status, 200);
+  } finally {
+    globalThis.fetch = original;
+  }
 });
 
 test('a missing key degrades with the dev 503 shape instead of calling OpenAI', async () => {
@@ -19,11 +52,9 @@ test('a missing key degrades with the dev 503 shape instead of calling OpenAI', 
   const original = globalThis.fetch;
   globalThis.fetch = async (...args) => { calls.push(args); throw new Error('no'); };
   try {
-    for (const method of ['GET', 'POST']) {
-      const res = await onRequest(ctx(new Request(url(), { method })));
-      assert.equal(res.status, 503);
-      assert.deepEqual(await res.json(), { error: 'OPENAI_API_KEY is not set' });
-    }
+    const res = await onRequest(ctx(new Request(url(), { method: 'POST' })));
+    assert.equal(res.status, 503);
+    assert.deepEqual(await res.json(), { error: 'OPENAI_API_KEY is not set' });
     assert.equal(calls.length, 0);
   } finally {
     globalThis.fetch = original;
@@ -38,7 +69,7 @@ test('a standard-tier session is minted on the shared module shape', async () =>
     return new Response(JSON.stringify({ value: 'eccnec' }), { status: 201 });
   };
   try {
-    const res = await onRequest(ctx(new Request(url()), {
+    const res = await onRequest(ctx(new Request(url(), { method: 'POST' }), {
       OPENAI_API_KEY: 'k',
       OPENAI_REALTIME_VOICE: 'alloy',
       OPENAI_REALTIME_CONTEXT_TOKENS: '5000',
@@ -72,10 +103,10 @@ test('?tier=mini mints the mini model and honors its env override', async () => 
     return new Response('{}', { status: 200 });
   };
   try {
-    const plain = await onRequest(ctx(new Request(url('?tier=mini')), { OPENAI_API_KEY: 'k' }));
+    const plain = await onRequest(ctx(new Request(url('?tier=mini'), { method: 'POST' }), { OPENAI_API_KEY: 'k' }));
     assert.equal(plain.headers.get('X-GEV-Voice-Model'), VOICE_MODELS.mini.id);
 
-    await onRequest(ctx(new Request(url('?tier=mini')), {
+    await onRequest(ctx(new Request(url('?tier=mini'), { method: 'POST' }), {
       OPENAI_API_KEY: 'k',
       OPENAI_REALTIME_MODEL_MINI: 'my-mini-model',
     }));
@@ -93,7 +124,7 @@ test('a hostile tier degrades to standard and is flagged, never forwarded', asyn
     return new Response('{}', { status: 200 });
   };
   try {
-    const res = await onRequest(ctx(new Request(url('?tier=%22%3E%3Cscript%3E')), { OPENAI_API_KEY: 'k' }));
+    const res = await onRequest(ctx(new Request(url('?tier=%22%3E%3Cscript%3E'), { method: 'POST' }), { OPENAI_API_KEY: 'k' }));
     assert.equal(res.headers.get('X-GEV-Voice-Tier'), 'standard');
     assert.equal(res.headers.get('X-GEV-Voice-Tier-Fallback'), '1');
     assert.equal(seen, VOICE_MODELS.standard.id);
@@ -106,7 +137,7 @@ test('a transport failure becomes the dev 502 shape', async () => {
   const original = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error('connect ECONNREFUSED'); };
   try {
-    const res = await onRequest(ctx(new Request(url()), { OPENAI_API_KEY: 'k' }));
+    const res = await onRequest(ctx(new Request(url(), { method: 'POST' }), { OPENAI_API_KEY: 'k' }));
     assert.equal(res.status, 502);
     assert.deepEqual(await res.json(), { error: 'connect ECONNREFUSED' });
   } finally {

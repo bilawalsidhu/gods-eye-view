@@ -1,7 +1,9 @@
 /**
- * Cloudflare Pages Function — /api/cctv
- * CCTV frame proxy — requires private key brokering via Workers KV.
- * Graceful degradation: returns empty sources list.
+ * Cloudflare Pages Function — /api/ais-live
+ * AIS vessel positions require a private AISSTREAM_API_KEY brokered over a
+ * persistent WebSocket, which Pages Functions cannot hold. Graceful
+ * degradation: returns an empty sources list (the layer reports unavailable
+ * on Pages deployments; the Vite dev middleware serves the real feed).
  */
 export async function onRequest({ request }: { request: Request }): Promise<Response> {
   if (request.method === 'OPTIONS') return corsResponse();

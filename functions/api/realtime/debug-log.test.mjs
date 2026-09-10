@@ -26,9 +26,25 @@ test('a good record is accepted with 204 and emitted as one JSON log line', asyn
 
     assert.equal(lines.length, 1, 'exactly one structured line per record');
     const record = JSON.parse(lines[0]);
-    assert.equal(record.event, 'session_end');
-    assert.equal(record.turns, 3);
+    // The record is NESTED, not spread: client keys cannot collide with the
+    // envelope, and `loggedAt` is always the server stamp.
+    assert.equal(record.record.event, 'session_end');
+    assert.equal(record.record.turns, 3);
     assert.ok(!Number.isNaN(Date.parse(record.loggedAt)), 'the sink stamps loggedAt');
+  } finally {
+    console.log = original;
+  }
+});
+
+test('a client-supplied loggedAt cannot override the server timestamp', async () => {
+  const lines = [];
+  const original = console.log;
+  console.log = (line) => lines.push(line);
+  try {
+    await onRequest(post(JSON.stringify({ loggedAt: '1999-01-01T00:00:00.000Z', event: 'spoof' })));
+    const record = JSON.parse(lines[0]);
+    assert.notEqual(record.loggedAt, '1999-01-01T00:00:00.000Z');
+    assert.equal(record.record.loggedAt, '1999-01-01T00:00:00.000Z', 'the client value survives as data, never as envelope');
   } finally {
     console.log = original;
   }
