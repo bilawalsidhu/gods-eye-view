@@ -8321,8 +8321,8 @@ export class StyleManager {
       this._celestialBtn.disabled = !styleSupported;
       this._celestialBtn.setAttribute('aria-disabled', String(!styleSupported));
       this._celestialBtn.title = styleSupported
-        ? 'Celestial ring — reveal the full globe'
-        : 'Celestial ring — available in Normal style';
+        ? t('cockpit.display.celestialToggleTitle')
+        : t('cockpit.display.celestialUnavailableTitle');
     }
     let cameraFocused = false;
     if (nextEnabled && focus) {
@@ -9822,7 +9822,8 @@ export class StyleManager {
     // Create orbit indicator element
     this._orbitIndicator = document.createElement('div');
     this._orbitIndicator.id = 'orbit-indicator';
-    this._orbitIndicator.innerHTML = '<span class="orbit-icon">&#x21BB;</span> ORBIT';
+    this._orbitIndicator.innerHTML = '<span class="orbit-icon">&#x21BB;</span>';
+    this._orbitIndicator.appendChild(document.createTextNode(` ${t('cockpit.location.orbitLabel')}`));
     document.body.appendChild(this._orbitIndicator);
   }
 
@@ -9989,8 +9990,8 @@ export class StyleManager {
           longitude: Number(Cesium.Math.toDegrees(carto.longitude).toFixed(2)),
         },
       };
-      this._resetGlobeBtn?.setAttribute('aria-label', 'Reset to full globe view');
-      this._cockpitResetGlobeBtn?.setAttribute('aria-label', 'Reset cockpit to full globe view');
+      this._resetGlobeBtn?.setAttribute('aria-label', t('cockpit.hud.resetGlobeAria'));
+      this._cockpitResetGlobeBtn?.setAttribute('aria-label', t('cockpit.hud.resetGlobeCockpitAria'));
       this._globeResetPromise = null;
       resolveReset(result);
     };
@@ -9998,8 +9999,8 @@ export class StyleManager {
       const height = this.viewer.camera.positionCartographic?.height;
       finish(!Number.isFinite(height) || Math.abs(height - GLOBE_VIEW.heightM) > 1000);
     }, 4200);
-    this._resetGlobeBtn?.setAttribute('aria-label', 'Resetting to full globe view');
-    this._cockpitResetGlobeBtn?.setAttribute('aria-label', 'Resetting cockpit to full globe view');
+    this._resetGlobeBtn?.setAttribute('aria-label', t('cockpit.hud.resettingGlobeAria'));
+    this._cockpitResetGlobeBtn?.setAttribute('aria-label', t('cockpit.hud.resettingGlobeCockpitAria'));
     const target = flyToGlobeView(this.viewer, {
       onComplete: () => finish(false),
       onCancel: () => finish(true),
@@ -10272,20 +10273,20 @@ export class StyleManager {
     const enabled = modeLabel !== 'OFF';
     btn.setAttribute('aria-pressed', String(enabled));
     btn.setAttribute('aria-label', enabled
-      ? `Detection overlay: ${String(modeLabel).toLowerCase()}`
-      : 'Detection overlay: off');
+      ? t('cockpit.display.detectionAriaTemplate', { mode: String(modeLabel).toLowerCase() })
+      : t('cockpit.display.detectionAriaOff'));
     btn.classList.remove('active', 'god', 'panoptic');
     if (modeLabel === 'SPARSE') {
-      btn.querySelector('.pp-label').textContent = 'SPARSE';
+      btn.querySelector('.pp-label').textContent = t('cockpit.display.detectionLabelSparse');
       btn.classList.add('active');
     } else if (modeLabel === 'BALANCED') {
-      btn.querySelector('.pp-label').textContent = 'BALANCED';
+      btn.querySelector('.pp-label').textContent = t('cockpit.display.detectionLabelBalanced');
       btn.classList.add('active');
     } else if (modeLabel === 'DENSE') {
-      btn.querySelector('.pp-label').textContent = 'DENSE';
+      btn.querySelector('.pp-label').textContent = t('cockpit.display.detectionLabelDense');
       btn.classList.add('active', 'panoptic');
     } else {
-      btn.querySelector('.pp-label').textContent = 'DETECT';
+      btn.querySelector('.pp-label').textContent = t('cockpit.display.detectionLabel');
     }
 
     if (this._detectionSliderRow) {

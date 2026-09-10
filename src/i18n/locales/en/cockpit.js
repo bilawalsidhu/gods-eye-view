@@ -492,4 +492,30 @@ export default {
     other: '{count} cameras loaded · enable CCTV to activate',
   },
   'cctv.summaryNoneAvailable': 'No summary available.',
+
+  // ── Phase-3 runtime extraction batch 5: remainder + hud.js ────────────────
+
+  // _setCelestialRingEnabled(): unsupported-style title sibling of the seeded
+  // display.celestialToggleTitle.
+  'display.celestialUnavailableTitle': 'Celestial ring — available in Normal style',
+  // _updateDetectionButton(): density-profile labels (display.detectionLabel
+  // 'DETECT' was seeded on the static button) + composed aria.
+  'display.detectionAriaTemplate': 'Detection overlay: {mode}',
+  'display.detectionAriaOff': 'Detection overlay: off',
+  'display.detectionLabelSparse': 'SPARSE',
+  'display.detectionLabelBalanced': 'BALANCED',
+  'display.detectionLabelDense': 'DENSE',
+  // Globe-reset buttons: idle/working aria states (cockpit variant sibling).
+  'hud.resetGlobeAria': 'Reset to full globe view',
+  'hud.resetGlobeCockpitAria': 'Reset cockpit to full globe view',
+  'hud.resettingGlobeAria': 'Resetting to full globe view',
+  'hud.resettingGlobeCockpitAria': 'Resetting cockpit to full globe view',
+  // _initOrbit(): indicator caption after the orbit glyph.
+  'location.orbitLabel': 'ORBIT',
+  // Intel HUD (src/hud.js): summary caption, idle placeholder, REC indicator.
+  // Classification banners, terse instrument readout codes (MGRS/GSD/NIIRS/
+  // ALT/COLL/ONA/BAND/BITS/LVL), and the AI summary line stay keep-English.
+  'hud.summaryLabel': 'SUMMARY',
+  'hud.summaryAwaiting': 'Awaiting telemetry...',
+  'hud.recLabel': 'REC',
 };
