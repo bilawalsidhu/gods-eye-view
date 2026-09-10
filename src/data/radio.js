@@ -9,6 +9,7 @@
  * @module radio
  */
 import * as Cesium from 'cesium';
+import { t } from '../i18n/index.js';
 import { cachedGroundFloor, warmGroundFloor } from './groundFloor.js';
 import { normalizeRadioCountryInput } from './radioCountry.js';
 import { normalizeRadioFilter } from './layerState.js';
@@ -74,32 +75,35 @@ const _radioEarthToCenter = new Cesium.Cartesian3();
 export const DEFAULT_RADIO_FILTER = 'all';
 export const GLOBAL_RADIO_ALTITUDE_M = 2_000_000;
 
+// Genre tag (machine, matches station tags) → display key. Labels resolve
+// through t() at build time — never at module load — so the station-tag
+// filter chips track the active locale.
 const MUSIC_GENRES = Object.freeze([
-  ['alternative', 'Alternative'],
-  ['ambient', 'Ambient'],
-  ['blues', 'Blues'],
-  ['classical', 'Classical'],
-  ['country', 'Country'],
-  ['dance', 'Dance'],
-  ['electronic', 'Electronic'],
-  ['folk', 'Folk'],
-  ['funk', 'Funk'],
-  ['hip hop', 'Hip-Hop'],
-  ['house', 'House'],
-  ['indie', 'Indie'],
-  ['jazz', 'Jazz'],
-  ['latin', 'Latin'],
-  ['metal', 'Metal'],
-  ['oldies', 'Oldies'],
-  ['pop', 'Pop'],
-  ['punk', 'Punk'],
-  ['r&b', 'R&B'],
-  ['reggae', 'Reggae'],
-  ['rock', 'Rock'],
-  ['soul', 'Soul'],
-  ['techno', 'Techno'],
-  ['trance', 'Trance'],
-  ['world', 'World'],
+  ['alternative', 'layers.radio.genre.alternative'],
+  ['ambient', 'layers.radio.genre.ambient'],
+  ['blues', 'layers.radio.genre.blues'],
+  ['classical', 'layers.radio.genre.classical'],
+  ['country', 'layers.radio.genre.country'],
+  ['dance', 'layers.radio.genre.dance'],
+  ['electronic', 'layers.radio.genre.electronic'],
+  ['folk', 'layers.radio.genre.folk'],
+  ['funk', 'layers.radio.genre.funk'],
+  ['hip hop', 'layers.radio.genre.hipHop'],
+  ['house', 'layers.radio.genre.house'],
+  ['indie', 'layers.radio.genre.indie'],
+  ['jazz', 'layers.radio.genre.jazz'],
+  ['latin', 'layers.radio.genre.latin'],
+  ['metal', 'layers.radio.genre.metal'],
+  ['oldies', 'layers.radio.genre.oldies'],
+  ['pop', 'layers.radio.genre.pop'],
+  ['punk', 'layers.radio.genre.punk'],
+  ['r&b', 'layers.radio.genre.rAndB'],
+  ['reggae', 'layers.radio.genre.reggae'],
+  ['rock', 'layers.radio.genre.rock'],
+  ['soul', 'layers.radio.genre.soul'],
+  ['techno', 'layers.radio.genre.techno'],
+  ['trance', 'layers.radio.genre.trance'],
+  ['world', 'layers.radio.genre.world'],
 ]);
 
 const CATEGORY_MATCHERS = Object.freeze({
@@ -124,14 +128,14 @@ const RADIO_CATEGORY_COLORS = Object.freeze({
 });
 
 const RADIO_CLUSTER_LABELS = Object.freeze({
-  news: 'NEWS',
-  talk: 'TALK',
-  weather: 'WEATHER',
-  'public-safety': 'SAFETY',
-  'aviation-marine': 'AIR / SEA',
-  'traffic-transit': 'TRANSIT',
-  music: 'MUSIC',
-  other: 'OTHER',
+  news: 'layers.radio.cluster.news',
+  talk: 'layers.radio.cluster.talk',
+  weather: 'layers.radio.cluster.weather',
+  'public-safety': 'layers.radio.cluster.publicSafety',
+  'aviation-marine': 'layers.radio.cluster.aviationMarine',
+  'traffic-transit': 'layers.radio.cluster.trafficTransit',
+  music: 'layers.radio.cluster.music',
+  other: 'layers.radio.cluster.other',
 });
 
 const RADIO_MARKER_CATEGORY_ORDER = Object.freeze([
@@ -756,7 +760,7 @@ export function radioCategoryColor(categoryId = 'other') {
 export function radioClusterBadgeText(categoryId = 'other', count = 0) {
   const normalized = String(categoryId || 'other');
   const canonical = normalized.startsWith('genre:') ? 'music' : normalized;
-  const label = RADIO_CLUSTER_LABELS[canonical] || RADIO_CLUSTER_LABELS.other;
+  const label = t(RADIO_CLUSTER_LABELS[canonical] || RADIO_CLUSTER_LABELS.other);
   const stationCount = Math.max(0, Math.floor(Number(count) || 0));
   return `${stationCount} ${label}`;
 }
@@ -805,23 +809,23 @@ export function radioStationCategoryId(station) {
 export function buildRadioCategories(stations) {
   const rows = Array.isArray(stations) ? stations : [];
   const categories = [
-    { id: 'all', label: 'All' },
-    { id: 'news', label: 'News' },
-    { id: 'talk', label: 'Talk' },
-    { id: 'weather', label: 'Weather / Emergency' },
-    { id: 'public-safety', label: 'Public Safety' },
-    { id: 'aviation-marine', label: 'Aviation / Marine' },
-    { id: 'traffic-transit', label: 'Traffic / Transit' },
-    { id: 'music', label: 'Music' },
+    { id: 'all', label: t('layers.radio.filterAll') },
+    { id: 'news', label: t('layers.radio.category.news') },
+    { id: 'talk', label: t('layers.radio.category.talk') },
+    { id: 'weather', label: t('layers.radio.category.weather') },
+    { id: 'public-safety', label: t('layers.radio.category.publicSafety') },
+    { id: 'aviation-marine', label: t('layers.radio.category.aviationMarine') },
+    { id: 'traffic-transit', label: t('layers.radio.category.trafficTransit') },
+    { id: 'music', label: t('layers.radio.category.music') },
   ];
 
-  for (const [genre, label] of MUSIC_GENRES) {
+  for (const [genre, labelKey] of MUSIC_GENRES) {
     const id = `genre:${genre}`;
     if (rows.some((station) => stationMatchesRadioCategory(station, id))) {
-      categories.push({ id, label });
+      categories.push({ id, label: t(labelKey) });
     }
   }
-  categories.push({ id: 'other', label: 'Other' });
+  categories.push({ id: 'other', label: t('layers.radio.category.other') });
   return categories.map((category) => ({
     ...category,
     color: radioCategoryColor(category.id),
