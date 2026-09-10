@@ -2867,6 +2867,15 @@ function pushAmbientCardEntries() {
       rank: rank++,
       pinned,
       active,
+      // Accessible mirror (worldOverlay.syncAccessibleActions): the cards are
+      // pointer-only click targets — without these two fields they are
+      // silently dropped from the keyboard/screen-reader target list.
+      accessibilityLabel: `Focus CCTV camera ${record.camera.name}${record.camera.city ? `, ${record.camera.city}` : ''}`,
+      activate: () => {
+        if (!_recordById.has(id)) return false;
+        activateCctvCameraFromWorldClick(id, setActiveCamera);
+        return true;
+      },
     }));
   };
   for (const id of _cardIds) push(id, { pinned: id === _hoverCardId });

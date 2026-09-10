@@ -2033,7 +2033,16 @@ export class DataLayerManager {
 
       const left = document.createElement('div');
       left.className = 'data-toggle-left';
-      left.innerHTML = `<span class="data-icon">${layer.icon}</span><span class="data-name">${layer.name}</span>`;
+      // Built via textContent, not innerHTML: layer names come from the
+      // registry today, but a future remote-sourced name must never become
+      // markup.
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'data-icon';
+      iconSpan.textContent = layer.icon;
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'data-name';
+      nameSpan.textContent = layer.name;
+      left.append(iconSpan, nameSpan);
 
       const right = document.createElement('div');
       right.className = 'data-toggle-right';

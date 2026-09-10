@@ -504,7 +504,11 @@ export class SceneDirector {
       const top = document.createElement('div');
       top.className = 'scene-shot-top';
 
-      const label = document.createElement('div');
+      // A real button, not a clickable div: shot selection must be reachable
+      // by keyboard (Enter/Space), announced with a role, and visibly
+      // hoverable. dblclick still renames on a mouse double-click.
+      const label = document.createElement('button');
+      label.type = 'button';
       label.className = 'scene-shot-label';
       label.textContent = shot.title;
       label.addEventListener('click', () => {

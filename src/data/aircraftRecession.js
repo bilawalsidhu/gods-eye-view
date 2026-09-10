@@ -120,11 +120,6 @@ export function getAircraftRecessionParams() {
   return _params;
 }
 
-/** Restore production defaults for deterministic QA. */
-export function resetAircraftRecessionParams() {
-  _params = { ...DEFAULT_AIRCRAFT_RECESSION_PARAMS };
-}
-
 /**
  * Straight-line tangent distance from a camera above a spherical Earth to its
  * geometric limb. The WGS84 semi-major radius is sufficient for a visual

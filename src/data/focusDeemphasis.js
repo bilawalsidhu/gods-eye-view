@@ -139,11 +139,6 @@ export function getFocusDeemphasisParams() {
   return _params;
 }
 
-/** Restore production defaults. Primarily useful for deterministic QA. */
-export function resetFocusDeemphasisParams() {
-  _params = { ...DEFAULT_FOCUS_DEEMPHASIS_PARAMS };
-}
-
 /**
  * Publish a focus target from the exact world position already cached by its
  * tracking/render path. Callers must never re-derive a position here: a second

@@ -40,10 +40,9 @@
  *     moves, override it with OPENAI_REALTIME_MODEL_MINI rather than editing
  *     code — see .env.example.
  *
- * Rates are USD per 1,000,000 tokens.
- */
-export const VOICE_MODEL_RATES_VERIFIED_ON = '2026-08-18';
-
+ * Rates are USD per 1,000,000 tokens (last verified against upstream
+ * pricing: 2026-08-18).
+ 
 /** @typedef {'standard'|'mini'} VoiceModelTier */
 
 export const VOICE_MODELS = Object.freeze({

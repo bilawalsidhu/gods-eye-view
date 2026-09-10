@@ -889,8 +889,11 @@
     <p class="first-run-note" data-first-run-status role="status" aria-live="polite">Tip: the GEV MIC button in the dock lets you talk to the map.</p>
   </aside>
 
-  <!-- Intelligence HUD Overlay -->
-  <div id="intel-hud"></div>
+  <!-- Intelligence HUD Overlay. Decorative telemetry (classification banner,
+       250 ms camera readout, blinking rec dot) — hidden from assistive tech:
+       it duplicates the accessible readouts and its constant mutation would
+       churn a screen reader's virtual cursor. -->
+  <div id="intel-hud" aria-hidden="true"></div>
 
   <!-- Loading screen -->
   <div id="loading-screen">

@@ -104,6 +104,7 @@ test('renders ordinary layer rows without recreating a panel-hidden coordinator'
         toggle() {},
       },
       appendChild(child) { this.children.push(child); return child; },
+      append(...kids) { for (const kid of kids) this.appendChild(kid); },
       addEventListener() {},
       setAttribute(name, value) { this.attributes[name] = String(value); },
       querySelector(selector) {

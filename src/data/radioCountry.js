@@ -93,8 +93,3 @@ export function normalizeRadioCountryInput(value) {
     name: canonicalCountryName(code),
   });
 }
-
-/** Return whether a value is a recognized ISO 3166-1 alpha-2 code. */
-export function isRadioCountryCode(value) {
-  return typeof value === 'string' && ISO_ALPHA_2_SET.has(value.toUpperCase());
-}

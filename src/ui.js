@@ -3339,11 +3339,16 @@ export class StyleManager {
 
     // Keyboard shortcuts: 1-7, H, Escape
     this._globalKeydownHandler = (e) => {
-      // Ignore when interacting with a form control (except Escape). Global
-      // hotkeys ('1'-'7', 'h', 'o', 'v', 'd', 'c', 'f') otherwise fire while a
-      // <select> dropdown (e.g. HUD layout) is focused and its native
-      // type-ahead is in use, or while typing in a text field (M9).
-      const isFormControl = e.target?.matches?.('select, input, textarea')
+      // Never hijack browser/OS chords: Ctrl+F (find), Ctrl+D (bookmark),
+      // Ctrl+1..7 (tab switch), Alt+letter etc. must keep their native
+      // meaning — only bare keys drive app actions.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      // Ignore when interacting with a form control or editable region
+      // (except Escape). Global hotkeys ('1'-'7', 'h', 'o', 'v', 'd', 'c',
+      // 'f') otherwise fire while a <select> dropdown (e.g. HUD layout) is
+      // focused and its native type-ahead is in use, or while typing in a
+      // text field (M9).
+      const isFormControl = e.target?.matches?.('select, input, textarea, [contenteditable], [role="textbox"]')
         || e.target === this._locationSearch;
       if (isFormControl && e.key !== 'Escape') return;
 
@@ -9664,7 +9669,12 @@ export class StyleManager {
     // Create orbit indicator element
     this._orbitIndicator = document.createElement('div');
     this._orbitIndicator.id = 'orbit-indicator';
-    this._orbitIndicator.innerHTML = '<span class="orbit-icon">&#x21BB;</span> ORBIT';
+    this._orbitIndicator.innerHTML = '<span class="orbit-icon" aria-hidden="true">&#x21BB;</span><span class="orbit-text">ORBIT OFF</span>';
+    // Announced (politely) when orbit state changes; the glyph is decoration
+    // and the TEXT carries the state so both directions are announced even
+    // though the container also transitions via visibility.
+    this._orbitIndicator.setAttribute('role', 'status');
+    this._orbitIndicator.setAttribute('aria-live', 'polite');
     document.body.appendChild(this._orbitIndicator);
   }
 
@@ -9684,6 +9694,7 @@ export class StyleManager {
       pitch: this._currentPoi?.pitch || -30,
     });
 
+    this._orbitIndicator.querySelector('.orbit-text').textContent = isActive ? 'ORBIT ON' : 'ORBIT OFF';
     this._orbitIndicator.classList.toggle('active', isActive);
   }
 
@@ -9694,6 +9705,9 @@ export class StyleManager {
   _stopOrbit() {
     if (this.orbitController.active) {
       this.orbitController.stop();
+      // Text first: the status must change while still in the accessibility
+      // tree — removing visibility first would announce nothing.
+      this._orbitIndicator.querySelector('.orbit-text').textContent = 'ORBIT OFF';
       this._orbitIndicator.classList.remove('active');
     }
   }

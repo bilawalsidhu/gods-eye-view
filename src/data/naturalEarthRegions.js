@@ -241,9 +241,6 @@ export async function listRegions() {
   }));
 }
 
-// exported for tests
-export { normalizeName as _normalizeName };
-
 /**
  * Ray-cast (even-odd) point-in-ring test. Ring = [[lon,lat], …], open or
  * closed. Degenerate rings (<3 verts) are never containing.

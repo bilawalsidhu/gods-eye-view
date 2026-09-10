@@ -160,7 +160,3 @@ export const SCENE_RECIPES = [
     ],
   },
 ];
-
-export function getSceneRecipeById(id) {
-  return SCENE_RECIPES.find((recipe) => recipe.id === id) || null;
-}

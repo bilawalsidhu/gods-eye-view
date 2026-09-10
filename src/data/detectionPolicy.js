@@ -5,7 +5,6 @@
  * module so density cannot drift into contradictory mode semantics again.
  */
 
-export const DENSITY_STOPS = Object.freeze([0, 25, 50, 75, 100]);
 export const ALLOCATION_ELASTIC = 'ELASTIC';
 export const ALLOCATION_WEIGHTED = 'WEIGHTED';
 export const ALLOCATION_STRATEGIES = Object.freeze([ALLOCATION_ELASTIC, ALLOCATION_WEIGHTED]);

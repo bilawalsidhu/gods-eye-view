@@ -13,7 +13,7 @@
   --accent-glow: rgba(0, 212, 255, 0.4);
   --text-primary: #e8eaed;
   --text-secondary: rgba(232, 234, 237, 0.5);
-  --text-dim: rgba(232, 234, 237, 0.3);
+  --text-dim: rgba(232, 234, 237, 0.55); /* 5.3:1 on --bg-dark — WCAG AA */
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --panel-radius: 16px;
@@ -115,6 +115,25 @@ html, body {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* Sighted keyboard users tab through this clipped region too — without an
+   un-clip on focus those stops are invisible (a silent focus trap). The
+   focused button expands in place; screen-reader users are unaffected. */
+.world-overlay-accessibility button:focus-visible {
+  clip: auto;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  margin: 10px;
+  padding: 6px 10px;
+  white-space: normal;
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  z-index: 1000;
+  font: 12px/1.4 var(--font-mono);
 }
 
 /* ── Source-backed cockpit weather ─────────────
@@ -591,7 +610,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 
 .panel-mini-label {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 1.4px;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -1778,7 +1797,7 @@ body.ui-clean-view #scene-runtime.active {
 
 .poi-pill-key {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 1px;
   color: var(--text-dim);
   background: rgba(255, 255, 255, 0.06);
@@ -5250,7 +5269,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   gap: 7px;
   align-items: center;
   color: var(--text-dim);
-  font: 7px/1 var(--font-mono);
+  font: 9px/1 var(--font-mono);
   letter-spacing: .08em;
 }
 .context-radio-mini-volume input { width: 100%; }
@@ -6525,12 +6544,28 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   font-size: 10px;
   letter-spacing: 1px;
   color: var(--text-primary);
+  /* Button reset + visible affordance (the label is a real <button>): */
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.scene-shot-label:hover {
+  text-decoration: underline;
+}
+
+.scene-shot-label:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .scene-shot-meta {
   margin-top: 4px;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.8px;
   color: var(--text-dim);
 }

@@ -1467,6 +1467,9 @@ export class GevRealtimeController {
   updateVoiceButtonLabel() {
     if (!this.ui.buttonLabel) return;
     this.ui.buttonLabel.textContent = 'MIC';
+    // Toggle state must be perceivable non-visually: the visible caption is
+    // always "MIC", so aria-pressed is the only state channel (WCAG 4.1.2).
+    this.ui.button?.setAttribute('aria-pressed', this.status !== 'idle' ? 'true' : 'false');
     if (this.ui.helpDetail) {
       this.ui.helpDetail.textContent = resolveVoiceControlHint(
         this.pushToTalkMode,
@@ -2312,7 +2315,10 @@ function isNearlyBlackFrame(ctx, width, height) {
  */
 async function fetchRealtimeToken(tier = DEFAULT_VOICE_TIER) {
   const url = `${TOKEN_URL}?tier=${encodeURIComponent(resolveVoiceModel(tier).tier)}`;
-  const response = await fetch(url, { cache: 'no-store' });
+  // POST (not GET): a cross-site GET is a CORS "simple request" — no
+  // preflight — so a hostile page could mint billable sessions drive-by from
+  // a visitor's browser. Both token endpoints are POST + same-origin.
+  const response = await fetch(url, { method: 'POST', cache: 'no-store' });
   const data = await response.json().catch(() => null);
   // Server echo first (authoritative, always present); the minted session
   // config is the fallback when a proxy strips headers.
@@ -2552,13 +2558,13 @@ function createVoiceControl({ reset = false } = {}) {
     root.innerHTML = `
       <div class="gev-voice-heading">
         <div class="gev-voice-kicker">AI AGENT</div>
-        <div id="gev-voice-status">OFF</div>
+        <div id="gev-voice-status" role="status" aria-live="polite">OFF</div>
         <div class="gev-voice-cost">
           <button id="gev-voice-tier" class="gev-voice-tier-btn" type="button" aria-pressed="false" title="Voice model tier — applies next session">STD</button>
           <span id="gev-voice-cost-value" class="gev-voice-cost-value" data-level="ok" title="Estimated session cost">~$0.00</span>
         </div>
       </div>
-      <button id="gev-voice-button" type="button" aria-label="Voice control — hold Space to speak; click to toggle voice" aria-describedby="gev-voice-help">
+      <button id="gev-voice-button" type="button" aria-label="Voice control — hold Space to speak; click to toggle voice" aria-pressed="false" aria-describedby="gev-voice-help">
         <span class="gev-mic-orbit"><img src="/mic.svg" alt="" /></span>
         <span class="gev-mic-label">ON/OFF</span>
       </button>
