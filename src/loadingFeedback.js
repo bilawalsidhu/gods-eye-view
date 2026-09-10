@@ -1,4 +1,5 @@
 import { installationFeedback } from './data/installationFeedback.js';
+import { t } from './i18n/index.js';
 
 export const LOADING_REVEAL_DELAY_MS = 160;
 export const LOADING_TERMINAL_DWELL_MS = 2200;
@@ -181,7 +182,7 @@ export function reduceTrafficSyncFeedback(previous, {
       // Neutral default: the layer always supplies its own LIVE/SIMULATED
       // label, and a fallback string must never claim a live feed on a
       // keyless build.
-      label: label || 'syncing road network',
+      label: label || t('shell.status.trafficSyncing'),
       progressText: hasProgress ? `${progressPct}%` : '...',
     };
   }
@@ -305,22 +306,27 @@ export function presentLoadingFeedback(state, summary, nowMs) {
   }
   if (!state?.visible) return null;
   if (state.phase === 'terminal') {
-    const labels = { complete: 'LOAD COMPLETE', cancelled: 'LOAD CANCELLED', error: 'LOAD FAILED' };
+    const labels = {
+      complete: t('shell.status.loadComplete'),
+      cancelled: t('shell.status.loadCancelled'),
+      error: t('shell.status.loadFailed'),
+    };
     const label = state.operation === 'disabling' && state.terminal === 'complete'
-      ? 'LIVE DATA OFF'
+      ? t('shell.status.liveDataOff')
       : state.terminal === 'complete' && state.activeIds?.length === 1 && state.activeIds[0] === 'military-installations'
-        ? 'MAPPED SITES LOADED' : labels[state.terminal] || 'LOAD COMPLETE';
+        ? t('shell.status.mappedSitesLoaded') : labels[state.terminal] || t('shell.status.loadComplete');
     return { state: state.terminal, label, detail: '' };
   }
   const active = summary.active;
   if (active.length === 1 && active[0].installationRetry && !summary.disabling) {
+    // Detail names the data providers — keep-English boundary, verbatim.
     return { state: 'loading', label: active[0].installationRetry.retrying
-      ? 'RETRYING MAPPED SITES' : 'FETCHING MAPPED SITES', detail: 'OpenStreetMap · Overpass' };
+      ? t('shell.status.retryingMappedSites') : t('shell.status.fetchingMappedSites'), detail: 'OpenStreetMap · Overpass' };
   }
   const elapsed = Math.max(0, nowMs - state.startedAt);
   const label = summary.disabling
-    ? 'TURNING OFF LIVE DATA'
-    : summary.refresh ? 'REFRESHING LIVE DATA' : 'LOADING LIVE DATA';
+    ? t('shell.status.turningOffLiveData')
+    : summary.refresh ? t('shell.status.refreshingLiveData') : t('shell.status.loadingLiveData');
   const names = active.slice(0, 2).map((record) => record.label).join(' · ');
   const suffix = active.length > 2 ? ` +${active.length - 2}` : '';
   return {
