@@ -229,4 +229,110 @@ export default {
   // readout's single-segment search fallback (initial-state keys
   // location.miniCityInitial/miniPoiInitial were seeded in phase 2).
   'location.miniSearchedPlaceholder': 'Searched location',
+
+  // ── Phase-3 runtime extraction batch 2: cockpit + Context renderers ───────
+  // UNTRANSLATED STAGE-3 SEED: same keys and English values as en/cockpit.js
+  // until stage 4.
+
+  // syncWeatherToggle(): state-sibling keys for the runtime ON/OFF rewrite
+  // (context.weatherEnableAriaLabel was seeded on the static button).
+  'context.weatherDisableAriaLabel': 'Disable cockpit weather effects',
+  'context.weatherStateOn': 'ON',
+  'context.weatherStateOff': 'OFF',
+  // syncTr3bToggle(): converted-state title sibling of context.tr3bTitle.
+  'context.tr3bRestoreTitle': 'Restore real aircraft',
+  // setVisionMode(): the style token is dynamic, so the sentence is split out
+  // of the seeded vision.currentAriaLabel/currentTitle (whose values pin the
+  // NORMAL default) into {style} templates.
+  'vision.styleNameNightVision': 'Night vision',
+  'vision.styleNameThermal': 'Thermal',
+  'vision.styleNameNoir': 'Noir',
+  'vision.currentAriaTemplate': 'Current cockpit vision style: {style}. Activate for next style.',
+  'vision.currentTitleTemplate': 'Current style: {style} — click for next',
+
+  // Cockpit signal stream (pushCockpitSignal / renderCockpitSignals).
+  'signal.trackAcquired': 'TRACK ACQUIRED',
+  'signal.trackDetail': '{label} · COURSE {heading}°',
+  'signal.selectFlightAria': 'Select flight {title}',
+  'signal.contextStandby': 'CONTEXT STANDBY',
+  'signal.contextStandbyHint': 'ENABLE GLOBAL CONTEXT FOR PROXIMITY PINGS',
+  'signal.contactLostTitle': 'CONTACT LOST · {subject}',
+  'signal.contactLostDetail': 'SUBJECT LEFT ITS FEED · READOUT HOLDING LAST KNOWN',
+  'signal.classMilitary': 'MILITARY FLIGHT',
+  'signal.classCommercial': 'COMMERCIAL FLIGHT',
+  'signal.contactCurrent': '{aircraftClass} · CURRENT',
+  'signal.contactRange': '{aircraftClass} · {distance}',
+  'signal.distanceUnknown': 'DISTANCE UNKNOWN',
+  'signal.inputsUnknown': {
+    one: '{count} INPUT UNKNOWN',
+    other: '{count} INPUTS UNKNOWN',
+  },
+  'signal.sourceStatusUnavailable': 'SOURCE STATUS UNAVAILABLE',
+
+  // updateHud(): callsign fallback + the composed aircraft meta line (each
+  // feed state is its own key so no state can leak English later).
+  'hud.fallbackCallsign': 'AIRCRAFT',
+  'hud.metaClassMilitary': 'MILITARY',
+  'hud.metaClassCommercial': 'COMMERCIAL',
+  'hud.metaFeedAcquiringSurface': 'ACQUIRING SURFACE',
+  'hud.metaFeedSurfaceFallback': 'SURFACE FALLBACK',
+  'hud.metaFeedStale': 'STALE FEED',
+  'hud.metaFeedLive': 'LIVE TRACK',
+  'hud.aircraftMetaTemplate': '{aircraftClass} · {feedState} · COURSE ALIGNED',
+
+  // updateRoute(): runtime state siblings of the seeded route keys.
+  'route.statusArrowEstimated': 'ARROW · ESTIMATED DIRECTION',
+  'route.directionLabel': 'DEST {bearing}',
+
+  // updateContext(): uncertainty/nearest/bearing readout states.
+  'context.uncertaintyContactLost': 'CONTACT LOST · LAST KNOWN READOUT · NOT AN ALL-CLEAR',
+  'context.uncertaintyInputsUnknown': {
+    one: '{count} INPUT UNKNOWN · NOT AN ALL-CLEAR',
+    other: '{count} INPUTS UNKNOWN · NOT AN ALL-CLEAR',
+  },
+  'context.uncertaintyInputsCurrent': 'AVAILABLE INPUTS CURRENT · NOT AN ALL-CLEAR',
+  'context.nearestTemplate': '{cohort} · {contact}',
+  'context.nearestUnavailableAria': '{cohort}, Unavailable',
+  'context.bearingNone': 'BRG —',
+  'context.bearingAhead': 'AHEAD',
+  'context.bearingSide': '{side} {angle}',
+  'context.sideLeft': 'L',
+  'context.sideRight': 'R',
+
+  // setContextCollapsed()/setSignalCollapsed(): expand-state siblings.
+  'context.toggleExpandAriaLabel': 'Expand Contact panel',
+  'context.toggleExpandTitle': 'Expand contact panel',
+  'brief.expandAriaLabel': 'Expand cockpit briefing panel',
+  'brief.expandTitle': 'Expand briefing panel',
+
+  // setBriefAutoRotate(): cycle toggle states + the ON-state help text (the
+  // OFF-state help is the seeded brief.autoTitle).
+  'brief.autoOn': 'CYCLE ON',
+  'brief.autoOff': 'CYCLE OFF',
+  'brief.autoTitleOn': 'Stop automatic page cycling. Previous, Next, and the SIG/NEWS/LOCAL tabs stay available.',
+
+  // Briefing carousel pages (kicker/subtitle/source per page; the news/local
+  // source lines are provider attribution and stay English).
+  'brief.kickerNews': 'REGIONAL NEWS',
+  'brief.kickerLocal': 'LOCAL INFO',
+  'brief.subtitleNews': 'LATEST LOCATION-MATCHED REPORTING',
+  'brief.subtitleLocal': 'PLACE / CONDITIONS / POSITION',
+
+  // Local position + regional brief status states.
+  'brief.positionUnavailable': 'POSITION UNAVAILABLE',
+  'brief.newsUnavailable': 'REGIONAL NEWS UNAVAILABLE',
+  'brief.regionUnavailable': 'REGION UNAVAILABLE',
+  'brief.newsEmpty': 'NO RECENT LOCATION MATCHES',
+
+  // renderRegionalBrief(): article metadata, cloud readout, and age chips.
+  'brief.metadataSourceFallback': 'SOURCE',
+  'brief.articleMetaTemplate': '{domain} · {age}',
+  'brief.newsSourceLine': '{source} · LOCATION QUERY',
+  'brief.age.timeUnknown': 'TIME UNKNOWN',
+  'brief.age.minutes': '{count}M AGO',
+  'brief.age.hours': '{count}H AGO',
+  'brief.age.days': '{count}D AGO',
+  'brief.wind.dirUnknown': 'DIR UNKNOWN',
+  'brief.cloudTemplate': 'CLOUD {pct}%',
+  'brief.cloudUnknown': 'CLOUD UNKNOWN',
 };

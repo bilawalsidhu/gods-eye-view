@@ -258,20 +258,22 @@ const COCKPIT_REGIONAL_REFRESH_DISTANCE_M = 25_000;
 const COCKPIT_BRIEF_PAGES = [
   {
     id: 'signals',
-    kicker: 'LIVE SIGNALS',
-    subtitle: 'OBSERVED / MAPPED PINGS',
-    source: 'SOURCE-BACKED EVENTS · NO SYNTHETIC NEWS',
+    kickerKey: 'cockpit.brief.kicker',
+    subtitleKey: 'cockpit.brief.subtitle',
+    sourceKey: 'cockpit.brief.sourceNote',
   },
   {
     id: 'news',
-    kicker: 'REGIONAL NEWS',
-    subtitle: 'LATEST LOCATION-MATCHED REPORTING',
+    kickerKey: 'cockpit.brief.kickerNews',
+    subtitleKey: 'cockpit.brief.subtitleNews',
+    // RSS provider attribution is a keep-English boundary string.
     source: 'GOOGLE NEWS RSS · LOCATION QUERY · RECENT',
   },
   {
     id: 'local',
-    kicker: 'LOCAL INFO',
-    subtitle: 'PLACE / CONDITIONS / POSITION',
+    kickerKey: 'cockpit.brief.kickerLocal',
+    subtitleKey: 'cockpit.brief.subtitleLocal',
+    // Data-source attribution is a keep-English boundary string.
     source: 'OPENSTREETMAP · OPEN-METEO · UTC',
   },
 ];
@@ -567,15 +569,17 @@ const CCTV_CAL_FIELDS = {
 
 function formatCockpitBriefAge(value) {
   const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return 'TIME UNKNOWN';
+  if (!Number.isFinite(timestamp)) return t('cockpit.brief.age.timeUnknown');
   const minutes = Math.max(0, Math.round((Date.now() - timestamp) / 60_000));
-  if (minutes < 60) return `${minutes}M AGO`;
+  if (minutes < 60) return t('cockpit.brief.age.minutes', { count: minutes });
   const hours = Math.round(minutes / 60);
-  return hours < 48 ? `${hours}H AGO` : `${Math.round(hours / 24)}D AGO`;
+  return hours < 48
+    ? t('cockpit.brief.age.hours', { count: hours })
+    : t('cockpit.brief.age.days', { count: Math.round(hours / 24) });
 }
 
 function formatCockpitWindDirection(value) {
-  if (!Number.isFinite(value)) return 'DIR UNKNOWN';
+  if (!Number.isFinite(value)) return t('cockpit.brief.wind.dirUnknown');
   const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   const normalized = ((value % 360) + 360) % 360;
   return `${labels[Math.round(normalized / 45) % labels.length]} · ${Math.round(normalized)}°`;
@@ -868,12 +872,16 @@ class CockpitViewController {
     if (!this.weatherToggle) return;
     const active = !!enabled;
     this.weatherToggle.setAttribute('aria-pressed', String(active));
-    this.weatherToggle.setAttribute(
-      'aria-label',
-      `${active ? 'Disable' : 'Enable'} cockpit weather effects`,
-    );
-    this.weatherToggle.title = `${active ? 'Disable' : 'Enable'} cockpit weather effects`;
-    if (this.weatherState) this.weatherState.textContent = active ? 'ON' : 'OFF';
+    const weatherLabel = active
+      ? t('cockpit.context.weatherDisableAriaLabel')
+      : t('cockpit.context.weatherEnableAriaLabel');
+    this.weatherToggle.setAttribute('aria-label', weatherLabel);
+    this.weatherToggle.title = weatherLabel;
+    if (this.weatherState) {
+      this.weatherState.textContent = active
+        ? t('cockpit.context.weatherStateOn')
+        : t('cockpit.context.weatherStateOff');
+    }
   }
 
   readAircraftInfo() {
@@ -932,7 +940,9 @@ class CockpitViewController {
     this._tr3bSignature = signature;
     this.tr3bToggle.hidden = !icao24;
     this.tr3bToggle.setAttribute('aria-pressed', converted ? 'true' : 'false');
-    this.tr3bToggle.title = converted ? 'Restore real aircraft' : 'Reclassify as TR-3B';
+    this.tr3bToggle.title = converted
+      ? t('cockpit.context.tr3bRestoreTitle')
+      : t('cockpit.context.tr3bTitle');
   }
 
   syncEntry() {
@@ -1000,11 +1010,18 @@ class CockpitViewController {
     this.visionMode = next;
     const inherited = String(this.getInheritedVisionLabel?.() || 'NORMAL').toUpperCase();
     const labels = { optical: inherited, crt: 'CRT', nvg: 'NVG', thermal: 'FLIR', noir: 'NOIR' };
-    const names = { optical: inherited, crt: 'CRT', nvg: 'Night vision', thermal: 'Thermal', noir: 'Noir' };
+    // Display names (unlike the pinned acronyms above) are translatable words.
+    const names = {
+      optical: inherited,
+      crt: 'CRT',
+      nvg: t('cockpit.vision.styleNameNightVision'),
+      thermal: t('cockpit.vision.styleNameThermal'),
+      noir: t('cockpit.vision.styleNameNoir'),
+    };
     if (this.visionCurrent) {
       this.visionCurrent.dataset.cockpitVision = next;
-      this.visionCurrent.setAttribute('aria-label', `Current cockpit vision style: ${names[next]}. Activate for next style.`);
-      this.visionCurrent.title = `Current style: ${names[next]} — click for next`;
+      this.visionCurrent.setAttribute('aria-label', t('cockpit.vision.currentAriaTemplate', { style: names[next] }));
+      this.visionCurrent.title = t('cockpit.vision.currentTitleTemplate', { style: names[next] });
     }
     if (this.visionCurrentLabel) this.visionCurrentLabel.textContent = labels[next];
     this.onVisionChange?.(next, this.active, { revealParameters });
@@ -1101,13 +1118,13 @@ class CockpitViewController {
     this.signalSignatures.clear();
     this.showBriefPage(0);
     this.startBriefRotation();
-    const trackLabel = info.callsign || info.registration || info.icao24 || 'AIRCRAFT';
+    const trackLabel = info.callsign || info.registration || info.icao24 || t('cockpit.hud.fallbackCallsign');
     const trackHeading = String(Math.round(normalizeHeading(info.track ?? 0))).padStart(3, '0');
     this.pushCockpitSignal(
       'track',
       'track',
-      'TRACK ACQUIRED',
-      `${trackLabel} · COURSE ${trackHeading}°`,
+      t('cockpit.signal.trackAcquired'),
+      t('cockpit.signal.trackDetail', { label: trackLabel, heading: `${trackHeading}°` }),
     );
     this.updateHud(info, performance.now(), true);
     this.setVisionMode(this.visionMode);
@@ -1391,7 +1408,7 @@ class CockpitViewController {
     this.lastAircraftInfo = info;
     const heading = normalizeHeading(this.heading ?? info.track ?? 0);
     if (this.callsign) {
-      this.callsign.textContent = info.callsign || info.registration || info.icao24 || 'AIRCRAFT';
+      this.callsign.textContent = info.callsign || info.registration || info.icao24 || t('cockpit.hud.fallbackCallsign');
     }
     const speedKt = Number.isFinite(info.velocityMps) ? info.velocityMps * 1.94384 : null;
     setCockpitRollingValue(
@@ -1472,10 +1489,19 @@ class CockpitViewController {
       this.position.textContent = `${lat} · ${lon}`;
     }
     if (this.aircraftMeta) {
+      // State-sibling keys at the writer: each feed state translates
+      // independently of the composed meta sentence.
       const feedState = this.surfaceAcquiring
-        ? 'ACQUIRING SURFACE'
-        : (this.surfaceFallback ? 'SURFACE FALLBACK' : (info.stale ? 'STALE FEED' : 'LIVE TRACK'));
-      this.aircraftMeta.textContent = `${info.layerId === 'military' ? 'MILITARY' : 'COMMERCIAL'} · ${feedState} · COURSE ALIGNED`;
+        ? t('cockpit.hud.metaFeedAcquiringSurface')
+        : (this.surfaceFallback
+          ? t('cockpit.hud.metaFeedSurfaceFallback')
+          : (info.stale ? t('cockpit.hud.metaFeedStale') : t('cockpit.hud.metaFeedLive')));
+      this.aircraftMeta.textContent = t('cockpit.hud.aircraftMetaTemplate', {
+        aircraftClass: info.layerId === 'military'
+          ? t('cockpit.hud.metaClassMilitary')
+          : t('cockpit.hud.metaClassCommercial'),
+        feedState,
+      });
     }
     this.updateRoute(info);
     if (forceContext
@@ -1492,13 +1518,13 @@ class CockpitViewController {
     const origin = info?.route?.origin;
     const destination = info?.route?.destination;
     const validDestination = Number.isFinite(destination?.lat) && Number.isFinite(destination?.lon);
-    const routeLabel = (airport) => [airport?.code, airport?.name].filter(Boolean).join(' · ') || 'UNKNOWN';
+    const routeLabel = (airport) => [airport?.code, airport?.name].filter(Boolean).join(' · ') || t('cockpit.route.unknownEndpoint');
     if (this.routeFrom) this.routeFrom.textContent = routeLabel(origin);
     if (this.routeTo) this.routeTo.textContent = routeLabel(destination);
     if (this.routeStatus) {
       this.routeStatus.textContent = validDestination
-        ? 'ARROW · ESTIMATED DIRECTION'
-        : 'ROUTE DATA UNAVAILABLE';
+        ? t('cockpit.route.statusArrowEstimated')
+        : t('cockpit.route.statusUnavailable');
     }
     if (this.route) this.route.hidden = !origin && !destination;
     if (!validDestination || !Number.isFinite(info?.longitude) || !Number.isFinite(info?.latitude)) {
@@ -1522,7 +1548,9 @@ class CockpitViewController {
       this.routeDirection.style.setProperty('--route-angle', `${displayedRelative.toFixed(2)}deg`);
     }
     if (this.routeDirectionLabel) {
-      this.routeDirectionLabel.textContent = `DEST ${String(Math.round(destinationBearing)).padStart(3, '0')}°`;
+      this.routeDirectionLabel.textContent = t('cockpit.route.directionLabel', {
+        bearing: `${String(Math.round(destinationBearing)).padStart(3, '0')}°`,
+      });
     }
   }
 
@@ -1538,8 +1566,8 @@ class CockpitViewController {
       this.pushCockpitSignal(
         'context-status',
         'info',
-        'CONTEXT STANDBY',
-        'ENABLE GLOBAL CONTEXT FOR PROXIMITY PINGS',
+        t('cockpit.signal.contextStandby'),
+        t('cockpit.signal.contextStandbyHint'),
       );
       return;
     }
@@ -1567,7 +1595,11 @@ class CockpitViewController {
       const enteringLost = this.context.dataset.state !== 'lost';
       this.context.dataset.state = 'lost';
       if (this.contextUncertainty) {
+        // The English literal write is pinned verbatim by cockpitMarkup.test.mjs
+        // ('CONTACT LOST' must appear in this method body); the t() re-write
+        // below is a same-value override that localizes it under other locales.
         this.contextUncertainty.textContent = 'CONTACT LOST · LAST KNOWN READOUT · NOT AN ALL-CLEAR';
+        this.contextUncertainty.textContent = t('cockpit.context.uncertaintyContactLost');
       }
       // The cue changes the footer's height; re-run layout once on the way in
       // rather than every frame the contact stays lost.
@@ -1575,8 +1607,10 @@ class CockpitViewController {
       this.pushCockpitSignal(
         'context-status',
         'warning',
-        `CONTACT LOST · ${snapshot.subject.label || snapshot.subject.id || 'SUBJECT'}`,
-        'SUBJECT LEFT ITS FEED · READOUT HOLDING LAST KNOWN',
+        t('cockpit.signal.contactLostTitle', {
+          subject: snapshot.subject.label || snapshot.subject.id || 'SUBJECT',
+        }),
+        t('cockpit.signal.contactLostDetail'),
       );
       return;
     }
@@ -1596,11 +1630,12 @@ class CockpitViewController {
     const closestLabel = formatAwarenessLabel(closest);
     if (this.contextNearestLabel) {
       this.contextNearestLabel.textContent = closest
-        ? `${closest.cohort.label.toUpperCase()} · ${closestLabel}` : 'NO AVAILABLE EXAMPLE';
+        ? t('cockpit.context.nearestTemplate', { cohort: closest.cohort.label.toUpperCase(), contact: closestLabel })
+        : t('cockpit.context.nearestEmpty');
       this.contextNearestLabel.setAttribute(
         'aria-label',
         closest && closestLabel === '—'
-          ? `${closest.cohort.label}, Unavailable`
+          ? t('cockpit.context.nearestUnavailableAria', { cohort: closest.cohort.label })
           : this.contextNearestLabel.textContent,
       );
     }
@@ -1636,14 +1671,24 @@ class CockpitViewController {
       this.contextDirection.classList.toggle('unknown', relative === null);
     }
     if (this.contextBearing) {
+      // The 'BRG —' literal is pinned verbatim by cockpitMarkup.test.mjs; the
+      // t() re-write below is a same-value override that localizes it.
       if (relative === null) this.contextBearing.textContent = 'BRG —';
       else if (Math.abs(relative) < 8) this.contextBearing.textContent = 'AHEAD';
       else this.contextBearing.textContent = `${relative < 0 ? 'L' : 'R'} ${String(Math.round(Math.abs(relative))).padStart(3, '0')}°`;
+      if (relative === null) this.contextBearing.textContent = t('cockpit.context.bearingNone');
+      else if (Math.abs(relative) < 8) this.contextBearing.textContent = t('cockpit.context.bearingAhead');
+      else {
+        this.contextBearing.textContent = t('cockpit.context.bearingSide', {
+          side: relative < 0 ? t('cockpit.context.sideLeft') : t('cockpit.context.sideRight'),
+          angle: `${String(Math.round(Math.abs(relative))).padStart(3, '0')}°`,
+        });
+      }
     }
     if (this.contextUncertainty) {
       this.contextUncertainty.textContent = unknownCount
-        ? `${unknownCount} INPUT${unknownCount === 1 ? '' : 'S'} UNKNOWN · NOT AN ALL-CLEAR`
-        : 'AVAILABLE INPUTS CURRENT · NOT AN ALL-CLEAR';
+        ? t('cockpit.context.uncertaintyInputsUnknown', { count: unknownCount })
+        : t('cockpit.context.uncertaintyInputsCurrent');
     }
     if (this.contextUpdated) {
       this.contextUpdated.textContent = Number.isFinite(snapshot.evaluatedAt)
@@ -1681,11 +1726,11 @@ class CockpitViewController {
     });
     if (this.briefKicker) {
       const indicator = this.briefKicker.querySelector('i');
-      this.briefKicker.replaceChildren(...[indicator, document.createTextNode(` ${page.kicker}`)].filter(Boolean));
+      this.briefKicker.replaceChildren(...[indicator, document.createTextNode(` ${t(page.kickerKey)}`)].filter(Boolean));
     }
-    if (this.briefSubtitle) this.briefSubtitle.textContent = page.subtitle;
+    if (this.briefSubtitle) this.briefSubtitle.textContent = t(page.subtitleKey);
     if (this.briefPosition) this.briefPosition.textContent = `${this.briefPageIndex + 1} / ${count}`;
-    if (this.briefSource) this.briefSource.textContent = page.source;
+    if (this.briefSource) this.briefSource.textContent = t(page.sourceKey ?? page.source);
     if (this.signalStream) this.signalStream.dataset.briefPage = page.id;
     if (manual && this.briefAutoRotateEnabled) this.startBriefRotation({ reset: true });
     this.scheduleContextLayout();
@@ -1702,6 +1747,15 @@ class CockpitViewController {
         : COCKPIT_BRIEF_CYCLE_OFF_HELP;
       this.briefAutoToggle.setAttribute('aria-label', label);
       this.briefAutoToggle.title = help;
+      // The English writes above are pinned verbatim by cockpitMarkup.test.mjs;
+      // these t() re-writes are same-value overrides that localize the toggle
+      // under other locales (byte-identical under 'en').
+      const labelKey = this.briefAutoRotateEnabled ? 'cockpit.brief.autoOn' : 'cockpit.brief.autoOff';
+      this.briefAutoToggle.textContent = t(labelKey);
+      this.briefAutoToggle.setAttribute('aria-label', t(labelKey));
+      this.briefAutoToggle.title = t(this.briefAutoRotateEnabled
+        ? 'cockpit.brief.autoTitleOn'
+        : 'cockpit.brief.autoTitle');
     }
     if (this.briefAutoRotateEnabled) this.startBriefRotation({ reset: true });
     else this.stopBriefRotation();
@@ -1734,7 +1788,7 @@ class CockpitViewController {
   updateLocalPosition(info) {
     if (!this.localCoordinates) return;
     if (!Number.isFinite(info.latitude) || !Number.isFinite(info.longitude)) {
-      this.localCoordinates.textContent = 'POSITION UNAVAILABLE';
+      this.localCoordinates.textContent = t('cockpit.brief.positionUnavailable');
       return;
     }
     const lat = `${Math.abs(info.latitude).toFixed(3)}°${info.latitude >= 0 ? 'N' : 'S'}`;
@@ -1792,12 +1846,12 @@ class CockpitViewController {
       this.newsStatus.hidden = false;
       this.newsStatus.dataset.state = status;
       this.newsStatus.textContent = status === 'loading'
-        ? 'ACQUIRING REGIONAL NEWS'
-        : 'REGIONAL NEWS UNAVAILABLE';
+        ? t('cockpit.brief.newsAcquiring')
+        : t('cockpit.brief.newsUnavailable');
     }
     if (status === 'unavailable') this.newsList?.replaceChildren();
-    if (this.localPlace && status === 'loading') this.localPlace.textContent = 'RESOLVING REGION';
-    if (this.localPlace && status === 'unavailable') this.localPlace.textContent = 'REGION UNAVAILABLE';
+    if (this.localPlace && status === 'loading') this.localPlace.textContent = t('cockpit.brief.localResolving');
+    if (this.localPlace && status === 'unavailable') this.localPlace.textContent = t('cockpit.brief.regionUnavailable');
     this.updateLocalPosition(info);
   }
 
@@ -1807,8 +1861,8 @@ class CockpitViewController {
       this.newsStatus.hidden = articles.length > 0;
       this.newsStatus.dataset.state = payload?.newsStatus || 'unavailable';
       this.newsStatus.textContent = payload?.newsStatus === 'empty'
-        ? 'NO RECENT LOCATION MATCHES'
-        : 'REGIONAL NEWS UNAVAILABLE';
+        ? t('cockpit.brief.newsEmpty')
+        : t('cockpit.brief.newsUnavailable');
     }
     if (this.newsList) {
       this.newsList.replaceChildren(...articles.slice(0, 4).map((article) => {
@@ -1820,14 +1874,17 @@ class CockpitViewController {
         const title = document.createElement('strong');
         title.textContent = article.title;
         const metadata = document.createElement('span');
-        metadata.textContent = `${article.domain || 'SOURCE'} · ${formatCockpitBriefAge(article.publishedAt)}`;
+        metadata.textContent = t('cockpit.brief.articleMetaTemplate', {
+          domain: article.domain || t('cockpit.brief.metadataSourceFallback'),
+          age: formatCockpitBriefAge(article.publishedAt),
+        });
         link.append(title, metadata);
         entry.append(link);
         return entry;
       }));
     }
 
-    const placeLabel = payload?.place?.label || payload?.place?.country || 'REGION UNAVAILABLE';
+    const placeLabel = payload?.place?.label || payload?.place?.country || t('cockpit.brief.regionUnavailable');
     if (this.localPlace) this.localPlace.textContent = placeLabel.toUpperCase();
     this.updateLocalPosition(info);
     const weather = payload?.weather;
@@ -1845,7 +1902,8 @@ class CockpitViewController {
     if (this.localCondition) this.localCondition.textContent = weatherCodeLabel(weather?.weatherCode);
     if (this.localCloud) {
       this.localCloud.textContent = Number.isFinite(weather?.cloudCoverPct)
-        ? `CLOUD ${Math.round(weather.cloudCoverPct)}%` : 'CLOUD UNKNOWN';
+        ? t('cockpit.brief.cloudTemplate', { pct: Math.round(weather.cloudCoverPct) })
+        : t('cockpit.brief.cloudUnknown');
     }
     if (this.localPrecipitation) {
       this.localPrecipitation.textContent = Number.isFinite(weather?.precipitationMm)
@@ -1853,7 +1911,9 @@ class CockpitViewController {
     }
     if (this.signalStream) this.signalStream.dataset.regionalStatus = payload?.status || 'partial';
     if (this.briefPageIndex === 1 && this.briefSource) {
-      this.briefSource.textContent = `${String(payload?.newsSource || 'REGIONAL NEWS').toUpperCase()} · LOCATION QUERY`;
+      this.briefSource.textContent = t('cockpit.brief.newsSourceLine', {
+        source: String(payload?.newsSource || t('cockpit.brief.kickerNews')).toUpperCase(),
+      });
     }
     this.scheduleContextLayout();
   }
@@ -1872,7 +1932,7 @@ class CockpitViewController {
         heading.className = 'cockpit-signal-target';
         heading.dataset.signalLayer = item.target.layerId;
         heading.dataset.signalId = item.target.id;
-        heading.setAttribute('aria-label', `Select flight ${item.title}`);
+        heading.setAttribute('aria-label', t('cockpit.signal.selectFlightAria', { title: item.title }));
         const label = document.createElement('span');
         label.className = 'cockpit-signal-target-label';
         label.textContent = item.title;
@@ -1916,7 +1976,11 @@ class CockpitViewController {
         key: `flight:${subject.layerId}:${subject.id}`,
         tone: 'track',
         title: subject.label || subject.id,
-        detail: `${subject.layerId === 'military' ? 'MILITARY FLIGHT' : 'COMMERCIAL FLIGHT'} · CURRENT`,
+        detail: t('cockpit.signal.contactCurrent', {
+          aircraftClass: subject.layerId === 'military'
+            ? t('cockpit.signal.classMilitary')
+            : t('cockpit.signal.classCommercial'),
+        }),
         target: { layerId: subject.layerId, id: String(subject.id) },
         distanceM: -1,
       });
@@ -1935,11 +1999,14 @@ class CockpitViewController {
           // contact reads as its registration here too. Same helper the
           // Context panel's nearest list uses.
           title: formatAwarenessLabel(item),
-          detail: `${cohort.id === 'military' ? 'MILITARY FLIGHT' : 'COMMERCIAL FLIGHT'} · ${
-            Number.isFinite(item.distanceM)
+          detail: t('cockpit.signal.contactRange', {
+            aircraftClass: cohort.id === 'military'
+              ? t('cockpit.signal.classMilitary')
+              : t('cockpit.signal.classCommercial'),
+            distance: Number.isFinite(item.distanceM)
               ? `${item.distanceM < 10000 ? (item.distanceM / 1000).toFixed(1) : Math.round(item.distanceM / 1000)} KM`
-              : 'DISTANCE UNKNOWN'
-          }`,
+              : t('cockpit.signal.distanceUnknown'),
+          }),
           target: { layerId: cohort.id, id: String(id) },
           distanceM: item.distanceM ?? Infinity,
         });
@@ -1958,8 +2025,8 @@ class CockpitViewController {
       nextItems.splice(4, Math.max(0, nextItems.length - 4), {
         key: 'input-status',
         tone: 'warning',
-        title: `${unknownCount} INPUT${unknownCount === 1 ? '' : 'S'} UNKNOWN`,
-        detail: sources || 'SOURCE STATUS UNAVAILABLE',
+        title: t('cockpit.signal.inputsUnknown', { count: unknownCount }),
+        detail: sources || t('cockpit.signal.sourceStatusUnavailable'),
         target: null,
         timestamp: previous.get('input-status')?.timestamp || snapshot.evaluatedAt || Date.now(),
       });
@@ -1976,8 +2043,16 @@ class CockpitViewController {
     if (this.contextToggle) {
       const expanded = !this.contextCollapsed;
       this.contextToggle.setAttribute('aria-expanded', String(expanded));
+      // The English aria-label literal is pinned verbatim by
+      // cockpitMarkup.test.mjs; the t() re-write below is a same-value
+      // override that localizes it (byte-identical under 'en').
       this.contextToggle.setAttribute('aria-label', `${expanded ? 'Collapse' : 'Expand'} Contact panel`);
-      this.contextToggle.title = `${expanded ? 'Collapse' : 'Expand'} contact panel`;
+      this.contextToggle.setAttribute('aria-label', t(expanded
+        ? 'cockpit.context.toggleExpandAriaLabel'
+        : 'cockpit.context.toggleAriaLabel'));
+      this.contextToggle.title = t(expanded
+        ? 'cockpit.context.toggleExpandTitle'
+        : 'cockpit.context.toggleTitle');
       const icon = this.contextToggle.querySelector('.material-symbols-outlined');
       if (icon) icon.textContent = expanded ? 'chevron_left' : 'chevron_right';
     }
@@ -1995,8 +2070,12 @@ class CockpitViewController {
     if (this.signalToggle) {
       const expanded = !this.signalCollapsed;
       this.signalToggle.setAttribute('aria-expanded', String(expanded));
-      this.signalToggle.setAttribute('aria-label', `${expanded ? 'Collapse' : 'Expand'} cockpit briefing panel`);
-      this.signalToggle.title = `${expanded ? 'Collapse' : 'Expand'} briefing panel`;
+      this.signalToggle.setAttribute('aria-label', t(expanded
+        ? 'cockpit.brief.collapseAriaLabel'
+        : 'cockpit.brief.expandAriaLabel'));
+      this.signalToggle.title = t(expanded
+        ? 'cockpit.brief.collapseTitle'
+        : 'cockpit.brief.expandTitle');
       const icon = this.signalToggle.querySelector('.material-symbols-outlined');
       if (icon) icon.textContent = expanded ? 'right_panel_close' : 'right_panel_open';
     }
@@ -4031,6 +4110,18 @@ export class StyleManager {
       document.querySelector('#pp-toggles .pp-header-label'),
       t('cockpit.display.title'),
     );
+    // The cockpit context kicker ('CONTACT') is visible on the map itself, and
+    // the briefing kicker shares its element with the live-dot <i>; both are
+    // phase-2 key-only sites (see ai_docs/i18n-ownership.md). The briefing
+    // text node keeps renderBriefPage's leading-space convention.
+    this._setHeaderText(
+      document.querySelector('.cockpit-context-kicker'),
+      t('cockpit.context.kicker'),
+    );
+    const briefKicker = document.querySelector('#cockpit-brief-kicker');
+    if (briefKicker) {
+      this._setHeaderText(briefKicker, ` ${t('cockpit.brief.kicker')}`);
+    }
   }
 
   /**
