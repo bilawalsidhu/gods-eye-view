@@ -133,6 +133,9 @@ export class AtcRadioSystem {
     if (this._autoTuneEnabled) {
       this._manualAirportIcao = null;
       this._manualFreqType = null;
+    } else {
+      this._manualAirportIcao = this._currentTune?.airport?.icao || null;
+      this._manualFreqType = this._currentTune?.freqType || null;
     }
     this.updateAircraftTelemetry(this._currentAircraft);
   }
@@ -164,6 +167,7 @@ export class AtcRadioSystem {
    */
   selectFrequency(freqType) {
     if (!this._currentTune?.airport) return;
+    this._manualAirportIcao = this._currentTune.airport.icao;
     this._manualFreqType = freqType;
     this._autoTuneEnabled = false;
     this.updateAircraftTelemetry(this._currentAircraft);

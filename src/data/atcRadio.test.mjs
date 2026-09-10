@@ -133,3 +133,37 @@ test('atcRadio: autoPlay starts stream when entering airport coverage', async ()
 
   radio.destroy();
 });
+
+test('atcRadio: setAutoTune(false) snapshots and locks currently tuned station', () => {
+  const audio = new AtcAudioController({ AudioConstructor: MockAudio });
+  const radio = new AtcRadioSystem({ audioController: audio });
+
+  // Aircraft at Austin
+  radio.updateAircraftTelemetry({
+    lat: 30.19,
+    lon: -97.66,
+    altitudeM: 50,
+    onGround: true,
+  });
+  assert.equal(radio.currentTune.airport.icao, 'KAUS');
+
+  // Disable auto-tune - freezes KAUS
+  radio.setAutoTune(false);
+  assert.equal(radio.autoTuneEnabled, false);
+
+  // Teleport aircraft to Los Angeles (KLAX)
+  radio.updateAircraftTelemetry({
+    lat: 33.94,
+    lon: -118.40,
+    altitudeM: 500,
+  });
+  // Station remains frozen on KAUS because auto-tune is off
+  assert.equal(radio.currentTune.airport.icao, 'KAUS');
+
+  // Re-enable auto-tune - dynamically tunes to KLAX
+  radio.setAutoTune(true);
+  assert.equal(radio.autoTuneEnabled, true);
+  assert.equal(radio.currentTune.airport.icao, 'KLAX');
+
+  radio.destroy();
+});

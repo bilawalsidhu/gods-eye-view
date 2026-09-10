@@ -7,9 +7,9 @@
 import { findNearestAirport, getAirportByIcao } from './atcAirports.js';
 
 /**
- * Standard maximum line-of-sight VHF reception range in meters (~35 Nautical Miles).
+ * Standard maximum line-of-sight VHF reception range in meters (~50 Nautical Miles).
  */
-export const DEFAULT_ATC_RANGE_M = 64820;
+export const DEFAULT_ATC_RANGE_M = 92600;
 
 /**
  * Convert feet to meters.
@@ -155,7 +155,7 @@ export function resolveAtcTune({
         distanceNm = match.distanceNm;
       }
     }
-  } else {
+  } else if (autoTune) {
     const nearest = findNearestAirport(aircraft.lat, aircraft.lon, maxRangeM);
     if (nearest) {
       targetAirport = nearest.airport;

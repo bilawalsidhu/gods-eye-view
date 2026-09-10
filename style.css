@@ -9532,6 +9532,7 @@ body.scene-playback-mode #key-setup {
   border-radius: 6px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65), 0 0 15px rgba(0, 255, 255, 0.12);
   backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   color: #e0f8ff;
   font-family: var(--font-mono, monospace);
   z-index: 150;

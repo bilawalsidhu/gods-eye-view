@@ -318,7 +318,7 @@ export class AtcAudioController {
       this._audio = null;
     }
 
-    if (squelch && this._state === 'playing') {
+    if (squelch) {
       playSquelchBurst(this._getAudioContext());
     }
 
