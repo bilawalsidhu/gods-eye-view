@@ -33,7 +33,7 @@
   ],
   "scripts": {
     "doctor": "node scripts/setup-doctor.mjs",
-    "dev": "vite",
+    "dev": "vite --host 0.0.0.0",
     "dev:secure": "./scripts/dev-secure.sh",
     "opensky:import": "./scripts/opensky-import-client.sh",
     "build": "vite build",
