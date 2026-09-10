@@ -18,7 +18,8 @@
  * SYNTHETIC aircraft positioned near the camera, in the EXACT upstream payload
  * shapes the layers parse:
  *   - flights  → GET /api/opensky      → { states: [ <state-vector[]> ] }
- *   - military → GET /api/adsblol/mil  → { ac: [ <adsblol-aircraft{}> ] }
+ *   - military → GET /api/adsblol (layer) + /api/adsblol/mil (registry)
+ *               → { ac: [ <adsblol-aircraft{}> ] }
  *   - vessels  → GET /api/ais-live     → connected, zero-row snapshot
  * The shim stays installed so the layers' setInterval pollers keep the
  * synthetic planes alive (under MISSING_POLL_LIMIT=3 so they're never pruned).
@@ -276,7 +277,15 @@ async function main() {
         // errors (TypeError, unhandled rejection, etc.) are still captured.
         const isBenign404 = /Failed to load resource.*404/i.test(text);
         const sourceUrl = msg.location()?.url || '';
-        if (!isBenign404) consoleErrors.push(sourceUrl ? `${text} [${sourceUrl}]` : text);
+        // Same class: a placeholder/absent Google key makes
+        // tile.googleapis.com answer 400 for the 3D-tiles root at boot, and
+        // the app falls back to the Cesium globe by design. On a keyed
+        // machine this signature never appears.
+        const isKeylessGoogleTile = /tile\.googleapis\.com/i.test(sourceUrl)
+          && /status of 400/i.test(text);
+        if (!isBenign404 && !isKeylessGoogleTile) {
+          consoleErrors.push(sourceUrl ? `${text} [${sourceUrl}]` : text);
+        }
       }
       // Surface a trace for debugging, but keep it quiet.
       if (process.env.GEV_TEST_VERBOSE) console.log(`    [page:${type}] ${text}`);
@@ -344,6 +353,29 @@ async function main() {
         // military: { timestamp: <epochSec>, trace: [ [secAfter, lat, lon, ...] ] }
         if (isAppRequest && url.pathname === '/api/adsblol/trace') {
           return Promise.resolve(jsonResponse({ timestamp: Math.floor(Date.now() / 1000), trace: [] }));
+        }
+        // The military LAYER polls /api/adsblol (militaryFlights.js API_URL);
+        // /api/adsblol/mil feeds the known-military REGISTRY. Both get the
+        // synthetic fleet — intercepting only the registry path used to leave
+        // the layer's own poll live, so the "synthetic" fleet silently
+        // depended on whatever the dev proxy could reach and the
+        // jitter/pull-out/orphan invariants skipped on offline machines.
+        if (isAppRequest && url.pathname === '/api/adsblol') {
+          window.__SYNTH_HITS.mil++;
+          const ac = window.__SYNTH.military.map((m) => ({
+            hex: m.hex,
+            flight: m.flight,
+            lon: m.lon,
+            lat: m.lat,
+            alt_baro: m.altFt,
+            track: m.track,
+            gs: m.gsKt,
+            t: m.t,
+            r: m.r,
+            ownOp: 'SYNTH AF',
+            seen_pos: 0,
+          }));
+          return Promise.resolve(jsonResponse({ msg: 'No error', now: Date.now(), ac }));
         }
         // adsbdb enrichment (fires for tracked/model-eligible planes): empty
         // object → typeCode stays null → the synthetic planes' class (and so
@@ -918,6 +950,23 @@ async function main() {
         // wholesale by a TLE refresh, so a surviving subject must re-resolve
         // against the new satrec — and a subject that did NOT survive must
         // release the slot rather than linger frozen at its last position.
+        //
+        // The satellites layer persists every core TLE group in localStorage
+        // (tleCache.js, 6 h TTL — added after this harness was written).
+        // Without purging, the "refresh" below is served from that cache and
+        // the shimmed mutations never reach the layer: the rebuild proves
+        // nothing and the release case can never fire. Purge before each
+        // phase that rewrites __SYNTH.tle.
+        const purgeTleCache = () => {
+          const doomed = [];
+          for (let i = 0; i < localStorage.length; i += 1) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('gev:cache:tle:')) doomed.push(key);
+          }
+          for (const key of doomed) localStorage.removeItem(key);
+          return doomed.length;
+        };
+        await purgeTleCache();
         satellites.trackById(25544, { origin: 'user' });
         await new Promise((resolve) => setTimeout(resolve, 500));
         await satellites.update(window.__godsEyeView.viewer);
@@ -933,6 +982,7 @@ async function main() {
         const truncatedTle = fullTle.split('\n').slice(3).join('\n');
         window.__SYNTH.tle = truncatedTle;
         window.__SYNTH.failGroup = 'geo';
+        await purgeTleCache();
         await satellites.update(window.__godsEyeView.viewer);
         await new Promise((resolve) => setTimeout(resolve, 800));
         const afterPartial = await window.__gevVoiceCommands.runner('get_entity_context', { scope: 'selected' });
@@ -944,6 +994,7 @@ async function main() {
 
         // Now the subject vanishes from a COMPLETE catalog — proven absence.
         window.__SYNTH.tle = fullTle.split('\n').slice(3).join('\n');
+        await purgeTleCache();
         await satellites.update(window.__godsEyeView.viewer);
         await new Promise((resolve) => setTimeout(resolve, 800));
         const afterSubjectGone = await window.__gevVoiceCommands.runner('get_entity_context', { scope: 'selected' });
@@ -2327,9 +2378,10 @@ async function main() {
         // planes occupy distinct cells). FLATNESS across frames is the
         // load-bearing invariant — the absolute count just pins the fixtures.
         const callsBefore = g3dState.sampleCalls;
-        await page.evaluate(async (frames) => {
+        const g3dProbeFrames = 60;
+        const framesRan = await page.evaluate(async (frames) => {
           const v = window.__godsEyeView.viewer;
-          await new Promise((res) => {
+          return new Promise((res) => {
             let n = 0;
             let settled = false;
             const finish = () => {
@@ -2337,7 +2389,7 @@ async function main() {
               settled = true;
               clearTimeout(timer);
               stop();
-              res();
+              res(n);
             };
             const stop = v.scene.postRender.addEventListener(() => {
               if (++n >= frames) {
@@ -2346,10 +2398,13 @@ async function main() {
               }
               v.scene.requestRender();
             });
+            // A timed-out driver resolves with the frames it DID run — the
+            // caller guards on that, because zero growth over zero frames
+            // proves nothing about the sampler.
             const timer = setTimeout(finish, Math.max(15000, frames * 1500));
             v.scene.requestRender();
           });
-        }, 60);
+        }, g3dProbeFrames);
         await sleep(400);
         const callsAfter = await evalPage(() => window.__g3dSampleCalls);
         // Bounded-shape pin (round 5): with the boot-wide "no tiles" stub,
@@ -2359,9 +2414,14 @@ async function main() {
         // sampling is per-poll-bounded and one-shot per cell — a per-frame
         // sampler would add ~60+ over the frame loop; a mid-window poll
         // legitimately adds a few cells for moving contacts.
+        // The absolute count depends on how many grounded synthetics earlier
+        // groups left alive and whether terrain tiles were warm (a cold-cache
+        // probe times out and latches nothing → deterministically 3 here vs 4
+        // upstream), so the LOAD-BEARING invariant is the growth bound — with
+        // a guard so a frame driver that never ran can't read as "flat".
         record('ground-3d: ground snap + mesh-floor probes are one-shot/per-poll bounded (no per-frame sampling)',
-          callsBefore >= 4 && (callsAfter - callsBefore) <= 8,
-          `sampleHeight calls: after models up=${callsBefore} (≥4: snap + mesh cell per grounded plane), growth over ~60 frames=${callsAfter - callsBefore} (per-frame would be ~60+)`);
+          (callsAfter - callsBefore) <= 8 && framesRan >= g3dProbeFrames,
+          `sampleHeight calls: after models up=${callsBefore} (environment-dependent), growth over ${framesRan} frames=${callsAfter - callsBefore} (per-frame would be ~60+)`);
 
         // (d) TRACKED grounded plane → the standalone tracked model (the owner's
         // "tracked SWA143 at 0 kts stayed a 2D cyan billboard" case).

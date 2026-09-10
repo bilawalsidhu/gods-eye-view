@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { webglLaunchArgs } from './lib/webglLaunchArgs.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const shotsDir = path.join(repoRoot, 'qa-shots', 'cockpit-utility');
@@ -20,7 +21,7 @@ const executablePath = chromeCandidates.find((candidate) => fs.existsSync(candid
 const browser = await puppeteer.launch({
   headless: headful ? false : 'new',
   ...(executablePath ? { executablePath } : {}),
-  args: ['--use-angle=metal', '--enable-gpu', '--no-sandbox'],
+  args: [...webglLaunchArgs(), '--no-sandbox'],
 });
 const page = await browser.newPage();
 const failures = [];

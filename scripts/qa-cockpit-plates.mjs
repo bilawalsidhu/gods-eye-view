@@ -53,6 +53,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { webglLaunchArgs } from './lib/webglLaunchArgs.mjs';
 
 const argv = process.argv.slice(2);
 const getOpt = (name, fallback) => {
@@ -223,8 +224,8 @@ async function main() {
       '--no-sandbox',
       '--disable-setuid-sandbox',
       ...(SWIFTSHADER
-        ? ['--use-gl=angle', '--use-angle=swiftshader']
-        : ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist']),
+        ? ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']
+        : webglLaunchArgs()),
       '--disable-dev-shm-usage',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',

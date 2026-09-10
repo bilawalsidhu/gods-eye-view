@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { webglLaunchArgs } from './lib/webglLaunchArgs.mjs';
 import sharp from 'sharp';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -65,9 +66,7 @@ const browser = await puppeteer.launch({
     '--disable-setuid-sandbox',
     // Real GPU when the host has one: the dolly is frame-rate independent, but
     // a higher sample rate makes the roll and the ease ramps far easier to see.
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    ...webglLaunchArgs(),
     '--disable-dev-shm-usage',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',

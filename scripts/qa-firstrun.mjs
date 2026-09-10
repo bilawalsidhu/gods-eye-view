@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { webglLaunchArgs } from './lib/webglLaunchArgs.mjs';
 
 const args = process.argv.slice(2);
 const getOpt = (flag, fallback) => {
@@ -469,7 +470,7 @@ async function main() {
     ...(executablePath ? { executablePath } : {}),
     args: [
       '--no-sandbox', '--disable-setuid-sandbox',
-      '--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist',
+      ...webglLaunchArgs(), '--ignore-gpu-blocklist',
       '--disable-dev-shm-usage', '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding', '--window-size=1440,900',
     ],
