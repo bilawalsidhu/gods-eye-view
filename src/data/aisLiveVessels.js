@@ -844,7 +844,7 @@ function markAisUnavailable(reason) {
 async function loadLivePositions(viewer) {
   if (!viewer || state.loading) return;
   state.loading = true;
-  state.loadingLabel = state.loaded ? t('layers.firms.refreshing') : t('layers.meta.loading');
+  state.loadingLabel = state.loaded ? t('layers.meta.refreshing') : t('layers.meta.loading');
   const requestController = new AbortController();
   const requestSessionId = state.sessionId;
   state.abort = requestController;
