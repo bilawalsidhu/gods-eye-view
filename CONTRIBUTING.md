@@ -33,9 +33,8 @@ Open `http://localhost:4173`. Before sending a PR run `npm run build`, `npm test
   required. Exit code is the gate.
 - **`npm run test:track`** — the 3D flight-tracking regression harness. It
   drives the **real app** in headless Chromium, so it **requires a running
-  dev server** on the default port (`http://localhost:4173`). Pass
-  `--url <app-url>` to point it at another instance (e.g.
-  `node scripts/track-regression.mjs --url http://localhost:4272`). It does not
+  dev server** (default `http://localhost:4173`). To target another instance,
+  run `npm run test:track -- --url <app-url>` (or `node scripts/track-regression.mjs --url <app-url>`).
   depend on live OpenSky / adsb.lol / AISStream (those are optional or
   rate-limited locally); it installs a persistent `fetch` shim that returns
   synthetic aircraft in the exact upstream payload shapes the layers parse.
