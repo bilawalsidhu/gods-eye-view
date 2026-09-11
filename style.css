@@ -9520,3 +9520,407 @@ body.scene-playback-mode #key-setup {
   border-color: rgba(255, 170, 150, 0.65);
   outline: none;
 }
+.tour-popup {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12010;
+  min-width: 260px;
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 12px 14px 10px;
+  background: rgba(8, 14, 22, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  pointer-events: auto;
+}
+
+.tour-popup[hidden] {
+  display: none;
+}
+
+.tour-popup-kicker {
+  font-size: 9px;
+  letter-spacing: 1.6px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tour-popup-title {
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tour-popup-beat {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.tour-popup-progress {
+  margin: 8px 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+#tour-popup-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+
+.tour-popup-controls {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.tour-popup-controls button {
+  width: 34px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.tour-popup-controls button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tour-popup-status {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.tour-popup-status[hidden] {
+  display: none;
+}
+
+.tour-popup-autoplay {
+  display: block;
+  flex: 1;
+  margin-top: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.tour-popup-autoplay.is-on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tour-popup-toggles {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tour-popup-camera {
+  display: block;
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tour-popup-camera:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tour-popup-pause[hidden] {
+  display: none;
+}
+
+#tour-popup-progress {
+  cursor: pointer;
+}
+
+/* Locked full-screen overlay while a tour generates / first fly settles */
+.tour-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(20, 40, 70, 0.55), transparent 55%),
+    rgba(4, 8, 14, 0.72);
+  backdrop-filter: blur(10px);
+  pointer-events: all;
+  touch-action: none;
+  user-select: none;
+}
+
+.tour-loading[hidden] {
+  display: none !important;
+}
+
+.tour-loading-card {
+  width: min(420px, calc(100vw - 32px));
+  padding: 28px 26px 22px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(10, 16, 26, 0.92);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  text-align: center;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.tour-loading-kicker {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tour-loading-title {
+  margin-top: 10px;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.tour-loading-status {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  min-height: 2.6em;
+}
+
+.tour-loading-bar {
+  margin: 18px auto 8px;
+  height: 6px;
+  width: 100%;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.tour-loading-bar-fill {
+  height: 100%;
+  width: 8%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent), #7ec8ff);
+  transition: width 0.45s ease;
+}
+
+.tour-loading-pct {
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+}
+
+body.tour-loading-lock {
+  overflow: hidden;
+}
+
+body.tour-loading-lock #cesiumContainer,
+body.tour-loading-lock .cesium-viewer,
+body.tour-loading-lock #hud,
+body.tour-loading-lock #voice-dock,
+body.tour-loading-lock .location-pills,
+body.tour-loading-lock #tour-surprise-btn {
+  pointer-events: none !important;
+}
+
+body.tour-loading-lock #tour-popup {
+  pointer-events: auto !important;
+}
+
+/* Tour Review framing panel */
+.tour-review {
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  z-index: 45;
+  width: min(320px, calc(100vw - 24px));
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(8, 14, 22, 0.9);
+  backdrop-filter: blur(16px);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+}
+
+.tour-review[hidden] {
+  display: none !important;
+}
+
+.tour-review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tour-review-kicker {
+  font-size: 9px;
+  letter-spacing: 1.6px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+#tour-review-close {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.tour-review-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.tour-review-row select {
+  flex: 1;
+  min-width: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.tour-review-row button,
+.tour-review-actions button {
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tour-review-row button:hover,
+.tour-review-actions button:hover,
+.tour-review-beat:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tour-review-readout {
+  margin-top: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.tour-review-beats {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tour-review-beat {
+  display: flex;
+  gap: 8px;
+  text-align: left;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.tour-review-beat.is-active {
+  border-color: var(--accent);
+  background: rgba(80, 140, 220, 0.12);
+}
+
+.tour-review-beat-idx {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  flex: 0 0 auto;
+}
+
+.tour-review-beat-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tour-review-beat-body strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tour-review-beat-body em,
+.tour-review-beat-body small {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.tour-review-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.tour-review-actions button {
+  flex: 1;
+}
+
+.location-pill-review {
+  opacity: 0.92;
+}
+
+body.tour-playback-mode #first-run-launcher {
+  display: none;
+}
+

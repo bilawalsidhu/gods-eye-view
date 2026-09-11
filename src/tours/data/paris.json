@@ -1,0 +1,96 @@
+{
+  "id": "paris",
+  "title": "Paris: River and Axis",
+  "city": "Paris",
+  "cityId": "paris",
+  "durationTargetSec": 108,
+  "beats": [
+    {
+      "id": "paris-establish",
+      "kind": "establish",
+      "title": "Approaching Paris",
+      "durationSec": 8,
+      "script": "Paris along the Seine. This pass follows a tourist day compressed: iron tower, triumphal arch, palace museum, and the island where the city began.",
+      "place": { "name": "Paris", "lat": 48.8566, "lon": 2.312 },
+      "camera": { "mode": "flyTo", "lat": 48.8566, "lon": 2.312, "alt": 9500, "heading": 80, "pitch": -40, "durationSec": 12, "approachSec": 12, "spaceAlt": 32000000 }
+    },
+    {
+      "id": "paris-eiffel",
+      "kind": "hold",
+      "title": "Eiffel Tower",
+      "durationSec": 16,
+      "script": "The Eiffel Tower. Gustave Eiffel raised it for the 1889 Exposition — three hundred thirty metres of iron meant to be temporary. Paris kept it.",
+      "place": { "name": "Eiffel Tower", "lat": 48.8584, "lon": 2.2945 },
+      "camera": { "mode": "orbitHold", "lat": 48.8584, "lon": 2.2945, "rangeM": 750, "heading": 315, "pitch": -22, "buildingHeight": 150 }
+    },
+    {
+      "id": "paris-to-arc",
+      "kind": "transit",
+      "title": "Toward the Étoile",
+      "durationSec": 6,
+      "script": "After a short metro ride toward the Étoile, the arch sits at the star of twelve avenues.",
+      "scriptVariations": [
+        "A cross-town hop on the rails, and you come up under the Arc de Triomphe.",
+        "A straight drive up toward the arch along the axis Napoleon wanted you to see."
+      ],
+      "travel": { "mode": "transit", "fromPlace": "Eiffel Tower", "toPlace": "Arc de Triomphe" },
+      "camera": { "mode": "routeDolly", "compressToSec": 6 },
+      "place": { "name": "Arc de Triomphe", "lat": 48.8738, "lon": 2.295 }
+    },
+    {
+      "id": "paris-arc",
+      "kind": "hold",
+      "title": "Arc de Triomphe",
+      "durationSec": 14,
+      "script": "Napoleon commissioned it in 1806; it was finished in 1836. Under the vault, the Tomb of the Unknown Soldier. The Champs-Élysées runs from here like a ruler.",
+      "place": { "name": "Arc de Triomphe", "lat": 48.8738, "lon": 2.295 },
+      "camera": { "mode": "lookAt", "lat": 48.8738, "lon": 2.295, "rangeM": 680, "heading": 90, "pitch": -16, "buildingHeight": 55 }
+    },
+    {
+      "id": "paris-to-louvre",
+      "kind": "transit",
+      "title": "Toward the Louvre",
+      "durationSec": 6,
+      "script": "Following the fastest street route down the Champs-Élysées, you roll toward the palace that became a museum.",
+      "scriptVariations": [
+        "A metro hop toward the river and the Louvre courtyard opens.",
+        "We stay on the axis a little longer, then cut to the palace grounds."
+      ],
+      "travel": { "mode": "drive", "fromPlace": "Arc de Triomphe", "toPlace": "Louvre" },
+      "camera": { "mode": "routeDolly", "compressToSec": 6 },
+      "place": { "name": "Louvre", "lat": 48.8606, "lon": 2.3376 }
+    },
+    {
+      "id": "paris-louvre",
+      "kind": "hold",
+      "title": "The Louvre",
+      "durationSec": 16,
+      "script": "A fortress, then a palace, then a museum in 1793. I. M. Pei's glass pyramid from 1989 is the new door into the old royal courtyard.",
+      "place": { "name": "Louvre Pyramid", "lat": 48.8606, "lon": 2.3376 },
+      "camera": { "mode": "lookAt", "lat": 48.8606, "lon": 2.3376, "rangeM": 560, "heading": 0, "pitch": -28, "buildingHeight": 28 }
+    },
+    {
+      "id": "paris-to-notre-dame",
+      "kind": "transit",
+      "title": "Along the Seine",
+      "durationSec": 5,
+      "script": "A walk along the river to the island — the medieval seed of Paris.",
+      "scriptVariations": [
+        "A short hop along the Seine, and Notre-Dame fills the Île de la Cité.",
+        "We stay close to the water for this last stretch to the cathedral."
+      ],
+      "travel": { "mode": "walk", "fromPlace": "Louvre", "toPlace": "Notre-Dame" },
+      "camera": { "mode": "routeDolly", "compressToSec": 5 },
+      "place": { "name": "Notre-Dame", "lat": 48.853, "lon": 2.3499 }
+    },
+    {
+      "id": "paris-notre-dame",
+      "kind": "hold",
+      "title": "Notre-Dame",
+      "durationSec": 16,
+      "script": "Work began in 1163. The 2019 fire took the spire and the roof. The cathedral reopened in 2024. This island is where Paris was a city before it was a capital.",
+      "place": { "name": "Notre-Dame", "lat": 48.853, "lon": 2.3499 },
+      "camera": { "mode": "lookAt", "lat": 48.853, "lon": 2.3499, "rangeM": 520, "heading": 225, "pitch": -22, "buildingHeight": 40 }
+    }
+  ]
+}

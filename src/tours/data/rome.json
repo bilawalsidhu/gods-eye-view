@@ -1,0 +1,105 @@
+{
+  "id": "rome",
+  "title": "Rome: Heart of the Empire",
+  "city": "Rome",
+  "cityId": "rome",
+  "durationTargetSec": 110,
+  "beats": [
+    {
+      "id": "rome-establish",
+      "kind": "establish",
+      "title": "Approaching Rome",
+      "durationSec": 8,
+      "script": "Rome. City stacked on city. This pass stays in the ancient core: arena, forum, fountain, and a dome that is still unmatched.",
+      "place": { "name": "Rome historic center", "lat": 41.8945, "lon": 12.4855 },
+      "camera": { "mode": "flyTo", "lat": 41.8945, "lon": 12.4855, "alt": 9500, "heading": 20, "pitch": -42, "durationSec": 12, "approachSec": 12, "spaceAlt": 32000000 }
+    },
+    {
+      "id": "rome-colosseum",
+      "kind": "hold",
+      "title": "The Colosseum",
+      "durationSec": 18,
+      "script": "The Flavian amphitheatre. Vespasian built it on Nero's lake as a gift back to the city. Titus opened it in 80 AD. Under the floor, cages and ramps. The scars in the stone are later Rome quarrying it for palaces.",
+      "place": { "name": "Colosseum", "lat": 41.8902, "lon": 12.4922 },
+      "camera": { "mode": "orbitHold", "lat": 41.8902, "lon": 12.4922, "rangeM": 820, "heading": 240, "pitch": -18, "buildingHeight": 52 }
+    },
+    {
+      "id": "rome-to-forum",
+      "kind": "transit",
+      "title": "Walk to the Forum",
+      "durationSec": 5,
+      "script": "A few minutes on foot along the old triumphal axis, and the Forum opens under us.",
+      "scriptVariations": [
+        "We stay on the pavement; the Forum is the next valley over.",
+        "No ride here — this is a short walk the processions used."
+      ],
+      "travel": { "mode": "walk", "fromPlace": "Colosseum", "toPlace": "Arch of Titus" },
+      "camera": { "mode": "routeDolly", "compressToSec": 5 },
+      "place": { "name": "Via dei Fori Imperiali", "lat": 41.8906, "lon": 12.4885 }
+    },
+    {
+      "id": "rome-arch-titus",
+      "kind": "hold",
+      "title": "Arch of Titus",
+      "durationSec": 12,
+      "script": "Eighty-one AD. The Arch of Titus marks the siege of Jerusalem; the menorah in the relief still ties this street to another city.",
+      "place": { "name": "Arch of Titus", "lat": 41.8906, "lon": 12.4885 },
+      "camera": { "mode": "lookAt", "lat": 41.8906, "lon": 12.4885, "rangeM": 340, "heading": 250, "pitch": -20, "buildingHeight": 18 }
+    },
+    {
+      "id": "rome-forum-curia",
+      "kind": "hold",
+      "title": "Forum and Curia",
+      "durationSec": 12,
+      "script": "The valley under us was the civic machine: speeches, markets, the Curia. This is why Rome became a government, not just a hill fort.",
+      "place": { "name": "Roman Forum", "lat": 41.8925, "lon": 12.4853 },
+      "camera": { "mode": "lookAt", "lat": 41.8925, "lon": 12.4853, "rangeM": 560, "heading": 210, "pitch": -30, "buildingHeight": 22 }
+    },
+    {
+      "id": "rome-to-trevi",
+      "kind": "transit",
+      "title": "Walk to Trevi",
+      "durationSec": 5,
+      "script": "A short walk north through the lanes, and water starts to steal the scene.",
+      "scriptVariations": [
+        "On foot again — Trevi is only a neighborhood away.",
+        "We keep walking. The next stop is a theatre built for an aqueduct."
+      ],
+      "travel": { "mode": "walk", "fromPlace": "Roman Forum", "toPlace": "Trevi Fountain" },
+      "camera": { "mode": "routeDolly", "compressToSec": 5 },
+      "place": { "name": "Trevi Fountain", "lat": 41.9009, "lon": 12.4833 }
+    },
+    {
+      "id": "rome-trevi",
+      "kind": "hold",
+      "title": "Trevi Fountain",
+      "durationSec": 15,
+      "script": "Nicola Salvi's eighteenth-century theatre for water. It is the showy end of Aqua Virgo, a Roman aqueduct still feeding the city. The coins are a later ritual.",
+      "place": { "name": "Trevi Fountain", "lat": 41.9009, "lon": 12.4833 },
+      "camera": { "mode": "lookAt", "lat": 41.9009, "lon": 12.4833, "rangeM": 260, "heading": 5, "pitch": -16, "buildingHeight": 20 }
+    },
+    {
+      "id": "rome-to-pantheon",
+      "kind": "transit",
+      "title": "Walk to the Pantheon",
+      "durationSec": 5,
+      "script": "Another few minutes on foot west, and the dome that still has no equal comes into view.",
+      "scriptVariations": [
+        "We stay walking. The Pantheon is the next courtyard over.",
+        "No metro for this last stretch — just the old streets to Hadrian's dome."
+      ],
+      "travel": { "mode": "walk", "fromPlace": "Trevi Fountain", "toPlace": "Pantheon" },
+      "camera": { "mode": "routeDolly", "compressToSec": 5 },
+      "place": { "name": "Pantheon", "lat": 41.8986, "lon": 12.4769 }
+    },
+    {
+      "id": "rome-pantheon",
+      "kind": "hold",
+      "title": "The Pantheon",
+      "durationSec": 18,
+      "script": "Hadrian's rebuild, about 126 AD. Largest unreinforced concrete dome on Earth. The oculus is the only light. Temple to all gods, then a church — which is why it is still standing.",
+      "place": { "name": "Pantheon", "lat": 41.8986, "lon": 12.4769 },
+      "camera": { "mode": "lookAt", "lat": 41.8986, "lon": 12.4769, "rangeM": 380, "heading": 215, "pitch": -16, "buildingHeight": 48 }
+    }
+  ]
+}

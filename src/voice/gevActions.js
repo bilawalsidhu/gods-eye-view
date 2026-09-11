@@ -287,7 +287,7 @@ export function readLayerLifecycleSummary(dataManager, layerId, { fallbackEnable
   };
 }
 
-export function createGevActionRunner({ viewer, styleManager, dataManager, sceneDirector = null, annotations = null }) {
+export function createGevActionRunner({ viewer, styleManager, dataManager, sceneDirector = null, annotations = null, tourEngine = null }) {
   installViewTargetPrewarm(viewer);
   initCameraVerbs(viewer, getViewTargetCartesian);
   return async function runGevAction(name, rawArgs = {}, runOptions = {}) {
@@ -818,6 +818,9 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
     }
 
     if (name === 'move_camera') {
+      if (String(args.motion || '').toLowerCase() === 'stop' && tourEngine?.running) {
+        return tourEngine.stop('Stopped by voice');
+      }
       return moveCamera(args, (navigate, releaseOptions) => runManagedVoiceNavigation(
         styleManager, 'camera', 'move_camera', navigate, releaseOptions,
       ));
@@ -838,7 +841,7 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
     }
 
     if (name === 'get_current_view_state') {
-      return getCurrentViewState(viewer, styleManager, dataManager, sceneDirector);
+      return getCurrentViewState(viewer, styleManager, dataManager, sceneDirector, tourEngine);
     }
 
     if (name === 'set_hud') {
@@ -892,6 +895,10 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
 
     if (name === 'control_scene') {
       return controlScene(sceneDirector, args);
+    }
+
+    if (name === 'control_tour') {
+      return controlTour(tourEngine, args);
     }
 
     if (name === 'control_cctv') {
@@ -1046,6 +1053,43 @@ export function normalizeStackId(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return null;
   return STACK_ALIASES.get(raw) || null;
+}
+
+export async function controlTour(tourEngine, args = {}) {
+  if (!tourEngine) {
+    return { ok: false, action: 'control_tour', error: 'Tour engine unavailable' };
+  }
+  const action = String(args.action || '').toLowerCase();
+  if (action === 'list') {
+    return { ok: true, action: 'control_tour', tours: await tourEngine.listTours(), ...tourEngine.getPlaybackStatus() };
+  }
+  if (action === 'status') {
+    return { ok: true, action: 'control_tour', ...tourEngine.getPlaybackStatus() };
+  }
+  if (action === 'stop') {
+    return tourEngine.stop('Stopped by voice');
+  }
+  if (action === 'pause') {
+    return tourEngine.pause('Paused by voice');
+  }
+  if (action === 'resume') {
+    return tourEngine.resume();
+  }
+  if (action === 'autoplay') {
+    const enabled = args.enabled != null ? !!args.enabled : true;
+    return tourEngine.setAutoplay(enabled);
+  }
+  if (action === 'next' || action === 'prev') {
+    return action === 'next' ? tourEngine.next() : tourEngine.prev();
+  }
+  if (action === 'random') {
+    return tourEngine.random();
+  }
+  if (action === 'play') {
+    const query = args.tourId || args.city || args.query || '';
+    return tourEngine.play(query);
+  }
+  throw new Error(`Unknown tour action: ${args.action || 'missing'}`);
 }
 
 /**
@@ -2354,7 +2398,7 @@ function normalizeLocationId(value) {
   return null;
 }
 
-function getCurrentViewState(viewer, styleManager, dataManager, sceneDirector = null) {
+function getCurrentViewState(viewer, styleManager, dataManager, sceneDirector = null, tourEngine = null) {
   const cartographic = Cesium.Cartographic.fromCartesian(viewer.camera.positionWC);
   return {
     ok: true,
@@ -2378,6 +2422,7 @@ function getCurrentViewState(viewer, styleManager, dataManager, sceneDirector = 
       : null,
     controls: typeof styleManager.getControlState === 'function' ? styleManager.getControlState() : null,
     scenePlayback: sceneDirector?.getPlaybackStatus?.() || null,
+    tourPlayback: tourEngine?.getPlaybackStatus?.() || null,
     tracked: collectTrackedEntities(dataManager),
     layers: dataManager.getAll().map((layer) => ({
       id: layer.id,
