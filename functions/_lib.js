@@ -116,6 +116,115 @@ export function createCachedOptInLimiter() {
 }
 
 /**
+ * Default Pages throttles (requests/min/IP) for the cost-bearing endpoints —
+ * the values `createDefaultOnRateLimiter` applies when no `GEV_RATELIMIT_*`
+ * env is configured. Generous for a human driving the app (a HUD summary
+ * refreshes ~1×/min; voice token minting is per session), tight enough that a
+ * drive-by script cannot meaningfully burn quota. Override per deployment via
+ * the env knobs; `0` disables.
+ */
+export const PAGES_RATELIMIT_OPENAI_PER_MIN = 30;
+export const PAGES_RATELIMIT_GOOGLE_PER_MIN = 60;
+
+/**
+ * Cache a PAGES limiter: default-ON where the dev middleware is opt-in.
+ *
+ * A Pages deployment is a public URL, so a cost-bearing endpoint with no
+ * `GEV_RATELIMIT_*` configured must not be unlimited — the default throttle
+ * (per-IP 60 s window, global backstop at 20× the per-IP cap) applies unless
+ * the operator overrides it:
+ *
+ *   - env unset / empty        → `defaultPerMin` (the point of this factory)
+ *   - env a positive integer   → that many requests/min/IP (override)
+ *   - env `0` (or any other    → null = unlimited (documented escape hatch;
+ *     non-positive value)        also the dev opt-in semantics)
+ *
+ * Same caching discipline as `createCachedOptInLimiter`: keyed on the raw env
+ * value, rebuilt only when it changes, reused otherwise.
+ *
+ * @param {number} defaultPerMin Requests/min/IP when the env is unset.
+ * @returns {(envValue: string|number|undefined) => ((key: string) => boolean)|null}
+ */
+export function createDefaultOnRateLimiter(defaultPerMin) {
+  // Sentinel (not `undefined`): an UNSET env is a real cache state (the
+  // default-ON limiter), so the very first call must take the rebuild branch
+  // rather than "matching" an uninitialized key.
+  const UNSET = Symbol('unset');
+  let cachedKey = UNSET;
+  let cached;
+  return (envValue) => {
+    if (envValue !== cachedKey) {
+      cachedKey = envValue;
+      const override = Number(envValue);
+      if (Number.isFinite(override) && override > 0) {
+        cached = makeRateLimiter({
+          windowMs: 60_000,
+          max: Math.floor(override),
+          globalMax: Math.floor(override) * 20,
+        });
+      } else if (envValue === undefined || envValue === null || envValue === '') {
+        cached = makeRateLimiter({
+          windowMs: 60_000,
+          max: defaultPerMin,
+          globalMax: defaultPerMin * 20,
+        });
+      } else {
+        cached = null;
+      }
+    }
+    return cached;
+  };
+}
+
+/** Host of a URL string, '' when unparseable (an invalid Origin never matches). */
+export function hostOf(value) {
+  try {
+    return new URL(value).host;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Same-site guard for the cost-bearing endpoints — the shared shape of the
+ * `Origin` check the realtime token Function already applied, extended to the
+ * GET endpoints that carry no Origin header.
+ *
+ * Browsers attach `Origin` to every POST (and every cross-origin request):
+ * a POST whose Origin host differs from the request host is a cross-site
+ * drive-by (some other web page spending this deployment's API quota through
+ * a visitor's browser) and is rejected. GET fetches carry no Origin, so the
+ * guard falls back to `Sec-Fetch-Site`, which every modern browser attaches:
+ * anything other than `same-origin` or `none` (direct navigation) is
+ * rejected. Absent headers mean a non-browser client (curl, agents) — those
+ * cannot be distinguished from same-origin traffic and are allowed, subject
+ * to the rate limiter.
+ *
+ * @param {Request} request
+ * @returns {?string} 'cross-origin' | 'cross-site' when the request must be
+ *   rejected, null when it may proceed.
+ */
+export function sameSiteViolation(request) {
+  const origin = request.headers.get('Origin');
+  if (origin) {
+    return hostOf(origin) === hostOf(request.url) ? null : 'cross-origin';
+  }
+  const site = request.headers.get('Sec-Fetch-Site');
+  if (site && site !== 'same-origin' && site !== 'none') return 'cross-site';
+  return null;
+}
+
+/**
+ * The 403 both runtimes answer a same-site violation with. The google
+ * endpoints append their `places: []` contract field themselves.
+ *
+ * @returns {Response}
+ */
+export function sameSiteRejection() {
+  return jsonResponse({ error: 'cross-origin requests are rejected' }, { status: 403 });
+}
+
+/**
  * Apply an opt-in limiter, writing the dev's exact 429 shape when over cap.
  *
  * @param {((key: string) => boolean)|null} limiter Null = unlimited.

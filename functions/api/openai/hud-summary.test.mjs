@@ -131,3 +131,61 @@ test('the opt-in per-IP throttle answers 429 with Retry-After', async () => {
     globalThis.fetch = original;
   }
 });
+
+test('a cross-origin POST is rejected before spending OpenAI quota', async () => {
+  const calls = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (...args) => { calls.push(args); throw new Error('no'); };
+  try {
+    const res = await onRequest(ctx(new Request('https://example.com/api/openai/hud-summary', {
+      method: 'POST',
+      headers: { Origin: 'https://evil.example' },
+      body: '{}',
+    }), { OPENAI_API_KEY: 'k' }));
+    assert.equal(res.status, 403);
+    assert.deepEqual(await res.json(), { error: 'cross-origin requests are rejected' });
+    assert.equal(calls.length, 0, 'the drive-by summary never reaches OpenAI');
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('throttling is default-ON on Pages: the 31st summary in a minute is refused', async () => {
+  const calls = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => { calls.push(1); return new Response(JSON.stringify({ output_text: 'a b c d e' }), { status: 200 }); };
+  try {
+    // Dedicated edge IP so this test does not share window state with the
+    // other tests (which run as non-browser `unknown` clients).
+    const headers = { 'CF-Connecting-IP': '10.0.1.31' };
+    const make = () => onRequest(ctx(new Request('https://x/api/openai/hud-summary', {
+      method: 'POST', headers, body: '{}',
+    }), { OPENAI_API_KEY: 'k' }));
+
+    for (let i = 0; i < 30; i += 1) {
+      assert.equal((await make()).status, 200, `summary ${i} rides the default 30/min window`);
+    }
+    const blocked = await make();
+    assert.equal(blocked.status, 429, 'no GEV_RATELIMIT_* env still throttles on Pages');
+    assert.equal(calls.length, 30, 'the blocked summary never reached OpenAI');
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('GEV_RATELIMIT_OPENAI_PER_MIN=0 disables the default-on throttle', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ output_text: 'a b c d e' }), { status: 200 });
+  try {
+    const env = { OPENAI_API_KEY: 'k', GEV_RATELIMIT_OPENAI_PER_MIN: '0' };
+    const headers = { 'CF-Connecting-IP': '10.0.1.31' }; // already exhausted above
+    for (let i = 0; i < 32; i += 1) {
+      const res = await onRequest(ctx(new Request('https://x/api/openai/hud-summary', {
+        method: 'POST', headers, body: '{}',
+      }), env));
+      assert.equal(res.status, 200, `escape-hatch summary ${i} is unlimited`);
+    }
+  } finally {
+    globalThis.fetch = original;
+  }
+});

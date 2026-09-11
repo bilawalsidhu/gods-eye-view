@@ -484,17 +484,54 @@ ordered by value-per-risk; each is self-contained and committable.
       routes static function files at their exact path only, so every
       production tomtom request fell through to the SPA. Moved to
       `functions/api/tomtom/[[path]].js` (tests moved alongside, 11/11).
-- [ ] Same-site request gate for `/api/openai/hud-summary` and
+- [x] Same-site request gate for `/api/openai/hud-summary` and
       `/api/google/nearby-places` (completes the token/debug-log pattern;
-      PR #242 remainder).
-- [ ] Default-on rate limiting for exposed deployments: flip the opt-in
-      `GEV_RATELIMIT_*` default on for Pages only (dev stays open), with a
-      documented escape hatch.
-- [ ] CSP in `public/_headers` — must include `'unsafe-eval'` in
-      `script-src` for the Knockout code inside `@cesium/widgets` (PR #242
-      verified it never initializes otherwise), plus `connect-src` for
-      every proxied host. Ship in report-only mode first, watch, then
-      enforce.
+      PR #242 remainder): DONE 2026-09-11, generalized beyond the plan —
+      every cost-bearing endpoint is now gated, and Google Places gained a
+      Pages handler at all (`functions/api/google/[[path]].js`; previously
+      BOTH places endpoints fell through to the SPA on static deployments —
+      same fall-through class as the tomtom routing bug). One shared
+      implementation, `sameSiteViolation` in `functions/_lib.js`: POST
+      endpoints compare the `Origin` host against the request host (browsers
+      always attach Origin to POSTs), GET endpoints read `Sec-Fetch-Site`
+      (GET fetches carry no Origin). Anything except same-origin/`none` is a
+      cross-site drive-by burning this deployment's quota → sanitized 403.
+      Absent headers = non-browser client (curl, agents) — deliberately
+      allowed, throttled instead. Wired into token (Origin variant message),
+      hud-summary, debug-log, and both google subpaths (which keep the
+      client's `places: []` error envelope on every failure).
+- [x] Default-on rate limiting for exposed deployments: DONE 2026-09-11 via
+      `createDefaultOnRateLimiter` in `functions/_lib.js` — on Pages the
+      `GEV_RATELIMIT_OPENAI_PER_MIN` (default 30/min/IP) and
+      `GEV_RATELIMIT_GOOGLE_PER_MIN` (default 60/min/IP) throttles engage
+      with NO env configured; a positive integer overrides; `0` (or any
+      other non-positive value) is the documented unlimited escape hatch.
+      Dev's middlewares stay opt-in — localhost-bound, so unlimited is
+      acceptable there. Same caching discipline as the existing opt-in
+      factory (keyed on the raw env value, reused per isolate). Fixed
+      en route: the factory's cache key initialized to `undefined`, so the
+      very first unset-env call "matched" and built NO limiter — the
+      default-on path was silently unlimited until a sentinel initial key
+      made unset a real cache state. Also fixed a latent `Number(null) → 0`
+      bug shared by both runtimes: a MISSING `lat`/`lon` param parsed as 0
+      and queried Google for 0°N 0°E; the new shared
+      `parseCoordinateParam` (in `src/data/googlePlacesPolicy.js`) treats
+      missing/blank as invalid in dev and Pages alike. Tests: factory unit
+      tests in `functions/_lib.test.mjs`, default-on + escape-hatch + 403
+      gate coverage in the token/hud-summary/debug-log/google suites.
+- [x] CSP in `public/_headers` — DONE 2026-09-11, shipped as
+      `Content-Security-Policy-Report-Only` (the plan's "report-only mode
+      first, watch, then enforce"). Includes `'unsafe-eval'` for the
+      Knockout code inside `@cesium/widgets` (and the Maps JS API) and
+      `'wasm-unsafe-eval'` for the Cesium decoders + FIRMS WASM renderer;
+      `connect-src` covers the only DIRECT browser fetch targets — Google
+      3D tiles, Cesium ion, the OpenAI Realtime SDP exchange, the re:Earth
+      terrain mesh — while every data layer stays same-origin through the
+      proxies (`'self'`). `media-src https:` is the one broad directive:
+      radio streams play from arbitrary broadcaster hosts by design. The
+      header file documents each directive's justification inline; no
+      report-uri yet (violations are console-visible), so enforcement is a
+      copy-to-enforcing-header once production reports are quiet.
 
 ### Batch 2 — e2e fleet validation (cheap now, high information)
 

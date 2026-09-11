@@ -16,7 +16,8 @@
  *   upstream/config failure       → upstream status or 502 { error }
  *
  * Env: OPENAI_API_KEY (required), OPENAI_HUD_SUMMARY_MODEL (optional),
- *      GEV_RATELIMIT_OPENAI_PER_MIN (optional, requests/min/IP).
+ *      GEV_RATELIMIT_OPENAI_PER_MIN (override; default-on 30/min/IP on
+ *      Pages, `0` disables — dev's middleware stays opt-in).
  */
 import {
   HUD_SUMMARY_INSTRUCTIONS,
@@ -25,26 +26,35 @@ import {
   toFiveWordHudSummary,
 } from '../../../src/voice/realtimeSession.js';
 import {
+  PAGES_RATELIMIT_OPENAI_PER_MIN,
   allowRequest,
-  createCachedOptInLimiter,
+  createDefaultOnRateLimiter,
   jsonResponse,
   methodNotAllowed,
   rateLimitedResponse,
   readJsonBody,
+  sameSiteRejection,
+  sameSiteViolation,
 } from '../../_lib.js';
 
 /** The dev middleware caps the context document at 64 KB. */
 const HUD_SUMMARY_MAX_BODY_BYTES = 64 * 1024;
 
 /** Built once per isolate and reused, so the per-IP window state persists. */
-const openAiLimiter = createCachedOptInLimiter();
+const openAiLimiter = createDefaultOnRateLimiter(PAGES_RATELIMIT_OPENAI_PER_MIN);
 
 export async function onRequest(context) {
   const { env, request } = context;
 
   if (request.method !== 'POST') return methodNotAllowed();
 
-  // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). No-op when unset.
+  // Same-site guard: another web page driving a visitor's browser against
+  // this endpoint would spend OpenAI quota drive-by. Same contract as
+  // /api/realtime/token.
+  if (sameSiteViolation(request)) return sameSiteRejection();
+
+  // Per-IP throttle, default-ON on Pages (GEV_RATELIMIT_OPENAI_PER_MIN to
+  // override; `0` disables — see _lib.createDefaultOnRateLimiter).
   if (!allowRequest(openAiLimiter(env.GEV_RATELIMIT_OPENAI_PER_MIN), request)) {
     return rateLimitedResponse();
   }

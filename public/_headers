@@ -40,6 +40,45 @@
   Cache-Control: public, max-age=86400, stale-while-revalidate=3600
 
 # Global security headers
+#
+# Content-Security-Policy-Report-Only — the measurement phase before
+# enforcement. Report-Only means the browser blocks nothing; every violation
+# prints to the site console, so a production pilot surfaces any origin the
+# policy misses while the app keeps working. No report-uri yet: violations are
+# console-only until a collector endpoint exists. To enforce, copy the policy
+# to `Content-Security-Policy` once reports are quiet.
+#
+# Directive notes (why each origin/scope is listed):
+# - default-src 'self'         — fallback; everything else degrades to same-origin.
+# - script-src                 — 'self' (Vite bundle). 'unsafe-eval' is required
+#                                by Knockout inside @cesium/widgets (new Function)
+#                                and by the Maps JS API. 'wasm-unsafe-eval' is
+#                                required to compile the Cesium decoder and FIRMS
+#                                WASM renderers. blob: covers Cesium's dynamic
+#                                worker/scripts. maps.googleapis.com serves the
+#                                injected Maps JS chunks (main.js loads /maps/api/js).
+# - style-src                  — Cesium/widgets inject inline style attributes
+#                                ('unsafe-inline'); Google Fonts CSS.
+# - img-src                    — tile imagery: Google (*.googleapis.com,
+#                                *.gstatic.com), OSM basemap, Cesium ion assets.
+#                                data:/blob: for canvas-generated icons and
+#                                Cesium texture paths.
+# - font-src                   — Google Fonts (fonts.gstatic.com) + inlined data:.
+# - connect-src                — every DIRECT browser fetch/XHR/WebSocket. The
+#                                app's data layers are same-origin by design (all
+#                                /api/* calls proxy through Vite dev middlewares
+#                                or Pages Functions — 'self'); the direct
+#                                exceptions are the Google 3D tile pipeline,
+#                                Cesium ion, the OpenAI Realtime SDP exchange,
+#                                and the re:Earth terrain mesh.
+# - media-src https:           — radio streams play from arbitrary station
+#                                hosts (radio-browser data); CCTV video frames
+#                                are same-origin via /api/cctv/media.
+# - worker-src / child-src     — module workers (detection projection, AIS
+#                                visibility) are same-origin; blob: for Cesium's.
+# - object-src 'none', base-uri 'self', form-action 'none',
+#   frame-ancestors 'none'     — hard restrictions with no legitimate use
+#                                (frame-ancestors mirrors X-Frame-Options: DENY).
 /*
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
@@ -48,3 +87,4 @@
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: credentialless
   Cross-Origin-Resource-Policy: same-site
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com https://tile.openstreetmap.org https://*.ion.cesium.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.googleapis.com https://api.cesium.com https://*.ion.cesium.com https://api.openai.com https://terrain.reearth.land; media-src 'self' https:; worker-src 'self' blob:; child-src blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'

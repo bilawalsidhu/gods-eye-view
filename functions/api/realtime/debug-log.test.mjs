@@ -78,3 +78,44 @@ test('oversized records are refused before parsing', async () => {
     console.log = original;
   }
 });
+
+test('a cross-origin POST is rejected before anything is logged', async () => {
+  const lines = [];
+  const original = console.log;
+  console.log = (line) => lines.push(line);
+  try {
+    const res = await onRequest(ctx(new Request('https://example.com/api/realtime/debug-log', {
+      method: 'POST',
+      headers: { Origin: 'https://evil.example' },
+      body: '{"event":"spoof"}',
+    })));
+    assert.equal(res.status, 403);
+    assert.deepEqual(await res.json(), { error: 'cross-origin requests are rejected' });
+    assert.equal(lines.length, 0, 'a rejected drive-by write never reaches the log sink');
+  } finally {
+    console.log = original;
+  }
+});
+
+test('throttling is default-ON on Pages: the 31st write in a minute is refused', async () => {
+  const lines = [];
+  const original = console.log;
+  console.log = (line) => lines.push(line);
+  try {
+    // Dedicated edge IP so this test does not share window state with the
+    // limiter-less tests above (which run as non-browser `unknown` clients).
+    const headers = { 'CF-Connecting-IP': '10.0.2.31' };
+    const make = () => onRequest(ctx(new Request('https://x/api/realtime/debug-log', {
+      method: 'POST', headers, body: '{"event":"tick"}',
+    })));
+
+    for (let i = 0; i < 30; i += 1) {
+      assert.equal((await make()).status, 204, `write ${i} rides the default 30/min window`);
+    }
+    const blocked = await make();
+    assert.equal(blocked.status, 429, 'no GEV_RATELIMIT_* env still throttles on Pages');
+    assert.equal(lines.length, 30, 'the blocked write never reached the log sink');
+  } finally {
+    console.log = original;
+  }
+});

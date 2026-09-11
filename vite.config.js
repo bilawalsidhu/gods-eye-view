@@ -29,6 +29,15 @@ import fs from 'node:fs';
 import { handleOpenZenithRequest } from './functions/api/openzenith/_handler.js';
 import { createRadioCatalogBroker, isPublicRadioAddress } from './functions/api/radio/_broker.js';
 import {
+  GOOGLE_NEARBY_FIELD_MASK,
+  GOOGLE_TEXT_FIELD_MASK,
+  buildNearbyRequestBody,
+  buildTextSearchRequestBody,
+  normalizeNearbyPlaces,
+  normalizeTextPlaces,
+  parseCoordinateParam,
+} from './src/data/googlePlacesPolicy.js';
+import {
   buildMilitaryInstallationsQuery,
   fetchOverpassPayload,
   militaryInstallationCacheKey,
@@ -399,6 +408,32 @@ function googleRateLimiter() {
  * @param {import('http').ServerResponse} res
  * @returns {boolean} True if the request may proceed; false if a 429 was sent.
  */
+/**
+ * Same-site guard — Pages parity with `sameSiteViolation` in
+ * `functions/_lib.js`. POSTs carry Origin on every browser request, so a
+ * mismatched host is a cross-site drive-by. GETs carry no Origin, so fall
+ * back to `Sec-Fetch-Site` (sent by every modern browser on fetch): anything
+ * but same-origin/none is rejected. Absent headers = a non-browser client —
+ * allowed, throttled instead. Returns the rejection reason, or null to allow.
+ */
+function sameSiteViolation(req) {
+  const origin = req.headers.origin;
+  if (origin) {
+    const hostOf = (value) => { try { return new URL(value).host; } catch { return ''; } };
+    return hostOf(origin) !== hostOf(`http://${req.headers.host || 'localhost'}`) ? 'cross-origin' : null;
+  }
+  const site = req.headers['sec-fetch-site'];
+  if (site && site !== 'same-origin' && site !== 'none') return 'cross-site';
+  return null;
+}
+
+/** Reject a same-site violation with this endpoint's JSON error shape. */
+function sendSameSiteRejection(res, extraBody = {}) {
+  res.statusCode = 403;
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify({ error: 'cross-origin requests are rejected', ...extraBody }));
+}
+
 function enforceOptInRateLimit(limiter, req, res) {
   if (!limiter) return true; // unlimited (default) — no behavior change
   if (limiter(clientKey(req))) return true;
@@ -3370,6 +3405,12 @@ function openAiRealtimeProxy() {
         return;
       }
 
+      const siteViolation = sameSiteViolation(req);
+      if (siteViolation) {
+        sendSameSiteRejection(res);
+        return;
+      }
+
       // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). No-op when unset.
       if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
 
@@ -3429,6 +3470,12 @@ function openAiRealtimeProxy() {
       }
 
       try {
+        const siteViolation = sameSiteViolation(req);
+        if (siteViolation) {
+          sendSameSiteRejection(res);
+          return;
+        }
+
         // Opt-in per-IP throttle (Pages parity — the voice endpoints share
         // GEV_RATELIMIT_OPENAI_PER_MIN). No-op when unset.
         if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
@@ -3595,6 +3642,12 @@ function googlePlacesContextProxy() {
         return;
       }
 
+      const siteViolation = sameSiteViolation(req);
+      if (siteViolation) {
+        sendSameSiteRejection(res, { places: [] });
+        return;
+      }
+
       // Opt-in per-IP throttle (GEV_RATELIMIT_GOOGLE_PER_MIN). No-op when unset.
       // Inlined (not the shared helper) so the 429 body keeps this endpoint's
       // `places: []` contract that the client expects on every error response.
@@ -3616,8 +3669,10 @@ function googlePlacesContextProxy() {
       }
 
       const requestUrl = new URL(req.url || '', 'http://localhost');
-      const latitude = Number(requestUrl.searchParams.get('lat'));
-      const longitude = Number(requestUrl.searchParams.get('lon'));
+      // parseCoordinateParam treats a MISSING or blank param as NaN, not 0 —
+      // `Number(null)` is 0, which used to query Google for 0°N 0°E.
+      const latitude = parseCoordinateParam(requestUrl.searchParams.get('lat'));
+      const longitude = parseCoordinateParam(requestUrl.searchParams.get('lon'));
       const radiusM = Math.max(25, Math.min(5000, Number(requestUrl.searchParams.get('radiusM')) || 250));
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
         res.statusCode = 400;
@@ -3632,56 +3687,12 @@ function googlePlacesContextProxy() {
           headers: {
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': apiKey,
-            'X-Goog-FieldMask': [
-              'places.id',
-              'places.displayName',
-              'places.formattedAddress',
-              'places.shortFormattedAddress',
-              'places.location',
-              'places.primaryType',
-              'places.primaryTypeDisplayName',
-              'places.types',
-            ].join(','),
+            'X-Goog-FieldMask': GOOGLE_NEARBY_FIELD_MASK,
           },
-          body: JSON.stringify({
-            maxResultCount: 20,
-            rankPreference: 'DISTANCE',
-            locationRestriction: {
-              circle: {
-                center: { latitude, longitude },
-                radius: radiusM,
-              },
-            },
-          }),
+          body: JSON.stringify(buildNearbyRequestBody({ latitude, longitude, radiusM })),
         });
         const data = await response.json().catch(() => ({}));
-        const seenPlaces = new Set();
-        const places = Array.isArray(data.places) ? data.places
-          .map((place) => {
-            const placeLatitude = place.location?.latitude ?? null;
-            const placeLongitude = place.location?.longitude ?? null;
-            const types = Array.isArray(place.types) ? place.types.slice(0, 8) : [];
-            return {
-              id: place.id || null,
-              name: place.displayName?.text || null,
-              address: place.shortFormattedAddress || place.formattedAddress || null,
-              latitude: placeLatitude,
-              longitude: placeLongitude,
-              distanceM: approximateDistanceM(latitude, longitude, placeLatitude, placeLongitude),
-              primaryType: place.primaryTypeDisplayName?.text || place.primaryType || null,
-              types,
-              contextPriority: placeContextPriority(types),
-            };
-          })
-          .filter((place) => {
-            const key = `${place.name}:${place.address || ''}`.toLowerCase();
-            if (!place.name || seenPlaces.has(key)) return false;
-            seenPlaces.add(key);
-            return true;
-          })
-          .sort((a, b) => b.contextPriority - a.contextPriority || a.distanceM - b.distanceM)
-          .map(({ contextPriority: _contextPriority, ...place }) => place)
-          .slice(0, 20) : [];
+        const places = normalizeNearbyPlaces(data, latitude, longitude);
 
         res.statusCode = response.ok ? 200 : response.status;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -3709,6 +3720,12 @@ function googlePlacesContextProxy() {
         return;
       }
 
+      const siteViolation = sameSiteViolation(req);
+      if (siteViolation) {
+        sendSameSiteRejection(res, { places: [] });
+        return;
+      }
+
       // Opt-in per-IP throttle (GEV_RATELIMIT_GOOGLE_PER_MIN). No-op when unset.
       // Inlined (like nearby-places) so the 429 body keeps the `places: []`
       // contract the client expects on every error response.
@@ -3731,8 +3748,10 @@ function googlePlacesContextProxy() {
 
       const requestUrl = new URL(req.url || '', 'http://localhost');
       const textQuery = String(requestUrl.searchParams.get('q') || '').trim();
-      const latitude = Number(requestUrl.searchParams.get('lat'));
-      const longitude = Number(requestUrl.searchParams.get('lon'));
+      // parseCoordinateParam: missing/blank → NaN (not 0). Same fix as
+      // nearby-places above.
+      const latitude = parseCoordinateParam(requestUrl.searchParams.get('lat'));
+      const longitude = parseCoordinateParam(requestUrl.searchParams.get('lon'));
       const radiusM = Math.max(50, Math.min(50000, Number(requestUrl.searchParams.get('radiusM')) || 4000));
       // Range-validate, not just finite-validate: lat=999 is finite but an
       // invalid latitude for the Places API (upstream audit #19).
@@ -3751,57 +3770,12 @@ function googlePlacesContextProxy() {
           headers: {
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': apiKey,
-            'X-Goog-FieldMask': [
-              'places.id',
-              'places.displayName',
-              'places.formattedAddress',
-              'places.location',
-              'places.viewport',
-              'places.primaryType',
-              'places.types',
-            ].join(','),
+            'X-Goog-FieldMask': GOOGLE_TEXT_FIELD_MASK,
           },
-          body: JSON.stringify({
-            textQuery,
-            locationBias: {
-              circle: {
-                center: { latitude, longitude },
-                radius: radiusM,
-              },
-            },
-            maxResultCount: 5,
-          }),
+          body: JSON.stringify(buildTextSearchRequestBody({ textQuery, latitude, longitude, radiusM })),
         });
         const data = await response.json().catch(() => ({}));
-        const places = Array.isArray(data.places) ? data.places
-          .map((place) => {
-            const placeLatitude = place.location?.latitude ?? null;
-            const placeLongitude = place.location?.longitude ?? null;
-            const types = Array.isArray(place.types) ? place.types.slice(0, 8) : [];
-            // Places returns a lat/lng bounding box (low/high corners) framing the
-            // place — no polygon, but enough to SIZE a fallback grounds disc to the
-            // real feature instead of a blind constant. Normalize to plain numbers.
-            const vp = place.viewport;
-            const viewport = (
-              Number.isFinite(vp?.low?.latitude) && Number.isFinite(vp?.low?.longitude)
-              && Number.isFinite(vp?.high?.latitude) && Number.isFinite(vp?.high?.longitude)
-            ) ? {
-              low: { latitude: vp.low.latitude, longitude: vp.low.longitude },
-              high: { latitude: vp.high.latitude, longitude: vp.high.longitude },
-            } : null;
-            return {
-              id: place.id || null,
-              name: place.displayName?.text || null,
-              address: place.formattedAddress || null,
-              latitude: placeLatitude,
-              longitude: placeLongitude,
-              distanceM: approximateDistanceM(latitude, longitude, placeLatitude, placeLongitude),
-              primaryType: place.primaryType || null,
-              types,
-              viewport,
-            };
-          })
-          .filter((place) => place.name) : [];
+        const places = normalizeTextPlaces(data, latitude, longitude);
 
         res.statusCode = response.ok ? 200 : response.status;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -3828,27 +3802,6 @@ function googlePlacesContextProxy() {
     },
   };
 }
-
-function placeContextPriority(types) {
-  const typeSet = new Set(types);
-  if (typeSet.has('historical_landmark') || typeSet.has('monument')) return 100;
-  if (typeSet.has('tourist_attraction') || typeSet.has('museum')) return 90;
-  if (typeSet.has('premise') || typeSet.has('street_address')) return 75;
-  if (typeSet.has('point_of_interest')) return 60;
-  if (typeSet.has('public_bathroom')) return 10;
-  return 40;
-}
-
-function approximateDistanceM(latA, lonA, latB, lonB) {
-  if (![latA, lonA, latB, lonB].every(Number.isFinite)) return Number.MAX_SAFE_INTEGER;
-  const latitudeScale = 111320;
-  const longitudeScale = latitudeScale * Math.cos((latA * Math.PI) / 180);
-  return Math.round(Math.hypot(
-    (latB - latA) * latitudeScale,
-    (lonB - lonA) * longitudeScale
-  ));
-}
-
 
 /**
  * Load the `ws` constructor once.

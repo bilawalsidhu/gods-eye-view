@@ -4,12 +4,18 @@ import assert from 'node:assert/strict';
 import {
   allowRequest,
   clientKey,
+  createDefaultOnRateLimiter,
+  hostOf,
   jsonResponse,
   makeOptInRateLimiter,
   makeRateLimiter,
   methodNotAllowed,
+  PAGES_RATELIMIT_GOOGLE_PER_MIN,
+  PAGES_RATELIMIT_OPENAI_PER_MIN,
   rateLimitedResponse,
   readJsonBody,
+  sameSiteRejection,
+  sameSiteViolation,
 } from './_lib.js';
 
 const req = (body = null, headers = {}) => new Request('https://example.com/api/x', {
@@ -17,6 +23,9 @@ const req = (body = null, headers = {}) => new Request('https://example.com/api/
   headers,
   body: body === null ? undefined : body,
 });
+
+/** A request attributed to a specific edge peer address. */
+const ipReq = (ip, headers = {}) => req(null, { 'CF-Connecting-IP': ip, ...headers });
 
 test('jsonResponse serializes with the documented content type and status', async () => {
   const res = jsonResponse({ ok: true }, { status: 201, cacheControl: 'no-store' });
@@ -119,4 +128,84 @@ test('clientKey trusts only the edge-set peer address', () => {
     'unknown',
     'XFF is client-controlled and must never mint quota',
   );
+});
+
+test('default-on limiter: an UNSET env builds the default throttle on first call', () => {
+  const factory = createDefaultOnRateLimiter(3);
+  const limiter = factory(undefined);
+  assert.equal(typeof limiter, 'function', 'unset env must NOT mean unlimited');
+
+  // Regression: the factory used to initialize its cache key to `undefined`,
+  // so the first unset-env call "matched" and silently returned no limiter.
+  const seen = [];
+  for (let i = 0; i < 4; i += 1) seen.push(allowRequest(limiter, ipReq('10.1.0.1')));
+  assert.deepEqual(seen, [true, true, true, false], 'the 4th request inside the window is blocked');
+
+  assert.equal(PAGES_RATELIMIT_OPENAI_PER_MIN, 30);
+  assert.equal(PAGES_RATELIMIT_GOOGLE_PER_MIN, 60);
+});
+
+test('default-on limiter: empty env behaves like unset, `0` is the escape hatch', () => {
+  const factory = createDefaultOnRateLimiter(1);
+  assert.equal(typeof factory(''), 'function', 'empty string still gets the default throttle');
+  assert.equal(factory('0'), null, '0 opts out entirely');
+  assert.equal(factory('nope'), null, 'any other non-positive garbage opts out too');
+});
+
+test('default-on limiter: a positive env overrides the default', () => {
+  const factory = createDefaultOnRateLimiter(30);
+  const limiter = factory('2');
+  const seen = [];
+  for (let i = 0; i < 3; i += 1) seen.push(allowRequest(limiter, ipReq('10.2.0.1')));
+  assert.deepEqual(seen, [true, true, false], 'the override max wins over the default');
+});
+
+test('default-on limiter: the same env value reuses one limiter, a new value rebuilds', () => {
+  const factory = createDefaultOnRateLimiter(5);
+  const first = factory('1');
+  assert.equal(factory('1'), first, 'per-isolate cache: same env, same window state');
+
+  allowRequest(first, ipReq('10.3.0.1'));
+  assert.equal(allowRequest(first, ipReq('10.3.0.1')), false, 'state genuinely persists across calls');
+
+  const fresh = factory('6');
+  assert.notEqual(fresh, first, 'a changed env rebuilds the limiter');
+  assert.equal(allowRequest(fresh, ipReq('10.3.0.1')), true, 'the rebuilt limiter starts empty');
+});
+
+test('sameSiteViolation: Origin decides for POST-style requests', () => {
+  assert.equal(sameSiteViolation(req(null, { Origin: 'https://evil.example' })), 'cross-origin');
+  assert.equal(sameSiteViolation(req(null, { Origin: 'https://example.com' })), null);
+  assert.equal(
+    sameSiteViolation(req(null, { Origin: 'null' })),
+    'cross-origin',
+    'a sandboxed `Origin: null` is not this origin',
+  );
+});
+
+test('sameSiteViolation: GETs fall back to Sec-Fetch-Site', () => {
+  assert.equal(sameSiteViolation(req(null, { 'Sec-Fetch-Site': 'cross-site' })), 'cross-site');
+  assert.equal(
+    sameSiteViolation(req(null, { 'Sec-Fetch-Site': 'same-site' })),
+    'cross-site',
+    'sibling subdomains are still not this origin',
+  );
+  assert.equal(sameSiteViolation(req(null, { 'Sec-Fetch-Site': 'same-origin' })), null);
+  assert.equal(sameSiteViolation(req(null, { 'Sec-Fetch-Site': 'none' })), null, 'address-bar navigation is trusted');
+});
+
+test('sameSiteViolation: absent headers mean a non-browser client and are allowed', () => {
+  assert.equal(sameSiteViolation(req()), null);
+});
+
+test('sameSiteRejection answers the shared 403 shape', async () => {
+  const res = sameSiteRejection();
+  assert.equal(res.status, 403);
+  assert.deepEqual(await res.json(), { error: 'cross-origin requests are rejected' });
+});
+
+test('hostOf extracts host including a non-default port', () => {
+  assert.equal(hostOf('https://example.com/path?x=1'), 'example.com');
+  assert.equal(hostOf('http://localhost:4173/api'), 'localhost:4173');
+  assert.equal(hostOf('not a url'), '');
 });

@@ -163,3 +163,39 @@ test('the opt-in per-IP throttle answers 429 before minting', async () => {
     globalThis.fetch = original;
   }
 });
+
+test('throttling is default-ON on Pages: the 31st mint in a minute is refused', async () => {
+  const calls = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => { calls.push(1); return new Response('{}', { status: 200 }); };
+  try {
+    // Dedicated edge IP so the test does not share window state with the
+    // limiter-less tests above (which run as non-browser `unknown` clients).
+    const headers = { 'CF-Connecting-IP': '10.0.0.31' };
+    const make = () => onRequest(ctx(new Request(url(), { method: 'POST', headers }), { OPENAI_API_KEY: 'k' }));
+
+    for (let i = 0; i < 30; i += 1) {
+      assert.equal((await make()).status, 200, `mint ${i} rides the default 30/min window`);
+    }
+    const blocked = await make();
+    assert.equal(blocked.status, 429, 'no GEV_RATELIMIT_* env still throttles on Pages');
+    assert.equal(calls.length, 30, 'the blocked mint never reached OpenAI');
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('GEV_RATELIMIT_OPENAI_PER_MIN=0 disables the default-on throttle', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => new Response('{}', { status: 200 });
+  try {
+    const env = { OPENAI_API_KEY: 'k', GEV_RATELIMIT_OPENAI_PER_MIN: '0' };
+    const headers = { 'CF-Connecting-IP': '10.0.0.31' }; // already exhausted above
+    for (let i = 0; i < 32; i += 1) {
+      const res = await onRequest(ctx(new Request(url(), { method: 'POST', headers }), env));
+      assert.equal(res.status, 200, `escape-hatch mint ${i} is unlimited`);
+    }
+  } finally {
+    globalThis.fetch = original;
+  }
+});

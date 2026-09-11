@@ -38,24 +38,19 @@ import {
   buildRealtimeSessionConfig,
 } from '../../../src/voice/realtimeSession.js';
 import {
+  PAGES_RATELIMIT_OPENAI_PER_MIN,
   allowRequest,
-  createCachedOptInLimiter,
+  createDefaultOnRateLimiter,
   jsonResponse,
   methodNotAllowed,
   rateLimitedResponse,
+  sameSiteViolation,
 } from '../../_lib.js';
 
-/** Built once per isolate and reused, so the per-IP window state persists. */
-const openAiLimiter = createCachedOptInLimiter();
-
-/** Host of a URL string, '' when unparseable (an invalid Origin never matches). */
-function hostOf(value) {
-  try {
-    return new URL(value).host;
-  } catch {
-    return '';
-  }
-}
+/** Built once per isolate and reused, so the per-IP window state persists.
+ *  Default-ON on Pages (30/min/IP) — override GEV_RATELIMIT_OPENAI_PER_MIN,
+ *  `0` disables. Dev's middleware stays opt-in (unset = unlimited). */
+const openAiLimiter = createDefaultOnRateLimiter(PAGES_RATELIMIT_OPENAI_PER_MIN);
 
 export async function onRequest(context) {
   const { env, request } = context;
@@ -66,15 +61,15 @@ export async function onRequest(context) {
   // secret itself never crossed origins (no ACAO header) even before this.
   if (request.method !== 'POST') return methodNotAllowed();
 
-  // Same-origin guard. Browsers attach Origin to every POST; absent Origin
+  // Same-site guard. Browsers attach Origin to every POST; absent Origin
   // means a non-browser client (curl, agents) — allowed, throttled by the
-  // opt-in limiter below instead.
-  const origin = request.headers.get('Origin');
-  if (origin && hostOf(origin) !== hostOf(request.url)) {
+  // limiter below instead.
+  if (sameSiteViolation(request)) {
     return jsonResponse({ error: 'cross-origin token requests are rejected' }, { status: 403 });
   }
 
-  // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). No-op when unset.
+  // Per-IP throttle, default-ON on Pages (GEV_RATELIMIT_OPENAI_PER_MIN to
+  // override; `0` disables — see _lib.createDefaultOnRateLimiter).
   if (!allowRequest(openAiLimiter(env.GEV_RATELIMIT_OPENAI_PER_MIN), request)) {
     return rateLimitedResponse();
   }
