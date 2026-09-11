@@ -33,6 +33,7 @@ import {
 import { installScopeMask } from './scopeMask.js';
 import { initFirstRunExperience } from './firstRunExperience.js';
 import { initKeySetup } from './keySetup.js';
+import { initDeckControls } from './deckControls.js';
 import { loadPhotorealisticTileset } from './mapStartup.js';
 
 initLogoGaze();
@@ -327,6 +328,7 @@ async function init() {
       requestRender: governorRequestRender,
     };
     window.__godsEyeView.voiceCommands = initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector, annotations });
+    initDeckControls(viewer, styleManager);
 
   } catch (error) {
     console.error("God's Eye View initialization failed:", error);

@@ -11,6 +11,13 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- Steam Deck / gamepad camera controls (`src/deckControls.js`): sticks for
+  move/look, triggers for zoom, face buttons and D-pad for common UI actions,
+  optional DISPLAY → Gamepad slider. Defaults on unless `GEV_DECK_CONTROLS=0`;
+  the slider preference is stored in `localStorage`.
+
 ### Fixed
 
 - Mapped-site outages show their scheduled retry countdown and distinguish
