@@ -4,13 +4,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  CATALOG_LOCALES,
   DEFAULT_LOCALE,
   LOCALE_METADATA,
   LOCALE_STORAGE_KEY,
-  SUPPORTED_LOCALES,
   applyDocumentLanguage,
+  availableLocales,
   normalizeLocale,
   resolveLocale,
+  resolveLocalePair,
   writeStoredLocale,
 } from './locale.js';
 import {
@@ -39,7 +41,11 @@ test('normalizeLocale folds regional variants and rejects unsupported tags', () 
   assert.equal(normalizeLocale('es_419'), 'es');
   assert.equal(normalizeLocale('en'), 'en');
   assert.equal(normalizeLocale('en-GB'), 'en');
-  assert.equal(normalizeLocale('fr'), null);
+  assert.equal(normalizeLocale('fr'), 'fr');
+  assert.equal(normalizeLocale('FR'), 'fr');
+  assert.equal(normalizeLocale('fr-CA'), 'fr');
+  assert.equal(normalizeLocale('fr_FR'), 'fr');
+  assert.equal(normalizeLocale('de'), null, 'no shipped de catalog');
   assert.equal(normalizeLocale('english'), null);
   assert.equal(normalizeLocale(''), null);
   assert.equal(normalizeLocale(null), null);
@@ -54,6 +60,13 @@ test('resolution precedence: ?lang= overrides everything and is never persisted'
     languages: ['en-US'],
   }), 'es');
   // A garbage override is ignored — the chain keeps looking.
+  assert.equal(resolveLocale({
+    location: { search: '?lang=de' },
+    storage,
+    languages: ['en-US'],
+  }), 'en');
+  // A shipped catalog locale outside the DEFAULT pair (en+es) is equally
+  // ignored: fr only resolves while the configured pair offers it.
   assert.equal(resolveLocale({
     location: { search: '?lang=fr' },
     storage,
@@ -103,11 +116,16 @@ test('applyDocumentLanguage reflects lang and dir from locale metadata', () => {
   assert.deepEqual({ lang: esDoc.documentElement.lang, dir: esDoc.documentElement.dir },
     { lang: 'es', dir: LOCALE_METADATA.es.dir });
   assert.equal(LOCALE_METADATA.es.dir, 'ltr', 'Spanish is LTR by metadata');
+  const frDoc = makeDoc();
+  assert.equal(applyDocumentLanguage(frDoc, 'fr-CA'), true);
+  assert.deepEqual({ lang: frDoc.documentElement.lang, dir: frDoc.documentElement.dir },
+    { lang: 'fr', dir: LOCALE_METADATA.fr.dir });
+  assert.equal(LOCALE_METADATA.fr.dir, 'ltr', 'French is LTR by metadata');
   assert.equal(applyDocumentLanguage(null, 'es'), false);
   assert.equal(applyDocumentLanguage({ documentElement: null }, 'es'), false);
   // An unsupported locale still yields valid metadata, never an empty dir.
   const fallbackDoc = makeDoc();
-  applyDocumentLanguage(fallbackDoc, 'fr');
+  applyDocumentLanguage(fallbackDoc, 'de');
   assert.equal(fallbackDoc.documentElement.lang, DEFAULT_LOCALE);
   assert.equal(fallbackDoc.documentElement.dir, 'ltr');
 });
@@ -277,8 +295,9 @@ test('applyDocumentTranslations writes all four attributes and skips unknown key
   assert.equal(applyDocumentTranslations({}), 0);
 });
 
-test('getCatalog exposes the merged, dot-prefixed registry for every supported locale', () => {
-  for (const locale of SUPPORTED_LOCALES) {
+test('getCatalog exposes the merged, dot-prefixed registry for every shipped locale', () => {
+  assert.deepEqual([...CATALOG_LOCALES], ['en', 'es', 'fr']);
+  for (const locale of CATALOG_LOCALES) {
     const catalog = getCatalog(locale);
     assert.ok(catalog, `catalog for ${locale}`);
     assert.ok(Object.keys(catalog).length > 0);
@@ -286,6 +305,89 @@ test('getCatalog exposes the merged, dot-prefixed registry for every supported l
       assert.match(key, /^(shell|cockpit|layers|setup)\./, `${locale} key ${key}`);
     }
   }
-  assert.equal(getCatalog('fr'), null);
+  // The fr catalog is registered (stage-B seed mirroring en key-for-key) even
+  // though the default pair does not offer it; an unknown locale stays null.
+  assert.deepEqual(Object.keys(getCatalog('fr')).sort(), Object.keys(getCatalog('en')).sort());
+  assert.equal(getCatalog('de'), null);
   assert.equal(getLocale(), 'en', 'state survived the whole file');
+});
+
+test('locale pair: availableLocales dedups [default, secondary, en] in selector order', () => {
+  assert.deepEqual([...availableLocales()], ['en', 'es'], 'no config = built-in en+es');
+  assert.deepEqual([...availableLocales({ defaultLocale: 'fr', secondaryLocale: 'en' })], ['fr', 'en']);
+  // English joins as the always-shipped fallback when not part of the pair.
+  assert.deepEqual([...availableLocales({ defaultLocale: 'fr', secondaryLocale: 'es' })], ['fr', 'es', 'en']);
+  // Regional spellings normalize before the pair is validated/deduped.
+  assert.deepEqual([...availableLocales({ defaultLocale: 'FR-fr', secondaryLocale: 'EN' })], ['fr', 'en']);
+  // A blank field means "unset" (empty .env line) and takes its built-in default.
+  assert.deepEqual([...availableLocales({ defaultLocale: ' ' })], ['en', 'es']);
+  const pair = resolveLocalePair({ defaultLocale: 'fr', secondaryLocale: 'es' });
+  assert.equal(pair.defaultLocale, 'fr');
+  assert.equal(pair.secondaryLocale, 'es');
+  assert.ok(Object.isFrozen(pair) && Object.isFrozen(pair.availableLocales));
+});
+
+test('locale pair: a configured default=fr / secondary=en pair reshapes resolution', () => {
+  const config = { defaultLocale: 'fr', secondaryLocale: 'en' };
+  // Nothing else speaks: the CONFIGURED default wins (not hardcoded en).
+  assert.equal(resolveLocale({ location: { search: '' }, storage: null, languages: null, config }), 'fr');
+  // ?lang= is accepted for locales inside the pair, regional variants included…
+  assert.equal(resolveLocale({ location: { search: '?lang=en' }, storage: { getItem: () => 'fr' }, languages: null, config }), 'en');
+  assert.equal(resolveLocale({ location: { search: '?lang=fr-CA' }, storage: null, languages: null, config }), 'fr');
+  // …and ignored for a shipped locale outside it (es here).
+  assert.equal(resolveLocale({ location: { search: '?lang=es' }, storage: { getItem: () => 'en' }, languages: null, config }), 'en');
+  // Navigator matching is pair-scoped too.
+  assert.equal(resolveLocale({ location: { search: '' }, storage: null, languages: ['de-DE', 'en-US'], config }), 'en');
+});
+
+test('locale pair: ?lang=fr resolves only while fr is in the pair', () => {
+  assert.equal(
+    resolveLocale({ location: { search: '?lang=fr' }, storage: { getItem: () => 'en' }, languages: null }),
+    'en',
+    'default pair (en+es): the fr override falls through to the stored pref',
+  );
+  assert.equal(
+    resolveLocale({
+      location: { search: '?lang=fr' },
+      storage: { getItem: () => 'en' },
+      languages: null,
+      config: { defaultLocale: 'es', secondaryLocale: 'fr' },
+    }),
+    'fr',
+  );
+});
+
+test('locale pair: a stored preference outside the pair falls through', () => {
+  const config = { defaultLocale: 'fr', secondaryLocale: 'en' };
+  // es was stored under a previous en+es configuration; it is out of pair now,
+  // so navigator languages (pair-scoped) decide, then the configured default.
+  assert.equal(resolveLocale({ location: { search: '' }, storage: { getItem: () => 'es' }, languages: ['es-MX', 'fr-FR'], config }), 'fr');
+  assert.equal(resolveLocale({ location: { search: '' }, storage: { getItem: () => 'es' }, languages: ['en-US'], config }), 'en');
+  assert.equal(resolveLocale({ location: { search: '' }, storage: { getItem: () => 'es' }, languages: null, config }), 'fr', '…down to the configured default');
+});
+
+test('locale pair: invalid or degenerate values fall back to en+es (dev-warn only)', () => {
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnings.push(args);
+  try {
+    const badPairs = [
+      { defaultLocale: 'de', secondaryLocale: 'es' }, // unsupported catalog locale
+      { defaultLocale: 'fr', secondaryLocale: 'fr' },   // degenerate: same locale twice
+      { defaultLocale: 'en', secondaryLocale: 'en' },   // degenerate default pair
+      { defaultLocale: 'english', secondaryLocale: 'ES' },
+    ];
+    for (const bad of badPairs) {
+      const pair = resolveLocalePair(bad);
+      assert.equal(pair.defaultLocale, 'en', JSON.stringify(bad));
+      assert.equal(pair.secondaryLocale, 'es', JSON.stringify(bad));
+      assert.deepEqual([...pair.availableLocales], ['en', 'es'], JSON.stringify(bad));
+      assert.equal(resolveLocale({ location: { search: '' }, storage: null, languages: null, config: bad }), 'en');
+    }
+  } finally {
+    console.warn = originalWarn;
+  }
+  // import.meta.env is absent under node:test, so the DEV gate keeps the
+  // console quiet here; the warn fires only on the dev server.
+  assert.deepEqual(warnings, []);
 });

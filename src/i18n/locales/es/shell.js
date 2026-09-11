@@ -41,4 +41,9 @@ export default {
   'status.fetchingMappedSites': 'OBTENIENDO SITIOS MAPEADOS',
   'status.turningOffLiveData': 'DESACTIVANDO DATOS EN VIVO',
   'status.refreshingLiveData': 'ACTUALIZANDO DATOS EN VIVO',
+
+  // Par de idiomas configurable (espejo del apéndice de locales/en/shell.js).
+  'locale.en.ariaLabel': 'Cambiar a inglés',
+  'locale.es.ariaLabel': 'Cambiar a español',
+  'locale.fr.ariaLabel': 'Cambiar a francés',
 };

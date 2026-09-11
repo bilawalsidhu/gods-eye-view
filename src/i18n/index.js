@@ -1,6 +1,9 @@
 // God's Eye View i18n core (phase 1): catalog registry, translation, and
 // Intl-based formatting. English is the source/fallback catalog; a missing key
 // in another locale falls back to English with a development-only warning.
+// Every shipped catalog (es, fr) is built UNCONDITIONALLY — the build cost is
+// trivial and the registry stays declarative — but only locales in the
+// configured pair are offered/accepted (see locale.js resolveLocalePair).
 //
 // APPEND-ONLY NAMESPACE REGISTRATION
 // ─────────────────────────────────────────────────────────────────────────────
@@ -20,10 +23,15 @@ import * as esShell from './locales/es/shell.js';
 import * as esCockpit from './locales/es/cockpit.js';
 import * as esLayers from './locales/es/layers.js';
 import * as esSetup from './locales/es/setup.js';
+import * as frShell from './locales/fr/shell.js';
+import * as frCockpit from './locales/fr/cockpit.js';
+import * as frLayers from './locales/fr/layers.js';
+import * as frSetup from './locales/fr/setup.js';
 
 // Append new namespace modules here (one import + one entry per locale).
 const EN_NAMESPACES = [enShell, enCockpit, enLayers, enSetup];
 const ES_NAMESPACES = [esShell, esCockpit, esLayers, esSetup];
+const FR_NAMESPACES = [frShell, frCockpit, frLayers, frSetup];
 
 /**
  * Prefix one namespace module's flat, namespace-relative keys with its
@@ -63,6 +71,7 @@ function buildCatalog(namespaceModules) {
 const CATALOGS = Object.freeze({
   [DEFAULT_LOCALE]: buildCatalog(EN_NAMESPACES),
   es: buildCatalog(ES_NAMESPACES),
+  fr: buildCatalog(FR_NAMESPACES),
 });
 
 /**
@@ -78,7 +87,7 @@ export function getCatalog(locale) {
 
 let currentLocale = DEFAULT_LOCALE;
 
-/** Active locale ('en' or 'es'). */
+/** Active locale (any catalog locale; pair-scoped by resolveLocale at boot). */
 export function getLocale() {
   return currentLocale;
 }
@@ -86,7 +95,7 @@ export function getLocale() {
 /**
  * Switch the active locale. Pure state change: call applyDocumentLanguage /
  * applyDocumentTranslations to reflect it in the DOM.
- * @returns {'en'|'es'} The locale actually applied (normalized).
+ * @returns {string} The locale actually applied (normalized).
  */
 export function setLocale(locale) {
   const normalized = normalizeLocale(locale) || DEFAULT_LOCALE;

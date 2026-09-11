@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getCatalog, mergeNamespace } from './index.js';
-import { SUPPORTED_LOCALES } from './locale.js';
+import { CATALOG_LOCALES } from './locale.js';
 
 /*
  * PARITY FLIP — how this gate tightens once stage-4 translation completes.
@@ -45,9 +45,9 @@ function shapeOf(entry) {
 const enKeys = Object.keys(getCatalog('en')).sort();
 const esKeys = Object.keys(getCatalog('es')).sort();
 
-test('every supported locale ships a merged catalog', () => {
-  assert.deepEqual([...SUPPORTED_LOCALES].sort(), ['en', 'es']);
-  for (const locale of SUPPORTED_LOCALES) {
+test('every shipped locale ships a merged catalog', () => {
+  assert.deepEqual([...CATALOG_LOCALES].sort(), ['en', 'es', 'fr']);
+  for (const locale of CATALOG_LOCALES) {
     assert.ok(getCatalog(locale), `merged catalog for ${locale}`);
   }
 });

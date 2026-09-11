@@ -1,10 +1,12 @@
-// English catalog — shell namespace (phase-1 seed).
+// French catalog — shell namespace (UNTRANSLATED FR STAGE-B SEED).
 //
-// Owns the global application chrome: title bar, loader status, top-center
-// actions, panel titles, and the shared global status surface. Keys are
-// namespace-relative; the registry in src/i18n/index.js prefixes them with
-// `shell.`. Values are plain strings or { one, other } plural variant objects
-// with named {placeholder} interpolation.
+// This file mirrors locales/en/shell.js key-for-key with the ENGLISH
+// values until the stage-B French translation pass replaces them (see
+// docs/TRANSLATORS.md). Do NOT rename, reorder, add, or drop keys: the
+// parity gate enforces exact key/placeholder/plural-shape equality with
+// the en catalog. French is registered as a shipped catalog but is only
+// offered when the configured locale pair includes it
+// (GEV_DEFAULT_LOCALE / GEV_SECONDARY_LOCALE).
 export const NAMESPACE = 'shell';
 
 export default {
