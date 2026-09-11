@@ -11,7 +11,9 @@ const run = promisify(execFile);
 const bashTest = process.platform === 'win32' ? test.skip : test;
 
 async function launch(overrides = {}, dotenv = '', omitCctv = false) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'gev-cctv-launch-'));
+  // Resolve symlinks (macOS tmpdir is /var -> /private/var) so the physical
+  // cwd reported by the launched process matches the fixture root.
+  const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'gev-cctv-launch-')));
   try {
     await fs.mkdir(path.join(root, 'scripts'));
     await fs.mkdir(path.join(root, 'bin'));
