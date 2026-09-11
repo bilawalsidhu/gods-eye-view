@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-traffic-jamviz-ab.mjs — A/B screenshot capture for the jam-viz
- * congestion prototypes.
+ * congestion prototypes (feat/traffic-jam-viz).
  *
  * For each view, renders the SAME camera framing under each jamViz mode
  * (none = shipped main behavior / density / heatline / both), forcing a

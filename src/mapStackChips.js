@@ -1,6 +1,6 @@
 // MAP STACK source chips — the always-visible replacement for the `<select>`
 // that used to sit in the Map Stack panel. One button per stack, rendered from
-// `MapStackController.getStacks()`. The four accepted sources below are
+// `MapStackController.getStacks()`. The four owner-approved sources below are
 // the whole shipped set; keeping the allowlist explicit means a stack added to
 // `MAP_STACKS` for internal use cannot reach the tray until someone names it
 // here.
@@ -10,11 +10,14 @@
 // state is re-synced from controller state (never optimistically), so a failed
 // or superseded switch still leaves the truly-active stack lit.
 
+import { keySetupRequirement } from './keySetupCore.mjs';
+
 export const MAP_STACK_CHIP_CLASS = 'map-stack-chip';
 export const PRESENTED_MAP_STACK_IDS = Object.freeze([
   'photoreal',
   'bing-aerial',
   'bing-labels',
+  'esri-imagery',
   'osm',
 ]);
 
@@ -35,7 +38,7 @@ export function mapStackChipModel(stack, activeId) {
   const label = String(stack?.label ?? stack?.id ?? '');
   const requiresIon = stack?.requiresIon === true;
   const fallbackReason = requiresIon
-    ? 'Cesium ion token required'
+    ? keySetupRequirement('cesium-ion')
     : `${label || 'This map stack'} is unavailable`;
   const unavailableHint = available ? '' : String(stack?.unavailableReason || fallbackReason);
   return {

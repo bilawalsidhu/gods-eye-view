@@ -85,7 +85,7 @@ test('buildCellCard: plural noun, max FRP and newest age, accent passthrough', (
   assert.equal(card.accent, accentForSeverity('orange'));
 });
 
-// Field finding 2026-07-21: anchors must sit on the DEM once the shared
+// Owner field finding 2026-07-21: anchors must sit on the DEM once the shared
 // ground floor is warm — and the cached per-fire position must re-anchor when
 // the floor lands AFTER the first (cold, height-0) render. Distinct coords
 // from every other test in this file (module caches persist across tests).

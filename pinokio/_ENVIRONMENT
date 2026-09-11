@@ -1,0 +1,30 @@
+# God's Eye View works without any API keys.
+# Easiest way to add one: open PROVIDER SETTINGS inside the running app (the
+# POWER UP chip, bottom-right). It saves into this file for you with owner-only
+# permissions and restarts the app — you never need to edit this file by hand.
+# Manual fallback: use Pinokio's File Explorer to reveal this ignored
+# pinokio/ENVIRONMENT file, edit it with a trusted local text editor, uncomment
+# only the providers you need, then Stop and Start the app. This file is
+# plaintext, not encrypted.
+# Do not enter credentials in Pinokio 8.0.40's native Configure panel: that
+# release saves this nested layout to the wrong path and logs submitted values.
+
+# GOOGLE_MAPS_API_KEY=
+# CESIUM_ION_TOKEN=
+# OPENAI_API_KEY=
+# AISSTREAM_API_KEY=
+# FIRMS_MAP_KEY=
+# TOMTOM_API_KEY=
+# OPENSKY_CLIENT_ID=
+# OPENSKY_CLIENT_SECRET=
+# LL2_API_TOKEN=
+
+# Keep sharing off. The current supported Pinokio release logs successful
+# tunnel-login passcodes, so the launcher refuses to create a tunnel.
+PINOKIO_SHARE_CLOUDFLARE=false
+PINOKIO_SHARE_LOCAL=false
+PINOKIO_SHARE_VAR=__gev_sharing_disabled__
+
+# App-level guards, not billing caps. Provider-side budgets remain authoritative.
+GEV_RATELIMIT_OPENAI_PER_MIN=30
+GEV_RATELIMIT_GOOGLE_PER_MIN=120

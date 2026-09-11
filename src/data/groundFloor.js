@@ -1,7 +1,7 @@
 // src/data/groundFloor.js — coarse ground-floor clamp for entity render
 // heights (field-test round 2026-07-06).
 //
-// Two field findings drove this module:
+// Two owner findings drove this module:
 //  - RS46 (military H60): baro-only low-altitude contacts near steep terrain
 //    render INSIDE the hillside (no alt_geom → baro+N is off by more than the
 //    local relief).
@@ -118,7 +118,7 @@ export const NEIGHBOR_FLOOR_MIN_SAMPLES = 2;
  *
  * An earlier cut leaned HIGH, reasoning from the locked "never below the
  * visible surface" principle. That principle is about a contact's OWN measured
- * ground; applied to a BORROWED cell it inverts, and a field test found
+ * ground; applied to a BORROWED cell it inverts, and an owner playtest found
  * why — planes floating in midair at terminal gates. The two errors are not
  * symmetric:
  *  - Too LOW is inert. `displayFloorHeightM` only ever RAISES a position, so a
@@ -376,7 +376,7 @@ export function allocateCorridorCells(
   return out;
 }
 
-// --- Mesh-floor cells (round 4, validated design) ---------------------
+// --- Mesh-floor cells (round 4, owner-approved design) ---------------------
 // The Re:Earth DEM is BARE EARTH; the visible world in the google-3d regime
 // is the photogrammetric MESH, which sits above it (measured ~17 m at the
 // Austin airport apron). DEM-flooring therefore still buried sprites/trails

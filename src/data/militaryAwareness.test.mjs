@@ -1080,7 +1080,7 @@ test('awareness clears are scoped to the selected source layer', () => {
 });
 
 // ===========================================================================
-// BEGIN Contact-readout presence block.
+// BEGIN Contact-readout presence block — fix/context-panel-next-subjects.
 // Integrators: this whole delimited block belongs to the Contact-panel
 // CONTACT LOST work. Keep it intact and keep any concurrent branch's own
 // additions at the END of the file, so the two never collide.
@@ -1483,7 +1483,7 @@ test('production eviction sites actually tag their clears', () => {
 });
 
 // ===========================================================================
-// END Contact-readout presence block.
+// END Contact-readout presence block — fix/context-panel-next-subjects.
 // ===========================================================================
 
 test('cockpit blocks only non-aircraft Context camera flights', () => {
@@ -1530,6 +1530,11 @@ test('installation summaries disclose viewport-scoped coverage', () => {
 
   const unavailable = summarizeInstallationViewport([], { available: false, stale: false });
   assert.equal(unavailable.reason, 'feed unavailable');
+  const retrying = summarizeInstallationViewport([], { available: false, stats: {
+    statusMessage: 'Overpass temporarily unavailable — retrying in 30s',
+  } });
+  assert.equal(retrying.count, null, 'retrying is not a claim of zero mapped sites');
+  assert.equal(retrying.reason, 'Overpass temporarily unavailable — retrying in 30s');
 });
 
 test('compact Context snapshots retain installation coverage', () => {

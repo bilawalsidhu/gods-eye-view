@@ -1083,7 +1083,7 @@ try {
       && !firstCockpitContact.contextStandby,
     JSON.stringify(firstCockpitContact),
   );
-  // Field test 2026-08-18: "when you click on Contacts, detections should
+  // Owner playtest 2026-08-18: "when you click on Contacts, detections should
   // just turn on, and they should stay on in Cockpit or in third-person
   // tracking inside Contacts or inside Cockpit, both… when I leave the Cockpit,
   // detections go off" — that last part being the bug. Driven through the REAL

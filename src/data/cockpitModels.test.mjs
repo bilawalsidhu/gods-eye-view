@@ -42,7 +42,7 @@ for (const layer of LAYERS) {
     assert.match(regime, /if \(!_models3dEnabled\) return false;/,
       'OFF must keep Cockpit AIR contacts in 2D');
     assert.doesNotMatch(regime, /!_models3dEnabled\s*&&\s*!_cockpitContactMode/,
-      'Cockpit must not bypass the user-visible Display toggle');
+      'Cockpit must not bypass the owner-visible Display toggle');
   });
 
   test(`${layer.name}: the pilot's own airframe stays hidden in cockpit`, () => {

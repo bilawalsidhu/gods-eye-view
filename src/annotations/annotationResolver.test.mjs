@@ -1,6 +1,6 @@
 // Footprint-selection contract tests — pure fixtures, no network, no browser.
 //
-// Locks the monument-resolution regression:
+// Locks the field-test-7 monument fix (docs/field-test-rootcause-2026-06-30.md §1):
 // a POINT-LIKE target ("Tejano Monument, Austin") must never adopt a nearby
 // polygon that merely shares locality/context words ("Austin", "History").
 // The fixtures replicate the REAL Overpass candidates captured over the Texas

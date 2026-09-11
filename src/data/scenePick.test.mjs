@@ -30,7 +30,7 @@ test('the guard is an Earth-sized band, not just a non-zero check', () => {
   // Earth actually occupies, because the values BETWEEN "zero" and "the globe"
   // are the ones that fail quietly.
   const belowTheFloor = [
-    // the regression probe: finite, non-zero, and 6,378 km underground. A bare
+    // The adversarial probe: finite, non-zero, and 6,378 km underground. A bare
     // non-zero check accepts it, and the shipped path then reverse-geocodes
     // 0°, 0° as if the operator were looking at the Gulf of Guinea.
     new Cesium.Cartesian3(500, 0, 0),

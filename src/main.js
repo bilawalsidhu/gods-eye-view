@@ -32,6 +32,8 @@ import {
 } from './renderGovernor.js';
 import { installScopeMask } from './scopeMask.js';
 import { initFirstRunExperience } from './firstRunExperience.js';
+import { initKeySetup } from './keySetup.js';
+import { loadPhotorealisticTileset } from './mapStartup.js';
 
 initLogoGaze();
 
@@ -73,21 +75,11 @@ async function init() {
   try {
     loaderStatus.textContent = 'Configuring viewer...';
 
-    // Set Cesium Ion token for World Terrain
+    // A direct Google key provides Google 3D plus GEV place search. Cesium ion
+    // can host the same 3D tiles and also powers Bing/world-terrain stacks.
     const cesiumToken = import.meta.env.CESIUM_ION_TOKEN;
-    if (cesiumToken) {
-      Cesium.Ion.defaultAccessToken = cesiumToken;
-    }
-
-    // Set Google Maps API key for 3D Tiles
     const googleApiKey = import.meta.env.GOOGLE_MAPS_API_KEY;
-    if (!googleApiKey) {
-      throw new Error('GOOGLE_MAPS_API_KEY not found. Set it as an environment variable.');
-    }
-    Cesium.GoogleMaps.defaultApiKey = googleApiKey;
-
-    // Expose API key globally for geocoding in locations.js
-    window.__GOOGLE_MAPS_API_KEY__ = googleApiKey;
+    if (googleApiKey) window.__GOOGLE_MAPS_API_KEY__ = googleApiKey;
 
     // Create the Cesium viewer with minimal chrome
     const viewer = new Cesium.Viewer('cesiumContainer', {
@@ -137,7 +129,7 @@ async function init() {
     // Required by each source's license (ODbL, CC BY-NC-SA, NASA FIRMS, etc.);
     // strings are verbatim from DATA_SOURCES.md. Static + always-present in the
     // expandable bottom-left credit lightbox (showOnScreen=false), so they never
-    // clutter the on-globe attribution line.
+    // clutter the on-globe line. See docs/pre-ship-audit-2026-07-01.md H11.
     registerDataCredits(viewer);
 
     // Hide Cesium's default globe — Google Photorealistic 3D Tiles provide their own
@@ -153,22 +145,27 @@ async function init() {
     viewer.scene.skyAtmosphere.saturationShift = -0.12;
     viewer.scene.skyAtmosphere.brightnessShift = -0.08;
 
-    loaderStatus.textContent = 'Loading Google 3D Tiles...';
-    let tileset = null;
-    try {
-      // Load Google Photorealistic 3D Tiles
-      tileset = await Cesium.createGooglePhotorealistic3DTileset({
-        onlyUsingWithGoogleGeocoder: true,
-      });
+    loaderStatus.textContent = googleApiKey || cesiumToken
+      ? 'Loading Google 3D Tiles...'
+      : 'Loading the keyless globe...';
+    const photoreal = await loadPhotorealisticTileset(Cesium, {
+      googleApiKey,
+      cesiumToken,
+    });
+    const tileset = photoreal.tileset;
+    if (tileset) {
       viewer.scene.primitives.add(tileset);
       // NOTE: Cesium World Terrain intentionally disabled — conflicts with Google 3D Tiles at high zoom.
       // Google Photorealistic 3D Tiles provide their own terrain/elevation.
       viewer.scene.globe.show = false;
-    } catch (tileError) {
-      console.warn('[Init] Google 3D Tiles unavailable, falling back to Cesium globe:', tileError);
-      const tileErrorDetail = describeError(tileError);
-      loaderStatus.textContent = `Google 3D Tiles unavailable (${tileErrorDetail}). Continuing in fallback mode...`;
-      // Keep Cesium globe visible as fallback instead of aborting the app.
+      console.info(`[Init] Google 3D Tiles loaded via ${photoreal.route}.`);
+    } else {
+      if (photoreal.errors.length) {
+        const tileError = photoreal.errors.at(-1);
+        console.warn('[Init] Google 3D Tiles unavailable, using the keyless globe:', tileError);
+        const tileErrorDetail = describeError(tileError);
+        loaderStatus.textContent = `Google 3D Tiles unavailable (${tileErrorDetail}). Loading the keyless globe...`;
+      }
       viewer.scene.globe.show = true;
     }
 
@@ -177,7 +174,7 @@ async function init() {
     const mapStackController = new MapStackController(viewer, {
       googleTileset: tileset,
       cesiumToken,
-      initialStack: tileset ? 'photoreal' : 'osm',
+      initialStack: tileset ? 'photoreal' : 'esri-imagery',
       // Task 5 (height-datum fix): rebroadcast stack changes as a window
       // CustomEvent so data layers (CCTV per-regime ground resolution) can
       // react without coupling MapStackController to layer modules. Fires on
@@ -188,7 +185,7 @@ async function init() {
       },
       onError: (message) => console.warn('[MapStack]', message),
     });
-    await mapStackController.setStack(tileset ? 'photoreal' : 'osm', { silent: true });
+    await mapStackController.setStack(tileset ? 'photoreal' : 'esri-imagery', { silent: true });
 
     // Initialize the style manager (post-processing, HUD, locations, share links)
     const styleManager = new StyleManager(viewer, { mapStackController });
@@ -269,6 +266,11 @@ async function init() {
       loadingScreen.addEventListener('transitionend', revealFirstRun, { once: true });
       setTimeout(revealFirstRun, 900);
     });
+
+    // Provider Settings (the POWER UP chip + dialog). Fire-and-forget: the
+    // module removes its own surface when the dev-server endpoint is absent
+    // (prod builds, non-local visitors), so this costs prod exactly nothing.
+    void initKeySetup();
 
     // Expose for debugging
     // Idle render governor: flips the scene into requestRenderMode whenever

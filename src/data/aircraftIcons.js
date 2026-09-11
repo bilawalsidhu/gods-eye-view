@@ -18,7 +18,7 @@
  * white / cyan-tracked / amber-military, plus .withAlpha fades) keeps working —
  * no per-glyph hardcoded colors that would fight the tint.
  *
- * MIXED-SET UPDATE (2026-08-15, selected asset set): airliner/widebody/
+ * MIXED-SET UPDATE (2026-08-15, owner Hangar picks): airliner/widebody/
  * turboprop/helicopter use the "refined" recognition-chart redraw;
  * quadjet/glider use the "bold" chart-symbol redraw; light/fastjet keep the
  * original drawings. Raster fidelity doubled (192px source, same 96 coords).

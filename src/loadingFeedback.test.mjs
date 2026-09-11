@@ -1,6 +1,42 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+const retrySite = (stats = {}) => ({ id: 'military-installations', name: 'Mapped Installations', enabled: true,
+  stats: { status: 'unavailable', error: 'Unavailable', retryAt: Date.now() + 30000, ...stats } });
+
+test('installation retry remains visible after failure dwell without a false spinner', () => {
+  const summary = aggregateLayerLoading([retrySite()]);
+  const view = presentLoadingFeedback(createLoadingFeedbackState(), summary, 100);
+  assert.equal(view.state, 'retry');
+  assert.equal(view.label, 'OVERPASS TEMPORARILY UNAVAILABLE');
+  assert.match(view.detail, /retrying in 30s/);
+  assert.equal(presentLoadingFeedback(createLoadingFeedbackState(), aggregateLayerLoading([{ ...retrySite(), enabled: false }]), 100), null);
+});
+test('an installation retry never conceals another participant failure', () => {
+  const state = { visible: true, phase: 'terminal', terminal: 'error', activeIds: ['military-installations', 'flights'] };
+  const summary = aggregateLayerLoading([retrySite(), { id: 'flights', enabled: true, stats: { error: 'Failed' } }]);
+  assert.equal(presentLoadingFeedback(state, summary, 100).label, 'LOAD FAILED');
+  const healthyNow = aggregateLayerLoading([retrySite()]);
+  assert.equal(presentLoadingFeedback({ ...state, failedEventIds: ['flights'] }, healthyNow, 100).label, 'LOAD FAILED');
+});
+test('a fresh installation retry can finish successfully without inheriting the old error', () => {
+  let state = { ...createLoadingFeedbackState(), phase: 'terminal', terminal: 'error', visible: true, activeIds: ['military-installations'] };
+  const loading = aggregateLayerLoading([retrySite({ status: 'loading', error: null, loading: true, retryAt: 0, retrying: true })]);
+  state = reduceLoadingFeedback(state, loading, 1000);
+  state = reduceLoadingFeedback(state, loading, 1200);
+  assert.equal(presentLoadingFeedback(state, loading, 1200).label, 'RETRYING MAPPED SITES');
+  const done = aggregateLayerLoading([retrySite({ status: 'ready', error: null, loading: false, retryAt: 0, retrying: false, count: 3 })]);
+  state = reduceLoadingFeedback(state, done, 1500);
+  assert.equal(presentLoadingFeedback(state, done, 1500).label, 'MAPPED SITES LOADED');
+});
+test('turning off a retrying installation layer does not report the old fetch failure as a disable failure', () => {
+  const stopping = aggregateLayerLoading([{ ...retrySite(), lifecycleState: 'disabling' }]);
+  let state = reduceLoadingFeedback(createLoadingFeedbackState(), stopping, 1000);
+  state = reduceLoadingFeedback(state, stopping, 1200);
+  const off = aggregateLayerLoading([{ ...retrySite({ status: 'idle', error: null, retryAt: 0 }), enabled: false }]);
+  state = reduceLoadingFeedback(state, off, 1400);
+  assert.equal(presentLoadingFeedback(state, off, 1400).label, 'LIVE DATA OFF');
+});
 import {
   aggregateLayerLoading,
   canPresentDeferredStatusNotice,
@@ -286,7 +322,7 @@ test('AIS first-connect grace expiry reports failure even without a terminal man
   assert.equal(presentLoadingFeedback(state, unavailable, 300).label, 'LOAD FAILED');
 });
 
-test('an explicitly missing optional key completes the global loading batch honestly', () => {
+test('participant stats failure outranks a simultaneous visibility completion', () => {
   const enabling = aggregateLayerLoading([{
     id: 'ais-live-vessels',
     name: 'AIS Vessels',
@@ -305,31 +341,6 @@ test('an explicitly missing optional key completes the global loading batch hone
   }]);
   state = reduceLoadingFeedback(state, missingKey, 250, {
     type: 'visibility', layerId: 'ais-live-vessels', enabled: true,
-  });
-
-  assert.equal(state.terminal, 'complete');
-  assert.equal(presentLoadingFeedback(state, missingKey, 250).label, 'LOAD COMPLETE');
-});
-
-test('an explicit lifecycle failure still outranks a key-required row', () => {
-  const enabling = aggregateLayerLoading([{
-    id: 'local-firms',
-    name: 'FIRMS Active Fires',
-    lifecycleState: 'enabling',
-    stats: { loading: true },
-  }]);
-  let state = reduceLoadingFeedback(createLoadingFeedbackState(), enabling, 0);
-  state = reduceLoadingFeedback(state, enabling, 200);
-
-  const missingKey = aggregateLayerLoading([{
-    id: 'local-firms',
-    name: 'FIRMS Active Fires',
-    enabled: true,
-    lifecycleState: 'enabled',
-    stats: { loading: false, keyRequired: true, error: 'KEY REQUIRED' },
-  }]);
-  state = reduceLoadingFeedback(state, missingKey, 250, {
-    type: 'visibility-failed', layerId: 'local-firms', error: new Error('lifecycle failed'),
   });
 
   assert.equal(state.terminal, 'error');

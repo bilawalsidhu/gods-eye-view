@@ -1253,3 +1253,16 @@ test('disable reports a semantic failure while restoring the satellites dependen
     /could not restore the satellites layer/,
   );
 });
+
+
+test('missing payload details stay unknown without inventing mass or classification', () => {
+  for (const [mass, expected] of [[null, null], [undefined, null], ['', null], ['  ', null],
+    [false, null], [-1, null], ['invalid', null], [0, 0], ['125', 125]]) {
+    const [launch] = normalizeRocketLaunches([{ id: 'mass', pad: { latitude: 1, longitude: 2 }, net: '2026-07-20T10:00:00Z',
+      payloads: [{ mass }] }], NOW);
+    assert.equal(launch.payloads[0].massKg, expected);
+    assert.equal(launch.payloads[0].name, 'Unnamed payload');
+  }
+  const [launch] = normalizeRocketLaunches([{ id: 'missing', pad: { latitude: 1, longitude: 2 }, net: '2026-07-20T10:00:00Z' }], NOW);
+  assert.deepEqual(launch.payloads, []);
+});

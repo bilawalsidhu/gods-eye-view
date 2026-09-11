@@ -285,7 +285,7 @@ test('keyhole fade controls default and round-trip as normalized percentages', (
   assert.equal(params.get('ko'), '30');
 });
 
-// ── `sce` is a BAND, not a free number (second review) ───────────────────────
+// ── `sce` is a BAND, not a free number (review round 2) ───────────────────────
 //
 // The terminus is documented and supported as 94..100. Parsing clamped to
 // 0..100, so `sce=0` produced an unsupported sub-94 terminus — a hole in the

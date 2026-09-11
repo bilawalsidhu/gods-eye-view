@@ -1,6 +1,40 @@
 # God's Eye View Current State
 
+## September 8, 2026
+
+Earthquake refreshes validate the complete feed and construct replacement entities before clearing the previous snapshot. Malformed rows and duplicate rendered IDs retain the last good entities, overlays, count and timestamp and report a malformed response; unknown magnitude is excluded from M2.5+ rendering.
+
+Non-object or array-valued properties reject the response instead of being treated as an unknown magnitude.
+
+Launch payloads with missing records now say PAYLOAD DATA UNAVAILABLE. Missing names use Unnamed payload; absent or invalid mass stays unknown instead of appearing as 0 KG.
+
 Updated: August 24, 2026
+
+## FIRMS source status
+
+The FIRMS proxy records source success after appending its rows. If aggregation
+throws, that source reports failure without a contradictory success entry.
+The existing per-record append continues to support large feeds; sequential
+fetching, trailing-24-hour filtering and partial-success caching are unchanged.
+
+## Installations and map-source guidance
+
+- On an uncached Overpass failure, mapped installations keep their existing
+  30–240 second retry backoff. The top status and Contacts row explain the
+  outage and scheduled countdown; an active retry says "Retrying mapped
+  sites" and successful recovery clears the previous error. Known upstream
+  rate limits, timeouts, and query failures are distinguished without exposing
+  raw server errors. Failures from other loading layers retain precedence.
+- Click a selected installation again or click elsewhere on the map to clear
+  its selection. Clearing the installation does not clear another layer's
+  newly selected contact, and refreshes do not revive the cleared site.
+- Installation ways and relations without an explicit center use the midpoint
+  of finite, ordered bounds spanning at most 10 degrees per axis. Explicit
+  coordinates and centers retain precedence; invalid bounds are dropped.
+- Visual-style buttons describe their simulated effects on hover. Unavailable
+  map-source tooltips and toasts share provider guidance: missing credentials
+  point to Provider Settings, while a configured Google 3D route that fails
+  points to restrictions, quota, or connectivity. These hints do not expose keys.
 
 > **2026-08-23 — first-run mission launcher** (`src/firstRunExperience.js`,
 > `#first-run-launcher`, styles at the tail of `style.css`). After startup
@@ -664,7 +698,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   shared Parameters surface moves into Cockpit Display for the session and
 >   returns on exit, with slider values contained by the panel at its supported widths;
 >   the bottom Visual Presets tray owns the MAP SOURCE label, centered status,
->   and four-tile source row. Its compact wing is a keyboard disclosure:
+>   and five-tile source row. Its compact wing is a keyboard disclosure:
 >   Enter/Space opens and focuses Map Source, Escape closes and returns focus,
 >   and unavailable sources remain tabbable with their reason exposed. Expanded left-panel
 >   headers use the same container-owned background treatment without changing
@@ -1665,9 +1699,11 @@ preserves object identity for an idempotent repeat of the same generation, and
 degrades without replacement if a fresh response presents an older generation.
 Snapshot records mark community metadata as untrusted, and Radio tool results
 omit station names so directory text never becomes model instruction context.
-One bounded country parser maps recognized ISO codes and English/common names
-through proxy metadata and final station selection, while malformed, non-ISO,
-control-containing, and oversized inputs fail closed. Literal or resolved
+One bounded country parser maps recognized ISO codes and English/common names —
+including widely used exonyms the Intl display label omits (Turkey, Holland,
+Burma, and similar) — through proxy metadata and final station selection, while
+malformed, non-ISO, control-containing, ambiguous, and oversized inputs fail
+closed. Literal or resolved
 non-global IPv4/IPv6 targets are refused. Destroy fully releases the Radio audio
 session, voice ducking/restoration, request state, filter, selection, volume,
 accepted snapshot, and feed telemetry before re-initialization; monotonic
@@ -2006,6 +2042,12 @@ silently demoting every later lookup for the session.
 - **Track trails**: server accumulates per-MMSI ring buffers (`/api/ais-live/track?mmsi=`, Float32+Uint32, 64 samples, 30s/25m thinning); aircraft backfill proxies `/api/opensky-track` (OAuth, own credit bucket) and `/api/adsblol/trace` (tar1090 readsb, ~24h history, ODbL — credit adsb.lol).
 - Shared `src/data/pickRegistry.js` stops the two flight layers' click handlers from fighting over the camera.
 
+### Overpass proxy mirror rotation (September 2026)
+
+- `/api/overpass` fans out across four public mirrors. `overpassPayloadIsData()` governs cache reads, writes, and stale fallback: only a 2xx that is neither rate-limited nor a body-level runtime error qualifies. Previously stored refusals are ignored on both fresh and stale reads, so upgrading does not require manually clearing the disk cache.
+- HTTP refusals such as 406 now rotate alongside the existing network, rate-limit, and runtime-error cases. A refusal from one mirror no longer prevents reaching healthy alternatives or persists under the seven-day road/month-long boundary cache TTLs. Concurrent identical queries share one mirror sequence; if it fails, both the initiating and joined callers can use the same last-good data.
+- A refusal every mirror agrees on is still reported with the first mirror's status and body, so a genuinely malformed query says what upstream said — but only after every mirror has had the chance to answer it. `fetchOverpassPayload` takes injectable endpoints and fetch so the rotation is tested without a live mirror (`src/overpassProxy.test.mjs`).
+
 ### Share-link v2 layer state (August 2026)
 
 - Generated share links use a deterministic v2 hash. Existing camera, visual,
@@ -2177,11 +2219,11 @@ silently demoting every later lookup for the session.
 
 ### Map Stack Switcher (June 2026)
 
-- `src/mapStackController.js` switches between Google Photorealistic 3D (`photoreal`, default), Bing Aerial / Aerial-with-Labels via Cesium ion world imagery (require `CESIUM_ION_TOKEN`), and OSM tile fallback. Bing Road is **retired**: it is gone from `MAP_STACKS`, from the `set_map_stack` enum, and from the voice aliases (road phrasings now resolve to OSM, the one shipped road basemap). An old `map=bing-road` link is simply an unknown id and takes `setStack()`'s existing photoreal fallback with the Google 3D tile lit — pinned live in `scripts/qa-map-source-tray.mjs`.
-- The bottom Visual Presets tray presents a **four-tile MAP SOURCE row** (`#map-stack-chips`, `src/mapStackChips.js`): Google 3D, Bing Aerial, Bing Labels, and OSM. The duplicate left `#stack-panel` is retired. The four tiles share one row on desktop and two rows on narrow screens, carry `aria-pressed` on the active source, and remain keyboard-reachable with a visible focus outline.
+- `src/mapStackController.js` switches between Google Photorealistic 3D (`photoreal`, the default when a Google or ion key is present), keyless Esri World Imagery (the zero-key default landing, with keyless terrain), Bing Aerial / Aerial-with-Labels via Cesium ion world imagery (require `CESIUM_ION_TOKEN`), and OSM tile fallback. Bing Road is **retired**: it is gone from `MAP_STACKS`, from the `set_map_stack` enum, and from the voice aliases (road phrasings now resolve to OSM, the one shipped road basemap). An old `map=bing-road` link is simply an unknown id and takes `setStack()`'s existing photoreal fallback with the Google 3D tile lit — pinned live in `scripts/qa-map-source-tray.mjs`.
+- The bottom Visual Presets tray presents a **five-tile MAP SOURCE row** (`#map-stack-chips`, `src/mapStackChips.js`): Google 3D, Esri Satellite, Bing Aerial, Bing Labels, and OSM. The duplicate left `#stack-panel` is retired. The five tiles share one row on desktop and two rows on narrow screens, carry `aria-pressed` on the active source, and remain keyboard-reachable with a visible focus outline.
 - The lit tile follows controller state, not the click: a rejected switch (no ion token) or a superseded one (rapid A→B) leaves the genuinely active source lit, and the tray heading keeps its short-label status readout (`...` while switching, amber on `lastError`).
 - Ion stacks remain visible and keyboard-focusable when no ion token is configured, but expose `aria-disabled="true"` and do not switch. Their accessible label and tooltip quote `getStacks().unavailableReason` — the same string `setStack()` puts in the toast. OSM works keyless. The `ION` badge is gated on the stack's own `requiresIon`, so a `photoreal` chip unavailable because the Google tileset failed says so instead of falsely demanding an ion token.
-- Stack choice participates in share links (`src/sharelink.js`) and falls back to OSM when Google 3D tiles fail to load. Share-link restore, the `set_map_stack` voice tool, and the chip row all land on the same `_setMapStack()` path.
+- Stack choice participates in share links (`src/sharelink.js`) and falls back to the best available stack when the requested one is unavailable (keyless boots land on Esri; OSM takes over automatically if Esri is unreachable). Share-link restore, the `set_map_stack` voice tool, and the chip row all land on the same `_setMapStack()` path.
 
 ### Voice Map Whiteboard / Annotations (June 2026)
 
@@ -2253,6 +2295,10 @@ silently demoting every later lookup for the session.
 ## Auth + Launch
 
 - Recommended launcher: `./scripts/dev-fresh.sh` (also: `dev-secure.sh` for stricter bindings, `dev-cctv.sh` for CCTV source-pack tuning)
+- A successful Pinokio install writes the owner-only `pinokio/.installed`
+  marker. The nested launcher menu resolves that marker from its own directory:
+  an absent marker exposes Install, a present marker exposes Start, and a
+  running server with a captured ready URL exposes Open God's Eye View.
 - Build gate: `npm run build`
 - Network access: local-only by default (`HOST=localhost` in dev-fresh.sh); LAN is an explicit opt-in via `HOST=0.0.0.0` (launcher prints a key-exposure warning + LAN URL; see SECURITY.md)
 - OpenSky default mode: OAuth (`OPENSKY_AUTH_MODE=oauth`; `anon` works without credentials)
