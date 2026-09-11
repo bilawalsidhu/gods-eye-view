@@ -67,6 +67,13 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'nifc',
+    html:
+      'Wildfire incidents: ' +
+      '<a href="https://data-nifc.opendata.arcgis.com/" target="_blank" rel="noopener">National Interagency Fire Center (NIFC) — WFIGS</a> ' +
+      '(U.S. public domain)',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +
