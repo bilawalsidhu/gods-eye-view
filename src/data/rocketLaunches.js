@@ -2106,13 +2106,15 @@ function normalizePayloadFlights(launch) {
     const payload = flight.payload || flight;
     return {
       id: String(flight.id || payload.id || `payload-${index}`),
-      name: payload.name || flight.name || 'Undisclosed payload',
+      name: payload.name || flight.name || 'Unnamed payload',
       type: payload.type?.name || flight.type?.name || null,
       manufacturer: payload.manufacturer?.name || null,
       operator: payload.operator?.name || null,
       destination: flight.destination || payload.destination || null,
       amount: Number.isFinite(Number(flight.amount)) ? Number(flight.amount) : 1,
-      massKg: Number.isFinite(Number(payload.mass)) ? Number(payload.mass) : null,
+      massKg: (typeof payload.mass === 'number' || (typeof payload.mass === 'string' && payload.mass.trim() !== ''))
+        && Number.isFinite(Number(payload.mass)) && Number(payload.mass) >= 0
+        ? Number(payload.mass) : null,
     };
   });
 }
@@ -2288,7 +2290,7 @@ function renderMissionPanel() {
   _missionPanel.querySelector('[data-mission-payloads]').innerHTML = missionTableRows(
     payloadRows,
     3,
-    'CLASSIFIED / MULTI-PAYLOAD',
+    'PAYLOAD DATA UNAVAILABLE',
   );
   const stageRows = launch.recoveryStages.map((stage) => {
     const endpoint = stage.endpoint;
