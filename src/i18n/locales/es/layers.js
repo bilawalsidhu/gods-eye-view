@@ -114,7 +114,7 @@ export default {
   'meta.hoursAgo': 'hace {count}h',
   'meta.never': 'nunca',
   'meta.loading': 'cargando...',
-  'meta.uncertainLifecycle': 'INCIERTO · {source} · el estado del ciclo de vida requiere conciliación',
+  'meta.uncertainLifecycle': 'INCIERTO · {source} · el estado del ciclo de vida requiere reconciliación',
   'meta.transitioning': '{state} · {source}',
   'meta.stateSourceRetry': '{state} · {source} · {detail} · reintento en {seconds}s',
   'meta.stateSourceDetail': '{state} · {source} · {detail}',
@@ -405,7 +405,7 @@ export default {
   // src/data/militaryAwareness.js panel + militaryAwarenessEngine.js reasons.
   'awareness.standbyReady': 'CONTEXTO LISTO',
   'awareness.standbyOff': 'CONTEXTO GLOBAL DESACTIVADO',
-  'awareness.standbySelect': 'SELECCIONA UN VUELO, BUQUE O INSTALACIÓN MAPEADA',
+  'awareness.standbySelect': 'SELECCIONA UN VUELO, BUQUE U INSTALACIÓN MAPEADA',
   'awareness.standbyEnable': 'ACTIVA PARA CARGAR PROXIMIDAD OBSERVADA / MAPEADA',
   'awareness.controlsAria': 'Navegación del Contexto global',
   'awareness.previous': 'ANTERIOR',

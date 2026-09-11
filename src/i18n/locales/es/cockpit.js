@@ -79,7 +79,7 @@ export default {
   'display.bloomToggleTitle': 'Bloom / Resplandor',
   'display.bloomLabel': 'Bloom',
   'display.sharpenToggleTitle': 'Nitidez',
-  'display.sharpenLabel': 'Enfocar',
+  'display.sharpenLabel': 'Nitidez',
   'location.toolbarLabel': 'UBICACIÓN',
   'location.collapseTitle': 'Contraer panel',
   'location.pinAriaLabel': 'Fijar bandeja de ubicación',
@@ -271,7 +271,7 @@ export default {
   'hud.metaClassMilitary': 'MILITAR',
   'hud.metaClassCommercial': 'COMERCIAL',
   'hud.metaFeedAcquiringSurface': 'OBTENIENDO SUPERFICIE',
-  'hud.metaFeedSurfaceFallback': 'SUPERFICIE DE RESPALDO',
+  'hud.metaFeedSurfaceFallback': 'RESPALDO DE SUPERFICIE',
   'hud.metaFeedStale': 'FUENTE DESACTUALIZADA',
   'hud.metaFeedLive': 'RASTREO EN VIVO',
   'hud.aircraftMetaTemplate': '{aircraftClass} · {feedState} · RUMBO ALINEADO',
@@ -289,7 +289,7 @@ export default {
   'context.uncertaintyInputsCurrent': 'DATOS DISPONIBLES ACTUALIZADOS · NO IMPLICA TODO DESPEJADO',
   'context.nearestTemplate': '{cohort} · {contact}',
   'context.nearestUnavailableAria': '{cohort}, no disponible',
-  'context.bearingNone': 'MARC —',
+  'context.bearingNone': 'BRG —',
   'context.bearingAhead': 'AL FRENTE',
   'context.bearingSide': '{side} {angle}',
   'context.sideLeft': 'I',
@@ -305,7 +305,7 @@ export default {
   // OFF-state help is the seeded brief.autoTitle).
   'brief.autoOn': 'CICLO ACTIVADO',
   'brief.autoOff': 'CICLO DESACTIVADO',
-  'brief.autoTitleOn': 'Detén el cambio automático de páginas. Anterior, Siguiente y las pestañas SEÑALES/NOTICIAS/LOCAL siguen disponibles.',
+  'brief.autoTitleOn': 'Detén el cambio automático de páginas. Anterior, Siguiente y las pestañas SIG/NEWS/LOCAL siguen disponibles.',
 
   // Briefing carousel pages (kicker/subtitle/source per page; the news/local
   // source lines are provider attribution and stay English).
@@ -348,7 +348,7 @@ export default {
   // Global status chip notices (_handleShareTrackingRestoreStatus).
   'status.acquiring': 'OBTENIENDO',
   'status.subjectFallback': 'entidad',
-  'status.sharedSubjectDetail': '{subject} COMPARTIDO',
+  'status.sharedSubjectDetail': '{subject} COMPARTIDA',
   'status.sharedFollowExpired': 'El seguimiento de {subject} compartido ha caducado',
   'status.sharedRestoreFailed': 'No se pudo restaurar {subject} compartido — fuente no disponible',
   'status.sharedUnavailable': '{subject} compartido no está disponible',
@@ -365,7 +365,7 @@ export default {
   'context.toastInstallationsRefreshed': 'Instalaciones cercanas actualizadas',
   'context.toastLayerUnavailable': 'Esa capa no está disponible en el modo de contexto actual',
   'context.actionStart': 'iniciar',
-  'context.actionStop': 'detener',
+  'context.actionStop': 'detenerse',
   'context.toastLayerLifecycleFailed': '{layerId} no pudo {action} correctamente',
   'radio.toastLifecycleFailed': 'Radio no pudo {action} correctamente',
 
@@ -420,7 +420,7 @@ export default {
 
   // CCTV panel runtime states (layers.cctv.* seeded keys reused where they
   // match; these are the runtime-only compositions and flipped states).
-  'cctv.coverageViewshedOn': 'CAMPO DE VISIÓN ACTIVADO',
+  'cctv.coverageViewshedOn': 'ÁREA VISIBLE ACTIVADA',
   'cctv.frameLoading': 'FOTOGRAMA · CARGANDO',
   'cctv.frameUnavailable': 'FOTOGRAMA · NO DISPONIBLE',
   'cctv.calChipEdited': 'CAL · EDITADA (SIN GUARDAR)',
