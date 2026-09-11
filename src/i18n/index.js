@@ -283,17 +283,35 @@ export function applyDocumentTranslations(doc) {
  */
 export function persistLocaleAndReload(locale, {
   location = globalThis.location,
+  history = globalThis.history,
   storage,
 } = {}) {
   const normalized = normalizeLocale(locale) || DEFAULT_LOCALE;
   writeStoredLocale(normalized, storage);
   if (!location || typeof location.assign !== 'function') return false;
+  const stripLang = () => {
+    try {
+      const url = new URL(location.href);
+      url.searchParams.delete('lang');
+      return url.href;
+    } catch {
+      return location.href;
+    }
+  };
+  // location.assign() to the byte-identical URL performs NO navigation in
+  // real browsers (the common case: no ?lang present, hash unchanged), so a
+  // stored locale change would never reload. Strip ?lang via replaceState
+  // (no extra history entry) and force a real reload instead.
+  const target = stripLang();
   try {
-    const url = new URL(location.href);
-    url.searchParams.delete('lang');
-    location.assign(url.href);
+    history?.replaceState?.(null, '', target);
   } catch {
-    location.assign(location.href);
+    // replaceState is best-effort; the reload below still applies.
+  }
+  if (typeof location.reload === 'function') {
+    location.reload();
+  } else {
+    location.assign(target);
   }
   return true;
 }

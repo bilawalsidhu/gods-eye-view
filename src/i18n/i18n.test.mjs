@@ -215,6 +215,24 @@ test('persistLocaleAndReload stores the choice, keeps the hash exact, strips ?la
   // Nothing navigable injected: no throw, no reload claim.
   assert.equal(persistLocaleAndReload('es', { location: null }), false);
   assert.equal(persistLocaleAndReload('es', { location: {} }), false);
+
+  // Real-browser shape: a reloadable location MUST force the reload — assign()
+  // to a byte-identical URL never navigates, which stranded stored-locale
+  // switches (no ?lang present, hash unchanged).
+  const reloaded = [];
+  const assigned = [];
+  const replaced = [];
+  assert.equal(persistLocaleAndReload('es', {
+    location: {
+      href: 'http://localhost:4173/#scene=coast',
+      assign: (u) => assigned.push(u),
+      reload: () => reloaded.push(true),
+    },
+    history: { replaceState: (_s, _t, u) => replaced.push(u) },
+  }), true);
+  assert.deepEqual(replaced, ['http://localhost:4173/#scene=coast'], '?lang-free URL passes through replaceState');
+  assert.equal(reloaded.length, 1, 'reload is forced');
+  assert.equal(assigned.length, 0, 'assign is not used when reload exists');
 });
 
 class FakeElement {
