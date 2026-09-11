@@ -18,6 +18,7 @@
  *  13. Weather effects — camera-local Open-Meteo observations without news/geocoding overhead
  *  14. Rocket launches — recent Launch Library 2 mission metadata
  *  15. Radio Browser — public-domain station directory and click counting
+ *  16. NASA NeoWs — near-Earth asteroid close approaches (key-gated, cached)
  *
  * Also exposes Cesium and Google 3D Tiles API keys to the
  * client via `import.meta.env.*` defines.
@@ -53,6 +54,7 @@ import {
   normalizeRegionalWeather,
 } from './src/data/regionalBrief.js';
 import { normalizeAdsbLolPointResponse } from './src/data/adsbLolFallback.js';
+import { neoFeedWindow, normalizeNeoFeed } from './src/data/neoFeed.js';
 import { createAisStreamAdapter, isRecognizedAisEnvelope } from './src/data/aisStreamAdapter.js';
 import { parseSilenceTimeoutEnv } from './src/data/aisWatchdog.js';
 import { keylessHudSummaryResponse } from './src/hudSummaryResponse.js';
@@ -1769,6 +1771,133 @@ function rocketLaunchesProxy() {
 
   return {
     name: 'rocket-launches-proxy',
+    configureServer(server) {
+      install(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      install(server.middlewares);
+    },
+  };
+}
+
+/**
+ * NASA NeoWs (Near Earth Object Web Service) proxy.
+ *
+ * Upstream: https://api.nasa.gov/neo/rest/v1/feed?start_date=…&end_date=…
+ * (rolling 7-day close-approach window). The key comes from NEO_API_KEY
+ * server-side only — the browser fetches same-origin /api/neo and never sees
+ * it. Keyless (no NEO_API_KEY): /api/neo → 503 {error:'no_key'} (the FIRMS
+ * pattern) and the layer reports KEY REQUIRED.
+ *
+ * Cache: memory + disk (.gev-cache/neo-feed.json), TTL 2 h, single-flight,
+ * serve-stale-on-failure — the celestrak-proxy pattern. Responses are size-
+ * capped and normalized through src/data/neoFeed.js (shared with the layer and
+ * unit tests). Errors never echo upstream bodies.
+ */
+function neoProxy() {
+  const TTL_MS = 2 * 60 * 60_000;
+  const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+  const CACHE_PATH = path.join(process.cwd(), '.gev-cache', 'neo-feed.json');
+  /** @type {?{at: number, rows: Array<object>}} */
+  let cache = null;
+  let diskLoaded = false;
+  /** @type {Map<string, Promise<?{at: number, rows: Array<object>}>>} */
+  const inFlight = new Map();
+
+  const apiKey = () => String(process.env.NEO_API_KEY || '').trim();
+
+  async function loadDiskCache() {
+    if (diskLoaded) return;
+    diskLoaded = true;
+    try {
+      const parsed = JSON.parse(await fsp.readFile(CACHE_PATH, 'utf8'));
+      if (Number.isFinite(parsed?.at) && Array.isArray(parsed?.rows)) cache = parsed;
+    } catch { /* first run or invalid cache */ }
+  }
+
+  async function saveDiskCache(entry) {
+    try {
+      await fsp.mkdir(path.dirname(CACHE_PATH), { recursive: true });
+      await fsp.writeFile(CACHE_PATH, JSON.stringify(entry), 'utf8');
+    } catch (error) {
+      console.warn('[neo-proxy] cache write failed:', error?.message || error);
+    }
+  }
+
+  async function refreshUpstream(nowMs) {
+    const params = neoFeedWindow(nowMs);
+    const url = new URL('https://api.nasa.gov/neo/rest/v1/feed');
+    url.searchParams.set('start_date', params.start_date);
+    url.searchParams.set('end_date', params.end_date);
+    url.searchParams.set('api_key', apiKey());
+    const upstream = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+    const body = await readResponseTextCapped(upstream, MAX_RESPONSE_BYTES);
+    if (!upstream.ok) {
+      const error = new Error(`upstream HTTP ${upstream.status}`);
+      error.upstreamStatus = upstream.status;
+      throw error;
+    }
+    // Never log the URL — it embeds the API key.
+    const rows = normalizeNeoFeed(JSON.parse(body));
+    if (rows === null) throw new Error('malformed upstream response');
+    const fresh = { at: Date.now(), rows };
+    cache = fresh;
+    void saveDiskCache(fresh);
+    return fresh;
+  }
+
+  function sendJson(res, status, obj, cacheState) {
+    if (res.headersSent) return;
+    res.writeHead(status, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+      'X-GEV-Cache': cacheState,
+    });
+    res.end(JSON.stringify(obj));
+  }
+
+  function install(middlewares) {
+    middlewares.use('/api/neo', async (req, res) => {
+      if (req.method !== 'GET') {
+        sendJson(res, 405, { error: 'Method Not Allowed' }, 'NONE');
+        return;
+      }
+      try {
+        const key = apiKey();
+        if (!key) {
+          sendJson(res, 503, { error: 'no_key' }, 'NONE');
+          return;
+        }
+        await loadDiskCache();
+        const now = Date.now();
+        if (cache && now - cache.at < TTL_MS) {
+          sendJson(res, 200, { fetchedAt: cache.at, stale: false, ttlMs: TTL_MS, rows: cache.rows }, 'HIT');
+          return;
+        }
+        const stale = cache;
+        const request = coalesceProxyRequest(inFlight, 'neo-feed', () => refreshUpstream(now));
+        try {
+          const fresh = await request.promise;
+          sendJson(res, 200, { fetchedAt: fresh.at, stale: false, ttlMs: TTL_MS, rows: fresh.rows }, request.shared ? 'INFLIGHT' : 'MISS');
+        } catch (error) {
+          // Log only a bounded status, never upstream bodies, URLs, or credentials.
+          const status = Number.isInteger(error?.upstreamStatus) ? error.upstreamStatus : 502;
+          if (!request.shared) console.warn(`[neo-proxy] refresh failed (HTTP ${status})${stale ? ' — serving stale cache' : ''}`);
+          if (stale) {
+            sendJson(res, 200, { fetchedAt: stale.at, stale: true, ttlMs: TTL_MS, rows: stale.rows }, 'STALE-ERROR');
+          } else {
+            sendJson(res, status, { error: 'NeoWs feed unavailable' }, 'NONE');
+          }
+        }
+      } catch (err) {
+        console.warn('[neo-proxy] error:', err?.message || err);
+        sendJson(res, 500, { error: 'neo proxy error' }, 'NONE');
+      }
+    });
+  }
+
+  return {
+    name: 'neo-proxy',
     configureServer(server) {
       install(server.middlewares);
     },
@@ -5774,13 +5903,14 @@ const GEV_REALTIME_TOOLS = [
         layerId: {
           type: 'string',
           description:
-            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio.',
+            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; asteroid(s)/near-Earth object(s) → near-earth-objects; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio.',
           enum: [
             'flights',
             'military',
             'earthquakes',
             'satellites',
             'rocket-launches',
+            'near-earth-objects',
             'traffic',
             'cctv',
             'radio',
@@ -5812,6 +5942,7 @@ const GEV_REALTIME_TOOLS = [
             'military',
             'earthquakes',
             'satellites',
+            'near-earth-objects',
             'traffic',
             'cctv',
             'radio',
@@ -6231,15 +6362,15 @@ const GEV_REALTIME_TOOLS = [
   {
     type: 'function',
     name: 'analyst_query',
-    description: 'Answer questions ABOUT the data currently loaded on the map — counts, lists, superlatives, and attribute filters over live layers (flights, military, ships, fires, earthquakes). Examples: "how many flights over Texas", "biggest fire near LA", "which ships are headed to Oakland", "anything above 40,000 feet", "fastest thing in view". Queries ONLY client-side data from ENABLED layers — if the needed layer is off, say so and offer to enable it. For a follow-up about the previous answer\'s set ("which of those is closest?"), set followUp=true and send only the new filters/sort.',
+    description: 'Answer questions ABOUT the data currently loaded on the map — counts, lists, superlatives, and attribute filters over live layers (flights, military, ships, fires, earthquakes, asteroids). Examples: "how many flights over Texas", "biggest fire near LA", "which ships are headed to Oakland", "anything above 40,000 feet", "fastest thing in view". Queries ONLY client-side data from ENABLED layers — if the needed layer is off, say so and offer to enable it. For a follow-up about the previous answer\'s set ("which of those is closest?"), set followUp=true and send only the new filters/sort.',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
         layers: {
           type: 'array',
-          items: { type: 'string', enum: ['flights', 'military', 'ais-live-vessels', 'local-firms', 'earthquakes'] },
-          description: 'Layers to query. fires/wildfires → local-firms; ships/vessels → ais-live-vessels.',
+          items: { type: 'string', enum: ['flights', 'military', 'ais-live-vessels', 'local-firms', 'earthquakes', 'near-earth-objects'] },
+          description: 'Layers to query. fires/wildfires → local-firms; ships/vessels → ais-live-vessels; asteroids/near-Earth objects → near-earth-objects.',
         },
         scope: {
           type: 'object',
@@ -7749,6 +7880,7 @@ export default defineConfig(({ mode }) => {
       tomtomProxy(),
       firmsProxy(),
       rocketLaunchesProxy(),
+      neoProxy(),
       terrainHeightsProxy(),
       adsbdbProxy(),
       overpassProxy(),

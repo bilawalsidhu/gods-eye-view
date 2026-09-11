@@ -169,6 +169,13 @@ export const DATA_CREDITS = [
       'part of NASA’s Earth Observing System Data and Information System (EOSDIS)',
   },
   {
+    key: 'neows',
+    html:
+      'Near-Earth asteroids: ' +
+      '<a href="https://api.nasa.gov" target="_blank" rel="noopener">NASA NeoWs</a> / ' +
+      'JPL Center for Near-Earth Object Studies (courtesy)',
+  },
+  {
     key: 'telegeography',
     html:
       'Submarine cables: © TeleGeography — ' +

@@ -13,6 +13,15 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- A Near-Earth Asteroids layer (☄) shows NASA NeoWs close approaches for a
+  rolling 7-day window: static point markers on a high equatorial display
+  ring, amber for potentially hazardous objects, ambient labels with miss
+  distance in lunar distances. Data flows through the key-gated `/api/neo`
+  dev proxy (`NEO_API_KEY`, server-side only; memory + disk cache, 2 h TTL,
+  serve-stale-on-failure). Keyless installs read KEY REQUIRED, never a silent
+  empty layer. Voice can toggle the layer and run analyst queries over the
+  approach records (size, miss distance, velocity, hazardous flag).
+
 - Unchanged local infrastructure overlays no longer sustain idle rendering.
   Ground samples wait for visible terrain to settle and cannot place a marker
   below its loaded surface; roofs and valid below-sea-level heights are retained.
