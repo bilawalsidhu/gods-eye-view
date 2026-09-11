@@ -1,26 +1,28 @@
-// Catalog parity gates: while es is an untranslated seed it may LAG en (a
-// subset), it may never LEAD en (no extra keys), and every shared key must
-// keep identical placeholder names and plural-variant shape so stage-4
-// translation can fill values without schema surprises.
+// Catalog parity gates: every shipped non-English locale (es, fr, …) is
+// checked against en — it may never LEAD en (no extra keys), every shared key
+// must keep identical placeholder names and plural-variant shape, and the
+// strict gate demands exact key-set equality so a forgotten translation
+// cannot ship silently behind the English fallback.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getCatalog, mergeNamespace } from './index.js';
 import { CATALOG_LOCALES } from './locale.js';
 
 /*
- * PARITY FLIP — how this gate tightens once stage-4 translation completes.
+ * PARITY FLIP — how the strict gate is previewed or relaxed.
  * ─────────────────────────────────────────────────────────────────────────────
- * While es is seeded/lagging, REQUIRE_FULL_ES_PARITY stays false and only the
- * subset rules below run. When the Spanish catalog is complete, flip this
- * default to `true` (one line) — or run CI with
- * GEV_I18N_REQUIRE_FULL_ES_PARITY=1 to preview the strict gate — and the
- * "exact key parity" test starts failing on any key present in en but missing
- * in es, so a forgotten translation can no longer ship behind the English
- * fallback. The flip is recorded in ai_docs/i18n-ownership.md.
+ * REQUIRE_FULL_PARITY is on by default: every shipped locale must hold the
+ * exact en key set. While a NEW catalog is still an untranslated seed that
+ * lags en, run CI with GEV_I18N_REQUIRE_FULL_LOCALE_PARITY=0 to drop back to
+ * the subset rules (a locale may be a subset of en, never a superset). The
+ * pre-generalization name GEV_I18N_REQUIRE_FULL_ES_PARITY is still honored as
+ * an alias. The Spanish flip was recorded in ai_docs/i18n-ownership.md
+ * (commit c91a923); the fr seed ships key-complete, so it already passes the
+ * strict gate with English values until stage-B translation lands.
  */
-// Flipped to strict by the integrator on stage-3 completion: all four es
-// catalogs are fully translated (shell/cockpit/layers/setup).
-const REQUIRE_FULL_ES_PARITY = process.env.GEV_I18N_REQUIRE_FULL_ES_PARITY !== '0';
+const PARITY_OPT_OUT = process.env.GEV_I18N_REQUIRE_FULL_LOCALE_PARITY
+  ?? process.env.GEV_I18N_REQUIRE_FULL_ES_PARITY;
+const REQUIRE_FULL_PARITY = PARITY_OPT_OUT !== '0';
 
 const PLACEHOLDER_PATTERN = /\{([A-Za-z0-9_]+)\}/g;
 
@@ -43,7 +45,12 @@ function shapeOf(entry) {
 }
 
 const enKeys = Object.keys(getCatalog('en')).sort();
-const esKeys = Object.keys(getCatalog('es')).sort();
+// Every shipped non-en locale with its sorted key list.
+const localeKeys = new Map(
+  CATALOG_LOCALES
+    .filter((locale) => locale !== 'en')
+    .map((locale) => [locale, Object.keys(getCatalog(locale)).sort()]),
+);
 
 test('every shipped locale ships a merged catalog', () => {
   assert.deepEqual([...CATALOG_LOCALES].sort(), ['en', 'es', 'fr']);
@@ -52,33 +59,47 @@ test('every shipped locale ships a merged catalog', () => {
   }
 });
 
-test('es never carries keys that en does not have', () => {
-  const extras = esKeys.filter((key) => !enKeys.includes(key));
-  assert.deepEqual(extras, [], `extra es keys leak untranslated-only surfaces: ${extras.join(', ')}`);
-});
-
-test('es placeholder names and plural-variant shapes match en for every shared key', () => {
-  const enCatalog = getCatalog('en');
-  const esCatalog = getCatalog('es');
-  for (const key of esKeys) {
-    const enEntry = enCatalog[key];
-    const esEntry = esCatalog[key];
+test('no locale carries keys that en does not have', () => {
+  for (const [locale, keys] of localeKeys) {
+    const extras = keys.filter((key) => !enKeys.includes(key));
     assert.deepEqual(
-      [...placeholdersOf(esEntry)].sort(),
-      [...placeholdersOf(enEntry)].sort(),
-      `placeholder drift on ${key}: a renamed {name} would break interpolation at runtime`,
+      extras,
+      [],
+      `extra ${locale} keys leak untranslated-only surfaces: ${extras.join(', ')}`,
     );
-    assert.equal(shapeOf(esEntry), shapeOf(enEntry), `variant-shape drift on ${key}`);
   }
 });
 
-test('exact key parity once the Spanish translation is complete (parity flip)', () => {
-  if (!REQUIRE_FULL_ES_PARITY) {
-    // Subset mode: every es key resolves; en-only keys fall back silently.
-    for (const key of esKeys) assert.ok(enKeys.includes(key));
+test('placeholder names and plural-variant shapes match en for every shared key', () => {
+  const enCatalog = getCatalog('en');
+  for (const [locale, keys] of localeKeys) {
+    const catalog = getCatalog(locale);
+    for (const key of keys) {
+      assert.deepEqual(
+        [...placeholdersOf(catalog[key])].sort(),
+        [...placeholdersOf(enCatalog[key])].sort(),
+        `placeholder drift on ${locale}:${key}: a renamed {name} would break interpolation at runtime`,
+      );
+      assert.equal(
+        shapeOf(catalog[key]),
+        shapeOf(enCatalog[key]),
+        `variant-shape drift on ${locale}:${key}`,
+      );
+    }
+  }
+});
+
+test('exact key parity for every shipped locale once translation is complete (parity flip)', () => {
+  if (!REQUIRE_FULL_PARITY) {
+    // Subset mode: every locale key resolves; en-only keys fall back silently.
+    for (const [locale, keys] of localeKeys) {
+      for (const key of keys) assert.ok(enKeys.includes(key), `${locale}:${key}`);
+    }
     return;
   }
-  assert.deepEqual(esKeys, enKeys, 'stage-4 flip is on: es must be complete');
+  for (const [locale, keys] of localeKeys) {
+    assert.deepEqual(keys, enKeys, `strict gate is on: ${locale} must be key-complete`);
+  }
 });
 
 test('mergeNamespace prefixes relative keys and rejects malformed namespaces', () => {

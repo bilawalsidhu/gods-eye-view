@@ -131,14 +131,18 @@ The full, binding list is "Keep-English boundary" in
    variants (`es-MX`, `es_419`) to the primary tag automatically.
 3. **Register the catalogs in `src/i18n/index.js`**: one import and one
    array entry per namespace file, alongside the `en`/`es` blocks.
-4. **Update the gates**: the supported-locales pin in
-   `src/i18n/catalog.test.mjs` asserts `['en', 'es']` and must list the new
-   locale in the same change. The strict es-parity gate
-   (`REQUIRE_FULL_ES_PARITY`) is **on**; while your new catalog is
-   incomplete you may stage work with
-   `GEV_I18N_REQUIRE_FULL_ES_PARITY=0 npm test`, then flip the default once
-   translation completes (and record the flip in the ownership manifest,
-   as done for Spanish in commit `c91a923`).
+4. **Update the gates**: the shipped-locales pin in
+   `src/i18n/catalog.test.mjs` asserts `['en', 'es', 'fr']` and must list the
+   new locale in the same change. The strict parity gate
+   (`REQUIRE_FULL_PARITY`) covers **every** shipped locale and is **on**;
+   while your new catalog is incomplete you may stage work with
+   `GEV_I18N_REQUIRE_FULL_LOCALE_PARITY=0 npm test` (the older
+   `GEV_I18N_REQUIRE_FULL_ES_PARITY` spelling still works), then rely on the
+   default once translation completes (record flips in the ownership
+   manifest, as done for Spanish in commit `c91a923`).
+5. **Selector aria-label**: add `shell.locale.<code>.ariaLabel` for the new
+   locale code to every `shell.js` catalog — the runtime-rendered dock switch
+   reads that key per offered locale.
 
 ## Running the i18n test gates
 
@@ -149,8 +153,8 @@ npm test                         # full suite (see below for the known environme
 
 - `src/i18n/i18n.test.mjs` — resolution precedence, guarded storage,
   fallback, interpolation, plural selection, DOM application.
-- `src/i18n/catalog.test.mjs` — en/es key + placeholder + plural-shape
-  parity, strict `REQUIRE_FULL_ES_PARITY` gate.
+- `src/i18n/catalog.test.mjs` — key + placeholder + plural-shape parity for
+  every shipped locale against en, strict `REQUIRE_FULL_PARITY` gate.
 - `src/i18n/markupCoverage.test.mjs` — every `data-i18n*` attribute in
   `index.html` must resolve in both catalogs; unknown attribute spellings
   fail loudly.
