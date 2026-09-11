@@ -25,6 +25,7 @@
  * @module vite.config
  */
 
+import { resolveGoogleServerKey } from './scripts/google-server-key.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import { promises as fsp } from 'node:fs';
@@ -1573,7 +1574,7 @@ function celestrakProxy() {
       await fsp.mkdir(CACHE_DIR, { recursive: true });
       await fsp.writeFile(diskPath(group), JSON.stringify(entry), 'utf8');
     } catch (err) {
-      console.warn(`[celestrak-proxy] cache write failed for ${group}:`, err?.message || err);
+      console.warn('[celestrak-proxy] cache write failed');
     }
   }
 
@@ -1632,7 +1633,7 @@ function celestrakProxy() {
                 return fresh;
               })
               .catch((err) => {
-                console.warn(`[celestrak-proxy] ${group} refresh failed (${err?.message || err}) — serving cache if any`);
+                console.warn('[celestrak-proxy] refresh failed — serving cache if any');
                 return null;
               })
               .finally(() => inflight.delete(group)));
@@ -1646,7 +1647,8 @@ function celestrakProxy() {
             send(502, 'celestrak fetch failed and no cache available', 'NONE');
           }
         } catch (err) {
-          send(500, `celestrak proxy error: ${err?.message || err}`, 'ERROR');
+          console.error('[celestrak-proxy] request failed');
+          send(500, 'celestrak proxy error', 'ERROR');
         }
       });
     },
@@ -1693,7 +1695,7 @@ function rocketLaunchesProxy() {
       await fsp.mkdir(path.dirname(cachePath), { recursive: true });
       await fsp.writeFile(cachePath, JSON.stringify(entry), 'utf8');
     } catch (error) {
-      console.warn(`[launch-library-proxy] cache write failed: ${error?.message || error}`);
+      console.warn('[launch-library-proxy] cache write failed');
     }
   }
 
@@ -1722,7 +1724,6 @@ function rocketLaunchesProxy() {
     if (!upstream.ok) {
       const error = new Error(`upstream HTTP ${upstream.status}`);
       error.upstreamStatus = upstream.status;
-      error.upstreamBody = body;
       throw error;
     }
     const parsed = JSON.parse(body);
@@ -1751,15 +1752,17 @@ function rocketLaunchesProxy() {
         const fresh = await request.promise;
         send(res, 200, fresh.body, request.shared ? 'INFLIGHT' : 'MISS');
       } catch (error) {
+        // Log only a bounded status, never upstream bodies, URLs, or credentials.
+        const status = Number.isInteger(error?.upstreamStatus) ? error.upstreamStatus : 502;
+        if (!request.shared) console.warn(`[launch-library-proxy] refresh failed (HTTP ${status})${stale ? ' — serving stale cache' : ''}`);
         if (stale) {
-          if (!request.shared) console.warn(`[launch-library-proxy] refresh failed (${error?.message || error}) — serving stale cache`);
           send(res, 200, stale.body, 'STALE-ERROR');
           return;
         }
         send(
           res,
-          Number.isInteger(error?.upstreamStatus) ? error.upstreamStatus : 502,
-          error?.upstreamBody || JSON.stringify({ error: 'Launch Library 2 unavailable' }),
+          status,
+          JSON.stringify({ error: 'Launch Library 2 unavailable' }),
           'NONE',
         );
       }
@@ -2095,11 +2098,11 @@ function firmsProxy() {
     for (const source of SOURCES) {
       try {
         const records = filterTrailing24h(await fetchSource(key, source), now);
-        sources.push({ source, count: records.length, ok: true });
         // NOT fires.push(...records): spread passes each record as an argument,
         // and a world/2 VIIRS pull exceeds V8's argument limit (~125k) at
         // ~131k records — RangeError, and the whole source is silently dropped.
         for (const record of records) fires.push(record);
+        sources.push({ source, count: records.length, ok: true });
       } catch (err) {
         console.warn(`[firms-proxy] ${source} fetch failed:`, err?.message || err);
         sources.push({ source, count: 0, ok: false });
@@ -2297,7 +2300,7 @@ function terrainHeightsProxy() {
         await fsp.writeFile(CACHE_PATH, JSON.stringify(obj), 'utf8');
       } catch (err) {
         diskDirty = true; // retry next tick
-        console.warn('[terrain-heights-proxy] cache write failed:', err?.message || err);
+        console.warn('[terrain-heights-proxy] cache write failed');
       }
     }, 15_000).unref?.();
   }
@@ -2368,13 +2371,14 @@ function terrainHeightsProxy() {
           if (outcome.cacheChanged) diskDirty = true;
           if (outcome.upstreamError) {
             console.warn(
-              `[terrain-heights-proxy] refresh incomplete (${outcome.upstreamError?.message || outcome.upstreamError})`
+              '[terrain-heights-proxy] refresh incomplete'
               + ' — serving stale points when available'
             );
           }
           send(outcome.status, outcome.body);
         } catch (err) {
-          send(500, { error: `terrain heights proxy error: ${err?.message || err}` });
+          console.error('[terrain-heights-proxy] request failed');
+          send(500, { error: 'terrain heights proxy error' });
         }
       });
     },
@@ -2495,7 +2499,8 @@ function adsbdbProxy() {
           }
           return send(404, { error: 'unknown endpoint' });
         } catch (err) {
-          return send(500, { error: String(err?.message || err) });
+          console.error('[adsbdb-proxy] request failed');
+          return send(500, { error: 'adsbdb proxy error' });
         }
       });
     },
@@ -4560,9 +4565,15 @@ function cctvProxy() {
     };
   };
 
-  /** Fetch a Google Street View static image as a fallback frame. Requires GOOGLE_MAPS_API_KEY. */
+  /**
+   * Fetch a Google Street View static image as a fallback frame. Server-side
+   * call, never reaches the browser — prefers GOOGLE_MAPS_SERVER_API_KEY
+   * (#33: a key scoped to Street View Static/Places, restricted by server IP
+   * rather than HTTP referrer) and falls back to the browser-exposed
+   * GOOGLE_MAPS_API_KEY for setups that haven't split the two yet.
+   */
   const streetViewFallback = async ({ lat, lon, heading, fov, pitch }) => {
-    const streetViewKey = process.env.GOOGLE_MAPS_API_KEY;
+    const streetViewKey = googleServerApiKey();
     if (!streetViewKey || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
     try {
       const sv = new URL('https://maps.googleapis.com/maps/api/streetview');
@@ -5416,6 +5427,18 @@ export function keylessGooglePlacesResponse(apiKey) {
 }
 
 /**
+ * Google API key for the SERVER-SIDE calls (Places nearby/text search, the
+ * CCTV Street View fallback). These never reach the browser, so this key can
+ * be restricted by server IP and scoped to Places API + Street View Static
+ * API — while GOOGLE_MAPS_API_KEY stays referrer-restricted to Map Tiles +
+ * Geocoding for the browser (#33). Splitting them is opt-in: unset, this
+ * falls back to the shared browser key and nothing changes.
+ */
+export function googleServerApiKey() {
+  return resolveGoogleServerKey(process.env);
+}
+
+/**
  * Vite plugin: nearby Google place labels for Realtime scene context.
  *
  * The Photorealistic 3D Tiles mesh does not expose rendered map labels as
@@ -5436,7 +5459,7 @@ export function googlePlacesContextProxy() {
       // Keyless place context has no provider cost, so it resolves before the
       // paid-endpoint limiter can consume or exhaust quota (mirrors the HUD
       // summary route).
-      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+      const apiKey = googleServerApiKey();
       const keyless = keylessGooglePlacesResponse(apiKey);
       if (keyless) {
         res.statusCode = keyless.statusCode;
@@ -5555,7 +5578,7 @@ export function googlePlacesContextProxy() {
       // Keyless place context has no provider cost, so it resolves before the
       // paid-endpoint limiter can consume or exhaust quota (mirrors the HUD
       // summary route).
-      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+      const apiKey = googleServerApiKey();
       const keyless = keylessGooglePlacesResponse(apiKey);
       if (keyless) {
         res.statusCode = keyless.statusCode;

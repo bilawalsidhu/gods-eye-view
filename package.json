@@ -51,10 +51,15 @@
     "satellite.js": "^6.0.2"
   },
   "devDependencies": {
-    "puppeteer": "^24.37.5",
-    "sharp": "^0.34.5",
+    "puppeteer": "^25.10.0",
+    "sharp": "^0.35.4",
     "vite": "^6.0.0",
     "vite-plugin-cesium": "^1.2.23",
     "ws": "^8.21.0"
+  },
+  "exports": {
+    "./infrastructure": "./src/data/infrastructure.js",
+    "./infrastructure/geojson": "./src/data/localGeojsonCore.js",
+    "./infrastructure/lod": "./src/data/localGeojsonLod.js"
   }
 }

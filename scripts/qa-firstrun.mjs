@@ -38,7 +38,7 @@ const SHOT_DIR = path.join(ROOT, 'qa-shots', 'firstrun');
 const CHROME_CANDIDATES = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
   // Version-pinned Chrome-for-Testing over the auto-updating system Chrome.
-  (() => { try { return puppeteer.executablePath(); } catch { return null; } })(),
+  await puppeteer.executablePath().catch(() => null),
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 ].filter(Boolean);
 
@@ -332,14 +332,17 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
       `session=${escUnderLightbox.session}`,
     );
     record(
-      'the lightbox keeps its OWN ESC semantics (Cesium binds none, so it stays)',
-      lightboxAfterEsc.shown,
+      'ESC closes attribution without dismissing the launcher underneath',
+      !lightboxAfterEsc.shown,
       `overlay shown=${lightboxAfterEsc.shown}`,
     );
 
-    // The guard disarms the launcher; it must never break it. Close the overlay
-    // the way a visitor does and the key comes straight back.
-    await page.evaluate(() => document.querySelector('.cesium-credit-lightbox-close')?.click());
+    // The attribution keyboard handler closes the overlay and restores focus.
+    // A second Escape belongs to the now-uncovered launcher.
+    const attributionFocusRestored = await page.evaluate(() => (
+      document.activeElement === document.querySelector('#cesium-credits .cesium-credit-expand-link')
+    ));
+    record('closing attribution restores its disclosure focus', attributionFocusRestored);
     await sleep(300);
     const uncovered = await launcherState();
     record('closing the lightbox hands the card back the key',
@@ -491,7 +494,10 @@ async function main() {
     ...(executablePath ? { executablePath } : {}),
     args: [
       '--no-sandbox', '--disable-setuid-sandbox',
-      '--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist',
+      // Metal is a macOS-only ANGLE backend; anywhere else it fails WebGL init.
+      ...(process.platform === 'darwin'
+        ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist']
+        : ['--use-gl=angle', '--use-angle=swiftshader']),
       '--disable-dev-shm-usage', '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding', '--window-size=1440,900',
     ],

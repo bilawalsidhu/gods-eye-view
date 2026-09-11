@@ -19,6 +19,7 @@ function encodeUtf16be(source) {
 
 const PROVIDER_FIELDS = [
   'GOOGLE_MAPS_API_KEY',
+  'GOOGLE_MAPS_SERVER_API_KEY',
   'CESIUM_ION_TOKEN',
   'OPENAI_API_KEY',
   'AISSTREAM_API_KEY',
@@ -206,3 +207,22 @@ for (const fixture of [
     }
   });
 }
+
+test('server Google key follows app values, blanks and absence instead of inherited credentials', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'gev-pinokio-server-key-'));
+  try {
+    const filepath = path.join(root, 'ENVIRONMENT');
+    for (const [source, expected] of [
+      ['GOOGLE_MAPS_SERVER_API_KEY=app-server\n', 'app-server'],
+      ['GOOGLE_MAPS_SERVER_API_KEY=\n', ''],
+      ['', ''],
+    ]) {
+      writeFileSync(filepath, source);
+      const environment = { GOOGLE_MAPS_SERVER_API_KEY: 'global-server' };
+      applyPinokioEnvironment({ environment, filepath });
+      assert.equal(environment.GOOGLE_MAPS_SERVER_API_KEY, expected);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

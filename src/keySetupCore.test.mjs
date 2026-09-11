@@ -341,3 +341,16 @@ test('validation rejects dotenv metacharacters that would round-trip wrong', () 
     assert.equal(validateKeySetupUpdates({ OPENAI_API_KEY: good }).ok, true, `${good} accepted`);
   }
 });
+
+test('server Google key can be saved and removed without appearing in status values', () => {
+  const secret = 'server-key-fixture';
+  assert.deepEqual(validateKeySetupUpdates({ GOOGLE_MAPS_SERVER_API_KEY: secret }), {
+    ok: true, updates: { GOOGLE_MAPS_SERVER_API_KEY: secret },
+  });
+  assert.equal(validateKeySetupUpdates({ GOOGLE_MAPS_SERVER_API_KEY: null }).ok, true);
+  const status = keySetupStatus({ GOOGLE_MAPS_SERVER_API_KEY: secret });
+  const entry = status.keys.find((key) => key.id === 'google-maps-server');
+  assert.equal(entry.set, true);
+  assert.ok(!entry.clientExposed);
+  assert.ok(!JSON.stringify(status).includes(secret));
+});

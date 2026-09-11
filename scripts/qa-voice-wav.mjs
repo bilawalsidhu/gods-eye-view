@@ -30,7 +30,7 @@ if (fixtureSha256 !== expectedFixtureSha256) {
 const appOrigin = new URL(appUrl).origin;
 const browser = await puppeteer.launch({
   headless: 'new',
-  executablePath: puppeteer.executablePath(),
+  executablePath: await puppeteer.executablePath(),
   args: [
     '--no-sandbox',
     '--disable-setuid-sandbox',

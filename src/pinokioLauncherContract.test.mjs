@@ -12,6 +12,7 @@ const require = createRequire(import.meta.url);
 
 const PROVIDER_FIELDS = [
   'GOOGLE_MAPS_API_KEY',
+  'GOOGLE_MAPS_SERVER_API_KEY',
   'CESIUM_ION_TOKEN',
   'OPENAI_API_KEY',
   'AISSTREAM_API_KEY',
