@@ -15,6 +15,9 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Fixed
 
+- The CCTV source-pack launcher now binds to localhost by default. LAN exposure
+  remains available through an explicit `HOST=0.0.0.0` override and prints a
+  warning that the key-bearing development server will be network-accessible.
 - Mapped-site outages show their scheduled retry countdown and distinguish
   known Overpass rate limits, timeouts, and query failures. Search feedback no
   longer claims a refresh succeeded while the layer is unavailable or loading.

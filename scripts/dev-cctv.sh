@@ -5,7 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 PORT="${PORT:-4173}"
-HOST="${HOST:-0.0.0.0}"
+# Local-only by default: this launcher brokers configured API keys. Set
+# HOST=0.0.0.0 explicitly when CCTV source-pack testing needs LAN access.
+HOST="${HOST:-localhost}"
 CCTV_SOURCES_FILE="${CCTV_SOURCES_FILE:-config/cctv_sources.austin.json}"
 CCTV_PREFER_AUSTIN="${CCTV_PREFER_AUSTIN:-1}"
 CCTV_AUSTIN_MAX_SOURCES="${CCTV_AUSTIN_MAX_SOURCES:-36}"
@@ -156,7 +158,21 @@ resolve_opensky_credentials() {
 resolve_opensky_credentials
 
 echo "Starting God's Eye View with CCTV source pack..."
-echo "URL: http://localhost:${PORT}/"
+case "${HOST}" in
+  localhost|127.0.0.1|::1)
+    echo "Local-only mode: reachable at http://localhost:${PORT}/ (set HOST=0.0.0.0 for LAN)"
+    ;;
+  *)
+    echo ""
+    echo "!! =============================================================="
+    echo "!! WARNING: HOST=${HOST} - network-exposed mode."
+    echo "!! This dev server brokers your configured API keys to anyone who"
+    echo "!! can reach it. Use only on networks you trust."
+    echo "!! =============================================================="
+    echo ""
+    echo "URL (this machine): http://localhost:${PORT}/"
+    ;;
+esac
 echo "Google Maps key source: ${GOOGLE_MAPS_API_KEY_SOURCE}"
 if [[ -f "${CCTV_SOURCES_FILE}" ]]; then
   echo "CCTV_SOURCES_FILE: ${CCTV_SOURCES_FILE}"

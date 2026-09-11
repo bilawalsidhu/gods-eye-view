@@ -2291,7 +2291,9 @@ silently demoting every later lookup for the session.
   an absent marker exposes Install, a present marker exposes Start, and a
   running server with a captured ready URL exposes Open God's Eye View.
 - Build gate: `npm run build`
-- Network access: local-only by default (`HOST=localhost` in dev-fresh.sh); LAN is an explicit opt-in via `HOST=0.0.0.0` (launcher prints a key-exposure warning + LAN URL; see SECURITY.md)
+- Network access: local-only by default (`HOST=localhost` in `dev-fresh.sh` and
+  `dev-cctv.sh`); LAN is an explicit opt-in via `HOST=0.0.0.0` (launchers print
+  a key-exposure warning; `dev-fresh.sh` also prints the LAN URL; see SECURITY.md)
 - OpenSky default mode: OAuth (`OPENSKY_AUTH_MODE=oauth`; `anon` works without credentials)
 - Google key expected in Keychain service `google-maps-api` (or `GOOGLE_MAPS_API_KEY`, or `.env`)
 - OpenSky credentials expected in Keychain service `opensky-network` (or env, or `.env`); `OPENSKY_AUTH_MODE` and `OPENSKY_CREDENTIALS_FILE` read from `.env` too
