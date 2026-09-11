@@ -549,8 +549,8 @@ async function main() {
 
       const tiles = await page.$$eval('[data-first-run-choice]', (nodes) => nodes.map((n) => n.dataset.firstRunChoice));
       record(
-        'four tiles in the owner\'s order',
-        JSON.stringify(tiles) === JSON.stringify(['contacts', 'space-missions', 'environmental', 'explore']),
+        'tiles in the owner\'s order',
+        JSON.stringify(tiles) === JSON.stringify(['contacts', 'space-missions', 'environmental', 'world-desk', 'explore']),
         tiles.join(' · '),
       );
 

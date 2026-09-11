@@ -115,6 +115,14 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
     layerIds: Object.freeze(['earthquakes', 'local-firms']),
     busyText: 'Scanning active events…',
   }),
+  'world-desk': Object.freeze({
+    kind: 'globe',
+    // World Desk is the public-news globe: GDELT coverage pins plus the same
+    // sensor pair Environmental already stages. Pins are outlet country, not
+    // verified incident locations — the layer row and card copy say so.
+    layerIds: Object.freeze(['world-news', 'earthquakes', 'local-firms']),
+    busyText: 'Opening the world desk…',
+  }),
   explore: Object.freeze({ kind: 'none' }),
 });
 

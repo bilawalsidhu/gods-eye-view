@@ -18,6 +18,7 @@
  *  13. Weather effects — camera-local Open-Meteo observations without news/geocoding overhead
  *  14. Rocket launches — recent Launch Library 2 mission metadata
  *  15. Radio Browser — public-domain station directory and click counting
+ *  16. World News — GDELT DOC 2.0 headlines clustered by outlet country
  *
  * Also exposes Cesium and Google 3D Tiles API keys to the
  * client via `import.meta.env.*` defines.
@@ -53,6 +54,12 @@ import {
   normalizeRegionalPlace,
   normalizeRegionalWeather,
 } from './src/data/regionalBrief.js';
+import {
+  WORLD_NEWS_DISCLAIMER,
+  WORLD_NEWS_QUERY,
+  clusterWorldNewsPoints,
+  normalizeWorldNewsArticles,
+} from './src/data/worldNewsData.js';
 import { normalizeAdsbLolPointResponse } from './src/data/adsbLolFallback.js';
 import { createAisStreamAdapter, isRecognizedAisEnvelope } from './src/data/aisStreamAdapter.js';
 import { parseSilenceTimeoutEnv } from './src/data/aisWatchdog.js';
@@ -5272,7 +5279,7 @@ export function openAiRealtimeProxy() {
             // Fully expressible with tools that already exist, so
             // GEV_REALTIME_TOOLS is deliberately untouched — deleting this one
             // string is the whole rollback.
-            'NAMED VIEWS are shorthand for tool calls you already have — there is no "mode" tool for them. Treat ONLY these as the shorthand: "infrastructure mode" / "the infrastructure view" / "show me global infrastructure" means three set_layer_visibility calls (local-datacenters, local-dams, telegeography-submarine-cables) plus zoom_to_globe; "environmental mode" / "earth watch" / "active events", said as the name of a view, means set_layer_visibility for local-firms and earthquakes plus zoom_to_globe. Anything vaguer is NOT this shorthand — an open-ended question about the world or the news is an ordinary question: answer it, or use analyst_query over the layers already on. Never switch a whole view on to answer a question nobody asked to see. When you do run one, make every call before speaking, then give one confirmation naming the resulting state; if the fires layer comes back unavailable because no FIRMS key is configured, say so plainly — the earthquakes still loaded. "Live contacts" and "space missions" are NOT this pattern: they stay set_context_mode{mode:"contacts"} and set_context_mode{mode:"space-missions"}.',
+            'NAMED VIEWS are shorthand for tool calls you already have — there is no "mode" tool for them. Treat ONLY these as the shorthand: "infrastructure mode" / "the infrastructure view" / "show me global infrastructure" means three set_layer_visibility calls (local-datacenters, local-dams, telegeography-submarine-cables) plus zoom_to_globe; "environmental mode" / "earth watch" / "active events", said as the name of a view, means set_layer_visibility for local-firms and earthquakes plus zoom_to_globe; "world desk" / "news desk" / "world news", said as the name of a view, means set_layer_visibility for world-news, earthquakes, and local-firms plus zoom_to_globe. Anything vaguer is NOT this shorthand — an open-ended question about the world or the news is an ordinary question: answer it, or use analyst_query over the layers already on. If world-news is off, offer to enable it rather than silently staging the whole desk. Never switch a whole view on to answer a question nobody asked to see. When you do run one, make every call before speaking, then give one confirmation naming the resulting state; if the fires layer comes back unavailable because no FIRMS key is configured, say so plainly — the earthquakes still loaded. "Live contacts" and "space missions" are NOT this pattern: they stay set_context_mode{mode:"contacts"} and set_context_mode{mode:"space-missions"}.',
             'For visual filter requests, call set_visual_style with one of the allowed style IDs.',
             'Disambiguation table — basemap vs layer vs style: basemap switching requires an explicit stack name — "Bing aerial" means set_map_stack bing-aerial, "aerial with labels" means bing-labels, "OSM"/"road map" means osm, "Esri"/"Esri imagery" means esri-imagery, "Google 3D"/"photorealistic" means photoreal. Any mention of "satellite" or "satellites" ALWAYS means the satellites DATA LAYER via set_layer_visibility, never a basemap. "surveillance"/"night vision"/"thermal" are visual STYLES via set_visual_style.',
             'HUD requests ("hud on/off", "switch to operator/minimal/tactical layout") use set_hud. Detection requests ("detection on", "dense mode", "balanced mode", "sparse mode", "set density to 25", "use weighted allocation") use set_detection. Density snaps to 0/25/50/75/100 and derives Sparse/Balanced/Dense; panoptic is a legacy alias for Dense.',
@@ -5793,7 +5800,7 @@ const GEV_REALTIME_TOOLS = [
         layerId: {
           type: 'string',
           description:
-            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio.',
+            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio; world news/headlines/world desk → world-news.',
           enum: [
             'flights',
             'military',
@@ -5809,6 +5816,7 @@ const GEV_REALTIME_TOOLS = [
             'local-dams',
             'telegeography-submarine-cables',
             'local-firms',
+            'world-news',
           ],
         },
         enabled: { type: 'boolean' },
@@ -5840,6 +5848,7 @@ const GEV_REALTIME_TOOLS = [
             'local-dams',
             'telegeography-submarine-cables',
             'local-firms',
+            'world-news',
           ],
           description: 'Optional layer row to scroll into view and highlight.',
         },
@@ -6257,8 +6266,8 @@ const GEV_REALTIME_TOOLS = [
       properties: {
         layers: {
           type: 'array',
-          items: { type: 'string', enum: ['flights', 'military', 'ais-live-vessels', 'local-firms', 'earthquakes'] },
-          description: 'Layers to query. fires/wildfires → local-firms; ships/vessels → ais-live-vessels.',
+          items: { type: 'string', enum: ['flights', 'military', 'ais-live-vessels', 'local-firms', 'earthquakes', 'world-news'] },
+          description: 'Layers to query. fires/wildfires → local-firms; ships/vessels → ais-live-vessels; news/headlines → world-news.',
         },
         scope: {
           type: 'object',
@@ -7067,6 +7076,7 @@ const REGIONAL_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const _regionalBriefCache = new Map();
 const _regionalBriefInFlight = new Map();
 const _regionalBriefRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 30, globalMax: 90 });
+const _worldNewsRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 8, globalMax: 12 });
 const WEATHER_EFFECTS_CACHE_MS = 5 * 60_000;
 const WEATHER_EFFECTS_STALE_MS = 30 * 60_000;
 const WEATHER_EFFECTS_MAX_CACHE = 180;
@@ -7434,6 +7444,112 @@ function weatherEffectsProxy() {
   };
 }
 
+const WORLD_NEWS_CACHE_TTL_MS = 5 * 60_000;
+const WORLD_NEWS_STALE_MS = 30 * 60_000;
+
+/**
+ * Vite plugin: GDELT DOC 2.0 world-news proxy.
+ *
+ * GET /api/world-news returns outlet-country clusters. GDELT asks callers to
+ * stay at about one request per five seconds; the five-minute cache plus the
+ * shared limiter keep us inside that. Upstream bodies never reach the client.
+ *
+ * @returns {import('vite').Plugin}
+ */
+function worldNewsProxy() {
+  let cache = null;
+  const inFlight = new Map();
+
+  async function refreshUpstream() {
+    const params = new URLSearchParams({
+      query: WORLD_NEWS_QUERY,
+      mode: 'artlist',
+      format: 'json',
+      maxrecords: '75',
+      sort: 'datedesc',
+      timespan: '24h',
+    });
+    const payload = await fetchRegionalJson(`https://api.gdeltproject.org/api/v2/doc/doc?${params}`, {
+      headers: { 'User-Agent': 'GodsEyeView/0.1 (+https://github.com/bilawalsidhu/gods-eye-view)' },
+      timeoutMs: 12_000,
+    });
+    const articles = normalizeWorldNewsArticles(payload, 75);
+    const points = clusterWorldNewsPoints(articles);
+    return {
+      status: points.length ? 'ready' : 'empty',
+      source: 'GDELT DOC 2.0',
+      geometry: 'outlet-country',
+      disclaimer: WORLD_NEWS_DISCLAIMER,
+      retrievedAt: new Date().toISOString(),
+      count: points.length,
+      articleCount: articles.length,
+      points,
+    };
+  }
+
+  function install(middlewares) {
+    middlewares.use('/api/world-news', async (req, res) => {
+      if (req.method !== 'GET') {
+        res.writeHead(405, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+        return;
+      }
+      if (!_worldNewsRateLimiter(clientKey(req))) {
+        res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': '5', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
+        return;
+      }
+      const now = Date.now();
+      if (cache && now - cache.cachedAt <= WORLD_NEWS_CACHE_TTL_MS) {
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=60',
+          'X-GEV-Cache': 'HIT',
+        });
+        res.end(JSON.stringify(cache.payload));
+        return;
+      }
+      const request = coalesceProxyRequest(inFlight, 'world-news', refreshUpstream);
+      try {
+        const payload = await request.promise;
+        cache = { payload, cachedAt: Date.now() };
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=60',
+          'X-GEV-Cache': request.shared ? 'INFLIGHT' : 'MISS',
+        });
+        res.end(JSON.stringify(payload));
+      } catch (error) {
+        const status = Number(error?.message?.match(/HTTP (\d+)/)?.[1]);
+        if (!request.shared) {
+          console.warn(`[world-news-proxy] refresh failed${Number.isInteger(status) ? ` (HTTP ${status})` : ''}${cache ? ' — serving stale cache' : ''}`);
+        }
+        if (cache && now - cache.cachedAt <= WORLD_NEWS_STALE_MS) {
+          res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+            'X-GEV-Cache': 'STALE-ERROR',
+          });
+          res.end(JSON.stringify(cache.payload));
+          return;
+        }
+        res.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ error: 'World news unavailable' }));
+      }
+    });
+  }
+
+  return {
+    name: 'world-news-proxy',
+    configureServer(server) {
+      install(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      install(server.middlewares);
+    },
+  };
+}
+
 function parseJsonEnv(key, fallback) {
   const value = process.env[key];
   if (!value) return fallback;
@@ -7774,6 +7890,7 @@ export default defineConfig(({ mode }) => {
       militaryInstallationsProxy(),
       regionalBriefProxy(),
       weatherEffectsProxy(),
+      worldNewsProxy(),
       cctvProxy(),
       radioBrowserProxy(),
       gbfsProxy(),

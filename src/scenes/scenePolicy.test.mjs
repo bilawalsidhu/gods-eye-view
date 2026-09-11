@@ -43,7 +43,7 @@ const REGISTERED = new Set([
   'flights', 'military', 'earthquakes', 'satellites', 'rocket-launches', 'traffic',
   'cctv', 'radio', 'bikeshare', 'ais-live-vessels', 'military-installations',
   'military-awareness', 'local-datacenters', 'local-dams',
-  'telegeography-submarine-cables', 'local-firms',
+  'telegeography-submarine-cables', 'local-firms', 'world-news',
 ]);
 
 test('a shot only reconciles the layers it declares', () => {

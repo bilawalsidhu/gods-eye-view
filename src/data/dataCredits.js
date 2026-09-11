@@ -104,9 +104,9 @@ export const DATA_CREDITS = [
   {
     key: 'gdelt',
     html:
-      'Cockpit regional headlines: ' +
+      'Cockpit regional headlines and World News layer: ' +
       '<a href="https://www.gdeltproject.org/about.html" target="_blank" rel="noopener">GDELT Project</a> ' +
-      '(location-matched article links; publisher terms apply)',
+      '(article links; publisher terms apply; World News pins are outlet country, not verified incidents)',
   },
   {
     key: 'austin-cctv',

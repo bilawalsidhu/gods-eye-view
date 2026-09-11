@@ -13,6 +13,15 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- World Desk: a GDELT DOC 2.0 World News layer pins 24-hour crisis, disaster,
+  protest, election, and conflict coverage on the globe by **outlet country**,
+  with publisher links and an honest disclaimer. `/api/world-news` caches for
+  five minutes. First-run offers a World Desk mission; voice understands
+  "world desk" / "world news". Pins are coverage mentions, not verified
+  incidents.
+
 ### Fixed
 
 - Separate optional Google server credentials for Places and Street View from
