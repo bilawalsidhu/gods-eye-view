@@ -11,21 +11,29 @@ the seed string inventory that anchors key naming.
 ## Phase-1 foundation (already landed — do not rebuild)
 
 ```text
-src/i18n/locale.js        resolution + storage + <html lang>/<html dir>
+src/i18n/locale.js        pair config (GEV_DEFAULT_LOCALE/GEV_SECONDARY_LOCALE
+                          client defines) + resolution + storage + <html lang>/<html dir>
 src/i18n/index.js         catalog registry, t(), Intl formatters, DOM application
 src/i18n/locales/en/*.js  English source catalogs (shell, cockpit, layers, setup)
-src/i18n/locales/es/*.js  Spanish seeds (SAME keys, English values, marked
-                          'UNTRANSLATED STAGE-3 SEED' until stage 4)
-src/i18n/i18n.test.mjs    precedence, guards, fallback, plurals, DOM application
-src/i18n/catalog.test.mjs en/es key + placeholder + shape parity
+src/i18n/locales/es/*.js  Spanish catalogs (translated, stage 4)
+src/i18n/locales/fr/*.js  French seeds (SAME keys, English values, marked
+                          'UNTRANSLATED FR STAGE-B SEED' until stage B)
+src/i18n/i18n.test.mjs    precedence, pair config, guards, fallback, plurals, DOM application
+src/i18n/catalog.test.mjs key/placeholder/shape parity for EVERY shipped locale vs en
 ```
 
 `src/main.js` already calls `resolveLocale()` → `setLocale()` →
-`applyDocumentLanguage()` before app init. English is the default and the
-fallback; missing es keys render English with a dev-server-only
-`console.warn`. Storage key: `gev:locale:v1`. `?lang=` is a one-shot override
-that is never persisted and is stripped by `persistLocaleAndReload()`, which
-preserves `window.location.hash` exactly.
+`applyDocumentLanguage()` before app init. English is the default-without-
+configuration and the unconditional fallback; missing keys in the active
+locale render English with a dev-server-only `console.warn`. Storage key:
+`gev:locale:v1`. `?lang=` is a one-shot override that is never persisted and
+is stripped by `persistLocaleAndReload()`, which preserves
+`window.location.hash` exactly. **Configurable pair:** the app offers
+`dedup([GEV_DEFAULT_LOCALE, GEV_SECONDARY_LOCALE, 'en'])`; every resolution
+step accepts offered locales only, and invalid/degenerate pairs fall back to
+the built-in en+es (dev-only warn). The dock selector is runtime-rendered
+from that set (ui.js `_initLocaleSelector()`), so no markup change is needed
+when the pair changes.
 
 ## Worker → file → namespace map
 
@@ -78,14 +86,14 @@ keys there — layer-row status copy belongs in `layers.*`.
 
 ## Parity flip (post-stage-4 gate)
 
-`src/i18n/catalog.test.mjs` enforces: es ⊆ en, placeholder-name parity, and
-plural-shape parity per shared key. **FLIPPED (stage-3 completion, commit c91a923):** strict exact-parity is now
-the default (`GEV_I18N_REQUIRE_FULL_ES_PARITY=0` opts out). Originally: when
-stage-4 translation completes, flip
-`REQUIRE_FULL_ES_PARITY` in that file to `true` (or run CI with
-`GEV_I18N_REQUIRE_FULL_ES_PARITY=1` to preview) — the gate then demands exact
-en/es key-set equality so a forgotten translation cannot ship behind the
-English fallback. Update this file's status line when flipped.
+`src/i18n/catalog.test.mjs` enforces, for EVERY shipped non-en locale:
+no extra keys, placeholder-name parity, and plural-shape parity per shared
+key. **Strict exact-parity is the default**
+(`GEV_I18N_REQUIRE_FULL_LOCALE_PARITY=0` opts out for every locale; the
+older `GEV_I18N_REQUIRE_FULL_ES_PARITY` spelling is honored as an alias).
+The Spanish flip was recorded here at stage-3 completion (commit `c91a923`);
+the fr seed ships key-complete with English values, so the strict gate holds
+throughout stage B.
 
 ## Seed string inventory (representative keys → both write sites)
 

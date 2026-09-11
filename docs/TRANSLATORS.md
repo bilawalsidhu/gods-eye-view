@@ -1,9 +1,20 @@
-# Translator's guide (English / Spanish)
+# Translator's guide (English / Spanish / French)
 
 This is the working guide for translating God's Eye View. The authoritative
 contract — file ownership, namespace registration, and the keep-English
 boundaries in full — is [`ai_docs/i18n-ownership.md`](../ai_docs/i18n-ownership.md);
 this file is the practical summary a translator needs.
+
+## Which locales ship, and which pair is offered
+
+Three catalogs ship: **en** (source of truth and unconditional fallback),
+**es** (fully translated), and **fr** (an untranslated stage-B seed mirroring
+en key-for-key with English values). Which pair the app actually *offers* is
+configuration, not code: `GEV_DEFAULT_LOCALE` (default `en`) and
+`GEV_SECONDARY_LOCALE` (default `es`) in `.env`, injected into the browser via
+vite defines. Invalid or degenerate values fall back to the built-in en+es
+pair (dev-server-only `console.warn`). English is always resolvable — it is
+the fallback catalog — even when not part of the configured pair.
 
 ## How the catalog system works
 
@@ -11,10 +22,11 @@ All application-owned UI text lives in four flat message catalogs per locale:
 
 ```text
 src/i18n/
-  locale.js                  resolution + storage + <html lang>/<html dir>
+  locale.js                  pair config + resolution + storage + <html lang>/<html dir>
   index.js                   catalog registry, t(), Intl formatters, DOM apply
   locales/en/{shell,cockpit,layers,setup}.js
   locales/es/{shell,cockpit,layers,setup}.js
+  locales/fr/{shell,cockpit,layers,setup}.js   (stage-B seed, English values)
 ```
 
 | Namespace | Surface |
@@ -27,9 +39,10 @@ src/i18n/
 Each catalog file exports `NAMESPACE` and a default map of
 namespace-relative keys; `mergeNamespace()` prefixes them (`cockpit.…`) and
 `buildCatalog()` rejects duplicates. English is the default and the fallback
-locale: a key missing in Spanish renders its English value (dev-server-only
-`console.warn`). At the time of writing the catalogs mirror each other —
-shell 34, cockpit 364, layers 384, setup 115 keys (897 per locale).
+locale: a key missing in another locale renders its English value
+(dev-server-only `console.warn`). At the time of writing the catalogs mirror
+each other — shell 35, cockpit 364, layers 384, setup 115 keys (898 per
+locale).
 
 ## Key naming
 
@@ -43,10 +56,11 @@ shell 34, cockpit 364, layers 384, setup 115 keys (897 per locale).
 
 ## Append-only rules
 
-- New keys are **appended to the end** of your namespace file in **both**
-  `locales/en/` and `locales/es/` in the same change. Never edit another
-  namespace's files, and never touch the registration arrays in
-  `src/i18n/index.js` without reading the ownership manifest first.
+- New keys are **appended to the end** of your namespace file in **every**
+  shipped locale directory (`locales/en/`, `locales/es/`, `locales/fr/`) in the
+  same change. Never edit another namespace's files, and never touch the
+  registration arrays in `src/i18n/index.js` without reading the ownership
+  manifest first.
 - A fifth namespace is a last resort (prefer fitting one of the four); the
   registration recipe for one is in the ownership manifest.
 - Parity is enforced by tests, not goodwill: es may never carry a key en
@@ -126,9 +140,11 @@ The full, binding list is "Keep-English boundary" in
    `src/i18n/locales/<locale>/` and translate the values. Keep every key,
    placeholder name, and plural-variant shape identical to English.
 2. **Extend the resolution map in `src/i18n/locale.js`**: add the tag to
-   `SUPPORTED_LOCALES` and a `LOCALE_METADATA` entry with the correct `dir`
-   (both shipped locales are LTR). `normalizeLocale()` maps regional
-   variants (`es-MX`, `es_419`) to the primary tag automatically.
+   `CATALOG_LOCALES` and a `LOCALE_METADATA` entry with the correct `dir`
+   (all shipped locales are LTR). `normalizeLocale()` maps regional
+   variants (`es-MX`, `fr_419`) to the primary tag automatically. Shipping a
+   catalog does not activate it: activation is pair-scoped by
+   `GEV_DEFAULT_LOCALE` / `GEV_SECONDARY_LOCALE` (see above).
 3. **Register the catalogs in `src/i18n/index.js`**: one import and one
    array entry per namespace file, alongside the `en`/`es` blocks.
 4. **Update the gates**: the shipped-locales pin in
@@ -147,7 +163,7 @@ The full, binding list is "Keep-English boundary" in
 ## Running the i18n test gates
 
 ```sh
-node --test src/i18n/            # 31 tests: core, catalog parity, markup coverage, repair-pass anchors
+node --test src/i18n/            # 38 tests: core + pair config, catalog parity, markup coverage, repair-pass anchors
 npm test                         # full suite (see below for the known environmental caveat)
 ```
 
