@@ -118,6 +118,19 @@ npm run doctor
 npm run dev
 ```
 
+Alternatively, launch it using docker:
+
+```bash
+docker build . -t gods-eye-view && docker run -p 4173:4173 gods-eye-view
+```
+
+Or run using `docker compose up`:
+
+```bash
+docker compose up
+```
+
+
 Open **`http://localhost:4173`**. Choose **Live Contacts**, **Space Missions**,
 **Environmental**, or **Explore Manually** from the first-run panel.
 
