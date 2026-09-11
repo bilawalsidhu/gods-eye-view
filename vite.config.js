@@ -68,9 +68,12 @@ import {
 } from './src/keySetupCore.mjs';
 import { hardenCredentialFile } from './src/keySetupHardening.mjs';
 import {
+  TERRAIN_DISK_CACHE_MAX_BYTES,
+  evictTerrainCache,
   fetchTerrainChunkWithRetry,
   parseTerrainPoints,
   resolveTerrainHeightRequest,
+  serializeTerrainCache,
   terrainPointKey,
   validTerrainResult,
 } from './src/data/terrainHeightsProxy.js';
@@ -479,6 +482,7 @@ function makeRateLimiter({ windowMs, max, globalMax }) {
 const _overpassRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 90, globalMax: 300 });
 const _militaryInstallationsRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 90, globalMax: 300 });
 const _routeRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 60, globalMax: 200 });
+const _terrainHeightsRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 90, globalMax: 300 });
 
 /**
  * Opt-in per-IP rate limiter for the cost-bearing API proxies (OpenAI / Google).
@@ -2260,7 +2264,11 @@ function terrainHeightsProxy() {
     if (diskLoaded) return;
     diskLoaded = true;
     try {
-      const parsed = JSON.parse(await fsp.readFile(CACHE_PATH, 'utf8'));
+      const stat = await fsp.stat(CACHE_PATH);
+      // A cache file grown past the byte cap is never parsed at full size; the
+      // next flush rewrites it within bounds.
+      const oversized = stat.size > TERRAIN_DISK_CACHE_MAX_BYTES;
+      const parsed = oversized ? null : JSON.parse(await fsp.readFile(CACHE_PATH, 'utf8'));
       const pointEntries = parsed?.version === 2 && parsed.points && typeof parsed.points === 'object'
         ? parsed.points
         : null;
@@ -2286,6 +2294,9 @@ function terrainHeightsProxy() {
         }
         diskDirty = mem.size > 0;
       }
+      const beforeEviction = mem.size;
+      evictTerrainCache(mem);
+      if (oversized || mem.size !== beforeEviction) diskDirty = true;
     } catch { /* no disk cache yet */ }
     // Periodic flush, same shape as adsbdbProxy: coalesce writes instead of
     // hitting disk on every request.
@@ -2294,8 +2305,7 @@ function terrainHeightsProxy() {
       diskDirty = false;
       try {
         await fsp.mkdir(CACHE_DIR, { recursive: true });
-        const obj = { version: 2, points: Object.fromEntries(mem.entries()) };
-        await fsp.writeFile(CACHE_PATH, JSON.stringify(obj), 'utf8');
+        await fsp.writeFile(CACHE_PATH, serializeTerrainCache(mem), 'utf8');
       } catch (err) {
         diskDirty = true; // retry next tick
         console.warn('[terrain-heights-proxy] cache write failed');
@@ -2347,12 +2357,17 @@ function terrainHeightsProxy() {
           res.end(JSON.stringify(bodyObj));
         };
         try {
+          if (!_terrainHeightsRateLimiter(clientKey(req))) {
+            res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': '5' });
+            res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
+            return;
+          }
           await loadDiskOnce();
           const parsedUrl = new URL(req.url || '', 'http://internal');
           const rawPoints = parsedUrl.searchParams.get('points');
           const points = parseTerrainPoints(rawPoints);
           if (!points) {
-            send(400, { error: 'invalid points parameter — expected "lon,lat;lon,lat;…" with finite numbers' });
+            send(400, { error: 'invalid points parameter — expected "lon,lat;lon,lat;…" with lon in [-180,180] and lat in [-90,90]' });
             return;
           }
           if (points.length > MAX_POINTS) {

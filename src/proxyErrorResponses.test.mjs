@@ -28,6 +28,8 @@ function fixture(name, overrides = {}, preview = false) {
     console: { warn: (...args) => logs.push(args.join(' ')), error: (...args) => logs.push(args.join(' ')) },
     setInterval: () => ({ unref() {} }),
     LL2_CACHE_TTL_MS: 15 * 60_000,
+    clientKey: () => 'fixture-client',
+    _terrainHeightsRateLimiter: () => true,
     parseTerrainPoints: () => [[1, 2]],
     resolveTerrainHeightRequest: async () => { throw new Error(detail); },
     ...overrides,
@@ -150,6 +152,22 @@ test('terrain validation and resolver outcomes remain intact', async () => {
   assert.equal(res.status, 200);
   assert.deepEqual(JSON.parse(res.body), body);
   assert.equal(app.logs.length, 1);
+});
+
+test('terrain requests are rate limited before any upstream work', async () => {
+  let allows = 0;
+  let resolves = 0;
+  const app = fixture('terrainHeightsProxy', {
+    _terrainHeightsRateLimiter: () => (allows += 1) <= 2,
+    resolveTerrainHeightRequest: async () => { resolves += 1; return { status: 200, body: { results: [] } }; },
+  });
+  assert.equal((await app.request('/?points=1,2')).status, 200);
+  assert.equal((await app.request('/?points=1,2')).status, 200);
+  const limited = await app.request('/?points=1,2');
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers['Retry-After'], '5');
+  assert.deepEqual(JSON.parse(limited.body), { error: 'Rate limit exceeded' });
+  assert.equal(resolves, 2, 'the refused request never reaches the resolver');
 });
 
 test('ADSBDB unexpected failures hide details', async () => {
