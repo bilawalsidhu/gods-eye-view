@@ -1,6 +1,28 @@
 # God's Eye View Current State
 
-Updated: August 24, 2026
+Updated: September 10, 2026
+
+## Live news dock
+
+- `#news-dock` (`src/newsPanel.js`, styles at the tail of `style.css`) opens
+  from the top-center TV button or `N`. It lists the channels in
+  `NEWS_CHANNELS` as tabs and embeds one YouTube player. Channels marked
+  `eventOnly` (Fox News, Reuters) carry no 24/7 feed; their tab renders with a
+  dashed border and YouTube shows its own card while they are off-air.
+- Opening a tab calls `GET /api/news/live?channel=<id>` (`newsLiveResolver` in
+  `vite.config.js`). The proxy fetches `youtube.com/channel/<id>/live`, reads
+  the canonical `watch?v=` id and the `"isLive":true` marker, and caches the
+  answer for ten minutes. The dock embeds `/embed/<videoId>` when the channel
+  is live and falls back to `/embed/live_stream?channel=` otherwise. The
+  channel form resolves only one designated stream per channel, which is why
+  multi-stream channels showed "Video unavailable" before the resolver.
+- The dock is a left-lane obstacle (`LEFT_STACK_OBSTACLE_SELECTOR`), so the
+  adaptive accordion ends above it. It drags by its header through
+  `_makePanelDraggable`, persists its position under the shared panel storage
+  key, and sits in the panel z band so a click raises it over rail chips.
+  Closing the dock blanks the iframe to stop audio. `window.__gevNews` exposes
+  `open(channel)`, `close()`, `toggle()`, and `isOpen()`.
+
 
 ## Installations and map-source guidance
 

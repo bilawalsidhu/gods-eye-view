@@ -19,6 +19,7 @@ import { LAYER_STATE_REGISTRY } from './data/layerState.js';
 import { registerDataCredits } from './data/dataCredits.js';
 import { SceneDirector } from './scenes/director.js';
 import { initGevVoiceCommands } from './voice/gevRealtime.js';
+import { initNewsPanel } from './newsPanel.js';
 import { MapStackController } from './mapStackController.js';
 import { initAnnotations } from './annotations/index.js';
 import { initLogoGaze } from './logoGaze.js';
@@ -236,6 +237,7 @@ async function init() {
         return dataManager.unregisterForQa(layerId);
       };
     }
+    window.__gevNews = initNewsPanel();
     dataManager.buildTogglePanel(document.getElementById('data-toggles'));
     styleManager.attachDataManager(dataManager);
 
