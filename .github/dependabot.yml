@@ -1,0 +1,18 @@
+version: 2
+
+# Pinned action SHAs stop floating with their tag, so they need something to
+# move them forward: without this, a pin silently misses upstream security
+# fixes. Actions only — npm dependencies stay under manual review. Grouped and
+# monthly so this opens at most one PR a month.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns:
+          - '*'
