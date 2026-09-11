@@ -13,8 +13,7 @@
  * @module data/trafficBounds
  */
 
-/** @const {number} Mean Earth radius in km (spherical approximation). */
-const EARTH_RADIUS_KM = 6371;
+import { EARTH_RADIUS_KM, greatCircleKm } from '../geoDistance.js';
 
 const toRad = (deg) => (deg * Math.PI) / 180;
 const toDeg = (rad) => (rad * 180) / Math.PI;
@@ -28,15 +27,7 @@ const toDeg = (rad) => (rad * 180) / Math.PI;
  * @param {number} lon2 - Second point longitude (degrees).
  * @returns {number} Distance in kilometres.
  */
-export function greatCircleKm(lat1, lon1, lat2, lon2) {
-  const p1 = toRad(lat1);
-  const p2 = toRad(lat2);
-  const dp = toRad(lat2 - lat1);
-  const dl = toRad(lon2 - lon1);
-  const a = Math.sin(dp / 2) ** 2
-    + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
-  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(a)));
-}
+export { greatCircleKm };
 
 /**
  * Initial bearing (radians) from point 1 toward point 2 along the great circle.

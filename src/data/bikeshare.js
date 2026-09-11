@@ -12,6 +12,7 @@
 
 import * as Cesium from 'cesium';
 import { governorRequestRender } from '../renderGovernor.js';
+import { greatCircleKm } from '../geoDistance.js';
 import { registerSpriteCollection, restoreSpriteOrder } from './spriteOrder.js';
 import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
 import {
@@ -628,16 +629,6 @@ function getCameraCenterLatLon(viewer) {
  * @param {number} bLon - Longitude of point B in degrees.
  * @returns {number} Distance in kilometers.
  */
-function haversineKm(aLat, aLon, bLat, bLon) {
-  const toRad = (value) => value * Math.PI / 180;
-  const dLat = toRad(bLat - aLat);
-  const dLon = toRad(bLon - aLon);
-  const p1 = toRad(aLat);
-  const p2 = toRad(bLat);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dLon / 2) ** 2;
-  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 /**
  * Determine whether the layer should be active at the given camera altitude.
  * Uses hysteresis (separate enter/exit thresholds) to avoid rapid toggling
@@ -672,7 +663,7 @@ function computeInRangeCities(center) {
   if (!center) return active;
 
   for (const city of GBFS_CITY_REGISTRY) {
-    const distance = haversineKm(center.lat, center.lon, city.centerLat, city.centerLon);
+    const distance = greatCircleKm(center.lat, center.lon, city.centerLat, city.centerLon);
     const radius = Math.max(CITY_RANGE_BASE_KM, city.loadRadiusKm);
     if (distance <= radius) active.add(city.id);
   }

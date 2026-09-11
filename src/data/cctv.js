@@ -45,6 +45,8 @@
  * implements the standard layer interface (init/enable/disable/update/destroy)
  * plus CCTV-specific methods (selectCamera, cycleCamera, focusNearest, etc.).
  */
+
+import { greatCircleKm } from '../geoDistance.js';
 import * as Cesium from 'cesium';
 import { registerSpriteCollection, restoreSpriteOrder } from './spriteOrder.js';
 import {
@@ -985,14 +987,6 @@ export function activationProbeClampRange(rangeM, hitDistanceM) {
  * @param {number} lon2 - Longitude of point 2 (degrees).
  * @returns {number} Distance in kilometres.
  */
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 /**
  * Computes the area of a circular sector (camera FOV wedge).
  * @param {number} rangeM - Radius in metres.
@@ -2586,7 +2580,7 @@ function startGeometryLoadQueue() {
     .filter((record) => record !== active)
     .map((record) => ({
       record,
-      distKm: haversineKm(refLat, refLon, record.camera.lat, record.camera.lon),
+      distKm: greatCircleKm(refLat, refLon, record.camera.lat, record.camera.lon),
     }))
     .sort((a, b) => a.distKm - b.distKm)
     .map((entry) => entry.record);
@@ -2652,7 +2646,7 @@ function buildCoverageVisibleSet(activeRecord) {
     }
     return {
       record,
-      distKm: haversineKm(
+      distKm: greatCircleKm(
         activeRecord.camera.lat,
         activeRecord.camera.lon,
         record.camera.lat,
@@ -2797,7 +2791,7 @@ function refreshAmbientCards() {
     }
     candidates.push({
       id,
-      distanceKm: haversineKm(viewerLat, viewerLon, record.camera.lat, record.camera.lon),
+      distanceKm: greatCircleKm(viewerLat, viewerLon, record.camera.lat, record.camera.lon),
       inView,
       isVideo: isVideoFeedType(normalizeFeedType(record.camera.feedType)),
       sx,
@@ -3307,7 +3301,7 @@ function nearestCameraIdToViewer() {
 
   let best = null;
   for (const record of _records) {
-    const distKm = haversineKm(lat, lon, record.camera.lat, record.camera.lon);
+    const distKm = greatCircleKm(lat, lon, record.camera.lat, record.camera.lon);
     if (!best || distKm < best.distKm) {
       best = { id: record.camera.id, distKm };
     }
@@ -3327,7 +3321,7 @@ function coverageNeighborCount(targetRecord) {
   let count = 0;
   for (const record of _records) {
     if (record === targetRecord) continue;
-    const dKm = haversineKm(
+    const dKm = greatCircleKm(
       targetRecord.camera.lat,
       targetRecord.camera.lon,
       record.camera.lat,

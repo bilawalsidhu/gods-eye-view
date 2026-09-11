@@ -142,6 +142,9 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   like "play radio in Turkey" no longer fail closed (Turkey → Türkiye, plus
   Myanmar/Burma, UAE, Holland, Swaziland, East Timor, Cabo Verde, Vatican).
   Ambiguous names such as a bare "Congo" or "Korea" still fail closed.
+- Great-circle distance checks now share one latitude-then-longitude utility
+  instead of maintaining conflicting local implementations. Natural Earth
+  region bounds no longer expose the opposite positional convention.
 - Mapped-site outages show their scheduled retry countdown and distinguish
   known Overpass rate limits, timeouts, and query failures. Search feedback no
   longer claims a refresh succeeded while the layer is unavailable or loading.
