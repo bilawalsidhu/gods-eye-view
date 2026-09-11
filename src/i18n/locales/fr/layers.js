@@ -20,8 +20,8 @@ export default {
     other: '{count} couches de données effacées',
   },
   'clear.toast.notCleared': {
-    one: '{count} couche de données n’a pas pu être effacée',
-    other: '{count} couches de données n’ont pas pu être effacées',
+    one: '{count} couche de données n\'a pas pu être effacée',
+    other: '{count} couches de données n\'ont pas pu être effacées',
   },
 
   // ── Phase-2 static markup extraction (index.html), appended ──────────────
@@ -80,7 +80,7 @@ export default {
   // radioMarkup.test.mjs, so the attribute must be wired by a later phase.
   'radio.bandLabel': 'BANDE DU RÉPERTOIRE',
   'radio.dragToTune': 'GLISSER POUR ACCORDER',
-  'radio.tunerIdle': 'TOUTES · GLISSER L’AIGUILLE',
+  'radio.tunerIdle': 'TOUTES · GLISSER L\'AIGUILLE',
   'radio.snapsNote': 'SE CALE SUR LES STATIONS DISPONIBLES',
   'radio.transportAriaLabel': 'Lecture Radio',
   'radio.prev': 'PRÉC.',
@@ -96,7 +96,7 @@ export default {
   // Initial idle announcement; the runtime states land with the layers worker.
   'radio.playbackOff': 'Radio désactivée',
   'radio.stationSite': 'SITE DE LA STATION',
-  'radio.privacyNote': 'L’audio se connecte directement au diffuseur une fois la lecture lancée. Votre adresse IP est visible par ce diffuseur.',
+  'radio.privacyNote': 'L\'audio se connecte directement au diffuseur une fois la lecture lancée. Votre adresse IP est visible par ce diffuseur.',
 
   // ── Phase-3 runtime extraction (src/data/*), appended ────────────────────
   // Layer display names are translated only at the presentation boundary
@@ -132,7 +132,7 @@ export default {
   'name.fires': 'Feux actifs FIRMS',
 
   // src/data/manager.js data-panel row meta line (_buildMetaText) + time ago.
-  'meta.justNow': 'à l’instant',
+  'meta.justNow': 'à l\'instant',
   'meta.secondsAgo': 'il y a {count}s',
   'meta.minutesAgo': 'il y a {count}m',
   'meta.hoursAgo': 'il y a {count}h',
@@ -195,7 +195,7 @@ export default {
   'cctv.adjustOn': 'AJUSTEMENT ACTIVÉ',
 
   // src/data/cctv.js buildSummaryText() — the SCENE SUMMARY line.
-  'cctv.summary.standingBy': '{count} CAMÉRAS EN ATTENTE · AUCUNE CAMÉRA SÉLECTIONNÉE · CLIQUEZ SUR UNE CAMÉRA POUR L’ACTIVER',
+  'cctv.summary.standingBy': '{count} CAMÉRAS EN ATTENTE · AUCUNE CAMÉRA SÉLECTIONNÉE · CLIQUEZ SUR UNE CAMÉRA POUR L\'ACTIVER',
   'cctv.summary.empty': 'Aucune caméra disponible dans le catalogue.',
   'cctv.summary.city': 'CCTV de {city}',
   'cctv.summary.hdg': 'HDG {value}°',
@@ -276,11 +276,11 @@ export default {
   'radio.state.staleDirectory': ' · répertoire périmé',
   'radio.state.staleDegradedDirectory': ' · répertoire périmé/dégradé',
   'radio.state.outsideFilter': ' · hors filtre actuel',
-  'radio.state.voiceMuted': ' · en sourdine pendant l’interaction vocale',
+  'radio.state.voiceMuted': ' · en sourdine pendant l\'interaction vocale',
   'radio.state.voiceRestoring': ' · restauration du volume après la voix',
-  'radio.state.staticNoAudio': ' · le souffle indique l’absence d’audio du diffuseur',
-  'radio.state.tuningStatic': ' · souffle d’accord jusqu’au démarrage du diffuseur',
-  'radio.state.stationUnavailable': 'Station indisponible après l’actualisation du répertoire — choisissez un autre canal',
+  'radio.state.staticNoAudio': ' · le souffle indique l\'absence d\'audio du diffuseur',
+  'radio.state.tuningStatic': ' · souffle d\'accord jusqu\'au démarrage du diffuseur',
+  'radio.state.stationUnavailable': 'Station indisponible après l\'actualisation du répertoire — choisissez un autre canal',
   'radio.state.enabling': 'Activation de Radio…',
   'radio.state.disabling': 'Désactivation de Radio…',
   'radio.state.uncertain': 'Le cycle de vie de Radio est incertain — utilisez Activer ou Désactiver pour réconcilier',
@@ -321,7 +321,7 @@ export default {
   'missions.roster.selectAria': 'Sélectionner {mission}',
   'missions.rows.additionalPayloads': '+{count} enregistrements de charge utile supplémentaires',
   'missions.rows.classified': 'CLASSIFIÉE / MULTI-CHARGES',
-  'missions.rows.noStageData': 'AUCUNE DONNÉE DE RENTRÉE / RÉCUPÉRATION D’ÉTAGE',
+  'missions.rows.noStageData': 'AUCUNE DONNÉE DE RENTRÉE / RÉCUPÉRATION D\'ÉTAGE',
   'missions.rows.unspecified': 'NON SPÉCIFIÉ',
   'missions.rows.unavailable': 'INDISPONIBLE',
   'missions.rows.flightNumber': 'VOL {count}',
@@ -345,7 +345,7 @@ export default {
   'missions.replay.liftoff': 'DÉCOLLAGE · {mission}',
   'missions.replay.ascentReplay': 'REJEU DE MONTÉE · {mission}',
   'missions.replay.ascentEstimate': 'ESTIMATION DE MONTÉE · {mission}',
-  'missions.replay.recovery': 'RENTRÉE / RÉCUPÉRATION D’ÉTAGE · {mission}',
+  'missions.replay.recovery': 'RENTRÉE / RÉCUPÉRATION D\'ÉTAGE · {mission}',
   'missions.replay.orbit': 'REJEU EN ORBITE · {mission}',
   'missions.replay.pausedPrefix': 'EN PAUSE · {title}',
   'missions.replay.phaseCountdown': 'T moins {seconds}',
@@ -370,9 +370,9 @@ export default {
   'satellites.class.nav': 'NAV',
   'satellites.class.navBlurb': 'Navigation GNSS — GPS, GLONASS, Galileo',
   'satellites.class.geo': 'GEO',
-  'satellites.class.geoBlurb': 'Ceinture géostationnaire — communications et météo, fixes au-dessus de l’équateur',
+  'satellites.class.geoBlurb': 'Ceinture géostationnaire — communications et météo, fixes au-dessus de l\'équateur',
   'satellites.class.visual': 'VISUEL',
-  'satellites.class.visualBlurb': 'Objets les plus brillants à l’œil nu — groupe visuel CelesTrak',
+  'satellites.class.visualBlurb': 'Objets les plus brillants à l\'œil nu — groupe visuel CelesTrak',
   'satellites.class.comms': 'TÉLÉCOMS',
   'satellites.class.commsBlurb': 'Coquille de constellation à haut débit — visible uniquement en mode DENSE',
 
@@ -414,8 +414,8 @@ export default {
   'installations.fallbackTitle': 'INSTALLATION CARTOGRAPHIÉE',
   'installations.loading': 'chargement du contexte des installations cartographiées',
   'installations.feedback.reason.rateLimited': 'Overpass a atteint sa limite de requêtes',
-  'installations.feedback.reason.timeout': 'Overpass a dépassé le délai d’attente',
-  'installations.feedback.reason.queryFailed': 'Overpass n’a pas pu terminer la requête',
+  'installations.feedback.reason.timeout': 'Overpass a dépassé le délai d\'attente',
+  'installations.feedback.reason.queryFailed': 'Overpass n\'a pas pu terminer la requête',
   'installations.feedback.reason.unavailable': 'Overpass temporairement indisponible',
   'installations.feedback.retrying': 'Réessai des sites cartographiés…',
   'installations.feedback.fetching': 'Récupération des sites cartographiés…',
@@ -437,7 +437,7 @@ export default {
   'awareness.next': 'SUIV.',
   'awareness.previousTitle': 'Précédent — contact déjà visité dans la fenêtre de 250 km',
   'awareness.nextTitle': 'Suivant — contact non visité le plus proche dans la fenêtre de 250 km',
-  'awareness.note': 'Contexte cartographié/observé de sources ouvertes. Les diffusions manquantes, les zones de carte non chargées ou les sites non cartographiés ne constituent pas une preuve d’absence.',
+  'awareness.note': 'Contexte cartographié/observé de sources ouvertes. Les diffusions manquantes, les zones de carte non chargées ou les sites non cartographiés ne constituent pas une preuve d\'absence.',
   'awareness.unavailableAria': 'Indisponible',
   'awareness.focusAria': 'Centrer sur {label}',
   'awareness.cohort.flights': 'Vols',
