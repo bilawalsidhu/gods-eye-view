@@ -97,4 +97,19 @@ export default {
   'voice.tier.buttonTitle': 'Nivel del modelo de voz — se aplica en la próxima sesión',
   'voice.cost.buttonTitle': 'Costo estimado de la sesión',
   'voice.button.ariaLabel': 'Control de voz — mantén presionada la barra espaciadora para hablar; haz clic para activar o desactivar la voz',
+
+  // Stage-4 repair pass (mirrors locales/en/setup.js appendix).
+  'scenes.status.captureCameraNotReady': 'No se puede capturar el plano: la cámara no está lista',
+  'scenes.status.shotTitleDefault': 'Plano {n}',
+  'scenes.status.captured': 'Capturado: {scene} / {shot}',
+  'scenes.status.selectShotFirst': 'Selecciona primero un plano',
+  'scenes.status.updated': 'Actualizado: {scene} / {shot}',
+  'scenes.status.deleteShotConfirm': '¿Eliminar el plano "{shot}"?',
+  'scenes.status.loaded': 'Cargado: {scene} / {shot}',
+  'scenes.status.cameraUnavailable': 'Cámara no disponible — sal primero de la cabina',
+  'scenes.status.noShotsToRun': 'No hay planos para ejecutar',
+  'scenes.status.runningShot': 'Ejecutando {index}/{total}: {scene} / {shot}',
+  'scenes.status.runComplete': 'Ejecución de escenas completada',
+  'scenes.status.runError': 'Error: {message}',
+  'scenes.status.contextExitFailed': 'No se pudo salir de {mode} — las capas de la escena pueden rechazarse',
 };

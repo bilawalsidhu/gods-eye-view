@@ -665,13 +665,13 @@ export class SceneDirector {
 
     const camera = this.styleManager.getCameraState();
     if (!camera) {
-      this._updateStatus('Cannot capture shot: camera not ready');
+      this._updateStatus(t('setup.scenes.status.captureCameraNotReady'));
       return;
     }
 
     const shot = normalizeShot({
       id: uid('shot'),
-      title: `Shot ${scene.shots.length + 1}`,
+      title: t('setup.scenes.status.shotTitleDefault', { n: scene.shots.length + 1 }),
       durationSec: DEFAULT_SHOT_DURATION_SEC,
       holdSec: DEFAULT_HOLD_SEC,
       camera,
@@ -683,7 +683,7 @@ export class SceneDirector {
     this._selectedShotId = shot.id;
     this._saveProject();
     this._renderShotList();
-    this._updateStatus(`Captured: ${scene.title} / ${shot.title}`);
+    this._updateStatus(t('setup.scenes.status.captured', { scene: scene.title, shot: shot.title }));
   }
 
   /**
@@ -696,7 +696,7 @@ export class SceneDirector {
 
     const shot = scene.shots.find((item) => item.id === this._selectedShotId);
     if (!shot) {
-      this._updateStatus('Select a shot first');
+      this._updateStatus(t('setup.scenes.status.selectShotFirst'));
       return;
     }
 
@@ -709,7 +709,7 @@ export class SceneDirector {
 
     this._saveProject();
     this._renderShotList();
-    this._updateStatus(`Updated: ${scene.title} / ${shot.title}`);
+    this._updateStatus(t('setup.scenes.status.updated', { scene: scene.title, shot: shot.title }));
   }
 
   /**
@@ -721,7 +721,7 @@ export class SceneDirector {
     const { scene, shot } = this._getShot(sceneId, shotId);
     if (!scene || !shot) return;
 
-    const ok = window.confirm(`Delete shot "${shot.title}"?`);
+    const ok = window.confirm(t('setup.scenes.status.deleteShotConfirm', { shot: shot.title }));
     if (!ok) return;
 
     scene.shots = scene.shots.filter((item) => item.id !== shot.id);
@@ -773,7 +773,7 @@ export class SceneDirector {
     if (token.cancelled) return;
 
     if (this._loadAbort === controller) this._loadAbort = null;
-    this._updateStatus(`Loaded: ${scene.title} / ${shot.title}`);
+    this._updateStatus(t('setup.scenes.status.loaded', { scene: scene.title, shot: shot.title }));
     this._updateRuntime('');
   }
 
@@ -809,7 +809,7 @@ export class SceneDirector {
     if (typeof this.styleManager?.runImmediateNavigation !== 'function') return true;
     const claimed = this.styleManager.runImmediateNavigation('scene', () => true);
     if (claimed === false) {
-      this._updateStatus('Camera unavailable — exit cockpit first');
+      this._updateStatus(t('setup.scenes.status.cameraUnavailable'));
       return false;
     }
     return true;
@@ -906,7 +906,7 @@ export class SceneDirector {
 
     const queue = this._buildPlaybackQueue(sceneId || this._selectedSceneId || this._project.scenes[0]?.id, { single });
     if (!queue.length) {
-      this._updateStatus('No shots to run');
+      this._updateStatus(t('setup.scenes.status.noShotsToRun'));
       return { started: false, reason: 'no-shots' };
     }
 
@@ -977,7 +977,7 @@ export class SceneDirector {
         this._renderSceneSelect();
         this._renderShotList();
 
-        this._updateStatus(`Running ${idx + 1}/${queue.length}: ${scene.title} / ${shot.title}`);
+        this._updateStatus(t('setup.scenes.status.runningShot', { index: idx + 1, total: queue.length, scene: scene.title, shot: shot.title }));
         this._updateRuntime(`${displaySceneTitle(scene)} · ${shot.title}`);
 
         this._logEvent('shot_start', {
@@ -1017,11 +1017,11 @@ export class SceneDirector {
 
       if (!token.cancelled) {
         this._setProgress(1);
-        this._updateStatus('Scene run complete');
+        this._updateStatus(t('setup.scenes.status.runComplete'));
         this._logEvent('scene_run_complete', {});
       }
     } catch (error) {
-      this._updateStatus(`Error: ${error.message || 'run failed'}`);
+      this._updateStatus(t('setup.scenes.status.runError', { message: error.message || 'run failed' }));
       this._logEvent('scene_run_error', { message: error.message || 'unknown error' });
     } finally {
       this._finishRun();
@@ -1219,7 +1219,7 @@ export class SceneDirector {
     const result = await this.styleManager.setContextMode('off');
     if (result && result.ok === false) {
       console.warn(`[Scenes] Could not exit ${mode}:`, result.error || 'unknown reason');
-      this._updateStatus(`Could not exit ${mode} — scene layers may be refused`);
+      this._updateStatus(t('setup.scenes.status.contextExitFailed', { mode }));
       this._logEvent('context_mode_exit_failed', { mode, error: result.error || null });
       return false;
     }

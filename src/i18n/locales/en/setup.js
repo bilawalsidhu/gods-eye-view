@@ -140,4 +140,22 @@ export default {
   'voice.tier.buttonTitle': 'Voice model tier — applies next session',
   'voice.cost.buttonTitle': 'Estimated session cost',
   'voice.button.ariaLabel': 'Voice control — hold Space to speak; click to toggle voice',
+
+  // ── Stage-4 repair pass: src/scenes/director.js status corpus, appended ───
+  // Status/confirm lines and the default shot title. {scene}/{shot} carry
+  // stored project titles (user data, rendered verbatim); {mode} is the raw
+  // context-mode identifier (machine value, keep-English boundary).
+  'scenes.status.captureCameraNotReady': 'Cannot capture shot: camera not ready',
+  'scenes.status.shotTitleDefault': 'Shot {n}',
+  'scenes.status.captured': 'Captured: {scene} / {shot}',
+  'scenes.status.selectShotFirst': 'Select a shot first',
+  'scenes.status.updated': 'Updated: {scene} / {shot}',
+  'scenes.status.deleteShotConfirm': 'Delete shot "{shot}"?',
+  'scenes.status.loaded': 'Loaded: {scene} / {shot}',
+  'scenes.status.cameraUnavailable': 'Camera unavailable — exit cockpit first',
+  'scenes.status.noShotsToRun': 'No shots to run',
+  'scenes.status.runningShot': 'Running {index}/{total}: {scene} / {shot}',
+  'scenes.status.runComplete': 'Scene run complete',
+  'scenes.status.runError': 'Error: {message}',
+  'scenes.status.contextExitFailed': 'Could not exit {mode} — scene layers may be refused',
 };
