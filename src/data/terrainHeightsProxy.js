@@ -11,6 +11,12 @@ export const TERRAIN_RETRY_BUDGET_MS = 10_000;
 /** One initial attempt plus three bounded retries. */
 export const TERRAIN_MAX_ATTEMPTS = 4;
 
+/** Hard cap on the in-memory per-point cache; the oldest points are evicted first. */
+export const TERRAIN_MAX_CACHE_ENTRIES = 50_000;
+
+/** Hard cap on the JSON blob persisted to `.gev-cache/terrain-heights.json`. */
+export const TERRAIN_DISK_CACHE_MAX_BYTES = 16 * 1024 * 1024;
+
 /** @param {number} ms */
 function defaultSleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -33,6 +39,10 @@ export function parseTerrainPoints(raw) {
     const lon = Number(parts[0]);
     const lat = Number(parts[1]);
     if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+    // Reject out-of-range coordinates here, before they can be cached, written
+    // to disk, or forwarded upstream. Finite-but-impossible points let a client
+    // grow both caches without bound.
+    if (lon < -180 || lon > 180 || lat < -90 || lat > 90) return null;
     points.push([lon, lat]);
   }
   return points;
@@ -55,6 +65,44 @@ function canonicalTerrainPoint(point) {
 /** Only a real numeric ellipsoid height is cacheable/servable. */
 export function validTerrainResult(result) {
   return Boolean(result) && Number.isFinite(result.ellipsoid);
+}
+
+/**
+ * Evict entries until the cache holds at most `maxEntries`. Oldest by fetch
+ * time goes first, so a point refreshed during the current request is never the
+ * one dropped. A no-op while the cache is within its cap.
+ * @param {Map<string, {at:number, result:object}>} cache
+ * @param {number} [maxEntries]
+ */
+export function evictTerrainCache(cache, maxEntries = TERRAIN_MAX_CACHE_ENTRIES) {
+  if (cache.size <= maxEntries) return;
+  const oldestFirst = [...cache.entries()].sort((a, b) => a[1].at - b[1].at);
+  for (let i = 0; i < oldestFirst.length - maxEntries; i += 1) {
+    cache.delete(oldestFirst[i][0]);
+  }
+}
+
+/** @param {Array<[string, {at:number, result:object}]>} entries */
+function terrainCacheJson(entries) {
+  return JSON.stringify({ version: 2, points: Object.fromEntries(entries) });
+}
+
+/**
+ * Serialize the per-point cache to a JSON string no larger than `maxBytes`,
+ * dropping the oldest points first so a pre-cap cache file cannot be rewritten
+ * at its original size.
+ * @param {Map<string, {at:number, result:object}>} cache
+ * @param {number} [maxBytes]
+ * @returns {string}
+ */
+export function serializeTerrainCache(cache, maxBytes = TERRAIN_DISK_CACHE_MAX_BYTES) {
+  let kept = [...cache.entries()].sort((a, b) => a[1].at - b[1].at);
+  let json = terrainCacheJson(kept);
+  while (Buffer.byteLength(json, 'utf8') > maxBytes && kept.length > 0) {
+    kept = kept.slice(Math.max(1, Math.floor(kept.length / 10)));
+    json = terrainCacheJson(kept);
+  }
+  return json;
 }
 
 /**
@@ -153,6 +201,7 @@ export async function fetchTerrainChunkWithRetry(points, {
  * @param {(points:Array<[number, number]>)=>Promise<Array<object>>} options.fetchMissing
  * @param {number} options.ttlMs
  * @param {()=>number} [options.now]
+ * @param {number} [options.maxCacheEntries]
  */
 export async function resolveTerrainHeightRequest({
   points,
@@ -160,6 +209,7 @@ export async function resolveTerrainHeightRequest({
   fetchMissing,
   ttlMs,
   now = Date.now,
+  maxCacheEntries = TERRAIN_MAX_CACHE_ENTRIES,
 }) {
   const requested = points.map(canonicalTerrainPoint);
   const unique = new Map();
@@ -188,6 +238,7 @@ export async function resolveTerrainHeightRequest({
         cache.set(missing[i].key, { at: fetchedAt, result });
         cacheChanged = true;
       }
+      evictTerrainCache(cache, maxCacheEntries);
       if (fetched.length !== missing.length || missing.some((_, i) => !validTerrainResult(fetched[i]))) {
         upstreamError = new Error('upstream omitted one or more terrain heights');
       }

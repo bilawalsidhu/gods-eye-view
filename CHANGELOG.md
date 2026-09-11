@@ -63,6 +63,10 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   return generic error messages. Related diagnostics omit raw exception details
   and upstream error bodies; response statuses and cache fallback remain intact.
   Includes the security fixes contributed by Tom-Neverwinter in PR #171.
+- The terrain-height proxy rejects out-of-range coordinates before caching or
+  forwarding them, throttles requests per client, and caps both its in-memory
+  point cache and the persisted cache file, so a client cycling through the
+  coordinate keyspace can no longer grow memory or disk without bound.
 
 ### Fixed
 

@@ -1043,7 +1043,13 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   stale real heights remain usable per point, while an uncached absent height
 >   still returns 502 rather than becoming a fabricated ground value. Client
 >   geoid fallbacks wait 60 seconds before retrying and self-heal to Re:Earth on
->   the first later successful fetch.
+>   the first later successful fetch. Requests are throttled per client
+>   (90/min, 300/min global), coordinates outside `lon ∈ [-180,180]` /
+>   `lat ∈ [-90,90]` are rejected with 400 before any cache write or upstream
+>   call, and the per-point cache is capped at 50,000 entries with the oldest
+>   evicted first. The persisted `terrain-heights.json` is written within a
+>   16 MB ceiling (oldest points dropped first) and an oversized legacy file is
+>   replaced rather than parsed at full size.
 > - **Overpass cache admission:** `/api/overpass` parses and sanitizes requests,
 >   then checks fresh memory, identical in-flight work, and fresh disk entries
 >   before invoking its local 90/min limiter. Cache and single-flight responses
