@@ -2342,6 +2342,7 @@ export class StyleManager {
     this._scopeFeatherValue = document.getElementById('scope-feather-value');
     this._mapStackChips = document.getElementById('map-stack-chips');
     this._mapStackStatus = document.getElementById('map-stack-status');
+    this._mapSourceLabel = document.getElementById('map-source-label');
     this._mapStackChangeHandler = null;
     this._cleanViewBtn = document.getElementById('clean-view-toggle');
     this._cleanViewExitBtn = document.getElementById('clean-view-exit');
@@ -3574,6 +3575,13 @@ export class StyleManager {
    */
   _initMapStackControl() {
     if (!this._mapStackChips || !this.mapStackController) return;
+
+    // Key-only i18n sites (mapStackChips.test.mjs pins the static markup
+    // verbatim, so no data-i18n* attribute can be added): localize at this
+    // runtime write instead. The locale resolves before UI init and never
+    // changes without a reload, so an init-time write is sufficient.
+    if (this._mapSourceLabel) this._mapSourceLabel.textContent = t('cockpit.presets.mapSourceLabel');
+    this._mapStackChips.setAttribute('aria-label', t('cockpit.presets.mapSourceChipsAriaLabel'));
 
     if (!this._mapStackChangeHandler) {
       // Provider-driven transitions (notably Esri tile-error fallback) do not
