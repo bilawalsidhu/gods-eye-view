@@ -126,6 +126,58 @@ async function init() {
     // 120 Hz hardware; a no-op on 60 Hz displays. (perf item 2)
     viewer.targetFrameRate = 60;
 
+    // macOS trackpad pinch reaches the canvas as a `wheel` event with
+    // ctrlKey=true (Safari/Chrome both do this so pages can implement their
+    // own pinch-zoom instead of the OS zooming the whole page). Cesium's
+    // default zoomEventTypes only binds plain WHEEL (no modifier), so pinch
+    // events were falling through to no-op — two-finger scroll (plain wheel,
+    // no ctrlKey) worked, pinch didn't. Add the CTRL-modified WHEEL binding
+    // so pinch drives zoom the same way scroll does.
+    viewer.scene.screenSpaceCameraController.zoomEventTypes = [
+      Cesium.CameraEventType.RIGHT_DRAG,
+      Cesium.CameraEventType.WHEEL,
+      Cesium.CameraEventType.PINCH,
+      {
+        eventType: Cesium.CameraEventType.WHEEL,
+        modifier: Cesium.KeyboardEventModifier.CTRL,
+      },
+    ];
+
+    // Cesium turns any wheel `delta` into camera movement via the same fixed
+    // formula regardless of what produced it (arcLength = 7.5deg * delta).
+    // macOS reports trackpad pinch as wheel+ctrlKey with a much smaller
+    // deltaY per unit of finger movement than a real two-finger scroll
+    // produces, so pinch alone reads as "barely moving" even with the
+    // CTRL-modified zoom binding above. There's no public Cesium knob to
+    // rescale just the CTRL+WHEEL case, so intercept the raw pinch event
+    // ahead of Cesium's own listener (capture phase on an ancestor of the
+    // canvas always runs first) and re-dispatch it with deltaY amplified.
+    const PINCH_ZOOM_MULTIPLIER = 8;
+    const PINCH_RELAY_FLAG = '__pinchRelayed';
+    viewer.container.addEventListener(
+      'wheel',
+      (event) => {
+        if (!event.ctrlKey || event[PINCH_RELAY_FLAG]) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const relayed = new WheelEvent('wheel', {
+          deltaX: event.deltaX,
+          deltaY: event.deltaY * PINCH_ZOOM_MULTIPLIER,
+          deltaZ: event.deltaZ,
+          deltaMode: event.deltaMode,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+          view: window,
+        });
+        relayed[PINCH_RELAY_FLAG] = true;
+        viewer.canvas.dispatchEvent(relayed);
+      },
+      { capture: true, passive: false },
+    );
+
     // Register per-layer data attribution into the "Data attribution" popover.
     // Required by each source's license (ODbL, CC BY-NC-SA, NASA FIRMS, etc.);
     // strings are verbatim from DATA_SOURCES.md. Static + always-present in the
