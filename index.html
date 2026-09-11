@@ -440,7 +440,7 @@
              mirrors SCOPE_FEATHER_RATIO_DEFAULT in src/scopeMask.js. Feather
              softens the black mask edge; label fading is the separate Fade
              slider. -->
-        <input type="range" class="pp-slider" id="scope-feather-slider" min="0" max="100" value="11" title="Scope edge feather as a percentage of the keyhole radius" />
+        <input type="range" class="pp-slider" id="scope-feather-slider" min="0" max="100" value="11" aria-label="Scope edge feather" title="Scope edge feather as a percentage of the keyhole radius" />
         <span class="pp-slider-value" id="scope-feather-value">11%</span>
       </div>
     </div>
@@ -460,7 +460,7 @@
         <span class="pp-label">Bloom</span>
       </button>
       <div class="pp-slider-row" id="bloom-slider-row">
-        <input type="range" class="pp-slider" id="bloom-intensity-slider" min="0" max="200" value="0" />
+        <input type="range" class="pp-slider" id="bloom-intensity-slider" min="0" max="200" value="0" aria-label="Bloom intensity" />
         <span class="pp-slider-value" id="bloom-intensity-value">0%</span>
       </div>
     </div>
@@ -470,7 +470,7 @@
         <span class="pp-label">Sharpen</span>
       </button>
       <div class="pp-slider-row" id="sharpen-slider-row">
-        <input type="range" class="pp-slider" id="sharpen-intensity-slider" min="0" max="100" value="49" />
+        <input type="range" class="pp-slider" id="sharpen-intensity-slider" min="0" max="100" value="49" aria-label="Sharpen intensity" />
         <span class="pp-slider-value" id="sharpen-intensity-value">49%</span>
       </div>
     </div>
@@ -548,14 +548,16 @@
     <div class="panel-glow"></div>
     <div class="location-inner">
       <div class="location-toolbar">
-        <span class="location-toolbar-label"><span class="dock-label-icon dock-label-icon-location" aria-hidden="true"></span>LOCATION</span>
+        <button id="location-bar-toggle" class="dock-tray-toggle" type="button" data-dock-toggle-target="location-bar" aria-controls="location-bar-popover" aria-expanded="false" aria-label="Expand LOCATION" title="Expand LOCATION">
+          <span class="location-toolbar-label"><span class="dock-label-icon dock-label-icon-location" aria-hidden="true"></span>LOCATION</span>
+        </button>
         <button class="panel-collapse-btn" data-collapse-target="location-bar" title="Collapse panel">+</button>
       </div>
       <div id="location-mini-status" class="location-mini-status" aria-live="polite">
         <div id="location-mini-city" class="location-mini-city">📍 Location: --</div>
         <div id="location-mini-poi" class="location-mini-poi">Landmark: --</div>
       </div>
-      <div class="dock-popover-content">
+      <div id="location-bar-popover" class="dock-popover-content">
         <button class="dock-pin-btn" data-pin-target="location-bar" type="button" aria-label="Pin location tray" aria-pressed="false" title="Keep location tray open"><img src="/pin.svg" alt="" /></button>
         <div id="poi-row" class="poi-row-container"></div>
         <div class="location-bar-divider" id="location-bar-divider"></div>
@@ -565,7 +567,7 @@
             <button id="search-toggle" class="search-toggle-btn" title="Search any location">
               <span>&#x1F50E;</span>
             </button>
-            <input type="text" id="location-search" placeholder="Search any location..." autocomplete="off" spellcheck="false" />
+            <input type="text" id="location-search" placeholder="Search any location..." autocomplete="off" spellcheck="false" aria-label="Search location by name or coordinates" />
           </div>
         </div>
       </div>
@@ -727,7 +729,7 @@
             <span class="material-symbols-outlined" aria-hidden="true">radar</span>
             <span>CONTACTS</span>
           </button>
-          <button id="global-context-missions-btn" class="context-mode-button" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="context-missions-view">
+          <button id="global-context-missions-btn" class="context-mode-button" type="button" role="tab" tabindex="0" aria-selected="false" aria-controls="context-missions-view">
             <span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span>
             <span>SPACE MISSIONS</span>
           </button>
@@ -765,6 +767,7 @@
               <div class="space-mission-roster-list" data-mission-roster-list>
                 <div class="space-mission-roster-empty">LOADING 30-DAY MISSION INDEX</div>
               </div>
+              <p class="space-mission-roster-focus-continuation" tabindex="-1" data-mission-roster-focus-continuation>TAB PREVIEWS · ENTER / SPACE SELECTS</p>
             </div>
           </div>
         </section>

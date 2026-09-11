@@ -12,7 +12,11 @@ import {
   GevRealtimeController,
   gateVoiceVisualizerLevel,
   isBenignViewportDeleteError,
+  isEditingSpaceTarget,
+  isInteractiveSpaceTarget,
   isPushToTalkKey,
+  isPushToTalkSurface,
+  PUSH_TO_TALK_HOLD_DELAY_MS,
   resolveVoiceControlHint,
   resolveVoiceVisualizerSpeaker,
   selectVoiceVisualizerSignal,
@@ -30,23 +34,442 @@ import {
 import { createVoiceCostTracker } from './voiceCost.js';
 
 test('push-to-talk recognizes Space by code or key', () => {
+  assert.equal(PUSH_TO_TALK_HOLD_DELAY_MS, 500);
   assert.equal(isPushToTalkKey({ code: 'Space', key: 'Unidentified' }), true);
   assert.equal(isPushToTalkKey({ code: '', key: ' ' }), true);
   assert.equal(isPushToTalkKey({ code: 'KeyM', key: 'm' }), false);
 });
 
-test('push-to-talk ignores typing targets and modified shortcuts', () => {
+test('push-to-talk protects text entry but arbitrates non-editing controls', () => {
   const plainTarget = { isContentEditable: false, closest: () => null };
   assert.equal(shouldHandlePushToTalkKeyDown({ code: 'Space', target: plainTarget }), true);
   assert.equal(shouldHandlePushToTalkKeyDown({ code: 'Space', target: plainTarget, metaKey: true }), false);
   assert.equal(shouldHandlePushToTalkKeyDown({
     code: 'Space',
-    target: { isContentEditable: false, closest: () => ({ tagName: 'INPUT' }) },
+    target: pushToTalkTarget({ tagName: 'INPUT', type: 'text' }),
   }), false);
   assert.equal(shouldHandlePushToTalkKeyDown({
     code: 'Space',
     target: { isContentEditable: true, closest: () => null },
   }), false);
+  assert.equal(shouldHandlePushToTalkKeyDown({
+    code: 'Space',
+    target: pushToTalkTarget({ tagName: 'BUTTON' }),
+  }), true);
+  assert.equal(isEditingSpaceTarget(pushToTalkTarget({ tagName: 'INPUT', type: 'range' })), false);
+});
+
+// Dispatch through the installed document/window listeners, keeping WebRTC at
+// the start boundary. Native button activation itself belongs to browser QA.
+function createPushToTalkFixture(t) {
+  const savedGlobals = new Map(['document', 'window', 'setTimeout', 'clearTimeout'].map((name) => (
+    [name, Object.getOwnPropertyDescriptor(globalThis, name)]
+  )));
+  const eventHub = () => {
+    const listeners = new Map();
+    return {
+      addEventListener(type, listener) {
+        if (!listeners.has(type)) listeners.set(type, new Set());
+        listeners.get(type).add(listener);
+      },
+      removeEventListener(type, listener) { listeners.get(type)?.delete(listener); },
+      dispatch(type, event = {}) {
+        for (const listener of listeners.get(type) || []) listener(event);
+        return event;
+      },
+      count(type) { return listeners.get(type)?.size || 0; },
+    };
+  };
+  let clock = 0;
+  let nextTimerId = 1;
+  const timers = new Map();
+  const setTimeout = (callback, delay = 0) => {
+    const id = nextTimerId++;
+    timers.set(id, { callback, due: clock + Number(delay || 0) });
+    return id;
+  };
+  const clearTimeout = (id) => timers.delete(id);
+  const advance = (milliseconds) => {
+    const end = clock + milliseconds;
+    while (true) {
+      const due = [...timers.entries()]
+        .filter(([, timer]) => timer.due <= end)
+        .sort((a, b) => a[1].due - b[1].due || a[0] - b[0])[0];
+      if (!due) break;
+      const [id, timer] = due;
+      timers.delete(id);
+      clock = timer.due;
+      timer.callback();
+    }
+    clock = end;
+  };
+  const document = { ...eventHub(), visibilityState: 'visible', activeElement: null };
+  const window = eventHub();
+  Object.assign(globalThis, { document, window, setTimeout, clearTimeout });
+  const starts = [];
+  const radio = [];
+  const controllers = [];
+  const makeController = () => {
+    const microphone = { enabled: false, stopped: false, stop() { this.stopped = true; } };
+    const controller = new GevRealtimeController({
+      ui: {
+        root: { dataset: {}, querySelectorAll: () => [], remove() {} },
+        status: {}, detail: {},
+      },
+      runner: async () => ({}),
+      radioLayer: {
+        pause: () => radio.push('pause'),
+        setVoiceDucked: (ducked) => radio.push(ducked ? 'duck' : 'unduck'),
+      },
+    });
+    controller.debugLog = () => {};
+    controller.start = ({ pushToTalk }) => {
+      starts.push({ pushToTalk });
+      controller.pushToTalkMode = pushToTalk;
+      controller.status = 'listening';
+      controller.stream = {
+        getAudioTracks: () => [microphone],
+        getTracks: () => [microphone],
+      };
+      controller.setMicrophoneEnabled(true);
+    };
+    controllers.push(controller);
+    controller.bindPushToTalkShortcut();
+    return { controller, microphone };
+  };
+  t.after(() => {
+    for (const controller of controllers) controller.stop({ removeUi: true });
+    for (const [name, descriptor] of savedGlobals) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  });
+  const key = (type, target, options = {}) => {
+    document.activeElement = options.activeElement === undefined ? target : options.activeElement;
+    return document.dispatch(type, {
+    code: 'Space', key: ' ', target, defaultPrevented: false,
+    preventDefault() { this.defaultPrevented = true; },
+    ...options,
+    });
+  };
+  return { advance, document, window, starts, radio, key, makeController, timers, ...makeController() };
+}
+
+function pushToTalkTarget({
+  tagName = null,
+  id = null,
+  style = null,
+  parentElement = null,
+  role = null,
+  tabIndex = null,
+  href = null,
+  controls = false,
+  type = null,
+  contentEditable = false,
+  mapSurface = false,
+} = {}) {
+  const resolvedTagName = (tagName || (style ? 'BUTTON' : 'DIV')).toUpperCase();
+  return {
+    tagName: resolvedTagName,
+    id,
+    style,
+    parentElement,
+    role,
+    tabIndex,
+    href,
+    controls,
+    type,
+    blurred: 0,
+    blur() { this.blurred += 1; },
+    isContentEditable: contentEditable,
+    closest(selector) {
+      for (let node = this; node; node = node.parentElement) {
+        if (selector === '#cesiumContainer' && (node.id === 'cesiumContainer' || node.mapSurface)) {
+          return node;
+        }
+        for (const part of selector.split(/,\s*/)) {
+          if (part.toUpperCase() === node.tagName) return node;
+          if (part === 'a[href]' && node.tagName === 'A' && node.href !== null) return node;
+          if (part === 'audio[controls]' && node.tagName === 'AUDIO' && node.controls) return node;
+          if (part === 'video[controls]' && node.tagName === 'VIDEO' && node.controls) return node;
+          if (part === '[contenteditable]' && node.isContentEditable) return node;
+          if (part === '[tabindex]' && node.tabIndex !== null) return node;
+          const roleMatch = part.match(/^\[role="([^"]+)"\]$/);
+          if (roleMatch && node.role === roleMatch[1]) return node;
+        }
+      }
+      return null;
+    },
+    mapSurface,
+  };
+}
+
+test('push-to-talk starts from Cesium canvases and the document background', (t) => {
+  const f = createPushToTalkFixture(t);
+  const cesiumContainer = pushToTalkTarget({ tagName: 'DIV', id: 'cesiumContainer' });
+  const cesiumCanvas = pushToTalkTarget({
+    tagName: 'CANVAS',
+    tabIndex: 0,
+    parentElement: cesiumContainer,
+  });
+  const overlayCanvas = pushToTalkTarget({
+    tagName: 'CANVAS',
+    id: 'world-overlay-canvas',
+    tabIndex: 0,
+  });
+
+  for (const [index, canvas] of [cesiumCanvas, overlayCanvas].entries()) {
+    assert.equal(isPushToTalkSurface(canvas), true);
+    assert.equal(isInteractiveSpaceTarget(canvas), false);
+    assert.equal(f.key('keydown', canvas).defaultPrevented, true);
+    f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+    assert.equal(f.starts.length, 1, 'the first map hold opens one reusable voice session');
+    assert.equal(f.controller.pushToTalkKeyHeld, true);
+    assert.equal(f.microphone.enabled, true, `map hold ${index + 1} enables the microphone`);
+    assert.equal(f.key('keyup', canvas).defaultPrevented, true);
+    assert.equal(f.microphone.enabled, false, `map release ${index + 1} mutes the microphone`);
+  }
+  const background = pushToTalkTarget();
+  assert.equal(f.key('keydown', background).defaultPrevented, true);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.equal(f.controller.pushToTalkKeyHeld, true);
+  assert.equal(f.key('keyup', background).defaultPrevented, true);
+});
+
+test('short Space on a focused control preserves release activation', (t) => {
+  const f = createPushToTalkFixture(t);
+  const button = pushToTalkTarget({ tagName: 'BUTTON' });
+  let activations = 0;
+  assert.equal(f.key('keydown', button).defaultPrevented, false);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS - 1);
+  const release = f.key('keyup', button);
+  if (!release.defaultPrevented) activations += 1;
+  assert.equal(release.defaultPrevented, false);
+  assert.equal(activations, 1);
+  assert.equal(button.blurred, 0);
+  assert.deepEqual(f.starts, []);
+});
+
+test('long Space blurs a focused control before voice and consumes release', (t) => {
+  const f = createPushToTalkFixture(t);
+  const button = pushToTalkTarget({ tagName: 'BUTTON' });
+  const order = [];
+  button.blur = () => {
+    button.blurred += 1;
+    order.push('blur');
+    f.document.activeElement = null;
+  };
+  f.controller.pauseRadioForVoice = () => order.push('voice');
+  assert.equal(f.key('keydown', button).defaultPrevented, false);
+  assert.equal(f.key('keydown', button, { repeat: true }).defaultPrevented, false);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.deepEqual(order, ['blur', 'voice']);
+  assert.equal(button.blurred, 1);
+  assert.equal(f.controller.pushToTalkKeyHeld, true);
+  assert.equal(f.key('keydown', button, { repeat: true, activeElement: null }).defaultPrevented, true);
+  let activations = 0;
+  const release = f.key('keyup', button, { activeElement: null });
+  if (!release.defaultPrevented) activations += 1;
+  assert.equal(release.defaultPrevented, true);
+  assert.equal(activations, 0);
+  assert.equal(f.microphone.enabled, false);
+});
+
+test('push-to-talk still ignores modified, already-handled and typing keydowns', (t) => {
+  const f = createPushToTalkFixture(t);
+  const target = pushToTalkTarget();
+  for (const modifier of ['altKey', 'ctrlKey', 'metaKey', 'shiftKey']) {
+    assert.equal(f.key('keydown', target, { [modifier]: true }).defaultPrevented, false);
+  }
+  f.key('keydown', target, { defaultPrevented: true });
+  f.key('keydown', target, { code: 'Enter', key: 'Enter' });
+  for (const tagName of ['INPUT', 'TEXTAREA']) f.key('keydown', pushToTalkTarget({ tagName }));
+  f.key('keydown', pushToTalkTarget({ role: 'textbox' }));
+  f.key('keydown', { isContentEditable: true });
+  assert.deepEqual(f.starts, []);
+  assert.deepEqual(f.radio, []);
+  assert.equal(f.controller.spaceKeyHeld, false);
+});
+
+test('push-to-talk starts once at 500ms and repeat does not reset the threshold', (t) => {
+  const f = createPushToTalkFixture(t);
+  const background = pushToTalkTarget();
+  assert.equal(f.key('keydown', background).defaultPrevented, true);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS - 1);
+  assert.deepEqual(f.starts, []);
+  assert.deepEqual(f.radio, []);
+  assert.equal(f.key('keydown', background, { repeat: true }).defaultPrevented, true);
+  f.advance(1);
+  assert.deepEqual(f.starts, [{ pushToTalk: true }]);
+  assert.equal(f.controller.pushToTalkKeyHeld, true);
+  assert.equal(f.microphone.enabled, true);
+  const radioAfterStart = f.radio.slice();
+  assert.equal(f.key('keydown', background, { repeat: true }).defaultPrevented, true);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS * 2);
+  assert.deepEqual(f.radio, radioAfterStart);
+  assert.equal(f.starts.length, 1);
+  assert.equal(
+    f.key('keyup', pushToTalkTarget({ tagName: 'BUTTON' })).defaultPrevented,
+    true,
+    'release follows a voice-owned hold after focus moves',
+  );
+  assert.equal(f.controller.spaceKeyHeld, false);
+  assert.equal(f.controller.pushToTalkKeyHeld, false);
+  assert.equal(f.microphone.enabled, false);
+  assert.equal(f.controller.ui.root.dataset.pushToTalk, undefined);
+  assert.equal(f.controller.ui.detail.textContent, 'Hold Space to talk');
+});
+
+test('push-to-talk treats a Space release before 500ms as a background tap', (t) => {
+  const f = createPushToTalkFixture(t);
+  const background = pushToTalkTarget();
+  assert.equal(f.key('keydown', background).defaultPrevented, true);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS - 1);
+  assert.equal(f.key('keyup', background).defaultPrevented, true);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS + 1);
+  assert.deepEqual(f.starts, []);
+  assert.deepEqual(f.radio, []);
+  assert.equal(f.controller.spaceKeyHeld, false);
+  assert.equal(f.controller.pushToTalkKeyHeld, false);
+  assert.equal(f.timers.size, 0);
+});
+
+test('push-to-talk rechecks focus before the hold threshold claims voice', (t) => {
+  const f = createPushToTalkFixture(t);
+  const background = pushToTalkTarget();
+  const control = pushToTalkTarget({ tagName: 'BUTTON' });
+  assert.equal(f.key('keydown', background).defaultPrevented, true);
+  f.document.activeElement = control;
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.deepEqual(f.starts, []);
+  assert.deepEqual(f.radio, []);
+  assert.equal(f.key('keyup', control).defaultPrevented, true, 'release follows the background gesture owner');
+  assert.equal(f.controller.spaceKeyHeld, false);
+});
+
+test('push-to-talk never claims a control-started hold after focus moves outside', (t) => {
+  const f = createPushToTalkFixture(t);
+  const control = pushToTalkTarget({ tagName: 'BUTTON' });
+  const background = pushToTalkTarget();
+  assert.equal(f.key('keydown', control).defaultPrevented, false);
+  assert.equal(f.key('keydown', background, { repeat: true }).defaultPrevented, false);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS + 1);
+  assert.equal(f.key('keyup', background).defaultPrevented, false);
+  assert.deepEqual(f.starts, []);
+  assert.deepEqual(f.radio, []);
+});
+
+test('push-to-talk cancels pending and active holds on blur or hidden document', (t) => {
+  const f = createPushToTalkFixture(t);
+  const background = pushToTalkTarget();
+  for (const exit of ['blur', 'hidden']) {
+    const startsBeforePending = f.starts.length;
+    const radioBeforePending = f.radio.length;
+    f.key('keydown', background);
+    const staleCallback = [...f.timers.values()][0].callback;
+    if (exit === 'blur') f.window.dispatch('blur');
+    else {
+      f.document.visibilityState = 'hidden';
+      f.document.dispatch('visibilitychange');
+    }
+    staleCallback();
+    f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+    assert.equal(f.starts.length, startsBeforePending);
+    assert.equal(f.radio.length, radioBeforePending);
+    assert.equal(f.controller.spaceKeyHeld, false);
+    f.document.visibilityState = 'visible';
+
+    f.key('keydown', background);
+    f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+    assert.equal(f.microphone.enabled, true);
+    if (exit === 'blur') f.window.dispatch('blur');
+    else {
+      f.document.visibilityState = 'hidden';
+      f.document.dispatch('visibilitychange');
+    }
+    assert.equal(f.controller.spaceKeyHeld, false);
+    assert.equal(f.controller.pushToTalkKeyHeld, false);
+    assert.equal(f.microphone.enabled, false);
+    assert.equal(f.controller.ui.root.dataset.pushToTalk, undefined);
+    assert.equal(f.key('keyup', background).defaultPrevented, false);
+    f.document.visibilityState = 'visible';
+  }
+});
+
+test('push-to-talk timer refuses hidden or unfocused documents before lifecycle events arrive', (t) => {
+  const f = createPushToTalkFixture(t);
+  const background = pushToTalkTarget();
+  for (const state of ['hidden', 'unfocused']) {
+    f.key('keydown', background);
+    if (state === 'hidden') f.document.visibilityState = 'hidden';
+    else f.document.hasFocus = () => false;
+    f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+    assert.deepEqual(f.starts, []);
+    assert.deepEqual(f.radio, []);
+    assert.equal(f.key('keyup', background).defaultPrevented, true);
+    f.document.visibilityState = 'visible';
+    delete f.document.hasFocus;
+  }
+});
+
+test('focused controls and background Space preserve a click-started open mic', (t) => {
+  const f = createPushToTalkFixture(t);
+  f.controller.start({ pushToTalk: false });
+  f.starts.length = 0;
+  const style = pushToTalkTarget({ style: 'retro' });
+  f.key('keydown', style);
+  f.key('keydown', style, { repeat: true });
+  assert.equal(f.key('keyup', style).defaultPrevented, false);
+  assert.deepEqual(f.radio, []);
+  assert.equal(f.microphone.enabled, true);
+  assert.equal(f.controller.pushToTalkMode, false);
+  assert.equal(f.key('keydown', pushToTalkTarget()).defaultPrevented, true);
+  assert.equal(f.controller.spaceKeyHeld, true);
+  assert.equal(f.controller.pushToTalkKeyHeld, false);
+  assert.equal(f.timers.size, 0);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS + 1);
+  assert.equal(f.key('keyup', style).defaultPrevented, true);
+  assert.equal(f.controller.spaceKeyHeld, false);
+  assert.equal(f.microphone.enabled, true, 'an outside Space gesture must not claim or mute an open-mic session');
+  assert.deepEqual(f.starts, []);
+});
+
+test('push-to-talk teardown removes installed listeners and replacement binds once', (t) => {
+  const f = createPushToTalkFixture(t);
+  const outside = pushToTalkTarget();
+  f.controller.bindPushToTalkShortcut();
+  assert.equal(f.document.count('keydown'), 1);
+  f.key('keydown', outside);
+  const staleCallback = [...f.timers.values()][0].callback;
+  f.controller.stop({ removeUi: true });
+  staleCallback();
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.equal(f.microphone.stopped, false);
+  assert.equal(f.controller.spaceKeyHeld, false);
+  assert.equal(f.controller.pushToTalkKeyHeld, false);
+  assert.equal(f.controller.pushToTalkMode, false);
+  assert.equal(f.document.count('keydown'), 0);
+  assert.equal(f.document.count('keyup'), 0);
+  assert.equal(f.document.count('visibilitychange'), 0);
+  assert.equal(f.window.count('blur'), 0);
+  f.key('keydown', outside);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.equal(f.starts.length, 0, 'the removed controller must not respond');
+  const replacement = f.makeController();
+  replacement.controller.bindPushToTalkShortcut();
+  assert.equal(f.document.count('keydown'), 1);
+  assert.equal(f.document.count('keyup'), 1);
+  assert.equal(f.document.count('visibilitychange'), 1);
+  assert.equal(f.window.count('blur'), 1);
+  f.key('keydown', pushToTalkTarget({ tagName: 'INPUT', type: 'text' }));
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.equal(f.starts.length, 0);
+  f.key('keydown', outside);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.equal(f.starts.length, 1);
+  assert.equal(replacement.microphone.enabled, true);
+  f.key('keyup', outside);
+  assert.equal(replacement.microphone.enabled, false);
 });
 
 test('mic clicks are ignored while Space is physically held', () => {
@@ -57,12 +480,12 @@ test('mic clicks are ignored while Space is physically held', () => {
 test('voice control help tray reflects the push-to-talk key state', () => {
   assert.equal(
     resolveVoiceControlHint(false, false),
-    'Hold Space to speak · click mic to toggle voice',
+    'Hold Space to speak · tap Space to activate focused controls',
   );
   assert.equal(resolveVoiceControlHint(true, true), 'Release Space to send');
   assert.equal(
     resolveVoiceControlHint(true, false),
-    'Hold Space to speak · click mic to toggle voice',
+    'Hold Space to speak · tap Space to activate focused controls',
   );
 });
 

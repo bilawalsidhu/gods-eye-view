@@ -139,7 +139,7 @@ const CHROME_CANDIDATES = [
   // Version-pinned Chrome-for-Testing over the auto-updating system Chrome:
   // its software-GL behavior shifts across majors and has produced false
   // negatives in this repo's harnesses before.
-  (() => { try { return puppeteer.executablePath(); } catch { return null; } })(),
+  await puppeteer.executablePath().catch(() => null),
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 ].filter(Boolean);
 

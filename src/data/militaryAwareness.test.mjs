@@ -10,14 +10,17 @@ import militaryAwarenessLayer, {
   awarenessRefreshIntervalMs,
   awarenessRefreshRequired,
   awarenessResultsAreLive,
+  awarenessPanelControlKey,
   buildAwarenessContextSnapshot,
   canNavigateAwarenessNext,
   contactsWindowFromSnapshot,
   contextTargetFlyToAllowed,
+  captureAwarenessPanelFocus,
   summarizeInstallationViewport,
   findCompatibleHistoryIndex,
   AWARENESS_QUERY_LIMIT,
   historySubjectSnapshot,
+  restoreAwarenessPanelFocus,
 } from './militaryAwareness.js';
 import flightsLayer, {
   _setTrackedFlightRefreshStateForTest,
@@ -211,6 +214,96 @@ function installAwarenessRuntime({
     },
   };
 }
+
+function awarenessControl(dataset, { disabled = false } = {}) {
+  return {
+    dataset,
+    disabled,
+    focusCalls: 0,
+    closest(selector) {
+      if (selector === '[data-awareness-focus-continuation]') {
+        return this.isContinuation ? this : null;
+      }
+      return selector.includes('button') && !this.isContinuation ? this : null;
+    },
+    matches(selector) {
+      return selector === '[data-awareness-focus-continuation]' && this.isContinuation;
+    },
+    focus(options) {
+      this.focusCalls += 1;
+      this.focusOptions = options;
+    },
+  };
+}
+
+function awarenessPanel(controls) {
+  const continuation = awarenessControl({});
+  continuation.isContinuation = true;
+  return {
+    controls,
+    continuation,
+    contains(element) { return controls.includes(element) || element === continuation; },
+    querySelectorAll() { return this.controls; },
+    querySelector(selector) {
+      return selector === '[data-awareness-focus-continuation]' ? continuation : null;
+    },
+  };
+}
+
+test('Contacts live repaint restores only stable identity and never retargets another contact', () => {
+  const previous = awarenessControl({ awarenessAction: 'previous' });
+  const focus = awarenessControl({ awarenessAction: 'focus' });
+  const next = awarenessControl({ awarenessAction: 'next' });
+  const alpha = awarenessControl({ awarenessLayer: 'flights', awarenessId: 'abc123' });
+  const bravo = awarenessControl({ awarenessLayer: 'military', awarenessId: 'def456' });
+  const before = awarenessPanel([previous, focus, next, alpha, bravo]);
+  const alphaSnapshot = captureAwarenessPanelFocus(before, alpha);
+
+  assert.deepEqual(alphaSnapshot, { key: 'target:flights:abc123' });
+  assert.equal(awarenessPanelControlKey(next), 'action:next');
+
+  const retainedAlpha = awarenessControl({ awarenessLayer: 'flights', awarenessId: 'abc123' });
+  const retained = awarenessPanel([previous, focus, next, bravo, retainedAlpha]);
+  assert.equal(restoreAwarenessPanelFocus(retained, alphaSnapshot), retainedAlpha);
+  assert.equal(retainedAlpha.focusCalls, 1, 'identity wins even when live distance reorders rows');
+  assert.deepEqual(retainedAlpha.focusOptions, { preventScroll: true });
+
+  const forward = awarenessControl({ awarenessLayer: 'ais-live-vessels', awarenessId: '789' });
+  const departed = awarenessPanel([previous, focus, next, forward]);
+  assert.equal(restoreAwarenessPanelFocus(departed, alphaSnapshot), departed.continuation);
+  assert.equal(forward.focusCalls, 0, 'automatic paging must not transfer focus to another contact');
+  assert.equal(departed.continuation.focusCalls, 1);
+
+  const bravoSnapshot = captureAwarenessPanelFocus(before, bravo);
+  const noRemainingRow = awarenessPanel([previous, focus, next, alpha]);
+  assert.equal(
+    restoreAwarenessPanelFocus(noRemainingRow, bravoSnapshot),
+    noRemainingRow.continuation,
+  );
+  assert.equal(noRemainingRow.continuation.focusCalls, 1, 'the end sentinel continues Tab beyond the list');
+
+  const continuationSnapshot = captureAwarenessPanelFocus(departed, departed.continuation);
+  assert.deepEqual(continuationSnapshot, { key: 'continuation' });
+  const repaintedAgain = awarenessPanel([previous, focus, next, forward]);
+  assert.equal(
+    restoreAwarenessPanelFocus(repaintedAgain, continuationSnapshot),
+    repaintedAgain.continuation,
+  );
+  assert.equal(
+    repaintedAgain.continuation.focusCalls,
+    1,
+    'later live repaints keep focus on the continuation point until the user tabs onward',
+  );
+});
+
+test('Contacts continuation target is the visible explanatory note', () => {
+  const source = fs.readFileSync(new URL('./militaryAwareness.js', import.meta.url), 'utf8');
+  assert.match(
+    source,
+    /<p class="military-awareness-note" tabindex="-1" data-awareness-focus-continuation>Open-source mapped\/observed context\./,
+  );
+  assert.doesNotMatch(source, /<span[^>]*data-awareness-focus-continuation/);
+});
 
 test('awareness disable settles every owned dependency release before resolving', async () => {
   let releasing = false;

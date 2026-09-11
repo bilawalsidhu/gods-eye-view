@@ -2043,16 +2043,23 @@ export class DataLayerManager {
       count.textContent = layer.stats.count ? this._formatCount(layer.stats.count) : '—';
 
       const toggle = document.createElement('button');
+      toggle.type = 'button';
       toggle.className = `data-toggle-btn${layer.enabled ? ' active' : ''}`;
       this._syncToggleButton(toggle, layer);
       toggle.addEventListener('click', async () => {
-        toggle.disabled = true;
+        // Native `disabled` immediately evicts keyboard focus in Chromium. Keep
+        // the lifecycle control focusable while it is busy, and enforce the
+        // same single-flight interaction contract through ARIA instead.
+        if (toggle.getAttribute('aria-disabled') === 'true') return;
+        toggle.setAttribute('aria-disabled', 'true');
+        toggle.setAttribute('aria-busy', 'true');
         try {
           await this.setEnabled(layer.id, !this.isEnabled(layer.id), { origin: 'user' });
         } catch (error) {
           console.warn(`[Data] ${layer.id} toggle error:`, error);
         } finally {
-          toggle.disabled = false;
+          const current = this.getAll().find(({ id }) => id === layer.id);
+          if (current) this._syncToggleButton(toggle, current);
         }
       });
 
@@ -2266,7 +2273,12 @@ export class DataLayerManager {
     button.dataset.feedState = transitioning
       ? layer.lifecycleState
       : (uncertain ? 'uncertain' : feedState);
-    button.disabled = transitioning;
+    // A busy toggle remains the keyboard focus owner. `aria-disabled` plus the
+    // click guard above prevents repeat activation without the focus loss caused
+    // by native `disabled`.
+    button.disabled = false;
+    button.setAttribute('aria-disabled', String(transitioning));
+    button.setAttribute('aria-busy', String(transitioning));
     button.textContent = transitioning
       ? layer.lifecycleState.toUpperCase()
       : (uncertain ? 'UNCERTAIN' : (layer.enabled ? FEED_STATE_LABELS[feedState] : 'OFF'));

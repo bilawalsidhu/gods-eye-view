@@ -121,6 +121,35 @@ export function mapAnalystRecord(raw, index = 0) {
   };
 }
 
+/** Validate a complete feed before replacing the last good earthquake snapshot. */
+export function normalizeEarthquakeSnapshot(geojson) {
+  if (!Array.isArray(geojson?.features)) return null;
+  const rows = [];
+  const ids = new Set();
+  for (const [index, feature] of geojson.features.entries()) {
+    const coordinates = feature?.geometry?.coordinates;
+    const properties = feature?.properties;
+    if (!Array.isArray(coordinates) || coordinates.length < 2 || !properties
+      || typeof properties !== 'object' || Array.isArray(properties)
+      || (feature.geometry.type != null && feature.geometry.type !== 'Point')) return null;
+    const [lon, lat, depthKm] = coordinates;
+    const mag = properties.mag;
+    if (!Number.isFinite(lon) || Math.abs(lon) > 180
+      || !Number.isFinite(lat) || Math.abs(lat) > 90
+      || (depthKm != null && !Number.isFinite(depthKm))
+      || (mag != null && (!Number.isFinite(mag) || mag > 10))) return null;
+    // A missing magnitude cannot establish that this event meets M2.5+.
+    if (mag == null || mag < 2.5) continue;
+    const stableId = feature.id == null || feature.id === '' ? `event-${index + 1}` : String(feature.id);
+    if (ids.has(stableId)) return null;
+    ids.add(stableId);
+    rows.push({ stableId, usgsId: feature.id ?? null, lon, lat, depthKm: depthKm ?? null,
+      mag, place: typeof properties.place === 'string' ? properties.place : null,
+      time: Number.isFinite(properties.time) ? properties.time : null });
+  }
+  return rows;
+}
+
 export function createEarthquakesLayer({ overlayHost = DEFAULT_OVERLAY_HOST } = {}) {
   let _dataSource = null;
   let _count = 0;
@@ -172,23 +201,17 @@ export function createEarthquakesLayer({ overlayHost = DEFAULT_OVERLAY_HOST } = 
       }
 
       const geojson = await response.json();
-      if (!geojson || !Array.isArray(geojson.features)) {
+      const rows = normalizeEarthquakeSnapshot(geojson);
+      if (!rows) {
         _lastError = 'Malformed USGS response';
         return false;
       }
 
-      _dataSource.entities.removeAll();
+      const nextEntities = [];
       let count = 0;
       const overlayEntries = [];
 
-      for (const feature of geojson.features) {
-        const [lon, lat, depthKm] = feature.geometry.coordinates;
-        const mag = feature.properties.mag;
-        const place = feature.properties.place;
-        const time = feature.properties.time;
-
-        if (mag < 2.5) continue; // Skip micro-quakes
-
+      for (const { stableId, usgsId, lon, lat, depthKm, mag, place, time } of rows) {
         count++;
         const baseRadius = Math.pow(2, mag) * 1000;
         const color = depthColor(depthKm || 0);
@@ -197,8 +220,7 @@ export function createEarthquakesLayer({ overlayHost = DEFAULT_OVERLAY_HOST } = 
         const outlineAlpha = isSignificant ? 1.0 : 0.8;
 
         const position = Cesium.Cartesian3.fromDegrees(lon, lat);
-        const stableId = feature.id || `event-${count}`;
-        _dataSource.entities.add({
+        nextEntities.push(new Cesium.Entity({
           id: `earthquake:${stableId}`,
           position,
           ellipse: {
@@ -216,13 +238,13 @@ export function createEarthquakesLayer({ overlayHost = DEFAULT_OVERLAY_HOST } = 
           },
           properties: {
             // Analyst seam (additive): the USGS event id (e.g. "us7000abcd").
-            usgsId: feature.id ?? null,
+            usgsId,
             mag,
             place,
             time,
             depth: depthKm,
           },
-        });
+        }));
         overlayEntries.push(createEarthquakeOverlayEntry({
           id: String(stableId),
           position,
@@ -231,6 +253,8 @@ export function createEarthquakesLayer({ overlayHost = DEFAULT_OVERLAY_HOST } = 
         }));
       }
 
+      _dataSource.entities.removeAll();
+      for (const entity of nextEntities) _dataSource.entities.add(entity);
       if (_enabled) {
         overlayHost.setEntries(
           EARTHQUAKE_OVERLAY_SOURCE_ID,

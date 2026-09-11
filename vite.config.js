@@ -1572,7 +1572,7 @@ function celestrakProxy() {
       await fsp.mkdir(CACHE_DIR, { recursive: true });
       await fsp.writeFile(diskPath(group), JSON.stringify(entry), 'utf8');
     } catch (err) {
-      console.warn(`[celestrak-proxy] cache write failed for ${group}:`, err?.message || err);
+      console.warn('[celestrak-proxy] cache write failed');
     }
   }
 
@@ -1631,7 +1631,7 @@ function celestrakProxy() {
                 return fresh;
               })
               .catch((err) => {
-                console.warn(`[celestrak-proxy] ${group} refresh failed (${err?.message || err}) — serving cache if any`);
+                console.warn('[celestrak-proxy] refresh failed — serving cache if any');
                 return null;
               })
               .finally(() => inflight.delete(group)));
@@ -1645,7 +1645,8 @@ function celestrakProxy() {
             send(502, 'celestrak fetch failed and no cache available', 'NONE');
           }
         } catch (err) {
-          send(500, `celestrak proxy error: ${err?.message || err}`, 'ERROR');
+          console.error('[celestrak-proxy] request failed');
+          send(500, 'celestrak proxy error', 'ERROR');
         }
       });
     },
@@ -1692,7 +1693,7 @@ function rocketLaunchesProxy() {
       await fsp.mkdir(path.dirname(cachePath), { recursive: true });
       await fsp.writeFile(cachePath, JSON.stringify(entry), 'utf8');
     } catch (error) {
-      console.warn(`[launch-library-proxy] cache write failed: ${error?.message || error}`);
+      console.warn('[launch-library-proxy] cache write failed');
     }
   }
 
@@ -1721,7 +1722,6 @@ function rocketLaunchesProxy() {
     if (!upstream.ok) {
       const error = new Error(`upstream HTTP ${upstream.status}`);
       error.upstreamStatus = upstream.status;
-      error.upstreamBody = body;
       throw error;
     }
     const parsed = JSON.parse(body);
@@ -1750,15 +1750,17 @@ function rocketLaunchesProxy() {
         const fresh = await request.promise;
         send(res, 200, fresh.body, request.shared ? 'INFLIGHT' : 'MISS');
       } catch (error) {
+        // Log only a bounded status, never upstream bodies, URLs, or credentials.
+        const status = Number.isInteger(error?.upstreamStatus) ? error.upstreamStatus : 502;
+        if (!request.shared) console.warn(`[launch-library-proxy] refresh failed (HTTP ${status})${stale ? ' — serving stale cache' : ''}`);
         if (stale) {
-          if (!request.shared) console.warn(`[launch-library-proxy] refresh failed (${error?.message || error}) — serving stale cache`);
           send(res, 200, stale.body, 'STALE-ERROR');
           return;
         }
         send(
           res,
-          Number.isInteger(error?.upstreamStatus) ? error.upstreamStatus : 502,
-          error?.upstreamBody || JSON.stringify({ error: 'Launch Library 2 unavailable' }),
+          status,
+          JSON.stringify({ error: 'Launch Library 2 unavailable' }),
           'NONE',
         );
       }
@@ -2094,11 +2096,11 @@ function firmsProxy() {
     for (const source of SOURCES) {
       try {
         const records = filterTrailing24h(await fetchSource(key, source), now);
-        sources.push({ source, count: records.length, ok: true });
         // NOT fires.push(...records): spread passes each record as an argument,
         // and a world/2 VIIRS pull exceeds V8's argument limit (~125k) at
         // ~131k records — RangeError, and the whole source is silently dropped.
         for (const record of records) fires.push(record);
+        sources.push({ source, count: records.length, ok: true });
       } catch (err) {
         console.warn(`[firms-proxy] ${source} fetch failed:`, err?.message || err);
         sources.push({ source, count: 0, ok: false });
@@ -2296,7 +2298,7 @@ function terrainHeightsProxy() {
         await fsp.writeFile(CACHE_PATH, JSON.stringify(obj), 'utf8');
       } catch (err) {
         diskDirty = true; // retry next tick
-        console.warn('[terrain-heights-proxy] cache write failed:', err?.message || err);
+        console.warn('[terrain-heights-proxy] cache write failed');
       }
     }, 15_000).unref?.();
   }
@@ -2367,13 +2369,14 @@ function terrainHeightsProxy() {
           if (outcome.cacheChanged) diskDirty = true;
           if (outcome.upstreamError) {
             console.warn(
-              `[terrain-heights-proxy] refresh incomplete (${outcome.upstreamError?.message || outcome.upstreamError})`
+              '[terrain-heights-proxy] refresh incomplete'
               + ' — serving stale points when available'
             );
           }
           send(outcome.status, outcome.body);
         } catch (err) {
-          send(500, { error: `terrain heights proxy error: ${err?.message || err}` });
+          console.error('[terrain-heights-proxy] request failed');
+          send(500, { error: 'terrain heights proxy error' });
         }
       });
     },
@@ -2494,7 +2497,8 @@ function adsbdbProxy() {
           }
           return send(404, { error: 'unknown endpoint' });
         } catch (err) {
-          return send(500, { error: String(err?.message || err) });
+          console.error('[adsbdb-proxy] request failed');
+          return send(500, { error: 'adsbdb proxy error' });
         }
       });
     },

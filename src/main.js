@@ -17,6 +17,7 @@ import militaryAwarenessLayer from './data/militaryAwareness.js';
 import localDataLayers from './data/localLayers.js';
 import { LAYER_STATE_REGISTRY } from './data/layerState.js';
 import { registerDataCredits } from './data/dataCredits.js';
+import { configureCreditKeyboardAccess } from './creditKeyboard.js';
 import { SceneDirector } from './scenes/director.js';
 import { initGevVoiceCommands } from './voice/gevRealtime.js';
 import { MapStackController } from './mapStackController.js';
@@ -131,6 +132,7 @@ async function init() {
     // expandable bottom-left credit lightbox (showOnScreen=false), so they never
     // clutter the on-globe line. See docs/pre-ship-audit-2026-07-01.md H11.
     registerDataCredits(viewer);
+    configureCreditKeyboardAccess(document);
 
     // Hide Cesium's default globe — Google Photorealistic 3D Tiles provide their own
     // globe at all LODs (street level → orbital). The default globe's 2D imagery
