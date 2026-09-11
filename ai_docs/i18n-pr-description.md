@@ -167,3 +167,5 @@ per-locale CSS.
   `src/data/flights.js`, `src/data/rocketLaunches.js`) are deferred and
   documented in `docs/CURRENT-STATE.md`; the `formatNumber` helper exists
   for when that policy lands.
+
+> **`npm run test:track`**: run on an otherwise-idle machine — the SwiftShader harness is CPU-bound, and concurrent heavy processes (builds, containers, extra dev servers) can produce protocol timeouts and fixture-cleanup races unrelated to this change.
