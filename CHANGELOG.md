@@ -11,6 +11,41 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- **Amsterdam CCTV source pack.** The CCTV layer now registers the City of
+  Amsterdam's public traffic-camera register (~390 cameras: mast traffic
+  cameras plus the travel-time, environmental-zone and S100-ring ANPR
+  network), read live and keyless from `api.data.amsterdam.nl`, capped to the
+  250 nearest Dam square by `CCTV_AMSTERDAM_MAX_SOURCES` and switchable with
+  `CCTV_AMSTERDAM_ENABLED=0`. An optional `AMSTERDAM_DATA_API_KEY` is
+  forwarded ahead of that platform's announced move to mandatory API keys.
+  Attribution is registered in the Data attribution popover and
+  [DATA_SOURCES.md](DATA_SOURCES.md).
+
+  **This pack carries camera positions, not imagery.** Amsterdam publishes
+  where its public cameras are but not what they see, so its cameras register
+  with no frame URL and the proxy's existing fallback chain owns the frame —
+  Street View where a Google key is configured, otherwise the synthetic
+  `NO UPSTREAM CONFIGURED` placeholder. `/api/cctv/health` reports them as
+  `degraded`/`streetview`/`synthetic`; no camera in this pack claims a live
+  feed. Since that fallback frame never changes, the pack refreshes at the
+  20-minute cadence ceiling instead of the 5-minute default, so an ambient
+  card ring over Amsterdam does not re-bill a Street View request per camera
+  for the same picture. The live feeds that do exist around Amsterdam are
+  served by a host whose `robots.txt` forbids fetching and which requires a
+  forged `Referer`, so they are deliberately not used.
+
+### Changed
+
+- The default global CCTV catalog cap (`CCTV_MAX_SOURCES`) rises from 900 to
+  1150. The cap keeps the first N of a merge that appends packs in order, so a
+  cap below the sum of the per-pack caps silently truncates whichever pack
+  merges last — with Amsterdam added, that sum is 1050 (Austin 250 + Caltrans
+  300 + TfL 250 + Amsterdam 250). 1150 restores the same headroom 900 gave
+  over the previous 800 and stays within the existing 1200 hard bound and
+  health-map capacity.
+
 ### Fixed
 
 - Mapped-site outages show their scheduled retry countdown and distinguish

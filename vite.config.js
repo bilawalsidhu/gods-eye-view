@@ -3521,8 +3521,19 @@ const DEFAULT_CCTV_SOURCE_FILE = 'config/cctv_sources.austin.json';
 const DEFAULT_AUSTIN_ROWS_URL = 'https://data.austintexas.gov/api/views/b4k4-adkb/rows.json?accessType=DOWNLOAD';
 /** Default cap on Austin cameras after distance-based prioritization. */
 const DEFAULT_AUSTIN_MAX_SOURCES = 250;
-/** Global cap on total CCTV sources served by the proxy. */
-const DEFAULT_CCTV_MAX_SOURCES = 900;
+/**
+ * Global cap on total CCTV sources served by the proxy.
+ *
+ * This is a per-pack-cap SUM, not a guess: Austin 250 + Caltrans 300 + TfL 250
+ * + Amsterdam 250 = 1050 worst case, and the cap keeps the FIRST maxCount
+ * entries of a merge that appends packs in order — so a cap below the sum
+ * silently truncates whichever pack merges last (before this pack was added
+ * the sum was 800 against a 900 cap). 1150 leaves the same ~100 of headroom
+ * over the sum that 900 gave, and stays inside both the 1200 hard bound below
+ * and HEALTH_MAX_ENTRIES, so health/status observability still covers a full
+ * catalog.
+ */
+const DEFAULT_CCTV_MAX_SOURCES = 1150;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
@@ -3543,7 +3554,31 @@ const TFL_JAMCAM_URL = 'https://api.tfl.gov.uk/Place/Type/JamCam';
 const TFL_IMAGE_ORIGIN = 'https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/';
 const DEFAULT_TFL_MAX_SOURCES = 250;
 const LONDON_CENTER = { lat: 51.5074, lon: -0.1278 };
-/** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL) infrequent. Frames are fetched per-request and are unaffected. */
+/**
+ * City of Amsterdam "verkeersinformatiesystemen" (traffic information systems)
+ * asset register, filtered server-side to `objectSoort=Camera`. Keyless today;
+ * the DSO platform has announced that an API key will become mandatory at a
+ * date still to be set, so an optional AMSTERDAM_DATA_API_KEY rides along as
+ * `X-Api-Key` (see loadAmsterdamSourcesFromOpenData).
+ *
+ * POSE-ONLY PACK: unlike Austin/Caltrans/TfL this catalog carries NO frame
+ * URL — Amsterdam publishes where its public traffic cameras are, not what
+ * they see. Records therefore reach the proxy with `url: ''` and fall through
+ * the existing frame chain (Street View, then the synthetic SVG), which
+ * reports itself honestly as `sourceKind: 'streetview' | 'synthetic'` and
+ * `status: 'degraded'` in /api/cctv/health. Nothing here fabricates a feed.
+ */
+const AMSTERDAM_CAMERA_ORIGIN = 'https://api.data.amsterdam.nl/';
+const AMSTERDAM_CAMERA_URL =
+  `${AMSTERDAM_CAMERA_ORIGIN}v1/verkeersinformatiesystemen/verkeersinformatiesystemen/`;
+/** The register holds ~390 cameras; one page covers it with room to grow. */
+const AMSTERDAM_CAMERA_PAGE_SIZE = 1000;
+/** Hard stop on `_links.next` following, so a paging bug cannot loop forever. */
+const AMSTERDAM_MAX_PAGES = 4;
+const DEFAULT_AMSTERDAM_MAX_SOURCES = 250;
+/** Prioritization anchor: Dam square, the centre of the canal ring. */
+const AMSTERDAM_CENTER = { lat: 52.3730, lon: 4.8926 };
+/** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Amsterdam) infrequent. Frames are fetched per-request and are unaffected. */
 const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
  * stalled upstream can't leave getCctvSources (and thus every CCTV route)
@@ -4169,6 +4204,197 @@ async function loadTflSourcesFromOpenData() {
 }
 
 /**
+ * Bounding-box sanity check: is this coordinate plausibly in Amsterdam?
+ *
+ * Doubles as the datum guard for the pack. The register stores geometry in
+ * Rijksdriehoek (EPSG:28992), whose values are metres in the six-figure range
+ * (e.g. 120997, 485841); the loader asks for WGS84 via an `Accept-Crs` header.
+ * If that negotiation ever stops working, every record fails this check and
+ * the pack empties instead of scattering cameras off the Gulf of Guinea.
+ *
+ * @param {number} lat
+ * @param {number} lon
+ * @returns {boolean}
+ */
+function isLikelyAmsterdamCoordinate(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+  return lat >= 52.25 && lat <= 52.46 && lon >= 4.70 && lon <= 5.10;
+}
+
+/**
+ * Render the register's Dutch camera-type label in the app's language.
+ *
+ * Fails OPEN: an unrecognized type passes through verbatim rather than being
+ * dropped or blanked, so a new type the city introduces still gets a name.
+ * ("Mileuzone" reproduces an upstream typo for Milieuzone — matching the wire
+ * value is the point.)
+ *
+ * @param {string} type - `typeGedetailleerd` from the register.
+ * @returns {string} Display label, or '' when the field is empty.
+ */
+function amsterdamCameraTypeLabel(type) {
+  const raw = String(type || '').trim();
+  if (!raw) return '';
+  const known = {
+    'TV camera': 'Traffic camera',
+    'ANPR camera Reistijd': 'ANPR — travel time',
+    'ANPR camera Mileuzone': 'ANPR — environmental zone',
+    'ANPR camera S100': 'ANPR — S100 ring',
+    'ANPR camera Verplaatsbaar': 'ANPR — mobile',
+    'ANPR camera Munt': 'ANPR — Munt',
+  };
+  return known[raw] || raw;
+}
+
+/**
+ * Normalize City of Amsterdam traffic-camera register records into CCTV source
+ * objects. Pure (no I/O) so the suite can pin the mapping, the coordinate
+ * datum guard and the pose personality without touching the network.
+ *
+ * Records are kept only with a Point geometry inside the Amsterdam bounding
+ * box and a non-empty `objectnummer` (the register's stable, unique asset
+ * number — verified unique across all 392 camera rows, and far friendlier in a
+ * camera id than the row GUID).
+ *
+ * The register carries no bearing for any camera, so every record takes the
+ * same low-confidence pose personality as the headingless Austin/TfL rows: an
+ * id-hash fallback heading and the wider, shorter, lower prior. These are RAW
+ * PRIORS — the client's one-shot ground snap and manual calibration own the
+ * truth.
+ *
+ * @param {Array<object>} records - Raw `verkeersinformatiesystemen` rows.
+ * @returns {Array<object>} Normalized camera source objects.
+ */
+export function normalizeAmsterdamCameraRecords(records) {
+  const rows = Array.isArray(records) ? records : [];
+  const cameras = [];
+  const seen = new Set();
+
+  for (const record of rows) {
+    if (!record || typeof record !== 'object') continue;
+    if (String(record.objectSoort || '').trim() !== 'Camera') continue;
+
+    const geometry = record.geometrie;
+    if (!geometry || geometry.type !== 'Point') continue;
+    const coordinates = Array.isArray(geometry.coordinates) ? geometry.coordinates : [];
+    const lon = toFiniteNumber(coordinates[0], NaN);
+    const lat = toFiniteNumber(coordinates[1], NaN);
+    if (!isLikelyAmsterdamCoordinate(lat, lon)) continue;
+
+    const assetNumber = String(record.objectnummer || '').trim();
+    if (!assetNumber) continue;
+    const cameraId = `ams-${assetNumber.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
+    if (!cameraId || cameraId === 'ams-' || seen.has(cameraId)) continue;
+    seen.add(cameraId);
+
+    const street = String(record.standplaats || '').trim();
+    const typeLabel = amsterdamCameraTypeLabel(record.typeGedetailleerd);
+    let name;
+    if (street && typeLabel) name = `${street} (${typeLabel})`;
+    else if (street) name = street;
+    else name = `${typeLabel || 'Traffic camera'} ${assetNumber}`;
+
+    cameras.push({
+      id: cameraId,
+      name,
+      city: 'Amsterdam',
+      cityId: 'amsterdam',
+      // Keep in step with the PROVIDER_STATIC_REFRESH_MS key in
+      // src/data/cctvLod.js, which looks this up lowercased.
+      provider: 'Gemeente Amsterdam',
+      lat,
+      lon,
+      // No bearing anywhere in the register → id-hash fallback, low-confidence
+      // personality (identical to headingless Austin and every TfL camera).
+      headingDeg: fallbackHeadingFromId(cameraId),
+      headingConfidence: 'low',
+      pitchDeg: -18,
+      fovDeg: 44,
+      rangeM: 145,
+      mountHeightM: 8,
+      // ORTHOMETRIC metres (h = H + N; see src/data/geoid.js) — the polder city
+      // sits within a metre or two of NAP, which is itself ~mean sea level.
+      // Prior only: the client's one-shot snap corrects it wherever a 3D-tile
+      // or terrain stack can be sampled.
+      groundElevationM: 2,
+      feedType: 'image',
+      // Deliberately empty: Amsterdam publishes camera POSITIONS as open data
+      // but not their imagery, so the proxy's Street View / synthetic fallback
+      // owns the frame and reports itself as degraded. See the pack JSDoc.
+      url: '',
+      snapshotUrl: '',
+      sourceKind: 'amsterdam-open-data',
+      license: 'Public camera register, Gemeente Amsterdam (positions only — no public frames)',
+    });
+  }
+
+  return cameras;
+}
+
+/**
+ * Fetch the City of Amsterdam public traffic-camera register.
+ * `CCTV_AMSTERDAM_ENABLED=0` disables the pack.
+ *
+ * Keyless: an optional AMSTERDAM_DATA_API_KEY is forwarded as `X-Api-Key`
+ * ahead of the platform making keys mandatory. `Accept-Crs: EPSG:4326` is
+ * required — without it the register answers in Rijksdriehoek and every row
+ * fails the coordinate guard. Pages are followed through `_links.next`, pinned
+ * to the official origin and bounded by AMSTERDAM_MAX_PAGES.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+async function loadAmsterdamSourcesFromOpenData() {
+  if (String(process.env.CCTV_AMSTERDAM_ENABLED || '1').trim() === '0') return [];
+
+  const apiKey = String(process.env.AMSTERDAM_DATA_API_KEY || '').trim();
+  const headers = {
+    // DSO-API answers 406 to a plain `application/json` Accept, even with
+    // `_format=json` in the query — the envelope is HAL and it insists on
+    // being asked for by name.
+    Accept: 'application/hal+json',
+    // Ask for WGS84 lon/lat instead of the register's native EPSG:28992.
+    'Accept-Crs': 'EPSG:4326',
+    ...(apiKey ? { 'X-Api-Key': apiKey } : {}),
+  };
+
+  try {
+    const first = new URL(process.env.CCTV_AMSTERDAM_URL || AMSTERDAM_CAMERA_URL);
+    first.searchParams.set('_format', 'json');
+    first.searchParams.set('_pageSize', String(AMSTERDAM_CAMERA_PAGE_SIZE));
+    first.searchParams.set('objectSoort', 'Camera');
+
+    const records = [];
+    let next = first.toString();
+    for (let page = 0; page < AMSTERDAM_MAX_PAGES && next; page++) {
+      const resp = await fetch(next, { headers, signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS) });
+      if (!resp.ok) {
+        console.warn('[CCTV] Amsterdam camera register download failed:', resp.status);
+        break;
+      }
+      const payload = await resp.json();
+      const rows = payload?._embedded?.verkeersinformatiesystemen;
+      if (!Array.isArray(rows) || !rows.length) break;
+      records.push(...rows);
+
+      // Official-host pin on the server-supplied paging link (defense in depth
+      // — the same idiom the Caltrans and TfL packs apply to image URLs).
+      const nextHref = String(payload?._links?.next?.href || '');
+      next = nextHref.startsWith(AMSTERDAM_CAMERA_ORIGIN) ? nextHref : '';
+    }
+
+    const cameras = normalizeAmsterdamCameraRecords(records);
+    const maxRaw = Number(process.env.CCTV_AMSTERDAM_MAX_SOURCES || DEFAULT_AMSTERDAM_MAX_SOURCES);
+    const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(600, Math.floor(maxRaw))) : DEFAULT_AMSTERDAM_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, [AMSTERDAM_CENTER]);
+    console.log(`[CCTV] Loaded Amsterdam camera register: ${cameras.length} cameras (using nearest ${prioritized.length}; positions only, no public frames)`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] Amsterdam camera register download error:', error?.message || error);
+    return [];
+  }
+}
+
+/**
  * Normalize a raw CCTV source item into a canonical shape with safe defaults.
  *
  * @param {object} item - Raw source from file, env, or Austin Open Data.
@@ -4239,27 +4465,31 @@ async function refreshCctvSources() {
 
   const forceAustin = String(process.env.CCTV_FORCE_AUSTIN || '').trim() === '1';
   const preferAustin = String(process.env.CCTV_PREFER_AUSTIN || '1').trim() !== '0';
-  // Live open-data packs (Austin + Caltrans + TfL) load unless a file/env pack
-  // is configured and live packs aren't forced — same gate that governed the
-  // Austin-only fetch, now governing all three. Each pack fails independently.
+  // Live open-data packs (Austin + Caltrans + TfL + Amsterdam) load unless a
+  // file/env pack is configured and live packs aren't forced — same gate that
+  // governed the Austin-only fetch, now governing all four. Each pack fails
+  // independently.
   const needsLiveSources = forceAustin || ((fromFile.length + fromEnv.length) === 0 && preferAustin);
   const tflEnabled = String(process.env.CCTV_TFL_ENABLED || '1').trim() !== '0';
 
   let fromAustin = [];
   let fromCaltrans = [];
   let fromTfl = [];
+  let fromAmsterdam = [];
   if (needsLiveSources) {
-    const [austinResult, caltransResult, tflResult] = await Promise.allSettled([
+    const [austinResult, caltransResult, tflResult, amsterdamResult] = await Promise.allSettled([
       loadAustinSourcesFromOpenData(),
       loadCaltransSourcesFromOpenData(),
       tflEnabled ? loadTflSourcesFromOpenData() : Promise.resolve([]),
+      loadAmsterdamSourcesFromOpenData(),
     ]);
     fromAustin = austinResult.status === 'fulfilled' ? austinResult.value : [];
     fromCaltrans = caltransResult.status === 'fulfilled' ? caltransResult.value : [];
     fromTfl = tflResult.status === 'fulfilled' ? tflResult.value : [];
+    fromAmsterdam = amsterdamResult.status === 'fulfilled' ? amsterdamResult.value : [];
   }
   // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
-  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromFile, ...fromEnv];
+  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromAmsterdam, ...fromFile, ...fromEnv];
 
   // Deduplicate by camera ID (last-write wins because of Map.set)
   const byId = new Map();
