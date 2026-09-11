@@ -27,13 +27,21 @@ function fixture(name, overrides = {}, preview = false) {
     fetch: async () => { throw new Error(detail); },
     console: { warn: (...args) => logs.push(args.join(' ')), error: (...args) => logs.push(args.join(' ')) },
     setInterval: () => ({ unref() {} }),
+    RATE_LIMITER_MAX_KEYS: 2000,
     LL2_CACHE_TTL_MS: 15 * 60_000,
     parseTerrainPoints: () => [[1, 2]],
     resolveTerrainHeightRequest: async () => { throw new Error(detail); },
     ...overrides,
   };
-  const helpers = ['readResponseTextCapped', 'coalesceProxyRequest', 'launchLibraryRequestHeaders'].map(extract).join('\n');
-  const plugin = new Function(...Object.keys(deps), `${helpers}\n${extract(name)}\nreturn ${name}();`)(...Object.values(deps));
+  const helpers = ['makeRateLimiter', 'clientKey', 'readResponseTextCapped', 'coalesceProxyRequest', 'launchLibraryRequestHeaders'].map(extract).join('\n');
+  // Module-level constants the extracted proxies close over, read from source so
+  // retuning a cap or a limiter there needs no matching edit here.
+  const moduleConsts = ['ADSBDB_CACHE_MAX_ENTRIES', 'ADSBDB_CACHE_PRUNE_TO', '_adsbdbRateLimiter'].map((constName) => {
+    const line = source.match(new RegExp(`^const ${constName} = .*$`, 'm'));
+    assert.ok(line, `${constName} must exist`);
+    return line[0];
+  }).join('\n');
+  const plugin = new Function(...Object.keys(deps), `${helpers}\n${moduleConsts}\n${extract(name)}\nreturn ${name}();`)(...Object.values(deps));
   let middleware;
   plugin[preview ? 'configurePreviewServer' : 'configureServer']({ middlewares: { use(_route, handler) { middleware = handler; } } });
   return {

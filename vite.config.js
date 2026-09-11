@@ -2384,6 +2384,25 @@ function terrainHeightsProxy() {
 }
 
 /**
+ * Entry ceiling per adsbdb store. Both stores are keyed by a client-supplied
+ * callsign/hex, so without a cap a caller cycling keys grows
+ * `.gev-cache/adsbdb.json` without bound. Pruning down to a low-water mark
+ * keeps eviction amortized rather than sorting on every insert at capacity.
+ */
+const ADSBDB_CACHE_MAX_ENTRIES = 10000;
+const ADSBDB_CACHE_PRUNE_TO = 9000;
+/**
+ * Upstream backstop for `/api/adsbdb`, consulted only when the cache misses.
+ * The client drips enrichment through one shared queue at one dispatch per
+ * `ENRICH_DISPATCH_GAP_MS` (200 ms) — a documented ceiling of 5/s, so 300/min,
+ * and on a cold cache every one of those is a miss. The cap sits well above
+ * that ceiling so a legitimate cold start is never throttled; it exists to stop
+ * unbounded keyspace enumeration against a free community API, not to shape
+ * normal traffic.
+ */
+const _adsbdbRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 480, globalMax: 1920 });
+
+/**
  * adsbdb.com enrichment proxy: callsign → route (airline + origin/destination
  * airports) and hex → aircraft type/registration. Free community API — cached
  * aggressively: ONE upstream request per new key ever (404s negative-cached),
@@ -2397,6 +2416,24 @@ function adsbdbProxy() {
   let dirty = false;
   let loaded = false;
   const inflight = new Map();
+  /** Sentinel distinguishing "throttled" from a genuine "not found" result. */
+  const RATE_LIMITED = Symbol('adsbdb-rate-limited');
+
+  /** Drop the oldest entries once a store passes its ceiling. */
+  function pruneStore(store) {
+    const keys = Object.keys(store);
+    if (keys.length <= ADSBDB_CACHE_MAX_ENTRIES) return;
+    keys.sort((a, b) => (store[a]?.at || 0) - (store[b]?.at || 0));
+    for (const key of keys.slice(0, keys.length - ADSBDB_CACHE_PRUNE_TO)) delete store[key];
+    dirty = true;
+  }
+
+  /** Record a lookup result (a null `data` is a negative cache entry). */
+  function remember(store, key, data) {
+    store[key] = { at: Date.now(), data };
+    dirty = true;
+    pruneStore(store);
+  }
 
   async function loadOnce() {
     if (loaded) return;
@@ -2404,6 +2441,9 @@ function adsbdbProxy() {
     try {
       const parsed = JSON.parse(await fsp.readFile(CACHE_PATH, 'utf8'));
       cache = { routes: parsed.routes ?? {}, aircraft: parsed.aircraft ?? {} };
+      // A cache written before the ceiling existed is trimmed on first load.
+      pruneStore(cache.routes);
+      pruneStore(cache.aircraft);
     } catch { /* first run */ }
     setInterval(async () => {
       if (!dirty) return;
@@ -2439,11 +2479,24 @@ function adsbdbProxy() {
     };
   }
 
-  function lookup(kind, key) {
+  /**
+   * Resolve a key from cache, else spend one upstream request.
+   *
+   * @param {'route'|'aircraft'} kind - Which store to read.
+   * @param {string} key - Callsign or hex, already validated by the caller.
+   * @param {() => boolean} allowUpstream - Consulted only when the cache misses
+   *   and no identical request is already in flight, so cached and coalesced
+   *   lookups never draw on the budget.
+   * @returns {Promise<object|null|symbol>} Cached/fetched data, or RATE_LIMITED.
+   */
+  function lookup(kind, key, allowUpstream) {
     const store = kind === 'route' ? cache.routes : cache.aircraft;
     if (fresh(store[key])) return Promise.resolve(store[key].data);
     const ik = `${kind}:${key}`;
     if (!inflight.has(ik)) {
+      // A coalesced caller rides the in-flight request above and costs nothing
+      // upstream, so only a genuinely new fetch is charged.
+      if (!allowUpstream()) return Promise.resolve(RATE_LIMITED);
       inflight.set(ik, (async () => {
         try {
           const url = kind === 'route'
@@ -2452,13 +2505,11 @@ function adsbdbProxy() {
           const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
           if (res.ok) {
             const data = kind === 'route' ? parseRoute(await res.json()) : parseAircraft(await res.json());
-            store[key] = { at: Date.now(), data }; // data may be null — negative cache
-            dirty = true;
+            remember(store, key, data); // data may be null — negative cache
             return data;
           }
           if (res.status === 404) {
-            store[key] = { at: Date.now(), data: null }; // known-missing — cache the miss
-            dirty = true;
+            remember(store, key, null); // known-missing — cache the miss
           }
           // other statuses: leave uncached so we retry later
           return fresh(store[key]) ? store[key].data : null;
@@ -2481,18 +2532,25 @@ function adsbdbProxy() {
           res.writeHead(status, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(obj));
         };
+        const allowUpstream = () => _adsbdbRateLimiter(clientKey(req));
+        const sendThrottled = () => {
+          res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': '5' });
+          res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
+        };
         try {
           const [, kind, rawKey] = String(req.url || '').split('?')[0].split('/');
           if (kind === 'route') {
             const cs = String(rawKey || '').toUpperCase();
             if (!/^[A-Z0-9]{2,8}$/.test(cs)) return send(400, { error: 'invalid callsign' });
-            const data = await lookup('route', cs);
+            const data = await lookup('route', cs, allowUpstream);
+            if (data === RATE_LIMITED) return sendThrottled();
             return send(200, data ? { found: true, ...data } : { found: false });
           }
           if (kind === 'type') {
             const hex = String(rawKey || '').toLowerCase();
             if (!/^[0-9a-f]{6}$/.test(hex)) return send(400, { error: 'invalid hex' });
-            const data = await lookup('aircraft', hex);
+            const data = await lookup('aircraft', hex, allowUpstream);
+            if (data === RATE_LIMITED) return sendThrottled();
             return send(200, data ? { found: true, ...data } : { found: false });
           }
           return send(404, { error: 'unknown endpoint' });

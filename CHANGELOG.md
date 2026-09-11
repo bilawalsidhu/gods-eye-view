@@ -13,6 +13,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Aircraft enrichment lookups no longer grow the on-disk cache without bound or
+  relay unlimited traffic to the free adsbdb community API. `/api/adsbdb` now
+  caps each cache store and evicts the oldest entries, trims an oversized cache
+  file on load, and applies a per-client upstream limit on cache misses. The cap
+  sits above the client's own enrichment drip rate, so normal use is unchanged.
+
 - Unchanged local infrastructure overlays no longer sustain idle rendering.
   Ground samples wait for visible terrain to settle and cannot place a marker
   below its loaded surface; roofs and valid below-sea-level heights are retained.

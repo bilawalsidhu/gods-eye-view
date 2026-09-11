@@ -2432,6 +2432,7 @@ silently demoting every later lookup for the session.
 - `/api/military-installations` uses an independent limiter with the same 90-per-client/300-global one-minute bounds, so viewport installation refreshes never consume `/api/overpass` annotation/traffic capacity.
 - `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors.
 - Track endpoints: `/api/ais-live/track?mmsi=` (server-accumulated ring buffers; sub-route handled before the rows snapshot), `/api/opensky-track?icao24=` (OAuth, 60s cache, sanitized errors, independent OpenSky credit bucket), `/api/adsblol/trace?hex=` (60s cache, 5MB cap, ODbL attribution required in UI).
+- `/api/adsbdb` enrichment is bounded at both ends. Its disk cache (`.gev-cache/adsbdb.json`) holds at most 10,000 route and 10,000 aircraft entries, evicting oldest-first down to 9,000 so pruning stays amortized; a cache written before the ceiling existed is trimmed on first load. A 480-per-client/1920-global one-minute limiter is consulted only when the cache misses and no identical lookup is already in flight, leaving headroom above the client's documented 5/s enrichment drip while capping keyspace enumeration against the free community API.
 - Realtime debug logs redact API keys, bearer tokens, client secrets, and image data URLs before writing to disk; request bodies are size-capped.
 
 ## UI/UX Runtime Defaults
