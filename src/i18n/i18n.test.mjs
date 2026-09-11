@@ -305,7 +305,7 @@ test('getCatalog exposes the merged, dot-prefixed registry for every shipped loc
       assert.match(key, /^(shell|cockpit|layers|setup)\./, `${locale} key ${key}`);
     }
   }
-  // The fr catalog is registered (stage-B seed mirroring en key-for-key) even
+  // The fr catalog is registered (fully translated, mirroring en key-for-key) even
   // though the default pair does not offer it; an unknown locale stays null.
   assert.deepEqual(Object.keys(getCatalog('fr')).sort(), Object.keys(getCatalog('en')).sort());
   assert.equal(getCatalog('de'), null);

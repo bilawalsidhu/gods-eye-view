@@ -3,7 +3,7 @@
 // English is the default-without-configuration, the ALWAYS-shipped fallback
 // catalog, and the compatibility baseline (ai_docs/vision.md). Neutral
 // international Spanish ('es') is the default secondary locale; French ('fr')
-// ships as an untranslated stage-B seed. Which pair the app actually offers is
+// ships fully translated. Which pair the app actually offers is
 // configured at build/dev time through GEV_DEFAULT_LOCALE /
 // GEV_SECONDARY_LOCALE (vite.config.js client defines) and resolved here.
 // This module owns ONLY locale resolution and document language metadata —

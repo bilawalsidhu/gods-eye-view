@@ -31,7 +31,7 @@ export default {
   'actions.clearLayers.ariaLabel': 'Effacer les couches de données sélectionnées',
   'actions.clearLayers.title': 'Désactiver toutes les couches de données sélectionnées',
   'actions.share.ariaLabel': 'Copier le lien de partage',
-  'actions.resetView.ariaLabel': 'Réinitialiser la vue du globe complet',
+  'actions.resetView.ariaLabel': 'Réinitialiser la vue complète du globe',
   // index.html #data-toggles panel header
   'panels.dataLayers': 'COUCHES DE DONNÉES',
   // index.html .panel-collapse-btn on #data-panel
@@ -43,7 +43,7 @@ export default {
   // index.html #top-center-actions nav
   'actions.navAriaLabel': 'Actions du globe',
   'actions.share.title': 'Copier le lien de partage',
-  'actions.resetView.title': 'Réinitialiser la caméra et revenir à la vue du globe complet',
+  'actions.resetView.title': 'Réinitialiser la caméra et revenir à la vue complète du globe',
   // index.html #cctv-sync-label (initial); src/ui.js setSplitFlapText() fallback
   'status.framesLoading': 'chargement des images',
 

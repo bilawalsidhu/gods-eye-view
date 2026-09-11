@@ -161,7 +161,7 @@ export default {
   'keySetup.row.removeTitle': 'Retirer {title} des clés enregistrées de cette application',
   // src/keySetupCore.mjs keySetupRequirement(): availability sentence naming
   // the registry env vars (machine values stay raw).
-  'keySetup.requirement': 'Nécessite {envVars} — ajoutez-la dans Paramètres fournisseurs',
+  'keySetup.requirement': 'Nécessite {envVars} — à renseigner dans Paramètres fournisseurs',
   // src/keySetupCore.mjs KEY_SETUP_KEYS `unlocks` copy, keyed by registry id;
   // en values must stay byte-identical to the registry strings.
   'keySetup.unlocks.google-maps': 'La planète 3D photoréaliste + recherche de lieux',

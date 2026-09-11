@@ -8,7 +8,7 @@ this file is the practical summary a translator needs.
 ## Which locales ship, and which pair is offered
 
 Three catalogs ship: **en** (source of truth and unconditional fallback),
-**es** (fully translated), and **fr** (an untranslated stage-B seed mirroring
+**es** and **fr** (both fully translated; each mirrors
 en key-for-key with English values). Which pair the app actually *offers* is
 configuration, not code: `GEV_DEFAULT_LOCALE` (default `en`) and
 `GEV_SECONDARY_LOCALE` (default `es`) in `.env`, injected into the browser via
@@ -26,7 +26,7 @@ src/i18n/
   index.js                   catalog registry, t(), Intl formatters, DOM apply
   locales/en/{shell,cockpit,layers,setup}.js
   locales/es/{shell,cockpit,layers,setup}.js
-  locales/fr/{shell,cockpit,layers,setup}.js   (stage-B seed, English values)
+  locales/fr/{shell,cockpit,layers,setup}.js   (fully translated)
 ```
 
 | Namespace | Surface |

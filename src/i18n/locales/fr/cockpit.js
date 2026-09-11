@@ -200,7 +200,7 @@ export default {
   'context.cohortsAriaLabel': 'Effectifs des groupes à proximité',
   'context.nearestLabel': 'PLUS PROCHE OBSERVÉ / CARTOGRAPHIÉ',
   'context.nearestEmpty': 'AUCUN EXEMPLE DISPONIBLE',
-  'context.uncertaintyNote': 'DONNÉES DISPONIBLES UNIQUEMENT · NE SIGNIFIE PAS TOUT DÉGAGÉ',
+  'context.uncertaintyNote': 'DONNÉES DISPONIBLES UNIQUEMENT · NE SIGNIFIE PAS QUE TOUT EST DÉGAGÉ',
   'context.weatherEnableAriaLabel': 'Activer les effets météo du cockpit',
   'context.weatherEnableTitle': 'Activer les effets météo du cockpit',
   'context.panelTitle': 'CONTEXTE',
@@ -330,12 +330,12 @@ export default {
   'route.directionLabel': 'DEST {bearing}',
 
   // updateContext(): uncertainty/nearest/bearing readout states.
-  'context.uncertaintyContactLost': 'CONTACT PERDU · DERNIER AFFICHAGE CONNU · NE SIGNIFIE PAS TOUT DÉGAGÉ',
+  'context.uncertaintyContactLost': 'CONTACT PERDU · DERNIER AFFICHAGE CONNU · NE SIGNIFIE PAS QUE TOUT EST DÉGAGÉ',
   'context.uncertaintyInputsUnknown': {
-    one: '{count} DONNÉE INCONNUE · NE SIGNIFIE PAS TOUT DÉGAGÉ',
-    other: '{count} DONNÉES INCONNUES · NE SIGNIFIE PAS TOUT DÉGAGÉ',
+    one: '{count} DONNÉE INCONNUE · NE SIGNIFIE PAS QUE TOUT EST DÉGAGÉ',
+    other: '{count} DONNÉES INCONNUES · NE SIGNIFIE PAS QUE TOUT EST DÉGAGÉ',
   },
-  'context.uncertaintyInputsCurrent': 'DONNÉES DISPONIBLES À JOUR · NE SIGNIFIE PAS TOUT DÉGAGÉ',
+  'context.uncertaintyInputsCurrent': 'DONNÉES DISPONIBLES À JOUR · NE SIGNIFIE PAS QUE TOUT EST DÉGAGÉ',
   'context.nearestTemplate': '{cohort} · {contact}',
   'context.nearestUnavailableAria': '{cohort}, indisponible',
   'context.bearingNone': 'BRG —',
