@@ -7788,6 +7788,14 @@ export default defineConfig(({ mode }) => {
     define: {
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(env.GOOGLE_MAPS_API_KEY),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(env.CESIUM_ION_TOKEN),
+      // Locale pair (i18n): the client's default + secondary UI locale. These
+      // are NOT secrets and are read by src/i18n/locale.js, which falls back
+      // to the built-in en+es pair for empty/invalid values. Explicit define
+      // entries are required because Vite only auto-exposes VITE_-prefixed
+      // vars on import.meta.env — loadEnv above (prefix '') still loads these
+      // from .env files, and the define carries them the last mile.
+      'import.meta.env.GEV_DEFAULT_LOCALE': JSON.stringify(env.GEV_DEFAULT_LOCALE ?? ''),
+      'import.meta.env.GEV_SECONDARY_LOCALE': JSON.stringify(env.GEV_SECONDARY_LOCALE ?? ''),
     },
     build: {
       // The Cesium engine bundle is inherently large; raise the warning ceiling
