@@ -22,7 +22,19 @@ import os from 'node:os';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 
-const CHROME_EXECUTABLE = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+// Resolve Chrome the way the other regression harnesses do: explicit env
+// override first, then puppeteer's own version-pinned download, then the
+// platform app bundles. A hard-coded macOS path made this harness
+// Linux-unbootable (L9 matrix D12: "Required Chrome executable not found").
+const CHROME_EXECUTABLE = [
+  process.env.PUPPETEER_EXECUTABLE_PATH,
+  (() => { try { return puppeteer.executablePath(); } catch { return null; } })(),
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/google-chrome',
+].find((candidate) => candidate && fs.existsSync(candidate)) || process.env.PUPPETEER_EXECUTABLE_PATH || '';
 const DEFAULT_URL = 'http://localhost:4176';
 const VIEWPORT = Object.freeze({ width: 1440, height: 900 });
 const SAMPLE_MS = 5_000;

@@ -218,6 +218,57 @@ test('runtime-error and 5xx mirrors are skipped in favor of healthy ones', async
   }
 });
 
+test('a mirror serving a bare-HTML 406 fails over and is never cached', async () => {
+  // Regression (L9 matrix B18): overpass-api.de's Apache answers 406 with an
+  // HTML page while overloaded. The old code returned that as a SUCCESS-class
+  // payload, which the caller cached fresh — pinning the HTML error for the
+  // whole TTL.
+  const bodies = [
+    () => new Response('<!DOCTYPE HTML><html><head><title>406 Not Acceptable</title></head>', { status: 406 }),
+    () => Response.json({ elements: [{ type: 'node', id: 9 }] }),
+  ];
+  let call = 0;
+  const stub = stubFetch(() => {
+    const index = call;
+    call += 1;
+    return bodies[index]();
+  });
+  try {
+    const res = await onRequest(ctx(new Request(url, { method: 'POST', body: goodBody() })));
+    assert.equal(res.status, 200, 'the next mirror answers');
+    assert.deepEqual(await res.json(), { elements: [{ type: 'node', id: 9 }] });
+    assert.equal(call, 2, 'the 406 mirror is skipped, not returned');
+
+    stub.restore();
+    const stub2 = stubFetch(() => { throw new Error('must not fetch'); });
+    try {
+      const again = await onRequest(ctx(new Request(url, { method: 'POST', body: goodBody() })));
+      assert.equal(again.status, 200);
+      assert.equal(again.headers.get('x-overpass-cache'), 'HIT', 'the healthy answer is what got cached');
+      assert.equal(stub2.calls.length, 0);
+    } finally {
+      stub2.restore();
+    }
+  } finally {
+    stub.restore();
+  }
+});
+
+test('every mirror answering 406 degrades to 502 and caches nothing', async () => {
+  const stub = stubFetch(() => new Response('<h1>Not Acceptable</h1>', { status: 406 }));
+  try {
+    const cold = await onRequest(ctx(new Request(url, { method: 'POST', body: goodBody() })));
+    assert.equal(cold.status, 502);
+    assert.equal(stub.calls.length, 4, 'all mirrors tried');
+
+    const again = await onRequest(ctx(new Request(url, { method: 'POST', body: goodBody() })));
+    assert.equal(again.status, 502);
+    assert.equal(stub.calls.length, 8, 'the second request re-tries upstream — an error page must never be cached');
+  } finally {
+    stub.restore();
+  }
+});
+
 test('a transport failure on every mirror answers the 502 shape, stale when warm', async () => {
   let stub = stubFetch(() => { throw new Error('mirror unreachable'); });
   const originalNow = Date.now;

@@ -810,15 +810,28 @@ check({
 });
 
 check({
-  id: 'B7', group: 'B', desc: 'FIRMS without a key fails HONESTLY (503 no_key, never a healthy-empty)',
+  id: 'B7', group: 'B', desc: 'FIRMS without a key degrades HONESTLY (public 24h VIIRS, or 503 no_key — never a healthy-empty)',
   run: async () => {
     const guard = keyGuard('FIRMS', env.keys.FIRMS);
     if (guard) return guard;
     if (env.keys.FIRMS === true) return skip('server HAS a FIRMS key — the keyless path needs an unkeyed server', 'N/A');
-    const r = await jget('/api/firms');
-    return r.status === 503 && r.json?.error === 'no_key'
-      ? pass('503 {"error":"no_key"}')
-      : fail(`expected 503 no_key, got ${r.status} ${r.text.slice(0, 120)}`);
+    // The shipped keyless contract: NASA's public rolling-24h SNPP VIIRS CSV
+    // is served with no MAP_KEY at all (mode=public, sources[].keyless); the
+    // 503 {"error":"no_key"} is the LAST resort when that public fetch itself
+    // fails. What would be dishonest is a 200 presenting no rows as healthy.
+    const r = await jget('/api/firms', { timeoutMs: 60000 });
+    if (r.status === 503 && r.json?.error === 'no_key') {
+      return pass('503 {"error":"no_key"} — the public source failed and the handler said so');
+    }
+    if (r.ok && Array.isArray(r.json?.sources)) {
+      const total = r.json.sources.reduce((sum, s) => sum + (s.count || 0), 0);
+      const keyless = r.json.sources.some((s) => s.keyless || /public/i.test(String(s.source || '')));
+      if (total > 0 && keyless) {
+        return pass(`public 24h VIIRS served keyless: ${total} detections (mode=${r.json.mode || 'public'})`);
+      }
+      return fail(`keyless 200 is healthy-shaped but empty/unlabeled: ${r.text.slice(0, 120)}`);
+    }
+    return fail(`expected the honest keyless contract, got ${r.status} ${r.text.slice(0, 120)}`);
   },
 });
 
@@ -1407,6 +1420,13 @@ async function runBrowserGroup(record) {
     // The claim is PHOTOREALISTIC 3D, so an ordinary imagery layer is not
     // evidence: an OSM-only fallback would have satisfied the old OR-chain
     // while the headline feature was missing.
+    if (env.keys.GOOGLE === false) {
+      // Keyless server: Google 3D cannot attach by definition. The shipped
+      // keyless behavior is the OSM imagery fallback (same contract
+      // qa-map-source-tray exercises with --keyless), so demanding the
+      // photorealistic tileset here would fail every keyless run forever.
+      return skip('no Google Maps key on this server — the OSM fallback is the shipped keyless basemap; photorealistic 3D needs a keyed OWNER run', 'ENV');
+    }
     const infoR = await mustEval(() => {
       const g = window.__godsEyeView;
       const prims = g.viewer.scene.primitives;
@@ -1431,6 +1451,15 @@ async function runBrowserGroup(record) {
     const info = infoR.value;
     const photoreal = info.tilesets.find((t) => /google|tile\.googleapis|photorealistic|3dtiles/i.test(t.url));
     if (!info.tilesets.length) {
+      // No tileset AND the stack settled on OSM imagery is the documented
+      // degraded boot: the key is absent, a placeholder, or rejected by
+      // Google at runtime — states a presence probe cannot distinguish (a
+      // placeholder key makes the probe report "keyed" while boot still
+      // falls back). That is shipped fallback behavior, not a product bug;
+      // photorealistic validation needs a genuinely valid key.
+      if (/osm/i.test(String(info.mapStack || ''))) {
+        return skip(`no 3D tileset and the map stack fell back to ${info.mapStack} — this server's Google key is absent/placeholder/rejected (the documented fallback); photorealistic 3D needs a valid OWNER key`, 'ENV');
+      }
       return fail(`no Cesium3DTileset attached (imagery layers=${info.imagery}, mapStack=${info.mapStack}) — the photorealistic globe is absent`);
     }
     if (!photoreal) {
@@ -1579,9 +1608,17 @@ async function runBrowserGroup(record) {
     const r = await settle('local-firms', 30);
     const s = r.stats || {};
     if (env.keys.FIRMS === false) {
-      return s.error === 'KEY REQUIRED'
-        ? pass('keyless and honest: getStats().error === "KEY REQUIRED"')
-        : fail(`keyless but error=${s.error} count=${s.count} — expected "KEY REQUIRED"`);
+      // Both keyless states are honest: 'KEY REQUIRED' when the public 24h
+      // VIIRS source itself failed (the proxy answers 503 no_key and the
+      // layer says so), or live public data with no error masquerading.
+      // What this check still forbids is a silently empty "healthy" layer.
+      if (s.error === 'KEY REQUIRED') {
+        return pass('keyless and honest: getStats().error === "KEY REQUIRED"');
+      }
+      if (!s.error && s.count > 0 && s.keyRequired === false) {
+        return pass(`keyless public 24h VIIRS: ${s.count} detections (label="${String(s.loadingLabel || '').slice(0, 50)}")`);
+      }
+      return fail(`keyless but error=${s.error} count=${s.count} — expected "KEY REQUIRED" or live public data`);
     }
     return s.count > 0 ? pass(`${s.count} fires, cells=${s.cells}`) : fail(`keyed but 0 fires (error=${s.error || ''})`);
   });
@@ -1757,20 +1794,25 @@ async function runBrowserGroup(record) {
   });
 
   await step('C12', async () => {
-    // This check reads the credits of whatever THIS run switched on. Run
-    // standalone (`--only C12`) nothing is on, and it would pass vacuously off
-    // the static credit list — so self-arm a deterministic set first.
-    const armed = (await evalBounded(() => [...(window.__godsEyeView.dataManager.getEnabledLayerIds?.() || [])], null, 20000)) || [];
-    const SELF_ARM = ['flights', 'satellites', 'earthquakes', 'telegeography-submarine-cables'];
-    if (armed.length === 0) {
-      for (const id of SELF_ARM) {
-         
-        await settle(id, 25);
-      }
-      const nowOn = (await evalBounded(() => [...(window.__godsEyeView.dataManager.getEnabledLayerIds?.() || [])], null, 20000)) || [];
-      if (nowOn.length === 0) {
-        return crash('no layers are enabled and self-arming failed — this check has nothing to verify credits against');
-      }
+    // This check claims ATTRIBUTION correctness, which has nothing to do with
+    // render load — but by the time C12 runs, C4-C11 have saturated the main
+    // thread (57k FIRMS detections + AIS + traffic + bundled layers) hard
+    // enough that the trivial reads below silently starve (run 3: armed=[]
+    // via a timed-out eval, then C13+ never answered at all). Quiesce first:
+    // dropping the heavy layers makes the page answer again and leaves a
+    // deterministic, fully-mapped enabled set (AIS failed keyless = 0
+    // entities; FIRMS is one splat rect).
+    await quiesce();
+    // Light, keyless, credit-mapped layers only. The old set armed
+    // flights+satellites (~20k entities), re-drowning the page this check
+    // just dug out of.
+    const SELF_ARM = ['earthquakes', 'local-dams', 'telegeography-submarine-cables'];
+    for (const id of SELF_ARM) {
+      await settle(id, 25);
+    }
+    const nowOn = (await evalBounded(() => [...(window.__godsEyeView.dataManager.getEnabledLayerIds?.() || [])], null, 20000)) || [];
+    if (nowOn.length === 0) {
+      return crash('no layers are enabled and self-arming failed — this check has nothing to verify credits against');
     }
     const credR = await mustEval(async () => {
       const viewer = window.__godsEyeView.viewer;
@@ -2080,6 +2122,15 @@ async function preflight() {
     else if (used === 'anon') env.keys.OPENSKY = false;
     else env.keys.OPENSKY = 'error';
   } catch { env.keys.OPENSKY = 'error'; }
+  try {
+    // Google has no /status endpoint; its documented keyless shape is the
+    // places proxy's 503 {"error":"GOOGLE_MAPS_API_KEY is not set"}. A keyed
+    // server answers otherwise (upstream result) — presence, not validity.
+    const g = await jget('/api/google/nearby-places?lat=30.27&lon=-97.74', { timeoutMs: 30000 });
+    if (g.status === 503 && /GOOGLE_MAPS_API_KEY is not set/.test(g.text)) env.keys.GOOGLE = false;
+    else if (g.status < 500) env.keys.GOOGLE = true;
+    else env.keys.GOOGLE = 'error';
+  } catch { env.keys.GOOGLE = 'error'; }
   if (CHEAP) {
     // Minting a Realtime token is free, but --cheap promises to touch nothing
     // cost-bearing; leave OpenAI presence unknown and let its checks skip.

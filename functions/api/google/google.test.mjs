@@ -226,3 +226,21 @@ test('unknown google subpaths answer 404, never an upstream call', async () => {
     stub.restore();
   }
 });
+
+test('the scaffolded .env placeholder key is treated as absent, not forwarded', async () => {
+  // Regression (L9 D8): a placeholder-configured server forwarded the
+  // sentinel to Google, which 400'd "API key not valid" on every call —
+  // degrading differently from an honest keyless deployment and blinding
+  // keyless-detection in the QA probes.
+  const stub = stubFetch(() => { throw new Error('must not fetch'); });
+  try {
+    for (const placeholder of ['your_google_maps_api_key_here', '  your_google_maps_api_key_here  ', '   ', '']) {
+      const res = await onRequest(ctx(siteFetch('/nearby-places', 'lat=29.4&lon=-98.5'), { GOOGLE_MAPS_API_KEY: placeholder }));
+      assert.equal(res.status, 503, JSON.stringify(placeholder));
+      assert.deepEqual(await res.json(), { error: 'GOOGLE_MAPS_API_KEY is not set', places: [] });
+    }
+    assert.equal(stub.calls.length, 0, 'no placeholder value may reach upstream');
+  } finally {
+    stub.restore();
+  }
+});

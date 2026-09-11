@@ -35,6 +35,7 @@
  */
 
 import { directionToHeading } from './directionText.js';
+import { resolveGoogleApiKey } from './googlePlacesPolicy.js';
 
 /** Path to the optional static CCTV source list (JSON array). */
 export const DEFAULT_CCTV_SOURCE_FILE = 'config/cctv_sources.austin.json';
@@ -1038,7 +1039,10 @@ export async function fetchCctvImageFromUpstream(url, {
  * @returns {Promise<{ok:true,body:Uint8Array,contentType:string}|null>}
  */
 export async function streetViewFallback({ lat, lon, heading, fov, pitch, apiKey }) {
-  const streetViewKey = apiKey;
+  // resolveGoogleApiKey: the scaffolded .env placeholder counts as absent, so
+  // a placeholder-configured deployment falls through to the synthetic frame
+  // instead of requesting frames Google will only 400.
+  const streetViewKey = resolveGoogleApiKey(apiKey);
   if (!streetViewKey || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   try {
     const sv = new URL('https://maps.googleapis.com/maps/api/streetview');

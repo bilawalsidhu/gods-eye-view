@@ -5333,6 +5333,17 @@ export class StyleManager {
     const setCockpitDisclosure = (kind, expanded, { returnFocus = false } = {}) => {
       const displayOpen = kind === 'display' && Boolean(expanded);
       const radioOpen = kind === 'radio' && Boolean(expanded);
+      // Idempotence: re-asserting an already-open disclosure must not re-run
+      // the reveal flow — its deferred scrollIntoView would yank the panel
+      // away from a position the user (or a portal restore) just set, and it
+      // lands after the portal scroll guard clears, so it would also be
+      // recorded as user intent.
+      if (displayOpen && this._cockpitDisplayToggleBtn?.getAttribute('aria-expanded') === 'true') {
+        return;
+      }
+      if (radioOpen && this._cockpitRadioToggleBtn?.getAttribute('aria-expanded') === 'true') {
+        return;
+      }
       if (displayOpen || radioOpen) this.cockpitView?.setSignalCollapsed(true);
       if (this._cockpitDisplayPanel) this._cockpitDisplayPanel.hidden = !displayOpen;
       if (this._cockpitRadioPanel) this._cockpitRadioPanel.hidden = !radioOpen;
@@ -10034,13 +10045,19 @@ export class StyleManager {
     });
     this._standardDisplayScrollTop = this._ppToggles?.scrollTop || 0;
     this._cockpitDisplayScrollTop = this._cockpitDisplayPanel?.scrollTop || 0;
+    // Both handlers ignore scrolls while a portal restore is in flight
+    // (_displayPortalScrollRestoreOwner set until the settle rAF clears it):
+    // the group move fires transient clamp/anchor scrolls whose positions are
+    // layout artifacts, not user intent — recording them permanently corrupted
+    // the saved offset, so a round trip came back at the clamp position
+    // instead of where the user left the panel.
     this._standardDisplayScrollHandler = () => {
-      if (!this._cockpitDisplayPortalActive) {
+      if (!this._cockpitDisplayPortalActive && !this._displayPortalScrollRestoreOwner) {
         this._standardDisplayScrollTop = this._ppToggles?.scrollTop || 0;
       }
     };
     this._cockpitDisplayScrollHandler = () => {
-      if (this._cockpitDisplayPortalActive) {
+      if (this._cockpitDisplayPortalActive && !this._displayPortalScrollRestoreOwner) {
         this._cockpitDisplayScrollTop = this._cockpitDisplayPanel?.scrollTop || 0;
       }
     };

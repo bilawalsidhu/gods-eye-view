@@ -398,6 +398,15 @@ export async function fetchOverpassPayload(body, maxResponseBytes = OVERPASS_MAX
         lastError = new Error(`Overpass upstream returned ${status} (${endpoint})`);
         continue;
       }
+      // Any other non-200 is a mirror that did not answer the query — e.g.
+      // the main mirror's Apache serves a bare-HTML `406 Not Acceptable`
+      // page while overloaded. Returning it as a success would let callers
+      // CACHE the HTML as a fresh payload and pin the error for the whole
+      // cache TTL, so fail over to the next mirror exactly like a 5xx.
+      if (status !== 200) {
+        lastError = new Error(`Overpass upstream returned ${status} (${endpoint})`);
+        continue;
+      }
 
       // Success: decimate giant boundary geometry before it reaches the cache,
       // or the client (what makes the read cap safe to hold).

@@ -86,17 +86,23 @@ async function init() {
 
     // Set Google Maps API key for 3D Tiles (optional — globe works with OSM without it)
     const googleApiKey = import.meta.env.GOOGLE_MAPS_API_KEY;
-    if (googleApiKey) {
+    // The scaffolded placeholder is a sentinel for "not configured yet", not a
+    // key: sending it to tile.googleapis.com just 400s every boot (and the
+    // voice nearby-places proxy forwards it into the same rejection). The
+    // Places-library loader below already treated it as absent — apply that
+    // consistently to every key consumer.
+    const hasGoogleKey = Boolean(googleApiKey) && googleApiKey !== 'your_google_maps_api_key_here';
+    if (hasGoogleKey) {
       Cesium.GoogleMaps.defaultApiKey = googleApiKey;
     } else {
-      console.info('VITE_GOOGLE_MAPS_API_KEY not set — using OpenStreetMap basemap');
+      console.info('GOOGLE_MAPS_API_KEY not set — using OpenStreetMap basemap');
     }
     // Expose API key globally for geocoding in locations.js and Places autocomplete
-    window.__GOOGLE_MAPS_API_KEY__ = googleApiKey || '';
+    window.__GOOGLE_MAPS_API_KEY__ = hasGoogleKey ? googleApiKey : '';
 
     // Load Google Maps Places library for location search autocomplete
     window.__googleMapsReady__ = new Promise((resolve) => {
-      if (!googleApiKey || googleApiKey === 'your_google_maps_api_key_here') {
+      if (!hasGoogleKey) {
         resolve(null);
         return;
       }
@@ -262,10 +268,14 @@ async function init() {
       };
     }
     // buildTogglePanel builds the vanilla layer toggle rows into #data-toggles.
-    // In the PWA/React build, LayerPanel.tsx handles layer UI — skip the vanilla
-    // build so we don't get duplicate layer rows (one from vanilla at z:100, one
-    // from React at z:10, both always-visible).
-    // Data manager state is shared; both paths read/write the same layer registry.
+    // The React/PWA sibling build mounts its own LayerPanel.tsx and skips this
+    // call to avoid duplicate rows; THIS build loads only src/main.js (no
+    // React entry), so without it #data-toggles stays empty and the app ships
+    // with no layer UI at all — the regression the L9 matrix caught (layer
+    // rows, feed-state chips, and the voice layer-state sync all read these
+    // rows). Data manager state is shared; both paths read/write the same
+    // layer registry.
+    dataManager.buildTogglePanel(document.getElementById('data-toggles'));
     styleManager.attachDataManager(dataManager);
 
     // Restore "where you left off" camera position and style from localStorage.

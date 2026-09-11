@@ -106,6 +106,25 @@ export function parseCoordinateParam(value) {
   return Number(value);
 }
 
+/** The scaffolded .env sentinel — a request to configure, not a credential. */
+export const GOOGLE_API_KEY_PLACEHOLDER = 'your_google_maps_api_key_here';
+
+/**
+ * Resolve the configured GOOGLE_MAPS_API_KEY, treating unset, blank, and the
+ * scaffolded placeholder alike as ABSENT. Forwarding the placeholder to
+ * Google just 400s ("API key not valid") and makes a placeholder-configured
+ * server answer upstream failures instead of its honest keyless contract —
+ * which also blinds keyless-detection in the QA probes. Shared by both
+ * runtimes so dev and prod degrade identically.
+ * @param {?string} value Raw key from the environment.
+ * @returns {?string} The usable key, or null when effectively unset.
+ */
+export function resolveGoogleApiKey(value) {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (!trimmed || trimmed === GOOGLE_API_KEY_PLACEHOLDER) return null;
+  return trimmed;
+}
+
 /** Request body for `places:searchText` (view-biased). */
 export function buildTextSearchRequestBody({ textQuery, latitude, longitude, radiusM }) {
   return {

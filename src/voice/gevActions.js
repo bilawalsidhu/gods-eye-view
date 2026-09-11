@@ -3054,6 +3054,10 @@ function summarizeViewportPlaces(places) {
 }
 
 async function fetchNearbyPlaces(latitude, longitude, cameraHeightM) {
+  // A camera aimed at space yields non-finite pick coordinates; requesting
+  // with them just 400s on the proxy and spams the console every such frame.
+  // No coords, no request — the context simply carries no nearby places.
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return [];
   const radiusM = nearbyPlacesRadiusM(cameraHeightM);
   const cacheKey = nearbyPlacesCacheKey(latitude, longitude, cameraHeightM);
   if (nearbyPlacesCache.has(cacheKey)) return nearbyPlacesCache.get(cacheKey);

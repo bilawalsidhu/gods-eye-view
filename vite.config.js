@@ -36,6 +36,7 @@ import {
   normalizeNearbyPlaces,
   normalizeTextPlaces,
   parseCoordinateParam,
+  resolveGoogleApiKey,
 } from './src/data/googlePlacesPolicy.js';
 import {
   buildMilitaryInstallationsQuery,
@@ -3660,7 +3661,9 @@ function googlePlacesContextProxy() {
         return;
       }
 
-      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+      // resolveGoogleApiKey treats the scaffolded .env placeholder as unset —
+      // forwarding it to Google just 400s "API key not valid" on every call.
+      const apiKey = resolveGoogleApiKey(process.env.GOOGLE_MAPS_API_KEY);
       if (!apiKey) {
         res.statusCode = 503;
         res.setHeader('Content-Type', 'application/json');
@@ -3738,7 +3741,8 @@ function googlePlacesContextProxy() {
         return;
       }
 
-      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+      // Placeholder-aware, matching nearby-places above.
+      const apiKey = resolveGoogleApiKey(process.env.GOOGLE_MAPS_API_KEY);
       if (!apiKey) {
         res.statusCode = 503;
         res.setHeader('Content-Type', 'application/json');
@@ -5040,6 +5044,14 @@ export default defineConfig(({ mode }) => {
     // Expose selected API keys to the browser via import.meta.env.*
     // Cloudflare Pages injects non-prefixed vars from _vars / dashboard at runtime.
     // Local dev reads from .env (which maps VITE_GOOGLE_MAPS_API_KEY → GOOGLE_MAPS_API_KEY).
+    // Pre-bundle the lazily-imported geoid dependency: `src/data/geoid.js`
+    // does `import('egm96-universal')` on first altitude read, so on a fresh
+    // `--force` server the FIRST page that enables a flight layer used to
+    // 504 "Outdated Optimize Dep" — killing that harness's boot console
+    // record and every `--only` rerun before it (L9 matrix D1/D2/D3/D6/D8).
+    optimizeDeps: {
+      include: ['egm96-universal'],
+    },
     define: {
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(env.GOOGLE_MAPS_API_KEY),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(env.CESIUM_ION_TOKEN),

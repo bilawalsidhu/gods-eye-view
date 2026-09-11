@@ -314,8 +314,12 @@ test('Clear Selected Layers uses one adopted batch and discards Context restorat
 test('Cockpit Display portal retains both scroll owners across round trips', () => {
   assert.match(ui, /this\._standardDisplayScrollTop = this\._ppToggles\?\.scrollTop \|\| 0/);
   assert.match(ui, /this\._cockpitDisplayScrollTop = this\._cockpitDisplayPanel\?\.scrollTop \|\| 0/);
-  assert.match(ui, /if \(!this\._cockpitDisplayPortalActive\)[\s\S]*?this\._standardDisplayScrollTop = this\._ppToggles\?\.scrollTop/);
-  assert.match(ui, /if \(this\._cockpitDisplayPortalActive\)[\s\S]*?this\._cockpitDisplayScrollTop = this\._cockpitDisplayPanel\?\.scrollTop/);
+  // Each scroll owner also ignores scrolls while a portal restore is in
+  // flight (_displayPortalScrollRestoreOwner): the group move fires
+  // transient clamp/anchor scrolls that are layout artifacts, not user
+  // intent — recording them corrupted the saved offset.
+  assert.match(ui, /if \(!this\._cockpitDisplayPortalActive && !this\._displayPortalScrollRestoreOwner\)\s*\{[\s\S]*?this\._standardDisplayScrollTop = this\._ppToggles\?\.scrollTop \|\| 0/);
+  assert.match(ui, /if \(this\._cockpitDisplayPortalActive && !this\._displayPortalScrollRestoreOwner\)\s*\{[\s\S]*?this\._cockpitDisplayScrollTop = this\._cockpitDisplayPanel\?\.scrollTop \|\| 0/);
   assert.match(ui, /this\._cockpitDisplayPanel\.scrollTop = this\._cockpitDisplayScrollTop[\s\S]*?this\._ppToggles\.scrollTop = this\._standardDisplayScrollTop/);
 });
 

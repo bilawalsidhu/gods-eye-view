@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { webglLaunchArgs } from './lib/webglLaunchArgs.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -82,12 +83,25 @@ async function main() {
     console.error(`Dev server not reachable at ${APP_URL}`);
     process.exit(2);
   }
+  // Keyless probe (same allowance the L9 matrix's C3 makes): a server with
+  // no real GOOGLE_MAPS_API_KEY answers its OWN endpoints with the honest
+  // 503 "not set" contract, and Chrome logs every non-2xx as a console
+  // error. Without tolerating exactly those, a keyless run can never pass
+  // the console/5xx assertions at the bottom.
+  let serverKeyless = false;
+  try {
+    const probe = await fetch(`${APP_URL}/api/google/nearby-places?lat=30.2672&lon=-97.7431`);
+    serverKeyless = probe.status === 503 && /not set/i.test(await probe.text());
+  } catch { /* server up (checked above); a probe failure just means keyed */ }
   fs.mkdirSync(SHOTS_DIR, { recursive: true });
   const browser = await puppeteer.launch({
     headless: HEADFUL ? false : 'new',
     ...(chrome ? { executablePath: chrome } : {}),
     args: [
-      '--no-sandbox', '--disable-setuid-sandbox', '--use-gl=angle',
+      // webglLaunchArgs() (not a bare --use-gl=angle): without a real
+      // --use-angle backend this box has no GPU to fall back to, Cesium never
+      // finishes booting, and the loading screen never hides (L9 matrix D8).
+      '--no-sandbox', '--disable-setuid-sandbox', ...webglLaunchArgs(),
       '--disable-dev-shm-usage', '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding', '--window-size=1440,900',
     ],
@@ -4387,8 +4401,47 @@ async function main() {
       };
     });
     await page.click('#context-radio-toggle-btn');
-    await page.waitForFunction(() => !document.getElementById('radio-panel').classList.contains('collapsed'));
-    await sleep(450);
+    // Bounded + diagnosed: a swallowed click (toast overlap, panel state race)
+    // used to kill the whole harness on puppeteer's default 30s timeout with
+    // no RESULT line (L9 D8). Record the state instead and let the run grade.
+    let contextRadioExpanded = true;
+    try {
+      await page.waitForFunction(
+        () => !document.getElementById('radio-panel').classList.contains('collapsed'),
+        { timeout: 8000, polling: 200 },
+      );
+    } catch {
+      contextRadioExpanded = false;
+    }
+    if (!contextRadioExpanded) {
+      const stuckState = await page.evaluate(() => ({
+        contextCollapsed: document.getElementById('global-context-panel')?.classList.contains('collapsed'),
+        radioCollapsed: document.getElementById('radio-panel')?.classList.contains('collapsed'),
+        launcherVisible: (document.getElementById('context-radio-toggle-btn')?.getBoundingClientRect().width ?? 0) > 0,
+        launcherAria: document.getElementById('context-radio-toggle-btn')?.getAttribute('aria-controls'),
+        activeElement: document.activeElement?.id || document.activeElement?.tagName || null,
+      }));
+      check(
+        'expanded Context Radio icon reveals and scrolls to embedded Radio without an overlay or playback/camera theft',
+        false,
+        `radio-panel never expanded after toggle click — ${JSON.stringify(stuckState)}`,
+      );
+      // Skip the dependent scroll/focus assertions; nothing else in this phase
+      // can be graded against an unexpanded panel.
+      await page.evaluate(() => {
+        window.__godsEyeView.styleManager.setPanelCollapsed('radio-panel', false);
+      });
+      await sleep(450);
+      const expandedContextRadioAfter = await page.evaluate(() => ({
+        radioCollapsed: document.getElementById('radio-panel').classList.contains('collapsed'),
+      }));
+      check(
+        'expanded Context Radio scroll/focus assertions reached (panel manually recovered)',
+        !expandedContextRadioAfter.radioCollapsed,
+        JSON.stringify(expandedContextRadioAfter),
+      );
+    } else {
+      await sleep(450);
     const expandedContextRadioAfter = await page.evaluate(() => {
       const gev = window.__godsEyeView;
       gev.styleManager._renderRadioState(gev.dataManager.layers.get('radio').module.getUIState());
@@ -4434,6 +4487,7 @@ async function main() {
         cameraDelta: expandedContextRadioCameraDelta,
       }),
     );
+    }
 
     await page.evaluate(() => {
       const manager = window.__godsEyeView.styleManager;
@@ -4444,6 +4498,14 @@ async function main() {
       const close = document.getElementById('context-radio-mini-close-btn');
       const rect = close.getBoundingClientRect();
       return !document.getElementById('context-radio-mini').hidden && rect.width > 0 && rect.height > 0;
+    }, { timeout: 8000, polling: 200 }).catch(async (error) => {
+      // Same bounding as the expansion wait above: diagnose, don't die.
+      check(
+        'context-radio-mini close control becomes visible after disclosure opens',
+        false,
+        `${String(error.message).slice(0, 80)} — compact disclosure did not open`,
+      );
+      await page.evaluate(() => window.__godsEyeView.styleManager._setRadioDisclosure(false));
     });
     await page.click('#context-radio-mini-close-btn');
     const closedCompact = await page.evaluate(() => {
@@ -4596,6 +4658,31 @@ async function main() {
         }
       }
       console.log(`INFO external Cesium ion asset endpoint unavailable (${externalCesiumEndpointFailures.length}); Radio assertions continued against the loaded app`);
+    }
+    if (serverKeyless) {
+      // Endpoints whose 503 "not set" is the documented keyless contract.
+      const KEYLESS_CONTRACT_503 = /HTTP 503 https?:\/\/[^/]*\/api\/(google\/(?:nearby-places|text-search)|openai\/hud-summary|realtime\/token|firms)(\?|$)/;
+      let tolerated = 0;
+      for (let i = failedResponses.length - 1; i >= 0; i -= 1) {
+        if (KEYLESS_CONTRACT_503.test(failedResponses[i])) {
+          tolerated += 1;
+          failedResponses.splice(i, 1);
+        }
+      }
+      if (tolerated > 0) {
+        console.log(`INFO keyless server: ${tolerated} expected 503 no-key response(s) tolerated`);
+        // The matching console text carries no URL ("Failed to load resource:
+        // ... 503"), so only drop it when every 503 this run observed was a
+        // contract endpoint — a real 503 elsewhere keeps the entry AND its
+        // response line, failing the check as before.
+        if (!failedResponses.some((entry) => entry.startsWith('HTTP 503 '))) {
+          for (let i = actionableConsoleErrors.length - 1; i >= 0; i -= 1) {
+            if (actionableConsoleErrors[i].includes('Failed to load resource: the server responded with a status of 503')) {
+              actionableConsoleErrors.splice(i, 1);
+            }
+          }
+        }
+      }
     }
     check(
       'runtime console remains clean',

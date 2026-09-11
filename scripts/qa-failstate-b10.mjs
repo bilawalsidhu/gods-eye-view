@@ -131,6 +131,23 @@ async function captureLayerControl(page, layerId, filename) {
   await row.screenshot({ path: path.join(ARTIFACT_DIR, filename) });
 }
 
+// tleCache.js postdates this harness (6 h TTL, same story track-regression.mjs
+// hit): without purging, the off→on "re-enable" below is served the baseline
+// catalog from cache, the stubbed 503 never happens, no error is ever set,
+// and the DEGRADED/UNAVAILABLE waits time out against a chip that is honestly
+// ONLINE. Purge before every phase that changes the stubbed upstream.
+async function purgeTleCache(page) {
+  return page.evaluate(() => {
+    const doomed = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('gev:cache:tle:')) doomed.push(key);
+    }
+    for (const key of doomed) localStorage.removeItem(key);
+    return doomed.length;
+  });
+}
+
 // A minimal but valid TLE for one satellite (ISS), so the "good catalog" pass
 // builds a non-zero catalog we can later prove is preserved across the outage.
 // parseTLE in satellites.js expects `NAME\n1 ...\n2 ...` triplets.
@@ -375,13 +392,15 @@ async function main() {
 
     // ── (ii) CelesTrak outage on re-enable → catalog NOT wiped, error set ────
     console.log('\n(ii) Satellites: building a good catalog first...');
-    const goodStats = await page.evaluate(async () => {
-      const dm = window.__godsEyeView.dataManager;
-      await dm.setEnabled('satellites', true);
-      await new Promise((r) => setTimeout(r, 800));
-      const mod = dm.layers.get('satellites').module;
-      return mod.getStats();
-    });
+    await purgeTleCache(page);
+    await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('satellites', true));
+    // The catalog lands after fetch + SGP4 propagation; a fixed sleep guesses
+    // at that, so observe the stats instead.
+    await page.waitForFunction(() => {
+      const s = window.__godsEyeView.dataManager.layers.get('satellites')?.module?.getStats?.();
+      return s && (s.count > 0 || s.error);
+    }, { timeout: 30000 });
+    const goodStats = await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('satellites').module.getStats());
     record(
       'Satellites: good catalog loaded before outage (baseline)',
       goodStats.count > 0,
@@ -393,14 +412,18 @@ async function main() {
     } else {
       console.log('     Failing one CelesTrak group and verifying the visible degraded state...');
       mode.celestrak = 'partial';
-      const partialStats = await page.evaluate(async () => {
+      await purgeTleCache(page);
+      await page.evaluate(async () => {
         const dm = window.__godsEyeView.dataManager;
         await dm.setEnabled('satellites', false);
         await new Promise((r) => setTimeout(r, 200));
         await dm.setEnabled('satellites', true);
-        await new Promise((r) => setTimeout(r, 800));
-        return dm.layers.get('satellites').module.getStats();
       });
+      await page.waitForFunction(() => {
+        const s = window.__godsEyeView.dataManager.layers.get('satellites')?.module?.getStats?.();
+        return Boolean(s?.error);
+      }, { timeout: 30000 });
+      const partialStats = await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('satellites').module.getStats());
       const partialControl = await readLayerControl(page, 'satellites', 'DEGRADED');
       const partialChipHonest = partialStats.count > 0
         && /1 CelesTrak group unavailable/i.test(partialStats.error || '')
@@ -423,16 +446,22 @@ async function main() {
 
       console.log('     Flipping ALL CelesTrak groups to 503 and toggling satellites off→on...');
       mode.celestrak = 'down';
-      const outageStats = await page.evaluate(async (baseline) => {
+      await purgeTleCache(page);
+      await page.evaluate(async () => {
         const dm = window.__godsEyeView.dataManager;
         // Toggle off then on — the re-enable's update() re-fetches (now all 503).
         await dm.setEnabled('satellites', false);
         await new Promise((r) => setTimeout(r, 200));
         await dm.setEnabled('satellites', true);
-        await new Promise((r) => setTimeout(r, 800));
-        const mod = dm.layers.get('satellites').module;
-        return { stats: mod.getStats(), baseline };
-      }, goodStats.count);
+      });
+      await page.waitForFunction(() => {
+        const s = window.__godsEyeView.dataManager.layers.get('satellites')?.module?.getStats?.();
+        return typeof s?.error === 'string' && s.error.length > 0;
+      }, { timeout: 30000 });
+      const outageStats = await page.evaluate((baseline) => ({
+        stats: window.__godsEyeView.dataManager.layers.get('satellites').module.getStats(),
+        baseline,
+      }), goodStats.count);
 
       const s = outageStats.stats;
       const notWiped = s.count > 0; // catalog preserved, not blanked to 0
