@@ -109,6 +109,16 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Existing cached refusals are now ignored immediately, including during
   stale-data fallback. Concurrent identical requests share the same last-good
   fallback when all mirrors refuse, without duplicating upstream requests.
+### Added
+
+- Added a **Civic Offices** data layer: police stations, town halls and
+  government offices for the current viewport, from OpenStreetMap. The layer
+  states its own limits from what it measured rather than from a disclaimer —
+  the row reads `400 of 437 in view · mapped to 2026-05-06`, pairing Overpass's
+  own `out count` with the answering mirror's snapshot date, and a viewport too
+  wide to query says so instead of reporting zero. OpenStreetMap is
+  community-mapped, so an unmapped district and a district with no office look
+  identical; the layer never presents itself as a register of what exists.
 
 - Refresh vulnerable transitive dependencies and update browser/image tooling
   to Puppeteer 25.10.0 and Sharp 0.35.4. Cesium remains on 1.138.0.
