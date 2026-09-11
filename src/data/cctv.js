@@ -1168,6 +1168,8 @@ function buildCatalogFromSources(rawSources) {
       absoluteHeightM: groundElevationM + mountHeightM,
       pitchDeg,
       license: String(source.license || source.licenseNote || ''),
+      // Directory packs (Windy) must link every image back to its page.
+      detailUrl: typeof source.detailUrl === 'string' && /^https:\/\//.test(source.detailUrl) ? source.detailUrl : '',
       poseSource,
     };
     ensureCameraPose(camera);
@@ -3407,6 +3409,8 @@ function getPublicCameraState(record, activeId = null) {
     sourceStatus: health?.status || 'unknown',
     sourceMessage: health?.message || '',
     sourceLabel: health?.label || camera.provider || '',
+    license: camera.license || '',
+    detailUrl: camera.detailUrl || '',
     calibration: { ...normalizeCalibration(camera.calibration) },
     // Save-gated persistence (design §3e): true while the live pose carries
     // edits that have not been SAVEd (or RESET). Drives the CAL · EDITED chip.

@@ -128,6 +128,30 @@ export const DATA_CREDITS = [
       'Contains OS data © Crown copyright and database rights.',
   },
   {
+    key: 'cctv-hong-kong',
+    html: 'Hong Kong traffic cameras: Transport Department, HKSAR via <a href="https://data.gov.hk/" target="_blank" rel="noopener">data.gov.hk</a>',
+  },
+  {
+    key: 'cctv-drivebc',
+    html: 'British Columbia highway cameras: <a href="https://www.drivebc.ca/" target="_blank" rel="noopener">DriveBC</a> — BC Ministry of Transportation and Transit (Open Government Licence – BC)',
+  },
+  {
+    key: 'cctv-ontario-511',
+    html: 'Ontario cameras: <a href="https://511on.ca/" target="_blank" rel="noopener">Ontario 511</a> — Ministry of Transportation (Open Government Licence – Ontario)',
+  },
+  {
+    key: 'cctv-digitraffic',
+    html: 'Finland weather cameras: Source: <a href="https://www.digitraffic.fi/" target="_blank" rel="noopener">Fintraffic / digitraffic.fi</a>, license CC 4.0 BY',
+  },
+  {
+    key: 'cctv-nzta',
+    html: 'New Zealand traffic cameras: <a href="https://nzta.govt.nz/traffic-and-travel-information/use-our-data" target="_blank" rel="noopener">NZ Transport Agency Waka Kotahi</a>',
+  },
+  {
+    key: 'cctv-windy',
+    html: 'Webcams provided by <a href="https://www.windy.com/webcams" target="_blank" rel="noopener">Windy.com</a> (when a Windy API key is configured)',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },

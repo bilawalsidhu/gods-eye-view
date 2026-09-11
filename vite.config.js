@@ -8,6 +8,8 @@
  *   3. Overpass  — OpenStreetMap road geometry queries
  *   4. GBFS     — bike-share station feeds
  *   5. CCTV     — traffic-camera frames, media streams, and fallback SVG
+ *               (Austin, Caltrans, TfL, Hong Kong TD, DriveBC, Ontario 511 and
+ *               other 511 feeds, Fintraffic Digitraffic, NZTA, Windy webcams)
  *   6. adsb.lol — military aircraft tracking
  *   7. AIS live — AISStream websocket-backed live vessel positions
  *   8. Terrain heights — Re:Earth keyless point-height lookups (ellipsoidal ground)
@@ -3527,7 +3529,7 @@ const DEFAULT_AUSTIN_ROWS_URL = 'https://data.austintexas.gov/api/views/b4k4-adk
 /** Default cap on Austin cameras after distance-based prioritization. */
 const DEFAULT_AUSTIN_MAX_SOURCES = 250;
 /** Global cap on total CCTV sources served by the proxy. */
-const DEFAULT_CCTV_MAX_SOURCES = 900;
+const DEFAULT_CCTV_MAX_SOURCES = 2000;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
@@ -4173,6 +4175,536 @@ async function loadTflSourcesFromOpenData() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Open-data camera packs beyond Austin / Caltrans / TfL
+//
+// Each pack is one government or directory feed with terms that allow reuse
+// with attribution (see DATA_SOURCES.md), normalized into the same camera
+// shape the registry already understands, capped per pack and prioritized
+// around a few anchor cities like Caltrans. Every pack is keyless except
+// Windy (WINDY_API_KEY) and the optional extra 511-platform feeds
+// (CCTV_511_FEEDS), fails independently, and can be switched off with
+// CCTV_<PACK>_ENABLED=0. Image URLs are pinned to each provider's official
+// host so a poisoned catalog can never point the frame proxy elsewhere.
+// ---------------------------------------------------------------------------
+const CCTV_PACK_USER_AGENT = 'GodsEyeView/1.0 (CCTV open-data client)';
+const HK_CAMERA_LIST_URL = 'https://static.data.gov.hk/td/traffic-snapshot-images/code/Traffic_Camera_Locations_En.xml';
+const HK_IMAGE_ORIGIN = 'https://tdcctv.data.one.gov.hk/';
+const HK_ANCHORS = [{ lat: 22.2819, lon: 114.1589 }, { lat: 22.3193, lon: 114.1694 }, { lat: 22.3700, lon: 114.1130 }];
+const DRIVEBC_URL = 'https://images.drivebc.ca/webcam/api/v1/webcams';
+const DRIVEBC_IMAGE_ORIGIN = 'https://images.drivebc.ca/';
+const DRIVEBC_ANCHORS = [
+  { lat: 49.2827, lon: -123.1207 }, // Vancouver
+  { lat: 48.4284, lon: -123.3656 }, // Victoria
+  { lat: 49.8880, lon: -119.4960 }, // Kelowna
+  { lat: 50.6745, lon: -120.3273 }, // Kamloops
+  { lat: 53.9171, lon: -122.7497 }, // Prince George
+];
+const ONTARIO_511_FEED = Object.freeze({
+  id: 'on',
+  label: 'Ontario 511',
+  url: 'https://511on.ca/api/v2/get/cameras',
+  imageOrigin: 'https://511on.ca/',
+  provider: 'Ontario 511 (Ministry of Transportation)',
+  regionLabel: 'Ontario',
+  license: 'Open Government Licence – Ontario',
+  anchors: [
+    { lat: 43.6532, lon: -79.3832 }, // Toronto
+    { lat: 45.4215, lon: -75.6972 }, // Ottawa
+    { lat: 43.2557, lon: -79.8711 }, // Hamilton
+    { lat: 42.9849, lon: -81.2453 }, // London ON
+    { lat: 42.3149, lon: -83.0364 }, // Windsor
+  ],
+});
+const DIGITRAFFIC_URL = 'https://tie.digitraffic.fi/api/weathercam/v1/stations';
+const DIGITRAFFIC_IMAGE_ORIGIN = 'https://weathercam.digitraffic.fi/';
+const DIGITRAFFIC_ANCHORS = [
+  { lat: 60.1699, lon: 24.9384 }, // Helsinki
+  { lat: 61.4978, lon: 23.7610 }, // Tampere
+  { lat: 60.4518, lon: 22.2666 }, // Turku
+  { lat: 65.0121, lon: 25.4651 }, // Oulu
+  { lat: 66.5039, lon: 25.7294 }, // Rovaniemi
+];
+const NZTA_URL = 'https://trafficnz.info/service/traffic/rest/4/cameras/all';
+const NZTA_IMAGE_ORIGIN = 'https://trafficnz.info/';
+const NZTA_ANCHORS = [
+  { lat: -36.8485, lon: 174.7633 }, // Auckland
+  { lat: -41.2865, lon: 174.7762 }, // Wellington
+  { lat: -43.5321, lon: 172.6362 }, // Christchurch
+  { lat: -37.7870, lon: 175.2793 }, // Hamilton
+];
+const WINDY_API_ORIGIN = 'https://api.windy.com';
+const WINDY_PREVIEW_TTL_MS = 8 * 60 * 1000; // free-tier image tokens expire after 10 minutes
+const WINDY_DEFAULT_NEARBY = [
+  // lat, lon, radius km — a global spread of well-covered cities; override with CCTV_WINDY_NEARBY.
+  [40.7128, -74.0060, 60], [34.0522, -118.2437, 60], [41.8781, -87.6298, 50], [25.7617, -80.1918, 50],
+  [51.5074, -0.1278, 50], [48.8566, 2.3522, 50], [52.5200, 13.4050, 50], [41.9028, 12.4964, 50],
+  [40.4168, -3.7038, 50], [47.3769, 8.5417, 60], [55.7558, 37.6173, 50], [35.6762, 139.6503, 60],
+  [37.5665, 126.9780, 50], [22.3193, 114.1694, 40], [1.3521, 103.8198, 40], [-33.8688, 151.2093, 50],
+  [-23.5505, -46.6333, 50], [19.4326, -99.1332, 50], [30.0444, 31.2357, 50], [-26.2041, 28.0473, 50],
+];
+
+/** Fetch a pack catalog as text (gzip negotiated; Digitraffic refuses uncompressed clients). */
+async function fetchPackText(url, accept, extraHeaders = {}) {
+  const resp = await fetch(url, {
+    headers: { 'User-Agent': CCTV_PACK_USER_AGENT, 'Accept-Encoding': 'gzip', Accept: accept, ...extraHeaders },
+    signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.text();
+}
+
+function packEnabled(name) {
+  return String(process.env[`CCTV_${name}_ENABLED`] ?? '1').trim() !== '0';
+}
+
+function packCap(name, fallback) {
+  const raw = Number(process.env[`CCTV_${name}_MAX_SOURCES`] || fallback);
+  return Number.isFinite(raw) ? Math.max(8, Math.min(600, Math.floor(raw))) : fallback;
+}
+
+/**
+ * Pose prior personalities shared with Caltrans/TfL (cctv design §1a): a
+ * published facing direction earns the confident wide personality, anything
+ * else the cautious one plus an id-hashed heading. Raw priors only — the
+ * client's ground snap and manual calibration own the truth.
+ */
+function posePriorFor(cameraId, headingDeg, groundElevationM) {
+  const hasHeading = Number.isFinite(headingDeg);
+  return {
+    headingDeg: hasHeading ? headingDeg : fallbackHeadingFromId(cameraId),
+    headingConfidence: hasHeading ? 'high' : 'low',
+    pitchDeg: hasHeading ? -24 : -18,
+    fovDeg: hasHeading ? 56 : 44,
+    rangeM: hasHeading ? 210 : 145,
+    mountHeightM: hasHeading ? 10 : 8,
+    groundElevationM,
+  };
+}
+
+/** Coordinate text → number; empty and blank strings are NaN, not 0. */
+function coordFromText(text) {
+  const trimmed = String(text ?? '').trim();
+  return trimmed ? toFiniteNumber(trimmed) : NaN;
+}
+
+/** DriveBC-style compass abbreviations (N, NE, …) plus the shared direction-word parser. */
+function compassAbbreviationToHeading(text) {
+  const key = String(text || '').trim().toUpperCase();
+  const table = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315 };
+  return Object.prototype.hasOwnProperty.call(table, key) ? table[key] : directionToHeading(key, true);
+}
+
+function decodeXmlEntities(text) {
+  return String(text)
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'");
+}
+
+/** Every `<tag>…</tag>` body in a flat XML feed (no XML library in the dependency set). */
+export function xmlBlocks(text, tag) {
+  const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`, 'g');
+  const out = [];
+  let match;
+  while ((match = re.exec(String(text ?? '')))) out.push(match[1]);
+  return out;
+}
+
+/** First `<tag>` text inside a block, entity-decoded and trimmed. */
+export function xmlText(block, tag) {
+  const match = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`).exec(String(block ?? ''));
+  return match ? decodeXmlEntities(match[1]).trim() : '';
+}
+
+/** Hong Kong Transport Department traffic snapshot list (XML, ~1000 cameras). */
+export function normalizeHongKongCameras(xml) {
+  const cameras = [];
+  for (const block of xmlBlocks(xml, 'image')) {
+    const key = xmlText(block, 'key').toUpperCase();
+    const lat = coordFromText(xmlText(block, 'latitude'));
+    const lon = coordFromText(xmlText(block, 'longitude'));
+    const url = xmlText(block, 'url');
+    if (!/^[A-Z0-9]+$/.test(key) || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    if (!url.startsWith(HK_IMAGE_ORIGIN)) continue;
+    const description = xmlText(block, 'description').replace(/\s*\[[A-Z0-9]+\]\s*$/, '').trim();
+    const district = xmlText(block, 'district');
+    const cameraId = `hk-${key.toLowerCase()}`;
+    cameras.push({
+      id: cameraId,
+      name: description || `Camera ${key}`,
+      city: district ? `${district}, Hong Kong` : 'Hong Kong',
+      cityId: 'hong-kong',
+      provider: 'Transport Department, Hong Kong',
+      lat,
+      lon,
+      ...posePriorFor(cameraId, NaN, 20),
+      feedType: 'image',
+      url,
+      snapshotUrl: url,
+      sourceKind: 'hk-td-open-data',
+      license: 'data.gov.hk open data terms (attribution)',
+    });
+  }
+  return cameras;
+}
+
+/** DriveBC highway webcams (JSON, ~1100 cameras, orientation published). */
+export function normalizeDriveBcCameras(payload) {
+  const cameras = [];
+  for (const cam of Array.isArray(payload?.webcams) ? payload.webcams : []) {
+    if (!cam || cam.isOn !== true || cam.shouldAppear === false) continue;
+    const lat = coordFromText(cam.location?.latitude);
+    const lon = coordFromText(cam.location?.longitude);
+    const url = String(cam.links?.imageDisplay || '');
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !url.startsWith(DRIVEBC_IMAGE_ORIGIN)) continue;
+    const cameraId = `bc-${String(cam.id).toLowerCase()}`;
+    const heading = compassAbbreviationToHeading(cam.orientation);
+    const elevation = toFiniteNumber(cam.location?.elevation, NaN);
+    const highway = String(cam.highway?.locationDescription || '').trim();
+    cameras.push({
+      id: cameraId,
+      name: String(cam.camName || cam.caption || `DriveBC ${cam.id}`).trim(),
+      city: highway ? `${highway}, British Columbia` : 'British Columbia',
+      cityId: 'bc',
+      provider: 'DriveBC (BC Ministry of Transportation and Transit)',
+      lat,
+      lon,
+      ...posePriorFor(cameraId, heading, Number.isFinite(elevation) ? Math.max(-50, Math.min(3000, elevation)) : 200),
+      feedType: 'image',
+      url,
+      snapshotUrl: url,
+      sourceKind: 'drivebc-open-data',
+      license: 'Open Government Licence – British Columbia',
+    });
+  }
+  return cameras;
+}
+
+/**
+ * The 511 platform used by Ontario, New York, Georgia, Louisiana, Alberta and
+ * others: one camera row with several Views, each an image URL and a "Looking
+ * East" style description that doubles as the facing direction.
+ */
+export function normalizeIteris511Cameras(rows, feed) {
+  const cameras = [];
+  const origin = String(feed?.imageOrigin || '');
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const lat = coordFromText(row?.Latitude);
+    const lon = coordFromText(row?.Longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    const views = Array.isArray(row?.Views) ? row.Views : [];
+    for (const view of views) {
+      if (String(view?.Status || 'Enabled').toLowerCase() !== 'enabled') continue;
+      const url = String(view?.Url || '');
+      if (!origin || !url.startsWith(origin)) continue;
+      const description = String(view?.Description || '').trim();
+      const cameraId = `${feed.id}-${row.Id}-${view.Id}`;
+      const heading = directionToHeading(`${description} ${row?.Direction || ''}`, true);
+      const location = String(row?.Location || row?.Roadway || `Camera ${row.Id}`).trim();
+      cameras.push({
+        id: cameraId,
+        name: description && !/^looking down$/i.test(description) ? `${location} — ${description}` : location,
+        city: feed.regionLabel || feed.label,
+        cityId: feed.id,
+        provider: feed.provider,
+        lat,
+        lon,
+        ...posePriorFor(cameraId, heading, 120),
+        feedType: 'image',
+        url,
+        snapshotUrl: url,
+        sourceKind: `iteris511-${feed.id}`,
+        license: feed.license,
+      });
+    }
+  }
+  return cameras;
+}
+
+/** Fintraffic Digitraffic weather cameras (GeoJSON stations; one preset per station keeps the pack bounded). */
+export function normalizeDigitrafficCameras(geojson) {
+  const cameras = [];
+  for (const feature of Array.isArray(geojson?.features) ? geojson.features : []) {
+    const props = feature?.properties || {};
+    const coords = feature?.geometry?.coordinates;
+    const lon = coordFromText(coords?.[0]);
+    const lat = coordFromText(coords?.[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    if (props.collectionStatus && props.collectionStatus !== 'GATHERING') continue;
+    const preset = (Array.isArray(props.presets) ? props.presets : []).find((p) => p?.id && p.inCollection !== false);
+    if (!preset || !/^[A-Z0-9]+$/i.test(String(preset.id))) continue;
+    const presetId = String(preset.id);
+    const cameraId = `fi-${presetId.toLowerCase()}`;
+    const url = `${DIGITRAFFIC_IMAGE_ORIGIN}${presetId}.jpg`;
+    const rawName = String(props.name || props.id || presetId);
+    const name = rawName.replace(/^([a-z]{1,3}\d+)_/i, (_, road) => `${road.toUpperCase()} `).replace(/_/g, ' ');
+    cameras.push({
+      id: cameraId,
+      name,
+      city: 'Finland',
+      cityId: 'fi',
+      provider: 'Fintraffic / Digitraffic',
+      lat,
+      lon,
+      ...posePriorFor(cameraId, NaN, 80),
+      feedType: 'image',
+      url,
+      snapshotUrl: url,
+      sourceKind: 'digitraffic-weathercam',
+      license: 'CC BY 4.0 — Source: Fintraffic / digitraffic.fi',
+    });
+  }
+  return cameras;
+}
+
+/** NZ Transport Agency traffic cameras (XML, ~300 cameras with travel direction). */
+export function normalizeNztaCameras(xml) {
+  const cameras = [];
+  for (const rawBlock of xmlBlocks(xml, 'camera')) {
+    // The camera element nests journey/journeyLeg elements with their own <name>; strip them first.
+    const block = rawBlock.replace(/<journey>[\s\S]*?<\/journey>/g, '').replace(/<journeyLeg>[\s\S]*?<\/journeyLeg>/g, '');
+    if (xmlText(block, 'offline') === 'true' || xmlText(block, 'underMaintenance') === 'true') continue;
+    const id = xmlText(block, 'id');
+    const lat = coordFromText(xmlText(block, 'latitude'));
+    const lon = coordFromText(xmlText(block, 'longitude'));
+    const imagePath = xmlText(block, 'imageUrl');
+    if (!/^\d+$/.test(id) || !Number.isFinite(lat) || !Number.isFinite(lon) || !/^\/camera\/[\w.-]+$/.test(imagePath)) continue;
+    const cameraId = `nz-${id}`;
+    const url = `${NZTA_IMAGE_ORIGIN}${imagePath.slice(1)}`;
+    const region = xmlText(block, 'region');
+    const heading = directionToHeading(xmlText(block, 'direction'));
+    cameras.push({
+      id: cameraId,
+      name: xmlText(block, 'description') || xmlText(block, 'name') || `NZTA ${id}`,
+      city: region ? `${region}, New Zealand` : 'New Zealand',
+      cityId: 'nz',
+      provider: 'NZ Transport Agency Waka Kotahi',
+      lat,
+      lon,
+      ...posePriorFor(cameraId, heading, 60),
+      feedType: 'image',
+      url,
+      snapshotUrl: url,
+      sourceKind: 'nzta-open-data',
+      license: 'NZTA open data terms (attribution required)',
+    });
+  }
+  return cameras;
+}
+
+/** Windy Webcams API v3 list payload → cameras (preview URLs carry expiring tokens; see resolveWindyFrameUrl). */
+export function normalizeWindyWebcams(payload) {
+  const cameras = [];
+  for (const cam of Array.isArray(payload?.webcams) ? payload.webcams : []) {
+    if (!cam || (cam.status && cam.status !== 'active')) continue;
+    const lat = coordFromText(cam.location?.latitude);
+    const lon = coordFromText(cam.location?.longitude);
+    const preview = String(cam.images?.current?.preview || '');
+    const webcamId = String(cam.webcamId || '').trim();
+    if (!/^\d+$/.test(webcamId) || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    if (!isWindyImageUrl(preview)) continue;
+    const cameraId = `windy-${webcamId}`;
+    const place = [cam.location?.city, cam.location?.country].filter(Boolean).join(', ');
+    cameras.push({
+      id: cameraId,
+      name: String(cam.title || `Windy webcam ${webcamId}`).trim(),
+      city: place || 'Windy webcam',
+      cityId: 'windy',
+      provider: 'Windy.com webcams',
+      lat,
+      lon,
+      ...posePriorFor(cameraId, NaN, 50),
+      feedType: 'image',
+      url: preview,
+      snapshotUrl: preview,
+      detailUrl: /^https:\/\/(www\.)?windy\.com\//.test(String(cam.urls?.detail || '')) ? String(cam.urls.detail) : `https://www.windy.com/webcams/${webcamId}`,
+      windyId: webcamId,
+      sourceKind: 'windy',
+      license: 'Webcams provided by Windy.com',
+    });
+  }
+  return cameras;
+}
+
+function isWindyImageUrl(value) {
+  try {
+    const url = new URL(String(value));
+    return url.protocol === 'https:' && /(^|\.)windy\.com$/.test(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+async function loadHongKongSourcesFromOpenData() {
+  if (!packEnabled('HK')) return [];
+  try {
+    const cameras = normalizeHongKongCameras(await fetchPackText(HK_CAMERA_LIST_URL, 'application/xml, text/xml'));
+    const prioritized = prioritizeSources(cameras, packCap('HK', 200), HK_ANCHORS);
+    console.log(`[CCTV] Loaded Hong Kong TD camera sources: ${cameras.length} listed (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] Hong Kong TD download error:', error?.message || error);
+    return [];
+  }
+}
+
+async function loadDriveBcSourcesFromOpenData() {
+  if (!packEnabled('DRIVEBC')) return [];
+  try {
+    const cameras = normalizeDriveBcCameras(JSON.parse(await fetchPackText(DRIVEBC_URL, 'application/json')));
+    const prioritized = prioritizeSources(cameras, packCap('DRIVEBC', 200), DRIVEBC_ANCHORS);
+    console.log(`[CCTV] Loaded DriveBC camera sources: ${cameras.length} on (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] DriveBC download error:', error?.message || error);
+    return [];
+  }
+}
+
+/**
+ * Extra 511-platform feeds from CCTV_511_FEEDS (JSON array). Keys travel in
+ * the URL the operator supplies; the feed object shape mirrors ONTARIO_511_FEED:
+ *   [{"id":"ny","label":"511NY","url":"https://511ny.org/api/v2/get/cameras?key=…",
+ *     "imageOrigin":"https://511ny.org/","provider":"New York State DOT","regionLabel":"New York",
+ *     "license":"511NY developer terms","anchors":[{"lat":40.71,"lon":-74.0}],"max":150}]
+ */
+function extra511FeedsFromEnv() {
+  const raw = String(process.env.CCTV_511_FEEDS || '').trim();
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return (Array.isArray(parsed) ? parsed : []).filter((feed) => (
+      feed && /^[a-z0-9-]{2,12}$/.test(String(feed.id || '')) && /^https:\/\//.test(String(feed.url || '')) && /^https:\/\//.test(String(feed.imageOrigin || ''))
+    )).map((feed) => ({
+      id: String(feed.id).toLowerCase(),
+      label: String(feed.label || feed.id),
+      url: String(feed.url),
+      imageOrigin: String(feed.imageOrigin),
+      provider: String(feed.provider || feed.label || feed.id),
+      regionLabel: String(feed.regionLabel || feed.label || feed.id),
+      license: String(feed.license || 'See the operator\'s developer terms'),
+      anchors: Array.isArray(feed.anchors) ? feed.anchors : [],
+      max: Number(feed.max) || 150,
+    }));
+  } catch (error) {
+    console.warn('[CCTV] CCTV_511_FEEDS is not valid JSON:', error?.message || error);
+    return [];
+  }
+}
+
+async function load511SourcesFromOpenData() {
+  const feeds = [...(packEnabled('ON511') ? [ONTARIO_511_FEED] : []), ...extra511FeedsFromEnv()];
+  const settled = await Promise.allSettled(feeds.map(async (feed) => {
+    const rows = JSON.parse(await fetchPackText(feed.url, 'application/json'));
+    const cameras = normalizeIteris511Cameras(rows, feed);
+    const cap = feed.id === 'on' ? packCap('ON511', 200) : Math.max(8, Math.min(600, feed.max));
+    const prioritized = prioritizeSources(cameras, cap, feed.anchors);
+    console.log(`[CCTV] Loaded ${feed.label} camera views: ${cameras.length} enabled (using nearest ${prioritized.length})`);
+    return prioritized;
+  }));
+  const cameras = [];
+  settled.forEach((result, index) => {
+    if (result.status === 'fulfilled') cameras.push(...result.value);
+    else console.warn(`[CCTV] ${feeds[index].label} download error:`, result.reason?.message || result.reason);
+  });
+  return cameras;
+}
+
+async function loadDigitrafficSourcesFromOpenData() {
+  if (!packEnabled('DIGITRAFFIC')) return [];
+  try {
+    const cameras = normalizeDigitrafficCameras(JSON.parse(await fetchPackText(DIGITRAFFIC_URL, 'application/geo+json, application/json')));
+    const prioritized = prioritizeSources(cameras, packCap('DIGITRAFFIC', 150), DIGITRAFFIC_ANCHORS);
+    console.log(`[CCTV] Loaded Digitraffic weathercam sources: ${cameras.length} gathering (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] Digitraffic download error:', error?.message || error);
+    return [];
+  }
+}
+
+async function loadNztaSourcesFromOpenData() {
+  if (!packEnabled('NZTA')) return [];
+  try {
+    const cameras = normalizeNztaCameras(await fetchPackText(NZTA_URL, 'application/xml, text/xml'));
+    const prioritized = prioritizeSources(cameras, packCap('NZTA', 150), NZTA_ANCHORS);
+    console.log(`[CCTV] Loaded NZTA camera sources: ${cameras.length} online (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] NZTA download error:', error?.message || error);
+    return [];
+  }
+}
+
+function windyNearbyPoints() {
+  const raw = String(process.env.CCTV_WINDY_NEARBY || '').trim();
+  if (!raw) return WINDY_DEFAULT_NEARBY;
+  const points = raw.split(';').map((entry) => entry.split(',').map(Number)).filter((p) => p.length === 3 && p.every(Number.isFinite));
+  return points.length ? points : WINDY_DEFAULT_NEARBY;
+}
+
+async function windyGet(path, apiKey) {
+  const resp = await fetch(`${WINDY_API_ORIGIN}${path}`, {
+    headers: { 'x-windy-api-key': apiKey, Accept: 'application/json', 'User-Agent': CCTV_PACK_USER_AGENT },
+    signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+async function loadWindySourcesFromApi() {
+  const apiKey = String(process.env.WINDY_API_KEY || '').trim();
+  if (!apiKey || !packEnabled('WINDY')) return [];
+  const byId = new Map();
+  const settled = await Promise.allSettled(windyNearbyPoints().map(async ([lat, lon, radiusKm]) => {
+    const query = new URLSearchParams({
+      limit: '50',
+      nearby: `${lat},${lon},${radiusKm}`,
+      include: 'images,location,urls',
+      sortKey: 'popularity',
+      sortDirection: 'desc',
+    });
+    return normalizeWindyWebcams(await windyGet(`/webcams/api/v3/webcams?${query}`, apiKey));
+  }));
+  for (const result of settled) {
+    if (result.status !== 'fulfilled') {
+      console.warn('[CCTV] Windy webcams request failed:', result.reason?.message || result.reason);
+      continue;
+    }
+    for (const camera of result.value) byId.set(camera.id, camera);
+  }
+  const cameras = [...byId.values()];
+  for (const camera of cameras) _windyPreviewCache.set(camera.windyId, { url: camera.snapshotUrl, at: Date.now() });
+  const capped = cameras.slice(0, packCap('WINDY', 200));
+  console.log(`[CCTV] Loaded Windy webcam sources: ${cameras.length} active near ${windyNearbyPoints().length} anchors (using ${capped.length})`);
+  return capped;
+}
+
+/** @type {Map<string, {url: string, at: number}>} fresh Windy preview URLs (tokens expire after 10 min). */
+const _windyPreviewCache = new Map();
+
+/** A Windy preview URL still inside its token lifetime, refreshed through the API when stale. */
+async function resolveWindyFrameUrl(source) {
+  const webcamId = String(source?.windyId || '').trim();
+  const fallback = source?.snapshotUrl || source?.url || '';
+  const apiKey = String(process.env.WINDY_API_KEY || '').trim();
+  if (!webcamId || !apiKey) return fallback;
+  const cached = _windyPreviewCache.get(webcamId);
+  if (cached && Date.now() - cached.at < WINDY_PREVIEW_TTL_MS) return cached.url;
+  try {
+    const payload = await windyGet(`/webcams/api/v3/webcams/${encodeURIComponent(webcamId)}?include=images`, apiKey);
+    const preview = String(payload?.images?.current?.preview || '');
+    if (isWindyImageUrl(preview)) {
+      _windyPreviewCache.set(webcamId, { url: preview, at: Date.now() });
+      return preview;
+    }
+  } catch (error) {
+    console.warn(`[CCTV] Windy preview refresh failed for ${webcamId}:`, error?.message || error);
+  }
+  return fallback;
+}
+
 /**
  * Normalize a raw CCTV source item into a canonical shape with safe defaults.
  *
@@ -4206,6 +4738,10 @@ function normalizeSourceItem(item) {
     // badge can distinguish them from raw automated priors (e.g. Austin Open
     // Data, which never sets this field). Passed through as-is to the client.
     poseSource: item.poseSource === 'curated' ? 'curated' : undefined,
+    // Directory packs (Windy) must link each image back to its page; keep the
+    // link and the provider id so the card and the frame route can use them.
+    detailUrl: typeof item.detailUrl === 'string' && /^https:\/\//.test(item.detailUrl) ? item.detailUrl : undefined,
+    windyId: item.windyId ? String(item.windyId) : undefined,
   };
 }
 
@@ -4253,18 +4789,26 @@ async function refreshCctvSources() {
   let fromAustin = [];
   let fromCaltrans = [];
   let fromTfl = [];
+  let fromPacks = [];
   if (needsLiveSources) {
-    const [austinResult, caltransResult, tflResult] = await Promise.allSettled([
+    const [austinResult, caltransResult, tflResult, ...packResults] = await Promise.allSettled([
       loadAustinSourcesFromOpenData(),
       loadCaltransSourcesFromOpenData(),
       tflEnabled ? loadTflSourcesFromOpenData() : Promise.resolve([]),
+      loadHongKongSourcesFromOpenData(),
+      loadDriveBcSourcesFromOpenData(),
+      load511SourcesFromOpenData(),
+      loadDigitrafficSourcesFromOpenData(),
+      loadNztaSourcesFromOpenData(),
+      loadWindySourcesFromApi(),
     ]);
     fromAustin = austinResult.status === 'fulfilled' ? austinResult.value : [];
     fromCaltrans = caltransResult.status === 'fulfilled' ? caltransResult.value : [];
     fromTfl = tflResult.status === 'fulfilled' ? tflResult.value : [];
+    fromPacks = packResults.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
   }
   // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
-  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromFile, ...fromEnv];
+  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromPacks, ...fromFile, ...fromEnv];
 
   // Deduplicate by camera ID (last-write wins because of Map.set)
   const byId = new Map();
@@ -4277,7 +4821,7 @@ async function refreshCctvSources() {
 
   const mergedSources = Array.from(byId.values());
   const maxRaw = Number(process.env.CCTV_MAX_SOURCES || DEFAULT_CCTV_MAX_SOURCES);
-  const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(1200, Math.floor(maxRaw))) : DEFAULT_CCTV_MAX_SOURCES;
+  const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(3000, Math.floor(maxRaw))) : DEFAULT_CCTV_MAX_SOURCES;
   if (mergedSources.length > maxCount) {
     console.warn(`[CCTV] source catalog ${mergedSources.length} exceeds cap ${maxCount}; keeping the first ${maxCount} (raise CCTV_MAX_SOURCES or lower a per-pack cap to change which).`);
   }
@@ -4524,7 +5068,7 @@ function cctvProxy() {
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
   /** Cap on health map entries to prevent unbounded growth. Sized to cover the
-   * full served catalog (CCTV_MAX_SOURCES hard-bounds at 1200) so health/status
+   * full served catalog (CCTV_MAX_SOURCES hard-bounds at 3000) so health/status
    * observability isn't silently evicted for a default 800-camera catalog. */
   const HEALTH_MAX_ENTRIES = 1200;
 
@@ -4743,9 +5287,10 @@ function cctvProxy() {
 
           // Only use server-registered upstream URLs — never accept client-supplied URLs
           // (prevents SSRF via ?upstream= query parameter)
-          const upstreamCandidate =
-            source?.snapshotUrl
-            || (!isVideoFeedType(normalizeFeedType(source?.feedType)) ? source?.url : '');
+          const upstreamCandidate = source?.sourceKind === 'windy'
+            ? await resolveWindyFrameUrl(source)
+            : (source?.snapshotUrl
+              || (!isVideoFeedType(normalizeFeedType(source?.feedType)) ? source?.url : ''));
 
           const upstreamImage = await fetchCctvImageFromUpstream(upstreamCandidate);
           if (upstreamImage?.ok) {

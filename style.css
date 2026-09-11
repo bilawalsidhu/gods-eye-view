@@ -6414,6 +6414,23 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   color: var(--text-secondary);
 }
 
+.cctv-attribution-link {
+  display: inline-block;
+  margin: 2px 0 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--accent, #7cc4ff);
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+}
+
+.cctv-attribution-link:hover,
+.cctv-attribution-link:focus-visible {
+  text-decoration: none;
+  border-bottom-style: solid;
+}
+
 #cctv-source-badge {
   align-self: flex-start;
   border: 1px solid rgba(0, 212, 255, 0.32);
@@ -6817,6 +6834,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 #cctv-panel.collapsed .cctv-calibration-block,
 #cctv-panel.collapsed .cctv-frame-wrap,
 #cctv-panel.collapsed #cctv-source-badge,
+#cctv-panel.collapsed #cctv-attribution-link,
 #cctv-panel.collapsed #cctv-meta,
 #cctv-panel.collapsed .cctv-summary-label,
 #cctv-panel.collapsed #cctv-summary,
