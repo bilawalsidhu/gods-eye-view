@@ -86,6 +86,7 @@ html, body {
   position: absolute;
   top: 0;
   left: 0;
+  touch-action: none;
 }
 
 /* Unified world-overlay host: detection uses one host-owned blend surface

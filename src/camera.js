@@ -1,5 +1,7 @@
 import * as Cesium from 'cesium';
 
+export { installTouchpadCamera } from './cameraTouchpad.js';
+
 /**
  * Camera presets for notable locations.
  * Phase 1 default: fly to Austin, TX on load.

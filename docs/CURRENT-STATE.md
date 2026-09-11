@@ -2185,7 +2185,13 @@ silently demoting every later lookup for the session.
   not claim that lane or partially change controls.
   Direct globe pointer and wheel gestures supersede the delayed shared camera
   and selected-subject Follow without aborting unrelated layer visibility or
-  display-option restoration.
+  display-option restoration. On a fine pointer (typical laptop),
+  `installTouchpadCamera` (`src/cameraTouchpad.js`) maps Windows Precision
+  Touchpad pinch (Ctrl/Meta+wheel) and continuous two-finger scroll to zoom
+  at `0.002 × altitude × wheel Δ`, and drops unmodified PINCH from tilt so
+  two-finger motion does not orbit. Discrete mouse-wheel notches and
+  touch-screen pinch-zoom stay on Cesium; click-drag orbit and Ctrl+drag
+  tilt are unchanged.
 - The initial restore has one terminal promise spanning the camera flight,
   visual/map/panel callback work, every production layer result, and the
   destination-scoped selected-subject Follow result. Hash writes remain
