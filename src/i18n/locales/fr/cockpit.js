@@ -3,7 +3,7 @@ export const NAMESPACE = 'cockpit';
 
 export default {
   // index.html #cockpit-hud section aria-label
-  'hud.sectionLabel': 'Vue du cockpit de l’aéronef',
+  'hud.sectionLabel': 'Vue du cockpit de l\'aéronef',
   // index.html #map-view-switch button label
   'exit.label': 'QUITTER LE COCKPIT',
   // index.html .cockpit-readout-label
@@ -27,7 +27,7 @@ export default {
 
   // index.html #style-indicator / #clean-view-exit (visual-style chrome)
   'presets.activeStyleLabel': 'STYLE ACTUEL',
-  'display.cleanViewExitTitle': 'Réafficher les commandes de l’interface',
+  'display.cleanViewExitTitle': 'Réafficher les commandes de l\'interface',
   'display.cleanViewExitLabel': 'QUITTER LA VUE ÉPURÉE',
 
   // index.html control panel — Visual Presets dock tray
@@ -39,7 +39,7 @@ export default {
   'presets.pinTitle': 'Garder les Préréglages visuels ouverts',
   'presets.styleNormalTitle': 'Affiche le globe sans filtre visuel.',
   'presets.styleNormalLabel': 'Normal',
-  'presets.styleCrtTitle': 'Émule un CRT à phosphore vert avec lignes de balayage et courbure d’écran.',
+  'presets.styleCrtTitle': 'Émule un CRT à phosphore vert avec lignes de balayage et courbure d\'écran.',
   'presets.styleCrtLabel': 'CRT',
   'presets.styleNvgTitle': 'Simule des jumelles de vision nocturne avec intensification verte et vignettage de tube.',
   'presets.styleNvgLabel': 'NVG',
@@ -97,7 +97,7 @@ export default {
   'display.featherTitle': 'Adoucissement du bord du viseur, en pourcentage du rayon du hublot',
   'display.celestialToggleTitle': 'Anneau céleste — révèle le globe complet',
   'display.celestialLabel': 'Céleste',
-  'display.cleanViewToggleTitle': 'Masquer l’habillage de l’interface',
+  'display.cleanViewToggleTitle': 'Masquer l\'habillage de l\'interface',
   'display.cleanViewLabel': 'Interface épurée',
   'display.bloomToggleTitle': 'Bloom / Éclat',
   'display.bloomLabel': 'Bloom',
@@ -112,7 +112,7 @@ export default {
   'location.pinTitle': 'Garder le volet Position ouvert',
   // Initial mini-status values; ui.js rewrites both once a place resolves.
   'location.miniCityInitial': '📍 Position : --',
-  'location.miniPoiInitial': 'Point d’intérêt : --',
+  'location.miniPoiInitial': 'Point d\'intérêt : --',
   'location.searchToggleTitle': 'Rechercher une position',
   'location.searchPlaceholder': 'Rechercher une position...',
 
@@ -127,7 +127,7 @@ export default {
   // Initial meta line; ui.js rewrites it from live track state.
   'hud.aircraftMetaInitial': 'SUIVI EN DIRECT · CAP ALIGNÉ',
   'hud.visionGroupAriaLabel': 'Style de vision du cockpit',
-  'hud.compassAriaLabel': 'Cap actuel de l’aéronef',
+  'hud.compassAriaLabel': 'Cap actuel de l\'aéronef',
   'readout.rimGroundSpeed': 'VITESSE SOL · KTS',
   'readout.rimAltitude': 'ALTITUDE · FT',
 
@@ -170,7 +170,7 @@ export default {
   'brief.nextTitle': 'Page de briefing suivante',
   // Title is static prose; the visible label + aria-label are CYCLE ON/OFF
   // states that belong to the phase-3 runtime extraction.
-  'brief.autoTitle': 'Fait défiler automatiquement les pages de briefing toutes les 9 secondes (Signaux → Actualités → Local). Se met en pause pendant le survol ou le focus du panneau. Les données de signaux en direct s’actualisent en continu dans tous les cas.',
+  'brief.autoTitle': 'Fait défiler automatiquement les pages de briefing toutes les 9 secondes (Signaux → Actualités → Local). Se met en pause pendant le survol ou le focus du panneau. Les données de signaux en direct s\'actualisent en continu dans tous les cas.',
   'brief.collapseAriaLabel': 'Réduire le panneau de briefing du cockpit',
   'brief.collapseTitle': 'Réduire le panneau de briefing',
   'brief.signalsAriaLabel': 'Signaux en direct',
@@ -220,8 +220,8 @@ export default {
   'context.awarenessOffHint': 'SÉLECTIONNEZ DES CONTACTS POUR CHARGER LA PROXIMITÉ OBSERVÉE / CARTOGRAPHIÉE',
   'context.rosterAriaLabel': 'Missions spatiales disponibles',
   'context.rosterTitle': 'MISSIONS DISPONIBLES',
-  'context.rosterHint': 'SÉLECTIONNEZ UNE MISSION POUR L’INSPECTER',
-  'context.rosterLoading': 'CHARGEMENT DE L’INDEX DES MISSIONS SUR 30 JOURS',
+  'context.rosterHint': 'SÉLECTIONNEZ UNE MISSION POUR L\'INSPECTER',
+  'context.rosterLoading': 'CHARGEMENT DE L\'INDEX DES MISSIONS SUR 30 JOURS',
   'context.radioToggleAriaLabel': 'Ouvrir les commandes Radio compactes',
   'context.radioToggleTitle': 'Ouvrir les commandes Radio compactes',
   'context.radioMiniGroupAriaLabel': 'Commandes Radio compactes',
@@ -242,12 +242,12 @@ export default {
   'context.radioMiniVolumeAriaLabel': 'Volume de la Radio compacte',
 
   // index.html cockpit utility controls + compact radio popover
-  'utility.controlsAriaLabel': 'Commandes d’affichage et de Radio du cockpit',
+  'utility.controlsAriaLabel': 'Commandes d\'affichage et de Radio du cockpit',
   'utility.displayLabel': 'AFFICHAGE',
   'utility.radioLabel': 'RADIO',
-  'utility.displayToggleAriaLabel': 'Développer les options d’affichage du cockpit',
-  'utility.displayToggleTitle': 'Développer les options d’affichage du cockpit',
-  'utility.displayPanelAriaLabel': 'Options d’affichage du cockpit',
+  'utility.displayToggleAriaLabel': 'Développer les options d\'affichage du cockpit',
+  'utility.displayToggleTitle': 'Développer les options d\'affichage du cockpit',
+  'utility.displayPanelAriaLabel': 'Options d\'affichage du cockpit',
   'utility.radioToggleAriaLabel': 'Développer les commandes Radio du cockpit',
   'utility.radioToggleTitle': 'Développer les commandes Radio du cockpit',
   'utility.radioPanelAriaLabel': 'Commandes Radio compactes du cockpit',
@@ -285,7 +285,7 @@ export default {
   'context.weatherStateOn': 'ACTIVÉ',
   'context.weatherStateOff': 'DÉSACTIVÉ',
   // syncTr3bToggle(): converted-state title sibling of context.tr3bTitle.
-  'context.tr3bRestoreTitle': 'Restaurer l’aéronef réel',
+  'context.tr3bRestoreTitle': 'Restaurer l\'aéronef réel',
   // setVisionMode(): the style token is dynamic, so the sentence is split out
   // of the seeded vision.currentAriaLabel/currentTitle (whose values pin the
   // NORMAL default) into {style} templates.
@@ -302,7 +302,7 @@ export default {
   'signal.contextStandby': 'CONTEXTE EN VEILLE',
   'signal.contextStandbyHint': 'ACTIVEZ LE CONTEXTE GLOBAL POUR LES PINGS DE PROXIMITÉ',
   'signal.contactLostTitle': 'CONTACT PERDU · {subject}',
-  'signal.contactLostDetail': 'LE SUJET A QUITTÉ SON FLUX · L’AFFICHAGE CONSERVE LE DERNIER ÉTAT CONNU',
+  'signal.contactLostDetail': 'LE SUJET A QUITTÉ SON FLUX · L\'AFFICHAGE CONSERVE LE DERNIER ÉTAT CONNU',
   'signal.classMilitary': 'VOL MILITAIRE',
   'signal.classCommercial': 'VOL COMMERCIAL',
   'signal.contactCurrent': '{aircraftClass} · ACTUEL',
@@ -389,9 +389,9 @@ export default {
   'share.toastCopyFailed': 'Échec de la copie',
   'location.toastNotFound': 'Position introuvable',
   'location.toastSearchFailed': 'Échec de la recherche',
-  'location.toastFlyToPoiFirst': 'Survolez d’abord un point d’intérêt',
+  'location.toastFlyToPoiFirst': 'Survolez d\'abord un point d\'intérêt',
   'actions.clearLayersBusyAria': 'Effacement des couches de données sélectionnées',
-  'actions.clearLayersFailedToast': 'Impossible d’effacer les couches de données sélectionnées',
+  'actions.clearLayersFailedToast': 'Impossible d\'effacer les couches de données sélectionnées',
 
   // Global status chip notices (_handleShareTrackingRestoreStatus).
   'status.acquiring': 'ACQUISITION',
@@ -404,18 +404,18 @@ export default {
   // Context mode user-facing action failures.
   'context.modeContext': 'Contexte',
   'context.modeSpaceMissions': 'Missions spatiales',
-  'context.toastStartBlocked': '{mode} n’a pas pu démarrer car une autre couche ne s’est pas arrêtée proprement',
-  'context.toastTransitionFailedContacts': 'Contacts n’a pas pu effectuer la transition demandée ; réessayez',
-  'context.toastTransitionFailedMissions': 'Missions spatiales n’a pas pu effectuer la transition demandée ; réessayez',
-  'context.toastInstallationsRefreshFailed': 'Impossible d’actualiser les installations à proximité ; réessayez',
-  'context.toastRestoreFailed': 'Contexte n’a pas pu restaurer toutes les couches ; réessayez',
+  'context.toastStartBlocked': '{mode} n\'a pas pu démarrer car une autre couche ne s\'est pas arrêtée proprement',
+  'context.toastTransitionFailedContacts': 'Contacts n\'a pas pu effectuer la transition demandée ; réessayez',
+  'context.toastTransitionFailedMissions': 'Missions spatiales n\'a pas pu effectuer la transition demandée ; réessayez',
+  'context.toastInstallationsRefreshFailed': 'Impossible d\'actualiser les installations à proximité ; réessayez',
+  'context.toastRestoreFailed': 'Contexte n\'a pas pu restaurer toutes les couches ; réessayez',
   'context.toastZoomToSearch': 'Zoomez pour rechercher les installations cartographiées',
   'context.toastInstallationsRefreshed': 'Installations à proximité actualisées',
   'context.toastLayerUnavailable': 'Cette couche est indisponible dans le mode Contexte actuel',
   'context.actionStart': 'démarrer',
   'context.actionStop': 'arrêter',
-  'context.toastLayerLifecycleFailed': '{layerId} n’a pas pu {action} proprement',
-  'radio.toastLifecycleFailed': 'Radio n’a pas pu {action} proprement',
+  'context.toastLayerLifecycleFailed': '{layerId} n\'a pas pu {action} proprement',
+  'radio.toastLifecycleFailed': 'Radio n\'a pas pu {action} proprement',
 
   // CCTV sync chip captions + calibration/availability toasts.
   'cctv.syncLoadingFrames': 'chargement des images',
@@ -439,10 +439,10 @@ export default {
   // _syncContextRadioLauncherState(): close-state sibling of the seeded
   // context.radioToggleAriaLabel ('Open compact Radio controls').
   'context.radioToggleCloseAriaLabel': 'Fermer les commandes Radio compactes',
-  'context.toastMissionsCancelRestoreFailed': 'L’annulation des Missions spatiales n’a pas pu restaurer l’état précédent des couches',
+  'context.toastMissionsCancelRestoreFailed': 'L\'annulation des Missions spatiales n\'a pas pu restaurer l\'état précédent des couches',
   // Cockpit utility disclosures: collapse-state siblings of the seeded
   // utility.*ToggleAriaLabel expand keys.
-  'utility.displayToggleCollapseAriaLabel': 'Réduire les options d’affichage du cockpit',
+  'utility.displayToggleCollapseAriaLabel': 'Réduire les options d\'affichage du cockpit',
   'utility.radioToggleCollapseAriaLabel': 'Réduire les commandes Radio du cockpit',
 
   // Radio panel runtime states (state-sibling keys so no state can leak
@@ -480,12 +480,12 @@ export default {
   'cctv.metaProjectionOff': 'DÉSACTIVÉ',
   'cctv.metaTemplate': '{city} · HDG {heading} · FOV {fov} · PORTÉE {range}m · {projection}{calBadge} · {provider}{status}',
   'cctv.metaCamerasClick': {
-    one: '{count} caméra chargée · cliquez sur une caméra pour l’activer',
-    other: '{count} caméras chargées · cliquez sur une caméra pour l’activer',
+    one: '{count} caméra chargée · cliquez sur une caméra pour l\'activer',
+    other: '{count} caméras chargées · cliquez sur une caméra pour l\'activer',
   },
   'cctv.metaCamerasEnable': {
-    one: '{count} caméra chargée · activez CCTV pour l’activer',
-    other: '{count} caméras chargées · activez CCTV pour l’activer',
+    one: '{count} caméra chargée · activez CCTV pour l\'activer',
+    other: '{count} caméras chargées · activez CCTV pour l\'activer',
   },
   'cctv.summaryNoneAvailable': 'Aucun résumé disponible.',
 
