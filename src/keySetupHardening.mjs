@@ -150,6 +150,15 @@ export function hardenCredentialFile(filepath, {
     ], {
       env: {
         ...environment,
+        // Pin the module path to Windows PowerShell's own. Installing
+        // PowerShell 7 prepends its module directories to PSModulePath for the
+        // whole session, and 5.1 then fails to load its bundled
+        // Microsoft.PowerShell.Security — so Get-Acl does not exist, this verify
+        // exits non-zero, and hardening fails closed on a machine where icacls
+        // applied the DACL correctly. Derived from the already-validated
+        // interpreter path so it inherits the canonical-path checks above
+        // rather than trusting the environment a second time.
+        PSModulePath: path.win32.join(path.win32.dirname(tools.powershell), 'Modules'),
         GEV_ACL_FILE: filepath,
         GEV_ACL_USER_SID: sid,
       },
