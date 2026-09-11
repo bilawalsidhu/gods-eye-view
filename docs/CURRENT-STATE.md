@@ -2766,3 +2766,25 @@ nanoid 3.3.19. Cesium remains on 1.138.0. Browser QA uses Puppeteer 25.10.0;
 image-processing tools use Sharp 0.35.4. QA scripts await Puppeteer's asynchronous
 executable-path lookup before testing or passing the path to Chrome. Supported Node versions remain
 24.14.x and 26.x. Use `npm ci` to reproduce the checked-in dependency tree.
+
+## CCTV open-data camera packs
+
+> - **Packs:** Hong Kong Transport Department (XML list, ~1000), DriveBC (JSON,
+>   ~1100, orientation), Ontario 511 (JSON, ~950 cameras × views, "Looking …"
+>   descriptions) plus operator-configured 511-platform feeds
+>   (`CCTV_511_FEEDS`), Fintraffic Digitraffic weather cameras (GeoJSON, gzip
+>   mandatory, one preset per station), NZ Transport Agency (XML, travel
+>   direction), Windy.com webcams (`WINDY_API_KEY`; 20 default city anchors
+>   or `CCTV_WINDY_NEARBY`). All in vite.config.js next to Caltrans/TfL.
+> - **Contract:** every pack is fetched through the 15-minute source cache,
+>   normalized to the registry camera shape, image URLs pinned to the
+>   provider's host, capped per pack (`CCTV_<PACK>_MAX_SOURCES`) and
+>   prioritized around anchor cities; `CCTV_<PACK>_ENABLED=0` disables one.
+>   The overall cap defaults to 2000 (hard bound 3000).
+> - **Windy specifics:** preview URLs carry tokens that expire after 10 min on
+>   the free tier; the frame route refreshes a camera's preview through the
+>   single-webcam endpoint when the cached URL is older than 8 min. Each
+>   Windy camera carries `detailUrl` (link-back required by the terms) and
+>   `windyId`; the panel shows the link.
+> - **Proof:** `src/data/cctvOpenDataPacks.test.mjs` covers every normalizer
+>   with host pinning, on/off filtering, heading extraction and entity decoding.

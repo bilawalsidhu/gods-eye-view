@@ -13,6 +13,18 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- **Six more camera sources for the CCTV layer.** Hong Kong Transport
+  Department, DriveBC (British Columbia), Ontario 511 (plus any other
+  511-platform feed the operator configures with their own key), Fintraffic
+  Digitraffic weather cameras (Finland) and NZ Transport Agency cameras load
+  keyless alongside Austin, Caltrans and TfL; the Windy.com webcam directory
+  joins when `WINDY_API_KEY` is set, with its link-back and token-expiry
+  rules honored. Published facing directions (DriveBC, Ontario, NZTA)
+  become high-confidence pose priors for the 3D projection. Each pack is
+  capped and can be switched off; the overall catalog cap rises to 2000.
+
 ### Fixed
 
 - Separate optional Google server credentials for Places and Street View from

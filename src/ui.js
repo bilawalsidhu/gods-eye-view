@@ -2425,6 +2425,7 @@ export class StyleManager {
     this._cctvFramePreloader = null;
     this._cctvSourceBadge = document.getElementById('cctv-source-badge');
     this._cctvMeta = document.getElementById('cctv-meta');
+    this._cctvAttributionLink = document.getElementById('cctv-attribution-link');
     this._cctvSummary = document.getElementById('cctv-summary');
     this._shareBtn = document.getElementById('share-btn');
     this._clearSelectedLayersBtn = document.getElementById('clear-selected-layers');
@@ -6817,6 +6818,19 @@ export class StyleManager {
           : `${cameras.length} cameras loaded · enable CCTV to activate`;
       } else {
         this._cctvMeta.textContent = 'Enable CCTV to load camera intersections';
+      }
+    }
+
+    // Directory packs (Windy) require a link from every image back to its page.
+    if (this._cctvAttributionLink) {
+      const detailUrl = activeCamera?.detailUrl || '';
+      if (detailUrl) {
+        this._cctvAttributionLink.href = detailUrl;
+        this._cctvAttributionLink.textContent = activeCamera.sourceKind === 'windy' ? 'Webcam page on Windy.com ↗' : 'Camera page ↗';
+        this._cctvAttributionLink.hidden = false;
+      } else {
+        this._cctvAttributionLink.hidden = true;
+        this._cctvAttributionLink.removeAttribute('href');
       }
     }
 
