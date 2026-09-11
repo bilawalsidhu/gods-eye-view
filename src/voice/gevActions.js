@@ -176,6 +176,9 @@ const LAYER_ALIASES = new Map([
   ['firms', 'local-firms'],
   ['fires', 'local-firms'],
   ['active fires', 'local-firms'],
+  ['tak', 'tak-events'],
+  ['cursor on target', 'tak-events'],
+  ['atak', 'tak-events'],
 ]);
 
 const CITY_ALIASES = new Map([

@@ -18,6 +18,7 @@
  *  13. Weather effects — camera-local Open-Meteo observations without news/geocoding overhead
  *  14. Rocket launches — recent Launch Library 2 mission metadata
  *  15. Radio Browser — public-domain station directory and click counting
+ *  16. TAK / Cursor-on-Target — read-only mutual-TLS CoT ingest (BYOS)
  *
  * Also exposes Cesium and Google 3D Tiles API keys to the
  * client via `import.meta.env.*` defines.
@@ -42,6 +43,9 @@ import {
   isOverBudget as isTomTomOverBudget,
 } from './src/data/tomtomTiles.js';
 import { filterTrailing24h, parseFirmsCsv } from './src/data/firmsCsv.js';
+import tls from 'node:tls';
+import { decodeCotEvent, extractCotEvents } from './src/data/cotDecode.js';
+import { cotIsExpired } from './src/data/cotEvent.js';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { defineConfig, loadEnv } from 'vite';
@@ -4941,6 +4945,261 @@ function aisLiveProxy() {
   };
 }
 
+// TAK / Cursor-on-Target (CoT) read-only ingest — Phase 1 of issue #7
+// ---------------------------------------------------------------------------
+/**
+ * BYOS (bring your own server): God's Eye View never discovers or connects
+ * to a TAK Server without every one of these explicitly configured. No
+ * default/public TAK network exists to fall back to.
+ */
+const TAK_RECONNECT_MS = 15_000;
+const TAK_SWEEP_INTERVAL_MS = 60_000;
+const TAK_EVENT_CACHE_MAX = 4000;
+/**
+ * A connection that never yields a complete <event> within this many
+ * characters is either not CoT or badly broken — drop the buffer rather
+ * than grow forever. Measured in JS string length (UTF-16 code units), not
+ * true UTF-8 bytes — a coarse safety backstop, not a precise byte budget,
+ * so that slop doesn't matter; checking real byte size on every chunk isn't
+ * worth the repeated re-encoding cost.
+ */
+const TAK_MAX_BUFFER_CHARS = 2 * 1024 * 1024;
+
+let _takSocket = null;
+let _takBuffer = '';
+let _takConnected = false;
+let _takLastMessageAt = null;
+let _takLastError = null;
+let _takReconnectTimer = null;
+let _takSweepTimer = null;
+/** @type {Map<string, object>} CoT uid -> decoded event. In-memory ONLY — no
+ * disk persistence, so a restart drops all position history (see issue #7's
+ * "avoid persisting TAK position history unless explicitly configured"). */
+const _takEvents = new Map();
+
+/**
+ * Map a TAK connection/cert-read failure to a generic, safe status message.
+ *
+ * `/api/tak/events` promises (SECURITY.md, .env.example) that the browser
+ * never sees the configured host, port, or certificate paths — but Node's
+ * raw `err.message` for common failures embeds exactly that (e.g. "connect
+ * ECONNREFUSED 10.0.0.5:8089", or an fs ENOENT naming the cert file path).
+ * `err.code` is a stable, target-independent Node error identifier — safe
+ * to surface as-is; the human-readable message built from it never is.
+ * @param {NodeJS.ErrnoException} err
+ * @returns {string}
+ */
+export function sanitizeTakConnectionError(err) {
+  const KNOWN = {
+    ECONNREFUSED: 'TAK Server refused the connection',
+    ENOTFOUND: 'TAK Server hostname could not be resolved',
+    ETIMEDOUT: 'TAK Server connection timed out',
+    ECONNRESET: 'TAK Server connection was reset',
+    EHOSTUNREACH: 'TAK Server host is unreachable',
+    ENETUNREACH: 'TAK network is unreachable',
+    ENOENT: 'TAK certificate/key file not found on the server',
+    EACCES: 'TAK certificate/key file is not readable by the server',
+    CERT_HAS_EXPIRED: 'TAK Server certificate has expired',
+    DEPTH_ZERO_SELF_SIGNED_CERT: 'TAK Server certificate is self-signed (configure TAK_CA_CERT_PATH)',
+    UNABLE_TO_VERIFY_LEAF_SIGNATURE: 'TAK Server certificate could not be verified (configure TAK_CA_CERT_PATH)',
+    ERR_TLS_CERT_ALTNAME_INVALID: 'TAK Server certificate does not match the configured hostname',
+  };
+  const code = err?.code;
+  return (code && KNOWN[code]) || 'TAK connection error';
+}
+
+function takConfig() {
+  const host = process.env.TAK_SERVER_HOST;
+  const certPath = process.env.TAK_CLIENT_CERT_PATH;
+  const keyPath = process.env.TAK_CLIENT_KEY_PATH;
+  if (!host || !certPath || !keyPath) return null;
+  const port = Number.parseInt(process.env.TAK_SERVER_PORT || '', 10);
+  return { host, port: Number.isFinite(port) && port > 0 ? port : 8089, certPath, keyPath };
+}
+
+function scheduleTakReconnect() {
+  if (_takReconnectTimer) return;
+  _takReconnectTimer = setTimeout(() => {
+    _takReconnectTimer = null;
+    ensureTakConnection();
+  }, TAK_RECONNECT_MS);
+  _takReconnectTimer.unref?.();
+}
+
+function connectTakSocket(config) {
+  let cert, key, ca;
+  try {
+    cert = fs.readFileSync(config.certPath);
+    key = fs.readFileSync(config.keyPath);
+    if (process.env.TAK_CA_CERT_PATH) ca = fs.readFileSync(process.env.TAK_CA_CERT_PATH);
+  } catch (err) {
+    // Full detail (including the file path) stays in the server's own log;
+    // only the sanitized category crosses into the browser-facing API.
+    console.warn('[TAK Proxy] certificate/key read failed:', err?.message || err);
+    _takLastError = `Failed to read TAK certificate/key: ${sanitizeTakConnectionError(err)}`;
+    scheduleTakReconnect();
+    return;
+  }
+  _takBuffer = '';
+  const socket = tls.connect({
+    host: config.host,
+    port: config.port,
+    cert,
+    key,
+    ca,
+    passphrase: process.env.TAK_CLIENT_KEY_PASSPHRASE || undefined,
+    rejectUnauthorized: true,
+  });
+  _takSocket = socket;
+  socket.setEncoding('utf8');
+
+  socket.on('secureConnect', () => {
+    _takConnected = true;
+    _takLastError = null;
+  });
+  socket.on('data', (chunk) => {
+    _takLastMessageAt = Date.now();
+    _takBuffer += chunk;
+    if (_takBuffer.length > TAK_MAX_BUFFER_CHARS) {
+      console.warn('[TAK Proxy] input buffer exceeded cap without a complete event; dropping it');
+      _takBuffer = '';
+      return;
+    }
+    const { events, remainder } = extractCotEvents(_takBuffer);
+    _takBuffer = remainder;
+    for (const xml of events) {
+      let record = null;
+      try {
+        record = decodeCotEvent(xml);
+      } catch {
+        // Malformed/unsupported event on the stream — skip it, keep reading.
+      }
+      if (!record) continue;
+      // delete-then-set so an update to an EXISTING uid moves it to the
+      // "most recent" end too — a Map's set() on an existing key does not
+      // reorder it, so without this the overflow eviction below would be
+      // oldest-INSERTED, not oldest-SEEN.
+      _takEvents.delete(record.uid);
+      _takEvents.set(record.uid, record);
+      if (_takEvents.size > TAK_EVENT_CACHE_MAX) {
+        _takEvents.delete(_takEvents.keys().next().value);
+      }
+    }
+  });
+  socket.on('error', (err) => {
+    // Full detail (host/port are literally in Node's TLS/net error message)
+    // stays in the server's own log; only the sanitized category crosses
+    // into the browser-facing API.
+    console.warn('[TAK Proxy] connection error:', err?.message || err);
+    _takLastError = sanitizeTakConnectionError(err);
+  });
+  socket.on('close', () => {
+    _takConnected = false;
+    _takSocket = null;
+    scheduleTakReconnect();
+  });
+
+  if (!_takSweepTimer) {
+    _takSweepTimer = setInterval(() => {
+      for (const [uid, record] of _takEvents) {
+        if (cotIsExpired(record.stale)) _takEvents.delete(uid);
+      }
+    }, TAK_SWEEP_INTERVAL_MS);
+    _takSweepTimer.unref?.();
+  }
+}
+
+/** Idempotent: a Vite in-process reload must never stack a second TAK connection. */
+function ensureTakConnection() {
+  // A pending reconnect timer means a connect attempt is already scheduled
+  // on its own backoff — an /api/tak/events poll landing in that gap must
+  // not race it into an extra immediate connect (each one re-reads the
+  // cert/key files synchronously and opens a second TLS handshake against
+  // the remote server, roughly doubling reconnect attempts during an outage).
+  if (_takSocket || _takReconnectTimer) return;
+  const config = takConfig();
+  if (!config) return; // not configured — the status/events endpoints report this
+  connectTakSocket(config);
+}
+
+function disposeTakConnection() {
+  clearTimeout(_takReconnectTimer);
+  _takReconnectTimer = null;
+  if (_takSweepTimer) {
+    clearInterval(_takSweepTimer);
+    _takSweepTimer = null;
+  }
+  if (_takSocket) {
+    _takSocket.destroy();
+    _takSocket = null;
+  }
+  _takConnected = false;
+}
+
+/**
+ * Vite plugin: TAK / Cursor-on-Target read-only ingest (Phase 1 of issue #7).
+ *
+ * Browsers can't hold a raw mutual-TLS socket or a private key, so the
+ * server keeps the one TAK Server connection and exposes a same-origin JSON
+ * snapshot. Read-only: this never sends anything onto the TAK stream (no
+ * Phase 2 publish, no client-presence announce) — it only decodes what the
+ * server sends.
+ */
+function takProxy() {
+  function install(middlewares) {
+    middlewares.use('/api/tak/status', (req, res) => {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(JSON.stringify({ configured: Boolean(takConfig()), connected: _takConnected }));
+    });
+    middlewares.use('/api/tak/events', (req, res) => {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      const config = takConfig();
+      if (!config) {
+        res.statusCode = 503;
+        res.end(JSON.stringify({
+          available: false, events: [],
+          error: 'TAK_SERVER_HOST/TAK_CLIENT_CERT_PATH/TAK_CLIENT_KEY_PATH not configured',
+        }));
+        return;
+      }
+      ensureTakConnection();
+      const now = Date.now();
+      const events = [];
+      for (const [uid, record] of _takEvents) {
+        if (cotIsExpired(record.stale, now)) { _takEvents.delete(uid); continue; }
+        events.push(record);
+      }
+      res.statusCode = 200;
+      res.end(JSON.stringify({
+        available: true,
+        events,
+        connected: _takConnected,
+        lastMessageAt: _takLastMessageAt,
+        error: _takLastError,
+        source: 'TAK Server (Cursor-on-Target)',
+      }));
+    });
+  }
+  return {
+    name: 'tak-proxy',
+    configureServer(server) {
+      install(server.middlewares);
+      ensureTakConnection();
+      server.httpServer?.on('close', disposeTakConnection);
+    },
+    configurePreviewServer(server) {
+      install(server.middlewares);
+      ensureTakConnection();
+      server.httpServer?.on('close', disposeTakConnection);
+    },
+    closeBundle() {
+      disposeTakConnection();
+    },
+  };
+}
+
 /**
  * Vite plugin: aircraft track-history backfill proxies (PRD WS-F F1/F2).
  *
@@ -7756,6 +8015,7 @@ export default defineConfig(({ mode }) => {
       gbfsProxy(),
       adsbLolProxy(),
       aisLiveProxy(),
+      takProxy(),
       trackBackfillProxies(),
       openAiRealtimeProxy(),
       googlePlacesContextProxy(),
