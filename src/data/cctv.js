@@ -4820,6 +4820,29 @@ const cctvLayer = {
     }
     return nearest;
   },
+
+  /**
+   * Snapshot of enabled cameras for marquee / analyst selection matching.
+   * @param {number} [maxCount=2000]
+   * @returns {Array<Object>}
+   */
+  getAnalystRecords(maxCount = 2000) {
+    if (!_enabled || !_records.length) return [];
+    const limit = Number.isFinite(maxCount) ? Math.max(1, Math.floor(maxCount)) : 2000;
+    return _records.slice(0, limit).map((record) => {
+      const camera = record?.camera || {};
+      return {
+        id: String(camera.id || ''),
+        name: camera.name || camera.id || 'Camera',
+        lat: camera.lat,
+        lon: camera.lon,
+        city: camera.city || '',
+        provider: camera.provider || camera.source || '',
+        headingDeg: camera.headingDeg,
+        feedType: camera.feedType || '',
+      };
+    }).filter((row) => row.id && Number.isFinite(row.lat) && Number.isFinite(row.lon));
+  },
 };
 
 export default cctvLayer;

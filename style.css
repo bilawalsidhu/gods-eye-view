@@ -7340,7 +7340,9 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
 }
 
 body.ui-clean-view #command-dock,
-body.recording-mode #command-dock {
+body.recording-mode #command-dock,
+body.ui-clean-view #intel-brief-stack,
+body.recording-mode #intel-brief-stack {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
@@ -9682,4 +9684,405 @@ body.scene-playback-mode #key-setup {
   color: rgba(255, 190, 170, 1);
   border-color: rgba(255, 170, 150, 0.65);
   outline: none;
+}
+
+/* ── Alt marquee selection for intelligence brief ── */
+#intel-brief-marquee-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 12020;
+  pointer-events: none;
+}
+
+#intel-brief-marquee-layer.armed #intel-brief-marquee-hint {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#intel-brief-marquee-box {
+  position: fixed;
+  border: 1px solid color-mix(in srgb, var(--accent) 85%, transparent);
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0.04));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent) inset,
+    0 0 24px color-mix(in srgb, var(--accent) 16%, transparent);
+  backdrop-filter: blur(1px);
+}
+
+#intel-brief-marquee-box::before,
+#intel-brief-marquee-box::after {
+  content: '';
+  position: absolute;
+  background: color-mix(in srgb, var(--accent) 92%, transparent);
+}
+
+#intel-brief-marquee-box::before {
+  top: -1px;
+  left: -1px;
+  width: 10px;
+  height: 10px;
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+
+#intel-brief-marquee-box::after {
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+
+#intel-brief-marquee-hint {
+  position: fixed;
+  left: 50%;
+  top: calc(4.5rem + env(safe-area-inset-top, 0px));
+  transform: translate(-50%, -8px);
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 255, 255, 0.35);
+  background: rgba(6, 14, 22, 0.88);
+  color: rgba(180, 245, 255, 0.95);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+body.ui-clean-view #intel-brief-marquee-layer,
+body.recording-mode #intel-brief-marquee-layer {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+.intel-brief-stack {
+  position: fixed;
+  right: 24px;
+  bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px));
+  z-index: 12040;
+  width: min(360px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  gap: 2px;
+  pointer-events: none;
+  max-height: min(52vh, 500px);
+}
+
+.intel-brief-card {
+  position: relative;
+  width: 100%;
+  pointer-events: auto;
+  flex: 0 0 auto;
+  transition: opacity 0.2s ease, max-height 0.2s ease;
+}
+
+.intel-brief-card.is-front {
+  max-height: min(42vh, 420px);
+  min-height: 0;
+  z-index: 2;
+}
+
+.intel-brief-card.is-peek {
+  max-height: 24px;
+  overflow: hidden;
+  opacity: 0.92;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.intel-brief-card.is-peek:hover {
+  opacity: 1;
+}
+
+.intel-brief-card.is-active .intel-brief-glow {
+  opacity: 1;
+}
+
+.intel-brief-glow {
+  position: absolute;
+  inset: -1px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 34%, transparent), color-mix(in srgb, var(--accent) 10%, transparent));
+  filter: blur(8px);
+  opacity: 0.35;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+}
+
+.intel-brief-card.is-front .intel-brief-inner {
+  max-height: min(42vh, 420px);
+}
+
+.intel-brief-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.85rem 0.95rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(8, 16, 24, 0.94), rgba(4, 10, 16, 0.9));
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  max-height: inherit;
+}
+
+.intel-brief-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.intel-brief-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.intel-brief-badge {
+  align-self: flex-start;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  color: color-mix(in srgb, var(--accent) 88%, white);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.14rem;
+}
+
+.intel-brief-header h3 {
+  margin: 0;
+  color: rgba(245, 250, 255, 0.96);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04rem;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.intel-brief-close {
+  flex: 0 0 auto;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0.45rem;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(230, 240, 255, 0.85);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.intel-brief-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.intel-brief-chip {
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  background: var(--accent-dim);
+  color: color-mix(in srgb, var(--accent) 82%, white);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.05rem;
+}
+
+.intel-brief-stream {
+  flex: 1 1 auto;
+  min-height: 4.5rem;
+  max-height: 18rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 50%, transparent) rgba(255, 255, 255, 0.04);
+  scrollbar-gutter: stable;
+  color: rgba(220, 235, 245, 0.92);
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.intel-brief-stream::-webkit-scrollbar {
+  width: 6px;
+}
+
+.intel-brief-stream::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+}
+
+.intel-brief-stream::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 65%, transparent),
+    color-mix(in srgb, var(--accent) 20%, transparent)
+  );
+  border-radius: 999px;
+}
+
+.intel-brief-copy p,
+.intel-brief-lede {
+  margin: 0;
+}
+
+.intel-brief-section {
+  margin-top: 0.45rem;
+}
+
+.intel-brief-section:first-child {
+  margin-top: 0;
+}
+
+.intel-brief-headline {
+  margin: 0;
+  color: rgba(245, 250, 255, 0.98);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.03rem;
+  line-height: 1.45;
+}
+
+.intel-brief-summary,
+.intel-brief-detail {
+  margin: 0.15rem 0 0;
+  color: rgba(210, 230, 245, 0.95);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.intel-brief-contact {
+  margin-top: 0.65rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.intel-brief-contact-title {
+  margin: 0 0 0.2rem;
+  color: rgba(245, 250, 255, 0.98);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.04rem;
+}
+
+.intel-brief-contact-line {
+  margin: 0.12rem 0 0;
+  color: rgba(170, 195, 215, 0.92);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.intel-brief-narrative {
+  line-height: 1.62;
+  font-size: 0.73rem;
+  color: rgba(215, 235, 248, 0.96);
+}
+
+.intel-brief-prose {
+  margin: 0.42rem 0 0;
+  color: rgba(200, 220, 235, 0.94);
+  font-size: 0.71rem;
+  line-height: 1.55;
+}
+
+.intel-brief-area,
+.intel-brief-ambient {
+  margin: 0.35rem 0 0;
+  color: rgba(170, 195, 215, 0.9);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.04rem;
+  line-height: 1.45;
+}
+
+.intel-brief-ambient {
+  color: rgba(140, 170, 190, 0.82);
+  font-size: 0.6rem;
+}
+
+.intel-brief-h {
+  margin: 0.65rem 0 0.25rem;
+  color: color-mix(in srgb, var(--accent) 88%, white);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+}
+
+.intel-brief-list {
+  margin: 0.15rem 0 0.55rem 1rem;
+  padding: 0;
+}
+
+.intel-brief-list li {
+  margin-bottom: 0.2rem;
+}
+
+.intel-brief-tracks {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.intel-brief-tracks li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+  padding: 0.38rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.intel-brief-tracks li:last-child {
+  border-bottom: none;
+}
+
+.intel-brief-track-name {
+  color: rgba(245, 250, 255, 0.96);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.03rem;
+}
+
+.intel-brief-track-meta {
+  color: rgba(170, 195, 215, 0.88);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.intel-brief-tracks-more {
+  color: rgba(140, 170, 190, 0.85);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+  padding-top: 0.25rem;
+}
+
+.intel-brief-status {
+  color: rgba(140, 170, 190, 0.85);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+}
+
+@media (max-width: 720px) {
+  .intel-brief-stack {
+    right: 12px;
+    left: 12px;
+    width: auto;
+    bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+  }
 }

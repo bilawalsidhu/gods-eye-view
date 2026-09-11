@@ -64,6 +64,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 - **🎨 Reskin reality:** GLSL sensor looks over the normal globe — CRT, NVG, FLIR/thermal, Noir, Snow.
 - **🟩 Detection overlay:** Screen-space bounding boxes and IDs on everything in view.
 - **🎖️ Military HUD:** Tactical heads-up display with intelligence-style telemetry.
+- **🔍 Area intel brief:** Hold **Alt** and drag a box on the globe — Gemini analyzes the viewport capture and streams a natural-language brief (live tracks, weather, and CCTV metadata support the prompt).
 - **🌐 Global Context:** Stage the full situational picture with one switch — and get your exact view back when you leave.
 - **🎥 Scene director:** Capture cinematic camera tours for clips and demos.
 - **🔗 Share Links:** Camera, style, layers, and even one tracked target serialize into a URL — a live target is a handoff, not a bookmark.
@@ -199,9 +200,10 @@ Choose a first-run mission, or try these in order. The GIFs show Google Photorea
 ![Cycling a dense live globe through CRT, FLIR, and NVG in one continuous view](docs/media/01-style-sweep.gif)
 
 7. **Talk to it** *(needs an OpenAI key)*: *"Take me to LAX and select the nearest airborne aircraft."*
-8. **Come home.** Hit **Reset Globe** — or just say *"zoom out to a globe view."*
+8. **Box what you're looking at** *(optional Gemini key)*: hold **Alt**, drag a rectangle over the view, and read the streamed area brief in the **INTEL** card.
+9. **Come home.** Hit **Reset Globe** — or just say *"zoom out to a globe view."*
 
-**Keyboard:** `1`–`7` visual styles · `H` HUD · `D` detection · `C` cockpit · `Esc` out.
+**Keyboard:** `1`–`7` visual styles · `H` HUD · `D` detection · `C` cockpit · `Alt`+drag area brief · `Esc` out.
 
 ---
 
@@ -396,6 +398,7 @@ Six keys. Four have a free tier, and the two 🔴 ones are metered:
 |---|-----|-----|--------|
 | 🟡 | **OpenSky** | ✈️ More flight-polling credits (🟢 anonymous works without) | [opensky-network.org](https://opensky-network.org) |
 | 🟡 | **Launch Library 2** | 🚀 Higher space-missions request allowance (🟢 works without) | [thespacedevs.com](https://thespacedevs.com) |
+| 🟡 | **Gemini** | 🔍 Alt+drag area intel brief — vision analysis of your marquee selection, streamed via a server-side proxy | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
 
 Add these if you need higher polling allowances.
 

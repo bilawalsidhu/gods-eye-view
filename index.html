@@ -14,6 +14,10 @@
 </head>
 <body>
   <div id="cesiumContainer"></div>
+  <div id="intel-brief-marquee-layer" aria-hidden="true">
+    <div id="intel-brief-marquee-box" hidden></div>
+    <div id="intel-brief-marquee-hint" hidden>Hold Alt · drag to identify this area</div>
+  </div>
   <div id="world-overlay-root" aria-hidden="true">
     <canvas id="world-overlay-canvas"></canvas>
   </div>
@@ -476,6 +480,8 @@
     </div>
   </div>
   <button id="clean-view-exit" title="Return UI controls">EXIT CLEAN VIEW</button>
+
+  <div id="intel-brief-stack" class="intel-brief-stack" aria-label="Area intelligence briefs"></div>
 
   <!-- Unified bottom command dock: locations, voice (injected at runtime), visual presets -->
   <div id="command-dock" aria-label="Navigation, voice, and visual preset controls">

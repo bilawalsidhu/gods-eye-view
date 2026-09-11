@@ -2871,6 +2871,27 @@ export const radioLayer = {
   stopPlayback: stopRadioPlayback,
   setVolume: setRadioVolume,
   setVoiceDucked: setRadioVoiceDucking,
+
+  /**
+   * Snapshot of visible radio stations for marquee / analyst selection matching.
+   * @param {number} [maxCount=2000]
+   * @returns {Array<Object>}
+   */
+  getAnalystRecords(maxCount = 2000) {
+    if (!_enabled) return [];
+    const limit = Number.isFinite(maxCount) ? Math.max(1, Math.floor(maxCount)) : 2000;
+    return visibleStations().slice(0, limit).map((station) => ({
+      id: String(station.id || ''),
+      name: station.name || station.id || 'Radio station',
+      lat: station.lat,
+      lon: station.lon,
+      country: station.country || '',
+      state: station.state || '',
+      tags: Array.isArray(station.tags) ? station.tags.slice(0, 4) : [],
+      codec: station.codec || '',
+      bitrate: station.bitrate,
+    })).filter((row) => row.id && Number.isFinite(row.lat) && Number.isFinite(row.lon));
+  },
 };
 
 export default radioLayer;
