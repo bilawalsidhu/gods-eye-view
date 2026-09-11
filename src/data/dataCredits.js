@@ -83,9 +83,15 @@ export const DATA_CREDITS = [
   {
     key: 'cockpit-place-osm',
     html:
-      'Cockpit place context: ' +
+      'Place/geocoding context: ' +
       '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
       'via Nominatim (ODbL 1.0)',
+  },
+  {
+    key: 'foursquare-places',
+    html:
+      'POI/place lookup: ' +
+      '<a href="https://foursquare.com/products/places-api/" target="_blank" rel="noopener">Foursquare Places</a>',
   },
   {
     key: 'open-meteo',

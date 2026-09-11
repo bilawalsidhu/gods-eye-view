@@ -1,8 +1,18 @@
 # God's Eye View Current State
 
-Updated: August 24, 2026
+Updated: September 11, 2026
 
 ## Installations and map-source guidance
+
+- Free-text location and annotation geocoding uses the shared search-provider
+  layer. Google remains preferred when `GOOGLE_MAPS_API_KEY` is configured;
+  otherwise `/api/nominatim/search` proxies OpenStreetMap Nominatim with an
+  identifying User-Agent, a 1.1-second minimum request interval, bounded cache,
+  and optional `NOMINATIM_BASE_URL` override. POI/venue recovery uses Google
+  Places when Google is configured or `/api/foursquare/place-search` when a
+  `FOURSQUARE_SERVICE_KEY` is available. Foursquare credentials remain
+  server-side. A missed Nominatim geocode still reaches the near-view Places
+  recovery path before search is declared not found.
 
 - On an uncached Overpass failure, mapped installations keep their existing
   30–240 second retry backoff. The top status and Contacts row explain the

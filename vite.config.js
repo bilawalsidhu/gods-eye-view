@@ -18,6 +18,7 @@
  *  13. Weather effects — camera-local Open-Meteo observations without news/geocoding overhead
  *  14. Rocket launches — recent Launch Library 2 mission metadata
  *  15. Radio Browser — public-domain station directory and click counting
+ *  16. Search providers — keyless Nominatim geocoding + optional Foursquare Places
  *
  * Also exposes Cesium and Google 3D Tiles API keys to the
  * client via `import.meta.env.*` defines.
@@ -67,6 +68,7 @@ import {
   validateKeySetupUpdates,
 } from './src/keySetupCore.mjs';
 import { hardenCredentialFile } from './src/keySetupHardening.mjs';
+import { searchProvidersProxy } from './src/server/searchProvidersProxy.mjs';
 import {
   fetchTerrainChunkWithRetry,
   parseTerrainPoints,
@@ -7555,7 +7557,7 @@ function keySetupEndpoint() {
       ? false
       : LAUNCHER_AT_BOOT === 'dev-fresh'
         ? DEV_FRESH_EXTERNAL_KEYS_AT_BOOT.has(name)
-        : PROVIDER_ENV_AT_BOOT[name] !== '';
+        : String(PROVIDER_ENV_AT_BOOT[name] ?? '').trim() !== '';
     return isKeySetupExternallyManaged({
       effectiveValue: process.env[name],
       storedValue: inStore[name],
@@ -7740,6 +7742,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       cesium(),
+      searchProvidersProxy(),
       openSkyProxy(),
       celestrakProxy(),
       tomtomProxy(),

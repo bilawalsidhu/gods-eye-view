@@ -597,3 +597,57 @@ test('search without an authority hook preserves the existing caller contract', 
   assert.equal(result.navigationMode, 'city-overview');
   assert.equal(viewer.flights.length, 1);
 });
+
+
+test('a Nominatim miss falls through to Foursquare near the current view', async () => {
+  const viewer = stubViewer();
+  viewer.camera.positionCartographic = {
+    longitude: Cesium.Math.toRadians(148.6026502),
+    latitude: Cesium.Math.toRadians(-32.2478964),
+    height: 1200,
+  };
+
+  const hadWindow = Object.hasOwn(globalThis, 'window');
+  const priorWindow = globalThis.window;
+  const priorFetch = globalThis.fetch;
+  globalThis.window = {};
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    const href = String(url);
+    calls.push(href);
+    if (href.startsWith('/api/nominatim/search')) {
+      return { ok: true, status: 200, json: async () => [] };
+    }
+    if (href.startsWith('/api/foursquare/place-search')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          places: [{
+            id: 'fsq-zoo',
+            name: 'Taronga Western Plains Zoo',
+            latitude: -32.27378196117909,
+            longitude: 148.58643386221732,
+            primaryType: 'Zoo',
+            types: ['zoo'],
+            viewport: null,
+            provider: 'foursquare',
+          }],
+        }),
+      };
+    }
+    throw new Error(`Unexpected fetch ${href}`);
+  };
+
+  try {
+    const destination = await searchAndFlyTo(viewer, 'Taronga Western Plains Zoo');
+    assert.equal(destination?.label, 'Taronga Western Plains Zoo');
+    assert.ok(calls.some((url) => url.startsWith('/api/nominatim/search')), 'Nominatim tried first');
+    assert.ok(calls.some((url) => url.startsWith('/api/foursquare/place-search')), 'Foursquare handled the miss');
+    assert.equal(viewer.flights.length, 1, 'the recovered Foursquare POI issued a flight');
+  } finally {
+    globalThis.fetch = priorFetch;
+    if (hadWindow) globalThis.window = priorWindow;
+    else delete globalThis.window;
+  }
+});

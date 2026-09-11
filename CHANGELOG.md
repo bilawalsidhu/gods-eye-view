@@ -5,6 +5,13 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- Added keyless forward geocoding through OpenStreetMap Nominatim when Google
+  Maps is not configured, plus optional Foursquare Places POI/venue recovery
+  using a server-side Service API Key. Google geocoding/Places remains the
+  preferred path when a Google Maps key is present.
+
 ### Fixed
 
 - Mapped-site outages show their scheduled retry countdown and distinguish
@@ -17,6 +24,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Visual presets explain their effects on hover. Unavailable map sources name
   missing credentials and Provider Settings, while configured-but-failed
   Google 3D routes explain the failure without asking for another key.
+- Provider Settings keeps newly added file-backed provider keys editable after
+  an in-process Vite restart instead of misclassifying them as externally managed.
 
 - The Overpass proxy now rotates to the next mirror on any non-2xx upstream
   response, not only on 5xx. `overpass-api.de` and its `lz4` alias answer 406 to

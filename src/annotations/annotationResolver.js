@@ -3,6 +3,7 @@ import { lookupNeighborhoodRing } from '../data/neighborhoodPolygons.js';
 import { lookupNaturalRegionOutline, findNaturalRegion } from '../data/naturalEarthRegions.js';
 import { registerDynamicCredit, NATURAL_EARTH_CREDIT } from '../data/dataCredits.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
+import { forwardGeocode, searchPlaces } from '../searchProviders.js';
 
 /**
  * Annotation target resolver.
@@ -599,51 +600,38 @@ function ringAreaM2(ring) {
 }
 
 /**
- * Forward-geocode a place name via Google Geocoding, biased to the current
- * viewport so "the marina" resolves near where the user is looking.
+ * Forward-geocode a place name through the shared search-provider layer, biased
+ * to the current viewport so "the marina" resolves near where the user is looking.
+ * Google remains preferred when configured; otherwise this uses Nominatim.
  */
 async function geocodePlace(query, biasRect, signal) {
-  const apiKey = window.__GOOGLE_MAPS_API_KEY__ || import.meta.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) return null;
-
   const cacheKey = `${query.toLowerCase()}|${biasRect || ''}`;
   const cached = cacheRead(geocodeCache, cacheKey);
   if (cached !== undefined) return cached;
 
-  let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
-  if (biasRect) url += `&bounds=${biasRect}`;
-
   try {
-    const response = await fetch(url, { signal });
-    const data = await response.json();
-    if (data.status !== 'OK' || !data.results?.length) {
-      // ZERO_RESULTS is a definitive not-found (cacheable); OVER_QUERY_LIMIT /
-      // REQUEST_DENIED / UNKNOWN_ERROR are transient → don't poison the cache.
-      negCache(geocodeCache, cacheKey, signal, data?.status === 'ZERO_RESULTS');
+    const result = await forwardGeocode(query, { biasRect, signal });
+    if (!result) {
+      negCache(geocodeCache, cacheKey, signal, true);
       return null;
     }
-    const result = data.results[0];
     const place = {
-      lat: result.geometry.location.lat,
-      lon: result.geometry.location.lng,
-      label: shortLabel(result.formatted_address),
-      // The CANONICAL name of the resolved feature (e.g. "Mission District",
-      // "Texas State Capitol") — used for OSM name-matching instead of the raw
-      // utterance, so incidental tokens ("...Texas", "...Austin") can't win.
-      primaryName: extractPrimaryName(result),
+      lat: result.lat,
+      lon: result.lon,
+      label: shortLabel(result.label),
+      // Canonical feature name is used for OSM name matching rather than the
+      // raw utterance, so incidental admin/location tokens cannot win.
+      primaryName: result.primaryName || shortLabel(result.label),
       types: result.types || [],
-      // Geocode viewport (sw/ne box framing the feature), normalized to the Places
-      // low/high shape — sizes grounds discs and flyTo framing for geocode anchors.
-      viewport: normalizeGeocodeViewport(result.geometry?.bounds || result.geometry?.viewport),
+      viewport: normalizeGeocodeViewport(result.viewport),
     };
     cacheWrite(geocodeCache, cacheKey, place);
     return place;
   } catch {
-    negCache(geocodeCache, cacheKey, signal, false); // network/abort — transient
+    negCache(geocodeCache, cacheKey, signal, false);
     return null;
   }
 }
-
 /** Geocoding returns {southwest:{lat,lng},northeast:{lat,lng}}; normalize to the Places
  *  {low,high} lat/lng shape the rest of the pipeline (disc sizing, framing) consumes. */
 function normalizeGeocodeViewport(vp) {
@@ -659,15 +647,9 @@ function normalizeGeocodeViewport(vp) {
 const placesCache = new Map(); // Text Search hits, keyed by query + rounded view centre
 
 /**
- * View-biased Google Places TEXT SEARCH for a named landmark/POI. Geocoding
- * scatters obscure monument/POI names across the city; a Text Search biased to
- * the view centre lands on the ACTUAL feature near what the user is looking at.
- * Goes through the `/api/google/text-search` proxy (key stays server-side) and
- * returns the closest result, or null on no-match / transient failure. The
- * `viewport` (a lat/lng bounding box framing the place, or null) is carried
- * through so the resolver can SIZE a fallback grounds disc to the real feature.
- * @returns {Promise<null | { lat:number, lon:number, label:string|null, distanceM:number,
- *   viewport:{low:{latitude:number,longitude:number},high:{latitude:number,longitude:number}}|null }>}
+ * View-biased place search for a named landmark/POI. The shared provider layer
+ * preserves Google Places when configured and otherwise uses Foursquare when a
+ * service key is available. Results keep the existing Places-compatible shape.
  */
 async function placesTextSearch(query, centerLat, centerLon, radiusM, signal) {
   const q = String(query || '').trim();
@@ -677,29 +659,21 @@ async function placesTextSearch(query, centerLat, centerLon, radiusM, signal) {
   const cached = cacheRead(placesCache, cacheKey);
   if (cached !== undefined) return cached;
 
-  const params = new URLSearchParams({
-    q,
-    lat: String(centerLat),
-    lon: String(centerLon),
-    radiusM: String(radiusM),
-  });
   try {
-    const response = await fetch(`/api/google/text-search?${params}`, { signal });
-    if (!response.ok) { negCache(placesCache, cacheKey, signal, false); return null; } // transient
-    const data = await response.json();
-    const hit = Array.isArray(data?.places)
-      ? data.places.find((p) => Number.isFinite(p?.latitude) && Number.isFinite(p?.longitude))
+    const hits = await searchPlaces(q, centerLat, centerLon, radiusM, signal);
+    const hit = Array.isArray(hits)
+      ? hits.find((place) => Number.isFinite(place?.latitude) && Number.isFinite(place?.longitude))
       : null;
-    if (!hit) { negCache(placesCache, cacheKey, signal, true); return null; } // definitive no-match
+    if (!hit) {
+      negCache(placesCache, cacheKey, signal, true);
+      return null;
+    }
     const place = {
       lat: hit.latitude,
       lon: hit.longitude,
       label: hit.name || null,
       distanceM: approximateDistanceM(centerLat, centerLon, hit.latitude, hit.longitude),
       viewport: hit.viewport || null,
-      // Entity identity/classification — the proxy already pays for these in its field
-      // mask, so keep them: `primaryType`/`types` classify the feature (point-like
-      // monument vs compound) and `id` is a stable identity key for future caching/dedup.
       id: hit.id || null,
       primaryType: hit.primaryType || null,
       types: Array.isArray(hit.types) ? hit.types : [],
@@ -707,27 +681,9 @@ async function placesTextSearch(query, centerLat, centerLon, radiusM, signal) {
     cacheWrite(placesCache, cacheKey, place);
     return place;
   } catch {
-    negCache(placesCache, cacheKey, signal, false); // network/abort — transient
+    negCache(placesCache, cacheKey, signal, false);
     return null;
   }
-}
-
-/**
- * The canonical name of the geocoded feature: the address component whose own
- * types match the result's feature type (e.g. the `neighborhood` component for a
- * neighborhood result), falling back to the first component / leading label
- * token. This is the user's INTENT, stripped of the trailing admin context that
- * makes the raw utterance match the wrong-scope OSM feature.
- */
-function extractPrimaryName(result) {
-  const resultTypes = new Set((result.types || []).map((t) => String(t).toLowerCase()));
-  const comps = Array.isArray(result.address_components) ? result.address_components : [];
-  for (const c of comps) {
-    const ct = (c.types || []).map((t) => String(t).toLowerCase());
-    if (ct.some((t) => t !== 'political' && resultTypes.has(t))) return c.long_name;
-  }
-  if (comps[0]?.long_name) return comps[0].long_name;
-  return String(result.formatted_address || '').split(',')[0].trim() || null;
 }
 
 /**

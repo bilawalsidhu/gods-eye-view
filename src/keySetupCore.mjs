@@ -14,7 +14,7 @@
 /** Longest accepted key/token value. Real provider keys are all far shorter. */
 export const KEY_SETUP_VALUE_LIMIT = 512;
 
-/** Most env vars accepted in one save. The registry defines nine. */
+/** Most env vars accepted in one save. The registry currently defines ten. */
 export const KEY_SETUP_UPDATE_LIMIT = 16;
 
 /** Header line written above keys the panel appends to a .env file. */
@@ -43,6 +43,14 @@ export const KEY_SETUP_KEYS = Object.freeze([
     unlocks: 'Voice control — talk to the planet',
     getUrl: 'https://platform.openai.com/api-keys',
     envVars: Object.freeze(['OPENAI_API_KEY']),
+    tier: 'metered',
+  }),
+  Object.freeze({
+    id: 'foursquare',
+    title: 'FOURSQUARE',
+    unlocks: 'POI/place lookup without Google (provider pricing and quotas apply)',
+    getUrl: 'https://foursquare.com/developer/',
+    envVars: Object.freeze(['FOURSQUARE_SERVICE_KEY']),
     tier: 'metered',
   }),
   Object.freeze({
