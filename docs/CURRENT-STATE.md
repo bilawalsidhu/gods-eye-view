@@ -1,5 +1,22 @@
 # God's Eye View Current State
 
+## Docker runtime
+
+Docker runs the existing Vite server, including its live API middleware.
+It does not use `vite preview` or a static-only server.
+Vite reads provider keys from the container environment at startup.
+Google Maps and Cesium ion keys enter the browser modules by design.
+Private provider keys stay on the server.
+
+`GEV_KEY_SETUP_DISABLED=1` (or `true`) denies all Provider Settings reads
+and writes. The Docker image and Compose file enable this mode.
+Other launchers keep their current behavior when the variable is absent.
+
+The container runs as the `node` user and listens on port 4173.
+Compose exposes that port only on host address `127.0.0.1`.
+Named volumes retain `.gev-cache` and `.gev-logs` across container replacement.
+See [DOCKER.md](DOCKER.md) for installation and update steps.
+
 ## Keyboard interaction and focus
 
 - Enter on the map-source disclosure opens immediately. A short Space press

@@ -196,6 +196,9 @@ export function admitKeySetupRequest({
   proxyHeaders = {},
   env = {},
 } = {}) {
+  if (/^(1|true)$/i.test(String(env.GEV_KEY_SETUP_DISABLED || '').trim())) {
+    return { ok: false, status: 403, error: 'Provider Settings is disabled; use the server environment' };
+  }
   // A request carrying reverse-proxy / CDN forwarding headers did not originate
   // on this machine, whatever its socket says. Refuse them outright as defense
   // in depth — the shipped tunnel (Pinokio) is force-closed at boot, so these

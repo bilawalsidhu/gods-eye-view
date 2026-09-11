@@ -1,0 +1,21 @@
+services:
+  app:
+    image: ${GEV_IMAGE:-ghcr.io/bilawalsidhu/gods-eye-view:latest}
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${GEV_PORT:-4173}:4173"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOST: 0.0.0.0
+      PORT: "4173"
+      GEV_KEY_SETUP_DISABLED: "1"
+    volumes:
+      - cache:/app/.gev-cache
+      - logs:/app/.gev-logs
+
+volumes:
+  cache:
+  logs:

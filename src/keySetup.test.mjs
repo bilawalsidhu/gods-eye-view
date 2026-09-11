@@ -2,9 +2,26 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   collectKeyUpdates,
+  initKeySetup,
   keySetupChipLabel,
   stripKeylessBasemapFromHash,
 } from './keySetup.js';
+
+test('ENV-only configuration removes Provider Settings without a network request', async () => {
+  const elements = new Map();
+  for (const id of ['key-setup-chip', 'key-setup']) {
+    elements.set(id, { dataset: {}, remove: () => elements.delete(id) });
+  }
+  let requests = 0;
+  const result = await initKeySetup({
+    disabled: true,
+    documentRef: { getElementById: (id) => elements.get(id) },
+    fetchImpl: async () => { requests++; throw new Error('Unexpected setup request'); },
+  });
+  assert.equal(result, null);
+  assert.equal(elements.size, 0);
+  assert.equal(requests, 0);
+});
 
 test('the chip counts what is missing, and retires the count at zero', () => {
   assert.equal(keySetupChipLabel({ setCount: 0, total: 8 }), 'POWER UP · 8 KEYS WAITING');

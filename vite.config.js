@@ -7790,6 +7790,7 @@ export default defineConfig(({ mode }) => {
     },
     // Expose selected API keys to the browser via import.meta.env.*
     define: {
+      'import.meta.env.GEV_KEY_SETUP_DISABLED': /^(1|true)$/i.test(String(env.GEV_KEY_SETUP_DISABLED || '').trim()),
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(env.GOOGLE_MAPS_API_KEY),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(env.CESIUM_ION_TOKEN),
     },

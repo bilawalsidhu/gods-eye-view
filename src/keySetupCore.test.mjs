@@ -236,6 +236,26 @@ test('a real .env.example round-trip: the curated file keeps its shape', () => {
   assert.equal(lines[7], 'TOMTOM_API_KEY=tt-real', 'commented key uncommented in place');
 });
 
+test('environment-only setup refuses local reads and writes without changing the default', async () => {
+  const { admitKeySetupRequest } = await import('./keySetupCore.mjs');
+  const local = {
+    remoteAddress: '127.0.0.1',
+    hostHeader: 'localhost:4173',
+    origin: 'http://localhost:4173',
+    contentType: 'application/json',
+  };
+  for (const method of ['GET', 'POST']) {
+    assert.equal(admitKeySetupRequest({ ...local, method }).ok, true);
+    for (const value of ['1', 'true']) {
+      const result = admitKeySetupRequest({
+        ...local, method, env: { GEV_KEY_SETUP_DISABLED: value },
+      });
+      assert.equal(result.ok, false);
+      assert.equal(result.status, 403);
+    }
+  }
+});
+
 test('the admission gate refuses every non-local shape, one assertion per refusal', async () => {
   const { admitKeySetupRequest } = await import('./keySetupCore.mjs');
   const local = {

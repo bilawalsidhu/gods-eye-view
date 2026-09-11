@@ -133,6 +133,36 @@ See [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 **macOS shortcut:** `./scripts/dev-fresh.sh` clears the Vite cache and pulls any
 configured keys straight from the Keychain. It starts keyless too.
 
+### Path 3 — Docker
+
+Use Docker with Linux container support and Docker Compose 2.24 or later.
+The image supports `linux/amd64` and `linux/arm64`.
+The browser needs WebGL support and an internet connection for live data.
+
+Download [`compose.yaml`](compose.yaml) and run:
+
+```bash
+docker compose up -d
+```
+
+Open **http://localhost:4173**. No API key is required.
+The default image is `ghcr.io/bilawalsidhu/gods-eye-view:latest`.
+It becomes available when the repository owner enables the Docker workflow
+and makes the package public. For a fork, set `GEV_IMAGE` to its published
+image before the first start.
+
+To add keys, copy [`.env.docker.example`](.env.docker.example) to `.env`
+beside `compose.yaml`. Add only the keys you need. Then apply the new values:
+
+```bash
+docker compose up -d --force-recreate
+```
+
+Docker uses the ENV file for keys. The in-app Provider Settings panel is
+disabled in this mode. A key change needs a new container, not a new image.
+For updates, local image builds, and fork publication, see
+[the Docker guide](docs/DOCKER.md).
+
 ### Then power it up — in the app, not in a file
 
 Keys are upgrades, not prerequisites. When you want one, click the **POWER UP**

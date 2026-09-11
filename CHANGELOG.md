@@ -13,6 +13,14 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Add Docker Compose and a container image for AMD64 and ARM64 Linux.
+  Keys come from the container environment at startup. The image starts
+  without keys and retains data caches in a Docker volume.
+- Add `GEV_KEY_SETUP_DISABLED=1` for ENV-only configuration. Docker uses
+  this mode to refuse Provider Settings reads and writes.
+- Add a GitHub Actions workflow to test both image platforms and publish
+  successful default-branch and version-tag builds to the repository's GHCR package.
+
 - Keyboard focus rings now survive active/selected button styles across the
   interface. Visual Styles, Location cities and points of interest, search,
   Context/mission actions, Cockpit utilities, and sliders retain a distinct

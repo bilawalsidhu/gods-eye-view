@@ -1,0 +1,25 @@
+# Only send runtime files to the builder. Local keys, caches, media, and Git
+# history must never enter the build context or an image layer.
+**
+!package.json
+!package-lock.json
+!src/
+!src/**
+!scripts/
+!scripts/**
+!public/
+!public/**
+!config/
+!config/**
+!index.html
+!style.css
+!vite.config.js
+!LICENSE
+!DATA_SOURCES.md
+**/.env
+**/.env.*
+**/ENVIRONMENT
+**/*.pem
+**/*.key
+**/node_modules
+scripts/fixtures/

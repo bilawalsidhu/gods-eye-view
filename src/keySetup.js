@@ -142,11 +142,20 @@ function buildRow(documentRef, key) {
  * Wire the chip + dialog. Fire-and-forget from main.js; resolves to null when
  * the surface has no business existing (prod build, LAN visitor, no markup).
  */
-export async function initKeySetup({ documentRef = globalThis.document, fetchImpl } = {}) {
+export async function initKeySetup({
+  documentRef = globalThis.document,
+  fetchImpl,
+  disabled = import.meta.env?.GEV_KEY_SETUP_DISABLED === true,
+} = {}) {
   const chip = documentRef?.getElementById?.('key-setup-chip');
   const root = documentRef?.getElementById?.('key-setup');
   if (!chip || !root || root.dataset.initialized === 'true') return null;
   root.dataset.initialized = 'true';
+  if (disabled) {
+    chip.remove();
+    root.remove();
+    return null;
+  }
   const doFetch = fetchImpl || globalThis.fetch?.bind(globalThis);
 
   let status = null;
