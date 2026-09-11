@@ -5,6 +5,30 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- The application-owned interface now ships in English and Spanish. A four-file
+  catalog system (`src/i18n/locales/{en,es}/{shell,cockpit,layers,setup}.js`)
+  carries 890+ keys per locale covering the shell chrome, cockpit and Context
+  surfaces, data-layer presentation, and setup/first-run/key-setup flows, with
+  the English catalog unchanged as both the default and the fallback.
+- Language selection resolves in order: a one-shot `?lang=` URL override, the
+  stored preference (`gev:locale:v1` in local storage), the browser's language
+  list, then English. The compact EN|ES selector in the command dock persists
+  the choice and reloads the page while preserving the URL hash, so an active
+  share link survives the switch; `?lang=` is never persisted and never enters
+  share links. `<html lang>`/`<html dir>` always reflect the rendered language.
+- A strict parity gate (`src/i18n/catalog.test.mjs`, on by default;
+  `GEV_I18N_REQUIRE_FULL_ES_PARITY=0` stages incomplete work) fails the build
+  if the Spanish catalog ever drifts from the English key set, placeholder
+  names, or plural shapes, so a forgotten translation cannot ship silently
+  behind the English fallback. Markup coverage and repair-pass anchor tests
+  pin every static attribute and reviewed translation.
+- Nothing machine-facing changed: internal layer IDs, status enums, voice tool
+  names and schemas, API fields, share-link parameters, provider names, and
+  attribution strings stay English byte-for-byte, and existing English
+  snapshots and share links continue to resolve exactly as before.
+
 ### Fixed
 
 - Mapped-site outages show their scheduled retry countdown and distinguish
