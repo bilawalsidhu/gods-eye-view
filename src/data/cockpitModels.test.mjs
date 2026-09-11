@@ -13,8 +13,8 @@ import { readFileSync } from 'node:fs';
  */
 
 const LAYERS = [
-  { name: 'flights', path: new URL('./flights.js', import.meta.url) },
-  { name: 'militaryFlights', path: new URL('./militaryFlights.js', import.meta.url) },
+  { name: 'flights', path: new URL('./FlightTracker.js', import.meta.url) },
+  { name: 'militaryFlights', path: new URL('./FlightTracker.js', import.meta.url) },
 ];
 
 /** Read a `const NAME = <number>;` declaration out of a module's source. */

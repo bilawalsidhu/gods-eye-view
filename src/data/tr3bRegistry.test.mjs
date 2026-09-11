@@ -226,7 +226,7 @@ test('a conversion survives a poll refresh, in both the billboard and the tracke
 });
 
 test('both flight layers keep a converted contact 2D and visible (render invariants)', async () => {
-  for (const name of ['flights.js', 'militaryFlights.js']) {
+  for (const name of ['FlightTracker.js']) {
     const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');
 
     // 1. The 3D model handoff is SUPPRESSED for a converted contact — there is
@@ -405,7 +405,7 @@ test('a converted contact never consumes a 3D model CAP SLOT', async () => {
   // an ordinary contact. Structural pin: the eligibility loop itself is inline
   // in the fleet tick (no seam to drive headlessly), so this asserts the guard's
   // POSITION rather than replaying the four-pass selection.
-  for (const name of ['flights.js', 'militaryFlights.js']) {
+  for (const name of ['FlightTracker.js']) {
     const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');
     // Anchor on the MODEL-eligibility loop (keepDistSq), not the unrelated
     // ambient-enrichment candidate loop that also builds a `cand`.

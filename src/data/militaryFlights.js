@@ -1,4 +1,183 @@
 import * as Cesium from 'cesium';
+import { createFlightLayer } from './FlightTracker.js';
+
+function _toCleanTextLocal(v) {
+  const t = String(v ?? '').trim();
+  return t || null;
+}
+
+function _toFiniteNumberLocal(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+import { tr3bAircraftClass } from './tr3bRegistry.js';
+
+export const TRACKED_MODEL_MAX_PX = 200;
+const MODEL_MAX_ALL = 350;
+const MODEL_PROX_ADD_M  = 150000;
+const MODEL_PROX_KEEP_M = 185000;
+const COCKPIT_MODEL_MAX = 60;
+const MODEL_ALL_ADD_M   = 400000;
+const MODEL_ALL_KEEP_M  = 450000;
+const MODEL_HEADING_OFFSET_DEG = 180;
+const MODEL_COLOR_BLEND_AMOUNT = 0.94;
+const PLANE_MODEL_URL = '/models/airplane.glb';
+const PLANE_MODEL_SCALE = 1;
+const PLANE_NATIVE_RADIUS_M = 34.41;
+const PLANE_BELLY_OFFSET_NATIVE = 6.719;
+
+export const MODEL_BELLY_OFFSET_NATIVE = 5.631;
+const JET_MODEL_URL = '/models/jet.glb';
+const HELI_MODEL_URL = '/models/heli.glb';
+const MODEL_SCALE = 1;
+
+function _isUsableMilitaryAircraft(aircraft) {
+  if (!aircraft) return false;
+  const hex = _toCleanTextLocal(aircraft.hex);
+  if (!hex || hex.length !== 6 || hex === '000000' || hex === 'ffffff') return false;
+  if (!Number.isFinite(_toFiniteNumberLocal(aircraft.lat)) || !Number.isFinite(_toFiniteNumberLocal(aircraft.lon))) return false;
+  return true;
+}
+
+const API_URL = '/api/adsblol/mil';
+const MIL_TINT = Cesium.Color.fromCssColorString('#FFB800');
+
+const layer = createFlightLayer({
+  layerId: 'military',
+  getApiUrl: () => API_URL,
+  defaultStatsSource: 'adsb.lol',
+  trackingIdParamName: 'selectedMilitaryTrackingId',
+  suppressDuplicate: () => false,
+  getFleetBillboardColor: (icao24) => MIL_TINT,
+  disableEnrichment: true,
+  defaultModelUrl: JET_MODEL_URL,
+  defaultBellyOffsetNative: MODEL_BELLY_OFFSET_NATIVE,
+  classModelUrl: { 'H1': HELI_MODEL_URL },
+  
+  mapAnalystRecord,
+  parsePayload: (data, nowMs, ERROR_BACKOFF_INTERVAL) => {
+    if (!data || !Array.isArray(data.ac)) {
+      throw new Error('Malformed adsb.lol response');
+    }
+    const usableAircraft = data.ac.filter(_isUsableMilitaryAircraft);
+    if (data.ac.length > 0 && usableAircraft.length === 0) {
+      throw new Error('Malformed adsb.lol aircraft rows');
+    }
+    return usableAircraft;
+  },
+  buildTrackedLabel: (info, icao24, buildFromText, isStale) => {
+    const stale = isStale ? ' · STALE' : '';
+    const callsign = (_toCleanTextLocal(info?.callsign) || _toCleanTextLocal(info?.registration) || icao24) + stale;
+    const type = _toCleanTextLocal(info?.typeCode) || _toCleanTextLocal(info?.type) || 'Type unknown';
+    const registration = _toCleanTextLocal(info?.registration) || 'Reg unknown';
+    const operator = _toCleanTextLocal(info?.operator) || 'Operator unknown';
+    
+    let altitudeFt = info?.altitudeFt;
+    if (!Number.isFinite(altitudeFt) && Number.isFinite(info?.altitude)) {
+      altitudeFt = info.altitude / 0.3048;
+    }
+    const altitude = Number.isFinite(altitudeFt) ? (altitudeFt < 0 ? 'Surface' : `${Math.round(altitudeFt)} ft`) : 'Alt unknown';
+    
+    let speedKt = info?.speedKt;
+    if (!Number.isFinite(speedKt) && Number.isFinite(info?.speedMps)) speedKt = info.speedMps * 1.944;
+    else if (!Number.isFinite(speedKt) && Number.isFinite(info?.velocity)) speedKt = info.velocity * 1.94384;
+    speedKt = Number.isFinite(speedKt) ? Math.round(speedKt) : null;
+    
+    const tail = speedKt ? `${altitude} · ${speedKt} kt` : altitude;
+    
+    return buildFromText([
+      callsign,
+      `${type} · ${registration}`,
+      `${operator} · ${tail}`,
+    ].join('\n'), '#ffd166');
+  },
+
+  mapRecord: (aircraft) => {
+    const icao24 = _toCleanTextLocal(aircraft.hex).toLowerCase();
+    const lon = _toFiniteNumberLocal(aircraft.lon);
+    const lat = _toFiniteNumberLocal(aircraft.lat);
+    
+    const rawAltBaro = aircraft.alt_baro;
+    const on_ground = typeof rawAltBaro === 'string' && rawAltBaro.trim().toLowerCase() === 'ground';
+    const altitudeFt = _toFiniteNumberLocal(rawAltBaro);
+    
+    const altGeomFt = _toFiniteNumberLocal(aircraft.alt_geom);
+    
+    const speedKt = _toFiniteNumberLocal(aircraft.gs);
+    const baroRateFtMin = _toFiniteNumberLocal(aircraft.baro_rate);
+
+    return {
+      icao24,
+      callsign: _toCleanTextLocal(aircraft.flight),
+      lon,
+      lat,
+      baro_alt: Number.isFinite(altitudeFt) ? altitudeFt * 0.3048 : NaN,
+      on_ground,
+      velocity: Number.isFinite(speedKt) ? speedKt * 0.514444 : 0,
+      true_track: _toFiniteNumberLocal(aircraft.track) || 0,
+      vertical_rate: Number.isFinite(baroRateFtMin) ? baroRateFtMin * 0.00508 : null,
+      geo_alt: Number.isFinite(altGeomFt) ? altGeomFt * 0.3048 : NaN,
+      category: null,
+      extraMeta: {
+        registration: _toCleanTextLocal(aircraft.r) || null,
+        operator: _toCleanTextLocal(aircraft.ownOp) || null,
+        typeCode: _toCleanTextLocal(aircraft.t) || null,
+        altitudeFt: Number.isFinite(altitudeFt) ? altitudeFt : null,
+        speedMps: Number.isFinite(speedKt) ? speedKt * 0.514444 : null,
+        track: _toFiniteNumberLocal(aircraft.track) || null,
+        verticalRateMps: Number.isFinite(baroRateFtMin) ? baroRateFtMin * 0.00508 : null,
+      }
+    };
+  }
+});
+
+export const militaryFlightsLayer = layer;
+export default militaryFlightsLayer;
+
+export const _updateTrackedModelForTest = layer._updateTrackedModelForTest;
+export const _driveFleetModelHandoffForTest = layer._driveFleetModelHandoffForTest;
+export const _ensureFleetModelForTest = layer._ensureFleetModelForTest;
+export const _setTrackedMilitaryRefreshStateForTest = layer._setTrackedFlightRefreshStateForTest;
+export const _setMilitaryTrackingRefreshOutcomeForTest = layer._setFlightTrackingRefreshOutcomeForTest;
+export const _addMilitaryTrackingCandidateForTest = layer._addFlightTrackingCandidateForTest;
+export const _pendingMilitaryTrackingRestoreForTest = layer._pendingFlightTrackingRestoreForTest;
+export const _applyPendingMilitaryTrackingRestoreForTest = layer._applyPendingFlightTrackingRestoreForTest;
+export const _setCockpitDetectionSubjectForTest = layer._setCockpitDetectionSubjectForTest;
+export const _trackedModelRegimeActiveForTest = layer._trackedModelRegimeActiveForTest;
+export const _trackedBillboardColorForTest = layer._trackedBillboardColorForTest;
+
+export function mapAnalystRecord(icao24, info) {
+  const num = (v) => (Number.isFinite(v) ? v : null);
+  const text = (v) => { const t = String(v ?? '').trim(); return t || null; };
+  const callsign = text(info?.callsign);
+  return {
+    id: callsign || text(info?.registration) || icao24,
+    icao24,
+    callsign,
+    lat: num(info?.rawLat),
+    lon: num(info?.rawLon),
+    // altitudeFt is the sticky barometric/MSL aviation field — converted to
+    // meters here for shape parity with the flights layer.
+    altitudeM: Number.isFinite(info?.altitudeFt) ? info.altitudeFt * 0.3048 : null,
+    speedMps: num(info?.speedMps),
+    heading: num(info?.track),
+    verticalRateMps: num(info?.verticalRateMps),
+    onGround: info?.onGround === true,
+    military: true,
+    // A converted contact reports the class it RENDERS as (mirror of
+    // flights.js), so an analyst filter/superlative agrees with the triangle.
+    aircraftClass: tr3bAircraftClass(icao24, text(info?.klass)),
+    originCountry: null,
+    operator: text(info?.operator),
+    routeOrigin: null,
+    routeDestination: null,
+  };
+}
+
+
+/* LEGACY TEST STUBS
+import * as Cesium from 'cesium';
 import { aircraftIncludedInNearby } from './aircraftNearbyPolicy.js';
 import { registerPickOwner, unregisterPickOwner, isOwnedByOtherLayer, resolvePickId } from './pickRegistry.js';
 import { registerSpriteCollection, restoreSpriteOrder } from './spriteOrder.js';
@@ -77,22 +256,22 @@ import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor
  * position so that the rotation angle (heading/track) operates in the local tangent
  * plane where 0 deg = north; near nadir the icons switch to screen-aligned
  * rotation (camera.heading - track) with hysteresis.
- */
+ * /
 
-/** @constant {string} API endpoint proxied to adsb.lol military feed */
+/** @constant {string} API endpoint proxied to adsb.lol military feed * /
 const API_URL = '/api/adsblol/mil';
-/** @constant {number} Milliseconds to wait before retrying after a transient error */
+/** @constant {number} Milliseconds to wait before retrying after a transient error * /
 const ERROR_BACKOFF_INTERVAL = 20000;
-/** @constant {number} Longer cooldown (ms) after a 429 rate-limit, mirroring flights.js */
+/** @constant {number} Longer cooldown (ms) after a 429 rate-limit, mirroring flights.js * /
 const BACKOFF_INTERVAL = 45000;
-/** @constant {number} Max position samples retained per aircraft for dead reckoning */
+/** @constant {number} Max position samples retained per aircraft for dead reckoning * /
 const POSITION_HISTORY_LIMIT = 5;
-/** @constant {number} Base billboard display scale */
+/** @constant {number} Base billboard display scale * /
 const BILLBOARD_SCALE = 0.7;
 
-/** @constant {Cesium.Color} Default amber tint for untracked military billboards */
+/** @constant {Cesium.Color} Default amber tint for untracked military billboards * /
 const MIL_ICON_COLOR = Cesium.Color.fromCssColorString('#FFB800');
-/** @constant {Cesium.Color} Lighter amber tint applied to the actively tracked aircraft */
+/** @constant {Cesium.Color} Lighter amber tint applied to the actively tracked aircraft * /
 const TRACKED_ICON_COLOR = Cesium.Color.fromCssColorString('#FFD166');
 
 // --- Ground traffic (owner reversal 2026-07-03; mirror of flights.js) ---------------
@@ -109,13 +288,13 @@ const TRACKED_ICON_COLOR = Cesium.Color.fromCssColorString('#FFD166');
 // test: the day-1 slate-gray 50%-alpha muted tint was unreadable — "in NYC I can
 // barely see them"). "On the ground" reads from the ×0.8 scale + missing trail;
 // "feed-dropped, coasting" stays the 45%-alpha stale fade.
-/** Ground billboards render slightly smaller so airport clutter stays visually minor. */
+/** Ground billboards render slightly smaller so airport clutter stays visually minor. * /
 const GROUND_SCALE = 0.8;
 
 /** Depth-test policy for aircraft billboards (mirror of flights.js — see the
  *  full rationale there). Round 5 (owner directive 2026-07-06): EVERY contact
  *  renders depth-test-free at every distance — a uniform always-visible rule;
- *  the fleet tick's horizon occluder still removes far-side contacts. */
+ *  the fleet tick's horizon occluder still removes far-side contacts. * /
 function _groundDepthDistance() {
   return Number.POSITIVE_INFINITY;
 }
@@ -172,7 +351,7 @@ const PLANE_BELLY_OFFSET_NATIVE = 6.719;
  *  fastjet and unknown keep jet.glb with the same 180° offset. The MIX tint stays
  *  dominant everywhere — military is amber, tracked is TRACKED_ICON_COLOR,
  *  and the tint must dominate any livery (owner: "stays yellow"). Specs are
- *  static per class — memoized (the fleet pass asks at 12 Hz per model). */
+ *  static per class — memoized (the fleet pass asks at 12 Hz per model). * /
 const _specCache = new Map();
 function _modelSpec(klass) {
   let spec = _specCache.get(klass);
@@ -197,27 +376,27 @@ function _modelSpec(klass) {
 // rests its lowest geometry (gear/belly) ON the sampled tile skin instead of sinking to
 // the fuselage-centerline origin. Locked against the GLB by modelScale.test.mjs.
 const MODEL_BELLY_OFFSET_NATIVE = 5.631;
-/** One-shot cached tile-skin heights for MODELED grounded planes (see groundSnap.js). */
+/** One-shot cached tile-skin heights for MODELED grounded planes (see groundSnap.js). * /
 const _groundSnap = createGroundSnap();
 const _scratchGroundCarto = new Cesium.Cartographic();
 const _scratchGroundPos = new Cesium.Cartesian3();
-/** @type {Cesium.PrimitiveCollection|null} */
+/** @type {Cesium.PrimitiveCollection|null} * /
 let _modelCollection = null;
-/** @type {Map<string, Cesium.Model>} icao24 → model */
+/** @type {Map<string, Cesium.Model>} icao24 → model * /
 const _models = new Map();
-/** @type {Set<string>} icao24 currently loading (async) */
+/** @type {Set<string>} icao24 currently loading (async) * /
 const _modelPending = new Set();
 /** @type {Map<string, number>} icao24 → load generation; bumped on release to invalidate
- *  an in-flight load (so a track/untrack/remove during fromGltfAsync can't add a stale model). */
+ *  an in-flight load (so a track/untrack/remove during fromGltfAsync can't add a stale model). * /
 const _modelGen = new Map();
 /** Lifecycle epoch; bumped on destroy so an in-flight load from a PREVIOUS init can't settle
- *  against a new lifecycle's globals (which destroy cleared). Captured by _ensureModel. */
+ *  against a new lifecycle's globals (which destroy cleared). Captured by _ensureModel. * /
 let _modelEpoch = 0;
 /** DEFAULT-ON in PROXIMITY (owner directive 2026-08-22). A fresh boot never runs
  *  layer-state restoration, so this initializer — not the codec — is what the app
  *  actually starts with; it must stay in lockstep with the `models3d` default in
  *  `layerState.js` and `this._models3dEnabled` in ui.js, or the DISPLAY rail would
- *  light a button the layer has not armed. */
+ *  light a button the layer has not armed. * /
 let _models3dEnabled = true;
 let _models3dMode = 'proximity'; // 'proximity' = nearest MODEL_MAX in view; 'all' = every in-view plane (≤ MODEL_MAX_ALL)
 let _lastModelCapWarnMs = 0; // throttle the "more planes in view than the cap" console notice
@@ -227,39 +406,39 @@ let _lastModelCapWarnMs = 0; // throttle the "more planes in view than the cap" 
 // fades — no gap, no double-image. Preloaded once at init; the instance is retained (not
 // destroyed) purely to keep Cesium's glTF cache warm for fast tracked-model instantiation.
 let _planeModelLoaded = false;
-/** @type {Cesium.Model|null} retained preload that keeps the glTF cache warm */
+/** @type {Cesium.Model|null} retained preload that keeps the glTF cache warm * /
 let _preloadModel = null;
-/** Amber fade target for the tracked billboard once the model takes over (mirrors flights.js CYAN_TRANSPARENT). */
+/** Amber fade target for the tracked billboard once the model takes over (mirrors flights.js CYAN_TRANSPARENT). * /
 const AMBER_TRANSPARENT = MIL_ICON_COLOR.withAlpha(0);
 const _scratchModelHpr = new Cesium.HeadingPitchRoll(0, 0, 0);
 const _scratchModelMtx = new Cesium.Matrix4();
 const _scratchModelBS = new Cesium.BoundingSphere(new Cesium.Cartesian3(), 1.0); // frustum-visibility test
-/** Last limb taper per billboard, retained across class/ground/cockpit repaints. */
+/** Last limb taper per billboard, retained across class/ground/cockpit repaints. * /
 const _billboardLimbScale = new WeakMap();
 
 // ---------------------------------------------------------------------------
 // Module-level state
 // ---------------------------------------------------------------------------
 
-/** @type {Cesium.BillboardCollection|null} Single GPU-batched collection for all aircraft */
+/** @type {Cesium.BillboardCollection|null} Single GPU-batched collection for all aircraft * /
 let _billboardCollection = null;
-/** @type {Map<string, Cesium.Billboard>} ICAO hex -> billboard primitive */
+/** @type {Map<string, Cesium.Billboard>} ICAO hex -> billboard primitive * /
 let _billboards = new Map();
-/** Stable lightweight records reused by the detection overlay between polls. */
+/** Stable lightweight records reused by the detection overlay between polls. * /
 let _detectionObjects = new Map();
-/** @type {Map<string, Object>} ICAO hex -> flight metadata (callsign, type, registration, operator, altitudeFt, speedMps, track) */
+/** @type {Map<string, Object>} ICAO hex -> flight metadata (callsign, type, registration, operator, altitudeFt, speedMps, track) * /
 let _flightData = new Map();
-/** @type {Map<string, Array<{time: Cesium.JulianDate, position: Cesium.Cartesian3}>>} ICAO hex -> recent position samples for dead reckoning */
+/** @type {Map<string, Array<{time: Cesium.JulianDate, position: Cesium.Cartesian3}>>} ICAO hex -> recent position samples for dead reckoning * /
 let _positionHistory = new Map();
-/** @type {number} Current number of visible aircraft */
+/** @type {number} Current number of visible aircraft * /
 let _count = 0;
-/** @type {number|null} Epoch ms of last successful API update */
+/** @type {number|null} Epoch ms of last successful API update * /
 let _lastUpdate = null;
-/** @type {boolean} True when in error-backoff mode */
+/** @type {boolean} True when in error-backoff mode * /
 let _backoff = false;
-/** @type {number} Epoch ms after which the next retry is allowed */
+/** @type {number} Epoch ms after which the next retry is allowed * /
 let _retryAt = 0;
-/** @type {string|null} Human-readable description of the last error */
+/** @type {string|null} Human-readable description of the last error * /
 let _lastError = null;
 const _activeUpdateControllers = new Set();
 
@@ -267,15 +446,15 @@ function _abortActiveUpdates() {
   for (const controller of _activeUpdateControllers) controller.abort();
   _activeUpdateControllers.clear();
 }
-/** @type {number|null} HTTP status code from the last API response */
+/** @type {number|null} HTTP status code from the last API response * /
 let _lastStatus = null;
-/** @type {boolean} True once ensureGeoidReady() has resolved (awaited once at enable()). Mirror of flights.js. */
+/** @type {boolean} True once ensureGeoidReady() has resolved (awaited once at enable()). Mirror of flights.js. * /
 let _geoidReady = false;
-/** @type {Map<string, number>} icao24 -> geoid undulation N (m), cached (negligible drift per-aircraft). */
+/** @type {Map<string, number>} icao24 -> geoid undulation N (m), cached (negligible drift per-aircraft). * /
 const _geoidNCache = new Map();
 
 // -- Click-to-track state --
-/** @type {string|null} ICAO hex of the currently tracked aircraft */
+/** @type {string|null} ICAO hex of the currently tracked aircraft * /
 let _trackedIcao = null;
 let _pendingTrackingRestore = null;
 let _trackingIntentGeneration = 0;
@@ -286,27 +465,27 @@ let _lastTrackingRefreshOutcome = {
   ids: new Set(),
   source: 'adsb.lol',
 };
-/** @type {Cesium.Entity|null} Entity created for the tracked aircraft (camera follows this) */
+/** @type {Cesium.Entity|null} Entity created for the tracked aircraft (camera follows this) * /
 let _trackedEntity = null;
-/** Disposes the single active tracked-camera framing owner. */
+/** Disposes the single active tracked-camera framing owner. * /
 let _trackedCameraFrameStop = null;
 /** @type {Cesium.Model|null} Standalone 3D model for the tracked aircraft — NOT a graphic on
  *  _trackedEntity, so viewer.trackedEntity's follow-camera always has a ready bounding sphere
- *  (a model graphic reports PENDING until loaded, which freezes the centering on 3D-toggle). */
+ *  (a model graphic reports PENDING until loaded, which freezes the centering on 3D-toggle). * /
 let _trackedModel = null;
 let _trackedModelGen = 0;
 let _trackedModelLoading = false;
-/** @type {Cesium.ScreenSpaceEventHandler|null} Click handler for selecting aircraft */
+/** @type {Cesium.ScreenSpaceEventHandler|null} Click handler for selecting aircraft * /
 let _clickHandler = null;
-/** @type {Cesium.Viewer|null} Cached viewer reference */
+/** @type {Cesium.Viewer|null} Cached viewer reference * /
 let _viewer = null;
-/** Cockpit presentation switches ambient AIR contacts between near aircraft and far dots. */
+/** Cockpit presentation switches ambient AIR contacts between near aircraft and far dots. * /
 let _cockpitContactMode = false;
-/** AIR contacts inside the selected Display range; independent from model admission/load/cap. */
+/** AIR contacts inside the selected Display range; independent from model admission/load/cap. * /
 let _cockpitNearContacts = new Set();
-/** Normalized ICAO24 of the active Cockpit subject, omitted from detection candidates. */
+/** Normalized ICAO24 of the active Cockpit subject, omitted from detection candidates. * /
 let _cockpitSubjectId = null;
-/** @type {((event: CustomEvent) => void)|null} */
+/** @type {((event: CustomEvent) => void)|null} * /
 let _cockpitModeListener = null;
 
 function _emitAwarenessEvent(type, detail) {
@@ -336,7 +515,7 @@ function _publishTrackedSelection(icao24, origin = 'programmatic') {
  * snapshot, so a long follow never narrates a position the plane has left.
  * @param {string} icao24 Contact identity.
  * @returns {object|null} Context metadata, or null when the contact is gone.
- */
+ * /
 function _contextSubjectMetadata(icao24) {
   const described = _describeFlight(icao24);
   if (!described) return null;
@@ -397,7 +576,7 @@ function _militaryBillboardScale(icao24) {
   return BILLBOARD_SCALE * (CLASS_SCALE_2D[meta?.klass] || 1) * (meta?.onGround ? GROUND_SCALE : 1);
 }
 
-/** Apply the current normal/cockpit visual contract to one owned fleet billboard. */
+/** Apply the current normal/cockpit visual contract to one owned fleet billboard. * /
 function _applyFleetBillboardPresentation(icao24, bb) {
   if (!bb) return;
   const limbScale = _billboardLimbScale.get(bb) ?? 1;
@@ -424,7 +603,7 @@ function _applyFleetBillboardPresentation(icao24, bb) {
   bb.color = MIL_ICON_COLOR.withAlpha(bb.color?.alpha ?? 1);
 }
 
-/** Refresh the AIR-only Cockpit near band independently from model admission. */
+/** Refresh the AIR-only Cockpit near band independently from model admission. * /
 function _refreshCockpitNearContacts() {
   if (!_cockpitContactMode || !_viewer?.camera?.positionWC) {
     if (_cockpitNearContacts.size) _cockpitNearContacts = new Set();
@@ -455,7 +634,7 @@ function _refreshCockpitNearContacts() {
   if (presentationChanged) _lastCamPoseSig = '';
 }
 
-/** Switch all current and future ambient contacts between silhouettes and cockpit pips. */
+/** Switch all current and future ambient contacts between silhouettes and cockpit pips. * /
 function _setCockpitContactMode(active) {
   const next = active === true;
   if (_cockpitContactMode === next) return;
@@ -488,19 +667,19 @@ function _applyCockpitState(detail = {}) {
 // so the visible trail can grow to TRAIL_MAX_POINTS fixes.
 // ---------------------------------------------------------------------------
 
-/** @constant {string} Military trail hue (PRD F4, pinned). */
+/** @constant {string} Military trail hue (PRD F4, pinned). * /
 const TRAIL_COLOR = '#FFB800';
-/** @constant {number} Combined cap on trail vertices (backfill + live accumulation). */
+/** @constant {number} Combined cap on trail vertices (backfill + live accumulation). * /
 const TRAIL_MAX_POINTS = 400;
-/** @type {{setPositions: Function, clear: Function, destroy: Function}|null} Shared fading-trail renderer */
+/** @type {{setPositions: Function, clear: Function, destroy: Function}|null} Shared fading-trail renderer * /
 let _trail = null;
-/** @type {Cesium.Entity|null} Per-frame head segment: last body point → live icon */
+/** @type {Cesium.Entity|null} Per-frame head segment: last body point → live icon * /
 let _trailHeadEntity = null;
-/** @type {number} Uniquifier for head-segment entity ids (Cesium requires unique ids). */
+/** @type {number} Uniquifier for head-segment entity ids (Cesium requires unique ids). * /
 let _trailHeadSeq = 0;
-/** @type {Cesium.Cartesian3[]} Chronological tracked-aircraft fixes (oldest first) */
+/** @type {Cesium.Cartesian3[]} Chronological tracked-aircraft fixes (oldest first) * /
 let _trailPositions = [];
-/** @type {number} Monotonic token — invalidates in-flight backfill responses */
+/** @type {number} Monotonic token — invalidates in-flight backfill responses * /
 let _trailBackfillToken = 0;
 
 // ---------------------------------------------------------------------------
@@ -511,9 +690,9 @@ let _trailBackfillToken = 0;
 // regression.
 // ---------------------------------------------------------------------------
 
-/** @constant {number} Display latency in seconds (= one poll interval). */
+/** @constant {number} Display latency in seconds (= one poll interval). * /
 const RENDER_DELAY_SEC = 15;
-/** @constant {number} Polls an aircraft may miss before removal (transient adsb.lol dropouts). */
+/** @constant {number} Polls an aircraft may miss before removal (transient adsb.lol dropouts). * /
 const MISSING_POLL_LIMIT = 3;
 // --- Landed-plane fast cull (mirror of flights.js; owner field report
 // 2026-07-02: "phantom" planes lingered ~2 min at airports after touchdown).
@@ -524,11 +703,11 @@ const MISSING_POLL_LIMIT = 3;
 // only; a high-elevation airport ghost falls back to the normal grace) AND
 // below ~45 kts ground speed (≈23 m/s — rollout/taxi; nothing in normal
 // FLIGHT is this slow, so cruise planes always keep the full grace).
-/** @constant {number} Max baro altitude (ft, MSL) for the landed fast cull (~150 m). */
+/** @constant {number} Max baro altitude (ft, MSL) for the landed fast cull (~150 m). * /
 const LANDED_ALT_MAX_FT = 500;
-/** @constant {number} Max ground speed (m/s) for the landed fast cull (~45 kts). */
+/** @constant {number} Max ground speed (m/s) for the landed fast cull (~45 kts). * /
 const LANDED_SPEED_MAX_MPS = 23;
-/** @constant {number} Missed-poll allowance for likely-landed planes (1 = removed on the first missed poll). */
+/** @constant {number} Missed-poll allowance for likely-landed planes (1 = removed on the first missed poll). * /
 const LANDED_MISSING_POLL_LIMIT = 1;
 // Field-test fix (RS46, 2026-07-06): only contacts rendering below this
 // ellipsoidal height get the below-ground floor clamp + a coarse floor-cell
@@ -536,9 +715,9 @@ const LANDED_MISSING_POLL_LIMIT = 1;
 // cruise traffic (which can never be below ground) costs zero terrain
 // lookups; low pattern/heli work — the class that actually clips hillsides —
 // gets the floor.
-/** @constant {number} Max render altitude (m, ellipsoidal) eligible for the ground-floor clamp. */
+/** @constant {number} Max render altitude (m, ellipsoidal) eligible for the ground-floor clamp. * /
 const GROUND_FLOOR_WARM_MAX_ALT_M = 4500;
-/** @type {Map<string, number>} icao24 -> consecutive missed polls */
+/** @type {Map<string, number>} icao24 -> consecutive missed polls * /
 let _missingPolls = new Map();
 
 // ---------------------------------------------------------------------------
@@ -552,24 +731,24 @@ let _missingPolls = new Map();
 // are continuous at the boundary with this formula.
 // ---------------------------------------------------------------------------
 
-/** @constant {number} Fleet dead-reckoning tick interval (ms) — ~12Hz, not per-frame. */
+/** @constant {number} Fleet dead-reckoning tick interval (ms) — ~12Hz, not per-frame. * /
 const FLEET_DR_INTERVAL_MS = 80;
-/** @constant {number} Max ms between rotation passes while the camera is idle. */
+/** @constant {number} Max ms between rotation passes while the camera is idle. * /
 const ROTATION_REFRESH_MS = 1000;
-/** @type {number} Epoch ms of the last fleet dead-reckoning pass */
+/** @type {number} Epoch ms of the last fleet dead-reckoning pass * /
 let _lastFleetTickMs = 0;
-/** @type {string} Camera pose signature at the last rotation pass */
+/** @type {string} Camera pose signature at the last rotation pass * /
 let _lastCamPoseSig = '';
-/** @type {number} Epoch ms of the last full rotation pass */
+/** @type {number} Epoch ms of the last full rotation pass * /
 let _lastRotPassMs = 0;
-/** @type {number} Last computed rotation for the tracked entity (radians) */
+/** @type {number} Last computed rotation for the tracked entity (radians) * /
 let _lastTrackedRotation = 0;
-/** @type {Cesium.Event.RemoveCallback|null} preRender listener disposer */
+/** @type {Cesium.Event.RemoveCallback|null} preRender listener disposer * /
 let _preRenderRemove = null;
 let _trackedModelPreUpdateRemove = null;
-/** @type {Cesium.Event.RemoveCallback|null} camera.moveEnd listener disposer (arrival rotation pass) */
+/** @type {Cesium.Event.RemoveCallback|null} camera.moveEnd listener disposer (arrival rotation pass) * /
 let _moveEndRemove = null;
-/** @type {Cesium.Event.RemoveCallback|null} trackedEntityChanged listener disposer (cross-layer untrack) */
+/** @type {Cesium.Event.RemoveCallback|null} trackedEntityChanged listener disposer (cross-layer untrack) * /
 let _trackedEntityChangedRemove = null;
 
 // -- Scratch variables (reused each frame to avoid GC pressure) --
@@ -584,28 +763,28 @@ const _scratchWarmupTime = new Cesium.JulianDate();
 const _trackedPosHolder = new Cesium.Cartesian3();
 
 // -- Per-frame dead-reckoning cache for the tracked entity --
-/** @type {Cesium.Cartesian3|null} Cached DR position for the current render frame */
+/** @type {Cesium.Cartesian3|null} Cached DR position for the current render frame * /
 let _cachedDRPosition = null;
-/** @type {number} Frame number the cache was last populated for */
+/** @type {number} Frame number the cache was last populated for * /
 let _cachedDRFrame = -1;
 
 /** Course (deg) of the position `_deadReckon` most recently returned — set on
  *  every branch of `_deadReckon`, read IMMEDIATELY by the caller (same
- *  synchronous flow; module-scratch idiom, like the Cartesian scratches). */
+ *  synchronous flow; module-scratch idiom, like the Cartesian scratches). * /
 let _drCourseDeg = null;
 /** Sibling scratches of _drCourseDeg: the displayed ground speed of the motion
  *  `_deadReckon` just returned, and whether that motion is too slow for ANY
  *  course source to be trusted (hover/GPS drift — consumers HOLD their
- *  previous display course instead of chasing noise). */
+ *  previous display course instead of chasing noise). * /
 let _drSpeedMps = null;
 let _drCourseHold = false;
-/** Frame-cached course for the tracked aircraft (sibling of _cachedDRPosition). */
+/** Frame-cached course for the tracked aircraft (sibling of _cachedDRPosition). * /
 let _cachedDRCourse = null;
-/** Frame-cached siblings of _cachedDRCourse (same discipline). */
+/** Frame-cached siblings of _cachedDRCourse (same discipline). * /
 let _cachedDRSpeedMps = null;
 let _cachedDRHold = false;
 /** Wall-clock of the tracked course limiter's last advance (dt source only —
- *  the course VALUE lives in the shared per-icao _displayCourse map below). */
+ *  the course VALUE lives in the shared per-icao _displayCourse map below). * /
 let _trackedCourseMs = 0;
 /** Per-aircraft smoothed display course — the SINGLE source of truth for the
  *  nose direction an aircraft displays (mirror of flights.js, 2026-07-03
@@ -614,12 +793,12 @@ let _trackedCourseMs = 0;
  *  the tracked plane (the fleet pass skips the tracked icao, so exactly one
  *  writer owns an entry at a time). Sharing the entry — including its slew
  *  state — keeps the tracked↔fleet handoff seamless (separate states froze
- *  the fleet entry while tracked → nose flip on click / click-away). */
+ *  the fleet entry while tracked → nose flip on click / click-away). * /
 const _displayCourse = new Map();
 /** Max course slew (deg/s) — well above real turns (≤4°/s), hides fix-boundary
- *  steps. Scaled down toward COURSE_MIN_DPS at low speed (courseSlewCapDps). */
+ *  steps. Scaled down toward COURSE_MIN_DPS at low speed (courseSlewCapDps). * /
 const COURSE_MAX_DPS = 60;
-/** Never spend a long render stall's full elapsed time in one visible course step. */
+/** Never spend a long render stall's full elapsed time in one visible course step. * /
 const COURSE_SLEW_DT_MAX_SEC = 0.25;
 
 // -- Tracked-display reconciliation (see flights.js for the rationale): absorb a raw
@@ -633,7 +812,7 @@ const _drPrevRaw = new Cesium.Cartesian3();
 const _drPrevDisplay = new Cesium.Cartesian3();
 let _drPrevMs = 0;
 let _drReconcileValid = false;
-/** @type {string|null} icao the reconciliation state currently belongs to */
+/** @type {string|null} icao the reconciliation state currently belongs to * /
 let _drReconcileIcao = null;
 
 /**
@@ -641,7 +820,7 @@ let _drReconcileIcao = null;
  * Handles both numeric and string inputs (e.g. API fields that may arrive as strings).
  * @param {*} value - Raw value from the API response
  * @returns {number|null} Finite number or null
- */
+ * /
 function _toFiniteNumber(value) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string') {
@@ -655,7 +834,7 @@ function _toFiniteNumber(value) {
  * Safely convert a value to a trimmed string, defaulting to '' for falsy inputs.
  * @param {*} value - Raw value to stringify
  * @returns {string} Trimmed string
- */
+ * /
 function _toCleanText(value) {
   return String(value || '').trim();
 }
@@ -664,7 +843,7 @@ function _toCleanText(value) {
  * Format an altitude value in feet for display, with fallback text.
  * @param {number|null|undefined} altitudeFt - Barometric altitude in feet
  * @returns {string} Formatted altitude string (e.g. "35000 ft" or "Alt unknown")
- */
+ * /
 function _formatAltitude(altitudeFt) {
   if (!Number.isFinite(altitudeFt)) return 'Alt unknown';
   return `${Math.round(altitudeFt)} ft`;
@@ -676,7 +855,7 @@ function _formatAltitude(altitudeFt) {
  * hold, so a plane missing either datum keeps the normal grace.
  * @param {string} icao24 - ICAO hex identifier of the aircraft
  * @returns {boolean}
- */
+ * /
 function _likelyLanded(icao24) {
   const info = _flightData.get(icao24);
   if (!info) return false;
@@ -700,7 +879,7 @@ function _likelyLanded(icao24) {
  * @param {Object|null} info - Flight metadata from _flightData
  * @param {string} icao24 - ICAO hex identifier (fallback display name)
  * @returns {string} Newline-separated label text
- */
+ * /
 function _buildTrackedLabel(info, icao24) {
   const stale = (_missingPolls.get(icao24) || _backoff) ? ' · STALE' : '';
   const callsign = (_toCleanText(info?.callsign) || _toCleanText(info?.registration) || icao24) + stale;
@@ -719,7 +898,7 @@ function _buildTrackedLabel(info, icao24) {
   ].join('\n');
 }
 
-/** Write the explicit tracked presentation model and refresh its host entry. */
+/** Write the explicit tracked presentation model and refresh its host entry. * /
 function _updateTrackedLabelModel(icao24) {
   if (!_trackedEntity || icao24 !== _trackedIcao) return;
   _trackedEntity.gevLabelModel = trackedLabelModelFromText(
@@ -736,10 +915,10 @@ function _updateTrackedLabelModel(icao24) {
  *  the ones the operator converted into a TR-3B (Easter egg), which draw the
  *  black-triangle glyph — its thermal-reactive variant while an IR style owns
  *  the scene. Routing EVERY `aircraftIcon()` call through this is what makes a
- *  conversion survive the poll reconciler and the two-tier raster swap. */
+ *  conversion survive the poll reconciler and the two-tier raster swap. * /
 const _iconKind = (icao24, klass) => tr3bIconKind(icao24, klass, { hot: _irBoost });
 
-/** Re-image the tracked entity's billboard from the current class/conversion. */
+/** Re-image the tracked entity's billboard from the current class/conversion. * /
 function _syncTrackedBillboardImage() {
   if (!_trackedIcao || !_trackedEntity?.billboard) return;
   _trackedEntity.billboard.image = aircraftIcon(
@@ -754,7 +933,7 @@ function _syncTrackedBillboardImage() {
  * owns the visual, then the billboard, tracked entity, and card re-derive.
  * @param {string} icao24 - ICAO 24-bit address.
  * @returns {boolean} True when the layer owns this contact.
- */
+ * /
 function _refreshTr3bContact(icao24) {
   const id = String(icao24 || '').trim().toLowerCase();
   if (!id) return false;
@@ -777,7 +956,7 @@ function _refreshTr3bContact(icao24) {
   return _billboards.has(id) || id === _trackedIcao;
 }
 
-/** Re-image every converted contact this layer owns (IR style flip). */
+/** Re-image every converted contact this layer owns (IR style flip). * /
 function _refreshTr3bForStyle() {
   for (const id of tr3bConvertedIds()) {
     if (_billboards.has(id) || id === _trackedIcao) _refreshTr3bContact(id);
@@ -799,7 +978,7 @@ function _refreshTr3bForStyle() {
  * @param {boolean} [state.tracked=true]
  * @param {Iterable<[string, object]>} [state.models=[]] - Fleet 3D models keyed
  *   by icao24, for the billboard-hidden/model-shown handoff state.
- */
+ * /
 export function _setTrackedMilitaryRefreshStateForTest({
   icao24,
   entity,
@@ -837,7 +1016,7 @@ export function _setTrackedMilitaryRefreshStateForTest({
   _retryAt = 0;
 }
 
-/** Seed the authoritative snapshot outcome used by share-Follow tests. */
+/** Seed the authoritative snapshot outcome used by share-Follow tests. * /
 export function _setMilitaryTrackingRefreshOutcomeForTest({
   status = 'accepted',
   ids = [],
@@ -852,47 +1031,47 @@ export function _setMilitaryTrackingRefreshOutcomeForTest({
   };
 }
 
-/** Add a cached contact so tests can model a target arriving on a later feed. */
+/** Add a cached contact so tests can model a target arriving on a later feed. * /
 export function _addMilitaryTrackingCandidateForTest({ icao24, meta, billboard, history = [] }) {
   _billboards.set(icao24, billboard);
   _flightData.set(icao24, meta);
   _positionHistory.set(icao24, history);
 }
 
-/** Return the deferred restore target held by the production tracker. */
+/** Return the deferred restore target held by the production tracker. * /
 export function _pendingMilitaryTrackingRestoreForTest() {
   return _pendingTrackingRestore?.id ?? null;
 }
 
-/** Exercise the production deferred-restore retry after a simulated feed refresh. */
+/** Exercise the production deferred-restore retry after a simulated feed refresh. * /
 export function _applyPendingMilitaryTrackingRestoreForTest() {
   return _applyPendingTrackingRestore();
 }
 
-/** Set the exact Cockpit subject through the production state transition for focused tests. */
+/** Set the exact Cockpit subject through the production state transition for focused tests. * /
 export function _setCockpitDetectionSubjectForTest(active, subjectId = null) {
   _applyCockpitState({ active, subjectId });
 }
 
 /** Evaluate the TRACKED contact's zoom regime through the production predicate.
  *  The decision is latch-bearing (default-on, hysteretic, cockpit/TR-3B-suppressed)
- *  and otherwise only observable through a live scene, so tests drive it here. */
+ *  and otherwise only observable through a live scene, so tests drive it here. * /
 export function _trackedModelRegimeActiveForTest() {
   return _trackedModelRegimeActive();
 }
 
 /** Run one frame of the production tracked-model driver (normally a
- *  `scene.preUpdate` listener) so tests can pin its bounded load retries. */
+ *  `scene.preUpdate` listener) so tests can pin its bounded load retries. * /
 export function _updateTrackedModelForTest() {
   return _updateTrackedModel();
 }
 
-/** Evaluate the production tracked-billboard handoff colour for focused tests. */
+/** Evaluate the production tracked-billboard handoff colour for focused tests. * /
 export function _trackedBillboardColorForTest() {
   return _modelOwnsVisual(_trackedIcao) ? AMBER_TRANSPARENT : TRACKED_ICON_COLOR;
 }
 
-/** Drive the exact fleet billboard-to-model handoff used by `_fleetTick`. */
+/** Drive the exact fleet billboard-to-model handoff used by `_fleetTick`. * /
 export function _driveFleetModelHandoffForTest({ icao24, position, course = 0 }) {
   return _driveFleetModelHandoff(
     icao24,
@@ -903,7 +1082,7 @@ export function _driveFleetModelHandoffForTest({ icao24, position, course = 0 })
   );
 }
 
-/** Exercise the exact asynchronous fleet loader and return its admitted model. */
+/** Exercise the exact asynchronous fleet loader and return its admitted model. * /
 export async function _ensureFleetModelForTest(icao24) {
   await _ensureModel(icao24);
   return _models.get(icao24) || null;
@@ -921,7 +1100,7 @@ export async function _ensureFleetModelForTest(icao24) {
  * @param {string} icao24 - ICAO hex identifier of the aircraft
  * @param {Cesium.Cartesian3} [result] - Optional out-parameter to write into.
  * @returns {Cesium.Cartesian3|null} Estimated current ECEF position, or null if no history
- */
+ * /
 function _deadReckon(icao24, result) {
   const history = _positionHistory.get(icao24);
   const info = _flightData.get(icao24);
@@ -1015,7 +1194,7 @@ function _deadReckon(icao24, result) {
  * up = +Z; heading 0 deg = north, 90 deg = east (clockwise from north). Sets
  * `_drCourseDeg` to the arc's instantaneous end course on every path.
  * Arc math adapted from skylight (https://github.com/cpaczek/skylight, MIT).
- */
+ * /
 function _extrapolateFix(fix, info, dt, out, turnRateDps = 0) {
   const speed = Number.isFinite(fix.velocity) ? fix.velocity : ((info && info.speedMps) || 0);
   const heading = Number.isFinite(fix.track) ? fix.track : ((info && info.track) || 0);
@@ -1039,7 +1218,7 @@ function _extrapolateFix(fix, info, dt, out, turnRateDps = 0) {
  * predates its oldest real fix — _deadReckon is extrapolating backward with no real
  * history yet behind the displayed icon, so the trail must draw nothing.
  * @returns {boolean}
- */
+ * /
 function _isTrackWarmingUp() {
   if (!_trackedIcao) return false;
   const history = _positionHistory.get(_trackedIcao);
@@ -1050,7 +1229,7 @@ function _isTrackWarmingUp() {
   return Cesium.JulianDate.lessThan(renderTime, history[0].time);
 }
 
-/** Resolve the selected aircraft's actual rendered square extent this frame. */
+/** Resolve the selected aircraft's actual rendered square extent this frame. * /
 function _trackedFocusSizePx(icao24, position) {
   const camera = _viewer?.camera;
   const scene = _viewer?.scene;
@@ -1090,7 +1269,7 @@ function _trackedFocusSizePx(icao24, position) {
  * null when the aircraft has no fix.
  * @param {string} icao24
  * @returns {Cesium.Cartesian3|null}
- */
+ * /
 function _trackedDisplayPosition(icao24) {
   const frame = _viewer?.scene?.frameState?.frameNumber ?? -1;
   if (frame === _cachedDRFrame && icao24 === _drReconcileIcao) return _cachedDRPosition;
@@ -1157,18 +1336,18 @@ function _trackedDisplayPosition(icao24) {
 /** The tracked plane's display position WITHOUT recomputing — the value the follow-camera already
  *  settled on this frame. Mirror of flights.js: getDetectableObjects + the readout run in postRender at
  *  a later frameNumber, so recomputing _trackedDisplayPosition there jitters the label against the
- *  now-stable plane. Null when no valid fix (callers fall back to the billboard position). */
+ *  now-stable plane. Null when no valid fix (callers fall back to the billboard position). * /
 function _trackedDisplayCached() {
   return (_drReconcileValid && _drReconcileIcao === _trackedIcao) ? _cachedDRPosition : null;
 }
 
-/** @type {Cesium.Cartesian3} Scratch for the tracked model's rendered translation. */
+/** @type {Cesium.Cartesian3} Scratch for the tracked model's rendered translation. * /
 const _trackedVisualPos = new Cesium.Cartesian3();
 const _trackedTrailPos = new Cesium.Cartesian3();
-/** Scratch for the tracked model's world-space origin (the envelope centre). */
+/** Scratch for the tracked model's world-space origin (the envelope centre). * /
 const _scratchTrailClip = new Cesium.Cartesian3();
 /** Scratch for the shortened trail-head start. Owned by the head-segment
- *  callback alone, so nothing else can overwrite it mid-frame. */
+ *  callback alone, so nothing else can overwrite it mid-frame. * /
 const _scratchTrailHead = new Cesium.Cartesian3();
 
 /**
@@ -1178,7 +1357,7 @@ const _scratchTrailHead = new Cesium.Cartesian3();
  * Reads the modelMatrix the tracked-model update already wrote this frame: no sampling,
  * no `_modelDisplayPosition` from postRender, and `gevDisplayPosition` keeps its
  * follow-camera anti-jitter contract untouched.
- */
+ * /
 function _trackedVisualCached() {
   if (_trackedIcao && _modelOwnsVisual(_trackedIcao)) {
     const spec = _modelSpec(_flightData.get(_trackedIcao)?.klass);
@@ -1195,10 +1374,10 @@ function _trackedVisualCached() {
 /** The tracked model's rendered bounding radius (m), or 0 when no model of this
  *  contact is drawing. Carries Cesium's effective `computedScale`, which may be
  *  above `scale` to satisfy minimumPixelSize — the trail head has to be judged
- *  against the size the operator SEES, not the nominal one. */
+ *  against the size the operator SEES, not the nominal one. * /
 /** World-space origin of the tracked model, or null when no model of this
  *  contact is drawing. This is the centre the rendered bounding sphere is
- *  measured from, so the trail clip and the envelope agree on one frame. */
+ *  measured from, so the trail clip and the envelope agree on one frame. * /
 function _trackedModelCenterWorld() {
   if (!_trackedIcao || !_trackedModel || !_modelOwnsVisual(_trackedIcao)) return null;
   return Cesium.Matrix4.getTranslation(_trackedModel.modelMatrix, _scratchTrailClip);
@@ -1214,7 +1393,7 @@ function _trackedModelEnvelopeM() {
 }
 
 /** Trail endpoint for the rendered tracked owner. Brackets/readouts stay on
- * the visual centre; only the trail moves to the model's aft-belly hardpoint. */
+ * the visual centre; only the trail moves to the model's aft-belly hardpoint. * /
 function _trackedTrailCached() {
   if (_trackedIcao && _modelOwnsVisual(_trackedIcao)) {
     const spec = _modelSpec(_flightData.get(_trackedIcao)?.klass);
@@ -1235,7 +1414,7 @@ function _trackedTrailCached() {
  *  its declaration): on click the limiter continues from whatever nose the
  *  fleet pass was displaying, and on untrack the fleet pass continues from
  *  whatever nose this path last wrote — tracked and fleet consumers of the
- *  same aircraft can never disagree across the handoff (mirror of flights.js). */
+ *  same aircraft can never disagree across the handoff (mirror of flights.js). * /
 function _trackedDisplayCourse() {
   const info = _flightData.get(_trackedIcao);
   const fallback = (info && info.track) || 0;
@@ -1259,7 +1438,7 @@ function _trackedDisplayCourse() {
 /** Reset reconciliation + per-frame cache when tracking stops or switches
  *  target. Deliberately does NOT touch _displayCourse: the smoothed course
  *  entry belongs to the AIRCRAFT (not to the tracked session) and must
- *  survive the handoff back to the fleet pass. */
+ *  survive the handoff back to the fleet pass. * /
 function _resetTrackedDisplay() {
   _drReconcileValid = false;
   _drReconcileIcao = null;
@@ -1271,7 +1450,7 @@ function _resetTrackedDisplay() {
   _trackedCourseMs = 0;
 }
 
-/** Model tint, mirroring the billboard color rules (amber instead of cyan/white). */
+/** Model tint, mirroring the billboard color rules (amber instead of cyan/white). * /
 function _modelColor(icao24) {
   if (icao24 === _trackedIcao) return TRACKED_ICON_COLOR;
   return MIL_ICON_COLOR;
@@ -1284,7 +1463,7 @@ function _modelColor(icao24) {
  *  `all`, and one who wants none turns 3D off — this predicate is unchanged. The TRACKED
  *  contact does not route through here: it is one model, it is what the camera is aimed at,
  *  and it takes its own default-on, hysteretic zoom regime
- *  (`_trackedModelRegimeActive`). Mirror of flights.js. */
+ *  (`_trackedModelRegimeActive`). Mirror of flights.js. * /
 function _modelRegimeActive() {
   if (!_models3dEnabled) return false;
   const h = _viewer?.camera?.positionCartographic?.height ?? Infinity;
@@ -1293,7 +1472,7 @@ function _modelRegimeActive() {
 
 /** Hysteresis latch for the tracked contact's zoom regime, plus the selection it
  *  belongs to. Scoped per selection so a NEW target re-evaluates against the ENTER
- *  ceiling instead of inheriting the previous target's looser EXIT band. */
+ *  ceiling instead of inheriting the previous target's looser EXIT band. * /
 let _trackedZoomLatched = false;
 let _trackedZoomLatchIcao = null;
 
@@ -1305,7 +1484,7 @@ let _trackedZoomLatchIcao = null;
  *  blip, then the layer stops asking until the operator selects something else.
  *  The billboard is the visual throughout (the handoff only fades it once a
  *  model actually renders), so a latched failure degrades to exactly the
- *  pre-3D presentation. */
+ *  pre-3D presentation. * /
 const TRACKED_MODEL_MAX_LOAD_FAILS = 3;
 const TRACKED_MODEL_RETRY_BACKOFF_MS = 1500;
 let _trackedModelFailIcao = null;
@@ -1322,7 +1501,7 @@ let _trackedModelRetryAtMs = 0;
  *  makes `_trackedIcao` *observably* change, so the guard never fires. Without
  *  the reset, a contact dropped inside the hysteresis band comes back as a
  *  MODEL above the ENTER ceiling, and a contact whose GLB had already failed
- *  out would never get its retries back. Mirror of flights.js. */
+ *  out would never get its retries back. Mirror of flights.js. * /
 function _resetTrackedSelectionState() {
   _trackedZoomLatched = false;
   _trackedZoomLatchIcao = null;
@@ -1331,14 +1510,14 @@ function _resetTrackedSelectionState() {
   _trackedModelRetryAtMs = 0;
 }
 
-/** Whether the driver may start another tracked-model load this frame. */
+/** Whether the driver may start another tracked-model load this frame. * /
 function _trackedModelLoadAllowed(nowMs = Date.now()) {
   if (_trackedModelFailIcao !== _trackedIcao) return true; // untried selection
   if (_trackedModelFailCount >= TRACKED_MODEL_MAX_LOAD_FAILS) return false;
   return nowMs >= _trackedModelRetryAtMs;
 }
 
-/** Record a rejected tracked-model load and arm the backoff / give-up latch. */
+/** Record a rejected tracked-model load and arm the backoff / give-up latch. * /
 function _noteTrackedModelLoadFailure(url, err) {
   if (_trackedModelFailIcao !== _trackedIcao) {
     _trackedModelFailIcao = _trackedIcao;
@@ -1366,7 +1545,7 @@ function _noteTrackedModelLoadFailure(url, err) {
  * TRACKED_MODEL_EXIT_ALT_M so a boundary orbit cannot flap billboard↔model.
  * First-person means your own airframe is not drawn in cockpit — the eye sits
  * metres from its origin.
- */
+ * /
 function _trackedModelRegimeActive() {
   if (_trackedZoomLatchIcao !== _trackedIcao) {
     _trackedZoomLatchIcao = _trackedIcao;
@@ -1386,7 +1565,7 @@ function _trackedModelRegimeActive() {
   return _trackedZoomLatched;
 }
 
-/** Seed the tracked billboard's 2D orientation before a 3D→2D handoff. */
+/** Seed the tracked billboard's 2D orientation before a 3D→2D handoff. * /
 function _syncTracked2dRotation() {
   if (!_trackedIcao || !_viewer) return;
   const pos = _trackedDisplayCached() || _billboards.get(_trackedIcao)?.position;
@@ -1403,14 +1582,14 @@ function _syncTracked2dRotation() {
 
 /** Active model cap — the eligibility pre-pass AND _ensureModel's admission checks must use the
  *  SAME value, else 'all' (MODEL_MAX_ALL) marks planes eligible that _ensureModel refuses at the
- *  lower MODEL_MAX, silently degrading 'all' to 'proximity'. */
+ *  lower MODEL_MAX, silently degrading 'all' to 'proximity'. * /
 function _modelCap() {
   const mapCap = _models3dMode === 'all' ? MODEL_MAX_ALL : MODEL_MAX;
   // `Math.min` on purpose: cockpit may only ever LOWER the GLB budget.
   return _cockpitContactMode ? Math.min(COCKPIT_MODEL_MAX, mapCap) : mapCap;
 }
 
-/** Active ADD/KEEP radii (m) — mode-aware ('all' reaches ~to the horizon). Mirror of flights.js. */
+/** Active ADD/KEEP radii (m) — mode-aware ('all' reaches ~to the horizon). Mirror of flights.js. * /
 function _modelAddDistM() {
   return _models3dMode === 'all' ? MODEL_ALL_ADD_M : MODEL_PROX_ADD_M;
 }
@@ -1421,7 +1600,7 @@ function _modelKeepDistM() {
 /** World model matrix from a position + course heading (pitch/roll 0; ENU frame). Writes into
  *  `result` and returns it — pass each model's OWN `.modelMatrix` so models never share one mutable
  *  matrix object (see flights.js for the full rationale: sharing one scratch stacked every model on
- *  the last-written transform, and the per-frame tracked write made it flicker). */
+ *  the last-written transform, and the per-frame tracked write made it flicker). * /
 function _modelMatrix(pos, headingDeg, result = _scratchModelMtx, offsetDeg = MODEL_HEADING_OFFSET_DEG) {
   _scratchModelHpr.heading = Cesium.Math.toRadians((headingDeg || 0) + offsetDeg);
   _scratchModelHpr.pitch = 0;
@@ -1435,7 +1614,7 @@ function _modelMatrix(pos, headingDeg, result = _scratchModelMtx, offsetDeg = MO
  *  flights.js): the vertical pick ray at a plane's own lat/lon otherwise lands on its
  *  (or a parked neighbor's) billboard/model instead of the tile skin. Exclusion matches
  *  picked-object IDs — every billboard AND model here carries its icao as `id` — plus
- *  the tracked entity object itself. Built lazily, only when a sample actually fires. */
+ *  the tracked entity object itself. Built lazily, only when a sample actually fires. * /
 function _groundSampleExclusions() {
   const out = [..._billboards.keys()];
   if (_trackedEntity) out.push(_trackedEntity);
@@ -1449,7 +1628,7 @@ function _groundSampleExclusions() {
  *  gear; airborne planes pass through. Until the FIRST sample lands, callers keep the
  *  depth-test-free billboard visible and the model hidden while this returns null; a
  *  contact that has already resolved once holds that measurement through a later
- *  outage inside groundSnap's drift bound, so taxiing does not pop it back to 2D. */
+ *  outage inside groundSnap's drift bound, so taxiing does not pop it back to 2D. * /
 function _modelDisplayPosition(icao24, pos, result) {
   const meta = _flightData.get(icao24);
   if (!meta || !meta.onGround) return pos;
@@ -1464,7 +1643,7 @@ function _modelDisplayPosition(icao24, pos, result) {
  * ready 3D model. Missing/loading models and unresolved terrain always leave
  * the billboard owning the visual, so no render frame can hide both.
  * `beforeShow` runs only on the committing path — the per-tick model treatment
- * belongs to a model that is about to draw, not to one still waiting. */
+ * belongs to a model that is about to draw, not to one still waiting. * /
 function _driveFleetModelHandoff(icao24, model, bb, pos, course, beforeShow) {
   if (!model) {
     bb.show = true;
@@ -1497,7 +1676,7 @@ function _driveFleetModelHandoff(icao24, model, bb, pos, course, beforeShow) {
 }
 
 /** A model owns the visual only while it is ready, shown, and (for the tracked
- *  primitive) inside the tracked-model regime. Mere existence/loading is not ownership. */
+ *  primitive) inside the tracked-model regime. Mere existence/loading is not ownership. * /
 function _modelOwnsVisual(icao24) {
   if (icao24 === _trackedIcao) {
     return _trackedModelRegimeActive() && _modelIsRendering(_trackedModel);
@@ -1508,20 +1687,20 @@ function _modelOwnsVisual(icao24) {
 /** `show` is sufficient evidence of a safe placement because only the handoff and
  *  the tracked driver ever set it true, and both do so after committing a matrix;
  *  everything else — admission, unresolved ground, an unready glTF, the limb cull,
- *  a regime exit — only ever clears it. Mirror of flights.js. */
+ *  a regime exit — only ever clears it. Mirror of flights.js. * /
 function _modelIsRendering(model) {
   return !!model && model.ready === true && model.show === true;
 }
 
 /** Spec identity for a LOADED model — mirror of flights.js: URL and scale
- *  together (same-URL classes differ by scale). */
+ *  together (same-URL classes differ by scale). * /
 const _specKeyFor = (klass) => {
   const spec = _modelSpec(klass);
   return `${spec.url}@${spec.scale}`;
 };
 /** Class-change model sync — mirror of flights.js: drop a live model or
  *  in-flight load whose spec no longer matches the class, re-showing the
- *  fleet billboard FIRST (gap-proof) and covering the tracked standalone. */
+ *  fleet billboard FIRST (gap-proof) and covering the tracked standalone. * /
 function _syncModelToClass(icao24) {
   const key = _specKeyFor(_flightData.get(icao24)?.klass);
   const current = _models.get(icao24);
@@ -1537,19 +1716,19 @@ function _syncModelToClass(icao24) {
 
 /** IR hot-target mode — mirror of flights.js: under the luminance-mapped
  *  NVG/FLIR post-styles every model renders flat white (hottest); the dominant
- *  amber/tracked tint restores on style exit. */
+ *  amber/tracked tint restores on style exit. * /
 let _irBoost = false;
 /** Boosted models render UNLIT — mirror of flights.js (owner cockpit-FLIR
  *  field rounds): material-stage tint still sun-shades, so side-on planes
  *  read near-black under a high sun; UNLIT emits flat white regardless.
  *  customShader on a READY model is a silent no-op (field-verified), so the
- *  boost flips by release-and-reload — creation-time options carry it. */
+ *  boost flips by release-and-reload — creation-time options carry it. * /
 const _IR_UNLIT_SHADER = new Cesium.CustomShader({ lightingModel: Cesium.LightingModel.UNLIT });
 /** Boost flip = BATCHED release through the fleet tick (mirror of flights.js —
  *  destroying the whole fleet synchronously in the style handler stalls the
  *  render thread). Models tagged with their load-time boost state; stale queue
  *  entries skip; in-flight loads invalidated immediately; tracked reloads
- *  synchronously (single primitive). */
+ *  synchronously (single primitive). * /
 const IR_RELOAD_BATCH = 40;
 let _irReloadQueue = null;
 function _reloadModelsForIrBoost() {
@@ -1572,7 +1751,7 @@ function _drainIrReloadQueue() {
   if (_irReloadQueue.length === 0) _irReloadQueue = null;
 }
 
-/** Lazily create the glTF model for an aircraft (fire-and-forget; billboard shows until ready). */
+/** Lazily create the glTF model for an aircraft (fire-and-forget; billboard shows until ready). * /
 async function _ensureModel(icao24) {
   // Never model the TRACKED aircraft — it owns a separate entity billboard, and the fleet
   // tick skips it, so a model here would be orphaned + double-rendered.
@@ -1612,7 +1791,7 @@ async function _ensureModel(icao24) {
   }
   // A load from a PREVIOUS lifecycle (destroy→init happened mid-load) must NOT mutate the new
   // epoch's _modelPending/_modelGen or add to the new collection — just drop its model.
-  if (epoch !== _modelEpoch) { try { model.destroy(); } catch { /* gone */ } return; }
+  if (epoch !== _modelEpoch) { try { model.destroy(); } catch { /* gone * / } return; }
   _modelPending.delete(icao24);
   // Post-await admission: reject (and DESTROY the loaded model) if anything changed during the
   // load — a release bumped the generation (track/untrack/remove), the layer toggled off / was
@@ -1628,7 +1807,7 @@ async function _ensureModel(icao24) {
     // IR boost flipped mid-load → this model baked the wrong shader/tint.
     || _irBoost !== loadIrBoost;
   if (stale) {
-    try { model.destroy(); } catch { /* already gone */ }
+    try { model.destroy(); } catch { /* already gone * / }
     _cleanupModelGen(icao24); // bound the map
     return;
   }
@@ -1648,7 +1827,7 @@ async function _ensureModel(icao24) {
 }
 
 /** Remove the 3D model for ONE aircraft (removal / track handoff).
- *  Bumps the load generation so any in-flight load for this icao is rejected on completion. */
+ *  Bumps the load generation so any in-flight load for this icao is rejected on completion. * /
 function _releaseModel(icao24) {
   const m = _models.get(icao24);
   const pending = _modelPending.has(icao24);
@@ -1658,7 +1837,7 @@ function _releaseModel(icao24) {
     _modelGen.set(icao24, (_modelGen.get(icao24) || 0) + 1);
   }
   if (m) {
-    if (_modelCollection && !_modelCollection.isDestroyed()) { try { _modelCollection.remove(m); } catch { /* gone */ } }
+    if (_modelCollection && !_modelCollection.isDestroyed()) { try { _modelCollection.remove(m); } catch { /* gone * / } }
     _models.delete(icao24);
   }
   // Do NOT clear _modelPending here — the in-flight load's OWN post-await removes it. Keeping
@@ -1668,34 +1847,34 @@ function _releaseModel(icao24) {
 }
 
 /** Drop an icao's generation entry once nothing references it (no live model, no in-flight
- *  load) — keeps _modelGen bounded. Shared by _releaseModel + both _ensureModel exit paths. */
+ *  load) — keeps _modelGen bounded. Shared by _releaseModel + both _ensureModel exit paths. * /
 function _cleanupModelGen(icao24) {
   if (!_modelPending.has(icao24) && !_models.has(icao24)) _modelGen.delete(icao24);
 }
 
-/** Remove all live models (toggle-off / zoom-out); billboards take back over next tick. */
+/** Remove all live models (toggle-off / zoom-out); billboards take back over next tick. * /
 function _releaseModels() {
   _irReloadQueue = null; // a full release supersedes any pending boost-flip drain
   // Invalidate in-flight loads so a completion after this bulk release can't add a model.
   for (const icao of _modelPending) _modelGen.set(icao, (_modelGen.get(icao) || 0) + 1);
   if (_modelCollection && !_modelCollection.isDestroyed()) {
-    for (const m of _models.values()) { try { _modelCollection.remove(m); } catch { /* gone */ } }
+    for (const m of _models.values()) { try { _modelCollection.remove(m); } catch { /* gone * / } }
   }
   _models.clear();
 }
 
-/** Destroy the standalone tracked-aircraft model and invalidate any in-flight load. */
+/** Destroy the standalone tracked-aircraft model and invalidate any in-flight load. * /
 function _releaseTrackedModel() {
   _trackedModelGen++;
   _trackedModelLoading = false;
   if (_trackedModel) {
-    if (_modelCollection && !_modelCollection.isDestroyed()) { try { _modelCollection.remove(_trackedModel); } catch { /* gone */ } }
+    if (_modelCollection && !_modelCollection.isDestroyed()) { try { _modelCollection.remove(_trackedModel); } catch { /* gone * / } }
     _trackedModel = null;
   }
 }
 
 /** Per-frame driver for the standalone tracked model (see flights.js for the rationale). The
- *  tracked entity stays a pure billboard, so the follow-camera never stalls/freezes on 3D-toggle. */
+ *  tracked entity stays a pure billboard, so the follow-camera never stalls/freezes on 3D-toggle. * /
 function _updateTrackedModel() {
   const active = _trackedIcao && _trackedModelRegimeActive()
     && _modelCollection && !_modelCollection.isDestroyed();
@@ -1727,11 +1906,11 @@ function _updateTrackedModel() {
       // deselect. With the icao, the click handler recognizes it as ours.
       id: _trackedIcao,
     }).then((m) => {
-      if (gen !== _trackedModelGen || !_modelCollection || _modelCollection.isDestroyed()) { try { m.destroy(); } catch { /* gone */ } return; }
+      if (gen !== _trackedModelGen || !_modelCollection || _modelCollection.isDestroyed()) { try { m.destroy(); } catch { /* gone * / } return; }
       // Class reclassified OR boost flipped mid-load (no release ran —
       // _trackedModel was still null): drop the stale asset; driver reloads.
       if (_specKeyFor(_flightData.get(_trackedIcao)?.klass) !== trackedKey || _irBoost !== trackedIrBoost) {
-        try { m.destroy(); } catch { /* gone */ }
+        try { m.destroy(); } catch { /* gone * / }
         _trackedModelLoading = false;
         return;
       }
@@ -1799,7 +1978,7 @@ function _updateTrackedModel() {
  * scene.preRender — NOT camera.changed, whose granularity is globally
  * degraded by other layers mutating camera.percentageChanged.
  * @returns {void}
- */
+ * /
 function _fleetTick() {
   if (!_viewer || !_billboardCollection || !_billboardCollection.show) return;
   const scene = _viewer.scene;
@@ -2014,7 +2193,7 @@ function _fleetTick() {
  * @param {string} icao24 - ICAO hex identifier of the aircraft.
  * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
  *   Descriptor with a cloned position, or null if the aircraft is unknown.
- */
+ * /
 function _describeFlight(icao24) {
   const info = _flightData.get(icao24);
   const bb = _billboards.get(icao24);
@@ -2049,7 +2228,7 @@ function _describeFlight(icao24) {
   };
 }
 
-/** @type {Cesium.Cartographic} Scratch for _trailFloorPosition (per-frame safe). */
+/** @type {Cesium.Cartographic} Scratch for _trailFloorPosition (per-frame safe). * /
 const _scratchTrailCarto = new Cesium.Cartographic();
 
 /**
@@ -2062,7 +2241,7 @@ const _scratchTrailCarto = new Cesium.Cartographic();
  * on the surface without touching the billboard/model machinery.
  * @param {Cesium.Cartesian3} position - Owned position (mutated/replaced freely).
  * @returns {Cesium.Cartesian3} The same or a lifted position.
- */
+ * /
 function _trailFloorPosition(position) {
   const carto = Cesium.Cartographic.fromCartesian(position, Cesium.Ellipsoid.WGS84, _scratchTrailCarto);
   if (!carto) return position;
@@ -2077,7 +2256,7 @@ function _trailFloorPosition(position) {
  * Append one fix to the tracked aircraft's trail accumulation and refresh
  * the rendered trail. Caller passes an owned (cloned) Cartesian3.
  * @param {Cesium.Cartesian3} position - New fix position, appended at the head.
- */
+ * /
 function _appendTrailFix(position) {
   _trailPositions.push(_trailFloorPosition(position));
   if (_trailPositions.length > TRAIL_MAX_POINTS) _trailPositions.shift();
@@ -2091,7 +2270,7 @@ function _appendTrailFix(position) {
  * The cheap per-frame _trailHeadEntity segment bridges the last body point to the
  * delayed dead-reckoned head, so this primitive only rebuilds on a real fix (poll
  * cadence), never at motion cadence.
- */
+ * /
 function _refreshTrailDisplay() {
   if (!_trail) return;
   _trail.setPositions(_trailPositions.length > 1 ? _trailPositions.slice(0, -1) : _trailPositions);
@@ -2102,7 +2281,7 @@ function _refreshTrailDisplay() {
  * dead-reckoning history (chronological), render immediately, then
  * fire-and-forget an adsb.lol trace backfill (~24 h of real history).
  * @param {string} icao24 - ICAO hex identifier being tracked.
- */
+ * /
 function _startTrail(icao24) {
   _trailBackfillToken += 1;
   _trailPositions = [];
@@ -2192,7 +2371,7 @@ function _startTrail(icao24) {
  * @param {number} token - Backfill token captured at request time.
  * @param {number} oldestFixEpochSec - Epoch seconds of the oldest seeded fix.
  * @returns {Promise<void>}
- */
+ * /
 async function _backfillTrail(icao24, token, oldestFixEpochSec) {
   let baseEpochSec = null;
   let trace = null;
@@ -2279,20 +2458,20 @@ async function _backfillTrail(icao24, token, oldestFixEpochSec) {
 
 /**
  * Clear the rendered trail and accumulation; invalidate pending backfills.
- */
+ * /
 function _clearTrail() {
   _trailBackfillToken += 1;
   _trailPositions = [];
   if (_trail) _trail.clear();
   if (_trailHeadEntity && _viewer && !_viewer.isDestroyed()) {
-    try { _viewer.entities.remove(_trailHeadEntity); } catch { /* already gone */ }
+    try { _viewer.entities.remove(_trailHeadEntity); } catch { /* already gone * / }
   }
   _trailHeadEntity = null;
 }
 
 /**
  * Destroy the trail primitive entirely (layer disable/teardown).
- */
+ * /
 function _destroyTrail() {
   _clearTrail();
   if (_trail) {
@@ -2320,7 +2499,7 @@ function _destroyTrail() {
  *   rather than being deselected. Consumers that keep a readout on screen
  *   (the Cockpit Contact panel) hold last-known values for an eviction and
  *   only tear down on a deliberate clear.
- */
+ * /
 function _clearTracking(skipViewerUntrack = false, {
   evicted = false,
   origin = 'programmatic',
@@ -2413,7 +2592,7 @@ function _cancelPendingTrackingRestore() {
  * smooth continuous motion, and sets the viewer's trackedEntity so the camera
  * follows.
  * @param {string} icao24 - ICAO hex identifier of the aircraft to track
- */
+ * /
 function _trackFlight(icao24, { origin = 'programmatic' } = {}) {
   _clearTracking(false, { origin }); // switching planes — the new follow-camera takes over
 
@@ -2564,7 +2743,7 @@ function _trackFlight(icao24, { origin = 'programmatic' } = {}) {
  *   heading: number|null, verticalRateMps: number|null, onGround: boolean,
  *   military: boolean, aircraftClass: string|null, originCountry: null,
  *   operator: string|null, routeOrigin: null, routeDestination: null}}
- */
+ * /
 export function mapAnalystRecord(icao24, info) {
   const num = (v) => (Number.isFinite(v) ? v : null);
   const text = (v) => { const t = String(v ?? '').trim(); return t || null; };
@@ -2598,20 +2777,20 @@ export function mapAnalystRecord(icao24, info) {
  * Conforms to the layer manager contract: init, enable, disable, update, destroy,
  * plus optional getNearby, getDetectableObjects, and getStats accessors.
  * @type {Object}
- */
+ * /
 const militaryFlightsLayer = {
   id: 'military',
   name: 'Military Flights',
   icon: '🎖️',
   source: 'adsb.lol',
-  /** @type {number} Polling interval in ms between API fetches */
+  /** @type {number} Polling interval in ms between API fetches * /
   updateInterval: 15000,
 
   /**
    * Initialize the layer: create the billboard collection, reset all state,
    * and install the click-to-track handler.
    * @param {Cesium.Viewer} viewer - The Cesium viewer instance
-   */
+   * /
   init(viewer) {
     clearFocusTarget('militaryFlights');
     _viewer = viewer;
@@ -2628,9 +2807,9 @@ const militaryFlightsLayer = {
       Cesium.Model.fromGltfAsync({ url: JET_MODEL_URL, asynchronous: false })
         .then((m) => {
           if (epoch === _modelEpoch) { _preloadModel = m; _planeModelLoaded = true; }
-          else { try { m.destroy(); } catch { /* gone */ } }
+          else { try { m.destroy(); } catch { /* gone * / } }
         })
-        .catch(() => { /* tracked plane just stays a billboard a beat longer */ });
+        .catch(() => { /* tracked plane just stays a billboard a beat longer * / });
     }
     _billboards = new Map();
     _detectionObjects = new Map();
@@ -2665,7 +2844,7 @@ const militaryFlightsLayer = {
   /**
    * Show the layer and re-install the click handler.
    * @param {Cesium.Viewer} viewer - The Cesium viewer instance
-   */
+   * /
   enable(viewer) {
     if (_billboardCollection) _billboardCollection.show = true;
     holdContinuousRender('military'); // per-frame animator (perf wave 2)
@@ -2677,7 +2856,7 @@ const militaryFlightsLayer = {
     if (!_geoidReady) {
       ensureGeoidReady()
         .then(() => { _geoidReady = true; })
-        .catch(() => { /* geoid grid failed to load — baro path stays un-geoid-corrected until retried */ });
+        .catch(() => { /* geoid grid failed to load — baro path stays un-geoid-corrected until retried * / });
     }
     _installClickHandler(viewer);
     registerPickOwner('military', (pickedId) => _billboards.has(pickedId));
@@ -2709,7 +2888,7 @@ const militaryFlightsLayer = {
    * Hide the layer, clear any active tracking, and remove input handlers
    * so clicks do not get intercepted while the layer is off.
    * @param {Cesium.Viewer} viewer - The Cesium viewer instance
-   */
+   * /
   disable(viewer) {
     _abortActiveUpdates();
     _cancelPendingTrackingRestore();
@@ -2747,12 +2926,12 @@ const militaryFlightsLayer = {
     }
   },
 
-  /** @deprecated Compatibility alias for {@link enable}. */
+  /** @deprecated Compatibility alias for {@link enable}. * /
   show(viewer) {
     this.enable(viewer);
   },
 
-  /** @deprecated Compatibility alias for {@link disable}. */
+  /** @deprecated Compatibility alias for {@link disable}. * /
   hide(viewer) {
     this.disable(viewer);
   },
@@ -2763,7 +2942,7 @@ const militaryFlightsLayer = {
    * position history updates, and grace-period removal of absent aircraft.
    * @param {Cesium.Viewer} viewer - The Cesium viewer instance
    * @returns {Promise<void>}
-   */
+   * /
   async update(viewer, { signal = null } = {}) {
     const nowMs = Date.now();
     const trackingRefreshEpoch = ++_trackingRefreshEpoch;
@@ -3242,7 +3421,7 @@ const militaryFlightsLayer = {
    * Tear down the layer: clear tracking, remove handlers, remove the billboard
    * collection from the scene, and release all state.
    * @param {Cesium.Viewer} viewer - The Cesium viewer instance
-   */
+   * /
   destroy(viewer) {
     _abortActiveUpdates();
     releaseContinuousRender('military'); // direct-destroy path (perf wave 2 fix)
@@ -3287,7 +3466,7 @@ const militaryFlightsLayer = {
     _modelEpoch += 1; // invalidate any in-flight load from this lifecycle (settles post-destroy)
     _modelPending.clear();
     _modelGen.clear();
-    if (_preloadModel) { try { _preloadModel.destroy(); } catch { /* gone */ } _preloadModel = null; }
+    if (_preloadModel) { try { _preloadModel.destroy(); } catch { /* gone * / } _preloadModel = null; }
     _planeModelLoaded = false;
     _billboards.clear();
     _detectionObjects.clear();
@@ -3320,7 +3499,7 @@ const militaryFlightsLayer = {
    * camera distance regardless (see `_trackedModelRegimeActive` / trackedModelRegime.js).
    * `models3dMode` is 'proximity' (nearest MODEL_MAX in view) or 'all' (every in-view plane).
    * @param {{models3d?: boolean, models3dMode?: 'proximity'|'all', selectedMilitaryTrackingId?: string|null}} params
-   */
+   * /
   setParams(params = {}, { origin = 'programmatic' } = {}) {
     if (isExplicitLayerStateOrigin(origin)
         && !Object.hasOwn(params, 'selectedMilitaryTrackingId')) {
@@ -3381,7 +3560,7 @@ const militaryFlightsLayer = {
    * Callers own the registry write; this only re-derives what renders.
    * @param {string} icao24 - ICAO 24-bit address.
    * @returns {boolean} True when this layer owns the contact.
-   */
+   * /
   refreshTr3b(icao24) { return _refreshTr3bContact(icao24); },
 
   /**
@@ -3393,7 +3572,7 @@ const militaryFlightsLayer = {
    * @param {object} [options] Query membership options.
    * @param {boolean} [options.includeHidden=false] Include loaded horizon-hidden aircraft.
    * @returns {Array<Object>} Sorted array of nearby aircraft descriptors
-   */
+   * /
   getNearby(center, range, maxCount = 50, { includeHidden = false } = {}) {
     if (!center || !_billboardCollection || !_billboardCollection.show) return [];
 
@@ -3455,7 +3634,7 @@ const militaryFlightsLayer = {
    * @param {number} [options.maxCount] - Maximum objects to return (defaults to all)
    * @param {number} [options.seed] - Seed offset for stride sampling (for frame variation)
    * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean}>}
-   */
+   * /
   getDetectableObjects(options = {}) {
     if (!_billboardCollection || !_billboardCollection.show) return [];
     const maxCount = Number.isFinite(options.maxCount)
@@ -3538,7 +3717,7 @@ const militaryFlightsLayer = {
    * @param {string} query - ICAO hex or full/partial callsign.
    * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
    *   Best match with a cloned, dead-reckoned position, or null if none.
-   */
+   * /
   findByQuery(query) {
     if (!_flightData || _flightData.size === 0) return null;
     const q = String(query || '').trim().toLowerCase();
@@ -3578,7 +3757,7 @@ const militaryFlightsLayer = {
    * dead reckoning and no cloning.
    * @param {number} [maxCount=500] - Maximum number of entries to return.
    * @returns {Array<{id: string, label: string, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number}>}
-   */
+   * /
   /**
    * Whether this layer still carries a contact, in O(1).
    *
@@ -3590,7 +3769,7 @@ const militaryFlightsLayer = {
    * @param {string} icao24 Contact identifier.
    * @returns {boolean|null} Presence, or null when the layer is disabled or
    *   holds no data and therefore cannot answer.
-   */
+   * /
   hasContact(icao24) {
     if (!_billboardCollection || !_billboardCollection.show || _billboards.size === 0) return null;
     if (!icao24) return false;
@@ -3631,7 +3810,7 @@ const militaryFlightsLayer = {
    * [] while the layer is disabled or empty.
    * @param {number} [maxCount=2000] - Maximum records to return (truncation).
    * @returns {Array<Object>} See mapAnalystRecord for the record shape.
-   */
+   * /
   getAnalystRecords(maxCount = 2000) {
     if (!_billboardCollection || !_billboardCollection.show || _flightData.size === 0) return [];
     const limit = Number.isFinite(maxCount) ? Math.max(1, Math.floor(maxCount)) : 2000;
@@ -3647,7 +3826,7 @@ const militaryFlightsLayer = {
    * Start camera-tracking an aircraft by ICAO hex identifier.
    * @param {string} icao24 - ICAO hex identifier of the aircraft.
    * @returns {boolean} True if the aircraft exists and tracking started.
-   */
+   * /
   trackById(icao24, { origin = 'programmatic' } = {}) {
     if (!icao24) return false;
     let id = String(icao24).trim();
@@ -3659,7 +3838,7 @@ const militaryFlightsLayer = {
     return true;
   },
 
-  /** Resolve a shared Follow target only against the latest accepted refresh. */
+  /** Resolve a shared Follow target only against the latest accepted refresh. * /
   async resolveTrackingRestoreTarget(icao24, { signal = null, origin = 'share-restore' } = {}) {
     if (signal?.aborted) return { status: 'cancelled', reason: String(signal.reason || 'aborted') };
     const id = String(icao24 ?? '').trim().toLowerCase();
@@ -3688,7 +3867,7 @@ const militaryFlightsLayer = {
       : { status: 'source-unavailable', reason: 'target-not-renderable', refreshEpoch: outcome.epoch };
   },
 
-  /** Reapply the canonical follow frame without recreating the selected flight. */
+  /** Reapply the canonical follow frame without recreating the selected flight. * /
   refocusTrackedById(icao24, { origin = 'programmatic' } = {}) {
     if (!icao24 || _cockpitContactMode || !_viewer || !_trackedEntity) return false;
     let id = String(icao24).trim();
@@ -3713,7 +3892,7 @@ const militaryFlightsLayer = {
   /**
    * Stop tracking the currently followed aircraft (no-op if none).
    * @returns {boolean} Always true.
-   */
+   * /
   stopTracking({ origin = 'programmatic' } = {}) {
     _cancelPendingTrackingRestore();
     _clearTracking(false, { origin });
@@ -3728,7 +3907,7 @@ const militaryFlightsLayer = {
    * Describe the currently tracked aircraft at its dead-reckoned position.
    * @returns {{icao24: string, callsign: string|null, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
    *   Tracked aircraft info, or null when nothing is tracked.
-   */
+   * /
   getTrackedInfo() {
     if (!_trackedIcao) return null;
     const described = _describeFlight(_trackedIcao);
@@ -3742,7 +3921,7 @@ const militaryFlightsLayer = {
    * tracking or camera ownership.
    * @returns {{layerId: string, id: string, label: string, position: Cesium.Cartesian3}|null}
    *   Detached subject descriptor, or null when no aircraft is tracked.
-   */
+   * /
   getTrackedSubject() {
     if (!_trackedIcao) return null;
     const described = _describeFlight(_trackedIcao);
@@ -3760,7 +3939,7 @@ const militaryFlightsLayer = {
   /**
    * Return current layer health/status for the HUD status chip.
    * @returns {{count: number, lastUpdate: number|null, stale: boolean, error: string|null, status: number|null, retryInSec: number}}
-   */
+   * /
   getStats() {
     const retryInSec = _retryAt ? Math.max(0, Math.ceil((_retryAt - Date.now()) / 1000)) : 0;
     return {
@@ -3779,7 +3958,7 @@ const militaryFlightsLayer = {
 /**
  * Global keydown handler: pressing Escape clears the active aircraft tracking.
  * @param {KeyboardEvent} e - The keyboard event
- */
+ * /
 function _onKeyDown(e) {
   if (e.key === 'Escape' && _trackedIcao) {
     _cancelPendingTrackingRestore();
@@ -3793,7 +3972,7 @@ function _onKeyDown(e) {
  * space or a non-military object deselects. Also attaches the Escape key
  * listener via {@link _onKeyDown}. Idempotent -- no-ops if already installed.
  * @param {Cesium.Viewer} viewer - The Cesium viewer instance
- */
+ * /
 function _installClickHandler(viewer) {
   if (_clickHandler) return; // already installed
 
@@ -3874,3 +4053,5 @@ function _installClickHandler(viewer) {
 }
 
 export default militaryFlightsLayer;
+
+*/
