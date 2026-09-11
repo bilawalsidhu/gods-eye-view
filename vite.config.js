@@ -18,6 +18,7 @@
  *  13. Weather effects — camera-local Open-Meteo observations without news/geocoding overhead
  *  14. Rocket launches — recent Launch Library 2 mission metadata
  *  15. Radio Browser — public-domain station directory and click counting
+ *  16. Meshtastic — public MQTT MapReport node cache (mqtt.meshtastic.org)
  *
  * Also exposes Cesium and Google 3D Tiles API keys to the
  * client via `import.meta.env.*` defines.
@@ -42,6 +43,9 @@ import {
   isOverBudget as isTomTomOverBudget,
 } from './src/data/tomtomTiles.js';
 import { filterTrailing24h, parseFirmsCsv } from './src/data/firmsCsv.js';
+import mqtt from 'mqtt';
+import { decodeMeshtasticMapReportEnvelope } from './src/data/meshtasticDecode.js';
+import { MESHTASTIC_NODE_EVICT_MS } from './src/data/meshtasticMapReport.js';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { defineConfig, loadEnv } from 'vite';
@@ -4941,6 +4945,144 @@ function aisLiveProxy() {
   };
 }
 
+// Meshtastic public MapReport MQTT cache state
+// ---------------------------------------------------------------------------
+/**
+ * mqtt.meshtastic.org is the Meshtastic project's own public broker; these
+ * are its published read-only subscriber credentials for the shared public
+ * root topic (see https://meshtastic.org/docs/software/integrations/mqtt/)
+ * — not a secret, and never a route to a node's private/encrypted traffic.
+ */
+const MESHTASTIC_MQTT_URL = 'mqtts://mqtt.meshtastic.org:8883';
+const MESHTASTIC_MQTT_USERNAME = 'meshdev';
+const MESHTASTIC_MQTT_PASSWORD = 'large4cats';
+/** Nodes that opt in to Map Reporting publish here, unencrypted, region-wide. */
+const MESHTASTIC_MAP_TOPIC = 'msh/+/2/map/#';
+const MESHTASTIC_NODE_CACHE_MAX = 8000;
+const MESHTASTIC_SWEEP_INTERVAL_MS = 15 * 60 * 1000;
+
+/** @type {import('mqtt').MqttClient|null} Module-lifetime singleton. */
+let _meshtasticClient = null;
+let _meshtasticSweepTimer = null;
+/** @type {Map<string, object>} nodeIdHex -> decoded record (+ lastSeen). */
+const _meshtasticNodes = new Map();
+let _meshtasticConnected = false;
+let _meshtasticLastMessageAt = null;
+let _meshtasticLastError = null;
+
+/** Idempotent: a Vite in-process reload must never stack a second MQTT connection. */
+function ensureMeshtasticConnection() {
+  if (_meshtasticClient) return;
+  const client = mqtt.connect(MESHTASTIC_MQTT_URL, {
+    username: MESHTASTIC_MQTT_USERNAME,
+    password: MESHTASTIC_MQTT_PASSWORD,
+    clientId: `gev-${randomUUID()}`,
+    keepalive: 30,
+    reconnectPeriod: 10_000,
+    connectTimeout: 15_000,
+  });
+  _meshtasticClient = client;
+
+  client.on('connect', () => {
+    _meshtasticConnected = true;
+    _meshtasticLastError = null;
+    client.subscribe(MESHTASTIC_MAP_TOPIC, { qos: 0 }, (err) => {
+      if (err) _meshtasticLastError = err.message;
+    });
+  });
+  client.on('close', () => { _meshtasticConnected = false; });
+  client.on('error', (err) => {
+    _meshtasticLastError = err?.message || 'Meshtastic MQTT error';
+  });
+  client.on('message', (_topic, payload) => {
+    _meshtasticLastMessageAt = Date.now();
+    let record = null;
+    try {
+      record = decodeMeshtasticMapReportEnvelope(payload);
+    } catch {
+      // Malformed or unrelated packet on the wildcard subscription — ignore.
+    }
+    if (!record) return;
+    // Hard cap, true LRU: a Map's iteration order is insertion order and a
+    // `set()` on an EXISTING key does not move it — so an update must
+    // delete-then-set to push the node to the "most recent" end, or the
+    // first key is merely oldest-INSERTED, not oldest-SEEN. With that in
+    // place, evicting the first key on overflow is correct LRU eviction
+    // rather than silently dropping the new node (the previous behavior,
+    // which left new nodes in a dense region permanently invisible).
+    if (_meshtasticNodes.size >= MESHTASTIC_NODE_CACHE_MAX && !_meshtasticNodes.has(record.id)) {
+      _meshtasticNodes.delete(_meshtasticNodes.keys().next().value);
+    }
+    _meshtasticNodes.delete(record.id);
+    record.lastSeen = Date.now();
+    _meshtasticNodes.set(record.id, record);
+  });
+
+  if (!_meshtasticSweepTimer) {
+    _meshtasticSweepTimer = setInterval(() => {
+      const cutoff = Date.now() - MESHTASTIC_NODE_EVICT_MS;
+      for (const [id, record] of _meshtasticNodes) {
+        if (record.lastSeen < cutoff) _meshtasticNodes.delete(id);
+      }
+    }, MESHTASTIC_SWEEP_INTERVAL_MS);
+    _meshtasticSweepTimer.unref?.();
+  }
+}
+
+/** Tear down the MQTT connection and sweep timer (dev-server reload/close). */
+function disposeMeshtasticConnection() {
+  if (_meshtasticSweepTimer) {
+    clearInterval(_meshtasticSweepTimer);
+    _meshtasticSweepTimer = null;
+  }
+  if (_meshtasticClient) {
+    _meshtasticClient.end(true);
+    _meshtasticClient = null;
+  }
+  _meshtasticConnected = false;
+}
+
+/**
+ * Vite plugin: Meshtastic public MapReport node cache.
+ *
+ * Browsers can't hold a raw MQTT/TLS connection, so the server keeps one
+ * persistent subscription to mqtt.meshtastic.org's public map-report topic
+ * and exposes an accumulated same-origin JSON snapshot to the Cesium layer.
+ */
+function meshtasticProxy() {
+  function install(middlewares) {
+    middlewares.use('/api/meshtastic/nodes', (req, res) => {
+      ensureMeshtasticConnection();
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(JSON.stringify({
+        nodes: [..._meshtasticNodes.values()],
+        connected: _meshtasticConnected,
+        lastMessageAt: _meshtasticLastMessageAt,
+        error: _meshtasticLastError,
+        source: 'Meshtastic public MQTT MapReport (mqtt.meshtastic.org)',
+      }));
+    });
+  }
+  return {
+    name: 'meshtastic-proxy',
+    configureServer(server) {
+      install(server.middlewares);
+      ensureMeshtasticConnection();
+      server.httpServer?.on('close', disposeMeshtasticConnection);
+    },
+    configurePreviewServer(server) {
+      install(server.middlewares);
+      ensureMeshtasticConnection();
+      server.httpServer?.on('close', disposeMeshtasticConnection);
+    },
+    closeBundle() {
+      disposeMeshtasticConnection();
+    },
+  };
+}
+
 /**
  * Vite plugin: aircraft track-history backfill proxies (PRD WS-F F1/F2).
  *
@@ -7756,6 +7898,7 @@ export default defineConfig(({ mode }) => {
       gbfsProxy(),
       adsbLolProxy(),
       aisLiveProxy(),
+      meshtasticProxy(),
       trackBackfillProxies(),
       openAiRealtimeProxy(),
       googlePlacesContextProxy(),

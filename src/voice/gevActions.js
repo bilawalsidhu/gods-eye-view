@@ -176,6 +176,9 @@ const LAYER_ALIASES = new Map([
   ['firms', 'local-firms'],
   ['fires', 'local-firms'],
   ['active fires', 'local-firms'],
+  ['meshtastic', 'meshtastic-nodes'],
+  ['mesh nodes', 'meshtastic-nodes'],
+  ['mesh network', 'meshtastic-nodes'],
 ]);
 
 const CITY_ALIASES = new Map([

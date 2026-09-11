@@ -43,10 +43,13 @@
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs"
   },
   "dependencies": {
+    "@bufbuild/protobuf": "^2.14.0",
     "@mapbox/vector-tile": "^3.0.0",
+    "@meshtastic/protobufs": "^2.7.26",
     "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",
     "mgrs": "^2.1.0",
+    "mqtt": "^5.15.2",
     "pbf": "^5.1.2",
     "satellite.js": "^6.0.2"
   },

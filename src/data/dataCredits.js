@@ -74,6 +74,12 @@ export const DATA_CREDITS = [
       '(ODbL 1.0)',
   },
   {
+    key: 'meshtastic-mqtt',
+    html:
+      'Meshtastic nodes: opt-in public MapReport data via ' +
+      '<a href="https://meshtastic.org" target="_blank" rel="noopener">Meshtastic</a>\'s public MQTT broker',
+  },
+  {
     key: 'military-installations-osm',
     html:
       'Mapped installation context: ' +
