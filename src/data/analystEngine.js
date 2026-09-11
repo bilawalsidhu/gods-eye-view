@@ -33,6 +33,7 @@ export const ANALYST_LAYERS = {
   'ais-live-vessels': { numeric: ['speedKts', 'courseDeg'], text: ['name', 'mmsi', 'shipType', 'destination', 'navStatus'], flags: [] },
   'local-firms': { numeric: ['frp'], text: ['confidence', 'satellite'], flags: [] },
   earthquakes: { numeric: ['magnitude', 'depthKm'], text: ['place'], flags: [] },
+  'near-earth-objects': { numeric: ['sizeM', 'missKm', 'missLunar', 'velocityKph', 'absMag'], text: ['name'], flags: ['hazardous'] },
 };
 
 const EARTH_R_KM = 6371;
