@@ -481,6 +481,18 @@ const _militaryInstallationsRateLimiter = makeRateLimiter({ windowMs: 60_000, ma
 const _routeRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 60, globalMax: 200 });
 
 /**
+ * Track-backfill limiters for `/api/opensky-track` and `/api/adsblol/trace`.
+ * Both routes are keyed by a client-supplied aircraft id, so the per-id cache
+ * inside `trackBackfillProxies` bounds memory but not request volume: a caller
+ * cycling ids misses every time. An OpenSky `/tracks` miss spends 4 credits
+ * from a finite daily budget shared by everyone using this server, so unlike
+ * the opt-in OpenAI/Google limiters these are default-on. Backfill fires once
+ * per aircraft the operator selects, so both caps sit far above interactive use.
+ */
+const _openSkyTrackRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 30, globalMax: 120 });
+const _adsbLolTraceRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 60, globalMax: 240 });
+
+/**
  * Opt-in per-IP rate limiter for the cost-bearing API proxies (OpenAI / Google).
  * DEFAULT IS UNLIMITED: when the env var is unset, `0`, or non-numeric, this
  * returns `null` and the caller skips the check entirely — a runtime no-op that
@@ -4972,13 +4984,34 @@ function trackBackfillProxies() {
     }
   }
 
-  async function proxyJson(res, key, upstreamUrl, headers = {}) {
+  /**
+   * Serve a fresh cached track, else spend one upstream request. The limiter is
+   * consulted only on a miss, so repeated lookups of the same aircraft — the
+   * interactive case — keep being served from cache without drawing on quota.
+   *
+   * @param {import('http').IncomingMessage} req - Incoming request (rate-limit key).
+   * @param {import('http').ServerResponse} res - Response to write.
+   * @param {(key: string) => boolean} limiter - Upstream allowance for this route.
+   * @param {string} key - Per-aircraft cache key.
+   * @param {string} upstreamUrl - Absolute upstream URL.
+   * @param {Record<string, string>} [headers] - Upstream request headers.
+   * @returns {Promise<void>}
+   */
+  async function proxyJson(req, res, limiter, key, upstreamUrl, headers = {}) {
     const cached = cache.get(key);
     if (cached && Date.now() - cached.at < TRACK_CACHE_MS) {
       res.statusCode = cached.status;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');
       res.end(cached.body);
+      return;
+    }
+    if (!limiter(clientKey(req))) {
+      res.statusCode = 429;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Retry-After', '5');
+      res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
       return;
     }
     const upstream = await fetch(upstreamUrl, { headers, signal: AbortSignal.timeout(12000) });
@@ -5012,7 +5045,9 @@ function trackBackfillProxies() {
         }
         const token = await getOpenSkyToken();
         await proxyJson(
+          req,
           res,
+          _openSkyTrackRateLimiter,
           `osky:${icao24}`,
           `https://opensky-network.org/api/tracks/all?icao24=${icao24}&time=0`,
           token ? { Authorization: `Bearer ${token}` } : {}
@@ -5035,7 +5070,9 @@ function trackBackfillProxies() {
           return;
         }
         await proxyJson(
+          req,
           res,
+          _adsbLolTraceRateLimiter,
           `lol:${hex}`,
           `https://adsb.lol/data/traces/${hex.slice(-2)}/trace_full_${hex}.json`
         );

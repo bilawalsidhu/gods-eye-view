@@ -13,6 +13,13 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Aircraft track backfill no longer lets a caller spend the shared OpenSky
+  credit budget without limit. `/api/opensky-track` and `/api/adsblol/trace` are
+  keyed by a client-supplied aircraft id, so their 60-second per-aircraft cache
+  bounded memory but not upstream calls. Each route now has its own default-on
+  per-client limit, checked only when the cache misses. Selecting and
+  re-selecting aircraft is unaffected.
+
 - Unchanged local infrastructure overlays no longer sustain idle rendering.
   Ground samples wait for visible terrain to settle and cannot place a marker
   below its loaded surface; roofs and valid below-sea-level heights are retained.

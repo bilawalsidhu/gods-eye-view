@@ -2432,6 +2432,7 @@ silently demoting every later lookup for the session.
 - `/api/military-installations` uses an independent limiter with the same 90-per-client/300-global one-minute bounds, so viewport installation refreshes never consume `/api/overpass` annotation/traffic capacity.
 - `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors.
 - Track endpoints: `/api/ais-live/track?mmsi=` (server-accumulated ring buffers; sub-route handled before the rows snapshot), `/api/opensky-track?icao24=` (OAuth, 60s cache, sanitized errors, independent OpenSky credit bucket), `/api/adsblol/trace?hex=` (60s cache, 5MB cap, ODbL attribution required in UI).
+- Both aircraft track-backfill routes carry independent default-on limiters on top of their 60s per-aircraft cache, because the aircraft id is client-supplied and a varying id misses the cache every time: `/api/opensky-track` allows 30 upstream calls per client per minute (120 global) and `/api/adsblol/trace` allows 60 (240 global). The limiter is consulted only on a cache miss, so repeat lookups of the same aircraft are never throttled; over-cap callers get a sanitized 429 with `Retry-After: 5`.
 - Realtime debug logs redact API keys, bearer tokens, client secrets, and image data URLs before writing to disk; request bodies are size-capped.
 
 ## UI/UX Runtime Defaults
