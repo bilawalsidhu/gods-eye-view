@@ -227,6 +227,8 @@ The cockpit even carries its own briefing strip: nearby live signals, regional h
 
 Click **GEV MIC**, grant the microphone, and just talk. This is more than a voice-controlled remote:
 
+> **No OpenAI key? Use the local voice provider.** Set `OLLAMA_URL=http://127.0.0.1:11434` (and `OLLAMA_MODEL`, any tool-capable model such as `qwen3`) or `ANTHROPIC_API_KEY` in `.env` and restart. The mic button switches to the local controller automatically: your browser does speech-to-text and text-to-speech (Web Speech API — Safari/Chrome, HTTPS required on iOS), the model only chooses which of the same 28 tools to call, and the tier chip shows the provider (`QWEN3`, `CLAUDE`) with `$0` instead of a meter. Typed commands work the same way. See `LOCAL_VOICE_*` in `.env.example`.
+
 - **🧠 It knows what it's looking at.** The agent pulls live scene context before answering — including coordinates, street names, active layers, and view scale. Ask *"what city is this?"* mid-flight and it knows.
 - **🎯 Entity Q&A.** Click any plane, ship, or datacenter and ask *"what's this?"* It answers using the object's live telemetry.
 - **👁️ Visual grounding.** At street level, it reads a viewport screenshot to identify legible signage and building names, and is instructed never to hallucinate labels.
@@ -382,6 +384,7 @@ Six keys. Four have a free tier, and the two 🔴 ones are metered:
 | 🟡 | **Cesium ion** | 🗺️ Google Photorealistic 3D, world terrain, and additional ion-hosted imagery stacks. The free Community plan is for eligible individual, personal/non-commercial use and has quotas | [cesium.com/ion](https://cesium.com/ion) — use a public `assets:read` token and check current [pricing/eligibility](https://cesium.com/platform/cesium-ion/pricing/) |
 | 🔴 | **Google Maps** | Direct Google Photorealistic 3D + Google place search ([Map Tiles API](https://developers.google.com/maps/documentation/tile)) | [Google Cloud Console](https://console.cloud.google.com/) — URL-restrict it |
 | 🔴 | **OpenAI** | 🎙️ The voice experience + AI HUD summary. The mini model works; the standard model is noticeably smarter. Want Gemini or another provider behind the mic? PRs welcome | [platform.openai.com](https://platform.openai.com) — metered, see costs below |
+| 🟢 | **Local voice** | 🎙️ The same mic and 28 tools without OpenAI: the browser transcribes and speaks (Web Speech API, HTTPS on iOS) and a local **Ollama** model or the **Anthropic** API picks the tool calls. Set `OLLAMA_URL` (+ `OLLAMA_MODEL`) or `ANTHROPIC_API_KEY` in `.env` | [ollama.com](https://ollama.com) — free, local · [console.anthropic.com](https://console.anthropic.com) — metered text tokens |
 | 🟡 | **AISStream** | 🚢 Live global ships | [aisstream.io](https://aisstream.io) — free signup |
 | 🟡 | **NASA FIRMS** | 🔥 Live active fires | [firms.modaps.eosdis.nasa.gov](https://firms.modaps.eosdis.nasa.gov/api/map_key/) — free |
 | 🟡 | **TomTom** | 🚦 Live flow speeds and congestion colors for the simulated traffic layer | [developer.tomtom.com](https://developer.tomtom.com) — free tier available |

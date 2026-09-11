@@ -11,6 +11,15 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- Local voice provider: the mic drives the same 28 voice tools without an
+  OpenAI key. The browser transcribes and speaks (Web Speech API); a local
+  Ollama model or the Anthropic API picks the tool calls through
+  `/api/local-voice/turn`. Configure with `OLLAMA_URL`/`OLLAMA_MODEL` or
+  `ANTHROPIC_API_KEY` (see `.env.example`). The voice instructions are now one
+  shared constant (`GEV_VOICE_INSTRUCTIONS`) so providers cannot drift.
+
 ### Fixed
 
 - Mapped-site outages show their scheduled retry countdown and distinguish

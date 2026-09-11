@@ -1,4 +1,5 @@
 import { createGevActionRunner, readLayerLifecycleSummary } from './gevActions.js';
+import { LocalVoiceController, isLocalVoiceSupported } from './localVoice.js';
 import {
   DEFAULT_VOICE_TIER,
   VOICE_COST_LIMITS,
@@ -222,7 +223,32 @@ export function initGevVoiceCommands({ viewer, styleManager, dataManager, sceneD
   controller.syncCostUi();
   controller.bindPushToTalkShortcut();
   window.__gevVoiceCommands = controller;
+  // Local provider (issue #212): when the server has OLLAMA_URL / ANTHROPIC_API_KEY
+  // and the browser can transcribe, the same UI drives LocalVoiceController instead.
+  probeLocalVoiceProvider().then((status) => {
+    if (!status?.configured || !isLocalVoiceSupported()) return;
+    if (controller.isActive()) return;
+    ui.button.removeEventListener('click', controller.buttonHandler);
+    if (ui.tierButton && controller.tierHandler) ui.tierButton.removeEventListener('click', controller.tierHandler);
+    const local = new LocalVoiceController({ runner, ui, dataManager, status });
+    local.buttonHandler = () => { if (local.isActive()) local.stop(); else local.start(); };
+    ui.button.addEventListener('click', local.buttonHandler);
+    local.syncCostUi();
+    local.bindPushToTalkShortcut();
+    window.__gevVoiceCommands = local;
+    if (window.__godsEyeView) window.__godsEyeView.voiceCommands = local;
+  }).catch(() => {});
   return controller;
+}
+
+async function probeLocalVoiceProvider() {
+  try {
+    const response = await fetch('/api/local-voice/status', { cache: 'no-store' });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
 }
 
 export class GevRealtimeController {
