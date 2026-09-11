@@ -471,7 +471,7 @@ export class SceneDirector {
       this.downloadLastRunMetadata();
     });
 
-    this._updateStatus('Ready');
+    this._updateStatus(t('setup.scenes.statusReady'));
     this._setProgress(0);
     this._setButtons(false);
   }
