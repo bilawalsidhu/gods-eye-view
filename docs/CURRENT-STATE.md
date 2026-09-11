@@ -1,6 +1,6 @@
 # God's Eye View Current State
 
-Updated: August 24, 2026
+Updated: September 11, 2026
 
 ## Installations and map-source guidance
 
@@ -1600,6 +1600,7 @@ Historical planning documents may not match runtime behavior.
 - 3D aircraft/model tracking surfaces in `src/data/flights.js` and `src/data/militaryFlights.js`
 - Detection overlay and tracked-target readout in `src/data/detection.js`, `src/data/detectionDraw.js`, and `src/data/trackedReadout.js`
 - Proxy middleware and API wiring in `vite.config.js`
+- EN/ES localization in `src/i18n/` (catalogs, locale resolution, `t()`, DOM application; see the Internationalization section below)
 
 ### Active Data Layers in Runtime
 
@@ -2024,6 +2025,59 @@ silently demoting every later lookup for the session.
 - **AIS vessels**: chevron symbology (naval cyan base, type tints), world-space headings, MMSI-keyed reconciliation (selection survives refreshes; pinned 3 refreshes with STALE marker when absent), detection-overlay integration (`type: 'SEA'`), contextStore registration for voice Q&A. Empty-space clicks, id-less photorealistic-tile picks, and Escape dismiss the vessel card/HUD/context and clear its trail; picks owned by another layer (including `gev-trail:*`) and raw vessel-record picks without a live MMSI key are no-ops for vessel selection. Click and key handlers detach while the layer is disabled and reinstall on enable. Selecting another vessel replaces the selection and trail, and reconciliation clears a trail if its owning vessel is evicted.
 - **Track trails**: server accumulates per-MMSI ring buffers (`/api/ais-live/track?mmsi=`, Float32+Uint32, 64 samples, 30s/25m thinning); aircraft backfill proxies `/api/opensky-track` (OAuth, own credit bucket) and `/api/adsblol/trace` (tar1090 readsb, ~24h history, ODbL — credit adsb.lol).
 - Shared `src/data/pickRegistry.js` stops the two flight layers' click handlers from fighting over the camera.
+
+### Internationalization / EN+ES localization (September 2026)
+
+The application-owned UI renders in English and Spanish. English is the
+default, the source catalog, and the fallback; a key missing in Spanish
+renders its English value. The subsystem lives in `src/i18n/`:
+
+- **File map.** `src/i18n/locale.js` owns locale resolution, guarded storage
+  (`gev:locale:v1`), the one-shot `?lang=` override, and `<html lang>`/`<html
+  dir>` metadata. `src/i18n/index.js` owns the catalog registry, `t()`
+  (interpolation + `Intl.PluralRules` plural selection), `formatNumber` /
+  `formatDate`, `applyDocumentTranslations()`, and
+  `persistLocaleAndReload()`. Catalogs are four flat message maps per locale —
+  `src/i18n/locales/{en,es}/{shell,cockpit,layers,setup}.js` — mirrored
+  key-for-key (897 keys per locale at the time of writing).
+- **Selector.** The command dock carries a compact EN|ES switch
+  (`index.html`, `.dock-locale-switch` / `.dock-locale-btn`), wired by
+  `ui.js` `_initLocaleSelector()`. A click persists the choice and reloads
+  the page with the hash preserved, so no live re-apply of already-rendered
+  dynamic panels is needed.
+- **Resolution order.** `?lang=<locale>` (search string only; never
+  persisted, never written into share links; stripped by
+  `persistLocaleAndReload`) → stored `gev:locale:v1` →
+  `navigator.languages` (regional variants normalize to the primary tag:
+  `es-MX`/`es_419` → `es`) → `'en'`. Unsupported values defer to the next
+  step rather than forcing English.
+- **Gates** (all under `node --test src/i18n/`, 31 tests):
+  `catalog.test.mjs` enforces en/es key, placeholder-name, and
+  plural-shape parity with the strict exact-parity flip ON
+  (`REQUIRE_FULL_ES_PARITY`; `GEV_I18N_REQUIRE_FULL_ES_PARITY=0` opts out
+  for staged work — flipped by commit `c91a923`);
+  `markupCoverage.test.mjs` requires every `data-i18n*` attribute in
+  `index.html` to resolve in both catalogs and rejects unknown attribute
+  spellings; `i18n.test.mjs` pins precedence, guards, fallback,
+  interpolation, plurals, and DOM application; `repairPass.test.mjs`
+  anchors the reviewed translations — en byte-identity for extracted
+  literals and the eleven corrected es strings.
+- **Accepted deferrals (do not "fix" silently):**
+  - The military-awareness subject header literal `FLIGHT / VESSEL WINDOW`
+    (`src/data/militaryAwareness.js`) stays English; the literal is
+    test-pinned in `src/data/militaryAwareness.test.mjs`.
+  - The visible cockpit-brief tab tokens `SIG` / `NEWS` / `LOCAL`
+    (`index.html`) stay untranslated to match the runtime keys; their
+    `aria-label`s ARE localized (`cockpit.brief.tab*AriaLabel`).
+  - `src/voice/gevActions.js` tool-result confirmation strings stay English
+    by contract (voice tool schemas and spoken confirmations are
+    keep-English; see the ownership manifest).
+  - Number formatting is still the pre-i18n `toLocaleString` policy at:
+    `src/ui.js:1442`, `src/data/satellites.js:829`,
+    `src/data/flights.js:436` (`'en-US'` pinned), and
+    `src/data/rocketLaunches.js:2281/2299/2364/2371/2374`
+    (default-locale). A locale-aware number-format policy is deferred; the
+    `formatNumber` helper exists in `src/i18n/index.js` when that lands.
 
 ### Overpass proxy mirror rotation (September 2026)
 
