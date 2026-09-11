@@ -890,6 +890,14 @@
     <p class="first-run-note" data-first-run-status role="status" aria-live="polite">Tip: the GEV MIC button in the dock lets you talk to the map.</p>
   </aside>
 
+  <aside id="world-desk-timeline" hidden>
+    <div class="world-desk-timeline-row">
+      <a href="/world-desk/" target="_blank" rel="noopener">World Desk</a>
+      <strong data-world-desk-year>2026 CE</strong>
+      <input id="world-desk-year" type="range" min="-3000" max="2026" value="2026" aria-label="World Desk year" />
+    </div>
+  </aside>
+
   <!-- POWER UP — in-app key setup. Dev-server only: src/keySetup.js removes
        both the chip and this dialog outright when /api/setup/status is not
        there to answer (prod builds, LAN visitors). Rows are rendered from

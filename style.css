@@ -9683,3 +9683,33 @@ body.scene-playback-mode #key-setup {
   border-color: rgba(255, 170, 150, 0.65);
   outline: none;
 }
+
+#world-desk-timeline {
+  position: fixed;
+  left: 52px;
+  right: 52px;
+  bottom: 18px;
+  z-index: 80;
+  padding: 8px 14px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  backdrop-filter: blur(16px);
+}
+#world-desk-timeline[hidden] { display: none; }
+.world-desk-timeline-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.world-desk-timeline-row a,
+.world-desk-timeline-row strong {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.world-desk-timeline-row input { flex: 1; accent-color: var(--accent); }

@@ -18,9 +18,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - World Desk: a GDELT DOC 2.0 World News layer pins 24-hour crisis, disaster,
   protest, election, and conflict coverage on the globe by **outlet country**,
   with publisher links and an honest disclaimer. `/api/world-news` caches for
-  five minutes. First-run offers a World Desk mission; voice understands
+  five minutes and archives a daily snapshot under `.gev-cache/world-news/`.
+  First-run offers a World Desk mission; voice understands
   "world desk" / "world news". Pins are coverage mentions, not verified
-  incidents.
+  incidents. A 5,000-year timeline (3000 BCE–present) of major recorded
+  events can be filtered by calamity, war, prophets, births, deaths, and
+  other desks, with a standalone page at `/world-desk/`.
 
 ### Fixed
 

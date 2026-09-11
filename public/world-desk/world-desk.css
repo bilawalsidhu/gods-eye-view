@@ -1,0 +1,152 @@
+:root {
+  --bg: #07080c;
+  --glass: rgba(8, 10, 16, 0.78);
+  --line: rgba(255, 255, 255, 0.1);
+  --accent: #00d4ff;
+  --gold: #ffd166;
+  --text: #e8eaed;
+  --dim: rgba(232, 234, 237, 0.55);
+  --mono: "IBM Plex Mono", "SF Mono", monospace;
+  --sans: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #map { width: 100%; height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); }
+body { overflow: hidden; }
+.vignette {
+  pointer-events: none;
+  position: fixed; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 42%, rgba(0,0,0,0.55) 100%);
+  z-index: 400;
+}
+
+.hud-top, .filters, .selected, .roster, .timeline {
+  position: fixed;
+  z-index: 500;
+  background: var(--glass);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(16px);
+}
+
+.hud-top {
+  top: 18px; left: 18px; right: 18px;
+  display: flex; justify-content: space-between; gap: 16px; align-items: flex-end;
+  padding: 14px 18px;
+  border-radius: 16px;
+}
+.kicker {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.03em; }
+.status { font-family: var(--mono); font-size: 12px; color: var(--dim); }
+
+.filters {
+  top: 96px; left: 18px;
+  width: min(420px, calc(100vw - 36px));
+  padding: 12px 14px;
+  border-radius: 14px;
+}
+.filters-label, .roster-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 8px;
+}
+.filter-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter-row button {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 9px;
+  cursor: pointer;
+}
+.filter-row button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(0, 212, 255, 0.08);
+}
+
+.selected {
+  top: 96px; right: 18px;
+  width: min(340px, calc(100vw - 36px));
+  padding: 16px;
+  border-radius: 14px;
+}
+.selected-kicker { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+.selected h2 { font-size: 18px; margin: 6px 0 8px; }
+.selected #selected-place { color: var(--accent); font-family: var(--mono); font-size: 12px; margin-bottom: 8px; }
+.selected #selected-summary { font-size: 14px; line-height: 1.45; color: var(--dim); }
+.selected-source { margin-top: 10px; font-size: 11px; color: var(--dim); }
+
+.roster {
+  top: 280px; right: 18px; bottom: 132px;
+  width: min(340px, calc(100vw - 36px));
+  padding: 12px 10px 12px 14px;
+  border-radius: 14px;
+  overflow: auto;
+}
+.roster ol { list-style: none; }
+.roster li { margin: 0 0 8px; }
+.roster button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+.roster .when { font-family: var(--mono); font-size: 10px; color: var(--gold); }
+.roster .what { display: block; font-size: 13px; }
+
+.timeline {
+  left: 18px; right: 18px; bottom: 16px;
+  padding: 12px 16px 10px;
+  border-radius: 16px;
+}
+.timeline-readout {
+  display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px;
+}
+.timeline-readout button {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  border-radius: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.timeline-readout strong { font-size: 20px; letter-spacing: -0.03em; }
+#window-label { color: var(--dim); font-family: var(--mono); font-size: 11px; }
+.timeline input[type="range"] { width: 100%; accent-color: var(--accent); }
+.era-marks {
+  display: flex; justify-content: space-between;
+  font-family: var(--mono); font-size: 10px; color: var(--dim); margin-top: 4px;
+}
+
+.leaflet-container { background: #07080c; font-family: var(--sans); }
+.desk-pin {
+  border-radius: 50%;
+  border: 2px solid #071018;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 0 12px currentColor;
+}
+
+@media (max-width: 820px) {
+  .selected { display: none; }
+  .roster { top: auto; bottom: 132px; left: 18px; width: auto; max-height: 28vh; }
+  h1 { font-size: 18px; }
+}

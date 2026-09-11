@@ -7475,7 +7475,7 @@ function worldNewsProxy() {
     });
     const articles = normalizeWorldNewsArticles(payload, 75);
     const points = clusterWorldNewsPoints(articles);
-    return {
+    const result = {
       status: points.length ? 'ready' : 'empty',
       source: 'GDELT DOC 2.0',
       geometry: 'outlet-country',
@@ -7485,6 +7485,12 @@ function worldNewsProxy() {
       articleCount: articles.length,
       points,
     };
+    const archiveDir = path.join(process.cwd(), '.gev-cache', 'world-news');
+    const day = new Date().toISOString().slice(0, 10);
+    fsp.mkdir(archiveDir, { recursive: true })
+      .then(() => fsp.writeFile(path.join(archiveDir, `${day}.json`), JSON.stringify(result), 'utf8'))
+      .catch((error) => console.warn('[world-news-proxy] archive write failed', error?.message || error));
+    return result;
   }
 
   function install(middlewares) {

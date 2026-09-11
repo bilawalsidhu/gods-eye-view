@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>World Desk — 5,000 years</title>
+  <meta name="description" content="A public-data world desk: five millennia of recorded events, filtered and laid on a globe, plus a cached live news layer." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://unpkg.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="./world-desk.css" />
+</head>
+<body>
+  <div id="map" aria-label="World map"></div>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <header class="hud-top">
+    <div>
+      <p class="kicker">God's Eye View · World Desk</p>
+      <h1>5,000 years on one glass</h1>
+    </div>
+    <p class="status" id="status" role="status">Acquiring catalog…</p>
+  </header>
+
+  <aside class="filters" aria-label="Event desks">
+    <p class="filters-label">Desks</p>
+    <div id="filter-row" class="filter-row"></div>
+  </aside>
+
+  <section class="selected" id="selected" hidden>
+    <p class="selected-kicker" id="selected-kicker"></p>
+    <h2 id="selected-title"></h2>
+    <p id="selected-place"></p>
+    <p id="selected-summary"></p>
+    <p class="selected-source" id="selected-source"></p>
+  </section>
+
+  <aside class="roster" aria-label="Events in view">
+    <p class="roster-label">In frame <span id="roster-count">0</span></p>
+    <ol id="roster"></ol>
+  </aside>
+
+  <footer class="timeline">
+    <div class="timeline-readout">
+      <button type="button" id="btn-play" aria-pressed="false">Play</button>
+      <button type="button" id="btn-now">Today</button>
+      <strong id="year-label">2026 CE</strong>
+      <span id="window-label">±40 years</span>
+    </div>
+    <input id="year" type="range" min="-3000" max="2026" value="2026" aria-label="Timeline year" />
+    <div class="era-marks" aria-hidden="true">
+      <span>3000 BCE</span>
+      <span>0</span>
+      <span>1000</span>
+      <span>1500</span>
+      <span>1900</span>
+      <span>Today</span>
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="./world-desk.js" type="module"></script>
+</body>
+</html>

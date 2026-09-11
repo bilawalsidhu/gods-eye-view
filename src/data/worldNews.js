@@ -9,6 +9,14 @@ import {
   mapAnalystRecord,
   normalizeWorldNewsSnapshot,
 } from './worldNewsData.js';
+import {
+  WORLD_DESK_CATEGORIES,
+  WORLD_DESK_ERA_END,
+  WORLD_DESK_ERA_START,
+  WORLD_DESK_HISTORY,
+  eventsVisibleOnPlayhead,
+  formatWorldDeskYear,
+} from './worldNewsHistory.js';
 
 export {
   WORLD_NEWS_ARTICLE_CAP,
@@ -130,6 +138,110 @@ export function createWorldNewsLayer({
   let _geometry = 'outlet-country';
   let _source = 'GDELT';
   let _selectedId = null;
+  let _year = WORLD_DESK_ERA_END;
+  let _categories = new Set(WORLD_DESK_CATEGORIES.map((row) => row.id));
+  let _liveSnapshot = { points: [] };
+
+  function syncTimelineDock() {
+    const dock = globalThis.document?.getElementById('world-desk-timeline');
+    if (!dock) return;
+    dock.hidden = !_enabled;
+    const label = dock.querySelector('[data-world-desk-year]');
+    if (label) label.textContent = formatWorldDeskYear(_year);
+    const slider = dock.querySelector('#world-desk-year');
+    if (slider && Number(slider.value) !== _year) slider.value = String(_year);
+  }
+
+  function paint() {
+    if (!_dataSource) return;
+    const nextEntities = [];
+    const overlayEntries = [];
+    const nextRecords = new Map();
+    const liveColor = Cesium.Color.fromCssColorString(WORLD_NEWS_ACCENT);
+    const historyColor = Cesium.Color.fromCssColorString('#4cc9f0');
+    const showLive = _categories.has('live') && _year >= WORLD_DESK_ERA_END - 2;
+    if (showLive) {
+      for (const point of _liveSnapshot.points || []) {
+        const position = Cesium.Cartesian3.fromDegrees(point.lon, point.lat);
+        nextRecords.set(point.id, { ...point, place: point.place, articles: point.articles, count: point.count });
+        nextEntities.push(new Cesium.Entity({
+          id: `world-news:${point.id}`,
+          position,
+          point: {
+            pixelSize: 8 + Math.min(14, Math.round(Math.log2((point.count || 1) + 1) * 4)),
+            color: liveColor.withAlpha(0.92),
+            outlineColor: Cesium.Color.BLACK.withAlpha(0.55),
+            outlineWidth: 1,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
+          properties: {
+            place: point.place,
+            count: point.count,
+            title: point.articles?.[0]?.title || null,
+            domain: point.articles?.[0]?.domain || null,
+            url: point.articles?.[0]?.url || null,
+          },
+        }));
+        overlayEntries.push(createWorldNewsOverlayEntry({
+          id: point.id, position, place: point.place, count: point.count,
+        }));
+      }
+    }
+    const historic = eventsVisibleOnPlayhead(
+      WORLD_DESK_HISTORY.filter((event) => _categories.has(event.category)),
+      _year,
+    );
+    for (const event of historic) {
+      const position = Cesium.Cartesian3.fromDegrees(event.lon, event.lat);
+      nextRecords.set(event.id, {
+        id: event.id,
+        place: event.place,
+        lat: event.lat,
+        lon: event.lon,
+        count: 1,
+        articles: [{ title: event.title, url: '', domain: event.category }],
+      });
+      nextEntities.push(new Cesium.Entity({
+        id: `world-news:${event.id}`,
+        position,
+        point: {
+          pixelSize: 9,
+          color: historyColor.withAlpha(0.9),
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.5),
+          outlineWidth: 1,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        properties: {
+          place: event.place,
+          count: 1,
+          title: event.title,
+          domain: event.category,
+          url: null,
+        },
+      }));
+      overlayEntries.push(createWorldNewsOverlayEntry({
+        id: event.id, position, place: event.title, count: 1,
+      }));
+    }
+    _dataSource.entities.removeAll();
+    for (const entity of nextEntities) _dataSource.entities.add(entity);
+    _records = nextRecords;
+    _count = nextRecords.size;
+    if (_enabled) {
+      overlayHost.setEntries(
+        WORLD_NEWS_OVERLAY_SOURCE_ID,
+        selectWorldNewsOverlayCohort(overlayEntries),
+        {
+          cohortLimit: WORLD_NEWS_OVERLAY_COHORT_LIMIT,
+          collisionCapacity: WORLD_NEWS_OVERLAY_COLLISION_CAPACITY,
+          moving: false,
+        },
+      );
+    }
+    syncTimelineDock();
+  }
 
   function clearSelection() {
     _selectedId = null;
@@ -194,6 +306,12 @@ export function createWorldNewsLayer({
           publishSelection(point, entity.position?.getValue(Cesium.JulianDate.now()));
         }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
       }
+      const slider = globalThis.document?.getElementById('world-desk-year');
+      slider?.addEventListener('input', () => {
+        _year = Number(slider.value);
+        syncTimelineDock();
+        paint();
+      });
     },
 
     enable() {
@@ -201,6 +319,7 @@ export function createWorldNewsLayer({
       if (_dataSource) _dataSource.show = true;
       overlayHost.setVisible(WORLD_NEWS_OVERLAY_SOURCE_ID, true);
       overlayHost.setVisible(WORLD_NEWS_SELECTED_OVERLAY_SOURCE_ID, Boolean(_selectedId));
+      syncTimelineDock();
     },
 
     disable() {
@@ -210,90 +329,48 @@ export function createWorldNewsLayer({
       overlayHost.setVisible(WORLD_NEWS_OVERLAY_SOURCE_ID, false);
       clearSelection();
       overlayHost.setVisible(WORLD_NEWS_SELECTED_OVERLAY_SOURCE_ID, false);
+      syncTimelineDock();
     },
 
     async update() {
       try {
         const response = await fetchImpl('/api/world-news');
-        if (!response.ok) {
-          _lastError = `GDELT HTTP ${response.status}`;
-          return false;
-        }
-        const snapshot = normalizeWorldNewsSnapshot(await response.json());
-        if (!snapshot) {
-          _lastError = 'Malformed world-news response';
-          return false;
-        }
-
-        const nextEntities = [];
-        const overlayEntries = [];
-        const nextRecords = new Map();
-        const color = Cesium.Color.fromCssColorString(WORLD_NEWS_ACCENT);
-
-        for (const point of snapshot.points) {
-          const position = Cesium.Cartesian3.fromDegrees(point.lon, point.lat);
-          nextRecords.set(point.id, point);
-          nextEntities.push(new Cesium.Entity({
-            id: `world-news:${point.id}`,
-            position,
-            point: {
-              pixelSize: 8 + Math.min(14, Math.round(Math.log2(point.count + 1) * 4)),
-              color: color.withAlpha(0.92),
-              outlineColor: Cesium.Color.BLACK.withAlpha(0.55),
-              outlineWidth: 1,
-              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-              disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            },
-            properties: {
-              place: point.place,
-              count: point.count,
-              title: point.articles[0]?.title || null,
-              domain: point.articles[0]?.domain || null,
-              url: point.articles[0]?.url || null,
-            },
-          }));
-          overlayEntries.push(createWorldNewsOverlayEntry({
-            id: point.id,
-            position,
-            place: point.place,
-            count: point.count,
-          }));
-        }
-
-        _dataSource.entities.removeAll();
-        for (const entity of nextEntities) _dataSource.entities.add(entity);
-        _records = nextRecords;
-        _geometry = snapshot.geometry;
-        _source = snapshot.source;
-        if (_enabled) {
-          overlayHost.setEntries(
-            WORLD_NEWS_OVERLAY_SOURCE_ID,
-            selectWorldNewsOverlayCohort(overlayEntries),
-            {
-              cohortLimit: WORLD_NEWS_OVERLAY_COHORT_LIMIT,
-              collisionCapacity: WORLD_NEWS_OVERLAY_COLLISION_CAPACITY,
-              moving: false,
-            },
-          );
-          if (_selectedId && _records.has(_selectedId)) {
-            const selected = _records.get(_selectedId);
-            publishSelection(
-              selected,
-              Cesium.Cartesian3.fromDegrees(selected.lon, selected.lat),
-            );
-          } else {
-            clearSelection();
-          }
-        }
-
-        _count = snapshot.points.length;
-        _lastUpdate = Date.now();
-        _lastError = snapshot.status === 'empty' ? 'No geocoded coverage' : null;
-        return snapshot.status !== 'empty';
+        if (response.ok) {
+          const snapshot = normalizeWorldNewsSnapshot(await response.json());
+          if (snapshot) {
+            _liveSnapshot = snapshot;
+            _geometry = snapshot.geometry;
+            _source = snapshot.source;
+            _lastError = snapshot.status === 'empty' ? null : null;
+          } else _lastError = 'Malformed world-news response';
+        } else _lastError = `GDELT HTTP ${response.status}`;
       } catch {
         _lastError = 'GDELT network error';
-        return false;
       }
+      paint();
+      _lastUpdate = Date.now();
+      return _count > 0;
+    },
+
+    setParams(next = {}) {
+      if (Number.isFinite(Number(next.year))) {
+        _year = Math.min(WORLD_DESK_ERA_END, Math.max(WORLD_DESK_ERA_START, Number(next.year)));
+      }
+      if (Array.isArray(next.categories)) {
+        _categories = new Set(next.categories);
+      }
+      if (typeof next.category === 'string') {
+        if (_categories.has(next.category)) _categories.delete(next.category);
+        else _categories.add(next.category);
+        if (_categories.size === 0) _categories.add(next.category);
+      }
+      syncTimelineDock();
+      paint();
+      return true;
+    },
+
+    getParams() {
+      return { year: _year, categories: [..._categories] };
     },
 
     destroy(viewer) {
@@ -324,9 +401,16 @@ export function createWorldNewsLayer({
     getRowControls() {
       if (!_enabled) return null;
       return {
+        chips: WORLD_DESK_CATEGORIES.map((cat) => ({
+          id: cat.id,
+          label: cat.label,
+          active: _categories.has(cat.id),
+          title: `Toggle ${cat.label}`,
+          params: { category: cat.id },
+        })),
         legend: [{
           color: WORLD_NEWS_ACCENT,
-          label: _geometry === 'story-location' ? 'Story place' : 'Outlet country',
+          label: `${formatWorldDeskYear(_year)} · ${_count}`,
           count: _count,
           blurb: WORLD_NEWS_DISCLAIMER,
         }],
