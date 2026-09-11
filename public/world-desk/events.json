@@ -3,7 +3,7 @@
   "subtitle": "Five thousand years of recorded events, plus a live public-news cache.",
   "eraStart": -3000,
   "eraEnd": 2026,
-  "disclaimer": "This is a desk of major recorded events, not a complete newscast and not a verdict. Religious lifetimes use traditional dates. Live pins are outlet-country coverage, not verified incidents.",
+  "disclaimer": "This is a desk of major recorded events, not a complete newscast and not a verdict. Religious lifetimes — including many Hindu gurus — use traditional dates. Live pins are outlet-country coverage, not verified incidents.",
   "categories": [
     {
       "id": "calamity",
@@ -16,6 +16,10 @@
     {
       "id": "prophet",
       "label": "Prophets & founders"
+    },
+    {
+      "id": "saint",
+      "label": "Saints & gurus"
     },
     {
       "id": "birth",
@@ -238,6 +242,19 @@
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
+      "id": "culture--1500-early-vedic-hymns-take-shape",
+      "year": -1500,
+      "yearEnd": -1200,
+      "category": "culture",
+      "title": "Early Vedic hymns take shape",
+      "place": "Sapta Sindhu / Punjab",
+      "lat": 31.15,
+      "lon": 75.34,
+      "summary": "The Rigveda is compiled over centuries. Foundational Sanskrit scripture of Hindu tradition.",
+      "traditional": true,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
       "id": "politics--1279-ramesses-ii",
       "year": -1279,
       "yearEnd": -1213,
@@ -368,6 +385,19 @@
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
+      "id": "culture--800-principal-upanishads",
+      "year": -800,
+      "yearEnd": -500,
+      "category": "culture",
+      "title": "Principal Upanishads",
+      "place": "northern India",
+      "lat": 25.32,
+      "lon": 83.01,
+      "summary": "Forest dialogues on atman and brahman. Later Vedanta reads them as scripture.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
       "id": "culture--776-first-recorded-olympic-games",
       "year": -776,
       "yearEnd": null,
@@ -430,6 +460,19 @@
       "lon": 43.15,
       "summary": "Assyrian capital falls to Babylonians and Medes.",
       "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "prophet--599-mahavira-traditional-jain-dates",
+      "year": -599,
+      "yearEnd": -527,
+      "category": "prophet",
+      "title": "Mahavira (traditional Jain dates)",
+      "place": "Vaishali / Pavapuri",
+      "lat": 26.0,
+      "lon": 85.13,
+      "summary": "24th Tirthankara of Jainism in the traditional chronology.",
+      "traditional": true,
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
@@ -586,6 +629,19 @@
       "lon": 23.72,
       "summary": "Typhoid-like outbreak during the Spartan siege. Thucydides survived it.",
       "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "culture--400-bhagavad-gita-takes-written-form",
+      "year": -400,
+      "yearEnd": -200,
+      "category": "culture",
+      "title": "Bhagavad Gita takes written form",
+      "place": "northern India",
+      "lat": 26.45,
+      "lon": 80.33,
+      "summary": "Krishna and Arjuna on dharma. The Mahabharata's most traveled book.",
+      "traditional": true,
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
@@ -940,6 +996,19 @@
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
+      "id": "saint-500-bhakti-of-the-tamil-alvars-and-nayanars",
+      "year": 500,
+      "yearEnd": 800,
+      "category": "saint",
+      "title": "Bhakti of the Tamil Alvars and Nayanars",
+      "place": "Tamil country",
+      "lat": 10.79,
+      "lon": 79.14,
+      "summary": "Vaishnava and Shaiva poet-saints. Temple Hinduism in the Tamil voice.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
       "id": "calamity-541-plague-of-justinian",
       "year": 541,
       "yearEnd": 549,
@@ -1005,6 +1074,19 @@
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
+      "id": "saint-700-andal-traditional",
+      "year": 700,
+      "yearEnd": null,
+      "category": "saint",
+      "title": "Andal (traditional)",
+      "place": "Srivilliputhur, Tamil Nadu",
+      "lat": 9.51,
+      "lon": 77.63,
+      "summary": "The woman Alvar. Tiruppavai still sung in Margazhi.",
+      "traditional": true,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
       "id": "war-711-muslim-conquest-of-visigothic-spain",
       "year": 711,
       "yearEnd": null,
@@ -1044,6 +1126,45 @@
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
+      "id": "saint-788-adi-shankaracharya",
+      "year": 788,
+      "yearEnd": 820,
+      "category": "saint",
+      "title": "Adi Shankaracharya",
+      "place": "Kalady, Kerala",
+      "lat": 10.17,
+      "lon": 76.44,
+      "summary": "Advaita Vedanta. Mathas at Sringeri, Dwaraka, Puri, and Jyotirmath. Traditional dates 788–820 CE; some lineages place him much earlier.",
+      "traditional": true,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "birth-788-birth-of-adi-shankaracharya-traditional",
+      "year": 788,
+      "yearEnd": null,
+      "category": "birth",
+      "title": "Birth of Adi Shankaracharya (traditional)",
+      "place": "Kalady, Kerala",
+      "lat": 10.17,
+      "lon": 76.44,
+      "summary": "Born on the Periyar. The 8th-century dating is the common scholarly one.",
+      "traditional": true,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-788-mandana-mishra-sureshvara-traditional-debate",
+      "year": 788,
+      "yearEnd": 820,
+      "category": "saint",
+      "title": "Mandana Mishra / Sureshvara (traditional debate)",
+      "place": "Mahishi / north India",
+      "lat": 25.85,
+      "lon": 86.93,
+      "summary": "The famous debate story of Shankara and the Mimamsa household. Hagiography, not a dated dispatch.",
+      "traditional": true,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
       "id": "war-793-viking-raid-on-lindisfarne",
       "year": 793,
       "yearEnd": null,
@@ -1066,6 +1187,32 @@
       "lat": 41.89,
       "lon": 12.48,
       "summary": "A western empire in name, a Frankish one in fact.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "death-820-death-of-adi-shankaracharya-traditional",
+      "year": 820,
+      "yearEnd": null,
+      "category": "death",
+      "title": "Death of Adi Shankaracharya (traditional)",
+      "place": "Kedarnath, Himalaya",
+      "lat": 30.73,
+      "lon": 79.07,
+      "summary": "Tradition has him leave the body at Kedarnath still a young man.",
+      "traditional": true,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "culture-820-four-amnaya-mathas-associated-with-shankara",
+      "year": 820,
+      "yearEnd": null,
+      "category": "culture",
+      "title": "Four amnaya mathas associated with Shankara",
+      "place": "Sringeri, Karnataka",
+      "lat": 13.42,
+      "lon": 75.25,
+      "summary": "Sringeri, Dwaraka, Puri, Jyotirmath — seats that still argue Vedanta.",
       "traditional": false,
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
@@ -1161,6 +1308,19 @@
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
+      "id": "saint-1017-ramanujacharya",
+      "year": 1017,
+      "yearEnd": 1137,
+      "category": "saint",
+      "title": "Ramanujacharya",
+      "place": "Sriperumbudur, Tamil Nadu",
+      "lat": 12.97,
+      "lon": 79.94,
+      "summary": "Vishishtadvaita. Temple, grace, and a qualified non-dual Brahman.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
       "id": "politics-1054-great-schism",
       "year": 1054,
       "yearEnd": null,
@@ -1226,6 +1386,32 @@
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
+      "id": "saint-1106-basavanna",
+      "year": 1106,
+      "yearEnd": 1167,
+      "category": "saint",
+      "title": "Basavanna",
+      "place": "Basavakalyan, Karnataka",
+      "lat": 17.87,
+      "lon": 76.95,
+      "summary": "Sharana movement. Vachanas, the ishtalinga, and a critique of caste.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1130-akkamahadevi-approximate",
+      "year": 1130,
+      "yearEnd": 1160,
+      "category": "saint",
+      "title": "Akkamahadevi (approximate)",
+      "place": "Udutadi / Kalyana",
+      "lat": 14.17,
+      "lon": 75.4,
+      "summary": "Veerashaiva poet-saint. Shiva as Chennamallikarjuna.",
+      "traditional": true,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
       "id": "empire-1206-genghis-khan",
       "year": 1206,
       "yearEnd": 1227,
@@ -1252,6 +1438,19 @@
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
+      "id": "saint-1238-madhvacharya",
+      "year": 1238,
+      "yearEnd": 1317,
+      "category": "saint",
+      "title": "Madhvacharya",
+      "place": "Pajaka / Udupi, Karnataka",
+      "lat": 13.34,
+      "lon": 74.74,
+      "summary": "Dvaita Vedanta. Krishna at Udupi; a dualist reading of the sutras.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
       "id": "war-1258-mongols-sack-baghdad",
       "year": 1258,
       "yearEnd": null,
@@ -1262,6 +1461,19 @@
       "lon": 44.37,
       "summary": "The Abbasid caliphate's city is ruined. Irrigation and libraries burn.",
       "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1270-namdev-approximate",
+      "year": 1270,
+      "yearEnd": 1350,
+      "category": "saint",
+      "title": "Namdev (approximate)",
+      "place": "Pandharpur, Maharashtra",
+      "lat": 17.68,
+      "lon": 75.33,
+      "summary": "Varkari poet of Vitthal. Verses later travel into the Guru Granth Sahib.",
+      "traditional": true,
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
@@ -1278,6 +1490,19 @@
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
+      "id": "saint-1275-sant-dnyaneshwar",
+      "year": 1275,
+      "yearEnd": 1296,
+      "category": "saint",
+      "title": "Sant Dnyaneshwar",
+      "place": "Alandi, Maharashtra",
+      "lat": 18.68,
+      "lon": 73.9,
+      "summary": "Jnaneshwari on the Gita, in Marathi. He is said to enter sanjeevan samadhi at 21.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
       "id": "calamity-1281-kamikaze-storms-wreck-the-mongol-fleets",
       "year": 1281,
       "yearEnd": null,
@@ -1288,6 +1513,19 @@
       "lon": 130.4,
       "summary": "Typhoons, plus Japanese defense, save the islands twice.",
       "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1290-vedanta-desika-approximate",
+      "year": 1290,
+      "yearEnd": 1380,
+      "category": "saint",
+      "title": "Vedanta Desika (approximate)",
+      "place": "Kanchipuram / Srirangam",
+      "lat": 12.86,
+      "lon": 79.32,
+      "summary": "Post-Ramanuja Sri Vaishnava acharya. Poet, logician, temple theologian.",
+      "traditional": true,
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
@@ -1382,6 +1620,19 @@
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
+      "id": "saint-1440-kabir",
+      "year": 1440,
+      "yearEnd": 1518,
+      "category": "saint",
+      "title": "Kabir",
+      "place": "Varanasi",
+      "lat": 25.32,
+      "lon": 83.01,
+      "summary": "Weaver-poet. Ram and Rahim in the same doha; later claimed by more than one panth.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
       "id": "discovery-1450-gutenberg-s-press-in-mainz",
       "year": 1450,
       "yearEnd": null,
@@ -1421,6 +1672,45 @@
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
+      "id": "saint-1479-vallabhacharya",
+      "year": 1479,
+      "yearEnd": 1531,
+      "category": "saint",
+      "title": "Vallabhacharya",
+      "place": "Champaranya / Mathura",
+      "lat": 26.75,
+      "lon": 83.67,
+      "summary": "Shuddhadvaita and the Pushtimarg. Krishna as the child of grace.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1482-surdas-approximate",
+      "year": 1482,
+      "yearEnd": 1565,
+      "category": "saint",
+      "title": "Surdas (approximate)",
+      "place": "Braj / Mathura",
+      "lat": 27.5,
+      "lon": 77.68,
+      "summary": "Blind poet of Krishna in Braj Bhasha. Tradition more than a firm biography.",
+      "traditional": true,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1486-chaitanya-mahaprabhu",
+      "year": 1486,
+      "yearEnd": 1534,
+      "category": "saint",
+      "title": "Chaitanya Mahaprabhu",
+      "place": "Nabadwip, Bengal",
+      "lat": 23.41,
+      "lon": 88.37,
+      "summary": "Gaudiya Vaishnavism. Public kirtan; Krishna-bhakti as a mass path.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
       "id": "discovery-1492-columbus-reaches-the-caribbean",
       "year": 1492,
       "yearEnd": null,
@@ -1430,6 +1720,19 @@
       "lat": 24.08,
       "lon": -74.5,
       "summary": "A Genoese in Spanish pay. The Atlantic world — and catastrophe for the Americas — begins.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1498-mirabai",
+      "year": 1498,
+      "yearEnd": 1546,
+      "category": "saint",
+      "title": "Mirabai",
+      "place": "Merta / Mewar, Rajasthan",
+      "lat": 26.65,
+      "lon": 74.03,
+      "summary": "Rajput princess, Krishna's devotee. Bhajans that outlive the court.",
       "traditional": false,
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
@@ -1444,6 +1747,19 @@
       "lon": 75.78,
       "summary": "Portugal's sea route around Africa.",
       "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1500-purandara-dasa-approximate",
+      "year": 1500,
+      "yearEnd": 1600,
+      "category": "saint",
+      "title": "Purandara Dasa (approximate)",
+      "place": "Hampi / Karnataka",
+      "lat": 15.34,
+      "lon": 76.46,
+      "summary": "Karnataka bhakti and the pedagogy of Carnatic music.",
+      "traditional": true,
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
@@ -1508,6 +1824,32 @@
       "lat": -7.16,
       "lon": -78.51,
       "summary": "Pizarro captures Atahualpa. Andes into the Spanish world.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1532-tulsidas",
+      "year": 1532,
+      "yearEnd": 1623,
+      "category": "saint",
+      "title": "Tulsidas",
+      "place": "Rajapur / Varanasi",
+      "lat": 25.32,
+      "lon": 83.01,
+      "summary": "Ramcharitmanas. Rama in Awadhi for a north Indian public.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1540-eknath",
+      "year": 1540,
+      "yearEnd": 1603,
+      "category": "saint",
+      "title": "Eknath",
+      "place": "Paithan, Maharashtra",
+      "lat": 19.48,
+      "lon": 75.38,
+      "summary": "Varkari saint. Marathi Ramayana and a householder's bhakti.",
       "traditional": false,
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
@@ -1612,6 +1954,32 @@
       "lat": 37.21,
       "lon": -76.78,
       "summary": "First permanent English settlement in North America.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1608-samarth-ramdas",
+      "year": 1608,
+      "yearEnd": 1681,
+      "category": "saint",
+      "title": "Samarth Ramdas",
+      "place": "Sajjangad, Maharashtra",
+      "lat": 17.65,
+      "lon": 73.91,
+      "summary": "Dasbodh. Guru to a generation that includes Shivaji in later telling.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1608-tukaram",
+      "year": 1608,
+      "yearEnd": 1649,
+      "category": "saint",
+      "title": "Tukaram",
+      "place": "Dehu, Maharashtra",
+      "lat": 18.72,
+      "lon": 73.75,
+      "summary": "Abhangs to Vitthal. The voice of the Varkari road to Pandharpur.",
       "traditional": false,
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
@@ -1807,6 +2175,19 @@
       "lat": 51.05,
       "lon": 13.74,
       "summary": "The first world war in all but name. Britain takes the inside track.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1761-swaminarayan-sahajanand-swami",
+      "year": 1761,
+      "yearEnd": 1830,
+      "category": "saint",
+      "title": "Swaminarayan (Sahajanand Swami)",
+      "place": "Chhapaiya / Gadhada, Gujarat",
+      "lat": 26.98,
+      "lon": 82.39,
+      "summary": "Reformer-guru of a still-growing sampradaya.",
       "traditional": false,
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
@@ -2019,6 +2400,45 @@
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
+      "id": "birth-1836-birth-of-ramakrishna",
+      "year": 1836,
+      "yearEnd": null,
+      "category": "birth",
+      "title": "Birth of Ramakrishna",
+      "place": "Kamarpukur, Bengal",
+      "lat": 23.23,
+      "lon": 87.73,
+      "summary": "A village birth; a Calcutta temple will make the name.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1836-ramakrishna-paramahamsa",
+      "year": 1836,
+      "yearEnd": 1886,
+      "category": "saint",
+      "title": "Ramakrishna Paramahamsa",
+      "place": "Dakshineswar, Bengal",
+      "lat": 22.66,
+      "lon": 88.36,
+      "summary": "Kali's priest at Dakshineswar. Many paths, one realization — as his disciples told it.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1836-sai-baba-of-shirdi",
+      "year": 1836,
+      "yearEnd": 1918,
+      "category": "saint",
+      "title": "Sai Baba of Shirdi",
+      "place": "Shirdi, Maharashtra",
+      "lat": 19.77,
+      "lon": 74.48,
+      "summary": "Fakir-saint of a mosque-temple town. Still a pan-Indian pilgrimage.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
       "id": "war-1839-first-opium-war",
       "year": 1839,
       "yearEnd": 1842,
@@ -2110,6 +2530,19 @@
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
+      "id": "birth-1863-birth-of-vivekananda",
+      "year": 1863,
+      "yearEnd": null,
+      "category": "birth",
+      "title": "Birth of Vivekananda",
+      "place": "Kolkata",
+      "lat": 22.54,
+      "lon": 88.35,
+      "summary": "Narendranath Datta. Later the monk who speaks in Chicago.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
       "id": "politics-1863-emancipation-proclamation",
       "year": 1863,
       "yearEnd": null,
@@ -2119,6 +2552,19 @@
       "lat": 38.9,
       "lon": -77.04,
       "summary": "A war measure that becomes a moral fact.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1863-swami-vivekananda",
+      "year": 1863,
+      "yearEnd": 1902,
+      "category": "saint",
+      "title": "Swami Vivekananda",
+      "place": "Kolkata / Belur Math",
+      "lat": 22.63,
+      "lon": 88.35,
+      "summary": "Chicago 1893. Vedanta and yoga enter a global vocabulary.",
       "traditional": false,
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
@@ -2175,6 +2621,19 @@
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
+      "id": "saint-1872-sri-aurobindo",
+      "year": 1872,
+      "yearEnd": 1950,
+      "category": "saint",
+      "title": "Sri Aurobindo",
+      "place": "Kolkata / Pondicherry",
+      "lat": 11.93,
+      "lon": 79.83,
+      "summary": "Revolutionary, then yogi. Integral yoga and an ashram on the Coromandel.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
       "id": "discovery-1876-bell-s-telephone",
       "year": 1876,
       "yearEnd": null,
@@ -2188,6 +2647,19 @@
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
+      "id": "saint-1879-ramana-maharshi",
+      "year": 1879,
+      "yearEnd": 1950,
+      "category": "saint",
+      "title": "Ramana Maharshi",
+      "place": "Tiruvannamalai, Tamil Nadu",
+      "lat": 12.23,
+      "lon": 79.07,
+      "summary": "Who am I? Silence as teaching at Arunachala.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
       "id": "calamity-1883-krakatoa-eruption",
       "year": 1883,
       "yearEnd": null,
@@ -2197,6 +2669,19 @@
       "lat": -6.1,
       "lon": 105.42,
       "summary": "The bang is heard thousands of kilometres away. Global sunsets follow.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1884-swami-sivananda",
+      "year": 1884,
+      "yearEnd": 1963,
+      "category": "saint",
+      "title": "Swami Sivananda",
+      "place": "Rishikesh",
+      "lat": 30.12,
+      "lon": 78.31,
+      "summary": "Divine Life Society. A 20th-century exporter of yoga and Vedanta.",
       "traditional": false,
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
@@ -2240,6 +2725,45 @@
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
     {
+      "id": "saint-1893-chandrashekarendra-saraswati-kanchi-paramacharya",
+      "year": 1893,
+      "yearEnd": 1994,
+      "category": "saint",
+      "title": "Chandrashekarendra Saraswati (Kanchi Paramacharya)",
+      "place": "Kanchipuram",
+      "lat": 12.84,
+      "lon": 79.7,
+      "summary": "68th Shankaracharya of the Kanchi Kamakoti peetham in that matha's count.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "culture-1893-vivekananda-at-the-parliament-of-religions",
+      "year": 1893,
+      "yearEnd": null,
+      "category": "culture",
+      "title": "Vivekananda at the Parliament of Religions",
+      "place": "Chicago",
+      "lat": 41.87,
+      "lon": -87.62,
+      "summary": "Sisters and brothers of America. A Hindu monk on a world's-fair stage.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1896-anandamayi-ma",
+      "year": 1896,
+      "yearEnd": 1982,
+      "category": "saint",
+      "title": "Anandamayi Ma",
+      "place": "Kheora / Dehradun",
+      "lat": 23.95,
+      "lon": 91.11,
+      "summary": "Bengali woman saint. Devotees took her presence as the teaching.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
       "id": "culture-1896-first-modern-olympic-games",
       "year": 1896,
       "yearEnd": null,
@@ -2249,6 +2773,19 @@
       "lat": 37.97,
       "lon": 23.72,
       "summary": "Coubertin's revival, with ancient costume and modern nations.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "culture-1897-ramakrishna-mission-founded",
+      "year": 1897,
+      "yearEnd": null,
+      "category": "culture",
+      "title": "Ramakrishna Mission founded",
+      "place": "Belur Math, Bengal",
+      "lat": 22.63,
+      "lon": 88.35,
+      "summary": "Vivekananda's order: service as worship.",
       "traditional": false,
       "source": "Standard historical chronology; traditional religious dates flagged."
     },
@@ -2340,6 +2877,19 @@
       "lat": 49.97,
       "lon": 2.3,
       "summary": "Industrial slaughter. Empires die; the influenza is coming.",
+      "traditional": false,
+      "source": "Standard historical chronology; traditional religious dates flagged."
+    },
+    {
+      "id": "saint-1916-swami-chinmayananda",
+      "year": 1916,
+      "yearEnd": 1993,
+      "category": "saint",
+      "title": "Swami Chinmayananda",
+      "place": "Ernakulam / Mumbai",
+      "lat": 9.97,
+      "lon": 76.28,
+      "summary": "Chinmaya Mission. Gita classes for a middle-class republic.",
       "traditional": false,
       "source": "Standard historical chronology; traditional religious dates flagged."
     },

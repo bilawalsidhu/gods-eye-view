@@ -2,6 +2,7 @@ const COLORS = {
   calamity: '#ff6b4a',
   war: '#ff4d6d',
   prophet: '#c77dff',
+  saint: '#f4a261',
   birth: '#80ed99',
   death: '#adb5bd',
   discovery: '#00d4ff',
