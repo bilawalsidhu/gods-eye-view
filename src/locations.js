@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { viewportBias, placesNearViewRecovery } from './annotations/annotationResolver.js';
+import { forwardGeocode } from './searchProviders.js';
 
 /**
  * Points of Interest per city.
@@ -347,32 +348,33 @@ export const CANCELLED_SEARCH = Object.freeze({ cancelled: true });
  * default; precise landmarks/buildings use close landmark framing.
  */
 export async function searchAndFlyTo(viewer, query, options = {}) {
-  const apiKey = window.__GOOGLE_MAPS_API_KEY__ || import.meta.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) throw new Error('No Google Maps API key available for geocoding');
-
   const beforeFly = typeof options.beforeFly === 'function' ? options.beforeFly : null;
   const mayFly = () => beforeFly === null || beforeFly() !== false;
 
-  // Viewport-biased geocode — the same bias annotationResolver's geocodePlace uses:
-  // "Sixth Street" spoken over Austin must prefer the Sixth Street on screen, not a
-  // same-named road in another city (or the wrong end of town — the W 6th vs E 6th bug).
-  let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
-  const bias = viewportBias(viewer);
-  if (bias) url += `&bounds=${bias}`;
-  const response = await fetch(url);
-  const data = await response.json();
-
-  const result = (data.status === 'OK' && data.results?.length) ? data.results[0] : null;
-  let lat = result?.geometry.location.lat;
-  let lng = result?.geometry.location.lng;
-  let label = result ? result.formatted_address : null;
+  // Preserve Google when configured; otherwise use keyless OpenStreetMap
+  // Nominatim. Provider results are normalised to the camera-framing vocabulary
+  // this function already understands.
+  const result = await forwardGeocode(query, {
+    biasRect: viewportBias(viewer),
+    signal: options.signal,
+  });
+  let lat = result?.lat;
+  let lng = result?.lon;
+  let label = result?.label || null;
   let types = result?.types || [];
-  let viewport = result ? (result.geometry.bounds || result.geometry.viewport) : null;
+  let viewport = result?.viewport || null;
 
   // Places-near-view recovery (annotationResolver's twin): a missed geocode, or one
   // that landed implausibly far from the view centre, snaps back to a view-biased
   // Places hit within the trust bound — "the Capitol" means the one on screen.
-  const recovered = await placesNearViewRecovery(viewer, query, result ? { lat, lon: lng } : null);
+  // This MUST run even when geocoding misses entirely: that is the normal
+  // Nominatim -> Foursquare fallback path for POIs that are not in OSM.
+  const recovered = await placesNearViewRecovery(
+    viewer,
+    query,
+    result ? { lat, lon: lng } : null,
+    options.signal,
+  );
   if (recovered) {
     lat = recovered.lat;
     lng = recovered.lon;

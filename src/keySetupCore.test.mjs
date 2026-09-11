@@ -35,6 +35,18 @@ test('the boot provenance snapshot survives in-process Vite config re-evaluation
   );
 });
 
+test('a provider added after the boot snapshot is treated as store-owned, not external', () => {
+  // During hot development the registry can gain a provider after the global
+  // boot snapshot was first created. A missing property is undefined, not proof
+  // that the credential came from the shell; normalise it to blank before the
+  // external-ownership comparison.
+  const source = readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
+  assert.match(
+    source,
+    /String\(PROVIDER_ENV_AT_BOOT\[name\] \?\? ''\)\.trim\(\) !== ''/,
+  );
+});
+
 test('external ownership uses boot provenance even when store and shell values match', () => {
   assert.equal(isKeySetupExternallyManaged({
     effectiveValue: 'same-value',

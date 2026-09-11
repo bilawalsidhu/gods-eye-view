@@ -18,8 +18,10 @@ npm run doctor
 
 No key is required to start: the app boots on keyless Esri World Imagery with
 keyless terrain, and OSM takes over automatically if Esri is unreachable.
-Google Maps provides direct photorealistic 3D and place search; Cesium ion
-provides ion-hosted Google 3D plus optional Bing/world-terrain stacks.
+Google Maps provides direct photorealistic 3D and Google-backed place search;
+keyless search uses OpenStreetMap Nominatim, with optional Foursquare Places
+for POI/venue lookup. Cesium ion provides ion-hosted Google 3D plus optional
+Bing/world-terrain stacks.
 On macOS the launcher pulls optional keys from
 the Keychain; on any platform you can pass them as env vars or use a `.env`.
 People who only want to run the app can instead install the repository directly
