@@ -298,6 +298,8 @@ const LEFT_STACK_OBSTACLE_SELECTOR = [
   '#intel-hud .hud-right-edge',
   '#cockpit-context',
   '#cesium-credits .cesium-credit-logoContainer',
+  // The live news dock sits in the left lane; the accordion stops above it.
+  '#news-dock',
   '#cesium-credits .cesium-credit-textContainer',
   '#location-bar',
   '#control-panel',
@@ -2626,6 +2628,7 @@ export class StyleManager {
     this._initLocationBar();
     this._initShareButton();
     this._initClearSelectedLayersButton();
+    this._initNewsDockDrag();
     this._initResetGlobeButton();
     this._initHUDToggle();
     this._initModels3dToggle();
@@ -3358,6 +3361,7 @@ export class StyleManager {
         this._syncShareState();
       }
       if (e.key.toLowerCase() === 'o') this._toggleOrbit();
+      if (e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey) window.__gevNews?.toggle();
       if (e.key.toLowerCase() === 'v') this.toggleCleanView();
       if (e.key.toLowerCase() === 'f') {
         document.getElementById('data-panel').classList.toggle('active');
@@ -9617,6 +9621,15 @@ export class StyleManager {
     for (const button of [this._resetGlobeBtn, this._cockpitResetGlobeBtn]) {
       button?.addEventListener('click', this._globeResetHandler);
     }
+  }
+
+  /** Live news dock: draggable by its header, position persisted. */
+  _initNewsDockDrag() {
+    const dock = document.getElementById('news-dock');
+    const handle = dock?.querySelector('.news-head');
+    if (!dock || !handle) return;
+    this._restorePanelPosition('news-dock', dock);
+    this._makePanelDraggable('news-dock', dock, handle);
   }
 
   /** Wire the top-center action that clears only manager-owned data layers. */

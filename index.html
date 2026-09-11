@@ -43,6 +43,9 @@
     <button id="share-btn" type="button" aria-label="Copy share link" title="Copy share link">
       <span class="share-icon" aria-hidden="true">&#x1F517;</span>
     </button>
+    <button id="news-toggle" type="button" aria-label="Toggle live news dock" aria-pressed="false" title="Live news streams (N)">
+      <span class="material-symbols-outlined" aria-hidden="true">live_tv</span>
+    </button>
     <button id="reset-globe-view" type="button" aria-label="Reset to full globe view" title="Reset camera and return to full globe view">
       <span class="material-symbols-outlined" aria-hidden="true">public</span>
     </button>
@@ -59,6 +62,21 @@
     <span id="cctv-sync-label">loading frames</span>
     <span id="cctv-sync-progress">0/0</span>
   </div>
+
+  <!-- Live news dock (local fork): tab strip + one embedded YouTube live player -->
+  <aside id="news-dock" class="panel-draggable" hidden aria-label="Live news">
+    <div class="news-head">
+      <span class="news-title"><span class="news-live-dot" aria-hidden="true"></span>LIVE NEWS</span>
+      <span class="news-actions">
+        <button class="news-popout" type="button" title="Open on YouTube"><span class="material-symbols-outlined" aria-hidden="true">open_in_new</span></button>
+        <button class="news-close" type="button" title="Close (N)"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+      </span>
+    </div>
+    <div class="news-tabs" role="tablist"></div>
+    <div class="news-player">
+      <iframe title="Live news stream" src="about:blank" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+    </div>
+  </aside>
 
   <!-- Toast notification -->
   <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>

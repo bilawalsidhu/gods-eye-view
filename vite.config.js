@@ -5385,6 +5385,56 @@ export function keylessGooglePlacesResponse(apiKey) {
 }
 
 /**
+ * Live-stream resolver for the news dock.
+ *
+ * YouTube's `embed/live_stream?channel=` only resolves a channel's ONE
+ * designated live; channels running several simultaneous streams (NBC, ABC,
+ * LiveNOW, Fox, CNN) answer "Video unavailable". The channel's /live page
+ * always carries the current live in its canonical `watch?v=` link, so this
+ * resolves that id server-side and the dock embeds the video directly.
+ *
+ * GET /api/news/live?channel=<channelId> → { videoId, isLive, title } (10 min cache)
+ */
+export function newsLiveResolver() {
+  const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36';
+  const TTL_MS = 10 * 60 * 1000;
+  const cache = new Map();
+  return {
+    name: 'gev-news-live-resolver',
+    configureServer(server) {
+      server.middlewares.use('/api/news/live', async (req, res) => {
+        const json = (statusCode, body) => {
+          res.statusCode = statusCode;
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Cache-Control', 'no-store');
+          res.end(JSON.stringify(body));
+        };
+        const channel = String(new URL(req.url || '', 'http://localhost').searchParams.get('channel') || '');
+        if (!/^UC[\w-]{22}$/.test(channel)) return json(400, { error: 'channel must be a YouTube channel id' });
+        const hit = cache.get(channel);
+        if (hit && hit.expires > Date.now()) return json(200, hit.body);
+        try {
+          const page = await fetch(`https://www.youtube.com/channel/${channel}/live`, {
+            headers: { 'User-Agent': UA, 'Accept-Language': 'en', Cookie: 'CONSENT=YES+1' },
+            signal: AbortSignal.timeout(12_000),
+            redirect: 'follow',
+          });
+          const html = await page.text();
+          const videoId = html.match(/<link rel="canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([\w-]{11})"/)?.[1] || null;
+          const isLive = /"isLive":true/.test(html);
+          const title = (html.match(/<title>([^<]*)<\/title>/)?.[1] || '').replace(/ - YouTube$/, '');
+          const body = { channel, videoId, isLive, title };
+          cache.set(channel, { body, expires: Date.now() + TTL_MS });
+          json(200, body);
+        } catch (error) {
+          json(502, { error: error?.message || 'resolver failed' });
+        }
+      });
+    },
+  };
+}
+
+/**
  * Vite plugin: nearby Google place labels for Realtime scene context.
  *
  * The Photorealistic 3D Tiles mesh does not expose rendered map labels as
@@ -7759,6 +7809,7 @@ export default defineConfig(({ mode }) => {
       trackBackfillProxies(),
       openAiRealtimeProxy(),
       googlePlacesContextProxy(),
+      newsLiveResolver(),
       keySetupEndpoint(),
     ],
     server: {

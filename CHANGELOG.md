@@ -5,6 +5,17 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- Live news dock. Press `N` or the top-center TV button to open a panel with
+  a tab strip of broadcast channels (Al Jazeera, Sky News, DW, France 24, TRT
+  World, Euronews, ABC, CBS, NBC, Bloomberg, LiveNOW from FOX, Fox News, CNN,
+  Reuters, WION, Al Jazeera Arabic, NASA ISS) and one embedded YouTube live
+  player. The dev server resolves each channel's current live video id, so
+  channels that run several streams at once play instead of showing
+  "Video unavailable". The dock drags by its header, remembers its position
+  and last channel, and the left accordion stops above it. No key needed.
+
 ### Fixed
 
 - Mapped-site outages show their scheduled retry countdown and distinguish
