@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createRadioProxyMiddleware } from '../../vite.config.js';
 import {
-  createRadioProxyMiddleware,
   isPublicRadioAddress,
   normalizeRadioBrowserStation,
   publicRadioStation,
   publicRadioHttpsUrl,
-} from '../../vite.config.js';
+} from '../../functions/api/radio/_broker.js';
 import { rankRadioStationsForRequest } from './radio.js';
 
 const UUID = '12345678-1234-4234-8234-123456789abc';
