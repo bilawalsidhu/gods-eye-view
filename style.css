@@ -8983,6 +8983,43 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   background: rgba(255, 196, 107, 0.12);
 }
 
+/* #52: radio-to-voice-model capture toggle — same chrome as the tier button,
+   green (not amber) so it never reads as the same control at a glance. */
+.gev-voice-radio-capture-btn {
+  padding: 0 0.2rem;
+  height: 0.72rem;
+  min-width: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 212, 255, 0.06);
+  border: 1px solid rgba(0, 212, 255, 0.34);
+  border-radius: 0.18rem;
+  font-size: 0.4rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: color var(--transition-fast), border-color var(--transition-fast),
+    background var(--transition-fast), opacity var(--transition-fast);
+}
+
+.gev-voice-radio-capture-btn:hover {
+  opacity: 0.85;
+  border-color: rgba(0, 212, 255, 0.6);
+}
+
+.gev-voice-radio-capture-btn[aria-pressed='true'] {
+  border-color: rgba(120, 230, 150, 0.55);
+  background: rgba(120, 230, 150, 0.12);
+  opacity: 0.85;
+}
+
+/* Actually confirmed reaching the model (not just enabled) — solid instead of dim. */
+.gev-voice-radio-capture-btn.gev-radio-capture-live {
+  opacity: 1;
+  background: rgba(120, 230, 150, 0.22);
+}
+
 .gev-voice-cost-value {
   color: var(--text-dim);
   font-family: var(--font-mono);

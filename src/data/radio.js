@@ -194,6 +194,17 @@ let _tuningNoiseSource = null;
 let _tuningNoiseFilter = null;
 let _tuningNoiseGain = null;
 let _voiceDucked = false;
+// Whether newly INSTALLED <audio> elements should request CORS mode, so the
+// voice controller can tap their output via Web Audio (#52). Applied only at
+// element construction, never by mutating a live element: flipping crossOrigin
+// on an already-loading stream doesn't retroactively fix already-buffered
+// bytes, and forcing a reload mid-playback would fight `tryRadioFallback`'s
+// own retry logic (a station that simply lacks CORS would look like an
+// outage and get swapped for a fallback the user never asked for). So this is
+// "applies next station" — same precedent as the voice tier's "applies next
+// session" — set via `setRadioVoiceCaptureMode`, never read from storage here
+// (radio.js doesn't own that preference; gevRealtime.js does).
+let _voiceCaptureMode = false;
 let _voiceRestoring = false;
 let _voiceRestoreTimer = null;
 let _volumeFadeFrame = null;
@@ -1297,6 +1308,9 @@ function installAudio({ replace = false } = {}) {
   }
   const audio = new Audio();
   _audio = audio;
+  // Must be set before `.src` (elsewhere) ever is — crossOrigin only affects
+  // the fetch mode of loads that happen AFTER it's set.
+  if (_voiceCaptureMode) audio.crossOrigin = 'anonymous';
   audio.preload = 'none';
   audio.volume = _voiceDucked ? 0 : _userVolume;
   audio.addEventListener('playing', () => {
@@ -2016,6 +2030,20 @@ export function setRadioParams(params = {}) {
 
 export function getRadioParams() {
   return { filter: _filter, volume: _userVolume };
+}
+
+/**
+ * Arms/disarms CORS mode for future `<audio>` elements (#52's voice-capture
+ * toggle). Never touches the CURRENT element — see `_voiceCaptureMode`'s
+ * comment for why a live reload isn't done here. Idempotent.
+ */
+export function setRadioVoiceCaptureMode(enabled) {
+  _voiceCaptureMode = Boolean(enabled);
+}
+
+/** The live `<audio>` element, for the voice controller's Web Audio tap. Never null-checked by callers of THIS module otherwise — added solely for #52. */
+export function getRadioAudioElement() {
+  return _audio;
 }
 
 /**
@@ -2782,6 +2810,12 @@ export const radioLayer = {
     cancelRadioVolumeTransition();
     _voiceDucked = false;
     _voiceRestoring = false;
+    // _voiceCaptureMode is NOT reset here — unlike ducking (re-asserted
+    // continuously off live speaker state), it's a static preference owned by
+    // the voice controller (persisted in localStorage, mirrored in here via
+    // setRadioVoiceCaptureMode) with nothing that re-applies it after a
+    // destroy()/init() cycle. Clearing it here would silently desync Radio
+    // from a still-enabled #52 toggle until the user next clicks it.
     endRadioTuning();
     const closedTuningNoise = _tuningNoiseContext?.close?.();
     if (closedTuningNoise?.catch) void closedTuningNoise.catch(() => {});
@@ -2871,6 +2905,8 @@ export const radioLayer = {
   stopPlayback: stopRadioPlayback,
   setVolume: setRadioVolume,
   setVoiceDucked: setRadioVoiceDucking,
+  setVoiceCaptureMode: setRadioVoiceCaptureMode,
+  getAudioElement: getRadioAudioElement,
 };
 
 export default radioLayer;

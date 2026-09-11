@@ -113,12 +113,48 @@ export function writeStoredVoiceLimits(limits, storage) {
   return normalized;
 }
 
-/** Return whether a voice transition should pause Radio playback. */
+const RADIO_TO_VOICE_STORAGE_KEY = 'godsEyeView.voice.radioToVoiceEnabled';
+
+/**
+ * Read the persisted radio-to-voice-model capture preference (#52). Off by
+ * default — this is the one voice setting that sends third-party broadcast
+ * audio to the realtime API, so it is never inferred, only explicit opt-in.
+ */
+export function readStoredRadioToVoiceEnabled(storage) {
+  try {
+    return voiceStorage(storage)?.getItem(RADIO_TO_VOICE_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Persist the radio-to-voice-model capture preference. Never throws. */
+export function writeStoredRadioToVoiceEnabled(enabled, storage) {
+  const next = Boolean(enabled);
+  try {
+    voiceStorage(storage)?.setItem(RADIO_TO_VOICE_STORAGE_KEY, next ? '1' : '0');
+  } catch {
+    /* best effort */
+  }
+  return next;
+}
+
+/**
+ * Return whether a voice transition should pause Radio playback.
+ *
+ * `radioToVoiceEnabled` short-circuits this to always-false: once the user has
+ * opted Radio audio INTO the voice model's input, pausing/ducking Radio the
+ * instant voice becomes active would defeat the entire point of #52 (there
+ * would be nothing left for the model to hear). The mutually-exclusive
+ * default behavior below is unchanged when the toggle is off.
+ */
 export function shouldPauseRadioForVoice({
   status = 'idle',
   speaker = 'idle',
   pushToTalkKeyHeld = false,
+  radioToVoiceEnabled = false,
 } = {}) {
+  if (radioToVoiceEnabled) return false;
   return status === 'connecting'
     || status === 'executing'
     || speaker === 'user'
@@ -220,6 +256,10 @@ export function initGevVoiceCommands({ viewer, styleManager, dataManager, sceneD
     controller.tierHandler = () => controller.toggleVoiceTier();
     ui.tierButton.addEventListener('click', controller.tierHandler);
   }
+  if (ui.radioCaptureButton) {
+    controller.radioCaptureHandler = () => controller.setRadioToVoiceEnabled(!controller.radioToVoiceEnabled);
+    ui.radioCaptureButton.addEventListener('click', controller.radioCaptureHandler);
+  }
   controller.syncCostUi();
   controller.bindPushToTalkShortcut();
   window.__gevVoiceCommands = controller;
@@ -233,6 +273,26 @@ export class GevRealtimeController {
     this.radioLayer = radioLayer;
     this.dataManager = dataManager;
     this.radioVoiceDucked = false;
+    // #52: route the tuned Radio station's audio into the voice model. Off by
+    // default, persisted like the neighbouring voice-cost settings below.
+    // `_radioVoiceContext`/`_radioVoiceElSourceByEl` are controller-lifetime
+    // (see `_ensureRadioVoiceContext` for why); `_radioVoiceMix` is the
+    // per-SESSION mic-source+destination half, rebuilt each start() and torn
+    // down in stop(). `_radioVoiceCaptureStatus` is the last-known honest
+    // answer to "is audio actually reaching the model", never just "is the
+    // toggle on" (see `getRadioVoiceCaptureStatus`).
+    this.radioToVoiceEnabled = readStoredRadioToVoiceEnabled();
+    this._radioVoiceContext = null;
+    this._radioVoiceElSourceByEl = null;
+    // The one element currently `.connect()`-ed to `context.destination` (the
+    // shared speaker route — see `_ensureRadioVoiceCaptureTap`). Tracked
+    // separately from `_radioVoiceMix.connectedEl` because the speaker route
+    // exists even with no live session, and must be explicitly severed from
+    // a stale element on station change or that element's node (and the
+    // silent, abandoned `<audio>` it wraps) leaks for the controller's life.
+    this._radioVoiceSpeakerEl = null;
+    this._radioVoiceMix = null;
+    this._radioVoiceCaptureStatus = { capturing: false, reason: 'idle' };
     this.pc = null;
     this.dc = null;
     this.stream = null;
@@ -295,6 +355,14 @@ export class GevRealtimeController {
         this.stop({ preserveRadioPlayback: true });
       }
     }) || null;
+    // #52: re-tap the Radio <audio> element whenever its state changes (station
+    // switch, restart after error) — Radio installs a brand-new element on most
+    // of those, which invalidates whatever we last connected via
+    // createMediaElementSource. No-ops when capture is off or no session is live.
+    this.radioStateUnsubscribe = this.radioLayer?.subscribe?.(
+      () => this._onRadioStateChangedForVoice(),
+    ) || null;
+    this.radioLayer?.setVoiceCaptureMode?.(this.radioToVoiceEnabled);
     this.radioVisibilityRequestUnsubscribe = this.dataManager?.subscribeVisibilityRequests?.((change) => {
       if (
         change?.layerId === 'radio'
@@ -450,6 +518,10 @@ export class GevRealtimeController {
         });
       };
       this.stream.getTracks().forEach((track) => this.pc.addTrack(track, this.stream));
+      // #52: if the capture toggle is already on (persisted from a prior
+      // session), route Radio into the outbound track from the start instead
+      // of waiting for a later explicit setRadioToVoiceEnabled() call.
+      this._applyRadioVoiceRouting();
 
       const dataChannel = this.pc.createDataChannel('oai-events');
       this.dc = dataChannel;
@@ -890,6 +962,12 @@ export class GevRealtimeController {
     } else {
       this.stopVoiceVisualizer();
     }
+    // Session-scoped half only — NOT the shared context/speaker link, which
+    // must outlive this session (see `_ensureRadioVoiceContext`). Every stop()
+    // ends the mic stream that fed the session mix, so that half is equally
+    // dead regardless of `removeUi`.
+    this._teardownRadioVoiceSessionMix();
+    this._radioVoiceCaptureStatus = { capturing: false, reason: 'idle' };
     if (this.audioEl) {
       this.audioEl.remove();
       this.audioEl = null;
@@ -921,6 +999,10 @@ export class GevRealtimeController {
       this.ui.tierButton.removeEventListener('click', this.tierHandler);
       this.tierHandler = null;
     }
+    if (removeUi && this.ui?.radioCaptureButton && this.radioCaptureHandler) {
+      this.ui.radioCaptureButton.removeEventListener('click', this.radioCaptureHandler);
+      this.radioCaptureHandler = null;
+    }
     if (removeUi) {
       if (this.shortcutKeyDownHandler) document.removeEventListener('keydown', this.shortcutKeyDownHandler, true);
       if (this.shortcutKeyUpHandler) document.removeEventListener('keyup', this.shortcutKeyUpHandler, true);
@@ -951,6 +1033,15 @@ export class GevRealtimeController {
       this.radioVisibilityUnsubscribe();
       this.radioVisibilityUnsubscribe = null;
     }
+    if (removeUi && this.radioStateUnsubscribe) {
+      this.radioStateUnsubscribe();
+      this.radioStateUnsubscribe = null;
+    }
+    // Full re-init only (e.g. HMR/duplicate init guard) — a plain stop() must
+    // never reach this, or a still-tuned station goes silent (see
+    // `_ensureRadioVoiceContext`). The replacement controller does not
+    // proactively re-tap; it re-engages on its own next relevant trigger.
+    if (removeUi) this._teardownRadioVoiceContext();
     if (removeUi && this.ui?.root) {
       this.ui.root.remove();
     }
@@ -1521,7 +1612,11 @@ export class GevRealtimeController {
     if (status === 'idle' || status === 'connecting' || status === 'error') {
       this.setVoiceSpeaker('idle');
     }
-    if (shouldPauseRadioForVoice({ status, pushToTalkKeyHeld: this.pushToTalkKeyHeld })) {
+    if (shouldPauseRadioForVoice({
+      status,
+      pushToTalkKeyHeld: this.pushToTalkKeyHeld,
+      radioToVoiceEnabled: this.radioToVoiceEnabled,
+    })) {
       this.pauseRadioForVoice();
     }
   }
@@ -1549,7 +1644,10 @@ export class GevRealtimeController {
       keepVisualizerSpeaker,
     );
     this.ui.root.dataset.speaker = nextSpeaker;
-    if (shouldPauseRadioForVoice({ speaker: nextSpeaker })) this.pauseRadioForVoice();
+    if (shouldPauseRadioForVoice({
+      speaker: nextSpeaker,
+      radioToVoiceEnabled: this.radioToVoiceEnabled,
+    })) this.pauseRadioForVoice();
   }
 
   /** Pause Radio for explicit voice ownership; never resumes it automatically. */
@@ -1565,6 +1663,201 @@ export class GevRealtimeController {
     if (next === this.radioVoiceDucked) return;
     this.radioVoiceDucked = next;
     this.radioLayer?.setVoiceDucked?.(next);
+  }
+
+  /**
+   * Turns Radio→voice-model audio capture on/off (#52). Persists the choice
+   * and, if a session is live, applies it immediately via `replaceTrack` — no
+   * renegotiation needed. Radio's OWN crossOrigin mode only applies to the
+   * NEXT station it installs (see `setRadioVoiceCaptureMode` in radio.js), so
+   * flipping this while a station is already playing takes full effect the
+   * next time a station is (re)tuned, matching the existing "applies next
+   * session" pattern used for the voice tier.
+   * @param {boolean} enabled
+   * @returns {{enabled: boolean, capturing: boolean, reason: string}}
+   */
+  setRadioToVoiceEnabled(enabled) {
+    this.radioToVoiceEnabled = writeStoredRadioToVoiceEnabled(enabled);
+    this.radioLayer?.setVoiceCaptureMode?.(this.radioToVoiceEnabled);
+    this._applyRadioVoiceRouting();
+    this.syncCostUi();
+    return this.getRadioVoiceCaptureStatus();
+  }
+
+  /**
+   * Honest current capture state for UI/status readouts — whether audio is
+   * ACTUALLY reaching the model right now, not just whether the toggle is on.
+   * `reason` values: 'idle' (no session), 'disabled', 'no-station-playing',
+   * 'applies-next-station' (a station is playing but was installed before the
+   * toggle was last turned on, so it isn't in CORS mode), 'ok' (connected;
+   * the underlying stream may still be silent if its server never sends CORS
+   * headers at all — that can't be distinguished from network-side silence
+   * without live signal analysis, which this pass doesn't add).
+   * @returns {{enabled: boolean, capturing: boolean, reason: string}}
+   */
+  getRadioVoiceCaptureStatus() {
+    return { ...this._radioVoiceCaptureStatus, enabled: this.radioToVoiceEnabled };
+  }
+
+  _onRadioStateChangedForVoice() {
+    if (!this.radioToVoiceEnabled || !this.pc) return;
+    this._ensureRadioVoiceCaptureTap();
+    this.syncCostUi();
+  }
+
+  /**
+   * Swaps the outbound WebRTC audio track between the plain mic track and the
+   * mic+radio mix, via `RTCRtpSender.replaceTrack` (no renegotiation).
+   */
+  _applyRadioVoiceRouting() {
+    const sender = this.pc?.getSenders?.().find((candidate) => candidate.track?.kind === 'audio');
+    if (!sender || !this.stream) {
+      this._radioVoiceCaptureStatus = { capturing: false, reason: 'idle' };
+      return;
+    }
+    if (!this.radioToVoiceEnabled) {
+      const micTrack = this.stream.getAudioTracks()[0] || null;
+      if (micTrack && sender.track !== micTrack) sender.replaceTrack(micTrack).catch(() => {});
+      this._teardownRadioVoiceSessionMix();
+      this._radioVoiceCaptureStatus = { capturing: false, reason: 'disabled' };
+      return;
+    }
+    const mix = this._ensureRadioVoiceSessionMix();
+    if (!mix) {
+      this._radioVoiceCaptureStatus = { capturing: false, reason: 'audio-graph-unavailable' };
+      return;
+    }
+    this._ensureRadioVoiceCaptureTap();
+    const mixTrack = mix.dest.stream.getAudioTracks()[0];
+    if (mixTrack && sender.track !== mixTrack) sender.replaceTrack(mixTrack).catch(() => {});
+  }
+
+  /**
+   * Lazily creates the ONE AudioContext this controller ever uses for #52,
+   * plus the WeakMap caching each Radio `<audio>` element's source node.
+   *
+   * Both are controller-lifetime, NOT per-voice-session, for a hard Web Audio
+   * constraint: `createMediaElementSource(el)` may be called at most ONCE per
+   * element for its entire life (a second call throws `InvalidStateError`,
+   * even from a different, fresh context), and the moment it succeeds, that
+   * element STOPS playing through its normal output — it plays ONLY through
+   * whatever the resulting node is `.connect()`-ed to, permanently, until the
+   * element itself is replaced. So closing this context (or dropping the
+   * cache) the instant a voice session ends would silently mute the user's
+   * Radio the moment their first capture-enabled session stopped. This is
+   * torn down only on full controller teardown (`removeUi`), never on stop().
+   */
+  _ensureRadioVoiceContext() {
+    if (this._radioVoiceContext && this._radioVoiceContext.state !== 'closed') return this._radioVoiceContext;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    const context = new AudioContextClass();
+    context.resume().catch(() => {});
+    this._radioVoiceContext = context;
+    this._radioVoiceElSourceByEl = new WeakMap();
+    this._radioVoiceSpeakerEl = null;
+    return context;
+  }
+
+  /** Lazily (re)builds the per-SESSION half of the mixer: mic source + WebRTC-bound destination, both scoped to the current `this.stream`. */
+  _ensureRadioVoiceSessionMix() {
+    if (this._radioVoiceMix && this._radioVoiceMix.stream === this.stream) return this._radioVoiceMix;
+    this._teardownRadioVoiceSessionMix();
+    const context = this._ensureRadioVoiceContext();
+    if (!context || !this.stream) return null;
+    try {
+      const micSource = context.createMediaStreamSource(this.stream);
+      const dest = context.createMediaStreamDestination();
+      micSource.connect(dest);
+      this._radioVoiceMix = { stream: this.stream, dest, micSource, connectedEl: null };
+      return this._radioVoiceMix;
+    } catch (error) {
+      console.warn('[GEV voice] radio-to-voice audio graph unavailable:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Connects (or reconnects, after Radio installs a new element for a station
+   * change) the currently tuned station's audio into BOTH the persistent
+   * speaker output and, if a session is live, this session's mix. Runs
+   * whenever Radio's state changes while the toggle is on, not just at
+   * session start — see `_onRadioStateChangedForVoice`.
+   */
+  _ensureRadioVoiceCaptureTap() {
+    const context = this._ensureRadioVoiceContext();
+    if (!context) {
+      this._radioVoiceCaptureStatus = { capturing: false, reason: 'audio-graph-unavailable' };
+      return;
+    }
+    const el = this.radioLayer?.getAudioElement?.() || null;
+    const mix = this._radioVoiceMix;
+    if (!el) {
+      this._radioVoiceCaptureStatus = { capturing: false, reason: 'no-station-playing' };
+      return;
+    }
+    let source = this._radioVoiceElSourceByEl.get(el);
+    if (!source) {
+      if (el.crossOrigin !== 'anonymous') {
+        // Installed before the toggle was last turned on — tapping it now
+        // would only capture browser-tainted silence, not the real stream.
+        this._radioVoiceCaptureStatus = { capturing: false, reason: 'applies-next-station' };
+        return;
+      }
+      try {
+        source = context.createMediaElementSource(el);
+        this._radioVoiceElSourceByEl.set(el, source);
+      } catch (error) {
+        this._radioVoiceCaptureStatus = { capturing: false, reason: 'capture-blocked' };
+        return;
+      }
+    }
+    if (this._radioVoiceSpeakerEl !== el) {
+      // The outgoing element is already paused/abandoned by Radio (station
+      // change installs a fresh element) — safe to fully sever it from the
+      // shared speaker destination so its node (and the element it holds
+      // alive per the Web Audio spec) can actually be garbage collected,
+      // instead of leaking one permanently-live pair per station change.
+      if (this._radioVoiceSpeakerEl) {
+        const outgoing = this._radioVoiceElSourceByEl.get(this._radioVoiceSpeakerEl);
+        try { outgoing?.disconnect(context.destination); } catch { /* already disconnected */ }
+      }
+      // PERMANENT (until superseded) — see `_ensureRadioVoiceContext`.
+      try { source.connect(context.destination); } catch { /* already connected */ }
+      this._radioVoiceSpeakerEl = el;
+    }
+    if (mix && mix.connectedEl !== el) {
+      if (mix.connectedEl) {
+        const stale = this._radioVoiceElSourceByEl.get(mix.connectedEl);
+        try { stale?.disconnect(mix.dest); } catch { /* already disconnected */ }
+      }
+      try { source.connect(mix.dest); } catch { /* connecting twice is harmless, but guard anyway */ }
+      mix.connectedEl = el;
+    }
+    this._radioVoiceCaptureStatus = mix
+      ? { capturing: true, reason: 'ok' }
+      : { capturing: false, reason: 'idle' };
+  }
+
+  /** Tears down only the per-SESSION half (mic source + this session's WebRTC destination). Never touches the shared context or the element→speaker link — see `_ensureRadioVoiceContext`. */
+  _teardownRadioVoiceSessionMix() {
+    const mix = this._radioVoiceMix;
+    this._radioVoiceMix = null;
+    if (!mix) return;
+    try { mix.micSource.disconnect(); } catch { /* no-op */ }
+    if (mix.connectedEl) {
+      const source = this._radioVoiceElSourceByEl?.get(mix.connectedEl);
+      try { source?.disconnect(mix.dest); } catch { /* no-op */ }
+    }
+  }
+
+  /** Full teardown, including the shared context — only for controller teardown (`removeUi`), never a plain stop(). */
+  _teardownRadioVoiceContext() {
+    this._teardownRadioVoiceSessionMix();
+    this._radioVoiceContext?.close?.().catch(() => {});
+    this._radioVoiceContext = null;
+    this._radioVoiceElSourceByEl = null;
+    this._radioVoiceSpeakerEl = null;
   }
 
   /**
@@ -1838,7 +2131,24 @@ export class GevRealtimeController {
    * session actually connected with). During a session those two can legitimately
    * disagree, which is exactly what "applies next session" means.
    */
+  /** Also syncs the #52 radio-capture button — same "refresh the voice dock's small status readouts" job as the cost/tier sync below, so it rides every existing call site instead of needing its own. */
   syncCostUi() {
+    if (this.ui?.radioCaptureButton) {
+      const capture = this.getRadioVoiceCaptureStatus();
+      this.ui.radioCaptureButton.setAttribute('aria-pressed', capture.enabled ? 'true' : 'false');
+      this.ui.radioCaptureButton.classList.toggle('gev-radio-capture-live', capture.capturing);
+      const reasonLabel = {
+        idle: 'no session',
+        disabled: 'off',
+        'no-station-playing': 'on — tune a station',
+        'applies-next-station': 'on — applies next time you tune a station',
+        'capture-blocked': "on — this station isn't sharing audio",
+        'audio-graph-unavailable': "on — browser doesn't support this",
+        ok: 'on — model can hear the station',
+      }[capture.reason] || capture.reason;
+      this.ui.radioCaptureButton.title =
+        `Let the voice model hear Radio (${reasonLabel}) — click to ${capture.enabled ? 'disable' : 'enable'}`;
+    }
     const state = this.costTracker.state();
     const pendingTier = resolveVoiceModel(this.voiceTier).tier;
     const isMini = pendingTier === 'mini';
@@ -2680,6 +2990,7 @@ function createVoiceControl({ reset = false } = {}) {
         <div id="gev-voice-status">OFF</div>
         <div class="gev-voice-cost">
           <button id="gev-voice-tier" class="gev-voice-tier-btn" type="button" aria-pressed="false" title="Voice model tier — applies next session">STD</button>
+          <button id="gev-voice-radio-capture" class="gev-voice-radio-capture-btn" type="button" aria-pressed="false" title="Let the voice model hear Radio">📻</button>
           <span id="gev-voice-cost-value" class="gev-voice-cost-value" data-level="ok" title="Estimated session cost">~$0.00</span>
         </div>
       </div>
@@ -2729,6 +3040,7 @@ function createVoiceControl({ reset = false } = {}) {
     helpDetail: root.querySelector('.gev-voice-help-detail'),
     errorDetail: root.querySelector('#gev-voice-error-detail'),
     tierButton: root.querySelector('#gev-voice-tier'),
+    radioCaptureButton: root.querySelector('#gev-voice-radio-capture'),
     costValue: root.querySelector('#gev-voice-cost-value'),
   };
 }

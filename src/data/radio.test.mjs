@@ -47,6 +47,8 @@ import {
   setRadioParams,
   setRadioVolume,
   setRadioVoiceDucking,
+  setRadioVoiceCaptureMode,
+  getRadioAudioElement,
   radioSingletonLabelLimit,
   radioViewIsGlobal,
   stationMatchesRadioCategory,
@@ -430,6 +432,57 @@ test('destroy and re-init reset Radio audio ownership, volume, filter, and telem
       oldAudio.listeners.get(eventName)?.();
       assert.deepEqual(getRadioUIState(), nextState, `discarded ${eventName} callback is inert`);
     }
+  } finally {
+    radioLayer.destroy();
+    if (originalAudio === undefined) delete globalThis.Audio;
+    else globalThis.Audio = originalAudio;
+  }
+});
+
+test('#52: voice-capture mode only arms crossOrigin on the NEXT installed element, never retroactively', async () => {
+  const originalAudio = globalThis.Audio;
+  const audioInstances = [];
+  globalThis.Audio = class FakeAudio {
+    constructor() {
+      this.crossOrigin = null;
+      this.volume = 0.8;
+      audioInstances.push(this);
+    }
+
+    addEventListener() {}
+    pause() {}
+    play() { return Promise.resolve(); }
+    removeAttribute() {}
+    load() {}
+  };
+  const viewer = {
+    camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
+    scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
+    dataSources: { add() {}, remove() {} },
+    entities: { add(entity) { return entity; }, remove() {} },
+  };
+  radioLayer.destroy();
+  try {
+    radioLayer.init(viewer);
+    radioLayer.enable();
+    const firstEl = audioInstances[0];
+    assert.equal(getRadioAudioElement(), firstEl);
+    assert.equal(firstEl.crossOrigin, null, 'off by default — no regression for existing stations');
+
+    setRadioVoiceCaptureMode(true);
+    assert.equal(firstEl.crossOrigin, null, 'flipping the toggle never mutates the LIVE element');
+
+    // A fresh install (re-init) is the next opportunity for the preference to apply.
+    radioLayer.destroy();
+    radioLayer.init(viewer);
+    const secondEl = audioInstances[1];
+    assert.equal(secondEl.crossOrigin, 'anonymous');
+    assert.equal(getRadioAudioElement(), secondEl);
+
+    setRadioVoiceCaptureMode(false);
+    radioLayer.destroy();
+    radioLayer.init(viewer);
+    assert.equal(audioInstances[2].crossOrigin, null, 'disabling likewise only applies to the next install');
   } finally {
     radioLayer.destroy();
     if (originalAudio === undefined) delete globalThis.Audio;

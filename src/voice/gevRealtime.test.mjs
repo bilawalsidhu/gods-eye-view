@@ -30,6 +30,8 @@ import {
   readStoredVoiceLimits,
   writeStoredVoiceTier,
   writeStoredVoiceLimits,
+  readStoredRadioToVoiceEnabled,
+  writeStoredRadioToVoiceEnabled,
 } from './gevRealtime.js';
 import { createVoiceCostTracker } from './voiceCost.js';
 
@@ -520,6 +522,74 @@ test('voice activation, speech, and push-to-talk pause Radio without an idle aut
   assert.equal(shouldPauseRadioForVoice({ status: 'listening' }), false);
   assert.equal(shouldPauseRadioForVoice({ status: 'idle' }), false);
   assert.equal(shouldPauseRadioForVoice({ status: 'error' }), false);
+});
+
+test('#52: radioToVoiceEnabled overrides every pause condition, never the reverse', () => {
+  assert.equal(shouldPauseRadioForVoice({ status: 'connecting', radioToVoiceEnabled: true }), false);
+  assert.equal(shouldPauseRadioForVoice({ status: 'executing', radioToVoiceEnabled: true }), false);
+  assert.equal(shouldPauseRadioForVoice({ speaker: 'user', radioToVoiceEnabled: true }), false);
+  assert.equal(shouldPauseRadioForVoice({ speaker: 'ai', radioToVoiceEnabled: true }), false);
+  assert.equal(shouldPauseRadioForVoice({ pushToTalkKeyHeld: true, radioToVoiceEnabled: true }), false);
+  // Toggle off (the default) must reproduce today's behavior exactly.
+  assert.equal(shouldPauseRadioForVoice({ status: 'connecting', radioToVoiceEnabled: false }), true);
+});
+
+/** Minimal fake Web Audio graph — just enough to observe connect/disconnect calls. */
+class FakeAudioNode {
+  constructor() {
+    this.connections = [];
+    this.disconnections = [];
+  }
+  connect(target) { this.connections.push(target); }
+  disconnect(target) { this.disconnections.push(target); }
+}
+class FakeAudioContext {
+  constructor() {
+    this.destination = { name: 'speakers' };
+    this.state = 'running';
+  }
+  resume() { return Promise.resolve(); }
+  close() { return Promise.resolve(); }
+  createMediaElementSource() { return new FakeAudioNode(); }
+  createMediaStreamSource() { return new FakeAudioNode(); }
+  createMediaStreamDestination() { return { stream: { getAudioTracks: () => [] } }; }
+}
+
+test('#52: station change disconnects the outgoing element from the speaker route (memory-leak regression)', () => {
+  const previousWindow = globalThis.window;
+  globalThis.window = { AudioContext: FakeAudioContext };
+  try {
+    let tunedEl = { crossOrigin: 'anonymous', id: 'station-a' };
+    const controller = new GevRealtimeController({
+      ui: {},
+      runner: async () => ({}),
+      radioLayer: { getAudioElement: () => tunedEl },
+    });
+
+    controller._ensureRadioVoiceCaptureTap();
+    const sourceA = controller._radioVoiceElSourceByEl.get(tunedEl);
+    const destination = controller._radioVoiceContext.destination;
+    assert.deepEqual(sourceA.connections, [destination], 'the tuned element must route to the speaker');
+
+    // Radio installs a fresh element for the new station; the old one is
+    // abandoned (this is what radio.js actually does on station change).
+    const stationB = { crossOrigin: 'anonymous', id: 'station-b' };
+    tunedEl = stationB;
+    controller._ensureRadioVoiceCaptureTap();
+    const sourceB = controller._radioVoiceElSourceByEl.get(stationB);
+
+    assert.deepEqual(sourceA.disconnections, [destination],
+      'the outgoing element must be severed from the speaker destination or its node (and the audio element it holds alive) leaks for the controller\'s life');
+    assert.deepEqual(sourceB.connections, [destination], 'the new element must take over the speaker route');
+
+    // A repeated tap for the SAME still-tuned element must not reconnect —
+    // only an actual station change should touch the graph.
+    controller._ensureRadioVoiceCaptureTap();
+    assert.equal(sourceB.connections.length, 1);
+    assert.equal(sourceA.disconnections.length, 1);
+  } finally {
+    globalThis.window = previousWindow;
+  }
 });
 
 test('successful Radio activation tools close voice after handing control to Radio', () => {
@@ -3044,6 +3114,33 @@ test('a storage that throws never breaks the mic', () => {
   assert.equal(readStoredVoiceTier(hostile), 'standard');
   assert.equal(writeStoredVoiceTier('mini', hostile), 'mini');
   assert.deepEqual(readStoredVoiceLimits(hostile), { warnUsd: 2, capUsd: 5 });
+});
+
+test('#52: radio-to-voice capture preference round-trips and defaults off', () => {
+  const storage = fakeVoiceStorage();
+  assert.equal(readStoredRadioToVoiceEnabled(storage), false, 'unset reads as off');
+  assert.equal(writeStoredRadioToVoiceEnabled(true, storage), true);
+  assert.equal(readStoredRadioToVoiceEnabled(storage), true);
+  assert.equal(writeStoredRadioToVoiceEnabled(false, storage), false);
+  assert.equal(readStoredRadioToVoiceEnabled(storage), false);
+  // Hand-edited garbage must never read back as enabled.
+  assert.equal(
+    readStoredRadioToVoiceEnabled(fakeVoiceStorage({ 'godsEyeView.voice.radioToVoiceEnabled': 'yes' })),
+    false,
+  );
+});
+
+test('#52: a storage that throws never breaks the mic', () => {
+  const hostile = {
+    getItem() {
+      throw new Error('SecurityError');
+    },
+    setItem() {
+      throw new Error('SecurityError');
+    },
+  };
+  assert.equal(readStoredRadioToVoiceEnabled(hostile), false);
+  assert.equal(writeStoredRadioToVoiceEnabled(true, hostile), true);
 });
 
 test('spend limits round-trip as one object', () => {

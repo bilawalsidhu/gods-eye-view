@@ -223,6 +223,14 @@ const OPTION_GROUPS = Object.freeze({
     booleanOption('showProjection', 'p', true),
     booleanOption('autoHop', 'a', false),
   ]),
+  // Two independently toggleable open-data raster overlays (#10) sharing one
+  // owner — same "one master row, several booleans" shape as `cctv`/`radio`
+  // above, not a new mechanism. Both default ON: switching the row on with
+  // nothing yet chosen would show nothing and read as broken.
+  osmOverlays: Object.freeze([
+    booleanOption('seamap', 's', true),
+    booleanOption('snowmap', 'n', true),
+  ]),
   radio: Object.freeze([
     Object.freeze({
       key: 'filter',
@@ -286,6 +294,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'military', token: 'm', disposition: 'enabled+mirrored-options', optionOwner: 'flights' }),
   Object.freeze({ id: 'military-awareness', token: 'g', disposition: 'enabled-only' }),
   Object.freeze({ id: 'military-installations', token: 'i', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'osm-overlays', token: 'j', disposition: 'enabled+options', optionOwner: 'osmOverlays' }),
   Object.freeze({ id: 'radio', token: 'r', disposition: 'enabled+options', optionOwner: 'radio' }),
   Object.freeze({ id: 'rocket-launches', token: 'x', disposition: 'enabled-only' }),
   Object.freeze({ id: 'satellites', token: 's', disposition: 'enabled+options', optionOwner: 'satellites' }),
