@@ -46,6 +46,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { defineConfig, loadEnv } from 'vite';
 import cesium from 'vite-plugin-cesium';
+import { trafficSignalsProxy } from './src/trafficSignalsProxy.js';
 import { normalizeRadioCountryInput } from './src/data/radioCountry.js';
 import {
   normalizeRegionalArticles,
@@ -5778,6 +5779,7 @@ const GEV_REALTIME_TOOLS = [
             'satellites',
             'rocket-launches',
             'traffic',
+            'traffic-signals',
             'cctv',
             'radio',
             'bikeshare',
@@ -5809,6 +5811,7 @@ const GEV_REALTIME_TOOLS = [
             'earthquakes',
             'satellites',
             'traffic',
+            'traffic-signals',
             'cctv',
             'radio',
             'bikeshare',
@@ -7748,6 +7751,7 @@ export default defineConfig(({ mode }) => {
       terrainHeightsProxy(),
       adsbdbProxy(),
       overpassProxy(),
+      trafficSignalsProxy(env),
       militaryInstallationsProxy(),
       regionalBriefProxy(),
       weatherEffectsProxy(),

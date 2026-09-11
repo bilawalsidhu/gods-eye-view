@@ -26,6 +26,12 @@ import * as Cesium from 'cesium';
  * @type {{ key: string, html: string }[]}
  */
 export const DATA_CREDITS = [
+  {
+    key: 'hamburg-traffic-signals',
+    html: 'Traffic-light reports: Freie und Hansestadt Hamburg, zuständige Behörde · '
+      + '<a href="https://suche.transparenz.hamburg.de/dataset/traffic-lights-data-hamburg" target="_blank" rel="noopener">Traffic Lights Data Hamburg</a> '
+      + '(<a href="https://www.govdata.de/dl-de/by-2-0" target="_blank" rel="noopener">Datenlizenz Deutschland Namensnennung 2.0</a>)',
+  },
   // ── Live sources ────────────────────────────────────────────────
   {
     key: 'opensky',
@@ -69,7 +75,7 @@ export const DATA_CREDITS = [
   {
     key: 'overpass',
     html:
-      'Road geometry (traffic): ' +
+      'Road geometry and mapped traffic lights: ' +
       '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
       '(ODbL 1.0)',
   },

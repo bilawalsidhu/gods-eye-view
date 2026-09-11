@@ -130,3 +130,21 @@ Douglas-Peucker simplification, 6-decimal rounding).
 ## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
+## Traffic-light locations and optional timing
+
+Traffic Lights uses © OpenStreetMap contributors, ODbL 1.0, via the existing
+Overpass proxy. It displays mapped signals and signal-controlled crossings in a
+bounded local area; coverage is incomplete. OSM supplies locations, not live
+states. See <https://www.openstreetmap.org/copyright>.
+
+Hamburg signal reports connect automatically through
+<https://tld.iot.hamburg.de/v1.1/Datastreams>. Attribution: **Freie und Hansestadt
+Hamburg, zuständige Behörde**, [Datenlizenz Deutschland Namensnennung 2.0](https://www.govdata.de/dl-de/by-2-0).
+Reports are normalized into lane-specific map markers; recent reported colors
+are distinct from guaranteed timing. No countdown is supplied by this source.
+[Official dataset](https://suche.transparenz.hamburg.de/dataset/traffic-lights-data-hamburg).
+
+Other live timing can be supplied by an operator-configured adapter. Each
+record displays its source. Operators must satisfy their provider's access,
+licensing and attribution requirements. No Baidu/Amap feed is bundled and no
+millisecond accuracy is claimed. See [Traffic Lights](docs/TRAFFIC_SIGNALS.md).

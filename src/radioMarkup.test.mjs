@@ -183,7 +183,8 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     .update(JSON.stringify(unchanged))
     .digest('hex')
     .slice(0, 16);
-  assert.equal(digest, '802ed694b8887b88', 'an unchanged Realtime tool definition drifted');
+  // Re-pinned for traffic-signals in both layer-control enums (2026-09-10).
+  assert.equal(digest, '5471923897e58786', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {

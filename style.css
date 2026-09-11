@@ -9520,3 +9520,22 @@ body.scene-playback-mode #key-setup {
   border-color: rgba(255, 170, 150, 0.65);
   outline: none;
 }
+/* Traffic-light inspector uses textContent for all provider-supplied text. */
+.traffic-signals-panel {
+  position: fixed;
+  right: 20px;
+  bottom: 115px;
+  z-index: 120;
+  width: min(360px, calc(100vw - 40px));
+  padding: 14px 16px;
+  color: #dce7f5;
+  background: rgba(9, 17, 28, 0.94);
+  border: 1px solid #52657b;
+  border-radius: 8px;
+  font: 12px/1.5 ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  pointer-events: auto;
+}
+.traffic-signals-panel[hidden] { display: none; }
+.traffic-signals-panel strong { letter-spacing: 0.12em; }
+.traffic-signals-panel p { margin: 8px 0 0; white-space: pre-line; overflow-wrap: anywhere; }

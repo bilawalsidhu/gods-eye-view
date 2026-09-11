@@ -50,6 +50,11 @@ Most feeds are live or regularly refreshed. Traffic is simulated along real
 roads using aggregate location data. CCTV camera poses and rocket launch
 trajectories are coarse estimates.
 
+**Traffic Lights** maps nearby OpenStreetMap signals below 8 km altitude.
+Hamburg's public signal reports connect automatically without a key. Other areas
+show unknown timing unless a provider is configured; worldwide live coverage and
+millisecond accuracy are unavailable. See [traffic-light coverage and setup](docs/TRAFFIC_SIGNALS.md).
+
 Start with the included data sources, then add your own. Each layer is a separate module.
 
 ---
