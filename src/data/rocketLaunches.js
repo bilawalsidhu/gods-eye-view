@@ -61,6 +61,7 @@ let _missionPanel = null;
 let _missionRoster = null;
 let _missionRosterHoverTimer = null;
 let _hoveredRosterLaunchId = null;
+let _missionRosterPreviewOwnership = null;
 let _missionHoverReticleImage = null;
 let _replayVehicleOverlay = null;
 let _replayVehicleOverlayText = '';
@@ -784,6 +785,115 @@ export function missionHoverPreviewRange(cameraHeight) {
     MISSION_CLOSE_VIEW_RANGE_M,
     Number.isFinite(height) ? height : MISSION_GLOBE_VIEW_RANGE_M,
   );
+}
+
+/**
+ * Coordinate pointer and keyboard ownership of the temporary roster preview.
+ * The most recent input owns the preview until it leaves, then any remaining
+ * input resumes ownership. This lets keyboard focus take over from a pointer
+ * resting on another row without losing that pointer preview on blur.
+ * @param {{preview: (index: number) => void, clear: () => void}} handlers
+ * @returns {{pointerEnter: (index: number) => void, pointerLeave: () => void,
+ *   focus: (index: number) => void, blur: (nextIndex?: number|null) => void,
+ *   reset: () => void}}
+ */
+export function createMissionRosterPreviewOwnership({ preview, clear }) {
+  let pointerIndex = null;
+  let focusIndex = null;
+  let latestOwner = null;
+  let activeIndex = null;
+
+  const sync = () => {
+    const nextIndex = latestOwner === 'pointer'
+      ? pointerIndex ?? focusIndex
+      : focusIndex ?? pointerIndex;
+    if (nextIndex === activeIndex) return;
+    activeIndex = nextIndex;
+    if (Number.isInteger(nextIndex)) preview(nextIndex);
+    else clear();
+  };
+
+  return {
+    pointerEnter(index) {
+      pointerIndex = index;
+      latestOwner = 'pointer';
+      sync();
+    },
+    pointerLeave() {
+      pointerIndex = null;
+      if (latestOwner === 'pointer') latestOwner = focusIndex === null ? null : 'focus';
+      sync();
+    },
+    focus(index) {
+      focusIndex = index;
+      latestOwner = 'focus';
+      sync();
+    },
+    blur(nextIndex = null) {
+      focusIndex = Number.isInteger(nextIndex) ? nextIndex : null;
+      if (latestOwner === 'focus') latestOwner = focusIndex === null
+        ? (pointerIndex === null ? null : 'pointer')
+        : 'focus';
+      sync();
+    },
+    reset() {
+      pointerIndex = null;
+      focusIndex = null;
+      latestOwner = null;
+      activeIndex = null;
+      clear();
+    },
+  };
+}
+
+/**
+ * Bind native keyboard focus events for one rendered roster row.
+ * @param {Element} button Mission roster button.
+ * @param {number} index Source-array mission index.
+ * @param {{pointerEnter: (index: number) => void, pointerLeave: () => void,
+ *   focus: (index: number) => void, blur: (nextIndex?: number|null) => void}} ownership
+ * @param {Element} roster Roster root used to reject focus targets outside the list.
+ */
+export function bindMissionRosterItemKeyboardPreview(button, index, ownership, roster) {
+  button.addEventListener('mouseenter', () => ownership.pointerEnter(index));
+  button.addEventListener('mouseleave', () => ownership.pointerLeave());
+  button.addEventListener('focus', () => ownership.focus(index));
+  button.addEventListener('blur', (event) => {
+    const nextButton = event.relatedTarget?.closest?.('[data-mission-roster-index]');
+    const nextIndex = nextButton && roster.contains(nextButton)
+      ? Number(nextButton.dataset.missionRosterIndex)
+      : null;
+    ownership.blur(nextIndex);
+  });
+}
+
+/** Capture the exact mission identity owned by keyboard focus before a refresh. */
+export function captureMissionRosterFocus(list, activeElement = globalThis.document?.activeElement) {
+  const button = activeElement?.closest?.('[data-mission-roster-id]');
+  if (!button || !list?.contains(button)) return null;
+  const launchId = button.dataset.missionRosterId;
+  return launchId ? { launchId } : null;
+}
+
+/** Restore focus by mission identity, or continue after the list if it departed. */
+export function restoreMissionRosterFocus(list, snapshot, continuation) {
+  if (!snapshot?.launchId) return 'none';
+  const button = Array.from(list?.querySelectorAll?.('[data-mission-roster-id]') || [])
+    .find((candidate) => candidate.dataset.missionRosterId === snapshot.launchId);
+  if (button) {
+    button.focus({ preventScroll: true });
+    return 'restored';
+  }
+  if (continuation?.focus) {
+    continuation.focus({ preventScroll: true });
+    return 'continued';
+  }
+  return 'none';
+}
+
+/** Resolve a pending preview against the current refresh, never a stale object. */
+export function resolveMissionRosterPreviewLaunch(launches, launchId) {
+  return (launches || []).find((candidate) => candidate.id === launchId) || null;
 }
 
 /**
@@ -2106,13 +2216,15 @@ function normalizePayloadFlights(launch) {
     const payload = flight.payload || flight;
     return {
       id: String(flight.id || payload.id || `payload-${index}`),
-      name: payload.name || flight.name || 'Undisclosed payload',
+      name: payload.name || flight.name || 'Unnamed payload',
       type: payload.type?.name || flight.type?.name || null,
       manufacturer: payload.manufacturer?.name || null,
       operator: payload.operator?.name || null,
       destination: flight.destination || payload.destination || null,
       amount: Number.isFinite(Number(flight.amount)) ? Number(flight.amount) : 1,
-      massKg: Number.isFinite(Number(payload.mass)) ? Number(payload.mass) : null,
+      massKg: (typeof payload.mass === 'number' || (typeof payload.mass === 'string' && payload.mass.trim() !== ''))
+        && Number.isFinite(Number(payload.mass)) && Number(payload.mass) >= 0
+        ? Number(payload.mass) : null,
     };
   });
 }
@@ -2288,7 +2400,7 @@ function renderMissionPanel() {
   _missionPanel.querySelector('[data-mission-payloads]').innerHTML = missionTableRows(
     payloadRows,
     3,
-    'CLASSIFIED / MULTI-PAYLOAD',
+    'PAYLOAD DATA UNAVAILABLE',
   );
   const stageRows = launch.recoveryStages.map((stage) => {
     const endpoint = stage.endpoint;
@@ -2325,9 +2437,16 @@ function renderMissionRoster() {
   const count = _missionRoster.querySelector('[data-mission-roster-count]');
   if (count) count.textContent = `${_launches.length} / 30D`;
   if (!list) return;
+  const focusSnapshot = captureMissionRosterFocus(list);
+  _missionRosterPreviewOwnership?.reset();
   const entries = missionRosterEntries(_launches);
   if (!entries.length) {
     list.innerHTML = '<div class="space-mission-roster-empty">NO MISSIONS AVAILABLE IN THE CURRENT 30-DAY WINDOW</div>';
+    restoreMissionRosterFocus(
+      list,
+      focusSnapshot,
+      _missionRoster.querySelector('[data-mission-roster-focus-continuation]'),
+    );
     return;
   }
   list.innerHTML = entries.map(({ launch, index }) => {
@@ -2335,8 +2454,22 @@ function renderMissionRoster() {
     const date = launch.launchTime?.slice(0, 10) || 'DATE UNAVAILABLE';
     const provider = launch.provider || 'UNSPECIFIED OPERATOR';
     const label = shortMissionLabel(launch.name, 27).toUpperCase();
-    return `<button type="button" class="space-mission-roster-item" data-mission-roster-index="${index}" aria-label="Select ${escapeMissionText(label)}"><span class="space-mission-roster-marker" style="--mission-roster-color:${color}" aria-hidden="true"></span><span class="space-mission-roster-copy"><strong>${escapeMissionText(label)}</strong><small>${escapeMissionText(provider)} · ${escapeMissionText(date)}</small></span><span class="space-mission-roster-chevron" aria-hidden="true">›</span></button>`;
+    return `<button type="button" class="space-mission-roster-item" data-mission-roster-index="${index}" data-mission-roster-id="${escapeMissionText(launch.id)}" aria-label="Select ${escapeMissionText(label)}"><span class="space-mission-roster-marker" style="--mission-roster-color:${color}" aria-hidden="true"></span><span class="space-mission-roster-copy"><strong>${escapeMissionText(label)}</strong><small>${escapeMissionText(provider)} · ${escapeMissionText(date)}</small></span><span class="space-mission-roster-chevron" aria-hidden="true">›</span></button>`;
   }).join('');
+  list.querySelectorAll('[data-mission-roster-index]').forEach((button) => {
+    const index = Number(button.dataset.missionRosterIndex);
+    bindMissionRosterItemKeyboardPreview(
+      button,
+      index,
+      _missionRosterPreviewOwnership,
+      _missionRoster,
+    );
+  });
+  restoreMissionRosterFocus(
+    list,
+    focusSnapshot,
+    _missionRoster.querySelector('[data-mission-roster-focus-continuation]'),
+  );
 }
 
 function escapeMissionText(value) {
@@ -2382,12 +2515,17 @@ function selectMissionAt(index) {
   focusMission(launch);
 }
 
-function clearMissionRosterHover() {
+function clearMissionRosterPreviewState() {
   if (_missionRosterHoverTimer) clearTimeout(_missionRosterHoverTimer);
   _missionRosterHoverTimer = null;
   const changed = _hoveredRosterLaunchId !== null;
   _hoveredRosterLaunchId = null;
   if (changed) syncMissionOverlayEntries();
+}
+
+function clearMissionRosterHover() {
+  if (_missionRosterPreviewOwnership) _missionRosterPreviewOwnership.reset();
+  else clearMissionRosterPreviewState();
 }
 
 function previewMissionFromRoster(launch) {
@@ -2412,7 +2550,9 @@ function scheduleMissionRosterPreview(index) {
   syncMissionOverlayEntries();
   _missionRosterHoverTimer = setTimeout(() => {
     _missionRosterHoverTimer = null;
-    if (_hoveredRosterLaunchId === launch.id) previewMissionFromRoster(launch);
+    if (_hoveredRosterLaunchId !== launch.id) return;
+    const currentLaunch = resolveMissionRosterPreviewLaunch(_launches, launch.id);
+    if (currentLaunch) previewMissionFromRoster(currentLaunch);
   }, 140);
 }
 
@@ -2497,29 +2637,16 @@ function createMissionPanel() {
   if (!host) return;
   _missionRoster = document.getElementById('space-mission-roster');
   if (_missionRoster) {
+    _missionRosterPreviewOwnership = createMissionRosterPreviewOwnership({
+      preview: scheduleMissionRosterPreview,
+      clear: clearMissionRosterPreviewState,
+    });
     _missionRoster.onclick = (event) => {
       const button = event.target instanceof Element
         ? event.target.closest('[data-mission-roster-index]')
         : null;
       if (!button) return;
       selectMissionAt(Number(button.dataset.missionRosterIndex));
-    };
-    _missionRoster.onmouseover = (event) => {
-      const button = event.target instanceof Element
-        ? event.target.closest('[data-mission-roster-index]')
-        : null;
-      if (!button || button.contains(event.relatedTarget)) return;
-      scheduleMissionRosterPreview(Number(button.dataset.missionRosterIndex));
-    };
-    _missionRoster.onfocusin = (event) => {
-      const button = event.target instanceof Element
-        ? event.target.closest('[data-mission-roster-index]')
-        : null;
-      if (button) scheduleMissionRosterPreview(Number(button.dataset.missionRosterIndex));
-    };
-    _missionRoster.onmouseleave = clearMissionRosterHover;
-    _missionRoster.onfocusout = (event) => {
-      if (!_missionRoster.contains(event.relatedTarget)) clearMissionRosterHover();
     };
   }
   _missionPanel = document.createElement('aside');
@@ -3537,11 +3664,8 @@ const rocketLaunchesLayer = {
     _missionPanel = null;
     if (_missionRoster) {
       _missionRoster.onclick = null;
-      _missionRoster.onmouseover = null;
-      _missionRoster.onfocusin = null;
-      _missionRoster.onmouseleave = null;
-      _missionRoster.onfocusout = null;
     }
+    _missionRosterPreviewOwnership = null;
     _missionRoster = null;
     _viewer = null;
     if (_dataSource) viewer.dataSources.remove(_dataSource, true);

@@ -20,6 +20,7 @@ const STATUS = {
   error: 'ERROR',
 };
 const CALL_DEDUPE_MS = 2500;
+export const PUSH_TO_TALK_HOLD_DELAY_MS = 500;
 // WebRTC 'disconnected' is frequently momentary (a brief network blip that ICE
 // recovers on its own). Give it this long to return to 'connected' before we
 // treat it as a real drop (H8).
@@ -307,6 +308,11 @@ export class GevRealtimeController {
     this.pushToTalkMode = false;
     this.pushToTalkKeyHeld = false;
     this.spaceKeyHeld = false;
+    this.pushToTalkHoldTimer = null;
+    this.pushToTalkHoldGeneration = 0;
+    this.pushToTalkHoldFocusOwner = null;
+    this.pushToTalkHoldControl = null;
+    this.pushToTalkHoldPreservesNative = false;
     this.shortcutKeyDownHandler = null;
     this.shortcutKeyUpHandler = null;
     this.shortcutBlurHandler = null;
@@ -568,58 +574,114 @@ export class GevRealtimeController {
     }
   }
 
-  /**
-   * Registers hold-Space push-to-talk without hijacking typing or modified shortcuts.
-   * @returns {void}
-   */
+  /** Registers delayed hold-Space push-to-talk while preserving short control taps. */
   bindPushToTalkShortcut() {
     if (this.shortcutKeyDownHandler) return;
     this.shortcutKeyDownHandler = (event) => {
       if (!shouldHandlePushToTalkKeyDown(event)) return;
       if (event.repeat) {
-        if (this.spaceKeyHeld) event.preventDefault();
+        if (this.spaceKeyHeld && !this.pushToTalkHoldPreservesNative) event.preventDefault();
+        if (this.pushToTalkKeyHeld) event.preventDefault();
         return;
       }
       this.spaceKeyHeld = true;
-      // Space must not generate the focused mic button's native click on keyup.
-      event.preventDefault();
-      this.pauseRadioForVoice();
-      if (this.pushToTalkKeyHeld) return;
+      this.pushToTalkHoldFocusOwner = document.activeElement;
+      this.pushToTalkHoldControl = isInteractiveSpaceTarget(document.activeElement)
+        ? document.activeElement
+        : (isInteractiveSpaceTarget(event.target)
+          ? event.target.closest?.(SPACE_INTERACTIVE_SELECTOR) || event.target
+          : null);
+      this.pushToTalkHoldPreservesNative = Boolean(this.pushToTalkHoldControl);
+      // Background Space is reserved immediately to avoid scrolling. A focused
+      // control keeps its native keydown and release unless the hold is claimed.
+      if (!this.pushToTalkHoldPreservesNative) event.preventDefault();
       // A click-started session is intentionally open-mic. Space only claims an
       // idle session (or a session it already started) so releasing the key can
       // never surprise the user by muting a click-started conversation.
       if (this.isActive() && !this.pushToTalkMode) return;
-      this.pushToTalkKeyHeld = true;
-      this.ui.root.dataset.pushToTalk = 'held';
-      if (this.isActive()) {
-        this.setMicrophoneEnabled(true);
-        if (this.status === 'listening') this.setStatus('listening', 'Release Space to send');
-      } else {
-        this.start({ pushToTalk: true });
-      }
+      this.cancelPushToTalkHold();
+      const holdGeneration = ++this.pushToTalkHoldGeneration;
+      this.pushToTalkHoldTimer = setTimeout(() => {
+        this.pushToTalkHoldTimer = null;
+        if (holdGeneration !== this.pushToTalkHoldGeneration) return;
+        if (!this.spaceKeyHeld || this.pushToTalkKeyHeld) return;
+        // A pointer or Tab focus change during the delay cancels the original
+        // gesture rather than letting voice claim a key held for another owner.
+        if (document.activeElement !== this.pushToTalkHoldFocusOwner) return;
+        if (
+          document.visibilityState === 'hidden'
+          || (typeof document.hasFocus === 'function' && !document.hasFocus())
+        ) return;
+        if (this.isActive() && !this.pushToTalkMode) return;
+        // Blur before voice starts. This removes the focused state and ensures
+        // the eventual Space release cannot activate the old control.
+        if (
+          this.pushToTalkHoldControl
+          && document.activeElement === this.pushToTalkHoldControl
+          && typeof this.pushToTalkHoldControl.blur === 'function'
+        ) {
+          this.pushToTalkHoldControl.blur();
+        }
+        this.pauseRadioForVoice();
+        this.pushToTalkKeyHeld = true;
+        if (this.isActive()) {
+          this.ui.root.dataset.pushToTalk = 'held';
+          this.setMicrophoneEnabled(true);
+          if (this.status === 'listening') this.setStatus('listening', 'Release Space to send');
+        } else {
+          this.start({ pushToTalk: true });
+          // start() performs a controlled stop() before connecting. Restore the
+          // marker it clears so the UI reflects this still-held gesture.
+          if (this.pushToTalkKeyHeld) this.ui.root.dataset.pushToTalk = 'held';
+        }
+      }, PUSH_TO_TALK_HOLD_DELAY_MS);
     };
     this.shortcutKeyUpHandler = (event) => {
       if (!isPushToTalkKey(event)) return;
       const wasHoldingSpace = this.spaceKeyHeld;
+      const preservedNativeActivation = this.pushToTalkHoldPreservesNative;
       this.spaceKeyHeld = false;
+      this.cancelPushToTalkHold();
       if (!this.pushToTalkKeyHeld) {
-        if (wasHoldingSpace) event.preventDefault();
+        if (wasHoldingSpace && !preservedNativeActivation) event.preventDefault();
+        this.resetPushToTalkGesture();
         return;
       }
       event.preventDefault();
       this.releasePushToTalkKey();
+      this.resetPushToTalkGesture();
     };
     this.shortcutBlurHandler = () => {
       this.spaceKeyHeld = false;
+      this.cancelPushToTalkHold();
       this.releasePushToTalkKey();
+      this.resetPushToTalkGesture();
     };
     this.shortcutVisibilityHandler = () => {
       if (document.visibilityState === 'hidden') this.shortcutBlurHandler();
     };
-    document.addEventListener('keydown', this.shortcutKeyDownHandler);
-    document.addEventListener('keyup', this.shortcutKeyUpHandler);
+    // Observe before custom controls call preventDefault for their own Space
+    // behavior. This lets the same physical hold cross the 500ms voice
+    // threshold while short taps still reach the control unchanged.
+    document.addEventListener('keydown', this.shortcutKeyDownHandler, true);
+    document.addEventListener('keyup', this.shortcutKeyUpHandler, true);
     window.addEventListener('blur', this.shortcutBlurHandler);
     document.addEventListener('visibilitychange', this.shortcutVisibilityHandler);
+  }
+
+  /** Cancels an unclaimed Space hold before it starts voice. */
+  cancelPushToTalkHold() {
+    this.pushToTalkHoldGeneration++;
+    if (this.pushToTalkHoldTimer === null) return;
+    clearTimeout(this.pushToTalkHoldTimer);
+    this.pushToTalkHoldTimer = null;
+  }
+
+  /** Clears the owner metadata for the current physical Space gesture. */
+  resetPushToTalkGesture() {
+    this.pushToTalkHoldFocusOwner = null;
+    this.pushToTalkHoldControl = null;
+    this.pushToTalkHoldPreservesNative = false;
   }
 
   /**
@@ -627,6 +689,7 @@ export class GevRealtimeController {
    * @returns {void}
    */
   releasePushToTalkKey() {
+    this.cancelPushToTalkHold();
     if (!this.pushToTalkKeyHeld) return;
     this.pushToTalkKeyHeld = false;
     delete this.ui.root.dataset.pushToTalk;
@@ -773,6 +836,7 @@ export class GevRealtimeController {
     // releases its own resources instead of promoting them onto a stopped
     // controller (H7).
     this.startEpoch++;
+    this.cancelPushToTalkHold();
     this.radioHandoffEpoch++;
     for (const controller of this.activeToolAbortControllers) controller.abort();
     this.activeToolAbortControllers.clear();
@@ -844,6 +908,7 @@ export class GevRealtimeController {
     this.pushToTalkMode = false;
     this.pushToTalkKeyHeld = false;
     this.spaceKeyHeld = false;
+    this.resetPushToTalkGesture();
     if (this.ui?.root) {
       delete this.ui.root.dataset.pushToTalk;
       delete this.ui.root.dataset.microphone;
@@ -857,8 +922,8 @@ export class GevRealtimeController {
       this.tierHandler = null;
     }
     if (removeUi) {
-      if (this.shortcutKeyDownHandler) document.removeEventListener('keydown', this.shortcutKeyDownHandler);
-      if (this.shortcutKeyUpHandler) document.removeEventListener('keyup', this.shortcutKeyUpHandler);
+      if (this.shortcutKeyDownHandler) document.removeEventListener('keydown', this.shortcutKeyDownHandler, true);
+      if (this.shortcutKeyUpHandler) document.removeEventListener('keyup', this.shortcutKeyUpHandler, true);
       if (this.shortcutBlurHandler) window.removeEventListener('blur', this.shortcutBlurHandler);
       if (this.shortcutVisibilityHandler) {
         document.removeEventListener('visibilitychange', this.shortcutVisibilityHandler);
@@ -2454,18 +2519,77 @@ export function isPushToTalkKey(event) {
   return event?.code === 'Space' || event?.key === ' ';
 }
 
+const SPACE_INTERACTIVE_SELECTOR = [
+  'button',
+  'input',
+  'textarea',
+  'select',
+  'option',
+  'a[href]',
+  'summary',
+  'audio[controls]',
+  'video[controls]',
+  '[contenteditable]',
+  '[tabindex]',
+  '[role="button"]',
+  '[role="checkbox"]',
+  '[role="combobox"]',
+  '[role="link"]',
+  '[role="listbox"]',
+  '[role="menuitem"]',
+  '[role="menuitemcheckbox"]',
+  '[role="menuitemradio"]',
+  '[role="option"]',
+  '[role="radio"]',
+  '[role="searchbox"]',
+  '[role="slider"]',
+  '[role="spinbutton"]',
+  '[role="switch"]',
+  '[role="tab"]',
+  '[role="textbox"]',
+  '[role="treeitem"]',
+].join(', ');
+
 /**
- * Protects text entry and modified shortcuts from the global push-to-talk key.
- * @param {KeyboardEvent|object|null} event
- * @returns {boolean}
+ * Returns whether Space began on the map surface reserved for push-to-talk.
+ * Cesium gives its canvas `tabindex="0"` for camera input, which otherwise
+ * makes the generic focus guard treat a map click like a button activation.
  */
+export function isPushToTalkSurface(target) {
+  if (target?.tagName?.toUpperCase?.() !== 'CANVAS') return false;
+  if (target.id === 'world-overlay-canvas') return true;
+  return Boolean(target.closest?.('#cesiumContainer'));
+}
+
+/** Returns whether a focused target owns Space for UI interaction. */
+export function isInteractiveSpaceTarget(target) {
+  if (!target) return false;
+  if (isPushToTalkSurface(target)) return false;
+  if (target.isContentEditable) return true;
+  return Boolean(target.closest?.(SPACE_INTERACTIVE_SELECTOR));
+}
+
+/** Returns whether Space belongs to a text-entry surface. */
+export function isEditingSpaceTarget(target) {
+  if (!target) return false;
+  if (target.isContentEditable || target.closest?.('[contenteditable]')) return true;
+  if (target.closest?.('textarea, [role="textbox"], [role="searchbox"], [role="spinbutton"]')) {
+    return true;
+  }
+  const input = target.closest?.('input');
+  if (!input) return false;
+  const type = String(input.type || 'text').toLowerCase();
+  return [
+    'text', 'search', 'email', 'url', 'tel', 'password', 'number',
+    'date', 'datetime-local', 'month', 'week', 'time',
+  ].includes(type);
+}
+
+/** Protects text entry and modified shortcuts from push-to-talk arbitration. */
 export function shouldHandlePushToTalkKeyDown(event) {
   if (!isPushToTalkKey(event) || event.defaultPrevented) return false;
   if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return false;
-  const target = event.target;
-  if (target?.isContentEditable) return false;
-  const editingControl = target?.closest?.('input, textarea, select, [contenteditable], [role="textbox"]');
-  return !editingControl;
+  return !isEditingSpaceTarget(event.target);
 }
 
 /**
@@ -2510,7 +2634,7 @@ export function resolveVoiceVisualizerSpeaker(currentSpeaker, nextSpeaker, keepC
 export function resolveVoiceControlHint(pushToTalkMode, pushToTalkKeyHeld) {
   return pushToTalkMode && pushToTalkKeyHeld
     ? 'Release Space to send'
-    : 'Hold Space to speak · click mic to toggle voice';
+    : 'Hold Space to speak · tap Space to activate focused controls';
 }
 
 /**
@@ -2559,7 +2683,7 @@ function createVoiceControl({ reset = false } = {}) {
           <span id="gev-voice-cost-value" class="gev-voice-cost-value" data-level="ok" title="Estimated session cost">~$0.00</span>
         </div>
       </div>
-      <button id="gev-voice-button" type="button" aria-label="Voice control — hold Space to speak; click to toggle voice" aria-describedby="gev-voice-help">
+      <button id="gev-voice-button" type="button" aria-label="Voice control — activate to toggle voice; hold Space to speak" aria-describedby="gev-voice-help">
         <span class="gev-mic-orbit"><img src="/mic.svg" alt="" /></span>
         <span class="gev-mic-label">ON/OFF</span>
       </button>
@@ -2571,7 +2695,7 @@ function createVoiceControl({ reset = false } = {}) {
       </div>
       <div id="gev-voice-help" class="gev-voice-help-tray" role="tooltip">
         <span class="gev-voice-help-kicker">VOICE CONTROL</span>
-        <span class="gev-voice-help-detail">Hold Space to speak · click mic to toggle voice</span>
+        <span class="gev-voice-help-detail">Hold Space to speak · tap Space to activate focused controls</span>
       </div>
       <div class="gev-voice-error-tray" role="alert" aria-live="assertive">
         <div class="gev-voice-error-header">

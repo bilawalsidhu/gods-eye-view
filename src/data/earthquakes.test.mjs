@@ -338,3 +338,66 @@ test('earthquake refresh reports failure and clears it only after a successful r
     layer.destroy(viewer);
   }
 });
+
+test('malformed earthquake refresh preserves entities, overlays, count and timestamp', async () => {
+  const originalFetch = globalThis.fetch;
+  const dataSources = [];
+  const publications = [];
+  const viewer = { dataSources: {
+    add(source) { dataSources.push(source); }, remove() { return true; },
+  } };
+  const layer = createEarthquakesLayer({ overlayHost: {
+    setEntries(...args) { publications.push(args); }, setVisible() {}, clearSource() {},
+  } });
+  const good = { id: 'good', geometry: { type: 'Point', coordinates: [10, 20, 5] },
+    properties: { mag: 4, time: 100, place: 'Fixture' } };
+  const respond = (features) => { globalThis.fetch = async () => ({ ok: true, json: async () => ({ features }) }); };
+  try {
+    layer.init(viewer);
+    layer.enable(viewer);
+    respond([good]);
+    assert.equal(await layer.update(viewer), true);
+    const entity = dataSources[0].entities.values[0];
+    const stats = layer.getStats();
+    for (const properties of ['invalid', 123, [], true]) {
+      const bad = { ...good, id: 'bad-properties', properties };
+      for (const features of [[bad], [good, bad]]) {
+        respond(features);
+        assert.equal(await layer.update(viewer), false);
+        assert.equal(dataSources[0].entities.values.length, 1);
+        assert.equal(dataSources[0].entities.values[0], entity);
+        assert.equal(layer.getStats().count, stats.count);
+        assert.equal(layer.getStats().lastUpdate, stats.lastUpdate);
+        assert.equal(layer.getStats().error, 'Malformed USGS response');
+        assert.equal(publications.length, 1);
+      }
+    }
+    for (const bad of [null, { ...good, geometry: null },
+      { ...good, geometry: { type: 'LineString', coordinates: [1, 2] } },
+      { ...good, geometry: { coordinates: [181, 20] } },
+      { ...good, geometry: { coordinates: [10, -91] } },
+      { ...good, geometry: { coordinates: [null, 20] } },
+      { ...good, properties: { mag: '4' } },
+      { ...good, properties: { mag: Infinity } }, good]) {
+      respond([good, bad]);
+      assert.equal(await layer.update(viewer), false);
+      assert.equal(dataSources[0].entities.values.length, 1);
+      assert.equal(dataSources[0].entities.values[0], entity);
+      assert.equal(layer.getStats().count, stats.count);
+      assert.equal(layer.getStats().lastUpdate, stats.lastUpdate);
+      assert.equal(layer.getStats().error, 'Malformed USGS response');
+      assert.equal(publications.length, 1);
+    }
+    respond([{ ...good, properties: { mag: null } }]);
+    assert.equal(await layer.update(viewer), true);
+    assert.equal(dataSources[0].entities.values.length, 0);
+    assert.equal(layer.getStats().error, null);
+    assert.equal(publications.at(-1)[1].length, 0);
+    respond([good]);
+    assert.equal(await layer.update(viewer), true);
+    assert.equal(dataSources[0].entities.values.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    layer.destroy(viewer);
+  }
+});

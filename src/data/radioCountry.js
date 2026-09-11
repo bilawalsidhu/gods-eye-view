@@ -55,6 +55,22 @@ for (const [name, code] of Object.entries({
   brunei: 'BN',
   'cape verde': 'CV',
   'the netherlands': 'NL',
+  // Common English names and exonyms whose code is not reachable through the
+  // Intl.DisplayNames primary label, so they would otherwise fail closed
+  // (verified against ICU 77): TR resolves only as 'Türkiye', MM only as
+  // 'Myanmar (Burma)', AE only as 'United Arab Emirates', SZ as 'Eswatini',
+  // TL as 'Timor-Leste'. Each maps to exactly one country; ambiguous names
+  // (e.g. bare "Congo") are deliberately left to fail closed.
+  turkey: 'TR',
+  turkiye: 'TR',
+  myanmar: 'MM',
+  burma: 'MM',
+  uae: 'AE',
+  holland: 'NL',
+  swaziland: 'SZ',
+  'east timor': 'TL',
+  'cabo verde': 'CV',
+  vatican: 'VA',
 })) COUNTRY_NAME_TO_CODE.set(countryKey(name), code);
 
 function canonicalCountryName(code) {

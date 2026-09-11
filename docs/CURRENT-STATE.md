@@ -1,6 +1,110 @@
 # God's Eye View Current State
 
+## Keyboard interaction and focus
+
+- Enter on the map-source disclosure opens immediately. A short Space press
+  opens it on key release. Either route focuses the selected source once visible;
+  a bounded retry handles delayed opening transitions, and closing the tray or
+  moving focus elsewhere cancels the handoff.
+- Keyboard focus rings are a global interface state and stay visible when a
+  button is active or selected. Visual Styles, Location suboptions, Context and
+  mission actions, Cockpit utilities, native fields, and sliders use the same
+  visible-ring contract.
+- A short Space press on a focused control keeps its native key-release action.
+  If it remains held for 500 ms, focus is checked again, the control is blurred,
+  and push-to-talk starts; releasing a claimed hold cannot activate the old
+  control. The same hold works on the map and page background. Text-entry
+  controls remain protected.
+- The Location disclosure is reachable with Tab or Shift+Tab and shows a
+  keyboard focus ring. Its city, point-of-interest, search-toggle, and search
+  field controls show inset rings, including selected items. Enter toggles its
+  tray immediately, while Space does so on release; either route makes the revealed controls immediately reachable by Tab;
+  Escape closes it and clears any unfinished search. Escape from a tray control
+  returns focus to the disclosure; Escape on the disclosure clears focus after closing.
+- Data Layers ON/OFF buttons show a visible keyboard focus ring without
+  changing their enabled state or feed-status presentation.
+- Display controls and shader-parameter sliders show keyboard focus in both
+  the map panel and Cockpit Display. Arrow keys retain native range adjustment.
+  The enabled CCTV camera dropdown shows keyboard focus as well.
+- Tab reaches both Contacts and Space Missions in sequence in every Context
+  state. Left/Right arrows also switch them; the focused tab has a distinct ring
+  even when selected.
+- Keyboard focus on a Space Missions roster item uses the same temporary globe
+  rotation and mission-marker highlight as pointer hover. Focus alone does not
+  select the mission; Enter or Space performs selection. Keyboard and pointer
+  preview ownership remain independent when the pointer is parked over the list.
+- Radio power controls in the full, compact, and Cockpit surfaces, Search Nearby
+  Sites, and Clear Selected Layers remain focusable while lifecycle work is in
+  progress. They announce busy/disabled semantics and ignore repeat activation
+  until the operation settles, so async work cannot drop the keyboard ring.
+- Normal-mode Contacts results preserve the focused action or contact by stable
+  identity while live counts, distance order, and pages refresh. If that contact
+  departs or rotates off the visible page, focus moves to a stable continuation
+  point on the named explanatory note at the end of the list and remains there
+  through later repaints. The following Tab proceeds beyond the results instead
+  of restarting at Contacts or silently focusing another contact.
+- Cockpit Live Signals updates existing contact buttons without replacing or
+  disconnecting the focused one. Tab can continue through the briefing footer
+  to Display and Radio. If the focused contact leaves the list, focus moves
+  once to the current briefing tab; later refreshes do not reclaim it.
+- Cockpit-only Display and Radio launcher icons show a complete inset keyboard
+  ring in their collapsed and expanded states.
+- Escape collapses the nearest expanded panel containing focus before any
+  containing panel acts. Closing from panel content returns focus to that panel's
+  disclosure; closing from the disclosure itself clears focus so the collapsed
+  button does not retain its ring. This includes standard panels, nested
+  Parameters, Cockpit Contact and Live Signals, and Cockpit Display/Radio utilities.
+- The required bottom-left Data attribution control is a named popup button in
+  the Tab order. Enter opens immediately and Space opens on release, then the
+  credit lightbox focuses Close;
+  Close, Escape, or backdrop dismissal restores focus to Data attribution.
+
+## CCTV launcher and proxy failure responses
+
+`scripts/dev-cctv.sh` delegates startup to `scripts/dev-fresh.sh`. It retains
+its Austin source file, Austin preference, 36-camera Austin limit, and 48-camera
+total limit, with environment overrides. Keys are optional; credential loading
+and names-only provider provenance follow the normal launcher. The default
+binding is localhost. An explicit `HOST=0.0.0.0` uses the same LAN warning as
+normal startup.
+
+The CelesTrak, Launch Library, terrain-height, and ADSBDB middleware return
+fixed messages for unexpected failures. Launch Library retains its upstream
+HTTP failure status and no-store policy but does not forward the upstream body.
+Existing successful, in-flight, missing-data, and stale-cache behavior remains
+in place. Failure diagnostics identify the service and, for Launch Library,
+HTTP status without printing raw exception text or upstream bodies.
+
+## Map Source keyboard focus
+
+Keyboard opening focuses the selected map-source tile, falling back to the first
+only when no source is selected. A bounded retry handles delayed tray visibility.
+Moving focus away, pointer interaction, closing the tray, or disposing the UI
+cancels pending work; a later reopening cannot inherit an old focus request.
+
+## September 8, 2026
+
+Earthquake refreshes validate the complete feed and construct replacement entities before clearing the previous snapshot. Malformed rows and duplicate rendered IDs retain the last good entities, overlays, count and timestamp and report a malformed response; unknown magnitude is excluded from M2.5+ rendering.
+
+Non-object or array-valued properties reject the response instead of being treated as an unknown magnitude.
+
+Launch payloads with missing records now say PAYLOAD DATA UNAVAILABLE. Missing names use Unnamed payload; absent or invalid mass stays unknown instead of appearing as 0 KG.
+
 Updated: August 24, 2026
+
+## Control names for assistive technology
+
+Scope, Bloom, Sharpen and location search have explicit accessible names.
+Generated style sliders use the same name as their visible parameter label.
+The first-run suppression checkbox keeps its native wrapping label, so its
+accessible name remains "Don't show this again". Control behavior is unchanged.
+
+## FIRMS source status
+
+The FIRMS proxy records source success after appending its rows. If aggregation
+throws, that source reports failure without a contradictory success entry.
+The existing per-record append continues to support large feeds; sequential
+fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 
 ## Installations and map-source guidance
 
@@ -748,7 +852,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   corridor. Layer toggles stay live from there, and collapsing returns the
 >   plain launcher. The map-only Clear, Share, and Reset Globe actions are hidden
 >   for the duration of Cockpit, both as a group and as individual controls.
->   It uses the `radar` symbol and provides roving keyboard tab navigation. Its action row
+>   It uses the `radar` symbol; both tabs are reachable with Tab and Left/Right arrows switch between them. Its action row
 >   places the single Cockpit entry before Search Nearby Sites. Cockpit removes
 >   the duplicate floating map entry and topline exit; the bottom-center
 >   `EXIT COCKPIT` control (offset downward by a `-95px` bottom margin) plus `Escape`/`C` own exit, with entry/exit focus
@@ -1684,9 +1788,11 @@ preserves object identity for an idempotent repeat of the same generation, and
 degrades without replacement if a fresh response presents an older generation.
 Snapshot records mark community metadata as untrusted, and Radio tool results
 omit station names so directory text never becomes model instruction context.
-One bounded country parser maps recognized ISO codes and English/common names
-through proxy metadata and final station selection, while malformed, non-ISO,
-control-containing, and oversized inputs fail closed. Literal or resolved
+One bounded country parser maps recognized ISO codes and English/common names —
+including widely used exonyms the Intl display label omits (Turkey, Holland,
+Burma, and similar) — through proxy metadata and final station selection, while
+malformed, non-ISO, control-containing, ambiguous, and oversized inputs fail
+closed. Literal or resolved
 non-global IPv4/IPv6 targets are refused. Destroy fully releases the Radio audio
 session, voice ducking/restoration, request state, filter, selection, volume,
 accepted snapshot, and feed telemetry before re-initialization; monotonic
@@ -2611,3 +2717,11 @@ Replay transport uses one Play/Pause toggle plus Cancel. During ascent only the 
 ## Maintenance Rule
 
 When runtime behavior or architecture changes, update this file in the same change set as code updates.
+
+## Dependency security baseline
+
+The lockfile uses DOMPurify 3.4.15, protobufjs 8.8.0, PostCSS 8.5.28, and
+nanoid 3.3.19. Cesium remains on 1.138.0. Browser QA uses Puppeteer 25.10.0;
+image-processing tools use Sharp 0.35.4. QA scripts await Puppeteer's asynchronous
+executable-path lookup before testing or passing the path to Chrome. Supported Node versions remain
+24.14.x and 26.x. Use `npm ci` to reproduce the checked-in dependency tree.
