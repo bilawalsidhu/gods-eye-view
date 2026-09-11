@@ -112,4 +112,17 @@ export default {
   'scenes.status.runComplete': 'Ejecución de escenas completada',
   'scenes.status.runError': 'Error: {message}',
   'scenes.status.contextExitFailed': 'No se pudo salir de {mode} — las capas de la escena pueden rechazarse',
+
+  // Stage-4 repair pass (mirrors locales/en/setup.js appendix).
+  'keySetup.row.remove': 'ELIMINAR',
+  'keySetup.row.removeTitle': 'Elimina {title} de las claves guardadas de esta app',
+  'keySetup.requirement': 'Necesita {envVars} — añádela en Ajustes de proveedores',
+  'keySetup.unlocks.google-maps': 'El planeta 3D fotorrealista + búsqueda de lugares',
+  'keySetup.unlocks.openai': 'Control por voz — habla con el planeta',
+  'keySetup.unlocks.aisstream': 'Barcos en vivo, en todo el mundo',
+  'keySetup.unlocks.firms': 'Detecciones de incendios activos en vivo',
+  'keySetup.unlocks.tomtom': 'Tráfico real en vivo (sin clave usa una simulación)',
+  'keySetup.unlocks.cesium-ion': 'Conjuntos de mapas Bing imagery + terreno mundial',
+  'keySetup.unlocks.opensky': 'Más créditos de consulta de vuelos (sin clave funciona el modo anónimo)',
+  'keySetup.unlocks.launch-library': 'Mayor límite de peticiones para misiones espaciales',
 };

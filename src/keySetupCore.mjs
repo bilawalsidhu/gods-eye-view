@@ -1,15 +1,19 @@
 /**
  * Key setup ("POWER UP") — the pure core.
  *
- * One registry, three pure functions, zero dependencies. The dev server's
- * /api/setup endpoints (vite.config.js) and the in-app panel (keySetup.js)
- * are both thin shells over this module, so what a key is called, what it
- * unlocks, and how a .env line is written each live in exactly one place.
+ * One registry, three pure functions. The dev server's /api/setup endpoints
+ * (vite.config.js) and the in-app panel (keySetup.js) are both thin shells over
+ * this module, so what a key is called, what it unlocks, and how a .env line
+ * is written each live in exactly one place. The single import is the i18n
+ * catalog: the client-facing requirement sentence localizes there, and node
+ * callers simply resolve the English default.
  *
  * Nothing here touches the filesystem, the network, or process.env — callers
  * pass environments in and write text out, which is also what makes every
  * behavior below unit-testable.
  */
+
+import { t } from './i18n/index.js';
 
 /** Longest accepted key/token value. Real provider keys are all far shorter. */
 export const KEY_SETUP_VALUE_LIMIT = 512;
@@ -263,11 +267,18 @@ export function knownKeySetupEnvVars() {
   return names;
 }
 
-/** Tooltip guidance for a control gated by one registry entry. */
+/** Tooltip guidance for a control gated by one registry entry.
+ *
+ * The sentence template lives in the setup catalog (setup.keySetup.requirement)
+ * so the client surface localizes it; the env-var names are registry machine
+ * values and stay raw. Under node (vite.config, tests) the locale resolves to
+ * the English default, so the rendered sentence is byte-identical to the
+ * previously-hardcoded literal.
+ */
 export function keySetupRequirement(id) {
   const entry = KEY_SETUP_KEYS.find((candidate) => candidate.id === id);
   if (!entry) return '';
-  return `Needs ${entry.envVars.join(' + ')} — add it in Provider Settings`;
+  return t('setup.keySetup.requirement', { envVars: entry.envVars.join(' + ') });
 }
 
 /**

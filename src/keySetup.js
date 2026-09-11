@@ -14,7 +14,7 @@
  * the chip and the dialog are removed outright.
  */
 
-import { t } from './i18n/index.js';
+import { t, hasMessage } from './i18n/index.js';
 
 /**
  * Chip label — pure, exported for tests. The exact English values are pinned
@@ -114,7 +114,10 @@ function buildRow(documentRef, key) {
 
   const unlocks = documentRef.createElement('p');
   unlocks.className = 'key-setup-unlocks';
-  unlocks.textContent = key.unlocks;
+  // The registry `unlocks` text localizes per registry id; an id missing from
+  // the catalog falls back to the server-provided English copy.
+  const unlocksKey = `setup.keySetup.unlocks.${key.id}`;
+  unlocks.textContent = hasMessage(unlocksKey) ? t(unlocksKey) : key.unlocks;
 
   row.append(head, unlocks);
   if (!external) {
@@ -139,8 +142,8 @@ function buildRow(documentRef, key) {
       remove.type = 'button';
       remove.className = 'key-setup-remove';
       remove.dataset.keySetupRemove = JSON.stringify(key.envVars);
-      remove.textContent = 'REMOVE';
-      remove.title = `Remove ${key.title} from this app's saved keys`;
+      remove.textContent = t('setup.keySetup.row.remove');
+      remove.title = t('setup.keySetup.row.removeTitle', { title: key.title });
       fields.append(remove);
     }
     row.append(fields);

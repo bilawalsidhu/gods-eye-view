@@ -158,4 +158,22 @@ export default {
   'scenes.status.runComplete': 'Scene run complete',
   'scenes.status.runError': 'Error: {message}',
   'scenes.status.contextExitFailed': 'Could not exit {mode} — scene layers may be refused',
+
+  // ── Stage-4 repair pass: keySetup dev-surface copy, appended ──────────────
+  // src/keySetup.js buildRow() remove chrome (dev-server-only surface).
+  'keySetup.row.remove': 'REMOVE',
+  'keySetup.row.removeTitle': "Remove {title} from this app's saved keys",
+  // src/keySetupCore.mjs keySetupRequirement(): availability sentence naming
+  // the registry env vars (machine values stay raw).
+  'keySetup.requirement': 'Needs {envVars} — add it in Provider Settings',
+  // src/keySetupCore.mjs KEY_SETUP_KEYS `unlocks` copy, keyed by registry id;
+  // en values must stay byte-identical to the registry strings.
+  'keySetup.unlocks.google-maps': 'The photorealistic 3D planet + place search',
+  'keySetup.unlocks.openai': 'Voice control — talk to the planet',
+  'keySetup.unlocks.aisstream': 'Live ships, worldwide',
+  'keySetup.unlocks.firms': 'Live active-fire detections',
+  'keySetup.unlocks.tomtom': 'Real live traffic (keyless runs a simulation)',
+  'keySetup.unlocks.cesium-ion': 'Bing imagery map stacks + world terrain',
+  'keySetup.unlocks.opensky': 'More flight-polling credits (anonymous works without)',
+  'keySetup.unlocks.launch-library': 'Higher space-missions request allowance',
 };
