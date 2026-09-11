@@ -2038,18 +2038,27 @@ renders its English value. The subsystem lives in `src/i18n/`:
   (interpolation + `Intl.PluralRules` plural selection), `formatNumber` /
   `formatDate`, `applyDocumentTranslations()`, and
   `persistLocaleAndReload()`. Catalogs are four flat message maps per locale —
-  `src/i18n/locales/{en,es}/{shell,cockpit,layers,setup}.js` — mirrored
-  key-for-key (897 keys per locale at the time of writing).
-- **Selector.** The command dock carries a compact EN|ES switch
-  (`index.html`, `.dock-locale-switch` / `.dock-locale-btn`), wired by
-  `ui.js` `_initLocaleSelector()`. A click persists the choice and reloads
-  the page with the hash preserved, so no live re-apply of already-rendered
-  dynamic panels is needed.
+  `src/i18n/locales/{en,es,fr}/{shell,cockpit,layers,setup}.js` — mirrored
+  key-for-key (898 keys per locale at the time of writing; fr holds English
+  seed values pending stage-B translation).
+- **Selector.** The command dock carries a compact locale switch: a static
+  `.dock-locale-switch` group container in `index.html` whose buttons
+  (`.dock-locale-btn`) are rendered at runtime by `ui.js`
+  `_initLocaleSelector()` — one per locale in the configured pair. A click
+  persists the choice and reloads the page with the hash preserved, so no
+  live re-apply of already-rendered dynamic panels is needed.
+- **Locale pair config.** `GEV_DEFAULT_LOCALE` (default `en`) and
+  `GEV_SECONDARY_LOCALE` (default `es`) in `.env`, injected as
+  `import.meta.env` defines by `vite.config.js`; the offered set is
+  `dedup([default, secondary, 'en'])` and invalid/degenerate pairs fall back
+  to en+es (dev-only warn).
 - **Resolution order.** `?lang=<locale>` (search string only; never
   persisted, never written into share links; stripped by
-  `persistLocaleAndReload`) → stored `gev:locale:v1` →
+  `persistLocaleAndReload`; accepted only for offered locales) → stored
+  `gev:locale:v1` (re-checked against the pair) →
   `navigator.languages` (regional variants normalize to the primary tag:
-  `es-MX`/`es_419` → `es`) → `'en'`. Unsupported values defer to the next
+  `es-MX`/`es_419` → `es`) → the CONFIGURED default locale. Unsupported
+  values defer to the next
   step rather than forcing English.
 - **Gates** (all under `node --test src/i18n/`, 31 tests):
   `catalog.test.mjs` enforces en/es key, placeholder-name, and
