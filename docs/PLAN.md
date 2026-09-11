@@ -403,6 +403,148 @@ acting — the audit described upstream's tree):
       as null). Port the normalization tests where the launch payload
       rendering matches.
 
+## Phase 8 — Post-0.7.0 gap analysis & systematic roadmap (2026-09-10)
+
+A re-verification pass after v0.7.0 shipped. Every number below was measured
+against THIS tree (grep/wc/`npm test -- --coverage`) in this pass — where the
+community audit's counts differed, these are the real ones. Batches are
+ordered by value-per-risk; each is self-contained and committable.
+
+### Measured state (2026-09-10)
+
+- **Coverage**: 66.64% lines / 76.06% branch / 63.06% functions. Worst large
+  modules: `flights.js` 34.69%, `vite.config.js` 40.27%, `traffic.js`
+  40.54%, `mapStackController.js` 38.21%, `worldAnnotationRenderer.js`
+  47.59%, `firstRunExperience.js` 48.22%, `bikeshare.js` 57.82%,
+  `splitFlap.js` 59.69%, `cctvSources.js` 60.80%, `annotationResolver.js`
+  62.17%, `gevActions.js` 62.31%. Worst small: `logoGaze` 26.49%,
+  `cctvGizmo` 30.40%, `cockpitCloudEffects` 37.74%, `celestialRing` 37.90%.
+- **Monoliths**: `src/ui.js` 10,417 lines; `vite.config.js` 5,957 lines;
+  the flights fork totals 9,312 lines (`flights.js` 5,437 +
+  `militaryFlights.js` 3,875) with duplicated ingestion/label/render
+  pipelines.
+- **Smells, recounted**: 862 `console.*` call sites (the audit's "147"
+  sampled upstream, not here); 31 files bypass `apiEndpoints.js`;
+  13 `create*OverlayEntry` factory clones; 2 blocking `window.prompt`
+  dialogs (`src/scenes/director.js:519`, `:582`).
+- **Headers**: `public/_headers` sets no CSP at all.
+- **Pages Functions**: 8 untested `.ts` handlers — `adsblol.ts`,
+  `ais-live.ts`, `analytics.ts`, `military-installations.ts`, `overpass.ts`,
+  `radio.ts`, `regional-brief.ts`, `weather.ts` — beside the tested `.js`
+  convention (firms, tomtom, launches, opensky-track, cctv, openzenith,
+  adsblol/mil, adsblol/trace, realtime/*).
+- **PWA**: precache manifest is 10 entries / ~6.1 MB.
+
+### New findings this pass (not in the community audit)
+
+- [ ] **`functions/api/radio.ts` breaks the SECURITY.md contract** (P0):
+      SECURITY.md promises allowlist + redirect rejection + private-IP
+      rejection + TLS pinning, but the Pages handler is a 52-line thin
+      pass-through with none of it — those guardrails live only in the dev
+      middleware (`radioProxyMiddleware`, `vite.config.js`). Fix by
+      extracting the destination policy into a worker-safe shared module
+      (the `cctvSources.js` pattern) used by both runtimes, with tests,
+      then restore the unqualified SECURITY.md wording. Until fixed, the
+      security claim on Pages is false.
+- [ ] **`functions/api/adsblol.ts` dev/prod drift** (P0): dev serves a 12 s
+      cache with stale-on-error; the Pages handler is a raw pass-through
+      (no cache, no stale) — a slow or flapping adsb.lol feed takes the
+      military layer down on Pages but not in dev. Port to `.js`, mirror
+      the dev caching policy, add tests next to `adsblol/mil.test.mjs`.
+- [ ] **Console surface**: 862 sites is too many to migrate blindly and too
+      many to leave. Introduce a small logger module (level-gated, ring
+      buffer for the existing debug-log function) and migrate per-module —
+      start with the hot paths (`flights.js`, `ui.js`, `detection.js`),
+      leave `?debug` gated logging explicit.
+
+### Batch 1 — Correctness & security hardening (P0, small, independent)
+
+- [ ] Overpass + military-installations Pages handlers: bbox range clamps
+      and response byte caps (dev has caps; the `.ts` handlers interpolate
+      raw bbox into the query — see backlog item under Phase 7). Port
+      `.ts` → `.js` + tests in the same move.
+- [ ] Same-site request gate for `/api/openai/hud-summary` and
+      `/api/google/nearby-places` (completes the token/debug-log pattern;
+      PR #242 remainder).
+- [ ] Default-on rate limiting for exposed deployments: flip the opt-in
+      `GEV_RATELIMIT_*` default on for Pages only (dev stays open), with a
+      documented escape hatch.
+- [ ] CSP in `public/_headers` — must include `'unsafe-eval'` in
+      `script-src` for the Knockout code inside `@cesium/widgets` (PR #242
+      verified it never initializes otherwise), plus `connect-src` for
+      every proxied host. Ship in report-only mode first, watch, then
+      enforce.
+
+### Batch 2 — e2e fleet validation (cheap now, high information)
+
+- [ ] Run `scripts/qa-l9-matrix.mjs` headless on this box (Linux/SwiftShader
+      now works via `scripts/lib/webglLaunchArgs.mjs`); fix what falls out
+      and extend the `checkSkip` keyless pattern to scripts that still
+      hard-require Google keys. This validates ~39 QA scripts in one pass
+      and tells us which are dead.
+
+### Batch 3 — Coverage campaign (P1, mechanical but large)
+
+- [ ] Pages Functions first: the 8 untested `.ts` handlers (small files,
+      node:test convention already established).
+- [ ] Then worst large modules in order: `flights.js` (34.69% — biggest
+      single win), `traffic.js`, `mapStackController.js`,
+      `gevActions.js`, `worldAnnotationRenderer.js`.
+- [ ] Milestone honesty: the 99% goal is aspirational; 80% lines on all
+      `src/data/` + `functions/` is the credible 0.8 target (modules with
+      heavy Cesium coupling are integration-tested via the QA harness
+      instead).
+
+### Batch 4 — Architecture debt (P1, unblocks everything else)
+
+- [ ] Extract `vite.config.js` middlewares into per-endpoint modules
+      (issue #41; 5,957 lines today). Prerequisite for testing the dev
+      side of every parity fix and for the security-gate items. Shared
+      worker-safe logic goes in `functions/_lib.js`-style modules both
+      runtimes import.
+- [ ] Consolidate `apiEndpoints.js` (31 bypassers).
+- [ ] One `createOverlayEntry` helper for the 13 factory clones.
+- [ ] Logger migration (see new findings) after Batch 1 lands.
+
+### Batch 5 — Large refactors (P2, each needs its own plan + tests first)
+
+- [ ] Split `src/ui.js` (10,417 lines) along its existing section banners
+      into `src/ui/*` — behavior-preserving, moved with their co-located
+      tests.
+- [ ] Unify the flights fork: `militaryFlights.js` duplicates the
+      ingestion → label → render pipeline of `flights.js` (9,312 lines
+      combined). Extract the shared pipeline; keep separate data sources
+      and styling.
+
+### Batch 6 — Perf, bundle, a11y remainder (P2/P3)
+
+- [ ] Render-perf five (Phase 7 backlog, unchanged) with before/after
+      measurements.
+- [ ] Icon font subsetting (PR #239) + precache diet: audit the 6.1 MB
+      manifest — don't precache multi-MB datasets that can lazy-load on
+      first layer enable.
+- [ ] Bundle budgets in CI (issue #40) once the diet lands.
+- [ ] `window.prompt` → accessible modal in `director.js` (a11y +
+      testability; blocking dialogs also freeze the render loop).
+- [ ] Remaining Phase 7 backlog items (portable tests, panel clamping,
+      CCTV source-pack validation, `.overpass` mirrors, FIRMS IPv6,
+      DATA_PRESET honesty, accessible-name test, allocation gates on
+      Node 26, Google server-key split, keyless geocoding).
+
+### Process debt
+
+- [ ] Version-bump discipline: `package.json` rode at 0.1.0 until v0.7.0 —
+      add "bump version + changelog" to the release checklist so tags and
+      package version never diverge again.
+- [ ] GitForge pipeline (task #7 of the session plan) remains BLOCKED on
+      the interactive `gitforge auth --login`; the gateway rejects the
+      CLI's stored credentials and the orchestrator is down. No gitforge
+      remote exists for this repo yet. GitHub Actions (lint + tests +
+      build) remains the active CI.
+- [ ] GitHub repo was renamed `gods-eye-view` → `Globe` (origin URL still
+      uses the old name and works only via redirect) — update the origin
+      URL on next push round.
+
 ## Deliberately deferred (documented, not forgotten)
 
 These are known gaps with reasons, not oversights:
