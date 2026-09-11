@@ -28,8 +28,6 @@ export default {
   'status.framesLoading': 'cargando fotogramas',
 
   'locale.groupAriaLabel': 'Idioma',
-  'locale.english.ariaLabel': 'Cambiar a inglés',
-  'locale.spanish.ariaLabel': 'Cambiar a español',
 
   // Phase-3 runtime extraction (mirrors locales/en/shell.js appendix).
   'loading.status.tilesGoogle': 'Cargando Google 3D Tiles...',

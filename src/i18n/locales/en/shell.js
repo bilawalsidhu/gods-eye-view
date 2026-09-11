@@ -46,12 +46,10 @@ export default {
   // index.html #cctv-sync-label (initial); src/ui.js setSplitFlapText() fallback
   'status.framesLoading': 'loading frames',
 
-  // Locale selector (index.html #control-panel tray). Static EN|ES buttons here;
-  // the click → persistLocaleAndReload wiring belongs to the phase-3 core-ui
-  // worker, which owns the pressed-state sync.
+  // Locale selector (index.html #control-panel tray): the group container is
+  // static; its buttons are runtime-rendered by ui.js _initLocaleSelector()
+  // from the configured locale pair (keys at the end of this file).
   'locale.groupAriaLabel': 'Language',
-  'locale.english.ariaLabel': 'Switch to English',
-  'locale.spanish.ariaLabel': 'Switch to Spanish',
 
   // ── Phase-3 runtime extraction (support worker), appended ─────────────────
   // src/main.js init() loaderStatus write sites without a phase-1/2 key.

@@ -15,6 +15,7 @@ import {
 import { LOCATIONS, CITY_POIS, GLOBE_VIEW, flyToGlobeView, flyToPresetLocation, flyToPOI, searchAndFlyTo } from './locations.js';
 import { locationMiniStatus } from './locationStatus.js';
 import { getLocale, persistLocaleAndReload, t } from './i18n/index.js';
+import { availableLocales } from './i18n/locale.js';
 import { interruptCameraMotion } from './cameraVerbs.js';
 import {
   aircraftTrackingTarget,
@@ -4060,24 +4061,36 @@ export class StyleManager {
   }
 
   /**
-   * Wires the command-dock EN|ES locale switch (phase-3 core-ui). Pressed
-   * state is synced from the resolved locale at boot; a click persists the
-   * choice and reloads the page, so no live re-apply of document translations
-   * is needed here (persistLocaleAndReload strips ?lang and keeps the hash).
+   * Renders the command-dock locale switch (runtime-built since the
+   * configurable-pair stage): one button per locale availableLocales()
+   * yields — the configured GEV_DEFAULT_LOCALE / GEV_SECONDARY_LOCALE pair,
+   * already deduped against the always-shipped English fallback. Labels are
+   * uppercase locale codes (EN/ES/FR); aria-labels come from
+   * shell.locale.<code>.ariaLabel in the active catalog. Pressed state is
+   * synced from the resolved locale at boot; a click persists the choice and
+   * reloads the page, so no live re-apply of document translations is needed
+   * here (persistLocaleAndReload strips ?lang and keeps the hash).
    * @returns {void}
    */
   _initLocaleSelector() {
-    const buttons = document.querySelectorAll('#control-panel .dock-locale-btn');
-    if (!buttons.length) return;
+    const container = document.querySelector('#control-panel .dock-locale-switch');
+    if (!container) return;
     const active = getLocale();
-    buttons.forEach((button) => {
-      const isActive = button.dataset.locale === active;
+    for (const locale of availableLocales()) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'dock-locale-btn';
+      button.dataset.locale = locale;
+      button.textContent = locale.toUpperCase();
+      button.setAttribute('aria-label', t(`shell.locale.${locale}.ariaLabel`));
+      const isActive = locale === active;
       button.classList.toggle('active', isActive);
       button.setAttribute('aria-pressed', String(isActive));
       button.addEventListener('click', () => {
         persistLocaleAndReload(button.dataset.locale);
       });
-    });
+      container.appendChild(button);
+    }
   }
 
   /**

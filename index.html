@@ -493,14 +493,13 @@
         <span class="panel-title"><span class="dock-label-icon dock-label-icon-presets" aria-hidden="true"></span>VISUAL PRESETS</span>
         <span class="panel-divider"></span>
       </button>
-      <!-- Language selector: STATIC MARKUP ONLY (phase 2). The click →
-           persistLocaleAndReload wiring and pressed-state sync belong to the
-           phase-3 core-ui worker; aria-pressed reflects the English default
-           until that sync lands. -->
-      <div class="dock-locale-switch" role="group" data-i18n-aria-label="shell.locale.groupAriaLabel">
-        <button type="button" class="dock-locale-btn active" data-locale="en" aria-pressed="true" data-i18n-aria-label="shell.locale.english.ariaLabel">EN</button>
-        <button type="button" class="dock-locale-btn" data-locale="es" aria-pressed="false" data-i18n-aria-label="shell.locale.spanish.ariaLabel">ES</button>
-      </div>
+      <!-- Language selector: only the group container is static (its
+           data-i18n-aria-label is applied from the catalog at boot). The
+           buttons are rendered at runtime by ui.js _initLocaleSelector(): one
+           per locale in the configured GEV_DEFAULT_LOCALE / GEV_SECONDARY_LOCALE
+           pair plus the always-shipped English fallback, deduped, labels EN/ES/FR
+           with aria-labels from shell.locale.<code>.ariaLabel. -->
+      <div class="dock-locale-switch" role="group" data-i18n-aria-label="shell.locale.groupAriaLabel"></div>
       <div id="control-panel-popover" class="dock-popover-content">
       <button class="dock-pin-btn" data-pin-target="control-panel" type="button" aria-label="Pin visual presets" aria-pressed="false" title="Keep visual presets open" data-i18n-aria-label="cockpit.presets.pinAriaLabel" data-i18n-title="cockpit.presets.pinTitle"><img src="/pin.svg" alt="" /></button>
       <div id="style-buttons" class="button-grid">
