@@ -2445,7 +2445,8 @@ silently demoting every later lookup for the session.
   eight-second timeout; the timer is cleared on every success or failure path.
 - OpenSky response cache stores successful upstream responses only; OAuth token refresh calls are coalesced.
 - A cold OpenSky failure uses the current camera subpoint only to request a cached adsb.lol point fallback capped at 250 nm. A fresh OpenSky response or last-good cache wins; a nominally successful worldwide snapshot more than two minutes old prefers viewport-scoped adsb.lol when available, otherwise the stale source is reported honestly. The fallback is visibly source-labeled and is never presented as a worldwide snapshot.
-- GBFS response size is capped; CCTV health map is bounded.
+- GBFS response size is capped and `/api/gbfs` is throttled with the same
+  90-per-client/300-global one-minute limiter as `/api/overpass`; CCTV health map is bounded.
 - Proxy error payloads are sanitized (no internal error details returned to clients).
 - `OPENAI_API_KEY` is server-side only; the browser receives ephemeral Realtime client secrets from `/api/realtime/token`.
 - `AISSTREAM_API_KEY` is server-side only; the browser reads the same-origin `/api/ais-live` cache.
