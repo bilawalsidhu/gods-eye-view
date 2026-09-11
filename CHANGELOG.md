@@ -4,8 +4,9 @@ This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
 ## [Unreleased]
-
 ### Added
+- French (`fr`) interface locale — 898 catalog keys, neutral international French, same strict parity gates as `es`.
+- Configurable locale pair via `.env`: `GEV_DEFAULT_LOCALE` / `GEV_SECONDARY_LOCALE` (defaults `en`/`es`; `en` always ships as fallback; invalid pairs fall back to `en`+`es`). Dock selector renders the configured pair dynamically. Browser-language detection keeps priority over the configured default.
 
 - The application-owned interface now ships in English and Spanish. A four-file
   catalog system (`src/i18n/locales/{en,es}/{shell,cockpit,layers,setup}.js`)

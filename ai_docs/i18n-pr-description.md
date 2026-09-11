@@ -1,4 +1,4 @@
-# PR draft: EN/ES interface localization (i18n)
+# PR draft: EN/ES/FR interface localization (i18n) with configurable locale pair
 
 > Working draft for the feature/i18n pull request. Trim or adapt when opening
 > the PR; all counts and file references verified at branch HEAD `2db4440`.
@@ -169,3 +169,20 @@ per-locale CSS.
   for when that policy lands.
 
 > **`npm run test:track`**: run on an otherwise-idle machine — the SwiftShader harness is CPU-bound, and concurrent heavy processes (builds, containers, extra dev servers) can produce protocol timeouts and fixture-cleanup races unrelated to this change.
+
+---
+
+## Follow-up: French locale + configurable default/secondary languages
+
+**What changes (additionally):**
+- Third catalog `fr` (898 keys, neutral international French; same parity gates — strict key/placeholder/plural equality with `en` and `es`).
+- `.env`-configurable pair: `GEV_DEFAULT_LOCALE` (default `en`) and `GEV_SECONDARY_LOCALE` (default `es`), wired `.env` → `loadEnv` → explicit `import.meta.env` defines → `locale.js`. `en` always ships as the source-of-truth fallback catalog. Invalid or degenerate pairs fall back to `en`+`es` with a dev-only warning.
+- Resolution order is unchanged: `?lang=` → stored preference → **browser language (priority)** → configured default. An explicitly configured default does NOT override browser detection.
+- Dock selector is now runtime-rendered from the configured pair (`EN | ES`, `FR | EN`, ...) with native-name aria-labels; static EN/ES markup removed.
+- Runtime review repairs: grammatical caveat clause (`NE SIGNIFIE PAS QUE TOUT EST DÉGAGÉ`), globe-view wording unification, doc-drift cleanup. French width ≤ Spanish on every known clip surface (no `[lang='fr']` CSS needed); watchlist items (installations cohort row, nearestLabel) queued for native review.
+
+**How to test (additionally):**
+- `GEV_DEFAULT_LOCALE=fr GEV_SECONDARY_LOCALE=en npm run dev` → boots with `FR | EN` selector; browser-language matching a pair locale still wins.
+- Strict parity now fails on any missing `es` **or** `fr` translation: `GEV_I18N_REQUIRE_FULL_LOCALE_PARITY=0` opts out.
+
+**Non-goals (additional):** other regional French variants; changing browser-language auto-detection priority.
