@@ -29,7 +29,7 @@ const HEADFUL = args.includes('--headful');
 
 const chromeCandidates = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
-  (() => { try { return puppeteer.executablePath(); } catch { return null; } })(),
+  await puppeteer.executablePath().catch(() => null),
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
 ].filter(Boolean);
