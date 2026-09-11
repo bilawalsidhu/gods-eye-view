@@ -13,6 +13,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- Live Air Traffic Control (ATC) auto-tuning avionics radio (COM1) that tracks
+  aircraft telemetry, classifies flight phases, and auto-tunes to nearest airport
+  tower and approach frequencies with VHF procedural squelch audio and HUD avionics card.
+
 ### Fixed
 
 - Map Source keyboard opening retries focus until the selected tile is visible.

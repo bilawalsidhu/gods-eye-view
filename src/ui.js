@@ -3371,6 +3371,13 @@ export class StyleManager {
       if (e.key.toLowerCase() === 'c') {
         this._toggleCctvEnabled();
       }
+      if (
+        e.key?.toLowerCase() === 'a' &&
+        !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && !e.isComposing &&
+        !e.target?.closest?.('input, textarea, select, [contenteditable], [role="textbox"], #first-run-launcher')
+      ) {
+        window.__godsEyeView?.atcRadioCard?.toggle();
+      }
     };
     document.addEventListener('keydown', this._globalKeydownHandler);
 

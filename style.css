@@ -9520,3 +9520,343 @@ body.scene-playback-mode #key-setup {
   border-color: rgba(255, 170, 150, 0.65);
   outline: none;
 }
+
+/* ── Air Traffic Control (ATC) COM1 Avionics Card ── */
+.atc-radio-card {
+  position: fixed;
+  bottom: 5.5rem;
+  right: 1.5rem;
+  width: 320px;
+  background: rgba(10, 18, 26, 0.92);
+  border: 1px solid rgba(0, 255, 255, 0.28);
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65), 0 0 15px rgba(0, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #e0f8ff;
+  font-family: var(--font-mono, monospace);
+  z-index: 150;
+  pointer-events: auto;
+  user-select: none;
+  animation: atc-slide-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes atc-slide-in {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.atc-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: rgba(0, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(0, 255, 255, 0.15);
+  font-size: 0.7rem;
+  letter-spacing: 0.08rem;
+  font-weight: 700;
+  color: #00ffff;
+}
+
+.atc-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.atc-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #39ffd5;
+  box-shadow: 0 0 8px #39ffd5;
+  animation: atc-pulse 1.8s infinite ease-in-out;
+}
+
+@keyframes atc-pulse {
+  0%, 100% { transform: scale(0.9); opacity: 0.7; }
+  50% { transform: scale(1.3); opacity: 1; }
+}
+
+.atc-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.atc-pill-btn {
+  background: rgba(0, 255, 255, 0.1);
+  border: 1px solid rgba(0, 255, 255, 0.25);
+  color: rgba(0, 255, 255, 0.7);
+  font-size: 0.55rem;
+  font-family: inherit;
+  letter-spacing: 0.05rem;
+  border-radius: 3px;
+  padding: 0.15rem 0.4rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.atc-pill-btn.active {
+  background: rgba(57, 255, 213, 0.25);
+  border-color: #39ffd5;
+  color: #39ffd5;
+  box-shadow: 0 0 6px rgba(57, 255, 213, 0.3);
+}
+
+.atc-close-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0 0.2rem;
+}
+.atc-close-btn:hover { color: #ff6666; }
+
+.atc-card-body {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.atc-station-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 0.5rem 0.65rem;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.atc-airport-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  overflow: hidden;
+}
+
+.atc-airport-block strong {
+  font-size: 0.72rem;
+  letter-spacing: 0.04rem;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+}
+
+.atc-airport-block span {
+  font-size: 0.62rem;
+  color: #7ae7ff;
+}
+
+.atc-frequency-block {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  text-align: right;
+}
+
+.atc-frequency-block span {
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.atc-frequency-block strong {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #39ffd5;
+  text-shadow: 0 0 8px rgba(57, 255, 213, 0.4);
+}
+
+.atc-frequency-block small {
+  font-size: 0.55rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.atc-phase-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.6rem;
+  letter-spacing: 0.05rem;
+}
+
+.atc-phase-badge {
+  background: rgba(255, 170, 0, 0.15);
+  color: #ffaa00;
+  border: 1px solid rgba(255, 170, 0, 0.35);
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.atc-phase-badge[data-phase='approach'] {
+  background: rgba(57, 255, 213, 0.15);
+  color: #39ffd5;
+  border-color: rgba(57, 255, 213, 0.4);
+}
+
+.atc-phase-badge[data-phase='surface'] {
+  background: rgba(68, 173, 255, 0.15);
+  color: #44adff;
+  border-color: rgba(68, 173, 255, 0.4);
+}
+
+.atc-status-chip {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.atc-status-chip[data-status='live'] {
+  color: #39ffd5;
+  font-weight: 700;
+  text-shadow: 0 0 6px rgba(57, 255, 213, 0.4);
+}
+
+.atc-controls-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.atc-freq-selector {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.atc-freq-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.75);
+  font-family: inherit;
+  font-size: 0.6rem;
+  padding: 0.25rem 0.45rem;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.atc-freq-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.atc-freq-btn.active {
+  background: rgba(0, 255, 255, 0.22);
+  border-color: #00ffff;
+  color: #00ffff;
+  box-shadow: 0 0 6px rgba(0, 255, 255, 0.25);
+}
+
+.atc-audio-controls {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.atc-audio-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(57, 255, 213, 0.12);
+  border: 1px solid rgba(57, 255, 213, 0.35);
+  color: #39ffd5;
+  font-family: inherit;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.atc-audio-toggle.active {
+  background: #39ffd5;
+  color: #051016;
+  box-shadow: 0 0 10px rgba(57, 255, 213, 0.6);
+}
+
+.atc-mute-toggle {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.7);
+  font-family: inherit;
+  font-size: 0.55rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.atc-mute-toggle.active {
+  background: rgba(255, 80, 80, 0.2);
+  border-color: #ff5050;
+  color: #ff8080;
+}
+
+.atc-volume-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.58rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.atc-volume-row input[type='range'] {
+  flex: 1;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  accent-color: #39ffd5;
+}
+
+/* Presentation mode suppression */
+body.ui-clean-view .atc-radio-card,
+body.recording-mode .atc-radio-card,
+body.scene-playback-mode .atc-radio-card {
+  display: none !important;
+}
+
+/* Accessibility: focus outlines */
+.atc-radio-card button:focus-visible,
+.atc-radio-card input:focus-visible {
+  outline: 2px solid var(--accent, #00ffff);
+  outline-offset: 1px;
+}
+
+/* Accessibility: screen reader utility */
+.atc-radio-card .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .atc-radio-card,
+  .atc-pulse-dot {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Mobile responsive positioning */
+@media (max-width: 760px) {
+  .atc-radio-card {
+    right: 16px;
+    bottom: 140px;
+    width: min(320px, calc(100vw - 32px));
+  }
+}
+
