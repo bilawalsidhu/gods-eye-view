@@ -28,12 +28,35 @@
 import fs from 'node:fs';
 import { handleOpenZenithRequest } from './functions/api/openzenith/_handler.js';
 import { createRadioCatalogBroker, isPublicRadioAddress } from './functions/api/radio/_broker.js';
+import {
+  buildMilitaryInstallationsQuery,
+  fetchOverpassPayload,
+  militaryInstallationCacheKey,
+  MILITARY_INSTALLATION_ELEMENT_CAP,
+  quantizeMilitaryInstallationBox,
+  requiredFiniteQueryNumber,
+  sanitizeOverpassBody,
+  validMilitaryInstallationBox,
+} from './src/data/overpassPolicy.js';
 import { promises as fsp } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import https from 'node:https';
 import { lookup as lookupDns } from 'node:dns/promises';
+
+// Pure Overpass / installation policy lives in the shared worker-safe module
+// (`src/data/overpassPolicy.js`) so the dev middlewares and the Pages
+// Functions cannot drift. Names below stay exported here only because the
+// proxy unit tests import them from this config module.
+export {
+  militaryInstallationCacheKey,
+  MILITARY_INSTALLATION_ELEMENT_CAP,
+  quantizeMilitaryInstallationBox,
+  requiredFiniteQueryNumber,
+  simplifyOverpassPayloadBody,
+  validMilitaryInstallationBox,
+} from './src/data/overpassPolicy.js';
 // CCTV subsystem: catalog assembly, feed types, and the frame fallback chain
 // are shared verbatim with the production Pages Function
 // (`functions/api/cctv/[[path]].js`). Only the Node-specific pieces (config-file
@@ -170,17 +193,6 @@ const OPENSKY_SOURCE_STALE_MS = 120_000;
 // ---------------------------------------------------------------------------
 // Overpass API proxy constants and cache state
 // ---------------------------------------------------------------------------
-/** Ordered list of Overpass API mirrors; tried sequentially on failure/rate-limit. */
-const OVERPASS_UPSTREAMS = [
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-  'https://lz4.overpass-api.de/api/interpreter',
-  // Community full-planet instance (privateforge nonprofit) — added 2026-07-30
-  // when all three mirrors above refused this IP (likely a dev-traffic rate
-  // ban; refused connections fail in ms, so healthy mirrors above still win).
-  // Verified: planet coverage (Texas query), CORS *, ~5-20 s cold latency.
-  'https://overpass.private.coffee/api/interpreter',
-];
 /**
  * TTL for FRESH cached Overpass responses (ms). Road geometry is static for
  * months — the original 45 s TTL forced a public-mirror round-trip on nearly
@@ -202,8 +214,6 @@ const OVERPASS_DISK_TTL_MS = 7 * 86_400_000;
 const OVERPASS_BOUNDARY_DISK_TTL_MS = 30 * 86_400_000;
 /** Disk-cache directory for Overpass responses. */
 const OVERPASS_DISK_DIR = path.join(process.cwd(), '.gev-cache', 'overpass');
-/** Per-upstream fetch timeout (ms). */
-const OVERPASS_TIMEOUT_MS = 22000;
 /** Max entries in the Overpass response cache (LRU-like, oldest evicted first). */
 const OVERPASS_CACHE_MAX_ENTRIES = 120;
 /** @type {Map<string,{status:number,body:string,contentType:string,endpoint:string,cachedAt:number}>} */
@@ -224,95 +234,6 @@ export function isOverpassBoundaryQuery(cacheKey) {
 /** Disk TTL for a query: boundary geometry keeps for a month, the rest 7 days. */
 function overpassDiskTtlMs(cacheKey) {
   return isOverpassBoundaryQuery(cacheKey) ? OVERPASS_BOUNDARY_DISK_TTL_MS : OVERPASS_DISK_TTL_MS;
-}
-
-/** Iterative Douglas-Peucker on [{lat,lon},...] (planar-degree approx — fine at
- *  the ~44 m tolerance used here). Endpoints always kept. */
-function douglasPeucker(points, toleranceDeg) {
-  const n = points.length;
-  if (n <= 2) return points;
-  const keep = new Uint8Array(n);
-  keep[0] = 1;
-  keep[n - 1] = 1;
-  const stack = [[0, n - 1]];
-  while (stack.length) {
-    const [a, b] = stack.pop();
-    if (b - a < 2) continue;
-    const ax = points[a].lon;
-    const ay = points[a].lat;
-    const vx = points[b].lon - ax;
-    const vy = points[b].lat - ay;
-    const c2 = vx * vx + vy * vy;
-    let worst = -1;
-    let worstDist = toleranceDeg;
-    for (let i = a + 1; i < b; i++) {
-      const wx = points[i].lon - ax;
-      const wy = points[i].lat - ay;
-      let d;
-      if (c2 === 0) {
-        d = Math.hypot(wx, wy);
-      } else {
-        const t = Math.max(0, Math.min(1, (vx * wx + vy * wy) / c2));
-        d = Math.hypot(wx - t * vx, wy - t * vy);
-      }
-      if (d > worstDist) {
-        worstDist = d;
-        worst = i;
-      }
-    }
-    if (worst >= 0) {
-      keep[worst] = 1;
-      stack.push([a, worst], [worst, b]);
-    }
-  }
-  const out = [];
-  for (let i = 0; i < n; i++) if (keep[i]) out.push(points[i]);
-  return out;
-}
-
-/** Simplify one element's geometry array in place if it is big enough. */
-function simplifyElementGeometry(el, minPoints, toleranceDeg) {
-  if (Array.isArray(el?.geometry) && el.geometry.length >= minPoints) {
-    el.geometry = douglasPeucker(el.geometry, toleranceDeg);
-  }
-  if (Array.isArray(el?.members)) {
-    for (const member of el.members) {
-      if (Array.isArray(member?.geometry) && member.geometry.length >= minPoints) {
-        member.geometry = douglasPeucker(member.geometry, toleranceDeg);
-      }
-    }
-  }
-}
-
-/**
- * Server-side geometry simplification for large Overpass `out geom` payloads.
- * Region/state boundary pivots return multi-MB coastline rings whose fidelity
- * nothing downstream needs (the client re-simplifies for draw); decimating them
- * HERE shrinks the disk cache, the wire, and client parse time — and is what
- * makes the raised read cap safe. Anything unparseable or below the thresholds
- * passes through byte-identical. Exported for tests (opts override thresholds).
- *
- * @param {string} bodyText - Raw upstream JSON body.
- * @returns {string} Possibly-simplified JSON body.
- */
-export function simplifyOverpassPayloadBody(bodyText, opts = {}) {
-  const minBytes = opts.minBytes ?? OVERPASS_SIMPLIFY_MIN_BYTES;
-  const minPoints = opts.minPoints ?? OVERPASS_SIMPLIFY_MIN_POINTS;
-  const toleranceDeg = opts.toleranceDeg ?? OVERPASS_SIMPLIFY_TOLERANCE_DEG;
-  if (typeof bodyText !== 'string' || bodyText.length < minBytes) return bodyText;
-  let data;
-  try {
-    data = JSON.parse(bodyText);
-  } catch {
-    return bodyText;
-  }
-  if (!Array.isArray(data?.elements)) return bodyText;
-  for (const el of data.elements) simplifyElementGeometry(el, minPoints, toleranceDeg);
-  try {
-    return JSON.stringify(data);
-  } catch {
-    return bodyText;
-  }
 }
 
 /** Normalized Overpass query -> stable disk-cache file path. */
@@ -389,27 +310,6 @@ const _routeCache = new Map();
 // --- Abuse guards shared by the Overpass + route proxies --------------------
 /** Max accepted POST body for the Overpass proxy (Overpass QL queries are tiny). */
 const OVERPASS_MAX_BODY_BYTES = 24 * 1024; // 24 KB
-/**
- * Hard cap on a single Overpass upstream response we will buffer into memory.
- * 32 MB (was 12 MB): a dense island/state admin boundary at full `out geom`
- * fidelity — Sicilia's Mediterranean coastline — can exceed 12 MB, and clipping
- * it read as a permanent "transient" failure (field test 2026-07-23, Sicily
- * never traced). The buffered payload is SIMPLIFIED server-side before it is
- * cached or sent (simplifyOverpassPayloadBody), so the raised cap does not
- * raise what clients receive or what the disk stores.
- */
-const OVERPASS_MAX_RESPONSE_BYTES = 32 * 1024 * 1024; // 32 MB
-/** Only payloads at least this large go through geometry simplification. */
-const OVERPASS_SIMPLIFY_MIN_BYTES = 1_500_000;
-/** Only per-element geometry arrays with at least this many points are simplified. */
-const OVERPASS_SIMPLIFY_MIN_POINTS = 1200;
-/**
- * Douglas-Peucker tolerance (degrees, ≈44 m of latitude). Region/state boundary
- * rings are drawn at regional camera scale and the client simplifies again for
- * draw, so ~44 m fidelity is invisible; building footprints never reach the
- * point threshold above and pass through untouched.
- */
-const OVERPASS_SIMPLIFY_TOLERANCE_DEG = 0.0004;
 /** Max concurrent in-flight upstream Overpass fetches across all distinct queries. */
 const OVERPASS_MAX_CONCURRENT = 6;
 let _overpassConcurrent = 0;
@@ -517,173 +417,6 @@ function enforceOptInRateLimit(limiter, req, res) {
  */
 function clientKey(req) {
   return String(req.socket?.remoteAddress || 'local');
-}
-
-/** Server-side timeout ceiling (seconds) we allow inside an Overpass QL query. */
-const OVERPASS_MAX_QL_TIMEOUT = 30;
-/** Max `around:` radius (m) — every app caller uses <= 1800 m. */
-const OVERPASS_MAX_AROUND_M = 50000;
-/** Max bbox span (degrees) — app bboxes are small viewport tiles. */
-const OVERPASS_MAX_BBOX_DEG = 12;
-/**
- * Every Overpass element-type specifier, including the combined shortcuts
- * (nwr/nw/nr/wr) and `rel`. Shared by the selector + area-element-deny regexes so
- * they can't drift (a missing shortcut like `wr` was an area-scan bypass).
- */
-const OVERPASS_ELEMENT_TYPES = 'node|way|relation|nwr|nw|nr|wr|rel';
-/** Element-selector (incl. `area`) whose statements must be individually bounded. */
-const OVERPASS_SELECTOR_RE = new RegExp(`\\b(?:${OVERPASS_ELEMENT_TYPES}|area)\\b`);
-/** An element selector bounded BY an area — the country-scan abuse shape. */
-const OVERPASS_AREA_ELEMENT_RE = new RegExp(`\\b(?:${OVERPASS_ELEMENT_TYPES})\\s*\\(\\s*area\\b`, 'i');
-/** A single bbox 4-tuple `(s,w,n,e)` (non-global so it does not advance lastIndex). */
-const OVERPASS_BBOX_RE = /\(\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\)/;
-
-/**
- * Validate + clamp an Overpass form body. Defends the generic proxy against
- * planet-scale abuse: requires exactly one `data` query in which EVERY element
- * selector is individually spatially bounded (around / bbox / is_in / poly /
- * area-set / pivot), rejects oversized radii and world-sized bboxes, and clamps
- * every `[timeout:]` directive. Comments + quoted literals are stripped first so
- * a fake bound inside a tag value can't satisfy the check.
- *
- * Every real app caller passes (annotations/locations/cctv use `around:`/`is_in`/
- * `area.`/`pivot`; traffic uses a small `(s,w,n,e)` bbox); a mixed query that
- * pairs one bounded selector with a global one is rejected.
- *
- * @returns {{ok:true, body:string} | {ok:false, error:string}}
- */
-/**
- * Single-pass lexer: blank out quoted literals (→ empty quotes) and strip line
- * and block comments — recognizing each in one walk so a comment marker INSIDE a
- * quoted string is treated as string content, not a comment (and vice versa).
- * Chained regex replaces get the ordering wrong (a quoted slash-slash would hide
- * the rest of the line), which is exactly the bypass this avoids.
- */
-function stripOverpassNoise(src) {
-  let out = '';
-  let i = 0;
-  const n = src.length;
-  while (i < n) {
-    const c = src[i];
-    if (c === '"' || c === "'") {
-      const quote = c;
-      i += 1;
-      while (i < n) {
-        if (src[i] === '\\') { i += 2; continue; } // escaped char
-        if (src[i] === quote) { i += 1; break; } // closing quote
-        i += 1;
-      }
-      out += quote + quote; // collapse the literal to empty quotes
-      continue;
-    }
-    if (c === '/' && src[i + 1] === '*') {
-      i += 2;
-      while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i += 1;
-      i += 2;
-      out += ' ';
-      continue;
-    }
-    if (c === '/' && src[i + 1] === '/') {
-      i += 2;
-      while (i < n && src[i] !== '\n') i += 1;
-      out += ' ';
-      continue;
-    }
-    out += c;
-    i += 1;
-  }
-  return out;
-}
-
-function sanitizeOverpassBody(rawBody) {
-  let params;
-  try { params = new URLSearchParams(rawBody); } catch { return { ok: false, error: 'Malformed query body' }; }
-  const all = params.getAll('data');
-  if (all.length !== 1) return { ok: false, error: 'Exactly one data query is required' };
-  const data = all[0];
-  if (!data || !data.trim()) return { ok: false, error: 'Missing Overpass data query' };
-
-  // Blank quoted literals + strip comments in one lexer pass so a fake bound or a
-  // `//` inside a string can't hide an unbounded selector (or satisfy a bound).
-  const stripped = stripOverpassNoise(data);
-
-  // Reject oversized radii in EVERY around form — point `around:r,lat,lon` AND the
-  // input-set form `around.set:r` — and parse the full numeric token so scientific
-  // notation (`5e7`) can't slip a planet-scale radius past the cap.
-  for (const m of stripped.matchAll(/around(?:\.\w+)?:\s*([\d.eE+-]+)/gi)) {
-    const radius = Number(m[1]);
-    if (!Number.isFinite(radius) || radius > OVERPASS_MAX_AROUND_M) {
-      return { ok: false, error: 'Overpass around radius too large' };
-    }
-  }
-  // Reject world-sized / oversized bboxes.
-  for (const m of stripped.matchAll(/\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)/g)) {
-    const s = Number(m[1]); const w = Number(m[2]); const n = Number(m[3]); const e = Number(m[4]);
-    if (Math.abs(n - s) > OVERPASS_MAX_BBOX_DEG || Math.abs(e - w) > OVERPASS_MAX_BBOX_DEG) {
-      return { ok: false, error: 'Overpass bbox too large' };
-    }
-  }
-
-  // Reject control-flow constructs the app never uses — their set/bound semantics
-  // are hard to validate statically. The app only uses plain selectors + is_in /
-  // area / pivot / recursion, so this denylist closes loop/transform escape hatches.
-  if (/\b(?:foreach|complete|retro|compare|convert|make)\b/i.test(stripped)) {
-    return { ok: false, error: 'Unsupported Overpass construct' };
-  }
-  // `poly:` has unchecked extent and the app never uses it — reject outright
-  // (position-independent, so tag filters can't hide it).
-  if (/\bpoly\s*:/i.test(stripped)) {
-    return { ok: false, error: 'Overpass poly filter not allowed' };
-  }
-
-  // Every selector statement must be individually bounded, WITH set provenance: a
-  // set counts as a bound only if it was assigned (->.set) by an already-bounded
-  // statement. So `way[...]->.a` (global assigned to a set) is rejected, while the
-  // app's `is_in(...)->.a; area.a[...]` and `area(id)->.x; rel(pivot.x)` validate.
-  const boundedSets = new Set();
-  for (let stmt of stripped.split(';')) {
-    stmt = stmt.trim();
-    if (!stmt || stmt.startsWith('[') || /^out\b/.test(stmt)) continue;
-
-    // Strip output-set assignments (NOT input bounds), then strip bracket tag
-    // filters so a tag KEY/value (e.g. `way[is_in]`, `node[around]`) can never be
-    // misread as a spatial bound. Bounds live in (...) / function calls / set
-    // refs, never inside [...], so the probe loses nothing real.
-    const outSets = [];
-    const body = stmt.replace(/->\s*\.(\w+)/g, (_, name) => { outSets.push(name); return ' '; });
-    const probe = body.replace(/\[[^\]]*\]/g, ' ');
-
-    // Reject element-in-area scans on the TAG-STRIPPED probe, so a tag filter
-    // between the selector and the area filter (way["highway"](area.a)) can't hide
-    // it. An area has unbounded extent (could be a whole country); the app only
-    // SELECTS admin areas (area.set) and pivots (rel(pivot.x)), never node/way/
-    // relation(area...). The probe collapses tags so `way (area.a)` is caught.
-    if (OVERPASS_AREA_ELEMENT_RE.test(probe)) {
-      return { ok: false, error: 'Overpass area-bounded element selector not allowed' };
-    }
-
-    const hasSelector = OVERPASS_SELECTOR_RE.test(probe);
-    const inputSets = [...probe.matchAll(/(?<!\d)\.([a-z_]\w*)/gi)].map((m) => m[1]);
-    const directBound = /around:\s*\d/.test(probe)
-      || OVERPASS_BBOX_RE.test(probe)
-      || /is_in\s*\(/.test(probe)                 // is_in(lat,lon) — the function form only
-      || /\barea\s*\(/.test(probe);               // area(id) — bounded as a set definition
-
-    const setBound = inputSets.some((s) => boundedSets.has(s));
-    const bounded = directBound || setBound;
-
-    if (hasSelector && !bounded) {
-      return { ok: false, error: 'Overpass query has an unbounded selector' };
-    }
-    // Only a bounded statement can mark its output sets as bounded.
-    if (bounded) for (const name of outSets) boundedSets.add(name);
-  }
-
-  const clamped = data.replace(
-    /\[timeout:\s*(\d+)\s*\]/gi,
-    (_, n) => `[timeout:${Math.min(Number(n) || OVERPASS_MAX_QL_TIMEOUT, OVERPASS_MAX_QL_TIMEOUT)}]`,
-  );
-  return { ok: true, body: `data=${encodeURIComponent(clamped)}` };
 }
 
 /** Read a request body with a hard byte cap; throws { code:'BODY_TOO_LARGE' } past the cap. */
@@ -2185,35 +1918,6 @@ function adsbdbProxy() {
   };
 }
 
-/**
- * Detect whether an Overpass API response body indicates rate-limiting.
- *
- * Checks for known rate-limit phrases in the body text regardless of
- * HTTP status code, since some mirrors return 200 with an error payload.
- *
- * @param {string} bodyText - Upstream response body.
- * @returns {boolean} True if the body looks rate-limited.
- */
-function overpassLooksRateLimited(bodyText) {
-  const text = String(bodyText || '').toLowerCase();
-  return text.includes('rate_limited')
-    || text.includes('quota of your ip address')
-    || text.includes('dispatcher_client::request_read_and_idx::rate_limited')
-    || text.includes('too many requests');
-}
-
-/**
- * Detect an Overpass HTTP-200 body that is actually a runtime FAILURE (server-side
- * timeout / out-of-memory) via its `remark`. These are transient upstream failures,
- * not authoritative empty results, so they must not be returned or cached.
- */
-function overpassLooksRuntimeError(bodyText) {
-  const text = String(bodyText || '').toLowerCase();
-  return text.includes('runtime error')
-    || text.includes('timed out')
-    || text.includes('out of memory');
-}
-
 /** Evict oldest Overpass cache entries until size is within the cap. */
 function trimOverpassCache() {
   while (_overpassCache.size > OVERPASS_CACHE_MAX_ENTRIES) {
@@ -2238,80 +1942,6 @@ function sendOverpassResponse(res, payload, cacheStatus = 'MISS') {
     'X-Overpass-Upstream': payload.endpoint || 'unknown',
   });
   res.end(payload.body || '');
-}
-
-/**
- * Try each Overpass upstream in order until one succeeds.
- *
- * Skips rate-limited or 5xx responses and falls through to the next
- * mirror. If all mirrors fail, returns the last rate-limited payload
- * (if any) or throws the last error.
- *
- * @param {string} body - URL-encoded Overpass QL query body.
- * @param {number} [maxResponseBytes] Endpoint-specific response cap.
- * @returns {Promise<{status:number,body:string,contentType:string,endpoint:string,rateLimited:boolean}>}
- */
-async function fetchOverpassPayload(body, maxResponseBytes = OVERPASS_MAX_RESPONSE_BYTES) {
-  let lastError = null;
-  let lastRateLimitPayload = null;
-
-  for (const endpoint of OVERPASS_UPSTREAMS) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), OVERPASS_TIMEOUT_MS);
-
-    try {
-      const upstream = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'gods-eye-view-overpass-proxy/1.0',
-        },
-        body,
-        signal: controller.signal,
-      });
-
-      const responseBody = await readResponseTextCapped(upstream, maxResponseBytes);
-      const contentType = upstream.headers.get('content-type') || 'application/json';
-      const status = upstream.status;
-      const rateLimited = status === 429 || overpassLooksRateLimited(responseBody);
-      const runtimeError = overpassLooksRuntimeError(responseBody);
-      const payload = {
-        status,
-        body: responseBody,
-        contentType,
-        endpoint,
-        rateLimited,
-        runtimeError,
-      };
-
-      if (rateLimited) {
-        lastRateLimitPayload = payload;
-        continue;
-      }
-      // A 200 body carrying a runtime error / timeout is a transient upstream
-      // failure — skip to the next mirror rather than returning or caching it.
-      if (runtimeError) {
-        lastError = new Error(`Overpass runtime error (${endpoint})`);
-        continue;
-      }
-      if (status >= 500) {
-        lastError = new Error(`Overpass upstream returned ${status} (${endpoint})`);
-        continue;
-      }
-
-      // Success: decimate giant boundary geometry before it reaches the cache,
-      // the disk, or the client (what makes the 32 MB read cap safe to hold).
-      payload.body = simplifyOverpassPayloadBody(payload.body);
-      return payload;
-    } catch (error) {
-      lastError = error;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
-  if (lastRateLimitPayload) return lastRateLimitPayload;
-  throw lastError || new Error('All Overpass upstreams failed');
 }
 
 /**
@@ -4630,12 +4260,6 @@ const MILITARY_INSTALLATION_STALE_MS = 60 * 60_000;
 const MILITARY_INSTALLATION_MAX_CACHE = 80;
 const MILITARY_INSTALLATION_MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 /**
- * Upstream element cap. A response that hits it exactly is SATURATED — Overpass
- * truncated, so off-viewport features from the snapped bbox may have crowded out
- * in-viewport ones. Callers re-ask for the exact viewport in that case.
- */
-export const MILITARY_INSTALLATION_ELEMENT_CAP = 700;
-/**
  * Disk-cache TTL for mapped installations (ms) — 30 days.
  *
  * Field test 2026-08-18: "search nearby sites" was slow because every look
@@ -4647,56 +4271,8 @@ export const MILITARY_INSTALLATION_ELEMENT_CAP = 700;
 const MILITARY_INSTALLATION_DISK_TTL_MS = 30 * 86_400_000;
 /** Disk-cache directory for mapped installation payloads. */
 const MILITARY_INSTALLATION_DISK_DIR = path.join(process.cwd(), '.gev-cache', 'military-installations');
-/**
- * Cache-key grid step in degrees (~5.5 km).
- *
- * The browser sends the raw view rectangle, so every pixel of pan minted a new
- * key and a new upstream query. Snapping the bbox OUTWARD onto a coarse grid
- * makes neighbouring viewports share one entry, and because the snap only ever
- * grows the box, the cached answer is always a superset of what was asked for.
- */
-const MILITARY_INSTALLATION_BBOX_STEP_DEG = 0.05;
 const _militaryInstallationCache = new Map();
 const _militaryInstallationInFlight = new Map();
-
-/**
- * Snap a request bbox outward onto the shared installation cache grid.
- * @param {{south:number, west:number, north:number, east:number}} box
- * @param {number} [stepDeg]
- * @returns {{south:number, west:number, north:number, east:number}}
- */
-export function quantizeMilitaryInstallationBox(box, stepDeg = MILITARY_INSTALLATION_BBOX_STEP_DEG) {
-  // Round the ratio first: 29.9999/0.05 lands a hair under an exact grid line
-  // in binary floating point, which would otherwise snap a whole cell too far.
-  const snap = (value, grow) => {
-    const cells = Number((value / stepDeg).toFixed(9));
-    return Number(((grow > 0 ? Math.ceil(cells) : Math.floor(cells)) * stepDeg).toFixed(6));
-  };
-  return {
-    south: Math.max(-90, snap(box.south, -1)),
-    west: Math.max(-180, snap(box.west, -1)),
-    north: Math.min(90, snap(box.north, 1)),
-    east: Math.min(180, snap(box.east, 1)),
-  };
-}
-
-/**
- * Stable disk/memory cache key for an installation bbox.
- *
- * The key's precision must match the precision of the bounds the QUERY uses, or
- * two different queries collide on one entry. Snapped boxes live on a 0.05 deg
- * grid, so 3 decimals is exact for them; an `exact=1` request carries the raw
- * viewport at 5 decimals and must be keyed at 5, otherwise two nearby exact
- * viewports would share an answer and the second would be missing the edge
- * strip it just exposed.
- * @param {{south:number, west:number, north:number, east:number}} box
- * @param {number} [decimals]
- */
-export function militaryInstallationCacheKey(box, decimals = 3) {
-  return [box.south, box.west, box.north, box.east]
-    .map((value) => value.toFixed(decimals))
-    .join(',');
-}
 
 /**
  * Resolve the READ tiers for one installation request, in order: fresh memory,
@@ -4816,17 +4392,6 @@ export async function writeMilitaryInstallationDisk(
   }
 }
 
-export function validMilitaryInstallationBox(params) {
-  const south = requiredFiniteQueryNumber(params, 'south');
-  const west = requiredFiniteQueryNumber(params, 'west');
-  const north = requiredFiniteQueryNumber(params, 'north');
-  const east = requiredFiniteQueryNumber(params, 'east');
-  if (![south, west, north, east].every(Number.isFinite)) return null;
-  if (south < -90 || north > 90 || west < -180 || east > 180 || south >= north || west >= east) return null;
-  if (north - south > 10 || east - west > 10) return null;
-  return { south, west, north, east };
-}
-
 function trimMilitaryInstallationCache() {
   while (_militaryInstallationCache.size > MILITARY_INSTALLATION_MAX_CACHE) {
     const oldest = _militaryInstallationCache.keys().next().value;
@@ -4837,10 +4402,8 @@ function trimMilitaryInstallationCache() {
 
 function militaryInstallationsProxy() {
   async function refresh(box, key) {
-    const bbox = `${box.south},${box.west},${box.north},${box.east}`;
-    const ql = `[out:json][timeout:20];(nwr["military"~"^(airfield|naval_base|range|barracks|base)$"](${bbox});nwr["landuse"="military"](${bbox}););out center tags geom ${MILITARY_INSTALLATION_ELEMENT_CAP};`;
     const upstream = await fetchOverpassPayload(
-      `data=${encodeURIComponent(ql)}`,
+      buildMilitaryInstallationsQuery(box, MILITARY_INSTALLATION_ELEMENT_CAP),
       MILITARY_INSTALLATION_MAX_RESPONSE_BYTES,
     );
     if (upstream.status >= 400 || upstream.rateLimited || upstream.runtimeError) {
@@ -4978,13 +4541,6 @@ const _weatherEffectsInFlight = new Map();
 const _weatherEffectsRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 45, globalMax: 120 });
 let _nominatimQueue = Promise.resolve();
 let _nominatimLastRequestAt = 0;
-
-export function requiredFiniteQueryNumber(params, key) {
-  const value = params.get(key);
-  if (value === null || value.trim() === '') return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
 
 export function validRegionalPoint(params) {
   const latitude = requiredFiniteQueryNumber(params, 'latitude');

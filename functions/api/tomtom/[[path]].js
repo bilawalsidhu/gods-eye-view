@@ -1,6 +1,11 @@
 /**
- * Cloudflare Pages Function — /api/tomtom
+ * Cloudflare Pages Function — /api/tomtom/[[path]] (catch-all)
  *
+ * Lives at a catch-all because the client only ever calls SUBPATHS
+ * (`/api/tomtom/status`, `/api/tomtom/flow/{z}/{x}/{y}.pbf`); Pages routes a
+ * static function file at its EXACT path only, so the previous flat
+ * `tomtom.js` never answered those requests on real deployments (they fell
+ * through to the SPA's index.html).
  * TomTom flow-tile proxy: the production counterpart of the dev middleware in
  * `vite.config.js` (tomtom-proxy). Replaces an earlier host-swap forwarder
  * that relayed ANY path on api.tomtom.com with the account key appended (an
@@ -24,8 +29,8 @@
  *
  * The key never appears in a response, a cache header, or an error message.
  */
-import { jsonResponse, methodNotAllowed } from '../_lib.js';
-import { isValidTileCoord } from '../../src/data/tomtomTiles.js';
+import { jsonResponse, methodNotAllowed } from '../../_lib.js';
+import { isValidTileCoord } from '../../../src/data/tomtomTiles.js';
 
 /** How long a fetched tile is served without re-fetching (dev parity). */
 const TILE_TTL_MS = 120_000;

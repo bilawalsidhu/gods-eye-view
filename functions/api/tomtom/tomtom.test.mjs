@@ -1,7 +1,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { onRequest, resetTomTomStateForTest, expireTomTomTileForTest } from './tomtom.js';
+import { onRequest, resetTomTomStateForTest, expireTomTomTileForTest } from './[[path]].js';
 
 const url = (path = '') => `https://example.com/api/tomtom${path}`;
 const ctx = (request, env = {}) => ({ request, env });

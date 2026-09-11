@@ -459,10 +459,31 @@ ordered by value-per-risk; each is self-contained and committable.
 
 ### Batch 1 — Correctness & security hardening (P0, small, independent)
 
-- [ ] Overpass + military-installations Pages handlers: bbox range clamps
-      and response byte caps (dev has caps; the `.ts` handlers interpolate
-      raw bbox into the query — see backlog item under Phase 7). Port
-      `.ts` → `.js` + tests in the same move.
+- [x] Overpass + military-installations Pages handlers: DONE 2026-09-11,
+      and worse than clamps-and-caps — `overpass.ts` relayed ANY unsanitized
+      body to a mirror (planet-scale queries, no caps, no cache, no
+      simplify), and `military-installations.ts` read a `bbox` param the
+      client has never sent (it sends south/west/north/east), so the layer
+      400'd on every production request while dev worked. Both were deleted
+      and replaced by `functions/api/overpass.js` +
+      `functions/api/military-installations.js`, which import the new shared
+      worker-safe policy module `src/data/overpassPolicy.js` (sanitizer,
+      mirror fan-out, simplify, bbox validation/quantization/cache keys, and
+      the one `buildMilitaryInstallationsQuery` builder) — the exact module
+      `vite.config.js` now uses, so the runtimes cannot drift (~19 KB of
+      policy extracted from the config). Dev-parity contracts implemented:
+      405/413/400/429/503-busy/degraded-verbatim/502 for overpass;
+      GET-only, snapped-grid keying with `exact=1` re-ask, HIT/INFLIGHT/
+      MISS/STALE headers, {elements, saturated, elementCap, retrievedAt,
+      status} payload, stale-then-503 for installations. 20 new tests.
+      Honest difference (documented in-file): dev's disk-cache tiers have no
+      workerd analogue — Pages serves memory-stale at any age instead.
+      Related routing fix in the same unit: `functions/api/tomtom.js` was an
+      exact-route file, but the client only calls SUBPATHS
+      (`/api/tomtom/status`, `/api/tomtom/flow/{z}/{x}/{y}.pbf`) — Pages
+      routes static function files at their exact path only, so every
+      production tomtom request fell through to the SPA. Moved to
+      `functions/api/tomtom/[[path]].js` (tests moved alongside, 11/11).
 - [ ] Same-site request gate for `/api/openai/hud-summary` and
       `/api/google/nearby-places` (completes the token/debug-log pattern;
       PR #242 remainder).
