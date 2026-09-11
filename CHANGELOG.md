@@ -11,6 +11,13 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- Phone layout shell (`src/mobileShell.js`): at ≤720px, a bottom tab bar opens
+  Search / Layers / Context / Display / Presets / More as exclusive sheets over
+  the existing rails. Desktop layout is unchanged; Clean View and Cockpit hide
+  the tab chrome.
+
 ### Fixed
 
 - Mapped-site outages show their scheduled retry countdown and distinguish

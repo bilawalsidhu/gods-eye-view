@@ -1418,7 +1418,10 @@ body.ui-clean-view #data-panel,
 body.ui-clean-view #cctv-panel,
 body.ui-clean-view #radio-panel,
 body.ui-clean-view #global-context-panel,
-body.ui-clean-view #scene-panel {
+body.ui-clean-view #scene-panel,
+body.ui-clean-view #mobile-tab-bar,
+body.ui-clean-view #mobile-sheet-backdrop,
+body.ui-clean-view #mobile-modal-close {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
@@ -3843,7 +3846,8 @@ body.cockpit-mode :is(
   #title-bar, #style-indicator, #top-center-actions, #traffic-sync-chip, #cctv-sync-chip,
   #command-dock,
   #military-awareness-panel, #military-awareness-direction-overlay,
-  #cockpit-entry
+  #cockpit-entry,
+  #mobile-tab-bar, #mobile-sheet-backdrop, #mobile-modal-close
 ) { display: none !important; }
 body.cockpit-mode :is(#clear-selected-layers, #share-btn, #reset-globe-view) {
   display: none !important;
@@ -9520,3 +9524,668 @@ body.scene-playback-mode #key-setup {
   border-color: rgba(255, 170, 150, 0.65);
   outline: none;
 }
+/* Hidden on desktop and before JS applies body.mobile-shell. */
+#mobile-tab-bar,
+#mobile-sheet-backdrop,
+#mobile-modal-close {
+  display: none;
+}
+
+/* ── Mobile tab-shell (720px, body.mobile-shell only) ── */
+@media (max-width: 720px) {
+  body.mobile-shell {
+    --mobile-tabbar-height: 3.25rem;
+    --mobile-dock-height: 3.875rem;
+    --mobile-chrome-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--mobile-tabbar-height) + var(--mobile-dock-height));
+    --mobile-modal-inset-top: max(12px, env(safe-area-inset-top, 0px));
+    --mobile-modal-max-height: min(72dvh, calc(100dvh - var(--mobile-chrome-bottom) - var(--mobile-modal-inset-top) - 12px));
+  }
+
+  body.mobile-shell #mobile-tab-bar {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 146;
+    display: flex;
+    align-items: stretch;
+    justify-content: space-around;
+    min-height: var(--mobile-tabbar-height);
+    padding: 0 4px env(safe-area-inset-bottom, 0px);
+    background: rgba(9, 18, 27, 0.92);
+    border-top: 1px solid rgba(123, 189, 211, 0.22);
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(24px) saturate(1.3);
+    -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  }
+
+  body.mobile-shell #mobile-tab-bar button {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-width: 0;
+    min-height: 44px;
+    padding: 6px 4px;
+    color: var(--text-secondary);
+    background: none;
+    border: 0;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  body.mobile-shell #mobile-tab-bar button .material-symbols-outlined {
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  body.mobile-shell #mobile-tab-bar button[aria-pressed='true'] {
+    color: var(--accent);
+  }
+
+  body.mobile-shell #mobile-sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 155;
+    display: none;
+    background: rgba(4, 8, 14, 0.42);
+    pointer-events: auto;
+  }
+
+  body.mobile-shell[data-mobile-sheet] #mobile-sheet-backdrop:not([hidden]) {
+    display: block;
+  }
+
+  body.mobile-shell #mobile-modal-close {
+    position: fixed;
+    top: calc(var(--mobile-modal-inset-top) + 8px);
+    right: 18px;
+    z-index: 170;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    color: var(--text-primary);
+    background: rgba(9, 18, 27, 0.92);
+    border: 1px solid rgba(123, 189, 211, 0.28);
+    border-radius: 50%;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  body.mobile-shell[data-mobile-sheet] #mobile-modal-close:not([hidden]) {
+    display: flex;
+  }
+
+  body.mobile-shell #mobile-modal-close .material-symbols-outlined {
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  body.mobile-shell #title-bar {
+    top: max(12px, env(safe-area-inset-top, 0px));
+    left: 12px;
+  }
+
+  body.mobile-shell #title-bar .subtitle,
+  body.mobile-shell #style-indicator {
+    display: none;
+  }
+
+  body.mobile-shell #top-center-actions {
+    top: max(10px, env(safe-area-inset-top, 0px));
+  }
+
+  body.mobile-shell #top-center-actions button {
+    width: 44px;
+    height: 44px;
+  }
+
+  body.mobile-shell #left-panel-stack {
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: 0;
+    height: 0;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  body.mobile-shell #right-context-rail {
+    width: 0;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack,
+  body.mobile-shell[data-mobile-sheet='context'] #right-context-rail,
+  body.mobile-shell[data-mobile-sheet='display'] #right-context-rail,
+  body.mobile-shell[data-mobile-sheet='search'] #command-dock,
+  body.mobile-shell[data-mobile-sheet='presets'] #command-dock {
+    z-index: 160;
+  }
+
+  body.mobile-shell #left-panel-stack > [data-panel-id],
+  body.mobile-shell #left-panel-stack > #data-panel.active,
+  body.mobile-shell #right-context-rail > [data-panel-id],
+  body.mobile-shell #pp-toggles {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  body.mobile-shell[data-mobile-sheet] .panel-collapse-btn,
+  body.mobile-shell[data-mobile-sheet] .dock-pin-btn {
+    display: none;
+  }
+
+  body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack > #data-panel,
+  body.mobile-shell[data-mobile-sheet='context'] #right-context-rail > #global-context-panel,
+  body.mobile-shell[data-mobile-sheet='display'] #pp-toggles,
+  body.mobile-shell[data-mobile-sheet='display'] #right-context-rail > #pp-toggles,
+  body.mobile-shell[data-mobile-sheet='search'] #command-dock > #location-bar,
+  body.mobile-shell[data-mobile-sheet='presets'] #command-dock > #control-panel {
+    position: fixed;
+    top: var(--mobile-modal-inset-top);
+    right: 12px;
+    bottom: auto;
+    left: 12px;
+    z-index: 160;
+    display: flex;
+    flex-direction: column;
+    visibility: visible;
+    width: auto;
+    max-width: none;
+    height: auto;
+    max-height: var(--mobile-modal-max-height);
+    overflow: hidden;
+    pointer-events: auto;
+    opacity: 1;
+    transform: none;
+  }
+
+  body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack > #data-panel.active {
+    visibility: visible;
+  }
+
+  body.mobile-shell[data-mobile-sheet='layers'] #data-panel .panel-header,
+  body.mobile-shell[data-mobile-sheet='context'] #global-context-panel .panel-header,
+  body.mobile-shell[data-mobile-sheet='display'] #pp-toggles .pp-header-row,
+  body.mobile-shell[data-mobile-sheet='search'] #location-bar .location-toolbar,
+  body.mobile-shell[data-mobile-sheet='presets'] #control-panel .panel-header,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack .panel-header {
+    padding-right: 52px;
+  }
+
+  body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack > #data-panel,
+  body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack > #data-panel.collapsed,
+  body.mobile-shell[data-mobile-sheet='context'] #right-context-rail > #global-context-panel,
+  body.mobile-shell[data-mobile-sheet='context'] #right-context-rail > #global-context-panel.collapsed,
+  body.mobile-shell[data-mobile-sheet='display'] #pp-toggles,
+  body.mobile-shell[data-mobile-sheet='display'] #pp-toggles.collapsed,
+  body.mobile-shell[data-mobile-sheet='search'] #command-dock > #location-bar,
+  body.mobile-shell[data-mobile-sheet='search'] #command-dock > #location-bar.collapsed,
+  body.mobile-shell[data-mobile-sheet='presets'] #command-dock > #control-panel,
+  body.mobile-shell[data-mobile-sheet='presets'] #command-dock > #control-panel.collapsed {
+    width: auto;
+  }
+
+  body.mobile-shell[data-mobile-sheet='display'] #pp-toggles {
+    align-items: stretch;
+  }
+
+  body.mobile-shell[data-mobile-sheet='display'] #pp-toggles .pp-header-row,
+  body.mobile-shell[data-mobile-sheet='display'] #pp-toggles .pp-toggle-group,
+  body.mobile-shell[data-mobile-sheet='display'] #pp-toggles #clean-view-toggle {
+    width: 100%;
+    max-width: none;
+  }
+
+  body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack > #data-panel .data-panel-inner,
+  body.mobile-shell[data-mobile-sheet='context'] #right-context-rail > #global-context-panel .global-context-panel-inner,
+  body.mobile-shell[data-mobile-sheet='search'] #command-dock > #location-bar .location-inner,
+  body.mobile-shell[data-mobile-sheet='presets'] #command-dock > #control-panel .panel-inner {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    max-height: var(--mobile-modal-max-height);
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  body.mobile-shell[data-mobile-sheet='display'] #pp-toggles,
+  body.mobile-shell[data-mobile-sheet='display'] #pp-toggles:not(.collapsed),
+  body.mobile-shell[data-mobile-sheet='display'] #right-context-rail > #pp-toggles,
+  body.mobile-shell[data-mobile-sheet='display'] #right-context-rail > #pp-toggles:not(.collapsed),
+  body.mobile-shell[data-mobile-sheet='display'] #right-context-rail.layout-focus > #pp-toggles:not(.collapsed) {
+    box-sizing: border-box;
+    flex: 0 1 auto;
+    align-items: stretch;
+    height: auto;
+    min-height: 0;
+    max-height: var(--mobile-modal-max-height);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-bottom: 12px;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  body.mobile-shell[data-mobile-sheet='display'] #pp-toggles > .pp-header-row {
+    flex: 0 0 auto;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  body.mobile-shell[data-mobile-sheet='display'] #pp-toggles > .pp-toggle-group,
+  body.mobile-shell[data-mobile-sheet='display'] #pp-toggles > #clean-view-toggle,
+  body.mobile-shell[data-mobile-sheet='display'] #pp-toggles > #param-slider-panel {
+    flex: 0 0 auto;
+    min-height: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  body.mobile-shell[data-mobile-sheet='layers'] #data-toggles {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack {
+    position: fixed;
+    top: var(--mobile-modal-inset-top);
+    right: 12px;
+    bottom: auto;
+    left: 12px;
+    z-index: 160;
+    display: flex;
+    flex-direction: column;
+    visibility: visible;
+    width: auto;
+    height: auto;
+    max-height: var(--mobile-modal-max-height);
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    pointer-events: auto;
+  }
+
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #data-panel {
+    display: none;
+  }
+
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #cctv-panel,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #scene-panel,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #geo-status-panel,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #cctv-panel.collapsed,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #scene-panel.collapsed,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #geo-status-panel.collapsed,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #cctv-panel:not(.collapsed),
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #scene-panel:not(.collapsed),
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #geo-status-panel:not(.collapsed),
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack.layout-focus > #cctv-panel:not(.collapsed),
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack.layout-focus > #scene-panel:not(.collapsed),
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack.layout-focus > #geo-status-panel:not(.collapsed),
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack.layout-tail > #cctv-panel:not(.collapsed),
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack.layout-tail > #scene-panel:not(.collapsed),
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack.layout-tail > #geo-status-panel:not(.collapsed) {
+    position: relative;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    display: flex;
+    flex: 0 0 auto;
+    visibility: visible;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+    pointer-events: auto;
+  }
+
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack.layout-focus > [data-panel-id].collapsed {
+    display: flex;
+  }
+
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #geo-status-panel,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #geo-status-panel.collapsed,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #geo-status-panel:not(.collapsed) {
+    display: flex !important;
+  }
+
+  body.mobile-shell[data-mobile-sheet='more'] #cctv-panel .cctv-panel-inner,
+  body.mobile-shell[data-mobile-sheet='more'] #scene-panel .scene-panel-inner,
+  body.mobile-shell[data-mobile-sheet='more'] #geo-status-panel .geo-status-panel-inner,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #cctv-panel:not(.collapsed) .cctv-panel-inner,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #scene-panel:not(.collapsed) .scene-panel-inner,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #geo-status-panel:not(.collapsed) .geo-status-panel-inner {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  body.mobile-shell #command-dock > #location-bar,
+  body.mobile-shell #command-dock > #control-panel {
+    display: none;
+  }
+
+  body.mobile-shell[data-mobile-sheet='search'] #command-dock > #location-bar,
+  body.mobile-shell[data-mobile-sheet='presets'] #command-dock > #control-panel {
+    display: flex;
+    pointer-events: auto;
+  }
+
+  body.mobile-shell[data-mobile-sheet='search'] #command-dock .location-toolbar-label,
+  body.mobile-shell[data-mobile-sheet='presets'] #command-dock #control-panel .panel-title {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+  }
+
+  body.mobile-shell[data-mobile-sheet='search'] #command-dock > #location-bar .location-city-row,
+  body.mobile-shell[data-mobile-sheet='search'] #command-dock > #location-bar .location-search-wrap,
+  body.mobile-shell[data-mobile-sheet='search'] #command-dock #location-search,
+  body.mobile-shell[data-mobile-sheet='search'] #command-dock #location-search.expanded {
+    flex-basis: auto;
+    width: 100%;
+    max-width: none;
+  }
+
+  body.mobile-shell[data-mobile-sheet='search'] #command-dock #location-search,
+  body.mobile-shell[data-mobile-sheet='search'] #command-dock #location-search.expanded {
+    padding: 10px 12px;
+  }
+
+  body.mobile-shell[data-mobile-sheet='presets'] #command-dock > #control-panel .button-grid {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  body.mobile-shell[data-mobile-sheet='search'] #command-dock #location-bar:not(.collapsed) .dock-popover-content,
+  body.mobile-shell[data-mobile-sheet='presets'] #command-dock #control-panel:not(.collapsed) .dock-popover-content {
+    position: relative;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: auto;
+    margin-bottom: 0;
+    transform: translateY(0) scale(1);
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack > #data-panel,
+  body.mobile-shell[data-mobile-sheet='context'] #right-context-rail > #global-context-panel,
+  body.mobile-shell[data-mobile-sheet='display'] #pp-toggles,
+  body.mobile-shell[data-mobile-sheet='search'] #command-dock > #location-bar,
+  body.mobile-shell[data-mobile-sheet='presets'] #command-dock > #control-panel,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack {
+    box-sizing: border-box;
+    min-width: 0;
+  }
+
+  body.mobile-shell[data-mobile-sheet='layers'] #data-panel .data-panel-inner,
+  body.mobile-shell[data-mobile-sheet='context'] #global-context-panel .global-context-panel-inner,
+  body.mobile-shell[data-mobile-sheet='search'] #location-bar .location-inner,
+  body.mobile-shell[data-mobile-sheet='presets'] #control-panel .panel-inner,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #cctv-panel,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #scene-panel {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    max-height: none;
+  }
+
+  body.mobile-shell[data-mobile-sheet='layers'] .data-toggle-row,
+  body.mobile-shell[data-mobile-sheet='more'] #cctv-frame,
+  body.mobile-shell[data-mobile-sheet='more'] select {
+    max-width: 100%;
+  }
+
+  body.mobile-shell #command-dock > #gev-voice-control {
+    position: fixed;
+    right: max(12px, env(safe-area-inset-right, 0px));
+    bottom: calc(var(--mobile-chrome-bottom) + 12px);
+    left: auto;
+    z-index: 148;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 80px;
+    min-width: 80px;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    pointer-events: none;
+  }
+
+  body.mobile-shell #command-dock .gev-voice-heading,
+  body.mobile-shell #command-dock .gev-voice-readout,
+  body.mobile-shell #command-dock .gev-voice-help-tray,
+  body.mobile-shell #command-dock .gev-mic-label {
+    display: none;
+  }
+
+  body.mobile-shell #command-dock #gev-voice-button {
+    position: relative;
+    pointer-events: auto;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  body.mobile-shell #command-dock #gev-voice-button::before {
+    content: '';
+    position: absolute;
+    inset: -18px;
+  }
+
+  body.mobile-shell #command-dock .gev-mic-orbit,
+  body.mobile-shell #command-dock .gev-mic-orbit img {
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+    -webkit-touch-callout: none;
+  }
+
+  body.mobile-shell #command-dock .gev-voice-visualizer {
+    position: fixed;
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: auto;
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    width: min(46vw, 11rem);
+    height: 0;
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0;
+    transition: height 220ms ease, opacity 180ms ease;
+  }
+
+  body.mobile-shell #command-dock .gev-voice-visualizer-input {
+    bottom: calc(var(--mobile-chrome-bottom) + 76px);
+  }
+
+  body.mobile-shell #command-dock .gev-voice-visualizer-output {
+    bottom: calc(var(--mobile-chrome-bottom) + 16px);
+  }
+
+  body.mobile-shell #gev-voice-control[data-wave-input='open'] .gev-voice-visualizer-input,
+  body.mobile-shell #gev-voice-control[data-wave-output='open'] .gev-voice-visualizer-output {
+    height: 2rem;
+    opacity: 1;
+  }
+
+  body.mobile-shell #mobile-tab-bar button {
+    padding: 6px 2px;
+    font-size: 8px;
+  }
+
+  body.mobile-shell #command-dock {
+    bottom: calc(3.25rem + 8px);
+    left: 0;
+    transform: none;
+    width: 100%;
+    max-width: none;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    pointer-events: none;
+  }
+
+  body.mobile-shell #command-dock:has(#location-bar:not(.collapsed)),
+  body.mobile-shell #command-dock:has(#control-panel:not(.collapsed)) {
+    left: 0;
+    transform: none;
+  }
+
+  body.mobile-shell:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
+  body.mobile-shell:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minimal'].active) #cesium-credits {
+    bottom: calc(2vh + 8.5rem);
+    left: 0.75rem;
+    max-width: calc(100vw - 1.5rem);
+  }
+
+  body.mobile-shell #location-mini-status {
+    display: none;
+  }
+
+  body.mobile-shell #intel-hud .hud-summary-wrap {
+    position: fixed;
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: calc(80px + 28px + env(safe-area-inset-right, 0px));
+    bottom: calc(var(--mobile-chrome-bottom) + 12px);
+    top: auto;
+    z-index: 145;
+    max-width: none;
+    max-height: 80px;
+    margin-top: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  body.mobile-shell #intel-hud .hud-summary-label {
+    font-size: 8px;
+  }
+
+  body.mobile-shell #intel-hud .hud-summary {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    max-height: 64px;
+    overflow: hidden;
+  }
+
+  body.mobile-shell #intel-hud .hud-bottom-left,
+  body.mobile-shell #intel-hud #hud-mgrs,
+  body.mobile-shell #intel-hud #hud-latlon,
+  body.mobile-shell #intel-hud .hud-bottom-bar,
+  body.mobile-shell #intel-hud[data-variant='tactical'] .hud-bottom-left,
+  body.mobile-shell #intel-hud[data-variant='operator'] .hud-bottom-left,
+  body.mobile-shell #intel-hud[data-variant='minimal'] .hud-bottom-left,
+  body.mobile-shell #intel-hud[data-variant='operator'] .hud-bottom-bar,
+  body.mobile-shell #intel-hud[data-variant='minimal'] .hud-bottom-bar {
+    display: none;
+  }
+
+  body.mobile-shell #intel-hud .hud-bottom-left,
+  body.mobile-shell #intel-hud .hud-bottom-right,
+  body.mobile-shell #intel-hud[data-variant='tactical'] .hud-bottom-left,
+  body.mobile-shell #intel-hud[data-variant='tactical'] .hud-bottom-right,
+  body.mobile-shell #intel-hud[data-variant='operator'] .hud-bottom-left,
+  body.mobile-shell #intel-hud[data-variant='operator'] .hud-bottom-right,
+  body.mobile-shell #intel-hud[data-variant='minimal'] .hud-bottom-left {
+    bottom: calc(var(--mobile-chrome-bottom) + 0.75rem);
+  }
+
+  body.mobile-shell #intel-hud .hud-bottom-bar,
+  body.mobile-shell #intel-hud[data-variant='operator'] .hud-bottom-bar,
+  body.mobile-shell #intel-hud[data-variant='minimal'] .hud-bottom-bar {
+    bottom: calc(var(--mobile-chrome-bottom) + 3.4rem);
+  }
+
+  body.mobile-shell.cockpit-mode #view-switcher {
+    bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  }
+
+  body.mobile-shell.cockpit-mode .cockpit-utility-controls {
+    bottom: calc(152px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body.ui-clean-view.mobile-shell #mobile-tab-bar,
+  body.recording-mode.mobile-shell #mobile-tab-bar,
+  body.cockpit-mode.mobile-shell #mobile-tab-bar,
+  body.scene-playback-mode.mobile-shell #mobile-tab-bar,
+  body.ui-clean-view.mobile-shell #mobile-sheet-backdrop,
+  body.recording-mode.mobile-shell #mobile-sheet-backdrop,
+  body.cockpit-mode.mobile-shell #mobile-sheet-backdrop,
+  body.ui-clean-view.mobile-shell #mobile-modal-close,
+  body.recording-mode.mobile-shell #mobile-modal-close,
+  body.cockpit-mode.mobile-shell #mobile-modal-close,
+  body.scene-playback-mode.mobile-shell #mobile-modal-close {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) and (max-height: 500px) {
+  body.mobile-shell #mobile-tab-bar button span:last-child {
+    display: none;
+  }
+
+  body.mobile-shell #mobile-tab-bar {
+    min-height: 2.75rem;
+  }
+
+  body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack > #data-panel,
+  body.mobile-shell[data-mobile-sheet='context'] #right-context-rail > #global-context-panel,
+  body.mobile-shell[data-mobile-sheet='display'] #pp-toggles,
+  body.mobile-shell[data-mobile-sheet='display'] #right-context-rail > #pp-toggles,
+  body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack,
+  body.mobile-shell[data-mobile-sheet='search'] #command-dock > #location-bar,
+  body.mobile-shell[data-mobile-sheet='presets'] #command-dock > #control-panel {
+    top: var(--mobile-modal-inset-top);
+    right: 12px;
+    bottom: auto;
+    left: 12px;
+    width: auto;
+    max-height: var(--mobile-modal-max-height);
+  }
+
+}
+

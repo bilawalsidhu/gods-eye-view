@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>God's Eye View</title>
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="stylesheet" href="/style.css" />
@@ -907,6 +907,37 @@
     </div>
     <p class="key-setup-note" data-key-setup-status role="status" aria-live="polite">The Google Maps key buys the photorealistic planet — everything else stacks on top.</p>
   </aside>
+
+  <div id="mobile-sheet-backdrop" hidden></div>
+  <button type="button" id="mobile-modal-close" hidden aria-label="Close">
+    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+  </button>
+  <nav id="mobile-tab-bar" aria-label="Mobile panels">
+    <button type="button" data-mobile-sheet="search" aria-pressed="false" aria-controls="location-bar">
+      <span class="material-symbols-outlined" aria-hidden="true">search</span>
+      <span>Search</span>
+    </button>
+    <button type="button" data-mobile-sheet="layers" aria-pressed="false" aria-controls="data-panel">
+      <span class="material-symbols-outlined" aria-hidden="true">layers</span>
+      <span>Layers</span>
+    </button>
+    <button type="button" data-mobile-sheet="context" aria-pressed="false" aria-controls="global-context-panel">
+      <span class="material-symbols-outlined" aria-hidden="true">radar</span>
+      <span>Context</span>
+    </button>
+    <button type="button" data-mobile-sheet="display" aria-pressed="false" aria-controls="pp-toggles">
+      <span class="material-symbols-outlined" aria-hidden="true">tune</span>
+      <span>Display</span>
+    </button>
+    <button type="button" data-mobile-sheet="presets" aria-pressed="false" aria-controls="control-panel">
+      <span class="material-symbols-outlined" aria-hidden="true">palette</span>
+      <span>Presets</span>
+    </button>
+    <button type="button" data-mobile-sheet="more" aria-pressed="false" aria-controls="cctv-panel">
+      <span class="material-symbols-outlined" aria-hidden="true">more_horiz</span>
+      <span>More</span>
+    </button>
+  </nav>
 
   <!-- Intelligence HUD Overlay -->
   <div id="intel-hud"></div>

@@ -120,6 +120,7 @@ import {
   resolveCockpitUtilityAnchor,
   resolveCockpitUtilityLayout,
 } from './cockpitUtilityLayout.js';
+import { initMobileShell, syncMobileSheetFromPanel } from './mobileShell.js';
 import {
   applyCockpitVisionStageIntensities,
   captureCockpitVisionBaseline,
@@ -2618,6 +2619,11 @@ export class StyleManager {
     this._initUI();
     this._initMapStackControl();
     this._initPanelChrome();
+    this._mobileShell = initMobileShell({
+      setPanelCollapsed: (panelId, collapsed, options) => {
+        this.setPanelCollapsed(panelId, collapsed, options);
+      },
+    });
     this._initLeftPanelAdaptiveLayout();
     this._initRightPanelAdaptiveLayout();
     this._initRadioPanel();
@@ -7711,6 +7717,7 @@ export class StyleManager {
       if (priorRightOwner !== this._rightStackPreferredPanelId) {
         this._scheduleRightPanelLayout({ reconsiderAutoCollapse: true });
       }
+      syncMobileSheetFromPanel(panelId, { collapsed: nextCollapsed, restore, explicit });
       return;
     }
     panelEl.classList.remove('layout-auto-collapsed');
@@ -7761,6 +7768,7 @@ export class StyleManager {
       reconsiderAutoCollapse: this._leftPanelStack?.contains(panelEl) === true,
     });
     if (syncShare) this.shareLinkManager?.onPanelStateChange?.();
+    syncMobileSheetFromPanel(panelId, { collapsed: nextCollapsed, restore, explicit });
   }
 
   /**

@@ -81,6 +81,8 @@ async function init() {
     const googleApiKey = import.meta.env.GOOGLE_MAPS_API_KEY;
     if (googleApiKey) window.__GOOGLE_MAPS_API_KEY__ = googleApiKey;
 
+    const phoneLayout = window.matchMedia('(max-width: 720px)').matches;
+
     // Create the Cesium viewer with minimal chrome
     const viewer = new Cesium.Viewer('cesiumContainer', {
       timeline: false,
@@ -108,7 +110,8 @@ async function init() {
         document.body.appendChild(el);
         return el;
       })(),
-      msaaSamples: 4,
+      // 4x MSAA is a known WebGL kill on phones; desktop keeps the current look.
+      msaaSamples: phoneLayout ? 1 : 4,
       contextOptions: {
         webgl: {
           preserveDrawingBuffer: true,
@@ -148,10 +151,24 @@ async function init() {
     loaderStatus.textContent = googleApiKey || cesiumToken
       ? 'Loading Google 3D Tiles...'
       : 'Loading the keyless globe...';
-    const photoreal = await loadPhotorealisticTileset(Cesium, {
+    // On phones a hung tileset request used to sit on the splash until the
+    // browser showed a timeout page — race a bounded deadline against startup.
+    const createTileset = loadPhotorealisticTileset(Cesium, {
       googleApiKey,
       cesiumToken,
     });
+    const photoreal = phoneLayout
+      ? await Promise.race([
+        createTileset,
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Google 3D Tiles timed out on this device')), 25_000);
+        }),
+      ]).catch((tileError) => ({
+        tileset: null,
+        route: null,
+        errors: [tileError],
+      }))
+      : await createTileset;
     const tileset = photoreal.tileset;
     if (tileset) {
       viewer.scene.primitives.add(tileset);
