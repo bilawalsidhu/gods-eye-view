@@ -14,6 +14,11 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Changed
 
+- Local voice setup reads the pipeline config instead of a hard-coded list, so
+  swapping a stage — a different LLM, STT or TTS — is a YAML edit: it installs
+  the backends the stage configs name, pulls gallery models, downloads Hugging
+  Face weights, and applies the MiniCPM/Apple Silicon requirements only while a
+  stage actually runs on the `mlx` backend.
 - Local voice setup downloads the language model too, so choosing LOCAL starts
   what is already installed instead of silently fetching 1.3 GB, and
   `voice:local:check` fails when those weights are missing.

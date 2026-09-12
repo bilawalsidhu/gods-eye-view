@@ -54,6 +54,25 @@ language and voice models`. Two outcomes are distinct on purpose:
   never cut off by the clock, so a slow connection no longer fails and then
   mysteriously works on the next click.
 
+## Swapping a stage
+
+The pipeline file decides what gets installed, so choosing different models is a
+YAML edit. Point a stage at another model, put that model's config beside it,
+and re-run setup:
+
+```sh
+$EDITOR config/localai/models/gpt-realtime.yaml   # llm: qwen3-4b-mlx
+$EDITOR config/localai/models/qwen3-4b-mlx.yaml   # backend, parameters, template
+npm run voice:local:setup
+```
+
+Setup reads the stages, installs the backend each config names, pulls the stages
+that resolve to LocalAI gallery models, and downloads Hugging Face weights for
+configs whose `parameters.model` is a repo id such as `openbmb/MiniCPM5-2B-MLX`.
+`npm run voice:local:check` verifies exactly those pieces. The MiniCPM tool
+parser patch and the Apple Silicon requirement apply only while a stage runs on
+the `mlx` backend.
+
 ## Configuration
 
 These optional environment values change the defaults:

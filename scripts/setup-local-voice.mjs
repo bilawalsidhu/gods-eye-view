@@ -7,8 +7,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PROFILE_DIR = path.join(ROOT, 'config', 'localai');
-const BACKENDS = ['opus', 'mlx', 'parakeet-cpp', 'whisper', 'kokoro'];
-const MODELS = ['silero-vad-ggml', 'parakeet-cpp-realtime_eou_120m-v1', 'kokoro'];
+/** Pipeline config the browser asks for; every stage is read out of this file. */
+const PIPELINE_NAME = 'gpt-realtime';
+/** WebRTC audio codec backend. No model config names it, the transport needs it. */
+const ALWAYS_BACKENDS = Object.freeze(['opus']);
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -142,12 +144,70 @@ function command(executable, args, environment) {
   if (result.status !== 0) throw new Error(`${executable} ${args.join(' ')} exited with ${result.status}`);
 }
 
-/** Repo id of the pipeline LLM, read from the shipped model config. */
-export function readLlmRepoId(profileDir = PROFILE_DIR) {
-  const file = path.join(profileDir, 'models', 'minicpm5-2b-mlx.yaml');
-  const match = /^\s{2}model:\s*(\S+)\s*$/m.exec(fs.readFileSync(file, 'utf8'));
-  if (!match) throw new Error(`No LLM model id found in ${file}`);
-  return match[1];
+/** Stage names a pipeline config declares (vad, transcription, llm, tts). */
+export function parsePipelineStages(text) {
+  const stages = {};
+  let inPipeline = false;
+  for (const raw of String(text).split('\n')) {
+    const line = raw.replace(/#.*$/, '').trimEnd();
+    if (!line.trim()) continue;
+    if (/^pipeline:\s*$/.test(line)) { inPipeline = true; continue; }
+    if (!/^\s/.test(line)) { inPipeline = false; continue; }
+    if (!inPipeline) continue;
+    const match = /^\s{2}(vad|transcription|llm|tts):\s*(\S+)$/.exec(line);
+    if (match) stages[match[1]] = match[2];
+  }
+  return stages;
+}
+
+/** The backend a model config runs on, if it names one. */
+export function parseBackend(text) {
+  return /^backend:\s*(\S+)\s*$/m.exec(String(text))?.[1] ?? null;
+}
+
+/** The `parameters.model` value a model config names, if any. */
+export function parseModelParameter(text) {
+  return /^\s{2}model:\s*(\S+)\s*$/m.exec(String(text))?.[1] ?? null;
+}
+
+/**
+ * Whether a model value names a Hugging Face repo rather than a local weight
+ * file. "openbmb/MiniCPM5-2B-MLX" is downloaded from the Hub;
+ * "parakeet-cpp/realtime_eou_120m-v1-f16.gguf" comes from LocalAI's gallery.
+ */
+export function isHuggingFaceRepo(value) {
+  return Boolean(value) && /^[^/\s]+\/[^/\s]+$/.test(value) && !/\.[A-Za-z0-9]{1,8}$/.test(value);
+}
+
+/**
+ * Read what the profile actually declares, so swapping a stage is a YAML edit
+ * rather than a code change: the backends to install, the gallery models to
+ * pull, and the Hugging Face weights to download all come from these files.
+ */
+export function readProfile(profileDir = PROFILE_DIR, pipelineName = PIPELINE_NAME) {
+  const dir = path.join(profileDir, 'models');
+  const stages = parsePipelineStages(fs.readFileSync(path.join(dir, `${pipelineName}.yaml`), 'utf8'));
+  const names = Object.values(stages);
+  if (!names.length) throw new Error(`${pipelineName}.yaml declares no pipeline stages`);
+
+  const backends = new Set(ALWAYS_BACKENDS);
+  const gallery = [];
+  const weights = [];
+  for (const name of names) {
+    const file = path.join(dir, `${name}.yaml`);
+    if (!fs.existsSync(file)) {
+      // A stage with no config of ours is a plain gallery model.
+      gallery.push(name);
+      continue;
+    }
+    const text = fs.readFileSync(file, 'utf8');
+    const backend = parseBackend(text);
+    if (backend) backends.add(backend);
+    const parameter = parseModelParameter(text);
+    if (isHuggingFaceRepo(parameter)) weights.push({ name, repoId: parameter });
+    else gallery.push(name);
+  }
+  return { pipelineName, stages, backends: [...backends], gallery, weights };
 }
 
 /** Hugging Face cache directory name for a repo id. */
@@ -162,7 +222,7 @@ export function hfCacheDirName(repoId) {
  * snapshot carrying both config and weights means the download is done —
  * an interrupted pull leaves the config without any .safetensors beside it.
  */
-export function llmWeightsPresent(modelsDir, repoId) {
+export function weightsPresent(modelsDir, repoId) {
   const snapshots = path.join(modelsDir, hfCacheDirName(repoId), 'snapshots');
   if (!fs.existsSync(snapshots)) return false;
   return fs.readdirSync(snapshots).some((entry) => {
@@ -179,7 +239,7 @@ export function llmWeightsPresent(modelsDir, repoId) {
  * LOCAL into a silent multi-GB wait. The MLX backend ships its own Hugging Face
  * CLI, so the download shows progress and resumes.
  */
-function installLlmWeights({ backendsDir, modelsDir, repoId, environment }) {
+function installWeights({ backendsDir, modelsDir, repoId, environment }) {
   const python = path.join(backendsDir, 'metal-mlx', 'venv', 'bin', 'python');
   if (!fs.existsSync(python)) {
     throw new Error(`No MLX backend runtime at ${python}; reinstall the mlx backend`);
@@ -195,14 +255,55 @@ function installLlmWeights({ backendsDir, modelsDir, repoId, environment }) {
   );
 }
 
+/**
+ * Patch the installed MLX backend and MLX-LM for MiniCPM-style tool calls.
+ * Only profiles that actually run an mlx stage need this.
+ */
+function applyMlxCompatibility({ backendsDir, checkOnly, missing, profileDir }) {
+  const mlxBackend = path.join(backendsDir, 'metal-mlx');
+  const backendFile = path.join(mlxBackend, 'backend.py');
+  const streamFilterTarget = path.join(mlxBackend, 'function_stream_filter.py');
+  if (!fs.existsSync(backendFile)) throw new Error(`MLX backend not found at ${mlxBackend}`);
+  const sitePackages = findSitePackages(mlxBackend);
+  const tokenizerFile = path.join(sitePackages, 'mlx_lm', 'tokenizer_utils.py');
+  const parserTarget = path.join(sitePackages, 'mlx_lm', 'tool_parsers', 'minicpm5.py');
+  if (!fs.existsSync(tokenizerFile)) throw new Error(`MLX-LM tokenizer not found at ${tokenizerFile}`);
+
+  const backendSource = fs.readFileSync(backendFile, 'utf8');
+  const tokenizerSource = fs.readFileSync(tokenizerFile, 'utf8');
+  const patchedBackend = patchLocalAiBackendSource(backendSource);
+  const patchedTokenizer = patchTokenizerSource(tokenizerSource);
+
+  if (checkOnly) {
+    if (patchedBackend !== backendSource) missing.push('LocalAI MLX compatibility patch');
+    if (patchedTokenizer !== tokenizerSource) missing.push('MiniCPM5 parser registration');
+    if (!fs.existsSync(streamFilterTarget)) missing.push('stream function filter');
+    if (!fs.existsSync(parserTarget)) missing.push('MiniCPM5 parser');
+    return null;
+  }
+
+  writeChanged(backendFile, patchedBackend);
+  writeChanged(tokenizerFile, patchedTokenizer);
+  fs.copyFileSync(path.join(profileDir, 'compat', 'function_stream_filter.py'), streamFilterTarget);
+  if (!fs.existsSync(parserTarget)) {
+    fs.copyFileSync(path.join(profileDir, 'compat', 'minicpm5.py'), parserTarget);
+  }
+  return { fingerprint: sha256(patchedBackend + patchedTokenizer) };
+}
+
 export function setupLocalVoice({
   environment = process.env,
   platform = process.platform,
   architecture = process.arch,
   checkOnly = false,
+  profileDir = PROFILE_DIR,
 } = {}) {
-  if (platform !== 'darwin' || architecture !== 'arm64') {
-    throw new Error('The bundled MiniCPM5 MLX profile requires an Apple Silicon Mac');
+  const profile = readProfile(profileDir);
+  const usesMlx = profile.backends.includes('mlx');
+  // Only the MLX stack is Apple-Silicon-bound; a profile that swaps in a
+  // llama.cpp stage has no reason to refuse to install elsewhere.
+  if (usesMlx && (platform !== 'darwin' || architecture !== 'arm64')) {
+    throw new Error('The mlx stage in this profile requires an Apple Silicon Mac');
   }
   const executable = environment.GEV_LOCAL_AI_BIN || 'local-ai';
   const home = path.resolve(environment.GEV_LOCAL_AI_HOME || path.join(os.homedir(), '.local', 'share', 'localai'));
@@ -218,54 +319,37 @@ export function setupLocalVoice({
   if (!checkOnly) {
     fs.mkdirSync(modelsDir, { recursive: true });
     fs.mkdirSync(backendsDir, { recursive: true });
-    for (const backend of BACKENDS) command(executable, ['backends', 'install', backend], childEnvironment);
-    for (const model of MODELS) command(executable, ['models', 'install', model], childEnvironment);
-    for (const name of fs.readdirSync(path.join(PROFILE_DIR, 'models'))) {
-      fs.copyFileSync(path.join(PROFILE_DIR, 'models', name), path.join(modelsDir, name));
+    for (const backend of profile.backends) command(executable, ['backends', 'install', backend], childEnvironment);
+    for (const model of profile.gallery) command(executable, ['models', 'install', model], childEnvironment);
+    for (const name of fs.readdirSync(path.join(profileDir, 'models'))) {
+      fs.copyFileSync(path.join(profileDir, 'models', name), path.join(modelsDir, name));
     }
-    const llmRepoId = readLlmRepoId();
-    if (llmWeightsPresent(modelsDir, llmRepoId)) {
-      console.log(`${llmRepoId} weights are already cached in ${modelsDir}`);
-    } else {
-      console.log(`Downloading ${llmRepoId} weights (about 1.3 GB) into ${modelsDir}…`);
-      installLlmWeights({ backendsDir, modelsDir, repoId: llmRepoId, environment: childEnvironment });
+    for (const { name, repoId } of profile.weights) {
+      if (weightsPresent(modelsDir, repoId)) {
+        console.log(`${name}: ${repoId} is already cached in ${modelsDir}`);
+      } else {
+        console.log(`${name}: downloading ${repoId} into ${modelsDir}…`);
+        installWeights({ backendsDir, modelsDir, repoId, environment: childEnvironment });
+      }
     }
   }
 
-  const mlxBackend = path.join(backendsDir, 'metal-mlx');
-  const backendFile = path.join(mlxBackend, 'backend.py');
-  const streamFilterTarget = path.join(mlxBackend, 'function_stream_filter.py');
-  if (!fs.existsSync(backendFile)) throw new Error(`MLX backend not found at ${mlxBackend}`);
-  const sitePackages = findSitePackages(mlxBackend);
-  const tokenizerFile = path.join(sitePackages, 'mlx_lm', 'tokenizer_utils.py');
-  const parserTarget = path.join(sitePackages, 'mlx_lm', 'tool_parsers', 'minicpm5.py');
-  if (!fs.existsSync(tokenizerFile)) throw new Error(`MLX-LM tokenizer not found at ${tokenizerFile}`);
+  const missing = [];
+  for (const name of fs.readdirSync(path.join(profileDir, 'models'))) {
+    if (!fs.existsSync(path.join(modelsDir, name))) missing.push(`model config ${name}`);
+  }
+  for (const { name, repoId } of profile.weights) {
+    if (!weightsPresent(modelsDir, repoId)) missing.push(`${name} weights (${repoId})`);
+  }
+  const mlx = usesMlx ? applyMlxCompatibility({ backendsDir, checkOnly, missing, profileDir }) : null;
 
-  const patchedBackend = patchLocalAiBackendSource(fs.readFileSync(backendFile, 'utf8'));
-  const patchedTokenizer = patchTokenizerSource(fs.readFileSync(tokenizerFile, 'utf8'));
   if (checkOnly) {
-    const missing = [];
-    if (patchedBackend !== fs.readFileSync(backendFile, 'utf8')) missing.push('LocalAI MLX compatibility patch');
-    if (patchedTokenizer !== fs.readFileSync(tokenizerFile, 'utf8')) missing.push('MiniCPM5 parser registration');
-    if (!fs.existsSync(streamFilterTarget)) missing.push('stream function filter');
-    if (!fs.existsSync(parserTarget)) missing.push('MiniCPM5 parser');
-    for (const name of fs.readdirSync(path.join(PROFILE_DIR, 'models'))) {
-      if (!fs.existsSync(path.join(modelsDir, name))) missing.push(`model config ${name}`);
-    }
-    if (!llmWeightsPresent(modelsDir, readLlmRepoId())) missing.push('MiniCPM5 weights');
     if (missing.length) {
       throw new Error(`Local voice setup incomplete (${missing.join(', ')}) — run npm run voice:local:setup`);
     }
-    return { home, ready: true };
+    return { home, ready: true, profile: profile.pipelineName };
   }
-
-  writeChanged(backendFile, patchedBackend);
-  writeChanged(tokenizerFile, patchedTokenizer);
-  fs.copyFileSync(path.join(PROFILE_DIR, 'compat', 'function_stream_filter.py'), streamFilterTarget);
-  if (!fs.existsSync(parserTarget)) {
-    fs.copyFileSync(path.join(PROFILE_DIR, 'compat', 'minicpm5.py'), parserTarget);
-  }
-  return { home, ready: true, fingerprint: sha256(patchedBackend + patchedTokenizer) };
+  return { home, ready: true, profile: profile.pipelineName, fingerprint: mlx?.fingerprint };
 }
 
 function main() {

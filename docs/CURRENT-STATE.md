@@ -11,7 +11,9 @@ Updated: September 12, 2026
 - The Apple Silicon reference profile uses Silero VAD, Parakeet Realtime EOU
   120M STT, MiniCPM5-2B MLX 4-bit, and Kokoro TTS. `npm run
   voice:local:setup` installs the profile; `npm run voice:local:check` verifies
-  it without mutation, including the language-model weights it downloads so a
+  it without mutation. Both read the pipeline config for the stage list, so
+  swapping a model is a YAML edit rather than a code change. Setup installs the
+  backends those stages name and the language-model weights it downloads so a
   first LOCAL session never waits on a silent multi-gigabyte fetch (about 5.5 GB
   installed). `npm run doctor` reports the same readiness. Reasoning is disabled
   in the shipped profile. The thinking
