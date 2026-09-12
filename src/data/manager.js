@@ -123,6 +123,10 @@ export class DataLayerManager {
     this._visibilityRequestListeners = new Set();
     this._beforeDestroyListeners = new Set();
     this._visibilityGuards = new Set();
+    // Optional sync check for the DATA LAYERS panel: given a layerId, returns
+    // a user-facing reason string if a Context currently excludes it, or null.
+    // Set by ui.js via setContextGateInfo() whenever Context state changes.
+    this._contextGateReasonFn = null;
     this._registrationsFinalized = false;
     this._registrationDispositions = null;
     this._allowQaRegistration = allowQaRegistration === true;
@@ -2011,6 +2015,17 @@ export class DataLayerManager {
   }
 
   /**
+   * Let the UI layer tell the panel how to check whether a layer is
+   * currently excluded by an active Context, so rows can show a persistent
+   * gated state instead of only reacting to a refused click.
+   * @param {{ getBlockReason?: (layerId: string) => (string|null) }} input
+   */
+  setContextGateInfo({ getBlockReason } = {}) {
+    this._contextGateReasonFn = typeof getBlockReason === 'function' ? getBlockReason : null;
+    this._refreshTogglePanel();
+  }
+
+  /**
    * Build the toggle panel UI inside the given container element.
    */
   buildTogglePanel(container) {
@@ -2255,11 +2270,15 @@ export class DataLayerManager {
     const feedState = layer.enabled ? layerFeedState(layer.stats) : 'off';
     const transitioning = layer.lifecycleState === 'enabling' || layer.lifecycleState === 'disabling';
     const uncertain = Boolean(layer.lifecycleUncertain);
+    const gateReason = (!layer.enabled && !transitioning && typeof this._contextGateReasonFn === 'function')
+      ? this._contextGateReasonFn(layer.id)
+      : null;
     button.classList.toggle('active', layer.enabled);
     button.classList.toggle('transitioning', transitioning);
     button.classList.toggle('enabling', layer.lifecycleState === 'enabling');
     button.classList.toggle('disabling', layer.lifecycleState === 'disabling');
     button.classList.toggle('lifecycle-uncertain', uncertain);
+    button.classList.toggle('gated', Boolean(gateReason));
     for (const state of Object.keys(FEED_STATE_LABELS)) {
       button.classList.toggle(`feed-${state}`, layer.enabled && !uncertain && feedState === state);
     }
@@ -2269,8 +2288,12 @@ export class DataLayerManager {
     button.disabled = transitioning;
     button.textContent = transitioning
       ? layer.lifecycleState.toUpperCase()
-      : (uncertain ? 'UNCERTAIN' : (layer.enabled ? FEED_STATE_LABELS[feedState] : 'OFF'));
-    button.setAttribute('aria-label', `${layer.name}: ${button.textContent}`);
+      : (uncertain ? 'UNCERTAIN' : (gateReason ? 'LOCKED' : (layer.enabled ? FEED_STATE_LABELS[feedState] : 'OFF')));
+    button.title = gateReason || '';
+    button.setAttribute(
+      'aria-label',
+      gateReason ? `${layer.name}: locked — ${gateReason}` : `${layer.name}: ${button.textContent}`,
+    );
   }
 
   _formatCount(n) {
