@@ -583,10 +583,6 @@
       <div class="panel-header">
         <span class="panel-title">DATA LAYERS</span>
         <span class="panel-divider"></span>
-        <button id="provider-health-toggle" class="provider-health-toggle" type="button" aria-expanded="false" aria-controls="provider-health-panel" title="Show provider health">
-          <span class="material-symbols-outlined" aria-hidden="true">monitor_heart</span>
-          <span data-health-summary>0 live · 0 attention</span>
-        </button>
         <button class="panel-collapse-btn" data-collapse-target="data-panel" title="Collapse panel">+</button>
       </div>
       <div id="data-toggles" class="data-toggle-list"></div>
@@ -897,6 +893,10 @@
        both the chip and this dialog outright when /api/setup/status is not
        there to answer (prod builds, LAN visitors). Rows are rendered from
        that payload, so the key registry lives in src/keySetupCore.mjs alone. -->
+  <button id="provider-health-toggle" class="provider-health-toggle" type="button" aria-expanded="false" aria-controls="provider-health-panel" title="Show provider health">
+    <span class="material-symbols-outlined" aria-hidden="true">monitor_heart</span>
+    <span data-health-summary>0 live · 0 attention</span>
+  </button>
   <button id="key-setup-chip" type="button" hidden aria-haspopup="dialog" aria-controls="key-setup">
     <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
     <span data-key-setup-chip-label>POWER UP</span>

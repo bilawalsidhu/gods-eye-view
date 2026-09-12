@@ -4554,30 +4554,42 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 }
 
 .provider-health-toggle {
+  position: fixed;
+  right: 0.9rem;
+  bottom: 4.25rem;
+  z-index: 60;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto;
-  padding: 3px 6px;
-  border: 1px solid var(--glass-border);
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text-dim);
+  padding: 0.45rem 0.7rem;
+  border: 1px solid rgba(54, 220, 255, 0.38);
+  border-radius: 0.42rem;
+  background: linear-gradient(145deg, rgba(10, 27, 37, 0.92), rgba(7, 13, 22, 0.9));
+  color: rgba(225, 244, 248, 0.92);
   font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 0.4px;
+  font-size: 0.6rem;
+  letter-spacing: 0.09rem;
   cursor: pointer;
+  box-shadow: 0 0.4rem 1.6rem rgba(0, 0, 0, 0.5), 0 0 1.2rem rgba(0, 212, 255, 0.07);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
 }
 
 .provider-health-toggle:hover,
+.provider-health-toggle:focus-visible,
 .provider-health-toggle[aria-expanded="true"] {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: rgba(54, 220, 255, 0.7);
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .provider-health-toggle .material-symbols-outlined {
-  font-size: 14px;
+  color: #55dff5;
+  font-size: 0.95rem;
 }
+
+.provider-health-toggle[hidden] { display: none; }
 
 .provider-health-panel {
   flex: 0 0 auto;
