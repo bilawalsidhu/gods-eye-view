@@ -13,6 +13,7 @@ import path from 'node:path';
 import { overpassProxy } from 'gods-eye-view/server/providers/overpass';
 import { militaryInstallationsProxy } from 'gods-eye-view/server/providers/military-installations';
 import {
+  geocodeProxy,
   regionalBriefProxy,
   weatherEffectsProxy,
 } from 'gods-eye-view/server/providers/regional';
@@ -96,6 +97,7 @@ test('standalone service guards run in development and preview without upstream 
       [overpassProxy, '/api/overpass'],
       [militaryInstallationsProxy, '/api/military-installations'],
       [regionalBriefProxy, '/api/regional-brief'],
+      [geocodeProxy, '/api/geocode'],
       [weatherEffectsProxy, '/api/weather-effects'],
     ]) {
       const routes = install(factory(), preview);

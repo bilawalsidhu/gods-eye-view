@@ -36,6 +36,28 @@ test('a keyless service does not issue any Google request', async () => {
   assert.equal((await service.geocode('Hanoi')).place.lat, 21.03);
 });
 
+test('Nominatim answers after Photon does not', async () => {
+  const urls = [];
+  const service = createStandalonePlaceSearch({ fetchImpl: async (url) => {
+    urls.push(String(url));
+    if (String(url).includes('photon.komoot.io')) return new Response('offline', { status: 503 });
+    assert.match(String(url), /^\/api\/geocode\?/);
+    return Response.json({
+      status: 'OK',
+      results: [{
+        formatted_address: 'Hanoi, Vietnam',
+        types: ['locality', 'political'],
+        geometry: { location: { lat: 21.03, lng: 105.85 } },
+      }],
+    });
+  } });
+  const result = await service.geocode('Hanoi');
+  assert.equal(result.place.lat, 21.03);
+  assert.equal(result.fallbackUsed, true);
+  assert.equal(urls.some((url) => url.includes('maps.googleapis.com')), false);
+  assert.ok(urls.some((url) => url.includes('/api/geocode?')));
+});
+
 test('cancellation before lookup makes no request', async () => {
   const controller = new AbortController(); controller.abort();
   let calls = 0;

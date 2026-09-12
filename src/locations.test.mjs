@@ -598,3 +598,48 @@ test('search without an authority hook preserves the existing caller contract', 
   assert.equal(result.navigationMode, 'city-overview');
   assert.equal(viewer.flights.length, 1);
 });
+
+test('search without a Google key uses Nominatim when Photon does not answer', async () => {
+  const viewer = stubViewer();
+  const urls = [];
+  const fetchImpl = async (url) => {
+    urls.push(String(url));
+    if (String(url).includes('photon.komoot.io')) {
+      return new Response('offline', { status: 503 });
+    }
+    return Response.json({ status: 'OK', results: [AUSTIN_RESULT] });
+  };
+  const result = await searchAndFlyTo(viewer, 'austin', {
+    placeSearch: createStandalonePlaceSearch({ fetchImpl }),
+  });
+  assert.equal(result.navigationMode, 'city-overview');
+  assert.equal(viewer.flights.length, 1);
+  assert.equal(urls.some((url) => url.includes('maps.googleapis.com')), false);
+  assert.ok(urls.some((url) => url.includes('photon.komoot.io')));
+  assert.ok(urls.some((url) => url.includes('/api/geocode?')), urls.join('\n'));
+});
+
+test('a denied Google geocode falls through Photon to Nominatim', async () => {
+  const viewer = stubViewer();
+  const urls = [];
+  const fetchImpl = async (url) => {
+    urls.push(String(url));
+    if (String(url).includes('maps.googleapis.com')) {
+      return Response.json({ status: 'REQUEST_DENIED', results: [] });
+    }
+    if (String(url).includes('photon.komoot.io')) {
+      return new Response('offline', { status: 503 });
+    }
+    return Response.json({ status: 'OK', results: [AUSTIN_RESULT] });
+  };
+  const result = await searchAndFlyTo(viewer, 'austin', {
+    placeSearch: createStandalonePlaceSearch({
+      resolveApiKey: () => 'AIza-invalid',
+      fetchImpl,
+    }),
+  });
+  assert.equal(result.navigationMode, 'city-overview');
+  assert.ok(urls.some((url) => url.includes('maps.googleapis.com')));
+  assert.ok(urls.some((url) => url.includes('photon.komoot.io')));
+  assert.ok(urls.some((url) => url.includes('/api/geocode?')));
+});

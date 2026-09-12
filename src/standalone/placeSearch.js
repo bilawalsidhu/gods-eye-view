@@ -4,7 +4,7 @@ import {
   createPhotonGeocoder,
 } from '../search/index.js';
 
-/** Google first when configured, then keyless Photon; transport stays local to setup. */
+/** Google first when configured, then Photon, then local Nominatim `/api/geocode`. */
 export function createStandalonePlaceSearch({
   resolveApiKey,
   fetchImpl = (...args) => fetch(...args),
@@ -27,6 +27,13 @@ export function createStandalonePlaceSearch({
         },
       }),
       createPhotonGeocoder({ fetchImpl }),
+      createGoogleGeocoder({
+        request(query, { bias, signal }) {
+          const params = new URLSearchParams({ q: query });
+          if (bias) params.set('bounds', bias);
+          return fetchImpl(`/api/geocode?${params}`, { signal });
+        },
+      }),
     ],
   });
 }
