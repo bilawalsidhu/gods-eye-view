@@ -88,18 +88,22 @@ test('terrain middleware chunks missing points and reconstructs repeated/reorder
   const points = Array.from({ length: 257 }, (_, i) => `${i / 100},1`);
   const res = await request('/?points=' + points.join(';'));
   assert.equal(res.status, 200);
-  assert.deepEqual(sizes, [256, 1]);
+  // Tracks UPSTREAM_CHUNK in server/providers/terrain.js (64): 257 points
+  // split into four full chunks and a remainder.
+  assert.deepEqual(sizes, [64, 64, 64, 64, 1]);
   const reordered = await request('/?points=2.56,1;0,1;2.56,1');
   assert.deepEqual(json(reordered), {
     results: [{ ellipsoid: 102.56 }, { ellipsoid: 100 }, { ellipsoid: 102.56 }],
   });
-  assert.equal(calls, 2);
+  // Five chunks for the first batch; the reordered request is fully cached.
+  assert.equal(calls, 5);
   assert.equal((await request('/?points=invalid')).status, 400);
   assert.equal(
     (await request('/?points=' + Array(2001).fill('0,1').join(';'))).status,
     500,
   );
-  assert.equal(calls, 2);
+  // Rejected requests add no upstream calls: still the five from the first batch.
+  assert.equal(calls, 5);
 });
 
 test('terrain middleware migrates valid legacy disk points without fabricating omitted heights', async (t) => {
