@@ -19,7 +19,16 @@
  * Content-Type. It touches nothing but its arguments, so every refusal below is
  * pinned by a unit assertion.
  */
-import { PROXY_SIGNALS } from './keySetupCore.mjs';
+/**
+ * Reverse-proxy / CDN forwarding headers. Their presence means the request did
+ * not originate on this machine, whatever its socket says. Shared with the
+ * credential-panel gate in keySetupCore.mjs so there is one definition.
+ */
+export const PROXY_SIGNALS = Object.freeze([
+  'forwarded', 'via', 'x-forwarded-for', 'x-forwarded-host',
+  'x-forwarded-port', 'x-forwarded-proto', 'x-real-ip',
+  'cf-connecting-ip', 'cf-ray',
+]);
 
 /**
  * Compute a request's own authority (an origin string) from its protocol and

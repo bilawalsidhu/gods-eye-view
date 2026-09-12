@@ -24,7 +24,8 @@
  * @module server/providers/local
  */
 
-import { resolveGoogleServerKey } from '../../scripts/google-server-key.mjs';
+import { googlePlacesContextProxy, googleServerApiKey, keylessGooglePlacesResponse, installRouteMiddleware, makeRateLimiter, makeOptInRateLimiter, clientKey, haversineKm } from './places.js';
+export { googlePlacesContextProxy, googleServerApiKey, keylessGooglePlacesResponse };
 
 import { openSkyProxy, adsbLolFallbackAnchor } from './aircraft/opensky.js';
 import { adsbLolProxy } from './aircraft/adsb-lol.js';
@@ -70,7 +71,7 @@ import {
   upsertDotenvValues,
   validateKeySetupUpdates,
 } from '../../src/keySetupCore.mjs';
-import { admitSameSiteRequest } from '../../src/localRequestGate.mjs';
+import { admitSameSite } from './common/same-site.js';
 import { hardenCredentialFile } from '../../src/keySetupHardening.mjs';
 import {
   fetchTerrainChunkWithRetry,
@@ -340,9 +341,6 @@ async function readStaleOverpass(cacheKey) {
   const cached = _overpassCache.get(cacheKey);
   return overpassPayloadIsData(cached) ? cached : readOverpassDisk(cacheKey, Infinity);
 }
-/** OSM routing (FOSSGIS OSRM) cache: profile|coords -> { payload, cachedAt }. */
-const ROUTE_CACHE_MS = 600000;
-const _routeCache = new Map();
 
 // --- Abuse guards shared by the Overpass + route proxies --------------------
 /** Max accepted POST body for the Overpass proxy (Overpass QL queries are tiny). */
@@ -371,80 +369,18 @@ const OVERPASS_SIMPLIFY_TOLERANCE_DEG = 0.0004;
 /** Max concurrent in-flight upstream Overpass fetches across all distinct queries. */
 const OVERPASS_MAX_CONCURRENT = 6;
 let _overpassConcurrent = 0;
-/** Hard cap on the OSRM route response we will buffer. */
-const ROUTE_MAX_RESPONSE_BYTES = 8 * 1024 * 1024; // 8 MB
-/** Reject routes whose straight-line spans are obviously abusive (km). */
-const ROUTE_MAX_LEG_KM = 600;
-const ROUTE_MAX_TOTAL_KM = 2500;
-
-/**
- * Minimal fixed-window per-key rate limiter for the dev proxies. Not a hard
- * security boundary (dev-only), just a backstop so a runaway client can't hammer
- * the public Overpass / OSRM mirrors or exhaust this process.
- */
-const RATE_LIMITER_MAX_KEYS = 2000;
-function makeRateLimiter({ windowMs, max, globalMax }) {
-  const hits = new Map(); // key -> number[] (timestamps within window)
-  let globalTimes = []; // all hits in window, for the global backstop
-  return function allow(key) {
-    const now = Date.now();
-    globalTimes = globalTimes.filter((t) => now - t < windowMs);
-    if (globalMax && globalTimes.length >= globalMax) return false; // global backstop
-    const recent = (hits.get(key) || []).filter((t) => now - t < windowMs);
-    if (recent.length >= max) { hits.set(key, recent); return false; }
-    recent.push(now);
-    hits.set(key, recent);
-    globalTimes.push(now);
-    // Hard key cap so a key-rotating caller can't grow the map without bound.
-    if (hits.size > RATE_LIMITER_MAX_KEYS) {
-      const oldest = hits.keys().next().value;
-      if (oldest !== undefined) hits.delete(oldest);
-    }
-    if (hits.size > 256) {
-      for (const [k, v] of hits) {
-        if (!v.length || now - v[v.length - 1] > windowMs) hits.delete(k);
-      }
-    }
-    return true;
-  };
-}
 const _overpassRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 90, globalMax: 300 });
 const _militaryInstallationsRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 90, globalMax: 300 });
-const _routeRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 60, globalMax: 200 });
-
-/**
- * Opt-in per-IP rate limiter for the cost-bearing API proxies (OpenAI / Google).
- * DEFAULT IS UNLIMITED: when the env var is unset, `0`, or non-numeric, this
- * returns `null` and the caller skips the check entirely — a runtime no-op that
- * preserves the original behavior. Only a positive integer N enables a fixed
- * 60s window of N requests/IP (built lazily once, then reused so its per-IP
- * window state persists across requests). The global backstop is set to a
- * generous multiple of the per-IP cap so a single host can't starve the rest.
- *
- * @param {string|undefined} envValue - Raw env value (requests/min/IP).
- * @returns {((key:string)=>boolean)|null} An `allow(key)` fn, or null when unlimited.
- */
-function makeOptInRateLimiter(envValue) {
-  const max = Number(envValue);
-  if (!Number.isFinite(max) || max <= 0) return null; // unset/0/garbage -> unlimited
-  return makeRateLimiter({ windowMs: 60_000, max: Math.floor(max), globalMax: Math.floor(max) * 20 });
-}
 // Built LAZILY on first request, NOT at module load: `.env` values are applied to process.env later
 // (the plugin config hook calls loadEnv → process.env, AFTER this module is imported), so reading
 // process.env here at import time would always see them unset and silently stay unlimited even when
 // configured via .env. Building on first request (like the OPENAI_API_KEY reads) sees the loaded env;
 // the result is cached so the limiter's per-IP window state persists. `null` = unlimited (default).
-let _openAiRateLimiter; // undefined = not built yet; null = unlimited; fn = active limiter
-let _googleRateLimiter;
+let _openAiRateLimiter;
 /** OpenAI cost endpoints (realtime/token + hud-summary). Null = unlimited (default). */
 function openAiRateLimiter() {
   if (_openAiRateLimiter === undefined) _openAiRateLimiter = makeOptInRateLimiter(process.env.GEV_RATELIMIT_OPENAI_PER_MIN);
   return _openAiRateLimiter;
-}
-/** Google cost endpoint (nearby-places). Null = unlimited (default). */
-function googleRateLimiter() {
-  if (_googleRateLimiter === undefined) _googleRateLimiter = makeOptInRateLimiter(process.env.GEV_RATELIMIT_GOOGLE_PER_MIN);
-  return _googleRateLimiter;
 }
 
 /**
@@ -465,16 +401,6 @@ function enforceOptInRateLimit(limiter, req, res) {
   res.setHeader('Retry-After', '5');
   res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
   return false;
-}
-
-/**
- * Client key for rate limiting. Uses the real socket peer address only — we do
- * NOT trust X-Forwarded-For (client-controlled; a rotating value would mint fresh
- * quota and grow the limiter map). This is a localhost dev proxy, so the socket
- * address is the real client.
- */
-function clientKey(req) {
-  return String(req.socket?.remoteAddress || 'local');
 }
 
 /** Server-side timeout ceiling (seconds) we allow inside an Overpass QL query. */
@@ -2366,97 +2292,7 @@ function overpassProxy() {
         }
       });
 
-      // Real OSM routing via the public FOSSGIS OSRM servers (foot/car/bike).
-      // GET /api/route?profile=foot|car|bike&coords=lon,lat;lon,lat[;...]
-      server.middlewares.use('/api/route', async (req, res) => {
-        const fail = (msg) => {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: msg }));
-        };
-        try {
-          if (!_routeRateLimiter(clientKey(req))) {
-            res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': '5' });
-            res.end(JSON.stringify({ ok: false, error: 'rate limited' }));
-            return;
-          }
-          const url = new URL(req.url, 'http://localhost');
-          const raw = (url.searchParams.get('profile') || 'foot').toLowerCase();
-          const profile = (raw === 'car' || raw === 'driving') ? 'car'
-            : (raw === 'bike' || raw === 'cycling' || raw === 'bicycle') ? 'bike'
-              : (raw === 'foot' || raw === 'walking' || raw === 'walk') ? 'foot'
-                : null;
-          if (!profile) return fail('invalid profile');
-          const osrmProfile = profile === 'car' ? 'driving' : profile;
-          const pairs = (url.searchParams.get('coords') || '').split(';').map((s) => s.trim()).filter(Boolean);
-          if (pairs.length < 2 || pairs.length > 12) return fail('need 2-12 coordinates');
-          const clean = [];
-          const pts = [];
-          for (const pr of pairs) {
-            const parts = pr.split(',');
-            if (parts.length !== 2) return fail('invalid coordinate');
-            const lon = Number(parts[0]);
-            const lat = Number(parts[1]);
-            if (!Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
-              return fail('invalid coordinate');
-            }
-            clean.push(`${lon},${lat}`);
-            pts.push([lon, lat]);
-          }
-          // Reject obviously-abusive spans — a real walking/driving route is local,
-          // so a cross-continent request is either a bug or an attempt to drive
-          // heavy upstream OSRM work.
-          let totalKm = 0;
-          for (let i = 1; i < pts.length; i += 1) {
-            // pts are [lon, lat]; existing haversineKm takes (lat1, lon1, lat2, lon2).
-            const legKm = haversineKm(pts[i - 1][1], pts[i - 1][0], pts[i][1], pts[i][0]);
-            if (legKm > ROUTE_MAX_LEG_KM) return fail('route leg too long');
-            totalKm += legKm;
-          }
-          if (totalKm > ROUTE_MAX_TOTAL_KM) return fail('route too long');
-          const coords = clean.join(';');
-          const cacheKey = `${profile}|${coords}`;
-          const now = Date.now();
-          const cached = _routeCache.get(cacheKey);
-          if (cached && now - cached.cachedAt <= ROUTE_CACHE_MS) {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify(cached.payload));
-            return;
-          }
-          const upstream = `https://routing.openstreetmap.de/routed-${profile}/route/v1/${osrmProfile}/${coords}?overview=full&geometries=geojson&alternatives=false&steps=false`;
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 12000);
-          let osrm;
-          try {
-            const upstreamRes = await fetch(upstream, {
-              signal: controller.signal,
-              headers: { 'User-Agent': 'gods-eye-view/dev (local)' },
-            });
-            if (!upstreamRes.ok) return fail('no route found');
-            const ctype = upstreamRes.headers.get('content-type') || '';
-            if (!ctype.includes('json')) return fail('no route found');
-            const text = await readResponseTextCapped(upstreamRes, ROUTE_MAX_RESPONSE_BYTES);
-            osrm = JSON.parse(text);
-          } finally {
-            clearTimeout(timer);
-          }
-          const route = osrm?.routes?.[0];
-          if (osrm?.code !== 'Ok' || !route?.geometry?.coordinates?.length) return fail('no route found');
-          const payload = {
-            ok: true,
-            profile,
-            distanceM: Math.round(route.distance),
-            durationS: Math.round(route.duration),
-            geometry: route.geometry.coordinates,
-          };
-          _routeCache.set(cacheKey, { payload, cachedAt: now });
-          if (_routeCache.size > 200) _routeCache.delete(_routeCache.keys().next().value);
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(payload));
-        } catch (e) {
-          console.error('[Route Proxy]', e?.message || e);
-          fail('route proxy error');
-        }
-      });
+      installRouteMiddleware(server.middlewares);
     },
   };
 }
@@ -3016,24 +2852,6 @@ function rowArrayToObject(row, columns) {
     record[key] = row[idx];
   }
   return record;
-}
-
-/**
- * Haversine great-circle distance between two WGS-84 points.
- *
- * @param {number} lat1 - Latitude of point A (degrees).
- * @param {number} lon1 - Longitude of point A (degrees).
- * @param {number} lat2 - Latitude of point B (degrees).
- * @param {number} lon2 - Longitude of point B (degrees).
- * @returns {number} Distance in kilometers.
- */
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const toRad = (value) => value * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 /**
@@ -3941,33 +3759,6 @@ function cctvProxy() {
 
 /**
 /**
- * Cross-site request gate for the cost-bearing and log endpoints. Mirrors the
- * credential-panel `admit` helper (below) but feeds the request to the pure,
- * unit-tested `admitSameSiteRequest` in src/localRequestGate.mjs. Returns true
- * when it has already responded 403 (caller returns); false when the request is
- * admitted and the handler should continue. Refuses cross-site browser requests
- * (foreign/opaque Origin, or Sec-Fetch-Site other than same-origin/none, or
- * reverse-proxy headers) while keeping loopback non-browser tools and the LAN
- * opt-in working.
- */
-const admitSameSite = (req, res) => {
-  const verdict = admitSameSiteRequest({
-    method: req.method,
-    hostHeader: req.headers?.host,
-    protocol: req.socket?.encrypted ? 'https:' : 'http:',
-    origin: req.headers?.origin,
-    secFetchSite: req.headers?.['sec-fetch-site'],
-    proxyHeaders: req.headers || {},
-  });
-  if (verdict.ok) return false;
-  res.statusCode = verdict.status;
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Cache-Control', 'no-store');
-  res.end(JSON.stringify({ error: verdict.error }));
-  return true;
-};
-
-/**
  * Vite plugin: OpenAI Realtime ephemeral client secret.
  *
  * Keeps OPENAI_API_KEY server-side while the browser connects to the
@@ -4285,309 +4076,6 @@ function readRequestBody(req, maxBytes = 1024 * 1024) {
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     req.on('error', reject);
   });
-}
-
-/**
- * Optional Google place context is an empty capability when no key is present,
- * not a server outage. Returning 200 keeps a deliberately keyless session out
- * of the browser error console while preserving an explicit configured flag.
- */
-export function keylessGooglePlacesResponse(apiKey) {
-  if (String(apiKey ?? '').trim()) return null;
-  return {
-    statusCode: 200,
-    payload: { configured: false, error: null, places: [] },
-  };
-}
-
-/**
- * Google API key for the SERVER-SIDE calls (Places nearby/text search, the
- * CCTV Street View fallback). These never reach the browser, so this key can
- * be restricted by server IP and scoped to Places API + Street View Static
- * API — while GOOGLE_MAPS_API_KEY stays referrer-restricted to Map Tiles +
- * Geocoding for the browser (#33). Splitting them is opt-in: unset, this
- * falls back to the shared browser key and nothing changes.
- */
-export function googleServerApiKey() {
-  return resolveGoogleServerKey(process.env);
-}
-
-/**
- * Vite plugin: nearby Google place labels for Realtime scene context.
- *
- * The Photorealistic 3D Tiles mesh does not expose rendered map labels as
- * Cesium feature metadata. Nearby Search supplies the names around the actual
- * screen-space target without exposing the Google API key in the request.
- */
-export function googlePlacesContextProxy() {
-  function install(middlewares) {
-    middlewares.use('/api/google/nearby-places', async (req, res) => {
-      if (req.method !== 'GET') {
-        res.statusCode = 405;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Method not allowed', places: [] }));
-        return;
-      }
-      if (admitSameSite(req, res)) return;
-
-      // Keyless place context has no provider cost, so it resolves before the
-      // paid-endpoint limiter can consume or exhaust quota (mirrors the HUD
-      // summary route).
-      const apiKey = googleServerApiKey();
-      const keyless = keylessGooglePlacesResponse(apiKey);
-      if (keyless) {
-        res.statusCode = keyless.statusCode;
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Cache-Control', 'no-store');
-        res.end(JSON.stringify(keyless.payload));
-        return;
-      }
-
-      // Opt-in per-IP throttle (GEV_RATELIMIT_GOOGLE_PER_MIN). No-op when unset.
-      // Inlined (not the shared helper) so the 429 body keeps this endpoint's
-      // `places: []` contract that the client expects on every error response.
-      const _grl = googleRateLimiter();
-      if (_grl && !_grl(clientKey(req))) {
-        res.statusCode = 429;
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Retry-After', '5');
-        res.end(JSON.stringify({ error: 'Rate limit exceeded', places: [] }));
-        return;
-      }
-
-      const requestUrl = new URL(req.url || '', 'http://localhost');
-      const latitude = Number(requestUrl.searchParams.get('lat'));
-      const longitude = Number(requestUrl.searchParams.get('lon'));
-      const radiusM = Math.max(25, Math.min(5000, Number(requestUrl.searchParams.get('radiusM')) || 250));
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        res.statusCode = 400;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Valid lat and lon are required', places: [] }));
-        return;
-      }
-
-      try {
-        const response = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': apiKey,
-            'X-Goog-FieldMask': [
-              'places.id',
-              'places.displayName',
-              'places.formattedAddress',
-              'places.shortFormattedAddress',
-              'places.location',
-              'places.primaryType',
-              'places.primaryTypeDisplayName',
-              'places.types',
-            ].join(','),
-          },
-          body: JSON.stringify({
-            maxResultCount: 20,
-            rankPreference: 'DISTANCE',
-            locationRestriction: {
-              circle: {
-                center: { latitude, longitude },
-                radius: radiusM,
-              },
-            },
-          }),
-        });
-        const data = await response.json().catch(() => ({}));
-        const seenPlaces = new Set();
-        const places = Array.isArray(data.places) ? data.places
-          .map((place) => {
-            const placeLatitude = place.location?.latitude ?? null;
-            const placeLongitude = place.location?.longitude ?? null;
-            const types = Array.isArray(place.types) ? place.types.slice(0, 8) : [];
-            return {
-              id: place.id || null,
-              name: place.displayName?.text || null,
-              address: place.shortFormattedAddress || place.formattedAddress || null,
-              latitude: placeLatitude,
-              longitude: placeLongitude,
-              distanceM: approximateDistanceM(latitude, longitude, placeLatitude, placeLongitude),
-              primaryType: place.primaryTypeDisplayName?.text || place.primaryType || null,
-              types,
-              contextPriority: placeContextPriority(types),
-            };
-          })
-          .filter((place) => {
-            const key = `${place.name}:${place.address || ''}`.toLowerCase();
-            if (!place.name || seenPlaces.has(key)) return false;
-            seenPlaces.add(key);
-            return true;
-          })
-          .sort((a, b) => b.contextPriority - a.contextPriority || a.distanceM - b.distanceM)
-          .map(({ contextPriority, ...place }) => place)
-          .slice(0, 20) : [];
-
-        res.statusCode = response.ok ? 200 : response.status;
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.setHeader('Cache-Control', 'private, max-age=300');
-        res.end(JSON.stringify({
-          places,
-          error: response.ok ? null : data.error?.message || 'Google Places request failed',
-        }));
-      } catch (error) {
-        res.statusCode = 502;
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.end(JSON.stringify({ error: error?.message || 'Google Places request failed', places: [] }));
-      }
-    });
-
-    // Text Search: resolve a named landmark/POI to a real coordinate, biased to
-    // the view. Geocoding scatters obscure monument/POI names across the city;
-    // a view-biased Text Search lands on the actual feature. Same key, field
-    // mask, throttle, and `places: []` error contract as nearby-places above.
-    middlewares.use('/api/google/text-search', async (req, res) => {
-      if (req.method !== 'GET') {
-        res.statusCode = 405;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Method not allowed', places: [] }));
-        return;
-      }
-
-      // Keyless place context has no provider cost, so it resolves before the
-      // paid-endpoint limiter can consume or exhaust quota (mirrors the HUD
-      // summary route).
-      const apiKey = googleServerApiKey();
-      const keyless = keylessGooglePlacesResponse(apiKey);
-      if (keyless) {
-        res.statusCode = keyless.statusCode;
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Cache-Control', 'no-store');
-        res.end(JSON.stringify(keyless.payload));
-        return;
-      }
-
-      // Opt-in per-IP throttle (GEV_RATELIMIT_GOOGLE_PER_MIN). No-op when unset.
-      // Inlined (like nearby-places) so the 429 body keeps the `places: []`
-      // contract the client expects on every error response.
-      const _grl = googleRateLimiter();
-      if (_grl && !_grl(clientKey(req))) {
-        res.statusCode = 429;
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Retry-After', '5');
-        res.end(JSON.stringify({ error: 'Rate limit exceeded', places: [] }));
-        return;
-      }
-
-      const requestUrl = new URL(req.url || '', 'http://localhost');
-      const textQuery = String(requestUrl.searchParams.get('q') || '').trim();
-      const latitude = Number(requestUrl.searchParams.get('lat'));
-      const longitude = Number(requestUrl.searchParams.get('lon'));
-      const radiusM = Math.max(50, Math.min(50000, Number(requestUrl.searchParams.get('radiusM')) || 4000));
-      if (!textQuery || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        res.statusCode = 400;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'q, lat and lon are required', places: [] }));
-        return;
-      }
-
-      try {
-        const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': apiKey,
-            'X-Goog-FieldMask': [
-              'places.id',
-              'places.displayName',
-              'places.formattedAddress',
-              'places.location',
-              'places.viewport',
-              'places.primaryType',
-              'places.types',
-            ].join(','),
-          },
-          body: JSON.stringify({
-            textQuery,
-            locationBias: {
-              circle: {
-                center: { latitude, longitude },
-                radius: radiusM,
-              },
-            },
-            maxResultCount: 5,
-          }),
-        });
-        const data = await response.json().catch(() => ({}));
-        const places = Array.isArray(data.places) ? data.places
-          .map((place) => {
-            const placeLatitude = place.location?.latitude ?? null;
-            const placeLongitude = place.location?.longitude ?? null;
-            const types = Array.isArray(place.types) ? place.types.slice(0, 8) : [];
-            // Places returns a lat/lng bounding box (low/high corners) framing the
-            // place — no polygon, but enough to SIZE a fallback grounds disc to the
-            // real feature instead of a blind constant. Normalize to plain numbers.
-            const vp = place.viewport;
-            const viewport = (
-              Number.isFinite(vp?.low?.latitude) && Number.isFinite(vp?.low?.longitude)
-              && Number.isFinite(vp?.high?.latitude) && Number.isFinite(vp?.high?.longitude)
-            ) ? {
-              low: { latitude: vp.low.latitude, longitude: vp.low.longitude },
-              high: { latitude: vp.high.latitude, longitude: vp.high.longitude },
-            } : null;
-            return {
-              id: place.id || null,
-              name: place.displayName?.text || null,
-              address: place.formattedAddress || null,
-              latitude: placeLatitude,
-              longitude: placeLongitude,
-              distanceM: approximateDistanceM(latitude, longitude, placeLatitude, placeLongitude),
-              primaryType: place.primaryType || null,
-              types,
-              viewport,
-            };
-          })
-          .filter((place) => place.name) : [];
-
-        res.statusCode = response.ok ? 200 : response.status;
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.setHeader('Cache-Control', 'private, max-age=300');
-        res.end(JSON.stringify({
-          places,
-          error: response.ok ? null : data.error?.message || 'Google Places request failed',
-        }));
-      } catch (error) {
-        res.statusCode = 502;
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.end(JSON.stringify({ error: error?.message || 'Google Places request failed', places: [] }));
-      }
-    });
-  }
-
-  return {
-    name: 'google-places-context-proxy',
-    configureServer(server) {
-      install(server.middlewares);
-    },
-    configurePreviewServer(server) {
-      install(server.middlewares);
-    },
-  };
-}
-
-function placeContextPriority(types) {
-  const typeSet = new Set(types);
-  if (typeSet.has('historical_landmark') || typeSet.has('monument')) return 100;
-  if (typeSet.has('tourist_attraction') || typeSet.has('museum')) return 90;
-  if (typeSet.has('premise') || typeSet.has('street_address')) return 75;
-  if (typeSet.has('point_of_interest')) return 60;
-  if (typeSet.has('public_bathroom')) return 10;
-  return 40;
-}
-
-function approximateDistanceM(latA, lonA, latB, lonB) {
-  if (![latA, lonA, latB, lonB].every(Number.isFinite)) return Number.MAX_SAFE_INTEGER;
-  const latitudeScale = 111320;
-  const longitudeScale = latitudeScale * Math.cos((latA * Math.PI) / 180);
-  return Math.round(Math.hypot(
-    (latB - latA) * latitudeScale,
-    (lonB - lonA) * longitudeScale
-  ));
 }
 
 const GEV_REALTIME_TOOLS = [

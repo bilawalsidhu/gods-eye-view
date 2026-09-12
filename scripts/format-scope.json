@@ -44,5 +44,14 @@
   "src/tooling/liveProviders.test.mjs",
   "src/data/adsbLolFallback.js",
   "src/data/aisStreamAdapter.js",
-  "src/data/aisWatchdog.js"
+  "src/data/aisWatchdog.js",
+  "server/providers/common/geo.js",
+  "server/providers/common/rate-limit.js",
+  "server/providers/places.js",
+  "server/providers/places/google-key.js",
+  "server/providers/places/google.js",
+  "server/providers/places/routes.js",
+  "src/data/placeProviderPayloads.js",
+  "src/tooling/placeProviders.test.mjs",
+  "server/providers/common/same-site.js"
 ]

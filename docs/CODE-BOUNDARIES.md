@@ -42,7 +42,7 @@ They check build-time imports, not arbitrary runtime-generated module URLs.
 Keep runtime module discovery out of these exports. When extracting another
 component, add its ownership and consumer tests together. Node services must use
 separate entry points and their own checks when they become reusable; importing
-them into a browser component is not supported. No provider service is exported yet.
+them into a browser component is not supported.
 
 `gods-eye-view/application` owns construction order, startup state, cancellation
 and disposal of caller-supplied components. Its only owned module is
@@ -100,3 +100,20 @@ socket/watchdog on server close and re-reads configuration after restart.
 The portable `gods-eye-view/sources/adsb-lol` export normalizes existing aircraft
 records without importing Node middleware or a renderer. Browser layer/controller
 separation is outside this server extraction.
+
+## Place-search and routing providers
+
+`gods-eye-view/server/providers/places` exports the Google nearby-place and
+text-search plugin, OSRM route registration, and their shared Node helpers.
+The existing Overpass plugin still mounts `/api/route` in its original order.
+Google credentials are resolved on each request; the default uses the existing
+server-key precedence, and callers may supply `resolveApiKey`.
+
+`gods-eye-view/sources/places` exports portable response projections for Google
+place results and OSRM route results/profile aliases. These functions own no
+credentials, requests, caches, environment loading, or rendering. Callers retain
+input validation and upstream-response acceptance. The boundary check builds
+this entry independently and rejects Node imports.
+
+The browser's direct geocoding, annotation rendering and full Overpass query
+service remain in their existing modules.

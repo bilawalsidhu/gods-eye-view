@@ -109,16 +109,9 @@ const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 /** Socket addresses that count as this machine. */
 const LOOPBACK_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
-/**
- * Reverse-proxy / CDN forwarding headers. Their presence means the request did
- * not originate on this machine, whatever its socket says. Shared with the
- * cost/log endpoint gate in localRequestGate.mjs so there is one definition.
- */
-export const PROXY_SIGNALS = Object.freeze([
-  'forwarded', 'via', 'x-forwarded-for', 'x-forwarded-host',
-  'x-forwarded-port', 'x-forwarded-proto', 'x-real-ip',
-  'cf-connecting-ip', 'cf-ray',
-]);
+import { PROXY_SIGNALS } from './localRequestGate.mjs';
+
+export { PROXY_SIGNALS };
 
 /** Parse an exact local request authority from a Host header. */
 function localAuthority(hostHeader, protocol) {
