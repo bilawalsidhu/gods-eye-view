@@ -597,3 +597,59 @@ test('search without an authority hook preserves the existing caller contract', 
   assert.equal(result.navigationMode, 'city-overview');
   assert.equal(viewer.flights.length, 1);
 });
+
+test('search without a Google key uses the Nominatim geocode proxy', async () => {
+  const viewer = stubViewer();
+  const urls = [];
+  const hadWindow = Object.hasOwn(globalThis, 'window');
+  const priorWindow = globalThis.window;
+  const priorFetch = globalThis.fetch;
+  globalThis.window = {};
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    return {
+      ok: true,
+      json: async () => ({ status: 'OK', results: [AUSTIN_RESULT] }),
+    };
+  };
+  try {
+    const result = await searchAndFlyTo(viewer, 'austin');
+    assert.equal(result.navigationMode, 'city-overview');
+    assert.equal(viewer.flights.length, 1);
+    assert.ok(urls.some((url) => url.includes('/api/geocode?')), urls.join('\n'));
+    assert.equal(urls.some((url) => url.includes('maps.googleapis.com')), false);
+  } finally {
+    globalThis.fetch = priorFetch;
+    if (hadWindow) globalThis.window = priorWindow;
+    else delete globalThis.window;
+  }
+});
+
+test('a denied Google geocode falls through to Nominatim', async () => {
+  const viewer = stubViewer();
+  const urls = [];
+  const hadWindow = Object.hasOwn(globalThis, 'window');
+  const priorWindow = globalThis.window;
+  const priorFetch = globalThis.fetch;
+  globalThis.window = { __GOOGLE_MAPS_API_KEY__: 'AIza-invalid' };
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    if (String(url).includes('maps.googleapis.com')) {
+      return { json: async () => ({ status: 'REQUEST_DENIED', results: [] }) };
+    }
+    return {
+      ok: true,
+      json: async () => ({ status: 'OK', results: [AUSTIN_RESULT] }),
+    };
+  };
+  try {
+    const result = await searchAndFlyTo(viewer, 'austin');
+    assert.equal(result.navigationMode, 'city-overview');
+    assert.ok(urls.some((url) => url.includes('maps.googleapis.com')));
+    assert.ok(urls.some((url) => url.includes('/api/geocode?')));
+  } finally {
+    globalThis.fetch = priorFetch;
+    if (hadWindow) globalThis.window = priorWindow;
+    else delete globalThis.window;
+  }
+});
