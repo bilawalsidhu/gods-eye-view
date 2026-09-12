@@ -86,6 +86,12 @@ Start with the included data sources, then add your own. Each layer is a separat
 
 ## ⚡ Quick Start
 
+The app opens in **Simple view**: choose a city, turn on flights, satellites or
+earthquakes, and explore the globe. **Full interface** reveals all the original
+tools; **Simple view** switches back. Your choice is remembered in this browser.
+Shared views use your saved layout, or the full interface for new visitors. Use `?view=simple` or
+`?view=full` to open a specific layout.
+
 **Start without an account or API keys.** Both paths open the same app with
 Esri satellite imagery and keyless terrain. OSM is the fallback if Esri is
 unreachable. Flights, military traffic, satellites, earthquakes, public

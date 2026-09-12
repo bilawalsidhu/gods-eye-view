@@ -1,0 +1,87 @@
+/* A small, optional shell over the same globe and data controls. */
+#simple-explorer { display: none; }
+#interface-toggle {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  z-index: 160;
+  padding: 11px 16px;
+  border: 1px solid #526572;
+  border-radius: 10px;
+  background: #13212eee;
+  color: #f1f6fa;
+  font: 500 13px Inter, sans-serif;
+  cursor: pointer;
+}
+body[data-interface="simple"] :is(#title-bar, #style-indicator, #top-center-actions,
+  #pp-toggles, #command-dock, #left-panel-stack, #right-context-rail, #view-switcher,
+  #intel-hud, #safe-frame-overlay, #scene-runtime, #first-run-launcher, #key-setup-chip) {
+  display: none !important;
+}
+body[data-interface="simple"] #simple-explorer {
+  display: block;
+  position: fixed;
+  left: 24px;
+  top: 24px;
+  width: 300px;
+  max-height: calc(100dvh - 70px);
+  overflow: auto;
+  box-sizing: border-box;
+  z-index: 110;
+  padding: 22px;
+  border: 1px solid #ffffff24;
+  border-radius: 18px;
+  background: #101e2bec;
+  box-shadow: 0 16px 50px #0005;
+  backdrop-filter: blur(16px);
+  color: #eff5fa;
+  font: 14px/1.5 Inter, sans-serif;
+}
+#simple-explorer header { display: flex; gap: 12px; align-items: center; margin-bottom: 24px; }
+#simple-explorer header img { width: 36px; height: 36px; }
+#simple-explorer h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.6px; }
+#simple-explorer p { margin: 4px 0 0; color: #a6b6c6; font-size: 12px; }
+#simple-explorer label { display: block; margin-bottom: 8px; font-weight: 500; }
+#simple-explorer select, #simple-explorer button {
+  border: 1px solid #ffffff30;
+  border-radius: 8px;
+  background: #203345;
+  color: #eff5fa;
+  font: 500 13px Inter, sans-serif;
+  min-height: 40px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+#simple-explorer select { width: 100%; }
+#simple-explorer button:hover, #interface-toggle:hover { background: #2b465d; }
+#simple-explorer :focus-visible, #interface-toggle:focus-visible { outline: 2px solid #84d8f1; outline-offset: 3px; }
+#simple-explorer button:disabled, #interface-toggle:disabled { opacity: .5; cursor: wait; }
+.simple-actions { display: flex; gap: 8px; margin-top: 10px; }
+.simple-actions button { flex: 1; }
+#simple-layers { border-top: 1px solid #ffffff20; margin-top: 22px; padding-top: 16px; }
+#simple-layers summary { cursor: pointer; font-weight: 500; }
+#simple-explorer .simple-layer-help { margin: 10px 0; }
+#simple-explorer .simple-help { margin-top: 18px; line-height: 1.8; }
+#simple-explorer #data-toggles { display: flex; flex-direction: column; gap: 2px; max-height: 38dvh; overflow: auto; }
+#simple-explorer .data-toggle-row { padding: 10px 0; border-bottom: 1px solid #ffffff12; background: transparent; }
+#simple-explorer .data-name { font: 500 13px Inter, sans-serif; color: #eff5fa; }
+#simple-explorer .data-count { font-size: 11px; }
+#simple-explorer .data-toggle-meta { font-size: 9px; letter-spacing: 0; color: #a6b6c6; white-space: normal; }
+#simple-explorer .data-toggle-btn { min-width: 60px; min-height: 34px; font-size: 10px; }
+#simple-explorer .data-toggle-btn.active { background: #164c4f; border-color: #65c9bd; color: #b7fff0; }
+#simple-explorer .data-toggle-controls { display: none; }
+/* Keep any already selected extra layers reachable, including transitions. */
+#simple-explorer .data-toggle-row:not([data-layer-id="flights"]):not([data-layer-id="satellites"]):not([data-layer-id="earthquakes"]):not(:has(.data-toggle-btn:is(.active, .enabling, .disabling, .lifecycle-uncertain))) { display: none; }
+#simple-explorer #simple-clear { margin-top: 12px; width: 100%; background: transparent; color: #b7c8d7; }
+body[data-interface="simple"] #global-loading-status { top: auto; bottom: 36px; max-width: calc(100vw - 40px); }
+body.ui-clean-view #simple-explorer, body.ui-clean-view #interface-toggle { display: none; }
+body[data-interface="full"] #interface-toggle { top: 80px; }
+@media (max-width: 640px) {
+  #interface-toggle { top: 12px; right: 12px; padding: 9px 12px; }
+  body[data-interface="simple"] #simple-explorer { left: 12px; top: auto; bottom: 34px; width: calc(100% - 24px); max-height: 53dvh; padding: 16px; border-radius: 14px; }
+  #simple-explorer header { margin-bottom: 12px; }
+  #simple-explorer header img { width: 28px; height: 28px; }
+  #simple-explorer header p, #simple-explorer .simple-help { display: none; }
+  #simple-layers { margin-top: 14px; padding-top: 12px; }
+  body[data-interface="simple"] #global-loading-status { top: 60px; bottom: auto; }
+}

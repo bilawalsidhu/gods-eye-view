@@ -6,13 +6,31 @@
   <title>God's Eye View</title>
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/simple.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
 </head>
-<body>
+<body data-interface="simple">
+  <button id="interface-toggle" type="button" disabled>Full interface</button>
+  <aside id="simple-explorer" aria-label="Simple globe explorer">
+    <header><img src="/logo.svg" alt="" /><div><h1>God's Eye View</h1><p>Explore the world.</p></div></header>
+    <label for="simple-city">Go to a city</label>
+    <select id="simple-city" disabled><option value="">Choose a place…</option></select>
+    <div class="simple-actions">
+      <button id="simple-reset" type="button" disabled>Reset globe</button>
+      <button id="simple-share" type="button" disabled>Share view</button>
+    </div>
+    <details id="simple-layers" open>
+      <summary>Map layers</summary>
+      <p class="simple-layer-help">Turn a layer on, then select a marker on the globe.</p>
+      <div id="simple-layer-host"></div>
+      <button id="simple-clear" type="button" disabled>Turn all layers off</button>
+    </details>
+    <p class="simple-help">Drag to look around. Scroll or pinch to zoom.<br />More tools are in the Full interface.</p>
+  </aside>
   <div id="cesiumContainer"></div>
   <div id="world-overlay-root" aria-hidden="true">
     <canvas id="world-overlay-canvas"></canvas>

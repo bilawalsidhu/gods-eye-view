@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { StyleManager } from './ui.js';
 import { flyToAustin } from './camera.js';
+import { flyToGlobeView } from './locations.js';
 import { DataLayerManager } from './data/manager.js';
 import flightsLayer from './data/flights.js';
 import militaryFlightsLayer from './data/militaryFlights.js';
@@ -35,8 +36,10 @@ import { installScopeMask } from './scopeMask.js';
 import { initFirstRunExperience } from './firstRunExperience.js';
 import { initKeySetup } from './keySetup.js';
 import { loadPhotorealisticTileset } from './mapStartup.js';
+import { initSimpleView } from './simpleView.js';
 
 initLogoGaze();
+const connectSimpleView = initSimpleView();
 
 /**
  * Extract a human-readable error message from any thrown value.
@@ -196,10 +199,15 @@ async function init() {
     const weatherEffects = null;
     const cockpitCloudEffects = initCockpitCloudEffects(viewer);
 
-    // If no share link state, do default fly-to Austin
+    // Simple view starts with an overview; shared camera state always wins.
     if (!styleManager.hasShareState) {
-      loaderStatus.textContent = 'Flying to Austin, TX...';
-      flyToAustin(viewer);
+      if (document.body.dataset.interface === 'simple') {
+        loaderStatus.textContent = 'Opening the globe...';
+        flyToGlobeView(viewer);
+      } else {
+        loaderStatus.textContent = 'Flying to Austin, TX...';
+        flyToAustin(viewer);
+      }
     } else {
       loaderStatus.textContent = 'Restoring shared view...';
     }
@@ -263,7 +271,9 @@ async function init() {
         // dataManager is passed explicitly: the globe missions enable bundled
         // keyless layers through it, and reaching for styleManager._dataManager
         // would make a private field part of this feature's contract.
-        initFirstRunExperience({ styleManager, dataManager });
+        if (document.body.dataset.interface !== 'simple') {
+          initFirstRunExperience({ styleManager, dataManager });
+        }
       };
       loadingScreen.addEventListener('transitionend', revealFirstRun, { once: true });
       setTimeout(revealFirstRun, 900);
@@ -329,6 +339,7 @@ async function init() {
       requestRender: governorRequestRender,
     };
     window.__godsEyeView.voiceCommands = initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector, annotations });
+    connectSimpleView();
 
   } catch (error) {
     console.error("God's Eye View initialization failed:", error);
