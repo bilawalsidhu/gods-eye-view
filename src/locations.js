@@ -341,28 +341,60 @@ export function findPoiByName(query) {
 /** Distinguishes an authority veto from a genuine not-found result. */
 export const CANCELLED_SEARCH = Object.freeze({ cancelled: true });
 
+function googleMapsApiKey() {
+  return String(
+    (typeof window !== 'undefined' && window.__GOOGLE_MAPS_API_KEY__)
+    || (typeof import.meta !== 'undefined' && import.meta.env?.GOOGLE_MAPS_API_KEY)
+    || '',
+  ).trim();
+}
+
 /**
- * Geocode a place name using Google Geocoding API, then fly there at a scale
- * appropriate to the request. Countries and cities use their viewport by
- * default; precise landmarks/buildings use close landmark framing.
+ * Resolve a typed/spoken place. Google Geocoding is used when a real Maps key
+ * is configured; otherwise (or when Google denies the request) Nominatim via
+ * `/api/geocode` — so voice fly-to works without Google billing.
  */
-export async function searchAndFlyTo(viewer, query, options = {}) {
-  const apiKey = window.__GOOGLE_MAPS_API_KEY__ || import.meta.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) throw new Error('No Google Maps API key available for geocoding');
-
-  const beforeFly = typeof options.beforeFly === 'function' ? options.beforeFly : null;
-  const mayFly = () => beforeFly === null || beforeFly() !== false;
-
+async function geocodePlaceForSearch(viewer, query) {
   // Viewport-biased geocode — the same bias annotationResolver's geocodePlace uses:
   // "Sixth Street" spoken over Austin must prefer the Sixth Street on screen, not a
   // same-named road in another city (or the wrong end of town — the W 6th vs E 6th bug).
-  let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
   const bias = viewportBias(viewer);
-  if (bias) url += `&bounds=${bias}`;
-  const response = await fetch(url);
-  const data = await response.json();
+  const apiKey = googleMapsApiKey();
+  if (apiKey) {
+    try {
+      let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
+      if (bias) url += `&bounds=${bias}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      if (data.status === 'OK' && data.results?.length) return data.results[0];
+    } catch {
+      // Fall through to Nominatim — a denied/invalid Google key must not
+      // disable named-place navigation.
+    }
+  }
 
-  const result = (data.status === 'OK' && data.results?.length) ? data.results[0] : null;
+  const params = new URLSearchParams({ q: String(query || '').trim() });
+  if (bias) params.set('bounds', bias);
+  try {
+    const response = await fetch(`/api/geocode?${params}`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    return (data.status === 'OK' && data.results?.length) ? data.results[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Geocode a place name, then fly there at a scale appropriate to the request.
+ * Countries and cities use their viewport by default; precise landmarks/buildings
+ * use close landmark framing.
+ */
+export async function searchAndFlyTo(viewer, query, options = {}) {
+  const beforeFly = typeof options.beforeFly === 'function' ? options.beforeFly : null;
+  const mayFly = () => beforeFly === null || beforeFly() !== false;
+
+  const result = await geocodePlaceForSearch(viewer, query);
   let lat = result?.geometry.location.lat;
   let lng = result?.geometry.location.lng;
   let label = result ? result.formatted_address : null;
