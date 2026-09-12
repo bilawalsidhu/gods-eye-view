@@ -15,7 +15,8 @@ const LOCAL_OVERLAY_COLLISION_CAPACITY = 96;
 const LOCAL_OVERLAY_CELL_SURPLUS = 2;
 const LOCAL_OVERLAY_MAX_DISTANCE_M = 14000000;
 const LOCAL_OVERLAY_FADE_START_M = 250000;
-const LOCAL_OVERLAY_FADE_START_RATIO = LOCAL_OVERLAY_FADE_START_M / LOCAL_OVERLAY_MAX_DISTANCE_M;
+const LOCAL_OVERLAY_FADE_START_RATIO =
+  LOCAL_OVERLAY_FADE_START_M / LOCAL_OVERLAY_MAX_DISTANCE_M;
 // Stems are anchored at ellipsoid height 0, but high-elevation features
 // (e.g. dams in river canyons) sit hundreds of meters above the ellipsoid,
 // burying the short close-in stem inside the photoreal mesh. Once the
@@ -63,8 +64,12 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
       props.capacity,
     ]);
     const line = [operator, capacity]
-      .filter((value, index, values) => value && values.indexOf(value) === index)
-      .filter((value) => value.toLocaleLowerCase() !== title.toLocaleLowerCase())
+      .filter(
+        (value, index, values) => value && values.indexOf(value) === index,
+      )
+      .filter(
+        (value) => value.toLocaleLowerCase() !== title.toLocaleLowerCase(),
+      )
       .join(' · ');
     if (line) details.push(clampCardLine(line));
   } else if (layerId === 'local-dams') {
@@ -147,21 +152,29 @@ export function createLocalInfrastructureOverlayEntry({
  * @param {number} [options.cohortLimit=Infinity] Host-safe materialization cap.
  * @returns {object[]} Bounded overlay entries for shared-host arbitration.
  */
-export function selectLocalInfrastructureOverlayCohort(records, {
-  maxEntries,
-  gridPx,
-  width,
-  height,
-  project,
-  cohortLimit = Number.POSITIVE_INFINITY,
-}) {
+export function selectLocalInfrastructureOverlayCohort(
+  records,
+  {
+    maxEntries,
+    gridPx,
+    width,
+    height,
+    project,
+    cohortLimit = Number.POSITIVE_INFINITY,
+  },
+) {
   const sourceCap = Math.max(0, Math.floor(Number(maxEntries) || 0));
   const materializationCap = Number.isFinite(Number(cohortLimit))
     ? Math.max(0, Math.floor(Number(cohortLimit)))
     : Number.POSITIVE_INFINITY;
   const cap = Math.min(sourceCap, materializationCap);
   const cellSize = Math.max(1, Number(gridPx) || 1);
-  if (!Array.isArray(records) || records.length === 0 || cap === 0 || typeof project !== 'function') {
+  if (
+    !Array.isArray(records) ||
+    records.length === 0 ||
+    cap === 0 ||
+    typeof project !== 'function'
+  ) {
     return [];
   }
 
@@ -170,8 +183,13 @@ export function selectLocalInfrastructureOverlayCohort(records, {
   for (const record of records) {
     const screen = project(record);
     if (!Number.isFinite(screen?.x) || !Number.isFinite(screen?.y)) continue;
-    if (screen.x < -padding || screen.x > width + padding
-      || screen.y < -padding || screen.y > height + padding) continue;
+    if (
+      screen.x < -padding ||
+      screen.x > width + padding ||
+      screen.y < -padding ||
+      screen.y > height + padding
+    )
+      continue;
     const key = `${Math.floor(screen.x / cellSize)}:${Math.floor(screen.y / cellSize)}`;
     let contenders = cells.get(key);
     if (!contenders) {
@@ -189,7 +207,8 @@ export function selectLocalInfrastructureOverlayCohort(records, {
   }
   primary.sort(compareLocalOverlayRecords);
   surplus.sort(compareLocalOverlayRecords);
-  if (primary.length >= cap) return primary.slice(0, cap).map((record) => record.entry);
+  if (primary.length >= cap)
+    return primary.slice(0, cap).map((record) => record.entry);
   const candidates = primary.concat(surplus.slice(0, cap - primary.length));
   return candidates.map((record) => record.entry);
 }
@@ -201,10 +220,7 @@ export function selectLocalInfrastructureOverlayCohort(records, {
  * @param {object} [options.host] Test seam for the three host lifecycle calls.
  * @returns {{show:function():void,publish:function(object[]):void,hide:function():void,destroy:function():void}}
  */
-export function createLocalInfrastructureOverlayPublisher({
-  sourceId,
-  host,
-}) {
+export function createLocalInfrastructureOverlayPublisher({ sourceId, host }) {
   let visible = false;
   let published = false;
   let destroyed = false;
@@ -227,17 +243,26 @@ export function createLocalInfrastructureOverlayPublisher({
     },
     publish(entries) {
       if (destroyed || !visible) return;
-      if (lastPublication && entries.length === lastPublication.length
-        && entries.every((entry, index) => {
+      if (
+        lastPublication &&
+        entries.length === lastPublication.length &&
+        entries.every((entry, index) => {
           const previous = lastPublication[index];
-          return entry === previous.entry
-            && entry.position?.x === previous.x
-            && entry.position?.y === previous.y
-            && entry.position?.z === previous.z;
-        })) return;
+          return (
+            entry === previous.entry &&
+            entry.position?.x === previous.x &&
+            entry.position?.y === previous.y &&
+            entry.position?.z === previous.z
+          );
+        })
+      )
+        return;
       host.setEntries(sourceId, entries, sourceOptions);
-      lastPublication = entries.map(entry => ({
-        entry, x: entry.position?.x, y: entry.position?.y, z: entry.position?.z,
+      lastPublication = entries.map((entry) => ({
+        entry,
+        x: entry.position?.x,
+        y: entry.position?.y,
+        z: entry.position?.z,
       }));
       published = entries.length > 0;
     },
@@ -288,26 +313,31 @@ export function localDatasetError(error) {
  * One live instance per layer id is allowed in a given viewer/context/overlay host.
  * Destroy the previous instance before replacing it. Importing creates no layers.
  */
-export function createLocalGeoJsonLayer({
-  id,
-  url,
-  name,
-  color,
-  icon = '📍',
-  source = 'Local JSONL',
-  labels = true,
-  labelMax = DEFAULT_LABEL_MAX,
-  labelGridPx = DEFAULT_LABEL_GRID_PX,
-  screenSpaceEventHandlerFactory = (canvas) => new Cesium.ScreenSpaceEventHandler(canvas),
-  projectToWindow = (scene, position) => Cesium.SceneTransforms.worldToWindowCoordinates(scene, position),
-}, {
-  overlayHost,
-  registerEntityContext,
-  selectEntityContext,
-  clearSelectedEntityContextForLayer,
-  removeEntityContextsForLayer,
-  governorRequestRender,
-}) {
+export function createLocalGeoJsonLayer(
+  {
+    id,
+    url,
+    name,
+    color,
+    icon = '📍',
+    source = 'Local JSONL',
+    labels = true,
+    labelMax = DEFAULT_LABEL_MAX,
+    labelGridPx = DEFAULT_LABEL_GRID_PX,
+    screenSpaceEventHandlerFactory = (canvas) =>
+      new Cesium.ScreenSpaceEventHandler(canvas),
+    projectToWindow = (scene, position) =>
+      Cesium.SceneTransforms.worldToWindowCoordinates(scene, position),
+  },
+  {
+    overlayHost,
+    registerEntityContext,
+    selectEntityContext,
+    clearSelectedEntityContextForLayer,
+    removeEntityContextsForLayer,
+    governorRequestRender,
+  },
+) {
   let _dataSource = null;
   let _enabled = false;
   let _clickHandler = null;
@@ -483,231 +513,279 @@ export function createLocalGeoJsonLayer({
 
       // 1. Initialize data source
       if (!_dataSource) {
-        if (!_loadPromise) _loadPromise = (async () => {
-          _loadController = new AbortController();
-          const baseColor = Cesium.Color.fromCssColorString(color);
+        if (!_loadPromise)
+          _loadPromise = (async () => {
+            _loadController = new AbortController();
+            const baseColor = Cesium.Color.fromCssColorString(color);
 
-          // Fetch and parse JSON Lines (.geojsonl) into a FeatureCollection.
-          // The source is built into a local and committed to `_dataSource`
-          // only once setup finishes: a half-built source published early would
-          // make every later enable() skip this block, so the layer could never
-          // clear its error or retry.
-          _error = null;
-          let loaded = null;
-          // Whether the scene has actually accepted `loaded` — the two rollback
-          // windows (before vs after the add settles) need different cleanup.
-          let addedToScene = false;
-          try {
-            const response = await fetch(url, { signal: _loadController.signal });
-            if (_destroyed) return;
-            // A 404 returns an HTML body that would otherwise die in JSON.parse
-            // one line later, reported as a parse error for a missing file.
-            if (!response.ok) {
-              throw new Error(`HTTP ${response.status ?? '?'}`);
-            }
-            const text = await response.text();
-            if (_destroyed) return;
-            const lines = text.split('\n').filter(l => l.trim().length > 0);
+            // Fetch and parse JSON Lines (.geojsonl) into a FeatureCollection.
+            // The source is built into a local and committed to `_dataSource`
+            // only once setup finishes: a half-built source published early would
+            // make every later enable() skip this block, so the layer could never
+            // clear its error or retry.
+            _error = null;
+            let loaded = null;
+            // Whether the scene has actually accepted `loaded` — the two rollback
+            // windows (before vs after the add settles) need different cleanup.
+            let addedToScene = false;
+            try {
+              const response = await fetch(url, {
+                signal: _loadController.signal,
+              });
+              if (_destroyed) return;
+              // A 404 returns an HTML body that would otherwise die in JSON.parse
+              // one line later, reported as a parse error for a missing file.
+              if (!response.ok) {
+                throw new Error(`HTTP ${response.status ?? '?'}`);
+              }
+              const text = await response.text();
+              if (_destroyed) return;
+              const lines = text.split('\n').filter((l) => l.trim().length > 0);
 
-            const features = lines.map(line => JSON.parse(line));
+              const features = lines.map((line) => JSON.parse(line));
 
-            const geojson = {
-              type: 'FeatureCollection',
-              features
-            };
+              const geojson = {
+                type: 'FeatureCollection',
+                features,
+              };
 
-            // Natively parse into entities and use it as our _dataSource
-            loaded = await Cesium.GeoJsonDataSource.load(geojson, {
-              clampToGround: true,
-              stroke: baseColor,
-              fill: baseColor.withAlpha(0.3),
-              strokeWidth: 2,
-              markerSize: 8,
-              markerColor: baseColor,
-            });
+              // Natively parse into entities and use it as our _dataSource
+              loaded = await Cesium.GeoJsonDataSource.load(geojson, {
+                clampToGround: true,
+                stroke: baseColor,
+                fill: baseColor.withAlpha(0.3),
+                strokeWidth: 2,
+                markerSize: 8,
+                markerColor: baseColor,
+              });
 
-            if (_destroyed) return;
-            loaded.name = name;
-            loaded.show = false;
-            // Cesium's DataSourceCollection.add() returns a promise and only
-            // inserts on a later microtask. Without this await, a throw during
-            // post-processing would roll back a source the scene had not
-            // accepted yet — and Cesium would then insert the "removed" source
-            // anyway, leaving an orphan the retry would double up on. Awaiting
-            // also routes an add() rejection into the error path below instead
-            // of leaving it uncaught with healthy-looking stats.
-            await viewer.dataSources.add(loaded);
-            addedToScene = true;
-            if (_destroyed) {
-              viewer.dataSources.remove(loaded, true);
-              return;
-            }
-
-            // Convert parsed points into 3D stems or style polygons
-            const entities = loaded.entities.values;
-            _count = entities.length;
-            _stemRecords = [];
-            _stemGeometryDirty = true;
-
-            for (let i = 0; i < entities.length; i++) {
-              const feature = entities[i];
-              feature.__localLayerId = id; // Tag it so our click handler knows it belongs to this layer
-
-              let pos = feature.position?.getValue(Cesium.JulianDate.now());
-
-              if (!pos) {
-                // It's a polygon or line
-                if (feature.polygon) {
-                  feature.polygon.outline = true;
-                  feature.polygon.outlineColor = baseColor;
-
-                  // Calculate center point for the stem
-                  const hierarchy = feature.polygon.hierarchy?.getValue(Cesium.JulianDate.now());
-                  if (hierarchy && hierarchy.positions && hierarchy.positions.length > 0) {
-                    pos = Cesium.BoundingSphere.fromPoints(hierarchy.positions).center;
-                  }
-                }
+              if (_destroyed) return;
+              loaded.name = name;
+              loaded.show = false;
+              // Cesium's DataSourceCollection.add() returns a promise and only
+              // inserts on a later microtask. Without this await, a throw during
+              // post-processing would roll back a source the scene had not
+              // accepted yet — and Cesium would then insert the "removed" source
+              // anyway, leaving an orphan the retry would double up on. Awaiting
+              // also routes an add() rejection into the error path below instead
+              // of leaving it uncaught with healthy-looking stats.
+              await viewer.dataSources.add(loaded);
+              addedToScene = true;
+              if (_destroyed) {
+                viewer.dataSources.remove(loaded, true);
+                return;
               }
 
-              if (!pos) continue;
+              // Convert parsed points into 3D stems or style polygons
+              const entities = loaded.entities.values;
+              _count = entities.length;
+              _stemRecords = [];
+              _stemGeometryDirty = true;
 
-              const carto = Cesium.Cartographic.fromCartesian(pos);
-              const groundHeight = 0; // Ellipsoid surface until a scene sample lands
-              const tipHeight = 2000; // Initial Stem height
+              for (let i = 0; i < entities.length; i++) {
+                const feature = entities[i];
+                feature.__localLayerId = id; // Tag it so our click handler knows it belongs to this layer
 
-              const base = Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, groundHeight);
-              const tip = Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, tipHeight);
-              const properties = propertyObject(feature);
-              const recordId = String(feature.id ?? i);
+                let pos = feature.position?.getValue(Cesium.JulianDate.now());
 
-              // Store references for bounded stem scaling and native picking.
-              feature.__localBaseCarto = carto;
-              feature.__localBaseCartesian = base;
-              registerEntityContext(feature, {
-                id: `${id}:${recordId}`,
-                layerId: id,
-                layerName: name,
-                source,
-                dataSource: loaded,
-                label: featureLabelFromProperties(properties, id),
-                properties,
-                latitude: Number(Cesium.Math.toDegrees(carto.latitude).toFixed(6)),
-                longitude: Number(Cesium.Math.toDegrees(carto.longitude).toFixed(6)),
-              });
+                if (!pos) {
+                  // It's a polygon or line
+                  if (feature.polygon) {
+                    feature.polygon.outline = true;
+                    feature.polygon.outlineColor = baseColor;
 
-              // Constant properties are refreshed on the existing 450 ms source
-              // cadence. Cesium no longer evaluates 2-3 callbacks per entity on
-              // every frame, while the point/stem pick surface stays native.
-              feature.position = tip;
-              const stemPositionBuffers = [[base, tip], [base, tip]];
-              feature.polyline = new Cesium.PolylineGraphics({
-                positions: stemPositionBuffers[0],
-                width: 3.5,
-                material: new Cesium.ColorMaterialProperty(baseColor),
-              });
-              feature.point = new Cesium.PointGraphics({
-                pixelSize: 10,
-                color: baseColor,
-                outlineColor: Cesium.Color.BLACK,
-                outlineWidth: 2,
-                // Never depth-cull the anchor against the photoreal mesh —
-                // globe-horizon culling is handled by the pre-render occluder.
-                disableDepthTestDistance: Number.POSITIVE_INFINITY,
-              });
+                    // Calculate center point for the stem
+                    const hierarchy = feature.polygon.hierarchy?.getValue(
+                      Cesium.JulianDate.now(),
+                    );
+                    if (
+                      hierarchy &&
+                      hierarchy.positions &&
+                      hierarchy.positions.length > 0
+                    ) {
+                      pos = Cesium.BoundingSphere.fromPoints(
+                        hierarchy.positions,
+                      ).center;
+                    }
+                  }
+                }
 
-              const priority = labelPriorityFromProperties(properties, id);
-              _stemRecords.push({
-                id: recordId,
-                entity: feature,
-                carto,
-                base,
-                tip,
-                nextTip: Cesium.Cartesian3.clone(tip),
-                stemPositionBuffers,
-                stemPositionBufferIndex: 0,
-                groundHeight,
-                groundSampled: false,
-                lastGroundSampleMs: 0,
-                priority,
-                entry: labels ? createLocalInfrastructureOverlayEntry({
-                  id: recordId,
+                if (!pos) continue;
+
+                const carto = Cesium.Cartographic.fromCartesian(pos);
+                const groundHeight = 0; // Ellipsoid surface until a scene sample lands
+                const tipHeight = 2000; // Initial Stem height
+
+                const base = Cesium.Cartesian3.fromRadians(
+                  carto.longitude,
+                  carto.latitude,
+                  groundHeight,
+                );
+                const tip = Cesium.Cartesian3.fromRadians(
+                  carto.longitude,
+                  carto.latitude,
+                  tipHeight,
+                );
+                const properties = propertyObject(feature);
+                const recordId = String(feature.id ?? i);
+
+                // Store references for bounded stem scaling and native picking.
+                feature.__localBaseCarto = carto;
+                feature.__localBaseCartesian = base;
+                registerEntityContext(feature, {
+                  id: `${id}:${recordId}`,
                   layerId: id,
-                  position: tip,
+                  layerName: name,
+                  source,
+                  dataSource: loaded,
+                  label: featureLabelFromProperties(properties, id),
                   properties,
+                  latitude: Number(
+                    Cesium.Math.toDegrees(carto.latitude).toFixed(6),
+                  ),
+                  longitude: Number(
+                    Cesium.Math.toDegrees(carto.longitude).toFixed(6),
+                  ),
+                });
+
+                // Constant properties are refreshed on the existing 450 ms source
+                // cadence. Cesium no longer evaluates 2-3 callbacks per entity on
+                // every frame, while the point/stem pick surface stays native.
+                feature.position = tip;
+                const stemPositionBuffers = [
+                  [base, tip],
+                  [base, tip],
+                ];
+                feature.polyline = new Cesium.PolylineGraphics({
+                  positions: stemPositionBuffers[0],
+                  width: 3.5,
+                  material: new Cesium.ColorMaterialProperty(baseColor),
+                });
+                feature.point = new Cesium.PointGraphics({
+                  pixelSize: 10,
+                  color: baseColor,
+                  outlineColor: Cesium.Color.BLACK,
+                  outlineWidth: 2,
+                  // Never depth-cull the anchor against the photoreal mesh —
+                  // globe-horizon culling is handled by the pre-render occluder.
+                  disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                });
+
+                const priority = labelPriorityFromProperties(properties, id);
+                _stemRecords.push({
+                  id: recordId,
+                  entity: feature,
+                  carto,
+                  base,
+                  tip,
+                  nextTip: Cesium.Cartesian3.clone(tip),
+                  stemPositionBuffers,
+                  stemPositionBufferIndex: 0,
+                  groundHeight,
+                  groundSampled: false,
+                  lastGroundSampleMs: 0,
                   priority,
-                  accent: color,
-                }) : null,
-              });
-            }
-            // Setup finished — publish it.
-            _dataSource = loaded;
-            _lastUpdate = Date.now();
-          } catch (e) {
-            // The dataset ships with the build, so this is a broken install,
-            // not a blip — it has to reach the chip, not just the console.
-            if (!_destroyed) _error = localDatasetError(e);
-            // Roll the partial build back so a later enable() retries from
-            // scratch instead of inheriting a half-populated source. Only the
-            // post-add window has something in the scene to remove: a failure
-            // before (or inside) add() never reached the collection, and
-            // removing then would race Cesium's pending insert.
-            if (addedToScene) {
-              try { viewer?.dataSources?.remove(loaded, true); } catch { /* already gone */ }
-            }
-            if (_destroyed) return;
-            removeEntityContextsForLayer(id);
-            _count = 0;
-            _stemRecords = [];
-            console.error(`Failed to load ${id}:`, e);
-          }
-
-          if (_destroyed) return;
-          // 2. Install native global click handler
-          if (!_clickHandler) {
-            _clickHandler = screenSpaceEventHandlerFactory(viewer.scene.canvas);
-            _clickHandler.setInputAction((click) => {
-              if (!_enabled) return;
-              const picked = viewer.scene.pick(click.position);
-
-              if (picked && picked.id && picked.id.__localLayerId === id) {
-                const entity = picked.id;
-                viewer.selectedEntity = entity;
-                selectEntityContext(entity);
-
-                // We zoom to the surface base of the stem or the center of the polygon
-                let targetPos = null;
-
-                if (entity.polyline) {
-                  // If it's a stem, fly to the base
-                  const positions = entity.polyline.positions.getValue(Cesium.JulianDate.now());
-                  if (positions && positions.length > 0) {
-                    targetPos = positions[0];
-                  }
-                } else if (entity.polygon && entity.polygon.hierarchy) {
-                  // If it's a polygon, just fly to its center
-                  const hierarchy = entity.polygon.hierarchy.getValue(Cesium.JulianDate.now());
-                  if (hierarchy && hierarchy.positions.length > 0) {
-                    targetPos = Cesium.BoundingSphere.fromPoints(hierarchy.positions).center;
-                  }
-                }
-
-                if (targetPos) {
-                  const carto = Cesium.Cartographic.fromCartesian(targetPos);
-
-                  // Disable interactions so Cesium doesn't magically cancel the flight
-                  viewer.scene.screenSpaceCameraController.enableInputs = false;
-
-                  viewer.camera.flyTo({
-                    destination: Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, 5000),
-                    duration: 1.5,
-                    complete: () => { viewer.scene.screenSpaceCameraController.enableInputs = true; },
-                    cancel: () => { viewer.scene.screenSpaceCameraController.enableInputs = true; },
-                  });
+                  entry: labels
+                    ? createLocalInfrastructureOverlayEntry({
+                        id: recordId,
+                        layerId: id,
+                        position: tip,
+                        properties,
+                        priority,
+                        accent: color,
+                      })
+                    : null,
+                });
+              }
+              // Setup finished — publish it.
+              _dataSource = loaded;
+              _lastUpdate = Date.now();
+            } catch (e) {
+              // The dataset ships with the build, so this is a broken install,
+              // not a blip — it has to reach the chip, not just the console.
+              if (!_destroyed) _error = localDatasetError(e);
+              // Roll the partial build back so a later enable() retries from
+              // scratch instead of inheriting a half-populated source. Only the
+              // post-add window has something in the scene to remove: a failure
+              // before (or inside) add() never reached the collection, and
+              // removing then would race Cesium's pending insert.
+              if (addedToScene) {
+                try {
+                  viewer?.dataSources?.remove(loaded, true);
+                } catch {
+                  /* already gone */
                 }
               }
-            }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-          }
-        })();
+              if (_destroyed) return;
+              removeEntityContextsForLayer(id);
+              _count = 0;
+              _stemRecords = [];
+              console.error(`Failed to load ${id}:`, e);
+            }
+
+            if (_destroyed) return;
+            // 2. Install native global click handler
+            if (!_clickHandler) {
+              _clickHandler = screenSpaceEventHandlerFactory(
+                viewer.scene.canvas,
+              );
+              _clickHandler.setInputAction((click) => {
+                if (!_enabled) return;
+                const picked = viewer.scene.pick(click.position);
+
+                if (picked && picked.id && picked.id.__localLayerId === id) {
+                  const entity = picked.id;
+                  viewer.selectedEntity = entity;
+                  selectEntityContext(entity);
+
+                  // We zoom to the surface base of the stem or the center of the polygon
+                  let targetPos = null;
+
+                  if (entity.polyline) {
+                    // If it's a stem, fly to the base
+                    const positions = entity.polyline.positions.getValue(
+                      Cesium.JulianDate.now(),
+                    );
+                    if (positions && positions.length > 0) {
+                      targetPos = positions[0];
+                    }
+                  } else if (entity.polygon && entity.polygon.hierarchy) {
+                    // If it's a polygon, just fly to its center
+                    const hierarchy = entity.polygon.hierarchy.getValue(
+                      Cesium.JulianDate.now(),
+                    );
+                    if (hierarchy && hierarchy.positions.length > 0) {
+                      targetPos = Cesium.BoundingSphere.fromPoints(
+                        hierarchy.positions,
+                      ).center;
+                    }
+                  }
+
+                  if (targetPos) {
+                    const carto = Cesium.Cartographic.fromCartesian(targetPos);
+
+                    // Disable interactions so Cesium doesn't magically cancel the flight
+                    viewer.scene.screenSpaceCameraController.enableInputs = false;
+
+                    viewer.camera.flyTo({
+                      destination: Cesium.Cartesian3.fromRadians(
+                        carto.longitude,
+                        carto.latitude,
+                        5000,
+                      ),
+                      duration: 1.5,
+                      complete: () => {
+                        viewer.scene.screenSpaceCameraController.enableInputs = true;
+                      },
+                      cancel: () => {
+                        viewer.scene.screenSpaceCameraController.enableInputs = true;
+                      },
+                    });
+                  }
+                }
+              }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+            }
+          })();
         try {
           await _loadPromise;
         } finally {
@@ -741,7 +819,10 @@ export function createLocalGeoJsonLayer({
             const probe = shouldRecomputeInfraLod({
               nowMs: now,
               lastProbeMs: _lastLodProbeMs,
-              movedSqM: Cesium.Cartesian3.distanceSquared(cameraPos, _lastLodCameraPos),
+              movedSqM: Cesium.Cartesian3.distanceSquared(
+                cameraPos,
+                _lastLodCameraPos,
+              ),
               cameraHeightM: viewer.camera.positionCartographic?.height,
             });
             _lastLodProbeMs = probe.lastProbeMs;
@@ -750,7 +831,10 @@ export function createLocalGeoJsonLayer({
             if (probe.recompute) _stemGeometryDirty = true;
           }
 
-          const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, cameraPos);
+          const occluder = new Cesium.EllipsoidalOccluder(
+            Cesium.Ellipsoid.WGS84,
+            cameraPos,
+          );
           const visibleOverlayRecords = [];
           const refreshStemGeometry = _stemGeometryDirty;
 
@@ -762,7 +846,8 @@ export function createLocalGeoJsonLayer({
           // Capability can arrive late (WebGL context restore, a tileset that
           // finally supports sampling). A parked camera has no moveEnd to
           // re-open a spent budget, so the false→true edge does it.
-          if (canSampleGround && _lastGroundSampleCapability === false) _groundRetryArms = 0;
+          if (canSampleGround && _lastGroundSampleCapability === false)
+            _groundRetryArms = 0;
           _lastGroundSampleCapability = canSampleGround;
           let groundRetryPending = false;
           let groundSampleProgress = false;
@@ -814,7 +899,8 @@ export function createLocalGeoJsonLayer({
             const record = _stemRecords[i];
             const isActive = !_lodComputed || _activeLodIds.has(record.id);
             const isVisible = isActive && occluder.isPointVisible(record.base);
-            if (record.entity.show !== isVisible) record.entity.show = isVisible;
+            if (record.entity.show !== isVisible)
+              record.entity.show = isVisible;
 
             // Records outside the globe-LOD active set carry no visible stem,
             // so skip every per-frame cost for them — geometry trig, the
@@ -823,20 +909,32 @@ export function createLocalGeoJsonLayer({
             if (!isActive) continue;
 
             const wasGroundSampled = record.groundSampled;
-            const terrainFloorChanged = refreshLocalTerrainFloor(viewer, record);
+            const terrainFloorChanged = refreshLocalTerrainFloor(
+              viewer,
+              record,
+            );
             if (refreshStemGeometry || terrainFloorChanged) {
               updateLocalStemGeometry(viewer, record, now);
-            } else if (canSampleGround && !record.groundSampled
-              && now - record.lastGroundSampleMs >= GROUND_SAMPLE_RETRY_MS) {
+            } else if (
+              canSampleGround &&
+              !record.groundSampled &&
+              now - record.lastGroundSampleMs >= GROUND_SAMPLE_RETRY_MS
+            ) {
               // Capability first: without it the distance below is pure waste,
               // once per ungrounded record per walk, forever.
-              const distance = Cesium.Cartesian3.distance(viewer.camera.positionWC, record.base);
-              if (distance < GROUND_SAMPLE_MAX_DISTANCE_M
-                && sampleLocalGroundHeight(viewer, record, now)) {
+              const distance = Cesium.Cartesian3.distance(
+                viewer.camera.positionWC,
+                record.base,
+              );
+              if (
+                distance < GROUND_SAMPLE_MAX_DISTANCE_M &&
+                sampleLocalGroundHeight(viewer, record, now)
+              ) {
                 updateLocalStemGeometry(viewer, record, now, distance);
               }
             }
-            if (!wasGroundSampled && record.groundSampled) groundSampleProgress = true;
+            if (!wasGroundSampled && record.groundSampled)
+              groundSampleProgress = true;
             // Still unsampled AND close enough for a retry to succeed: this
             // layer has no hold and no periodic update, so under the idle
             // governor the retry's preRender never arrives on a parked camera
@@ -845,9 +943,15 @@ export function createLocalGeoJsonLayer({
             // Gated on a sampleable scene and in-range records only, so a far
             // camera (or a keyless scene) stays fully idle; the distance is
             // only computed for still-unsampled stems.
-            if (canSampleGround && !record.groundSampled && !groundRetryPending
-              && Cesium.Cartesian3.distance(viewer.camera.positionWC, record.base)
-                < GROUND_SAMPLE_MAX_DISTANCE_M) {
+            if (
+              canSampleGround &&
+              !record.groundSampled &&
+              !groundRetryPending &&
+              Cesium.Cartesian3.distance(
+                viewer.camera.positionWC,
+                record.base,
+              ) < GROUND_SAMPLE_MAX_DISTANCE_M
+            ) {
               groundRetryPending = true;
             }
             if (isVisible && record.entry) visibleOverlayRecords.push(record);
@@ -859,14 +963,17 @@ export function createLocalGeoJsonLayer({
           if (groundRetryPending) scheduleGroundRetryRender(viewer);
 
           const canvas = viewer.scene.canvas;
-          const cohort = selectLocalInfrastructureOverlayCohort(visibleOverlayRecords, {
-            maxEntries: labelMax,
-            gridPx: labelGridPx,
-            width: canvas.clientWidth || canvas.width || 0,
-            height: canvas.clientHeight || canvas.height || 0,
-            cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT,
-            project: (record) => projectToWindow(viewer.scene, record.tip),
-          });
+          const cohort = selectLocalInfrastructureOverlayCohort(
+            visibleOverlayRecords,
+            {
+              maxEntries: labelMax,
+              gridPx: labelGridPx,
+              width: canvas.clientWidth || canvas.width || 0,
+              height: canvas.clientHeight || canvas.height || 0,
+              cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT,
+              project: (record) => projectToWindow(viewer.scene, record.tip),
+            },
+          );
           _overlayPublisher.publish(cohort);
         });
       }
@@ -913,7 +1020,7 @@ export function createLocalGeoJsonLayer({
       _count = 0;
       _lastUpdate = null;
       _error = null;
-    }
+    },
   };
 }
 
@@ -923,24 +1030,36 @@ function compareLocalOverlayRecords(a, b) {
 
 function insertLocalCellContender(contenders, record) {
   let index = 0;
-  while (index < contenders.length && compareLocalOverlayRecords(contenders[index], record) <= 0) {
+  while (
+    index < contenders.length &&
+    compareLocalOverlayRecords(contenders[index], record) <= 0
+  ) {
     index++;
   }
   contenders.splice(index, 0, record);
-  if (contenders.length > LOCAL_OVERLAY_CELL_SURPLUS) contenders.length = LOCAL_OVERLAY_CELL_SURPLUS;
+  if (contenders.length > LOCAL_OVERLAY_CELL_SURPLUS)
+    contenders.length = LOCAL_OVERLAY_CELL_SURPLUS;
 }
 
 function refreshLocalTerrainFloor(viewer, record) {
   const globe = viewer.scene.globe;
-  if (!record.groundSampled || !globe?.show || globe.tilesLoaded === false) return false;
-  if (Cesium.Cartesian3.distance(viewer.camera.positionWC, record.base)
-    >= GROUND_SAMPLE_MAX_DISTANCE_M) return false;
+  if (!record.groundSampled || !globe?.show || globe.tilesLoaded === false)
+    return false;
+  if (
+    Cesium.Cartesian3.distance(viewer.camera.positionWC, record.base) >=
+    GROUND_SAMPLE_MAX_DISTANCE_M
+  )
+    return false;
   // Camera motion can refine terrain after the first successful depth sample.
   // Reuse the loaded mesh on existing bounded walks; never arm a timer or do
   // another GPU readback just to maintain this floor. Keep roof elevations.
   const height = globe.getHeight?.(record.carto);
-  if (!Number.isFinite(height) || Math.abs(height) > GROUND_SAMPLE_MAX_ABS_HEIGHT_M
-    || height <= record.groundHeight) return false;
+  if (
+    !Number.isFinite(height) ||
+    Math.abs(height) > GROUND_SAMPLE_MAX_ABS_HEIGHT_M ||
+    height <= record.groundHeight
+  )
+    return false;
   setLocalGroundHeight(record, height);
   return true;
 }
@@ -957,13 +1076,22 @@ function sampleLocalGroundHeight(viewer, record, now) {
   } catch {
     return false; // tiles not ready; retry on a later bounded update
   }
-  if (!Number.isFinite(sampled) || Math.abs(sampled) > GROUND_SAMPLE_MAX_ABS_HEIGHT_M) return false;
+  if (
+    !Number.isFinite(sampled) ||
+    Math.abs(sampled) > GROUND_SAMPLE_MAX_ABS_HEIGHT_M
+  )
+    return false;
   // A coarse scene-depth sample can lie below the terrain already loaded by
   // the visible globe. Keep that terrain as a floor while allowing roofs and
   // valid below-sea-level elevations. Photoreal scenes hide the globe, so its
   // inactive terrain must not constrain their geometry.
-  const terrainHeight = globe?.show ? globe.getHeight?.(record.carto) : undefined;
-  if (Number.isFinite(terrainHeight) && Math.abs(terrainHeight) <= GROUND_SAMPLE_MAX_ABS_HEIGHT_M) {
+  const terrainHeight = globe?.show
+    ? globe.getHeight?.(record.carto)
+    : undefined;
+  if (
+    Number.isFinite(terrainHeight) &&
+    Math.abs(terrainHeight) <= GROUND_SAMPLE_MAX_ABS_HEIGHT_M
+  ) {
     sampled = Math.max(sampled, terrainHeight);
   }
   record.groundSampled = true;
@@ -987,12 +1115,13 @@ function updateLocalStemGeometry(viewer, record, now, knownDistance = null) {
   const distance = Number.isFinite(knownDistance)
     ? knownDistance
     : Cesium.Cartesian3.distance(viewer.camera.positionWC, record.base);
-  if (distance < GROUND_SAMPLE_MAX_DISTANCE_M) sampleLocalGroundHeight(viewer, record, now);
+  if (distance < GROUND_SAMPLE_MAX_DISTANCE_M)
+    sampleLocalGroundHeight(viewer, record, now);
   // Keep the intended screen-size scaling in close-up views too. A 5 km
   // minimum made a marker hundreds of metres tall beside a nearby building.
   const effectiveDistance = Math.max(distance, 1);
   const canvasHeight = viewer.scene.canvas.clientHeight || 1080;
-  const fov = viewer.camera.frustum.fov || (Math.PI / 3);
+  const fov = viewer.camera.frustum.fov || Math.PI / 3;
   const targetPx = 65;
   const fovFactor = 2 * Math.tan(fov / 2) * (targetPx / canvasHeight);
   const tipHeight = record.groundHeight + effectiveDistance * fovFactor;
@@ -1003,12 +1132,16 @@ function updateLocalStemGeometry(viewer, record, now, knownDistance = null) {
     Cesium.Ellipsoid.WGS84,
     record.nextTip,
   );
-  if (Cesium.Cartesian3.distanceSquared(record.tip, record.nextTip) <= LOCAL_STEM_TIP_EPSILON_SQ) {
+  if (
+    Cesium.Cartesian3.distanceSquared(record.tip, record.nextTip) <=
+    LOCAL_STEM_TIP_EPSILON_SQ
+  ) {
     return false;
   }
   Cesium.Cartesian3.clone(record.nextTip, record.tip);
   record.stemPositionBufferIndex = 1 - record.stemPositionBufferIndex;
-  const stemPositions = record.stemPositionBuffers[record.stemPositionBufferIndex];
+  const stemPositions =
+    record.stemPositionBuffers[record.stemPositionBufferIndex];
   stemPositions[0] = record.base;
   stemPositions[1] = record.tip;
   record.entity.position.setValue(record.tip);
@@ -1050,9 +1183,10 @@ function labelPriorityFromProperties(props, layerId) {
 
 function propertyObject(entity) {
   const source = entity?.properties;
-  const raw = typeof source?.getValue === 'function'
-    ? source.getValue(Cesium.JulianDate.now())
-    : source || {};
+  const raw =
+    typeof source?.getValue === 'function'
+      ? source.getValue(Cesium.JulianDate.now())
+      : source || {};
   return unwrapProperties(raw);
 }
 
@@ -1061,9 +1195,10 @@ function unwrapProperties(value) {
   if (Array.isArray(value)) return value.map(unwrapProperties);
   const out = {};
   for (const [key, entry] of Object.entries(value)) {
-    out[key] = entry && typeof entry.getValue === 'function'
-      ? unwrapProperties(entry.getValue(Cesium.JulianDate.now()))
-      : unwrapProperties(entry);
+    out[key] =
+      entry && typeof entry.getValue === 'function'
+        ? unwrapProperties(entry.getValue(Cesium.JulianDate.now()))
+        : unwrapProperties(entry);
   }
   return out;
 }

@@ -226,8 +226,8 @@ if [[ ! -f "src/data/cctv.js" ]]; then
   exit 1
 fi
 
-if ! grep -q "dataManager.register(cctvLayer)" src/main.js; then
-  echo "error: CCTV layer not wired in src/main.js"
+if ! grep -q "dataManager.register(cctvLayer)" src/standalone/data.js; then
+  echo "error: CCTV layer not wired in src/standalone/data.js"
   exit 1
 fi
 

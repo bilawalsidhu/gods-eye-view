@@ -1,5 +1,46 @@
 # God's Eye View Current State
 
+## Build configuration and local provider boundaries
+
+`vite.config.js` delegates to `server/standalone/vite.config.js`, which loads
+this checkout's environment and constructs the local providers in their existing
+order. `server/providers/local.js` holds the existing middleware and process
+state; its named exports remain available through the root compatibility entry.
+Provider URLs, key selection, cache behavior, setup restrictions and routes are
+unchanged. Individual provider families remain to be split into smaller modules.
+
+`gods-eye-view/build/vite` is a Node-only export for explicit browser build
+settings: Cesium assets, caller-supplied plugins, browser key defines, server
+binding and document/credential protections. It never reads an environment file
+or constructs providers. The standalone caller owns those choices.
+
+Browser startup now lives in `src/standalone/`. That directory contains only
+browser code; Node configuration remains under `server/`. Application lifecycle
+and viewer export paths are unchanged.
+
+## Application startup and shutdown
+
+The standalone entry now composes scene setup, controls, layer registration and
+tools through the reusable application lifecycle. Map defaults, layer order,
+share restoration, voice setup and the running debug handle retain their behavior.
+The welcome card still waits for restoration and the loading-cover transition.
+
+Startup failure cleans up acquired resources. Explicit application destruction
+aborts construction, cancels pending playback/annotations and delayed welcome UI,
+then releases controls, layers and the viewer. Destruction is terminal; the
+standalone page must be reloaded to start again. The exported lifecycle and viewer
+helpers do not import the standalone entry or discover configuration. See
+[application construction](APPLICATION.md).
+
+## Scoped formatting and package checks
+
+`npm run format` and `npm run format:check` operate on the explicit adopted-file
+list. `npm run check:boundaries` checks the dependency graph of all
+current package exports in their declared browser or Node runtime; infrastructure owns its three implementation modules
+and takes Cesium from the consumer. CI runs both checks on Linux and Windows.
+The standalone app, layer behavior and public export paths remain unchanged.
+See [component ownership and adoption](CODE-BOUNDARIES.md).
+
 ## Google browser and server keys
 
 Local Places nearby/text search and the CCTV Street View fallback prefer

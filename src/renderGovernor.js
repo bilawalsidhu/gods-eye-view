@@ -128,6 +128,15 @@ export function getRenderGovernorDiagnostics() {
   };
 }
 
+/** Release the installed viewer after its animation owners have stopped. */
+export function uninstallRenderGovernor(viewer) {
+  if (_viewer !== viewer) return;
+  _viewer = null;
+  _installed = false;
+  _holds.clear();
+  _recentRequests.length = 0;
+}
+
 /** Test seam: reset module state between unit tests. */
 export function _resetRenderGovernorForTest() {
   _viewer = null;

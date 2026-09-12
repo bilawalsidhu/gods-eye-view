@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-const source = readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../server/providers/local.js', import.meta.url), 'utf8');
 const detail = 'fixture-secret-token /internal/example <html>';
 
 // Execute the production middleware with isolated upstreams and cache storage.

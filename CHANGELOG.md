@@ -13,6 +13,24 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Changed
+- Separate explicit browser build settings from standalone environment loading
+  and local provider middleware. Preserve provider behavior and root named exports.
+- Rename standalone browser startup to `src/standalone/` and add a Node-only
+  `gods-eye-view/build/vite` export with checked package ownership.
+
+
+### Development
+
+- Extract application lifecycle and viewer exports. Split standalone startup into
+  scene setup, controls, layer registration, tools and loading UI. Startup failure
+  and terminal shutdown release acquired resources and cancel delayed work.
+
+- Adopt Prettier tooling contributed by RohanDaCoder (#227), with an explicit
+  file scope, pinned formatter and Linux/Windows CI checks. Format the reusable
+  infrastructure modules and their consumer tests. Package boundary checks keep
+  those exports separate from app startup and local Node services.
+
 ### Fixed
 
 - Separate optional Google server credentials for Places and Street View from

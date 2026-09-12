@@ -2,7 +2,7 @@
   "name": "gods-eye-view",
   "private": true,
   "version": "0.1.1",
-  "description": "A real-time intelligence console for planet Earth — photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
+  "description": "A real-time intelligence console for planet Earth \u2014 photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
   "type": "module",
   "license": "MIT",
   "author": "Bilawal Sidhu",
@@ -33,6 +33,8 @@
   ],
   "scripts": {
     "doctor": "node scripts/setup-doctor.mjs",
+    "format": "node scripts/format.mjs --write",
+    "format:check": "node scripts/format.mjs --check",
     "dev": "vite",
     "dev:secure": "./scripts/dev-secure.sh",
     "opensky:import": "./scripts/opensky-import-client.sh",
@@ -40,7 +42,8 @@
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
-    "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs"
+    "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
+    "check:boundaries": "node scripts/check-package-boundaries.mjs"
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",
@@ -51,6 +54,7 @@
     "satellite.js": "^6.0.2"
   },
   "devDependencies": {
+    "prettier": "3.9.6",
     "puppeteer": "^25.10.0",
     "sharp": "^0.35.4",
     "vite": "^6.0.0",
@@ -60,6 +64,11 @@
   "exports": {
     "./infrastructure": "./src/data/infrastructure.js",
     "./infrastructure/geojson": "./src/data/localGeojsonCore.js",
-    "./infrastructure/lod": "./src/data/localGeojsonLod.js"
+    "./infrastructure/lod": "./src/data/localGeojsonLod.js",
+    "./application": "./src/app/application.js",
+    "./application/viewer": "./src/app/viewer.js",
+    "./build/vite": {
+      "node": "./build/vite.js"
+    }
   }
 }

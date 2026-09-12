@@ -151,3 +151,11 @@ test('the shipped layer boots keyless-honest before any status check', () => {
   assert.ok(!LIVE_CLAIM.test(stats.loadingLabel), `boot label implies live data: ${stats.loadingLabel}`);
   assert.equal(layerFeedState(stats), 'fallback');
 });
+
+test('traffic can be destroyed before its first enable and destroyed repeatedly', async () => {
+  const { default: traffic } = await import('./traffic.js');
+  const viewer = { camera: { changed: { removeEventListener() {} } } };
+  assert.doesNotThrow(() => traffic.destroy(viewer));
+  assert.doesNotThrow(() => traffic.destroy(viewer));
+  assert.equal(traffic.getStats().count, 0);
+});

@@ -1,0 +1,31 @@
+{
+  "infrastructure": {
+    "exports": [
+      "./infrastructure",
+      "./infrastructure/geojson",
+      "./infrastructure/lod"
+    ],
+    "modules": [
+      "src/data/infrastructure.js",
+      "src/data/localGeojsonCore.js",
+      "src/data/localGeojsonLod.js"
+    ],
+    "external": ["cesium"]
+  },
+  "application": {
+    "exports": ["./application"],
+    "modules": ["src/app/application.js"],
+    "external": []
+  },
+  "viewer": {
+    "exports": ["./application/viewer"],
+    "modules": ["src/app/viewer.js"],
+    "external": ["cesium"]
+  },
+  "vite-build": {
+    "runtime": "node",
+    "exports": ["./build/vite"],
+    "modules": ["build/vite.js"],
+    "external": ["vite-plugin-cesium"]
+  }
+}

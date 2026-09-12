@@ -20,7 +20,8 @@ async function launch(overrides = {}, dotenv = '') {
     for (const name of ['dev-cctv.sh', 'dev-fresh.sh', 'read-dotenv-value.mjs']) {
       await fs.copyFile(new URL(`../scripts/${name}`, import.meta.url), path.join(root, 'scripts', name));
     }
-    await fs.copyFile(new URL('./main.js', import.meta.url), path.join(root, 'src', 'main.js'));
+    await fs.mkdir(path.join(root, 'src', 'standalone'), { recursive: true });
+    await fs.copyFile(new URL('./standalone/data.js', import.meta.url), path.join(root, 'src', 'standalone', 'data.js'));
     await fs.mkdir(path.join(root, 'node_modules'));
     await fs.symlink(fileURLToPath(new URL('../node_modules/vite', import.meta.url)), path.join(root, 'node_modules', 'vite'), 'dir');
     await fs.writeFile(path.join(root, '.env'), dotenv);
