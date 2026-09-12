@@ -53,6 +53,8 @@ import {
   normalizeRegionalWeather,
 } from './src/data/regionalBrief.js';
 import { normalizeAdsbLolPointResponse } from './src/data/adsbLolFallback.js';
+import { createRecordScanner, parseSiteRecord, parseSiteMeasurement } from './src/data/ndwDatex.js';
+import { aggregateByGantry, gantriesInBox } from './src/data/ndwGantries.js';
 import { createAisStreamAdapter, isRecognizedAisEnvelope } from './src/data/aisStreamAdapter.js';
 import { parseSilenceTimeoutEnv } from './src/data/aisWatchdog.js';
 import { keylessHudSummaryResponse } from './src/hudSummaryResponse.js';
@@ -4519,6 +4521,129 @@ export async function fetchCctvImageFromUpstream(url, {
  *
  * @returns {import('vite').Plugin}
  */
+
+const NDW_TRAFFIC_URL = 'https://opendata.ndw.nu/trafficspeed.xml.gz';
+const NDW_SITES_URL = 'https://opendata.ndw.nu/measurement.xml.gz';
+/** The traffic body is republished once a minute; asking faster gains nothing. */
+const NDW_TRAFFIC_TTL_MS = 55_000;
+/** The site table changes when a loop is installed, not when a car passes. */
+const NDW_SITES_TTL_MS = 6 * 60 * 60 * 1000;
+const NDW_GANTRY_LIMIT = 600;
+
+let _ndwGantries = null;
+let _ndwGantriesAt = 0;
+let _ndwSites = null;
+let _ndwSitesAt = 0;
+let _ndwInFlight = null;
+
+/**
+ * Stream one gzipped DATEX II body through a record scanner.
+ *
+ * Streaming is not an optimisation here: the site table is 336 MB of XML and
+ * a string that size is about 670 MB of UTF-16.
+ * @param {string} url
+ * @param {string} tag - Record element name.
+ * @param {(record: string) => void} onRecord
+ */
+async function streamNdwRecords(url, tag, onRecord) {
+  const resp = await fetch(url, {
+    headers: { 'User-Agent': 'gods-eye-view-ndw-proxy/1.0' },
+    signal: AbortSignal.timeout(120_000),
+  });
+  if (!resp.ok) throw new Error(`NDW ${url} returned HTTP ${resp.status}`);
+  const text = resp.body.pipeThrough(new DecompressionStream('gzip')).pipeThrough(new TextDecoderStream());
+  const scanner = createRecordScanner(tag, onRecord);
+  for await (const chunk of text) scanner.push(chunk);
+  scanner.end();
+}
+
+/**
+ * Refresh the gantry snapshot: measurements first, then only the sites they
+ * name.
+ *
+ * The order is what bounds the memory. The table holds 87,771 records and a
+ * traffic body references 20,532 of them; parsing the rest costs 570 MB of
+ * heap instead of 281.
+ * @returns {Promise<Array<object>>}
+ */
+async function refreshNdwGantries() {
+  const measurements = [];
+  await streamNdwRecords(NDW_TRAFFIC_URL, 'siteMeasurements', (record) => {
+    const parsed = parseSiteMeasurement(record);
+    if (parsed) measurements.push(parsed);
+  });
+
+  if (!_ndwSites || Date.now() - _ndwSitesAt > NDW_SITES_TTL_MS) {
+    const wanted = new Set(measurements.map((m) => m.siteId));
+    const sites = new Map();
+    await streamNdwRecords(NDW_SITES_URL, 'measurementSiteRecord', (record) => {
+      const site = parseSiteRecord(record, wanted);
+      if (site) sites.set(site.id, site);
+    });
+    // An empty table is a failed read, not an answer: keep the last good one.
+    if (sites.size > 0) {
+      _ndwSites = sites;
+      _ndwSitesAt = Date.now();
+      console.log(`[NDW] site table: ${sites.size} locations`);
+    }
+  }
+  if (!_ndwSites) return [];
+
+  const gantries = aggregateByGantry(measurements, _ndwSites);
+  console.log(`[NDW] ${measurements.length} measurements over ${gantries.length} gantries`);
+  return gantries;
+}
+
+/**
+ * Vite plugin: Dutch road-speed gantries, bounded to the caller's viewport.
+ *
+ * A national refresh is 53 MB on the wire and yields ~9,000 gantries; the
+ * browser is handed only the box it is looking at, so the layer costs the
+ * client a few hundred rows however long the session runs.
+ */
+function ndwTrafficProxy() {
+  const install = (server) => {
+    server.middlewares.use('/api/ndw/traffic', async (req, res) => {
+      const json = (code, body) => {
+        res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify(body));
+      };
+      try {
+        if (!_ndwGantries || Date.now() - _ndwGantriesAt > NDW_TRAFFIC_TTL_MS) {
+          // Single-flight: a viewport pan must not start a second 53 MB read.
+          _ndwInFlight = _ndwInFlight || refreshNdwGantries()
+            .then((gantries) => {
+              if (gantries.length > 0) {
+                _ndwGantries = gantries;
+                _ndwGantriesAt = Date.now();
+              }
+              return gantries;
+            })
+            .finally(() => { _ndwInFlight = null; });
+          await _ndwInFlight;
+        }
+        const params = new URL(req.url, 'http://localhost').searchParams;
+        const parts = String(params.get('bbox') || '').split(',').map(Number);
+        const box = parts.length === 4
+          ? { south: parts[0], west: parts[1], north: parts[2], east: parts[3] }
+          : null;
+        const all = _ndwGantries || [];
+        const gantries = box ? gantriesInBox(all, box, NDW_GANTRY_LIMIT) : [];
+        json(200, {
+          at: _ndwGantriesAt || null,
+          total: all.length,
+          count: gantries.length,
+          gantries,
+        });
+      } catch (error) {
+        console.warn('[NDW] refresh failed:', error?.message || error);
+        json(502, { error: 'NDW upstream unavailable', gantries: [] });
+      }
+    });
+  };
+  return { name: 'ndw-traffic-proxy', configureServer: install, configurePreviewServer: install };
+}
+
 function cctvProxy() {
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
@@ -7762,6 +7887,7 @@ export default defineConfig(({ mode }) => {
       aisLiveProxy(),
       trackBackfillProxies(),
       openAiRealtimeProxy(),
+      ndwTrafficProxy(),
       googlePlacesContextProxy(),
       keySetupEndpoint(),
     ],
