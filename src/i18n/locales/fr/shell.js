@@ -74,4 +74,6 @@ export default {
   'locale.en.ariaLabel': 'Passer à l\'anglais',
   'locale.es.ariaLabel': 'Passer à l\'espagnol',
   'locale.fr.ariaLabel': 'Passer au français',
+
+  'credits.closeAria': 'Fermer les crédits de données',
 };

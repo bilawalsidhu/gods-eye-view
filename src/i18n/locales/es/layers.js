@@ -443,4 +443,6 @@ export default {
   'weather.snowShowers': 'CHUBASCOS DE NIEVE',
   'weather.thunderstorm': 'TORMENTA',
   'weather.mixed': 'CONDICIONES MIXTAS',
+
+  'missions.roster.keyboardHint': 'TAB VISTAS PREVIAS · INTRO / ESPACIO SELECCIONA',
 };

@@ -466,4 +466,11 @@ export default {
   'hud.summaryLabel': 'RESUMEN',
   'hud.summaryAwaiting': 'Esperando telemetría...',
   'hud.recLabel': 'REC',
+
+  // Adiciones de accesibilidad upstream (seguimiento post-fusión).
+  'display.featherAria': 'Suavizado del borde de la mirilla',
+  'display.bloomAria': 'Intensidad del bloom',
+  'display.sharpenAria': 'Intensidad de la nitidez',
+  'location.searchAria': 'Buscar ubicación por nombre o coordenadas',
+  'location.toggleAria': 'Expandir UBICACIÓN',
 };

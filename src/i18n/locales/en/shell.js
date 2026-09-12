@@ -73,4 +73,6 @@ export default {
   'locale.en.ariaLabel': 'Switch to English',
   'locale.es.ariaLabel': 'Switch to Spanish',
   'locale.fr.ariaLabel': 'Switch to French',
+
+  'credits.closeAria': 'Close data attribution',
 };

@@ -2,6 +2,8 @@
  * Adds the keyboard semantics omitted by Cesium's href-less attribution links.
  * Cesium retains ownership of showing and hiding its required credit lightbox.
  */
+import { t } from './i18n/index.js';
+
 export function configureCreditKeyboardAccess(root = document) {
   const expand = root?.querySelector?.('#cesium-credits .cesium-credit-expand-link');
   const lightbox = root?.querySelector?.('.cesium-credit-lightbox');
@@ -17,7 +19,7 @@ export function configureCreditKeyboardAccess(root = document) {
   expand.setAttribute('aria-expanded', 'false');
   close.setAttribute('role', 'button');
   close.setAttribute('tabindex', '0');
-  close.setAttribute('aria-label', 'Close data attribution');
+  close.setAttribute('aria-label', t('shell.credits.closeAria'));
 
   if (expand.dataset.gevKeyboardReady === 'true') return true;
   expand.dataset.gevKeyboardReady = 'true';

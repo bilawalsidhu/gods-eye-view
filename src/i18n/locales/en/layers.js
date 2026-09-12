@@ -467,4 +467,6 @@ export default {
   'weather.snowShowers': 'SNOW SHOWERS',
   'weather.thunderstorm': 'THUNDERSTORM',
   'weather.mixed': 'MIXED CONDITIONS',
+
+  'missions.roster.keyboardHint': 'TAB PREVIEWS · ENTER / SPACE SELECTS',
 };

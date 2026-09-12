@@ -514,4 +514,11 @@ export default {
   'hud.summaryLabel': 'SYNTHÈSE',
   'hud.summaryAwaiting': 'En attente de télémétrie...',
   'hud.recLabel': 'REC',
+
+  // Ajouts d'accessibilité upstream (suivi post-fusion).
+  'display.featherAria': 'Adoucissement du bord du viseur',
+  'display.bloomAria': 'Intensité du bloom',
+  'display.sharpenAria': 'Intensité de la netteté',
+  'location.searchAria': 'Rechercher un lieu par nom ou coordonnées',
+  'location.toggleAria': 'Développer la LOCALISATION',
 };

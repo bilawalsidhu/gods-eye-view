@@ -518,4 +518,11 @@ export default {
   'hud.summaryLabel': 'SUMMARY',
   'hud.summaryAwaiting': 'Awaiting telemetry...',
   'hud.recLabel': 'REC',
+
+  // Upstream a11y additions (post-merge follow-up): slider/toggle accessible names.
+  'display.featherAria': 'Scope edge feather',
+  'display.bloomAria': 'Bloom intensity',
+  'display.sharpenAria': 'Sharpen intensity',
+  'location.searchAria': 'Search location by name or coordinates',
+  'location.toggleAria': 'Expand LOCATION',
 };

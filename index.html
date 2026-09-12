@@ -443,7 +443,7 @@
              mirrors SCOPE_FEATHER_RATIO_DEFAULT in src/scopeMask.js. Feather
              softens the black mask edge; label fading is the separate Fade
              slider. -->
-        <input type="range" class="pp-slider" id="scope-feather-slider" min="0" max="100" value="11" aria-label="Scope edge feather" title="Scope edge feather as a percentage of the keyhole radius" data-i18n-title="cockpit.display.featherTitle" />
+        <input type="range" class="pp-slider" id="scope-feather-slider" min="0" max="100" value="11" aria-label="Scope edge feather" data-i18n-aria-label="cockpit.display.featherAria" title="Scope edge feather as a percentage of the keyhole radius" data-i18n-title="cockpit.display.featherTitle" />
         <span class="pp-slider-value" id="scope-feather-value">11%</span>
       </div>
     </div>
@@ -463,7 +463,7 @@
         <span class="pp-label" data-i18n="cockpit.display.bloomLabel">Bloom</span>
       </button>
       <div class="pp-slider-row" id="bloom-slider-row">
-        <input type="range" class="pp-slider" id="bloom-intensity-slider" min="0" max="200" value="0" aria-label="Bloom intensity" />
+        <input type="range" class="pp-slider" id="bloom-intensity-slider" min="0" max="200" value="0" aria-label="Bloom intensity" data-i18n-aria-label="cockpit.display.bloomAria" />
         <span class="pp-slider-value" id="bloom-intensity-value">0%</span>
       </div>
     </div>
@@ -473,7 +473,7 @@
         <span class="pp-label" data-i18n="cockpit.display.sharpenLabel">Sharpen</span>
       </button>
       <div class="pp-slider-row" id="sharpen-slider-row">
-        <input type="range" class="pp-slider" id="sharpen-intensity-slider" min="0" max="100" value="49" aria-label="Sharpen intensity" />
+        <input type="range" class="pp-slider" id="sharpen-intensity-slider" min="0" max="100" value="49" aria-label="Sharpen intensity" data-i18n-aria-label="cockpit.display.sharpenAria" />
         <span class="pp-slider-value" id="sharpen-intensity-value">49%</span>
       </div>
     </div>
@@ -559,7 +559,7 @@
     <div class="panel-glow"></div>
     <div class="location-inner">
       <div class="location-toolbar">
-        <button id="location-bar-toggle" class="dock-tray-toggle" type="button" data-dock-toggle-target="location-bar" aria-controls="location-bar-popover" aria-expanded="false" aria-label="Expand LOCATION" title="Expand LOCATION">
+        <button id="location-bar-toggle" class="dock-tray-toggle" type="button" data-dock-toggle-target="location-bar" aria-controls="location-bar-popover" aria-expanded="false" aria-label="Expand LOCATION" title="Expand LOCATION" data-i18n-aria-label="cockpit.location.toggleAria" data-i18n-title="cockpit.location.toggleAria">
           <span class="location-toolbar-label"><span class="dock-label-icon dock-label-icon-location" aria-hidden="true"></span>LOCATION</span>
         </button>
         <button class="panel-collapse-btn" data-collapse-target="location-bar" title="Collapse panel" data-i18n-title="cockpit.location.collapseTitle">+</button>
@@ -578,7 +578,7 @@
             <button id="search-toggle" class="search-toggle-btn" title="Search any location" data-i18n-title="cockpit.location.searchToggleTitle">
               <span>&#x1F50E;</span>
             </button>
-            <input type="text" id="location-search" placeholder="Search any location..." autocomplete="off" spellcheck="false" aria-label="Search location by name or coordinates" data-i18n-placeholder="cockpit.location.searchPlaceholder" />
+            <input type="text" id="location-search" placeholder="Search any location..." autocomplete="off" spellcheck="false" aria-label="Search location by name or coordinates" data-i18n-aria-label="cockpit.location.searchAria" data-i18n-placeholder="cockpit.location.searchPlaceholder" />
           </div>
         </div>
       </div>
@@ -778,7 +778,7 @@
               <div class="space-mission-roster-list" data-mission-roster-list>
                 <div class="space-mission-roster-empty" data-i18n="cockpit.context.rosterLoading">LOADING 30-DAY MISSION INDEX</div>
               </div>
-              <p class="space-mission-roster-focus-continuation" tabindex="-1" data-mission-roster-focus-continuation>TAB PREVIEWS · ENTER / SPACE SELECTS</p>
+              <p class="space-mission-roster-focus-continuation" tabindex="-1" data-mission-roster-focus-continuation data-i18n="layers.missions.roster.keyboardHint">TAB PREVIEWS · ENTER / SPACE SELECTS</p>
             </div>
           </div>
         </section>

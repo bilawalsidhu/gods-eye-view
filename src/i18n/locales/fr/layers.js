@@ -467,4 +467,6 @@ export default {
   'weather.snowShowers': 'AVERSES DE NEIGE',
   'weather.thunderstorm': 'ORAGE',
   'weather.mixed': 'CONDITIONS MIXTES',
+
+  'missions.roster.keyboardHint': 'TAB APERÇUS · ENTRÉE / ESPACE SÉLECTIONNE',
 };
