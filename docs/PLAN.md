@@ -535,11 +535,29 @@ ordered by value-per-risk; each is self-contained and committable.
 
 ### Batch 2 — e2e fleet validation (cheap now, high information)
 
-- [ ] Run `scripts/qa-l9-matrix.mjs` headless on this box (Linux/SwiftShader
+- [x] Run `scripts/qa-l9-matrix.mjs` headless on this box (Linux/SwiftShader
       now works via `scripts/lib/webglLaunchArgs.mjs`); fix what falls out
       and extend the `checkSkip` keyless pattern to scripts that still
       hard-require Google keys. This validates ~39 QA scripts in one pass
       and tells us which are dead.
+      Done 2026-09-11. Three matrix runs triaged every failure to root
+      cause; the D7 fix wave (`1c16f46`) then drove `qa-cockpit-utility`
+      from 43/52 to 52/52 READY across two consecutive runs: subject
+      attrition now re-acquires via `awareness.navigateNext` before the
+      `trackById` fallback; the utility-strip boundary seeds derive from
+      production's own decision budget (launcher scrollHeight, the
+      minTop-anchored flip point — the REC-anchored band self-normalizes
+      `available` to the rendered strip, so no card position there can
+      flip the decision); the height lever no longer double-subtracts the
+      rendered-vs-specified drift; the held-request stub re-raises
+      camera `moveEnd` while a follow camera tracks a moving subject
+      (Cesium never fires it, which starved the module's 500 ms debounce);
+      server-owned 5xx/429/420 on local `/api/` targets are tolerated as
+      environment, with the count logged. Matrix findings feeding later
+      batches: live per-IP budgets (adsb.lol 420s under repeated runs)
+      cap how many fleet runs can share one warm server; a4/a10-style
+      feed-fallback attrition (UUID row ids) is environmental for
+      cockpit-trackable checks.
 
 ### Batch 3 — Coverage campaign (P1, mechanical but large)
 

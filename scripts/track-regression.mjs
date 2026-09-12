@@ -283,7 +283,12 @@ async function main() {
         // machine this signature never appears.
         const isKeylessGoogleTile = /tile\.googleapis\.com/i.test(sourceUrl)
           && /status of 400/i.test(text);
-        if (!isBenign404 && !isKeylessGoogleTile) {
+        // Same class: ERR_NETWORK_CHANGED is Chrome refusing a request
+        // because the box's network interface flapped mid-run — a client
+        // transient on an external asset fetch (observed on the Cesium ion
+        // asset endpoint), not a tracking-invariant regression.
+        const isNetworkFlap = /ERR_NETWORK_CHANGED|ERR_INTERNET_DISCONNECTED|ERR_CONNECTION_RESET/i.test(text);
+        if (!isBenign404 && !isKeylessGoogleTile && !isNetworkFlap) {
           consoleErrors.push(sourceUrl ? `${text} [${sourceUrl}]` : text);
         }
       }
