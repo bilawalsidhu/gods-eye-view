@@ -4592,15 +4592,39 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 .provider-health-toggle[hidden] { display: none; }
 
 .provider-health-panel {
-  flex: 0 0 auto;
-  max-height: 240px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--glass-border);
+  position: fixed;
+  right: 0.9rem;
+  bottom: 7.8rem;
+  z-index: 60;
+  width: min(330px, calc(100vw - 1.8rem));
+  max-height: min(300px, calc(100vh - 9rem));
+  padding: 10px;
+  border: 1px solid rgba(54, 220, 255, 0.32);
+  border-radius: 0.42rem;
+  background: linear-gradient(145deg, rgba(10, 27, 37, 0.96), rgba(7, 13, 22, 0.96));
+  box-shadow: 0 0.6rem 1.8rem rgba(0, 0, 0, 0.55), 0 0 1.2rem rgba(0, 212, 255, 0.08);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+}
+
+.provider-health-panel[hidden] { display: none; }
+
+.provider-health-panel::after {
+  position: absolute;
+  right: 2rem;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  border-right: 1px solid rgba(54, 220, 255, 0.32);
+  border-bottom: 1px solid rgba(54, 220, 255, 0.32);
+  background: rgba(7, 13, 22, 0.96);
+  content: '';
+  transform: rotate(45deg);
 }
 
 .provider-health-panel-title {
   margin-bottom: 5px;
+  padding-top: 8px;
   color: var(--text-dim);
   font-family: var(--font-mono);
   font-size: 8px;
