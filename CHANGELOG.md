@@ -13,6 +13,11 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Attach honest layer feed-state provenance (nominal/loading/degraded/stale/
+  fallback/unavailable) to `analyst_query`, `get_current_view_state`, and HUD
+  summary context so voice and HUD answers cannot narrate a stale or degraded
+  feed as live.
+
 - Separate terrain, traffic, FIRMS and GBFS middleware into focused provider
   modules, preserving local configuration, routes and cache/error behavior.
 

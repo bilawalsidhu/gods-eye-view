@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createAnalystEngine, applyScope, haversineKm } from './analystEngine.js';
+import { layerSnapshot } from './layerSnapshot.js';
 
 // Stub world: a square "Texland" region, flights + ships + fires around it.
 const TEXLAND = { name: 'Texland', ring: [[-100, 28], [-94, 28], [-94, 33], [-100, 33]] };
@@ -20,18 +21,31 @@ const FIRES = [
   { id: 'FIRE-3', lat: 51.9, lon: -121.9, frp: 2400 },
 ];
 
-function makeEngine() {
+function snapshotFor(key, rows, extraStats = {}) {
+  return layerSnapshot({
+    id: key,
+    name: key,
+    enabled: true,
+    stats: { count: rows.length, lastUpdate: 1, ...extraStats },
+  });
+}
+
+function makeEngine(statOverrides = {}) {
+  const records = { flights: FLIGHTS, 'ais-live-vessels': SHIPS, 'local-firms': FIRES };
   return createAnalystEngine({
-    getRecords: (key) => ({ flights: FLIGHTS, 'ais-live-vessels': SHIPS, 'local-firms': FIRES }[key] || []),
+    getRecords: (key) => records[key] || [],
+    getLayerSnapshot: (key) => snapshotFor(key, records[key] || [], statOverrides[key]),
     resolveRegionRing: async (name) => (/texland/i.test(name) ? TEXLAND : null),
     getViewContext: () => ({ lat: 30.27, lon: -97.74, viewRadiusKm: 150 }),
   });
 }
 
 /** Same world, but Contacts is up with a subject far from the parked camera. */
-function makeContactsEngine(subject) {
+function makeContactsEngine(subject, statOverrides = {}) {
+  const records = { flights: FLIGHTS, 'ais-live-vessels': SHIPS, 'local-firms': FIRES };
   return createAnalystEngine({
-    getRecords: (key) => ({ flights: FLIGHTS, 'ais-live-vessels': SHIPS, 'local-firms': FIRES }[key] || []),
+    getRecords: (key) => records[key] || [],
+    getLayerSnapshot: (key) => snapshotFor(key, records[key] || [], statOverrides[key]),
     resolveRegionRing: async (name) => (/texland/i.test(name) ? TEXLAND : null),
     // Parked far away, as a high-altitude camera often is.
     getViewContext: () => ({ lat: 45.0, lon: -122.0, viewRadiusKm: 150 }),
@@ -200,4 +214,34 @@ test('helpers: haversine sanity + scope radius', () => {
   assert.ok(km > 200 && km < 280, `Austin-Houston ~235km, got ${km}`);
   const scoped = applyScope(FLIGHTS, { kind: 'radius' }, { center: { lat: 30.27, lon: -97.74 }, km: 50 });
   assert.deepEqual(scoped.map((f) => f.id).sort(), ['GND1', 'SWA1']);
+});
+
+test('analyst: a stale feed stamps provenance so the count cannot be narrated as live', async () => {
+  const r = await makeEngine({ flights: { stale: true } }).query({
+    layers: ['flights'], scope: { kind: 'view' }, limit: 50,
+  });
+  assert.equal(r.ok, true);
+  assert.equal(r.coverage.layersQueried[0].feedState, 'stale');
+  assert.equal(r.coverage.feedProvenance.overall, 'stale');
+  assert.match(r.coverage.feedProvenance.note, /STALE/);
+  assert.match(r.coverage.feedProvenance.note, /do not describe this as live/i);
+});
+
+test('analyst: a degraded feed outranks a nominal neighbour in overall provenance', async () => {
+  const r = await makeEngine({
+    'local-firms': { error: 'FIRMS timeout', count: 2 },
+  }).query({
+    layers: ['flights', 'local-firms'], scope: { kind: 'anywhere' }, limit: 50,
+  });
+  assert.equal(r.coverage.feedProvenance.overall, 'degraded');
+  const fires = r.coverage.layersQueried.find((row) => row.layerKey === 'local-firms');
+  assert.equal(fires.feedState, 'degraded');
+});
+
+test('analyst: follow-up keeps the original feed-state snapshot', async () => {
+  const eng = makeEngine({ flights: { stale: true } });
+  await eng.query({ layers: ['flights'], scope: { kind: 'region', name: 'Texland' } });
+  const r = await eng.query({ followUp: true, filters: [{ field: 'onGround', op: 'eq', value: true }] });
+  assert.equal(r.coverage.followUp, true);
+  assert.equal(r.coverage.feedProvenance.overall, 'stale');
 });

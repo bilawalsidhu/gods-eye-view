@@ -1,5 +1,20 @@
 # God's Eye View Current State
 
+## Voice and HUD feed-state provenance
+
+Voice and HUD answers share one layer snapshot envelope (`src/data/layerSnapshot.js`)
+so they cannot narrate a stale, degraded, fallback, loading, or unavailable feed as
+live. `layerFeedState` — the same classifier the Data Layers chips use — stamps
+each queried or enabled layer with `nominal` / `loading` / `degraded` / `stale` /
+`fallback` / `unavailable`, or `off` when the layer is disabled. `analyst_query`
+and `get_current_view_state` carry `feedProvenance` (`overall`, per-layer rows,
+and a mechanical `note`). The HUD summary context sends the same snapshots; the
+five-word AI line must include a non-nominal feedState token, and the
+deterministic telemetry fallback appends e.g. `STALE LIVE FLIGHTS`. Confirmations
+still report only what the tool result returned.
+
+## Terrain, traffic, fire and bike-share provider modules
+
 ## Terrain, traffic, fire and bike-share provider modules
 
 Local composition now imports separate Node modules for Re:Earth heights,
@@ -2426,13 +2441,14 @@ silently demoting every later lookup for the session.
   2. **Contacts OFF** → "nearby" means **in view**; "near \<place\>" means a radius around that place. A radius query with Contacts active and no explicit centre is centred on the **active contact**, not the camera.
   3. **Every count names its scope in words** — "42 in your window", "8 in view", "about 30 within 250 km of Austin" — never a bare number. `analyst_query` returns `scopeLabel` so this is mechanical. Two different numbers with named scopes are not a contradiction.
   4. **The loaded-data caveat is stated once when relevant**: counts cover loaded data, and the flights layer loads where you look (appended to `coverage.note` for radius/view scopes over viewport-loaded layers).
+  5. **Feed-state provenance rides with every count**: `feedProvenance` is the same `layerFeedState` the chips show. A non-nominal `overall` must be spoken with the count ("12 flights in view, STALE"); an unavailable feed is not a confident zero; fallback is valid data and must be named as fallback. Mechanism: `src/data/layerSnapshot.js`, attached by `analystEngine` / `get_current_view_state` / HUD summary context.
 - **Degradation**: without `OPENAI_API_KEY`, `/api/realtime/token` returns 503 and the mic button surfaces the error; the rest of the app is unaffected.
 
 ### AI HUD Summary (June 2026)
 
 - HUD `SUMMARY` readout requests a five-word intelligence-style summary from `/api/openai/hud-summary` (model `OPENAI_HUD_SUMMARY_MODEL`, default `gpt-5-nano`, minimal reasoning).
-- Input is the live basemap label context (place/street/nearby-place labels + enabled layers) — the model is instructed not to infer from coordinates.
-- Output is sanitized to exactly five words; falls back to the deterministic telemetry summary on error/timeout (5s abort); typewriter animation on update.
+- Input is the live basemap label context (place/street/nearby-place labels + enabled layers with `feedState`) — the model is instructed not to infer from coordinates or invent a feed-state. A non-nominal enabled layer requires that feedState token in the five words.
+- Output is sanitized to exactly five words; falls back to the deterministic telemetry summary on error/timeout (5s abort), which itself appends a provenance tag (`STALE LIVE FLIGHTS`) when an enabled feed is not nominal; typewriter animation on update.
 
 ### Map Stack Switcher (June 2026)
 

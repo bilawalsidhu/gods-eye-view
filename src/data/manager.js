@@ -1,5 +1,9 @@
 import { governorRequestRender } from '../renderGovernor.js';
 import { markDetectionSourcesChanged } from './detection.js';
+import { LAYER_FEED_STATE_LABELS, layerFeedState } from './layerSnapshot.js';
+
+export { layerFeedState };
+
 function cloneLayerParams(value) {
   if (Array.isArray(value)) return value.map(cloneLayerParams);
   if (value && typeof value === 'object') {
@@ -9,15 +13,6 @@ function cloneLayerParams(value) {
   }
   return value;
 }
-
-const FEED_STATE_LABELS = Object.freeze({
-  nominal: 'ON',
-  loading: 'LOADING',
-  degraded: 'DEGRADED',
-  stale: 'STALE',
-  fallback: 'FALLBACK',
-  unavailable: 'UNAVAILABLE',
-});
 
 const SUPERSEDED_VISIBILITY_INTENT = Symbol('superseded-visibility-intent');
 const VALID_LAYER_SERIALIZATION_DISPOSITIONS = new Set([
@@ -62,53 +57,6 @@ function refreshFailureFromStats(stats, label) {
     return new Error(`${label} refresh unavailable`);
   }
   return null;
-}
-
-/**
- * Normalize heterogeneous layer stats into one honest control-chip state.
- * @param {object|null} stats Layer getStats() result.
- * @returns {'nominal'|'loading'|'degraded'|'stale'|'fallback'|'unavailable'} Feed state.
- */
-export function layerFeedState(stats = {}) {
-  const state = stats || {};
-  const status = typeof state.status === 'string' ? state.status.toLowerCase() : '';
-  const source = `${state.source || ''} ${state.coverage || ''}`;
-  const hasExplicitFallback = typeof state.fallback === 'boolean';
-  const hasPriorData = Number(state.count) > 0 || Boolean(state.lastUpdate);
-  const presentedError = state.error || state.lastError || state.managerRefreshError;
-  if (['unavailable', 'offline', 'down', 'error'].includes(status)) return 'unavailable';
-  if (
-    (presentedError || state.unavailable === true || state.available === false)
-    && !hasPriorData
-    && !['zoom-in', 'empty', 'idle'].includes(status)
-  ) {
-    return 'unavailable';
-  }
-  if (state.loading) return 'loading';
-  // Guidance states ask the user to act (zoom in, run a search) — normal
-  // operation, not feed faults. One honesty carve-out: layers keep their
-  // rendered records through the guidance state, so a genuinely stale cache
-  // still reads STALE; a guidance prompt alone never reads DEGRADED.
-  if (['zoom-in', 'empty', 'idle'].includes(status)) {
-    return state.stale ? 'stale' : 'nominal';
-  }
-  if (
-    state.fallback === true
-    || status === 'fallback'
-    || state.mode === 'sim'
-    || /\bfallback\b/i.test(source)
-    || (!hasExplicitFallback && /\badsb\.lol\b/i.test(source))
-  ) {
-    return 'fallback';
-  }
-  if (state.stale || status === 'stale') return 'stale';
-  if (
-    state.degraded
-    || presentedError
-    || state.unavailable === true
-    || state.available === false
-  ) return 'degraded';
-  return 'nominal';
 }
 
 /**
@@ -2217,7 +2165,7 @@ export class DataLayerManager {
   _buildMetaText(layer) {
     const stats = layer.stats || {};
     const feedState = layerFeedState(stats);
-    const stateLabel = FEED_STATE_LABELS[feedState];
+    const stateLabel = LAYER_FEED_STATE_LABELS[feedState];
     const source = stats.source || layer.source;
     const lifecycleState = layer.lifecycleState || (layer.enabled ? 'enabled' : 'disabled');
     if (lifecycleState === 'enabling' || lifecycleState === 'disabling') {
@@ -2267,7 +2215,7 @@ export class DataLayerManager {
     button.classList.toggle('enabling', layer.lifecycleState === 'enabling');
     button.classList.toggle('disabling', layer.lifecycleState === 'disabling');
     button.classList.toggle('lifecycle-uncertain', uncertain);
-    for (const state of Object.keys(FEED_STATE_LABELS)) {
+    for (const state of Object.keys(LAYER_FEED_STATE_LABELS)) {
       button.classList.toggle(`feed-${state}`, layer.enabled && !uncertain && feedState === state);
     }
     button.dataset.feedState = transitioning
@@ -2281,7 +2229,7 @@ export class DataLayerManager {
     button.setAttribute('aria-busy', String(transitioning));
     button.textContent = transitioning
       ? layer.lifecycleState.toUpperCase()
-      : (uncertain ? 'UNCERTAIN' : (layer.enabled ? FEED_STATE_LABELS[feedState] : 'OFF'));
+      : (uncertain ? 'UNCERTAIN' : (layer.enabled ? LAYER_FEED_STATE_LABELS[feedState] : 'OFF'));
     button.setAttribute('aria-label', `${layer.name}: ${button.textContent}`);
   }
 

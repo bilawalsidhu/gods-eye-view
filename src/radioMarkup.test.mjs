@@ -64,6 +64,17 @@ test('the counting contract is stated in the Realtime instructions', () => {
   assert.match(text, /flights layer loads where you look/, 'rule 5: the loaded-data caveat');
 });
 
+test('the feed-state contract is stated in the Realtime instructions', () => {
+  const start = voice.indexOf("'FEED STATE CONTRACT");
+  assert.ok(start >= 0, 'the feed-state contract instruction is missing');
+  const text = voice.slice(start, voice.indexOf('\n', start));
+  assert.match(text, /feedProvenance/, 'names the envelope');
+  assert.match(text, /layerFeedState/, 'same classifier as the chips');
+  assert.match(text, /nominal\/loading\/degraded\/stale\/fallback\/unavailable/);
+  assert.match(text, /NEVER narrate a count as live/);
+  assert.match(text, /Confirm only what the tool result returned/);
+});
+
 test('Context panel opening stays distinct from Contacts activation', () => {
   const start = voice.indexOf("'For requests to open, show, reveal, or focus a menu/panel");
   assert.ok(start >= 0, 'panel-routing instruction is missing');
@@ -106,6 +117,10 @@ test('nearest-aircraft selection stays out of Contacts and Cockpit', () => {
   assert.match(nearest.description, /exclude on-ground records/);
   assert.match(nearest.description, /fallback feeds remain usable/);
   assert.match(nearest.description, /does not open Contacts or Cockpit/);
+
+  const analyst = byName.get('analyst_query');
+  assert.match(analyst.description, /feedProvenance/);
+  assert.match(analyst.description, /never describe a stale/);
 });
 
 test('the two Context/Cockpit tools pin their enums and required arguments', () => {
@@ -145,9 +160,12 @@ test('the edited existing tools changed exactly as intended', () => {
   );
   assert.deepEqual(panel.parameters.required, ['panelId', 'open']);
 
-  // Edit 2: description only — the view state now reports Context and Cockpit.
+  // Edit 2: description only — the view state now reports Context and Cockpit
+  // plus honest per-layer feedState / feedProvenance.
   const viewState = byName.get('get_current_view_state');
   assert.match(viewState.description, /Context, Cockpit/);
+  assert.match(viewState.description, /feedState/);
+  assert.match(viewState.description, /feedProvenance/);
   assert.deepEqual(viewState.parameters.properties, {});
 
   // Edit 3: dependent multi-tool navigation can wait for the destination view.
@@ -157,11 +175,11 @@ test('the edited existing tools changed exactly as intended', () => {
 });
 
 test('no unchanged Realtime tool definition drifts silently', () => {
-  // Context/Cockpit parity, the dependent-location wait edit, and the retired
-  // `bing-road` stack leaving `set_map_stack`'s enum are the known schema
-  // changes. Everything else must be byte-identical: an unnoticed edit
-  // to a shipped tool changes
-  // model behavior in production with nothing in review to catch it.
+  // Context/Cockpit parity, the dependent-location wait edit, the retired
+  // `bing-road` stack leaving `set_map_stack`'s enum, and analyst_query
+  // feedProvenance copy are the known schema changes. Everything else must be
+  // byte-identical: an unnoticed edit to a shipped tool changes model behavior
+  // in production with nothing in review to catch it.
   //
   // If this fails and the change was deliberate, re-derive the digest and say
   // in the mic-test brief which tools moved — the session cache busts on any
@@ -174,16 +192,17 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'fly_to_location',
     'select_nearest_aircraft',
     'set_map_stack',
+    'analyst_query',
   ]);
   const unchanged = realtimeTools()
     .filter((tool) => !TOUCHED.has(tool.name))
     .sort((a, b) => a.name.localeCompare(b.name));
-  assert.equal(unchanged.length, 21);
+  assert.equal(unchanged.length, 20);
   const digest = createHash('sha256')
     .update(JSON.stringify(unchanged))
     .digest('hex')
     .slice(0, 16);
-  assert.equal(digest, '802ed694b8887b88', 'an unchanged Realtime tool definition drifted');
+  assert.equal(digest, '5db68d7c29f6ed4f', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {

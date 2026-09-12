@@ -19,7 +19,7 @@ import { CITY_POIS } from './locations.js';
 import { composeLocalityTag } from './hudLocality.js';
 import { ellipsoidalToMslDisplayM, ensureGeoidReady, geoidHeight } from './data/geoid.js';
 import { getBasemapLabelContext } from './voice/gevActions.js';
-import { isHudSummaryUnconfigured } from './hudSummaryResponse.js';
+import { isHudSummaryUnconfigured, hudSummaryLayerContext, hudTelemetryProvenanceTag } from './hudSummaryResponse.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
@@ -587,8 +587,9 @@ export class IntelHUD {
       : 'N/A';
     // NEAR the nearest catalogued POI at metro range; otherwise the lat/lon sector.
     const localityTag = composeLocalityTag(nearest, m.latDeg, m.lonDeg);
-
-    return `${modeLabel} ${band} ${localityTag} | ${region} | ALT ${altTag} | WINDOW ${winTag} | SUN ${m.sunEl.toFixed(0)}° | ONA ${m.ona.toFixed(0)}° | ${localTag}`;
+    const provenance = hudTelemetryProvenanceTag(this._dataManager?.getAll?.() || []);
+    const line = `${modeLabel} ${band} ${localityTag} | ${region} | ALT ${altTag} | WINDOW ${winTag} | SUN ${m.sunEl.toFixed(0)}° | ONA ${m.ona.toFixed(0)}° | ${localTag}`;
+    return provenance ? `${line} | ${provenance}` : line;
   }
 
   /**
@@ -701,14 +702,11 @@ export class IntelHUD {
 
   async _summaryContext() {
     const labels = await getBasemapLabelContext(this.viewer);
-    const enabledLayers = this._dataManager?.getAll?.()
-      ?.filter((layer) => layer.enabled)
-      .map((layer) => layer.name) || [];
     return {
       placeLabels: labels.placeLabels,
       streetLabels: labels.streetLabels,
       nearbyPlaceLabels: labels.nearbyPlaceLabels,
-      enabledLayerLabels: enabledLayers,
+      ...hudSummaryLayerContext(this._dataManager?.getAll?.() || []),
     };
   }
 
@@ -838,7 +836,13 @@ export class IntelHUD {
     this._dataManager = dataManager || null;
     if (typeof this._dataManager?.subscribe === 'function') {
       this._dataManagerUnsubscribe = this._dataManager.subscribe((change) => {
-        if (change?.type === 'visibility') this._markSummaryDirty();
+        if (
+          change?.type === 'visibility'
+          || change?.type === 'refresh-transition'
+          || change?.type === 'refresh-cancelled'
+        ) {
+          this._markSummaryDirty();
+        }
       });
     }
     this._markSummaryDirty();

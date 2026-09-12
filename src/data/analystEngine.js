@@ -18,13 +18,20 @@
  *
  * Providers (injected — keeps the engine pure and node-testable):
  *   getRecords(layerKey) → Array<record>            (layer accessor snapshot)
+ *   getLayerSnapshot?(layerKey) → snapshot|null    (honest feed-state envelope)
  *   resolveRegionRing(name) → Promise<{ring, name}|null>  (NE pack / admin boundary)
  *   getViewContext() → {lat, lon, viewRadiusKm, bounds?}  (camera-derived)
  *
  * @module data/analystEngine
  */
 
+import { feedProvenanceEnvelope } from './layerSnapshot.js';
 import { pointInRing } from './naturalEarthRegions.js';
+
+function withFeedProvenance(coverage, snapshots) {
+  if (!Array.isArray(snapshots) || snapshots.length === 0) return coverage;
+  return { ...coverage, feedProvenance: feedProvenanceEnvelope(snapshots) };
+}
 
 /** Layers the engine understands, with the fields queries may reference. */
 export const ANALYST_LAYERS = {
@@ -115,12 +122,15 @@ export function createAnalystEngine(providers) {
     // 1) Source records
     let records;
     let layersQueried;
+    let queriedSnapshots;
     if (layers === null) {
       records = lastResult.items.slice();
       layersQueried = lastResult.coverage.layersQueried;
+      queriedSnapshots = lastResult.coverage.feedProvenance?.layers || [];
     } else {
       records = [];
       layersQueried = [];
+      queriedSnapshots = [];
       const unknown = layers.filter((k) => !ANALYST_LAYERS[k]);
       if (unknown.length) {
         return {
@@ -132,7 +142,21 @@ export function createAnalystEngine(providers) {
       for (const key of layers) {
         if (!ANALYST_LAYERS[key]) continue;
         const rows = providers.getRecords(key) || [];
-        layersQueried.push({ layerKey: key, records: rows.length });
+        const snapshot = typeof providers.getLayerSnapshot === 'function'
+          ? providers.getLayerSnapshot(key)
+          : null;
+        if (snapshot) queriedSnapshots.push(snapshot);
+        layersQueried.push({
+          layerKey: key,
+          records: rows.length,
+          ...(snapshot ? {
+            feedState: snapshot.feedState,
+            source: snapshot.source,
+            lastUpdate: snapshot.lastUpdate,
+            enabled: snapshot.enabled,
+            error: snapshot.error,
+          } : {}),
+        });
         for (const row of rows) records.push({ layerKey: key, ...row });
       }
     }
@@ -151,7 +175,10 @@ export function createAnalystEngine(providers) {
         return {
           ok: false,
           error: `I couldn't resolve a boundary for "${scope.name}" — try a state, country, or a named natural region.`,
-          coverage: { layersQueried, scope: `region:${scope.name}:unresolved` },
+          coverage: withFeedProvenance({
+            layersQueried,
+            scope: `region:${scope.name}:unresolved`,
+          }, queriedSnapshots),
         };
       }
       resolvedScope = region;
@@ -225,12 +252,12 @@ export function createAnalystEngine(providers) {
       truncated: items.length > top.length,
       summary: summarize(items, sortBy && sortBy !== 'distance' ? sortBy : null),
       scopeLabel,
-      coverage: {
+      coverage: withFeedProvenance({
         layersQueried,
         scope: scopeNote,
         followUp: Boolean(spec.followUp && lastResult),
         note: 'client-side data only — answers cover what the enabled layers currently hold',
-      },
+      }, queriedSnapshots),
       // Surfaced so the narration can name the centre it measured from rather
       // than implying a view-centred answer.
       ...(resolvedScope?.centeredOn ? { centeredOn: resolvedScope.centeredOn } : {}),

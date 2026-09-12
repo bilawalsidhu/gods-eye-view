@@ -9,7 +9,12 @@ import { getNextIssPass } from '../data/satellites.js';
 import { CCTV_FOCUS_RESULT } from '../data/cctv.js';
 import { contextModeWord } from '../contextModePolicy.js';
 import { createAnalystEngine } from '../data/analystEngine.js';
-import { layerFeedState } from '../data/manager.js';
+import {
+  feedProvenanceEnvelope,
+  layerSnapshot,
+  layerSnapshots,
+  viewStateLayerRow,
+} from '../data/layerSnapshot.js';
 import militaryAwarenessLayer, {
   collectAircraftProximityWindow,
   contactsWindowFromSnapshot,
@@ -503,10 +508,17 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
       }
       const stats = layerModule?.getStats?.() || {};
       const source = String(stats.source || layerModule?.source || '').trim() || null;
-      const feed = {
-        state: layerFeedState({ ...stats, source }),
+      const snap = layerSnapshot({
+        id: layerId,
+        name: layer.label || layerId,
+        enabled: true,
         source,
-        count: Number.isFinite(Number(stats.count)) ? Number(stats.count) : null,
+        stats: { ...stats, source },
+      });
+      const feed = {
+        state: snap.feedState,
+        source: snap.source,
+        count: snap.count,
       };
 
       const nearest = await createAnalystEngine(analystProviders(viewer, dataManager, {
@@ -2356,6 +2368,8 @@ function normalizeLocationId(value) {
 
 function getCurrentViewState(viewer, styleManager, dataManager, sceneDirector = null) {
   const cartographic = Cesium.Cartographic.fromCartesian(viewer.camera.positionWC);
+  const layerRows = (dataManager?.getAll?.() || []).map((layer) => viewStateLayerRow(layer));
+  const enabledSnapshots = layerSnapshots(dataManager?.getAll?.() || []).filter((s) => s.enabled);
   return {
     ok: true,
     action: 'get_current_view_state',
@@ -2379,13 +2393,8 @@ function getCurrentViewState(viewer, styleManager, dataManager, sceneDirector = 
     controls: typeof styleManager.getControlState === 'function' ? styleManager.getControlState() : null,
     scenePlayback: sceneDirector?.getPlaybackStatus?.() || null,
     tracked: collectTrackedEntities(dataManager),
-    layers: dataManager.getAll().map((layer) => ({
-      id: layer.id,
-      name: layer.name,
-      enabled: layer.enabled,
-      count: layer.stats?.count || 0,
-      error: layer.stats?.error || null,
-    })),
+    layers: layerRows,
+    feedProvenance: feedProvenanceEnvelope(enabledSnapshots),
   };
 }
 
@@ -2482,6 +2491,7 @@ function aircraftProximityWindowForQuery(args, result) {
       scope: `window:${radiusKm}km@${label}`,
       followUp: false,
       note: 'Contacts window engine — the same computation and cohort the Contacts panel displays, so this count matches the panel exactly — counts cover loaded data; the flights layer loads by viewport.',
+      ...(result?.coverage?.feedProvenance ? { feedProvenance: result.coverage.feedProvenance } : {}),
     },
     // (D) The answer always says whose window it is and which engine produced it.
     window: {
@@ -2493,6 +2503,12 @@ function aircraftProximityWindowForQuery(args, result) {
       aircraft: window.aircraft,
     },
     ...(activeContactsWindow() ? { contactsWindow: activeContactsWindow() } : {}),
+    ...(result?.coverage?.feedProvenance
+      ? {
+        feedProvenance: result.coverage.feedProvenance,
+        feedState: result.coverage.feedProvenance.overall,
+      }
+      : {}),
   };
 }
 
@@ -3310,6 +3326,47 @@ function activeContactsWindow() {
   }
 }
 
+function provenanceForQuery(dataManager, layerKeys) {
+  const keys = Array.isArray(layerKeys) && layerKeys.length ? layerKeys : ['flights'];
+  const all = dataManager?.getAll?.() || [];
+  const snapshots = keys.map((key) => {
+    const row = all.find((layer) => layer.id === key);
+    if (row) return layerSnapshot(row);
+    const enabled = Boolean(dataManager?.isEnabled?.(key));
+    return layerSnapshot({ id: key, enabled });
+  });
+  return feedProvenanceEnvelope(snapshots);
+}
+
+function attachQueryProvenance(result, dataManager, args = {}) {
+  if (!result || typeof result !== 'object') return result;
+  const keys = Array.isArray(args.layers) && args.layers.length
+    ? args.layers
+    : (result.coverage?.layersQueried || []).map((row) => row.layerKey);
+  const envelope = provenanceForQuery(dataManager, keys);
+  if (result.coverage) {
+    result.coverage.feedProvenance = envelope;
+    if (Array.isArray(result.coverage.layersQueried)) {
+      const byId = new Map(envelope.layers.map((snap) => [snap.id, snap]));
+      result.coverage.layersQueried = result.coverage.layersQueried.map((row) => {
+        const snap = byId.get(row.layerKey);
+        if (!snap) return row;
+        return {
+          ...row,
+          feedState: snap.feedState,
+          source: snap.source,
+          lastUpdate: snap.lastUpdate,
+          enabled: snap.enabled,
+          error: snap.error,
+        };
+      });
+    }
+  }
+  result.feedProvenance = envelope;
+  result.feedState = envelope.overall;
+  return result;
+}
+
 function analystProviders(viewer, dataManager, { recordLimitByLayer = null } = {}) {
   return {
     getRecords(layerKey) {
@@ -3321,6 +3378,20 @@ function analystProviders(viewer, dataManager, { recordLimitByLayer = null } = {
       return Number.isFinite(requestedLimit)
         ? (mod.getAnalystRecords(requestedLimit) || [])
         : (mod.getAnalystRecords() || []);
+    },
+    getLayerSnapshot(layerKey) {
+      const row = (dataManager.getAll?.() || []).find((layer) => layer.id === layerKey);
+      if (row) return layerSnapshot(row);
+      const enabled = Boolean(dataManager.isEnabled?.(layerKey));
+      const entry = dataManager.layers?.get?.(layerKey);
+      const stats = entry?.module?.getStats?.() || {};
+      return layerSnapshot({
+        id: layerKey,
+        name: entry?.module?.name || layerKey,
+        enabled,
+        source: stats.source || entry?.module?.source || null,
+        stats,
+      });
     },
     resolveRegionRing: (name) => resolveRegionRingForQuery(name),
     /**
@@ -3367,7 +3438,13 @@ async function runAnalystQuery(viewer, dataManager, args = {}) {
     limit: args.limit,
     followUp: Boolean(args.followUp),
   });
-  if (!result.ok) return { ok: false, action: 'analyst_query', error: result.error, coverage: result.coverage };
+  if (!result.ok) {
+    return attachQueryProvenance(
+      { ok: false, action: 'analyst_query', error: result.error, coverage: result.coverage },
+      dataManager,
+      args,
+    );
+  }
   // Compact payload for the voice model: identity + the fields queries sort/
   // filter on. The full record set stays engine-side for follow-ups.
   //
@@ -3411,7 +3488,7 @@ async function runAnalystQuery(viewer, dataManager, args = {}) {
   // arbitrary points — only "how many aircraft around <this contact>" is
   // unified, because that is the question the panel is already answering.
   const entityWindow = aircraftProximityWindowForQuery(args, result);
-  if (entityWindow) return entityWindow;
+  if (entityWindow) return attachQueryProvenance(entityWindow, dataManager, args);
 
   const contactsWindow = activeContactsWindow();
   const aircraftQueried = (result.coverage?.layersQueried || [])
@@ -3432,7 +3509,7 @@ async function runAnalystQuery(viewer, dataManager, args = {}) {
       + `"how many aircraft are nearby". This query measured something else — ${result.count} ${result.scopeLabel}. `
       + 'Give this one only if the operator asked about that specific area, and name both scopes if you give both.'
     : null;
-  return {
+  return attachQueryProvenance({
     ok: true,
     action: 'analyst_query',
     count: result.count,
@@ -3455,5 +3532,5 @@ async function runAnalystQuery(viewer, dataManager, args = {}) {
       }
       : {}),
     ...(countsReconciliation ? { countsReconciliation } : {}),
-  };
+  }, dataManager, args);
 }
