@@ -1,7 +1,7 @@
 // Locale identity for God's Eye View (i18n phase 1).
 //
 // English is the default-without-configuration, the ALWAYS-shipped fallback
-// catalog, and the compatibility baseline (ai_docs/vision.md). Neutral
+// catalog, and the compatibility baseline (docs/TRANSLATORS.md). Neutral
 // international Spanish ('es') is the default secondary locale; French ('fr')
 // ships fully translated. Which pair the app actually offers is
 // configured at build/dev time through GEV_DEFAULT_LOCALE /
@@ -198,7 +198,7 @@ export function writeStoredLocale(locale, storage) {
 }
 
 /**
- * Resolve the active locale. Precedence (ai_docs/vision.md):
+ * Resolve the active locale. Precedence (docs/TRANSLATORS.md):
  *
  *   ?lang=<locale> → stored preference → navigator.languages → configured default
  *

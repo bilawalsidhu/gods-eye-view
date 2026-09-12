@@ -13,14 +13,20 @@ fs.mkdirSync(shotsDir, { recursive: true });
 
 const chromeCandidates = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
-  (() => { try { return puppeteer.executablePath(); } catch { return null; } })(),
+  await puppeteer.executablePath().catch(() => null),
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 ].filter(Boolean);
 const executablePath = chromeCandidates.find((candidate) => fs.existsSync(candidate));
 const browser = await puppeteer.launch({
   headless: headful ? false : 'new',
   ...(executablePath ? { executablePath } : {}),
-  args: ['--use-angle=metal', '--enable-gpu', '--no-sandbox'],
+  // Metal is a macOS-only ANGLE backend; anywhere else it fails WebGL init.
+  args: [
+    ...(process.platform === 'darwin'
+      ? ['--use-angle=metal', '--enable-gpu']
+      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    '--no-sandbox',
+  ],
 });
 const page = await browser.newPage();
 const failures = [];
@@ -54,8 +60,22 @@ const check = (name, passed, detail) => {
 try {
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
   await page.setRequestInterception(true);
-  page.on('request', (request) => {
+  const routeQaRequest = (request) => {
     const url = new URL(request.url());
+    // This harness verifies UI/lifecycle behavior, not DEM accuracy. Keep an
+    // unrelated upstream terrain outage out of the rendered interaction gate.
+    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/terrain/heights') {
+      const points = (url.searchParams.get('points') || '').split(';').filter(Boolean);
+      request.respond({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ results: points.map((point) => {
+          const [lon, lat] = point.split(',').map(Number);
+          return { lon, lat, elevation: 0, geoid: 0, ellipsoid: 0 };
+        }) }),
+      });
+      return;
+    }
     if (url.origin === new URL(appUrl).origin && url.pathname === '/api/ais-live') {
       request.respond({
         status: 200,
@@ -111,7 +131,8 @@ try {
       return;
     }
     request.continue();
-  });
+  };
+  page.on('request', routeQaRequest);
   await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 60_000 });
   await page.waitForFunction(
@@ -768,146 +789,189 @@ try {
   //     was created to fix.
   // Holding the network reproduces the field exactly and the panel tracks it,
   // which is what gives these assertions teeth.
-  const deferredInstallationReadiness = await page.evaluate(async () => {
-    const { styleManager, dataManager } = window.__godsEyeView;
-    const entry = dataManager.layers.get('military-installations');
-    if (!entry?.module) return { exercised: false, reason: 'military-installations missing' };
-    const settleWithin = (promise, ms) => Promise.race([
-      promise.then(
-        (value) => ({ settled: true, value }),
-        (error) => ({ settled: true, value: `error: ${String(error?.message || error)}` }),
-      ),
-      new Promise((resolve) => { setTimeout(() => resolve({ settled: false, value: null }), ms); }),
-    ]);
-    const row = () => [...document.querySelectorAll('#military-awareness-panel .military-awareness-row')]
-      .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'Mapped installations');
-    const installationCount = () => row()?.querySelector('b')?.textContent?.trim() || null;
-    /** The REASON text, which is what tracks availability: the cohort engine
-     *  answers 'feed unavailable' / 'feed stale' when it refuses to count. */
-    const installationReason = () => row()?.querySelector('small')?.textContent?.trim() || null;
-
-    const realFetch = window.fetch;
-    let released = false;
-    let requestSeen = false;
-    let transition = null;
-    try {
-      await styleManager._selectContextMode(null);
-      await dataManager.setEnabled('military-installations', false, { origin: 'programmatic' });
-
-      // Hold the first Overpass request open, honouring the module's own
-      // AbortSignal so its camera-settle abort/refetch behaves as it does live.
-      window.fetch = (input, init) => {
-        const raw = typeof input === 'string' || input instanceof URL ? String(input) : input?.url;
-        let url = null;
-        try { url = new URL(raw, window.location.href); } catch { return realFetch(input, init); }
-        if (url.pathname !== '/api/military-installations') return realFetch(input, init);
-        requestSeen = true;
-        const signal = init?.signal;
-        return new Promise((resolve, reject) => {
-          let done = false;
-          const fail = () => {
-            if (done) return;
-            done = true;
-            const error = new Error('aborted');
-            error.name = 'AbortError';
-            reject(error);
-          };
-          if (signal) {
-            if (signal.aborted) return fail();
-            signal.addEventListener('abort', fail, { once: true });
-          }
-          const tick = () => {
-            if (done) return;
-            if (released) {
-              done = true;
-              resolve(new Response(
-                JSON.stringify({ elements: [], retrievedAt: new Date().toISOString() }),
-                { status: 200, headers: { 'Content-Type': 'application/json' } },
-              ));
-              return;
-            }
-            setTimeout(tick, 100);
-          };
-          tick();
+  // Earlier scenarios have already loaded installations. Use a fresh page so
+  // a legitimate retained snapshot cannot satisfy or invalidate a FIRST-fetch
+  // assertion when camera motion supersedes the manager's initial update.
+  const readinessPage = await browser.newPage();
+  let deferredInstallationReadiness;
+  try {
+    await readinessPage.setViewport({ width: 1440, height: 900 });
+    readinessPage.on('pageerror', (error) => consoleErrors.push(error.message));
+    await readinessPage.setRequestInterception(true);
+    readinessPage.on('request', (request) => {
+      const url = new URL(request.url());
+      if (url.origin === new URL(appUrl).origin && url.pathname === '/api/opensky') {
+        const now = Math.floor(Date.now() / 1000);
+        request.respond({
+          status: 200, contentType: 'application/json',
+          body: JSON.stringify({ time: now, states: [
+            ['aaa051', 'QA051', 'Synthetic', now, now, -97.7431, 30.2672,
+              9000, false, 230, 90, 0, null, 9000, null, false, 0],
+          ] }),
         });
-      };
-
-      transition = styleManager._selectContextMode('flights');
-      // The activation promise stays PENDING while the first fetch is out, and
-      // the Contacts panel comes up behind it — that is what a deferred
-      // dependency is for. Verified live on :4272: the panel renders and reads
-      // a non-numeric count for the whole of a 17 s first fetch.
-      const started = await settleWithin((async () => {
-        for (let i = 0; i < 100 && !(requestSeen && row()); i++) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-        return requestSeen && Boolean(row());
-      })(), 12_000);
-      styleManager.cockpitView.syncEntry();
-      const pendingLifecycle = dataManager.getLayerLifecycleState('military-installations');
-      const pendingCount = installationCount();
-      const pendingReason = installationReason();
-
-      // THE WINDOW: first request outstanding, panel live. Sampled more than
-      // once — the field report was a panel sitting on a fabricated 0 for ~13 s,
-      // so a single lucky read is not evidence.
-      const fetchingCounts = [];
-      const fetchingReasons = [];
-      for (let i = 0; i < 6; i++) {
-        fetchingCounts.push(installationCount());
-        fetchingReasons.push(installationReason());
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        return;
       }
-
-      released = true;
-      const contacts = await settleWithin(transition, 20_000);
-      styleManager.cockpitView.syncEntry();
-      // Measured AFTER activation settles, not during it. The sibling pin above
-      // ("Contacts blocks early Cockpit entry, then adopts the already tracked
-      // flight after settlement") establishes that Contacts HIDES the entry
-      // while the transition is changing — that is the designed contract, and
-      // asserting the opposite (as this scenario used to) could never pass.
-      // What matters is that a slow dependency does not lock it away for good.
-      const cockpitAvailableAfterActivation = !document.getElementById('cockpit-entry')?.hidden;
-      const installed = await settleWithin((async () => {
-        while (dataManager.getLayerLifecycleState('military-installations')?.lifecycleState !== 'enabled') {
-          await new Promise((resolve) => setTimeout(resolve, 50));
-        }
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        return true;
-      })(), 20_000);
-      const answered = await settleWithin((async () => {
-        for (let i = 0; i < 60 && !/^\d+$/.test(String(installationCount())); i++) {
-          await new Promise((resolve) => setTimeout(resolve, 150));
-        }
-        return true;
-      })(), 12_000);
-
-      return {
-        exercised: true,
-        started,
-        contacts,
-        pendingLifecycle,
-        pendingCount,
-        pendingReason,
-        cockpitAvailableAfterActivation,
-        installed,
-        settledLifecycle: dataManager.getLayerLifecycleState('military-installations'),
-        fetchingCounts,
-        fetchingReasons,
-        answered,
-        settledCount: installationCount(),
-        settledReason: installationReason(),
-      };
-    } finally {
-      released = true;
-      window.fetch = realFetch;
-      if (transition) await settleWithin(transition, 20_000);
-      if (styleManager._contextMode !== 'flights') {
-        await settleWithin(styleManager._selectContextMode('flights'), 15_000);
+      routeQaRequest(request);
+    });
+    const readinessUrl = new URL(appUrl);
+    readinessUrl.searchParams.set('welcome', '0');
+    await readinessPage.goto(readinessUrl.href, { waitUntil: 'domcontentloaded' });
+    await readinessPage.waitForFunction(() => window.__godsEyeView?.dataManager
+      && document.getElementById('loading-screen')?.classList.contains('hidden'), { timeout: 60000 });
+    await readinessPage.evaluate(async () => {
+      const manager = window.__godsEyeView.dataManager;
+      await manager.setEnabled('flights', true, { origin: 'user' });
+      if (!manager.layers.get('flights').module.trackById('aaa051')) {
+        throw new Error('First-fetch fixture aircraft was not tracked');
       }
-    }
-  });
+      if (manager.layers.get('military-installations').module.getStats().lastUpdate != null) {
+        throw new Error('First-fetch fixture already has an installation snapshot');
+      }
+    });
+    deferredInstallationReadiness = await readinessPage.evaluate(async () => {
+      const { styleManager, dataManager } = window.__godsEyeView;
+      const entry = dataManager.layers.get('military-installations');
+      if (!entry?.module) return { exercised: false, reason: 'military-installations missing' };
+      const settleWithin = (promise, ms) => Promise.race([
+        promise.then(
+          (value) => ({ settled: true, value }),
+          (error) => ({ settled: true, value: `error: ${String(error?.message || error)}` }),
+        ),
+        new Promise((resolve) => { setTimeout(() => resolve({ settled: false, value: null }), ms); }),
+      ]);
+      const row = () => [...document.querySelectorAll('#military-awareness-panel .military-awareness-row')]
+        .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'Mapped installations');
+      const installationCount = () => row()?.querySelector('b')?.textContent?.trim() || null;
+      /** The REASON text, which is what tracks availability: the cohort engine
+       *  answers 'feed unavailable' / 'feed stale' when it refuses to count. */
+      const installationReason = () => row()?.querySelector('small')?.textContent?.trim() || null;
+
+      const realFetch = window.fetch;
+      let released = false;
+      let requestSeen = false;
+      let transition = null;
+      try {
+        await styleManager._selectContextMode(null);
+        await dataManager.setEnabled('military-installations', false, { origin: 'programmatic' });
+
+        // Hold the first Overpass request open, honouring the module's own
+        // AbortSignal so its camera-settle abort/refetch behaves as it does live.
+        window.fetch = (input, init) => {
+          const raw = typeof input === 'string' || input instanceof URL ? String(input) : input?.url;
+          let url = null;
+          try { url = new URL(raw, window.location.href); } catch { return realFetch(input, init); }
+          if (url.pathname !== '/api/military-installations') return realFetch(input, init);
+          requestSeen = true;
+          const signal = init?.signal;
+          return new Promise((resolve, reject) => {
+            let done = false;
+            const fail = () => {
+              if (done) return;
+              done = true;
+              const error = new Error('aborted');
+              error.name = 'AbortError';
+              reject(error);
+            };
+            if (signal) {
+              if (signal.aborted) return fail();
+              signal.addEventListener('abort', fail, { once: true });
+            }
+            const tick = () => {
+              if (done) return;
+              if (released) {
+                done = true;
+                resolve(new Response(
+                  JSON.stringify({ elements: [], retrievedAt: new Date().toISOString() }),
+                  { status: 200, headers: { 'Content-Type': 'application/json' } },
+                ));
+                return;
+              }
+              setTimeout(tick, 100);
+            };
+            tick();
+          });
+        };
+
+        transition = styleManager._selectContextMode('flights');
+        // The activation promise stays PENDING while the first fetch is out, and
+        // the Contacts panel comes up behind it — that is what a deferred
+        // dependency is for. Verified live on :4272: the panel renders and reads
+        // a non-numeric count for the whole of a 17 s first fetch.
+        const started = await settleWithin((async () => {
+          for (let i = 0; i < 100 && !(requestSeen && row()); i++) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+          return requestSeen && Boolean(row());
+        })(), 12_000);
+        styleManager.cockpitView.syncEntry();
+        const pendingLifecycle = dataManager.getLayerLifecycleState('military-installations');
+        const pendingCount = installationCount();
+        const pendingReason = installationReason();
+
+        // THE WINDOW: first request outstanding, panel live. Sampled more than
+        // once — the field report was a panel sitting on a fabricated 0 for ~13 s,
+        // so a single lucky read is not evidence.
+        const fetchingCounts = [];
+        const fetchingReasons = [];
+        for (let i = 0; i < 6; i++) {
+          fetchingCounts.push(installationCount());
+          fetchingReasons.push(installationReason());
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+
+        released = true;
+        const contacts = await settleWithin(transition, 20_000);
+        styleManager.cockpitView.syncEntry();
+        // Measured AFTER activation settles, not during it. The sibling pin above
+        // ("Contacts blocks early Cockpit entry, then adopts the already tracked
+        // flight after settlement") establishes that Contacts HIDES the entry
+        // while the transition is changing — that is the designed contract, and
+        // asserting the opposite (as this scenario used to) could never pass.
+        // What matters is that a slow dependency does not lock it away for good.
+        const cockpitAvailableAfterActivation = !document.getElementById('cockpit-entry')?.hidden;
+        const installed = await settleWithin((async () => {
+          while (dataManager.getLayerLifecycleState('military-installations')?.lifecycleState !== 'enabled') {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          return true;
+        })(), 20_000);
+        const answered = await settleWithin((async () => {
+          for (let i = 0; i < 60 && !/^\d+$/.test(String(installationCount())); i++) {
+            await new Promise((resolve) => setTimeout(resolve, 150));
+          }
+          return true;
+        })(), 12_000);
+
+        return {
+          exercised: true,
+          started,
+          contacts,
+          pendingLifecycle,
+          pendingCount,
+          pendingReason,
+          cockpitAvailableAfterActivation,
+          installed,
+          settledLifecycle: dataManager.getLayerLifecycleState('military-installations'),
+          fetchingCounts,
+          fetchingReasons,
+          answered,
+          settledCount: installationCount(),
+          settledReason: installationReason(),
+        };
+      } finally {
+        released = true;
+        window.fetch = realFetch;
+        if (transition) await settleWithin(transition, 20_000);
+        if (styleManager._contextMode !== 'flights') {
+          await settleWithin(styleManager._selectContextMode('flights'), 15_000);
+        }
+      }
+    });
+  } finally {
+    await readinessPage.close();
+    await page.bringToFront();
+  }
   // The panel has two truthful ways to say "nothing has answered yet" — the
   // cohort count renders `?`, and an UNKNOWN relationship renders as that word.
   // Which one is on screen depends on which panel surface is mounted, and the
@@ -916,6 +980,11 @@ try {
   // assert numeric-vs-not, which is exactly the field report.
   const readsUnknown = (value) => typeof value === 'string' && value.length > 0 && !/^\d/.test(value);
   const readsNumber = (value) => typeof value === 'string' && /^\d+$/.test(value);
+  // Loading has explicit copy since the installations reliability update.
+  // Keep the numeric/count gates below: wording alone never proves readiness.
+  const readsPendingReason = (value) => (
+    /unavailable|stale|Mapped sites not loaded|Fetching mapped sites…/i.test(String(value))
+  );
   check(
     'mapped installations load behind Contacts without a false all-clear or a locked Cockpit',
     deferredInstallationReadiness.exercised
@@ -924,7 +993,7 @@ try {
       && deferredInstallationReadiness.contacts.value === true
       && deferredInstallationReadiness.pendingLifecycle?.lifecycleState === 'enabling'
       && readsUnknown(deferredInstallationReadiness.pendingCount)
-      && /unavailable|stale/i.test(String(deferredInstallationReadiness.pendingReason))
+      && readsPendingReason(deferredInstallationReadiness.pendingReason)
       && deferredInstallationReadiness.cockpitAvailableAfterActivation
       && deferredInstallationReadiness.installed?.settled,
     JSON.stringify(deferredInstallationReadiness),
@@ -937,10 +1006,11 @@ try {
       && deferredInstallationReadiness.fetchingCounts.length > 0
       && deferredInstallationReadiness.fetchingCounts.every(readsUnknown)
       && Array.isArray(deferredInstallationReadiness.fetchingReasons)
-      && deferredInstallationReadiness.fetchingReasons.every((r) => /unavailable|stale/i.test(String(r))),
+      && deferredInstallationReadiness.fetchingReasons.every(readsPendingReason),
     JSON.stringify({
       settledLifecycle: deferredInstallationReadiness.settledLifecycle,
       fetchingCounts: deferredInstallationReadiness.fetchingCounts,
+      fetchingReasons: deferredInstallationReadiness.fetchingReasons,
     }),
   );
   check(
@@ -948,7 +1018,7 @@ try {
     deferredInstallationReadiness.exercised
       && deferredInstallationReadiness.answered?.settled
       && readsNumber(deferredInstallationReadiness.settledCount)
-      && !/unavailable|stale/i.test(String(deferredInstallationReadiness.settledReason)),
+      && !readsPendingReason(deferredInstallationReadiness.settledReason),
     JSON.stringify({
       answered: deferredInstallationReadiness.answered,
       settledCount: deferredInstallationReadiness.settledCount,
@@ -1000,7 +1070,12 @@ try {
     );
     const zoomedRange = cameraRange();
     const refocused = awareness?.focusCurrent?.() === true;
-    await new Promise((resolve) => setTimeout(resolve, 180));
+    // The follow frame commits in Cesium preUpdate. A fixed 180ms delay can
+    // sample before that frame on a busy software renderer.
+    const frameDeadline = performance.now() + 5000;
+    while (cameraRange() >= 50_000 && performance.now() < frameDeadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
     const focusedRange = cameraRange();
     const after = awareness?.getContextSnapshot?.()?.subject || null;
     return {
@@ -1339,12 +1414,25 @@ try {
     const { styleManager, dataManager, viewer } = window.__godsEyeView;
     const awareness = dataManager.layers.get('military-awareness')?.module;
     const entity = viewer.trackedEntity || styleManager.cockpitView.trackedEntity;
+    const nextFrame = () => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        remove();
+        reject(new Error('Cockpit camera ownership check did not render a frame'));
+      }, 5000);
+      const remove = viewer.scene.postRender.addEventListener(() => {
+        remove();
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+    // Let revoked listeners retire before comparing ownership across exit.
+    await nextFrame();
     const listenersBeforeExit = viewer.scene.preUpdate.numberOfListeners;
     const exited = styleManager.cockpitView.exit() === true;
-    await new Promise((resolve) => setTimeout(resolve, 80));
+    await nextFrame();
     const listenersAfterExit = viewer.scene.preUpdate.numberOfListeners;
     const refocused = awareness?.focusCurrent?.() === true;
-    await new Promise((resolve) => setTimeout(resolve, 80));
+    await nextFrame();
     return {
       exited,
       refocused,
@@ -1907,6 +1995,58 @@ try {
       && contextTransition.label === 'Collapse Contact panel',
     JSON.stringify(contextTransition),
   );
+  // Use the real connected DOM to catch focus loss caused by moving live rows.
+  const signalFocus = await page.evaluate(() => {
+    const cockpit = window.__godsEyeView.styleManager.cockpitView;
+    const originalItems = cockpit.signalItems;
+    const wasCollapsed = cockpit.signalCollapsed;
+    cockpit.setSignalCollapsed(false);
+    const item = (id) => ({ key: `qa-${id}`, tone: 'info', timestamp: Date.now(),
+      title: `QA ${id}`, detail: 'Keyboard refresh fixture', target: { layerId: 'flights', id } });
+    try {
+      cockpit.signalItems = [item('focus-a'), item('focus-b')];
+      cockpit.renderCockpitSignals();
+      const button = cockpit.signalList.querySelector('[data-signal-id="focus-a"]');
+      button.focus();
+      const acquired = document.activeElement === button;
+      cockpit.signalItems = [item('focus-c'), item('focus-b'), item('focus-a')];
+      cockpit.renderCockpitSignals();
+      const retained = document.activeElement === button && button.isConnected;
+      const order = [...cockpit.signalList.querySelectorAll('[data-signal-id]')].map((node) => node.dataset.signalId);
+      cockpit.signalItems = [item('focus-b')];
+      cockpit.renderCockpitSignals();
+      const continuation = cockpit.briefTabs[cockpit.briefPageIndex] || cockpit.signalToggle;
+      const continued = document.activeElement === continuation;
+      cockpit.signalItems = [item('focus-a'), item('focus-b')];
+      cockpit.renderCockpitSignals();
+      return { acquired, retained, order, continued, notReclaimed: document.activeElement === continuation };
+    } finally {
+      cockpit.signalItems = originalItems;
+      cockpit.renderCockpitSignals();
+      cockpit.setSignalCollapsed(wasCollapsed);
+    }
+  });
+  check('Cockpit live reorder retains the same connected focus owner',
+    signalFocus.acquired && signalFocus.retained
+      && JSON.stringify(signalFocus.order) === JSON.stringify(['focus-c', 'focus-b', 'focus-a']),
+    JSON.stringify(signalFocus));
+  check('a departed Cockpit contact continues at the footer without later reclaiming focus',
+    signalFocus.continued && signalFocus.notReclaimed, JSON.stringify(signalFocus));
+
+  // Real keyboard events also verify the nested lightbox does not exit Cockpit.
+  await page.focus('#cesium-credits .cesium-credit-expand-link');
+  await page.keyboard.press('Enter');
+  check('keyboard attribution opening focuses Close inside Cockpit', await page.evaluate(() => (
+    document.activeElement?.classList.contains('cesium-credit-lightbox-close')
+      && document.querySelector('.cesium-credit-expand-link').getAttribute('aria-expanded') === 'true'
+  )));
+  await page.screenshot({ path: path.join(shotsDir, 'keyboard-attribution.png') });
+  await page.keyboard.press('Escape');
+  check('attribution Escape restores focus and keeps Cockpit active', await page.evaluate(() => (
+    document.activeElement?.classList.contains('cesium-credit-expand-link')
+      && document.activeElement.getAttribute('aria-expanded') === 'false'
+      && window.__godsEyeView.styleManager.cockpitView.active
+  )));
   await page.screenshot({ path: path.join(shotsDir, 'restored-desktop.png') });
   check(
     'restored screenshot remains in a real Cockpit session',

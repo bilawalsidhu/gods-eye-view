@@ -16,7 +16,7 @@ import { CATALOG_LOCALES } from './locale.js';
  * lags en, run CI with GEV_I18N_REQUIRE_FULL_LOCALE_PARITY=0 to drop back to
  * the subset rules (a locale may be a subset of en, never a superset). The
  * pre-generalization name GEV_I18N_REQUIRE_FULL_ES_PARITY is still honored as
- * an alias. The Spanish flip was recorded in ai_docs/i18n-ownership.md
+ * an alias. The Spanish flip was recorded in docs/TRANSLATORS.md
  * (commit c91a923); the fr seed ships key-complete, so it already passes the
  * strict gate with English values until stage-B translation lands.
  */

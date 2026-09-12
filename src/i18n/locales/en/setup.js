@@ -21,7 +21,7 @@ export default {
 
   // ── Phase-2 static markup extraction (index.html), appended ──────────────
   // The shell worker owns ALL index.html static markup in phase 2
-  // (ai_docs/i18n-ownership.md cross-surface rule); these keys cover the
+  // (docs/TRANSLATORS.md cross-surface rule); these keys cover the
   // support-worker surfaces (first-run, key setup, scene director) whose
   // runtime paths land here in phase 3.
 
@@ -129,7 +129,7 @@ export default {
   'voice.detail.voiceOff': 'Voice off',
   'voice.detail.runningCommand': 'Running command',
   'voice.detail.radioDidNotStart': 'Radio did not start',
-  'voice.hint.default': 'Hold Space to speak · click mic to toggle voice',
+  'voice.hint.default': 'Hold Space to speak · tap Space to activate focused controls',
   'voice.error.sessionStart': 'Voice session could not be started.',
   'voice.error.trayTitle': 'VOICE SYSTEM ERROR',
   'voice.error.dismiss': 'DISMISS',
@@ -139,7 +139,7 @@ export default {
   'voice.tier.appliesNextSession': '{tier} applies next session',
   'voice.tier.buttonTitle': 'Voice model tier — applies next session',
   'voice.cost.buttonTitle': 'Estimated session cost',
-  'voice.button.ariaLabel': 'Voice control — hold Space to speak; click to toggle voice',
+  'voice.button.ariaLabel': 'Voice control — activate to toggle voice; hold Space to speak',
 
   // ── Stage-4 repair pass: src/scenes/director.js status corpus, appended ───
   // Status/confirm lines and the default shot title. {scene}/{shot} carry
@@ -169,6 +169,7 @@ export default {
   // src/keySetupCore.mjs KEY_SETUP_KEYS `unlocks` copy, keyed by registry id;
   // en values must stay byte-identical to the registry strings.
   'keySetup.unlocks.google-maps': 'The photorealistic 3D planet + place search',
+  'keySetup.unlocks.google-maps-server': 'Places context + Street View fallback; optional separate key',
   'keySetup.unlocks.openai': 'Voice control — talk to the planet',
   'keySetup.unlocks.aisstream': 'Live ships, worldwide',
   'keySetup.unlocks.firms': 'Live active-fire detections',

@@ -1,4 +1,4 @@
-// Neutral international Spanish (es). See ai_docs/i18n-ownership.md glossary.
+// Neutral international Spanish (es). See docs/TRANSLATORS.md glossary.
 export const NAMESPACE = 'layers';
 
 export default {
@@ -78,7 +78,7 @@ export default {
   // Layer display names are translated only at the presentation boundary
   // (manager.js _renderToggles/_syncToggleButton map layer.id → key here).
   // layer.id values, FEED_STATE_LABELS enum KEYS, and lifecycle state keys
-  // stay English — see ai_docs/i18n-ownership.md keep-English boundary.
+  // stay English — see docs/TRANSLATORS.md keep-English boundary.
 
   // src/data/manager.js FEED_STATE_LABELS values + toggle-button states.
   'status.on': 'ACTIVO',
@@ -163,7 +163,7 @@ export default {
 
   // index.html CCTV panel flipped-state siblings (runtime writers live in
   // src/ui.js, owned by core-ui — these keys are the layers-surface half of
-  // the cross-surface rule in ai_docs/i18n-ownership.md).
+  // the cross-surface rule in docs/TRANSLATORS.md).
   'cctv.toggleOn': 'CCTV ACTIVADO',
   'cctv.coverageOn': 'COBERTURA ACTIVADA',
   'cctv.autoHopOn': 'AUTO HOP ACTIVADO',
@@ -296,7 +296,7 @@ export default {
   'missions.roster.unspecifiedOperator': 'OPERADOR NO ESPECIFICADO',
   'missions.roster.selectAria': 'Seleccionar {mission}',
   'missions.rows.additionalPayloads': '+{count} registros de carga útil adicionales',
-  'missions.rows.classified': 'CLASIFICADA / CARGA MÚLTIPLE',
+  'missions.rows.classified': 'DATOS DE CARGA ÚTIL NO DISPONIBLES',
   'missions.rows.noStageData': 'SIN DATOS DE REENTRADA / RECUPERACIÓN DE ETAPA',
   'missions.rows.unspecified': 'NO ESPECIFICADO',
   'missions.rows.unavailable': 'NO DISPONIBLE',

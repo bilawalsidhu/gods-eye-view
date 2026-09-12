@@ -1,4 +1,4 @@
-// Neutral international Spanish (es). See ai_docs/i18n-ownership.md glossary.
+// Neutral international Spanish (es). See docs/TRANSLATORS.md glossary.
 export const NAMESPACE = 'shell';
 
 export default {

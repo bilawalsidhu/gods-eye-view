@@ -22,7 +22,7 @@ export default {
 
   // ── Phase-2 static markup extraction (index.html), appended ──────────────
   // The shell worker owns ALL index.html static markup in phase 2
-  // (ai_docs/i18n-ownership.md cross-surface rule); these keys land here because
+  // (docs/TRANSLATORS.md cross-surface rule); these keys land here because
   // src/ui.js and src/hud.js own the surfaces' runtime half in phase 3.
 
   // index.html #style-indicator / #clean-view-exit (visual-style chrome)

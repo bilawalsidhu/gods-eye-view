@@ -344,7 +344,7 @@ test('the Visual Presets tray owns Map Source and the retired left panel is abse
     'the compact wing must expose a semantic keyboard disclosure',
   );
   assert.match(ui, /event\.key !== 'Escape'[\s\S]*?disclosure\?\.focus/);
-  assert.match(ui, /map-stack-chip\.active, \.map-stack-chip/);
+  assert.match(ui, /querySelector\('\.map-stack-chip\.active'\)\s*\|\| panelEl\.querySelector\('\.map-stack-chip'\)/);
 
   assert.match(
     ui,

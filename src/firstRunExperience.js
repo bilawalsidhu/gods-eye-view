@@ -343,7 +343,7 @@ export function initFirstRunExperience({
   // persuasive description line and the tile's feed subcopy are the two
   // phase-2 exceptions whose static sites are pinned verbatim by
   // firstRunExperience.test.mjs — the runtime write is their only legal
-  // localization point (ai_docs/i18n-ownership.md, runtime-only static sites).
+  // localization point (docs/TRANSLATORS.md, runtime-only static sites).
   const environmentalTitle = root.querySelector('[data-first-run-environmental-title]');
   if (environmentalTitle) environmentalTitle.textContent = environmentalLabel().title;
   const environmentalSub = root.querySelector('[data-first-run-environmental-title] + small');
@@ -656,5 +656,13 @@ export function initFirstRunExperience({
   }
   syncToExclusiveSurfaces();
 
-  return { dismiss, isTopmost };
+  // Teardown is not a user dismissal and must not change the show preference.
+  const destroy = () => {
+    closing = true;
+    documentRef.removeEventListener('keydown', onKeyDown, true);
+    globalThis.removeEventListener?.('resize', onViewportResize);
+    surfaceObserver?.disconnect();
+    root.remove();
+  };
+  return { dismiss, isTopmost, destroy };
 }

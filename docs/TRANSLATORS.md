@@ -2,7 +2,7 @@
 
 This is the working guide for translating God's Eye View. The authoritative
 contract — file ownership, namespace registration, and the keep-English
-boundaries in full — is [`ai_docs/i18n-ownership.md`](../ai_docs/i18n-ownership.md);
+boundaries in full — is [`docs/TRANSLATORS.md`](../docs/TRANSLATORS.md);
 this file is the practical summary a translator needs.
 
 ## Which locales ship, and which pair is offered
@@ -132,7 +132,7 @@ Never catalog these — they are contracts, not copy:
 - User-authored content (annotations, labels drawn from live data).
 
 The full, binding list is "Keep-English boundary" in
-[`ai_docs/i18n-ownership.md`](../ai_docs/i18n-ownership.md).
+[`docs/TRANSLATORS.md`](../docs/TRANSLATORS.md).
 
 ## Adding a new locale
 

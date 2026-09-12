@@ -26,7 +26,7 @@ export default {
 
   // ── Phase-2 static markup extraction (index.html), appended ──────────────
   // The shell worker owns ALL index.html static markup in phase 2
-  // (ai_docs/i18n-ownership.md cross-surface rule); these keys cover the
+  // (docs/TRANSLATORS.md cross-surface rule); these keys cover the
   // layers-worker surfaces (world overlay, CCTV panel, Radio panel) whose
   // runtime presentation paths land here in phase 3.
 
@@ -102,7 +102,7 @@ export default {
   // Layer display names are translated only at the presentation boundary
   // (manager.js _renderToggles/_syncToggleButton map layer.id → key here).
   // layer.id values, FEED_STATE_LABELS enum KEYS, and lifecycle state keys
-  // stay English — see ai_docs/i18n-ownership.md keep-English boundary.
+  // stay English — see docs/TRANSLATORS.md keep-English boundary.
 
   // src/data/manager.js FEED_STATE_LABELS values + toggle-button states.
   'status.on': 'ACTIVÉ',
@@ -187,7 +187,7 @@ export default {
 
   // index.html CCTV panel flipped-state siblings (runtime writers live in
   // src/ui.js, owned by core-ui — these keys are the layers-surface half of
-  // the cross-surface rule in ai_docs/i18n-ownership.md).
+  // the cross-surface rule in docs/TRANSLATORS.md).
   'cctv.toggleOn': 'CCTV ACTIVÉ',
   'cctv.coverageOn': 'COUVERTURE ACTIVÉE',
   'cctv.autoHopOn': 'AUTO HOP ACTIVÉ',
@@ -320,7 +320,7 @@ export default {
   'missions.roster.unspecifiedOperator': 'OPÉRATEUR NON SPÉCIFIÉ',
   'missions.roster.selectAria': 'Sélectionner {mission}',
   'missions.rows.additionalPayloads': '+{count} enregistrements de charge utile supplémentaires',
-  'missions.rows.classified': 'CLASSIFIÉE / MULTI-CHARGES',
+  'missions.rows.classified': 'DONNÉES DE CHARGE UTILE NON DISPONIBLES',
   'missions.rows.noStageData': 'AUCUNE DONNÉE DE RENTRÉE / RÉCUPÉRATION D\'ÉTAGE',
   'missions.rows.unspecified': 'NON SPÉCIFIÉ',
   'missions.rows.unavailable': 'INDISPONIBLE',

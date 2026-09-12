@@ -30,6 +30,7 @@ CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-900}"
 # the same value, without misclassifying values that dev-fresh loaded from .env.
 KEY_SETUP_EXTERNAL_KEYS=()
 [[ -n "${GOOGLE_MAPS_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(GOOGLE_MAPS_API_KEY)
+[[ -n "${GOOGLE_MAPS_SERVER_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(GOOGLE_MAPS_SERVER_API_KEY)
 [[ -n "${CESIUM_ION_TOKEN:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(CESIUM_ION_TOKEN)
 [[ -n "${OPENAI_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(OPENAI_API_KEY)
 [[ -n "${AISSTREAM_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(AISSTREAM_API_KEY)
@@ -225,8 +226,8 @@ if [[ ! -f "src/data/cctv.js" ]]; then
   exit 1
 fi
 
-if ! grep -q "dataManager.register(cctvLayer)" src/main.js; then
-  echo "error: CCTV layer not wired in src/main.js"
+if ! grep -q "dataManager.register(cctvLayer)" src/standalone/data.js; then
+  echo "error: CCTV layer not wired in src/standalone/data.js"
   exit 1
 fi
 

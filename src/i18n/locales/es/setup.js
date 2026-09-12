@@ -1,4 +1,4 @@
-// Neutral international Spanish (es). See ai_docs/i18n-ownership.md glossary.
+// Neutral international Spanish (es). See docs/TRANSLATORS.md glossary.
 export const NAMESPACE = 'setup';
 
 export default {
@@ -86,7 +86,7 @@ export default {
   'voice.detail.voiceOff': 'Voz desactivada',
   'voice.detail.runningCommand': 'Ejecutando comando',
   'voice.detail.radioDidNotStart': 'La radio no se inició',
-  'voice.hint.default': 'Mantén presionada la barra espaciadora para hablar · haz clic en el micrófono para activar o desactivar la voz',
+  'voice.hint.default': 'Mantén presionada la barra espaciadora para hablar · púlsala brevemente para activar los controles enfocados',
   'voice.error.sessionStart': 'No se pudo iniciar la sesión de voz.',
   'voice.error.trayTitle': 'ERROR DEL SISTEMA DE VOZ',
   'voice.error.dismiss': 'CERRAR',
@@ -96,7 +96,7 @@ export default {
   'voice.tier.appliesNextSession': '{tier} se aplica en la próxima sesión',
   'voice.tier.buttonTitle': 'Nivel del modelo de voz — se aplica en la próxima sesión',
   'voice.cost.buttonTitle': 'Costo estimado de la sesión',
-  'voice.button.ariaLabel': 'Control de voz — mantén presionada la barra espaciadora para hablar; haz clic para activar o desactivar la voz',
+  'voice.button.ariaLabel': 'Control de voz — actívalo para conectar o cortar la voz; mantén presionada la barra espaciadora para hablar',
 
   // Stage-4 repair pass (mirrors locales/en/setup.js appendix).
   'scenes.status.captureCameraNotReady': 'No se puede capturar el plano: la cámara no está lista',
@@ -118,6 +118,7 @@ export default {
   'keySetup.row.removeTitle': 'Elimina {title} de las claves guardadas de esta app',
   'keySetup.requirement': 'Necesita {envVars} — añádela en Ajustes de proveedores',
   'keySetup.unlocks.google-maps': 'El planeta 3D fotorrealista + búsqueda de lugares',
+  'keySetup.unlocks.google-maps-server': 'Contexto de Places + respaldo de Street View; clave separada opcional',
   'keySetup.unlocks.openai': 'Control por voz — habla con el planeta',
   'keySetup.unlocks.aisstream': 'Barcos en vivo, en todo el mundo',
   'keySetup.unlocks.firms': 'Detecciones de incendios activos en vivo',

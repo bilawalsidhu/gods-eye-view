@@ -200,7 +200,20 @@ export class MapStackController {
     return true;
   }
 
+  /** Invalidate pending switches before the viewer is destroyed. */
+  destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+    this._switchGen++;
+    this._isSwitching = false;
+    this._removeImageryErrorListener?.();
+    this._removeImageryErrorListener = null;
+    this._onChange = null;
+    this._onError = null;
+  }
+
   async setStack(id, { silent = false } = {}) {
+    if (this._destroyed) return this.getState();
     const stack = this.getStack(id) || this.getStack('photoreal');
     if (!stack) return null;
 

@@ -155,23 +155,37 @@ function buildRow(documentRef, key) {
  * Wire the chip + dialog. Fire-and-forget from main.js; resolves to null when
  * the surface has no business existing (prod build, LAN visitor, no markup).
  */
-export async function initKeySetup({ documentRef = globalThis.document, fetchImpl } = {}) {
+export async function initKeySetup({ documentRef = globalThis.document, fetchImpl, signal } = {}) {
   const chip = documentRef?.getElementById?.('key-setup-chip');
   const root = documentRef?.getElementById?.('key-setup');
   if (!chip || !root || root.dataset.initialized === 'true') return null;
   root.dataset.initialized = 'true';
+  const lifetime = new AbortController();
+  let disposed = false;
+  let disposeControls = () => {};
+  const destroy = () => {
+    if (disposed) return;
+    disposed = true;
+    lifetime.abort();
+    signal?.removeEventListener('abort', destroy);
+    disposeControls();
+    chip.remove();
+    root.remove();
+  };
+  if (signal?.aborted) { destroy(); return null; }
+  signal?.addEventListener('abort', destroy, { once: true });
   const doFetch = fetchImpl || globalThis.fetch?.bind(globalThis);
 
   let status = null;
   try {
-    const response = await doFetch('/api/setup/status', { cache: 'no-store' });
+    const response = await doFetch('/api/setup/status', { cache: 'no-store', signal: lifetime.signal });
     if (!response.ok) throw new Error(String(response.status));
     status = await response.json();
+    if (disposed) return null;
   } catch {
     // Prod build or non-loopback visitor: the surface cannot function, so it
     // does not exist. (The README covers .env for headless/self-host setups.)
-    chip.remove();
-    root.remove();
+    destroy();
     return null;
   }
 
@@ -186,6 +200,7 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
   let previouslyFocused = null;
 
   const render = (nextStatus) => {
+    if (disposed) return;
     status = nextStatus;
     chipLabel.textContent = keySetupChipLabel(status);
     // Fully powered is the owner's clean screen: the chip retires. The dialog
@@ -236,7 +251,7 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
   };
 
   const openDialog = () => {
-    if (open) return;
+    if (disposed || open) return;
     open = true;
     previouslyFocused = documentRef.activeElement;
     root.hidden = false;
@@ -271,7 +286,7 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
   // doneMessageKey names the whole saved/removed sentence; the storage
   // destination is interpolated so the {store} phrase stays one spelling.
   const submitUpdates = async (updates, doneMessageKey) => {
-    if (busy) return;
+    if (disposed || busy) return;
     const googleWasUnset = !status?.keys?.find((key) => key.id === 'google-maps')?.set;
     busy = true;
     applyButton?.setAttribute('aria-disabled', 'true');
@@ -279,10 +294,12 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
     try {
       const response = await doFetch('/api/setup/keys', {
         method: 'POST',
+        signal: lifetime.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
       const payload = await response.json().catch(() => ({}));
+      if (disposed) return;
       if (!response.ok || !payload.ok) {
         // payload.error is a server-authored message (API value) — shown as-is.
         say(payload.error || t('setup.keySetup.status.saveFailed', { status: response.status }));
@@ -302,7 +319,7 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
         strip();
         // The live share writer may re-serialize the still-OSM stack before
         // the restart's reload lands, so strip again at the door.
-        globalThis.addEventListener?.('pagehide', strip, { once: true });
+        globalThis.addEventListener?.('pagehide', strip, { once: true, signal: lifetime.signal });
       }
       say(t(doneMessageKey, { store: storeLabel() }));
     } catch (error) {
@@ -314,7 +331,7 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
   };
 
   const onApply = async () => {
-    if (busy) return;
+    if (disposed || busy) return;
     const inputs = [...root.querySelectorAll('input[data-env-var]')];
     const updates = collectKeyUpdates(
       inputs.map((input) => ({ envVar: input.dataset.envVar, value: input.value })),
@@ -332,7 +349,7 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
   // Remove buttons are rendered per row; delegate so re-renders stay wired.
   rowsHost?.addEventListener('click', (event) => {
     const button = event.target?.closest?.('[data-key-setup-remove]');
-    if (!button || busy) return;
+    if (disposed || !button || busy) return;
     let envVars = [];
     try {
       envVars = JSON.parse(button.dataset.keySetupRemove || '[]');
@@ -362,5 +379,12 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
     // An unparsable location never blocks init.
   }
 
-  return { open: openDialog, close, render };
+  disposeControls = () => {
+    open = false;
+    documentRef.removeEventListener('keydown', onKeyDown, true);
+    chip.removeEventListener('click', openDialog);
+    closeButton?.removeEventListener('click', close);
+    applyButton?.removeEventListener('click', onApply);
+  };
+  return { open: openDialog, close, render, destroy };
 }

@@ -17,7 +17,7 @@ export default {
 
   // ── Phase-2 static markup extraction (index.html), appended ──────────────
   // The shell worker owns ALL index.html static markup in phase 2
-  // (ai_docs/i18n-ownership.md cross-surface rule); these keys cover the
+  // (docs/TRANSLATORS.md cross-surface rule); these keys cover the
   // support-worker surfaces (first-run, key setup, scene director) whose
   // runtime paths land here in phase 3.
 
@@ -125,7 +125,7 @@ export default {
   'voice.detail.voiceOff': 'Voix désactivée',
   'voice.detail.runningCommand': 'Exécution de la commande',
   'voice.detail.radioDidNotStart': 'La radio n\'a pas démarré',
-  'voice.hint.default': 'Maintenez Espace pour parler · cliquez sur le micro pour activer ou couper la voix',
+  'voice.hint.default': 'Maintenez Espace pour parler · appuyez brièvement sur Espace pour activer les contrôles ciblés',
   'voice.error.sessionStart': 'Impossible de démarrer la session vocale.',
   'voice.error.trayTitle': 'ERREUR DU SYSTÈME VOCAL',
   'voice.error.dismiss': 'FERMER',
@@ -135,7 +135,7 @@ export default {
   'voice.tier.appliesNextSession': '{tier} s\'applique à la prochaine session',
   'voice.tier.buttonTitle': 'Palier du modèle vocal — s\'applique à la prochaine session',
   'voice.cost.buttonTitle': 'Coût estimé de la session',
-  'voice.button.ariaLabel': 'Commande vocale — maintenez Espace pour parler ; cliquez pour activer ou couper la voix',
+  'voice.button.ariaLabel': 'Commande vocale — activez pour couper la voix ; maintenez Espace pour parler',
 
   // ── Stage-4 repair pass: src/scenes/director.js status corpus, appended ───
   // Status/confirm lines and the default shot title. {scene}/{shot} carry
@@ -165,6 +165,7 @@ export default {
   // src/keySetupCore.mjs KEY_SETUP_KEYS `unlocks` copy, keyed by registry id;
   // en values must stay byte-identical to the registry strings.
   'keySetup.unlocks.google-maps': 'La planète 3D photoréaliste + recherche de lieux',
+  'keySetup.unlocks.google-maps-server': 'Contexte Places + repli Street View; clé distincte facultative',
   'keySetup.unlocks.openai': 'Commande vocale — parlez à la planète',
   'keySetup.unlocks.aisstream': 'Navires en direct, dans le monde entier',
   'keySetup.unlocks.firms': 'Détections d\'incendies actifs en direct',
