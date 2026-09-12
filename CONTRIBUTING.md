@@ -27,6 +27,36 @@ through Pinokio; the terminal path above remains the contributor path.
 
 Open `http://localhost:4173`. Before sending a PR run `npm run build`, `npm test`, and `npm run test:track` (dev server must be up) — **all three must stay green.**
 
+## Feature regression gates
+
+Those three are the baseline, not the whole story. Most features also have a
+dedicated headless gate under `scripts/qa-*.mjs` that drives the real app and
+asserts that feature's contract. **Run the gate covering whatever you touched**,
+and say which one you ran in the PR.
+
+The scripts are the canonical list, and each one documents itself:
+
+```bash
+ls scripts/qa-*.mjs            # every gate
+head -20 scripts/qa-radio.mjs  # what this gate proves, and how to run it
+```
+
+Every gate opens with a comment naming what it asserts. Most take
+`--url http://localhost:<port>` and need a dev server up; some need a specific
+provider key or a particular port, and the header says which. Run them directly
+with `node scripts/qa-<name>.mjs` — only `qa:map-source-tray` has an `npm run`
+alias.
+
+If you aren't sure which gate covers your change, search `docs/CURRENT-STATE.md`
+for the feature: it names the gate for many of them, and it's the authoritative
+runtime reference either way.
+
+> **CI does not cover this for you.** The workflow runs the unit suite, the
+> setup policy checks and the production build (plus a Windows onboarding job).
+> It runs neither `npm run test:track` nor any `qa-*.mjs` gate — both need a live
+> dev server and a browser. For anything outside the unit suite, your local run
+> is the only check before it reaches `main`.
+
 ## Good first contributions
 
 The highest-leverage places to jump in:
@@ -70,7 +100,7 @@ ownership and adoption process.
 ## Pull requests
 
 1. Branch off `main`.
-2. Keep `npm run build`, `npm test`, and `npm run test:track` green and avoid new console errors.
+2. Keep `npm run build`, `npm test`, and `npm run test:track` green and avoid new console errors, plus the [feature gate](#feature-regression-gates) for the area you touched.
 3. If you change runtime behavior, update `docs/CURRENT-STATE.md` and `CHANGELOG.md` in the same PR.
 4. If you add or change a data source, update [DATA_SOURCES.md](DATA_SOURCES.md) with its license and attribution. **Don't add data you don't have the right to redistribute** — fetch it at runtime instead.
 5. Describe what you changed and how you verified it (screenshots welcome for anything visual).
