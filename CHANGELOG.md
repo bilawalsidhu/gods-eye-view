@@ -59,6 +59,10 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Add seven Brazilian Bike Itaú (Tembici) cities to the GBFS bikeshare registry:
+  São Paulo, Rio de Janeiro, Salvador, Recife, Porto Alegre, Brasília and
+  Curitiba. These are the layer's first stations outside the United States.
+
 - Separate radio directory loading, station selection, globe presentation and playback into composed components with an explicit metadata source.
 
 - Separate submarine cable sources and rendering components, and export bundled geography lookup modules.
