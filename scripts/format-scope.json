@@ -626,5 +626,10 @@
   "src/data/cctvMediaRange.test.mjs",
   "src/materialSymbolsSubset.test.mjs",
   "scripts/pinokio-update.mjs",
-  "src/pinokioUpdatePreview.test.mjs"
+  "src/pinokioUpdatePreview.test.mjs",
+  "src/data/routeSteps.js",
+  "src/data/routeSteps.test.mjs",
+  "src/data/directions.js",
+  "src/data/directions.test.mjs",
+  "src/app/layers/directions.js"
 ]

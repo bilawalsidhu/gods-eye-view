@@ -355,6 +355,23 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   routes, local setup, fallback behavior and rendering.
 
 
+### Added
+
+- **Directions layer** — keyless A→B directions without a geocoder or a
+  microphone. The row's chips arm a globe click for A and B (DRIVE / WALK /
+  BIKE, SWAP, FLY, CLEAR); the route comes from the existing `/api/route`
+  proxy (OSRM on the FOSSGIS servers), is draped on terrain and 3D tiles with
+  the same flowing dashes as voice routes, and drops one dot per maneuver —
+  click one for the instruction. FLY rides the shared route-flight cinematic.
+  A route that cannot be found says so; no straight line is ever drawn as a
+  route. Share links carry the layer as token `n`.
+- `/api/route` now returns turn-by-turn steps when asked (`steps=1`), phrased
+  in plain English from OSRM's maneuver data (`src/data/routeSteps.js`). The
+  upstream is always asked for steps, so the annotation engine and the
+  Directions layer share one cached upstream call per route.
+- The Data attribution popover now credits OSRM / FOSSGIS routing (used by
+  voice routes since launch, previously uncredited).
+
 ### Changed
 
 - The interface asks Google Fonts for only the icon glyphs it draws, instead of

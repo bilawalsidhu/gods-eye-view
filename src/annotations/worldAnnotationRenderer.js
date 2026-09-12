@@ -336,7 +336,7 @@ let _flowFabricRegistered = false;
 /** Register the GevRouteFlow fabric ONCE so Cesium's `Material.fromType('GevRouteFlow')`
  *  can build the material the render pipeline uses. Constructing one Material with the
  *  fabric caches it under its type name. */
-function ensureFlowFabricRegistered() {
+export function ensureFlowFabricRegistered() {
   if (_flowFabricRegistered) return;
   makeRouteFlowMaterial('#ffffff'); // side effect: registers the 'GevRouteFlow' type
   _flowFabricRegistered = true;
@@ -352,7 +352,7 @@ function ensureFlowFabricRegistered() {
  * returned a standalone Material Cesium never rendered, or treated `result` as a
  * Material — both left the real uniforms untouched, so nothing animated.)
  */
-function FlowMaterialProperty(colorCss) {
+export function FlowMaterialProperty(colorCss) {
   this._color = Cesium.Color.fromCssColorString(colorCss).withAlpha(0.95);
   this._definitionChanged = new Cesium.Event();
 }

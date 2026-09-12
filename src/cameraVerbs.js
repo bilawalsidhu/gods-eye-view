@@ -968,11 +968,16 @@ function onTick() {
   }
 }
 
-/** Wire the module to the viewer once (idempotent). */
-export function initCameraVerbs(viewer, getViewTargetCartesian) {
+/**
+ * Wire the module to the viewer once (idempotent). The view-target getter is
+ * optional so a non-voice caller (the Directions FLY chip) can arm route
+ * flights before any voice session exists; a later call with a real getter
+ * installs it, and a call without one never clears an installed getter.
+ */
+export function initCameraVerbs(viewer, getViewTargetCartesian = null) {
+  if (typeof getViewTargetCartesian === 'function') _getTarget = getViewTargetCartesian;
   if (_viewer === viewer) return;
   _viewer = viewer;
-  _getTarget = getViewTargetCartesian;
   if (_tickRemover) _tickRemover();
   _tickRemover = viewer.clock.onTick.addEventListener(onTick);
   for (const rm of _inputRemovers) rm();
