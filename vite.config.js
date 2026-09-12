@@ -53,6 +53,10 @@ import {
   normalizeRegionalWeather,
 } from './src/data/regionalBrief.js';
 import { normalizeAdsbLolPointResponse } from './src/data/adsbLolFallback.js';
+import { decodeTripUpdates } from './src/data/gtfsTripUpdates.js';
+import { parseStopsTxt } from './src/data/gtfsStopsTable.js';
+import { fetchZipMemberText } from './src/data/gtfsZipMember.js';
+import { placeTrains } from './src/data/trainPositions.js';
 import { createAisStreamAdapter, isRecognizedAisEnvelope } from './src/data/aisStreamAdapter.js';
 import { parseSilenceTimeoutEnv } from './src/data/aisWatchdog.js';
 import { keylessHudSummaryResponse } from './src/hudSummaryResponse.js';
@@ -4519,6 +4523,98 @@ export async function fetchCctvImageFromUpstream(url, {
  *
  * @returns {import('vite').Plugin}
  */
+const TRAIN_UPDATES_URL = 'https://gtfs.ovapi.nl/nl/trainUpdates.pb';
+const TRAIN_GTFS_ZIP_URL = 'https://gtfs.ovapi.nl/nl/gtfs-nl.zip';
+/** Republished about once a minute, and OVapi throttles hard on top of that. */
+const TRAIN_FEED_TTL_MS = 30_000;
+/** The stop table changes when a platform is built, not when a train moves. */
+const TRAIN_STOPS_TTL_MS = 12 * 60 * 60 * 1000;
+const TRAIN_LIMIT = 400;
+
+let _trainTrips = null;
+let _trainTripsAt = 0;
+let _trainStops = null;
+let _trainStopsAt = 0;
+let _trainInFlight = null;
+
+/**
+ * Refresh the trip updates, and the stop table when it has aged out.
+ *
+ * Neither is replaced by an empty result: OVapi answers a throttled request
+ * with an HTML page, and swapping a good table for the parse of that would
+ * empty the layer until the next refresh.
+ */
+async function refreshTrainFeed() {
+  const resp = await fetch(TRAIN_UPDATES_URL, {
+    headers: { 'User-Agent': 'gods-eye-view-train-proxy/1.0' },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!resp.ok) throw new Error(`OVapi trainUpdates HTTP ${resp.status}`);
+  const decoded = decodeTripUpdates(new Uint8Array(await resp.arrayBuffer()));
+  if (decoded.trips.length > 0) {
+    _trainTrips = decoded.trips;
+    _trainTripsAt = Date.now();
+  }
+
+  if (!_trainStops || Date.now() - _trainStopsAt > TRAIN_STOPS_TTL_MS) {
+    const text = await fetchZipMemberText(TRAIN_GTFS_ZIP_URL, 'stops.txt');
+    const stops = text === null ? new Map() : parseStopsTxt(text);
+    if (stops.size > 0) {
+      _trainStops = stops;
+      _trainStopsAt = Date.now();
+      console.log(`[Trains] stop table: ${stops.size} stops`);
+    }
+  }
+}
+
+/**
+ * Vite plugin: Dutch trains, positioned from stop-time predictions.
+ *
+ * The feed carries no coordinates — 2,982 trip updates and not one position —
+ * so a train's place is interpolated between the two stops it is between.
+ * Placement runs per request rather than per refresh because the clock is the
+ * input that moves; the feed itself only changes once a minute.
+ */
+function trainsProxy() {
+  const install = (server) => {
+    server.middlewares.use('/api/trains/nl', async (req, res) => {
+      const json = (code, body) => {
+        res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify(body));
+      };
+      try {
+        if (!_trainTrips || Date.now() - _trainTripsAt > TRAIN_FEED_TTL_MS) {
+          _trainInFlight = _trainInFlight || refreshTrainFeed()
+            .finally(() => { _trainInFlight = null; });
+          await _trainInFlight;
+        }
+        if (!_trainTrips || !_trainStops) {
+          json(200, { at: null, count: 0, total: 0, trains: [] });
+          return;
+        }
+        const all = placeTrains(_trainTrips, _trainStops, Math.floor(Date.now() / 1000));
+        const parts = String(new URL(req.url, 'http://localhost').searchParams.get('bbox') || '')
+          .split(',').map(Number);
+        let trains = all;
+        if (parts.length === 4 && parts.every(Number.isFinite)) {
+          const [south, west, north, east] = parts;
+          trains = all.filter((t) => t.lat >= south && t.lat <= north && t.lon >= west && t.lon <= east);
+        }
+        json(200, {
+          at: _trainTripsAt || null,
+          total: all.length,
+          count: Math.min(trains.length, TRAIN_LIMIT),
+          trains: trains.slice(0, TRAIN_LIMIT),
+        });
+      } catch (error) {
+        console.warn('[Trains] refresh failed:', error?.message || error);
+        json(502, { error: 'OVapi upstream unavailable', trains: [] });
+      }
+    });
+  };
+  return { name: 'trains-proxy', configureServer: install, configurePreviewServer: install };
+}
+
 function cctvProxy() {
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
@@ -7762,6 +7858,7 @@ export default defineConfig(({ mode }) => {
       aisLiveProxy(),
       trackBackfillProxies(),
       openAiRealtimeProxy(),
+      trainsProxy(),
       googlePlacesContextProxy(),
       keySetupEndpoint(),
     ],
