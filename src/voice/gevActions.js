@@ -28,6 +28,7 @@ import {
   parseFrequencyHz,
 } from '../data/webReceiverTuning.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
+import { summarizeSpot } from '../data/dxSpotsLogic.js';
 
 const ALLOWED_STYLES = new Set(['normal', 'retro', 'surveillance', 'thermal', 'anime', 'noir', 'snow']);
 const PANEL_ALIASES = new Map([
@@ -54,6 +55,12 @@ const PANEL_ALIASES = new Map([
   ['kiwisdr', 'web-receivers-panel'],
   ['websdr', 'web-receivers-panel'],
   ['openwebrx', 'web-receivers-panel'],
+  ['ham radio', 'ham-radio-panel'],
+  ['ham', 'ham-radio-panel'],
+  ['amateur radio', 'ham-radio-panel'],
+  ['amateurfunk', 'ham-radio-panel'],
+  ['dx', 'ham-radio-panel'],
+  ['ham radio panel', 'ham-radio-panel'],
   ['context', 'global-context-panel'],
   ['context panel', 'global-context-panel'],
   ['global context', 'global-context-panel'],
@@ -70,7 +77,7 @@ const PANEL_ALIASES = new Map([
   ['sources', 'control-panel'],
 ]);
 
-const PANEL_IDS = new Set(['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'web-receivers-panel', 'global-context-panel', 'scene-panel', 'pp-toggles']);
+const PANEL_IDS = new Set(['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'web-receivers-panel', 'ham-radio-panel', 'global-context-panel', 'scene-panel', 'pp-toggles']);
 const CONTEXT_MODE_ALIASES = new Map([
   ['off', 'off'],
   ['none', 'off'],
@@ -188,6 +195,52 @@ const LAYER_ALIASES = new Map([
   ['websdr', 'web-receivers'],
   ['web sdr', 'web-receivers'],
   ['openwebrx', 'web-receivers'],
+  ['dx spots', 'dx-spots'],
+  ['dx-spots', 'dx-spots'],
+  ['dx spot', 'dx-spots'],
+  ['spots', 'dx-spots'],
+  ['cluster spots', 'dx-spots'],
+  ['dx cluster', 'dx-spots'],
+  ['cluster', 'dx-spots'],
+  ['pota', 'ham-activations'],
+  ['sota', 'ham-activations'],
+  ['wwff', 'ham-activations'],
+  ['bota', 'ham-activations'],
+  ['activations', 'ham-activations'],
+  ['ham activations', 'ham-activations'],
+  ['ham-activations', 'ham-activations'],
+  ['aktivierungen', 'ham-activations'],
+  ['dxpeditions', 'dxpeditions'],
+  ['dxpedition', 'dxpeditions'],
+  ['dxpeditionen', 'dxpeditions'],
+  ['beacons', 'ham-beacons'],
+  ['beacon', 'ham-beacons'],
+  ['ham beacons', 'ham-beacons'],
+  ['ham-beacons', 'ham-beacons'],
+  ['baken', 'ham-beacons'],
+  ['bake', 'ham-beacons'],
+  ['ncdxf', 'ham-beacons'],
+  ['propagation', 'ham-propagation'],
+  ['ham propagation', 'ham-propagation'],
+  ['ham-propagation', 'ham-propagation'],
+  ['band conditions', 'ham-propagation'],
+  ['condx', 'ham-propagation'],
+  ['aurora', 'ham-propagation'],
+  ['grayline', 'ham-propagation'],
+  ['ausbreitung', 'ham-propagation'],
+  ['bandbedingungen', 'ham-propagation'],
+  ['repeaters', 'ham-repeaters'],
+  ['repeater', 'ham-repeaters'],
+  ['ham repeaters', 'ham-repeaters'],
+  ['ham-repeaters', 'ham-repeaters'],
+  ['relais', 'ham-repeaters'],
+  ['umsetzer', 'ham-repeaters'],
+  ['ham stations', 'ham-stations'],
+  ['ham station', 'ham-stations'],
+  ['ham-stations', 'ham-stations'],
+  ['callsign', 'ham-stations'],
+  ['callsigns', 'ham-stations'],
+  ['rufzeichen', 'ham-stations'],
   ['bikeshare', 'bikeshare'],
   ['bikes', 'bikeshare'],
   ['ais', 'ais-live-vessels'],
@@ -942,6 +995,38 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
       return showRfSpectrum(viewer, dataManager, args, runOptions);
     }
 
+    if (name === 'lookup_ham_station') {
+      return lookupHamStation(viewer, dataManager, args, runOptions);
+    }
+
+    if (name === 'show_dx_spots') {
+      return showDxSpots(viewer, dataManager, args, runOptions);
+    }
+
+    if (name === 'tune_to_dx_spot') {
+      return tuneToDxSpot(viewer, dataManager, args, runOptions);
+    }
+
+    if (name === 'show_ham_activations') {
+      return showHamActivations(viewer, dataManager, args, runOptions);
+    }
+
+    if (name === 'show_dxpeditions') {
+      return showDxpeditions(viewer, dataManager, args, runOptions);
+    }
+
+    if (name === 'show_ham_propagation') {
+      return showHamPropagation(viewer, dataManager, args, runOptions);
+    }
+
+    if (name === 'show_ham_beacons') {
+      return showHamBeacons(viewer, dataManager, args, runOptions);
+    }
+
+    if (name === 'show_ham_repeaters') {
+      return showHamRepeaters(viewer, dataManager, args, runOptions);
+    }
+
     if (name === 'track_entity') {
       return trackEntity(viewer, dataManager, styleManager, args);
     }
@@ -1610,6 +1695,563 @@ export async function showRfSpectrum(viewer, dataManager, args = {}, options = {
     resolvedBy,
     scopeLabel: location ? `around ${location.label}` : null,
     ...readLayerLifecycleSummary(dataManager, WEB_RECEIVERS_LAYER),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Ham radio (HamRig-backed layers): DX spots, activations, DXpeditions,
+// propagation, beacons, repeaters, station lookup
+// ---------------------------------------------------------------------------
+
+const DX_SPOTS_LAYER = 'dx-spots';
+const HAM_ACTIVATIONS_LAYER = 'ham-activations';
+const DXPEDITIONS_LAYER = 'dxpeditions';
+const HAM_BEACONS_LAYER = 'ham-beacons';
+const HAM_PROPAGATION_LAYER = 'ham-propagation';
+const HAM_REPEATERS_LAYER = 'ham-repeaters';
+const HAM_STATIONS_LAYER = 'ham-stations';
+const HAM_LAYER_NAMES = Object.freeze({
+  [DX_SPOTS_LAYER]: 'DX Spots',
+  [HAM_ACTIVATIONS_LAYER]: 'Activations',
+  [DXPEDITIONS_LAYER]: 'DXpeditions',
+  [HAM_BEACONS_LAYER]: 'Beacons',
+  [HAM_PROPAGATION_LAYER]: 'Propagation',
+  [HAM_REPEATERS_LAYER]: 'Repeaters',
+  [HAM_STATIONS_LAYER]: 'Ham Stations',
+});
+const HAM_CALLSIGN_RE = /^[A-Z0-9/-]{3,15}$/;
+const HAM_BANDS = ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m', '4m', '2m', '1.25m', '70cm'];
+
+/** Layer module accessor for the seven ham-radio layers (mirrors `webReceiversModule`). */
+function hamModule(dataManager, layerId) {
+  return dataManager?.layers?.get(layerId)?.module || null;
+}
+
+/**
+ * Switch a ham layer on (origin 'voice', abortable) and wait for its first
+ * load. `load:false` skips `ensureLoaded()` for tools that trigger their own
+ * fetch (station lookup, repeater search).
+ */
+async function ensureHamLayerReady(dataManager, layerId, options = {}, { load = true } = {}) {
+  const label = HAM_LAYER_NAMES[layerId] || layerId;
+  if (!dataManager?.layers?.has(layerId)) throw new Error(`${label} layer unavailable`);
+  if (!dataManager.isEnabled(layerId)) {
+    const changeOptions = { origin: 'voice' };
+    if (options.signal) changeOptions.signal = options.signal;
+    await dataManager.setEnabled(layerId, true, changeOptions);
+  }
+  if (!radioActionIsCurrent(options)) throw radioAbortError();
+  const module = hamModule(dataManager, layerId);
+  if (!module) throw new Error(`${label} layer unavailable`);
+  if (load && typeof module.ensureLoaded === 'function') await module.ensureLoaded();
+  if (!radioActionIsCurrent(options)) throw radioAbortError();
+  return module;
+}
+
+/** Ask the UI to expand the Ham Radio panel on one tab (ui.js listens for this). */
+function openHamRadioPanel(tab) {
+  if (typeof document === 'undefined') return;
+  document.dispatchEvent(new CustomEvent('gev:ham-radio-panel', { detail: { tab, origin: 'voice' } }));
+}
+
+/** A place only when the user named one (or asked for the view); null otherwise. */
+async function resolveHamLocation(viewer, args, options, { fallbackToView = false } = {}) {
+  const coordinates = radioCoordinatePair(args);
+  if (coordinates.valid || args.locationQuery || args.locationId) {
+    const resolved = await resolveRadioLocation(args, coordinates, options);
+    if (resolved) return resolved;
+    if (args.locationQuery) throw new Error(`Could not place "${args.locationQuery}"`);
+  }
+  return fallbackToView ? currentViewCenter(viewer) : null;
+}
+
+function hamBand(value, allowed = HAM_BANDS) {
+  const text = String(value ?? '').trim().toLowerCase().replace(/\s+/g, '');
+  if (!text || text === 'all') return 'all';
+  return allowed.includes(text) ? text : 'all';
+}
+
+function hamLimit(value, fallback = 10, max = 20) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(1, Math.min(max, Math.floor(parsed))) : fallback;
+}
+
+function roundKm(value) {
+  return Number.isFinite(value) ? Math.round(value) : null;
+}
+
+/** Human note for a Loc precision, e.g. "spotter position is approximate (entity centroid, ±2000 km)". */
+function hamPrecisionNote(precision, { subject = 'position', entity = null } = {}) {
+  switch (precision) {
+    case 'exact': return `${subject} is exact`;
+    case 'grid': return `${subject} is from the Maidenhead grid locator (within about 50 km)`;
+    case 'area': return `${subject} is approximate (call-area centroid${entity ? ` of ${entity}` : ''})`;
+    case 'entity': return `${subject} is approximate (entity centroid${entity ? ` of ${entity}` : ''}, ±2000 km)`;
+    default: return `${subject} is unknown`;
+  }
+}
+
+function summarizeHamStation(station) {
+  if (!station) return null;
+  return {
+    callsign: station.callsign,
+    name: station.name ?? null,
+    country: station.country ?? null,
+    city: station.city ?? null,
+    state: station.state ?? null,
+    grid: station.grid ?? null,
+    lat: station.lat ?? null,
+    lon: station.lon ?? null,
+    precision: station.precision ?? null,
+    precisionNote: hamPrecisionNote(station.precision, { subject: 'station position', entity: station.dxcc?.name || station.country || null }),
+    dxcc: station.dxcc ? { name: station.dxcc.name ?? null, continent: station.dxcc.continent ?? null, cqZone: station.dxcc.cqZone ?? null, ituZone: station.dxcc.ituZone ?? null } : null,
+    licenseClass: station.licenseClass ?? null,
+    qslManager: station.qslManager ?? null,
+    lotw: station.lotw ?? null,
+    eqsl: station.eqsl ?? null,
+    hamrigUser: station.hamrigUser ? { username: station.hamrigUser.username ?? null, verified: Boolean(station.hamrigUser.verified) } : null,
+  };
+}
+
+function summarizeHamActivation(activation, nowMs = Date.now()) {
+  if (!activation) return null;
+  const age = activation.timeIso ? (nowMs - Date.parse(activation.timeIso)) / 60000 : null;
+  return {
+    id: activation.id,
+    program: activation.program,
+    callsign: activation.callsign,
+    reference: activation.reference,
+    name: activation.name ?? null,
+    frequencyLabel: Number.isFinite(activation.freqHz) ? formatFrequencyHz(activation.freqHz) : null,
+    band: activation.band ?? null,
+    mode: activation.mode ?? null,
+    spotter: activation.spotter ?? null,
+    country: activation.country ?? null,
+    altitudeM: activation.altitudeM ?? null,
+    points: activation.points ?? null,
+    ageMin: Number.isFinite(age) ? Math.max(0, Math.round(age)) : null,
+    lat: activation.lat ?? null,
+    lon: activation.lon ?? null,
+    precision: activation.precision ?? null,
+    url: activation.url ?? null,
+  };
+}
+
+function summarizeDxpedition(op) {
+  if (!op) return null;
+  return {
+    id: op.id,
+    callsign: op.callsign,
+    entity: op.entity ?? null,
+    continent: op.continent ?? null,
+    status: op.status ?? null,
+    startIso: op.startIso ?? null,
+    endIso: op.endIso ?? null,
+    daysUntil: op.daysUntil ?? null,
+    qslVia: op.qslVia ?? null,
+    mostWantedRank: op.mostWantedRank ?? null,
+    bands: Array.isArray(op.bands) ? op.bands : [],
+    modes: Array.isArray(op.modes) ? op.modes : [],
+    info: op.info ? String(op.info).slice(0, 200) : null,
+    url: op.url ?? null,
+    precisionNote: hamPrecisionNote(op.precision || 'entity', { subject: 'position', entity: op.entity || null }),
+  };
+}
+
+function summarizeHamRepeater(row) {
+  const repeater = row?.repeater || row;
+  if (!repeater) return null;
+  return {
+    id: repeater.id,
+    kind: repeater.kind,
+    callsign: repeater.callsign,
+    outputLabel: Number.isFinite(repeater.outputHz) ? formatFrequencyHz(repeater.outputHz) : null,
+    inputLabel: Number.isFinite(repeater.inputHz) ? formatFrequencyHz(repeater.inputHz) : null,
+    ctcss: repeater.ctcss ?? null,
+    module: repeater.module ?? null,
+    city: repeater.city ?? null,
+    region: repeater.region ?? null,
+    country: repeater.country ?? null,
+    status: repeater.status ?? null,
+    echolink: repeater.echolink ?? null,
+    distanceKm: roundKm(row?.distanceKm ?? repeater.distanceKm),
+  };
+}
+
+function summarizeHamReceiver(receiver) {
+  if (!receiver) return null;
+  return { id: receiver.id, name: receiver.name, type: receiver.type, typeLabel: receiver.typeLabel, site: receiver.site, url: receiver.url };
+}
+
+/** Voice: look up a callsign, plot it and open the STATIONS tab. */
+export async function lookupHamStation(viewer, dataManager, args = {}, options = {}) {
+  const callsign = String(args.callsign || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!HAM_CALLSIGN_RE.test(callsign)) {
+    return {
+      ok: false,
+      action: 'lookup_ham_station',
+      callsign,
+      station: null,
+      error: 'A callsign of 3–15 letters, digits, / or - is required',
+      ...readLayerLifecycleSummary(dataManager, HAM_STATIONS_LAYER),
+    };
+  }
+  const module = await ensureHamLayerReady(dataManager, HAM_STATIONS_LAYER, options, { load: false });
+  const station = await module.lookup(callsign, { flyTo: args.flyTo !== false, origin: 'voice' });
+  if (!radioActionIsCurrent(options)) throw radioAbortError();
+  openHamRadioPanel('stations');
+  const state = module.getUIState();
+  const summary = summarizeHamStation(station);
+  return {
+    ok: Boolean(station),
+    action: 'lookup_ham_station',
+    callsign,
+    station: summary,
+    precision: summary?.precision ?? null,
+    precisionNote: summary?.precisionNote ?? null,
+    authenticated: Boolean(state.authenticated),
+    error: station ? null : (state.lastLookup?.error || `No station matched ${callsign}`),
+    ...readLayerLifecycleSummary(dataManager, HAM_STATIONS_LAYER),
+  };
+}
+
+/** Voice: filter, frame or select DX cluster spots and open the SPOTS tab. */
+export async function showDxSpots(viewer, dataManager, args = {}, options = {}) {
+  const module = await ensureHamLayerReady(dataManager, DX_SPOTS_LAYER, options);
+  const patch = {};
+  if (args.band !== undefined) patch.band = hamBand(args.band);
+  if (args.mode !== undefined) patch.mode = String(args.mode || 'all');
+  if (args.minutes !== undefined) patch.minutes = Number(args.minutes);
+  if (args.spotterContinent !== undefined) patch.continent = String(args.spotterContinent || 'all');
+  if (Object.keys(patch).length) module.setFilter(patch);
+  const now = Date.now();
+  let selected = null;
+  let error = null;
+  const dxQuery = String(args.dx || '').trim();
+  if (dxQuery) {
+    const spot = module.resolveSpot(dxQuery);
+    if (spot) {
+      module.selectSpot(spot.id, { flyTo: true, origin: 'voice' });
+      selected = summarizeSpot(spot, now);
+    } else {
+      error = `No DX spot matched "${dxQuery.toUpperCase()}"`;
+    }
+  } else if (args.frameResults !== false) {
+    module.frameSpots();
+  }
+  openHamRadioPanel('spots');
+  const state = module.getUIState();
+  const spots = state.items.slice(0, 12).map((spot) => summarizeSpot(spot, now));
+  const scope = [
+    state.filter.band !== 'all' ? state.filter.band : null,
+    state.filter.mode !== 'all' ? state.filter.mode : null,
+    `last ${state.filter.minutes} min`,
+    state.filter.continent !== 'all' ? `spotted from ${state.filter.continent}` : null,
+  ].filter(Boolean).join(', ');
+  const ok = selected ? true : (!error && state.filteredCount > 0);
+  return {
+    ok,
+    action: 'show_dx_spots',
+    filter: state.filter,
+    scopeLabel: scope,
+    count: state.count,
+    filteredCount: state.filteredCount,
+    live: Boolean(state.live),
+    stale: Boolean(state.stale),
+    updatedAt: state.updatedAt,
+    selected,
+    spots,
+    error: error || (ok ? null : (state.error || `No DX spots match (${scope})`)),
+    ...readLayerLifecycleSummary(dataManager, DX_SPOTS_LAYER),
+  };
+}
+
+/** Voice: tune a web receiver near the SPOTTER of a DX spot (never near the DX). */
+export async function tuneToDxSpot(viewer, dataManager, args = {}, options = {}) {
+  const module = await ensureHamLayerReady(dataManager, DX_SPOTS_LAYER, options);
+  let spotId = String(args.spotId || '').trim() || null;
+  const dxQuery = String(args.dx || '').trim();
+  if (!spotId && dxQuery) {
+    const spot = module.resolveSpot(dxQuery);
+    if (!spot) {
+      return {
+        ok: false,
+        action: 'tune_to_dx_spot',
+        error: `No DX spot matched "${dxQuery.toUpperCase()}"`,
+        ...readLayerLifecycleSummary(dataManager, DX_SPOTS_LAYER),
+      };
+    }
+    spotId = spot.id;
+  }
+  if (!spotId) {
+    const state = module.getUIState();
+    if (!state.selectedId) {
+      return {
+        ok: false,
+        action: 'tune_to_dx_spot',
+        error: 'No DX spot is selected — name the DX callsign or select a spot first',
+        ...readLayerLifecycleSummary(dataManager, DX_SPOTS_LAYER),
+      };
+    }
+    spotId = state.selectedId;
+  }
+  const result = await module.tuneNearSpotter(spotId, {
+    origin: 'voice',
+    waitForReception: Boolean(args.waitForReception),
+    signal: options.signal || null,
+  });
+  if (!radioActionIsCurrent(options)) throw radioAbortError();
+  openHamRadioPanel('spots');
+  const precision = result.precision ?? result.spot?.spotterPrecision ?? null;
+  return {
+    ok: Boolean(result.ok),
+    action: 'tune_to_dx_spot',
+    spot: result.spot ?? null,
+    receiver: summarizeHamReceiver(result.receiver),
+    distanceKm: roundKm(result.distanceKm),
+    evidence: result.evidence ?? null,
+    anchor: result.anchor ?? null,
+    reason: result.reason ?? null,
+    spotterPrecision: precision,
+    precisionNote: hamPrecisionNote(precision, { subject: 'spotter position', entity: result.spot?.spotterEntity || null }),
+    mode: result.mode ?? null,
+    frequencyLabel: result.frequencyLabel ?? (Number.isFinite(result.hz) ? formatFrequencyHz(result.hz) : null),
+    tuneUrl: result.url ?? null,
+    openedIn: result.ok ? 'dock' : null,
+    receptionWarmingUp: Boolean(result.receptionWarmingUp),
+    error: result.ok ? null : (result.reason || 'Tuning failed'),
+    webReceivers: readLayerLifecycleSummary(dataManager, WEB_RECEIVERS_LAYER),
+    ...readLayerLifecycleSummary(dataManager, DX_SPOTS_LAYER),
+  };
+}
+
+/** Voice: POTA / SOTA / WWFF / BOTA activations, optionally nearest to a place. */
+export async function showHamActivations(viewer, dataManager, args = {}, options = {}) {
+  const module = await ensureHamLayerReady(dataManager, HAM_ACTIVATIONS_LAYER, options);
+  const program = String(args.program || 'all').trim().toLowerCase();
+  const patch = { programs: program || 'all' };
+  if (args.band !== undefined) patch.band = hamBand(args.band);
+  module.setFilter(patch);
+  const location = await resolveHamLocation(viewer, args, options, { fallbackToView: Boolean(args.nearView) });
+  if (!radioActionIsCurrent(options)) throw radioAbortError();
+  const limit = hamLimit(args.limit, 10);
+  const now = Date.now();
+  let results = [];
+  if (location) {
+    const nearest = module.nearest(location.lat, location.lon, limit);
+    results = nearest.map((row) => ({ ...summarizeHamActivation(row.activation, now), distanceKm: roundKm(row.distanceKm) }));
+    if (results.length) module.frame(results.map((row) => row.id));
+  } else {
+    module.frame();
+  }
+  openHamRadioPanel('activity');
+  const state = module.getUIState();
+  if (!location) results = state.items.slice(0, limit).map((activation) => summarizeHamActivation(activation, now));
+  const programLabel = program === 'all' ? 'all programs' : program.toUpperCase();
+  return {
+    ok: results.length > 0,
+    action: 'show_ham_activations',
+    program,
+    band: state.filter.band,
+    scopeLabel: location ? `${programLabel} nearest ${location.label}` : `${programLabel} worldwide`,
+    location: location ? { lat: location.lat, lon: location.lon, label: location.label } : null,
+    count: state.count,
+    filteredCount: state.filteredCount,
+    counts: state.counts?.byProgram ?? null,
+    degraded: Boolean(state.degraded),
+    updatedAt: state.updatedAt,
+    results,
+    error: results.length ? null : (state.error || `No ${programLabel === 'all programs' ? '' : `${programLabel} `}activations are on the air`),
+    ...readLayerLifecycleSummary(dataManager, HAM_ACTIVATIONS_LAYER),
+  };
+}
+
+/** Voice: announced DXpeditions with most-wanted ranks. */
+export async function showDxpeditions(viewer, dataManager, args = {}, options = {}) {
+  const module = await ensureHamLayerReady(dataManager, DXPEDITIONS_LAYER, options);
+  const patch = {};
+  if (args.status !== undefined) patch.status = String(args.status || 'all');
+  if (args.mostWantedOnly !== undefined) patch.mostWantedOnly = Boolean(args.mostWantedOnly);
+  module.setFilter(patch);
+  module.frame();
+  openHamRadioPanel('dxpeds');
+  const state = module.getUIState();
+  const results = state.items.slice(0, hamLimit(args.limit, 12)).map(summarizeDxpedition);
+  const scope = `${state.filter.status === 'all' ? 'active and upcoming' : state.filter.status}${state.filter.mostWantedOnly ? ', most-wanted only' : ''}`;
+  return {
+    ok: results.length > 0,
+    action: 'show_dxpeditions',
+    filter: state.filter,
+    scopeLabel: scope,
+    count: state.count,
+    filteredCount: state.filteredCount,
+    counts: state.counts ?? null,
+    updatedAt: state.updatedAt,
+    results,
+    error: results.length ? null : (state.error || `No DXpeditions match (${scope})`),
+    ...readLayerLifecycleSummary(dataManager, DXPEDITIONS_LAYER),
+  };
+}
+
+/** Voice: propagation readout and overlays (grayline / aurora / ionosondes / VOACAP). */
+export async function showHamPropagation(viewer, dataManager, args = {}, options = {}) {
+  const module = await ensureHamLayerReady(dataManager, HAM_PROPAGATION_LAYER, options);
+  const overlays = ['summary', 'grayline', 'aurora', 'ionosondes', 'voacap', 'all'];
+  const overlay = overlays.includes(args.overlay) ? args.overlay : 'summary';
+  if (overlay === 'all') module.setOverlays({ grayline: true, aurora: true, ionosondes: true, voacap: true });
+  else if (overlay !== 'summary') module.setOverlays({ [overlay]: true });
+  const notes = [];
+  const voacapPatch = {};
+  const gridRaw = String(args.grid || '').trim();
+  if (gridRaw) {
+    if (gridRaw.toLowerCase() === 'home') {
+      const home = module.getUIState().homeGrid;
+      if (home) voacapPatch.grid = home;
+      else notes.push('No home grid is configured (HAMRIG_HOME_GRID); using the current VOACAP grid');
+    } else {
+      voacapPatch.grid = gridRaw;
+    }
+  }
+  if (args.frequencyMhz !== undefined && args.frequencyMhz !== null) voacapPatch.frequencyMhz = Number(args.frequencyMhz);
+  else if (args.band !== undefined) voacapPatch.band = hamBand(args.band);
+  if (args.hour !== undefined) voacapPatch.hour = args.hour === null ? null : Number(args.hour);
+  if (Object.keys(voacapPatch).length) module.setVoacap(voacapPatch);
+  if (overlay === 'aurora') module.frameAurora();
+  else if (overlay === 'voacap') module.frameVoacap();
+  if (!radioActionIsCurrent(options)) throw radioAbortError();
+  openHamRadioPanel('prop');
+  const state = module.getUIState();
+  const summary = state.summary || null;
+  const ok = overlay === 'summary' ? Boolean(summary) : true;
+  return {
+    ok,
+    action: 'show_ham_propagation',
+    overlay,
+    overlays: state.overlays,
+    readout: state.readout ?? null,
+    solar: summary?.solar ?? null,
+    bandConditions: state.bandConditions ?? [],
+    dayNight: summary?.dayNight ?? null,
+    nearestIonosonde: summary?.ionosonde?.nearest ?? null,
+    ionosondeCount: state.ionosondeCount ?? 0,
+    aurora: state.aurora ?? null,
+    voacap: state.voacap ?? null,
+    homeGrid: state.homeGrid ?? null,
+    updatedAt: state.updatedAt,
+    sources: summary?.sources ?? [],
+    notes,
+    error: ok ? null : (state.error || 'Propagation summary unavailable'),
+    ...readLayerLifecycleSummary(dataManager, HAM_PROPAGATION_LAYER),
+  };
+}
+
+/** Voice: IBP / VHF beacons, the beacon on air right now per band, optional tune. */
+export async function showHamBeacons(viewer, dataManager, args = {}, options = {}) {
+  const module = await ensureHamLayerReady(dataManager, HAM_BEACONS_LAYER, options);
+  const kind = ['all', 'ibp', 'vhf'].includes(args.kind) ? args.kind : 'all';
+  const band = hamBand(args.band, ['20m', '17m', '15m', '12m', '10m']);
+  module.setFilter({ kind, band });
+  const callsign = String(args.callsign || '').trim().toUpperCase();
+  let selected = null;
+  if (callsign) {
+    selected = module.select(callsign, { flyTo: !args.tune, origin: 'voice' });
+    if (!selected) {
+      return {
+        ok: false,
+        action: 'show_ham_beacons',
+        kind,
+        band,
+        error: `No beacon matched "${callsign}"`,
+        ...readLayerLifecycleSummary(dataManager, HAM_BEACONS_LAYER),
+      };
+    }
+  }
+  let tune = null;
+  if (args.tune) {
+    tune = await module.tuneBeacon(callsign || null, band === 'all' ? null : band, { origin: 'voice', signal: options.signal || null });
+    if (!radioActionIsCurrent(options)) throw radioAbortError();
+  } else if (!callsign) {
+    module.frame(kind);
+  }
+  openHamRadioPanel('beacons');
+  const state = module.getUIState();
+  const slot = state.slot;
+  const transmittingNow = (slot?.byBand || []).filter((row) => band === 'all' || row.band === band);
+  const ok = args.tune ? Boolean(tune?.ok) : true;
+  return {
+    ok,
+    action: 'show_ham_beacons',
+    kind,
+    band,
+    slot: slot ? { slot: slot.slot, secondsIntoSlot: slot.secondsIntoSlot, secondsUntilNextSlot: slot.secondsUntilNextSlot } : null,
+    transmittingNow,
+    ibpCount: state.ibpCount ?? 0,
+    vhfCount: state.vhfCount ?? 0,
+    vhfForbidden: Boolean(state.vhfForbidden),
+    selected: selected ? { id: selected.id, call: selected.call, band: selected.band ?? null, location: selected.location ?? null } : null,
+    tune: tune ? {
+      ok: Boolean(tune.ok),
+      beacon: tune.beacon ? { call: tune.beacon.call, band: tune.beacon.band ?? null, khz: tune.beacon.khz ?? null, location: tune.beacon.location ?? null } : null,
+      receiver: summarizeHamReceiver(tune.receiver),
+      distanceKm: roundKm(tune.distanceKm),
+      frequencyLabel: tune.frequencyLabel ?? null,
+      mode: tune.mode ?? null,
+      when: tune.when ?? null,
+      secondsUntil: tune.secondsUntil ?? null,
+      tuneUrl: tune.url ?? null,
+      reason: tune.reason ?? null,
+      error: tune.ok ? null : (tune.error || null),
+    } : null,
+    error: ok ? null : (tune?.error || 'Beacon could not be tuned'),
+    ...(args.tune ? { webReceivers: readLayerLifecycleSummary(dataManager, WEB_RECEIVERS_LAYER) } : {}),
+    ...readLayerLifecycleSummary(dataManager, HAM_BEACONS_LAYER),
+  };
+}
+
+/** Voice: FM / D-STAR repeaters around a place or the current view. */
+export async function showHamRepeaters(viewer, dataManager, args = {}, options = {}) {
+  const module = await ensureHamLayerReady(dataManager, HAM_REPEATERS_LAYER, options, { load: false });
+  const location = await resolveHamLocation(viewer, args, options, { fallbackToView: true });
+  if (!location) {
+    return {
+      ok: false,
+      action: 'show_ham_repeaters',
+      error: 'Could not determine where to search for repeaters',
+      ...readLayerLifecycleSummary(dataManager, HAM_REPEATERS_LAYER),
+    };
+  }
+  const band = hamBand(args.band, ['6m', '2m', '1.25m', '70cm']);
+  const kindRaw = String(args.kind || 'all').trim().toLowerCase();
+  const kind = kindRaw === 'fm' ? 'FM' : (kindRaw === 'dstar' || kindRaw === 'd-star' ? 'D-STAR' : 'all');
+  const radiusKm = Number.isFinite(Number(args.radiusKm)) && Number(args.radiusKm) > 0 ? Number(args.radiusKm) : 100;
+  const loaded = await module.loadAround(location.lat, location.lon, radiusKm, {
+    band,
+    kind,
+    origin: 'voice',
+    reason: 'voice',
+    signal: options.signal || null,
+  });
+  if (!radioActionIsCurrent(options)) throw radioAbortError();
+  const limit = hamLimit(args.limit, 10);
+  const results = loaded.ok ? module.nearest(location.lat, location.lon, limit).map(summarizeHamRepeater) : [];
+  if (results.length) module.frame();
+  openHamRadioPanel('local');
+  const state = module.getUIState();
+  const area = loaded.area || state.area || null;
+  const scope = `within ${area?.radiusKm ?? Math.round(radiusKm)} km of ${location.label}`;
+  return {
+    ok: results.length > 0,
+    action: 'show_ham_repeaters',
+    scopeLabel: scope,
+    location: { lat: location.lat, lon: location.lon, label: location.label },
+    radiusKm: area?.radiusKm ?? Math.round(radiusKm),
+    band,
+    kind: kind === 'all' ? 'all' : (kind === 'FM' ? 'fm' : 'dstar'),
+    count: loaded.count ?? state.count,
+    filteredCount: state.filteredCount,
+    results,
+    error: results.length ? null : (loaded.error || state.error || `No ${kind === 'all' ? '' : `${kind} `}repeaters ${scope}`),
+    ...readLayerLifecycleSummary(dataManager, HAM_REPEATERS_LAYER),
   };
 }
 

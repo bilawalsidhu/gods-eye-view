@@ -1,0 +1,276 @@
+{
+  "timestamp": 1789170479,
+  "source": "NG3K Announced DX Operations",
+  "source_url": "https://www.ng3k.com/misc/adxo.html",
+  "operations": [
+    {
+      "start_date": "2026 Aug25",
+      "start_timestamp": 1787616000,
+      "end_date": "2026 Oct10",
+      "end_timestamp": 1791590400,
+      "entity": "Namibia",
+      "callsign": "V51WH",
+      "qsl_via": "DK2WH",
+      "reported_by": "DXW.Net20260705",
+      "info": "By DK2WH fm nr Omaruru; 160-6m, incl 60m; QRV as V55Y in CQWW RTTY Contest",
+      "is_active": true,
+      "operation_url": null,
+      "status": "active",
+      "bands": [
+        "160m",
+        "80m",
+        "60m",
+        "40m",
+        "30m",
+        "20m",
+        "17m",
+        "15m",
+        "12m",
+        "10m",
+        "6m"
+      ],
+      "modes": [
+        "RTTY"
+      ]
+    },
+    {
+      "start_date": "2026 Aug30",
+      "start_timestamp": 1788048000,
+      "end_date": "2026 Sep13",
+      "end_timestamp": 1789257600,
+      "entity": "Iceland",
+      "callsign": "TF",
+      "qsl_via": "LoTW)",
+      "reported_by": "OPDX20260830",
+      "info": "By DA6IC as TF/DA6IC/p fm Iceland's Ring Road; focus on 40 15 10m; SSB, FT8 FT4 as needed due to propagation; 50-100w;POTA activations; QSL via DA6IC Buro",
+      "is_active": true,
+      "operation_url": null,
+      "status": "active",
+      "bands": [
+        "40m",
+        "15m",
+        "10m"
+      ],
+      "modes": [
+        "SSB",
+        "FT8",
+        "FT4"
+      ]
+    },
+    {
+      "start_date": "2026 Sep01",
+      "start_timestamp": 1788220800,
+      "end_date": "2026 Sep12",
+      "end_timestamp": 1789171200,
+      "entity": "Grenada",
+      "callsign": "J3",
+      "qsl_via": "LoTW",
+      "reported_by": "OPDX20260418",
+      "info": "By MM8IJU as J38LD and GM5RDX as J38DX fm IOTA NA-024; 80-6m; SSB FT8 FT4; QSL via M0OXO",
+      "is_active": true,
+      "operation_url": null,
+      "status": "active",
+      "bands": [
+        "80m",
+        "60m",
+        "40m",
+        "30m",
+        "20m",
+        "17m",
+        "15m",
+        "12m",
+        "10m",
+        "6m"
+      ],
+      "modes": [
+        "SSB",
+        "FT8",
+        "FT4"
+      ],
+      "iota": "NA-024"
+    },
+    {
+      "start_date": "2026 Sep01",
+      "start_timestamp": 1788220800,
+      "end_date": "2026 Sep15",
+      "end_timestamp": 1789430400,
+      "entity": "Cape Verde Is",
+      "callsign": "D44TWO",
+      "qsl_via": "M0OXO OQRS",
+      "reported_by": "DXW.Net20260830",
+      "info": "By DF2WO fm Praia, Santiago I (IOTA AF-005); 160-6m; SSB CW; QSL via DF2WO direct",
+      "is_active": true,
+      "operation_url": "https://www.qrz.com/db/D44TWO",
+      "status": "active",
+      "bands": [
+        "160m",
+        "80m",
+        "60m",
+        "40m",
+        "30m",
+        "20m",
+        "17m",
+        "15m",
+        "12m",
+        "10m",
+        "6m"
+      ],
+      "modes": [
+        "CW",
+        "SSB"
+      ],
+      "iota": "AF-005"
+    },
+    {
+      "start_date": "2026 Sep01",
+      "start_timestamp": 1788220800,
+      "end_date": "2026 Sep19",
+      "end_timestamp": 1789776000,
+      "entity": "Nepal",
+      "callsign": "9N",
+      "qsl_via": "LoTW",
+      "reported_by": "TDDX20260902",
+      "info": "By OM0GA as 9N/OM0GA fm Kirtipur; 40-10m; QSL via Club Log OQRS",
+      "is_active": true,
+      "operation_url": null,
+      "status": "active",
+      "bands": [
+        "40m",
+        "30m",
+        "20m",
+        "17m",
+        "15m",
+        "12m",
+        "10m"
+      ]
+    },
+    {
+      "start_date": "2026 Sep05",
+      "start_timestamp": 1788566400,
+      "end_date": "2026 Sep15",
+      "end_timestamp": 1789430400,
+      "entity": "Madeira",
+      "callsign": "CT9",
+      "qsl_via": "LoTW",
+      "reported_by": "TDDX20260908",
+      "info": "By DK8MM as CT9/DK8MM; HF; with DL5AXX and DL8UD using CR3W, QRV forWAE SSB; QSL via Club Log OQRS and LoTW",
+      "is_active": true,
+      "operation_url": null,
+      "status": "active",
+      "bands": [
+        "HF"
+      ],
+      "modes": [
+        "SSB"
+      ]
+    },
+    {
+      "start_date": "2026 Sep08",
+      "start_timestamp": 1788825600,
+      "end_date": "2026 Sep17",
+      "end_timestamp": 1789603200,
+      "entity": "Turks & Caicos",
+      "callsign": "VP5",
+      "qsl_via": "LoTW",
+      "reported_by": "TDDX20260909",
+      "info": "By K5UR as VP5/K5UR from Providenciales I (IOTA NA-002); HF; mainly CW FT8, perhaps SSB; 100w",
+      "is_active": true,
+      "operation_url": null,
+      "status": "active",
+      "bands": [
+        "HF"
+      ],
+      "modes": [
+        "CW",
+        "SSB",
+        "FT8"
+      ],
+      "iota": "NA-002"
+    },
+    {
+      "start_date": "2026 Sep09",
+      "start_timestamp": 1788912000,
+      "end_date": "2026 Sep25",
+      "end_timestamp": 1790294400,
+      "entity": "Franz Josef Land",
+      "callsign": "RI1FJZ",
+      "qsl_via": "LoTW",
+      "reported_by": "RA1ZZ20260816",
+      "info": "By RA1ZZ R9LR RA9USU RW6MD R9LM fm IOTA EU-019 (LR30us); 160-10m; CW SSB FT8; QSL via Club Log OQRS or R9LR",
+      "is_active": true,
+      "operation_url": "https://ri1fjz.ru/en/",
+      "status": "active",
+      "bands": [
+        "160m",
+        "80m",
+        "60m",
+        "40m",
+        "30m",
+        "20m",
+        "17m",
+        "15m",
+        "12m",
+        "10m"
+      ],
+      "modes": [
+        "CW",
+        "SSB",
+        "FT8"
+      ],
+      "iota": "EU-019"
+    },
+    {
+      "start_date": "2026 Sep09",
+      "start_timestamp": 1788912000,
+      "end_date": "2026 Sep30",
+      "end_timestamp": 1790726400,
+      "entity": "St Kitts & Nevis",
+      "callsign": "V4",
+      "qsl_via": "LoTW",
+      "reported_by": "K0YA20260824",
+      "info": "By K0YA as V47YA and W5RCX as V47RCX fm St Kitts I; 160-6m; CW SSB FT8, V47RCX FT8 only; QSL OK via home_call",
+      "is_active": true,
+      "operation_url": null,
+      "status": "active",
+      "bands": [
+        "160m",
+        "80m",
+        "60m",
+        "40m",
+        "30m",
+        "20m",
+        "17m",
+        "15m",
+        "12m",
+        "10m",
+        "6m"
+      ],
+      "modes": [
+        "CW",
+        "SSB",
+        "FT8"
+      ]
+    },
+    {
+      "start_date": "2026 Sep10",
+      "start_timestamp": 1788998400,
+      "end_date": "2026 Sep15",
+      "end_timestamp": 1789430400,
+      "entity": "Mariana Is",
+      "callsign": "KH0N",
+      "qsl_via": "JA6CNL (B/d)",
+      "reported_by": "TDDX20260902",
+      "info": "By JA6CNL fm Saipan I; HF; FT8 FT4 FT2; vertical",
+      "is_active": true,
+      "operation_url": null,
+      "status": "active",
+      "bands": [
+        "HF"
+      ],
+      "modes": [
+        "FT8",
+        "FT4"
+      ]
+    }
+  ]
+}

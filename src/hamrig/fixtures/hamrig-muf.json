@@ -1,0 +1,53 @@
+{
+  "success": true,
+  "updated": "2026-09-12T15:52:45+00:00",
+  "source": "prop.kc2g / GIRO ionosondes",
+  "map_url": "https://prop.kc2g.com/renders/current/mufd-normal-now.svg",
+  "nearest": {
+    "name": "Dourbes, Belgium",
+    "distance_km": 315,
+    "age_min": 7,
+    "mufd": 22.6,
+    "fof2": 6.7,
+    "highest_band": "15m"
+  },
+  "nearby": [
+    {
+      "name": "Dourbes, Belgium",
+      "distance_km": 315,
+      "mufd": 22.6,
+      "age_min": 7
+    },
+    {
+      "name": "Juliusruh, Germany",
+      "distance_km": 483,
+      "mufd": 20.2,
+      "age_min": 9
+    },
+    {
+      "name": "Fairford, England",
+      "distance_km": 587,
+      "mufd": 25,
+      "age_min": 250
+    },
+    {
+      "name": "Pruhonice, Czech Republic",
+      "distance_km": 597,
+      "mufd": 21.2,
+      "age_min": 7
+    },
+    {
+      "name": "Sopron, Hungary",
+      "distance_km": 879,
+      "mufd": 21.5,
+      "age_min": 7
+    },
+    {
+      "name": "Warsaw, Poland",
+      "distance_km": 957,
+      "mufd": 19.8,
+      "age_min": 32
+    }
+  ],
+  "fresh_count": 30
+}

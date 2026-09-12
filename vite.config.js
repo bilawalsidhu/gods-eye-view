@@ -19,6 +19,8 @@
  *  14. Rocket launches — recent Launch Library 2 mission metadata
  *  15. Radio Browser — public-domain station directory and click counting
  *  16. Web receivers — KiwiSDR / WebSDR / OpenWebRX directory (Receiverbook + KiwiSDR feed)
+ *  17. HamRig   — amateur-radio layers: DX cluster spots, POTA/SOTA/WWFF/BOTA activations,
+ *                 DXpeditions, propagation, beacons, repeaters, station lookup (login optional)
  *
  * Also exposes Cesium and Google 3D Tiles API keys to the
  * client via `import.meta.env.*` defines.
@@ -50,6 +52,7 @@ import { defineConfig, loadEnv } from 'vite';
 import cesium from 'vite-plugin-cesium';
 import { normalizeRadioCountryInput } from './src/data/radioCountry.js';
 import { coverageFlags as webReceiverCoverageFlags, parseBandsFromText as parseWebReceiverBands } from './src/data/webReceiverTuning.js';
+import { hamrigProxyPlugin } from './src/hamrig/plugin.js';
 import {
   normalizeRegionalArticles,
   normalizeRegionalPlace,
@@ -5615,6 +5618,9 @@ export function openAiRealtimeProxy() {
             'HUD requests ("hud on/off", "switch to operator/minimal/tactical layout") use set_hud. Detection requests ("detection on", "dense mode", "balanced mode", "sparse mode", "set density to 25", "use weighted allocation") use set_detection. Density snaps to 0/25/50/75/100 and derives Sparse/Balanced/Dense; panoptic is a legacy alias for Dense.',
             'Bloom/sharpen requests use set_post_processing. Scene requests ("play orbital watch", "stop the scene", "what scenes are there") use control_scene. CCTV camera requests ("next camera", "nearest camera", "select the Congress camera", "show coverage") use control_cctv — the CCTV layer must be enabled first.',
             'WEB RECEIVERS are internet-controllable SDRs (KiwiSDR, WebSDR, OpenWebRX), not internet radio. "Show me the web receivers / SDRs around X", "which receivers near Y cover shortwave / 20 meters / 14233 kHz" → find_web_receivers (it enables the layer, highlights and frames the results; narrate two or three by name with distance and coverage, and say when a receiver reports full user slots). "Tune to 14233 kHz USB on this receiver", "listen to 7055 LSB on the nearest KiwiSDR" → tune_web_receiver with frequencyKhz (kHz, so 14.233 MHz is 14233) and mode; it loads the receiver page in the panel dock — the audio comes from the receiver itself. If the result says covers:false, say the receiver does not publish coverage of that frequency but the page was opened anyway. "Show me the RF spectrum / waterfall from 10 to 15 MHz around X", "let me see the 20 meter band without listening" → show_rf_spectrum with startKhz/stopKhz (or centerKhz + spanKhz); it opens a silent, zoomed waterfall on a KiwiSDR when one covers the range. If the result says muted:false, tell the user that receiver will play audio because its page cannot be muted from a link, and mention the note.',
+            'HAM RADIO (amateur radio, Amateurfunk) has its own tools; the layers switch on automatically, so never call set_layer_visibility first. CALLSIGNS: the user will often spell them in the NATO phonetic alphabet — convert every phonetic word to its letter (alpha A, bravo B, charlie C, delta D, echo E, foxtrot F, golf G, hotel H, india I, juliett J, kilo K, lima L, mike M, november N, oscar O, papa P, quebec Q, romeo R, sierra S, tango T, uniform U, victor V, whiskey W, x-ray X, yankee Y, zulu Z), "zero"/"Null" → 0, "stroke"/"slash"/"portable"/"Schrägstrich"/"Bruchstrich" → "/", and pass the compact callsign (e.g. "delta lima one alpha bravo charlie" → DL1ABC, "sierra seven nine stroke delta lima two sierra bravo yankee" → S79/DL2SBY). When you speak a callsign, read it back LETTER BY LETTER ("D L 1 A B C"), never as a word.',
+            'HAM RADIO routing: "show me / who is / where is DL1ABC", "zeig mir DL1ABC", "wer ist DL1ABC" → lookup_ham_station; state name, country and grid locator from the result, and when precision is area or entity say the position is approximate (call area / entity centroid). "What\'s on 20 metres", "was läuft auf 20 Meter", "show me the DX cluster / DX spots", "what is Europe hearing" → show_dx_spots (band as 20m, spotterContinent EU for "Europe hearing"). "POTA / SOTA / WWFF / BOTA / activations / Aktivierungen" → show_ham_activations. "DXpeditions / DXpeditionen / rare DX / meistgesuchte Länder" → show_dxpeditions. "Band conditions / Condx / propagation / Ausbreitung / Bandbedingungen / solar flux / K-index" → show_ham_propagation overlay summary; "aurora / Nordlicht / Polarlicht" → overlay aurora; "grayline / Dämmerungslinie / terminator" → overlay grayline; "MUF / ionosondes" → overlay ionosondes; "VOACAP from JO32 on 20 metres" → overlay voacap with grid and band. "Beacons / Baken / NCDXF / which beacon is on 15 metres" → show_ham_beacons; "tune to the 20 m beacon" → show_ham_beacons with band 20m and tune true. "Repeaters / Relais / Umsetzer around München" → show_ham_repeaters with locationQuery; "70 Zentimeter" is band 70cm, "2 Meter" is 2m. German band idioms: "auf 40 Meter" = band 40m, "auf Kurzwelle" = HF (leave band unset), "in CW"/"in Telegrafie" = mode CW, "in SSB"/"in Fonie" = mode SSB, "digital"/"FT8" = the mode word.',
+            'HAM RADIO tuning rule: "tune to this spot", "listen to that DX", "hör da mal rein", "stimm auf den Spot ab", "geh auf den Spot" → tune_to_dx_spot (the selected spot when no call is named). A DX spot is heard by the SPOTTER, so the receiver is chosen near the spotter (or near a station with PSKReporter reception evidence), NEVER near the DX station itself — say which receiver was opened, how far it is from the spotter or the reporting station (result.evidence: reception or spotter), and repeat the precision note: with precision area or entity say the spotter position is approximate (e.g. "near the US centroid; approximate"). If ok is false, read result.reason (e.g. "spotter location unknown") and offer show_dx_spots to pick another spot. receptionWarmingUp true means PSKReporter has only just started listening for that call — offer to try again in a minute with waitForReception true.',
             'Radio playback requests use control_radio. "Turn on/start the radio" means action=play; action=enable only reveals Radio markers and must be reserved for explicit "show/enable the Radio layer/markers" requests. After a prepared playback result, briefly confirm any other completed actions and say "Turning on the radio"—never claim it is already playing. The client keeps Radio muted until playback is verified, then closes voice before restoring Radio volume. Examples: "play news near Austin" → select category=news locationId=austin; "play US news" → select category=news country=US; "Radio volume 30" → volume; pause/resume/stop/next/previous use the matching action. Radio selection never moves the camera.',
             '"Track/follow <something specific>" (a callsign, ship name, satellite name) uses track_entity. "Take me to the biggest fire" uses track_entity with query "biggest fire" (the fires layer must be enabled). Bare "orbit" means camera orbit of the current landmark. "Stop following/tracking" uses stop_tracking.',
             '"Show me which planes are overhead"/"frame the ships"/"show me the satellites above" use frame_overhead with the matching target.',
@@ -6119,7 +6125,7 @@ const GEV_REALTIME_TOOLS = [
         layerId: {
           type: 'string',
           description:
-            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio; web receivers/SDRs/KiwiSDR/WebSDR/OpenWebRX/online receivers → web-receivers.',
+            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio; web receivers/SDRs/KiwiSDR/WebSDR/OpenWebRX/online receivers → web-receivers; DX spots/cluster spots/DX cluster → dx-spots; POTA/SOTA/WWFF/BOTA/activations/Aktivierungen → ham-activations; DXpeditions/DXpeditionen → dxpeditions; beacons/Baken/NCDXF → ham-beacons; propagation/band conditions/Ausbreitung/aurora/grayline → ham-propagation; repeaters/Relais/Umsetzer → ham-repeaters; ham stations/callsign lookups/Rufzeichen → ham-stations.',
           enum: [
             'flights',
             'military',
@@ -6136,6 +6142,13 @@ const GEV_REALTIME_TOOLS = [
             'local-dams',
             'telegeography-submarine-cables',
             'local-firms',
+            'dx-spots',
+            'ham-activations',
+            'dxpeditions',
+            'ham-beacons',
+            'ham-propagation',
+            'ham-repeaters',
+            'ham-stations',
           ],
         },
         enabled: { type: 'boolean' },
@@ -6168,6 +6181,13 @@ const GEV_REALTIME_TOOLS = [
             'local-dams',
             'telegeography-submarine-cables',
             'local-firms',
+            'dx-spots',
+            'ham-activations',
+            'dxpeditions',
+            'ham-beacons',
+            'ham-propagation',
+            'ham-repeaters',
+            'ham-stations',
           ],
           description: 'Optional layer row to scroll into view and highlight.',
         },
@@ -6184,7 +6204,7 @@ const GEV_REALTIME_TOOLS = [
       properties: {
         panelId: {
           type: 'string',
-          enum: ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'pp-toggles', 'global-context-panel'],
+          enum: ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'pp-toggles', 'global-context-panel', 'ham-radio-panel'],
         },
         open: { type: 'boolean' },
       },
@@ -6488,6 +6508,141 @@ const GEV_REALTIME_TOOLS = [
         latitude: { type: 'number', minimum: -90, maximum: 90 },
         longitude: { type: 'number', minimum: -180, maximum: 180 },
         openIn: { type: 'string', enum: ['dock', 'tab'] },
+      },
+      required: [],
+    },
+  },
+  {
+    type: 'function',
+    name: 'lookup_ham_station',
+    description: 'Look up an amateur-radio callsign (Rufzeichen) and show the station on the globe: "show me DL1ABC", "who is / where is DL1ABC", "zeig mir DL1ABC", "wer ist DL1ABC", "wo sitzt DL1ABC". Enables the Ham Stations layer automatically, flies to the station and opens the Ham Radio panel on STATIONS. The result carries name, country, grid locator, DXCC entity and a precision field (exact / grid / area / entity) — say when the position is only a call-area or entity centroid.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        callsign: { type: 'string', minLength: 3, maxLength: 15, description: 'Callsign as letters and digits, e.g. DL1ABC, W1AW/7, S79/DL2SBY. Convert phonetic alphabet first (delta lima one alpha bravo charlie → DL1ABC); "stroke", "slash", "portable", "Schrägstrich" → "/".' },
+        flyTo: { type: 'boolean', description: 'Fly the camera to the station (default true).' },
+      },
+      required: ['callsign'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'show_dx_spots',
+    description: 'Show live DX cluster spots (who is being heard where) and filter them by band, mode, age or the spotter\'s continent: "what\'s on 20 metres", "was läuft auf 20 Meter", "show me the DX cluster", "what is Europe hearing", "any FT8 on 40 m in the last 15 minutes", "zeig mir die DX-Spots auf 40 Meter". Enables the DX Spots layer automatically, applies the filter, frames the spots (or selects and flies to a named DX call) and opens the Ham Radio panel on SPOTS. Narrate two or three spots as "DX on frequency, spotted by spotter N minutes ago".',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        band: { type: 'string', enum: ['all', '160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m', '4m', '2m', '70cm'], description: 'Amateur band ("20 metres" → 20m). Omit or "all" for every band.' },
+        mode: { type: 'string', enum: ['all', 'CW', 'SSB', 'FT8', 'FT4', 'RTTY', 'DIGI'], description: 'Mode inferred from the spot comment/frequency. DIGI = any digital mode.' },
+        minutes: { type: 'integer', enum: [5, 15, 30, 60], description: 'Only spots younger than this many minutes (default 60).' },
+        dx: { type: 'string', maxLength: 20, description: 'A DX callsign to select and fly to, e.g. "S79/DL2SBY".' },
+        spotterContinent: { type: 'string', enum: ['all', 'EU', 'NA', 'SA', 'AS', 'AF', 'OC'], description: 'Keep only spots reported by stations on this continent ("what is Europe hearing" → EU).' },
+        frameResults: { type: 'boolean', description: 'Fly the camera to frame the filtered spots (default true).' },
+      },
+      required: [],
+    },
+  },
+  {
+    type: 'function',
+    name: 'tune_to_dx_spot',
+    description: 'Listen to a DX spot on a web receiver near the station that HEARD it (the spotter), never near the DX itself: "tune to this spot", "listen to that DX", "let me hear S79/DL2SBY", "stimm auf den Spot ab", "hör da mal rein", "geh auf den Spot". Uses the selected spot when no DX call or spot id is given. Enables the DX Spots and Web Receivers layers automatically, picks a receiver with reception evidence (PSKReporter) or the nearest receiver covering the frequency around the spotter, tunes it and opens it in the Web Receivers dock. The result names the receiver, the distance, the evidence (reception or spotter) and the spotter precision — say when the spotter position is approximate (call area or entity centroid).',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        dx: { type: 'string', maxLength: 20, description: 'DX callsign of the spot to tune to. Omit to use the selected spot.' },
+        spotId: { type: 'string', maxLength: 80, description: 'Spot id from a previous show_dx_spots result.' },
+        waitForReception: { type: 'boolean', description: 'Wait up to 30 s for PSKReporter reception evidence before choosing (default false: single fetch).' },
+      },
+      required: [],
+    },
+  },
+  {
+    type: 'function',
+    name: 'show_ham_activations',
+    description: 'Show portable amateur-radio activations — POTA parks, SOTA summits, WWFF flora & fauna, BOTA bunkers — currently on the air: "show me the POTA activations", "any SOTA summits active in the Alps", "zeig mir die Aktivierungen in Bayern", "which parks are on the air near me". Enables the Activations layer automatically, applies the program/band filter, frames the results (or the nearest ones around a place / the current view) and opens the Ham Radio panel on ACTIVITY.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        program: { type: 'string', enum: ['all', 'pota', 'sota', 'wwff', 'bota'], description: 'Activation program. Omit or "all" for every program.' },
+        band: { type: 'string', enum: ['all', '160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m', '2m', '70cm'] },
+        locationQuery: { type: 'string', maxLength: 120, description: 'Place to search around, e.g. "Bavaria" or "Colorado". Omit for the worldwide list.' },
+        locationId: { type: 'string', enum: ['austin', 'sf', 'nyc', 'tokyo', 'london', 'paris', 'dubai', 'dc'], description: 'Known city anchor.' },
+        latitude: { type: 'number', minimum: -90, maximum: 90 },
+        longitude: { type: 'number', minimum: -180, maximum: 180 },
+        nearView: { type: 'boolean', description: 'Rank by distance from the current view centre ("near me", "around here").' },
+        limit: { type: 'integer', minimum: 1, maximum: 20 },
+      },
+      required: [],
+    },
+  },
+  {
+    type: 'function',
+    name: 'show_dxpeditions',
+    description: 'Show announced DXpeditions (NG3K) on the globe with Club Log most-wanted ranks: "show me the DXpeditions", "which DXpeditions are active", "what rare DX is on", "zeig mir die DXpeditionen", "die meistgesuchten Länder", "was kommt demnächst". Enables the DXpeditions layer automatically, applies the status / most-wanted filter, frames the operations and opens the Ham Radio panel on DXPEDS. Narrate callsign, entity, dates and QSL route.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        status: { type: 'string', enum: ['all', 'active', 'upcoming'], description: 'active = on the air now; upcoming = announced; all = both (default).' },
+        mostWantedOnly: { type: 'boolean', description: 'Only operations from entities on the Club Log most-wanted list.' },
+        limit: { type: 'integer', minimum: 1, maximum: 20 },
+      },
+      required: [],
+    },
+  },
+  {
+    type: 'function',
+    name: 'show_ham_propagation',
+    description: 'Show HF propagation: the solar/geomagnetic readout and band conditions (Ausbreitung, Bandbedingungen, Condx), the grayline / terminator (Dämmerungslinie), the aurora oval forecast (Nordlicht, Polarlicht), live ionosonde MUF stations, or a VOACAP reliability map from a Maidenhead grid: "show band conditions", "how is 20 metres doing", "wie sind die Bedingungen", "show me the aurora oval", "zeig mir die Grayline", "VOACAP from JO32 on 20 metres", "wie ist die Ausbreitung von zu Hause auf 40 Meter". Enables the Propagation layer automatically, switches the requested overlay on and opens the Ham Radio panel on PROP. Read SFI, K-index, A-index and the band table from the result.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        overlay: { type: 'string', enum: ['summary', 'grayline', 'aurora', 'ionosondes', 'voacap', 'all'], description: 'summary = readout and band conditions only; grayline = day/night terminator; aurora = NOAA OVATION forecast oval; ionosondes = MUF stations; voacap = point-to-area reliability map; all = every overlay.' },
+        band: { type: 'string', enum: ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m'], description: 'Band for the VOACAP map (sets the frequency).' },
+        frequencyMhz: { type: 'number', minimum: 1.8, maximum: 30, description: 'VOACAP frequency in MHz (alternative to band).' },
+        grid: { type: 'string', maxLength: 8, description: 'VOACAP transmitter Maidenhead grid, e.g. "JO32"; "home" = the configured HAMRIG_HOME_GRID.' },
+        hour: { type: 'integer', minimum: 0, maximum: 23, description: 'UTC hour for the VOACAP map. Omit for now.' },
+      },
+      required: ['overlay'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'show_ham_beacons',
+    description: 'Show the NCDXF/IARU International Beacon Project network (18 HF beacons on 14100/18110/21150/24930/28200 kHz cycling every 3 minutes) and, when the HamRig login is configured, VHF beacons: "show me the beacons", "which beacon is transmitting on 20 metres right now", "zeig mir die Baken", "welche Bake sendet gerade auf 15 Meter", "tune to the 20 m beacon" (tune=true). Enables the Beacons layer automatically, frames them and opens the Ham Radio panel on BEACONS. The result lists the beacon transmitting on each band this instant and, with tune, the web receiver opened in the dock.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', enum: ['all', 'ibp', 'vhf'], description: 'ibp = the 18 NCDXF HF beacons; vhf = VHF/UHF beacons (login required); all = both (default).' },
+        band: { type: 'string', enum: ['all', '20m', '17m', '15m', '12m', '10m'], description: 'IBP band to focus on ("20 metres" → 20m).' },
+        callsign: { type: 'string', maxLength: 15, description: 'A specific beacon callsign to select or tune, e.g. OH2B, 4U1UN.' },
+        tune: { type: 'boolean', description: 'Tune a web receiver near the view centre to the beacon currently on `band` (or `callsign`) and open it in the dock.' },
+      },
+      required: [],
+    },
+  },
+  {
+    type: 'function',
+    name: 'show_ham_repeaters',
+    description: 'Show FM and D-STAR amateur-radio repeaters (Relais, Umsetzer) around a place or the current view: "show me the 70 cm repeaters around Munich", "zeig mir die 70-cm-Relais um München", "which 2 metre repeaters are near me", "D-STAR Umsetzer in Hamburg". Enables the Repeaters layer automatically, loads the directory within the radius, frames the results and opens the Ham Radio panel on LOCAL. Narrate two or three by callsign, output frequency, CTCSS tone and distance.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        radiusKm: { type: 'number', minimum: 5, maximum: 500, description: 'Search radius in km (default 100).' },
+        band: { type: 'string', enum: ['all', '6m', '2m', '1.25m', '70cm'], description: '"70 centimetres" → 70cm, "2 metres" → 2m.' },
+        kind: { type: 'string', enum: ['all', 'fm', 'dstar'] },
+        locationQuery: { type: 'string', maxLength: 120, description: 'Place to search around, e.g. "Munich". Omit to use the current view centre.' },
+        locationId: { type: 'string', enum: ['austin', 'sf', 'nyc', 'tokyo', 'london', 'paris', 'dubai', 'dc'], description: 'Known city anchor.' },
+        latitude: { type: 'number', minimum: -90, maximum: 90 },
+        longitude: { type: 'number', minimum: -180, maximum: 180 },
+        limit: { type: 'integer', minimum: 1, maximum: 20 },
       },
       required: [],
     },
@@ -8172,6 +8327,7 @@ export default defineConfig(({ mode }) => {
       cctvProxy(),
       radioBrowserProxy(),
       webReceiversProxy(),
+      hamrigProxyPlugin(),
       gbfsProxy(),
       adsbLolProxy(),
       aisLiveProxy(),

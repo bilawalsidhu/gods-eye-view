@@ -1,0 +1,40 @@
+{
+  "success": true,
+  "conditions": {
+    "160m": "poor",
+    "80m": "poor",
+    "60m": "fair",
+    "40m": "fair",
+    "30m": "fair",
+    "20m": "good",
+    "17m": "fair",
+    "15m": "fair",
+    "12m": "fair",
+    "10m": "fair",
+    "6m": "poor"
+  },
+  "solarData": {
+    "sfi": 110,
+    "kIndex": 2,
+    "aIndex": 8
+  },
+  "updated": "2026-09-12T15:52:45+00:00",
+  "dayNight": {
+    "NA": {
+      "status": "day",
+      "label": "North America"
+    },
+    "EU": {
+      "status": "day",
+      "label": "Europe"
+    },
+    "AS": {
+      "status": "night",
+      "label": "Asia"
+    },
+    "OC": {
+      "status": "night",
+      "label": "Oceania"
+    }
+  }
+}

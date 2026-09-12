@@ -1,0 +1,75 @@
+{
+  "list": [
+    {
+      "id": 7,
+      "location_id": 3,
+      "nickname": "Tower rotor",
+      "model": "Yaesu G-1000DXC",
+      "controller_type": "hamrig-switch",
+      "min_azimuth": "0.00",
+      "max_azimuth": "450.00",
+      "park_azimuth": "180.00",
+      "has_elevation": 0,
+      "current_azimuth": "95.50",
+      "current_elevation": "0.00",
+      "target_azimuth": "95.50",
+      "target_elevation": null,
+      "is_moving": 0,
+      "status": "online",
+      "last_seen_at": "2026-09-12 15:52:01",
+      "location_name": "Gronau QTH",
+      "location_lat": "52.18666700",
+      "location_lng": "7.04000000",
+      "location_grid": "JO32me",
+      "ownership_type": "owner",
+      "bands": [
+        { "band": "20m", "antenna_info": "3-el yagi" },
+        { "band": "15m", "antenna_info": "3-el yagi" },
+        { "band": "10m", "antenna_info": "3-el yagi" }
+      ],
+      "radios": [],
+      "is_online": true,
+      "gateway_key": "gk_SECRET_0123456789abcdef"
+    },
+    {
+      "id": 8,
+      "location_id": 4,
+      "nickname": null,
+      "model": "Spid RAS",
+      "controller_type": "spid",
+      "min_azimuth": "0.00",
+      "max_azimuth": "360.00",
+      "park_azimuth": "0.00",
+      "has_elevation": 1,
+      "current_azimuth": "270.00",
+      "current_elevation": "10.00",
+      "target_azimuth": "300.00",
+      "target_elevation": "10.00",
+      "is_moving": 1,
+      "status": "offline",
+      "last_seen_at": null,
+      "location_name": "Portable",
+      "location_lat": null,
+      "location_lng": null,
+      "location_grid": "JO31",
+      "ownership_type": "shared",
+      "bands": [],
+      "radios": [],
+      "is_online": false,
+      "gateway_key": "gk_SECRET_fedcba9876543210"
+    }
+  ],
+  "statuses": {
+    "7": {
+      "current_azimuth": "120.00",
+      "current_elevation": "0.00",
+      "target_azimuth": "180.00",
+      "target_elevation": null,
+      "is_moving": true,
+      "status": "online",
+      "last_error": null,
+      "last_seen_at": "2026-09-12T15:54:30+00:00",
+      "is_online": true
+    }
+  }
+}

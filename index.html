@@ -643,7 +643,6 @@
     </div>
   </div>
 
-  <!-- Scene Director Panel -->
   <section id="web-receivers-panel" class="panel-collapsible collapsed" data-panel-id="web-receivers-panel" aria-label="Web receivers companion">
     <div class="radio-panel-inner web-receivers-inner">
       <div class="panel-header">
@@ -704,6 +703,167 @@
       <p class="radio-privacy">Tuning loads the receiver operator's own web page. Your IP is visible to that receiver; its terms and user limits apply.</p>
     </div>
   </section>
+  <section id="ham-radio-panel" class="panel-collapsible collapsed" data-panel-id="ham-radio-panel" aria-label="Ham radio companion">
+    <div class="radio-panel-inner ham-radio-inner">
+      <div class="panel-header">
+        <span class="panel-title">HAM RADIO</span>
+        <span id="ham-radio-layer-state" class="radio-layer-state">OFF</span>
+        <span class="panel-divider"></span>
+        <button class="panel-collapse-btn" data-collapse-target="ham-radio-panel" title="Expand Ham Radio" aria-label="Expand Ham Radio section">+</button>
+      </div>
+      <div class="ham-tab-strip" role="tablist" aria-label="Ham radio sections">
+        <button type="button" class="ham-tab active" data-ham-tab="stations" role="tab" aria-selected="true" aria-controls="ham-tab-stations">STATIONS</button>
+        <button type="button" class="ham-tab" data-ham-tab="spots" role="tab" aria-selected="false" aria-controls="ham-tab-spots">SPOTS</button>
+        <button type="button" class="ham-tab" data-ham-tab="activity" role="tab" aria-selected="false" aria-controls="ham-tab-activity">ACTIVITY</button>
+        <button type="button" class="ham-tab" data-ham-tab="dxpeds" role="tab" aria-selected="false" aria-controls="ham-tab-dxpeds">DXPEDS</button>
+        <button type="button" class="ham-tab" data-ham-tab="prop" role="tab" aria-selected="false" aria-controls="ham-tab-prop">PROP</button>
+        <button type="button" class="ham-tab" data-ham-tab="beacons" role="tab" aria-selected="false" aria-controls="ham-tab-beacons">BEACONS</button>
+        <button type="button" class="ham-tab" data-ham-tab="local" role="tab" aria-selected="false" aria-controls="ham-tab-local">LOCAL</button>
+      </div>
+
+      <div id="ham-tab-stations" class="ham-tab-panel" data-ham-tab-panel="stations" role="tabpanel">
+        <div class="ham-tab-head">
+          <button id="ham-stations-enable-btn" class="panel-layer-toggle" type="button" data-ham-layer="ham-stations" aria-pressed="false">ENABLE</button>
+          <span id="ham-stations-summary" class="ham-tab-summary">Ham Stations off</span>
+        </div>
+        <form id="ham-stations-form" class="ham-form-row" autocomplete="off">
+          <input id="ham-stations-call" type="text" placeholder="Callsign · e.g. DL1ABC" spellcheck="false" autocapitalize="characters" maxlength="15" aria-label="Callsign to look up" />
+          <button id="ham-stations-lookup-btn" type="submit">LOOKUP</button>
+        </form>
+        <div id="ham-stations-card" class="radio-station-card ham-card" aria-live="polite">
+          <img id="ham-stations-image" class="ham-station-image" alt="" hidden />
+          <strong id="ham-stations-name">NO STATION</strong>
+          <span id="ham-stations-meta">Enter a callsign, or ask “who is DL1ABC”.</span>
+          <span id="ham-stations-precision"></span>
+          <div class="ham-actions">
+            <button id="ham-stations-fly-btn" type="button" disabled>FLY</button>
+            <button id="ham-stations-clear-btn" type="button" disabled>CLEAR</button>
+          </div>
+        </div>
+        <div id="ham-stations-history" class="ham-list" role="listbox" aria-label="Recent station lookups"></div>
+        <div id="ham-my-station" class="ham-my-station" hidden>
+          <div class="ham-section-label">MY STATION</div>
+          <div class="ham-check-row">
+            <label><input type="checkbox" id="ham-my-dxcc" checked /> WORKED DXCC</label>
+            <label><input type="checkbox" id="ham-my-grids" checked /> GRIDS</label>
+            <label><input type="checkbox" id="ham-my-rotator" checked /> ROTOR</label>
+          </div>
+          <span id="ham-my-station-summary" class="ham-note"></span>
+        </div>
+      </div>
+
+      <div id="ham-tab-spots" class="ham-tab-panel" data-ham-tab-panel="spots" role="tabpanel" hidden>
+        <div class="ham-tab-head">
+          <button id="ham-spots-enable-btn" class="panel-layer-toggle" type="button" data-ham-layer="dx-spots" aria-pressed="false">ENABLE</button>
+          <span id="ham-spots-summary" class="ham-tab-summary">DX Spots off</span>
+        </div>
+        <div class="ham-filter-row">
+          <select id="ham-spots-band" aria-label="Filter spots by band" disabled><option value="all">All bands</option></select>
+          <select id="ham-spots-mode" aria-label="Filter spots by mode" disabled><option value="all">All modes</option></select>
+          <select id="ham-spots-minutes" aria-label="Spot age window" disabled><option value="60">60 min</option></select>
+          <button id="ham-spots-arcs-btn" type="button" class="ham-chip" aria-pressed="true" disabled>ARCS</button>
+        </div>
+        <div id="ham-spots-card" class="radio-station-card ham-card" aria-live="polite">
+          <strong id="ham-spots-title">NO SPOT SELECTED</strong>
+          <span id="ham-spots-meta">Enable DX Spots, then click a spot — or ask “what's on 20 metres”.</span>
+          <div class="ham-actions">
+            <button id="ham-spots-tune-btn" type="button" disabled title="Tune a web receiver near the station that heard this spot">TUNE NEAR SPOTTER</button>
+            <button id="ham-spots-refine-btn" type="button" disabled title="Ask HamRig for precise DX and spotter positions">REFINE POSITION</button>
+          </div>
+          <span id="ham-spots-note" class="ham-note"></span>
+        </div>
+        <div id="ham-spots-list" class="ham-list" role="listbox" aria-label="DX spots"></div>
+        <div id="ham-spots-updated" class="ham-note"></div>
+      </div>
+
+      <div id="ham-tab-activity" class="ham-tab-panel" data-ham-tab-panel="activity" role="tabpanel" hidden>
+        <div class="ham-tab-head">
+          <button id="ham-activity-enable-btn" class="panel-layer-toggle" type="button" data-ham-layer="ham-activations" aria-pressed="false">ENABLE</button>
+          <span id="ham-activity-summary" class="ham-tab-summary">Activations off</span>
+        </div>
+        <div id="ham-activity-programs" class="ham-chip-row" role="group" aria-label="Activation programs"></div>
+        <div class="ham-filter-row">
+          <select id="ham-activity-band" aria-label="Filter activations by band" disabled><option value="all">All bands</option></select>
+        </div>
+        <div id="ham-activity-list" class="ham-list" role="listbox" aria-label="Activations"></div>
+        <div id="ham-activity-updated" class="ham-note"></div>
+      </div>
+
+      <div id="ham-tab-dxpeds" class="ham-tab-panel" data-ham-tab-panel="dxpeds" role="tabpanel" hidden>
+        <div class="ham-tab-head">
+          <button id="ham-dxpeds-enable-btn" class="panel-layer-toggle" type="button" data-ham-layer="dxpeditions" aria-pressed="false">ENABLE</button>
+          <span id="ham-dxpeds-summary" class="ham-tab-summary">DXpeditions off</span>
+        </div>
+        <div class="ham-chip-row" role="group" aria-label="DXpedition status">
+          <span id="ham-dxpeds-status"></span>
+          <label class="ham-check"><input type="checkbox" id="ham-dxpeds-mostwanted" disabled /> MOST WANTED ONLY</label>
+        </div>
+        <div id="ham-dxpeds-list" class="ham-list" role="listbox" aria-label="DXpeditions"></div>
+        <div id="ham-dxpeds-updated" class="ham-note"></div>
+      </div>
+
+      <div id="ham-tab-prop" class="ham-tab-panel" data-ham-tab-panel="prop" role="tabpanel" hidden>
+        <div class="ham-tab-head">
+          <button id="ham-prop-enable-btn" class="panel-layer-toggle" type="button" data-ham-layer="ham-propagation" aria-pressed="false">ENABLE</button>
+          <span id="ham-prop-summary" class="ham-tab-summary">Propagation off</span>
+        </div>
+        <div id="ham-prop-readout" class="ham-readout" aria-live="polite">SFI — · K — · A — · SSN —</div>
+        <div id="ham-prop-bands" class="ham-band-grid" aria-label="Band conditions"></div>
+        <div class="ham-check-row" role="group" aria-label="Propagation overlays">
+          <label><input type="checkbox" id="ham-prop-grayline" data-ham-overlay="grayline" /> GRAYLINE</label>
+          <label><input type="checkbox" id="ham-prop-aurora" data-ham-overlay="aurora" /> AURORA</label>
+          <label><input type="checkbox" id="ham-prop-ionosondes" data-ham-overlay="ionosondes" /> IONOSONDES</label>
+          <label><input type="checkbox" id="ham-prop-voacap" data-ham-overlay="voacap" /> VOACAP</label>
+        </div>
+        <div class="ham-form-row ham-voacap-row" role="group" aria-label="VOACAP transmitter">
+          <input id="ham-prop-voacap-grid" type="text" placeholder="TX grid · JO32" maxlength="6" spellcheck="false" autocapitalize="characters" aria-label="VOACAP transmitter grid square" />
+          <select id="ham-prop-voacap-band" aria-label="VOACAP frequency"></select>
+          <button id="ham-prop-hour-down" type="button" aria-label="One hour earlier">−</button>
+          <button id="ham-prop-hour" type="button" title="Click to reset to the current hour" aria-label="VOACAP hour (UTC)">NOW</button>
+          <button id="ham-prop-hour-up" type="button" aria-label="One hour later">+</button>
+        </div>
+        <div id="ham-prop-note" class="ham-note"></div>
+      </div>
+
+      <div id="ham-tab-beacons" class="ham-tab-panel" data-ham-tab-panel="beacons" role="tabpanel" hidden>
+        <div class="ham-tab-head">
+          <button id="ham-beacons-enable-btn" class="panel-layer-toggle" type="button" data-ham-layer="ham-beacons" aria-pressed="false">ENABLE</button>
+          <span id="ham-beacons-summary" class="ham-tab-summary">Beacons off</span>
+        </div>
+        <div id="ham-beacons-slot" class="ham-note">NCDXF/IBP · 3-minute cycle, 18 beacons, 10 s slots</div>
+        <div id="ham-beacons-ibp" class="ham-list" aria-label="Currently transmitting IBP beacons"></div>
+        <div id="ham-beacons-vhf" class="ham-note">VHF beacons: —</div>
+        <div id="ham-beacons-note" class="ham-note"></div>
+      </div>
+
+      <div id="ham-tab-local" class="ham-tab-panel" data-ham-tab-panel="local" role="tabpanel" hidden>
+        <div class="ham-tab-head">
+          <button id="ham-local-enable-btn" class="panel-layer-toggle" type="button" data-ham-layer="ham-repeaters" aria-pressed="false">ENABLE</button>
+          <span id="ham-local-summary" class="ham-tab-summary">Repeaters off</span>
+        </div>
+        <div class="ham-filter-row">
+          <select id="ham-local-radius" aria-label="Search radius">
+            <option value="25">25 km</option>
+            <option value="50">50 km</option>
+            <option value="100" selected>100 km</option>
+            <option value="200">200 km</option>
+            <option value="300">300 km</option>
+          </select>
+          <select id="ham-local-band" aria-label="Filter repeaters by band"><option value="all">All bands</option></select>
+          <select id="ham-local-kind" aria-label="Filter repeaters by kind"><option value="all">All repeaters</option></select>
+          <button id="ham-local-load-btn" type="button" title="Load repeaters around the centre of the current view">LOAD HERE</button>
+        </div>
+        <div id="ham-local-area" class="ham-note"></div>
+        <div id="ham-local-list" class="ham-list" role="listbox" aria-label="Repeaters"></div>
+        <div class="ham-section-label">NEAREST ACTIVATIONS</div>
+        <div id="ham-local-activations" class="ham-list" role="listbox" aria-label="Nearest activations"></div>
+      </div>
+
+      <div id="ham-radio-status" class="radio-playback-state" role="status" aria-live="polite">HamRig: not checked</div>
+      <p class="radio-privacy">Station data comes from HamRig (QRZ/HamDB-derived, contact details removed). Tuning a spot opens a web receiver near the station that heard it, never at the DX.</p>
+    </div>
+  </section>
+  <!-- Scene Director Panel -->
   <div id="scene-panel" class="panel-collapsible collapsed" data-panel-id="scene-panel">
     <div class="panel-glow"></div>
     <div class="scene-panel-inner">

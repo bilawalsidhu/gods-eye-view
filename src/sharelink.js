@@ -39,6 +39,7 @@ const SHARE_PANEL_STATE_REGISTRY = Object.freeze([
   { id: 'cctv-panel', token: 'v', pinnable: false },
   { id: 'radio-panel', token: 'r', pinnable: false },
   { id: 'web-receivers-panel', token: 'w', pinnable: false },
+  { id: 'ham-radio-panel', token: 'h', pinnable: false },
   { id: 'scene-panel', token: 's', pinnable: false },
   { id: 'global-context-panel', token: 'g', pinnable: false },
   { id: 'pp-toggles', token: 'p', pinnable: false },

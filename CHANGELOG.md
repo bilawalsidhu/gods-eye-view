@@ -7,6 +7,34 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Added
 
+- **Ham radio companion (HamRig).** Seven amateur-radio layers fed through a
+  same-origin `/api/hamrig/*` broker: **DX Spots** (live cluster spots over a
+  WebSocket with a REST seed, coloured by band, fading over an hour, hollow
+  rings for country-centroid positions, DX↔spotter arcs), **Activations**
+  (POTA, SOTA, WWFF, WWBOTA), **DXpeditions** (NG3K announced operations sized
+  by Club Log most-wanted rank), **Propagation** (grayline and twilight rings,
+  NOAA OVATION aurora forecast, ionosonde MUF stations, VOACAP reliability
+  cells from a chosen grid; SFI/K/A/SSN and band conditions), **Beacons** (the
+  18 NCDXF/IARU beacons with a live 3-minute schedule ticker, plus HamRig's
+  VHF beacons when logged in), **Repeaters** (FM and D-STAR around the view
+  when the camera is below 1500 km) and **Ham Stations** (callsign lookups;
+  with a HamRig login the operator's worked DXCC, worked grids and rotator
+  beam). One companion panel (`#ham-radio-panel`, share token `h`) with
+  STATIONS / SPOTS / ACTIVITY / DXPEDS / PROP / BEACONS / LOCAL tabs. Eight
+  voice tools (`lookup_ham_station`, `show_dx_spots`, `tune_to_dx_spot`,
+  `show_ham_activations`, `show_dxpeditions`, `show_ham_propagation`,
+  `show_ham_beacons`, `show_ham_repeaters`) understand NATO and German
+  phonetics and read callsigns back letter by letter. "Tune to this spot"
+  picks a web receiver near a PSKReporter station that heard the DX or near
+  the spotter — never near the DX — and opens it in the Web Receivers dock,
+  saying how approximate the spotter position is. Callsign positions come
+  from AD1C's `cty.dat` (call-area centroids for large countries) with
+  precise HamRig lookups on selection. The broker strips personal fields
+  from callsign records, never exposes the HamRig token, validates every
+  input, and caches each upstream. Optional `HAMRIG_USERNAME` /
+  `HAMRIG_PASSWORD` unlock the login-gated feeds; `HAMRIG_HOME_GRID` sets the
+  VOACAP/WSPR home. Upstream terms are recorded in `DATA_SOURCES.md` — note
+  the SOTA API and wspr.live conditions before enabling those feeds.
 - **Web Receivers layer.** Internet-controllable radio receivers — KiwiSDR,
   WebSDR and OpenWebRX — as a globe layer, sourced from Receiverbook and the
   community KiwiSDR map feed through a same-origin broker. Markers are colored

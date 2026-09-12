@@ -1,0 +1,80 @@
+{
+  "success": true,
+  "spots": [
+    {
+      "dx_callsign": "SP9SIR",
+      "spotter": "SP9SIR",
+      "frequency": "3.707",
+      "mode": "CW",
+      "band": "80m",
+      "time": "1241Z",
+      "comment": "WWFF SPFF-2718"
+    },
+    {
+      "dx_callsign": "YB1GAL",
+      "spotter": "GM4FDM",
+      "frequency": "21.248",
+      "mode": "CW",
+      "band": "15m",
+      "time": "1240Z",
+      "comment": ""
+    },
+    {
+      "dx_callsign": "CX2RA",
+      "spotter": "DK9IP",
+      "frequency": "28.440",
+      "mode": "CW",
+      "band": "10m",
+      "time": "1240Z",
+      "comment": "WAE"
+    },
+    {
+      "dx_callsign": "UA9XO",
+      "spotter": "IK6MNB",
+      "frequency": "14.023",
+      "mode": "CW",
+      "band": "20m",
+      "time": "1240Z",
+      "comment": "CQ TEST"
+    },
+    {
+      "dx_callsign": "AC1RH",
+      "spotter": "KC1VGE",
+      "frequency": "7.213",
+      "mode": "CW",
+      "band": "40m",
+      "time": "1240Z",
+      "comment": "POTA US-4939 NH"
+    },
+    {
+      "dx_callsign": "JA8JNU",
+      "spotter": "ES0IA",
+      "frequency": "21.140",
+      "mode": "CW",
+      "band": "15m",
+      "time": "1240Z",
+      "comment": "FT4"
+    },
+    {
+      "dx_callsign": "UP4L",
+      "spotter": "P3CR",
+      "frequency": "14.255",
+      "mode": "CW",
+      "band": "20m",
+      "time": "1240Z",
+      "comment": ""
+    },
+    {
+      "dx_callsign": "II4IANT",
+      "spotter": "IU4DTV",
+      "frequency": "21.074",
+      "mode": "CW",
+      "band": "15m",
+      "time": "1240Z",
+      "comment": "Italian Navy Ship FT8"
+    }
+  ],
+  "count": 8,
+  "updated": "2026-09-12T15:52:44+00:00",
+  "source": "live"
+}

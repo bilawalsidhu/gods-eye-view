@@ -1,0 +1,19 @@
+{
+    "success": true,
+    "callsign": "RW6MD",
+    "dxcc_data": {
+        "name": "European Russia",
+        "cq_zone": 16,
+        "itu_zone": 29,
+        "continent": "EU",
+        "time_offset": -4,
+        "lat": 55.7558,
+        "lon": 37.6176,
+        "primary_prefix": "UA",
+        "is_deleted": false,
+        "dxcc": 269,
+        "match_type": "prefix"
+    },
+    "source": "call2dxcc",
+    "timestamp": "2026-09-12T15:53:05+00:00"
+}

@@ -1,0 +1,119 @@
+{
+  "success": true,
+  "updated": "2026-09-12T15:34:09+00:00",
+  "source": "Club Log + NG3K",
+  "active_count": 12,
+  "wanted_active": 4,
+  "operations": [
+    {
+      "callsign": "RI1FJZ",
+      "entity": "Franz Josef Land",
+      "continent": "EU",
+      "dxcc": 232,
+      "rank": 55,
+      "end_date": "2026 Sep25",
+      "end_timestamp": 1790294400,
+      "qsl_via": "LoTW",
+      "info": "By RA1ZZ R9LR RA9USU RW6MD R9LM fm IOTA EU-019 (LR30us); 160-10m; CW SSB FT8; QSL via Club Log OQRS or R9LR"
+    },
+    {
+      "callsign": "VP5",
+      "entity": "Turks & Caicos",
+      "continent": "NA",
+      "dxcc": 295,
+      "rank": 70,
+      "end_date": "2026 Sep17",
+      "end_timestamp": 1789603200,
+      "qsl_via": "LoTW",
+      "info": "By K5UR as VP5/K5UR from Providenciales I (IOTA NA-002); HF; mainly CW FT8, perhaps SSB; 100w"
+    },
+    {
+      "callsign": "V51WH",
+      "entity": "Namibia",
+      "continent": "AF",
+      "dxcc": 278,
+      "rank": 224,
+      "end_date": "2026 Oct10",
+      "end_timestamp": 1791590400,
+      "qsl_via": "DK2WH",
+      "info": "By DK2WH fm nr Omaruru; 160-6m, incl 60m; QRV as V55Y in CQWW RTTY Contest"
+    },
+    {
+      "callsign": "S79",
+      "entity": "Seychelles",
+      "continent": "AF",
+      "dxcc": 236,
+      "rank": 315,
+      "end_date": "2026 Sep21",
+      "end_timestamp": 1789948800,
+      "qsl_via": "LoTW",
+      "info": "By DL2SBY as S79/DL2SBY fm Mahe I (IOTA AF-024, LI75rk); 80-6m; CW SSB FT8; verticals, inverted V; QSL via Club Log OQRS or DL2SBY direct"
+    },
+    {
+      "callsign": "J3",
+      "entity": "Grenada",
+      "continent": null,
+      "dxcc": null,
+      "rank": null,
+      "end_date": "2026 Sep12",
+      "end_timestamp": 1789171200,
+      "qsl_via": "LoTW",
+      "info": "By MM8IJU as J38LD and GM5RDX as J38DX fm IOTA NA-024; 80-6m; SSB FT8 FT4; QSL via M0OXO"
+    },
+    {
+      "callsign": "TF",
+      "entity": "Iceland",
+      "continent": null,
+      "dxcc": null,
+      "rank": null,
+      "end_date": "2026 Sep13",
+      "end_timestamp": 1789257600,
+      "qsl_via": "LoTW)",
+      "info": "By DA6IC as TF/DA6IC/p fm Iceland's Ring Road; focus on 40 15 10m; SSB, FT8 FT4 as needed due to propagation; 50-100w;POTA activations; QSL via DA6IC Buro"
+    },
+    {
+      "callsign": "D44TWO",
+      "entity": "Cape Verde Is",
+      "continent": "AF",
+      "dxcc": 93,
+      "rank": null,
+      "end_date": "2026 Sep15",
+      "end_timestamp": 1789430400,
+      "qsl_via": "M0OXO OQRS",
+      "info": "By DF2WO fm Praia, Santiago I (IOTA AF-005); 160-6m; SSB CW; QSL via DF2WO direct"
+    },
+    {
+      "callsign": "CT9",
+      "entity": "Madeira",
+      "continent": "AF",
+      "dxcc": 87,
+      "rank": null,
+      "end_date": "2026 Sep15",
+      "end_timestamp": 1789430400,
+      "qsl_via": "LoTW",
+      "info": "By DK8MM as CT9/DK8MM; HF; with DL5AXX and DL8UD using CR3W, QRV forWAE SSB; QSL via Club Log OQRS and LoTW"
+    },
+    {
+      "callsign": "KH0N",
+      "entity": "Mariana Is",
+      "continent": "OC",
+      "dxcc": 186,
+      "rank": null,
+      "end_date": "2026 Sep15",
+      "end_timestamp": 1789430400,
+      "qsl_via": "JA6CNL (B/d)",
+      "info": "By JA6CNL fm Saipan I; HF; FT8 FT4 FT2; vertical"
+    },
+    {
+      "callsign": "9N",
+      "entity": "Nepal",
+      "continent": null,
+      "dxcc": null,
+      "rank": null,
+      "end_date": "2026 Sep19",
+      "end_timestamp": 1789776000,
+      "qsl_via": "LoTW",
+      "info": "By OM0GA as 9N/OM0GA fm Kirtipur; 40-10m; QSL via Club Log OQRS"
+    }
+  ]
+}

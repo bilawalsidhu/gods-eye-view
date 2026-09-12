@@ -1,0 +1,285 @@
+{
+  "timestamp": 1789227287,
+  "source": "NOAA SWPC Ovation",
+  "data_origin": "NOAA Ovation Aurora Model",
+  "unit": "%",
+  "current": 19,
+  "level": "low",
+  "history": [],
+  "points": [
+    {
+      "lat": 70,
+      "lon": 0,
+      "value": 6,
+      "level": "low"
+    },
+    {
+      "lat": 71,
+      "lon": 0,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 72,
+      "lon": 0,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 73,
+      "lon": 0,
+      "value": 8,
+      "level": "low"
+    },
+    {
+      "lat": 74,
+      "lon": 0,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 75,
+      "lon": 0,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 76,
+      "lon": 0,
+      "value": 6,
+      "level": "low"
+    },
+    {
+      "lat": 70,
+      "lon": 1,
+      "value": 6,
+      "level": "low"
+    },
+    {
+      "lat": 71,
+      "lon": 1,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 72,
+      "lon": 1,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 73,
+      "lon": 1,
+      "value": 8,
+      "level": "low"
+    },
+    {
+      "lat": 74,
+      "lon": 1,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 75,
+      "lon": 1,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 76,
+      "lon": 1,
+      "value": 6,
+      "level": "low"
+    },
+    {
+      "lat": 70,
+      "lon": 2,
+      "value": 6,
+      "level": "low"
+    },
+    {
+      "lat": 71,
+      "lon": 2,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 72,
+      "lon": 2,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 73,
+      "lon": 2,
+      "value": 8,
+      "level": "low"
+    },
+    {
+      "lat": 74,
+      "lon": 2,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 75,
+      "lon": 2,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 76,
+      "lon": 2,
+      "value": 6,
+      "level": "low"
+    },
+    {
+      "lat": 70,
+      "lon": 3,
+      "value": 6,
+      "level": "low"
+    },
+    {
+      "lat": 71,
+      "lon": 3,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 72,
+      "lon": 3,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 73,
+      "lon": 3,
+      "value": 8,
+      "level": "low"
+    },
+    {
+      "lat": 74,
+      "lon": 3,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 75,
+      "lon": 3,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 76,
+      "lon": 3,
+      "value": 6,
+      "level": "low"
+    },
+    {
+      "lat": 70,
+      "lon": 4,
+      "value": 6,
+      "level": "low"
+    },
+    {
+      "lat": 71,
+      "lon": 4,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 72,
+      "lon": 4,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 73,
+      "lon": 4,
+      "value": 8,
+      "level": "low"
+    },
+    {
+      "lat": 74,
+      "lon": 4,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 75,
+      "lon": 4,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 76,
+      "lon": 4,
+      "value": 6,
+      "level": "low"
+    },
+    {
+      "lat": 70,
+      "lon": 5,
+      "value": 6,
+      "level": "low"
+    },
+    {
+      "lat": 71,
+      "lon": 5,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 72,
+      "lon": 5,
+      "value": 7,
+      "level": "low"
+    },
+    {
+      "lat": 73,
+      "lon": 5,
+      "value": 8,
+      "level": "low"
+    },
+    {
+      "lat": 74,
+      "lon": 5,
+      "value": 7,
+      "level": "low"
+    }
+  ],
+  "observation_time": "2026-09-12T15:25:00Z",
+  "forecast_time": "2026-09-12T16:35:00Z",
+  "scale": [
+    {
+      "min": 0,
+      "max": 20,
+      "color": "#1a472a",
+      "label": "Low"
+    },
+    {
+      "min": 20,
+      "max": 40,
+      "color": "#2d7a3e",
+      "label": "Moderate"
+    },
+    {
+      "min": 40,
+      "max": 60,
+      "color": "#4caf50",
+      "label": "Active"
+    },
+    {
+      "min": 60,
+      "max": 80,
+      "color": "#8bc34a",
+      "label": "High"
+    },
+    {
+      "min": 80,
+      "max": 100,
+      "color": "#cddc39",
+      "label": "Very High"
+    }
+  ]
+}

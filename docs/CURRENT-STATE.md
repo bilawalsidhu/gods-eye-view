@@ -2648,3 +2648,94 @@ When runtime behavior or architecture changes, update this file in the same chan
 >   `node scripts/qa-web-receivers.mjs --url http://localhost:4173` drives the
 >   live layer, panel, dock and both voice tools headlessly without contacting
 >   any receiver.
+
+## Ham radio layers (HamRig)
+
+> - **What it is:** seven amateur-radio layers fed by HamRig (hamrig.com) plus
+>   POTA, SOTA and prop.kc2g.com directly, with one companion panel
+>   (`#ham-radio-panel`, panel share token `h`, not pinnable). Layer ids and
+>   share tokens (all `enabled-only`): `dx-spots` `j`, `dxpeditions` `p`,
+>   `ham-activations` `n`, `ham-beacons` `o`, `ham-propagation` `v`,
+>   `ham-repeaters` `l`, `ham-stations` `y`. Not Context companions: they
+>   switch off on Context entry and are restored on exit.
+> - **Broker (`/api/hamrig/*`, `src/hamrig/proxy.js` + `plugin.js`;
+>   `hamrigProxyPlugin()` sits right after `webReceiversProxy()` in
+>   vite.config.js):** `status`, `station/:call`, `POST locate`, `spots`,
+>   `activations`, `dxpeditions`, `propagation`, `aurora`, `voacap`,
+>   `ionosondes`, `beacons/vhf`, `repeaters`, `reception`,
+>   `my/dxcc-status` · `my/worked-grids` · `my/rotators`. Every response is
+>   `no-store` and carries `generatedAt` + `sources`; 400 validation, 403
+>   login-not-configured, 502 upstream; per-route in-memory caches
+>   (`HAMRIG_CACHE_TTL_MS`) with stale fallback; PII and `gateway_key`
+>   scrubbed before serialization (`HAMRIG_FORBIDDEN_KEYS`). Env:
+>   `HAMRIG_ENABLED`, `HAMRIG_BASE_URL` (operator configuration, https unless
+>   localhost), `HAMRIG_USERNAME` / `HAMRIG_PASSWORD` (optional; 30-day token
+>   kept server-side, one 401 retry), `HAMRIG_SPOTS_WS_URL`, `HAMRIG_CTY_URL`,
+>   `HAMRIG_HOME_GRID`.
+> - **Server modules (`src/hamrig/`):** `ctyDat.js` (AD1C cty.dat parser and
+>   resolver — exact/designator/prefix rules, WAE skipping, call-area
+>   centroids, 7-day disk cache), `hamrigClient.js` (lazy login, expiry parsed
+>   from the token, never logs secrets), `normalize.js` (every upstream shape →
+>   the Spot / Activation / Dxpedition / Station / IonoStation / Repeater /
+>   Reception / PropagationSummary / VhfBeacon / Rotator contract shapes; mode
+>   inferred from the comment, then the dial table, never from HamRig's
+>   default `mode`), `geolocate.js` (entity/area sync lookups, precise cached
+>   lookups with a concurrency-limited queue and negative cache), `spotFeed.js`
+>   (WebSocket `wss://hamrig.com:8777` with REST seed and 60 s poll while
+>   down, dedupe by `spotKey`, 1 s → 60 s backoff, idle shutdown).
+> - **Layers (`src/data/`):** `dxSpots.js` (band-coloured points sized and
+>   faded by age over 60 min, hollow ring for entity/area precision, spiral
+>   pile offsets, DX↔spotter arcs for the selection and the newest 25 — dashed
+>   when either end is approximate; `selectSpot()` pre-warms reception and
+>   refines positions; `tuneNearSpotter()`), `hamActivations.js` (POTA / SOTA /
+>   WWFF / BOTA points by program), `dxpeditions.js` (sized by Club Log rank,
+>   upcoming dimmer), `hamBeacons.js` (18 IBP beacons with a 1 s schedule
+>   ticker marking the transmitting beacon per band, VHF beacons when logged
+>   in — a 403 is tolerated, not an error; `tuneBeacon()`),
+>   `hamPropagation.js` (grayline + nautical-twilight rings + night hemisphere
+>   + sun marker recomputed every 60 s, OVATION aurora point cloud, ionosonde
+>   MUF labels, VOACAP reliability rectangles from `txGrid`),
+>   `hamRepeaters.js` (loads around the view centre below 1500 km, debounced
+>   1.5 s on `moveEnd`), `hamStations.js` (callsign lookups, last 50; My
+>   Station: worked DXCC / worked grids / rotator wedge polled every 10 s).
+>   Pure helpers with tests beside them: `hamRadioShared.js` (band colours,
+>   great circles, subsolar point, terminator, `receiverModeForSpot`),
+>   `ncdxfBeacons.js` (IBP table and slot maths), `dxSpotTuning.js`
+>   (`chooseReceiverForSpot`), `maidenhead.js`, and the `*Logic.js` siblings.
+> - **Panel (`#ham-radio-panel`):** tabs STATIONS (lookup + result card + MY
+>   STATION toggles), SPOTS (band / mode / minutes / ARCS, list, TUNE NEAR
+>   SPOTTER, REFINE POSITION), ACTIVITY (program chips, band), DXPEDS (status
+>   chips, most-wanted-only), PROP (SFI/K/A/SSN readout, band-conditions grid,
+>   overlay checkboxes, VOACAP grid / band / hour), BEACONS (per-band current
+>   IBP beacon, power step, seconds to next, VHF count, TUNE), LOCAL
+>   (repeaters radius / band / kind + LOAD HERE, nearest activations). Each
+>   tab carries an ENABLE/DISABLE for its layer; the status line shows the
+>   HamRig host and whether a login is configured. Share state: active tab +
+>   propagation overlays `{grayline,aurora,ionosondes,voacap,txGrid,frequencyMhz}`.
+>   Voice handlers dispatch `gev:ham-radio-panel { tab }` to open the right tab.
+> - **Voice (8 tools):** `lookup_ham_station`, `show_dx_spots`,
+>   `tune_to_dx_spot`, `show_ham_activations`, `show_dxpeditions`,
+>   `show_ham_propagation`, `show_ham_beacons`, `show_ham_repeaters`; the seven
+>   layer ids join `set_layer_visibility` / `show_data_layers_menu` and
+>   `ham-radio-panel` joins `set_panel_open`. Each handler enables its layer
+>   (`origin:'voice'`), returns `{ ok, action, …, ...readLayerLifecycleSummary }`
+>   without a `message`, and understands NATO / German phonetics
+>   ("stroke / Schrägstrich" → `/`); callsigns are read back letter by letter.
+> - **Spotter rule:** `tune_to_dx_spot` / TUNE NEAR SPOTTER choose a web
+>   receiver near a PSKReporter station that heard the DX (last 45 min, same
+>   band, compatible mode) or else near the spotter — precise position
+>   preferred, call-area / entity centroid allowed but named as approximate in
+>   `reason` — never near the DX. The receiver opens through the Web Receivers
+>   dock (`gev:web-receiver-tune`).
+> - **Proof:** unit tests beside every module (`src/hamrig/*.test.mjs`
+>   against the trimmed live fixtures in `src/hamrig/fixtures/`, plus the
+>   `src/data/*Logic.test.mjs`, `hamRadioShared`, `ncdxfBeacons`,
+>   `dxSpotTuning` and `maidenhead` tests);
+>   `node scripts/qa-ham-radio.mjs --url http://localhost:4173` enables all
+>   seven layers on the live dev server, checks geometry and UI state, drives
+>   the eight voice tools through the real action runner and asserts the
+>   chosen receiver sits within 1500 km of the spotter-side anchor with the
+>   dock visible.
+> - **Terms to honour before enabling:** the SOTA API terms (non-commercial,
+>   SOTA Reflector "API-consumers" group membership, prior approval for
+>   AI-written clients) and wspr.live (non-commercial) — see DATA_SOURCES.md.

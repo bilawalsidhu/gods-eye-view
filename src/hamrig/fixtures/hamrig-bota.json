@@ -1,0 +1,24 @@
+{
+  "timestamp": 1789228267,
+  "source": "WWBOTA",
+  "source_url": "https://wwbota.net/",
+  "spots": [
+    {
+      "id": null,
+      "callsign": "GB1MG",
+      "reference": "B/G-1314",
+      "name": "Airfield Battle HQ - Ramsbury",
+      "frequency": 18.08325,
+      "mode": "CW",
+      "time": "2026-09-12T15:21:18.791057Z",
+      "spotter": "GB1MG",
+      "comments": "B/G-1314",
+      "location": "UKBOTA",
+      "type": "Bunker",
+      "locator": "IO91",
+      "lat": 51.44,
+      "lon": -1.6,
+      "dxcc": 223
+    }
+  ]
+}

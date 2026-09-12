@@ -262,7 +262,7 @@ Twenty-eight tools, four jobs — the commands below come straight from the prod
 
 ## 🛰️ What's on the Globe
 
-Thirteen layers and map sources. **Eleven have a keyless path.** Some offer additional capabilities with a provider key. (🟢 no key · 🟡 free key · 🔴 metered.)
+Twenty-one layers and map sources. **Nineteen have a keyless path.** Some offer additional capabilities with a provider key. (🟢 no key · 🟡 free key · 🔴 metered.)
 
 | Layer | What you get | Source | Auth |
 |-------|--------------|--------|------|
@@ -276,6 +276,13 @@ Thirteen layers and map sources. **Eleven have a keyless path.** Some offer addi
 | 📹 **CCTV Mesh** | ~800 public cameras projected *into* the 3D space — Austin · California (Caltrans) · London (TfL). Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs | 🟢 |
 | 📻 **Radio** | Geolocated world radio with an **analog tuner** — drag the needle across up to 750 stations and the globe flies to each broadcaster | Radio Browser / broadcasters | 🟢 |
 | 📡 **Web Receivers** | KiwiSDR, WebSDR and OpenWebRX receivers you can **tune from the globe** — pick one, enter a frequency and mode, and the receiver page opens already tuned; or watch a **silent waterfall** of any range. *"Which SDRs near Tokyo cover 20 meters?"* · *"Show me the RF spectrum from 10 to 15 MHz around here."* | Receiverbook / KiwiSDR map feed / receiver operators | 🟢 |
+| ⚡ **DX Spots** | Live DX-cluster spots on the globe, coloured by band and fading with age, with DX↔spotter great-circle arcs (dashed when a position is only a country centroid). **Tune a web receiver near the spotter** — never near the DX — and hear the signal from where it was reported. *"What's on 20 meters?"* · *"Tune to this spot."* · *"Was läuft auf 40 Meter?"* | HamRig DX cluster feed / AD1C country files | 🟢 |
+| ⛰ **Activations** | POTA, SOTA, WWFF and WWBOTA activators on the air right now, coloured by program. *"Show me POTA activations near Denver."* | POTA / SOTA / WWFF / WWBOTA (via HamRig) | 🟢 (SOTA API terms apply — see DATA_SOURCES.md) |
+| 🏝 **DXpeditions** | Active and announced DX operations, sized by Club Log most-wanted rank, with dates and QSL route. *"Which DXpeditions are active?"* · *"Zeig mir die meistgesuchten Länder."* | NG3K + Club Log via HamRig | 🟢 |
+| ☀ **Propagation** | Grayline and twilight rings, the NOAA OVATION aurora forecast, ionosonde MUF stations and a VOACAP reliability map from your grid; SFI/K/A/SSN and band conditions in the panel. *"Show me the aurora oval."* · *"VOACAP from JO32 on 20 meters."* | NOAA SWPC / prop.kc2g.com / VOACAP via HamRig | 🟢 |
+| 📡 **Beacons** | The 18 NCDXF/IARU beacons with the live 3-minute schedule — which one is keying on 20 m right now, at what power — plus HamRig's VHF beacon list when logged in. *"Tune to the 20 m beacon."* | NCDXF/IARU IBP / HamRig | 🟢 (🟡 HamRig login for VHF) |
+| 📻 **Repeaters** | FM and D-STAR repeaters around the view once you fly in close. *"Zeig mir die 70-cm-Relais um München."* | HamRig repeater database | 🟢 |
+| 👤 **Ham Stations** | Callsign lookup pins any station on the globe, spelled back letter by letter; with a HamRig login: worked DXCC entities, worked grids and your rotator's beam. *"Who is DL1ABC?"* · *"Wer ist DH5DAX?"* | HamRig callsign database (QRZ / HamDB) / AD1C country files | 🟢 (🟡 HamRig login for My Station) |
 | 🚲 **Bikeshare** | Live station availability | GBFS | 🟢 |
 | 🔥 **Active Fires** | Live NASA FIRMS detections, trailing 24h | NASA FIRMS | 🟡 |
 | 🚀 **Space Missions** | Rolling 30-day launches with payload, stage, and recovery detail | Launch Library 2 | 🟢 (🟡 optional token raises the allowance) |

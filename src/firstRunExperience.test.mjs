@@ -664,10 +664,15 @@ test('the voice TOOL SCHEMA is byte-identical to main — the mission mapping is
   // tune_web_receiver and extends the layer-id enums with 'web-receivers' —
   // again a deliberate schema change. The mission mapping is still
   // instruction-only and still rides existing tools.
-  assert.equal(block.length, 36853, 'tool schema byte length drifted from the pinned release schema');
+  // Re-pinned 2026-09-12: the HamRig amateur-radio layers add eight tools
+  // (lookup_ham_station … show_ham_repeaters), seven layer ids to the
+  // layer-id enums and 'ham-radio-panel' to set_panel_open — deliberate
+  // again; the missions still ride existing tools and the mapping below is
+  // still one instruction string.
+  assert.equal(block.length, 49087, 'tool schema byte length drifted from the pinned release schema');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'bf7681d51cc0660777fbf0643c53eae912fbafd170fed71a8963006c37391c71',
+    '21ffe3be0afa1a3ce1b076634819c77adcc0b3ae0f72b6b478e53e85c8440c11',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
 

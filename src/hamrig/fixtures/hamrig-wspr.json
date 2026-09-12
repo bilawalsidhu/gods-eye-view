@@ -1,0 +1,126 @@
+{
+  "success": true,
+  "field": "JO",
+  "minutes": 30,
+  "updated": "2026-09-12T15:52:44+00:00",
+  "source": "wspr.live",
+  "bands": [
+    {
+      "band": "630m",
+      "band_code": 0,
+      "spots": 81,
+      "max_km": 628,
+      "avg_snr": -21.8,
+      "dx_grid": "IO91fr",
+      "dx_azimuth": 276
+    },
+    {
+      "band": "160m",
+      "band_code": 1,
+      "spots": 101,
+      "max_km": 480,
+      "avg_snr": -21.7,
+      "dx_grid": "JN49qb",
+      "dx_azimuth": 110
+    },
+    {
+      "band": "80m",
+      "band_code": 3,
+      "spots": 1784,
+      "max_km": 11195,
+      "avg_snr": -18.4,
+      "dx_grid": "BL74",
+      "dx_azimuth": 340
+    },
+    {
+      "band": "60m",
+      "band_code": 5,
+      "spots": 609,
+      "max_km": 1582,
+      "avg_snr": -17,
+      "dx_grid": "IN53tf",
+      "dx_azimuth": 231
+    },
+    {
+      "band": "40m",
+      "band_code": 7,
+      "spots": 16655,
+      "max_km": 18097,
+      "avg_snr": -14.4,
+      "dx_grid": "RE78mu",
+      "dx_azimuth": 65
+    },
+    {
+      "band": "30m",
+      "band_code": 10,
+      "spots": 6651,
+      "max_km": 18461,
+      "avg_snr": -15.2,
+      "dx_grid": "RE79nd",
+      "dx_azimuth": 55
+    },
+    {
+      "band": "20m",
+      "band_code": 14,
+      "spots": 7450,
+      "max_km": 18885,
+      "avg_snr": -16,
+      "dx_grid": "RE66hk",
+      "dx_azimuth": 48
+    },
+    {
+      "band": "17m",
+      "band_code": 18,
+      "spots": 984,
+      "max_km": 16212,
+      "avg_snr": -20.6,
+      "dx_grid": "PF95ht",
+      "dx_azimuth": 77
+    },
+    {
+      "band": "15m",
+      "band_code": 21,
+      "spots": 722,
+      "max_km": 17554,
+      "avg_snr": -20.1,
+      "dx_grid": "QD52",
+      "dx_azimuth": 122
+    },
+    {
+      "band": "12m",
+      "band_code": 24,
+      "spots": 94,
+      "max_km": 13814,
+      "avg_snr": -21.1,
+      "dx_grid": "IB59ui",
+      "dx_azimuth": 186
+    },
+    {
+      "band": "10m",
+      "band_code": 28,
+      "spots": 151,
+      "max_km": 11267,
+      "avg_snr": -17.1,
+      "dx_grid": "GF05",
+      "dx_azimuth": 228
+    },
+    {
+      "band": "6m",
+      "band_code": 50,
+      "spots": 14,
+      "max_km": 194,
+      "avg_snr": -19.6,
+      "dx_grid": "JO10rw",
+      "dx_azimuth": 119
+    },
+    {
+      "band": "2m",
+      "band_code": 144,
+      "spots": 28,
+      "max_km": 271,
+      "avg_snr": -16.2,
+      "dx_grid": "JO30sn",
+      "dx_azimuth": 150
+    }
+  ]
+}

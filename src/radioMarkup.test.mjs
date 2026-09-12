@@ -21,11 +21,11 @@ function realtimeTools() {
   return new Function(`return ${literal};`)();
 }
 
-test('Realtime schema exposes the authoritative 31-tool inventory', () => {
+test('Realtime schema exposes the authoritative 39-tool inventory', () => {
   const tools = realtimeTools();
-  assert.equal(tools.length, 31);
+  assert.equal(tools.length, 39);
   const names = tools.map((tool) => tool.name);
-  assert.equal(new Set(names).size, 31, 'tool names are unique');
+  assert.equal(new Set(names).size, 39, 'tool names are unique');
   assert.ok(names.includes('set_context_mode'));
   assert.ok(names.includes('control_cockpit'));
   assert.ok(names.includes('select_nearest_aircraft'));
@@ -33,6 +33,13 @@ test('Realtime schema exposes the authoritative 31-tool inventory', () => {
   assert.ok(names.includes('find_web_receivers'));
   assert.ok(names.includes('tune_web_receiver'));
   assert.ok(names.includes('show_rf_spectrum'));
+  // HamRig amateur-radio layers: eight tools, each enabling its layer itself.
+  for (const name of [
+    'lookup_ham_station', 'show_dx_spots', 'tune_to_dx_spot', 'show_ham_activations',
+    'show_dxpeditions', 'show_ham_propagation', 'show_ham_beacons', 'show_ham_repeaters',
+  ]) {
+    assert.ok(names.includes(name), `${name} is missing from the Realtime schema`);
+  }
   // Every tool closes its parameter object: an open schema lets the model
   // invent arguments the runner silently drops.
   for (const tool of tools) {
@@ -144,7 +151,7 @@ test('the edited existing tools changed exactly as intended', () => {
   const panel = byName.get('set_panel_open');
   assert.deepEqual(
     panel.parameters.properties.panelId.enum,
-    ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'pp-toggles', 'global-context-panel'],
+    ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'pp-toggles', 'global-context-panel', 'ham-radio-panel'],
   );
   assert.deepEqual(panel.parameters.required, ['panelId', 'open']);
 
@@ -183,16 +190,19 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'find_web_receivers',
     'tune_web_receiver',
     'show_rf_spectrum',
+    // HamRig layers (2026-09-12): the layer-id enums grew by seven ids and
+    // set_panel_open gained 'ham-radio-panel'; the eight new ham tools are
+    // pinned in the digest below like every other shipped tool.
   ]);
   const unchanged = realtimeTools()
     .filter((tool) => !TOUCHED.has(tool.name))
     .sort((a, b) => a.name.localeCompare(b.name));
-  assert.equal(unchanged.length, 19);
+  assert.equal(unchanged.length, 27);
   const digest = createHash('sha256')
     .update(JSON.stringify(unchanged))
     .digest('hex')
     .slice(0, 16);
-  assert.equal(digest, 'bec5d5804021d11d', 'an unchanged Realtime tool definition drifted');
+  assert.equal(digest, '89c8d76e6bd8a150', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {

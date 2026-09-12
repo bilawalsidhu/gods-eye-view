@@ -30,6 +30,12 @@ export const CREDENTIALS = Object.freeze([
     )),
   },
   { name: 'LL2_API_TOKEN', label: 'Launch Library 2', keychain: [] },
+  // HamRig (amateur-radio layers). All optional: the public feeds work without
+  // a login; username + password unlock VHF beacons and the "my station" data.
+  { name: 'HAMRIG_USERNAME', label: 'HamRig username', keychain: [['hamrig', 'username']] },
+  { name: 'HAMRIG_PASSWORD', label: 'HamRig password', keychain: [['hamrig', 'password']] },
+  { name: 'HAMRIG_BASE_URL', label: 'HamRig base URL', keychain: [] },
+  { name: 'HAMRIG_HOME_GRID', label: 'HamRig home grid', keychain: [] },
 ]);
 
 export function isConfiguredValue(value) {
@@ -148,6 +154,9 @@ export function buildCapabilitySummary(credentials) {
     missions: configured('LL2_API_TOKEN')
       ? 'Launch Library 2 token allowance'
       : 'Launch Library 2 public access',
+    hamRadio: configured('HAMRIG_USERNAME') && configured('HAMRIG_PASSWORD')
+      ? 'HamRig public feeds plus login-only data (VHF beacons, my station)'
+      : 'HamRig public feeds (spots, activations, DXpeditions, propagation, repeaters, station lookup); login-only data off',
   };
 }
 
@@ -201,10 +210,12 @@ export function formatSetupReport(report, { readyMessage } = {}) {
     `Fires:   ${report.capabilities.fires}`,
     `Traffic: ${report.capabilities.traffic}`,
     `Missions: ${report.capabilities.missions}`,
+    `Ham radio: ${report.capabilities.hamRadio}`,
     '',
     'Configured providers:',
     ...CREDENTIALS.map((spec) => {
-      const state = report.credentials[spec.name];
+      // Optional rows (HamRig) may be absent from a caller-built credential map.
+      const state = report.credentials[spec.name] ?? { configured: false, source: null };
       return state.configured
         ? `  [OK] ${spec.label} (${state.source})`
         : `  [--] ${spec.label}`;

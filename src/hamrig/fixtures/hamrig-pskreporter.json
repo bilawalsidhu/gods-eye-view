@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "call": "DL2SBY",
+  "minutes": 60,
+  "updated": "2026-09-12T15:52:46+00:00",
+  "source": "PSK Reporter (MQTT)",
+  "count": 0,
+  "bands": [],
+  "reports": [],
+  "warming_up": true
+}

@@ -1,0 +1,31 @@
+{
+  "success": true,
+  "updated": "2026-09-12T15:52:45+00:00",
+  "source": "GIRO ionosondes via prop.kc2g · eSSN prop.kc2g",
+  "lat": 52.5,
+  "lon": 7,
+  "station": {
+    "name": "Dourbes, Belgium",
+    "lat": 50.1,
+    "lon": 4.6,
+    "mufd": 22.6,
+    "fof2": 6.7,
+    "age_min": 7,
+    "hmf2": 242,
+    "yf2": 65,
+    "fof1": 4.1,
+    "hmf1": 173,
+    "yf1": 43,
+    "foe": 2.5,
+    "hme": 91,
+    "tec": null,
+    "cs": 95,
+    "distance_km": 315
+  },
+  "essn": {
+    "ssn": 43.7,
+    "sfi": 95.8,
+    "time": 1789226702,
+    "source": "prop.kc2g eSSN"
+  }
+}

@@ -1,0 +1,46 @@
+[
+  { "type": "welcome", "message": "HamRig live spots", "server_time": "2026-09-12T15:34:50+00:00" },
+  { "type": "spot_history_push", "spot_count": 100 },
+  {
+    "spotter": "CT7AUT",
+    "frequency": 24915.0,
+    "spotted": "S79/DL2SBY",
+    "comment": "FT8 +9 dB",
+    "time": "1223Z",
+    "timestamp": "2026-09-12T15:34:54.475625+00:00",
+    "raw": "DX de CT7AUT:    24915.0  S79/DL2SBY   FT8 +9 dB                      1223Z"
+  },
+  {
+    "spotter": "DL8LAS-#",
+    "frequency": 7024.0,
+    "spotted": "F5MQU/P",
+    "comment": "CW 15 dB 20 WPM CQ",
+    "time": "1224Z",
+    "timestamp": "2026-09-12T15:35:10.100000+00:00",
+    "raw": "DX de DL8LAS-#:   7024.0  F5MQU/P      CW 15 dB 20 WPM CQ             1224Z"
+  },
+  {
+    "spotter": "W3LPL-2",
+    "frequency": 14255.0,
+    "spotted": "UP4L",
+    "comment": "",
+    "time": "1225Z",
+    "raw": "DX de W3LPL-2:   14255.0  UP4L                                        1225Z"
+  },
+  { "type": "spot_history_push_complete" },
+  { "type": "spot_request_response", "request_id": "x", "spot_count": 1 },
+  {
+    "type": "historical_spot",
+    "spot": {
+      "spotter": "IK6MNB",
+      "frequency": 14023.0,
+      "spotted": "UA9XO",
+      "comment": "CQ TEST",
+      "time": "1240Z",
+      "timestamp": "2026-09-12T12:40:12.000000+00:00",
+      "raw": "DX de IK6MNB:    14023.0  UA9XO        CQ TEST                        1240Z"
+    }
+  },
+  { "type": "spot_request_complete", "request_id": "x" },
+  { "type": "spot_request_error", "request_id": "y", "error": "minutes_back too large" }
+]

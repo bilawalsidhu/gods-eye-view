@@ -1,0 +1,900 @@
+{
+  "timestamp": 1789228365,
+  "source": "NOAA SWPC",
+  "fallback_source": "Clear Sky Institute",
+  "data": {
+    "xray": {
+      "class": "B",
+      "magnitude": "3.1",
+      "flux": 3.1136247002905293e-7,
+      "timestamp": 1789227840,
+      "history": [
+        {
+          "timestamp": 1789227180,
+          "flux": 4.5495500700099e-9,
+          "class": {
+            "letter": "A",
+            "magnitude": "0.5"
+          }
+        },
+        {
+          "timestamp": 1789227180,
+          "flux": 3.181063732426992e-7,
+          "class": {
+            "letter": "B",
+            "magnitude": "3.2"
+          }
+        },
+        {
+          "timestamp": 1789227240,
+          "flux": 3.229853051678333e-9,
+          "class": {
+            "letter": "A",
+            "magnitude": "0.3"
+          }
+        },
+        {
+          "timestamp": 1789227240,
+          "flux": 3.169786282342102e-7,
+          "class": {
+            "letter": "B",
+            "magnitude": "3.2"
+          }
+        },
+        {
+          "timestamp": 1789227300,
+          "flux": 3.064734466207142e-9,
+          "class": {
+            "letter": "A",
+            "magnitude": "0.3"
+          }
+        },
+        {
+          "timestamp": 1789227300,
+          "flux": 3.1548592005492537e-7,
+          "class": {
+            "letter": "B",
+            "magnitude": "3.2"
+          }
+        },
+        {
+          "timestamp": 1789227360,
+          "flux": 2.131780973968489e-9,
+          "class": {
+            "letter": "A",
+            "magnitude": "0.2"
+          }
+        },
+        {
+          "timestamp": 1789227360,
+          "flux": 3.160109258715238e-7,
+          "class": {
+            "letter": "B",
+            "magnitude": "3.2"
+          }
+        },
+        {
+          "timestamp": 1789227420,
+          "flux": 3.274182480694776e-9,
+          "class": {
+            "letter": "A",
+            "magnitude": "0.3"
+          }
+        },
+        {
+          "timestamp": 1789227420,
+          "flux": 3.1354190355159517e-7,
+          "class": {
+            "letter": "B",
+            "magnitude": "3.1"
+          }
+        },
+        {
+          "timestamp": 1789227480,
+          "flux": 9.999999717180685e-10,
+          "class": {
+            "letter": "A",
+            "magnitude": "0.1"
+          }
+        },
+        {
+          "timestamp": 1789227480,
+          "flux": 3.137622570648091e-7,
+          "class": {
+            "letter": "B",
+            "magnitude": "3.1"
+          }
+        },
+        {
+          "timestamp": 1789227540,
+          "flux": 3.028493011925093e-9,
+          "class": {
+            "letter": "A",
+            "magnitude": "0.3"
+          }
+        },
+        {
+          "timestamp": 1789227540,
+          "flux": 3.123402620985871e-7,
+          "class": {
+            "letter": "B",
+            "magnitude": "3.1"
+          }
+        },
+        {
+          "timestamp": 1789227600,
+          "flux": 2.763009820938578e-9,
+          "class": {
+            "letter": "A",
+            "magnitude": "0.3"
+          }
+        },
+        {
+          "timestamp": 1789227600,
+          "flux": 3.128937464680348e-7,
+          "class": {
+            "letter": "B",
+            "magnitude": "3.1"
+          }
+        },
+        {
+          "timestamp": 1789227660,
+          "flux": 3.4428184747525847e-9,
+          "class": {
+            "letter": "A",
+            "magnitude": "0.3"
+          }
+        },
+        {
+          "timestamp": 1789227660,
+          "flux": 3.1072841011337005e-7,
+          "class": {
+            "letter": "B",
+            "magnitude": "3.1"
+          }
+        },
+        {
+          "timestamp": 1789227720,
+          "flux": 3.3666343046689917e-9,
+          "class": {
+            "letter": "A",
+            "magnitude": "0.3"
+          }
+        },
+        {
+          "timestamp": 1789227720,
+          "flux": 3.10689841853673e-7,
+          "class": {
+            "letter": "B",
+            "magnitude": "3.1"
+          }
+        },
+        {
+          "timestamp": 1789227780,
+          "flux": 4.350446225487303e-9,
+          "class": {
+            "letter": "A",
+            "magnitude": "0.4"
+          }
+        },
+        {
+          "timestamp": 1789227780,
+          "flux": 3.114187165920157e-7,
+          "class": {
+            "letter": "B",
+            "magnitude": "3.1"
+          }
+        },
+        {
+          "timestamp": 1789227840,
+          "flux": 5.379266809768524e-9,
+          "class": {
+            "letter": "A",
+            "magnitude": "0.5"
+          }
+        },
+        {
+          "timestamp": 1789227840,
+          "flux": 3.1136247002905293e-7,
+          "class": {
+            "letter": "B",
+            "magnitude": "3.1"
+          }
+        }
+      ],
+      "_source": "NOAA_SWPC",
+      "_cached": true
+    },
+    "noaa": {
+      "r_scale": {
+        "level": 0,
+        "status": "None"
+      },
+      "s_scale": {
+        "level": 0,
+        "status": "None"
+      },
+      "g_scale": {
+        "level": 0,
+        "status": "None"
+      },
+      "forecast": [],
+      "_source": "NOAA_SWPC",
+      "_cached": true
+    },
+    "solarwind": {
+      "speed": 411.8,
+      "density": 0.18,
+      "temperature": 113286,
+      "timestamp": 1789141560,
+      "speed_status": "moderate",
+      "history": [
+        {
+          "timestamp": 1789142526,
+          "speed": 414.75,
+          "density": 7.01,
+          "temperature": 79249
+        },
+        {
+          "timestamp": 1789142520,
+          "speed": 411.5,
+          "density": 5.13,
+          "temperature": 115291
+        },
+        {
+          "timestamp": 1789142520,
+          "speed": 411.46,
+          "density": 0.68,
+          "temperature": 39095
+        },
+        {
+          "timestamp": 1789142466,
+          "speed": 418.25,
+          "density": 6.99,
+          "temperature": 87624
+        },
+        {
+          "timestamp": 1789142460,
+          "speed": 414.3,
+          "density": 5.15,
+          "temperature": 113628
+        },
+        {
+          "timestamp": 1789142406,
+          "speed": 413.81,
+          "density": 7.18,
+          "temperature": 86219
+        },
+        {
+          "timestamp": 1789142400,
+          "speed": 413.8,
+          "density": 5.53,
+          "temperature": 112260
+        },
+        {
+          "timestamp": 1789142346,
+          "speed": 413.69,
+          "density": 7.24,
+          "temperature": 81639
+        },
+        {
+          "timestamp": 1789142340,
+          "speed": 411.7,
+          "density": 5.56,
+          "temperature": 113294
+        },
+        {
+          "timestamp": 1789142286,
+          "speed": 415.94,
+          "density": 7.02,
+          "temperature": 79861
+        },
+        {
+          "timestamp": 1789142280,
+          "speed": 411,
+          "density": 5.1,
+          "temperature": 109457
+        },
+        {
+          "timestamp": 1789142280,
+          "speed": 411.17,
+          "density": 0.76,
+          "temperature": 38933
+        },
+        {
+          "timestamp": 1789142226,
+          "speed": 412.87,
+          "density": 7.18,
+          "temperature": 82039
+        },
+        {
+          "timestamp": 1789142220,
+          "speed": 423.19,
+          "density": 1.06,
+          "temperature": 70251
+        },
+        {
+          "timestamp": 1789142220,
+          "speed": 410.6,
+          "density": 4.84,
+          "temperature": 105592
+        },
+        {
+          "timestamp": 1789142166,
+          "speed": 412.52,
+          "density": 6.94,
+          "temperature": 88012
+        },
+        {
+          "timestamp": 1789142160,
+          "speed": 406.2,
+          "density": 4.91,
+          "temperature": 101006
+        },
+        {
+          "timestamp": 1789142160,
+          "speed": 438.07,
+          "density": 1.3,
+          "temperature": 124513
+        },
+        {
+          "timestamp": 1789142106,
+          "speed": 415.24,
+          "density": 6.58,
+          "temperature": 82847
+        },
+        {
+          "timestamp": 1789142100,
+          "speed": 424.01,
+          "density": 0.93,
+          "temperature": 84436
+        },
+        {
+          "timestamp": 1789142100,
+          "speed": 408,
+          "density": 4.97,
+          "temperature": 102817
+        },
+        {
+          "timestamp": 1789142046,
+          "speed": 415.13,
+          "density": 6.27,
+          "temperature": 78731
+        },
+        {
+          "timestamp": 1789142040,
+          "speed": 411.2,
+          "density": 5.13,
+          "temperature": 114532
+        },
+        {
+          "timestamp": 1789142040,
+          "speed": 415.32,
+          "density": 1.39,
+          "temperature": 65459
+        },
+        {
+          "timestamp": 1789141986,
+          "speed": 413.21,
+          "density": 6.68,
+          "temperature": 79038
+        },
+        {
+          "timestamp": 1789141980,
+          "speed": 410.94,
+          "density": 0.89,
+          "temperature": 95665
+        },
+        {
+          "timestamp": 1789141980,
+          "speed": 410.7,
+          "density": 5.59,
+          "temperature": 112403
+        },
+        {
+          "timestamp": 1789141926,
+          "speed": 412.89,
+          "density": 6.81,
+          "temperature": 78840
+        },
+        {
+          "timestamp": 1789141920,
+          "speed": 409.1,
+          "density": 6.06,
+          "temperature": 132633
+        },
+        {
+          "timestamp": 1789141920,
+          "speed": 414.8,
+          "density": 0.2,
+          "temperature": 127178
+        },
+        {
+          "timestamp": 1789141866,
+          "speed": 412.86,
+          "density": 6.69,
+          "temperature": 81633
+        },
+        {
+          "timestamp": 1789141860,
+          "speed": 408.07,
+          "density": 0.22,
+          "temperature": 106761
+        },
+        {
+          "timestamp": 1789141860,
+          "speed": 404.7,
+          "density": 4.89,
+          "temperature": 116758
+        },
+        {
+          "timestamp": 1789141806,
+          "speed": 413.23,
+          "density": 6.64,
+          "temperature": 83142
+        },
+        {
+          "timestamp": 1789141800,
+          "speed": 395.9,
+          "density": 0.2,
+          "temperature": 77292
+        },
+        {
+          "timestamp": 1789141800,
+          "speed": 405.3,
+          "density": 5.3,
+          "temperature": 124140
+        },
+        {
+          "timestamp": 1789141746,
+          "speed": 416.53,
+          "density": 6.67,
+          "temperature": 84441
+        },
+        {
+          "timestamp": 1789141740,
+          "speed": 410.61,
+          "density": 0.2,
+          "temperature": 94821
+        },
+        {
+          "timestamp": 1789141740,
+          "speed": 407.8,
+          "density": 5.33,
+          "temperature": 112163
+        },
+        {
+          "timestamp": 1789141686,
+          "speed": 417.11,
+          "density": 6.71,
+          "temperature": 84099
+        },
+        {
+          "timestamp": 1789141680,
+          "speed": 407.88,
+          "density": 0.22,
+          "temperature": 72962
+        },
+        {
+          "timestamp": 1789141680,
+          "speed": 409.3,
+          "density": 5.43,
+          "temperature": 118177
+        },
+        {
+          "timestamp": 1789141626,
+          "speed": 416.59,
+          "density": 7.35,
+          "temperature": 87930
+        },
+        {
+          "timestamp": 1789141620,
+          "speed": 411.2,
+          "density": 5.55,
+          "temperature": 128762
+        },
+        {
+          "timestamp": 1789141620,
+          "speed": 400.28,
+          "density": 0.29,
+          "temperature": 76730
+        },
+        {
+          "timestamp": 1789141566,
+          "speed": 414.02,
+          "density": 7.25,
+          "temperature": 86671
+        },
+        {
+          "timestamp": 1789141560,
+          "speed": 409.9,
+          "density": 5.17,
+          "temperature": 121188
+        },
+        {
+          "timestamp": 1789141560,
+          "speed": 411.8,
+          "density": 0.18,
+          "temperature": 113286
+        }
+      ],
+      "_source": "NOAA_SWPC",
+      "_cached": true
+    },
+    "bz": {
+      "bz": 3.08,
+      "bt": 3.35,
+      "timestamp": 1789141560,
+      "direction": "neutral",
+      "impact": "minimal",
+      "history": [
+        {
+          "timestamp": 1789142520,
+          "bz": 2.06,
+          "bt": 3.71
+        },
+        {
+          "timestamp": 1789142460,
+          "bz": 2.38,
+          "bt": 3.76
+        },
+        {
+          "timestamp": 1789142460,
+          "bz": 2.1,
+          "bt": 4.07
+        },
+        {
+          "timestamp": 1789142460,
+          "bz": 1.79,
+          "bt": 3.75
+        },
+        {
+          "timestamp": 1789142400,
+          "bz": 2.29,
+          "bt": 3.95
+        },
+        {
+          "timestamp": 1789142400,
+          "bz": 1.74,
+          "bt": 3.59
+        },
+        {
+          "timestamp": 1789142400,
+          "bz": 1.59,
+          "bt": 3.58
+        },
+        {
+          "timestamp": 1789142340,
+          "bz": 1.05,
+          "bt": 3.72
+        },
+        {
+          "timestamp": 1789142340,
+          "bz": 1.92,
+          "bt": 4.24
+        },
+        {
+          "timestamp": 1789142280,
+          "bz": 1.39,
+          "bt": 4.48
+        },
+        {
+          "timestamp": 1789142280,
+          "bz": 1.19,
+          "bt": 3.43
+        },
+        {
+          "timestamp": 1789142280,
+          "bz": 1.17,
+          "bt": 3.67
+        },
+        {
+          "timestamp": 1789142220,
+          "bz": 0.71,
+          "bt": 4.5
+        },
+        {
+          "timestamp": 1789142220,
+          "bz": 1.76,
+          "bt": 3.77
+        },
+        {
+          "timestamp": 1789142220,
+          "bz": 1.42,
+          "bt": 3.18
+        },
+        {
+          "timestamp": 1789142160,
+          "bz": 1.37,
+          "bt": 4.44
+        },
+        {
+          "timestamp": 1789142160,
+          "bz": 2.5,
+          "bt": 2.97
+        },
+        {
+          "timestamp": 1789142160,
+          "bz": 2.59,
+          "bt": 3.37
+        },
+        {
+          "timestamp": 1789142100,
+          "bz": 1.62,
+          "bt": 4.34
+        },
+        {
+          "timestamp": 1789142100,
+          "bz": 3.24,
+          "bt": 3.25
+        },
+        {
+          "timestamp": 1789142100,
+          "bz": 3.03,
+          "bt": 3.8
+        },
+        {
+          "timestamp": 1789142040,
+          "bz": 1.41,
+          "bt": 4.35
+        },
+        {
+          "timestamp": 1789142040,
+          "bz": 1.71,
+          "bt": 2
+        },
+        {
+          "timestamp": 1789142040,
+          "bz": 2.43,
+          "bt": 4.37
+        },
+        {
+          "timestamp": 1789141980,
+          "bz": 1.78,
+          "bt": 4.12
+        },
+        {
+          "timestamp": 1789141980,
+          "bz": 1.3,
+          "bt": 3.92
+        },
+        {
+          "timestamp": 1789141980,
+          "bz": 2.14,
+          "bt": 4.4
+        },
+        {
+          "timestamp": 1789141920,
+          "bz": 1.38,
+          "bt": 2.5
+        },
+        {
+          "timestamp": 1789141920,
+          "bz": 0.91,
+          "bt": 4.06
+        },
+        {
+          "timestamp": 1789141920,
+          "bz": 1.53,
+          "bt": 3.95
+        },
+        {
+          "timestamp": 1789141860,
+          "bz": 1.19,
+          "bt": 2.67
+        },
+        {
+          "timestamp": 1789141860,
+          "bz": 0.59,
+          "bt": 4.07
+        },
+        {
+          "timestamp": 1789141860,
+          "bz": 1.19,
+          "bt": 3.97
+        },
+        {
+          "timestamp": 1789141800,
+          "bz": 0.58,
+          "bt": 4.46
+        },
+        {
+          "timestamp": 1789141800,
+          "bz": 1.35,
+          "bt": 3.87
+        },
+        {
+          "timestamp": 1789141800,
+          "bz": 0.95,
+          "bt": 2.61
+        },
+        {
+          "timestamp": 1789141740,
+          "bz": 2.61,
+          "bt": 3.67
+        },
+        {
+          "timestamp": 1789141740,
+          "bz": 0.89,
+          "bt": 4.77
+        },
+        {
+          "timestamp": 1789141740,
+          "bz": 1.21,
+          "bt": 3.16
+        },
+        {
+          "timestamp": 1789141680,
+          "bz": 3.35,
+          "bt": 3.64
+        },
+        {
+          "timestamp": 1789141680,
+          "bz": 1.33,
+          "bt": 4.66
+        },
+        {
+          "timestamp": 1789141680,
+          "bz": 1.38,
+          "bt": 3.18
+        },
+        {
+          "timestamp": 1789141620,
+          "bz": 2.81,
+          "bt": 2.85
+        },
+        {
+          "timestamp": 1789141620,
+          "bz": 3.02,
+          "bt": 3.19
+        },
+        {
+          "timestamp": 1789141620,
+          "bz": 0.86,
+          "bt": 4.54
+        },
+        {
+          "timestamp": 1789141560,
+          "bz": 2.98,
+          "bt": 3.22
+        },
+        {
+          "timestamp": 1789141560,
+          "bz": 0.79,
+          "bt": 4.49
+        },
+        {
+          "timestamp": 1789141560,
+          "bz": 3.08,
+          "bt": 3.35
+        }
+      ],
+      "_source": "NOAA_SWPC",
+      "_cached": true
+    },
+    "aurora": {
+      "north_probability": 0,
+      "south_probability": 0,
+      "timestamp": 1789226700,
+      "kp_required": 6,
+      "activity": "very_low",
+      "observation_time": "2026-09-12T15:25:00Z",
+      "forecast_time": "2026-09-12T16:35:00Z",
+      "_source": "NOAA_SWPC",
+      "_cached": true
+    },
+    "kindex": {
+      "kp": 0,
+      "timestamp": 1789226700,
+      "status": "quiet",
+      "history": [
+        {
+          "timestamp": 1789225320,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789225380,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789225440,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789225500,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789225560,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789225620,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789225680,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789225740,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789225800,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789225860,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789225920,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789225980,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789226040,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789226100,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789226160,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789226220,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789226280,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789226340,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789226400,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789226460,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789226520,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789226580,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789226640,
+          "kp": 0
+        },
+        {
+          "timestamp": 1789226700,
+          "kp": 0
+        }
+      ],
+      "forecast": [],
+      "_source": "NOAA_SWPC",
+      "_cached": true
+    },
+    "solarflux": {
+      "flux": null,
+      "timestamp": 1789227066,
+      "history": [],
+      "_source": "NOAA_SWPC",
+      "_cached": true
+    }
+  }
+}

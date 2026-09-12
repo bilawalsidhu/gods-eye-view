@@ -1,0 +1,18 @@
+Italy:                    15:  28:  EU:   42.82:   -12.58:    -1.0:  I:
+    I,=II0PN/MM(40),=II1RT/N,=IK0CNA/LH;
+Sicily:                   15:  28:  EU:   37.50:   -14.00:    -1.0:  *IT9:
+    IB9,ID9,IE9,IF9,II9,IJ9,IO9,IP9,IQ9,IR9,IT9,IU9,IW9,IY9,=II1MM/9,=IT9HBS/LH;
+Austria:                  15:  28:  EU:   47.33:   -13.33:    -1.0:  OE:
+    OE,=4U0IARU,=4U0R,=4U1A,=4U1VIC,=4U1WED;
+Iceland:                  40:  17:  EU:   64.80:    18.73:     0.0:  TF:
+    TF,=TF1IRA/LGT,=TF1IRA/LH,=TF8RX/LH;
+Norway:                   14:  18:  EU:   61.00:    -9.00:    -1.0:  LA:
+    LA,LB,LC,LD,LE,LF,LG,LH,LI,LJ,LK,LL,LM,LN,=LA/DB8JO/LH;
+Latvia:                   15:  29:  EU:   57.03:   -24.65:    -2.0:  YL:
+    YL,=YL0A/LH,=YL2SW/MM(21);
+Asiatic Russia:           17:  30:  AS:   55.88:   -84.08:    -7.0:  UA9:
+    R0(19)[33],R8,R9,RA0(19)[33],RA8,RA9,U8,U9,UA0(19)[33],UA8,UA9,UB0(19)[33],UB8,UB9,
+    =R0CAF,=R0XAD/6/P,=UA9ABC/P;
+Synthetic Overrides:      05:  08:  NA:   10.00:    20.00:     5.0:  QA:
+    QA,QB<12.34/-56.78>{AF}~-3.5~(38)[70],QC(33)~2.0~[45]{AS}<-45.67/123.45>,QD[71](39),
+    =QA1TEST<1.00/2.00>{SA}(9),=QA2MIX/P~-8.0~;

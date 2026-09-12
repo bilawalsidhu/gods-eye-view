@@ -70,6 +70,18 @@ import radioLayer, {
 } from './data/radio.js';
 import webReceiversLayer from './data/webReceivers.js';
 import { parseFrequencyHz } from './data/webReceiverTuning.js';
+import dxSpotsLayer from './data/dxSpots.js';
+import hamActivationsLayer from './data/hamActivations.js';
+import dxpeditionsLayer from './data/dxpeditions.js';
+import hamBeaconsLayer from './data/hamBeacons.js';
+import hamPropagationLayer from './data/hamPropagation.js';
+import hamRepeatersLayer from './data/hamRepeaters.js';
+import hamStationsLayer from './data/hamStations.js';
+import { PROGRAM_COLORS, bandColor, distanceKm, formatAge, formatHz } from './data/hamRadioShared.js';
+import { activationDetail } from './data/hamActivationsLogic.js';
+import { dxpeditionDetail, effectiveStatus } from './data/dxpeditionsLogic.js';
+import { repeaterDetails } from './data/hamRepeatersLogic.js';
+import { precisionLabel } from './data/hamStationsLogic.js';
 import bikeshareLayer from './data/bikeshare.js';
 import aisLiveVesselsLayer from './data/aisLiveVessels.js';
 import militaryAwarenessLayer from './data/militaryAwareness.js';
@@ -210,6 +222,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'cctv-panel' },
   { id: 'radio-panel' },
   { id: 'web-receivers-panel' },
+  { id: 'ham-radio-panel' },
   { id: 'scene-panel' },
   { id: 'global-context-panel' },
   { id: 'pp-toggles' },
@@ -224,7 +237,24 @@ const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'global-context-panel',
   'radio-panel',
   'web-receivers-panel',
+  'ham-radio-panel',
 ]);
+/** Ham Radio companion panel: one tab per amateur-radio layer (HamRig). */
+const HAM_RADIO_PANEL_ID = 'ham-radio-panel';
+const HAM_TABS = Object.freeze(['stations', 'spots', 'activity', 'dxpeds', 'prop', 'beacons', 'local']);
+const HAM_PANEL_LAYERS = Object.freeze([
+  Object.freeze({ id: 'ham-stations', tab: 'stations', name: 'Ham Stations', layer: hamStationsLayer }),
+  Object.freeze({ id: 'dx-spots', tab: 'spots', name: 'DX Spots', layer: dxSpotsLayer }),
+  Object.freeze({ id: 'ham-activations', tab: 'activity', name: 'Activations', layer: hamActivationsLayer }),
+  Object.freeze({ id: 'dxpeditions', tab: 'dxpeds', name: 'DXpeditions', layer: dxpeditionsLayer }),
+  Object.freeze({ id: 'ham-propagation', tab: 'prop', name: 'Propagation', layer: hamPropagationLayer }),
+  Object.freeze({ id: 'ham-beacons', tab: 'beacons', name: 'Beacons', layer: hamBeaconsLayer }),
+  Object.freeze({ id: 'ham-repeaters', tab: 'local', name: 'Repeaters', layer: hamRepeatersLayer }),
+]);
+const HAM_TAB_BY_LAYER = new Map(HAM_PANEL_LAYERS.map((row) => [row.id, row.tab]));
+/** Panel list caps: the SPOTS tab shows the newest 40, other tabs up to 60 rows. */
+const HAM_SPOT_LIST_LIMIT = 40;
+const HAM_LIST_LIMIT = 60;
 /**
  * Position keys are versioned separately from collapsed-state keys so layout
  * default changes (e.g. right-rail origin) can reset positions without also
@@ -2288,6 +2318,14 @@ export class StyleManager {
     this._webReceiversFrame = document.getElementById('web-receivers-frame');
     this._webReceiversDockNote = document.getElementById('web-receivers-dock-note');
     this._webReceiversStatus = document.getElementById('web-receivers-status');
+    this._hamRadioPanel = document.getElementById('ham-radio-panel');
+    this._hamEls = {};
+    this._hamStates = {};
+    this._hamTab = 'stations';
+    this._hamUnsubscribes = [];
+    this._hamBeaconRows = null;
+    this._hamStatus = null;
+    this._hamStatusPromise = null;
     this._contextRadioDock = document.getElementById('context-radio-dock');
     this._contextRadioToggleBtn = document.getElementById('context-radio-toggle-btn');
     this._contextRadioMini = document.getElementById('context-radio-mini');
@@ -2649,6 +2687,7 @@ export class StyleManager {
     this._initRightPanelAdaptiveLayout();
     this._initRadioPanel();
     this._initWebReceiversPanel();
+    this._initHamRadioPanel();
     this._initCctvPanel();
     this._initGlobalContextPanel();
     this._initLocationBar();
@@ -4534,6 +4573,14 @@ export class StyleManager {
         this._renderWebReceiversState(state);
       });
     }
+    for (const unsubscribe of this._hamUnsubscribes) unsubscribe();
+    this._hamUnsubscribes = [];
+    for (const row of HAM_PANEL_LAYERS) {
+      if (typeof row.layer.subscribe !== 'function') continue;
+      this._hamUnsubscribes.push(row.layer.subscribe((state) => {
+        this._renderHamLayerState(row.id, state);
+      }));
+    }
     if (!this._awarenessSelectedHandler) {
       this._awarenessSelectedHandler = (event) => this._persistAwarenessSelection(event, false);
       this._awarenessClearedHandler = (event) => this._persistAwarenessSelection(event, true);
@@ -5127,6 +5174,14 @@ export class StyleManager {
   }
 
   _handleContextLayerChange(change) {
+    if (HAM_TAB_BY_LAYER.has(change?.layerId) && [
+      'visibility-transition',
+      'visibility',
+      'visibility-cancelled',
+      'visibility-failed',
+    ].includes(change.type)) {
+      this._renderHamLayer(change.layerId);
+    }
     if (change?.layerId === 'web-receivers' && [
       'visibility-transition',
       'visibility',
@@ -6187,6 +6242,1015 @@ export class StyleManager {
         : 'Web receivers off';
     }
     if (!enabled) this._closeWebReceiverDock();
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Ham Radio companion panel (HamRig): seven tabs, one per amateur-radio
+  // layer. Every tab has its own ENABLE/DISABLE button; lists render from the
+  // layer's frozen getUIState() snapshot and never touch layer internals.
+  // ───────────────────────────────────────────────────────────────────────
+
+  _initHamRadioPanel() {
+    const panel = this._hamRadioPanel;
+    if (!panel) return;
+    const $ = (id) => document.getElementById(id);
+    const els = this._hamEls;
+    Object.assign(els, {
+      layerState: $('ham-radio-layer-state'),
+      status: $('ham-radio-status'),
+      tabs: Array.from(panel.querySelectorAll('[data-ham-tab]')),
+      tabPanels: Array.from(panel.querySelectorAll('[data-ham-tab-panel]')),
+      stationsEnable: $('ham-stations-enable-btn'),
+      stationsSummary: $('ham-stations-summary'),
+      stationsForm: $('ham-stations-form'),
+      stationsCall: $('ham-stations-call'),
+      stationsLookup: $('ham-stations-lookup-btn'),
+      stationsImage: $('ham-stations-image'),
+      stationsName: $('ham-stations-name'),
+      stationsMeta: $('ham-stations-meta'),
+      stationsPrecision: $('ham-stations-precision'),
+      stationsFly: $('ham-stations-fly-btn'),
+      stationsClear: $('ham-stations-clear-btn'),
+      stationsHistory: $('ham-stations-history'),
+      myStation: $('ham-my-station'),
+      myDxcc: $('ham-my-dxcc'),
+      myGrids: $('ham-my-grids'),
+      myRotator: $('ham-my-rotator'),
+      mySummary: $('ham-my-station-summary'),
+      spotsEnable: $('ham-spots-enable-btn'),
+      spotsSummary: $('ham-spots-summary'),
+      spotsBand: $('ham-spots-band'),
+      spotsMode: $('ham-spots-mode'),
+      spotsMinutes: $('ham-spots-minutes'),
+      spotsArcs: $('ham-spots-arcs-btn'),
+      spotsTitle: $('ham-spots-title'),
+      spotsMeta: $('ham-spots-meta'),
+      spotsTune: $('ham-spots-tune-btn'),
+      spotsRefine: $('ham-spots-refine-btn'),
+      spotsNote: $('ham-spots-note'),
+      spotsList: $('ham-spots-list'),
+      spotsUpdated: $('ham-spots-updated'),
+      activityEnable: $('ham-activity-enable-btn'),
+      activitySummary: $('ham-activity-summary'),
+      activityPrograms: $('ham-activity-programs'),
+      activityBand: $('ham-activity-band'),
+      activityList: $('ham-activity-list'),
+      activityUpdated: $('ham-activity-updated'),
+      dxpedsEnable: $('ham-dxpeds-enable-btn'),
+      dxpedsSummary: $('ham-dxpeds-summary'),
+      dxpedsStatus: $('ham-dxpeds-status'),
+      dxpedsMostWanted: $('ham-dxpeds-mostwanted'),
+      dxpedsList: $('ham-dxpeds-list'),
+      dxpedsUpdated: $('ham-dxpeds-updated'),
+      propEnable: $('ham-prop-enable-btn'),
+      propSummary: $('ham-prop-summary'),
+      propReadout: $('ham-prop-readout'),
+      propBands: $('ham-prop-bands'),
+      propOverlays: Array.from(panel.querySelectorAll('[data-ham-overlay]')),
+      propGrid: $('ham-prop-voacap-grid'),
+      propBand: $('ham-prop-voacap-band'),
+      propHourDown: $('ham-prop-hour-down'),
+      propHour: $('ham-prop-hour'),
+      propHourUp: $('ham-prop-hour-up'),
+      propNote: $('ham-prop-note'),
+      beaconsEnable: $('ham-beacons-enable-btn'),
+      beaconsSummary: $('ham-beacons-summary'),
+      beaconsSlot: $('ham-beacons-slot'),
+      beaconsIbp: $('ham-beacons-ibp'),
+      beaconsVhf: $('ham-beacons-vhf'),
+      beaconsNote: $('ham-beacons-note'),
+      localEnable: $('ham-local-enable-btn'),
+      localSummary: $('ham-local-summary'),
+      localRadius: $('ham-local-radius'),
+      localBand: $('ham-local-band'),
+      localKind: $('ham-local-kind'),
+      localLoad: $('ham-local-load-btn'),
+      localArea: $('ham-local-area'),
+      localList: $('ham-local-list'),
+      localActivations: $('ham-local-activations'),
+    });
+
+    // Tabs
+    for (const button of els.tabs) {
+      button.addEventListener('click', () => this._setHamTab(button.dataset.hamTab));
+    }
+    // ENABLE / DISABLE per layer
+    panel.querySelectorAll('[data-ham-layer]').forEach((button) => {
+      button.addEventListener('click', () => void this._toggleHamLayer(button.dataset.hamLayer, button));
+    });
+    // The first interaction with the panel checks the HamRig proxy status once.
+    panel.addEventListener('click', () => void this._refreshHamRadioStatus(), { capture: true, once: true });
+
+    // STATIONS
+    els.stationsForm?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void this._hamLookupStation();
+    });
+    els.stationsFly?.addEventListener('click', () => {
+      const selected = this._hamStates['ham-stations']?.selected;
+      if (selected) hamStationsLayer.flyTo(selected.callsign);
+    });
+    els.stationsClear?.addEventListener('click', () => hamStationsLayer.clearHistory());
+    for (const [box, key] of [[els.myDxcc, 'dxcc'], [els.myGrids, 'grids'], [els.myRotator, 'rotator']]) {
+      box?.addEventListener('change', () => hamStationsLayer.setMyStationOverlays({ [key]: box.checked }));
+    }
+
+    // SPOTS
+    els.spotsBand?.addEventListener('change', () => dxSpotsLayer.setFilter({ band: els.spotsBand.value }));
+    els.spotsMode?.addEventListener('change', () => dxSpotsLayer.setFilter({ mode: els.spotsMode.value }));
+    els.spotsMinutes?.addEventListener('change', () => dxSpotsLayer.setFilter({ minutes: Number(els.spotsMinutes.value) }));
+    els.spotsArcs?.addEventListener('click', () => {
+      const current = this._hamStates['dx-spots']?.filter?.arcs !== false;
+      dxSpotsLayer.setFilter({ arcs: !current });
+    });
+    els.spotsTune?.addEventListener('click', () => void this._hamTuneNearSpotter());
+    els.spotsRefine?.addEventListener('click', () => void this._hamRefineSpot());
+
+    // ACTIVITY
+    els.activityBand?.addEventListener('change', () => hamActivationsLayer.setFilter({ band: els.activityBand.value }));
+
+    // DXPEDS
+    els.dxpedsMostWanted?.addEventListener('change', () => dxpeditionsLayer.setFilter({ mostWantedOnly: els.dxpedsMostWanted.checked }));
+
+    // PROP
+    for (const box of els.propOverlays) {
+      box.addEventListener('change', () => void this._setHamPropOverlay(box.dataset.hamOverlay, box.checked));
+    }
+    const commitGrid = () => {
+      const value = String(els.propGrid?.value || '').trim().toUpperCase();
+      if (!value) return;
+      const applied = hamPropagationLayer.setVoacap({ grid: value });
+      if (els.propNote && applied?.txGrid !== value) {
+        this._hamNote(els.propNote, `${value} is not a Maidenhead grid (use 4 or 6 characters, e.g. JO32)`, { error: true });
+      }
+    };
+    els.propGrid?.addEventListener('change', commitGrid);
+    els.propGrid?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        commitGrid();
+      }
+    });
+    els.propBand?.addEventListener('change', () => hamPropagationLayer.setVoacap({ frequencyMhz: Number(els.propBand.value) }));
+    const stepHour = (delta) => {
+      const current = this._hamStates['ham-propagation']?.voacap?.hour;
+      const base = current === null || current === undefined ? new Date().getUTCHours() : Number(current);
+      hamPropagationLayer.setVoacap({ hour: (base + delta + 24) % 24 });
+    };
+    els.propHourDown?.addEventListener('click', () => stepHour(-1));
+    els.propHourUp?.addEventListener('click', () => stepHour(1));
+    els.propHour?.addEventListener('click', () => hamPropagationLayer.setVoacap({ hour: null }));
+
+    // LOCAL
+    els.localBand?.addEventListener('change', () => hamRepeatersLayer.setFilter({ band: els.localBand.value }));
+    els.localKind?.addEventListener('change', () => hamRepeatersLayer.setFilter({ kind: els.localKind.value }));
+    els.localLoad?.addEventListener('click', () => void this._hamLoadRepeatersHere());
+
+    // Voice handlers open the panel on the tab they acted on.
+    document.addEventListener('gev:ham-radio-panel', (event) => {
+      const tab = event?.detail?.tab;
+      this.setPanelCollapsed(HAM_RADIO_PANEL_ID, false, { explicit: true });
+      if (tab) this._setHamTab(tab);
+      void this._refreshHamRadioStatus();
+    });
+
+    this._setHamTab(this._hamTab);
+    this._renderHamRadioStatus();
+  }
+
+  _setHamTab(tab, { focus = false } = {}) {
+    const next = HAM_TABS.includes(tab) ? tab : this._hamTab;
+    this._hamTab = next;
+    for (const button of this._hamEls.tabs || []) {
+      const active = button.dataset.hamTab === next;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', String(active));
+      if (active && focus) button.focus({ preventScroll: true });
+    }
+    for (const section of this._hamEls.tabPanels || []) {
+      section.hidden = section.dataset.hamTabPanel !== next;
+    }
+    this._renderHamTab(next);
+    this.shareLinkManager?.onPanelStateChange?.();
+    this._scheduleLeftPanelLayout?.({ reconsiderAutoCollapse: true });
+  }
+
+  /** Re-render the tab from cached snapshots (tab switch, share restore). */
+  _renderHamTab(tab) {
+    for (const row of HAM_PANEL_LAYERS) {
+      if (row.tab === tab) this._renderHamLayerState(row.id, this._hamStates[row.id] || row.layer.getUIState?.());
+    }
+    if (tab === 'local') this._renderHamLocalActivations();
+  }
+
+  /** Dispatch one layer snapshot to its renderer; the header always updates. */
+  _renderHamLayerState(layerId, state) {
+    if (!this._hamRadioPanel || !state) return;
+    this._hamStates[layerId] = state;
+    this._renderHamRadioHeader();
+    switch (layerId) {
+      case 'ham-stations': this._renderHamStationsState(state); break;
+      case 'dx-spots': this._renderDxSpotsState(state); break;
+      case 'ham-activations': this._renderHamActivationsState(state); break;
+      case 'dxpeditions': this._renderDxpeditionsState(state); break;
+      case 'ham-propagation': this._renderHamPropagationState(state); break;
+      case 'ham-beacons': this._renderHamBeaconsState(state); break;
+      case 'ham-repeaters': this._renderHamRepeatersState(state); break;
+      default: break;
+    }
+  }
+
+  _renderHamLayer(layerId) {
+    const row = HAM_PANEL_LAYERS.find((entry) => entry.id === layerId);
+    if (!row || typeof row.layer.getUIState !== 'function') return;
+    this._renderHamLayerState(layerId, row.layer.getUIState());
+  }
+
+  async _toggleHamLayer(layerId, trigger = null) {
+    if (!this._dataManager?.layers?.has(layerId)) return false;
+    const row = HAM_PANEL_LAYERS.find((entry) => entry.id === layerId);
+    const enabling = !this._dataManager.isEnabled(layerId);
+    if (trigger) trigger.disabled = true;
+    try {
+      return await this._runUserFacingContextAction(
+        (notificationToken) => this._dataManager.setEnabled(layerId, enabling, {
+          origin: 'user',
+          notificationToken,
+        }),
+        `${row?.name || layerId} could not ${enabling ? 'start' : 'stop'} cleanly`,
+      );
+    } finally {
+      if (trigger) trigger.disabled = false;
+    }
+  }
+
+  /** Switch a ham layer on when it is off; resolves true when it is usable afterwards. */
+  async _ensureHamLayerEnabled(layerId) {
+    if (!this._dataManager?.layers?.has(layerId)) return false;
+    if (this._dataManager.isEnabled(layerId)) return true;
+    const row = HAM_PANEL_LAYERS.find((entry) => entry.id === layerId);
+    const result = await this._runUserFacingContextAction(
+      (notificationToken) => this._dataManager.setEnabled(layerId, true, {
+        origin: 'user',
+        notificationToken,
+      }),
+      `${row?.name || layerId} could not start cleanly`,
+    );
+    return result !== false && Boolean(this._dataManager.isEnabled(layerId));
+  }
+
+  _hamLifecycle(layerId, state) {
+    const lifecycle = this._dataManager?.getLayerLifecycleState?.(layerId) || null;
+    const lifecycleState = lifecycle?.lifecycleState || (state?.enabled ? 'enabled' : 'disabled');
+    const enabled = lifecycle ? Boolean(lifecycle.enabled) : Boolean(state?.enabled);
+    const transitioning = lifecycleState === 'enabling' || lifecycleState === 'disabling';
+    const uncertain = Boolean(lifecycle?.uncertain);
+    return { enabled, transitioning, uncertain, lifecycleState, interactive: enabled && !transitioning && !uncertain };
+  }
+
+  _renderHamEnableButton(button, life) {
+    if (!button) return;
+    button.classList.toggle('active', life.enabled);
+    button.setAttribute('aria-pressed', String(life.enabled));
+    button.textContent = life.transitioning
+      ? life.lifecycleState.toUpperCase()
+      : (life.uncertain ? 'RECONCILE' : (life.enabled ? 'DISABLE' : 'ENABLE'));
+  }
+
+  _hamNote(el, text, { error = false } = {}) {
+    if (!el) return;
+    el.textContent = text || '';
+    el.classList.toggle('error', Boolean(error) && Boolean(text));
+  }
+
+  _hamFillSelect(select, entries, current, { disabled = false } = {}) {
+    if (!select) return;
+    const wanted = entries.map((entry) => `${entry.id}|${entry.label}`).join(',');
+    if (select.dataset.options !== wanted) {
+      select.innerHTML = '';
+      for (const entry of entries) {
+        const option = document.createElement('option');
+        option.value = String(entry.id);
+        option.textContent = entry.label;
+        select.appendChild(option);
+      }
+      select.dataset.options = wanted;
+    }
+    const value = String(current);
+    if (select.value !== value) select.value = value;
+    select.disabled = disabled;
+  }
+
+  _hamChip(label, { pressed = false, color = null, disabled = false, onClick = null } = {}) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'ham-chip';
+    chip.setAttribute('aria-pressed', String(Boolean(pressed)));
+    chip.disabled = Boolean(disabled);
+    if (color) {
+      const dot = document.createElement('i');
+      dot.className = 'ham-chip-dot';
+      dot.style.background = color;
+      chip.appendChild(dot);
+    }
+    chip.appendChild(document.createTextNode(label));
+    if (onClick) chip.addEventListener('click', onClick);
+    return chip;
+  }
+
+  /** One list row: `lead · [dot] STRONG main · tail` with an optional sub-line and action button. */
+  _hamRow({
+    lead = '', strong = '', main = '', tail = '', sub = '', color = null, hollow = false,
+    selected = false, stale = false, extraClass = '', onClick = null, action = null,
+  } = {}) {
+    const row = document.createElement('div');
+    row.className = `ham-row${extraClass ? ` ${extraClass}` : ''}`;
+    row.setAttribute('role', 'option');
+    row.setAttribute('aria-selected', String(Boolean(selected)));
+    row.tabIndex = 0;
+    if (selected) row.classList.add('selected');
+    if (stale) row.classList.add('stale');
+    const leadEl = document.createElement('span');
+    leadEl.className = 'ham-row-lead';
+    leadEl.textContent = lead;
+    const mainEl = document.createElement('span');
+    mainEl.className = 'ham-row-main';
+    if (color) {
+      const dot = document.createElement('i');
+      dot.className = `ham-band-dot${hollow ? ' hollow' : ''}`;
+      dot.style.background = color;
+      dot.style.color = color;
+      mainEl.appendChild(dot);
+    }
+    if (strong) {
+      const strongEl = document.createElement('strong');
+      strongEl.textContent = strong;
+      mainEl.appendChild(strongEl);
+      if (main) mainEl.appendChild(document.createTextNode(' '));
+    }
+    if (main) mainEl.appendChild(document.createTextNode(main));
+    const tailEl = document.createElement('span');
+    tailEl.className = 'ham-row-tail';
+    tailEl.textContent = tail;
+    row.append(leadEl, mainEl, tailEl);
+    if (action) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'ham-row-action';
+      button.textContent = action.label;
+      if (action.title) button.title = action.title;
+      button.disabled = Boolean(action.disabled);
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        action.onClick?.();
+      });
+      row.appendChild(button);
+    }
+    if (sub) {
+      const subEl = document.createElement('span');
+      subEl.className = 'ham-row-sub';
+      subEl.textContent = sub;
+      row.appendChild(subEl);
+    }
+    if (onClick) {
+      row.addEventListener('click', onClick);
+      row.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick(event);
+        }
+      });
+    }
+    return row;
+  }
+
+  _hamRenderList(container, rows, emptyText) {
+    if (!container) return;
+    if (!rows.length) {
+      const empty = document.createElement('div');
+      empty.className = 'ham-list-empty';
+      empty.textContent = emptyText;
+      container.replaceChildren(empty);
+      return;
+    }
+    container.replaceChildren(...rows);
+  }
+
+  _hamUpdatedLine(state, { live = null } = {}) {
+    if (state.error && !state.count) return state.error;
+    const parts = [];
+    if (state.updatedAt) parts.push(`updated ${formatAge(state.updatedAt)} ago`);
+    if (live === true) parts.push('live');
+    if (live === false) parts.push('polling');
+    if (state.stale) parts.push('stale');
+    if (state.error) parts.push(state.error);
+    return parts.join(' · ');
+  }
+
+  _hamViewCentre() {
+    const viewer = this.viewer;
+    const scene = viewer?.scene;
+    if (!scene || !viewer.camera) return null;
+    try {
+      const canvas = scene.canvas;
+      const centre = new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2);
+      let cartesian = null;
+      const ray = viewer.camera.getPickRay(centre);
+      if (ray && scene.globe) cartesian = scene.globe.pick(ray, scene) || null;
+      if (!cartesian) cartesian = viewer.camera.pickEllipsoid(centre, scene.globe?.ellipsoid) || null;
+      const carto = cartesian ? Cesium.Cartographic.fromCartesian(cartesian) : viewer.camera.positionCartographic;
+      if (!carto) return null;
+      const lat = Cesium.Math.toDegrees(carto.latitude);
+      const lon = Cesium.Math.toDegrees(carto.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      return { lat, lon, heightM: viewer.camera.positionCartographic?.height ?? null };
+    } catch {
+      return null;
+    }
+  }
+
+  _renderHamRadioHeader() {
+    const panel = this._hamRadioPanel;
+    if (!panel) return;
+    let on = 0;
+    let syncing = false;
+    for (const row of HAM_PANEL_LAYERS) {
+      const life = this._hamLifecycle(row.id, this._hamStates[row.id]);
+      if (life.enabled) on += 1;
+      if (life.transitioning) syncing = true;
+      const tabButton = this._hamEls.tabs?.find((button) => button.dataset.hamTab === row.tab);
+      tabButton?.classList.toggle('has-data', life.enabled);
+    }
+    panel.classList.toggle('radio-enabled', on > 0);
+    const chip = this._hamEls.layerState;
+    if (chip) {
+      chip.classList.toggle('active', on > 0);
+      chip.textContent = syncing ? 'SYNC' : (on ? `${on}/${HAM_PANEL_LAYERS.length}` : 'OFF');
+    }
+  }
+
+  async _refreshHamRadioStatus() {
+    if (this._hamStatusPromise) return this._hamStatusPromise;
+    this._hamStatusPromise = (async () => {
+      try {
+        const response = await fetch('/api/hamrig/status', { cache: 'no-store' });
+        const body = await response.json();
+        this._hamStatus = body && typeof body === 'object' ? body : null;
+      } catch {
+        this._hamStatus = null;
+      }
+      this._renderHamRadioStatus();
+    })();
+    return this._hamStatusPromise;
+  }
+
+  _renderHamRadioStatus() {
+    const el = this._hamEls.status;
+    if (!el) return;
+    const status = this._hamStates['ham-stations']?.status || this._hamStatus || null;
+    if (!status) {
+      el.textContent = this._hamStatusPromise ? 'HamRig: checking…' : 'HamRig: not checked';
+      el.classList.remove('error');
+      return;
+    }
+    let host = '';
+    try { host = status.baseUrl ? new URL(status.baseUrl).host : ''; } catch { host = ''; }
+    if (status.enabled === false) {
+      el.textContent = 'HamRig proxy disabled (HAMRIG_ENABLED=0)';
+      el.classList.add('error');
+      return;
+    }
+    el.textContent = `HamRig: ${host || 'proxy'} · ${status.authenticated ? 'authenticated: yes' : 'authenticated: no (public feeds)'}${status.homeGrid ? ` · home ${status.homeGrid}` : ''}`;
+    el.classList.toggle('error', status.configured === false);
+  }
+
+  // ── STATIONS ──────────────────────────────────────────────────────────
+
+  async _hamLookupStation() {
+    const els = this._hamEls;
+    const raw = String(els.stationsCall?.value || '').trim();
+    if (!raw) {
+      els.stationsCall?.focus({ preventScroll: true });
+      return;
+    }
+    if (els.stationsLookup) els.stationsLookup.disabled = true;
+    try {
+      const ready = await this._ensureHamLayerEnabled('ham-stations');
+      if (!ready) return;
+      await hamStationsLayer.lookup(raw, { flyTo: true, origin: 'user' });
+    } finally {
+      if (els.stationsLookup) els.stationsLookup.disabled = false;
+    }
+  }
+
+  _renderHamStationsState(state) {
+    const els = this._hamEls;
+    const life = this._hamLifecycle('ham-stations', state);
+    this._renderHamEnableButton(els.stationsEnable, life);
+    this._hamNote(els.stationsSummary, life.enabled
+      ? (state.lookupPending ? `Looking up ${state.lookupPending}…` : `${state.count} lookup${state.count === 1 ? '' : 's'}${state.authenticated ? ' · my station available' : ''}`)
+      : 'Ham Stations off — LOOKUP switches it on', { error: false });
+    this._renderHamRadioStatus();
+    if (this._hamTab !== 'stations') return;
+    const station = state.selected;
+    const lookup = state.lastLookup;
+    if (els.stationsImage) {
+      if (station?.imageUrl) {
+        if (els.stationsImage.getAttribute('src') !== station.imageUrl) els.stationsImage.src = station.imageUrl;
+        els.stationsImage.hidden = false;
+      } else {
+        els.stationsImage.removeAttribute('src');
+        els.stationsImage.hidden = true;
+      }
+    }
+    if (els.stationsName) {
+      els.stationsName.textContent = station
+        ? `${station.callsign}${station.name ? ` · ${station.name}` : ''}`
+        : (lookup && !lookup.ok ? `${lookup.callsign || 'LOOKUP'} — NOT FOUND` : 'NO STATION');
+    }
+    if (els.stationsMeta) {
+      if (station) {
+        const place = [station.city, station.state].filter(Boolean).join(', ');
+        const parts = [place, station.country, station.dxcc?.name && station.dxcc.name !== station.country ? station.dxcc.name : null];
+        if (station.grid) parts.push(`grid ${station.grid}`);
+        if (station.licenseClass) parts.push(`class ${station.licenseClass}`);
+        if (station.qslManager) parts.push(`QSL via ${station.qslManager}`);
+        if (station.lotw) parts.push('LoTW');
+        if (station.eqsl) parts.push('eQSL');
+        if (station.hamrigUser?.username) parts.push(`HamRig @${station.hamrigUser.username}${station.hamrigUser.verified ? ' ✓' : ''}`);
+        els.stationsMeta.textContent = parts.filter(Boolean).join(' · ');
+      } else if (lookup && !lookup.ok) {
+        els.stationsMeta.textContent = lookup.error || 'No data for that callsign — not even a prefix match.';
+      } else {
+        els.stationsMeta.textContent = 'Enter a callsign, or ask “who is DL1ABC”.';
+      }
+    }
+    if (els.stationsPrecision) {
+      els.stationsPrecision.textContent = station
+        ? `${precisionLabel(station.precision)}${Number.isFinite(station.lat) ? ` · ${station.lat.toFixed(2)}, ${station.lon.toFixed(2)}` : ''}${station.sources?.length ? ` · ${station.sources.join(', ')}` : ''}`
+        : '';
+    }
+    if (els.stationsFly) els.stationsFly.disabled = !(life.interactive && station && Number.isFinite(station.lat));
+    if (els.stationsClear) els.stationsClear.disabled = !(life.interactive && state.count > 0);
+    const rows = (state.items || []).map((row) => this._hamRow({
+      lead: row.grid || '—',
+      strong: row.callsign,
+      main: [row.name, row.country].filter(Boolean).join(' · '),
+      tail: row.precision || '',
+      color: '#38bdf8',
+      hollow: row.precision !== 'exact',
+      selected: row.callsign === state.selectedId,
+      onClick: () => hamStationsLayer.selectStation(row.callsign, { flyTo: true, origin: 'user' }),
+    }));
+    this._hamRenderList(els.stationsHistory, rows, life.enabled ? 'No lookups yet.' : 'Enable Ham Stations to keep a lookup history on the globe.');
+    if (els.myStation) {
+      els.myStation.hidden = !state.authenticated;
+      if (state.authenticated) {
+        if (els.myDxcc) els.myDxcc.checked = Boolean(state.myOverlays?.dxcc);
+        if (els.myGrids) els.myGrids.checked = Boolean(state.myOverlays?.grids);
+        if (els.myRotator) els.myRotator.checked = Boolean(state.myOverlays?.rotator);
+        const my = state.myStation || {};
+        const dxcc = my.dxcc || { worked: 0, total: 0 };
+        this._hamNote(els.mySummary, `DXCC ${dxcc.worked}/${dxcc.total} worked · ${my.gridCount || 0} grids · ${my.rotators?.length || 0} rotator${my.rotators?.length === 1 ? '' : 's'}${my.rotators?.length ? ` · ${my.rotators.map((r) => r.label).join(' · ')}` : ''}`);
+      }
+    }
+  }
+
+  // ── SPOTS ─────────────────────────────────────────────────────────────
+
+  async _hamTuneNearSpotter() {
+    const els = this._hamEls;
+    const state = this._hamStates['dx-spots'];
+    const spotId = state?.selectedId;
+    if (!spotId) return;
+    if (els.spotsTune) els.spotsTune.disabled = true;
+    this._hamNote(els.spotsNote, 'Choosing a web receiver near the spotter…');
+    try {
+      const result = await dxSpotsLayer.tuneNearSpotter(spotId, { origin: 'user' });
+      if (result?.ok) {
+        const km = Number.isFinite(result.distanceKm) ? `${Math.round(result.distanceKm)} km from the ${result.evidence === 'reception' ? 'listener' : 'spotter'}` : '';
+        this._hamNote(els.spotsNote, [`Tuned ${result.receiver?.name || 'receiver'}`, km, result.reason].filter(Boolean).join(' · '));
+      } else {
+        this._hamNote(els.spotsNote, result?.reason || result?.error || 'No receiver could be tuned', { error: true });
+      }
+    } finally {
+      if (els.spotsTune) els.spotsTune.disabled = !this._hamStates['dx-spots']?.selectedId;
+    }
+  }
+
+  async _hamRefineSpot() {
+    const els = this._hamEls;
+    const spotId = this._hamStates['dx-spots']?.selectedId;
+    if (!spotId) return;
+    if (els.spotsRefine) els.spotsRefine.disabled = true;
+    this._hamNote(els.spotsNote, 'Asking HamRig for precise positions…');
+    try {
+      const result = await dxSpotsLayer.refinePositions(spotId);
+      if (result?.ok) {
+        const spot = result.spot;
+        this._hamNote(els.spotsNote, result.changed
+          ? `Positions refined · DX ${spot?.dxLoc?.precision || 'unknown'} · spotter ${spot?.spotterLoc?.precision || 'unknown'}`
+          : 'No better position available for this spot');
+      } else {
+        this._hamNote(els.spotsNote, result?.error || 'Position lookup failed', { error: true });
+      }
+    } finally {
+      if (els.spotsRefine) els.spotsRefine.disabled = !this._hamStates['dx-spots']?.selectedId;
+    }
+  }
+
+  _renderDxSpotsState(state) {
+    const els = this._hamEls;
+    const life = this._hamLifecycle('dx-spots', state);
+    this._renderHamEnableButton(els.spotsEnable, life);
+    this._hamNote(els.spotsSummary, life.enabled
+      ? (state.loading && !state.count
+        ? 'Loading DX cluster spots…'
+        : `${state.filteredCount}/${state.count} spots · ${state.live ? 'live' : 'polling'}${state.stale ? ' · stale' : ''}`)
+      : 'DX Spots off', { error: Boolean(state.error) && !state.count });
+    if (this._hamTab !== 'spots') return;
+    const filters = state.filters || {};
+    this._hamFillSelect(els.spotsBand, (filters.bands || ['all']).map((band) => ({ id: band, label: band === 'all' ? 'All bands' : band })), state.filter?.band || 'all', { disabled: !life.interactive });
+    this._hamFillSelect(els.spotsMode, (filters.modes || ['all']).map((mode) => ({ id: mode, label: mode === 'all' ? 'All modes' : mode })), state.filter?.mode || 'all', { disabled: !life.interactive });
+    this._hamFillSelect(els.spotsMinutes, (filters.minutes || [60]).map((minutes) => ({ id: minutes, label: `${minutes} min` })), state.filter?.minutes || 60, { disabled: !life.interactive });
+    if (els.spotsArcs) {
+      els.spotsArcs.setAttribute('aria-pressed', String(state.filter?.arcs !== false));
+      els.spotsArcs.disabled = !life.interactive;
+    }
+    const summary = state.selectedSummary;
+    if (els.spotsTitle) els.spotsTitle.textContent = summary ? `${summary.dx} · ${summary.frequencyLabel}` : 'NO SPOT SELECTED';
+    if (els.spotsMeta) {
+      els.spotsMeta.textContent = summary
+        ? [
+          summary.mode || null,
+          `de ${summary.spotter}${summary.spotterContinent ? ` (${summary.spotterContinent})` : ''}`,
+          `${summary.ageMin} min ago`,
+          summary.comment || null,
+          `DX ${summary.dxPrecision || 'unlocated'}${summary.dxEntity ? ` · ${summary.dxEntity}` : ''}`,
+          `spotter ${summary.spotterPrecision || 'unlocated'}${summary.spotterEntity ? ` · ${summary.spotterEntity}` : ''}`,
+        ].filter(Boolean).join(' · ')
+        : (life.enabled ? 'Click a spot on the globe or in the list.' : 'Enable DX Spots, then click a spot — or ask “what’s on 20 metres”.');
+    }
+    const canAct = life.interactive && Boolean(summary);
+    if (els.spotsTune) els.spotsTune.disabled = !canAct;
+    if (els.spotsRefine) els.spotsRefine.disabled = !canAct;
+    if (!summary) this._hamNote(els.spotsNote, '');
+    const now = Date.now();
+    const rows = (state.items || []).slice(0, HAM_SPOT_LIST_LIMIT).map((spot) => this._hamRow({
+      lead: formatAge(spot.timeIso, now),
+      strong: spot.dx,
+      main: `${formatHz(spot.freqHz, { unit: false })}${spot.mode ? ` ${spot.mode}` : ''}`,
+      tail: `de ${spot.spotterCall || spot.spotter}`,
+      color: bandColor(spot.band),
+      hollow: !spot.dxLoc || spot.dxLoc.precision === 'entity' || spot.dxLoc.precision === 'area',
+      selected: spot.id === state.selectedId,
+      onClick: () => dxSpotsLayer.selectSpot(spot.id, { flyTo: true, origin: 'user' }),
+    }));
+    this._hamRenderList(els.spotsList, rows, life.enabled
+      ? (state.loading ? 'Loading…' : 'No spots match the current filter.')
+      : 'Enable DX Spots to see the cluster.');
+    this._hamNote(els.spotsUpdated, life.enabled ? this._hamUpdatedLine(state, { live: Boolean(state.live) }) : '', { error: Boolean(state.error) });
+  }
+
+  // ── ACTIVITY ──────────────────────────────────────────────────────────
+
+  _renderHamActivationsState(state) {
+    const els = this._hamEls;
+    const life = this._hamLifecycle('ham-activations', state);
+    this._renderHamEnableButton(els.activityEnable, life);
+    this._hamNote(els.activitySummary, life.enabled
+      ? (state.loading && !state.count ? 'Loading POTA / SOTA / WWFF / BOTA…' : `${state.filteredCount}/${state.count} activations${state.disabledPrograms?.length ? ` · ${state.disabledPrograms.join('/')} off (needs approval)` : ''}${state.degraded ? ' · some feeds down' : ''}${state.stale ? ' · stale' : ''}`)
+      : 'Activations off', { error: Boolean(state.error) && !state.count });
+    if (this._hamTab === 'local') this._renderHamLocalActivations();
+    if (this._hamTab !== 'activity') return;
+    const active = new Set(state.filter?.programs || []);
+    const chips = (state.filters?.programs || []).map((program) => this._hamChip(`${program.id} ${program.count}`, {
+      pressed: active.has(program.id),
+      color: program.color,
+      disabled: !life.interactive,
+      onClick: () => {
+        const next = new Set(active);
+        if (next.has(program.id)) next.delete(program.id); else next.add(program.id);
+        hamActivationsLayer.setFilter({ programs: [...next] });
+      },
+    }));
+    els.activityPrograms?.replaceChildren(...chips);
+    this._hamFillSelect(els.activityBand, state.filters?.bands || [{ id: 'all', label: 'All bands' }], state.filter?.band || 'all', { disabled: !life.interactive });
+    const now = Date.now();
+    const rows = (state.items || []).slice(0, HAM_LIST_LIMIT).map((item) => this._hamRow({
+      lead: formatAge(item.timeIso, now),
+      strong: item.callsign,
+      main: item.reference,
+      tail: `${formatHz(item.freqHz, { unit: false })}${item.mode ? ` ${item.mode}` : ''}`,
+      sub: activationDetail(item, now),
+      color: PROGRAM_COLORS[item.program] || '#9aa4b2',
+      hollow: item.precision !== 'exact',
+      selected: item.id === state.selectedId,
+      onClick: () => hamActivationsLayer.select(item.id, { flyTo: true, origin: 'user' }),
+    }));
+    this._hamRenderList(els.activityList, rows, life.enabled
+      ? (state.loading ? 'Loading…' : 'No activations match the current filter.')
+      : 'Enable Activations to see parks, summits, flora & fauna and bunkers on the air.');
+    const errors = state.sourceErrors && typeof state.sourceErrors === 'object'
+      ? Object.entries(state.sourceErrors).map(([program, message]) => `${program}: ${message}`).join(' · ')
+      : '';
+    this._hamNote(els.activityUpdated, life.enabled ? [this._hamUpdatedLine(state), errors].filter(Boolean).join(' · ') : '', { error: Boolean(errors) });
+  }
+
+  // ── DXPEDS ────────────────────────────────────────────────────────────
+
+  _renderDxpeditionsState(state) {
+    const els = this._hamEls;
+    const life = this._hamLifecycle('dxpeditions', state);
+    this._renderHamEnableButton(els.dxpedsEnable, life);
+    const counts = state.counts || {};
+    this._hamNote(els.dxpedsSummary, life.enabled
+      ? (state.loading && !state.count ? 'Loading announced DX operations…' : `${counts.active ?? 0} active · ${counts.upcoming ?? 0} upcoming · ${counts.mostWanted ?? 0} most wanted`)
+      : 'DXpeditions off', { error: Boolean(state.error) && !state.count });
+    if (this._hamTab !== 'dxpeds') return;
+    const chips = (state.filters?.statuses || []).map((status) => this._hamChip(status.label, {
+      pressed: state.filter?.status === status.id,
+      disabled: !life.interactive,
+      onClick: () => dxpeditionsLayer.setFilter({ status: status.id }),
+    }));
+    els.dxpedsStatus?.replaceChildren(...chips);
+    if (els.dxpedsMostWanted) {
+      els.dxpedsMostWanted.checked = Boolean(state.filter?.mostWantedOnly);
+      els.dxpedsMostWanted.disabled = !life.interactive;
+    }
+    const now = Date.now();
+    const rows = (state.items || []).slice(0, HAM_LIST_LIMIT).map((op) => {
+      const status = effectiveStatus(op, now);
+      const lead = status === 'upcoming'
+        ? (op.daysUntil !== null && op.daysUntil !== undefined ? `in ${op.daysUntil} d` : 'upcoming')
+        : status.toUpperCase();
+      return this._hamRow({
+        lead,
+        strong: op.callsign,
+        main: op.entity || '',
+        tail: op.mostWantedRank ? `#${op.mostWantedRank}` : '',
+        sub: dxpeditionDetail(op, now),
+        color: op.mostWantedRank && op.mostWantedRank <= 20 ? '#f472b6' : '#a78bfa',
+        hollow: true,
+        stale: status === 'ended',
+        selected: op.id === state.selectedId,
+        onClick: () => dxpeditionsLayer.select(op.id, { flyTo: true, origin: 'user' }),
+      });
+    });
+    this._hamRenderList(els.dxpedsList, rows, life.enabled
+      ? (state.loading ? 'Loading…' : 'No DXpeditions match the current filter.')
+      : 'Enable DXpeditions to see announced operations (NG3K + Club Log most wanted).');
+    this._hamNote(els.dxpedsUpdated, life.enabled ? this._hamUpdatedLine(state) : '', { error: Boolean(state.error) });
+  }
+
+  // ── PROP ──────────────────────────────────────────────────────────────
+
+  async _setHamPropOverlay(key, on) {
+    if (!key) return;
+    hamPropagationLayer.setOverlays({ [key]: Boolean(on) });
+    if (on) await this._ensureHamLayerEnabled('ham-propagation');
+  }
+
+  _renderHamPropagationState(state) {
+    const els = this._hamEls;
+    const life = this._hamLifecycle('ham-propagation', state);
+    this._renderHamEnableButton(els.propEnable, life);
+    const overlays = state.overlays || {};
+    const onCount = Object.values(overlays).filter(Boolean).length;
+    this._hamNote(els.propSummary, life.enabled
+      ? (state.loading && !state.summary ? 'Loading solar and band data…' : `${onCount} overlay${onCount === 1 ? '' : 's'} on · ${state.ionosondeCount || 0} ionosondes${state.aurora ? ` · aurora ${state.aurora.level || ''}`.trimEnd() : ''}${state.stale ? ' · stale' : ''}`)
+      : 'Propagation off — ticking an overlay switches it on', { error: Boolean(state.error) && !state.summary });
+    if (this._hamTab !== 'prop') return;
+    if (els.propReadout) els.propReadout.textContent = state.readout || (life.enabled ? 'Waiting for solar data…' : 'SFI — · K — · A — · SSN —');
+    if (els.propBands) {
+      const cells = (state.bandConditions || []).map((row) => {
+        const cell = document.createElement('div');
+        cell.className = 'ham-band-cell';
+        cell.dataset.condition = String(row.condition || '').toLowerCase();
+        const band = document.createElement('strong');
+        band.textContent = row.band;
+        const condition = document.createElement('span');
+        condition.textContent = String(row.condition || '?').toUpperCase();
+        cell.append(band, condition);
+        return cell;
+      });
+      if (cells.length) els.propBands.replaceChildren(...cells);
+      else {
+        const empty = document.createElement('div');
+        empty.className = 'ham-list-empty';
+        empty.textContent = life.enabled ? 'Band conditions not loaded yet.' : 'Enable Propagation for HF band conditions.';
+        els.propBands.replaceChildren(empty);
+      }
+    }
+    for (const box of els.propOverlays || []) {
+      box.checked = Boolean(overlays[box.dataset.hamOverlay]);
+    }
+    const voacap = state.voacap || {};
+    if (els.propGrid && document.activeElement !== els.propGrid) {
+      els.propGrid.value = voacap.txGrid || '';
+      els.propGrid.placeholder = `TX grid · ${state.homeGrid || 'JO32'}`;
+    }
+    this._hamFillSelect(els.propBand, (state.frequencies || []).map((row) => ({ id: row.mhz, label: row.label })), voacap.frequencyMhz ?? 14.1);
+    if (els.propHour) {
+      els.propHour.textContent = voacap.hour === null || voacap.hour === undefined ? 'NOW' : `${String(voacap.hour).padStart(2, '0')}Z`;
+    }
+    const notes = [];
+    const nearest = state.summary?.ionosonde?.nearest;
+    if (nearest && Number.isFinite(nearest.mufd)) notes.push(`MUF(3000) ${nearest.mufd.toFixed(1)} MHz at ${nearest.name}${nearest.highestBand ? ` → ${nearest.highestBand}` : ''}`);
+    if (state.aurora) notes.push(`Aurora forecast ${state.aurora.forecastIso ? formatAge(state.aurora.forecastIso) : ''} · max ${Math.round(state.aurora.maxProbability ?? state.aurora.current ?? 0)}% · ${state.aurora.count} points`.replace(/\s+·/g, ' ·'));
+    if (overlays.voacap) {
+      notes.push(voacap.cellCount
+        ? `VOACAP ${voacap.cellCount} cells from ${voacap.txGrid || '?'} · ${voacap.frequencyMhz} MHz · ${String(voacap.utcHour ?? '--').padStart(2, '0')}Z · SSN ${voacap.ssn ?? '—'}`
+        : (voacap.txGrid ? 'VOACAP: waiting for the reliability map…' : 'VOACAP: enter a transmitter grid square.'));
+    }
+    if (state.summary?.dayNight && typeof state.summary.dayNight === 'object') {
+      const dn = Object.entries(state.summary.dayNight).map(([region, value]) => `${region} ${value?.label || value?.status || ''}`.trim()).join(', ');
+      if (dn) notes.push(dn);
+    }
+    const errors = state.errors && typeof state.errors === 'object' ? Object.entries(state.errors).filter(([, message]) => message).map(([key, message]) => `${key}: ${message}`).join(' · ') : '';
+    if (errors) notes.push(errors);
+    if (life.enabled && state.updatedAt) notes.push(`updated ${formatAge(state.updatedAt)} ago`);
+    this._hamNote(els.propNote, notes.join(' · '), { error: Boolean(errors) });
+  }
+
+  // ── BEACONS ───────────────────────────────────────────────────────────
+
+  async _hamTuneBeacon(call, band) {
+    const els = this._hamEls;
+    this._hamNote(els.beaconsNote, `Tuning a web receiver to ${call} on ${band}…`);
+    const result = await hamBeaconsLayer.tuneBeacon(call, band, { origin: 'user' });
+    if (result?.ok) {
+      this._hamNote(els.beaconsNote, `Tuned ${result.receiver?.name || 'receiver'} for ${call}${Number.isFinite(result.distanceKm) ? ` · ${Math.round(result.distanceKm)} km from the view centre` : ''}`);
+    } else {
+      this._hamNote(els.beaconsNote, result?.error || result?.reason || 'No receiver could be tuned', { error: true });
+    }
+  }
+
+  _renderHamBeaconsState(state) {
+    const els = this._hamEls;
+    const life = this._hamLifecycle('ham-beacons', state);
+    this._renderHamEnableButton(els.beaconsEnable, life);
+    this._hamNote(els.beaconsSummary, life.enabled
+      ? `${state.ibpCount} IBP · ${state.vhfForbidden ? 'VHF needs login' : `${state.vhfCount} VHF`}${state.stale ? ' · stale' : ''}`
+      : 'Beacons off', { error: Boolean(state.error) });
+    if (this._hamTab !== 'beacons') return;
+    const slot = state.slot;
+    if (els.beaconsSlot) {
+      els.beaconsSlot.textContent = slot
+        ? `NCDXF/IBP slot ${slot.slot + 1}/18 · ${slot.secondsIntoSlot.toFixed(0)} s in · next slot in ${Math.max(0, Math.ceil(slot.secondsUntilNextSlot))} s (UTC-synchronised)`
+        : 'NCDXF/IBP · 3-minute cycle, 18 beacons, 10 s slots';
+    }
+    // Rows are keyed by band and updated in place so the TUNE buttons survive the 1 s ticker.
+    if (els.beaconsIbp && slot) {
+      const wanted = slot.byBand.map((row) => row.band).join(',');
+      if (els.beaconsIbp.dataset.bands !== wanted) {
+        this._hamBeaconRows = new Map();
+        els.beaconsIbp.replaceChildren();
+        for (const band of slot.byBand) {
+          const row = this._hamRow({
+            lead: `${(band.khz / 1000).toFixed(3)}`,
+            strong: band.call,
+            main: '',
+            tail: '',
+            color: band.color,
+            extraClass: 'ham-beacon-row',
+            onClick: () => hamBeaconsLayer.select(this._hamBeaconRows?.get(band.band)?.call || band.call, { flyTo: true, origin: 'user' }),
+            action: {
+              label: 'TUNE',
+              title: `Tune a web receiver near the view centre to ${band.khz} kHz`,
+              onClick: () => void this._hamTuneBeacon(this._hamBeaconRows?.get(band.band)?.call || band.call, band.band),
+            },
+          });
+          els.beaconsIbp.appendChild(row);
+          this._hamBeaconRows.set(band.band, {
+            row,
+            call: band.call,
+            strong: row.querySelector('strong'),
+            main: row.querySelector('.ham-row-main'),
+            tail: row.querySelector('.ham-row-tail'),
+            action: row.querySelector('.ham-row-action'),
+          });
+        }
+        els.beaconsIbp.dataset.bands = wanted;
+      }
+      for (const band of slot.byBand) {
+        const entry = this._hamBeaconRows.get(band.band);
+        if (!entry) continue;
+        entry.call = band.call;
+        if (entry.strong) entry.strong.textContent = band.call;
+        const mainText = entry.main?.lastChild;
+        const label = ` ${band.location || ''}`;
+        if (mainText && mainText.nodeType === Node.TEXT_NODE) mainText.textContent = label;
+        else entry.main?.appendChild(document.createTextNode(label));
+        const step = band.offAir ? 'OFF AIR' : (band.powerStep === 'call' ? 'CALLSIGN' : band.powerStep);
+        if (entry.tail) entry.tail.textContent = `${band.band} · ${step}`;
+        entry.row.classList.toggle('off-air', Boolean(band.offAir));
+        entry.row.classList.toggle('selected', state.selectedId === `ibp:${band.call}` || state.selected?.call === band.call);
+        if (entry.action) entry.action.disabled = !life.interactive;
+      }
+    }
+    if (els.beaconsVhf) {
+      if (state.vhfForbidden) {
+        els.beaconsVhf.textContent = 'VHF/UHF beacons need a HamRig login (HAMRIG_USERNAME / HAMRIG_PASSWORD).';
+      } else if (life.enabled) {
+        const heard = (state.vhf || []).filter((beacon) => beacon.heardRecently).length;
+        els.beaconsVhf.textContent = state.vhfLoaded
+          ? `VHF/UHF beacons: ${state.vhfCount} · ${heard} heard in the last 2 h`
+          : 'VHF/UHF beacons: loading…';
+      } else {
+        els.beaconsVhf.textContent = 'Enable Beacons for the 18 IBP HF beacons and VHF/UHF beacons.';
+      }
+    }
+  }
+
+  // ── LOCAL ─────────────────────────────────────────────────────────────
+
+  async _hamLoadRepeatersHere() {
+    const els = this._hamEls;
+    const centre = this._hamViewCentre();
+    if (!centre) {
+      this._hamNote(els.localArea, 'The view centre could not be read', { error: true });
+      return;
+    }
+    if (els.localLoad) els.localLoad.disabled = true;
+    try {
+      const ready = await this._ensureHamLayerEnabled('ham-repeaters');
+      if (!ready) return;
+      const radiusKm = Number(els.localRadius?.value) || 100;
+      const result = await hamRepeatersLayer.loadAround(centre.lat, centre.lon, radiusKm, { origin: 'user', reason: 'panel' });
+      if (result && !result.ok && result.error && result.error !== 'superseded' && result.error !== 'cancelled') {
+        this._hamNote(els.localArea, result.error, { error: true });
+      }
+    } finally {
+      if (els.localLoad) els.localLoad.disabled = false;
+    }
+  }
+
+  _renderHamRepeatersState(state) {
+    const els = this._hamEls;
+    const life = this._hamLifecycle('ham-repeaters', state);
+    this._renderHamEnableButton(els.localEnable, life);
+    this._hamNote(els.localSummary, life.enabled
+      ? (state.loading ? 'Loading repeaters…' : `${state.filteredCount}/${state.count} repeaters${state.stale ? ' · stale' : ''}`)
+      : 'Repeaters off — LOAD HERE switches it on', { error: Boolean(state.error) && !state.count });
+    if (this._hamTab !== 'local') return;
+    this._hamFillSelect(els.localBand, state.filters?.bands || [{ id: 'all', label: 'All bands' }], state.filter?.band || 'all');
+    this._hamFillSelect(els.localKind, state.filters?.kinds || [{ id: 'all', label: 'All repeaters' }], state.filter?.kind || 'all');
+    const areaParts = [];
+    if (state.areaLabel) areaParts.push(state.areaLabel);
+    if (state.lastLoad?.count !== undefined && state.lastLoad?.at) areaParts.push(`${state.lastLoad.count} loaded ${formatAge(state.lastLoad.at)} ago`);
+    if (life.enabled && state.gate && !state.gate.withinGate && Number.isFinite(state.gate.heightM)) {
+      areaParts.push(`auto-load below ${Math.round(state.gate.gateM / 1000)} km (now ${Math.round(state.gate.heightM / 1000)} km)`);
+    }
+    if (state.error) areaParts.push(state.error);
+    this._hamNote(els.localArea, areaParts.join(' · '), { error: Boolean(state.error) });
+    const rows = (state.items || []).slice(0, HAM_LIST_LIMIT).map((repeater) => this._hamRow({
+      lead: Number.isFinite(repeater.distanceKm) ? `${Math.round(repeater.distanceKm)} km` : '',
+      strong: repeater.callsign,
+      main: formatHz(repeater.outputHz),
+      tail: repeater.kind === 'D-STAR' && repeater.module ? `D-STAR ${repeater.module}` : repeater.kind,
+      sub: repeaterDetails(repeater),
+      color: repeater.kind === 'D-STAR' ? '#a855f7' : '#f59e0b',
+      selected: repeater.id === state.selectedId,
+      onClick: () => hamRepeatersLayer.select(repeater.id, { flyTo: true, origin: 'user' }),
+    }));
+    this._hamRenderList(els.localList, rows, life.enabled
+      ? (state.loading ? 'Loading…' : (state.area ? 'No repeaters in this area.' : 'Fly below 1500 km or press LOAD HERE.'))
+      : 'Enable Repeaters (or press LOAD HERE) for FM and D-STAR repeaters around the view.');
+    this._renderHamLocalActivations();
+  }
+
+  _renderHamLocalActivations() {
+    const container = this._hamEls.localActivations;
+    if (!container || this._hamTab !== 'local') return;
+    const state = this._hamStates['ham-activations'];
+    const life = this._hamLifecycle('ham-activations', state);
+    if (!life.enabled) {
+      this._hamRenderList(container, [], 'Enable Activations (ACTIVITY tab) to list nearby POTA / SOTA / WWFF / BOTA.');
+      return;
+    }
+    const centre = this._hamViewCentre();
+    if (!centre) {
+      this._hamRenderList(container, [], 'The view centre could not be read.');
+      return;
+    }
+    const nearest = typeof hamActivationsLayer.nearest === 'function' ? hamActivationsLayer.nearest(centre.lat, centre.lon, 5) : [];
+    const now = Date.now();
+    const rows = (nearest || []).map((entry) => {
+      const item = entry?.activation || entry;
+      const km = Number.isFinite(entry?.distanceKm) ? entry.distanceKm : distanceKm(centre, item);
+      return this._hamRow({
+        lead: Number.isFinite(km) ? `${Math.round(km)} km` : '',
+        strong: item.callsign,
+        main: item.reference,
+        tail: `${formatHz(item.freqHz, { unit: false })}${item.mode ? ` ${item.mode}` : ''}`,
+        sub: activationDetail(item, now),
+        color: PROGRAM_COLORS[item.program] || '#9aa4b2',
+        selected: item.id === state?.selectedId,
+        onClick: () => hamActivationsLayer.select(item.id, { flyTo: true, origin: 'user' }),
+      });
+    });
+    this._hamRenderList(container, rows, 'No activations loaded yet.');
   }
 
   _renderRadioState(state) {
@@ -7960,6 +9024,22 @@ export class StyleManager {
         : panelEl.classList.contains('collapsed');
       const entry = { id: spec.id, collapsed };
       if (spec.pinnable) entry.pinned = panelEl.classList.contains('dock-pinned');
+      if (spec.id === HAM_RADIO_PANEL_ID) {
+        // Carried on the spec for consumers of the panel-state provider; the
+        // URL codec in sharelink.js encodes only the collapsed bit.
+        entry.tab = this._hamTab;
+        const prop = this._hamStates['ham-propagation'] || hamPropagationLayer.getUIState?.() || null;
+        if (prop) {
+          entry.propagation = {
+            grayline: Boolean(prop.overlays?.grayline),
+            aurora: Boolean(prop.overlays?.aurora),
+            ionosondes: Boolean(prop.overlays?.ionosondes),
+            voacap: Boolean(prop.overlays?.voacap),
+            txGrid: prop.voacap?.txGrid ?? null,
+            frequencyMhz: prop.voacap?.frequencyMhz ?? null,
+          };
+        }
+      }
       specs.push(entry);
     }
     return specs.length ? { specs } : null;
@@ -7984,6 +9064,9 @@ export class StyleManager {
         persist: false,
         syncShare: false,
       });
+      if (spec.id === HAM_RADIO_PANEL_ID && typeof state.tab === 'string' && this._hamRadioPanel) {
+        this._setHamTab(state.tab);
+      }
     }
     this.shareLinkManager?.onPanelStateChange?.();
   }
