@@ -362,3 +362,72 @@ test('ask-side admin bypass: admin level 2/3 result types never grant a township
     'both township-level admin result types stay guarded',
   );
 });
+
+// The Capitol geocoder response contains its coordinates but only ADDRESS names.
+// Synthetic footprints reproduce the real Capitol/YOTEL selection without live APIs.
+const CAPITOL_ANCHOR = { lat: 38.8899389, lon: -77.0090505 };
+function capitolViewer() {
+  return { camera: { positionCartographic: {
+    latitude: CAPITOL_ANCHOR.lat * Math.PI / 180,
+    longitude: CAPITOL_ANCHOR.lon * Math.PI / 180,
+    height: 1000,
+  } } };
+}
+function installCapitolMocks(t, elements, components = [
+  { long_name: 'Washington', types: ['locality', 'political'] },
+  { long_name: 'Capitol Hill', types: ['neighborhood', 'political'] },
+]) {
+  installGoogleMocks(t, async (url) => {
+    if (String(url).startsWith('https://maps.googleapis.com/')) {
+      return { json: async () => ({ status: 'OK', results: [{
+        formatted_address: 'Washington, DC 20004, USA',
+        types: ['establishment', 'landmark', 'point_of_interest', 'tourist_attraction'],
+        address_components: components,
+        geometry: { location: { lat: CAPITOL_ANCHOR.lat, lng: CAPITOL_ANCHOR.lon } },
+      }] }) };
+    }
+    assert.equal(String(url), '/api/overpass');
+    return { ok: true, status: 200, json: async () => ({ elements }) };
+  });
+}
+
+for (const [target, deferFootprint] of [
+  ['United States Capitol', true],
+  ['United States Capitol, Washington, DC', false],
+]) {
+  test(`address-only geocode retains landmark identity: ${target}`, async t => {
+    const capitol = squareWay(CAPITOL_ANCHOR, 0, 0, 20000, { building: 'yes', name: 'United States Capitol' });
+    const hotel = squareWay(CAPITOL_ANCHOR, 620, -140, 3000, { building: 'yes', tourism: 'hotel', name: 'YOTEL Washington DC' });
+    installCapitolMocks(t, [hotel, capitol]);
+    const result = await resolveAnnotationTarget({ viewer: capitolViewer(), target, entityKind: 'building', footprint: true, deferFootprint });
+    assert.ok(result);
+    const outline = deferFootprint ? await result.resolveOutline() : result;
+    assert.deepEqual(outline.ring, capitol.geometry.map(p => [p.lon, p.lat]));
+    assert.equal(outline.footprintKind, 'building');
+  });
+}
+
+test('address-only landmark without a matching outline keeps its geocoded point', async t => {
+  const hotel = squareWay(CAPITOL_ANCHOR, 620, -140, 3000, { building: 'yes', tourism: 'hotel', name: 'YOTEL Washington DC' });
+  installCapitolMocks(t, [hotel]);
+  const result = await resolveAnnotationTarget({ viewer: capitolViewer(), target: 'US Capitol building, Washington', entityKind: 'building', footprint: true, deferFootprint: true });
+  assert.ok(result);
+  assert.deepEqual([result.lat, result.lon], [CAPITOL_ANCHOR.lat, CAPITOL_ANCHOR.lon]);
+  assert.equal(await result.resolveOutline(), null);
+});
+
+test('missing address components do not turn a formatted city address into the landmark name', async t => {
+  const capitol = squareWay(CAPITOL_ANCHOR, 0, 0, 20000, { building: 'yes', name: 'United States Capitol' });
+  const hotel = squareWay(CAPITOL_ANCHOR, 620, -140, 3000, { building: 'yes', name: 'YOTEL Washington DC' });
+  installCapitolMocks(t, [hotel, capitol], []);
+  const result = await resolveAnnotationTarget({ viewer: capitolViewer(), target: 'United States Capitol building', footprint: true });
+  assert.deepEqual(result.ring, capitol.geometry.map(p => [p.lon, p.lat]));
+});
+
+test('a genuine geocoded feature name still canonicalizes an alternate user name', async t => {
+  const capitol = squareWay(CAPITOL_ANCHOR, 0, 0, 20000, { building: 'yes', name: 'United States Capitol' });
+  const decoy = squareWay(CAPITOL_ANCHOR, 620, -140, 3000, { building: 'yes', name: 'Congress meeting building' });
+  installCapitolMocks(t, [decoy, capitol], [{ long_name: 'United States Capitol', types: ['landmark'] }]);
+  const result = await resolveAnnotationTarget({ viewer: capitolViewer(), target: 'Congress meeting building', footprint: true });
+  assert.deepEqual(result.ring, capitol.geometry.map(p => [p.lon, p.lat]));
+});

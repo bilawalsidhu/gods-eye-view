@@ -982,6 +982,43 @@ function navigationState() {
   };
 }
 
+/** Stable identity for a delegated Contacts-panel button across live repaints. */
+export function awarenessPanelControlKey(element) {
+  const control = element?.closest?.(
+    'button[data-awareness-action], button[data-awareness-layer][data-awareness-id]',
+  );
+  if (!control) return null;
+  if (control.dataset.awarenessAction) return `action:${control.dataset.awarenessAction}`;
+  return `target:${control.dataset.awarenessLayer}:${control.dataset.awarenessId}`;
+}
+
+/** Capture stable identity so a live repaint can restore only the same control. */
+export function captureAwarenessPanelFocus(panel, activeElement = document.activeElement) {
+  if (!panel?.contains?.(activeElement)) return null;
+  if (activeElement?.matches?.('[data-awareness-focus-continuation]')) {
+    return { key: 'continuation' };
+  }
+  const key = awarenessPanelControlKey(activeElement);
+  if (!key) return null;
+  return { key };
+}
+
+/** Restore the same control, or continue beyond the list when it is no longer rendered. */
+export function restoreAwarenessPanelFocus(panel, snapshot) {
+  if (!panel || !snapshot) return null;
+  const continuation = panel.querySelector('[data-awareness-focus-continuation]');
+  const controls = [...panel.querySelectorAll(
+    'button[data-awareness-action], button[data-awareness-layer][data-awareness-id]',
+  )].filter((control) => !control.disabled);
+  const retained = snapshot.key === 'continuation'
+    ? continuation
+    : controls.find((control) => awarenessPanelControlKey(control) === snapshot.key);
+  const target = retained
+    || continuation;
+  target?.focus?.({ preventScroll: true });
+  return target || null;
+}
+
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 }
@@ -993,11 +1030,13 @@ function renderResults() {
   const markup = `<div class="military-awareness-subject">${escapeHtml(subject.label)} · ${formatAwarenessDistance(AWARENESS_RADIUS_M)} FLIGHT / VESSEL WINDOW</div>
     ${navigationControlsHtml()}
     ${cohorts.map(rowHtml).join('')}
-    <p class="military-awareness-note">Open-source mapped/observed context. Missing broadcasts, unloaded map areas, or unmapped sites are not evidence of absence.</p>`;
+    <p class="military-awareness-note" tabindex="-1" data-awareness-focus-continuation>Open-source mapped/observed context. Missing broadcasts, unloaded map areas, or unmapped sites are not evidence of absence.</p>`;
   panel.hidden = false;
   if (state.panelMarkup !== markup) {
+    const focusSnapshot = captureAwarenessPanelFocus(panel);
     panel.innerHTML = markup;
     state.panelMarkup = markup;
+    restoreAwarenessPanelFocus(panel, focusSnapshot);
   }
 }
 

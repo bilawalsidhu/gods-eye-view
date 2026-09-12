@@ -643,5 +643,13 @@ export function initFirstRunExperience({
   }
   syncToExclusiveSurfaces();
 
-  return { dismiss, isTopmost };
+  // Teardown is not a user dismissal and must not change the show preference.
+  const destroy = () => {
+    closing = true;
+    documentRef.removeEventListener('keydown', onKeyDown, true);
+    globalThis.removeEventListener?.('resize', onViewportResize);
+    surfaceObserver?.disconnect();
+    root.remove();
+  };
+  return { dismiss, isTopmost, destroy };
 }

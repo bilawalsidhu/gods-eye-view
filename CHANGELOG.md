@@ -1,11 +1,17 @@
 # Changelog
 
+## September 8, 2026
+
+Earthquake refreshes validate the complete feed and construct replacement entities before clearing the previous snapshot. Malformed rows and duplicate rendered IDs retain the last good entities, overlays, count and timestamp and report a malformed response; unknown magnitude is excluded from M2.5+ rendering.
+
+Non-object or array-valued properties reject the response instead of being treated as an unknown magnitude.
+
+Launch payloads with missing records now say PAYLOAD DATA UNAVAILABLE. Missing names use Unnamed payload; absent or invalid mass stays unknown instead of appearing as 0 KG.
+
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
 ## [Unreleased]
-
-### Added
 
 - Local voice installs from the app. The POWER UP panel gained a LOCAL VOICE row
   that reports readiness, runs the profile's install plan on a button, and shows
@@ -16,8 +22,22 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   Silero VAD, Parakeet STT, MiniCPM5-2B MLX 4-bit, and Kokoro TTS, with a
   repeatable setup/check command and the same 28 GEV tools.
 
-### Changed
+- Separate terrain, traffic, FIRMS and GBFS middleware into focused provider
+  modules, preserving local configuration, routes and cache/error behavior.
 
+- Split satellite and launch-feed server providers into focused modules with
+  portable request URL builders, preserving routes and cache/error behavior.
+
+- Keep landmark names when geocoding returns only address components, preventing
+  the United States Capitol annotation from moving to a Washington hotel.
+  Unrelated outlines leave the valid geocoded marker in place.
+
+- Split aircraft and vessel server providers into focused modules for source
+  fetching, AIS records/tracks and shared request helpers; preserve existing
+  routes, local setup, fallback behavior and rendering.
+
+
+### Changed
 - Local voice setup reads the pipeline config instead of a hard-coded list, so
   swapping a stage — a different LLM, STT or TTS — is a YAML edit: it installs
   the backends the stage configs name, pulls gallery models, downloads Hugging
@@ -36,6 +56,22 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Local voice sessions are excluded from OpenAI spend limits, wait for the
   pipeline to preload, and use the configured pipeline output limit after tool
   calls instead of the previous client-side 80-token cap.
+- Separate explicit browser build settings from standalone environment loading
+  and local provider middleware. Preserve provider behavior and root named exports.
+- Rename standalone browser startup to `src/standalone/` and add a Node-only
+  `gods-eye-view/build/vite` export with checked package ownership.
+
+
+### Development
+
+- Extract application lifecycle and viewer exports. Split standalone startup into
+  scene setup, controls, layer registration, tools and loading UI. Startup failure
+  and terminal shutdown release acquired resources and cancel delayed work.
+
+- Adopt Prettier tooling contributed by RohanDaCoder (#227), with an explicit
+  file scope, pinned formatter and Linux/Windows CI checks. Format the reusable
+  infrastructure modules and their consumer tests. Package boundary checks keep
+  those exports separate from app startup and local Node services.
 
 ### Fixed
 
@@ -43,6 +79,103 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   reaching speech output, and disabling model thinking now reaches the MLX chat
   template as `enable_thinking=false`.
 
+- Separate optional Google server credentials for Places and Street View from
+  the browser key, contributed by Tom-Neverwinter (#110). Provider Settings,
+  Pinokio's app-specific credential handling and setup diagnostics recognize
+  both keys. The Street View tool prefers the server key across environment
+  and `.env` sources. Existing single-key and keyless setups remain supported.
+
+- Complete the first-run, view-target prewarm, cockpit-plates and floor-hold
+  browser harness renderer portability fixes contributed by Tom-Neverwinter.
+  macOS retains Metal; other platforms default to SwiftShader. Cockpit renderer
+  assertions and evidence labels follow the actual selected mode. Floor-hold
+  explicitly selects its measured 2D billboard mode and keeps its mesh and terrain assertions; software runs are not real-GPU evidence.
+  First-run QA now checks the existing attribution Escape-close/focus-return
+  behavior while preserving the launcher-underneath regression checks.
+
+
+- Datacenter and dam factories are available through scoped package exports with
+  explicit context, overlay and render callbacks. The standalone app uses the
+  same implementation and bundled datasets.
+
+- Local GeoJSON layers share concurrent loads, cancel pending fetches on destruction,
+  discard late results, and remove their entity-context records on teardown.
+
+- Unchanged local infrastructure overlays no longer sustain idle rendering.
+  Ground samples wait for visible terrain to settle and cannot place a marker
+  below its loaded surface; roofs and valid below-sea-level heights are retained.
+  Already sampled markers also follow higher terrain as close-up tiles refine.
+
+- Datacenter and dam marker stems use bounded, zoom-dependent active sets with
+  stable selection during camera motion. Close-up stems scale to the actual
+  camera distance; source totals and submarine cables remain unchanged.
+
+- Keyboard focus rings now survive active/selected button styles across the
+  interface. Visual Styles, Location cities and points of interest, search,
+  Context/mission actions, Cockpit utilities, and sliders retain a distinct
+  focus indicator.
+- A short Space press activates a focused control only on key release. Holding
+  Space for 500 ms blurs that control before push-to-talk starts, and release is
+  then consumed so it cannot also activate the old control. The same hold works
+  from the map or page background; text-entry controls remain protected.
+- The Location disclosure is reachable with Tab and shows keyboard focus;
+  its city, point-of-interest, and search controls do too. Escape from inside
+  the tray returns focus to its disclosure and discards any unfinished search;
+  Escape on the disclosure itself closes the tray and clears that focus.
+- Data Layers ON/OFF buttons show a keyboard focus ring independently of
+  their enabled and feed-status colors.
+- Display buttons, layout selectors, mode buttons, and sliders show a visible
+  keyboard focus ring, including the controls used in Cockpit Display. Enabled
+  CCTV camera dropdowns also show keyboard focus.
+- Context tabs keep a distinct keyboard ring when selected. Their existing
+  Left/Right arrow navigation continues to switch Contacts and Space Missions,
+  and both choices remain reachable through ordinary Tab navigation.
+- Tabbing through the Space Missions roster now drives the same temporary globe
+  rotation and mission-marker highlight as pointer hover, without selecting the
+  mission. Keyboard and pointer previews no longer cancel each other.
+- Radio power controls, Search Nearby Sites, and Clear Selected Layers retain
+  keyboard focus while their async work is busy. They expose that busy state to
+  assistive technology and ignore repeated activation until the work settles.
+- Live Contacts results retain keyboard focus by contact identity when counts,
+  distance order, or pages refresh. If a focused contact departs or rotates off
+  the visible page, focus moves to the named explanatory note at the end of the
+  list and survives later refreshes there, so the next Tab proceeds beyond the
+  list instead of restarting at Contacts or silently selecting another contact.
+- Cockpit Live Signals retains keyboard focus during live updates and contact
+  reordering, allowing Tab to continue to Display and Radio. If the focused
+  contact leaves the list, focus moves to the current briefing tab.
+- Cockpit-only Display and Radio launchers show complete inset focus rings.
+- Escape collapses the nearest expanded panel containing keyboard focus and
+  returns focus to that panel's disclosure when closing from its contents.
+  Escape on the disclosure itself closes without leaving the collapsed control
+  focused. Cockpit Contact and Live Signals panels follow the same nesting rule.
+- Cesium's bottom-left Data attribution control and lightbox Close control are
+  in the Tab order and support Enter and Space. Close, Escape, and backdrop
+  dismissal restore focus and synchronize the disclosure state.
+
+- CCTV testing uses the normal launcher for keyless startup, credential loading,
+  localhost binding, and explicit LAN-exposure warnings while retaining its
+  smaller source-pack limits.
+- CelesTrak, Launch Library, terrain-height, and aircraft-enrichment failures
+  return generic error messages. Related diagnostics omit raw exception details
+  and upstream error bodies; response statuses and cache fallback remain intact.
+  Includes the security fixes contributed by Tom-Neverwinter in PR #171.
+
+### Fixed
+
+- Map Source keyboard opening retries focus until the selected tile is visible.
+  Leaving the disclosure, pointer interaction, or closing the tray cancels the
+  pending handoff so delayed work cannot pull focus back.
+
+- Scope, Bloom, Sharpen, location search and generated style sliders expose
+  explicit accessible names. The first-run checkbox retains its native label.
+- FIRMS records a source as successful only after appending its rows, avoiding
+  contradictory success/failure status if aggregation throws.
+- Radio country filtering and voice country requests now resolve common English
+  names and exonyms that `Intl.DisplayNames`' primary label omits, so requests
+  like "play radio in Turkey" no longer fail closed (Turkey → Türkiye, plus
+  Myanmar/Burma, UAE, Holland, Swaziland, East Timor, Cabo Verde, Vatican).
+  Ambiguous names such as a bare "Congo" or "Korea" still fail closed.
 - Mapped-site outages show their scheduled retry countdown and distinguish
   known Overpass rate limits, timeouts, and query failures. Search feedback no
   longer claims a refresh succeeded while the layer is unavailable or loading.
@@ -64,6 +197,10 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Existing cached refusals are now ignored immediately, including during
   stale-data fallback. Concurrent identical requests share the same last-good
   fallback when all mirrors refuse, without duplicating upstream requests.
+
+- Refresh vulnerable transitive dependencies and update browser/image tooling
+  to Puppeteer 25.10.0 and Sharp 0.35.4. Cesium remains on 1.138.0.
+  Browser QA awaits the new asynchronous executable-path lookup.
 
 ## [0.1.1] — 2026-09-01 — Installation and live-data fixes
 
