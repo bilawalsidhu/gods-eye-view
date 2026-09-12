@@ -96,6 +96,27 @@
     "./server/providers/gbfs": {
       "node": "./server/providers/gbfs.js"
     },
-    "./sources/gbfs": "./src/data/gbfsSource.js"
+    "./sources/gbfs": "./src/data/gbfsSource.js",
+    "./server/providers/cctv": {
+      "node": "./server/providers/cctv.js"
+    },
+    "./server/providers/radio": {
+      "node": "./server/providers/radio.js"
+    },
+    "./server/providers/overpass": {
+      "node": "./server/providers/overpass.js"
+    },
+    "./server/providers/military-installations": {
+      "node": "./server/providers/military-installations.js"
+    },
+    "./server/providers/regional": {
+      "node": "./server/providers/regional.js"
+    },
+    "./server/providers/openai": {
+      "node": "./server/providers/openai.js"
+    },
+    "./server/standalone/key-setup": {
+      "node": "./server/standalone/key-setup.js"
+    }
   }
 }

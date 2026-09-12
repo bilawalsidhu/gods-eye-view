@@ -107,45 +107,41 @@ export function adsbdbProxy() {
     return inflight.get(ik);
   }
 
+  const installMiddleware = (server) => {
+    server.middlewares.use('/api/adsbdb', async (req, res) => {
+      await loadOnce();
+      const send = (status, obj) => {
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(obj));
+      };
+      try {
+        const [, kind, rawKey] = String(req.url || '')
+          .split('?')[0]
+          .split('/');
+        if (kind === 'route') {
+          const cs = String(rawKey || '').toUpperCase();
+          if (!/^[A-Z0-9]{2,8}$/.test(cs))
+            return send(400, { error: 'invalid callsign' });
+          const data = await lookup('route', cs);
+          return send(200, data ? { found: true, ...data } : { found: false });
+        }
+        if (kind === 'type') {
+          const hex = String(rawKey || '').toLowerCase();
+          if (!/^[0-9a-f]{6}$/.test(hex))
+            return send(400, { error: 'invalid hex' });
+          const data = await lookup('aircraft', hex);
+          return send(200, data ? { found: true, ...data } : { found: false });
+        }
+        return send(404, { error: 'unknown endpoint' });
+      } catch (err) {
+        console.error('[adsbdb-proxy] request failed');
+        return send(500, { error: 'adsbdb proxy error' });
+      }
+    });
+  };
   return {
     name: 'adsbdb-proxy',
-    configureServer(server) {
-      server.middlewares.use('/api/adsbdb', async (req, res) => {
-        await loadOnce();
-        const send = (status, obj) => {
-          res.writeHead(status, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(obj));
-        };
-        try {
-          const [, kind, rawKey] = String(req.url || '')
-            .split('?')[0]
-            .split('/');
-          if (kind === 'route') {
-            const cs = String(rawKey || '').toUpperCase();
-            if (!/^[A-Z0-9]{2,8}$/.test(cs))
-              return send(400, { error: 'invalid callsign' });
-            const data = await lookup('route', cs);
-            return send(
-              200,
-              data ? { found: true, ...data } : { found: false },
-            );
-          }
-          if (kind === 'type') {
-            const hex = String(rawKey || '').toLowerCase();
-            if (!/^[0-9a-f]{6}$/.test(hex))
-              return send(400, { error: 'invalid hex' });
-            const data = await lookup('aircraft', hex);
-            return send(
-              200,
-              data ? { found: true, ...data } : { found: false },
-            );
-          }
-          return send(404, { error: 'unknown endpoint' });
-        } catch (err) {
-          console.error('[adsbdb-proxy] request failed');
-          return send(500, { error: 'adsbdb proxy error' });
-        }
-      });
-    },
+    configureServer: installMiddleware,
+    configurePreviewServer: installMiddleware,
   };
 }

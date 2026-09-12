@@ -79,11 +79,10 @@ use build-only dependency exceptions.
 
 `server/standalone/vite.config.js` loads the root environment and passes selected
 browser keys, host/port and the ordered local provider plugins to this helper.
-`server/providers/local.js` still owns provider process state, routes and
-credential-store paths. Provider Settings writes to the same root `.env` or
-Pinokio store as before. `vite.config.js` preserves the default configuration and
-existing named provider exports for tools/tests. The provider module remains
-large; later extractions should split complete provider families and their tests.
+`server/providers/local.js` composes provider factories and re-exports existing
+helpers for compatibility. Provider Settings lives in `server/standalone/key-setup.js`
+and writes to the same root `.env` or Pinokio store as before. `vite.config.js`
+preserves the default configuration and named provider exports for tools/tests.
 
 ## Aircraft and vessel providers
 
@@ -152,3 +151,21 @@ checks each entry independently.
 Browser terrain sampling, traffic matching/drawing, fire overlays and bike-share
 layer lifecycle remain in their current modules. This extraction changes no
 source defaults, credentials, quotas, data interpretation or visual behavior.
+
+## Local search, regional context, voice and setup
+
+Node-only exports `server/providers/overpass`, `server/providers/military-installations`,
+`server/providers/regional` and `server/providers/openai` own request handling
+without importing the standalone configuration or browser rendering. Overpass
+separates query admission, geometry simplification, cache and transport; military
+search shares the bounded transport. Regional place/news/weather acquisition is
+separate from briefing and weather-effect response caches. Voice handlers share
+existing rate limits and request reading; schemas and instructions are separate.
+
+`server/standalone/key-setup` is explicitly standalone Node functionality.
+Its factory and the local voice factory accept `sourceRoot` for application-owned
+configuration/log files; defaults resolve the repository root. Local voice also
+accepts an optional `annotationGuidance` paragraph. Neither factory starts
+acquisition on import. Setup retains its pre-environment-load provenance capture
+and development-only registration. Package checks enumerate every owned module
+and reject browser imports of these Node entries.

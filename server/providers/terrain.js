@@ -155,63 +155,65 @@ export function terrainHeightsProxy() {
     return inflight.get(key);
   }
 
+  const installMiddleware = (server) => {
+    server.middlewares.use('/api/terrain/heights', async (req, res) => {
+      const send = (status, bodyObj) => {
+        if (res.headersSent) return;
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(bodyObj));
+      };
+      try {
+        await loadDiskOnce();
+        const parsedUrl = new URL(req.url || '', 'http://internal');
+        const rawPoints = parsedUrl.searchParams.get('points');
+        const points = parseTerrainPoints(rawPoints);
+        if (!points) {
+          send(400, {
+            error:
+              'invalid points parameter — expected "lon,lat;lon,lat;…" with finite numbers',
+          });
+          return;
+        }
+        if (points.length > MAX_POINTS) {
+          send(500, {
+            error: `too many points (${points.length}); max ${MAX_POINTS} per request`,
+          });
+          return;
+        }
+
+        const outcome = await resolveTerrainHeightRequest({
+          points,
+          cache: mem,
+          fetchMissing: fetchMissingSingleFlight,
+          ttlMs: TTL_MS,
+        });
+        if (outcome.cacheChanged) diskDirty = true;
+        if (outcome.upstreamError) {
+          console.warn(
+            '[terrain-heights-proxy] refresh incomplete' +
+              ' — serving stale points when available',
+          );
+        } else if (outcome.absentPoints > 0) {
+          // Not a refresh failure. The upstream answered every position and
+          // returned a null height for a few of them (~0.16%, transient);
+          // the next poll re-asks and the client meanwhile resolves those
+          // through its bundled geoid. Informational, not actionable.
+          console.info(
+            `[terrain-heights-proxy] ${outcome.absentPoints}` +
+              ` of ${outcome.requestedPoints} position(s) had no upstream` +
+              ' height this poll — retrying next cycle',
+          );
+        }
+        send(outcome.status, outcome.body);
+      } catch (err) {
+        console.error('[terrain-heights-proxy] request failed');
+        send(500, { error: 'terrain heights proxy error' });
+      }
+    });
+  };
   return {
     name: 'terrain-heights-proxy',
-    configureServer(server) {
-      server.middlewares.use('/api/terrain/heights', async (req, res) => {
-        const send = (status, bodyObj) => {
-          if (res.headersSent) return;
-          res.writeHead(status, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(bodyObj));
-        };
-        try {
-          await loadDiskOnce();
-          const parsedUrl = new URL(req.url || '', 'http://internal');
-          const rawPoints = parsedUrl.searchParams.get('points');
-          const points = parseTerrainPoints(rawPoints);
-          if (!points) {
-            send(400, {
-              error:
-                'invalid points parameter — expected "lon,lat;lon,lat;…" with finite numbers',
-            });
-            return;
-          }
-          if (points.length > MAX_POINTS) {
-            send(500, {
-              error: `too many points (${points.length}); max ${MAX_POINTS} per request`,
-            });
-            return;
-          }
-
-          const outcome = await resolveTerrainHeightRequest({
-            points,
-            cache: mem,
-            fetchMissing: fetchMissingSingleFlight,
-            ttlMs: TTL_MS,
-          });
-          if (outcome.cacheChanged) diskDirty = true;
-          if (outcome.upstreamError) {
-            console.warn(
-              '[terrain-heights-proxy] refresh incomplete' +
-                ' — serving stale points when available',
-            );
-          } else if (outcome.absentPoints > 0) {
-            // Not a refresh failure. The upstream answered every position and
-            // returned a null height for a few of them (~0.16%, transient);
-            // the next poll re-asks and the client meanwhile resolves those
-            // through its bundled geoid. Informational, not actionable.
-            console.info(
-              `[terrain-heights-proxy] ${outcome.absentPoints}` +
-                ` of ${outcome.requestedPoints} position(s) had no upstream` +
-                ' height this poll — retrying next cycle',
-            );
-          }
-          send(outcome.status, outcome.body);
-        } catch (err) {
-          console.error('[terrain-heights-proxy] request failed');
-          send(500, { error: 'terrain heights proxy error' });
-        }
-      });
-    },
+    configureServer: installMiddleware,
+    configurePreviewServer: installMiddleware,
   };
 }
