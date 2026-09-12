@@ -5,6 +5,7 @@ import { terrainHeightsProxy } from 'gods-eye-view/server/providers/terrain';
 import { tomtomProxy } from 'gods-eye-view/server/providers/traffic';
 import { firmsProxy } from 'gods-eye-view/server/providers/firms';
 import { gbfsProxy } from 'gods-eye-view/server/providers/gbfs';
+import { mapillaryProxy } from '../../server/providers/mapillary.js';
 import { localProviderPlugins } from '../../server/providers/local.js';
 
 function install(plugin) {
@@ -63,6 +64,7 @@ test('standalone composition mounts every extracted provider exactly once withou
     tomtomProxy,
     firmsProxy,
     gbfsProxy,
+    mapillaryProxy,
   ])
     assert.equal(plugins.filter((p) => p.name === factory().name).length, 1);
 });

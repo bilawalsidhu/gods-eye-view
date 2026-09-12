@@ -2,6 +2,7 @@ import { terrainHeightsProxy } from './terrain.js';
 import { tomtomProxy } from './traffic.js';
 import { firmsProxy } from './firms.js';
 import { gbfsProxy } from './gbfs.js';
+import { mapillaryProxy } from './mapillary.js';
 import { celestrakProxy, rocketLaunchesProxy } from './space.js';
 export { LL2_CACHE_TTL_MS, launchLibraryRequestHeaders } from './space.js';
 /**
@@ -24,6 +25,7 @@ export { LL2_CACHE_TTL_MS, launchLibraryRequestHeaders } from './space.js';
  *  13. Weather effects — camera-local Open-Meteo observations without news/geocoding overhead
  *  14. Rocket launches — recent Launch Library 2 mission metadata
  *  15. Radio Browser — public-domain station directory and click counting
+ *  16. Mapillary — bounded street-level imagery metadata
  *
  * Standalone configuration owns environment loading and browser key selection.
  *
@@ -4651,6 +4653,7 @@ export function localProviderPlugins() {
       celestrakProxy(),
       tomtomProxy(),
       firmsProxy(),
+      mapillaryProxy(),
       rocketLaunchesProxy(),
       terrainHeightsProxy(),
       adsbdbProxy(),

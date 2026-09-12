@@ -13,6 +13,15 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Added an optional Mapillary street-level imagery layer. It requests a small
+  camera-local viewport only at close zoom, renders a newest-first spatially
+  spaced sample with subdued camera directions, and offers `ALL`, `12M`, and
+  `30D` capture-date filters. Selection shows a larger image preview, capture,
+  creator, available camera/device metadata, direction, coordinates, and a
+  card-wide link to the original. The access token remains server-side behind
+  a cached, rate-limited proxy and Mapillary attribution is visible while its
+  data is displayed.
+
 - Separate terrain, traffic, FIRMS and GBFS middleware into focused provider
   modules, preserving local configuration, routes and cache/error behavior.
 

@@ -41,7 +41,7 @@ function sweepLayerParamKeys() {
 /** The layer registry as main.js builds it (src/main.js dataManager.register calls). */
 const REGISTERED = new Set([
   'flights', 'military', 'earthquakes', 'satellites', 'rocket-launches', 'traffic',
-  'cctv', 'radio', 'bikeshare', 'ais-live-vessels', 'military-installations',
+  'cctv', 'radio', 'bikeshare', 'mapillary', 'ais-live-vessels', 'military-installations',
   'military-awareness', 'local-datacenters', 'local-dams',
   'telegeography-submarine-cables', 'local-firms',
 ]);

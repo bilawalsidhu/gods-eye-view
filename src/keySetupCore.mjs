@@ -70,6 +70,14 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'free',
   }),
   Object.freeze({
+    id: 'mapillary',
+    title: 'MAPILLARY',
+    unlocks: 'Nearby crowdsourced street-level imagery',
+    getUrl: 'https://www.mapillary.com/dashboard/developers',
+    envVars: Object.freeze(['MAPILLARY_ACCESS_TOKEN']),
+    tier: 'free',
+  }),
+  Object.freeze({
     id: 'tomtom',
     title: 'TOMTOM',
     unlocks: 'Real live traffic (keyless runs a simulation)',

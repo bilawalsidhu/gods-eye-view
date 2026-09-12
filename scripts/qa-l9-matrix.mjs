@@ -171,6 +171,7 @@ const CREDIT_EXPECTATIONS = {
   cctv: /Austin|Caltrans|Transport for London|TfL/i,
   radio: /Radio Browser/i,
   bikeshare: /GBFS|bikeshare/i,
+  mapillary: /Mapillary/i,
   'ais-live-vessels': /AISStream/i,
   'military-installations': /OpenStreetMap/i,
   'local-datacenters': /OpenStreetMap/i,

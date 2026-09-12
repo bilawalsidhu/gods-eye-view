@@ -15,6 +15,7 @@ export const CREDENTIALS = Object.freeze([
   { name: 'OPENAI_API_KEY', label: 'OpenAI voice', keychain: [['openai-api', 'api-key']] },
   { name: 'AISSTREAM_API_KEY', label: 'AISStream vessels', keychain: [['aisstream-api', 'api-key']] },
   { name: 'FIRMS_MAP_KEY', label: 'NASA FIRMS fires', keychain: [['firms-map', 'map-key']] },
+  { name: 'MAPILLARY_ACCESS_TOKEN', label: 'Mapillary imagery', keychain: [['mapillary', 'access-token']] },
   { name: 'TOMTOM_API_KEY', label: 'TomTom traffic', keychain: [['tomtom-api', 'api-key']] },
   {
     name: 'OPENSKY_CLIENT_ID',
@@ -145,6 +146,7 @@ export function buildCapabilitySummary(credentials) {
     voice: configured('OPENAI_API_KEY') ? 'available' : 'off until an OpenAI key is added',
     vessels: configured('AISSTREAM_API_KEY') ? 'live AISStream feed' : 'off until an AISStream key is added',
     fires: configured('FIRMS_MAP_KEY') ? 'live NASA FIRMS feed' : 'off until a FIRMS key is added',
+    streetImagery: configured('MAPILLARY_ACCESS_TOKEN') ? 'Mapillary imagery available' : 'off until a Mapillary token is added',
     traffic: configured('TOMTOM_API_KEY') ? 'live TomTom flow' : 'built-in traffic simulation',
     missions: configured('LL2_API_TOKEN')
       ? 'Launch Library 2 token allowance'
@@ -200,6 +202,7 @@ export function formatSetupReport(report, { readyMessage } = {}) {
     `Voice:   ${report.capabilities.voice}`,
     `Vessels: ${report.capabilities.vessels}`,
     `Fires:   ${report.capabilities.fires}`,
+    `Street:  ${report.capabilities.streetImagery}`,
     `Traffic: ${report.capabilities.traffic}`,
     `Missions: ${report.capabilities.missions}`,
     '',
