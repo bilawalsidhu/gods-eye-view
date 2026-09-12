@@ -3278,3 +3278,26 @@ test('a genuinely different refused call still gets its own output', async () =>
   await controller.handleRealtimeEvent(lateToolItemEvent('resp_old', 'call_two', 'item_two'));
   assert.deepEqual(outputs, ['call_one', 'call_two'], 'each distinct call is answered');
 });
+
+test('a local backend that needs setup fails the session start with the fix, not a retry loop', async () => {
+  const controller = new GevRealtimeController({ ui: {}, runner: async () => ({}) });
+  const methods = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options = {}) => {
+    methods.push(options.method || 'GET');
+    return {
+      json: async () => ({
+        state: 'needs-setup',
+        detail: 'LocalAI has no "gpt-realtime" pipeline — run npm run voice:local:setup',
+      }),
+    };
+  };
+  try {
+    const result = await controller.awaitLocalBackendReady(controller.startEpoch);
+    assert.equal(result.ok, false);
+    assert.match(result.detail, /npm run voice:local:setup/);
+    assert.deepEqual(methods, ['POST'], 'a missing install is terminal, so it must not keep polling');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

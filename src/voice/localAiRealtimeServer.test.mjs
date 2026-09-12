@@ -75,8 +75,8 @@ test('LocalAI reports a missing executable without throwing', async () => {
   });
 
   const result = await runtime.status({ startRequested: true });
-  assert.equal(result.state, 'unavailable');
-  assert.match(result.detail, /local-ai not found on PATH/);
+  assert.equal(result.state, 'needs-setup');
+  assert.match(result.detail, /brew install localai.*npm run voice:local:setup/);
 });
 
 test('LocalAI never auto-starts a configured remote service', async () => {
@@ -137,4 +137,46 @@ test('LocalAI calls relay translates raw SDP to JSON and unwraps the answer', as
     sdp: 'offer-sdp',
     model: 'requested-model',
   });
+});
+
+test('LocalAI points at the setup command when the pipeline is not installed', async () => {
+  const runtime = createLocalAiRealtime({
+    environment: { GEV_LOCAL_REALTIME_MODEL: 'voice-pipeline' },
+    fetchImpl: async () => ({ ok: true, json: async () => ({ data: [{ id: 'something-else' }] }) }),
+  });
+
+  const result = await runtime.status();
+  assert.equal(result.state, 'needs-setup');
+  assert.match(result.detail, /npm run voice:local:setup/);
+});
+
+test('LocalAI reports download progress without blocking, and fails only on a stall', async () => {
+  let clock = 1_000;
+  let bytes = 50e6;
+  const runtime = createLocalAiRealtime({
+    environment: { GEV_LOCAL_REALTIME_MODEL: 'voice-pipeline' },
+    fetchImpl: async (url) => {
+      // A first run holds /backend/load open while it downloads weights.
+      if (url.endsWith('/backend/load')) return new Promise(() => {});
+      return { ok: true, json: async () => ({ data: [{ id: 'voice-pipeline' }] }) };
+    },
+    now: () => clock,
+    readyGraceMs: 0,
+    stallTimeoutMs: 30_000,
+    downloadedBytes: () => bytes,
+  });
+
+  const first = await runtime.status();
+  assert.equal(first.state, 'starting');
+  assert.match(first.detail, /Downloading model weights… 50 MB/);
+
+  clock += 20_000;
+  bytes = 120e6;
+  const second = await runtime.status();
+  assert.equal(second.state, 'starting', 'bytes still arriving keeps the warm-up alive');
+
+  clock += 31_000;
+  const stalled = await runtime.status();
+  assert.equal(stalled.state, 'unavailable');
+  assert.match(stalled.detail, /stalled/);
 });

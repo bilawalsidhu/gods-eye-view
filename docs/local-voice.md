@@ -26,8 +26,11 @@ npm run voice:local:setup
 The setup downloads the required model and backend artifacts into
 `~/.local/share/localai`, copies the versioned pipeline files from
 `config/localai/models`, and applies the narrow compatibility fixes the
-verified versions still need. Downloads can take several minutes. The original
-patched files are retained beside them with a `.gev-backup` suffix.
+verified versions still need. It also downloads the language model itself, so a
+first LOCAL session starts what is already on disk instead of fetching 1.3 GB
+behind a spinner. Expect about 5.5 GB in `~/.local/share/localai` and several
+minutes on a fast connection. The original patched files are retained beside
+them with a `.gev-backup` suffix.
 
 Verify an existing installation without downloading or changing anything:
 
@@ -39,6 +42,17 @@ Start GEV normally and click **CLOUD** beside the mic to select **LOCAL**. The
 dev server starts LocalAI on demand, waits for all four stages to load, and
 stops the child process when the server exits. The first start is much slower
 than later sessions because every model must enter memory.
+
+The mic panel reports what the warm-up is actually doing — `Starting local
+backend`, `Downloading model weights… 412 MB so far`, then `Loading speech,
+language and voice models`. Two outcomes are distinct on purpose:
+
+- **needs setup** names the command to run (`brew install localai`, then `npm
+  run voice:local:setup`) instead of reporting a missing pipeline id.
+- **unavailable** means the warm-up stopped moving: a download with no new bytes
+  for 45s, or a load that never finished. A download that keeps arriving is
+  never cut off by the clock, so a slow connection no longer fails and then
+  mysteriously works on the next click.
 
 ## Configuration
 

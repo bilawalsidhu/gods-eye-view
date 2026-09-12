@@ -14,6 +14,13 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Changed
 
+- Local voice setup downloads the language model too, so choosing LOCAL starts
+  what is already installed instead of silently fetching 1.3 GB, and
+  `voice:local:check` fails when those weights are missing.
+- The local backend reports its warm-up honestly: a missing install names the
+  setup command, a first run shows download progress, and a warm-up fails only
+  when it stops making progress instead of at a fixed three-minute cutoff.
+- `npm run doctor` reports local voice readiness beside the OpenAI voice line.
 - Local voice setup skips the MLX thinking patch on LocalAI builds that already
   honor `enable_thinking=false` (merged upstream as mudler/LocalAI#11962), so
   setup and check keep working on newer LocalAI.

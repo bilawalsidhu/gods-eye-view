@@ -142,6 +142,59 @@ function command(executable, args, environment) {
   if (result.status !== 0) throw new Error(`${executable} ${args.join(' ')} exited with ${result.status}`);
 }
 
+/** Repo id of the pipeline LLM, read from the shipped model config. */
+export function readLlmRepoId(profileDir = PROFILE_DIR) {
+  const file = path.join(profileDir, 'models', 'minicpm5-2b-mlx.yaml');
+  const match = /^\s{2}model:\s*(\S+)\s*$/m.exec(fs.readFileSync(file, 'utf8'));
+  if (!match) throw new Error(`No LLM model id found in ${file}`);
+  return match[1];
+}
+
+/** Hugging Face cache directory name for a repo id. */
+export function hfCacheDirName(repoId) {
+  return `models--${repoId.replace(/\//g, '--')}`;
+}
+
+/**
+ * Whether a COMPLETE snapshot of the repo is cached under modelsDir.
+ *
+ * Hugging Face links a snapshot file only once its blob finishes, so a
+ * snapshot carrying both config and weights means the download is done —
+ * an interrupted pull leaves the config without any .safetensors beside it.
+ */
+export function llmWeightsPresent(modelsDir, repoId) {
+  const snapshots = path.join(modelsDir, hfCacheDirName(repoId), 'snapshots');
+  if (!fs.existsSync(snapshots)) return false;
+  return fs.readdirSync(snapshots).some((entry) => {
+    const dir = path.join(snapshots, entry);
+    if (!fs.statSync(dir).isDirectory()) return false;
+    const names = fs.readdirSync(dir);
+    return names.includes('config.json') && names.some((name) => name.endsWith('.safetensors'));
+  });
+}
+
+/**
+ * Pull the LLM weights during setup instead of leaving them to the first
+ * session: LocalAI downloads them lazily on first load, which turns a click on
+ * LOCAL into a silent multi-GB wait. The MLX backend ships its own Hugging Face
+ * CLI, so the download shows progress and resumes.
+ */
+function installLlmWeights({ backendsDir, modelsDir, repoId, environment }) {
+  const python = path.join(backendsDir, 'metal-mlx', 'venv', 'bin', 'python');
+  if (!fs.existsSync(python)) {
+    throw new Error(`No MLX backend runtime at ${python}; reinstall the mlx backend`);
+  }
+  // The venv ships from a build machine, so its console scripts (hf,
+  // huggingface-cli) carry that machine's interpreter path and cannot run
+  // here. Calling the library through the venv's own python avoids the
+  // shebang entirely and still prints download progress.
+  command(
+    python,
+    ['-c', 'import sys; from huggingface_hub import snapshot_download; print(snapshot_download(sys.argv[1]))', repoId],
+    { ...environment, HF_HUB_CACHE: modelsDir },
+  );
+}
+
 export function setupLocalVoice({
   environment = process.env,
   platform = process.platform,
@@ -170,6 +223,13 @@ export function setupLocalVoice({
     for (const name of fs.readdirSync(path.join(PROFILE_DIR, 'models'))) {
       fs.copyFileSync(path.join(PROFILE_DIR, 'models', name), path.join(modelsDir, name));
     }
+    const llmRepoId = readLlmRepoId();
+    if (llmWeightsPresent(modelsDir, llmRepoId)) {
+      console.log(`${llmRepoId} weights are already cached in ${modelsDir}`);
+    } else {
+      console.log(`Downloading ${llmRepoId} weights (about 1.3 GB) into ${modelsDir}…`);
+      installLlmWeights({ backendsDir, modelsDir, repoId: llmRepoId, environment: childEnvironment });
+    }
   }
 
   const mlxBackend = path.join(backendsDir, 'metal-mlx');
@@ -192,7 +252,10 @@ export function setupLocalVoice({
     for (const name of fs.readdirSync(path.join(PROFILE_DIR, 'models'))) {
       if (!fs.existsSync(path.join(modelsDir, name))) missing.push(`model config ${name}`);
     }
-    if (missing.length) throw new Error(`Local voice setup incomplete: ${missing.join(', ')}`);
+    if (!llmWeightsPresent(modelsDir, readLlmRepoId())) missing.push('MiniCPM5 weights');
+    if (missing.length) {
+      throw new Error(`Local voice setup incomplete (${missing.join(', ')}) — run npm run voice:local:setup`);
+    }
     return { home, ready: true };
   }
 

@@ -14,8 +14,13 @@ const TOKEN_URL = '/api/realtime/token';
 const LOCAL_BACKEND_URL = '/api/realtime/local-backend';
 /** How often to re-ask while the local backend warms up. */
 const LOCAL_BACKEND_POLL_MS = 2000;
-/** How long a session start will wait for a cold local backend before failing. */
-const LOCAL_BACKEND_START_TIMEOUT_MS = 180000;
+/**
+ * Backstop for a session start waiting on a cold backend. The dev server ends a
+ * warm-up that stops making progress — a stalled download, a load that never
+ * finishes — so this only guards a status endpoint that answers "starting"
+ * forever. A first run legitimately takes minutes while weights download.
+ */
+const LOCAL_BACKEND_START_TIMEOUT_MS = 1_800_000;
 /** Default (OpenAI) Realtime destination. Overridden per-session by the
  *  token endpoint's `callsUrl` when a self-hosted provider is configured. */
 const REALTIME_CALLS_URL = 'https://api.openai.com/v1/realtime/calls';
@@ -1988,6 +1993,11 @@ export class GevRealtimeController {
       const state = data?.state || 'unavailable';
       this.setLocalBackendState(state, data?.detail || '');
       if (state === 'ready') return { ok: true };
+      // needs-setup is not a failure to retry: the backend or the profile is
+      // not installed, and the detail names the command that installs it.
+      if (state === 'needs-setup') {
+        return { ok: false, detail: data?.detail || 'Local voice needs setup — run npm run voice:local:setup' };
+      }
       if (state === 'unavailable' || state === 'stopped') {
         return { ok: false, detail: data?.detail || 'Local backend could not be started' };
       }
@@ -2065,7 +2075,7 @@ export class GevRealtimeController {
     const isLocal = this.voiceProvider === 'local';
     if (this.ui?.providerButton) {
       const backend = isLocal ? (this.localBackendState?.state || null) : null;
-      const suffix = { starting: '…', ready: '', stopped: ' !', unavailable: ' !' };
+      const suffix = { starting: '…', ready: '', stopped: ' !', unavailable: ' !', 'needs-setup': ' ?' };
       this.ui.providerButton.textContent = isLocal
         ? `LOCAL${suffix[backend] ?? ''}`
         : 'CLOUD';

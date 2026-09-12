@@ -227,7 +227,8 @@ The cockpit even carries its own briefing strip: nearby live signals, regional h
 > Silicon. Without either, the rest of the app still runs. The OpenAI key also
 > drives the **AI HUD summary**: a terse, five-word intelligence-style readout
 > of the current view that regenerates as you move. See
-> [Local voice on Apple Silicon](docs/local-voice.md) for the self-hosted setup.
+> [Local voice on Apple Silicon](docs/local-voice.md) for the self-hosted setup:
+> one-time `npm run voice:local:setup`, about 5.5 GB on disk.
 
 Click **GEV MIC**, grant the microphone, and just talk. This is more than a voice-controlled remote:
 
