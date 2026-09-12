@@ -1,5 +1,15 @@
 # God's Eye View Current State
 
+## CCTV and radio provider modules
+
+CCTV catalog acquisition, source normalization and frame/media delivery now live
+in separate modules. Each CCTV factory owns its catalog and health state; its
+`sourceRoot` option resolves relative source files against the application root.
+Radio Browser station normalization, restricted outbound transport and directory
+caching are separate modules. Node-only package entries expose both provider
+factories. Routes, payloads, fallback behavior and existing dev/preview hook
+registration are preserved; browser rendering is unchanged.
+
 ## Terrain, traffic, fire and bike-share provider modules
 
 Local composition now imports separate Node modules for Re:Earth heights,
@@ -75,9 +85,11 @@ See [component ownership and adoption](CODE-BOUNDARIES.md).
 Local Places nearby/text search and the CCTV Street View fallback prefer
 `GOOGLE_MAPS_SERVER_API_KEY`, falling back to `GOOGLE_MAPS_API_KEY` when the
 server key is blank or absent. Only the browser key is injected into client
-code. Both are optional and configured in the same ignored root `.env`, or
-Pinokio's ignored `pinokio/ENVIRONMENT`, through Provider Settings or manual
-editing. `.env.example` and `pinokio/_ENVIRONMENT` document the two entries.
+code. POWER UP presents one Google Maps entry for the browser key. The optional
+server key is configured manually in the same ignored root `.env`, or Pinokio's
+ignored `pinokio/ENVIRONMENT`; it is omitted from Provider Settings and its
+missing-key count. Existing server keys and the single-key fallback remain
+supported. `.env.example` and `pinokio/_ENVIRONMENT` document both entries.
 The Street View headings tool uses the same server-first selection after
 resolving environment overrides per variable; its explicit `--key` wins.
 
