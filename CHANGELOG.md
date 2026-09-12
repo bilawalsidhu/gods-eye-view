@@ -38,6 +38,17 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   attribution strings stay English byte-for-byte, and existing English
   snapshots and share links continue to resolve exactly as before.
 
+- Restore data-provider routes under local build preview and return JSON 404s
+  for unmatched API requests. Credential editing remains development-only.
+
+- Extract CCTV catalog/media and Radio Browser directory providers into focused
+  Node modules, preserving their routes and policies and isolating CCTV catalogs
+  by provider instance and application root.
+
+- Simplify POWER UP to one Google Maps entry. Keep the optional server key
+  available through environment configuration without a second setup row or
+  missing-key reminder.
+
 - Separate terrain, traffic, FIRMS and GBFS middleware into focused provider
   modules, preserving local configuration, routes and cache/error behavior.
 

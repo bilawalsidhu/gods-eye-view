@@ -131,53 +131,55 @@ export function terrainHeightsProxy() {
     return inflight.get(key);
   }
 
+  const installMiddleware = (server) => {
+    server.middlewares.use('/api/terrain/heights', async (req, res) => {
+      const send = (status, bodyObj) => {
+        if (res.headersSent) return;
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(bodyObj));
+      };
+      try {
+        await loadDiskOnce();
+        const parsedUrl = new URL(req.url || '', 'http://internal');
+        const rawPoints = parsedUrl.searchParams.get('points');
+        const points = parseTerrainPoints(rawPoints);
+        if (!points) {
+          send(400, {
+            error:
+              'invalid points parameter — expected "lon,lat;lon,lat;…" with finite numbers',
+          });
+          return;
+        }
+        if (points.length > MAX_POINTS) {
+          send(500, {
+            error: `too many points (${points.length}); max ${MAX_POINTS} per request`,
+          });
+          return;
+        }
+
+        const outcome = await resolveTerrainHeightRequest({
+          points,
+          cache: mem,
+          fetchMissing: fetchMissingSingleFlight,
+          ttlMs: TTL_MS,
+        });
+        if (outcome.cacheChanged) diskDirty = true;
+        if (outcome.upstreamError) {
+          console.warn(
+            '[terrain-heights-proxy] refresh incomplete' +
+              ' — serving stale points when available',
+          );
+        }
+        send(outcome.status, outcome.body);
+      } catch (err) {
+        console.error('[terrain-heights-proxy] request failed');
+        send(500, { error: 'terrain heights proxy error' });
+      }
+    });
+  };
   return {
     name: 'terrain-heights-proxy',
-    configureServer(server) {
-      server.middlewares.use('/api/terrain/heights', async (req, res) => {
-        const send = (status, bodyObj) => {
-          if (res.headersSent) return;
-          res.writeHead(status, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(bodyObj));
-        };
-        try {
-          await loadDiskOnce();
-          const parsedUrl = new URL(req.url || '', 'http://internal');
-          const rawPoints = parsedUrl.searchParams.get('points');
-          const points = parseTerrainPoints(rawPoints);
-          if (!points) {
-            send(400, {
-              error:
-                'invalid points parameter — expected "lon,lat;lon,lat;…" with finite numbers',
-            });
-            return;
-          }
-          if (points.length > MAX_POINTS) {
-            send(500, {
-              error: `too many points (${points.length}); max ${MAX_POINTS} per request`,
-            });
-            return;
-          }
-
-          const outcome = await resolveTerrainHeightRequest({
-            points,
-            cache: mem,
-            fetchMissing: fetchMissingSingleFlight,
-            ttlMs: TTL_MS,
-          });
-          if (outcome.cacheChanged) diskDirty = true;
-          if (outcome.upstreamError) {
-            console.warn(
-              '[terrain-heights-proxy] refresh incomplete' +
-                ' — serving stale points when available',
-            );
-          }
-          send(outcome.status, outcome.body);
-        } catch (err) {
-          console.error('[terrain-heights-proxy] request failed');
-          send(500, { error: 'terrain heights proxy error' });
-        }
-      });
-    },
+    configureServer: installMiddleware,
+    configurePreviewServer: installMiddleware,
   };
 }

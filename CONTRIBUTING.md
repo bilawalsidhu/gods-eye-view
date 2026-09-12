@@ -27,6 +27,16 @@ through Pinokio; the terminal path above remains the contributor path.
 
 Open `http://localhost:4173`. Before sending a PR run `npm run build`, `npm test`, and `npm run test:track` (dev server must be up) — **all three must stay green.**
 
+## Checking a built app locally
+
+Run `npm run build` followed by `npm run preview`. Preview serves the built
+frontend and local data-provider APIs. Keep optional server credentials in the
+ignored `.env`; browser keys are embedded during the build, so rebuild after
+changing them. Provider Settings and `/api/setup/*` are development-only: edit
+configuration through the development app or environment file. Unknown API
+paths return JSON 404 responses. Vite preview is for checking a local build;
+it is not a production server.
+
 ## Good first contributions
 
 The highest-leverage places to jump in:

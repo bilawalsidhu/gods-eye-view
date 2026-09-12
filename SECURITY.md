@@ -51,7 +51,8 @@ Terminal development uses one ignored repository-root `.env` for both
 `GOOGLE_MAPS_API_KEY` (browser) and `GOOGLE_MAPS_SERVER_API_KEY` (server).
 The tracked `.env.example` documents both without credentials. Vite injects
 only the browser key; sharing an environment file does not expose the server
-key. Both entries are available in Provider Settings. Pinokio saves them in
+key. Provider Settings presents only the browser key as Google Maps; configure
+the optional server key manually in the environment file. Pinokio uses
 its ignored `pinokio/ENVIRONMENT` instead, with app values and blanks taking
 precedence over inherited global values. An absent server key retains the
 browser-key fallback for existing single-key setups.

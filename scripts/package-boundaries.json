@@ -131,5 +131,36 @@
     "exports": ["./sources/gbfs"],
     "modules": ["src/data/gbfsSource.js"],
     "external": []
+  },
+  "cctv-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/cctv"],
+    "modules": [
+      "server/providers/cctv.js",
+      "server/providers/cctv/catalog.js",
+      "server/providers/cctv/constants.js",
+      "server/providers/cctv/media.js",
+      "server/providers/cctv/normalize.js",
+      "server/providers/cctv/sources.js",
+      "src/data/directionText.js",
+      "server/providers/common/geo.js",
+      "server/providers/places/google-key.js",
+      "scripts/google-server-key.mjs"
+    ],
+    "external": []
+  },
+  "radio-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/radio"],
+    "modules": [
+      "server/providers/radio.js",
+      "server/providers/radio/catalog.js",
+      "server/providers/radio/constants.js",
+      "server/providers/radio/stations.js",
+      "server/providers/radio/transport.js",
+      "src/data/radioCountry.js",
+      "server/providers/common/http.js"
+    ],
+    "external": []
   }
 }
