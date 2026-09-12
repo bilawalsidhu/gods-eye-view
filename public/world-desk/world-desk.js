@@ -3,6 +3,7 @@ const COLORS = {
   war: '#ff4d6d',
   prophet: '#c77dff',
   saint: '#f4a261',
+  artifact: '#e9c46a',
   birth: '#80ed99',
   death: '#adb5bd',
   discovery: '#00d4ff',

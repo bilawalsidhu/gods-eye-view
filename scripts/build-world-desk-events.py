@@ -297,11 +297,119 @@ RAW = [
     (1893, None, "culture", "Vivekananda at the Parliament of Religions", "Chicago", 41.87, -87.62, "Sisters and brothers of America. A Hindu monk on a world's-fair stage."),
 ]
 
+# Indian kingdoms, Muhammad's life in more detail, Brahma Kumaris, and
+# major artifacts. Still a desk of recorded landmarks — not every dispatch.
+EXTRA = [
+    # ── Muhammad and the first community ────────────────────────────────
+    (570, None, "birth", "Birth of Muhammad (traditional)", "Mecca", 21.42, 39.83, "Year of the Elephant in the sira. Orphaned young; later a trusted merchant of Quraysh.", True),
+    (595, None, "politics", "Muhammad marries Khadija (traditional)", "Mecca", 21.42, 39.83, "The first believer in later Islamic telling. A trading partnership that becomes a household.", True),
+    (610, None, "prophet", "First revelation in the Cave of Hira", "Jabal al-Nour, near Mecca", 21.46, 39.85, "Iqra. The Qur'an begins as recited speech, not a bound book.", True),
+    (613, None, "prophet", "Public preaching in Mecca begins (traditional)", "Mecca", 21.42, 39.83, "From a private circle to the Haram. Quraysh opposition hardens.", True),
+    (619, None, "death", "Year of Sorrow: Khadija and Abu Talib die", "Mecca", 21.42, 39.83, "Wife and uncle gone in one year. Protection in Mecca thins.", True),
+    (620, None, "prophet", "Isra and Mi'raj (traditional)", "Jerusalem / Mecca", 31.78, 35.24, "Night journey in the sira. Later tied to the Rock in Jerusalem.", True),
+    (622, None, "politics", "Constitution of Medina", "Medina", 24.47, 39.61, "A written pact among emigrants, helpers, and some Jewish tribes. Politics of a new town."),
+    (624, None, "war", "Battle of Badr", "Badr, Hejaz", 23.78, 38.79, "A small caravan fight that the early community remembers as a sign."),
+    (625, None, "war", "Battle of Uhud", "Mount Uhud, Medina", 24.50, 39.61, "A reverse. Archers leave the slope; the Prophet is wounded in the tradition."),
+    (627, None, "war", "Battle of the Trench", "Medina", 24.47, 39.61, "A confederate siege. The ditch and a storm; Medina holds."),
+    (628, None, "politics", "Treaty of Hudaybiyyah", "Hudaybiyyah, near Mecca", 21.44, 39.63, "A ten-year truce that later Muslim historians call a clear victory."),
+    (630, None, "war", "Conquest of Mecca", "Mecca", 21.42, 39.83, "The city opens with little fighting. Idols of the Kaaba are removed in the sira."),
+    (632, None, "prophet", "Farewell sermon and Hajj", "Mount Arafat / Mecca", 21.35, 39.98, "A last public address in the tradition. Death follows in Medina the same year.", True),
+    (632, 661, "empire", "Rashidun Caliphate", "Medina / Kufa", 24.47, 39.61, "Abu Bakr, Umar, Uthman, Ali. Expansion, the first written Qur'an mushaf, then fitna."),
+    (656, 661, "war", "First Fitna", "Basra / Siffin / Kufa", 30.51, 47.78, "Civil war after Uthman's killing. The community splits in ways that still name sects."),
+    (661, 750, "empire", "Umayyad Caliphate", "Damascus", 33.51, 36.29, "A dynasty in Syria. Arabic as administration; the Dome of the Rock."),
+    (691, None, "artifact", "Dome of the Rock completed", "Jerusalem", 31.78, 35.24, "An Umayyad shrine on the Temple Mount. Mosaic and octagon."),
+    (750, 1258, "empire", "Abbasid Caliphate", "Baghdad", 33.31, 44.37, "The round city, paper, and a long twilight after 1258."),
+
+    # ── Indian kingdoms ────────────────────────────────────────────────
+    (-544, -413, "empire", "Haryanka / early Magadha", "Rajgir, Bihar", 25.03, 85.42, "Bimbisara and Ajatashatru. The Gangetic state that later empires inherit.", True),
+    (-345, -322, "empire", "Nanda Empire", "Pataliputra", 25.61, 85.14, "Mahapadma's Magadha. Greek writers later call it a great army on the Ganga."),
+    (-322, -185, "empire", "Maurya Empire", "Pataliputra (Patna)", 25.61, 85.14, "Chandragupta, Bindusara, Ashoka. The first pan-Indian state we can really map."),
+    (-268, -232, "politics", "Ashoka's reign", "Pataliputra / Dhauli", 20.19, 85.84, "Kalinga, then dhamma on stone. Edicts from Kandahar to Karnataka."),
+    (-261, None, "war", "Kalinga War", "Dhauli / Odisha", 20.19, 85.84, "Ashoka's conversion story begins in a massacre. The edicts say so themselves."),
+    (-185, -73, "empire", "Shunga kingdom", "Pataliputra / Vidisha", 23.53, 77.81, "Post-Maurya Magadha. Bharhut and early Sanchi stone."),
+    (-230, 220, "empire", "Satavahana kingdom", "Paithan / Amaravati", 19.48, 75.38, "Deccan trade, Prakrit, and the Amaravati stupa world."),
+    (30, 375, "empire", "Kushan Empire", "Peshawar / Mathura", 34.01, 71.57, "Kanishka's realm on the Silk Road. Buddha in stone with a Roman echo."),
+    (127, None, "politics", "Kanishka (approximate accession)", "Purushapura (Peshawar)", 34.01, 71.57, "The Kushan high point. Dates move; the gold coins do not.", True),
+    (250, 500, "empire", "Vakataka kingdom", "Nandivardhana / Ajanta", 20.55, 75.70, "Deccan patrons of Ajanta's later caves."),
+    (275, 897, "empire", "Pallava kingdom", "Kanchipuram", 12.84, 79.70, "Shore temple, granite rathas, and a southern Sanskrit court."),
+    (320, 550, "empire", "Gupta Empire", "Pataliputra / Ujjain", 23.18, 75.78, "Kalidasa's century in later memory. Zero, temples, and a classical north."),
+    (543, 753, "empire", "Early Chalukyas of Badami", "Badami, Karnataka", 15.92, 75.68, "Deccan temple-caves and a check on Harsha in the south."),
+    (606, 647, "empire", "Harsha's kingdom", "Kannauj", 27.05, 79.92, "A north Indian court Xuanzang actually visited."),
+    (650, 1250, "empire", "Eastern Chalukyas / Vengi", "Rajahmundry / Vengi", 16.99, 81.78, "Andhra between bigger neighbours."),
+    (730, 1036, "empire", "Gurjara-Pratihara", "Kannauj / Ujjain", 27.05, 79.92, "One leg of the tripartite fight for the Ganga plain."),
+    (750, 1161, "empire", "Pala Empire", "Bengal / Bihar / Vikramashila", 25.25, 87.28, "Buddhist palaeography, Nalanda's last great patrons."),
+    (753, 982, "empire", "Rashtrakuta Empire", "Manyakheta, Karnataka", 17.22, 77.21, "Kailasa at Ellora cut downward from a cliff."),
+    (848, 1279, "empire", "Chola Empire", "Thanjavur", 10.79, 79.14, "Rajaraja and Rajendra. Bronze, navy, and a temple-state."),
+    (985, 1014, "politics", "Rajaraja I", "Thanjavur", 10.79, 79.14, "Brihadisvara rises. The imperial Chola machine."),
+    (1014, 1044, "politics", "Rajendra I and the Gangaikonda city", "Gangaikonda Cholapuram", 11.21, 79.45, "A northern raid remembered in a new capital's name."),
+    (1000, 1346, "empire", "Hoysala kingdom", "Halebidu / Belur", 13.21, 75.99, "Soapstone temples, star-plans, and a late-Deccan court."),
+    (1163, 1323, "empire", "Kakatiya kingdom", "Warangal", 17.98, 79.60, "Telugu uplands, granite, and a fall to the Delhi Sultanate."),
+    (1187, 1317, "empire", "Yadavas of Devagiri", "Daulatabad, Maharashtra", 19.94, 75.21, "Marathi court before the sultanate takes the fort."),
+    (1190, 1311, "empire", "Pandyas of Madurai (imperial revival)", "Madurai", 9.93, 78.12, "Pearl, temple, and a second Pandya high tide."),
+    (1206, 1526, "empire", "Delhi Sultanate", "Delhi", 28.65, 77.23, "Mamluk, Khalji, Tughlaq, Sayyid, Lodi. Persian in the Yamuna plain."),
+    (1228, 1826, "empire", "Ahom kingdom", "Charaideo / Sivasagar, Assam", 26.94, 94.88, "Six centuries in the Brahmaputra valley. Mughals do not keep Assam."),
+    (1336, 1646, "empire", "Vijayanagara Empire", "Hampi, Karnataka", 15.34, 76.46, "A Hindu imperial city on the Tungabhadra. Stones still stand in ranks."),
+    (1347, 1527, "empire", "Bahmani Sultanate", "Gulbarga / Bidar", 17.91, 77.52, "Deccan Islamicate courts that later split into five sultanates."),
+    (1526, 1707, "empire", "Mughal high period (Babur to Aurangzeb)", "Agra / Delhi / Fatehpur Sikri", 27.18, 78.02, "A Timurid house in India. Farmans, painting, and a peafowl throne."),
+    (1556, 1605, "politics", "Akbar's reign", "Fatehpur Sikri / Agra", 27.09, 77.66, "Expansion, sulh-i-kul, and a new capital on a ridge."),
+    (1628, 1658, "politics", "Shah Jahan", "Agra / Shahjahanabad", 27.18, 78.02, "Taj Mahal, the Red Fort, and a marble idea of kingship."),
+    (1658, 1707, "politics", "Aurangzeb's reign", "Delhi / Deccan", 19.94, 75.21, "The empire's widest map and its most expensive wars."),
+    (1674, None, "empire", "Shivaji crowned Chhatrapati", "Raigad, Maharashtra", 18.23, 73.45, "A Maratha state with forts for bones."),
+    (1674, 1818, "empire", "Maratha confederacy", "Pune / Satara", 18.52, 73.86, "From a hill kingdom to a confederacy the British must bargain with."),
+    (1565, None, "war", "Battle of Talikota", "Talikota / Rakkasagi, Karnataka", 16.48, 76.31, "Deccan sultanates break Vijayanagara. Hampi is sacked."),
+    (1761, None, "war", "Third Battle of Panipat", "Panipat, Haryana", 29.39, 76.97, "Abdali smashes a Maratha army. North India opens again."),
+    (1761, 1799, "empire", "Mysore under Haidar Ali and Tipu", "Srirangapatna", 12.42, 76.69, "Rockets, a tiger, and four wars with the Company."),
+    (1799, None, "war", "Siege of Seringapatam; death of Tipu", "Srirangapatna", 12.42, 76.69, "The Company takes Mysore. A stuffed tiger later sits in London."),
+    (1799, 1849, "empire", "Sikh Empire of Ranjit Singh", "Lahore", 31.55, 74.34, "A Punjab kingdom between Afghans and the Company."),
+    (1729, 1949, "empire", "Travancore kingdom (modern high tide)", "Thiruvananthapuram", 8.52, 76.94, "A Kerala state that outlasts many bigger names, into independent India."),
+    (1326, 1956, "empire", "Mewar / Udaipur", "Chittorgarh / Udaipur", 24.89, 74.65, "A Rajput house that writes its own long memory of sieges."),
+
+    # ── Brahma Kumaris ─────────────────────────────────────────────────
+    (1876, None, "birth", "Birth of Dada Lekhraj (Brahma Baba)", "Hyderabad, Sindh", 25.39, 68.37, "Later Prajapita Brahma. A jeweller before the visions."),
+    (1936, 1937, "saint", "Om Mandli / Brahma Kumaris founded", "Hyderabad, Sindh", 25.39, 68.37, "Lekhraj's satsang becomes a women-led community. Colonial Sindh, then Partition."),
+    (1950, None, "saint", "Brahma Kumaris settle at Mount Abu (Madhuban)", "Mount Abu, Rajasthan", 24.59, 72.72, "Headquarters after Sindh. Raja yoga as a daily drill."),
+    (1969, None, "death", "Death of Brahma Baba", "Mount Abu, Rajasthan", 24.59, 72.72, "Leadership stays with the Dadis. The movement goes abroad in the next decades."),
+    (1922, 2007, "saint", "Dadi Prakashmani", "Mount Abu, Rajasthan", 24.59, 72.72, "Administrative head after Brahma Baba. UN NGO years."),
+    (1916, 2020, "saint", "Dadi Janki", "Mount Abu / London", 24.59, 72.72, "The public face of Brahma Kumaris in the West for a generation."),
+    (1980, None, "politics", "Brahma Kumaris as a UN NGO (approximate)", "New York / Mount Abu", 40.75, -73.97, "Peace conferences and a meditation brand at the UN campus.", True),
+
+    # ── Artifacts and monuments ────────────────────────────────────────
+    (-2500, None, "artifact", "Dancing Girl bronze, Mohenjo-daro", "Mohenjo-daro", 27.32, 68.14, "Lost-wax bronze. A teenage stance from the Indus streets."),
+    (-2500, None, "artifact", "Pashupati / proto-Shiva seal", "Mohenjo-daro", 27.32, 68.14, "A horned figure in yogic seat. Later Hindu eyes read a god into it."),
+    (-2500, None, "artifact", "Priest-King steatite bust", "Mohenjo-daro", 27.32, 68.14, "Trefoil robe, broken at the body. The face of the Indus in every textbook."),
+    (-1750, None, "artifact", "Code of Hammurabi stele", "Susa / Babylon (now Louvre)", 32.54, 44.42, "Basalt law in the round. Shamash dictating to a king."),
+    (-1336, -1327, "artifact", "Tutankhamun's tomb goods", "Valley of the Kings", 25.74, 32.60, "A minor pharaoh, an intact burial. The mask is the 20th century's Egypt."),
+    (-1250, None, "artifact", "Standard of Ur", "Ur, Mesopotamia", 30.96, 46.10, "War and peace in lapis and shell. A box that is a city."),
+    (-650, None, "artifact", "Cyrus Cylinder", "Babylon (now British Museum)", 32.54, 44.42, "A Persian king on a Babylonian barrel. Later read as a human-rights text."),
+    (-500, None, "artifact", "Behistun Inscription", "Bisitun, Iran", 34.39, 45.40, "Darius in three languages on a cliff. The cuneiform Rosetta."),
+    (-250, None, "artifact", "Ashoka lion capital, Sarnath", "Sarnath, Uttar Pradesh", 25.38, 83.02, "Four lions, a wheel. Independent India's emblem."),
+    (-250, None, "artifact", "Ashokan pillars and edicts", "Lauriya Nandangarh / throughout", 26.99, 84.40, "Polished sandstone with a voice. Dhamma as public letter."),
+    (-113, None, "artifact", "Heliodorus pillar", "Vidisha, Madhya Pradesh", 23.53, 77.81, "A Greek ambassador calls himself Bhagavata. Vishnu in an inscription."),
+    (100, 200, "artifact", "Didarganj Yakshi", "Patna, Bihar", 25.61, 85.14, "Chunar sandstone, polish like metal. A woman who is not a goddess and is."),
+    (400, 650, "artifact", "Ajanta cave paintings", "Ajanta, Maharashtra", 20.55, 75.70, "Jataka in pigment. Torches found them again in 1819."),
+    (400, 700, "artifact", "Iron Pillar of Delhi", "Mehrauli, Delhi", 28.52, 77.19, "Wrought iron that barely rusts. A Gupta-period boast still standing."),
+    (600, 900, "artifact", "Ellora Kailasa temple (Cave 16)", "Ellora, Maharashtra", 20.03, 75.18, "A mountain subtracted until a temple remained."),
+    (850, 1250, "artifact", "Chola Nataraja bronzes", "Thanjavur / Chidambaram", 11.40, 79.69, "Shiva as cosmic dancer. Lost-wax, four arms, a ring of fire."),
+    (1000, None, "artifact", "Brihadisvara temple fabric", "Thanjavur", 10.78, 79.13, "Granite vimana. A king's name in the stone as much as in copper plates."),
+    (1100, 1250, "artifact", "Angkor Wat", "Angkor, Cambodia", 13.41, 103.87, "Vishnu's house in later Buddhist keeping. The largest religious monument."),
+    (1200, None, "artifact", "Qutb Minar and iron pillar court", "Mehrauli, Delhi", 28.52, 77.19, "A victory tower over reused temple stone. Sultanate Delhi's first skyline."),
+    (1230, 1260, "artifact", "Sun Temple, Konark", "Konark, Odisha", 19.89, 86.09, "A stone chariot of Surya. Wheels that are calendars."),
+    (1250, None, "artifact", "Borobudur in later ruin and recovery", "Central Java", -7.61, 110.20, "A Mahayana mountain of stone. British and Dutch 'discovery' is a second life."),
+    (1632, 1653, "artifact", "Taj Mahal", "Agra", 27.18, 78.04, "Mumtaz's tomb. White marble as a Mughal sentence."),
+    (1639, 1648, "artifact", "Peacock Throne (original)", "Delhi / later Iran", 28.66, 77.24, "Jewels as furniture. Nader Shah will take it in 1739."),
+    (-196, None, "artifact", "Rosetta Stone carved", "Memphis / later Rashid", 31.40, 30.42, "Priestly decree in three scripts. Champollion's later key."),
+    (100, None, "artifact", "Antikythera mechanism (wreck date approx.)", "Antikythera, Greece", 35.87, 23.30, "Bronze gears for the sky. Recovered from a wreck in 1901.", True),
+    (220, None, "artifact", "Terracotta Army (First Emperor's tomb complex)", "Lintong, Xi'an", 34.38, 109.27, "Thousands of fired soldiers. Dug up by farmers in 1974."),
+    (1947, None, "artifact", "Dead Sea Scrolls first found", "Qumran / Dead Sea", 31.74, 35.46, "Jars in a cave. Hebrew Bible centuries older on paper."),
+    (1739, None, "war", "Nader Shah sacks Delhi; Koh-i-Noor leaves with the loot", "Delhi", 28.65, 77.23, "The Peacock Throne and the diamond enter the Iranian then Sikh then British story."),
+]
+
 CATS = {
     "calamity": "Natural calamities",
     "war": "Wars & conflict",
     "prophet": "Prophets & founders",
     "saint": "Saints & gurus",
+    "artifact": "Artifacts & monuments",
     "birth": "Famous births",
     "death": "Famous deaths",
     "discovery": "Exploration & firsts",
@@ -315,7 +423,7 @@ CATS = {
 
 def main():
     events = []
-    for i, row in enumerate(RAW):
+    for i, row in enumerate(RAW + EXTRA):
         traditional = False
         if len(row) == 9:
             year, year_end, category, title, place, lat, lon, summary, traditional = row

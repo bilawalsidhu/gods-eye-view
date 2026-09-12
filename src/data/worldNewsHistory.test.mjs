@@ -15,10 +15,15 @@ test('catalog spans 5000 years and includes the requested desks', () => {
   assert.ok(WORLD_DESK_ERA_END >= 2026);
   assert.ok(WORLD_DESK_HISTORY.length >= 200);
   const cats = new Set(WORLD_DESK_HISTORY.map((row) => row.category));
-  for (const id of ['calamity', 'war', 'prophet', 'saint', 'birth', 'death']) {
+  for (const id of ['calamity', 'war', 'prophet', 'saint', 'artifact', 'birth', 'death']) {
     assert.ok(cats.has(id), `missing ${id}`);
   }
   assert.ok(WORLD_DESK_HISTORY.some((row) => /Shankara/i.test(row.title)));
+  assert.ok(WORLD_DESK_HISTORY.some((row) => /Brahma Kumari/i.test(row.title)));
+  assert.ok(WORLD_DESK_HISTORY.some((row) => /Cave of Hira/i.test(row.title)));
+  assert.ok(WORLD_DESK_HISTORY.some((row) => /Maurya/i.test(row.title)));
+  assert.ok(WORLD_DESK_HISTORY.some((row) => /Chola/i.test(row.title)));
+  assert.ok(WORLD_DESK_HISTORY.some((row) => /Ashoka lion/i.test(row.title)));
   const years = WORLD_DESK_HISTORY.map((row) => row.year);
   assert.ok(Math.min(...years) <= -2500);
   assert.ok(Math.max(...years) >= 2022);
