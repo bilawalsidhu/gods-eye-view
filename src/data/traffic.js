@@ -2318,7 +2318,7 @@ const trafficLayer = {
       viewer.camera.percentageChanged = _prevPercentageChanged;
       _prevPercentageChanged = null;
     }
-    _pointCollection.show = false;
+    if (_pointCollection) _pointCollection.show = false;
   },
 
   /**

@@ -15,7 +15,7 @@
  * The contact must stay ON the mesh through phase B. Without the hold it falls
  * to the geoid, which at an inland field is ~150 m of burial.
  *
- *   node scripts/qa-floor-hold.mjs                       # real GPU (ANGLE/Metal)
+ *   node scripts/qa-floor-hold.mjs                       # Metal on macOS, SwiftShader elsewhere
  *   node scripts/qa-floor-hold.mjs --headful             # watch it
  *   QA_BASE_URL=http://localhost:4257 node scripts/qa-floor-hold.mjs
  *
@@ -25,10 +25,11 @@
  * under Metal — a backend comparison at one point, not to be confused with the
  * same-backend run-to-run spread (122.1 m vs 20.6 m on a cell centre) that
  * retired the hold chain's unvalidated tier. The
- * default is the real GPU. Under `--angle=swiftshader` the rendered-mesh oracle
- * is reported as unavailable rather than trusted, and the run falls back to the
- * bare-earth DEM (fetched server-side, so the simulated outage cannot reach
- * it) — a weaker but still decisive check, since the geoid sits ~150 m below it.
+ * default is Metal on macOS and SwiftShader elsewhere; `--angle` overrides it.
+ * Mesh samples describe the selected backend, not another GPU's rendered LOD.
+ * An unavailable rendered-mesh oracle remains a failed check, even if the
+ * separate bare-earth DEM check passes. Software evidence does not establish
+ * real-GPU visual correctness.
  */
 import puppeteer from 'puppeteer';
 import fs from 'node:fs';
@@ -37,7 +38,8 @@ import path from 'node:path';
 const APP_URL = process.env.QA_BASE_URL || 'http://localhost:4173';
 const argv = Object.fromEntries(process.argv.slice(2)
   .map((a) => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? true]));
-const ANGLE = String(argv.angle || 'metal');
+// Metal is a macOS-only ANGLE backend; defaulting to it off-Mac fails WebGL init.
+const ANGLE = String(argv.angle || (process.platform === 'darwin' ? 'metal' : 'swiftshader'));
 const HEADFUL = !!argv.headful;
 // Austin airport apron by default — the site qa-floor-verify pins, where the
 // mesh sits ~150 m above the geoid and burial is unmistakable.
@@ -56,7 +58,7 @@ function record(name, ok, detail) {
 }
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
-const chrome = (() => { try { return puppeteer.executablePath(); } catch { return undefined; } })();
+const chrome = await puppeteer.executablePath().catch(() => undefined);
 const browser = await puppeteer.launch({
   headless: HEADFUL ? false : 'new',
   executablePath: chrome,
@@ -108,6 +110,10 @@ await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await page.waitForFunction(() => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
   { timeout: 150000 });
 await sleep(12000); // let the boot fly-to settle before pinning
+await page.evaluate(() => {
+  document.querySelector('#first-run-launcher:not([hidden]) [data-first-run-choice="explore"]')?.click();
+});
+await sleep(600); // let the launcher dismissal finish before taking evidence
 
 await page.evaluate((site) => { window.__SITE = site; }, SITE);
 const pin = () => page.evaluate(() => {
@@ -123,7 +129,16 @@ const pin = () => page.evaluate(() => {
   v.camera.moveEnd.raiseEvent();
 });
 await pin();
-await page.evaluate(async () => { await window.__godsEyeView.dataManager.toggle('flights'); });
+const billboardMode = await page.evaluate(async () => {
+  const manager = window.__godsEyeView.dataManager;
+  const flights = manager.layers.get('flights').module;
+  // This harness measures billboard positions. A ready 3D model deliberately
+  // hides its billboard; that handoff is covered by track-regression instead.
+  flights.setParams({ models3d: false });
+  await manager.toggle('flights');
+  return flights.getParams().models3d === false;
+});
+record('the billboard floor test is explicitly in 2D aircraft mode', billboardMode);
 
 /** Reads the contact's rendered height and the rendered mesh beneath it. */
 const measure = () => page.evaluate(async (icao) => {

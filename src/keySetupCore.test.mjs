@@ -28,7 +28,7 @@ test('the boot provenance snapshot survives in-process Vite config re-evaluation
   // panel save has already set its values live on process.env. A recomputed
   // snapshot would classify the panel's own keys as external (read-only) until
   // a full process relaunch, so the first evaluation's snapshot must win.
-  const source = readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../server/providers/local.js', import.meta.url), 'utf8');
   assert.match(
     source,
     /const PROVIDER_ENV_AT_BOOT = globalThis\.__GEV_PROVIDER_ENV_AT_BOOT \?\?= Object\.freeze\(/,
@@ -340,4 +340,17 @@ test('validation rejects dotenv metacharacters that would round-trip wrong', () 
   for (const good of ['sk-AbC0-9_x', 'eyJhbGc.eyJzdWI.QWxpY2U', 'a1b2c3d4e5f6', 'AB+cd/ef=']) {
     assert.equal(validateKeySetupUpdates({ OPENAI_API_KEY: good }).ok, true, `${good} accepted`);
   }
+});
+
+test('server Google key can be saved and removed without appearing in status values', () => {
+  const secret = 'server-key-fixture';
+  assert.deepEqual(validateKeySetupUpdates({ GOOGLE_MAPS_SERVER_API_KEY: secret }), {
+    ok: true, updates: { GOOGLE_MAPS_SERVER_API_KEY: secret },
+  });
+  assert.equal(validateKeySetupUpdates({ GOOGLE_MAPS_SERVER_API_KEY: null }).ok, true);
+  const status = keySetupStatus({ GOOGLE_MAPS_SERVER_API_KEY: secret });
+  const entry = status.keys.find((key) => key.id === 'google-maps-server');
+  assert.equal(entry.set, true);
+  assert.ok(!entry.clientExposed);
+  assert.ok(!JSON.stringify(status).includes(secret));
 });

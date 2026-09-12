@@ -46,7 +46,7 @@
  *   node scripts/qa-cockpit-plates.mjs --url http://localhost:4268 --tag before
  *   node scripts/qa-cockpit-plates.mjs --url http://localhost:4268 --teeth
  *
- * Defaults to the real GPU (ANGLE/Metal). `--swiftshader` selects software GL,
+ * Defaults to ANGLE/Metal on macOS and software GL elsewhere. `--swiftshader` selects software GL,
  * which is deterministic but is NOT real-GPU evidence; the banner says which
  * backend actually ran and the run records it alongside the results.
  */
@@ -64,7 +64,7 @@ const APP_ORIGIN = new URL(APP_URL).origin;
 const TAG = getOpt('--tag', 'after');
 const HEADFUL = argv.includes('--headful');
 const TEETH = argv.includes('--teeth');
-const SWIFTSHADER = argv.includes('--swiftshader');
+const SWIFTSHADER = argv.includes('--swiftshader') || process.platform !== 'darwin';
 const SHOT_DIR = path.resolve('qa-shots/cockpitplates');
 
 /** Mirrors `SKY_PLATE_SCALE` in src/overlays/worldOverlayTokens.js. */
@@ -139,7 +139,7 @@ const CHROME_CANDIDATES = [
   // Version-pinned Chrome-for-Testing over the auto-updating system Chrome:
   // its software-GL behavior shifts across majors and has produced false
   // negatives in this repo's harnesses before.
-  (() => { try { return puppeteer.executablePath(); } catch { return null; } })(),
+  await puppeteer.executablePath().catch(() => null),
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 ].filter(Boolean);
 
@@ -222,6 +222,8 @@ async function main() {
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
+      // Metal is a macOS-only ANGLE backend; off-Mac the GPU branch has to fall
+      // back to the software rasterizer or WebGL init fails outright.
       ...(SWIFTSHADER
         ? ['--use-gl=angle', '--use-angle=swiftshader']
         : ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist']),
@@ -292,7 +294,7 @@ async function main() {
     console.log(`  GL      : ${renderer}\n`);
     record(
       SWIFTSHADER
-        ? 'running on software GL as requested (structural checks, not GPU evidence)'
+        ? 'running on software GL (structural checks, not GPU evidence)'
         : 'running on the real GPU, so the screenshots are real-GPU evidence',
       SWIFTSHADER ? softwareRenderer : !softwareRenderer,
       renderer,

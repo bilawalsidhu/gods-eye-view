@@ -623,3 +623,25 @@ test('a scene run supersedes a LOAD still suspended on its visual await', async 
     restore();
   }
 });
+
+test('destroy drains cancelled LOAD work before its viewer can be discarded', async (t) => {
+  const restore = installSceneRuntime();
+  t.after(restore);
+  let finishVisual;
+  const dataManager = fakeDataManager();
+  const viewer = { camera: { cancelFlight() {} } };
+  const director = new SceneDirector(viewer, {
+    applyVisualState: () => new Promise((resolve) => { finishVisual = resolve; }),
+  }, dataManager);
+  const loading = director.loadShot('scene-1', 'shot-a');
+  let destroyed = false;
+  const stopping = director.destroy().then(() => { destroyed = true; });
+  await Promise.resolve();
+  assert.equal(destroyed, false);
+  finishVisual();
+  await Promise.all([loading, stopping]);
+  assert.equal(destroyed, true);
+  assert.equal(dataManager.setEnabledCalls.length, 0);
+  assert.equal((await director.startScene('scene-1')).reason, 'destroyed');
+  await director.destroy();
+});

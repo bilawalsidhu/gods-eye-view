@@ -296,6 +296,9 @@ export class SceneDirector {
    * @param {Object} dataManager - Manages data layer enable/disable and per-layer params
    */
   constructor(viewer, styleManager, dataManager) {
+    this._destroyed = false;
+    this._pendingWork = new Set();
+    this._uiRemovers = [];
     this.viewer = viewer;
     this.styleManager = styleManager;
     this.dataManager = dataManager;
@@ -344,6 +347,40 @@ export class SceneDirector {
     this._sceneRuntime = document.getElementById('scene-runtime');
 
     this._initUI();
+  }
+
+  _listen(target, type, listener) {
+    if (!target) return;
+    target.addEventListener(type, listener);
+    this._uiRemovers.push(() => target.removeEventListener(type, listener));
+  }
+
+  _trackWork(promise) {
+    this._pendingWork ||= new Set();
+    this._pendingWork.add(promise);
+    const release = () => this._pendingWork.delete(promise);
+    promise.then(release, release);
+    return promise;
+  }
+
+  /** Stop playback and pending loads before releasing their viewer. */
+  destroy() {
+    if (this._destroyPromise) return this._destroyPromise;
+    this._destroyed = true;
+    this._destroyPromise = Promise.resolve().then(async () => {
+      this.stopScene('Stopped');
+      this._loadAbort?.abort();
+      this._loadGeneration++;
+      this.viewer.camera.cancelFlight();
+      for (const remove of this._uiRemovers || []) remove();
+      this._uiRemovers = [];
+      if (this._sceneShotList) this._sceneShotList.textContent = '';
+      clearTimeout(this._storageToastTimer);
+      await Promise.allSettled(this._pendingWork || []);
+      clearInterval(this._progressTimer);
+      document.removeEventListener('keydown', this._onKeyDown);
+    });
+    return this._destroyPromise;
   }
 
   /**
@@ -402,46 +439,46 @@ export class SceneDirector {
     this._renderSceneSelect();
     this._renderShotList();
 
-    this._sceneSelect.addEventListener('change', () => {
+    this._listen(this._sceneSelect, 'change', () => {
       this._selectedSceneId = this._sceneSelect.value;
       const scene = this._getSelectedScene();
       this._selectedShotId = scene?.shots[0]?.id || null;
       this._renderShotList();
     });
 
-    this._sceneNewBtn?.addEventListener('click', () => this._createScene());
-    this._sceneDeleteBtn?.addEventListener('click', () => this._deleteSelectedScene());
-    this._sceneCaptureBtn?.addEventListener('click', () => this.captureShot());
-    this._sceneUpdateShotBtn?.addEventListener('click', () => this.updateSelectedShot());
+    this._listen(this._sceneNewBtn, 'click', () => this._createScene());
+    this._listen(this._sceneDeleteBtn, 'click', () => this._deleteSelectedScene());
+    this._listen(this._sceneCaptureBtn, 'click', () => this.captureShot());
+    this._listen(this._sceneUpdateShotBtn, 'click', () => this.updateSelectedShot());
 
-    this._sceneStartBtn?.addEventListener('click', () => {
+    this._listen(this._sceneStartBtn, 'click', () => {
       this.startScene(this._selectedSceneId);
     });
 
-    this._sceneStopBtn?.addEventListener('click', () => {
+    this._listen(this._sceneStopBtn, 'click', () => {
       this.stopScene('Stopped');
     });
 
-    this._sceneNextBtn?.addEventListener('click', () => {
+    this._listen(this._sceneNextBtn, 'click', () => {
       this.runNextScene();
     });
 
-    this._sceneExportBtn?.addEventListener('click', () => {
+    this._listen(this._sceneExportBtn, 'click', () => {
       this.exportProject();
     });
 
-    this._sceneImportBtn?.addEventListener('click', () => {
+    this._listen(this._sceneImportBtn, 'click', () => {
       this._sceneImportFile?.click();
     });
 
-    this._sceneImportFile?.addEventListener('change', async () => {
+    this._listen(this._sceneImportFile, 'change', async () => {
       const file = this._sceneImportFile?.files?.[0];
       if (!file) return;
       await this.importProjectFile(file);
       this._sceneImportFile.value = '';
     });
 
-    this._sceneDownloadBtn?.addEventListener('click', () => {
+    this._listen(this._sceneDownloadBtn, 'click', () => {
       this.downloadLastRunMetadata();
     });
 
@@ -719,7 +756,12 @@ export class SceneDirector {
    * @param {Object} [options]
    * @param {number} [options.flyDuration=2.2] - Camera flight duration in seconds
    */
-  async loadShot(sceneId, shotId, { flyDuration = 2.2 } = {}) {
+  loadShot(sceneId, shotId, options) {
+    if (this._destroyed) return Promise.resolve({ started: false, reason: 'destroyed' });
+    return this._trackWork(this._loadShot(sceneId, shotId, options));
+  }
+
+  async _loadShot(sceneId, shotId, { flyDuration = 2.2 } = {}) {
     if (this._running) return;
     const { scene, shot } = this._getShot(sceneId, shotId);
     if (!scene || !shot) return;
@@ -875,7 +917,12 @@ export class SceneDirector {
    *   round-robining through the whole project (voice playback uses this).
    * @returns {Promise<{started: boolean, reason?: string, shots?: number}>}
    */
-  async startScene(sceneId, { single = false } = {}) {
+  startScene(sceneId, options) {
+    if (this._destroyed) return Promise.resolve({ started: false, reason: 'destroyed' });
+    return this._trackWork(this._startScene(sceneId, options));
+  }
+
+  async _startScene(sceneId, { single = false } = {}) {
     if (this._running) return { started: false, reason: 'already-running' };
 
     const queue = this._buildPlaybackQueue(sceneId || this._selectedSceneId || this._project.scenes[0]?.id, { single });
@@ -1007,7 +1054,7 @@ export class SceneDirector {
    * it without starting a full run. Used for manual step-through navigation.
    */
   async runNextScene() {
-    if (this._running) return;
+    if (this._destroyed || this._running) return;
 
     const queue = this._buildPlaybackQueue(this._selectedSceneId || this._project.scenes[0]?.id);
     if (!queue.length) return;
@@ -1069,6 +1116,7 @@ export class SceneDirector {
   async importProjectFile(file) {
     try {
       const text = await file.text();
+      if (this._destroyed) return;
       const parsed = JSON.parse(text);
       this._project = normalizeProject(parsed);
       this._selectedSceneId = this._project.scenes[0]?.id || null;
@@ -1227,9 +1275,11 @@ export class SceneDirector {
     await new Promise((resolve) => {
       // Guard against double-resolve from both callback and timeout
       let done = false;
+      let timer;
       const finish = () => {
         if (done) return;
         done = true;
+        clearTimeout(timer);
         resolve();
       };
 
@@ -1247,7 +1297,7 @@ export class SceneDirector {
       });
 
       // Safety timeout in case Cesium callbacks fail to fire
-      setTimeout(finish, (duration + 0.6) * 1000);
+      if (!done) timer = setTimeout(finish, (duration + 0.6) * 1000);
     });
   }
 
