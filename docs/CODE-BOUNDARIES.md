@@ -117,3 +117,18 @@ this entry independently and rejects Node imports.
 
 The browser's direct geocoding, annotation rendering and full Overpass query
 service remain in their existing modules.
+
+## Satellite and launch providers
+
+`gods-eye-view/server/providers/space` is a Node-only entry for the CelesTrak
+and Launch Library 2 middleware. Separate files under `server/providers/space/`
+own each feed's acquisition, memory/disk cache and error handling. The existing
+local composition mounts them in the same order. Importing the entry performs
+no acquisition; factory calls create independent cache state.
+
+`gods-eye-view/sources/space` owns only fixed upstream URL construction: the
+CelesTrak group/TLE query and Launch Library's recent 30-day detailed feed.
+Callers supply the group or end date and own validation, credentials, transport,
+response limits and cache policy. The boundary gate checks this portable entry
+separately from the Node providers. Satellite rendering and launch replay remain
+in their existing browser modules.

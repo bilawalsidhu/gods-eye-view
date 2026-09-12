@@ -13,6 +13,13 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Split satellite and launch-feed server providers into focused modules with
+  portable request URL builders, preserving routes and cache/error behavior.
+
+- Keep landmark names when geocoding returns only address components, preventing
+  the United States Capitol annotation from moving to a Washington hotel.
+  Unrelated outlines leave the valid geocoded marker in place.
+
 - Split aircraft and vessel server providers into focused modules for source
   fetching, AIS records/tracks and shared request helpers; preserve existing
   routes, local setup, fallback behavior and rendering.

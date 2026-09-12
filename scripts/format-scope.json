@@ -53,5 +53,10 @@
   "server/providers/places/routes.js",
   "src/data/placeProviderPayloads.js",
   "src/tooling/placeProviders.test.mjs",
-  "server/providers/common/same-site.js"
+  "server/providers/common/same-site.js",
+  "server/providers/space.js",
+  "server/providers/space/celestrak.js",
+  "server/providers/space/launch-library.js",
+  "src/data/spaceProviderRequests.js",
+  "src/tooling/spaceProviders.test.mjs"
 ]

@@ -74,5 +74,22 @@
     "exports": ["./sources/places"],
     "modules": ["src/data/placeProviderPayloads.js"],
     "external": []
+  },
+  "space-providers": {
+    "runtime": "node",
+    "exports": ["./server/providers/space"],
+    "modules": [
+      "server/providers/space.js",
+      "server/providers/space/celestrak.js",
+      "server/providers/space/launch-library.js",
+      "server/providers/common/http.js",
+      "src/data/spaceProviderRequests.js"
+    ],
+    "external": []
+  },
+  "space-requests": {
+    "exports": ["./sources/space"],
+    "modules": ["src/data/spaceProviderRequests.js"],
+    "external": []
   }
 }

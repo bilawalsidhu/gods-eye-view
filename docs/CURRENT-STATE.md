@@ -1,5 +1,24 @@
 # God's Eye View Current State
 
+## Landmark annotation identity
+
+When a landmark geocode contains only address components, annotations retain
+its requested name for outline matching. A city or neighborhood address no
+longer replaces the landmark's identity. Without a canonical feature name,
+outline candidates must contain the geocoded anchor or closely match the
+requested name; otherwise the annotation stays at its geocoded point.
+Genuine feature-name components and existing administrative/monument matching
+retain their established behavior.
+
+## Satellite and launch provider modules
+
+`server/providers/space/` owns the CelesTrak TLE and Launch Library 2 Node
+proxies. Their routes, six-hour/15-minute caches, disk storage, stale fallback,
+request coalescing and optional LL2 server token retain existing behavior.
+The Node-only `gods-eye-view/server/providers/space` export supplies factories;
+`sources/space` supplies fixed upstream URL builders with no I/O or environment
+access. Callers retain validation, transport and response policy.
+
 ## Build configuration and local provider boundaries
 
 `vite.config.js` delegates to `server/standalone/vite.config.js`, which loads

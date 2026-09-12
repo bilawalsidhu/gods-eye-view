@@ -77,6 +77,10 @@
     "./server/providers/places": {
       "node": "./server/providers/places.js"
     },
-    "./sources/places": "./src/data/placeProviderPayloads.js"
+    "./sources/places": "./src/data/placeProviderPayloads.js",
+    "./server/providers/space": {
+      "node": "./server/providers/space.js"
+    },
+    "./sources/space": "./src/data/spaceProviderRequests.js"
   }
 }
