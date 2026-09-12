@@ -52,5 +52,6 @@
   "server/providers/places/google.js",
   "server/providers/places/routes.js",
   "src/data/placeProviderPayloads.js",
-  "src/tooling/placeProviders.test.mjs"
+  "src/tooling/placeProviders.test.mjs",
+  "src/data/routeSteps.js"
 ]

@@ -264,7 +264,7 @@ Twenty-eight tools, four jobs — the commands below come straight from the prod
 
 ## 🛰️ What's on the Globe
 
-Thirteen layers and map sources. **Eleven have a keyless path.** Some offer additional capabilities with a provider key. (🟢 no key · 🟡 free key · 🔴 metered.)
+Fourteen layers and map sources. **Twelve have a keyless path.** Some offer additional capabilities with a provider key. (🟢 no key · 🟡 free key · 🔴 metered.)
 
 | Layer | What you get | Source | Auth |
 |-------|--------------|--------|------|
@@ -278,6 +278,7 @@ Thirteen layers and map sources. **Eleven have a keyless path.** Some offer addi
 | 📹 **CCTV Mesh** | ~800 public cameras projected *into* the 3D space — Austin · California (Caltrans) · London (TfL). Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs | 🟢 |
 | 📻 **Radio** | Geolocated world radio with an **analog tuner** — drag the needle across up to 750 stations and the globe flies to each broadcaster | Radio Browser / broadcasters | 🟢 |
 | 🚲 **Bikeshare** | Live station availability | GBFS | 🟢 |
+| 🧭 **Directions** | Click A and B on the globe for a street-following drive, walk or cycle route draped on the terrain with turn-by-turn steps — then FLY the camera along it. No key, no geocoder, no mic | OSRM on FOSSGIS servers (OpenStreetMap) | 🟢 |
 | 🔥 **Active Fires** | Live NASA FIRMS detections, trailing 24h | NASA FIRMS | 🟡 |
 | 🚀 **Space Missions** | Rolling 30-day launches with payload, stage, and recovery detail | Launch Library 2 | 🟢 (🟡 optional token raises the allowance) |
 | 🎖️ **Mapped Installations** | Viewport-bounded military-site context from community mapping — incomplete by nature, and labeled that way | OpenStreetMap | 🟢 |

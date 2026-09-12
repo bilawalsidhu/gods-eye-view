@@ -132,6 +132,13 @@ export const DATA_CREDITS = [
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },
   {
+    key: 'osrm-routing',
+    html:
+      'Routing (voice routes and Directions): OSRM on the FOSSGIS servers — ' +
+      '<a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener">routing.openstreetmap.de</a> · ' +
+      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> (ODbL)',
+  },
+  {
     key: 'radio-browser',
     html:
       'Internet-radio station directory: ' +

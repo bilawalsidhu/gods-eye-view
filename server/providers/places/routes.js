@@ -1,6 +1,7 @@
 import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
 import { haversineKm } from '../common/geo.js';
 import { readResponseTextCapped } from '../common/http.js';
+import { normalizeOsrmSteps } from '../../../src/data/routeSteps.js';
 import {
   normalizeRouteProfile,
   projectRouteResult,
@@ -27,7 +28,11 @@ const _routeRateLimiter = makeRateLimiter({
 
 export function installRouteMiddleware(middlewares) {
   // Real OSM routing via the public FOSSGIS OSRM servers (foot/car/bike).
-  // GET /api/route?profile=foot|car|bike&coords=lon,lat;lon,lat[;...]
+  // GET /api/route?profile=foot|car|bike&coords=lon,lat;lon,lat[;...][&steps=1]
+  // `steps=1` adds turn-by-turn maneuvers (src/data/routeSteps.js). The
+  // upstream is always asked for steps so one cached response serves both
+  // shapes; the annotation engine (no steps) and the Directions layer
+  // (steps) therefore share one upstream call per route.
   middlewares.use('/api/route', async (req, res) => {
     const fail = (msg) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -90,13 +95,16 @@ export function installRouteMiddleware(middlewares) {
       const coords = clean.join(';');
       const cacheKey = `${profile}|${coords}`;
       const now = Date.now();
+      const wantSteps = url.searchParams.get('steps') === '1';
+      const shapePayload = (payload) =>
+        wantSteps ? payload : { ...payload, steps: undefined };
       const cached = _routeCache.get(cacheKey);
       if (cached && now - cached.cachedAt <= ROUTE_CACHE_MS) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(cached.payload));
+        res.end(JSON.stringify(shapePayload(cached.payload)));
         return;
       }
-      const upstream = `https://routing.openstreetmap.de/routed-${profile}/route/v1/${osrmProfile}/${coords}?overview=full&geometries=geojson&alternatives=false&steps=false`;
+      const upstream = `https://routing.openstreetmap.de/routed-${profile}/route/v1/${osrmProfile}/${coords}?overview=full&geometries=geojson&alternatives=false&steps=true`;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 12000);
       let osrm;
@@ -119,12 +127,15 @@ export function installRouteMiddleware(middlewares) {
       const route = osrm?.routes?.[0];
       if (osrm?.code !== 'Ok' || !route?.geometry?.coordinates?.length)
         return fail('no route found');
-      const payload = projectRouteResult(route, profile);
+      const payload = {
+        ...projectRouteResult(route, profile),
+        steps: normalizeOsrmSteps(route),
+      };
       _routeCache.set(cacheKey, { payload, cachedAt: now });
       if (_routeCache.size > 200)
         _routeCache.delete(_routeCache.keys().next().value);
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(payload));
+      res.end(JSON.stringify(shapePayload(payload)));
     } catch (e) {
       console.error('[Route Proxy]', e?.message || e);
       fail('route proxy error');

@@ -64,7 +64,8 @@
       "server/providers/common/geo.js",
       "server/providers/common/http.js",
       "scripts/google-server-key.mjs",
-      "src/data/placeProviderPayloads.js"
+      "src/data/placeProviderPayloads.js",
+      "src/data/routeSteps.js"
     ],
     "external": []
   },

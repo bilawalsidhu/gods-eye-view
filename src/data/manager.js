@@ -2183,6 +2183,16 @@ export class DataLayerManager {
     }
   }
 
+  /**
+   * Repaint the toggle panel now. For layers whose state changes outside a
+   * manager tick (click placement, routing), so a row shows its state when
+   * the data lands instead of at the next interval.
+   * One DOM pass; skipped while the document is hidden.
+   */
+  refreshLayerStats() {
+    this._refreshTogglePanel();
+  }
+
   _refreshTogglePanel() {
     if (!this._toggleContainer) return;
     // Skip DOM churn while hidden; visibilitychange (main.js) triggers one

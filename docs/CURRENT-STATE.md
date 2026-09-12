@@ -1824,10 +1824,35 @@ its criteria cannot be silently ignored.
 | CCTV | Austin + Caltrans (CA) + TfL London Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
 | Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
 | Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
+| Directions 🧭 | OSRM on FOSSGIS servers (OpenStreetMap) | `src/data/directions.js` | `/api/route` (`steps=1`) | on placement / mode change |
 | Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Dams ▰ | OpenInfraMap/OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Submarine Cables ◠ | TeleGeography public map (bundled) | `src/data/telegeographySubmarineCables.js` | — | static |
 | FIRMS Active Fires ▲ | NASA FIRMS live (VIIRS ×3 NRT, trailing 24h) | `src/data/firmsHeatmap.js` | `/api/firms` (`FIRMS_MAP_KEY`) | 10 min (proxy TTL 30 min) |
+
+Directions is a keyless front end to the routing the voice agent already
+uses. Its row chips are the whole interface: DRIVE / WALK / BIKE pick the
+profile; SET A and SET B arm the next globe click (Escape or a second press
+cancels), placing clamped A/B markers; with both placed the layer requests
+`/api/route?…&steps=1`, drapes the geometry as a `ClassificationType.BOTH`
+ground polyline with the annotation renderer's flowing-dash material (so it
+reads on the keyless terrain globe and on 3D tiles alike), and drops one white
+point primitive per intermediate maneuver. Clicking a dot opens a protected
+shared-host card with the instruction, the leg after it, and the next
+instruction; Escape or a click on empty globe clears it. SWAP reverses the
+endpoints and reroutes; changing the mode reroutes; CLEAR removes everything.
+FLY hands the geometry to `flyRoute` (the same cinematic as voice `fly_route`)
+after an idempotent `initCameraVerbs` so no voice session is required. The row
+meta reads `OSM routing · 21 km · 25 min · Drive`; while routing it shows
+`Routing…`, and a router miss reads `No route found between A and B` — the
+layer never substitutes a straight line. The layer holds continuous render
+only while a route is drawn (the dashes animate). Disable clears all state.
+
+`/api/route` (`server/providers/places/routes.js`) always asks OSRM for steps
+and caches the full response, serving the step list only when `steps=1` is
+requested; `src/data/routeSteps.js` turns OSRM maneuver type / modifier / exit
+/ road name into one plain-English sentence per decision, folding
+`exit roundabout` steps into the roundabout they leave.
 
 `src/data/militaryAwareness.js` remains registered internally as the Contacts
 coordinator, but it is not a user-visible Data Layers entry. Its visible entry
