@@ -654,15 +654,14 @@ test('the voice TOOL SCHEMA is byte-identical to main — the mission mapping is
   const end = src.indexOf('\n];\n', start);
   const block = src.slice(start, end + 4);
 
-  // Re-pinned 2026-08-28: the Provider Settings / Esri release DELIBERATELY
-  // extends set_map_stack's enum with 'esri-imagery' (a real new basemap —
-  // exactly the kind of schema change this pin exists to make loud). The
-  // guarded claim is unchanged: first-run missions ride existing tools, and
-  // any NEW drift from this recorded schema still fails here.
-  assert.equal(block.length, 31189, 'tool schema byte length drifted from the pinned release schema');
+  // Re-pinned 2026-09-12: analyst_query's layer enum grows satellites +
+  // local-datacenters + local-dams so voice can count/nearest those layers.
+  // The guarded claim is unchanged: first-run missions ride existing tools,
+  // and any NEW drift from this recorded schema still fails here.
+  assert.equal(block.length, 31591, 'tool schema byte length drifted from the pinned release schema');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '73aaabdb169a5478893d28688f327a21edd32ed3ec16fc6287bd944ed77beecf',
+    'f78d80ddf564f7bef6d8c548d110d83f863a7b49a70ead4dbd7581a7996a193f',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
 

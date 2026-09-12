@@ -3378,7 +3378,7 @@ async function runAnalystQuery(viewer, dataManager, args = {}) {
   // model burned the turn on retries (owner field session 2026-08-21, 23:48).
   const items = result.items.map((r) => {
     const compact = { layerKey: r.layerKey, id: r.id };
-    for (const k of ['icao24', 'mmsi', 'registration', 'label', 'callsign', 'name', 'altitudeM', 'speedMps', 'speedKts', 'frp', 'magnitude', 'shipType', 'destination', 'operator', 'routeOrigin', 'routeDestination', 'aircraftClass', 'military', 'onGround', 'distanceKm', 'confidence', 'place']) {
+    for (const k of ['icao24', 'mmsi', 'registration', 'label', 'callsign', 'name', 'altitudeM', 'speedMps', 'speedKts', 'frp', 'magnitude', 'shipType', 'destination', 'operator', 'routeOrigin', 'routeDestination', 'aircraftClass', 'military', 'onGround', 'distanceKm', 'confidence', 'place', 'noradId', 'satelliteClass', 'group', 'river', 'output', 'capacity']) {
       if (r[k] !== null && r[k] !== undefined) compact[k] = r[k];
     }
     return compact;

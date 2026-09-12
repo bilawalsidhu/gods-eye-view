@@ -3020,3 +3020,21 @@ test('front5: 0.99 km due EAST is the subject, though a degree box rejects it', 
     assert.equal(result.window.centeredOn, 'N546PC');
   });
 });
+
+test('analyst_query tool enum includes satellites and local infrastructure', () => {
+  const config = readFileSync(new URL('../../server/providers/local.js', import.meta.url), 'utf8');
+  const match = config.match(/name: 'analyst_query'[\s\S]*?items: \{ type: 'string', enum: \[([^\]]+)\]/);
+  assert.ok(match, 'analyst_query layers enum must still be findable');
+  for (const layer of ["'satellites'", "'local-datacenters'", "'local-dams'"]) {
+    assert.ok(match[1].includes(layer), `${layer} must be queryable via analyst_query`);
+  }
+});
+
+test('analyst_query compact items keep satellite and infrastructure identity fields', () => {
+  const src = readFileSync(new URL('./gevActions.js', import.meta.url), 'utf8');
+  const match = src.match(/for \(const k of \['icao24', 'mmsi'[^\]]+\]\)/);
+  assert.ok(match, 'analyst compact-field list must still be findable');
+  for (const field of ["'noradId'", "'satelliteClass'", "'group'", "'river'", "'output'", "'capacity'"]) {
+    assert.ok(match[0].includes(field), `${field} must ride on compact analyst items`);
+  }
+});
