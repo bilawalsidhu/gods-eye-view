@@ -153,7 +153,7 @@ reopens the same panel.
 - **What to get first:** the free [Cesium ion](https://cesium.com/ion) token
   (eligible personal, non-commercial use; current terms and quotas apply) for
   photorealistic 3D and world terrain; a Google Maps key only for the
-  billing-enabled, metered route + place search; OpenAI when you want to talk
+  billing-enabled, metered route + place search; OpenAI, Anthropic, Gemini, or Ollama when you want to talk
   to the world. Full map, costs included, in [Keys & Costs](#-api-keys).
 
 <details>
@@ -200,7 +200,7 @@ Choose a first-run mission, or try these in order. The GIFs show Google Photorea
 
 ![Cycling a dense live globe through CRT, FLIR, and NVG in one continuous view](docs/media/01-style-sweep.gif)
 
-7. **Talk to it** *(needs an OpenAI key)*: *"Take me to LAX and select the nearest airborne aircraft."*
+7. **Talk to it** *(needs an AI provider key / OpenAI, Anthropic, Gemini, or Ollama)*: *"Take me to LAX and select the nearest airborne aircraft."*
 8. **Come home.** Hit **Reset Globe** — or just say *"zoom out to a globe view."*
 
 **Keyboard:** `1`–`7` visual styles · `H` HUD · `D` detection · `C` cockpit · `Esc` out.
@@ -225,7 +225,7 @@ The cockpit even carries its own briefing strip: nearby live signals, regional h
 
 ## 🎙️ Talk to It
 
-> Voice needs an **OpenAI key**. Without one the entire app still runs — the mic button just reports voice is unavailable. The same key drives the **AI HUD summary**: a terse, five-word intelligence-style readout of the current view that regenerates as you move.
+> Voice and AI HUD summaries support multiple AI providers: **OpenAI**, **Anthropic (Claude)**, **Google Gemini**, and **Ollama (Local)**. Select your provider in **POWER UP → Provider Settings**. OpenAI provides native bidirectional WebRTC Realtime voice; Anthropic, Gemini, and Ollama provide voice control via browser Web Speech API (STT + TTS fallback) coupled with function-calling intelligence. Without an AI key the entire app still runs — the mic button just reports voice is unavailable. The active provider also drives the **AI HUD summary**: a terse, five-word intelligence-style readout of the current view that regenerates as you move.
 
 Click **GEV MIC**, grant the microphone, and just talk. This is more than a voice-controlled remote:
 
@@ -233,7 +233,7 @@ Click **GEV MIC**, grant the microphone, and just talk. This is more than a voic
 - **🎯 Entity Q&A.** Click any plane, ship, or datacenter and ask *"what's this?"* It answers using the object's live telemetry.
 - **👁️ Visual grounding.** At street level, it reads a viewport screenshot to identify legible signage and building names, and is instructed never to hallucinate labels.
 - **🎬 Cinematic framing.** *"Show me the planes overhead"* pulls the camera back, angles it, and frames the live traffic like a director.
-- **🔒 Honest and secure.** The agent only confirms actions that succeeded. Your `OPENAI_API_KEY` never touches the browser; the client only gets a short-lived session token.
+- **🔒 Honest and secure.** The agent only confirms actions that succeeded. Your API keys never touch the browser; all non-browser requests are handled via server-side proxies.
 
 Twenty-eight tools, four jobs — the commands below come straight from the product's voice test suite and tool playbook:
 
@@ -320,7 +320,7 @@ Once the basics click, run these:
 | **🪦 Walk the boneyard** | Fly from regional context down into dense, fully resolved rows of retired aircraft. |
 | **🏗️ Orbit Three Gorges** | Sweep the dam and its terrain at a glance — then flip on the **Dams** layer and find 703 more. |
 
-*🎙️ = voice missions — they need an OpenAI key.*
+*🎙️ = voice missions — they need an active AI provider key (OpenAI, Anthropic, Gemini, or Ollama).*
 
 ![Resolving a selected aircraft's recent flight path into stacked 3D loops above the terrain](docs/media/07-helicopter-loops.gif)
 
@@ -345,8 +345,8 @@ How the globe handles live data:
 - **Honest satellites.** SGP4 propagation with orbit rings that stay locked to their satellites via GMST realignment — no drift, no per-second flicker.
 - **Sits on the real ground.** Entity heights run through a real vertical datum — geoid-aware, sampled against the *rendered* terrain mesh — so aircraft park on aprons and cameras stand on street corners instead of floating.
 - **Caching and request budgets.** An OpenSky credit governor, a TomTom daily tile budget, and disk-cached TLEs reduce repeated requests. These controls do not replace provider quotas or billing controls.
-- **Server-side credentials.** Every API that touches a private key (OpenAI, AISStream, OpenSky OAuth, camera frames) is brokered through a hardened server-side proxy with SSRF protection, response caps, and sanitized errors. The only keys the browser sees are Google Maps and Cesium ion (restrict both at the provider).
-- **No framework.** Vanilla JavaScript, **CesiumJS**, and **Vite** — plus **Google Photorealistic 3D Tiles** for the planet and the **OpenAI Realtime API** for voice. Fast to read, fast to hack on.
+- **Server-side credentials & Modular AI Architecture.** Every API that touches a private key (OpenAI, Anthropic, Gemini, Ollama, AISStream, OpenSky OAuth, camera frames) is brokered through a hardened server-side proxy with SSRF protection, response caps, and sanitized errors. AI providers use a clean Strategy & Registry pattern (`BaseAiProvider`, `AiProviderRegistry`), making adding new LLMs seamless. The only keys the browser sees are Google Maps and Cesium ion (restrict both at the provider).
+- **No framework.** Vanilla JavaScript, **CesiumJS**, and **Vite** — plus **Google Photorealistic 3D Tiles** for the planet, **OpenAI Realtime API** (WebRTC), and **Web Speech API** for cross-provider voice. Fast to read, fast to hack on.
 
 ```
 src/
@@ -355,7 +355,7 @@ src/
 ├── hud.js                  # Intelligence HUD + AI scene summary
 ├── keySetup.js             # POWER UP panel — in-app provider keys (dev server only)
 ├── mapStackController.js   # Basemap switching — Google 3D / Esri / OSM / ion stacks
-├── voice/                  # OpenAI Realtime session + 28 voice tools
+├── voice/                  # Voice controllers (Realtime WebRTC + Web Speech fallback) & 28 tools
 ├── data/                   # One module per layer + orchestration + context store
 │   ├── iconOrientation.js  # Screen-projected headings + horizon cull
 │   └── local_data/         # Bundled datasets (per-folder provenance)
@@ -377,13 +377,17 @@ and configuration details.
 
 ### Choose the capabilities you want
 
-Six keys. Four have a free tier, and the two 🔴 ones are metered:
+Configure provider keys in **POWER UP → Provider Settings**:
 
-| | Key | Why | Get it |
+| | Key / Setting | Why | Get it |
 |---|-----|-----|--------|
 | 🟡 | **Cesium ion** | 🗺️ Google Photorealistic 3D, world terrain, and additional ion-hosted imagery stacks. The free Community plan is for eligible individual, personal/non-commercial use and has quotas | [cesium.com/ion](https://cesium.com/ion) — use a public `assets:read` token and check current [pricing/eligibility](https://cesium.com/platform/cesium-ion/pricing/) |
 | 🔴 | **Google Maps** | Direct Google Photorealistic 3D + Google place search ([Map Tiles API](https://developers.google.com/maps/documentation/tile)) | [Google Cloud Console](https://console.cloud.google.com/) — URL-restrict it |
-| 🔴 | **OpenAI** | 🎙️ The voice experience + AI HUD summary. The mini model works; the standard model is noticeably smarter. Want Gemini or another provider behind the mic? PRs welcome | [platform.openai.com](https://platform.openai.com) — metered, see costs below |
+| 🟡 | **AI Provider** | 🎛️ Select active provider: OpenAI, Anthropic (Claude), Google Gemini, or Ollama (Local) | Dropdown in POWER UP settings |
+| 🔴 | **OpenAI** | 🎙️ The voice experience (WebRTC Realtime) + AI HUD summary. The mini model works; the standard model is noticeably smarter | [platform.openai.com](https://platform.openai.com) — metered, see costs below |
+| 🔴 | **Anthropic** | 🧠 Claude intelligence for HUD summaries & voice fallback (via Web Speech STT/TTS) | [console.anthropic.com](https://console.anthropic.com) — metered |
+| 🔴 | **Google Gemini** | 🧠 Gemini intelligence for HUD summaries & voice fallback (via Web Speech STT/TTS) | [aistudio.google.com](https://aistudio.google.com) — metered |
+| 🟢 | **Ollama** | 🦙 Local / custom models for HUD summaries & voice fallback (e.g. `http://localhost:11434`) | [ollama.com](https://ollama.com) — free / local |
 | 🟡 | **AISStream** | 🚢 Live global ships | [aisstream.io](https://aisstream.io) — free signup |
 | 🟡 | **NASA FIRMS** | 🔥 Live active fires | [firms.modaps.eosdis.nasa.gov](https://firms.modaps.eosdis.nasa.gov/api/map_key/) — free |
 | 🟡 | **TomTom** | 🚦 Live flow speeds and congestion colors for the simulated traffic layer | [developer.tomtom.com](https://developer.tomtom.com) — free tier available |

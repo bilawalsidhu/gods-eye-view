@@ -17,6 +17,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   handlers and standalone key setup into focused modules. Preserve routes,
   source behavior, tool schemas and credential restrictions.
 
+- Add multi-provider AI support (OpenAI, Anthropic Claude, Google Gemini, Ollama)
+  with an extensible Strategy & Registry architecture (`BaseAiProvider`,
+  `AiProviderRegistry`). Provide native WebRTC Realtime for OpenAI and Web Speech
+  STT/TTS fallback for Anthropic, Gemini, and Ollama. Added `AI_PROVIDER` dropdown
+  and respective keys in POWER UP provider setup.
+
 - Restore data-provider routes under local build preview and return JSON 404s
   for unmatched API requests. Credential editing remains development-only.
 

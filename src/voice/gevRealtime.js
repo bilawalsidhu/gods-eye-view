@@ -330,6 +330,7 @@ export class GevRealtimeController {
     // which case it replies with an item_not_found error echoing this id — a
     // benign race we must NOT treat as fatal (M14).
     this.pendingViewportDeletes = new Set();
+    this.speechRecognition = null;
     this.errors = loadStoredErrors();
     this.sessionId = createDebugSessionId();
     this.debugLog('controller.created', { status: this.status });
@@ -348,10 +349,6 @@ export class GevRealtimeController {
     this.pushToTalkMode = pushToTalk;
     this.pushToTalkKeyHeld = pushToTalkKeyHeld;
     this.spaceKeyHeld = spaceKeyHeld;
-    if (!window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia) {
-      this.setStatus('error', 'WebRTC microphone support unavailable');
-      return;
-    }
 
     // Claim this connect attempt. stop() (and any later start()) bump startEpoch,
     // so `epoch !== this.startEpoch` after any await means we were superseded and
@@ -371,7 +368,7 @@ export class GevRealtimeController {
       limits: this.voiceLimits,
     });
     this.syncCostUi();
-    this.setStatus('connecting', 'Requesting microphone');
+    this.setStatus('connecting', 'Connecting AI Voice...');
     this.debugLog('session.starting', {
       epoch,
       tier: this.voiceTier,
@@ -381,8 +378,35 @@ export class GevRealtimeController {
     let localPc = null;
     try {
       const minted = await fetchRealtimeToken(this.voiceTier);
-      const token = minted.token;
       if (this.abandonStart(epoch, { localStream, localPc })) return;
+
+      if (minted.fallback) {
+        if (navigator.mediaDevices?.getUserMedia) {
+          localStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              channelCount: 1,
+            },
+          }).catch(() => null);
+          if (this.abandonStart(epoch, { localStream, localPc })) return;
+          this.stream = localStream;
+          if (localStream) {
+            this.setMicrophoneEnabled(!this.pushToTalkMode || this.pushToTalkKeyHeld);
+            this.startVoiceVisualizer(localStream);
+          }
+        }
+        await this.startFallbackVoiceLoop({ epoch, provider: minted.provider });
+        return;
+      }
+
+      if (!window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia) {
+        this.setStatus('error', 'WebRTC microphone support unavailable');
+        return;
+      }
+
+      const token = minted.token;
       // Bind the session meter to the model actually served. An env override
       // (OPENAI_REALTIME_MODEL[_MINI]) can point a tier at a different model,
       // and pricing by the tier we asked for would then under-meter and let the
@@ -693,6 +717,9 @@ export class GevRealtimeController {
     if (!this.pushToTalkKeyHeld) return;
     this.pushToTalkKeyHeld = false;
     delete this.ui.root.dataset.pushToTalk;
+    if (this.speechRecognition) {
+      try { this.speechRecognition.stop(); } catch { /* no-op */ }
+    }
     if (!this.pushToTalkMode) return;
     this.setMicrophoneEnabled(false);
     if (this.status === 'listening') this.setStatus('listening', 'Hold Space to talk');
@@ -830,6 +857,129 @@ export class GevRealtimeController {
     return this.reportError(source, error, extra);
   }
 
+  async startFallbackVoiceLoop({ epoch, provider = 'ai' } = {}) {
+    const SpeechRecognitionClass = typeof window !== 'undefined'
+      ? (window.SpeechRecognition || window.webkitSpeechRecognition)
+      : null;
+    if (!SpeechRecognitionClass) {
+      this.setStatus('error', 'Browser speech recognition not supported in this browser. Please use Chrome or Edge.');
+      return;
+    }
+
+    const recognition = new SpeechRecognitionClass();
+    this.speechRecognition = recognition;
+    recognition.continuous = !this.pushToTalkMode;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      if (epoch !== this.startEpoch) return;
+      const detail = this.pushToTalkMode
+        ? (this.pushToTalkKeyHeld ? 'Release Space to send' : 'Hold Space to talk')
+        : `Ask or command (${provider})`;
+      this.setStatus('listening', detail);
+      this.debugLog('speech_recognition.started', { provider });
+    };
+
+    recognition.onresult = async (event) => {
+      if (epoch !== this.startEpoch) return;
+      const results = event.results;
+      const lastResult = results[results.length - 1];
+      const transcript = lastResult?.[0]?.transcript?.trim();
+      if (!transcript) return;
+
+      this.setStatus('executing', 'Thinking...');
+      this.visualizerSpeaker = 'user';
+
+      try {
+        let viewContext = null;
+        try {
+          viewContext = await this.runner('get_current_view_state', {}, { isCurrent: () => epoch === this.startEpoch });
+        } catch {
+          /* context is best-effort */
+        }
+
+        const res = await fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: transcript,
+            context: viewContext,
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `AI Chat returned HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        if (epoch !== this.startEpoch) return;
+
+        if (Array.isArray(data.toolCalls)) {
+          for (const call of data.toolCalls) {
+            if (call?.name) {
+              await this.runner(call.name, call.args || {}, { isCurrent: () => epoch === this.startEpoch });
+            }
+          }
+        }
+
+        if (data.text && typeof window !== 'undefined' && window.speechSynthesis) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(data.text);
+          utterance.lang = 'en-US';
+          this.visualizerSpeaker = 'ai';
+          utterance.onend = () => {
+            this.visualizerSpeaker = 'idle';
+            if (epoch === this.startEpoch && this.isActive()) {
+              this.setStatus('listening', this.pushToTalkMode ? 'Hold Space to talk' : 'Ask or command');
+            }
+          };
+          utterance.onerror = () => {
+            this.visualizerSpeaker = 'idle';
+            if (epoch === this.startEpoch && this.isActive()) {
+              this.setStatus('listening', this.pushToTalkMode ? 'Hold Space to talk' : 'Ask or command');
+            }
+          };
+          window.speechSynthesis.speak(utterance);
+        } else {
+          this.visualizerSpeaker = 'idle';
+          if (this.isActive()) {
+            this.setStatus('listening', this.pushToTalkMode ? 'Hold Space to talk' : 'Ask or command');
+          }
+        }
+      } catch (error) {
+        this.visualizerSpeaker = 'idle';
+        if (this.isActive()) {
+          this.setStatus('error', error?.message || 'Voice request failed');
+        }
+      }
+    };
+
+    recognition.onerror = (event) => {
+      if (epoch !== this.startEpoch) return;
+      if (event.error === 'no-speech') return;
+      this.reportError('Speech recognition', event, { error: event.error });
+    };
+
+    recognition.onend = () => {
+      if (epoch !== this.startEpoch) return;
+      if (this.isActive() && !this.pushToTalkMode) {
+        try {
+          recognition.start();
+        } catch {
+          /* ignore duplicate start */
+        }
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch (error) {
+      this.reportError('Speech recognition start', error);
+    }
+  }
+
   stop(options = {}) {
     const { removeUi = false, preserveStatus = false, preserveRadioPlayback = false } = options;
     // Bump the epoch so any start() awaiting a token/getUserMedia/SDP bails and
@@ -866,6 +1016,13 @@ export class GevRealtimeController {
       status: this.status,
       connection: this.connectionDiagnostics(),
     });
+    if (this.speechRecognition) {
+      try { this.speechRecognition.abort(); } catch { /* no-op */ }
+      this.speechRecognition = null;
+    }
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      try { window.speechSynthesis.cancel(); } catch { /* no-op */ }
+    }
     if (this.dc) {
       // A response in flight has already accrued billable tokens whose usage
       // only arrives with response.done — which we will never see, because the
@@ -2386,6 +2543,8 @@ async function fetchRealtimeToken(tier = DEFAULT_VOICE_TIER) {
     || data?.session?.model
     || null;
   const servedTier = response.headers?.get?.('X-GEV-Voice-Tier') || null;
+  const isFallback = Boolean(data?.fallback || response.headers?.get?.('X-GEV-Voice-Fallback') === '1');
+  const provider = response.headers?.get?.('X-GEV-Voice-Provider') || data?.provider || 'openai';
   if (!response.ok) {
     // OpenAI error bodies are objects ({error:{message,type,...}}); only the
     // key-absent server case is a bare string. Render either without the
@@ -2394,6 +2553,9 @@ async function fetchRealtimeToken(tier = DEFAULT_VOICE_TIER) {
       ? data.error
       : data?.error?.message;
     throw new Error(reason || `Realtime token failed: HTTP ${response.status}`);
+  }
+  if (isFallback) {
+    return { fallback: true, provider, model: servedModel || provider, tier: servedTier };
   }
   const token = data?.value || data?.client_secret?.value || data?.client_secret;
   if (!token) throw new Error('Realtime token response did not include a client secret');

@@ -94,13 +94,15 @@ function buildRow(documentRef, key) {
     badge.title = 'Supplied by your environment, Keychain, or launcher — change it where it was set';
     head.append(badge);
   }
-  const get = documentRef.createElement('a');
-  get.className = 'key-setup-get';
-  get.href = key.getUrl;
-  get.target = '_blank';
-  get.rel = 'noopener noreferrer';
-  get.textContent = key.set ? 'MANAGE ↗' : 'GET KEY ↗';
-  head.append(get);
+  if (key.getUrl) {
+    const get = documentRef.createElement('a');
+    get.className = 'key-setup-get';
+    get.href = key.getUrl;
+    get.target = '_blank';
+    get.rel = 'noopener noreferrer';
+    get.textContent = key.set ? 'MANAGE ↗' : 'GET KEY ↗';
+    head.append(get);
+  }
 
   const unlocks = documentRef.createElement('p');
   unlocks.className = 'key-setup-unlocks';
@@ -110,19 +112,36 @@ function buildRow(documentRef, key) {
   if (!external) {
     const fields = documentRef.createElement('div');
     fields.className = 'key-setup-fields';
-    for (const envVar of key.envVars) {
-      const input = documentRef.createElement('input');
-      // Passwords-style so a pasted key never shows on a shared or recorded
-      // screen — this app gets screen-recorded a lot.
-      input.type = 'password';
-      input.autocomplete = 'off';
-      input.spellcheck = false;
-      input.dataset.envVar = envVar;
-      input.setAttribute('aria-label', envVar);
-      input.placeholder = key.set
-        ? `${envVar} saved — paste to replace`
-        : `paste ${envVar}`;
-      fields.append(input);
+    if (Array.isArray(key.options) && key.options.length) {
+      const select = documentRef.createElement('select');
+      select.className = 'key-setup-select';
+      select.dataset.envVar = key.envVars[0];
+      select.setAttribute('aria-label', key.title);
+      for (const opt of key.options) {
+        const option = documentRef.createElement('option');
+        option.value = opt.value;
+        option.textContent = opt.label;
+        if (opt.value === key.currentValue) {
+          option.selected = true;
+        }
+        select.append(option);
+      }
+      fields.append(select);
+    } else {
+      for (const envVar of key.envVars) {
+        const input = documentRef.createElement('input');
+        // Passwords-style so a pasted key never shows on a shared or recorded
+        // screen — this app gets screen-recorded a lot.
+        input.type = 'password';
+        input.autocomplete = 'off';
+        input.spellcheck = false;
+        input.dataset.envVar = envVar;
+        input.setAttribute('aria-label', envVar);
+        input.placeholder = key.set
+          ? `${envVar} saved — paste to replace`
+          : `paste ${envVar}`;
+        fields.append(input);
+      }
     }
     if (key.managed === 'file') {
       const remove = documentRef.createElement('button');
@@ -316,12 +335,12 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
 
   const onApply = async () => {
     if (disposed || busy) return;
-    const inputs = [...root.querySelectorAll('input[data-env-var]')];
+    const inputs = [...root.querySelectorAll('input[data-env-var], select[data-env-var]')];
     const updates = collectKeyUpdates(
       inputs.map((input) => ({ envVar: input.dataset.envVar, value: input.value })),
     );
     if (!Object.keys(updates).length) {
-      say('Paste at least one key first.');
+      say('Paste at least one key or select a provider first.');
       return;
     }
     await submitUpdates(updates, 'Saved to');

@@ -26,6 +26,34 @@ function createRealtimeTokenHandler({ annotationGuidance } = {}) {
     // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). No-op when unset.
     if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
 
+    const providerId = (process.env.AI_PROVIDER || 'openai')
+      .toLowerCase()
+      .trim();
+    if (providerId !== 'openai') {
+      const { activeAiKey } = await import('../ai.js');
+      const activeKey = activeAiKey(process.env);
+      if (!activeKey) {
+        res.statusCode = 503;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(
+          JSON.stringify({ error: `API Key for ${providerId} is not set` }),
+        );
+        return;
+      }
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('X-GEV-Voice-Fallback', '1');
+      res.setHeader('X-GEV-Voice-Provider', providerId);
+      res.end(
+        JSON.stringify({
+          fallback: true,
+          provider: providerId,
+          model: providerId,
+        }),
+      );
+      return;
+    }
+
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       res.statusCode = 503;
