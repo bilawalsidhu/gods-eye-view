@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,10 +11,6 @@ const PROFILE_DIR = path.join(ROOT, 'config', 'localai');
 const PIPELINE_NAME = 'gpt-realtime';
 /** WebRTC audio codec backend. No model config names it, the transport needs it. */
 const ALWAYS_BACKENDS = Object.freeze(['opus']);
-
-function sha256(value) {
-  return createHash('sha256').update(value).digest('hex');
-}
 
 function replaceOnce(source, needle, replacement, label) {
   const first = source.indexOf(needle);
@@ -162,12 +157,12 @@ export function parsePipelineStages(text) {
 }
 
 /** The backend a model config runs on, if it names one. */
-export function parseBackend(text) {
+function parseBackend(text) {
   return /^backend:\s*(\S+)\s*$/m.exec(String(text))?.[1] ?? null;
 }
 
 /** The `parameters.model` value a model config names, if any. */
-export function parseModelParameter(text) {
+function parseModelParameter(text) {
   return /^\s{2}model:\s*(\S+)\s*$/m.exec(String(text))?.[1] ?? null;
 }
 
@@ -274,12 +269,10 @@ export function runLocalStep(step, { profileDir = PROFILE_DIR, modelsDir, backen
     for (const name of fs.readdirSync(path.join(profileDir, 'models'))) {
       fs.copyFileSync(path.join(profileDir, 'models', name), path.join(modelsDir, name));
     }
-    return null;
   }
   if (step?.kind === 'compat') {
-    return applyMlxCompatibility({ backendsDir, profileDir, checkOnly: false, missing: [] });
+    applyMlxCompatibility({ backendsDir, profileDir, checkOnly: false, missing: [] });
   }
-  return null;
 }
 
 /**
@@ -306,7 +299,7 @@ function applyMlxCompatibility({ backendsDir, checkOnly, missing, profileDir }) 
     if (patchedTokenizer !== tokenizerSource) missing.push('MiniCPM5 parser registration');
     if (!fs.existsSync(streamFilterTarget)) missing.push('stream function filter');
     if (!fs.existsSync(parserTarget)) missing.push('MiniCPM5 parser');
-    return null;
+    return;
   }
 
   writeChanged(backendFile, patchedBackend);
@@ -315,7 +308,6 @@ function applyMlxCompatibility({ backendsDir, checkOnly, missing, profileDir }) 
   if (!fs.existsSync(parserTarget)) {
     fs.copyFileSync(path.join(profileDir, 'compat', 'minicpm5.py'), parserTarget);
   }
-  return { fingerprint: sha256(patchedBackend + patchedTokenizer) };
 }
 
 export function setupLocalVoice({
@@ -343,7 +335,6 @@ export function setupLocalVoice({
     LOCALAI_BACKENDS_PATH: backendsDir,
   };
 
-  let fingerprint = null;
   if (!checkOnly) {
     fs.mkdirSync(modelsDir, { recursive: true });
     fs.mkdirSync(backendsDir, { recursive: true });
@@ -355,7 +346,7 @@ export function setupLocalVoice({
       if (step.cached) continue;
       const spec = stepCommand(step, { executable, backendsDir, modelsDir, environment: childEnvironment });
       if (spec) command(spec.command, spec.args, spec.environment);
-      else fingerprint = runLocalStep(step, { profileDir, modelsDir, backendsDir })?.fingerprint ?? fingerprint;
+      else runLocalStep(step, { profileDir, modelsDir, backendsDir });
     }
   }
 
@@ -372,7 +363,7 @@ export function setupLocalVoice({
   if (checkOnly && missing.length) {
     throw new Error(`Local voice setup incomplete (${missing.join(', ')}) — run npm run voice:local:setup`);
   }
-  return { home, ready: true, profile: profile.pipelineName, fingerprint };
+  return { home, ready: true, profile: profile.pipelineName };
 }
 
 function main() {

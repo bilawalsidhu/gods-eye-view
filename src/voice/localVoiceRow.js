@@ -85,5 +85,6 @@ export async function initLocalVoiceRow({ documentRef = globalThis.document, fet
     void load('POST');
   });
 
-  return { status: await load(), refresh: () => load(), dispose: stopPolling };
+  await load();
+  return { dispose: stopPolling };
 }

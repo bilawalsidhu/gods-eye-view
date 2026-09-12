@@ -5,11 +5,11 @@ import path from 'node:path';
 
 export const LOCAL_AI_REALTIME_URL_DEFAULT = 'http://localhost:8080/v1/realtime/calls';
 export const LOCAL_AI_REALTIME_MODEL_DEFAULT = 'gpt-realtime';
-export const LOCAL_AI_READY_TIMEOUT_MS = 180_000;
+const LOCAL_AI_READY_TIMEOUT_MS = 180_000;
 /** How long a warm-up may make NO measurable progress before it counts as failed. */
-export const LOCAL_AI_STALL_TIMEOUT_MS = 45_000;
+const LOCAL_AI_STALL_TIMEOUT_MS = 45_000;
 /** A first run downloads gigabytes, so the load request itself gets a long leash. */
-export const LOCAL_AI_PRELOAD_TIMEOUT_MS = 30 * 60_000;
+const LOCAL_AI_PRELOAD_TIMEOUT_MS = 30 * 60_000;
 
 /**
  * Bytes of unfinished Hugging Face downloads under a LocalAI models directory.
