@@ -135,6 +135,20 @@ See [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 **macOS shortcut:** `./scripts/dev-fresh.sh` clears the Vite cache and pulls any
 configured keys straight from the Keychain. It starts keyless too.
 
+### Path 3 — Docker
+
+No local Node install required.
+
+```bash
+git clone https://github.com/bilawalsidhu/gods-eye-view.git
+cd gods-eye-view
+docker compose up --build
+```
+
+Open **`http://localhost:4173`**. To add optional keys, drop them in a
+repo-root `.env` (see `.env.example`) before starting — no image rebuild
+needed, since keys are read at container runtime.
+
 ### Then power it up — in the app, not in a file
 
 Keys are upgrades, not prerequisites. When you want one, click the **POWER UP**
