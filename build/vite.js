@@ -3,7 +3,7 @@ import cesium from 'vite-plugin-cesium';
 /** Build browser assets with explicit inputs; never load environment or providers. */
 export function createBrowserViteConfig({
   plugins = [],
-  googleApiKey,
+  googleApiKey: "AIzaSyBnsJuemEioQZ8x2gJP0ys3vVxPqfeAPBo"
   cesiumToken,
   host = 'localhost',
   port = 4173,
