@@ -13,6 +13,11 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Add Ontario 511 as a keyless CCTV source pack, including Kitchener-area
+  highway cameras, with server-registered still URLs, attribution, and an
+  1,800-camera default CCTV catalog cap so Austin, Caltrans, TfL, and Ontario
+  can coexist.
+
 - Split Overpass/installation search, regional briefing/weather, local voice
   handlers and standalone key setup into focused modules. Preserve routes,
   source behavior, tool schemas and credential restrictions.

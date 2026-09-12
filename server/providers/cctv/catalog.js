@@ -10,6 +10,7 @@ import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
   loadTflSourcesFromOpenData,
+  loadOntarioSourcesFromOpenData,
 } from './sources.js';
 /**
  * Load CCTV sources from a local JSON file (CCTV_SOURCES_FILE env or default).
@@ -65,8 +66,8 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
   /**
    * Assemble and cache the merged CCTV source list.
    *
-   * Merges sources from three origins (Austin Open Data, local file,
-   * env variable), deduplicates by ID, applies the global max cap, and
+   * Merges live packs (Austin, Caltrans, TfL, Ontario 511) with local file
+   * and env sources, deduplicates by ID, applies the global max cap, and
    * caches for CCTV_SOURCE_CACHE_MS.
    *
    * @returns {Promise<Array<object>>} Deduplicated, capped source list.
@@ -104,35 +105,44 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
       String(process.env.CCTV_FORCE_AUSTIN || '').trim() === '1';
     const preferAustin =
       String(process.env.CCTV_PREFER_AUSTIN || '1').trim() !== '0';
-    // Live open-data packs (Austin + Caltrans + TfL) load unless a file/env pack
-    // is configured and live packs aren't forced — same gate that governed the
-    // Austin-only fetch, now governing all three. Each pack fails independently.
+    // Live open-data packs load unless a file/env pack is configured and live
+    // packs aren't forced — same gate that governed the Austin-only fetch, now
+    // governing every default pack. Each pack fails independently.
     const needsLiveSources =
       forceAustin || (fromFile.length + fromEnv.length === 0 && preferAustin);
     const tflEnabled =
       String(process.env.CCTV_TFL_ENABLED || '1').trim() !== '0';
+    const ontarioEnabled =
+      String(process.env.CCTV_ONTARIO_ENABLED || '1').trim() !== '0';
 
     let fromAustin = [];
     let fromCaltrans = [];
     let fromTfl = [];
+    let fromOntario = [];
     if (needsLiveSources) {
-      const [austinResult, caltransResult, tflResult] =
+      const [austinResult, caltransResult, tflResult, ontarioResult] =
         await Promise.allSettled([
           loadAustinSourcesFromOpenData(),
           loadCaltransSourcesFromOpenData(),
           tflEnabled ? loadTflSourcesFromOpenData() : Promise.resolve([]),
+          ontarioEnabled
+            ? loadOntarioSourcesFromOpenData()
+            : Promise.resolve([]),
         ]);
       fromAustin =
         austinResult.status === 'fulfilled' ? austinResult.value : [];
       fromCaltrans =
         caltransResult.status === 'fulfilled' ? caltransResult.value : [];
       fromTfl = tflResult.status === 'fulfilled' ? tflResult.value : [];
+      fromOntario =
+        ontarioResult.status === 'fulfilled' ? ontarioResult.value : [];
     }
     // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
     const merged = [
       ...fromAustin,
       ...fromCaltrans,
       ...fromTfl,
+      ...fromOntario,
       ...fromFile,
       ...fromEnv,
     ];
@@ -151,7 +161,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
       process.env.CCTV_MAX_SOURCES || DEFAULT_CCTV_MAX_SOURCES,
     );
     const maxCount = Number.isFinite(maxRaw)
-      ? Math.max(8, Math.min(1200, Math.floor(maxRaw)))
+      ? Math.max(8, Math.min(2000, Math.floor(maxRaw)))
       : DEFAULT_CCTV_MAX_SOURCES;
     if (mergedSources.length > maxCount) {
       console.warn(

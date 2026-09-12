@@ -1903,7 +1903,7 @@ its criteria cannot be silently ignored.
 | Satellites | CelesTrak | `src/data/satellites.js` | `/api/celestrak` | 120s |
 | Space Missions (30d) | Launch Library 2 + CelesTrak | `src/data/rocketLaunches.js` | `/api/launches` + `/api/celestrak/active` | 5 min |
 | Traffic | OSM Overpass (+ optional TomTom live flow) | `src/data/traffic.js` | `/api/overpass` + `/api/tomtom` | viewport-driven |
-| CCTV | Austin + Caltrans (CA) + TfL London Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
+| CCTV | Austin + Caltrans (CA) + TfL London + Ontario 511 Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
 | Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
 | Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
 | Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |
@@ -2254,7 +2254,9 @@ silently demoting every later lookup for the session.
   default 36 → 250, hard bound 300), filtered to `camera_status === TURNED_ON` (~815 live of
   1,003 rows). City packs (2026-07-04): Caltrans (districts 4/7/11/3 — SF, LA, San Diego,
   Sacramento; cap 300) and TfL London JamCams (cap 250) join Austin (cap 250) as keyless default
-  sources — ~800 cameras total, all RAW PRIOR poses, stills-first.
+  sources. Ontario 511 (2026-09-12) adds keyless highway cameras including Kitchener-area routes
+  (cap 1,000, all enabled rows from the current ~944-camera catalog). The default global CCTV cap is
+  1,800, all sources are RAW PRIOR poses, and the layer is stills-first.
 - **CCTV v3 UX — viewshed + calibration gizmo** (built 2026-07-05 and field
   validated 2026-07-21): the COVERAGE toggle is a
   tri-state cycle `OFF → ON → VIEWSHED`; viewshed mode renders each visible camera's frustum

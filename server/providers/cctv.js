@@ -30,9 +30,9 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
   /** Cap on health map entries to prevent unbounded growth. Sized to cover the
-   * full served catalog (CCTV_MAX_SOURCES hard-bounds at 1200) so health/status
-   * observability isn't silently evicted for a default 800-camera catalog. */
-  const HEALTH_MAX_ENTRIES = 1200;
+   * full served catalog (CCTV_MAX_SOURCES hard-bounds at 2000) so health/status
+   * observability isn't silently evicted for a default Ontario-sized catalog. */
+  const HEALTH_MAX_ENTRIES = 2000;
 
   /** Update the health entry for a camera, evicting the oldest entry if at capacity. */
   const setHealth = (cameraId, patch) => {
