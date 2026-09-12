@@ -14,6 +14,12 @@ import {
 } from './bloom.js';
 import { LOCATIONS, CITY_POIS, GLOBE_VIEW, flyToGlobeView, flyToPresetLocation, flyToPOI, searchAndFlyTo } from './locations.js';
 import { locationMiniStatus } from './locationStatus.js';
+import {
+  loadSavedLocations,
+  persistSavedLocations,
+  removeSavedLocation,
+  upsertSavedLocation,
+} from './savedLocations.js';
 import { interruptCameraMotion } from './cameraVerbs.js';
 import {
   aircraftTrackingTarget,
@@ -2444,6 +2450,9 @@ export class StyleManager {
     this._locationSearch = document.getElementById('location-search');
     this._searchToggle = document.getElementById('search-toggle');
     this._locationPills = document.getElementById('location-pills');
+    this._savedLocationRow = document.getElementById('saved-location-row');
+    this._savedLocationPills = document.getElementById('saved-location-pills');
+    this._saveLocationBtn = document.getElementById('save-location-btn');
     this._poiRow = document.getElementById('poi-row');
     this._locationBarDivider = document.getElementById('location-bar-divider');
     this._styleMiniValue = document.getElementById('style-mini-value');
@@ -2460,6 +2469,7 @@ export class StyleManager {
     // _activeLocationId instead; a search has no preset record, so this is the
     // only thing the mini-status can report for it.
     this._searchedLocationLabel = null;
+    this._savedLocations = [];
     this._trafficSyncFeedbackState = createTrafficSyncFeedbackState();
     this._trafficTransitionTimer = null;
     this._lastTrafficChipUpdateAt = 0;
@@ -9448,6 +9458,10 @@ export class StyleManager {
   _initLocationBar() {
     const QWERTY_KEYS = ['Q', 'W', 'E', 'R', 'T'];
 
+    this._savedLocations = loadSavedLocations();
+    this._renderSavedLocations();
+    this._saveLocationBtn?.addEventListener('click', () => this._saveCurrentLocation());
+
     // Render city pills (no submenu wrappers — POI row is separate)
     for (const [cityId, city] of Object.entries(CITY_POIS)) {
       const pill = document.createElement('button');
@@ -9624,6 +9638,81 @@ export class StyleManager {
       this._currentPoi = CITY_POIS[cityId].pois[0];
     }
     this._updateLocationMiniStatus();
+  }
+
+  /** Save the current camera and map source for quick reuse. */
+  _saveCurrentLocation() {
+    const camera = this.getCameraState();
+    if (!camera) return;
+    const defaultName = this._searchedLocationLabel
+      || this._currentPoi?.name
+      || (this._activeLocationId ? CITY_POIS[this._activeLocationId]?.name : null)
+      || 'Saved location';
+    const name = window.prompt('Name this location', defaultName)?.trim();
+    if (!name) return;
+    this._savedLocations = upsertSavedLocation(this._savedLocations, {
+      name,
+      camera,
+      mapStack: this.mapStackController?.getActiveId?.() || null,
+    });
+    if (!persistSavedLocations(this._savedLocations)) {
+      this._showToast('Could not save location');
+      return;
+    }
+    this._renderSavedLocations();
+    this._showToast(`Saved ${name}`);
+  }
+
+  /** Restore a saved camera and its map source. */
+  _onSavedLocationClick(saved) {
+    if (!saved?.camera) return;
+    const result = this._runExplicitNavigation('location', () => {
+      this._setActiveLocation(null);
+      this._currentPoi = null;
+      this._collapsePOIRow();
+      const applyCamera = () => this.applyCameraState(saved.camera);
+      if (saved.mapStack && this.mapStackController?.getActiveId?.() !== saved.mapStack) {
+        void this._setMapStack(saved.mapStack, { syncShare: false })
+          .then(applyCamera)
+          .catch(applyCamera);
+      } else {
+        applyCamera();
+      }
+      return true;
+    });
+    if (result === false) return;
+    this._searchedLocationLabel = saved.name;
+    this._updateLocationMiniStatus();
+  }
+
+  /** Render persisted locations in the Location tray. */
+  _renderSavedLocations() {
+    if (!this._savedLocationRow || !this._savedLocationPills) return;
+    this._savedLocationPills.innerHTML = '';
+    this._savedLocationRow.hidden = this._savedLocations.length === 0;
+    for (const saved of this._savedLocations) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'saved-location-item';
+      const pill = document.createElement('button');
+      pill.className = 'location-pill saved-location-pill';
+      pill.type = 'button';
+      pill.textContent = saved.name;
+      pill.title = `Fly to ${saved.name}`;
+      pill.addEventListener('click', () => this._onSavedLocationClick(saved));
+      const remove = document.createElement('button');
+      remove.className = 'saved-location-delete';
+      remove.type = 'button';
+      remove.setAttribute('aria-label', `Remove saved location ${saved.name}`);
+      remove.title = `Remove ${saved.name}`;
+      remove.textContent = 'x';
+      remove.addEventListener('click', () => {
+        this._savedLocations = removeSavedLocation(this._savedLocations, saved.id);
+        persistSavedLocations(this._savedLocations);
+        this._renderSavedLocations();
+      });
+      wrapper.append(pill, remove);
+      this._savedLocationPills.appendChild(wrapper);
+    }
   }
 
   /**

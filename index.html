@@ -561,9 +561,16 @@
         <button class="dock-pin-btn" data-pin-target="location-bar" type="button" aria-label="Pin location tray" aria-pressed="false" title="Keep location tray open"><img src="/pin.svg" alt="" /></button>
         <div id="poi-row" class="poi-row-container"></div>
         <div class="location-bar-divider" id="location-bar-divider"></div>
+        <div id="saved-location-row" class="saved-location-row" hidden>
+          <span class="saved-location-label">SAVED</span>
+          <div id="saved-location-pills" class="saved-location-pills"></div>
+        </div>
         <div class="location-city-row">
           <div id="location-pills" class="location-pills"></div>
           <div class="location-search-wrap">
+            <button id="save-location-btn" class="search-toggle-btn save-location-btn" type="button" title="Save current location" aria-label="Save current location">
+              <span class="material-symbols-outlined" aria-hidden="true">bookmark_add</span>
+            </button>
             <button id="search-toggle" class="search-toggle-btn" title="Search any location">
               <span>&#x1F50E;</span>
             </button>

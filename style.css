@@ -1841,6 +1841,63 @@ body.ui-clean-view #scene-runtime.active {
   gap: 8px;
 }
 
+.saved-location-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 4px 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.saved-location-row::-webkit-scrollbar {
+  display: none;
+}
+
+.saved-location-label {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+}
+
+.saved-location-pills {
+  display: flex;
+  gap: 6px;
+}
+
+.saved-location-item {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.saved-location-pill {
+  border-radius: 20px 0 0 20px;
+}
+
+.saved-location-delete {
+  width: 24px;
+  align-self: stretch;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 0;
+  border-radius: 0 20px 20px 0;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.saved-location-delete:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.save-location-btn .material-symbols-outlined {
+  font-size: 17px;
+}
+
 .poi-pill {
   display: inline-flex;
   align-items: center;
