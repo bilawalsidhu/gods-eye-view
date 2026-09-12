@@ -27,5 +27,29 @@
     "exports": ["./build/vite"],
     "modules": ["build/vite.js"],
     "external": ["vite-plugin-cesium"]
+  },
+  "live-providers": {
+    "runtime": "node",
+    "exports": ["./server/providers/live"],
+    "modules": [
+      "server/providers/live.js",
+      "server/providers/common/http.js",
+      "server/providers/common/query.js",
+      "server/providers/aircraft/opensky.js",
+      "server/providers/aircraft/adsb-lol.js",
+      "server/providers/aircraft/enrichment.js",
+      "server/providers/aircraft/tracks.js",
+      "server/providers/vessels/ais-store.js",
+      "server/providers/vessels/ais-live.js",
+      "src/data/adsbLolFallback.js",
+      "src/data/aisStreamAdapter.js",
+      "src/data/aisWatchdog.js"
+    ],
+    "external": ["ws"]
+  },
+  "adsb-lol-source": {
+    "exports": ["./sources/adsb-lol"],
+    "modules": ["src/data/adsbLolFallback.js"],
+    "external": []
   }
 }

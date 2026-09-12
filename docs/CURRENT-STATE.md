@@ -174,6 +174,23 @@ Launch payloads with missing records now say PAYLOAD DATA UNAVAILABLE. Missing n
 
 Updated: August 24, 2026
 
+## Aircraft and vessel server modules
+
+Standalone aircraft routes now live in `server/providers/aircraft/`: OpenSky
+state vectors and regional fallback, adsb.lol military positions, ADSBDB
+enrichment and track backfill. Vessel routes and websocket/watchdog setup live
+in `server/providers/vessels/ais-live.js`; AIS records and recent tracks live
+in `ais-store.js`. Common response caps, request coalescing and query parsing
+have their own modules. `server/providers/local.js` composes these with the
+remaining providers and retains existing named compatibility exports.
+
+`gods-eye-view/server/providers/live` is a Node-only entry for the existing
+plugins and shared request helpers. Importing it starts no sockets or timers.
+The existing aircraft normalizer is separately available through the portable
+`gods-eye-view/sources/adsb-lol` export. Provider URLs, local credentials, cache
+policy, fallback behavior, response shapes and rendering remain unchanged.
+
+
 ## Control names for assistive technology
 
 Scope, Bloom, Sharpen and location search have explicit accessible names.

@@ -13,6 +13,11 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Split aircraft and vessel server providers into focused modules for source
+  fetching, AIS records/tracks and shared request helpers; preserve existing
+  routes, local setup, fallback behavior and rendering.
+
+
 ### Changed
 - Separate explicit browser build settings from standalone environment loading
   and local provider middleware. Preserve provider behavior and root named exports.

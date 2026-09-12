@@ -84,3 +84,19 @@ credential-store paths. Provider Settings writes to the same root `.env` or
 Pinokio store as before. `vite.config.js` preserves the default configuration and
 existing named provider exports for tools/tests. The provider module remains
 large; later extractions should split complete provider families and their tests.
+
+## Aircraft and vessel providers
+
+`server/providers/live.js` exports the existing Node middleware factories and
+request helpers. `aircraft/` owns OpenSky state/fallback, military positions,
+enrichment and track endpoints in separate files. `vessels/ais-live.js` owns
+websocket setup and route responses; `vessels/ais-store.js` owns record ingestion,
+static metadata and recent-track storage. Neither area imports globe rendering.
+`common/http.js` owns capped reads/coalescing; `common/query.js` owns query values.
+
+These plugins retain their existing process-scoped caches and server lifetime.
+Importing the entry does not start acquisition. The AIS plugin disposes its
+socket/watchdog on server close and re-reads configuration after restart.
+The portable `gods-eye-view/sources/adsb-lol` export normalizes existing aircraft
+records without importing Node middleware or a renderer. Browser layer/controller
+separation is outside this server extraction.

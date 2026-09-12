@@ -69,6 +69,10 @@
     "./application/viewer": "./src/app/viewer.js",
     "./build/vite": {
       "node": "./build/vite.js"
-    }
+    },
+    "./server/providers/live": {
+      "node": "./server/providers/live.js"
+    },
+    "./sources/adsb-lol": "./src/data/adsbLolFallback.js"
   }
 }

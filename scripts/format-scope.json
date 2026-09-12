@@ -31,5 +31,18 @@
   "build/vite.js",
   "server/standalone/vite.config.js",
   "vite.config.js",
-  "src/tooling/viteBuild.test.mjs"
+  "src/tooling/viteBuild.test.mjs",
+  "server/providers/common/http.js",
+  "server/providers/common/query.js",
+  "server/providers/aircraft/opensky.js",
+  "server/providers/aircraft/adsb-lol.js",
+  "server/providers/aircraft/enrichment.js",
+  "server/providers/aircraft/tracks.js",
+  "server/providers/vessels/ais-store.js",
+  "server/providers/vessels/ais-live.js",
+  "server/providers/live.js",
+  "src/tooling/liveProviders.test.mjs",
+  "src/data/adsbLolFallback.js",
+  "src/data/aisStreamAdapter.js",
+  "src/data/aisWatchdog.js"
 ]
