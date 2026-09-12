@@ -28,3 +28,17 @@ export function admitSameSite(req, res) {
   res.end(JSON.stringify({ error: verdict.error }));
   return true;
 }
+
+/**
+ * Wrap a middleware handler so cross-site requests are refused with 403
+ * before the handler runs. Loopback tools and same-origin browser requests
+ * pass straight through.
+ * @param {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next?: Function) => unknown} handler
+ * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next?: Function) => unknown}
+ */
+export function sameSiteGated(handler) {
+  return (req, res, next) => {
+    if (admitSameSite(req, res)) return undefined;
+    return handler(req, res, next);
+  };
+}

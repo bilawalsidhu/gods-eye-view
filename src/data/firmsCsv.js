@@ -17,7 +17,14 @@
  */
 
 /** Header fields that must all be present for a payload to count as FIRMS CSV. */
-const REQUIRED_HEADER_FIELDS = ['latitude', 'longitude', 'acq_date', 'acq_time', 'confidence', 'frp'];
+const REQUIRED_HEADER_FIELDS = [
+  'latitude',
+  'longitude',
+  'acq_date',
+  'acq_time',
+  'confidence',
+  'frp',
+];
 
 const HOUR_MS = 3600_000;
 /** Trailing window size for {@link filterTrailing24h}. */
@@ -36,8 +43,10 @@ export function isLikelyCsv(text) {
   if (typeof text !== 'string') return false;
   const trimmed = text.trimStart();
   if (!trimmed || trimmed[0] === '<') return false;
-  const headerLine = trimmed.slice(0, trimmed.indexOf('\n') === -1 ? undefined : trimmed.indexOf('\n'))
-    .trim().toLowerCase();
+  const headerLine = trimmed
+    .slice(0, trimmed.indexOf('\n') === -1 ? undefined : trimmed.indexOf('\n'))
+    .trim()
+    .toLowerCase();
   const fields = headerLine.split(',').map((f) => f.trim());
   return REQUIRED_HEADER_FIELDS.every((required) => fields.includes(required));
 }
@@ -62,8 +71,13 @@ export function parseFirmsCsv(text) {
   // Locate the header (first non-empty line) and build a column index so the
   // parser survives column reordering across FIRMS product versions.
   let headerIndex = 0;
-  while (headerIndex < lines.length && !lines[headerIndex].trim()) headerIndex += 1;
-  const header = lines[headerIndex].trim().toLowerCase().split(',').map((f) => f.trim());
+  while (headerIndex < lines.length && !lines[headerIndex].trim())
+    headerIndex += 1;
+  const header = lines[headerIndex]
+    .trim()
+    .toLowerCase()
+    .split(',')
+    .map((f) => f.trim());
   const col = new Map(header.map((name, i) => [name, i]));
   const iLat = col.get('latitude');
   const iLon = col.get('longitude');
@@ -114,7 +128,8 @@ export function parseFirmsCsv(text) {
  * @returns {number} Epoch ms, or NaN when unparseable.
  */
 export function acquisitionMsUtc(acqDate, acqTime) {
-  if (typeof acqDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(acqDate)) return NaN;
+  if (typeof acqDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(acqDate))
+    return NaN;
   const timeText = String(acqTime ?? '').trim();
   if (!/^\d{1,4}$/.test(timeText)) return NaN;
   const hhmm = timeText.padStart(4, '0');
@@ -123,7 +138,15 @@ export function acquisitionMsUtc(acqDate, acqTime) {
   const day = Number(acqDate.slice(8, 10));
   const hours = Number(hhmm.slice(0, 2));
   const minutes = Number(hhmm.slice(2, 4));
-  if (month < 1 || month > 12 || day < 1 || day > 31 || hours > 23 || minutes > 59) return NaN;
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31 ||
+    hours > 23 ||
+    minutes > 59
+  )
+    return NaN;
   return Date.UTC(year, month - 1, day, hours, minutes);
 }
 

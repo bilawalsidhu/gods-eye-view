@@ -81,6 +81,42 @@
     "./server/providers/space": {
       "node": "./server/providers/space.js"
     },
-    "./sources/space": "./src/data/spaceProviderRequests.js"
+    "./sources/space": "./src/data/spaceProviderRequests.js",
+    "./server/providers/terrain": {
+      "node": "./server/providers/terrain.js"
+    },
+    "./sources/terrain": "./src/data/terrainHeightsProxy.js",
+    "./server/providers/traffic": {
+      "node": "./server/providers/traffic.js"
+    },
+    "./sources/traffic": "./src/data/tomtomTiles.js",
+    "./server/providers/firms": {
+      "node": "./server/providers/firms.js"
+    },
+    "./server/providers/gbfs": {
+      "node": "./server/providers/gbfs.js"
+    },
+    "./sources/gbfs": "./src/data/gbfsSource.js",
+    "./server/providers/cctv": {
+      "node": "./server/providers/cctv.js"
+    },
+    "./server/providers/radio": {
+      "node": "./server/providers/radio.js"
+    },
+    "./server/providers/overpass": {
+      "node": "./server/providers/overpass.js"
+    },
+    "./server/providers/military-installations": {
+      "node": "./server/providers/military-installations.js"
+    },
+    "./server/providers/regional": {
+      "node": "./server/providers/regional.js"
+    },
+    "./server/providers/openai": {
+      "node": "./server/providers/openai.js"
+    },
+    "./server/standalone/key-setup": {
+      "node": "./server/standalone/key-setup.js"
+    }
   }
 }

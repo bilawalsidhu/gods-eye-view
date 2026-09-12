@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 import { filterTrailing24h, parseFirmsCsv } from './firmsCsv.js';
 
-const config = fs.readFileSync(new URL('../../server/providers/local.js', import.meta.url), 'utf8');
+const config = fs.readFileSync(new URL('../../server/providers/firms.js', import.meta.url), 'utf8');
 const start = config.indexOf('  async function refreshUpstream(key) {');
 assert.notEqual(start, -1, 'FIRMS refresh function exists');
 const end = config.indexOf('\n  }', start);

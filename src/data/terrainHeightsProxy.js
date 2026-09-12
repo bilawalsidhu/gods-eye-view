@@ -24,7 +24,10 @@ function defaultSleep(ms) {
 export function parseTerrainPoints(raw) {
   const text = String(raw || '').trim();
   if (!text) return null;
-  const pairs = text.split(';').map((part) => part.trim()).filter(Boolean);
+  const pairs = text
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean);
   if (pairs.length === 0) return null;
   const points = [];
   for (const pair of pairs) {
@@ -83,16 +86,19 @@ export function terrainRetryAfterMs(value, nowMs = Date.now()) {
  * @param {object} [options]
  * @returns {Promise<Array<object>>}
  */
-export async function fetchTerrainChunkWithRetry(points, {
-  fetchImpl = globalThis.fetch,
-  sleep = defaultSleep,
-  random = Math.random,
-  now = Date.now,
-  makeSignal = (timeoutMs) => AbortSignal.timeout(timeoutMs),
-  attemptTimeoutMs = 30_000,
-  retryBudgetMs = TERRAIN_RETRY_BUDGET_MS,
-  maxAttempts = TERRAIN_MAX_ATTEMPTS,
-} = {}) {
+export async function fetchTerrainChunkWithRetry(
+  points,
+  {
+    fetchImpl = globalThis.fetch,
+    sleep = defaultSleep,
+    random = Math.random,
+    now = Date.now,
+    makeSignal = (timeoutMs) => AbortSignal.timeout(timeoutMs),
+    attemptTimeoutMs = 30_000,
+    retryBudgetMs = TERRAIN_RETRY_BUDGET_MS,
+    maxAttempts = TERRAIN_MAX_ATTEMPTS,
+  } = {},
+) {
   const pointsParam = points.map(terrainPointKey).join(';');
   const url = `https://terrain.reearth.land/heights.json?points=${encodeURIComponent(pointsParam)}`;
   let retryStartedAt = null;
@@ -117,7 +123,9 @@ export async function fetchTerrainChunkWithRetry(points, {
       }
       const json = await res.json();
       if (!Array.isArray(json?.results)) {
-        const error = new Error('malformed upstream response (no results array)');
+        const error = new Error(
+          'malformed upstream response (no results array)',
+        );
         error.retryable = false;
         throw error;
       }
@@ -131,14 +139,18 @@ export async function fetchTerrainChunkWithRetry(points, {
       if (remaining <= 0) break;
 
       const retryAfterMs = terrainRetryAfterMs(error?.retryAfter, now());
-      const backoffMs = Math.round(350 * (2 ** attempt) * (0.75 + random() * 0.5));
+      const backoffMs = Math.round(
+        350 * 2 ** attempt * (0.75 + random() * 0.5),
+      );
       const requestedDelay = retryAfterMs ?? backoffMs;
       const delayMs = Math.min(requestedDelay, remaining);
       if (delayMs > 0) await sleep(delayMs);
     }
   }
 
-  throw lastError || new Error('terrain heights upstream retry budget exhausted');
+  throw (
+    lastError || new Error('terrain heights upstream retry budget exhausted')
+  );
 }
 
 /**
@@ -171,7 +183,12 @@ export async function resolveTerrainHeightRequest({
   const missing = [];
   for (const [key, point] of unique) {
     const entry = cache.get(key);
-    if (entry && validTerrainResult(entry.result) && requestStartedAt - entry.at < ttlMs) continue;
+    if (
+      entry &&
+      validTerrainResult(entry.result) &&
+      requestStartedAt - entry.at < ttlMs
+    )
+      continue;
     missing.push({ key, point });
   }
 
@@ -180,7 +197,8 @@ export async function resolveTerrainHeightRequest({
   if (missing.length > 0) {
     try {
       const fetched = await fetchMissing(missing.map((item) => item.point));
-      if (!Array.isArray(fetched)) throw new Error('malformed upstream response (no results array)');
+      if (!Array.isArray(fetched))
+        throw new Error('malformed upstream response (no results array)');
       const fetchedAt = now();
       for (let i = 0; i < missing.length; i += 1) {
         const result = fetched[i];
@@ -188,8 +206,13 @@ export async function resolveTerrainHeightRequest({
         cache.set(missing[i].key, { at: fetchedAt, result });
         cacheChanged = true;
       }
-      if (fetched.length !== missing.length || missing.some((_, i) => !validTerrainResult(fetched[i]))) {
-        upstreamError = new Error('upstream omitted one or more terrain heights');
+      if (
+        fetched.length !== missing.length ||
+        missing.some((_, i) => !validTerrainResult(fetched[i]))
+      ) {
+        upstreamError = new Error(
+          'upstream omitted one or more terrain heights',
+        );
       }
     } catch (error) {
       upstreamError = error;
@@ -203,7 +226,10 @@ export async function resolveTerrainHeightRequest({
   if (results.some((result) => result == null)) {
     return {
       status: 502,
-      body: { error: 'terrain heights fetch failed and no cache available for every point' },
+      body: {
+        error:
+          'terrain heights fetch failed and no cache available for every point',
+      },
       cacheChanged,
       upstreamError,
     };
