@@ -1934,6 +1934,17 @@ body.ui-clean-view #scene-runtime.active {
   border-color: var(--glass-border-hover);
 }
 
+.my-location-btn.following,
+.my-location-btn[aria-pressed="true"] {
+  background: rgba(64, 180, 255, 0.22);
+  border-color: rgba(64, 180, 255, 0.55);
+  box-shadow: 0 0 0 1px rgba(64, 180, 255, 0.25);
+}
+
+.my-location-btn.searching {
+  opacity: 0.65;
+}
+
 #location-search {
   width: 0;
   padding: 0;

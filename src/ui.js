@@ -12,7 +12,13 @@ import {
   clampBloomIntensity,
   decodeBloomIntensity,
 } from './bloom.js';
-import { LOCATIONS, CITY_POIS, GLOBE_VIEW, flyToGlobeView, flyToPresetLocation, flyToPOI, searchAndFlyTo } from './locations.js';
+import { LOCATIONS, CITY_POIS, GLOBE_VIEW, flyToGlobeView, flyToLandmark, flyToPresetLocation, flyToPOI, searchAndFlyTo } from './locations.js';
+import {
+  createPressGesture,
+  getCurrentBrowserPosition,
+  isGeolocationAvailable,
+  watchBrowserPosition,
+} from './browserGeolocation.js';
 import { locationMiniStatus } from './locationStatus.js';
 import { interruptCameraMotion } from './cameraVerbs.js';
 import {
@@ -2443,6 +2449,12 @@ export class StyleManager {
     this._toast = document.getElementById('toast');
     this._locationSearch = document.getElementById('location-search');
     this._searchToggle = document.getElementById('search-toggle');
+    this._myLocationBtn = document.getElementById('my-location-btn');
+    this._myLocationFollow = false;
+    this._myLocationWatch = null;
+    this._myLocationEntity = null;
+    this._myLocationDetachGesture = null;
+    this._myLocationUserInterruptHandler = null;
     this._locationPills = document.getElementById('location-pills');
     this._poiRow = document.getElementById('poi-row');
     this._locationBarDivider = document.getElementById('location-bar-divider');
@@ -9531,6 +9543,207 @@ export class StyleManager {
         }
       }
     });
+
+    this._initMyLocationControl();
+  }
+
+  /**
+   * Wire the My Location control: click = one-shot fly-to GPS, hold = toggle follow.
+   * @returns {void}
+   */
+  _initMyLocationControl() {
+    if (!this._myLocationBtn) return;
+    if (!isGeolocationAvailable()) {
+      this._myLocationBtn.disabled = true;
+      this._myLocationBtn.title = 'Location not supported in this browser';
+      return;
+    }
+
+    const gesture = createPressGesture({
+      holdMs: 550,
+      onClick: () => {
+        void this._goToMyLocation({ follow: false });
+      },
+      onHold: () => {
+        if (this._myLocationFollow) this._stopMyLocationFollow({ toast: 'Stopped following location' });
+        else void this._goToMyLocation({ follow: true });
+      },
+    });
+    this._myLocationDetachGesture = gesture.attach(this._myLocationBtn);
+  }
+
+  /**
+   * Request browser GPS and fly (and optionally follow) the camera there.
+   * @param {{follow?: boolean}} [options]
+   * @returns {Promise<void>}
+   */
+  async _goToMyLocation({ follow = false } = {}) {
+    if (this._disposed) return;
+    if (!isGeolocationAvailable()) {
+      this._showToast('Location not supported in this browser');
+      return;
+    }
+
+    const generation = this._beginDeferredNavigation('location');
+    if (generation === false) return;
+
+    this._myLocationBtn?.classList.add('searching');
+    try {
+      const fix = await getCurrentBrowserPosition();
+      if (this._disposed || generation !== this._navigationGeneration) return;
+      if (!this._reassertNavigationHandoff(generation)) return;
+
+      this._applyMyLocationFix(fix, { follow, generation });
+    } catch (err) {
+      if (this._disposed || generation !== this._navigationGeneration) return;
+      this._showToast(err?.message || 'Could not get your location');
+      if (follow) this._stopMyLocationFollow();
+    } finally {
+      this._myLocationBtn?.classList.remove('searching');
+    }
+  }
+
+  /**
+   * Apply a GPS fix: marker, mini-status, fly-to, and optional live follow.
+   * @param {{lat:number,lon:number,accuracy?:number|null}} fix
+   * @param {{follow?:boolean, generation?:number|null, animate?:boolean}} [options]
+   * @returns {void}
+   */
+  _applyMyLocationFix(fix, { follow = false, generation = null, animate = true } = {}) {
+    if (this._disposed || !fix) return;
+    if (generation != null && generation !== this._navigationGeneration) return;
+
+    const range = Math.min(
+      Math.max(Number(fix.accuracy) > 0 ? Number(fix.accuracy) * 4 : 900, 400),
+      2500,
+    );
+
+    this._ensureMyLocationEntity(fix);
+    this._searchedLocationLabel = 'My location';
+    this._setActiveLocation(null);
+    this._currentPoi = null;
+    this._collapsePOIRow();
+    this._updateLocationMiniStatus();
+
+    if (animate) {
+      const flight = flyToLandmark(this.viewer, fix.lat, fix.lon, {
+        range,
+        pitch: -45,
+        buildingHeight: 0,
+        duration: 2.2,
+        onStart: () => this._beginWorldJumpTransition(),
+        onComplete: () => this._endWorldJumpTransition(),
+        onCancel: () => this._endWorldJumpTransition(),
+      });
+      this._currentTarget = flight?.targetPosition || null;
+    } else if (this._myLocationFollow && this.viewer?.camera) {
+      const target = Cesium.Cartesian3.fromDegrees(fix.lon, fix.lat, 0);
+      this._currentTarget = target;
+      this.viewer.camera.lookAt(
+        target,
+        new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-45), range),
+      );
+      this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    }
+
+    if (follow) this._startMyLocationFollow(fix);
+  }
+
+  /**
+   * Create or update the temporary "you are here" entity.
+   * @param {{lat:number,lon:number}} fix
+   * @returns {void}
+   */
+  _ensureMyLocationEntity(fix) {
+    if (!this.viewer?.entities) return;
+    const position = Cesium.Cartesian3.fromDegrees(fix.lon, fix.lat, 0);
+    if (!this._myLocationEntity) {
+      this._myLocationEntity = this.viewer.entities.add({
+        id: 'gev-my-location',
+        position,
+        point: {
+          pixelSize: 12,
+          color: Cesium.Color.fromCssColorString('#40b4ff'),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 2,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: 'You',
+          font: '12px sans-serif',
+          fillColor: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(0, -18),
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      });
+      return;
+    }
+    this._myLocationEntity.position = position;
+  }
+
+  /**
+   * Begin live GPS follow after an initial fix.
+   * @param {{lat:number,lon:number}} initialFix
+   * @returns {void}
+   */
+  _startMyLocationFollow(initialFix) {
+    this._stopMyLocationFollow({ toast: null, keepEntity: true });
+    this._myLocationFollow = true;
+    this._myLocationBtn?.classList.add('following');
+    this._myLocationBtn?.setAttribute('aria-pressed', 'true');
+    this._myLocationBtn && (this._myLocationBtn.title = 'Following you — hold to stop');
+    this._showToast('Following your location');
+    this._ensureMyLocationEntity(initialFix);
+
+    this._myLocationUserInterruptHandler = () => {
+      if (!this._myLocationFollow) return;
+      this._stopMyLocationFollow({ toast: 'Stopped following location' });
+    };
+    this.viewer?.canvas?.addEventListener('pointerdown', this._myLocationUserInterruptHandler);
+    this.viewer?.canvas?.addEventListener('wheel', this._myLocationUserInterruptHandler, { passive: true });
+
+    this._myLocationWatch = watchBrowserPosition({
+      onUpdate: (fix) => {
+        if (this._disposed || !this._myLocationFollow) return;
+        this._applyMyLocationFix(fix, { follow: false, animate: false });
+      },
+      onError: (err) => {
+        if (this._disposed) return;
+        this._showToast(err?.message || 'Could not get your location');
+        this._stopMyLocationFollow();
+      },
+    });
+  }
+
+  /**
+   * Stop live GPS follow and optionally remove the marker.
+   * @param {{toast?:string|null, keepEntity?:boolean}} [options]
+   * @returns {void}
+   */
+  _stopMyLocationFollow({ toast = null, keepEntity = false } = {}) {
+    this._myLocationWatch?.stop?.();
+    this._myLocationWatch = null;
+    this._myLocationFollow = false;
+    this._myLocationBtn?.classList.remove('following');
+    this._myLocationBtn?.setAttribute('aria-pressed', 'false');
+    if (this._myLocationBtn) {
+      this._myLocationBtn.title = 'My location (click: go there · hold: follow)';
+    }
+    if (this._myLocationUserInterruptHandler) {
+      this.viewer?.canvas?.removeEventListener('pointerdown', this._myLocationUserInterruptHandler);
+      this.viewer?.canvas?.removeEventListener('wheel', this._myLocationUserInterruptHandler);
+      this._myLocationUserInterruptHandler = null;
+    }
+    if (!keepEntity && this._myLocationEntity && this.viewer?.entities) {
+      this.viewer.entities.remove(this._myLocationEntity);
+      this._myLocationEntity = null;
+    }
+    if (toast) this._showToast(toast);
   }
 
   /**
@@ -10422,6 +10635,9 @@ export class StyleManager {
       document.removeEventListener('keydown', this._poiKeydownHandler);
       this._poiKeydownHandler = null;
     }
+    this._myLocationDetachGesture?.();
+    this._myLocationDetachGesture = null;
+    this._stopMyLocationFollow({ toast: null, keepEntity: false });
     // Cancel the rAF animation loop and release its governor hold; also stop
     // the traffic-chip ticker the loop no longer carries. (perf wave 2 fix)
     if (this._animFrameId) {
