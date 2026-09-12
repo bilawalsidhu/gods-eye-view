@@ -1,6 +1,13 @@
 # God's Eye View Current State
 
-## Landmark annotation identity
+## Street traffic dense city panning & viewport optimization
+
+Street traffic (`src/data/traffic.js`, `src/data/trafficBounds.js`) features 4 performance and responsiveness mitigations:
+- **Viewport road prioritization**: Road segments intersecting the active `getViewBounds()` and closest to `getFetchCenter()` are prioritized ahead of peripheral segments in both budget allocation and dot primitive spawning. In dense cores where roads exceed global caps, visible downtown streets directly under the camera are guaranteed dot budgets and spawn first.
+- **Neighbor ring prefetch**: After the primary viewport tile completes loading below `FAST_FETCH_ALTITUDE` (4,500m), background prefetching queues the 8 adjacent cardinal and diagonal neighbor tile bounds into `_tileCache` with low concurrency and 150ms pacing. If the user pans into adjacent blocks, major roads are instantly available from cache without cold-start delays. All prefetching aborts cleanly on camera pans or layer toggle.
+- **Adaptive dot cap by frame time**: `animate()` measures smoothed frame delta and dynamically adjusts the dot cap between 3,000 and 6,000 primitives (coverage first, density second). When frame time exceeds 22ms (<45 FPS), dot budgets scale down smoothly to preserve 60 FPS rendering, recovering toward 6,000 as headroom allows.
+- **Multi-phase sync chip progress**: Exposes `phaseProgressPct` (25% syncing major network, 65% loading local streets, 85% matching traffic flow, 95% prewarming road grid, 100% idle) and `phaseLabel` through `getStats()` to drive `#traffic-sync-chip` multi-phase feedback, seamlessly transitioning to a settled flash upon completion.
+
 
 When a landmark geocode contains only address components, annotations retain
 its requested name for outline matching. A city or neighborhood address no

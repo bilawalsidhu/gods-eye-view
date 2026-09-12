@@ -11,22 +11,17 @@ For the roadmap and open backlog, see the repository issue tracker.
 ## Open
 
 ### Street traffic can be slow/uneven when panning across dense city blocks
-Status: Open (partially mitigated)
+Status: Resolved / Mitigated (shipped 2026-09-12)
 
 Context:
-- Current traffic loader fetches one clamped viewport tile at a time (major pass, then full pass).
-- In dense cores, some visible roads can appear late after city jumps or fast pans.
-- Zooming into adjacent streets does not always immediately trigger higher-detail coverage for all visible roads.
+- Traffic loader previously fetched one clamped viewport tile at a time without viewport prioritization or adjacent tile prefetching.
+- In dense cores, peripheral roads could consume the dot budget before central downtown streets spawned, and rapid panning across city blocks could cause delayed street coverage.
 
-Current mitigation in runtime:
-- Fair per-road dot budget allocation (reduces hard starvation under global `MAX_DOTS` cap).
-- Center-shift threshold (reduces stale overlap lock while panning).
-
-Next iteration candidates:
-- Prioritize currently visible road segments inside the active viewport before off-center segments.
-- Add neighbor prefetch ring for nearby tiles after jump-to-city actions.
-- Add adaptive dot cap by frame time (coverage first, density second).
-- Promote sync chip from loading indicator to true multi-phase progress.
+Resolved mitigations:
+- **Active viewport road prioritization**: Roads intersecting `getViewBounds()` and closest to `getFetchCenter()` are prioritized first in dot budget allocation and spawn loops (`src/data/trafficBounds.js`, `src/data/traffic.js`).
+- **Neighbor ring prefetch**: When primary tile finishes loading below `FAST_FETCH_ALTITUDE`, background prefetching queues adjacent cardinal/diagonal neighbor tiles into `_tileCache` (quiet 150ms intervals; cancelled on camera pan/jump).
+- **Adaptive dot cap by frame time**: Tracks smoothed frame delta in `animate()` and adaptively scales dot primitives between 3,000 and 6,000 (coverage first, density second) under frame drop pressure (>22ms) while restoring 60 FPS headroom.
+- **Multi-phase sync chip progress**: Exposes `phaseProgressPct` (25% syncing major network, 65% loading local streets, 85% matching traffic flow, 95% prewarming road grid, 100% idle) and `phaseLabel` to drive `#traffic-sync-chip` multi-phase feedback.
 
 ---
 

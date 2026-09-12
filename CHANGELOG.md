@@ -11,6 +11,14 @@ Launch payloads with missing records now say PAYLOAD DATA UNAVAILABLE. Missing n
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
+## September 12, 2026
+
+- **Street traffic dense city panning & viewport optimization**:
+  - Prioritized currently visible road segments inside the active viewport and nearest to camera look-at ground center before off-center segments during dot budget allocation and spawning.
+  - Added background neighbor prefetch ring for adjacent 8 tiles after primary tile load completes below 4,500m altitude.
+  - Added adaptive dot cap by frame time (3,000–6,000 dot scaling; coverage first, density second) to maintain 60 FPS during fast pans.
+  - Promoted sync chip from loading indicator to true multi-phase progress (`25% syncing major network`, `65% loading local streets`, `85% matching traffic flow`, `95% prewarming road grid`, `100%` settled flash).
+
 ## [Unreleased]
 
 - Split satellite and launch-feed server providers into focused modules with

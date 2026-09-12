@@ -421,6 +421,18 @@ async function main() {
           }));
           return Promise.resolve(jsonResponse({ msg: 'No error', now: Date.now(), ac }));
         }
+        // Terrain heights: hermetic fallback so regression harness does not fail
+        // when upstream terrain.reearth.land is blocked or unreachable.
+        if (isAppRequest && url.pathname === '/api/terrain/heights') {
+          const raw = url.searchParams.get('points') || '';
+          const pairs = raw.split(';').map((p) => p.trim()).filter(Boolean);
+          const results = pairs.map((pair) => {
+            const [lon, lat] = pair.split(',').map(Number);
+            if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+            return { ellipsoid: 155.0 };
+          });
+          return Promise.resolve(jsonResponse({ results }));
+        }
         return realFetch(input, init);
       };
     }, SYNTH, APP_ORIGIN);

@@ -1,5 +1,11 @@
 import * as Cesium from 'cesium';
-import { deriveFetchCenter, clampBoundsAroundCenter } from './trafficBounds.js';
+import {
+  deriveFetchCenter,
+  clampBoundsAroundCenter,
+  prioritizeRoadsForViewport,
+  computeNeighborRingBounds,
+  calculateAdaptiveDotCap,
+} from './trafficBounds.js';
 import { fetchFlowForBounds, getFlowSessionStats, resetFlowTileCache } from './flowTiles.js';
 import { matchFlowToRoads } from './flowMatch.js';
 import { flowBucket, flowSpeedScale, flowDensityMult } from './trafficFlowStyle.js';
@@ -267,6 +273,20 @@ let _styleListenerBound = false;
  * @type {{free:Cesium.Color, slow:Cesium.Color, jam:Cesium.Color}}
  */
 let _activeBucketColors = { ...FLOW_BUCKET_COLORS };
+/** @type {number} Adaptive dot cap by frame time (clamped 3000–6000) */
+let _adaptiveDotCap = MAX_DOTS;
+/** @type {number} Smoothed frame time in ms */
+let _smoothedFrameTimeMs = 16.7;
+/** @type {number} Multi-phase progress percent (0-100) */
+let _phaseProgressPct = 100;
+/** @type {string} Multi-phase progress label */
+let _phaseLabel = '';
+/** @type {Array<{key:string, bounds:Object, dir:string}>} Neighbor prefetch queue */
+let _prewarmQueue = [];
+/** @type {AbortController|null} Abort controller for neighbor prefetch */
+let _prewarmAbort = null;
+/** @type {boolean} True while neighbor prefetch is running */
+let _prewarming = false;
 /**
  * @const {number} Minimum base pixel size for COLORED dots while a styled
  * preset is active — residential-road dots spawn at 4 px and vanish into
@@ -897,7 +917,16 @@ function animate() {
   const now = Date.now();
   // Delta time in seconds, capped to avoid jumps when returning from background tab
   const dt = _lastAnimTime ? Math.min((now - _lastAnimTime) / 1000, 0.1) : 0.016;
+  const frameMs = _lastAnimTime ? Math.min(now - _lastAnimTime, 100) : 16.7;
   _lastAnimTime = now;
+  _smoothedFrameTimeMs = _smoothedFrameTimeMs * 0.9 + frameMs * 0.1;
+  _animFrame++;
+  if (_animFrame % 30 === 0) {
+    _adaptiveDotCap = calculateAdaptiveDotCap(_smoothedFrameTimeMs, _adaptiveDotCap, {
+      minCap: 3000,
+      maxCap: MAX_DOTS,
+    });
+  }
 
   for (let i = 0; i < _dots.length; i++) {
     const dot = _dots[i];
@@ -1190,12 +1219,83 @@ function onCameraChanged() {
   );
 }
 
+/** Abort in-flight neighbor tile prefetching and clear queue */
+function cancelNeighborPrefetch() {
+  if (_prewarmAbort) {
+    _prewarmAbort.abort();
+    _prewarmAbort = null;
+  }
+  _prewarmQueue = [];
+  _prewarming = false;
+}
+
+/**
+ * Prefetch neighbor ring tiles in the background after primary tile settles.
+ * Fetches major road network only with quiet 150ms intervals.
+ *
+ * @param {{south:number, north:number, west:number, east:number}} clamped
+ * @param {number} altitude
+ * @param {number} generation
+ */
+function scheduleNeighborPrefetch(clamped, altitude, generation) {
+  cancelNeighborPrefetch();
+  if (!_enabled || altitude > FAST_FETCH_ALTITUDE) return;
+
+  const neighbors = computeNeighborRingBounds(clamped);
+  const toPrefetch = [];
+  for (const { dir, bounds } of neighbors) {
+    const key = `${bounds.south.toFixed(4)},${bounds.west.toFixed(4)},${bounds.north.toFixed(4)},${bounds.east.toFixed(4)}`;
+    if (!_tileCache.has(key)) {
+      toPrefetch.push({ key, bounds, dir });
+    }
+  }
+
+  if (toPrefetch.length === 0) return;
+  _prewarmQueue = toPrefetch;
+  _prewarmAbort = new AbortController();
+  const signal = _prewarmAbort.signal;
+
+  (async () => {
+    _prewarming = true;
+    for (let i = 0; i < toPrefetch.length; i++) {
+      if (!_enabled || generation !== _loadGeneration || signal.aborted) break;
+      _prewarmQueue = toPrefetch.slice(i);
+      const item = toPrefetch[i];
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        if (!_enabled || generation !== _loadGeneration || signal.aborted) break;
+        const data = await fetchRoads(
+          item.bounds.south, item.bounds.west, item.bounds.north, item.bounds.east,
+          { majorOnly: true, timeoutSec: 10, signal }
+        );
+        if (!_enabled || generation !== _loadGeneration || signal.aborted) break;
+        const roads = _parseRoads(data);
+        if (!_tileCache.has(item.key)) {
+          if (_tileCache.size >= TILE_CACHE_MAX_ENTRIES) {
+            const oldest = _tileCache.keys().next().value;
+            _tileCache.delete(oldest);
+          }
+          _tileCache.set(item.key, { major: roads, full: null });
+        }
+      } catch (e) {
+        if (e?.name === 'AbortError') break;
+      }
+    }
+    if (generation === _loadGeneration) {
+      _prewarmQueue = [];
+      _prewarming = false;
+      _prewarmAbort = null;
+    }
+  })();
+}
+
 /** Abort any in-flight Overpass fetch and clear the controller reference. */
 function cancelActiveFetch() {
   if (_activeFetchAbort) {
     _activeFetchAbort.abort();
     _activeFetchAbort = null;
   }
+  cancelNeighborPrefetch();
 }
 
 // ─── Live Flow (TomTom) ────────────────────────────────────
@@ -1600,21 +1700,26 @@ function renderRoadsForAltitude(roads, altitude, label, trace = null) {
   // At high altitude, drop minor roads to reduce visual noise
   const filteredRoads = visibleRoadsForAltitude(roads, altitude);
 
+  // Prioritize road segments inside current active viewport and nearest to camera look-at center
+  const viewBounds = getViewBounds();
+  const fetchCenter = getFetchCenter();
+  const prioritizedRoads = prioritizeRoadsForViewport(filteredRoads, viewBounds, fetchCenter);
+
   // Closed roads spawn zero dots (computeDotCount/spawnDotsForRoad) — count
   // them here so the closure signal is visible in stats even at zero dots.
   _closedRoads = _liveMode
-    ? filteredRoads.reduce((n, r) => n + (r.flow?.closure ? 1 : 0), 0)
+    ? prioritizedRoads.reduce((n, r) => n + (r.flow?.closure ? 1 : 0), 0)
     : 0;
 
   // Fade distances must track the camera-to-AREA distance, not assume a
   // nadir view: oblique pitches put the loaded roads many km away even at
   // low altitude. Probe three roads and stretch the curves accordingly.
   let areaDist = altitude;
-  if (_viewer && filteredRoads.length) {
+  if (_viewer && prioritizedRoads.length) {
     const probes = [
-      filteredRoads[0],
-      filteredRoads[Math.floor(filteredRoads.length / 2)],
-      filteredRoads[filteredRoads.length - 1],
+      prioritizedRoads[0],
+      prioritizedRoads[Math.floor(prioritizedRoads.length / 2)],
+      prioritizedRoads[prioritizedRoads.length - 1],
     ];
     for (const probe of probes) {
       const wp = probe?.waypoints?.[0];
@@ -1628,22 +1733,24 @@ function renderRoadsForAltitude(roads, altitude, label, trace = null) {
     renderId,
     renderLabel: label,
     roadCount: roads.length,
-    visibleRoadCount: filteredRoads.length,
+    visibleRoadCount: prioritizedRoads.length,
   }) : null;
-  const roadBudgets = allocateRoadDotBudgets(filteredRoads, altitude, MAX_DOTS);
-  for (let i = 0; i < filteredRoads.length; i++) {
-    const road = filteredRoads[i];
+  const effectiveCap = Math.max(3000, Math.min(MAX_DOTS, _adaptiveDotCap || MAX_DOTS));
+  const roadBudgets = allocateRoadDotBudgets(prioritizedRoads, altitude, effectiveCap);
+  for (let i = 0; i < prioritizedRoads.length; i++) {
+    const road = prioritizedRoads[i];
     const budget = roadBudgets[i] || 0;
     if (budget <= 0) continue;
     spawnDotsForRoad(road, altitude, budget);
-    if (_dots.length >= MAX_DOTS) break;
+    if (_dots.length >= effectiveCap) break;
   }
+  _roads = prioritizedRoads;
 
   const renderMetrics = state ? {
     renderId,
     renderLabel: label,
     roadCount: roads.length,
-    visibleRoadCount: filteredRoads.length,
+    visibleRoadCount: prioritizedRoads.length,
     dotCount: _dots.length,
   } : null;
   if (state) {
@@ -1652,7 +1759,7 @@ function renderRoadsForAltitude(roads, altitude, label, trace = null) {
   }
 
   const heatStart = state ? trafficTimingMark(state, 'rebuild-heat-lines-start', renderMetrics) : null;
-  rebuildHeatLines(filteredRoads);
+  rebuildHeatLines(prioritizedRoads);
   if (state) {
     const heatEnd = trafficTimingMark(state, 'rebuild-heat-lines-end', {
       ...renderMetrics,
@@ -2038,6 +2145,9 @@ async function loadRoadsForBounds(bounds, altitude, trace = null) {
   cancelActiveFetch();
   const clamped = clampBounds(bounds);
 
+  _phaseProgressPct = 25;
+  _phaseLabel = 'syncing major network';
+
   // Cache key: fixed-precision bounding-box string for deterministic lookups
   const cacheKey = `${clamped.south.toFixed(4)},${clamped.west.toFixed(4)},${clamped.north.toFixed(4)},${clamped.east.toFixed(4)}`;
 
@@ -2078,14 +2188,23 @@ async function loadRoadsForBounds(bounds, altitude, trace = null) {
     // but congestion data has a 120s shelf life. The race renders within
     // FLOW_RENDER_RACE_MS either way; late flow recolors in place.
     if (cache.full) {
+      _phaseProgressPct = 85;
+      _phaseLabel = 'matching traffic flow';
       renderedSomething = await applyFlowThenRender(
         cache.full, clamped, generation, altitude, 'Cache full', trace
       );
+      if (renderedSomething) {
+        _phaseProgressPct = 100;
+        _phaseLabel = '';
+        scheduleNeighborPrefetch(clamped, altitude, generation);
+      }
       return;
     }
 
     // Intermediate path: render cached major roads while fetching the rest
     if (cache.major) {
+      _phaseProgressPct = 65;
+      _phaseLabel = 'loading local streets';
       if (!await applyFlowThenRender(
         cache.major, clamped, generation, altitude, 'Cache major', trace
       )) return;
@@ -2102,6 +2221,8 @@ async function loadRoadsForBounds(bounds, altitude, trace = null) {
       // Discard stale response if a newer load was triggered while waiting
       if (generation !== _loadGeneration) return;
       cache.major = _parseRoads(majorData, trace);
+      _phaseProgressPct = 65;
+      _phaseLabel = 'loading local streets';
       if (!await applyFlowThenRender(
         cache.major, clamped, generation, altitude, 'Loaded major', trace
       )) return;
@@ -2109,9 +2230,16 @@ async function loadRoadsForBounds(bounds, altitude, trace = null) {
     }
 
     // At higher altitude, major roads provide sufficient motion density
-    if (altitude > FAST_FETCH_ALTITUDE) return;
+    if (altitude > FAST_FETCH_ALTITUDE) {
+      _phaseProgressPct = 100;
+      _phaseLabel = '';
+      scheduleNeighborPrefetch(clamped, altitude, generation);
+      return;
+    }
 
     // Detailed pass: fetch the full road graph (tertiary, residential, etc.)
+    _phaseProgressPct = 75;
+    _phaseLabel = 'loading local streets';
     _activeFetchAbort = new AbortController();
     console.log(`[Data:Traffic] Full fetch local roads [${cacheKey}]`);
     const fullData = await fetchRoads(
@@ -2122,10 +2250,15 @@ async function loadRoadsForBounds(bounds, altitude, trace = null) {
     if (generation !== _loadGeneration) return;
 
     cache.full = _parseRoads(fullData, trace);
+    _phaseProgressPct = 85;
+    _phaseLabel = 'matching traffic flow';
     if (!await applyFlowThenRender(
       cache.full, clamped, generation, altitude, 'Loaded full', trace
     )) return;
     renderedSomething = true;
+    _phaseProgressPct = 100;
+    _phaseLabel = '';
+    scheduleNeighborPrefetch(clamped, altitude, generation);
 
   } catch (e) {
     if (e?.name === 'AbortError') return;
@@ -2140,6 +2273,8 @@ async function loadRoadsForBounds(bounds, altitude, trace = null) {
       if (!renderedSomething) {
         _lastBounds = prevBounds;
         _lastViewCenter = prevViewCenter;
+        _phaseProgressPct = 100;
+        _phaseLabel = '';
       }
     }
     _activeFetchAbort = null;
@@ -2157,6 +2292,8 @@ function clearDots() {
   _count = 0;
   _bucketCounts = { free: 0, slow: 0, jam: 0, sim: 0 };
   _closedRoads = 0;
+  _phaseProgressPct = 100;
+  _phaseLabel = '';
 }
 
 // ─── Data Layer Interface ──────────────────────────────────
@@ -2204,6 +2341,13 @@ const trafficLayer = {
     _lastViewCenter = null;
     _flowCoveragePct = 0;
     _flowError = null;
+    _adaptiveDotCap = MAX_DOTS;
+    _smoothedFrameTimeMs = 16.7;
+    _phaseProgressPct = 100;
+    _phaseLabel = '';
+    _prewarmQueue = [];
+    _prewarmAbort = null;
+    _prewarming = false;
     if (TRAFFIC_TIMING_ENABLED) {
       _trafficTimingCurrentAnchor = null;
       _trafficTimingSequence = 0;
@@ -2443,8 +2587,11 @@ const trafficLayer = {
     removeHeatLines();
     _tileCache.clear();
     resetFlowTileCache();
+    cancelNeighborPrefetch();
     _count = 0;
     _lastUpdate = null;
+    _phaseProgressPct = 100;
+    _phaseLabel = '';
   },
 
   /**
@@ -2499,6 +2646,10 @@ const trafficLayer = {
       // SIMULATED mode is surfaced, and it must never imply a live feed the
       // layer does not have.
       loadingLabel: feed.loadingLabel,
+      phaseProgressPct: loading ? _phaseProgressPct : 100,
+      phaseLabel: loading ? _phaseLabel : '',
+      prewarmQueueDepth: _prewarmQueue.length,
+      adaptiveDotCap: _adaptiveDotCap,
     };
   },
 };

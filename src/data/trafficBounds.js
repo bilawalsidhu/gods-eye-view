@@ -136,3 +136,150 @@ export function clampBoundsAroundCenter(bounds, center, maxSpanDeg = 0.05) {
     east: center.lon + lonSpan / 2,
   };
 }
+
+/**
+ * Check if a lat/lon coordinate falls inside bounding box.
+ *
+ * @param {number} lat
+ * @param {number} lon
+ * @param {{south:number, west:number, north:number, east:number}} bounds
+ * @returns {boolean}
+ */
+export function isCoordInBounds(lat, lon, bounds) {
+  if (!bounds) return false;
+  return lat >= bounds.south && lat <= bounds.north &&
+         lon >= bounds.west && lon <= bounds.east;
+}
+
+/**
+ * Check if a road's polyline intersects or touches a bounding box.
+ *
+ * @param {{coords:number[][]}} road - Road object with coords as [lon, lat] pairs.
+ * @param {{south:number, west:number, north:number, east:number}} bounds
+ * @returns {boolean}
+ */
+export function roadIntersectsBounds(road, bounds) {
+  if (!bounds || !road?.coords?.length) return false;
+  let rSouth = Infinity, rNorth = -Infinity, rWest = Infinity, rEast = -Infinity;
+  for (let i = 0; i < road.coords.length; i++) {
+    const [lon, lat] = road.coords[i];
+    if (lat >= bounds.south && lat <= bounds.north && lon >= bounds.west && lon <= bounds.east) {
+      return true;
+    }
+    if (lat < rSouth) rSouth = lat;
+    if (lat > rNorth) rNorth = lat;
+    if (lon < rWest) rWest = lon;
+    if (lon > rEast) rEast = lon;
+  }
+  return !(rNorth < bounds.south || rSouth > bounds.north || rEast < bounds.west || rWest > bounds.east);
+}
+
+const ROAD_TYPE_PRIORITY = {
+  motorway: 6,
+  trunk: 5,
+  primary: 4,
+  secondary: 3,
+  tertiary: 2,
+  residential: 1,
+  unclassified: 0,
+};
+
+/**
+ * Sort road segments prioritizing:
+ *  1. Segments intersecting current visible viewport bounds
+ *  2. Proximity to camera fetch center
+ *  3. Road class hierarchy (major arterial before residential)
+ *
+ * @param {Array} roads
+ * @param {{south:number, north:number, west:number, east:number}|null} viewBounds
+ * @param {{lat:number, lon:number}|null} center
+ * @returns {Array} New array with prioritized road order
+ */
+export function prioritizeRoadsForViewport(roads, viewBounds, center) {
+  if (!Array.isArray(roads) || roads.length <= 1) return roads ? [...roads] : [];
+  return [...roads].sort((a, b) => {
+    const aInView = viewBounds ? roadIntersectsBounds(a, viewBounds) : true;
+    const bInView = viewBounds ? roadIntersectsBounds(b, viewBounds) : true;
+    if (aInView !== bInView) return aInView ? -1 : 1;
+
+    if (center && Number.isFinite(center.lat) && Number.isFinite(center.lon)) {
+      const aCoord = a.coords?.[0];
+      const bCoord = b.coords?.[0];
+      if (aCoord && bCoord) {
+        const aDist = greatCircleKm(center.lat, center.lon, aCoord[1], aCoord[0]);
+        const bDist = greatCircleKm(center.lat, center.lon, bCoord[1], bCoord[0]);
+        const distDiff = aDist - bDist;
+        if (Math.abs(distDiff) > 0.4) {
+          return distDiff;
+        }
+      }
+    }
+
+    const aPri = ROAD_TYPE_PRIORITY[a.type] ?? 0;
+    const bPri = ROAD_TYPE_PRIORITY[b.type] ?? 0;
+    return bPri - aPri;
+  });
+}
+
+/**
+ * Compute the 8 adjacent neighbor bounding boxes around a clamped tile.
+ * Cardinal directions (N, S, E, W) come first, followed by diagonals (NE, NW, SE, SW).
+ *
+ * @param {{south:number, north:number, west:number, east:number}} bounds
+ * @returns {Array<{direction:string, bounds:{south:number, north:number, west:number, east:number}}>}
+ */
+export function computeNeighborRingBounds(bounds) {
+  if (!bounds) return [];
+  const latSpan = bounds.north - bounds.south;
+  const lonSpan = bounds.east - bounds.west;
+  const directions = [
+    { dir: 'N',  dLat: 1,  dLon: 0 },
+    { dir: 'S',  dLat: -1, dLon: 0 },
+    { dir: 'E',  dLat: 0,  dLon: 1 },
+    { dir: 'W',  dLat: 0,  dLon: -1 },
+    { dir: 'NE', dLat: 1,  dLon: 1 },
+    { dir: 'NW', dLat: 1,  dLon: -1 },
+    { dir: 'SE', dLat: -1, dLon: 1 },
+    { dir: 'SW', dLat: -1, dLon: -1 },
+  ];
+  return directions.map(({ dir, dLat, dLon }) => ({
+    direction: dir,
+    bounds: {
+      south: bounds.south + dLat * latSpan,
+      north: bounds.north + dLat * latSpan,
+      west: bounds.west + dLon * lonSpan,
+      east: bounds.east + dLon * lonSpan,
+    },
+  }));
+}
+
+/**
+ * Calculate adaptive dot cap based on instantaneous or smoothed frame time.
+ * Covers coverage first (keeps minimum dots), reduces cap when frame drops below 45 FPS (22ms).
+ *
+ * @param {number} frameTimeMs
+ * @param {number} [currentCap=6000]
+ * @param {Object} [options]
+ * @returns {number}
+ */
+export function calculateAdaptiveDotCap(frameTimeMs, currentCap = 6000, options = {}) {
+  const {
+    minCap = 3000,
+    maxCap = 6000,
+    targetFrameTimeMs = 16.7,
+    degradeFrameTimeMs = 22.0,
+    stepDown = 300,
+    stepUp = 100,
+  } = options;
+
+  if (!Number.isFinite(frameTimeMs) || frameTimeMs <= 0) {
+    return Math.max(minCap, Math.min(maxCap, currentCap));
+  }
+
+  if (frameTimeMs > degradeFrameTimeMs) {
+    return Math.max(minCap, currentCap - stepDown);
+  } else if (frameTimeMs <= targetFrameTimeMs) {
+    return Math.min(maxCap, currentCap + stepUp);
+  }
+  return currentCap;
+}
