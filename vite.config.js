@@ -3543,6 +3543,44 @@ const CALTRANS_ANCHORS = [
   { lat: 38.5816, lon: -121.4944 }, // Sacramento
 ];
 /** TfL JamCams: one keyless list endpoint; frames live on a public S3 bucket. */
+const RWS_CAMERAS_URL = 'https://api.rwsverkeersinfo.nl/api/cameras/';
+const RWS_IMAGE_ORIGIN = 'https://stream.inmoves.nl/';
+const DEFAULT_RWS_MAX_SOURCES = 60;
+/** Rotterdam and Utrecht: the two busiest anchors in the national camera set. */
+const RWS_ANCHORS = [
+  { lat: 51.9225, lon: 4.4792 },
+  { lat: 52.0907, lon: 5.1214 },
+];
+
+/**
+ * Hosts that answer a frame request with HTTP 401 and a placeholder image
+ * unless a Referer is present. Measured 2026-09-11: stream.inmoves.nl returns
+ * a 1093-byte 320x180 PNG without one and the real JPEG with one, so a camera
+ * pack pointing there is silently blank until this header is sent.
+ */
+const CCTV_REFERER_BY_HOST = Object.freeze({
+  'stream.inmoves.nl': 'https://www.rwsverkeersinfo.nl/',
+});
+
+/**
+ * Upstream request headers for one camera URL.
+ *
+ * Exported so the host-specific Referer is asserted in tests rather than
+ * rediscovered the next time a pack goes blank.
+ * @param {string} url - Absolute upstream frame or media URL.
+ * @returns {Record<string,string>}
+ */
+export function cctvUpstreamHeaders(url) {
+  const headers = { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' };
+  try {
+    const referer = CCTV_REFERER_BY_HOST[new URL(String(url)).hostname];
+    if (referer) headers.Referer = referer;
+  } catch {
+    // Not an absolute URL: nothing host-specific to add.
+  }
+  return headers;
+}
+
 const TFL_JAMCAM_URL = 'https://api.tfl.gov.uk/Place/Type/JamCam';
 const TFL_IMAGE_ORIGIN = 'https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/';
 const DEFAULT_TFL_MAX_SOURCES = 250;
@@ -4173,6 +4211,80 @@ async function loadTflSourcesFromOpenData() {
 }
 
 /**
+ * Load the Rijkswaterstaat national motorway camera register.
+ *
+ * Twenty-six cameras on the A1-A27, published as open data with coordinates.
+ * Unlike the city packs these sit on motorway gantries, so the mount height and
+ * range priors are larger and the pitch is shallower.
+ *
+ * The register carries no bearing, so heading falls back to the id hash at low
+ * confidence — the same treatment headingless Austin and TfL cameras get, and
+ * the reason the drag-to-calibrate gizmo exists.
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+async function loadRwsSourcesFromOpenData() {
+  try {
+    const resp = await fetch(RWS_CAMERAS_URL, {
+      headers: { Accept: 'application/json', 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn('[CCTV] Rijkswaterstaat camera download failed:', resp.status);
+      return [];
+    }
+    const rows = await resp.json();
+    if (!Array.isArray(rows)) return [];
+
+    const cameras = [];
+    for (const row of rows) {
+      const lat = toFiniteNumber(row?.latitude);
+      const lon = toFiniteNumber(row?.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      const imageUrl = String(row?.static_url || '');
+      if (!imageUrl.startsWith(RWS_IMAGE_ORIGIN)) continue; // official-origin pin
+      const rawId = String(row?.id ?? '').trim();
+      if (!rawId) continue;
+
+      const road = String(row?.road || '').trim();
+      const near = String(row?.near || '').trim();
+      const cameraId = `rws-${rawId}`;
+      cameras.push({
+        id: cameraId,
+        name: [road, near].filter(Boolean).join(' — ') || `RWS ${rawId}`,
+        city: near || 'Nederland',
+        cityId: 'rws-nl',
+        provider: 'Rijkswaterstaat',
+        lat,
+        lon,
+        headingDeg: fallbackHeadingFromId(cameraId),
+        headingConfidence: 'low',
+        // Gantry-mounted and aimed down the carriageway: shallower and further
+        // than a street camera, and higher off the ground.
+        pitchDeg: -12,
+        fovDeg: 40,
+        rangeM: 320,
+        mountHeightM: 10,
+        groundElevationM: 2, // Dutch motorway prior; the one-shot snap corrects it.
+        feedType: 'image',
+        url: imageUrl,
+        snapshotUrl: imageUrl,
+        sourceKind: 'rws-open-data',
+        license: 'Rijkswaterstaat open data (CC0)',
+      });
+    }
+
+    const maxRaw = Number(process.env.CCTV_RWS_MAX_SOURCES || DEFAULT_RWS_MAX_SOURCES);
+    const maxCount = Number.isFinite(maxRaw) ? Math.max(4, Math.min(200, Math.floor(maxRaw))) : DEFAULT_RWS_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, RWS_ANCHORS);
+    console.log(`[CCTV] Loaded Rijkswaterstaat sources: ${cameras.length} available (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] Rijkswaterstaat camera download error:', error?.message || error);
+    return [];
+  }
+}
+
+/**
  * Normalize a raw CCTV source item into a canonical shape with safe defaults.
  *
  * @param {object} item - Raw source from file, env, or Austin Open Data.
@@ -4248,22 +4360,29 @@ async function refreshCctvSources() {
   // Austin-only fetch, now governing all three. Each pack fails independently.
   const needsLiveSources = forceAustin || ((fromFile.length + fromEnv.length) === 0 && preferAustin);
   const tflEnabled = String(process.env.CCTV_TFL_ENABLED || '1').trim() !== '0';
+  const rwsEnabled = String(process.env.CCTV_RWS_ENABLED || '1').trim() !== '0';
 
   let fromAustin = [];
   let fromCaltrans = [];
   let fromTfl = [];
+  let fromRws = [];
   if (needsLiveSources) {
-    const [austinResult, caltransResult, tflResult] = await Promise.allSettled([
+    const [austinResult, caltransResult, tflResult, rwsResult] = await Promise.allSettled([
       loadAustinSourcesFromOpenData(),
       loadCaltransSourcesFromOpenData(),
       tflEnabled ? loadTflSourcesFromOpenData() : Promise.resolve([]),
+      rwsEnabled ? loadRwsSourcesFromOpenData() : Promise.resolve([]),
     ]);
     fromAustin = austinResult.status === 'fulfilled' ? austinResult.value : [];
     fromCaltrans = caltransResult.status === 'fulfilled' ? caltransResult.value : [];
     fromTfl = tflResult.status === 'fulfilled' ? tflResult.value : [];
+    fromRws = rwsResult.status === 'fulfilled' ? rwsResult.value : [];
   }
   // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
-  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromFile, ...fromEnv];
+  // RWS leads the live packs because the catalog cap below is a blind slice of
+  // the merged order: a 26-camera national pack added last would be the first
+  // thing silently dropped once the other packs grow past CCTV_MAX_SOURCES.
+  const merged = [...fromRws, ...fromAustin, ...fromCaltrans, ...fromTfl, ...fromFile, ...fromEnv];
 
   // Deduplicate by camera ID (last-write wins because of Map.set)
   const byId = new Map();
@@ -4489,7 +4608,7 @@ export async function fetchCctvImageFromUpstream(url, {
   }, timeoutMs);
   try {
     const upstream = await fetchImpl(url, {
-      headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
+      headers: cctvUpstreamHeaders(url),
       signal: controller.signal,
     });
     const contentType = upstream.headers.get('content-type') || '';
@@ -4666,7 +4785,7 @@ function cctvProxy() {
             }
 
             try {
-              const upstreamHeaders = { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' };
+              const upstreamHeaders = cctvUpstreamHeaders(mediaUrl);
               const requestRange = req.headers?.range;
               if (requestRange) upstreamHeaders.Range = requestRange;
               const upstream = await fetch(mediaUrl, {
