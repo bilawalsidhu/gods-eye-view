@@ -63,9 +63,9 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Fixed
 
-- Terrain heights keep resolving when Re:Earth slows down. Upstream batches are
-  sized against measured response latency so a request completes inside its
-  timeout instead of failing wholesale, and a partial upstream failure now
+- Reduce terrain-height timeouts when Re:Earth slows down. Batches are
+  sized against measured response latency on both browser and server to reduce
+  request timeouts, and a partial upstream failure now
   keeps the heights that did resolve rather than discarding them. A position
   the upstream answers with no height is reported as an absent reading instead
   of a failed refresh, so the log distinguishes a slow or broken upstream from

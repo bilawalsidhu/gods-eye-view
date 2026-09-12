@@ -73,7 +73,12 @@ export function validTerrainResult(result) {
  */
 export function absentTerrainDatum(result) {
   return (
-    typeof result === 'object' && result !== null && !validTerrainResult(result)
+    typeof result === 'object' &&
+    result !== null &&
+    !Array.isArray(result) &&
+    result.ellipsoid === null &&
+    result.geoid === null &&
+    Number.isFinite(result.elevation)
   );
 }
 
@@ -229,7 +234,7 @@ export async function resolveTerrainHeightRequest({
           // left uncached: the next poll re-asks and usually succeeds.
           absentPoints += 1;
         } else {
-          // Null/undefined: the position was dropped entirely.
+          // Missing or malformed positions remain upstream faults.
           omittedPositions += 1;
         }
       }

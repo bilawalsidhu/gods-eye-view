@@ -212,3 +212,18 @@ test('a dropped position remains a genuine upstream fault', async () => {
   assert.match(response.upstreamError.message, /omitted/);
   assert.equal(response.absentPoints, 0, 'an omission is not an absence');
 });
+
+test('malformed height objects remain refresh failures, not absent readings', async () => {
+  for (const row of [{}, [], { ellipsoid: '0' }, { ellipsoid: null }]) {
+    const response = await resolveTerrainHeightRequest({
+      points: [[1, 2]],
+      cache: new Map(),
+      ttlMs: 10_000,
+      fetchMissing: async () => [row],
+    });
+    assert.equal(response.status, 502);
+    assert.ok(response.upstreamError);
+    assert.equal(response.absentPoints, 0);
+    assert.equal(response.cacheChanged, false);
+  }
+});

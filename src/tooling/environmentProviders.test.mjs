@@ -258,3 +258,40 @@ test('GBFS keeps host/path/method guards, response caps and distinct information
   );
   assert.equal((await request(target('station_status.json'))).status, 502);
 });
+
+test('terrain middleware retains successful chunks around a failure and retries only missing points', async (t) => {
+  isolate(t);
+  const requests = [];
+  let fail = true;
+  t.mock.method(globalThis, 'fetch', async (raw) => {
+    const points = new URL(raw).searchParams
+      .get('points')
+      .split(';')
+      .map((p) => p.split(',').map(Number));
+    requests.push(points);
+    if (fail && points[0][0] === 0.64) return new Response('', { status: 400 });
+    return Response.json({
+      results: points.map(([lon]) => ({ ellipsoid: lon + 100 })),
+    });
+  });
+  const request = install(terrainHeightsProxy());
+  const points = Array.from({ length: 130 }, (_, i) => `${i / 100},1`);
+  const url = '/?points=' + points.join(';');
+  assert.equal((await request(url)).status, 502);
+  assert.deepEqual(
+    requests.map((p) => p.length),
+    [64, 64, 2],
+  );
+  fail = false;
+  const recovered = await request(url);
+  assert.equal(recovered.status, 200);
+  assert.deepEqual(
+    requests[3],
+    Array.from({ length: 64 }, (_, i) => [(i + 64) / 100, 1]),
+  );
+  assert.deepEqual(
+    json(recovered).results,
+    Array.from({ length: 130 }, (_, i) => ({ ellipsoid: i / 100 + 100 })),
+  );
+  assert.equal(requests.length, 4);
+});
