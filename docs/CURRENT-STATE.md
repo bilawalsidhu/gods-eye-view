@@ -71,6 +71,12 @@ editing. `.env.example` and `pinokio/_ENVIRONMENT` document the two entries.
 The Street View headings tool uses the same server-first selection after
 resolving environment overrides per variable; its explicit `--key` wins.
 
+On Windows, Provider Settings restricts the credential file to the current
+user, SYSTEM, and Administrators, then verifies that exact DACL with native
+Windows PowerShell 5.1. The verifier supplies the native 5.1 security-module
+path explicitly, so launching the dev server from PowerShell 7 cannot make
+`Get-Acl` disappear through an inherited, incompatible `PSModulePath`.
+
 
 ## Infrastructure marker visibility
 

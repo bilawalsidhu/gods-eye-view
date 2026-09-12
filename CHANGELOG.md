@@ -45,6 +45,10 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Fixed
 
+- Provider Settings can save credentials when the Windows dev server is
+  launched from PowerShell 7. The Windows PowerShell 5.1 ACL verifier uses its
+  native security module path instead of inheriting incompatible module paths.
+
 - Separate optional Google server credentials for Places and Street View from
   the browser key, contributed by Tom-Neverwinter (#110). Provider Settings,
   Pinokio's app-specific credential handling and setup diagnostics recognize

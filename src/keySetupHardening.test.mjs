@@ -119,11 +119,60 @@ test('Windows hardening applies and then verifies the exact restricted DACL', ()
   assert.equal(calls[1].args.filter((arg) => arg === '/grant:r').length, 1);
   assert.equal(calls[2].options.env.GEV_ACL_FILE, filepath);
   assert.equal(calls[2].options.env.GEV_ACL_USER_SID, USER_SID);
+  assert.equal(
+    calls[2].options.env.PSModulePath,
+    `${WINDOWS_ROOT}\\System32\\WindowsPowerShell\\v1.0\\Modules`,
+  );
   assert.match(calls[2].args.at(-1), /AreAccessRulesProtected/);
   assert.match(calls[2].args.at(-1), /rules\.Count -ne 3/);
   assert.match(calls[2].args.at(-1), /seen\.ContainsKey/);
   assert.match(calls[2].args.at(-1), /FileSystemRights -ne \$full/);
   assert.match(calls[2].args.at(-1), /seen\.Count -ne 3/);
+});
+
+test('Windows ACL verification cannot inherit PowerShell 7 module paths or reserved aliases', () => {
+  const calls = [];
+  const filepath = 'C:\\GEV\\ENVIRONMENT.tmp';
+  const result = hardenCredentialFile(filepath, {
+    platform: 'win32',
+    environment: {
+      SYSTEMROOT: WINDOWS_ROOT,
+      PSModulePath: 'C:\\Program Files\\PowerShell\\Modules',
+      psmodulepath: 'C:\\attacker\\Modules',
+      gev_acl_file: 'C:\\attacker\\secrets.txt',
+      GeV_AcL_UsEr_SiD: 'S-1-5-32-545',
+      KEEP_ME: 'preserved',
+    },
+    fileSystem: windowsFileSystem(),
+    spawn(command, args, options) {
+      calls.push({ command, args, options });
+      if (command.endsWith('\\whoami.exe')) {
+        return { status: 0, signal: null, stdout: `"WORKSTATION\\alice","${USER_SID}"` };
+      }
+      return { status: 0, signal: null };
+    },
+  });
+  assert.equal(result, true);
+  const verificationEnvironment = calls.at(-1).options.env;
+  assert.equal(
+    verificationEnvironment.PSModulePath,
+    `${WINDOWS_ROOT}\\System32\\WindowsPowerShell\\v1.0\\Modules`,
+  );
+  assert.equal(verificationEnvironment.GEV_ACL_FILE, filepath);
+  assert.equal(verificationEnvironment.GEV_ACL_USER_SID, USER_SID);
+  assert.equal(verificationEnvironment.KEEP_ME, 'preserved');
+  assert.equal(
+    Object.keys(verificationEnvironment).filter((name) => name.toLowerCase() === 'psmodulepath').length,
+    1,
+  );
+  assert.equal(
+    Object.keys(verificationEnvironment).filter((name) => name.toLowerCase() === 'gev_acl_file').length,
+    1,
+  );
+  assert.equal(
+    Object.keys(verificationEnvironment).filter((name) => name.toLowerCase() === 'gev_acl_user_sid').length,
+    1,
+  );
 });
 
 test('Windows hardening bypasses PATH-shadowed native ACL tools', () => {

@@ -86,7 +86,34 @@ function resolveWindowsNativeTools(environment, fileSystem, architecture) {
   } catch {
     return null;
   }
-  return expected;
+  return {
+    ...expected,
+    powershellModulePath: path.win32.join(
+      systemRoot,
+      'System32',
+      'WindowsPowerShell',
+      'v1.0',
+      'Modules',
+    ),
+  };
+}
+
+/** Build a deterministic environment for Windows PowerShell 5.1 ACL checks. */
+function windowsAclVerificationEnvironment(environment, modulePath, filepath, sid) {
+  const reserved = new Set(['psmodulepath', 'gev_acl_file', 'gev_acl_user_sid']);
+  const clean = Object.fromEntries(
+    Object.entries(environment).filter(([name]) => !reserved.has(name.toLowerCase())),
+  );
+  return {
+    ...clean,
+    // PowerShell 7 prepends its own module directories to PSModulePath. If
+    // Windows PowerShell 5.1 inherits those paths, Microsoft.PowerShell.Security
+    // can fail to load because both versions register the same type data, which
+    // makes Get-Acl unavailable. This verifier needs only the native 5.1 module.
+    PSModulePath: modulePath,
+    GEV_ACL_FILE: filepath,
+    GEV_ACL_USER_SID: sid,
+  };
 }
 
 /**
@@ -148,11 +175,12 @@ export function hardenCredentialFile(filepath, {
       '-NonInteractive',
       '-Command', WINDOWS_ACL_VERIFY_SCRIPT,
     ], {
-      env: {
-        ...environment,
-        GEV_ACL_FILE: filepath,
-        GEV_ACL_USER_SID: sid,
-      },
+      env: windowsAclVerificationEnvironment(
+        environment,
+        tools.powershellModulePath,
+        filepath,
+        sid,
+      ),
       stdio: 'ignore',
       windowsHide: true,
     });
