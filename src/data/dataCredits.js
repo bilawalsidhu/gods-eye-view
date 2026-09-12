@@ -132,6 +132,13 @@ export const DATA_CREDITS = [
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },
   {
+    key: 'mapillary',
+    html:
+      'Street-level imagery and metadata: ' +
+      '<a href="https://www.mapillary.com/" target="_blank" rel="noopener">Mapillary</a> contributors ' +
+      '(CC BY-SA)',
+  },
+  {
     key: 'radio-browser',
     html:
       'Internet-radio station directory: ' +
@@ -199,6 +206,15 @@ export const NATURAL_EARTH_CREDIT = {
   html:
     'Physical region boundaries from ' +
     '<a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> (public domain)',
+};
+
+/** Mapillary requires visible linked attribution while its imagery or extracted
+ * API data is displayed. The layer creates an on-screen Cesium.Credit from
+ * this entry in addition to the always-present lightbox entry above. */
+export const MAPILLARY_CREDIT = {
+  key: 'mapillary',
+  html:
+    '© <a href="https://www.mapillary.com/" target="_blank" rel="noopener">Mapillary</a> contributors',
 };
 
 /** @type {Set<string>} Keys of dynamic credits already registered this session. */

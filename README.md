@@ -264,7 +264,7 @@ Twenty-eight tools, four jobs — the commands below come straight from the prod
 
 ## 🛰️ What's on the Globe
 
-Thirteen layers and map sources. **Eleven have a keyless path.** Some offer additional capabilities with a provider key. (🟢 no key · 🟡 free key · 🔴 metered.)
+Fourteen layers and map sources. **Eleven have a keyless path.** Some offer additional capabilities with a provider key. (🟢 no key · 🟡 free key · 🔴 metered.)
 
 | Layer | What you get | Source | Auth |
 |-------|--------------|--------|------|
@@ -278,6 +278,7 @@ Thirteen layers and map sources. **Eleven have a keyless path.** Some offer addi
 | 📹 **CCTV Mesh** | ~800 public cameras projected *into* the 3D space — Austin · California (Caltrans) · London (TfL). Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs | 🟢 |
 | 📻 **Radio** | Geolocated world radio with an **analog tuner** — drag the needle across up to 750 stations and the globe flies to each broadcaster | Radio Browser / broadcasters | 🟢 |
 | 🚲 **Bikeshare** | Live station availability | GBFS | 🟢 |
+| ⬡ **Mapillary Imagery** | Close-zoom crowdsourced street-level imagery with camera direction, `ALL` / `12M` / `30D` filters, a selected-image preview, and click-through to the original | Mapillary | 🟡 |
 | 🔥 **Active Fires** | Live NASA FIRMS detections, trailing 24h | NASA FIRMS | 🟡 |
 | 🚀 **Space Missions** | Rolling 30-day launches with payload, stage, and recovery detail | Launch Library 2 | 🟢 (🟡 optional token raises the allowance) |
 | 🎖️ **Mapped Installations** | Viewport-bounded military-site context from community mapping — incomplete by nature, and labeled that way | OpenStreetMap | 🟢 |
@@ -289,6 +290,15 @@ Thirteen layers and map sources. **Eleven have a keyless path.** Some offer addi
 | 🟢 Nothing | Esri World Imagery satellite basemap + keyless terrain, in 2D. OSM takes over automatically if Esri is unreachable; if terrain is unavailable the globe continues without it |
 | 🟡 A free Cesium ion token | **Google Photorealistic 3D cities** and world terrain — eligible personal, non-commercial use; current ion terms and quotas apply |
 | 🔴 A Google Maps key | The same 3D direct from Google, plus in-app place search — the billing-enabled, metered route |
+
+**Mapillary is an optional street-level layer.** Add a
+`MAPILLARY_ACCESS_TOKEN`, enable **Mapillary Imagery**, and zoom below 7 km.
+The layer requests only the small area around the current view, spaces dense
+capture runs into a readable sample, and lets you filter to the last 12 months
+or 30 days. Select a marker to inspect the image, capture date, contributor,
+available camera/device type and direction; click the preview card to open the
+original on Mapillary. It does not embed MapillaryJS, navigate sequences, or
+download imagery.
 
 ![A reconstructed Falcon 9 ascent climbing and curving into its projected orbit](docs/media/08-falcon9-replay.gif)
 
@@ -377,7 +387,7 @@ and configuration details.
 
 ### Choose the capabilities you want
 
-Six keys. Four have a free tier, and the two 🔴 ones are metered:
+Seven keys. Five have a free tier, and the two 🔴 ones are metered:
 
 | | Key | Why | Get it |
 |---|-----|-----|--------|
@@ -386,6 +396,7 @@ Six keys. Four have a free tier, and the two 🔴 ones are metered:
 | 🔴 | **OpenAI** | 🎙️ The voice experience + AI HUD summary. The mini model works; the standard model is noticeably smarter. Want Gemini or another provider behind the mic? PRs welcome | [platform.openai.com](https://platform.openai.com) — metered, see costs below |
 | 🟡 | **AISStream** | 🚢 Live global ships | [aisstream.io](https://aisstream.io) — free signup |
 | 🟡 | **NASA FIRMS** | 🔥 Live active fires | [firms.modaps.eosdis.nasa.gov](https://firms.modaps.eosdis.nasa.gov/api/map_key/) — free |
+| 🟡 | **Mapillary** | ⬡ Crowdsourced street-level imagery, recent-date filters and capture metadata | [mapillary.com/dashboard/developers](https://www.mapillary.com/dashboard/developers) — free token |
 | 🟡 | **TomTom** | 🚦 Live flow speeds and congestion colors for the simulated traffic layer | [developer.tomtom.com](https://developer.tomtom.com) — free tier available |
 
 ![Diving from city-scale live congestion straight into an intersection's public camera](docs/media/05-traffic-to-cctv.gif)
@@ -437,7 +448,7 @@ Honest numbers, roughly, as of mid-2026 — always check the provider pricing pa
 | | Cost reality |
 |---|---|
 | **🟢 Most layers** | **$0, no signup.** OpenSky anon, USGS, CelesTrak, adsb.lol, city CCTV, Radio Browser, GBFS, Launch Library 2, bundled datasets. |
-| **🟡 The free-key tier** | **$0 with a signup.** AISStream, FIRMS, TomTom, OpenSky, plus Cesium ion for eligible personal/non-commercial use. Provider quotas and eligibility still apply. |
+| **🟡 The free-key tier** | **$0 with a signup.** AISStream, FIRMS, Mapillary, TomTom, OpenSky, plus Cesium ion for eligible personal/non-commercial use. Provider quotas and eligibility still apply. |
 | **🗺️ Google 3D tiles** | **Free through an eligible Cesium ion Community account within its quota; metered through a direct Google key.** Use the direct route for GEV place search or commercial deployment, verify current provider terms, and set budget alerts where billing is enabled. |
 | **🔴 OpenAI voice** | **The one that costs real money — so the app meters it for you.** Realtime audio runs a few cents per active minute; an evening of heavy use is single-digit dollars. A live session-spend readout sits next to the mic, with an STD/MINI model toggle, a $2 warning, and a **$5 hard cap that ends the session**. The voice context window is kept deliberately short too. |
 

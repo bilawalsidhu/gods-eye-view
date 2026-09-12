@@ -62,6 +62,8 @@
   "server/providers/traffic.js",
   "server/providers/firms.js",
   "server/providers/gbfs.js",
+  "server/providers/mapillary.js",
+  "src/data/mapillaryProxy.test.mjs",
   "src/data/gbfsSource.js",
   "src/data/terrainHeightsProxy.js",
   "src/data/terrainHeightsProxy.test.mjs",

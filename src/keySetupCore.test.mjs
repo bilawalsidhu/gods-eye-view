@@ -20,6 +20,10 @@ test('provider requirements name the registry env vars and next step', () => {
     keySetupRequirement('cesium-ion'),
     'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
   );
+  assert.equal(
+    keySetupRequirement('mapillary'),
+    'Needs MAPILLARY_ACCESS_TOKEN — add it in Provider Settings',
+  );
   assert.equal(keySetupRequirement('unknown'), '');
 });
 

@@ -315,7 +315,8 @@ export function measureOverlayEntry(ctx, entry, out = {}) {
     out.thumbW = Math.max(1, Number(entry?.thumbnailWidth) || 96);
     out.thumbH = Math.max(1, Number(entry?.thumbnailHeight) || 54);
     out.w = out.thumbW + out.padX * 2;
-    out.h = out.padY + out.thumbH + out.titleGap + out.titleH + out.padBottom;
+    out.h = out.padY + out.thumbH + out.titleGap + out.titleH
+      + details.length * out.lineH + out.padBottom;
   } else {
     out.w = Math.ceil(Math.max(titleWidth, detailWidth)) + out.padX * 2;
     out.h = out.padY * 2 + out.titleH + details.length * out.lineH;
@@ -624,6 +625,7 @@ export function paintThumbnail(ctx, entry, placement, alpha = 1) {
   const thumbW = layout.thumbW || Number(entry.thumbnailWidth) || 96;
   const thumbH = layout.thumbH || Number(entry.thumbnailHeight) || 54;
   const titleH = Number.isFinite(layout.titleH) ? layout.titleH : 13;
+  const lineH = Number.isFinite(layout.lineH) ? layout.lineH : 13;
   const image = entry.image?.frame ?? entry.image;
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -665,6 +667,16 @@ export function paintThumbnail(ctx, entry, placement, alpha = 1) {
     imageX,
     imageY + thumbH + titleH - 3,
   );
+  const details = Array.isArray(entry.details) ? entry.details : [];
+  ctx.fillStyle = entry.thumbnailDetailColor || WORLD_OVERLAY_STYLE.detail;
+  ctx.font = entry.thumbnailDetailFont || WORLD_OVERLAY_STYLE.fontDetail;
+  for (let i = 0; i < details.length; i += 1) {
+    ctx.fillText(
+      String(details[i]),
+      imageX,
+      imageY + thumbH + titleH + (i + 1) * lineH - 3,
+    );
+  }
   ctx.restore();
   return placement.rect;
 }

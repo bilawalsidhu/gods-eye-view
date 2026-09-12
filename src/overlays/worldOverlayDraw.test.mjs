@@ -420,6 +420,34 @@ test('thumbnail painter preserves the shipped CCTV 104x77 geometry and drawing c
   );
 });
 
+test('thumbnail cards opt into detail rows without changing empty-detail CCTV geometry', () => {
+  const ctx = mockContext();
+  const entry = {
+    variant: 'thumbnail',
+    title: 'MAPILLARY IMAGE',
+    details: ['CAPTURED 2026-09-09 UTC', 'OPEN IN MAPILLARY ↗'],
+    thumbnailWidth: 224,
+    thumbnailHeight: 126,
+    thumbnailPadX: 8,
+    thumbnailPadTop: 8,
+    thumbnailPadBottom: 8,
+    thumbnailTitleGap: 5,
+  };
+  entry._overlayLayout = measureOverlayEntry(ctx, entry, {});
+  assert.equal(entry._overlayLayout.h, 8 + 126 + 5 + 13 + 2 * 13 + 8);
+  const placement = placementVariants({
+    anchorX: 250,
+    anchorY: 200,
+    width: entry._overlayLayout.w,
+    height: entry._overlayLayout.h,
+    viewportWidth: 800,
+    viewportHeight: 600,
+  })[0];
+  paintThumbnail(ctx, entry, placement);
+  const text = ctx.calls.filter(([name]) => name === 'fillText').map(([, value]) => value);
+  assert.deepEqual(text, ['MAPILLARY IMAGE', ...entry.details]);
+});
+
 test('tracked painter preserves centered multi-line readout metrics', () => {
   const ctx = mockContext();
   const entry = {

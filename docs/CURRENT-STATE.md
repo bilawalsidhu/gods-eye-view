@@ -1853,6 +1853,7 @@ its criteria cannot be silently ignored.
 | CCTV | Austin + Caltrans (CA) + TfL London Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
 | Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
 | Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
+| Mapillary Imagery ⬡ | Mapillary Graph API (optional BYOK) | `src/data/mapillary.js` | `/api/mapillary/images` (`MAPILLARY_ACCESS_TOKEN`) | viewport-driven below 7 km; 5 min proxy cache |
 | Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Dams ▰ | OpenInfraMap/OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Submarine Cables ◠ | TeleGeography public map (bundled) | `src/data/telegeographySubmarineCables.js` | — | static |
@@ -1861,6 +1862,25 @@ its criteria cannot be silently ignored.
 `src/data/militaryAwareness.js` remains registered internally as the Contacts
 coordinator, but it is not a user-visible Data Layers entry. Its visible entry
 point is the right-side `CONTEXT` chooser's `CONTACTS` mode.
+
+Mapillary is an optional, close-zoom layer. It enters below 7 km and exits above
+9 km, derives a compact 0.002° neighborhood around the camera's ground look-at
+point (wide dense-city boxes can be rejected by the Graph API), waits
+500 ms after settled movement, suppresses materially overlapping requests, and
+renders at most 48 image points. It prefers the newest image within each 25 m
+neighborhood so dense capture runs do not become a point-and-line thicket.
+Available compass metadata adds a short, subdued geographic heading whisker.
+The layer row offers `ALL`, rolling `12M`, and rolling `30D` capture-date
+filters; the selected filter is sent as a bounded enum and translated by the
+proxy to Mapillary's `start_captured_at` query. Selection publishes through the
+shared context store and uses the shared thumbnail overlay for a 1024 px-source
+preview, capture date, creator, available camera make/model/type, bearing,
+coordinates, and a card-wide original-image action. The browser never receives
+the access token; `/api/mapillary/images` validates the bbox and date range,
+caps and normalizes the Graph response, coalesces identical requests, holds a
+64-entry/5-minute memory cache keyed by bbox plus filter, and applies 30
+requests/client/minute plus 120 requests/minute globally. Images are loaded only
+for the selected thumbnail and are never stored.
 
 At global scale, ambient Radio cluster badges are hard-opacity shared-host
 entries: count/category updates and identity replacement do not run keyhole or
@@ -2272,7 +2292,7 @@ silently demoting every later lookup for the session.
   with compact fields for enabled layers, allowlisted layer options, panel state,
   and the active preset's allowlisted shader controls. An absent layer field uses
   deterministic defaults; an explicit empty field means no enabled layers.
-- The registry seals only after all 16 production layers register, and every
+- The registry seals only after all 17 production layers register, and every
   layer has an explicit serialization disposition. Unknown enabled-layer tokens
   reject the layer payload; unknown option tokens are ignored. Restoration
   settles independently per layer so one failed or unavailable source cannot
@@ -2521,7 +2541,7 @@ silently demoting every later lookup for the session.
 - OpenSky default mode: OAuth (`OPENSKY_AUTH_MODE=oauth`; `anon` works without credentials)
 - Google key expected in Keychain service `google-maps-api` (or `GOOGLE_MAPS_API_KEY`, or `.env`)
 - OpenSky credentials expected in Keychain service `opensky-network` (or env, or `.env`); `OPENSKY_AUTH_MODE` and `OPENSKY_CREDENTIALS_FILE` read from `.env` too
-- Optional-key precedence in `dev-fresh.sh` is uniform — explicit shell env, then `.env`, then Keychain: `OPENAI_API_KEY` (Keychain `openai-api`/`api-key` — voice + HUD summary), `AISSTREAM_API_KEY` (`aisstream-api`/`api-key` — live vessels), `CESIUM_ION_TOKEN` (`cesium-ion`/`token` — Bing stacks), `TOMTOM_API_KEY` (`tomtom-api`/`api-key` — live traffic flow), `FIRMS_MAP_KEY` (`firms-map`/`map-key` — live fires), `LL2_API_TOKEN` (`.env` only)
+- Optional-key precedence in `dev-fresh.sh` is uniform — explicit shell env, then `.env`, then Keychain: `OPENAI_API_KEY` (Keychain `openai-api`/`api-key` — voice + HUD summary), `AISSTREAM_API_KEY` (`aisstream-api`/`api-key` — live vessels), `CESIUM_ION_TOKEN` (`cesium-ion`/`token` — Bing stacks), `TOMTOM_API_KEY` (`tomtom-api`/`api-key` — live traffic flow), `FIRMS_MAP_KEY` (`firms-map`/`map-key` — live fires), `MAPILLARY_ACCESS_TOKEN` (`mapillary`/`access-token` — street imagery), `LL2_API_TOKEN` (`.env` only)
 - An empty string is not "unset" on either side of the launcher, and both sides are handled. `scripts/read-dotenv-value.mjs` hides the requested key from `process.env` for the duration of the read (Vite's `loadEnv` otherwise lets an inherited empty export win over the parsed files) and restores it after. A key the launcher resolves to nothing is then removed from the dev server's environment outright (`env -u`), not merely omitted — the child inherits this shell's environment, and Vite backfills `.env` only over undefined variables, so an empty export in either place would shadow a configured key. `CCTV_CALTRANS_DISTRICTS` is the deliberate exception: empty is its documented Caltrans kill switch and is passed through as-is
 - `.env` supported via `.env.example` template
 

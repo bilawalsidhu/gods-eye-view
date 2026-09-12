@@ -517,6 +517,8 @@ export function normalizeOverlayEntry(sourceId, entry) {
     thumbnailBackground: entry.thumbnailBackground,
     thumbnailTitleColor: entry.thumbnailTitleColor,
     thumbnailTitleFont: entry.thumbnailTitleFont,
+    thumbnailDetailColor: entry.thumbnailDetailColor,
+    thumbnailDetailFont: entry.thumbnailDetailFont,
     thumbnailLeaderColor: entry.thumbnailLeaderColor,
     thumbnailRuleColor: entry.thumbnailRuleColor,
     thumbnailRuleHeight: entry.thumbnailRuleHeight,
