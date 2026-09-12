@@ -14,7 +14,7 @@
 /** Longest accepted key/token value. Real provider keys are all far shorter. */
 export const KEY_SETUP_VALUE_LIMIT = 512;
 
-/** Most env vars accepted in one save. The registry defines nine. */
+/** Most env vars accepted in one save. The registry defines ten. */
 export const KEY_SETUP_UPDATE_LIMIT = 16;
 
 /** Header line written above keys the panel appends to a .env file. */
@@ -30,12 +30,20 @@ export const KEY_SETUP_APPEND_HEADER = '# Keys added by the in-app POWER UP pane
 export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'google-maps',
-    title: 'GOOGLE MAPS',
+    title: 'GOOGLE MAPS — BROWSER',
     unlocks: 'The photorealistic 3D planet + place search',
     getUrl: 'https://developers.google.com/maps/documentation/tile/get-api-key',
     envVars: Object.freeze(['GOOGLE_MAPS_API_KEY']),
     tier: 'metered',
     clientExposed: true,
+  }),
+  Object.freeze({
+    id: 'google-maps-server',
+    title: 'GOOGLE MAPS — SERVER',
+    unlocks: 'Places context + Street View fallback; optional separate key',
+    getUrl: 'https://developers.google.com/maps/documentation/places/web-service/get-api-key',
+    envVars: Object.freeze(['GOOGLE_MAPS_SERVER_API_KEY']),
+    tier: 'metered',
   }),
   Object.freeze({
     id: 'openai',

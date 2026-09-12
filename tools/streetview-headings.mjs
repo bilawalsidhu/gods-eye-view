@@ -24,6 +24,8 @@
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseEnv } from 'node:util';
+import { resolveGoogleServerKey } from '../scripts/google-server-key.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, '..');
@@ -57,25 +59,25 @@ function parseArgs() {
   return opts;
 }
 
-function loadApiKey(overrideKey) {
+/** The explicit CLI key wins; otherwise prefer the server key across both stores. */
+export function loadApiKey(overrideKey, {
+  environment = process.env,
+  envPath = join(PROJECT_ROOT, '.env'),
+} = {}) {
   if (overrideKey) return overrideKey;
-  if (process.env.GOOGLE_MAPS_API_KEY) return process.env.GOOGLE_MAPS_API_KEY;
-
+  const serverKey = resolveGoogleServerKey({
+    GOOGLE_MAPS_SERVER_API_KEY: environment.GOOGLE_MAPS_SERVER_API_KEY,
+  });
+  if (serverKey) return serverKey;
+  let fromDotenv = {};
   try {
-    const envPath = join(PROJECT_ROOT, '.env');
-    const envContent = readFileSync(envPath, 'utf8');
-    for (const line of envContent.split('\n')) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('#') || !trimmed.includes('=')) continue;
-      const eqIdx = trimmed.indexOf('=');
-      const key = trimmed.slice(0, eqIdx).trim();
-      const val = trimmed.slice(eqIdx + 1).trim();
-      if (key === 'GOOGLE_MAPS_API_KEY' && val) return val;
-    }
-  } catch { /* ignore */ }
-
-  console.error('Error: No API key found. Set GOOGLE_MAPS_API_KEY in .env or pass --key.');
-  process.exit(1);
+    fromDotenv = parseEnv(readFileSync(envPath, 'utf8'));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw new Error('Could not read the Street View tool environment file');
+  }
+  const key = resolveGoogleServerKey(environment, fromDotenv);
+  if (key) return key;
+  throw new Error('No API key found. Set GOOGLE_MAPS_SERVER_API_KEY (or GOOGLE_MAPS_API_KEY) in .env or pass --key.');
 }
 
 // ---------------------------------------------------------------------------
@@ -253,7 +255,9 @@ async function main() {
   console.log('\nDone.');
 }
 
-main().catch((err) => {
-  console.error('\nError:', err.message);
-  process.exit(1);
-});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error('\nError:', err.message);
+    process.exitCode = 1;
+  });
+}

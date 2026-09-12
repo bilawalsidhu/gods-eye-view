@@ -1,0 +1,76 @@
+{
+  "infrastructure": {
+    "exports": [
+      "./infrastructure",
+      "./infrastructure/geojson",
+      "./infrastructure/lod"
+    ],
+    "modules": [
+      "src/data/infrastructure.js",
+      "src/data/localGeojsonCore.js",
+      "src/data/localGeojsonLod.js"
+    ],
+    "external": ["cesium"]
+  },
+  "application": {
+    "exports": ["./application"],
+    "modules": ["src/app/application.js"],
+    "external": []
+  },
+  "viewer": {
+    "exports": ["./application/viewer"],
+    "modules": ["src/app/viewer.js"],
+    "external": ["cesium"]
+  },
+  "vite-build": {
+    "runtime": "node",
+    "exports": ["./build/vite"],
+    "modules": ["build/vite.js"],
+    "external": ["vite-plugin-cesium"]
+  },
+  "live-providers": {
+    "runtime": "node",
+    "exports": ["./server/providers/live"],
+    "modules": [
+      "server/providers/live.js",
+      "server/providers/common/http.js",
+      "server/providers/common/query.js",
+      "server/providers/aircraft/opensky.js",
+      "server/providers/aircraft/adsb-lol.js",
+      "server/providers/aircraft/enrichment.js",
+      "server/providers/aircraft/tracks.js",
+      "server/providers/vessels/ais-store.js",
+      "server/providers/vessels/ais-live.js",
+      "src/data/adsbLolFallback.js",
+      "src/data/aisStreamAdapter.js",
+      "src/data/aisWatchdog.js"
+    ],
+    "external": ["ws"]
+  },
+  "adsb-lol-source": {
+    "exports": ["./sources/adsb-lol"],
+    "modules": ["src/data/adsbLolFallback.js"],
+    "external": []
+  },
+  "place-providers": {
+    "runtime": "node",
+    "exports": ["./server/providers/places"],
+    "modules": [
+      "server/providers/places.js",
+      "server/providers/places/google.js",
+      "server/providers/places/google-key.js",
+      "server/providers/places/routes.js",
+      "server/providers/common/rate-limit.js",
+      "server/providers/common/geo.js",
+      "server/providers/common/http.js",
+      "scripts/google-server-key.mjs",
+      "src/data/placeProviderPayloads.js"
+    ],
+    "external": []
+  },
+  "place-payloads": {
+    "exports": ["./sources/places"],
+    "modules": ["src/data/placeProviderPayloads.js"],
+    "external": []
+  }
+}
