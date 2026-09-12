@@ -1166,12 +1166,18 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   settled dim contact always completes its release after tracking ends.
 > - **Terrain-height resilience:** `/api/terrain/heights` caches canonical
 >   5-decimal points individually, reconstructs reordered/overlapping batches
->   in exact request order, and refreshes only missing or stale points. Network,
->   429, and 5xx failures receive bounded jittered retries with `Retry-After`;
->   stale real heights remain usable per point, while an uncached absent height
->   still returns 502 rather than becoming a fabricated ground value. Client
->   geoid fallbacks wait 60 seconds before retrying and self-heal to Re:Earth on
->   the first later successful fetch.
+>   in exact request order, and refreshes only missing or stale points. Upstream
+>   calls are chunked at 64 points, sized so one chunk completes inside the 30s
+>   attempt timeout across Re:Earth's observed 87-186 ms/point range; a chunk
+>   that still fails contributes nulls for its own positions instead of
+>   discarding the chunks that resolved. Network, 429, and 5xx failures receive
+>   bounded jittered retries with `Retry-After`; stale real heights remain
+>   usable per point, while an uncached absent height still returns 502 rather
+>   than becoming a fabricated ground value. A position the upstream answers
+>   with a null ellipsoid is reported as an absent height rather than a refresh
+>   failure, and is left uncached so a later poll re-asks it. Client geoid
+>   fallbacks wait 60 seconds before retrying and self-heal to Re:Earth on the
+>   first later successful fetch.
 > - **Overpass cache admission:** `/api/overpass` parses and sanitizes requests,
 >   then checks fresh memory, identical in-flight work, and fresh disk entries
 >   before invoking its local 90/min limiter. Cache and single-flight responses
