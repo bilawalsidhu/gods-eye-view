@@ -23,6 +23,11 @@ function replaceOnce(source, needle, replacement, label) {
   return source.slice(0, first) + replacement + source.slice(first + needle.length);
 }
 
+// LocalAI newer than 4.9.0 coerces both values upstream (mudler/LocalAI#11962)
+// with a tuple, while our own patch writes a set. Either shape means "false"
+// already reaches the chat template.
+const THINKING_HONORS_FALSE = /if enable_thinking in [({]"true", "false"[)}]:/;
+
 export function patchLocalAiBackendSource(source) {
   let output = source;
   if (!output.includes('from function_stream_filter import FunctionStreamFilter')) {
@@ -82,7 +87,7 @@ export function patchLocalAiBackendSource(source) {
       'MLX streaming output tail',
     );
   }
-  if (!output.includes('if enable_thinking in {"true", "false"}:')) {
+  if (!THINKING_HONORS_FALSE.test(output)) {
     output = replaceOnce(
       output,
       `            if enable_thinking == "true":

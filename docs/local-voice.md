@@ -25,8 +25,8 @@ npm run voice:local:setup
 
 The setup downloads the required model and backend artifacts into
 `~/.local/share/localai`, copies the versioned pipeline files from
-`config/localai/models`, and applies two narrow compatibility fixes required by
-the verified versions. Downloads can take several minutes. The original
+`config/localai/models`, and applies the narrow compatibility fixes the
+verified versions still need. Downloads can take several minutes. The original
 patched files are retained beside them with a `.gev-backup` suffix.
 
 Verify an existing installation without downloading or changing anything:
@@ -69,6 +69,11 @@ raw MiniCPM function markup before converting it into a tool call. MLX-LM
 0.31.3 also lacked MiniCPM5 parser registration. The setup command patches
 those exact source shapes and stops with an error when the installed source is
 not compatible, rather than modifying an unknown version.
+
+The thinking fix is now upstream in LocalAI
+([#11962](https://github.com/mudler/LocalAI/pull/11962), released after 4.9.0),
+so setup skips that patch when the installed backend already honors
+`enable_thinking=false`.
 
 The two small compatibility modules under `config/localai/compat` follow the
 MIT-licensed [LocalAI MLX backend](https://github.com/mudler/LocalAI/tree/v4.9.0/backend/python/mlx)

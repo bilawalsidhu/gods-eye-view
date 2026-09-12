@@ -1,6 +1,6 @@
 # God's Eye View Current State
 
-Updated: September 10, 2026
+Updated: September 12, 2026
 
 ## Local Realtime voice
 
@@ -11,7 +11,9 @@ Updated: September 10, 2026
 - The Apple Silicon reference profile uses Silero VAD, Parakeet Realtime EOU
   120M STT, MiniCPM5-2B MLX 4-bit, and Kokoro TTS. `npm run
   voice:local:setup` installs the profile; `npm run voice:local:check` verifies
-  it without mutation. Reasoning is disabled in the shipped profile.
+  it without mutation. Reasoning is disabled in the shipped profile. The thinking
+  compatibility patch is skipped on LocalAI builds that already honor
+  `enable_thinking=false` (fixed upstream after 4.9.0).
 - LocalAI signalling is relayed through the dev server to avoid browser CORS
   configuration and to translate the raw SDP offer into LocalAI 4.9.0's JSON
   request shape. Media still uses the negotiated WebRTC connection.

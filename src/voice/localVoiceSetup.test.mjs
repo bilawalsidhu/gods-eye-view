@@ -48,3 +48,16 @@ test('MLX-LM compatibility patch registers the MiniCPM5 parser once', () => {
   assert.match(patched, /return "minicpm5"/);
   assert.equal(patchTokenizerSource(patched), patched, 'patch must be idempotent');
 });
+
+test('LocalAI compatibility patch skips the thinking fix when upstream already honors false', () => {
+  const upstream = BACKEND_FIXTURE.replace(
+    `            if enable_thinking == "true":
+                kwargs["enable_thinking"] = True`,
+    `            if enable_thinking in ("true", "false"):
+                kwargs["enable_thinking"] = enable_thinking == "true"`,
+  );
+  const patched = patchLocalAiBackendSource(upstream);
+  assert.match(patched, /FunctionStreamFilter/);
+  assert.match(patched, /enable_thinking in \("true", "false"\)/);
+  assert.doesNotMatch(patched, /enable_thinking in \{"true", "false"\}/);
+});
