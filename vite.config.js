@@ -1593,10 +1593,8 @@ function celestrakProxy() {
     return { at: Date.now(), body };
   }
 
-  return {
-    name: 'celestrak-proxy',
-    configureServer(server) {
-      server.middlewares.use('/api/celestrak', async (req, res) => {
+  function install(middlewares) {
+    middlewares.use('/api/celestrak', async (req, res) => {
         const group = String(req.url || '').replace(/^\//, '').split('?')[0];
         if (!/^[a-z0-9-]+$/i.test(group)) {
           res.writeHead(400, { 'Content-Type': 'text/plain' });
@@ -1648,7 +1646,16 @@ function celestrakProxy() {
           console.error('[celestrak-proxy] request failed');
           send(500, 'celestrak proxy error', 'ERROR');
         }
-      });
+    });
+  }
+
+  return {
+    name: 'celestrak-proxy',
+    configureServer(server) {
+      install(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      install(server.middlewares);
     },
   };
 }
@@ -1899,10 +1906,8 @@ function tomtomProxy() {
     return buf;
   }
 
-  return {
-    name: 'tomtom-proxy',
-    configureServer(server) {
-      server.middlewares.use('/api/tomtom', async (req, res) => {
+  function install(middlewares) {
+    middlewares.use('/api/tomtom', async (req, res) => {
         // Sanitized responses only (proxy/security baseline): no upstream
         // error details, and never echo the key or the upstream URL.
         const sendJson = (status, obj, extraHeaders = {}) => {
@@ -2003,7 +2008,16 @@ function tomtomProxy() {
           console.warn('[tomtom-proxy] error:', err?.message || err);
           sendJson(500, { error: 'proxy' });
         }
-      });
+    });
+  }
+
+  return {
+    name: 'tomtom-proxy',
+    configureServer(server) {
+      install(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      install(server.middlewares);
     },
   };
 }
@@ -2156,10 +2170,8 @@ function firmsProxy() {
     return statusInflight;
   }
 
-  return {
-    name: 'firms-proxy',
-    configureServer(server) {
-      server.middlewares.use('/api/firms', async (req, res) => {
+  function install(middlewares) {
+    middlewares.use('/api/firms', async (req, res) => {
         const sendJson = (status, obj) => {
           if (res.headersSent) return;
           res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -2226,7 +2238,16 @@ function firmsProxy() {
           console.warn('[firms-proxy] error:', err?.message || err);
           sendJson(500, { error: 'firms proxy error' });
         }
-      });
+    });
+  }
+
+  return {
+    name: 'firms-proxy',
+    configureServer(server) {
+      install(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      install(server.middlewares);
     },
   };
 }
@@ -2337,10 +2358,8 @@ function terrainHeightsProxy() {
     return inflight.get(key);
   }
 
-  return {
-    name: 'terrain-heights-proxy',
-    configureServer(server) {
-      server.middlewares.use('/api/terrain/heights', async (req, res) => {
+  function install(middlewares) {
+    middlewares.use('/api/terrain/heights', async (req, res) => {
         const send = (status, bodyObj) => {
           if (res.headersSent) return;
           res.writeHead(status, { 'Content-Type': 'application/json' });
@@ -2378,7 +2397,16 @@ function terrainHeightsProxy() {
           console.error('[terrain-heights-proxy] request failed');
           send(500, { error: 'terrain heights proxy error' });
         }
-      });
+    });
+  }
+
+  return {
+    name: 'terrain-heights-proxy',
+    configureServer(server) {
+      install(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      install(server.middlewares);
     },
   };
 }
@@ -2472,10 +2500,8 @@ function adsbdbProxy() {
     return inflight.get(ik);
   }
 
-  return {
-    name: 'adsbdb-proxy',
-    configureServer(server) {
-      server.middlewares.use('/api/adsbdb', async (req, res) => {
+  function install(middlewares) {
+    middlewares.use('/api/adsbdb', async (req, res) => {
         await loadOnce();
         const send = (status, obj) => {
           res.writeHead(status, { 'Content-Type': 'application/json' });
@@ -2500,7 +2526,16 @@ function adsbdbProxy() {
           console.error('[adsbdb-proxy] request failed');
           return send(500, { error: 'adsbdb proxy error' });
         }
-      });
+    });
+  }
+
+  return {
+    name: 'adsbdb-proxy',
+    configureServer(server) {
+      install(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      install(server.middlewares);
     },
   };
 }
@@ -2677,10 +2712,8 @@ export async function fetchOverpassPayload(body, maxResponseBytes = OVERPASS_MAX
  * @returns {import('vite').Plugin}
  */
 function overpassProxy() {
-  return {
-    name: 'overpass-proxy',
-    configureServer(server) {
-      server.middlewares.use('/api/overpass', async (req, res) => {
+  function install(middlewares) {
+    middlewares.use('/api/overpass', async (req, res) => {
         // Hoisted out of the try so the catch's serve-stale lookup can see it
         // (a body-read failure would otherwise hit an out-of-scope reference).
         let cacheKey = null;
@@ -2810,7 +2843,7 @@ function overpassProxy() {
 
       // Real OSM routing via the public FOSSGIS OSRM servers (foot/car/bike).
       // GET /api/route?profile=foot|car|bike&coords=lon,lat;lon,lat[;...]
-      server.middlewares.use('/api/route', async (req, res) => {
+      middlewares.use('/api/route', async (req, res) => {
         const fail = (msg) => {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: false, error: msg }));
@@ -2899,6 +2932,15 @@ function overpassProxy() {
           fail('route proxy error');
         }
       });
+  }
+
+  return {
+    name: 'overpass-proxy',
+    configureServer(server) {
+      install(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      install(server.middlewares);
     },
   };
 }
@@ -3015,10 +3057,8 @@ function openSkySourceIsStale(sourceEpochMs, now = Date.now()) {
  * @returns {import('vite').Plugin}
  */
 function openSkyProxy() {
-  return {
-    name: 'opensky-proxy',
-    configureServer(server) {
-      server.middlewares.use('/api/opensky', async (req, res) => {
+  function install(middlewares) {
+    middlewares.use('/api/opensky', async (req, res) => {
         try {
           const requestedMode = normalizeOpenSkyAuthMode(process.env.OPENSKY_AUTH_MODE);
           const now = Date.now();
@@ -3293,7 +3333,16 @@ function openSkyProxy() {
           );
           res.end(JSON.stringify({ error: 'OpenSky proxy error' }));
         }
-      });
+    });
+  }
+
+  return {
+    name: 'opensky-proxy',
+    configureServer(server) {
+      install(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      install(server.middlewares);
     },
   };
 }
@@ -3350,10 +3399,8 @@ function gbfsCacheControl(pathname) {
  * @returns {import('vite').Plugin}
  */
 function gbfsProxy() {
-  return {
-    name: 'gbfs-proxy',
-    configureServer(server) {
-      server.middlewares.use('/api/gbfs', async (req, res) => {
+  function install(middlewares) {
+    middlewares.use('/api/gbfs', async (req, res) => {
         try {
           if (req.method !== 'GET') {
             res.writeHead(405, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -3453,7 +3500,16 @@ function gbfsProxy() {
           res.writeHead(502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
           res.end(JSON.stringify({ error: 'GBFS proxy error' }));
         }
-      });
+    });
+  }
+
+  return {
+    name: 'gbfs-proxy',
+    configureServer(server) {
+      install(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      install(server.middlewares);
     },
   };
 }
@@ -4595,10 +4651,8 @@ function cctvProxy() {
     }
   };
 
-  return {
-    name: 'cctv-proxy',
-    configureServer(server) {
-      server.middlewares.use('/api/cctv', async (req, res) => {
+  function install(middlewares) {
+    middlewares.use('/api/cctv', async (req, res) => {
         try {
           const sources = await getCctvSources();
           const sourceById = new Map(sources.map((source) => [source.id, source]));
@@ -4799,7 +4853,16 @@ function cctvProxy() {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'CCTV proxy error' }));
         }
-      });
+    });
+  }
+
+  return {
+    name: 'cctv-proxy',
+    configureServer(server) {
+      install(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      install(server.middlewares);
     },
   };
 }
@@ -4819,38 +4882,45 @@ function adsbLolProxy() {
   let _cacheAt = 0;
   /** Response cache TTL (ms). */
   const CACHE_MS = 12000;
+  function install(middlewares) {
+    middlewares.use('/api/adsblol/mil', async (req, res) => {
+      try {
+        const now = Date.now();
+        if (_cache && now - _cacheAt < CACHE_MS) {
+          res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-ADS-B-Cache': 'HIT' });
+          res.end(_cache);
+          return;
+        }
+        const upstream = await fetch('https://api.adsb.lol/v2/mil', {
+          headers: { 'User-Agent': 'gods-eye-view-adsblol-proxy/1.0' },
+        });
+        const body = await upstream.text();
+        if (upstream.ok) {
+          _cache = body;
+          _cacheAt = now;
+        }
+        res.writeHead(upstream.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-ADS-B-Cache': 'MISS' });
+        res.end(body);
+      } catch (e) {
+        console.error('[adsb.lol Proxy]', e.message);
+        if (_cache) {
+          res.writeHead(200, { 'Content-Type': 'application/json', 'X-ADS-B-Cache': 'STALE' });
+          res.end(_cache);
+          return;
+        }
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'ADS-B proxy error' }));
+      }
+    });
+  }
+
   return {
     name: 'adsblol-proxy',
     configureServer(server) {
-      server.middlewares.use('/api/adsblol/mil', async (req, res) => {
-        try {
-          const now = Date.now();
-          if (_cache && now - _cacheAt < CACHE_MS) {
-            res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-ADS-B-Cache': 'HIT' });
-            res.end(_cache);
-            return;
-          }
-          const upstream = await fetch('https://api.adsb.lol/v2/mil', {
-            headers: { 'User-Agent': 'gods-eye-view-adsblol-proxy/1.0' },
-          });
-          const body = await upstream.text();
-          if (upstream.ok) {
-            _cache = body;
-            _cacheAt = now;
-          }
-          res.writeHead(upstream.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-ADS-B-Cache': 'MISS' });
-          res.end(body);
-        } catch (e) {
-          console.error('[adsb.lol Proxy]', e.message);
-          if (_cache) {
-            res.writeHead(200, { 'Content-Type': 'application/json', 'X-ADS-B-Cache': 'STALE' });
-            res.end(_cache);
-            return;
-          }
-          res.writeHead(502, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'ADS-B proxy error' }));
-        }
-      });
+      install(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      install(server.middlewares);
     },
   };
 }
@@ -7787,6 +7857,18 @@ export default defineConfig(({ mode }) => {
         'X-Frame-Options': 'DENY',
         'Content-Security-Policy': "frame-ancestors 'none'",
       },
+    },
+    // `vite preview` (what the production container actually runs) does not
+    // inherit `server.*` — it has its own host/port/allowedHosts. Mirror the
+    // dev-server choice here so a reverse-proxied domain isn't rejected by
+    // Vite's DNS-rebinding guard once nginx-proxy-manager forwards Host:
+    // <dominio> to this container instead of localhost.
+    preview: {
+      host: env.HOST || 'localhost',
+      port: parseInt(env.PORT, 10) || 4173,
+      allowedHosts: (env.HOST === '0.0.0.0' || env.HOST === '::')
+        ? true
+        : localAllowedHosts,
     },
     // Expose selected API keys to the browser via import.meta.env.*
     define: {
