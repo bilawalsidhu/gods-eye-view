@@ -69,5 +69,17 @@
   "src/data/tomtomTiles.test.mjs",
   "src/data/firmsCsv.js",
   "src/data/firmsCsv.test.mjs",
-  "src/tooling/environmentProviders.test.mjs"
+  "src/tooling/environmentProviders.test.mjs",
+  "server/providers/cctv.js",
+  "server/providers/cctv/catalog.js",
+  "server/providers/cctv/constants.js",
+  "server/providers/cctv/media.js",
+  "server/providers/cctv/normalize.js",
+  "server/providers/cctv/sources.js",
+  "server/providers/radio.js",
+  "server/providers/radio/catalog.js",
+  "server/providers/radio/constants.js",
+  "server/providers/radio/stations.js",
+  "server/providers/radio/transport.js",
+  "src/tooling/mediaProviders.test.mjs"
 ]
