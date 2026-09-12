@@ -340,11 +340,12 @@ test('/station/:callsign returns the geolocator station and 404/400/502 on miss/
   assertEnvelope(miss, 404);
   assert.match(miss.json().error, /ZZ9ZZZ/);
 
-  for (const bad of ['/station/DL', '/station/DL1%20ABC', '/station/ABCDEFGHIJKLMNOP', '/station/DL1AB%3Fx=1']) {
+  for (const bad of ['/station/DL', '/station/DL1%20ABC', '/station/ABCDEFGHIJKLMNOP', '/station/DL1AB%3Fx=1', '/station/%ZZ', '/station/DL1%E0%A4%A']) {
     const res = await h.call(bad);
     assert.equal(res.status, 400, bad);
     assert.match(res.json().error, /not a valid callsign/);
   }
+  assert.ok(!h.log.lines.some((line) => line.includes('crashed')), 'malformed encoding is validation, never an upstream crash');
   const slashed = await h.call('/station/S79%2FDL2SBY');
   assert.equal(slashed.status, 404);
   assert.deepEqual(h.geolocator.calls.at(-1), ['stationFor', 'S79/DL2SBY']);
@@ -390,8 +391,12 @@ test('POST /locate validates the body and maps callsigns to Loc|null', async () 
   assert.equal(body.located['BAD CALL!'], null);
   assert.equal(body.precise, true);
   const locateCall = h.geolocator.calls.find((c) => c[0] === 'locateMany');
-  assert.deepEqual(locateCall[1], ['DH5DAX', 'TF', 'ZZ9ZZZ'], 'invalid entries never reach the geolocator; duplicates collapse');
+  assert.deepEqual(locateCall[1], ['DH5DAX', 'ZZ9ZZZ'], 'invalid entries never reach the geolocator; duplicates collapse; prefix-only entries resolve locally when precise');
   assert.deepEqual(locateCall[2], { precise: true });
+  assert.ok(h.geolocator.calls.some((c) => c[0] === 'locateEntity' && c[1] === 'TF'), 'TF resolved via locateEntity, not the network');
+  const loose = assertEnvelope(await h.call('/locate', { method: 'POST', body: { calls: ['TF', 'DH5DAX'] } }));
+  assert.equal(loose.located.TF.entity, 'Iceland');
+  assert.deepEqual(h.geolocator.calls.filter((c) => c[0] === 'locateMany').at(-1)[1], ['TF', 'DH5DAX'], 'precise:false still sends prefixes to the (offline) bulk path');
 
   for (const bad of [{}, { calls: 'DH5DAX' }, { calls: Array.from({ length: 301 }, (_, i) => `DL${i}AA`) }]) {
     const res = await h.call('/locate', { method: 'POST', body: bad });
@@ -409,6 +414,34 @@ test('POST /locate validates the body and maps callsigns to Loc|null', async () 
 
   const boom = harness({ geolocator: { ...fakeGeolocator(), locateMany: async () => { throw new Error('queue exploded'); } } });
   assert.equal((await boom.call('/locate', { method: 'POST', body: { calls: ['DH5DAX'] } })).status, 502);
+});
+
+test('POST /locate caps precise batches at 25 calls, keeps 300 for cty-only, and enforces a deadline', async () => {
+  const h = harness();
+  const many = (n) => Array.from({ length: n }, (_, i) => `DL${String(i).padStart(3, '0')}AA`);
+  const tooMany = await h.call('/locate', { method: 'POST', body: { calls: many(26), precise: true } });
+  assert.equal(tooMany.status, 400);
+  assert.match(tooMany.json().error, /at most 25 calls/);
+  assert.equal(h.geolocator.calls.filter((c) => c[0] === 'locateMany').length, 0, 'rejected before any upstream work');
+  const okPrecise = assertEnvelope(await h.call('/locate', { method: 'POST', body: { calls: many(25), precise: true } }));
+  assert.equal(Object.keys(okPrecise.located).length, 25);
+  const bulk = assertEnvelope(await h.call('/locate', { method: 'POST', body: { calls: many(300), precise: false } }));
+  assert.equal(Object.keys(bulk.located).length, 300);
+
+  // A geolocator that never answers must not hold the request past the deadline.
+  const log = createLog();
+  const stuck = harness({
+    log,
+    config: { locateDeadlineMs: 20 },
+    geolocator: { ...fakeGeolocator(), locateMany: () => new Promise(() => {}) },
+  });
+  const started = Date.now();
+  const body = assertEnvelope(await stuck.call('/locate', { method: 'POST', body: { calls: ['DH5DAX', 'TF'], precise: true } }));
+  assert.ok(Date.now() - started < 5000, 'answered well before the default 20 s deadline');
+  assert.equal(body.located.DH5DAX.entity, 'Fed. Rep. of Germany', 'unresolved calls fall back to entity positions');
+  assert.equal(body.located.DH5DAX.precision, 'entity');
+  assert.equal(body.located.TF.entity, 'Iceland');
+  assert.ok(log.lines.some((line) => line.includes('locate deadline exceeded')), 'deadline is logged');
 });
 
 // ---------------------------------------------------------------------------
@@ -625,11 +658,21 @@ test('/aurora normalises the OVATION grid, drops faint cells and caches 10 min',
   assert.ok(body.points.every((p) => p.value > 5));
   assert.equal(body.unit, '%');
   assert.equal(typeof body.forecastIso, 'string');
-  assert.deepEqual(body.sources, ['hamrig:overlay-aurora (NOAA SWPC OVATION)']);
+  assert.deepEqual(body.sources, ['hamrig:overlay-aurora (NOAA SWPC Ovation)'], 'source label comes from the HamRig payload');
+  assert.equal(body.source, 'NOAA SWPC Ovation');
   await h.call('/aurora');
   assert.equal(h.client.calls.length, 1);
   const dead = harness({ client: fakeClient({ '/api/overlay/aurora': new Error('boom') }) });
   assert.equal((await dead.call('/aurora')).status, 502);
+});
+
+test('/aurora reports HamRig\'s Clear Sky Institute fallback (or data_origin / a default) in sources', async () => {
+  const fallback = harness({ client: fakeClient({ '/api/overlay/aurora': { ...FIX.aurora, source: 'Clear Sky Institute (fallback)' } }) });
+  assert.deepEqual(assertEnvelope(await fallback.call('/aurora')).sources, ['hamrig:overlay-aurora (Clear Sky Institute (fallback))']);
+  const originOnly = harness({ client: fakeClient({ '/api/overlay/aurora': { ...FIX.aurora, source: '', data_origin: 'NOAA Ovation Aurora Model' } }) });
+  assert.deepEqual(assertEnvelope(await originOnly.call('/aurora')).sources, ['hamrig:overlay-aurora (NOAA Ovation Aurora Model)']);
+  const unlabelled = harness({ client: fakeClient({ '/api/overlay/aurora': { points: FIX.aurora.points } }) });
+  assert.deepEqual(assertEnvelope(await unlabelled.call('/aurora')).sources, ['hamrig:overlay-aurora (NOAA SWPC OVATION)']);
 });
 
 test('/voacap validates every parameter, whitelists the resolution and caches per key', async () => {
@@ -843,6 +886,67 @@ test('/reception requires call or grid, passes warmingUp through and caches 20 s
 // Cross-cutting: PII and crash safety
 // ---------------------------------------------------------------------------
 
+test('the response cache is bounded (LRU, 256 entries) so user-controlled keys cannot grow it without limit', async () => {
+  const h = harness();
+  const callFor = (i) => `AA${String(i).padStart(3, '0')}AA`;
+  const upstreamCalls = () => h.client.calls.filter((c) => c.path === '/api/pskreporter').length;
+  assertEnvelope(await h.call(`/reception?call=${callFor(0)}`));
+  assert.equal(upstreamCalls(), 1);
+  assertEnvelope(await h.call(`/reception?call=${callFor(0)}`));
+  assert.equal(upstreamCalls(), 1, 'a warm key is served from cache');
+  // 255 more distinct keys fill the cache to exactly its bound; the first key survives.
+  for (let i = 1; i < 256; i += 1) assertEnvelope(await h.call(`/reception?call=${callFor(i)}`));
+  assert.equal(upstreamCalls(), 256);
+  assertEnvelope(await h.call(`/reception?call=${callFor(0)}`));
+  assert.equal(upstreamCalls(), 256, 'still cached at the bound; the hit also refreshes its recency');
+  // One more distinct key evicts the least recently used entry (key 1, since key 0 was just touched).
+  assertEnvelope(await h.call(`/reception?call=${callFor(256)}`));
+  assert.equal(upstreamCalls(), 257);
+  assertEnvelope(await h.call(`/reception?call=${callFor(0)}`));
+  assert.equal(upstreamCalls(), 257, 'recently touched key 0 was kept');
+  assertEnvelope(await h.call(`/reception?call=${callFor(1)}`));
+  assert.equal(upstreamCalls(), 258, 'least recently used key 1 was evicted and refetched');
+});
+
+test('/voacap cache keys round the frequency so the key space is finite', async () => {
+  const h = harness();
+  assertEnvelope(await h.call('/voacap?lat=52&lon=7&frequencyMhz=14.100001'));
+  assertEnvelope(await h.call('/voacap?lat=52&lon=7&frequencyMhz=14.1000049'));
+  assertEnvelope(await h.call('/voacap?lat=52&lon=7&frequencyMhz=14.1'));
+  assert.equal(h.client.calls.filter((c) => c.path === '/api/overlay/voacap').length, 1, 'sub-0.01 MHz variations share one key');
+  assertEnvelope(await h.call('/voacap?lat=52&lon=7&frequencyMhz=14.11'));
+  assert.equal(h.client.calls.filter((c) => c.path === '/api/overlay/voacap').length, 2);
+});
+
+test('direct fetches abort a chunked body at the 16 MiB cap before buffering it all', async () => {
+  const chunk = new Uint8Array(1024 * 1024).fill(0x5b); // 1 MiB of '['
+  const totalChunks = 64;
+  let pulled = 0;
+  let cancelled = false;
+  const stream = new ReadableStream({
+    pull(controller) {
+      if (pulled >= totalChunks) { controller.close(); return; }
+      pulled += 1;
+      controller.enqueue(chunk);
+    },
+    cancel() { cancelled = true; },
+  });
+  const fetch = fakeFetch({ ...DIRECT, [HAMRIG_DIRECT_SOURCES.kc2g]: () => new Response(stream, { status: 200, headers: { 'content-type': 'application/json' } }) });
+  const h = harness({ fetch });
+  const res = await h.call('/ionosondes');
+  assert.equal(res.status, 502);
+  assert.match(res.json().error, /response too large/);
+  assert.equal(cancelled, true, 'the upstream stream was cancelled');
+  assert.ok(pulled < totalChunks, `stopped reading after ${pulled} of ${totalChunks} chunks`);
+  assert.ok(pulled <= 18, `aborted right past the cap (pulled ${pulled} MiB)`);
+
+  // A bodiless fake Response (no stream) still gets the post-hoc check.
+  const fake = fakeFetch({ ...DIRECT, [HAMRIG_DIRECT_SOURCES.kc2g]: () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => '['.repeat(17 * 1024 * 1024) }) });
+  const res2 = await harness({ fetch: fake }).call('/ionosondes');
+  assert.equal(res2.status, 502);
+  assert.match(res2.json().error, /response too large/);
+});
+
 test('no route ever serialises PII or secrets, even with a leaky geolocator station', async () => {
   const leakyStation = { ...STATION_DH5DAX, email: 'x@example.org', addr1: 'Hoher Weg 32a', zip: '48599', county: 'Borken', gateway_key: 'gk_SECRET' };
   const h = harness({
@@ -998,6 +1102,33 @@ test('hamrigProxyPlugin installs on dev + preview servers, builds the runtime on
   await dev.uses[0].handler(fakeReq('GET', '/status'), res3, () => {});
   assert.equal(builds, 1);
   assert.equal(await plugin.hamrigRuntime(), runtime);
+});
+
+test('HAMRIG_SOTA_ENABLED=1 reaches the middleware: /status.features.sota flips and /activations includes SOTA', async () => {
+  const runtimeFor = () => ({ client: fakeClient(HAMRIG_ROUTES), cty: fakeCty(), geolocator: fakeGeolocator(), spotFeed: fakeSpotFeed() });
+  const fetch = fakeFetch(DIRECT);
+  const call = async (plugin, url) => {
+    const server = fakeServer();
+    plugin.configureServer(server);
+    const res = fakeRes();
+    await server.uses[0].handler(fakeReq('GET', url), res, () => {});
+    return res;
+  };
+  const off = hamrigProxyPlugin({ HAMRIG_HOME_GRID: 'JO32' }, { log: createLog(), fetchImpl: fetch.fetchImpl, buildRuntimeImpl: async () => runtimeFor() });
+  assert.equal(off.hamrigConfig.sotaEnabled, false);
+  assert.equal((await call(off, '/status')).json().features.sota, false, 'default stays off');
+  const offActs = (await call(off, '/activations?programs=sota')).json();
+  assert.match(offActs.errors.SOTA, /disabled by configuration/);
+  assert.equal(offActs.activations.length, 0);
+  assert.ok(!fetch.calls.some((c) => c.url.includes('sota.org.uk')), 'SOTA never contacted while off');
+
+  const on = hamrigProxyPlugin({ HAMRIG_HOME_GRID: 'JO32', HAMRIG_SOTA_ENABLED: '1' }, { log: createLog(), fetchImpl: fetch.fetchImpl, buildRuntimeImpl: async () => runtimeFor() });
+  assert.equal(on.hamrigConfig.sotaEnabled, true);
+  assert.equal((await call(on, '/status')).json().features.sota, true, 'opt-in is forwarded to the middleware');
+  const onActs = (await call(on, '/activations?programs=sota')).json();
+  assert.equal(onActs.errors.SOTA, undefined);
+  assert.ok(onActs.activations.length > 0 && onActs.activations.every((a) => a.program === 'SOTA'));
+  assert.ok(fetch.calls.some((c) => c.url.startsWith(HAMRIG_DIRECT_SOURCES.sota)), 'SOTA fetched directly once opted in');
 });
 
 test('HAMRIG_ENABLED=0 makes the plugin answer 503 for every /api/hamrig/* path and build nothing', async () => {

@@ -283,12 +283,14 @@ function installClusterStyling() {
 }
 
 function repeaterIdFromPick(picked) {
-  const id = resolvePickId(picked);
-  if (Array.isArray(id)) {
-    const first = id.find((entity) => String(entity?.id || '').startsWith(PREFIX));
+  // Cluster points carry the clustered entity array as their raw id;
+  // resolvePickId coerces that to null, so inspect the raw pick first.
+  const raw = picked?.id ?? picked?.primitive?.id;
+  if (Array.isArray(raw)) {
+    const first = raw.find((entity) => String(entity?.id || '').startsWith(PREFIX));
     return first ? String(first.id).slice(PREFIX.length) : null;
   }
-  const text = String(id || '');
+  const text = String(resolvePickId(picked) || '');
   if (!text.startsWith(PREFIX)) return null;
   const rest = text.slice(PREFIX.length);
   return rest === 'selected' || rest === 'hover' ? null : rest;

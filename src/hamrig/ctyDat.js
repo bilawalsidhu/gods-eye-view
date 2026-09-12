@@ -200,6 +200,8 @@ const RU_AREAS = {
   0: { lat: 56.0, lon: 110.0 },   // East Siberia / Far East
 };
 const RU_KALININGRAD = { lat: 54.7, lon: 20.5 };
+/** Perm / Komi-Permyak / Komi: cty.dat files the 8F/9F, 8G/9G, 8X/9X blocks under European Russia (west of the Urals). */
+const RU_URALS_WEST = { lat: 59.0, lon: 55.0 };
 
 const VK_AREAS = {
   1: { lat: -35.3, lon: 149.1 },  // ACT
@@ -255,9 +257,14 @@ function pick(table, digit) {
  * (USA, Canada, Russia, Australia, Japan, Brazil). A trailing `/digit`
  * overrides the base call's area digit (`W1AW/7` → area 7); `/MM` and `/AM`
  * yield null because the station is at sea or airborne.
+ *
+ * `primaryPrefix` is an optional hint naming the cty.dat entity the call
+ * resolved to; it disambiguates area digits that cty.dat splits across
+ * entities (UA9F/UA9X/R8F/R9F… are European Russia, not West Siberia).
  */
-export function callAreaCentroid(callsign) {
+export function callAreaCentroid(callsign, options = {}) {
   try {
+    const primaryPrefix = options?.primaryPrefix ?? null;
     const call = normalizeCall(callsign);
     if (!call) return null;
     const parts = call.split('/');
@@ -279,6 +286,8 @@ export function callAreaCentroid(callsign) {
     if (letters === 'VY') return pick(VY_AREAS, digit);
     if (/^(?:R[A-Z]?|U[A-I][A-Z]?)$/.test(letters)) {
       if (digit === 2) return letters.startsWith('U') ? { ...RU_KALININGRAD } : pick(RU_AREAS, 3);
+      // Digit 8/9 blocks that cty.dat assigns to European Russia (UA) lie west of the Urals, not in RU_AREAS[8]/[9] (West Siberia).
+      if (primaryPrefix === 'UA' && (digit === 8 || digit === 9)) return { ...RU_URALS_WEST };
       return pick(RU_AREAS, digit);
     }
     if (/^(?:AX|V[IJKL])$/.test(letters)) return pick(VK_AREAS, digit);
@@ -324,7 +333,7 @@ function buildResult(index, ref, matchType, token) {
   let { lat, lon } = ref;
   let precision = 'entity';
   if (LARGE_ENTITY_PREFIXES.has(entity.primaryPrefix)) {
-    const area = callAreaCentroid(token);
+    const area = callAreaCentroid(token, { primaryPrefix: entity.primaryPrefix });
     if (area) { lat = area.lat; lon = area.lon; precision = 'area'; }
   }
   return {

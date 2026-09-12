@@ -3020,3 +3020,217 @@ test('front5: 0.99 km due EAST is the subject, though a degree box rejects it', 
     assert.equal(result.window.centeredOn, 'N546PC');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Ham radio voice tools
+// ---------------------------------------------------------------------------
+
+function createHamVoiceViewer() {
+  return {
+    clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } },
+  };
+}
+
+/** A dx-spots layer module stub that counts the calls a voice tool may make. */
+function createDxSpotsLayerStub(calls, tuneResult = null) {
+  const spot = { id: 'spot-1', dx: 'ZL1ABC', spotterCall: 'W6ABC', freqHz: 14_025_000, band: '20m', mode: 'CW', timeIso: new Date().toISOString() };
+  return {
+    id: 'dx-spots',
+    name: 'DX Spots',
+    source: 'test',
+    updateInterval: -1,
+    async init() { calls.init += 1; },
+    async enable() { calls.enable += 1; },
+    async disable() { calls.disable += 1; },
+    async update() { calls.update += 1; },
+    getStats() { return { count: 1, lastUpdate: Date.now() }; },
+    async ensureLoaded() { calls.ensureLoaded += 1; },
+    setFilter() { calls.setFilter += 1; },
+    resolveSpot() { calls.resolveSpot += 1; return spot; },
+    selectSpot() { calls.selectSpot += 1; },
+    frameSpots() { calls.frameSpots += 1; },
+    getUIState() {
+      return { items: [spot], count: 1, filteredCount: 1, selectedId: spot.id, filter: { band: 'all', mode: 'all', minutes: 60, continent: 'all' }, stale: false, updatedAt: null, error: null };
+    },
+    async tuneNearSpotter() { calls.tuneNearSpotter += 1; return tuneResult; },
+  };
+}
+
+function hamCallCounter() {
+  return { init: 0, enable: 0, disable: 0, update: 0, ensureLoaded: 0, setFilter: 0, resolveSpot: 0, selectSpot: 0, frameSpots: 0, tuneNearSpotter: 0 };
+}
+
+test('voice ham tools stop on a refused layer enable instead of loading and reporting hidden data', async () => {
+  // Regression: ensureHamLayerReady awaited setEnabled() but ignored its result.
+  // A visibility guard (the Space Missions context guard in ui.js) resolves
+  // the enable false after a 'visibility-blocked' notification; the helper
+  // then called ensureLoaded()/tuneNearSpotter() anyway and the tool answered
+  // ok:true with fetched-but-invisible data, no framing and no panel.
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const viewer = createHamVoiceViewer();
+  const dataManager = new DataLayerManager(viewer);
+  const calls = hamCallCounter();
+  dataManager.register(createDxSpotsLayerStub(calls, { ok: true, receiver: { id: 'rx-1', name: 'Kiwi' }, evidence: 'spotter', anchor: { precision: 'exact' }, precision: 'exact', spot: {} }));
+  const receiverCalls = { ensureLoaded: 0, find: 0, frame: 0 };
+  dataManager.register({
+    id: 'web-receivers',
+    name: 'Web Receivers',
+    source: 'test',
+    updateInterval: -1,
+    async init() {},
+    async enable() {},
+    async disable() {},
+    async update() {},
+    getStats() { return { count: 1, lastUpdate: Date.now() }; },
+    async ensureLoaded() { receiverCalls.ensureLoaded += 1; },
+    find() { receiverCalls.find += 1; return []; },
+    frame() { receiverCalls.frame += 1; },
+    getReceivers() { return []; },
+  });
+  const blocked = new Set(['dx-spots', 'web-receivers']);
+  const removeGuard = dataManager.addVisibilityGuard((change) => (
+    blocked.has(change.layerId) && change.enabled ? `Space Missions keeps ${change.layerId} off` : null
+  ));
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+
+  await assert.rejects(
+    runner('tune_to_dx_spot', { dx: 'ZL1ABC' }),
+    { message: 'Space Missions keeps dx-spots off' },
+    'the guard reason must surface as the tool error',
+  );
+  await assert.rejects(
+    runner('show_dx_spots', { band: '20m' }),
+    { message: 'Space Missions keeps dx-spots off' },
+  );
+  await assert.rejects(
+    runner('find_web_receivers', {}),
+    { message: 'Space Missions keeps web-receivers off' },
+  );
+  assert.equal(dataManager.isEnabled('dx-spots'), false);
+  assert.equal(dataManager.isEnabled('web-receivers'), false);
+  assert.equal(calls.enable, 0, 'the guard refuses before any lifecycle work');
+  assert.equal(calls.ensureLoaded, 0, 'a hidden layer must not be loaded');
+  assert.equal(calls.tuneNearSpotter, 0, 'no receiver may be tuned for a hidden spot');
+  assert.equal(calls.frameSpots, 0);
+  assert.equal(calls.setFilter, 0);
+  assert.equal(receiverCalls.ensureLoaded, 0);
+  assert.equal(receiverCalls.find, 0);
+
+  // The same tools work once the guard is gone — the outcome check must not
+  // over-block an ordinary enable.
+  removeGuard();
+  const shown = await runner('show_dx_spots', { band: '20m' });
+  assert.equal(shown.ok, true);
+  assert.equal(shown.enabled, true);
+  assert.equal(dataManager.isEnabled('dx-spots'), true);
+  assert.equal(calls.enable, 1);
+  assert.equal(calls.ensureLoaded, 1);
+  assert.equal(calls.frameSpots, 1);
+  const tuned = await runner('tune_to_dx_spot', { dx: 'ZL1ABC' });
+  assert.equal(tuned.ok, true);
+  assert.equal(calls.tuneNearSpotter, 1);
+  assert.equal(calls.enable, 1, 'an already-enabled layer is not re-enabled');
+});
+
+test('voice ham tools surface a generic error when the enable fails without a guard reason', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const viewer = createHamVoiceViewer();
+  const calls = hamCallCounter();
+  const module = createDxSpotsLayerStub(calls, { ok: true });
+  // Lightweight manager whose enable "succeeds" without ever turning the layer on.
+  const dataManager = {
+    layers: new Map([['dx-spots', { module }]]),
+    isEnabled: () => false,
+    setEnabled: async () => false,
+  };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  await assert.rejects(runner('show_dx_spots', {}), { message: 'DX Spots layer could not be enabled' });
+  assert.equal(calls.ensureLoaded, 0);
+  assert.equal(calls.frameSpots, 0);
+});
+
+test('tune_to_dx_spot keeps the spotter precision separate from the reporting-station anchor', async () => {
+  // Regression: with PSKReporter reception evidence chooseReceiverForSpot
+  // anchors on the REPORTING station's grid (precision 'grid'). The tool used
+  // to publish that as spotterPrecision with a note about the "spotter
+  // position", so the voice repeated a grid-locator precision for a spotter
+  // that was only known to entity precision.
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const viewer = createHamVoiceViewer();
+  const results = [];
+  const module = {
+    resolveSpot: () => ({ id: 'spot-1' }),
+    getUIState: () => ({ selectedId: 'spot-1' }),
+    async ensureLoaded() {},
+    async tuneNearSpotter() { return results.shift(); },
+  };
+  const dataManager = {
+    layers: new Map([['dx-spots', { module }], ['web-receivers', { module: {} }]]),
+    isEnabled: () => true,
+    setEnabled: async () => true,
+  };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  const receiver = { id: 'rx-1', name: 'DL8AAM Kiwi', type: 'kiwisdr', typeLabel: 'KiwiSDR', site: 'Göttingen', url: 'http://example.test' };
+
+  results.push({
+    ok: true,
+    receiver,
+    distanceKm: 42.4,
+    evidence: 'reception',
+    anchor: { lat: 51.5, lon: 9.9, label: 'DL8AAM (JO42)', precision: 'grid' },
+    reason: 'heard by DL8AAM (JO42) on 20 m 3 min ago',
+    precision: 'grid',
+    mode: 'cw',
+    spot: { id: 'spot-1', dx: 'ZL1ABC', spotter: 'W6ABC', spotterPrecision: 'entity', spotterEntity: 'United States' },
+  });
+  const reception = await runner('tune_to_dx_spot', { dx: 'ZL1ABC' });
+  assert.equal(reception.ok, true);
+  assert.equal(reception.evidence, 'reception');
+  assert.equal(reception.spotterPrecision, 'entity', 'the spotter keeps its own precision');
+  assert.equal(reception.anchorPrecision, 'grid', 'the anchor precision is the reporting station\'s');
+  assert.equal(
+    reception.precisionNote,
+    'reporting station DL8AAM (JO42) position is from the Maidenhead grid locator (within about 50 km)',
+  );
+  assert.equal(/spotter/i.test(reception.precisionNote), false, 'the note must not describe the spotter');
+  assert.equal(reception.distanceKm, 42);
+  assert.equal(reception.receiver.id, 'rx-1');
+
+  results.push({
+    ok: true,
+    receiver,
+    distanceKm: 310,
+    evidence: 'spotter',
+    anchor: { lat: 37.2, lon: -119.5, label: 'spotter W6ABC', precision: 'area' },
+    reason: 'DL8AAM Kiwi is 310 km from spotter W6ABC; spotter position is approximate (US call area 6)',
+    precision: 'area',
+    mode: 'cw',
+    spot: { id: 'spot-1', dx: 'ZL1ABC', spotter: 'W6ABC', spotterPrecision: 'area', spotterEntity: 'United States' },
+  });
+  const spotter = await runner('tune_to_dx_spot', { dx: 'ZL1ABC' });
+  assert.equal(spotter.spotterPrecision, 'area');
+  assert.equal(spotter.anchorPrecision, 'area');
+  assert.equal(spotter.precisionNote, 'spotter position is approximate (call-area centroid of United States)');
+
+  // No receiver at all: the note still describes the spotter, whose precision
+  // tuneNearSpotter reports through `precision`.
+  results.push({
+    ok: false,
+    receiver: null,
+    distanceKm: null,
+    evidence: null,
+    anchor: null,
+    reason: 'no online receiver covering 20 m near spotter JA1XYZ; spotter position is approximate (entity centroid of Japan, ±2000 km)',
+    precision: 'entity',
+    mode: 'cw',
+    spot: { id: 'spot-1', dx: 'ZL1ABC', spotter: 'JA1XYZ', spotterPrecision: 'entity', spotterEntity: 'Japan' },
+  });
+  const none = await runner('tune_to_dx_spot', {});
+  assert.equal(none.ok, false);
+  assert.equal(none.spotterPrecision, 'entity');
+  assert.equal(none.anchorPrecision, 'entity');
+  assert.equal(none.precisionNote, 'spotter position is approximate (entity centroid of Japan, ±2000 km)');
+  assert.equal(none.error, none.reason);
+});

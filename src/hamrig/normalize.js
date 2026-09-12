@@ -156,9 +156,11 @@ function acceptHz(hz) {
  *  - `unitHint` ∈ 'mhz' | 'khz' | 'hz' | 'auto'.
  *  - thousands separators are stripped ("14,074" → 14074).
  *  - 'khz' guard: values ≥ 1e6 are really Hz.
- *  - POTA sanity: a kHz value > 1 300 000 written without a decimal point
- *    had its point dropped ('1403650' = 14036.50 kHz) → /100, but only when
- *    the corrected value lands in a ham band and the raw one does not.
+ *  - POTA sanity: a kHz value ≥ 100 000 written without a decimal point had
+ *    its point dropped — a two-decimal drop ('1403650' = 14036.50 kHz,
+ *    '703200' = 7032.00 kHz) → /100, or a one-decimal drop ('140625' =
+ *    14062.5 kHz) → /10 — but only when the value as written lands in no
+ *    ham band and the repaired one does. The /100 repair is tried first.
  */
 export function parseSpotFrequency(value, unitHint = 'auto') {
   const text = typeof value === 'string' ? value.trim().replace(/,/g, '') : value;
@@ -168,12 +170,17 @@ export function parseSpotFrequency(value, unitHint = 'auto') {
   const hint = String(unitHint ?? 'auto').toLowerCase();
 
   const fromKhz = (k) => {
-    if (k > 1_300_000 && !hasPoint) {
-      const fixed = k * 10; // (k / 100) kHz → Hz
-      if (bandForHz(fixed) && !bandForHz(k)) return acceptHz(fixed);
+    const raw = k >= 1e6 ? k : k * 1e3; // 'khz' guard: ≥ 1e6 is really Hz
+    if (!hasPoint && k >= 100_000 && !bandForHz(raw)) {
+      // Dropped-point repairs, compared against the interpretation the value
+      // would otherwise get (raw), so 30 m ('1013600', k in [1e6, 1.3e6)) and
+      // the sub-1e6 bands ('703200', '357300', '184000') are covered too.
+      const twoDecimals = k * 10; // (k / 100) kHz → Hz: '1403650' = 14036.50 kHz
+      if (bandForHz(twoDecimals)) return acceptHz(twoDecimals);
+      const oneDecimal = k * 100; // (k / 10) kHz → Hz: '140625' = 14062.5 kHz
+      if (bandForHz(oneDecimal)) return acceptHz(oneDecimal);
     }
-    if (k >= 1e6) return acceptHz(k); // already Hz
-    return acceptHz(k * 1e3);
+    return acceptHz(raw);
   };
 
   if (hint === 'mhz') return acceptHz(f * 1e6);
@@ -253,11 +260,17 @@ function explicitMode(value) {
   return EXPLICIT_MODES[text.replace(/[\s_-]+/g, '')] ?? null;
 }
 
-function modeFromComment(comment) {
+function modeFromComment(comment, hz = null) {
   const text = str(comment);
   if (!text) return null;
+  const value = num(hz);
+  const khz = value !== null && value > 0 ? value / 1000 : null;
   let best = null;
   for (const [re, mode] of COMMENT_KEYWORDS) {
+    // Upper-case "FM" is "from" in caps-typed cluster comments ("TNX FM JAPAN",
+    // "QSL FM EU"); FM is only a mode from the 10 m FM segment (29 MHz) up, so
+    // below that the remaining keywords and the band-plan tables decide.
+    if (mode === 'FM' && khz !== null && khz < 29_000) continue;
     const match = re.exec(text);
     if (match && (best === null || match.index < best.index)) best = { index: match.index, mode };
   }
@@ -299,7 +312,7 @@ function modeFromFrequency(hz) {
  * band-plan segment > null.
  */
 export function inferMode(comment, hz, explicit = null) {
-  return explicitMode(explicit) ?? modeFromComment(comment) ?? modeFromFrequency(hz);
+  return explicitMode(explicit) ?? modeFromComment(comment, hz) ?? modeFromFrequency(hz);
 }
 
 // ---------------------------------------------------------------------------
@@ -625,15 +638,21 @@ export function normalizeDxpedition(op, mostWantedByCall = null, locate = null) 
 // Space weather / propagation overlays
 // ---------------------------------------------------------------------------
 
-/** NOAA OVATION aurora overlay via HamRig → { points, current, level, ... }. */
+/**
+ * NOAA OVATION aurora overlay via HamRig → { points, current, level, ... }.
+ * OVATION reports longitudes 0..359, so they are wrapped to −180..180 rather
+ * than rejected (coords() would drop the whole western hemisphere).
+ */
 export function normalizeAurora(payload) {
   const rows = Array.isArray(payload?.points) ? payload.points : [];
   const points = [];
   for (const row of rows) {
-    const position = coords(row?.lat, row?.lon);
+    const lat = num(row?.lat);
+    const lon = num(row?.lon);
     const value = num(row?.value);
-    if (!position || value === null) continue;
-    points.push({ lat: position.lat, lon: position.lon, value });
+    if (lat === null || lon === null || value === null) continue;
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 360) continue;
+    points.push({ lat, lon: wrapLon(lon), value });
   }
   return {
     points,

@@ -244,13 +244,61 @@ test('locatePrecise: HTTP 404/500 → cty fallback without throwing', async () =
   const geo = createGeolocator({ cty: fakeCty(), client, log: quiet });
   assert.equal((await geo.locatePrecise('DL1ABC')).precision, 'entity');
   assert.equal((await geo.locatePrecise('DL2ABC')).precision, 'entity');
-  assert.equal(await geo.stationFor('DL1ABC'), null, '404 payload carries no row → cty alone is not a station');
+  const station = await geo.stationFor('DL1ABC');
+  assert.ok(station, '404 payload carries no row → cty match is still a station card');
+  assert.equal(station.callsign, 'DL1ABC');
+  assert.equal(station.precision, 'entity');
+  assert.equal(station.name, null);
+  assert.deepEqual(station.sources, ['cty.dat']);
+  const after5xx = await geo.stationFor('DL2ABC');
+  assert.equal(after5xx?.precision, 'entity', '5xx also falls back to the cty card');
 });
 
 test('locatePrecise: without a client it is cty only', async () => {
   const geo = createGeolocator({ cty: fakeCty(), client: null, log: quiet });
   assert.equal((await geo.locatePrecise('DL1ABC')).precision, 'entity');
-  assert.equal(await geo.stationFor('DL1ABC'), null);
+  const station = await geo.stationFor('DL1ABC');
+  assert.ok(station, 'cty alone yields a station card');
+  assert.equal(station.callsign, 'DL1ABC');
+  assert.equal(station.precision, 'entity');
+  assert.equal(station.name, null);
+  assert.deepEqual(station.sources, ['cty.dat']);
+  assert.equal(station.lat, 51);
+  assert.equal(station.lon, 10);
+});
+
+test('stationFor: slash call whose callsign-db path 404s (Apache HTML) still gets a cty station card', async () => {
+  // HamRig's Apache front end rejects %2F in the path (AllowEncodedSlashes off) with an HTML 404.
+  const client = fakeClient({ db: { 'DL2SBY/P': { status: 404, json: null, text: '<html><body>Not Found</body></html>' } } });
+  const geo = createGeolocator({ cty: fakeCty(), client, log: quiet });
+  const station = await geo.stationFor('DL2SBY/P');
+  assert.ok(station, 'a cty match is enough for a station card');
+  assert.equal(station.callsign, 'DL2SBY/P');
+  assert.equal(station.precision, 'entity');
+  assert.equal(station.name, null);
+  assert.equal(station.country, 'Fed. Rep. of Germany');
+  assert.deepEqual(station.sources, ['cty.dat']);
+  assert.equal(client.calls[0].path, '/api/public/callsign-db/DL2SBY%2FP');
+  const loc = await geo.locatePrecise('DL2SBY/P');
+  assert.equal(loc.precision, 'entity');
+  assert.equal(client.calls.length, 1, 'station and loc share one cache entry');
+  // Unknown everywhere (no cty match either) is still not a station.
+  assert.equal(await geo.stationFor('ZZ9ZZZ'), null);
+});
+
+test('stationFor: synthesized cty card is upgraded by locate-calls when authenticated', async () => {
+  const client = fakeClient({
+    canAuthenticate: true,
+    db: { 'IK6MNB/P': { status: 404, json: null, text: '<html>' } },
+    located: { 'IK6MNB/P': { adif: 248, entity: 'Italy', lat: 43.5, lon: 13.5 } },
+  });
+  const geo = createGeolocator({ cty: fakeCty(), client, log: quiet });
+  const station = await geo.stationFor('IK6MNB/P');
+  assert.ok(station);
+  assert.equal(station.lat, 43.5, 'prefix-row coordinates beat the cty centroid');
+  assert.equal(station.lon, 13.5);
+  assert.equal(station.precision, 'entity');
+  assert.deepEqual(station.sources, ['cty.dat']);
 });
 
 test('concurrency queue limits in-flight lookups and shares duplicates', async () => {

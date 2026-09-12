@@ -11,7 +11,12 @@
  *   `POST /api/map/data/locate-calls` (prefix-row coordinates, precision
  *   'entity'), else the cty result. Callsign-db answers are run through
  *   `normalizeStation`, which turns HamDB `NOT_FOUND` sentinels into nulls and
- *   strips PII; `stationFor(call)` returns that Station.
+ *   strips PII; `stationFor(call)` returns that Station. When callsign-db
+ *   yields no usable row (404 — e.g. HamRig's Apache front end rejects `%2F`
+ *   in the path for `DL2SBY/P`-style calls — or 5xx, or no client) a cty
+ *   match is still a station card (`sources: ['cty.dat']`, name null), the
+ *   same fallback the proxy applies without a geolocator; only calls unknown
+ *   everywhere yield null.
  *
  * Calls are cleaned with `cleanSpotter` semantics before any lookup
  * (`DL8LAS-#` / `W3LPL-2` → `DL8LAS` / `W3LPL`, upper-cased, trailing colon
@@ -287,6 +292,9 @@ export function createGeolocator({
     } else if (result && Number(result.status) >= 500) {
       transient = true;
     }
+
+    // 404 / no usable row: a cty match is still a station card (parity with the proxy's no-geolocator fallback).
+    station ??= normalizeStation({ callsign: key }, ctyResult, { baseUrl: baseUrl(), callsign: key });
 
     const precise = station && PRECISE_PRECISIONS.has(station.precision) ? locFromStation(station) : null;
     if (precise) {

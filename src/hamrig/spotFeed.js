@@ -25,7 +25,12 @@
  *   HamRig's own receipt time. `correctRestClockSkew` anchors the newest REST
  *   row to the payload's `updated` (never later than now) and shifts the rest
  *   relatively whenever the skew exceeds ten minutes — otherwise every seed
- *   row would look older than `maxAgeMs` and be thrown away.
+ *   row would look older than `maxAgeMs` and be thrown away. `updated` is
+ *   HamRig's cache-write time, not a property of the rows, so the anchor is
+ *   only recomputed when the newest raw cluster minute changes: while the
+ *   upstream is stalled (same rows every 60 s poll) the previous offset is
+ *   reused, otherwise every unchanged row would drift forward past
+ *   `DEDUPE_WINDOW_MS` on each poll and be re-added as a fresh spot.
  * - After `idleShutdownMs` without a `getSpots()` call the socket is closed
  *   and every timer cleared; the next `getSpots()` starts everything again.
  *
@@ -83,19 +88,30 @@ export function reconnectDelayMs(attempt) {
 export function correctRestClockSkew(list, { updatedMs = null, nowMs = Date.now() } = {}) {
   const spots = Array.isArray(list) ? list.filter(Boolean) : [];
   const anchor = Math.min(finite(updatedMs) ?? nowMs, nowMs);
-  let newest = 0;
-  for (const spot of spots) newest = Math.max(newest, timeMs(spot));
+  const newest = newestTimeMs(spots);
   if (newest <= 0) return { spots, offsetMs: 0 };
   const offsetMs = anchor - newest;
   if (Math.abs(offsetMs) <= SKEW_APPLY_MS) return { spots, offsetMs: 0 };
-  const shifted = spots.map((spot) => {
+  return { spots: shiftSpots(spots, offsetMs), offsetMs };
+}
+
+/** Newest `timeIso` in `spots` as epoch ms (0 when none parses). */
+function newestTimeMs(spots) {
+  let newest = 0;
+  for (const spot of spots) newest = Math.max(newest, timeMs(spot));
+  return newest;
+}
+
+/** Copies of `spots` with every parseable `timeIso` moved by `offsetMs`; ids recomputed. */
+function shiftSpots(spots, offsetMs) {
+  if (offsetMs === 0) return spots;
+  return spots.map((spot) => {
     const ms = timeMs(spot);
     if (ms <= 0) return spot;
     const next = { ...spot, timeIso: new Date(ms + offsetMs).toISOString() };
     next.id = spotKey(next);
     return next;
   });
-  return { spots: shifted, offsetMs };
 }
 
 /** Decode a WebSocket message payload (string / Buffer / ArrayBuffer / object) into JSON values. */
@@ -209,6 +225,8 @@ export function createSpotFeed({
     updatedAt: null,
     lastSeedAt: null,
     restClockOffsetMs: 0,
+    /** Newest raw (uncorrected) cluster minute that produced `restClockOffsetMs`. */
+    restAnchorRawMs: 0,
     lastSpotAt: null,
     seedError: null,
     socketError: null,
@@ -331,12 +349,26 @@ export function createSpotFeed({
         } else {
           const nowMs = now();
           const normalized = rows.map((row) => normalizeRestSpot(row, { nowMs })).filter(Boolean);
-          const updatedMs = Date.parse(String(result.json.updated ?? ''));
-          const { spots: corrected, offsetMs } = correctRestClockSkew(normalized, { updatedMs: Number.isFinite(updatedMs) ? updatedMs : null, nowMs });
+          const newestRaw = newestTimeMs(normalized);
+          let corrected;
+          let offsetMs;
+          if (newestRaw > 0 && newestRaw === state.restAnchorRawMs) {
+            // Same newest cluster minute as the last seed: the rows have not
+            // moved, so keep the previous anchor. `updated` is HamRig's
+            // cache-write time and advances on every poll; re-anchoring to it
+            // would drift every unchanged row past DEDUPE_WINDOW_MS and
+            // re-add it as a fresh spot.
+            offsetMs = state.restClockOffsetMs;
+            corrected = shiftSpots(normalized, offsetMs);
+          } else {
+            const updatedMs = Date.parse(String(result.json.updated ?? ''));
+            ({ spots: corrected, offsetMs } = correctRestClockSkew(normalized, { updatedMs: Number.isFinite(updatedMs) ? updatedMs : null, nowMs }));
+          }
           if (offsetMs !== 0 && offsetMs !== state.restClockOffsetMs) {
             info(`[hamrig/spots] REST cluster clock skewed by ${Math.round(offsetMs / 60000)} min; re-anchoring seed rows`);
           }
           state.restClockOffsetMs = offsetMs;
+          state.restAnchorRawMs = newestRaw;
           for (const spot of corrected) {
             if (addSpot(spot)) added += 1;
           }

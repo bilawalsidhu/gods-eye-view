@@ -58,7 +58,6 @@ const OVERLAY_HEIGHT_M = 30_000;
 const AURORA_HEIGHT_M = 100_000;
 const IONOSONDE_FLY_ALTITUDE_M = 1_500_000;
 const ITEM_LIMIT = 200;
-const AURORA_ID = `${PREFIX}aurora`;
 
 let _viewer = null;
 let _dataSource = null;
@@ -352,7 +351,7 @@ function renderAurora() {
     const color = auroraColor(point.value);
     if (!color) continue;
     _auroraCollection.add({
-      id: AURORA_ID,
+      // No pick id: the oval is decoration, not a selectable feature.
       position: Cesium.Cartesian3.fromDegrees(point.lon, point.lat, AURORA_HEIGHT_M),
       color: new Cesium.Color(color.r, color.g, color.b, color.a),
       pixelSize: auroraPointSize(point.value),
@@ -598,7 +597,11 @@ function ionoCodeFromPick(picked) {
 
 function installInteraction() {
   if (!_viewer || _clickHandler) return;
-  registerPickOwner(HAM_PROPAGATION_LAYER_ID, (id) => typeof id === 'string' && id.startsWith(PREFIX));
+  // Only the ionosonde markers are interactive. Grayline wedges, the aurora
+  // oval and VOACAP cells cover huge areas; claiming their ids would turn
+  // every click on the night hemisphere into an 'owned' pick and suppress
+  // sibling layers' empty-space deselect path.
+  registerPickOwner(HAM_PROPAGATION_LAYER_ID, (id) => typeof id === 'string' && id.startsWith(`${PREFIX}iono:`));
   _clickHandler = new Cesium.ScreenSpaceEventHandler(_viewer.scene.canvas);
   _clickHandler.setInputAction((click) => {
     if (!presentationAllowed()) return;

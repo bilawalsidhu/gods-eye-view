@@ -87,6 +87,12 @@ const CALLSIGN_RE = /^[A-Z0-9/-]{3,15}$/i;
 /** Prefix-only DXpedition callsigns ('TF', 'J3') and locate() inputs may be shorter. */
 const LOOSE_CALLSIGN_RE = /^[A-Z0-9/-]{1,15}$/i;
 const MAX_LOCATE_CALLS = 300;
+/** `precise: true` costs one upstream call per callsign; the client sends ≤ 2. */
+const MAX_PRECISE_LOCATE_CALLS = 25;
+/** Overall deadline for one `/locate` request (matches the upstream timeout). */
+const LOCATE_DEADLINE_MS = 20000;
+/** Bound for the shared response cache: keys derive from query parameters, so LRU-evict beyond this. */
+const HAMRIG_CACHE_MAX_ENTRIES = 256;
 const ACTIVATION_PROGRAMS = Object.freeze(['POTA', 'SOTA', 'WWFF', 'BOTA']);
 const REPEATER_BANDS = Object.freeze(['6m', '2m', '1.25m', '70cm']);
 const REPEATER_KINDS = Object.freeze(['all', 'fm', 'dstar']);
@@ -105,6 +111,42 @@ export const HAMRIG_FORBIDDEN_KEYS = Object.freeze([
 // ---------------------------------------------------------------------------
 // Small helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Read a fetch Response body as text, aborting (and cancelling the stream) as
+ * soon as more than `maxBytes` have arrived — chunked upstreams carry no
+ * content-length, so the cap must be enforced while streaming, not after
+ * buffering. Mirrors `hamrigClient.readBodyText`. Fake responses without a
+ * body stream fall back to `text()` with a post-hoc check.
+ */
+async function readCappedText(response, maxBytes) {
+  const tooLarge = () => {
+    const error = new Error(`response exceeded ${maxBytes} bytes`);
+    error.code = 'UPSTREAM_TOO_LARGE';
+    return error;
+  };
+  const body = response?.body;
+  if (!body || typeof body.getReader !== 'function') {
+    const text = String(await response.text());
+    if (Buffer.byteLength(text) > maxBytes) throw tooLarge();
+    return text;
+  }
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value?.byteLength ?? 0;
+    if (total > maxBytes) {
+      try { await reader.cancel(); } catch { /* no-op */ }
+      throw tooLarge();
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
 
 class HttpError extends Error {
   constructor(status, message, extra = null) {
@@ -252,7 +294,7 @@ async function readJsonBody(req, maxBytes = REQUEST_BODY_MAX_BYTES) {
  * @param {typeof fetch} [options.fetchImpl] used for POTA/SOTA/KC2G direct fetches
  * @param {() => number} [options.now]
  * @param {{ warn?: Function, info?: Function }|null} [options.log]
- * @param {{ enabled?: boolean, homeGrid?: string|null, baseUrl?: string|null, spotsWsUrl?: string|null }} [options.config]
+ * @param {{ enabled?: boolean, homeGrid?: string|null, baseUrl?: string|null, spotsWsUrl?: string|null, sotaEnabled?: boolean, locateDeadlineMs?: number }} [options.config]
  */
 export function createHamrigProxyMiddleware({
   client = null,
@@ -267,6 +309,7 @@ export function createHamrigProxyMiddleware({
   const enabled = config?.enabled !== false;
   const homeGrid = config?.homeGrid && isValidGrid(config.homeGrid) ? String(config.homeGrid).trim() : null;
   const sotaEnabled = config?.sotaEnabled === true;
+  const locateDeadlineMs = Number.isFinite(config?.locateDeadlineMs) && config.locateDeadlineMs > 0 ? config.locateDeadlineMs : LOCATE_DEADLINE_MS;
   const SOTA_DISABLED_MESSAGE = 'disabled by configuration: the SOTA API terms require prior approval for AI-written clients — set HAMRIG_SOTA_ENABLED=1 once approved';
   const warn = (message) => { try { log?.warn?.(message); } catch { /* logging never breaks a request */ } };
 
@@ -275,22 +318,34 @@ export function createHamrigProxyMiddleware({
   const cache = new Map();
   const inflight = new Map();
 
+  /** Insert into a Map in LRU order and evict oldest-first beyond `maxEntries`. */
+  function lruSet(map, key, value, maxEntries = HAMRIG_CACHE_MAX_ENTRIES) {
+    map.delete(key);
+    map.set(key, value);
+    while (map.size > maxEntries) map.delete(map.keys().next().value);
+  }
+
   /**
    * Memoise `producer()` under `key` for `ttlMs`. Concurrent callers share one
    * in-flight promise. When the producer fails and a stale entry exists (up to
    * STALE_TTL_FACTOR × ttl old) the stale value is returned with `stale: true`.
+   * The cache is bounded (HAMRIG_CACHE_MAX_ENTRIES, LRU) because several keys
+   * derive from user-controlled query parameters.
    */
   async function cached(key, ttlMs, producer) {
     const entry = cache.get(key);
     const age = entry ? now() - entry.cachedAt : Infinity;
-    if (entry && age < ttlMs) return { value: entry.value, stale: false, cachedAt: entry.cachedAt };
+    if (entry && age < ttlMs) {
+      lruSet(cache, key, entry); // refresh recency
+      return { value: entry.value, stale: false, cachedAt: entry.cachedAt };
+    }
     if (!inflight.has(key)) {
       inflight.set(key, Promise.resolve().then(producer).finally(() => { inflight.delete(key); }));
     }
     try {
       const value = await inflight.get(key);
       const cachedAt = now();
-      cache.set(key, { value, cachedAt });
+      lruSet(cache, key, { value, cachedAt });
       return { value, stale: false, cachedAt };
     } catch (error) {
       if (entry && age < ttlMs * STALE_TTL_FACTOR) {
@@ -340,11 +395,11 @@ export function createHamrigProxyMiddleware({
       if (Number.isFinite(declared) && declared > UPSTREAM_MAX_BYTES) throw upstreamError(`${label} response too large`);
       let text;
       try {
-        text = await response.text();
+        text = await readCappedText(response, UPSTREAM_MAX_BYTES);
       } catch (error) {
+        if (error?.code === 'UPSTREAM_TOO_LARGE') throw upstreamError(`${label} response too large`);
         throw upstreamError(`${label} body could not be read: ${shortMessage(error)}`);
       }
-      if (Buffer.byteLength(text) > UPSTREAM_MAX_BYTES) throw upstreamError(`${label} response too large`);
       try {
         return JSON.parse(text);
       } catch {
@@ -462,13 +517,42 @@ export function createHamrigProxyMiddleware({
       if (!LOOSE_CALLSIGN_RE.test(call)) { located[call] = null; continue; }
       if (!(call in located)) { located[call] = null; valid.push(call); }
     }
+    if (precise && valid.length > MAX_PRECISE_LOCATE_CALLS) {
+      throw badRequest(`precise locate accepts at most ${MAX_PRECISE_LOCATE_CALLS} calls`);
+    }
     await ensureCty();
     if (geolocator && typeof geolocator.locateMany === 'function') {
+      // Precise lookups cost one upstream call each: only real callsigns go to
+      // the geolocator; prefix-only entries ('TF', 'J3') resolve locally.
+      let network = valid;
+      if (precise) {
+        network = [];
+        for (const call of valid) {
+          if (CALLSIGN_RE.test(call)) network.push(call);
+          else located[call] = locateEntity(call);
+        }
+      }
       let result;
+      let timer = null;
       try {
-        result = await geolocator.locateMany(valid, { precise });
+        // Race, do not cancel: once the batch is capped a stuck queue must
+        // still not outlive the client's own timeout.
+        result = await Promise.race([
+          geolocator.locateMany(network, { precise }),
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new HttpError(504, 'locate deadline exceeded')), locateDeadlineMs);
+            timer.unref?.();
+          }),
+        ]);
       } catch (error) {
-        throw upstreamError(`Locate failed: ${shortMessage(error)}`);
+        if (error instanceof HttpError && error.status === 504) {
+          warn(`[hamrig] POST /locate: ${error.message} after ${locateDeadlineMs} ms — answering entity-level positions`);
+          result = new Map(network.map((call) => [call, locateEntity(call)]));
+        } else {
+          throw upstreamError(`Locate failed: ${shortMessage(error)}`);
+        }
+      } finally {
+        if (timer) clearTimeout(timer);
       }
       Object.assign(located, mapToObject(result));
     } else {
@@ -522,10 +606,10 @@ export function createHamrigProxyMiddleware({
     if (hit && now() - hit.cachedAt < HAMRIG_CACHE_TTL_MS.sotaSummit) return hit.value;
     try {
       const summit = await fetchDirectJson(`${HAMRIG_DIRECT_SOURCES.sotaSummit}${encodeURIComponent(code)}`, 'SOTA summit');
-      summitCache.set(code, { value: summit, cachedAt: now() });
+      lruSet(summitCache, code, { value: summit, cachedAt: now() });
       return summit;
     } catch {
-      summitCache.set(code, { value: null, cachedAt: now() });
+      lruSet(summitCache, code, { value: null, cachedAt: now() });
       return null;
     }
   }
@@ -671,7 +755,12 @@ export function createHamrigProxyMiddleware({
     const hit = await cached('aurora', HAMRIG_CACHE_TTL_MS.aurora, async () => {
       const payload = await hamrigJson('/api/overlay/aurora', { label: 'overlay/aurora' });
       const aurora = normalizeAurora(payload);
-      return { ...aurora, points: aurora.points.filter((point) => point.value > 5), sources: ['hamrig:overlay-aurora (NOAA SWPC OVATION)'] };
+      // HamRig reports its own upstream: 'NOAA SWPC Ovation' normally, or
+      // 'Clear Sky Institute (fallback)' when it serves HamClock's relayed
+      // file during a NOAA outage. Carry that label instead of hard-coding it.
+      const labelOf = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+      const source = labelOf(payload?.source) ?? labelOf(payload?.data_origin) ?? 'NOAA SWPC OVATION';
+      return { ...aurora, source, points: aurora.points.filter((point) => point.value > 5), sources: [`hamrig:overlay-aurora (${source})`] };
     });
     return { ...hit.value, stale: hit.stale, updatedAt: new Date(hit.cachedAt).toISOString() };
   }
@@ -686,7 +775,7 @@ export function createHamrigProxyMiddleware({
       : parseNumber(hourParam, { name: 'hour', min: 0, max: 23, integer: true });
     const resolution = parseNumber(params.get('resolution'), { name: 'resolution', integer: true, fallback: 10 });
     if (!VOACAP_RESOLUTIONS.includes(resolution)) throw badRequest(`resolution must be one of ${VOACAP_RESOLUTIONS.join(', ')}`);
-    const key = `voacap:${lat.toFixed(2)}|${lon.toFixed(2)}|${frequencyMhz}|${hour}|${resolution}`;
+    const key = `voacap:${lat.toFixed(2)}|${lon.toFixed(2)}|${frequencyMhz.toFixed(2)}|${hour}|${resolution}`;
     const hit = await cached(key, HAMRIG_CACHE_TTL_MS.voacap, async () => {
       const payload = await hamrigJson('/api/overlay/voacap', {
         query: { tx_lat: lat.toFixed(4), tx_lon: lon.toFixed(4), frequency: frequencyMhz, hour, resolution },
@@ -868,7 +957,11 @@ export function createHamrigProxyMiddleware({
     if (method !== 'GET' && method !== 'HEAD') return { status: 405, allow: 'GET' };
 
     if (head === 'status' && segments.length === 1) return { status: 200, body: statusPayload() };
-    if (head === 'station' && segments.length === 2) return { status: 200, body: await stationPayload(decodeURIComponent(segments[1])) };
+    if (head === 'station' && segments.length === 2) {
+      let raw;
+      try { raw = decodeURIComponent(segments[1]); } catch { throw badRequest('callsign is not a valid callsign'); }
+      return { status: 200, body: await stationPayload(raw) };
+    }
     if (head === 'spots' && segments.length === 1) return { status: 200, body: await spotsPayload(params) };
     if (head === 'activations' && segments.length === 1) return { status: 200, body: await activationsPayload(params) };
     if (head === 'dxpeditions' && segments.length === 1) return { status: 200, body: await dxpeditionsPayload() };

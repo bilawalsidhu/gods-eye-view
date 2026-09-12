@@ -38,7 +38,7 @@ function envString(env, key) {
  * Parse the HAMRIG_* environment block into a config object.
  *
  * @param {Record<string, string|undefined>} [env=process.env]
- * @returns {{ enabled: boolean, baseUrl: string, username: string, password: string, spotsWsUrl: string, ctyUrl: string, homeGrid: string|null }}
+ * @returns {{ enabled: boolean, baseUrl: string, username: string, password: string, spotsWsUrl: string, ctyUrl: string, homeGrid: string|null, sotaEnabled: boolean }}
  */
 export function parseHamrigEnv(env = process.env) {
   const enabledRaw = envString(env, 'HAMRIG_ENABLED').toLowerCase();
@@ -170,6 +170,7 @@ export function hamrigProxyPlugin(env = process.env, options = {}) {
               homeGrid: config.homeGrid,
               baseUrl: normalizeHamrigBaseUrl(config.baseUrl) ?? config.baseUrl,
               spotsWsUrl: config.spotsWsUrl,
+              sotaEnabled: config.sotaEnabled,
             },
           });
           return middleware;

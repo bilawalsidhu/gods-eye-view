@@ -183,7 +183,7 @@ const CREDIT_EXPECTATIONS = {
   'dx-spots': /HamRig|dxfun|cluster/i,
   'ham-activations': /Parks on the Air|Summits on the Air|WWFF/i,
   dxpeditions: /NG3K|Club Log/i,
-  'ham-propagation': /NOAA|kc2g|VOACAP/i,
+  'ham-propagation': /NOAA|N0NBH|kc2g|VOACAP/i,
   'ham-beacons': /NCDXF/i,
   'ham-repeaters': /repeater database/i,
   'ham-stations': /callsign database/i,

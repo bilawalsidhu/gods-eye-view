@@ -9,7 +9,7 @@ import * as Cesium from 'cesium';
  * datacenters/dams, adsb.lol, Overpass roads), CC BY-NC-SA (TeleGeography
  * cables), NASA FIRMS, CelesTrak, USGS, City of Austin, GBFS operators, OpenSky,
  * and the amateur-radio feeds relayed by HamRig (DX cluster nodes, AD1C country
- * files, POTA, SOTA, WWFF/WWBOTA, NG3K, Club Log, NOAA SWPC, VOACAP,
+ * files, POTA, SOTA, WWFF/WWBOTA, NG3K, Club Log, N0NBH/hamqsl.com, NOAA SWPC, VOACAP,
  * prop.kc2g.com, PSKReporter, wspr.live, NCDXF/IARU).
  * The MIT code license does NOT cover this data.
  *
@@ -210,6 +210,14 @@ export const DATA_CREDITS = [
       '(public domain)',
   },
   {
+    // hamqsl.com: "you must leave the credit to all people (me and the others)
+    // intact" — the link back is the licence condition, keep it.
+    key: 'n0nbh-hamqsl',
+    html:
+      'Solar-terrestrial data (SFI / A / K, HF band conditions): ' +
+      '<a href="https://www.hamqsl.com/solar.html" target="_blank" rel="noopener">N0NBH — hamqsl.com</a> via HamRig',
+  },
+  {
     key: 'voacap',
     html:
       'HF reliability maps: VOACAP via ' +
@@ -246,7 +254,7 @@ export const DATA_CREDITS = [
     key: 'hamrig-repeaters',
     html:
       'Repeaters: HamRig repeater database ' +
-      '(relaislisten.darc.de DL3EL, hearham.com, dstarinfo.com, ircddb.net)',
+      '(HamRig FM table; hearham.com; dstarinfo.com; ircddb.net)',
   },
   {
     key: 'hamrig-callsign-db',

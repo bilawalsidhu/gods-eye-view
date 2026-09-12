@@ -219,15 +219,26 @@ export function hashString(text) {
 }
 
 /**
- * Deterministic spiral offset for a spot id: a slot on a sunflower (golden
- * angle) spiral, radius ≤ `maxKm`. Same id → same offset on every render.
+ * Offset for slot `slot` of `count` on a sunflower (golden angle) spiral,
+ * radius ≤ `maxKm`. Distinct slots always map to distinct positions.
+ */
+export function slotOffset(slot, count, maxKm = PILE_MAX_OFFSET_KM) {
+  const total = Math.max(1, Math.round(count));
+  const index = Math.max(0, Math.floor(Number(slot) || 0)) % total;
+  const distance = maxKm * Math.sqrt((index + 1) / total);
+  const bearingDeg = (index * 137.50776405) % 360;
+  return { slot: index, bearingDeg, distanceKm: Math.round(distance * 1000) / 1000 };
+}
+
+/**
+ * Deterministic spiral offset for a spot id: a hashed slot on the spiral.
+ * Same id → same offset on every render. Kept for callers that need an
+ * id-only offset; `pileOffsets` assigns slots by rank within the pile so
+ * hash collisions can never stack two spots on one point.
  */
 export function spiralOffset(id, { maxKm = PILE_MAX_OFFSET_KM, slots = 48 } = {}) {
   const count = Math.max(1, Math.round(slots));
-  const slot = hashString(id) % count;
-  const distance = maxKm * Math.sqrt((slot + 1) / count);
-  const bearingDeg = (slot * 137.50776405) % 360;
-  return { slot, bearingDeg, distanceKm: Math.round(distance * 1000) / 1000 };
+  return slotOffset(hashString(id) % count, count, maxKm);
 }
 
 function positionKey(loc) {
@@ -264,16 +275,22 @@ export function pileOffsets(spots, { maxKm = PILE_MAX_OFFSET_KM, preciseKm = PIL
   }
   const out = new Map();
   for (const group of groups.values()) {
-    for (const spot of group) {
-      if (group.length < 2) {
-        out.set(spot.id, { lat: spot.dxLoc.lat, lon: spot.dxLoc.lon, offsetKm: 0, piled: false });
-        continue;
-      }
+    if (group.length < 2) {
+      const [spot] = group;
+      out.set(spot.id, { lat: spot.dxLoc.lat, lon: spot.dxLoc.lon, offsetKm: 0, piled: false });
+      continue;
+    }
+    // Slots by rank within the pile (sorted by id) rather than by hash: a
+    // hashed slot collides for ~30% of spots in a 40-spot pile and stacks them
+    // on one point. Rank keeps an id's offset stable across refreshes while
+    // pile membership is unchanged, and guarantees distinct positions.
+    const ordered = [...group].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    ordered.forEach((spot, index) => {
       const limit = isApproximatePrecision(spot.dxLoc.precision) ? maxKm : preciseKm;
-      const { bearingDeg, distanceKm: offsetKm } = spiralOffset(spot.id, { maxKm: limit });
+      const { bearingDeg, distanceKm: offsetKm } = slotOffset(index, ordered.length, limit);
       const moved = offsetLatLon(spot.dxLoc, bearingDeg, offsetKm);
       out.set(spot.id, { lat: moved.lat, lon: moved.lon, offsetKm, piled: true });
-    }
+    });
   }
   return out;
 }

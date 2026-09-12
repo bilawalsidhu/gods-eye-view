@@ -75,6 +75,7 @@ import hamActivationsLayer from './data/hamActivations.js';
 import dxpeditionsLayer from './data/dxpeditions.js';
 import hamBeaconsLayer from './data/hamBeacons.js';
 import hamPropagationLayer from './data/hamPropagation.js';
+import { isValidGrid } from './data/maidenhead.js';
 import hamRepeatersLayer from './data/hamRepeaters.js';
 import hamStationsLayer from './data/hamStations.js';
 import { PROGRAM_COLORS, bandColor, distanceKm, formatAge, formatHz } from './data/hamRadioShared.js';
@@ -2324,6 +2325,8 @@ export class StyleManager {
     this._hamTab = 'stations';
     this._hamUnsubscribes = [];
     this._hamBeaconRows = null;
+    this._hamTuneInFlight = false;
+    this._hamBeaconTuneInFlight = false;
     this._hamStatus = null;
     this._hamStatusPromise = null;
     this._contextRadioDock = document.getElementById('context-radio-dock');
@@ -6379,9 +6382,17 @@ export class StyleManager {
     const commitGrid = () => {
       const value = String(els.propGrid?.value || '').trim().toUpperCase();
       if (!value) return;
-      const applied = hamPropagationLayer.setVoacap({ grid: value });
-      if (els.propNote && applied?.txGrid !== value) {
+      // setVoacap (normalizeTxGrid) accepts any valid Maidenhead grid of four or
+      // more characters and applies its 4-character square, so a 6-character
+      // grid is never "rejected" — decide with the same rule instead of
+      // comparing the applied square with the raw input.
+      const rejected = !isValidGrid(value) || value.length < 4;
+      hamPropagationLayer.setVoacap({ grid: value });
+      if (!els.propNote) return;
+      if (rejected) {
         this._hamNote(els.propNote, `${value} is not a Maidenhead grid (use 4 or 6 characters, e.g. JO32)`, { error: true });
+      } else if (value.length > 4) {
+        this._hamNote(els.propNote, `Using ${value.slice(0, 4)} (VOACAP works on 4-character squares)`);
       }
     };
     els.propGrid?.addEventListener('change', commitGrid);
@@ -6819,10 +6830,15 @@ export class StyleManager {
   // ── SPOTS ─────────────────────────────────────────────────────────────
 
   async _hamTuneNearSpotter() {
+    // The dx-spots layer re-emits every poll and _renderDxSpotsState recomputes
+    // the button's disabled state, so a flag (not the DOM) guards against a
+    // second tune while one is still running.
+    if (this._hamTuneInFlight) return;
     const els = this._hamEls;
     const state = this._hamStates['dx-spots'];
     const spotId = state?.selectedId;
     if (!spotId) return;
+    this._hamTuneInFlight = true;
     if (els.spotsTune) els.spotsTune.disabled = true;
     this._hamNote(els.spotsNote, 'Choosing a web receiver near the spotter…');
     try {
@@ -6834,6 +6850,7 @@ export class StyleManager {
         this._hamNote(els.spotsNote, result?.reason || result?.error || 'No receiver could be tuned', { error: true });
       }
     } finally {
+      this._hamTuneInFlight = false;
       if (els.spotsTune) els.spotsTune.disabled = !this._hamStates['dx-spots']?.selectedId;
     }
   }
@@ -6892,7 +6909,7 @@ export class StyleManager {
         : (life.enabled ? 'Click a spot on the globe or in the list.' : 'Enable DX Spots, then click a spot — or ask “what’s on 20 metres”.');
     }
     const canAct = life.interactive && Boolean(summary);
-    if (els.spotsTune) els.spotsTune.disabled = !canAct;
+    if (els.spotsTune) els.spotsTune.disabled = !canAct || Boolean(this._hamTuneInFlight);
     if (els.spotsRefine) els.spotsRefine.disabled = !canAct;
     if (!summary) this._hamNote(els.spotsNote, '');
     const now = Date.now();
@@ -7076,13 +7093,25 @@ export class StyleManager {
   // ── BEACONS ───────────────────────────────────────────────────────────
 
   async _hamTuneBeacon(call, band) {
+    // Same guard as _hamTuneNearSpotter: the 1 s beacon ticker re-renders the
+    // rows (and their TUNE buttons), so the DOM alone cannot hold the lock.
+    if (this._hamBeaconTuneInFlight) return;
     const els = this._hamEls;
+    this._hamBeaconTuneInFlight = true;
+    for (const entry of this._hamBeaconRows?.values() || []) {
+      if (entry.action) entry.action.disabled = true;
+    }
     this._hamNote(els.beaconsNote, `Tuning a web receiver to ${call} on ${band}…`);
-    const result = await hamBeaconsLayer.tuneBeacon(call, band, { origin: 'user' });
-    if (result?.ok) {
-      this._hamNote(els.beaconsNote, `Tuned ${result.receiver?.name || 'receiver'} for ${call}${Number.isFinite(result.distanceKm) ? ` · ${Math.round(result.distanceKm)} km from the view centre` : ''}`);
-    } else {
-      this._hamNote(els.beaconsNote, result?.error || result?.reason || 'No receiver could be tuned', { error: true });
+    try {
+      const result = await hamBeaconsLayer.tuneBeacon(call, band, { origin: 'user' });
+      if (result?.ok) {
+        this._hamNote(els.beaconsNote, `Tuned ${result.receiver?.name || 'receiver'} for ${call}${Number.isFinite(result.distanceKm) ? ` · ${Math.round(result.distanceKm)} km from the view centre` : ''}`);
+      } else {
+        this._hamNote(els.beaconsNote, result?.error || result?.reason || 'No receiver could be tuned', { error: true });
+      }
+    } finally {
+      this._hamBeaconTuneInFlight = false;
+      this._renderHamLayer('ham-beacons');
     }
   }
 
@@ -7146,7 +7175,7 @@ export class StyleManager {
         if (entry.tail) entry.tail.textContent = `${band.band} · ${step}`;
         entry.row.classList.toggle('off-air', Boolean(band.offAir));
         entry.row.classList.toggle('selected', state.selectedId === `ibp:${band.call}` || state.selected?.call === band.call);
-        if (entry.action) entry.action.disabled = !life.interactive;
+        if (entry.action) entry.action.disabled = !life.interactive || Boolean(this._hamBeaconTuneInFlight);
       }
     }
     if (els.beaconsVhf) {
@@ -9025,8 +9054,9 @@ export class StyleManager {
       const entry = { id: spec.id, collapsed };
       if (spec.pinnable) entry.pinned = panelEl.classList.contains('dock-pinned');
       if (spec.id === HAM_RADIO_PANEL_ID) {
-        // Carried on the spec for consumers of the panel-state provider; the
-        // URL codec in sharelink.js encodes only the collapsed bit.
+        // Restored by _restorePanelState whenever a decoded panel state carries
+        // them; the `h` token codec in sharelink.js decides which of these
+        // fields travel in the URL.
         entry.tab = this._hamTab;
         const prop = this._hamStates['ham-propagation'] || hamPropagationLayer.getUIState?.() || null;
         if (prop) {
@@ -9064,11 +9094,31 @@ export class StyleManager {
         persist: false,
         syncShare: false,
       });
-      if (spec.id === HAM_RADIO_PANEL_ID && typeof state.tab === 'string' && this._hamRadioPanel) {
-        this._setHamTab(state.tab);
-      }
+      if (spec.id === HAM_RADIO_PANEL_ID && this._hamRadioPanel) this._restoreHamPanelState(state);
     }
     this.shareLinkManager?.onPanelStateChange?.();
+  }
+
+  /**
+   * Applies the ham-panel fields of a decoded share/panel state: the active
+   * tab and the propagation overlays / VOACAP transmitter settings captured by
+   * _buildSharePanelState. Missing or malformed fields leave the current
+   * state untouched; the layer's own enabled bit travels with the layer state.
+   */
+  _restoreHamPanelState(state) {
+    if (!state || typeof state !== 'object') return;
+    if (typeof state.tab === 'string') this._setHamTab(state.tab);
+    const prop = state.propagation;
+    if (!prop || typeof prop !== 'object') return;
+    const overlays = {};
+    for (const key of ['grayline', 'aurora', 'ionosondes', 'voacap']) {
+      if (typeof prop[key] === 'boolean') overlays[key] = prop[key];
+    }
+    if (Object.keys(overlays).length) hamPropagationLayer.setOverlays(overlays);
+    const voacap = {};
+    if (typeof prop.txGrid === 'string' && prop.txGrid.trim()) voacap.grid = prop.txGrid.trim();
+    if (typeof prop.frequencyMhz === 'number' && Number.isFinite(prop.frequencyMhz)) voacap.frequencyMhz = prop.frequencyMhz;
+    if (Object.keys(voacap).length) hamPropagationLayer.setVoacap(voacap);
   }
 
   /**

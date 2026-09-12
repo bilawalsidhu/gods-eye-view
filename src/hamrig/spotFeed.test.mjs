@@ -626,3 +626,51 @@ test('loose dedupe window: re-spots more than DEDUPE_WINDOW_MS apart stay separa
   assert.ok(DEDUPE_WINDOW_MS >= 2 * 60 * 1000);
   feed.stop();
 });
+
+test('stalled REST upstream: unchanged rows keep their anchor across polls instead of drifting into fresh duplicates', async () => {
+  // HamRig's `updated` is its cache-write time: it advances on every poll even
+  // when the rows behind it have not moved. Re-anchoring the same 1240Z/1241Z
+  // rows to each newer `updated` would push them past DEDUPE_WINDOW_MS after
+  // three polls and re-add every one of them as a new spot.
+  const start = Date.UTC(2026, 8, 12, 15, 53, 10);
+  const timers = fakeTimers(start);
+  const { feed, WebSocketImpl, client } = buildFeed({ now: timers.now, setTimeoutImpl: timers.setTimeout, clearTimeoutImpl: timers.clearTimeout });
+  let rows = REST_FIXTURE.spots;
+  client.get = async (p, opts) => {
+    client.calls.push({ path: p, opts });
+    return { status: 200, json: { ...REST_FIXTURE, spots: rows, updated: new Date(timers.now()).toISOString() }, text: '' };
+  };
+  const n = REST_FIXTURE.spots.length;
+  const first = await feed.getSpots();
+  assert.equal(first.spots.length, n);
+  const offset = feed.status().restClockOffsetMs;
+  assert.equal(offset, start - Date.UTC(2026, 8, 12, 12, 41, 0), 'first seed anchors the newest row to `updated`');
+
+  // The socket never comes up, so the feed polls REST every 60 s.
+  WebSocketImpl.instances[0].serverClose();
+  const polls = 6; // 6 min of polling: well past the 3 min dedupe window
+  for (let i = 0; i < polls; i += 1) {
+    await timers.advance(REST_POLL_INTERVAL_MS);
+    for (const s of WebSocketImpl.instances) if (!s.closed) s.serverClose();
+  }
+  assert.equal(client.calls.length, 1 + polls);
+  const stalled = feed.status();
+  assert.equal(stalled.spotCount, n, 'no unchanged row was re-added as a fresh spot');
+  assert.equal(stalled.restClockOffsetMs, offset, 'anchor reused while the newest cluster minute did not move');
+  assert.equal(stalled.duplicates, n * polls, 'every re-polled row merged into its stored copy');
+  const page = await feed.getSpots();
+  assert.equal(page.spots.length, n);
+  assert.equal(page.spots[0].timeIso, new Date(start).toISOString(), 'stored rows did not drift forward');
+
+  // A newer cluster minute means the rows moved: the anchor is recomputed.
+  rows = [{ dx_callsign: 'K1NEW', spotter: 'W1AW', frequency: '14.025', mode: 'CW', band: '20m', time: '1250Z', comment: '' }, ...REST_FIXTURE.spots];
+  await timers.advance(REST_POLL_INTERVAL_MS);
+  const moved = feed.status();
+  assert.equal(moved.restClockOffsetMs, timers.now() - Date.UTC(2026, 8, 12, 12, 50, 0), 're-anchored to the new newest row');
+  assert.notEqual(moved.restClockOffsetMs, offset);
+  const after = await feed.getSpots();
+  assert.equal(after.spots[0].dx, 'K1NEW');
+  assert.equal(after.spots[0].timeIso, new Date(timers.now()).toISOString());
+  assert.equal(after.spots.length, n + 1, 'old rows (shifted by less than the dedupe window) merged; only the new one added');
+  feed.stop();
+});

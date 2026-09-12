@@ -1425,13 +1425,40 @@ function webReceiversModule(dataManager) {
   return dataManager?.layers?.get(WEB_RECEIVERS_LAYER)?.module || null;
 }
 
+/**
+ * Switch a layer on for a voice tool (origin 'voice', abortable) and stop when
+ * the manager did not actually bring it on. `setEnabled` resolves false after
+ * a 'visibility-blocked' notification when a visibility guard refuses the
+ * enable (the ui.js context guard does this for every non-companion layer in
+ * Space Missions mode); loading or fetching for a layer that stayed hidden
+ * would let the tool report ok:true on data the user cannot see. Throws with
+ * the guard's own reason so the voice turn surfaces it as a tool error.
+ */
+async function enableLayerForVoice(dataManager, layerId, label, options = {}) {
+  if (dataManager.isEnabled(layerId)) return;
+  const changeOptions = { origin: 'voice' };
+  if (options.signal) changeOptions.signal = options.signal;
+  let blockReason = null;
+  const unsubscribe = typeof dataManager.subscribe === 'function'
+    ? dataManager.subscribe((change) => {
+        if (change?.type === 'visibility-blocked' && change.layerId === layerId) blockReason = change.reason || null;
+      })
+    : null;
+  let changed = false;
+  try {
+    changed = await dataManager.setEnabled(layerId, true, changeOptions);
+  } finally {
+    if (typeof unsubscribe === 'function') unsubscribe();
+  }
+  if (!radioActionIsCurrent(options)) throw radioAbortError();
+  if (!changed || !dataManager.isEnabled(layerId)) {
+    throw new Error(blockReason || `${label} layer could not be enabled`);
+  }
+}
+
 async function ensureWebReceiversReady(dataManager, options = {}) {
   if (!dataManager?.layers?.has(WEB_RECEIVERS_LAYER)) throw new Error('Web Receivers layer unavailable');
-  if (!dataManager.isEnabled(WEB_RECEIVERS_LAYER)) {
-    const changeOptions = { origin: 'voice' };
-    if (options.signal) changeOptions.signal = options.signal;
-    await dataManager.setEnabled(WEB_RECEIVERS_LAYER, true, changeOptions);
-  }
+  await enableLayerForVoice(dataManager, WEB_RECEIVERS_LAYER, 'Web Receivers', options);
   if (!radioActionIsCurrent(options)) throw radioAbortError();
   const module = webReceiversModule(dataManager);
   if (!module) throw new Error('Web Receivers layer unavailable');
@@ -1735,11 +1762,9 @@ function hamModule(dataManager, layerId) {
 async function ensureHamLayerReady(dataManager, layerId, options = {}, { load = true } = {}) {
   const label = HAM_LAYER_NAMES[layerId] || layerId;
   if (!dataManager?.layers?.has(layerId)) throw new Error(`${label} layer unavailable`);
-  if (!dataManager.isEnabled(layerId)) {
-    const changeOptions = { origin: 'voice' };
-    if (options.signal) changeOptions.signal = options.signal;
-    await dataManager.setEnabled(layerId, true, changeOptions);
-  }
+  // A refused enable (visibility guard) throws here — before ensureLoaded(),
+  // lookup() or loadAround() can fetch data for a layer that stayed hidden.
+  await enableLayerForVoice(dataManager, layerId, label, options);
   if (!radioActionIsCurrent(options)) throw radioAbortError();
   const module = hamModule(dataManager, layerId);
   if (!module) throw new Error(`${label} layer unavailable`);
@@ -2002,7 +2027,16 @@ export async function tuneToDxSpot(viewer, dataManager, args = {}, options = {})
   });
   if (!radioActionIsCurrent(options)) throw radioAbortError();
   openHamRadioPanel('spots');
-  const precision = result.precision ?? result.spot?.spotterPrecision ?? null;
+  // With reception evidence the receiver is anchored on the REPORTING
+  // station's grid, not on the spotter — `result.precision` then describes
+  // that station ('grid'), so the spotter's own precision comes from the spot
+  // and the note names whichever anchor was actually used.
+  const spotterPrecision = result.spot?.spotterPrecision ?? null;
+  const anchorPrecision = result.anchor?.precision ?? result.precision ?? spotterPrecision;
+  const reception = result.evidence === 'reception';
+  const noteSubject = reception
+    ? `reporting station ${result.anchor?.label || ''} position`.replace(/\s+/g, ' ').trim()
+    : 'spotter position';
   return {
     ok: Boolean(result.ok),
     action: 'tune_to_dx_spot',
@@ -2012,8 +2046,12 @@ export async function tuneToDxSpot(viewer, dataManager, args = {}, options = {})
     evidence: result.evidence ?? null,
     anchor: result.anchor ?? null,
     reason: result.reason ?? null,
-    spotterPrecision: precision,
-    precisionNote: hamPrecisionNote(precision, { subject: 'spotter position', entity: result.spot?.spotterEntity || null }),
+    spotterPrecision,
+    anchorPrecision,
+    precisionNote: hamPrecisionNote(anchorPrecision, {
+      subject: noteSubject,
+      entity: reception ? null : (result.spot?.spotterEntity || null),
+    }),
     mode: result.mode ?? null,
     frequencyLabel: result.frequencyLabel ?? (Number.isFinite(result.hz) ? formatFrequencyHz(result.hz) : null),
     tuneUrl: result.url ?? null,

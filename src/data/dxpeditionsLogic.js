@@ -271,6 +271,24 @@ function statusOrder(status) {
 }
 
 /**
+ * Drop rows whose id was already seen (first wins). Upstream ids are
+ * `dxped:<callsign>:<start>`, and NG3K bare-prefix callsigns (TF, V4, S79…)
+ * can repeat for the same start date; Cesium's entities.add throws on a
+ * duplicate id, which would blank the layer after reconcile's removeAll().
+ */
+export function dedupeDxpeditionsById(list) {
+  const seen = new Set();
+  const out = [];
+  for (const op of list || []) {
+    const id = String(op?.id ?? '');
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(op);
+  }
+  return out;
+}
+
+/**
  * Panel order: active first (most-wanted rank ascending, unranked last,
  * then ending soonest), then upcoming by start date, then ended by end date.
  */

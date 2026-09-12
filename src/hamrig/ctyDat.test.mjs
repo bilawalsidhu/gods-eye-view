@@ -17,12 +17,15 @@ import {
 const here = path.dirname(fileURLToPath(import.meta.url));
 const EXCERPT_PATH = path.join(here, 'fixtures', 'cty-excerpt.dat');
 const SYNTHETIC_PATH = path.join(here, 'fixtures', 'cty-synthetic.dat');
+const RUSSIA_PATH = path.join(here, 'fixtures', 'cty-russia.dat');
 const EXCERPT = fs.readFileSync(EXCERPT_PATH, 'utf8');
 const SYNTHETIC = fs.readFileSync(SYNTHETIC_PATH, 'utf8');
 const COMBINED = `${EXCERPT}\n${SYNTHETIC}`;
 
 const excerpt = parseCtyDat(EXCERPT);
 const index = parseCtyDat(COMBINED);
+// Real European Russia / Kaliningrad / Asiatic Russia lines incl. the 8F/9F, 8G/9G, 8X/9X blocks.
+const russia = loadCtyDatFileSync(RUSSIA_PATH);
 const entityByName = (idx, name) => idx.entities.find((e) => e.name === name);
 
 // ---------------------------------------------------------------------------
@@ -167,6 +170,7 @@ test('UA9ABC/1 becomes UA1ABC → European Russia, while UA9ABC stays Asiatic', 
   const asiatic = resolveCallsign(index, 'UA9ABC');
   assert.equal(asiatic.entity, 'Asiatic Russia');
   assert.equal(asiatic.precision, 'area');
+  assert.deepEqual({ lat: asiatic.lat, lon: asiatic.lon }, { lat: 57, lon: 70 });
   const european = resolveCallsign(index, 'UA9ABC/1');
   assert.equal(european.entity, 'European Russia');
   assert.equal(european.matchType, 'prefix');
@@ -177,6 +181,56 @@ test('UA9ABC/1 becomes UA1ABC → European Russia, while UA9ABC stays Asiatic', 
   // exact entry beats the digit-swap rule
   assert.equal(resolveCallsign(index, 'R0CAF/1').matchType, 'exact');
   assert.equal(resolveCallsign(index, 'R0CAF/1').entity, 'European Russia');
+});
+
+test('UA9X / UA9F / R8F / R9F blocks filed under European Russia get the west-of-Urals centroid, not West Siberia', () => {
+  // cty.dat assigns Perm / Komi-Permyak / Komi (area digit 8 or 9) to European Russia (UA);
+  // the digit table alone would place them at RU_AREAS[9] (57 N 70 E), ~900 km east.
+  for (const call of ['UA9XO', 'UA9FAB', 'UA9GX', 'R9FA', 'R8FF', 'R9XC', 'RA9XAB', 'UA8XA']) {
+    const r = resolveCallsign(russia, call);
+    assert.ok(r, call);
+    assert.equal(r.entity, 'European Russia', call);
+    assert.equal(r.primaryPrefix, 'UA', call);
+    assert.equal(r.matchType, 'prefix', call);
+    assert.equal(r.precision, 'area', call);
+    assert.deepEqual({ lat: r.lat, lon: r.lon }, { lat: 59, lon: 55 }, call);
+  }
+  const komi = resolveCallsign(russia, 'UA9XO');
+  assert.equal(komi.cq, 17, 'token-level cq override is kept');
+  assert.equal(komi.itu, 20);
+  const perm = resolveCallsign(russia, 'UA9FAB');
+  assert.equal(perm.cq, 17);
+  assert.equal(perm.itu, 30);
+  // Asiatic Russia (UA9) keeps the West Siberia / Far East centroids.
+  for (const [call, expected] of [
+    ['UA9CAB', { lat: 57, lon: 70 }],
+    ['R9WA', { lat: 57, lon: 70 }],
+    ['RA9AB', { lat: 57, lon: 70 }],
+    ['R8CD', { lat: 58, lon: 65 }],
+    ['UA0AA', { lat: 56, lon: 110 }],
+  ]) {
+    const r = resolveCallsign(russia, call);
+    assert.equal(r.entity, 'Asiatic Russia', call);
+    assert.equal(r.primaryPrefix, 'UA9', call);
+    assert.equal(r.precision, 'area', call);
+    assert.deepEqual({ lat: r.lat, lon: r.lon }, expected, call);
+  }
+  // European Russia areas 1-7 and Kaliningrad are untouched by the entity hint.
+  assert.deepEqual([resolveCallsign(russia, 'UA1ABC').lat, resolveCallsign(russia, 'UA1ABC').lon], [60, 35]);
+  assert.deepEqual([resolveCallsign(russia, 'R3AB').lat, resolveCallsign(russia, 'R3AB').lon], [55.5, 38]);
+  assert.deepEqual([resolveCallsign(russia, 'UA6AA').lat, resolveCallsign(russia, 'UA6AA').lon], [45.5, 42]);
+  const kgd = resolveCallsign(russia, 'UA2FF');
+  assert.equal(kgd.entity, 'Kaliningrad');
+  assert.equal(kgd.precision, 'entity', 'UA2 is not a large entity');
+  assert.deepEqual([kgd.lat, kgd.lon], [54.72, 20.52]);
+  // A /digit suffix still relocates a Komi call into that area.
+  const moved = resolveCallsign(russia, 'UA9XO/1');
+  assert.equal(moved.entity, 'European Russia');
+  assert.deepEqual([moved.lat, moved.lon], [60, 35]);
+  // Exact entries in the block still win over the prefix tokens.
+  assert.equal(resolveCallsign(russia, 'R0CAF/1').matchType, 'exact');
+  assert.equal(resolveCallsign(russia, 'R0CAF/1').entity, 'European Russia');
+  assert.equal(resolveCallsign(russia, 'R0CAF').entity, 'Asiatic Russia');
 });
 
 test('F/DL1ABC resolves to France via the designator rule', () => {
@@ -370,6 +424,23 @@ test('callAreaCentroid knows US, Canada, Russia, Australia, Japan and Brazil are
   assert.deepEqual(callAreaCentroid('PY2ABC'), { lat: -22.5, lon: -48.5 });
   assert.deepEqual(callAreaCentroid('PP5ABC'), { lat: -26, lon: -50.5 });
   assert.deepEqual(callAreaCentroid('ZZ1ABC'), { lat: -22.5, lon: -43 });
+});
+
+test('callAreaCentroid honours a European Russia entity hint only for area digits 8 and 9', () => {
+  assert.deepEqual(callAreaCentroid('UA9XO'), { lat: 57, lon: 70 }, 'no hint: plain digit table');
+  assert.deepEqual(callAreaCentroid('UA9XO', {}), { lat: 57, lon: 70 });
+  assert.deepEqual(callAreaCentroid('UA9XO', null), { lat: 57, lon: 70 }, 'null options never throw');
+  assert.deepEqual(callAreaCentroid('UA9XO', { primaryPrefix: 'UA' }), { lat: 59, lon: 55 });
+  assert.deepEqual(callAreaCentroid('R9FA', { primaryPrefix: 'UA' }), { lat: 59, lon: 55 });
+  assert.deepEqual(callAreaCentroid('R8FF', { primaryPrefix: 'UA' }), { lat: 59, lon: 55 });
+  assert.deepEqual(callAreaCentroid('UA9CAB', { primaryPrefix: 'UA9' }), { lat: 57, lon: 70 }, 'Asiatic Russia keeps West Siberia');
+  assert.deepEqual(callAreaCentroid('R8CD', { primaryPrefix: 'UA9' }), { lat: 58, lon: 65 });
+  assert.deepEqual(callAreaCentroid('UA1ABC', { primaryPrefix: 'UA' }), { lat: 60, lon: 35 }, 'other digits are unaffected');
+  assert.deepEqual(callAreaCentroid('R2AA', { primaryPrefix: 'UA' }), { lat: 55.5, lon: 38 });
+  assert.deepEqual(callAreaCentroid('UA2FF', { primaryPrefix: 'UA2' }), { lat: 54.7, lon: 20.5 });
+  assert.deepEqual(callAreaCentroid('UA9XO/1', { primaryPrefix: 'UA' }), { lat: 60, lon: 35 }, '/digit override wins');
+  assert.deepEqual(callAreaCentroid('W9ABC', { primaryPrefix: 'UA' }), { lat: 42, lon: -89 }, 'hint is ignored outside the Russia branch');
+  assert.equal(callAreaCentroid('UR9ABC', { primaryPrefix: 'UA' }), null, 'Ukraine has no table');
 });
 
 test('callAreaCentroid returns null outside the table and for mobile stations', () => {

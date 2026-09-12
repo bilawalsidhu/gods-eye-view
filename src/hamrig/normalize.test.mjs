@@ -124,6 +124,36 @@ test('parseSpotFrequency: POTA sanity rule repairs a dropped decimal point', () 
   assert.equal(parseSpotFrequency('1403650.0', 'khz'), 1_403_650);
 });
 
+test('parseSpotFrequency: two-decimal drop is repaired on every HF band, not only above 1.3 M', () => {
+  assert.equal(parseSpotFrequency('703200', 'khz'), 7_032_000, '7032.00 kHz (40 m), not 703.2 MHz');
+  assert.equal(parseSpotFrequency('357300', 'khz'), 3_573_000, '3573.00 kHz (80 m)');
+  assert.equal(parseSpotFrequency('184000', 'khz'), 1_840_000, '1840.00 kHz (160 m)');
+  assert.equal(parseSpotFrequency('1013600', 'khz'), 10_136_000, '10136.00 kHz (30 m): k in [1e6, 1.3e6) is repaired too');
+  assert.equal(parseSpotFrequency('703200', 'auto'), 7_032_000);
+  assert.equal(parseSpotFrequency('146580', 'khz'), 146_580_000, 'a real 2 m kHz value stays put');
+  assert.equal(parseSpotFrequency('432100', 'khz'), 432_100_000, 'a real 70 cm kHz value stays put');
+  assert.equal(parseSpotFrequency('703200.0', 'khz'), 703_200_000, 'point present → face value');
+  const act = normalizePotaSpot({ ...potaFixture[0], frequency: '703200' }, { nowMs: NOW });
+  assert.equal(act.freqHz, 7_032_000);
+  assert.equal(act.band, '40m');
+});
+
+test('parseSpotFrequency: one-decimal drop (6-digit POTA value) is repaired with ×100', () => {
+  assert.equal(parseSpotFrequency('140625', 'khz'), 14_062_500, '14062.5 kHz (20 m), not 140.625 MHz');
+  assert.equal(parseSpotFrequency('140385', 'khz'), 14_038_500);
+  assert.equal(parseSpotFrequency('101360', 'khz'), 10_136_000, '10136.0 kHz (30 m)');
+  assert.equal(parseSpotFrequency('210740', 'khz'), 21_074_000, '21074.0 kHz (15 m)');
+  assert.equal(parseSpotFrequency('280740', 'khz'), 28_074_000, '28074.0 kHz (10 m)');
+  assert.equal(parseSpotFrequency('140625', 'auto'), 14_062_500);
+  assert.equal(parseSpotFrequency('146520', 'khz'), 146_520_000, 'real 2 m must stay');
+  assert.equal(parseSpotFrequency('140625.0', 'khz'), 140_625_000, 'point present → face value');
+  assert.equal(parseSpotFrequency('14062.5', 'khz'), 14_062_500, 'well-formed value untouched');
+  const act = normalizePotaSpot({ ...potaFixture[0], frequency: '140625', mode: 'CW' }, { nowMs: NOW });
+  assert.equal(act.freqHz, 14_062_500);
+  assert.equal(act.band, '20m');
+  assert.equal(act.mode, 'CW');
+});
+
 test('parseSpotFrequency auto picks the interpretation that lands in a band', () => {
   assert.equal(parseSpotFrequency('7024.0', 'auto'), 7_024_000);
   assert.equal(parseSpotFrequency('14.074', 'auto'), 14_074_000);
@@ -172,6 +202,11 @@ test('inferMode: comment keywords are word-bounded and case-insensitive', () => 
   assert.equal(inferMode('FM simplex', 145_500_000), 'FM');
   assert.equal(inferMode('heard on PSKReporter', 14_255_000), 'SSB', 'PSKReporter is not the PSK keyword');
   assert.equal(inferMode('tnx fm JA', 7_213_000), 'SSB', 'lower-case "fm" (= from) is not FM');
+  assert.equal(inferMode('TNX FM JAPAN', 14_200_000), 'SSB', 'upper-case "FM" on HF is "from", not the mode');
+  assert.equal(inferMode('QSL FM EU', 7_150_000), 'SSB');
+  assert.equal(inferMode('TNX FM JA CW', 14_030_000), 'CW', 'other keywords still win');
+  assert.equal(inferMode('FM', 29_600_000), 'FM', '10 m FM segment keeps the keyword');
+  assert.equal(inferMode('FM', 145_500_000), 'FM');
 });
 
 test('inferMode: RBN skimmer patterns', () => {
@@ -580,9 +615,42 @@ test('normalizeAurora', () => {
   assert.equal(aurora.unit, '%');
   assert.equal(aurora.observationIso, '2026-09-12T15:25:00.000Z');
   assert.equal(aurora.forecastIso, '2026-09-12T16:35:00.000Z');
-  const dirty = normalizeAurora({ points: [{ lat: 'x', lon: 0, value: 5 }, { lat: 70, lon: 0 }, { lat: 91, lon: 0, value: 1 }, { lat: 70, lon: 5, value: 12 }] });
-  assert.deepEqual(dirty.points, [{ lat: 70, lon: 5, value: 12 }]);
+  const dirty = normalizeAurora({ points: [{ lat: 'x', lon: 0, value: 5 }, { lat: 70, lon: 0 }, { lat: 91, lon: 0, value: 1 }, { lat: 70, lon: 5, value: 12 }, { lat: 70, lon: 270, value: 40 }] });
+  assert.deepEqual(dirty.points, [{ lat: 70, lon: 5, value: 12 }, { lat: 70, lon: -90, value: 40 }]);
   assert.deepEqual(normalizeAurora(null).points, []);
+});
+
+test('normalizeAurora wraps OVATION 0..359 longitudes instead of dropping the western hemisphere', () => {
+  const western = [
+    { lat: 65, lon: 181, value: 30 },
+    { lat: 60, lon: 200, value: 25 },
+    { lat: 62, lon: 270, value: 40 },
+    { lat: 70, lon: 359, value: 9 },
+    { lat: 70, lon: 180, value: 6 },
+    { lat: 70, lon: 360, value: 6 },
+    { lat: 70, lon: '-95', value: 12 },
+    { lat: 70, lon: 361, value: 5 },
+    { lat: 70, lon: 1e300, value: 5 },
+    { lat: -80, lon: 300, value: 15 },
+  ];
+  const { points } = normalizeAurora({ points: western });
+  assert.deepEqual(points, [
+    { lat: 65, lon: -179, value: 30 },
+    { lat: 60, lon: -160, value: 25 },
+    { lat: 62, lon: -90, value: 40 },
+    { lat: 70, lon: -1, value: 9 },
+    { lat: 70, lon: 180, value: 6 },
+    { lat: 70, lon: 0, value: 6 },
+    { lat: 70, lon: -95, value: 12 },
+    { lat: -80, lon: -60, value: 15 },
+  ], 'lon > 180 wrapped, |lon| > 360 garbage dropped, already-signed lon kept');
+  for (const p of points) assert.ok(p.lon >= -180 && p.lon <= 180, `lon in range: ${p.lon}`);
+  // A full OVATION-style row set keeps both hemispheres.
+  const grid = [];
+  for (let lon = 0; lon < 360; lon += 10) grid.push({ lat: 68, lon, value: 20 });
+  const wrapped = normalizeAurora({ points: grid }).points;
+  assert.equal(wrapped.length, 36, 'no point dropped');
+  assert.equal(wrapped.filter((p) => p.lon < 0).length, 17, 'lon 190..350 → −170..−10');
 });
 
 test('normalizeVoacap', () => {

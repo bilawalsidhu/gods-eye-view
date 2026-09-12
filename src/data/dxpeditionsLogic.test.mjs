@@ -7,6 +7,7 @@ import {
   DXPEDITION_STATUSES,
   DXPEDITION_STATUS_FILTERS,
   MOST_WANTED_TOP_RANK,
+  dedupeDxpeditionsById,
   dxpeditionDays,
   dxpeditionDetail,
   dxpeditionDisplayPositions,
@@ -289,6 +290,22 @@ test('dxpeditionDisplayPositions spreads shared entity centroids and skips unloc
   const km = distanceKm({ lat: 65, lon: -18 }, b);
   assert.ok(km > 5 && km <= 60.5, `spread ${km} km`);
   assert.deepEqual(positions.get('dxped:V51WH:1787616000'), { lat: -22, lon: 17, offset: false });
+});
+
+test('dedupeDxpeditionsById keeps the first row per id (NG3K prefix collisions)', () => {
+  // Two operations announced for the same start date under the bare prefix 'TF'
+  // share the upstream id; Cesium entities.add would throw on the duplicate.
+  const first = row({ id: 'dxped:TF:1787616000', callsign: 'TF', info: 'By DA6IC as TF/DA6IC/p' });
+  const second = row({ id: 'dxped:TF:1787616000', callsign: 'TF', info: 'By G0XYZ as TF/G0XYZ' });
+  const other = row({ id: 'dxped:V4:1787616000', callsign: 'V4' });
+  const rows = [first, second, other, first].filter(isValidDxpedition).map(freezeDxpedition);
+  const deduped = dedupeDxpeditionsById(rows);
+  assert.deepEqual(deduped.map((op) => op.id), ['dxped:TF:1787616000', 'dxped:V4:1787616000']);
+  assert.equal(deduped[0].info, 'By DA6IC as TF/DA6IC/p', 'first occurrence wins');
+  assert.equal(new Set(sortDxpeditions(deduped, NOW).map((op) => op.id)).size, deduped.length);
+  assert.deepEqual(dedupeDxpeditionsById([]), []);
+  assert.deepEqual(dedupeDxpeditionsById(null), []);
+  assert.deepEqual(dedupeDxpeditionsById([{ id: '' }, { id: 'x' }, null]).map((op) => op.id), ['x']);
 });
 
 test('trimDxpeditionItems and summarizeDxpeditions', () => {

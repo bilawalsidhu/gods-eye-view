@@ -2671,7 +2671,9 @@ When runtime behavior or architecture changes, update this file in the same chan
 >   `HAMRIG_ENABLED`, `HAMRIG_BASE_URL` (operator configuration, https unless
 >   localhost), `HAMRIG_USERNAME` / `HAMRIG_PASSWORD` (optional; 30-day token
 >   kept server-side, one 401 retry), `HAMRIG_SPOTS_WS_URL`, `HAMRIG_CTY_URL`,
->   `HAMRIG_HOME_GRID`.
+>   `HAMRIG_HOME_GRID`, `HAMRIG_SOTA_ENABLED` (default off; SOTA is left out
+>   of every `/activations` response with `errors.SOTA` set until the operator
+>   holds SOTA API approval and sets it to 1 — see DATA_SOURCES.md).
 > - **Server modules (`src/hamrig/`):** `ctyDat.js` (AD1C cty.dat parser and
 >   resolver — exact/designator/prefix rules, WAE skipping, call-area
 >   centroids, 7-day disk cache), `hamrigClient.js` (lazy login, expiry parsed
