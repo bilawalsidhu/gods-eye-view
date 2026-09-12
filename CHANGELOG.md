@@ -13,6 +13,10 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Add opt-in Windy Webcams across Geneva, Vaud, and Valais through the
+  server-only POWER UP key flow, with validated catalog/frame URLs, expiring
+  image refresh, source links, and Windy attribution.
+
 - Separate terrain, traffic, FIRMS and GBFS middleware into focused provider
   modules, preserving local configuration, routes and cache/error behavior.
 

@@ -82,6 +82,17 @@ test('whitespace-only env values do not count as configured', () => {
   assert.equal(status.keys.find((key) => key.id === 'openai').set, false);
 });
 
+test('Windy Webcams is a server-only POWER UP provider and never leaks its key', () => {
+  const secret = 'windy-fixture-secret';
+  const entry = KEY_SETUP_KEYS.find((key) => key.id === 'windy-webcams');
+  assert.deepEqual(entry.envVars, ['WINDY_WEBCAMS_API_KEY']);
+  assert.equal(entry.clientExposed, undefined);
+  assert.equal(validateKeySetupUpdates({ WINDY_WEBCAMS_API_KEY: secret }).ok, true);
+  const status = keySetupStatus({ WINDY_WEBCAMS_API_KEY: secret });
+  assert.equal(status.keys.find((key) => key.id === 'windy-webcams').set, true);
+  assert.ok(!JSON.stringify(status).includes(secret));
+});
+
 test('subprocess success requires a clean zero exit', () => {
   assert.equal(commandCompletedSuccessfully({ status: 0, signal: null }), true);
   assert.equal(commandCompletedSuccessfully({ status: 1, signal: null }), false);

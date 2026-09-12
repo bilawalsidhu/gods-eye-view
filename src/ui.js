@@ -2421,6 +2421,7 @@ export class StyleManager {
     this._cctvCalibResetBtn = document.getElementById('cctv-calib-reset-btn');
     this._cctvFrame = document.getElementById('cctv-frame');
     this._cctvFrameWrap = document.getElementById('cctv-frame-wrap');
+    this._cctvSourceLink = document.getElementById('cctv-source-link');
     this._cctvFrameRequestToken = 0;
     this._cctvFramePreloader = null;
     this._cctvSourceBadge = document.getElementById('cctv-source-badge');
@@ -6437,6 +6438,7 @@ export class StyleManager {
       this._cctvFrame.dataset.error = '';
     }
     this._cctvFrameWrap?.classList.remove('loading', 'has-frame');
+    this._cctvSourceLink?.removeAttribute('href');
   }
 
   /**
@@ -6835,6 +6837,11 @@ export class StyleManager {
       if (!nextSrc) {
         this._clearCctvFrame();
       }
+    }
+    if (this._cctvSourceLink) {
+      const sourcePageUrl = enabled ? String(activeCamera?.sourcePageUrl || '') : '';
+      if (/^https:\/\//i.test(sourcePageUrl)) this._cctvSourceLink.href = sourcePageUrl;
+      else this._cctvSourceLink.removeAttribute('href');
     }
 
     this._syncCctvSourceBadge(activeCamera, enabled);
