@@ -7,6 +7,10 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Added
 
+- Local voice installs from the app. The POWER UP panel gained a LOCAL VOICE row
+  that reports readiness, runs the profile's install plan on a button, and shows
+  which step is running and how many megabytes of weights have arrived. Only
+  `brew install localai` stays a terminal step, shown as a command to copy.
 - Voice can switch between OpenAI Realtime and a self-hosted LocalAI Realtime
   pipeline from the mic panel. The Apple Silicon reference profile combines
   Silero VAD, Parakeet STT, MiniCPM5-2B MLX 4-bit, and Kokoro TTS, with a

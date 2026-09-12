@@ -78,6 +78,7 @@ import {
   LOCAL_AI_REALTIME_MODEL_DEFAULT as GEV_LOCAL_REALTIME_MODEL_DEFAULT,
   LOCAL_AI_REALTIME_URL_DEFAULT as GEV_LOCAL_REALTIME_URL_DEFAULT,
 } from './scripts/local-ai-realtime.mjs';
+import { createLocalVoiceInstaller } from './scripts/local-voice-installer.mjs';
 
 /** Resolve __dirname for ESM context. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -7808,6 +7809,18 @@ function keySetupEndpoint() {
     // guarantee rather than an accident of which hook a future edit uses.
     apply: (_config, { command, isPreview }) => command === 'serve' && !isPreview,
     configureServer(server) {
+      // Local voice is the one capability a key cannot switch on, so it gets
+      // the same treatment as a key: status on GET, one POST to install, and
+      // the same admission gate. The command set comes from the profile.
+      const localVoice = createLocalVoiceInstaller({ environment: process.env });
+      server.middlewares.use('/api/setup/local-voice', (req, res) => {
+        if (req.method !== 'GET' && req.method !== 'POST') {
+          return respond(res, 405, { error: 'Method not allowed' });
+        }
+        const admission = admit(req);
+        if (!admission.ok) return respond(res, admission.status, { error: admission.error });
+        return respond(res, 200, req.method === 'POST' ? localVoice.start() : localVoice.status());
+      });
       server.middlewares.use('/api/setup/status', (req, res) => {
         if (req.method !== 'GET') return respond(res, 405, { error: 'Method not allowed' });
         const admission = admit(req);

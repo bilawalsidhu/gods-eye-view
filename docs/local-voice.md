@@ -32,6 +32,14 @@ behind a spinner. Expect about 5.5 GB in `~/.local/share/localai` and several
 minutes on a fast connection. The original patched files are retained beside
 them with a `.gev-backup` suffix.
 
+The app can run that second command for you. Open **POWER UP** beside the
+globe, find the **LOCAL VOICE** row, and press INSTALL: it runs the same plan,
+names the step it is on, and reports download progress while the weights
+arrive. `brew install localai` stays a terminal step — the row shows that
+command when LocalAI itself is missing rather than driving your package
+manager. The endpoints behind the row (`/api/setup/local-voice`) answer only
+the machine running the dev server, exactly like the key endpoints.
+
 Verify an existing installation without downloading or changing anything:
 
 ```sh

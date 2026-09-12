@@ -901,6 +901,18 @@
     <h2 id="key-setup-title">Power up the globe</h2>
     <p id="key-setup-description">The globe already flies keyless. Every key below switches on another real feed — paste one and it's saved into this app's local configuration, then the server restarts itself. Server-side keys stay on this machine; Google Maps and Cesium ion run in the browser and must be provider-restricted. Keys you configured elsewhere are shown but never touched.</p>
     <div class="key-setup-rows" data-key-setup-rows></div>
+    <div class="key-setup-local" data-local-voice hidden>
+      <div class="key-setup-local-head">
+        <strong>LOCAL VOICE</strong>
+        <span class="key-setup-local-state" data-local-voice-state>CHECKING</span>
+      </div>
+      <p class="key-setup-local-unlocks">Voice with no key and no cloud — speech, language and voice models run on this machine (about 5.5 GB).</p>
+      <div class="key-setup-local-actions">
+        <button type="button" class="key-setup-local-install" data-local-voice-install hidden>INSTALL</button>
+        <code class="key-setup-local-command" data-local-voice-command hidden>brew install localai</code>
+      </div>
+      <p class="key-setup-local-progress" data-local-voice-progress role="status" aria-live="polite"></p>
+    </div>
     <div class="key-setup-footer">
       <button type="button" class="key-setup-apply" data-key-setup-apply>SAVE KEYS</button>
       <span class="key-setup-hint">ESC to close</span>

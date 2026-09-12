@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { localVoiceInstallPlan } from '../src/voice/localVoiceSetupCore.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PROFILE_DIR = path.join(ROOT, 'config', 'localai');
@@ -234,25 +235,51 @@ export function weightsPresent(modelsDir, repoId) {
 }
 
 /**
- * Pull the LLM weights during setup instead of leaving them to the first
- * session: LocalAI downloads them lazily on first load, which turns a click on
- * LOCAL into a silent multi-GB wait. The MLX backend ships its own Hugging Face
- * CLI, so the download shows progress and resumes.
+ * Weights are pulled during setup rather than left to the first session:
+ * LocalAI downloads them lazily on first load, which turns a click on LOCAL
+ * into a silent multi-GB wait.
+ *
+ * The venv ships from a build machine, so its console scripts (hf,
+ * huggingface-cli) carry that machine's interpreter path and cannot run here.
+ * Calling the library through the venv's own python avoids the shebang and
+ * still reports progress.
  */
-function installWeights({ backendsDir, modelsDir, repoId, environment }) {
-  const python = path.join(backendsDir, 'metal-mlx', 'venv', 'bin', 'python');
-  if (!fs.existsSync(python)) {
-    throw new Error(`No MLX backend runtime at ${python}; reinstall the mlx backend`);
+const HF_SNAPSHOT_SNIPPET = 'import sys; from huggingface_hub import snapshot_download; print(snapshot_download(sys.argv[1]))';
+
+/**
+ * The exact process an install step runs, or null when the step is file work in
+ * this process. One policy for the CLI and for the dev server's installer.
+ */
+export function stepCommand(step, { executable, backendsDir, modelsDir, environment = {} } = {}) {
+  if (step?.kind === 'backend') {
+    return { command: executable, args: ['backends', 'install', step.arg], environment };
   }
-  // The venv ships from a build machine, so its console scripts (hf,
-  // huggingface-cli) carry that machine's interpreter path and cannot run
-  // here. Calling the library through the venv's own python avoids the
-  // shebang entirely and still prints download progress.
-  command(
-    python,
-    ['-c', 'import sys; from huggingface_hub import snapshot_download; print(snapshot_download(sys.argv[1]))', repoId],
-    { ...environment, HF_HUB_CACHE: modelsDir },
-  );
+  if (step?.kind === 'model') {
+    return { command: executable, args: ['models', 'install', step.arg], environment };
+  }
+  if (step?.kind === 'weights') {
+    const python = path.join(backendsDir, 'metal-mlx', 'venv', 'bin', 'python');
+    return {
+      command: python,
+      args: ['-c', HF_SNAPSHOT_SNIPPET, step.arg],
+      environment: { ...environment, HF_HUB_CACHE: modelsDir },
+    };
+  }
+  return null;
+}
+
+/** Steps that are file work rather than a spawned command. */
+export function runLocalStep(step, { profileDir = PROFILE_DIR, modelsDir, backendsDir } = {}) {
+  if (step?.kind === 'configs') {
+    for (const name of fs.readdirSync(path.join(profileDir, 'models'))) {
+      fs.copyFileSync(path.join(profileDir, 'models', name), path.join(modelsDir, name));
+    }
+    return null;
+  }
+  if (step?.kind === 'compat') {
+    return applyMlxCompatibility({ backendsDir, profileDir, checkOnly: false, missing: [] });
+  }
+  return null;
 }
 
 /**
@@ -316,21 +343,19 @@ export function setupLocalVoice({
     LOCALAI_BACKENDS_PATH: backendsDir,
   };
 
+  let fingerprint = null;
   if (!checkOnly) {
     fs.mkdirSync(modelsDir, { recursive: true });
     fs.mkdirSync(backendsDir, { recursive: true });
-    for (const backend of profile.backends) command(executable, ['backends', 'install', backend], childEnvironment);
-    for (const model of profile.gallery) command(executable, ['models', 'install', model], childEnvironment);
-    for (const name of fs.readdirSync(path.join(profileDir, 'models'))) {
-      fs.copyFileSync(path.join(profileDir, 'models', name), path.join(modelsDir, name));
-    }
-    for (const { name, repoId } of profile.weights) {
-      if (weightsPresent(modelsDir, repoId)) {
-        console.log(`${name}: ${repoId} is already cached in ${modelsDir}`);
-      } else {
-        console.log(`${name}: downloading ${repoId} into ${modelsDir}…`);
-        installWeights({ backendsDir, modelsDir, repoId, environment: childEnvironment });
-      }
+    const cachedRepos = profile.weights
+      .filter(({ repoId }) => weightsPresent(modelsDir, repoId))
+      .map(({ repoId }) => repoId);
+    for (const step of localVoiceInstallPlan(profile, { cachedRepos })) {
+      console.log(step.cached ? step.label : `${step.label}…`);
+      if (step.cached) continue;
+      const spec = stepCommand(step, { executable, backendsDir, modelsDir, environment: childEnvironment });
+      if (spec) command(spec.command, spec.args, spec.environment);
+      else fingerprint = runLocalStep(step, { profileDir, modelsDir, backendsDir })?.fingerprint ?? fingerprint;
     }
   }
 
@@ -341,15 +366,13 @@ export function setupLocalVoice({
   for (const { name, repoId } of profile.weights) {
     if (!weightsPresent(modelsDir, repoId)) missing.push(`${name} weights (${repoId})`);
   }
-  const mlx = usesMlx ? applyMlxCompatibility({ backendsDir, checkOnly, missing, profileDir }) : null;
+  // Both paths verify; only the check path refuses.
+  if (usesMlx) applyMlxCompatibility({ backendsDir, checkOnly: true, missing, profileDir });
 
-  if (checkOnly) {
-    if (missing.length) {
-      throw new Error(`Local voice setup incomplete (${missing.join(', ')}) — run npm run voice:local:setup`);
-    }
-    return { home, ready: true, profile: profile.pipelineName };
+  if (checkOnly && missing.length) {
+    throw new Error(`Local voice setup incomplete (${missing.join(', ')}) — run npm run voice:local:setup`);
   }
-  return { home, ready: true, profile: profile.pipelineName, fingerprint: mlx?.fingerprint };
+  return { home, ready: true, profile: profile.pipelineName, fingerprint };
 }
 
 function main() {

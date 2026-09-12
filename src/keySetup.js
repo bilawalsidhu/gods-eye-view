@@ -13,6 +13,7 @@
  * or a LAN visitor (loopback-only endpoint) fails the status fetch, and both
  * the chip and the dialog are removed outright.
  */
+import { initLocalVoiceRow } from './voice/localVoiceRow.js';
 
 /** Chip label — pure, exported for tests. */
 export function keySetupChipLabel(status) {
@@ -337,6 +338,9 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
   });
 
   render(status);
+  // Local voice is the one capability no key can switch on, so its row lives
+  // here with the keys rather than in a separate place to discover.
+  void initLocalVoiceRow({ documentRef, fetchImpl: doFetch });
 
   // Re-entry for a fully-keyed setup, demos, and support: ?setup=1 opens the
   // dialog even though the chip has retired.

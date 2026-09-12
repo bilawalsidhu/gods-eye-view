@@ -22,6 +22,10 @@ Updated: September 12, 2026
 - LocalAI signalling is relayed through the dev server to avoid browser CORS
   configuration and to translate the raw SDP offer into LocalAI 4.9.0's JSON
   request shape. Media still uses the negotiated WebRTC connection.
+- The POWER UP panel installs local voice in place: `GET /api/setup/local-voice`
+  reports supported/ready/step state and `POST` starts the profile's plan, both
+  behind the same loopback admission gate as the key endpoints. The row shows
+  `brew install localai` as a command rather than running a package manager.
 - The backend status endpoint answers `ready`, `starting`, `needs-setup`,
   `unavailable` or `stopped`. `needs-setup` names the command that installs the
   missing piece and ends the session attempt instead of retrying; a warm-up
