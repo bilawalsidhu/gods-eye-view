@@ -4553,6 +4553,95 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   scrollbar-gutter: stable;
 }
 
+.provider-health-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 3px 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+}
+
+.provider-health-toggle:hover,
+.provider-health-toggle[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.provider-health-toggle .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.provider-health-panel {
+  flex: 0 0 auto;
+  max-height: 240px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.provider-health-panel-title {
+  margin-bottom: 5px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+
+.provider-health-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 205px;
+  overflow-y: auto;
+}
+
+.provider-health-row {
+  padding: 5px 7px;
+  border-left: 2px solid var(--text-dim);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.health-nominal { border-left-color: #55d68a; }
+.health-fallback { border-left-color: #e5c15b; }
+.health-loading { border-left-color: var(--accent); }
+.health-degraded,
+.health-stale { border-left-color: #f0a45d; }
+.health-unavailable { border-left-color: #e76f78; }
+
+.provider-health-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 10px;
+}
+
+.provider-health-state {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+
+.provider-health-detail {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .data-toggle-list::-webkit-scrollbar {
   width: 6px;
 }

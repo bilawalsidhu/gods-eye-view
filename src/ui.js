@@ -14,6 +14,7 @@ import {
 } from './bloom.js';
 import { LOCATIONS, CITY_POIS, GLOBE_VIEW, flyToGlobeView, flyToPresetLocation, flyToPOI, searchAndFlyTo } from './locations.js';
 import { locationMiniStatus } from './locationStatus.js';
+import { buildProviderHealthRows } from './providerHealth.js';
 import { interruptCameraMotion } from './cameraVerbs.js';
 import {
   aircraftTrackingTarget,
@@ -2333,6 +2334,10 @@ export class StyleManager {
     this._cleanViewBtn = document.getElementById('clean-view-toggle');
     this._cleanViewExitBtn = document.getElementById('clean-view-exit');
     this._dataPanel = document.getElementById('data-panel');
+    this._providerHealthToggle = document.getElementById('provider-health-toggle');
+    this._providerHealthPanel = document.getElementById('provider-health-panel');
+    this._providerHealthList = document.getElementById('provider-health-list');
+    this._providerHealthToggleHandler = null;
     this._scenePanel = document.getElementById('scene-panel');
     this._cctvPanel = document.getElementById('cctv-panel');
     this._radioPanel = document.getElementById('radio-panel');
@@ -3398,6 +3403,7 @@ export class StyleManager {
    * @returns {void}
    */
   _initUI() {
+    this._initProviderHealthPanel();
     // Style buttons
     document.querySelectorAll('.style-btn').forEach(btn => {
       btn.addEventListener('click', () => this.setStyle(btn.dataset.style));
@@ -4489,6 +4495,51 @@ export class StyleManager {
     }, { origin });
   }
 
+  _initProviderHealthPanel() {
+    if (!this._providerHealthToggle || !this._providerHealthPanel) return;
+    this._providerHealthToggleHandler = () => {
+      const expanded = this._providerHealthPanel.hidden;
+      this._providerHealthPanel.hidden = !expanded;
+      this._providerHealthToggle.setAttribute('aria-expanded', String(expanded));
+      this._renderProviderHealth();
+    };
+    this._providerHealthToggle.addEventListener('click', this._providerHealthToggleHandler);
+    this._renderProviderHealth();
+  }
+
+  _renderProviderHealth() {
+    if (!this._providerHealthList) return;
+    const rows = buildProviderHealthRows(this._dataManager?.getAll?.() || []);
+    const liveCount = rows.filter((row) => ['nominal', 'fallback'].includes(row.state)).length;
+    const problemCount = rows.filter((row) => ['degraded', 'stale', 'unavailable'].includes(row.state)).length;
+    if (this._providerHealthToggle) {
+      this._providerHealthToggle.querySelector('[data-health-summary]')?.replaceChildren(
+        document.createTextNode(`${liveCount} live · ${problemCount} attention`),
+      );
+    }
+    if (this._providerHealthPanel.hidden) return;
+    this._providerHealthList.replaceChildren();
+    for (const row of rows) {
+      const item = document.createElement('div');
+      item.className = `provider-health-row health-${row.state}`;
+      const heading = document.createElement('div');
+      heading.className = 'provider-health-heading';
+      const name = document.createElement('strong');
+      name.textContent = row.name;
+      const state = document.createElement('span');
+      state.className = 'provider-health-state';
+      state.textContent = row.keyRequired ? 'KEY REQUIRED' : row.label;
+      heading.append(name, state);
+      const detail = document.createElement('div');
+      detail.className = 'provider-health-detail';
+      const count = row.count === null ? '—' : this._formatCount(row.count);
+      detail.textContent = `${row.source} · ${row.detail} · ${count} records`;
+      if (row.retryInSec > 0) detail.textContent += ` · retry ${row.retryInSec}s`;
+      item.append(heading, detail);
+      this._providerHealthList.appendChild(item);
+    }
+  }
+
   /**
    * Connects the layer data manager for traffic sync, CCTV state subscription,
    * and layer enable/disable operations.
@@ -4522,8 +4573,10 @@ export class StyleManager {
         }
         this._loadingFeedbackEvent = change;
         this._updateGlobalLoadingFeedback(performance.now());
+        this._renderProviderHealth();
       });
     }
+    this._renderProviderHealth();
     this._updateGlobalLoadingFeedback(performance.now());
     if (typeof this._dataManager?.subscribeVisibilityRequests === 'function') {
       this._dataManagerVisibilityRequestUnsubscribe = this._dataManager.subscribeVisibilityRequests((change) => {
@@ -10310,6 +10363,10 @@ export class StyleManager {
     this._globalStatusNotice = null;
     if (this._globalLoadingStatus) this._globalLoadingStatus.hidden = true;
     this._disposed = true;
+    if (this._providerHealthToggle && this._providerHealthToggleHandler) {
+      this._providerHealthToggle.removeEventListener('click', this._providerHealthToggleHandler);
+      this._providerHealthToggleHandler = null;
+    }
     this._cancelMapSourceFocus?.();
     // Revoke persistence/hash authority before teardown can emit manager changes.
     this._layerStateCoordinator?.destroy();
