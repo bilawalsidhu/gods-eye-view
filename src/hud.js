@@ -20,6 +20,7 @@ import { composeLocalityTag } from './hudLocality.js';
 import { ellipsoidalToMslDisplayM, ensureGeoidReady, geoidHeight } from './data/geoid.js';
 import { getBasemapLabelContext } from './voice/gevActions.js';
 import { isHudSummaryUnconfigured } from './hudSummaryResponse.js';
+import { greatCircleKm } from './geoDistance.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
@@ -530,12 +531,7 @@ export class IntelHUD {
    * @returns {number} Distance in kilometers.
    */
   _haversineKm(lat1, lon1, lat2, lon2) {
-    const toRad = (deg) => Cesium.Math.toRadians(deg);
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a = Math.sin(dLat / 2) ** 2
-      + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return greatCircleKm(lat1, lon1, lat2, lon2);
   }
 
   /**

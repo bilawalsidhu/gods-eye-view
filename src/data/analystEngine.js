@@ -25,6 +25,7 @@
  */
 
 import { pointInRing } from './naturalEarthRegions.js';
+import { greatCircleKm as haversineKm } from '../geoDistance.js';
 
 /** Layers the engine understands, with the fields queries may reference. */
 export const ANALYST_LAYERS = {
@@ -35,17 +36,7 @@ export const ANALYST_LAYERS = {
   earthquakes: { numeric: ['magnitude', 'depthKm'], text: ['place'], flags: [] },
 };
 
-const EARTH_R_KM = 6371;
-
-/** Great-circle distance in km. */
-export function haversineKm(lat1, lon1, lat2, lon2) {
-  const d2r = Math.PI / 180;
-  const dLat = (lat2 - lat1) * d2r;
-  const dLon = (lon2 - lon1) * d2r;
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(lat1 * d2r) * Math.cos(lat2 * d2r) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_R_KM * Math.asin(Math.min(1, Math.sqrt(a)));
-}
+export { haversineKm };
 
 /** One filter: {field, op:'gt'|'lt'|'gte'|'lte'|'eq'|'neq'|'contains', value}. */
 export function applyFilter(records, filter) {

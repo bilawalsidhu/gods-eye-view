@@ -1080,6 +1080,8 @@ function getBoundsCenter(bounds) {
  * @returns {number} Distance in kilometres.
  */
 function distanceKm(a, b) {
+  // Intentional local approximation for small viewport-center shifts. Global
+  // and correctness-sensitive distances use src/geoDistance.js instead.
   const dLat = (a.lat - b.lat) * 111;
   const avgLat = ((a.lat + b.lat) / 2) * (Math.PI / 180);
   const dLon = (a.lon - b.lon) * 111 * Math.cos(avgLat);

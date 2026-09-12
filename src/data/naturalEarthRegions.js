@@ -17,8 +17,8 @@
  */
 
 import { createRetryableLoader } from './retryableLoad.js';
+import { EARTH_RADIUS_KM, greatCircleKm } from '../geoDistance.js';
 
-const EARTH_RADIUS_KM = 6371;
 const toRad = (d) => (d * Math.PI) / 180;
 
 /** Spherical-excess ring area (km²) — same family as turf/geojson-area. */
@@ -32,14 +32,6 @@ function ringAreaKm2(ring) {
     sum += toRad(lon2 - lon1) * (2 + Math.sin(toRad(lat1)) + Math.sin(toRad(lat2)));
   }
   return Math.abs((sum * EARTH_RADIUS_KM * EARTH_RADIUS_KM) / 2);
-}
-
-function haversineKm(lon1, lat1, lon2, lat2) {
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const h = Math.sin(dLat / 2) ** 2
-    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
 /**
@@ -147,7 +139,7 @@ function buildEntries(pack, kind) {
       polygons,
       areaKm2,
       bbox: [minLon, minLat, maxLon, maxLat],
-      bboxDiagonalKm: haversineKm(minLon, minLat, maxLon, maxLat),
+      bboxDiagonalKm: greatCircleKm(minLat, minLon, maxLat, maxLon),
     });
   }
   return out;

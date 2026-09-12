@@ -235,6 +235,12 @@ The FIRMS proxy records source success after appending its rows. If aggregation
 throws, that source reports failure without a contradictory success entry.
 The existing per-record append continues to support large feeds; sequential
 fetching, trailing-24-hour filtering and partial-success caching are unchanged.
+## Shared geodesic distance
+
+Lightweight spherical distance checks use `src/geoDistance.js`, whose positional
+contract is always `(lat1, lon1, lat2, lon2)`. Traffic's local viewport-motion
+approximation remains separate because it intentionally avoids great-circle
+math for small, frequent center-shift checks.
 
 ## Installations and map-source guidance
 
