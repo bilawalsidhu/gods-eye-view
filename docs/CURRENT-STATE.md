@@ -2452,6 +2452,18 @@ silently demoting every later lookup for the session.
 - Client render cap `VITE_AIS_LIVE_MAX_ROWS` (default 12,000); type-colored ship icons (tanker/cargo/passenger/fishing/tug); screen-space label clustering caps active labels at `VITE_AIS_LIVE_LABEL_MAX_ROWS` (default 900).
 - Click-to-inspect wired into the voice context store.
 
+### Rayhunter tap (September 2026)
+
+- Opt-in local-device tap for [Rayhunter](https://github.com/EFForg/rayhunter), off by default. Layer id `rayhunter-tap`.
+- `server/providers/rayhunter.js` relays two read-only device endpoints same-origin, because the device's embedded web server sends no CORS headers: `GET /api/rayhunter/manifest` -> device `/api/qmdl-manifest`, and `GET /api/rayhunter/analysis/:name` -> device `/api/analysis-report/:name`. GET only; nothing is ever written to the device.
+- The device address arrives from the browser as `?base=host:port` and is validated by the shared tap-address contract (`src/data/tapAddress.js`), which constrains it to loopback, RFC1918, or a `.local` name. A public or malformed address is a 400 and no upstream request is made. Both real access paths — USB tether and the device's own Wi-Fi hotspot — are private addresses, so the constraint costs nothing in practice.
+- Address is durable per-user state via the `rayhunter` options group (`stringOption('base', 'b', ...)`), default `192.168.1.1:8080`, editable through a free-text chip on the layer row. `DataLayerManager` grew a generic `chip.prompt` path for that: a chip may carry `{label, value, toParams}` instead of a static `params` object, and a null `toParams` return applies nothing — the row's own `getStats().error` is the feedback surface, not a second popup.
+- Per-client rate limit of 120 requests/minute (global backstop 600). The upstream is the user's own hardware, so this is not a quota guard — it stops a runaway client loop from wedging a small embedded web server.
+- Upstream responses are capped at 8 MB while streaming and redirects are refused rather than followed, so a device response cannot walk the request outside the validated address.
+- **Warnings are plotted at the browser's current position when the warning is first observed, not the device's position at detection time.** The app cannot know the latter. This is surfaced through `getStats().error` rather than presented as a precise fix. Warnings with no position fix yet are held and not rendered.
+- The analysis report is NDJSON: a leading metadata line with no `events` array, then per-packet rows whose `events` array is positional per analyzer and may contain `null`. `Informational` events are filtered out; only `Low`/`Medium`/`High` render. A malformed line is skipped rather than aborting the parse.
+- Tests run without hardware against recorded-shape fixtures in `src/data/fixtures/` (`rayhunter-qmdl-manifest.json`, `rayhunter-analysis-report.ndjson`), injected through the proxy's `fetchImpl`. Those fixtures are synthetic-to-schema, not device captures — see `src/data/fixtures/README.md`.
+
 ### Voice Control (June 2026)
 
 `GEV MIC` button (bottom UI) starts an OpenAI Realtime session over WebRTC:

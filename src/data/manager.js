@@ -2093,7 +2093,22 @@ export class DataLayerManager {
           // chip, so a stale row can never apply an inverted toggle.
           const chip = this._rowControlsFor(layer.id)?.chips
             ?.find((entry) => entry.id === button.dataset.chipId);
-          if (chip?.params) this.setLayerParams(layer.id, chip.params, { origin: 'user' });
+          if (!chip) return;
+          // Optional free-text chip (e.g. rayhunterTap.js's device-address
+          // setting): `prompt` asks the user for a value and turns it into
+          // params via `toParams`, instead of the chip carrying a static
+          // `params` object like every boolean toggle chip does. A null
+          // return (user cancelled, or `toParams` rejected the input) applies
+          // nothing — the row's own getStats().error is the feedback surface
+          // for a bad value, not a second popup.
+          if (chip.prompt) {
+            const raw = window.prompt(chip.prompt.label, chip.prompt.value ?? '');
+            if (raw === null) return;
+            const params = chip.prompt.toParams(raw.trim());
+            if (params) this.setLayerParams(layer.id, params, { origin: 'user' });
+            return;
+          }
+          if (chip.params) this.setLayerParams(layer.id, chip.params, { origin: 'user' });
         });
         row.appendChild(controls);
         this._syncRowControls(controls, layer);

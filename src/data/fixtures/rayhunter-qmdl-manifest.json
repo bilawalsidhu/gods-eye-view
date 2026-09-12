@@ -1,0 +1,22 @@
+{
+  "current_entry": {
+    "name": "1756450800",
+    "start_time": "2026-08-29T07:00:00Z",
+    "last_message_time": "2026-08-29T07:41:12Z",
+    "qmdl_size_bytes": 184320
+  },
+  "entries": [
+    {
+      "name": "1756418400",
+      "start_time": "2026-08-28T22:00:00Z",
+      "last_message_time": "2026-08-28T23:12:40Z",
+      "qmdl_size_bytes": 401408
+    },
+    {
+      "name": "1756364400",
+      "start_time": "2026-08-28T07:00:00Z",
+      "last_message_time": "2026-08-28T08:55:03Z",
+      "qmdl_size_bytes": 622592
+    }
+  ]
+}

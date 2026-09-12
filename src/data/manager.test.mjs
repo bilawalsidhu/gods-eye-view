@@ -3096,6 +3096,71 @@ test('a click outside a chip is inert, and a throwing layer cannot blank the pan
   }
 });
 
+test('a prompt chip asks for input via window.prompt and applies toParams, not a static params object', async () => {
+  const originalDocument = globalThis.document;
+  const originalWindow = globalThis.window;
+  globalThis.document = { createElement: makeControlElement };
+  let base = '192.168.1.1:8080';
+  const mgr = new DataLayerManager({});
+  mgr.register({
+    id: 'rayhunter-tap',
+    name: 'Rayhunter Tap',
+    icon: '',
+    source: 'test',
+    updateInterval: -1,
+    async init() {},
+    enable() {},
+    disable() {},
+    async update() {},
+    getStats() { return { count: 0, lastUpdate: null }; },
+    setParams(params) { if (params.base) base = params.base; },
+    getParams() { return { base }; },
+    getRowControls() {
+      return {
+        chips: [{
+          id: 'set-base',
+          label: `⚙️ ${base}`,
+          active: false,
+          title: 'set device address',
+          prompt: {
+            label: 'device address',
+            value: base,
+            toParams: (value) => (value.includes(':') ? { base: value } : null),
+          },
+        }],
+        legend: [],
+      };
+    },
+  });
+  const container = makeControlElement();
+
+  try {
+    mgr.buildTogglePanel(container);
+    assert.equal(await mgr.setEnabled('rayhunter-tap', true), true);
+    const row = container.querySelector('[data-layer-id="rayhunter-tap"]');
+    const controls = row.querySelector('.data-toggle-controls');
+    const chip = collectByClass(controls, 'data-toggle-chip')[0];
+
+    globalThis.window = { prompt: () => '10.0.0.5:9090' };
+    controls.listeners.click({ target: chip });
+    assert.equal(base, '10.0.0.5:9090', 'a valid prompt answer is applied via toParams');
+
+    globalThis.window = { prompt: () => 'garbage' };
+    controls.listeners.click({ target: chip });
+    assert.equal(base, '10.0.0.5:9090', 'toParams returning null applies nothing');
+
+    globalThis.window = { prompt: () => null }; // user cancelled
+    controls.listeners.click({ target: chip });
+    assert.equal(base, '10.0.0.5:9090', 'a cancelled prompt applies nothing');
+  } finally {
+    await mgr.destroyAll();
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  }
+});
+
 test('keyboard focus on a chip survives the refresh its own click triggers', async () => {
   // _syncRowControls runs on EVERY panel refresh, including the one the chip's
   // own click triggers. Rebuilding the button would blur it every time, so a

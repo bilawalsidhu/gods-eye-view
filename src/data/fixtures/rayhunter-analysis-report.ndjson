@@ -1,0 +1,7 @@
+{"rayhunter_version":"0.4.1","analyzers":[{"name":"IMSI Requested","description":"Cell requested the IMSI"},{"name":"Connection Release/Redirect","description":"Redirect to a different frequency"},{"name":"Null Cipher","description":"Cell requested a null cipher"}]}
+{"packet_timestamp":"2026-08-29T07:03:11Z","events":[null,null,null]}
+{"packet_timestamp":"2026-08-29T07:07:52Z","events":[{"event_type":"Informational","message":"LTE attach observed on EARFCN 1275"},null,null]}
+{"packet_timestamp":"2026-08-29T07:14:06Z","events":[{"event_type":"Low","message":"IMSI requested during attach"},null,null]}
+{"packet_timestamp":"2026-08-29T07:22:40Z","events":[null,{"event_type":"Medium","message":"Connection release with redirect to GSM ARFCN 62"},null]}
+{"packet_timestamp":"2026-08-29T07:31:18Z","events":[null,null,{"event_type":"High","message":"Null cipher (EEA0) accepted by the network"}]}
+{"packet_timestamp":"2026-08-29T07:35:02Z","malformed

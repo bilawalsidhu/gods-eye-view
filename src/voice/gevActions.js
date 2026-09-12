@@ -177,6 +177,10 @@ const LAYER_ALIASES = new Map([
   ['firms', 'local-firms'],
   ['fires', 'local-firms'],
   ['active fires', 'local-firms'],
+  ['rayhunter', 'rayhunter-tap'],
+  ['stingray detector', 'rayhunter-tap'],
+  ['imsi catcher detector', 'rayhunter-tap'],
+  ['cell site simulator detector', 'rayhunter-tap'],
 ]);
 
 const CITY_ALIASES = new Map([

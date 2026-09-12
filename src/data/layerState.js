@@ -223,6 +223,13 @@ const OPTION_GROUPS = Object.freeze({
     booleanOption('showProjection', 'p', true),
     booleanOption('autoHop', 'a', false),
   ]),
+  // The user's own Rayhunter device address (#56) — a personal setting, not a
+  // public data-source choice, but it's still durable per-user state, so it
+  // rides the same options-group mechanism rather than a second persistence
+  // path. Defaults to the Orbic hotspot's documented default LAN address.
+  rayhunter: Object.freeze([
+    stringOption('base', 'b', '192.168.1.1:8080'),
+  ]),
   radio: Object.freeze([
     Object.freeze({
       key: 'filter',
@@ -287,6 +294,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'military-awareness', token: 'g', disposition: 'enabled-only' }),
   Object.freeze({ id: 'military-installations', token: 'i', disposition: 'enabled-only' }),
   Object.freeze({ id: 'radio', token: 'r', disposition: 'enabled+options', optionOwner: 'radio' }),
+  Object.freeze({ id: 'rayhunter-tap', token: 'y', disposition: 'enabled+options', optionOwner: 'rayhunter' }),
   Object.freeze({ id: 'rocket-launches', token: 'x', disposition: 'enabled-only' }),
   Object.freeze({ id: 'satellites', token: 's', disposition: 'enabled+options', optionOwner: 'satellites' }),
   Object.freeze({ id: 'telegeography-submarine-cables', token: 'u', disposition: 'enabled-only' }),

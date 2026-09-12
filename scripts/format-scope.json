@@ -86,6 +86,8 @@
   "src/tooling/previewServing.test.mjs",
   "server/providers/common/request.js",
   "server/providers/common/source-root.js",
+  "src/data/tapAddress.test.mjs",
+  "src/data/tapAddress.js",
   "server/providers/local.js",
   "server/providers/military-installations.js",
   "server/providers/military-installations/cache.js",
