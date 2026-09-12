@@ -6380,6 +6380,10 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   pointer-events: none;
 }
 
+#cctv-source-link {
+  display: block;
+}
+
 @keyframes cctv-frame-shimmer {
   to {
     transform: translateX(100%);

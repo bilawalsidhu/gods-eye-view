@@ -1155,6 +1155,9 @@ function buildCatalogFromSources(rawSources) {
       city: String(source.city || city?.name || seed?.city || 'Global'),
       provider: String(source.provider || seed?.provider || 'Configured CCTV Source'),
       sourceKind: String(source.sourceKind || source.kind || (source.url ? 'configured' : 'seed')).toLowerCase(),
+      cameraType: String(source.cameraType || 'traffic-still'),
+      frameRefreshMs: safeNumber(source.frameRefreshMs, NaN),
+      sourcePageUrl: String(source.sourcePageUrl || ''),
       feedType,
       feedConfigured: typeof source.url === 'string' && !!source.url.trim(),
       lat,
@@ -1813,9 +1816,10 @@ function refreshProjectionImage(record, force = false) {
   // clears this latch so the next normal tick can refresh.
   if (runtime.imageLoading) return;
   const now = Date.now();
-  const refreshMs = record.camera.id === _activeCameraId
+  const displayRefreshMs = record.camera.id === _activeCameraId
     ? PROJECTION_ACTIVE_REFRESH_MS
     : PROJECTION_IDLE_REFRESH_MS;
+  const refreshMs = Math.max(displayRefreshMs, staticFrameRefreshMs(record.camera));
   if (!force && now - runtime.lastImageRefreshAt < refreshMs) return;
   runtime.lastImageRefreshAt = now;
 
@@ -3387,7 +3391,8 @@ function getPublicCameraState(record, activeId = null) {
   const camera = record.camera;
   const health = _healthById.get(camera.id) || null;
   const isActive = camera.id === resolvedActiveId;
-  const refreshMs = isActive ? ACTIVE_FRAME_REFRESH_MS : IDLE_FRAME_REFRESH_MS;
+  const displayRefreshMs = isActive ? ACTIVE_FRAME_REFRESH_MS : IDLE_FRAME_REFRESH_MS;
+  const refreshMs = Math.max(displayRefreshMs, staticFrameRefreshMs(camera));
   return {
     id: camera.id,
     name: camera.name,
@@ -3406,6 +3411,8 @@ function getPublicCameraState(record, activeId = null) {
     sourceKind: health?.sourceKind || camera.sourceKind || (camera.feedConfigured ? 'configured' : 'seed'),
     sourceStatus: health?.status || 'unknown',
     sourceMessage: health?.message || '',
+    cameraType: camera.cameraType,
+    sourcePageUrl: camera.sourcePageUrl,
     sourceLabel: health?.label || camera.provider || '',
     calibration: { ...normalizeCalibration(camera.calibration) },
     // Save-gated persistence (design §3e): true while the live pose carries

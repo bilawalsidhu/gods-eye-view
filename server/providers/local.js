@@ -52,6 +52,7 @@ import { Readable } from 'node:stream';
 import https from 'node:https';
 import { lookup as lookupDns } from 'node:dns/promises';
 import { directionToHeading } from '../../src/data/directionText.js';
+import { loadWindyWebcamSources, WINDY_CATALOG_REFRESH_MS } from './cctv/windy.js';
 
 
 import { fileURLToPath } from 'node:url';
@@ -2148,6 +2149,9 @@ function normalizeSourceItem(item) {
     snapshotUrl: typeof item.snapshotUrl === 'string' ? item.snapshotUrl : '',
     license: String(item.license || item.licenseNote || ''),
     sourceKind: String(item.sourceKind || item.kind || 'configured'),
+    cameraType: String(item.cameraType || 'traffic-still'),
+    frameRefreshMs: toFiniteNumber(item.frameRefreshMs),
+    sourcePageUrl: typeof item.sourcePageUrl === 'string' ? item.sourcePageUrl : '',
     // Optional CAL badge input (cctv-v2 design §3b/§9.2, additive-only per the
     // global constraints — nothing else in this file changes): hand-authored
     // file/env catalog entries may declare poseSource:'curated' so the panel
@@ -2168,7 +2172,10 @@ function normalizeSourceItem(item) {
  */
 async function getCctvSources() {
   const now = Date.now();
-  if (_cctvSourceCache.length && now - _cctvSourceCacheAt <= CCTV_SOURCE_CACHE_MS) {
+  const cacheMs = String(process.env.WINDY_WEBCAMS_API_KEY || '').trim()
+    ? WINDY_CATALOG_REFRESH_MS
+    : CCTV_SOURCE_CACHE_MS;
+  if (_cctvSourceCache.length && now - _cctvSourceCacheAt <= cacheMs) {
     return _cctvSourceCache;
   }
   // Single-flight: a burst of requests arriving past the TTL shares ONE refresh
@@ -2197,10 +2204,13 @@ async function refreshCctvSources() {
   // Austin-only fetch, now governing all three. Each pack fails independently.
   const needsLiveSources = forceAustin || ((fromFile.length + fromEnv.length) === 0 && preferAustin);
   const tflEnabled = String(process.env.CCTV_TFL_ENABLED || '1').trim() !== '0';
+  const windyKey = String(process.env.WINDY_WEBCAMS_API_KEY || '').trim();
+  const windyEnabled = String(process.env.CCTV_WINDY_ENABLED || '1').trim() !== '0' && Boolean(windyKey);
 
   let fromAustin = [];
   let fromCaltrans = [];
   let fromTfl = [];
+  let fromWindy = [];
   if (needsLiveSources) {
     const [austinResult, caltransResult, tflResult] = await Promise.allSettled([
       loadAustinSourcesFromOpenData(),
@@ -2211,8 +2221,15 @@ async function refreshCctvSources() {
     fromCaltrans = caltransResult.status === 'fulfilled' ? caltransResult.value : [];
     fromTfl = tflResult.status === 'fulfilled' ? tflResult.value : [];
   }
+  if (windyEnabled) {
+    fromWindy = await loadWindyWebcamSources({
+      apiKey: windyKey,
+      timeoutMs: CCTV_SOURCE_FETCH_TIMEOUT_MS,
+      maxSources: Number(process.env.CCTV_WINDY_MAX_SOURCES || 450),
+    });
+  }
   // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
-  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromFile, ...fromEnv];
+  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromWindy, ...fromFile, ...fromEnv];
 
   // Deduplicate by camera ID (last-write wins because of Map.set)
   const byId = new Map();
@@ -2544,6 +2561,9 @@ function cctvProxy() {
                 groundElevationM: source.groundElevationM,
                 feedType: normalizeFeedType(source.feedType),
                 sourceKind: source.sourceKind || (source.url ? 'configured' : 'fallback'),
+                cameraType: source.cameraType,
+                frameRefreshMs: source.frameRefreshMs,
+                sourcePageUrl: source.sourcePageUrl,
                 poseSource: source.poseSource,
                 license: source.license,
               })),

@@ -172,6 +172,13 @@ they do not reduce the materialized entity count or establish an FPS gain.
 
 ## CCTV launcher and proxy failure responses
 
+Windy Webcams are an optional CCTV source pack. Supplying the server-only
+`WINDY_WEBCAMS_API_KEY` through POWER UP (or the environment) loads active
+webcams across Geneva, Vaud, and Valais. The server validates and registers
+their current Windy image URLs, refreshes the catalog before those URLs expire,
+and the CCTV preview links to the original Windy webcam page. Without a key,
+the provider performs no requests and existing CCTV behavior is unchanged.
+
 `scripts/dev-cctv.sh` delegates startup to `scripts/dev-fresh.sh`. It retains
 its Austin source file, Austin preference, 36-camera Austin limit, and 48-camera
 total limit, with environment overrides. Keys are optional; credential loading

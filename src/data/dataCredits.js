@@ -128,6 +128,12 @@ export const DATA_CREDITS = [
       'Contains OS data © Crown copyright and database rights.',
   },
   {
+    key: 'windy-webcams',
+    html:
+      'Webcams provided by <a href="https://www.windy.com/" target="_blank" rel="noopener">windy.com</a> — ' +
+      '<a href="https://www.windy.com/webcams/add" target="_blank" rel="noopener">add a webcam</a>',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },

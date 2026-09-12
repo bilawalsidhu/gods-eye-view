@@ -102,6 +102,14 @@ export const KEY_SETUP_KEYS = Object.freeze([
     envVars: Object.freeze(['LL2_API_TOKEN']),
     tier: 'free',
   }),
+  Object.freeze({
+    id: 'windy-webcams',
+    title: 'WINDY WEBCAMS',
+    unlocks: 'Public webcams across Geneva, Vaud, and Valais',
+    getUrl: 'https://api.windy.com/webcams',
+    envVars: Object.freeze(['WINDY_WEBCAMS_API_KEY']),
+    tier: 'free',
+  }),
 ]);
 
 /** Hostnames a Provider Settings request may arrive under or originate from. */
