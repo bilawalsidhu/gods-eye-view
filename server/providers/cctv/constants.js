@@ -35,7 +35,20 @@ export const TFL_IMAGE_ORIGIN =
   'https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/';
 export const DEFAULT_TFL_MAX_SOURCES = 250;
 export const LONDON_CENTER = { lat: 51.5074, lon: -0.1278 };
-/** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL) infrequent. Frames are fetched per-request and are unaffected. */
+/** Ontario 511: keyless CARS/511 camera catalog; frame URLs are still images. */
+export const ONTARIO_511_CAMERAS_URL =
+  'https://511on.ca/api/v2/get/cameras?format=json&lang=en';
+export const ONTARIO_511_IMAGE_ORIGIN = 'https://511on.ca/map/Cctv/';
+export const DEFAULT_ONTARIO_MAX_SOURCES = 1000;
+export const ONTARIO_ANCHORS = [
+  { lat: 43.4516, lon: -80.4925 }, // Kitchener
+  { lat: 43.6532, lon: -79.3832 }, // Toronto
+  { lat: 45.4215, lon: -75.6972 }, // Ottawa
+  { lat: 43.2557, lon: -79.8711 }, // Hamilton
+  { lat: 42.9849, lon: -81.2453 }, // London, Ontario
+  { lat: 42.3149, lon: -83.0364 }, // Windsor
+];
+/** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
  * stalled upstream can't leave getCctvSources (and thus every CCTV route)

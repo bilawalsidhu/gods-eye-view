@@ -10,6 +10,10 @@ import {
   TFL_IMAGE_ORIGIN,
   DEFAULT_TFL_MAX_SOURCES,
   LONDON_CENTER,
+  ONTARIO_511_CAMERAS_URL,
+  ONTARIO_511_IMAGE_ORIGIN,
+  DEFAULT_ONTARIO_MAX_SOURCES,
+  ONTARIO_ANCHORS,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
 } from './constants.js';
 import {
@@ -331,6 +335,166 @@ export async function loadTflSourcesFromOpenData() {
     return prioritized;
   } catch (error) {
     console.warn('[CCTV] TfL JamCam download error:', error?.message || error);
+    return [];
+  }
+}
+
+/**
+ * Bounding-box sanity check for Ontario 511 rows.
+ *
+ * @param {number} lat
+ * @param {number} lon
+ * @returns {boolean}
+ */
+function isLikelyOntarioCoordinate(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+  return lat >= 41.0 && lat <= 57.5 && lon >= -95.6 && lon <= -74.0;
+}
+
+/**
+ * Pin an Ontario 511 camera view URL to the official still-image host.
+ *
+ * @param {string} value - Upstream view URL.
+ * @returns {string} Canonical 511on.ca still URL, or '' if not accepted.
+ */
+function normalizeOntarioCctvUrl(value) {
+  try {
+    const parsed = new URL(String(value || '').trim());
+    const match = /^\/map\/Cctv\/([^/?#]+)$/.exec(parsed.pathname);
+    if (!match) return '';
+    const host = parsed.hostname.toLowerCase();
+    if (
+      parsed.protocol !== 'https:' ||
+      (host !== '511on.ca' && !host.endsWith('.traveliq.co'))
+    ) {
+      return '';
+    }
+    const viewId = decodeURIComponent(match[1]);
+    if (!/^[A-Za-z0-9_.-]+$/.test(viewId)) return '';
+    return `${ONTARIO_511_IMAGE_ORIGIN}${encodeURIComponent(viewId)}`;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Select the best Ontario 511 still view for a camera.
+ *
+ * @param {Array<object>} views
+ * @returns {{url:string,description:string}|null}
+ */
+function pickOntarioCctvView(views) {
+  const enabled = (Array.isArray(views) ? views : [])
+    .filter(
+      (view) =>
+        String(view?.Status || view?.status || '')
+          .trim()
+          .toLowerCase() === 'enabled',
+    )
+    .map((view) => ({
+      url: normalizeOntarioCctvUrl(view?.Url || view?.url),
+      description: String(view?.Description || view?.description || '').trim(),
+    }))
+    .filter((view) => view.url);
+  if (!enabled.length) return null;
+  return (
+    enabled.find((view) => !/\bdown\b/i.test(view.description)) || enabled[0]
+  );
+}
+
+/**
+ * Fetch Ontario 511 CCTV cameras. Keyless: the catalog is exposed by the
+ * public 511 API, while frame URLs are stable still-image endpoints under
+ * 511on.ca/map/Cctv/. Only rows with finite Ontario coords and at least one
+ * enabled official still view are kept.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadOntarioSourcesFromOpenData() {
+  try {
+    const resp = await fetch(ONTARIO_511_CAMERAS_URL, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn('[CCTV] Ontario 511 camera download failed:', resp.status);
+      return [];
+    }
+    const rows = await resp.json();
+    if (!Array.isArray(rows)) return [];
+
+    const cameras = [];
+    for (const row of rows) {
+      const rawId = String(row?.Id ?? row?.id ?? '').trim();
+      if (!rawId) continue;
+      const lat = toFiniteNumber(row?.Latitude ?? row?.latitude);
+      const lon = toFiniteNumber(row?.Longitude ?? row?.longitude);
+      if (!isLikelyOntarioCoordinate(lat, lon)) continue;
+
+      const view = pickOntarioCctvView(row?.Views || row?.views);
+      if (!view) continue;
+
+      const cameraId = `on-${rawId}`;
+      const location = String(row?.Location || row?.location || '').trim();
+      const roadway = String(row?.Roadway || row?.roadway || '').trim();
+      const viewLabel =
+        view.description && !/\bdown\b/i.test(view.description)
+          ? view.description
+          : '';
+      const label = [
+        location || roadway || `Ontario 511 Camera ${rawId}`,
+        viewLabel,
+      ]
+        .filter(Boolean)
+        .join(' - ');
+      let heading = directionToHeading(row?.Direction ?? row?.direction, true);
+      if (!Number.isFinite(heading)) {
+        heading = directionToHeading(view.description, true);
+      }
+      const hasHeading = Number.isFinite(heading);
+
+      cameras.push({
+        id: cameraId,
+        name: label,
+        city: location || roadway || 'Ontario',
+        cityId: 'ontario',
+        provider: 'Ontario 511',
+        lat,
+        lon,
+        headingDeg: hasHeading ? heading : fallbackHeadingFromId(cameraId),
+        headingConfidence: hasHeading ? 'high' : 'low',
+        pitchDeg: hasHeading ? -24 : -18,
+        fovDeg: hasHeading ? 56 : 44,
+        rangeM: hasHeading ? 210 : 145,
+        mountHeightM: hasHeading ? 10 : 8,
+        groundElevationM: 200,
+        feedType: 'image',
+        url: view.url,
+        snapshotUrl: view.url,
+        sourceKind: 'ontario-511-open-data',
+        license: 'Open Government Licence - Ontario',
+      });
+    }
+
+    const unique = Array.from(
+      new Map(cameras.map((camera) => [camera.id, camera])).values(),
+    );
+    const maxRaw = Number(
+      process.env.CCTV_ONTARIO_MAX_SOURCES || DEFAULT_ONTARIO_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(1000, Math.floor(maxRaw)))
+      : DEFAULT_ONTARIO_MAX_SOURCES;
+    const prioritized = prioritizeSources(unique, maxCount, ONTARIO_ANCHORS);
+    console.log(
+      `[CCTV] Loaded Ontario 511 camera sources: ${unique.length} enabled (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Ontario 511 camera download error:',
+      error?.message || error,
+    );
     return [];
   }
 }
