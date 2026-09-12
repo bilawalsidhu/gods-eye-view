@@ -5463,6 +5463,13 @@ export class StyleManager {
     // the transaction settles, so this is the activation/deactivation edge.
     this._syncContactsDetection();
     this._scheduleRightPanelLayout();
+    this._dataManager?.setContextGateInfo?.({
+      getBlockReason: (layerId) => contextLayerEnableBlockReason({
+        contextMode: this._contextMode,
+        change: { layerId, enabled: true },
+        layerName: this._dataManager?.layers?.get(layerId)?.module?.name || layerId,
+      }),
+    });
   }
 
   /** Wire the independent Radio companion controls. */

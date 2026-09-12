@@ -5993,6 +5993,24 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   background: rgba(255, 255, 255, 0.06);
 }
 
+/* Persistent "excluded by an active Context" state (see issue #288) — kept
+   visually distinct from plain OFF so a click's silence doesn't read as a
+   bug. cursor:not-allowed and the dashed border read as "unavailable", not
+   "broken"; reason text lives in the button's title/aria-label. */
+.data-toggle-btn.gated {
+  min-width: 82px;
+  letter-spacing: 0.8px;
+  color: var(--text-dim);
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: not-allowed;
+}
+
+.data-toggle-btn.gated:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.02);
+}
+
 .data-toggle-btn.active {
   color: var(--accent);
   border-color: var(--accent);
