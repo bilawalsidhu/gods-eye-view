@@ -11,9 +11,9 @@ import { readFileSync } from 'node:fs';
  * decisions and constants in the two flight layers, and those are exactly what a
  * regression would silently revert. These assertions pin the decisions.
  *
- * flights' shared tracking/model pipeline lives in flightsTracking.js (Batch 5
- * item 2), so its pins read the factory source and address state through the
- * `p.` instance; militaryFlights still owns its copy inline.
+ * both flight layers' shared tracking/model pipeline lives in flightsTracking.js
+ * (Batch 5 item 2), so every pin reads the factory source and addresses state
+ * through the `p.` pipeline instance.
  */
 
 const LAYERS = [
@@ -23,7 +23,12 @@ const LAYERS = [
     pipeline: new URL('./flightsTracking.js', import.meta.url),
     px: 'p\\.',
   },
-  { name: 'militaryFlights', path: new URL('./militaryFlights.js', import.meta.url), px: '' },
+  {
+    name: 'militaryFlights',
+    path: new URL('./militaryFlights.js', import.meta.url),
+    pipeline: new URL('./flightsTracking.js', import.meta.url),
+    px: 'p\\.',
+  },
 ];
 
 /** Read a `<prefix>NAME = <number>;` declaration out of a module's source. */
@@ -40,7 +45,7 @@ for (const layer of LAYERS) {
 
   test(`${layer.name}: every GLB creation bypasses the tile-contended frame-spread queue`, () => {
     // flights' fleet-model creation moved to the factory; count across both files.
-    const calls = [...(source + '\n' + pipeline).matchAll(/Cesium\.Model\.fromGltfAsync\(\{([\s\S]*?)\}\)/g)];
+    const calls = [...(`${source  }\n${  pipeline}`).matchAll(/Cesium\.Model\.fromGltfAsync\(\{([\s\S]*?)\}\)/g)];
     assert.ok(calls.length >= 3, `expected fleet, tracked, and preload model calls; found ${calls.length}`);
     for (const [index, call] of calls.entries()) {
       assert.match(call[1], /\basynchronous:\s*false\b/,
@@ -94,7 +99,7 @@ for (const layer of LAYERS) {
 
   test(`${layer.name}: near AIR state is independent from model admission`, () => {
     // These pins span the layer's own code and the shared pipeline; scan both.
-    const impl = source + '\n' + pipeline;
+    const impl = `${source  }\n${  pipeline}`;
     assert.match(impl, /nextCockpitNearContacts\(/,
       'Cockpit derives a separate near-contact hysteresis set');
     assert.match(impl, new RegExp(`isCockpitContact && !isCockpitNear[\\s\\S]*cockpitContactDotImage\\(\\)`),

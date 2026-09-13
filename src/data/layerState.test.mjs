@@ -364,13 +364,14 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
   // The other three surfaces, read from source, because each is the literal a
   // first-run session actually boots from.
   const { readFile } = await import('node:fs/promises');
-  // flights' fleet-toggle state lives on the shared pipeline instance
-  // (flightsTracking.js); military still owns its module state inline.
+  // Both layers' fleet-toggle state lives on the shared pipeline instance
+  // (flightsTracking.js); each layer boots its own instance from these literals.
+  const factory = new URL('./flightsTracking.js', import.meta.url);
   const bootPins = [
-    ['flights.js', new URL('./flightsTracking.js', import.meta.url),
+    ['flights.js', factory,
       /^p\._models3dEnabled = true;$/m, /^p\._models3dMode = 'proximity';/m],
-    ['militaryFlights.js', new URL('./militaryFlights.js', import.meta.url),
-      /^let _models3dEnabled = true;$/m, /^let _models3dMode = 'proximity';/m],
+    ['militaryFlights.js', factory,
+      /^p\._models3dEnabled = true;$/m, /^p\._models3dMode = 'proximity';/m],
   ];
   for (const [name, path, armed, proximity] of bootPins) {
     const source = await readFile(path, 'utf8');

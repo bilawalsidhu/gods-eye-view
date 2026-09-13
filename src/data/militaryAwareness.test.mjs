@@ -1264,7 +1264,7 @@ test('hasContact declines while a layer is disabled, whatever its maps still hol
     ['flights', fs.readFileSync(new URL('./flights.js', import.meta.url), 'utf8'),
       /hasContact\(icao24\) \{\s*\n\s*if \(!p\._billboardCollection \|\| !p\._billboardCollection\.show \|\| p\._billboards\.size === 0\) return null;/],
     ['militaryFlights', fs.readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8'),
-      /hasContact\(icao24\) \{\s*\n\s*if \(!_billboardCollection \|\| !_billboardCollection\.show \|\| _billboards\.size === 0\) return null;/],
+      /hasContact\(icao24\) \{\s*\n\s*if \(!p\._billboardCollection \|\| !p\._billboardCollection\.show \|\| p\._billboards\.size === 0\) return null;/],
     ['aisLiveVessels', fs.readFileSync(new URL('./aisLiveVessels.js', import.meta.url), 'utf8'),
       /hasContact\(mmsi\) \{\s*\n\s*if \(!state\.enabled \|\| !state\.vesselMap \|\| state\.vesselMap\.size === 0\) return null;/],
   ]) {
@@ -1440,12 +1440,12 @@ test('production eviction sites actually tag their clears', () => {
   const militarySource = fs.readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8');
   const vesselsSource = fs.readFileSync(new URL('./aisLiveVessels.js', import.meta.url), 'utf8');
 
-  // flights' tracking state lives on the shared pipeline instance (flightsTracking.js),
-  // so its cull site reads _trackedIcao through the `p.` prefix — while its own
-  // _clearTracking seam stays a plain layer function passed into the factory.
+  // Both layers' tracking state lives on shared pipeline instances (flightsTracking.js),
+  // so their cull sites read _trackedIcao through the `p.` prefix — while each
+  // layer's own _clearTracking seam stays a plain function passed into the factory.
   for (const [name, source, trackedIcaoRef, clearTrackingRef] of [
     ['flights', flightsSource, 'p\\._trackedIcao', '_clearTracking'],
-    ['militaryFlights', militarySource, '_trackedIcao', '_clearTracking'],
+    ['militaryFlights', militarySource, 'p\\._trackedIcao', '_clearTracking'],
   ]) {
     assert.match(
       source,

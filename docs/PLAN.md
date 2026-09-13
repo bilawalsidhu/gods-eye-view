@@ -838,31 +838,42 @@ ordered by value-per-risk; each is self-contained and committable.
       rerun didn't reproduce; seam 5: qa-cockpit-utility 52/52,
       including the Location-pill → world-jump → Contact-handoff check
       that drives the moved code).
-- [ ] Unify the flights fork: `militaryFlights.js` duplicates the
-      ingestion → label → render pipeline of `flights.js` (9,358 lines
-      combined). SCOPED 2026-09-13, execution plan: function-level
-      diff of the two files (78 shared names of 124/89 top-level fns)
-      found 45 VERBATIM-IDENTICAL functions (11.3 KB), 11
-      near-identical (≥0.85 similarity, every delta parameterizable:
-      color/scale constants, `velocity|true_track` vs
-      `speedMps|track` ingestion field names, per-spec model heading
-      offset, trail-floor + label-builder hooks; two are comment-only),
-      and 22 genuinely divergent (dead reckoning, describe/context
-      metadata, TR3B refresh — stay per-layer). The shared pipeline is
-      a closure over ~79 module-state items (declared identically in
-      both files), so the seam is a FACTORY: new
-      `src/data/flightsTracking.js` exporting
-      `createFlightTrackingPipeline(config)` that owns the shared
-      state as factory locals and returns the 45 verbatim + ~9
-      parameterized functions verbatim-as-closures; config carries the
-      ~12 layer knobs/hooks above. Divergent fns stay in each layer
-      file and read the factory's exposed state (mechanical `_x` →
-      `pipe._x` rename on the state-identifier set). Ingestion,
-      normalization and styling stay per-layer. Sub-units, each with
-      transform-identity proof + gates + QA: (a) factory with the 45
-      verbatim fns + their state; (b) the 9 parameterizable fns;
-      (c) trail/floor + model-spec config; (d) exported `_ForTest`
-      surface preserved (both layers' test files pin it).
+- [x] Unify the flights fork: DONE 2026-09-13, both sub-units shipped
+      (c+d folded into them — the trail/model-spec config and the
+      `_ForTest` surface landed with their owning sub-unit). The shared
+      pipeline is `src/data/flightsTracking.js` (1,284 lines) exporting
+      `createFlightTrackingPipeline(config)`: the 45 verbatim fns plus
+      the 11 near-identical fns as closures over ~80 state items, with
+      the 15 per-layer hooks passed in and the 11 near-deltas expressed
+      as role-named knobs — `trackedFocusScaleBase` (1 vs
+      BILLBOARD_SCALE 0.7), `trackedLabelAccent` ('#39d0ff' vs
+      '#ffd166'), `unmodeledTrackedColor`/`modeledIconColor` (cyan vs
+      amber family), `infoSpeed`/`infoHeading` accessors
+      (`velocity|true_track` vs `speedMps|track`), `fleetFreshnessColor`,
+      `trailFloorFix` (military's `_trailFloorPosition`; flights omits
+      it → falsy → raw push), an optional-call `requestTypeEnrichment`
+      (flights only), and per-spec `blendAmount` supplied by military's
+      own `_modelSpec`. `_driveFleetModelHandoff` needed no knob (the
+      divergent heading offset is military `_modelMatrix`'s existing
+      default param). `flights.js` (4,506 lines) and
+      `militaryFlights.js` (4,973 → 3,018 lines) keep their divergent
+      fns, ingestion, and layer object, and address shared state
+      through their private `p` instance; each re-exports its 6 moved
+      `_ForTest` probes as signature-verbatim wrappers. Combined
+      9,358 → 8,808 lines with ONE copy of the
+      tracking/DR-display/billboard/cockpit/trail pipeline. Proof:
+      transform-identity (all 56 moved bodies byte-identical to their
+      originals after the `p.` rename), mechanical B checks (no
+      leftover moved decls, wrapper signatures match HEAD, all 24
+      factory config keys provided by both layers with only the two
+      designed absences, knob values pinned to the originals), gates
+      per sub-unit (lint 0 warnings, 2,973 tests + allocation probes,
+      build ok) and qa-cockpit-utility READY per sub-unit (sub-unit b
+      run 1 hit two cold-server timing failures in the
+      installations-gating probes — payloads identical to the run that
+      passed after sub-unit a except for lifecycle phase; rerun READY
+      0 failures). Seven white-box test files re-pointed to read
+      `layer + factory` combined source with `p.`-prefixed pins.
 
 ### Batch 6 — Perf, bundle, a11y remainder (P2/P3)
 

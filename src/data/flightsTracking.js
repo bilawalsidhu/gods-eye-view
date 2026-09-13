@@ -17,7 +17,6 @@ import { nearFarScalarValueAtDistance } from './focusDeemphasis.js';
 import { createGroundSnap } from './groundSnap.js';
 import { screenProjectedRotation, stabilizeScreenRotation } from './iconOrientation.js';
 import { modelAnchorWorld, modelVisualAnchor } from './modelVisualAnchor.js';
-import { isMilitaryIcao } from './militaryRegistry.js';
 import { arcOffsetEnu, COURSE_HOLD_SPEED_MPS, courseSlewCapDps, limitCourseStep } from './motionModel.js';
 import { isTr3b, tr3bConvertedIds, tr3bIconKind } from './tr3bRegistry.js';
 import { trackedModelScaleForPixelCap } from './trackedCamera.js';
@@ -337,13 +336,26 @@ p._scratchOffset = new Cesium.Cartesian3();
   p._refreshTrailDisplay = config.refreshTrailDisplay;
   p._requestTypeEnrichment = config.requestTypeEnrichment;
   p._trackedLabelText = config.trackedLabelText;
+  // Cockpit-dot freshness tint: flights tints by registry (military vs civilian),
+  // military paints every contact in its uniform icon color.
+  p._fleetFreshnessColor = config.fleetFreshnessColor;
 
   // Layer-owned presentation constants — the shared bodies read these through
   // p so each layer injects its own palette and pixel caps.
-  p.MIL_TINT = config.milTint;
-  p.COCKPIT_CIVILIAN_COLOR = config.cockpitCivilianColor;
-  p.CYAN_TRANSPARENT = config.cyanTransparent;
   p.TRACKED_MODEL_MAX_PX = config.trackedModelMaxPx;
+  p.TRACKED_FOCUS_SCALE_BASE = config.trackedFocusScaleBase;
+  p.TRACKED_LABEL_ACCENT = config.trackedLabelAccent;
+  p.UNMODELED_TRACKED_COLOR = config.unmodeledTrackedColor;
+  p.MODELED_ICON_COLOR = config.modeledIconColor;
+
+  // Kinematics-field accessors: the two feeds agree on fix.velocity/fix.track
+  // but disagree on the INFO fallback field names (flights: velocity|true_track,
+  // military: speedMps|track).
+  p._infoSpeed = config.infoSpeed;
+  p._infoHeading = config.infoHeading;
+
+  // military floors trail fixes to sampled ground; flights pushes raw fixes.
+  p._trailFloorFix = config.trailFloorFix;
 
   // Sibling scratch: whether the position `_deadReckon` just returned came from
   // EXTRAPOLATION (coasting past the newest fix, or the pre-history warm-up)
@@ -899,7 +911,7 @@ function _updateTrackedModelForTest() {
  * @param {Cesium.Cartesian3} position - New fix position, appended at the head.
  */
 function _appendTrailFix(position) {
-  p._trailPositions.push(position);
+  p._trailPositions.push(p._trailFloorFix ? p._trailFloorFix(position) : position);
   if (p._trailPositions.length > p.TRAIL_MAX_POINTS) p._trailPositions.shift();
   p._refreshTrailDisplay();
 }
@@ -917,7 +929,7 @@ function _applyFleetBillboardPresentation(icao24, bb) {
     bb.height = p.COCKPIT_CONTACT_SIZE_PX;
     bb.scale = limbScale;
     bb.scaleByDistance = p._cockpitBillboardScaleByDistance();
-    bb.color = (isMilitaryIcao(icao24) ? p.MIL_TINT : p.COCKPIT_CIVILIAN_COLOR).withAlpha(freshnessAlpha);
+    bb.color = p._fleetFreshnessColor(icao24, freshnessAlpha);
     bb.rotation = 0;
     return;
   }
@@ -967,7 +979,9 @@ async function _ensureModel(icao24) {
   // Never model the TRACKED aircraft — it owns a separate entity billboard, and the fleet
   // tick skips it, so a model here would be orphaned + double-rendered.
   if (icao24 === p._trackedIcao) return;
-  p._requestTypeEnrichment(icao24, true); // model-eligible: about to render in 3D — jump the ambient backlog
+  // model-eligible: about to render in 3D — jump the ambient backlog
+  // (military runs no ambient enrichment, so its config omits the seam)
+  p._requestTypeEnrichment?.(icao24, true);
   if (p._models.has(icao24) || p._modelPending.has(icao24)) return;
   // Count PENDING loads in the cap so a zoomed-in tick can't fire 100s of concurrent loads
   // (the cap is rechecked post-await too, before the add). Mode-aware so 'all' can reach MAX_ALL.
@@ -1051,8 +1065,8 @@ async function _ensureModel(icao24) {
  * Arc math adapted from skylight (https://github.com/cpaczek/skylight, MIT).
  */
 function _extrapolateFix(fix, info, dt, out, turnRateDps = 0) {
-  const speed = Number.isFinite(fix.velocity) ? fix.velocity : ((info && info.velocity) || 0);
-  const heading = Number.isFinite(fix.track) ? fix.track : ((info && info.true_track) || 0);
+  const speed = Number.isFinite(fix.velocity) ? fix.velocity : (p._infoSpeed(info) || 0);
+  const heading = Number.isFinite(fix.track) ? fix.track : (p._infoHeading(info) || 0);
   p._drSpeedMps = speed;
   p._drCourseHold = speed < COURSE_HOLD_SPEED_MPS;
   p._drExtrapolating = true;
@@ -1090,7 +1104,7 @@ function _setCockpitContactMode(active) {
 
 /** Evaluate the production tracked-billboard handoff colour for focused tests. */
 function _trackedBillboardColorForTest() {
-  return p._modelOwnsVisual(p._trackedIcao) ? p.CYAN_TRANSPARENT : Cesium.Color.CYAN;
+  return p._modelOwnsVisual(p._trackedIcao) ? p.UNMODELED_TRACKED_COLOR : p.MODELED_ICON_COLOR;
 }
 
 /** Smoothed world course for the tracked aircraft this frame. Reads the
@@ -1105,7 +1119,7 @@ function _trackedBillboardColorForTest() {
  *  the same aircraft can never disagree across the handoff. */
 function _trackedDisplayCourse() {
   const info = p._flightData.get(p._trackedIcao);
-  const fallback = (info && info.true_track) || 0;
+  const fallback = p._infoHeading(info) || 0;
   const cacheValid = p._drReconcileValid && p._drReconcileIcao === p._trackedIcao && p._cachedDRCourse != null;
   const raw = cacheValid ? p._cachedDRCourse : fallback;
   const nowMs = Date.now();
@@ -1117,7 +1131,7 @@ function _trackedDisplayCourse() {
   // Hover hold: at near-zero displayed speed both the chord and the reported
   // track are noise — keep the last stable nose direction instead of chasing.
   if (cacheValid && p._cachedDRHold && prev != null) return prev;
-  const cap = courseSlewCapDps(cacheValid ? p._cachedDRSpeedMps : ((info && info.velocity) ?? NaN), p.COURSE_MAX_DPS);
+  const cap = courseSlewCapDps(cacheValid ? p._cachedDRSpeedMps : (p._infoSpeed(info) ?? NaN), p.COURSE_MAX_DPS);
   const course = limitCourseStep(prev, raw, cap, dt);
   p._displayCourse.set(p._trackedIcao, course);
   return course;
@@ -1149,7 +1163,7 @@ function _trackedFocusSizePx(icao24, position) {
   const width = billboard?.width?.getValue(time) ?? 28;
   const height = billboard?.height?.getValue(time) ?? 28;
   const scale = billboard?.scale?.getValue(time)
-    ?? (CLASS_SCALE_2D[p._flightData.get(icao24)?.klass] || 1);
+    ?? (p.TRACKED_FOCUS_SCALE_BASE * (CLASS_SCALE_2D[p._flightData.get(icao24)?.klass] || 1));
   const scaleByDistance = billboard?.scaleByDistance?.getValue(time)
     ?? p.TRACKED_BILLBOARD_SCALE_BY_DISTANCE;
   const distanceScale = nearFarScalarValueAtDistance(scaleByDistance, rangeM);
@@ -1199,7 +1213,7 @@ function _updateTrackedLabelModel(icao24) {
   if (!p._trackedEntity || icao24 !== p._trackedIcao) return;
   p._trackedEntity.gevLabelModel = trackedLabelModelFromText(
     p._trackedLabelText(icao24),
-    '#39d0ff',
+    p.TRACKED_LABEL_ACCENT,
   );
   refreshTrackedReadout(p._trackedEntity);
   // The readout and the context slot describe the same contact — refresh them

@@ -933,7 +933,7 @@ for (const fixture of LAYERS) {
 const { readFile } = await import('node:fs/promises');
 const PINNED_LAYERS = [
   { name: 'flights.js', files: ['flights.js', 'flightsTracking.js'], px: 'p\\.' },
-  { name: 'militaryFlights.js', files: ['militaryFlights.js'], px: '' },
+  { name: 'militaryFlights.js', files: ['militaryFlights.js', 'flightsTracking.js'], px: 'p\\.' },
 ];
 
 for (const { name, files, px } of PINNED_LAYERS) {

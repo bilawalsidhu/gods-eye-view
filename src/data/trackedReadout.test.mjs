@@ -244,19 +244,27 @@ test('tracking layers write gevLabelModel and expose only their cached display p
     await readFile(new URL('./flights.js', import.meta.url), 'utf8'),
     await readFile(new URL('./flightsTracking.js', import.meta.url), 'utf8'),
   ].join('\n');
+  // military reads the factory alongside its layer, like flights.
+  const militarySource = [
+    await readFile(new URL('./militaryFlights.js', import.meta.url), 'utf8'),
+    await readFile(new URL('./flightsTracking.js', import.meta.url), 'utf8'),
+  ].join('\n');
   const files = await Promise.all([
-    'militaryFlights.js',
     'satellites.js',
     'militaryInstallations.js',
   ].map(async (name) => [name, await readFile(new URL(`./${name}`, import.meta.url), 'utf8')]));
-  const sources = { 'flights.js': flightsSource, ...Object.fromEntries(files) };
+  const sources = {
+    'flights.js': flightsSource,
+    'militaryFlights.js': militarySource,
+    ...Object.fromEntries(files),
+  };
   for (const [name, source] of Object.entries(sources)) {
     assert.ok(source.includes('.gevLabelModel ='), `${name} writes the explicit model directly`);
     assert.ok(source.includes('.gevDisplayPosition ='), `${name} exposes a display-position cache`);
   }
-  // flights reads the cache through the pipeline instance; the others own it inline.
+  // both flight layers read the cache through their pipeline instance; the others own it inline.
   assert.ok(flightsSource.includes('gevDisplayPosition = p._trackedDisplayCached'));
-  assert.ok(sources['militaryFlights.js'].includes('gevDisplayPosition = _trackedDisplayCached'));
+  assert.ok(sources['militaryFlights.js'].includes('gevDisplayPosition = p._trackedDisplayCached'));
   assert.ok(sources['satellites.js'].includes('gevDisplayPosition = _trackedDisplayCached'));
   assert.equal(flightsSource.includes('_trackedEntity.label.text'), false);
   assert.equal(sources['militaryFlights.js'].includes('_trackedEntity.label.text'), false);
@@ -267,7 +275,7 @@ test('civilian and military trail heads use the lower-centre model anchor and we
   const files = [
     // flights' trail seam stays in the layer but reads pipeline state via `p.`
     ['flights.js', 'const head = p._trackedTrailCached() || _trackedDisplayPosition(p._trackedIcao);'],
-    ['militaryFlights.js', 'const head = _trackedTrailCached() || _trackedDisplayPosition(_trackedIcao);'],
+    ['militaryFlights.js', 'const head = p._trackedTrailCached() || _trackedDisplayPosition(p._trackedIcao);'],
   ];
   for (const [name, headPin] of files) {
     const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');

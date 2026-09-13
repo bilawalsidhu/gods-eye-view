@@ -26,7 +26,11 @@ const FLIGHTS_SOURCE = [
   readFileSync(new URL('./flights.js', import.meta.url), 'utf8'),
   readFileSync(new URL('./flightsTracking.js', import.meta.url), 'utf8'),
 ].join('\n');
-const MILITARY_SOURCE = readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8');
+const MILITARY_SOURCE = [
+  // military's cockpit consumer lives in the shared factory too.
+  readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8'),
+  readFileSync(new URL('./flightsTracking.js', import.meta.url), 'utf8'),
+].join('\n');
 
 const LAYERS = [
   {

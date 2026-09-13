@@ -133,6 +133,19 @@ function _fleetBillboardScale(icao24, klass) {
   return (CLASS_SCALE_2D[klass] || 1) * (p._flightData.get(icao24)?.onGround ? GROUND_SCALE : 1);
 }
 
+/** Cockpit-dot freshness tint: registry-driven (amber military / civilian accent). */
+function _fleetFreshnessColor(icao24, alpha) {
+  return (isMilitaryIcao(icao24) ? MIL_TINT : COCKPIT_CIVILIAN_COLOR).withAlpha(alpha);
+}
+
+/** INFO-record kinematics fallbacks (OpenSky/adsb.lol field names). */
+function _infoSpeed(info) {
+  return info && info.velocity;
+}
+function _infoHeading(info) {
+  return info && info.true_track;
+}
+
 
 // --- 3D model rendering (B3) ---------------------------------------------------------
 // When enabled, aircraft render as 3D glTF models once the camera is below p.MODEL_ALT_CEIL_M
@@ -231,10 +244,14 @@ const p = createFlightTrackingPipeline({
   refreshTrailDisplay: _refreshTrailDisplay,
   requestTypeEnrichment: _requestTypeEnrichment,
   trackedLabelText: _trackedLabelText,
-  milTint: MIL_TINT,
-  cockpitCivilianColor: COCKPIT_CIVILIAN_COLOR,
-  cyanTransparent: CYAN_TRANSPARENT,
+  fleetFreshnessColor: _fleetFreshnessColor,
+  infoSpeed: _infoSpeed,
+  infoHeading: _infoHeading,
   trackedModelMaxPx: TRACKED_MODEL_MAX_PX,
+  trackedFocusScaleBase: 1,
+  trackedLabelAccent: '#39d0ff',
+  unmodeledTrackedColor: CYAN_TRANSPARENT,
+  modeledIconColor: Cesium.Color.CYAN,
 });
 
 

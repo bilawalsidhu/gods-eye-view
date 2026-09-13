@@ -229,7 +229,7 @@ test('a conversion survives a poll refresh, in both the billboard and the tracke
 // layer+factory source, with pipeline state addressed through `p.`
 const FLIGHT_PIN_LAYERS = [
   { name: 'flights.js', files: ['flights.js', 'flightsTracking.js'], px: 'p\\.' },
-  { name: 'militaryFlights.js', files: ['militaryFlights.js'], px: '' },
+  { name: 'militaryFlights.js', files: ['militaryFlights.js', 'flightsTracking.js'], px: 'p\\.' },
 ];
 
 test('both flight layers keep a converted contact 2D and visible (render invariants)', async () => {
