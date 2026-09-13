@@ -248,5 +248,10 @@
   "src/ui/styles/cockpit.css",
   "src/ui/styles/command-dock-compact.css",
   "src/app/stateChannel.js",
-  "src/app/stateChannel.test.mjs"
+  "src/app/stateChannel.test.mjs",
+  "server/providers/meshcore.js",
+  "src/data/meshcoreNodes.js",
+  "src/data/meshcoreNodes.test.mjs",
+  "src/data/meshcore.js",
+  "src/data/meshcore.test.mjs"
 ]

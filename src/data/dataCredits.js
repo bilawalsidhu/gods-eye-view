@@ -147,6 +147,13 @@ export const DATA_CREDITS = [
       '(public domain; audio delivered directly by each broadcaster)',
   },
   {
+    key: 'meshcore',
+    html:
+      'Mesh Network: ' +
+      '<a href="https://map.meshcore.io" target="_blank" rel="noopener">MeshCore</a> ' +
+      '(community-reported node positions)',
+  },
+  {
     key: 'reearth-terrain',
     html:
       'Terrain (keyless globe stacks): ' +
