@@ -16,6 +16,12 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const src = readFileSync(fileURLToPath(new URL('./ui.js', import.meta.url)), 'utf8');
+// Batch 5 seam 2: the Radio chip wiring lives in src/ui/radioPanel.js
+// (StyleManager keeps thin delegates), so its text contracts read that module.
+const radioPanelSrc = readFileSync(
+  fileURLToPath(new URL('./ui/radioPanel.js', import.meta.url)),
+  'utf8',
+);
 
 const handlerStart = src.indexOf('_handleContextLayerChange(change) {');
 assert.ok(handlerStart > 0, 'handler found');
@@ -173,23 +179,23 @@ test('every user-facing Context exit route settles through the failure surface',
 });
 
 test('the Radio chip catches lifecycle rejection and semantic false through the toast wrapper', () => {
-  const radioControls = src.slice(
-    src.indexOf('const toggleRadio = async (trigger) => {'),
-    src.indexOf("this._radioFilter?.addEventListener('change'"),
+  const radioControls = radioPanelSrc.slice(
+    radioPanelSrc.indexOf('const toggleRadio = async (trigger) => {'),
+    radioPanelSrc.indexOf("mgr._radioFilter?.addEventListener('change'"),
   );
-  assert.match(radioControls, /await this\._runUserFacingContextAction\(/);
+  assert.match(radioControls, /await mgr\._runUserFacingContextAction\(/);
   assert.match(radioControls, /Radio could not \$\{enabling \? 'start' : 'stop'\} cleanly/);
   assert.match(radioControls, /if \(toggled === false\) return/);
 });
 
 test('only the expanded Radio Enable gesture requests the contained post-enable reveal', () => {
-  const radioControls = src.slice(
-    src.indexOf('const toggleRadio = async (trigger) => {'),
-    src.indexOf("this._radioFilter?.addEventListener('change'"),
+  const radioControls = radioPanelSrc.slice(
+    radioPanelSrc.indexOf('const toggleRadio = async (trigger) => {'),
+    radioPanelSrc.indexOf("mgr._radioFilter?.addEventListener('change'"),
   );
-  assert.match(radioControls, /revealAfterEnable = enabling && trigger === this\._radioEnableBtn/);
-  assert.match(radioControls, /if \(revealAfterEnable\) await this\._revealRadioControlsAfterExplicitEnable\(trigger\)/);
-  assert.equal((src.match(/_revealRadioControlsAfterExplicitEnable\(trigger\)/g) || []).length, 2);
+  assert.match(radioControls, /revealAfterEnable = enabling && trigger === mgr\._radioEnableBtn/);
+  assert.match(radioControls, /if \(revealAfterEnable\) await revealRadioControlsAfterExplicitEnable\(mgr, trigger\)/);
+  assert.equal((radioPanelSrc.match(/revealRadioControlsAfterExplicitEnable\(/g) || []).length, 2);
 });
 
 test('right-rail context entry is transactional: activation result gates the mode', () => {

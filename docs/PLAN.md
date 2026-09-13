@@ -810,26 +810,22 @@ ordered by value-per-risk; each is self-contained and committable.
 
 - [ ] Split `src/ui.js` along its existing section banners into
       `src/ui/*` — behavior-preserving, moved with their co-located
-      tests. IN PROGRESS 2026-09-13, seam 1 of ~5: the whole cockpit
-      HUD loop moved verbatim to `src/ui/CockpitViewController.js`
-      (1,616 lines: the class, its 4 free helpers, and its
-      cockpit-tuning constants; `COCKPIT_LAYOUT_SETTLE_MS` exported
-      back to the one StyleManager consumer). ui.js 10,500 → 8,884
-      lines. Verified BYTE-IDENTICAL against HEAD's moved region, so
-      runtime behavior cannot differ; StyleManager keeps the
-      constructor wiring (`new CockpitViewController(viewer, {…})`),
-      the vision-apply path (`_setCockpitVision`), and all
-      panel/portal/display code. Three source-text contract tests
-      (cameraHandoff, cockpitMarkup ×13 assertions,
-      cockpitDetectionSubjects) now read the controller source from
-      its module. Gates: lint clean, 2,970 tests + 14 allocation
-      probes, build ok, and the full qa-cockpit-utility harness READY
-      (52 PASS / 0 FAIL) after fixing a latent harness bug — the
-      console-resource regex truncated IPv6-literal URLs at `::1`,
-      stranding the keyless 503 contract as false dirt (scripts/
-      qa-cockpit-utility.mjs). Remaining seams: radio panel (~820),
-      CCTV panel (~600), panel-layout/adaptive stacks (~980), location
-      bar (~350).
+      tests. IN PROGRESS 2026-09-13, seam 2 of ~5:
+      `src/ui/CockpitViewController.js` (seam 1: the cockpit HUD loop,
+      1,616 lines, byte-identical; StyleManager keeps constructor
+      wiring + `_setCockpitVision`) and `src/ui/radioPanel.js` (seam
+      2: the five Radio panel methods — `_initRadioPanel` +
+      `_renderRadioState` + `_syncContextRadioLauncherState` + the two
+      reveal helpers — 815 lines, verified transform-identical against
+      HEAD's moved region; public three stay as thin delegates so the
+      method surface is unchanged). ui.js 10,500 → 8,041 lines.
+      Source-text contract tests re-pointed (radioMarkup,
+      contextSessionOrdering, cockpitMarkup, firstRunExperience read
+      `src/ui/radioPanel.js` for moved bodies). Gates: lint clean,
+      2,971 tests + 14 allocation probes, build ok, qa-radio 106/106
+      PASS, qa-cockpit-utility 52/52 PASS. Remaining seams: CCTV panel
+      (~600), panel-layout/adaptive stacks (~980), location bar
+      (~350).
 - [ ] Unify the flights fork: `militaryFlights.js` duplicates the
       ingestion → label → render pipeline of `flights.js` (9,312 lines
       combined). Extract the shared pipeline; keep separate data sources

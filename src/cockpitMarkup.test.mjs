@@ -8,6 +8,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui.js'), 'utf8');
+// Batch 5 seam 2: the Cockpit compact Radio/Display disclosure lives in
+// src/ui/radioPanel.js; StyleManager keeps thin delegates.
+const radioPanelUi = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'radioPanel.js'), 'utf8');
 // Batch 5: the cockpit HUD loop (vision cycle, keyboard, Contact panel, signal
 // layout, briefing) lives in src/ui/CockpitViewController.js; StyleManager's
 // panel/portal/display wiring stays in ui.js.
@@ -256,8 +259,8 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   assert.match(css, /is-expanded:has\(\[data-cockpit-launcher="display"\]\)[\s\S]*?box-shadow:\s*0 8px 32px rgba\(0, 0, 0, \.42\)/);
   assert.match(css, /\.cockpit-utility-control\.is-expanded \.cockpit-utility-launcher\s*\{[\s\S]*?border:\s*0;[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;/);
   assert.match(css, /\.cockpit-utility-control\.is-expanded \.cockpit-utility-divider\s*\{[\s\S]*?linear-gradient\(90deg, rgb\(0 212 255 \/ 28%\), rgba\(0, 212, 255, 0\.18\) 58%, transparent\)[\s\S]*?box-shadow:\s*0 0 7px rgba\(0, 212, 255, \.22\);/);
-  assert.match(ui, /this\._cockpitDisplayToggleBtn\.textContent = displayOpen \? '▶' : '◀';/);
-  assert.match(ui, /this\._cockpitRadioToggleBtn\.textContent = radioOpen \? '▶' : '◀';/);
+  assert.match(radioPanelUi, /mgr\._cockpitDisplayToggleBtn\.textContent = displayOpen \? '▶' : '◀';/);
+  assert.match(radioPanelUi, /mgr\._cockpitRadioToggleBtn\.textContent = radioOpen \? '▶' : '◀';/);
   assert.match(css, /#cockpit-display-panel\s*\{[\s\S]*?display:\s*flex;[\s\S]*?gap:\s*7px;[\s\S]*?padding:\s*0;[\s\S]*?border-top:\s*0;/);
   assert.doesNotMatch(ui, /--cockpit-display-tab-width/);
   // These two widths size Cockpit Radio and nothing else. They were named for
@@ -315,7 +318,7 @@ test('Clear Selected Layers uses one adopted batch and discards Context restorat
   assert.match(ui, /this\._contextModeGeneration[\s\S]*?this\._contextSessionSnapshot = null;[\s\S]*?this\._contextRestoreState = null;/);
   assert.match(ui, /if \(this\._contextRestoreState\) this\._contextRestoreState\.cancelled = true/);
   assert.match(ui, /if \(restoreState\.cancelled\) return;[\s\S]*?settleContextIntentReplay/);
-  assert.match(ui, /!this\._preservePanelStateDuringLayerClear[\s\S]*?this\.setPanelCollapsed\('radio-panel', true\)/);
+  assert.match(radioPanelUi, /!mgr\._preservePanelStateDuringLayerClear[\s\S]*?mgr\.setPanelCollapsed\('radio-panel', true\)/);
   assert.match(ui, /this\._userFacingContextNotificationTokens\.add\(notificationToken\)/);
 });
 
@@ -333,15 +336,15 @@ test('Cockpit Display portal retains both scroll owners across round trips', () 
 
 test('Cockpit side surfaces behave as two single-expanded accordions', () => {
   assert.match(
-    ui,
-    /if \(displayOpen \|\| radioOpen\) this\.cockpitView\?\.setSignalCollapsed\(true\);/,
+    radioPanelUi,
+    /if \(displayOpen \|\| radioOpen\) mgr\.cockpitView\?\.setSignalCollapsed\(true\);/,
   );
   assert.match(
-    ui,
+    radioPanelUi,
     /'gev:cockpit-signal-expanded'[\s\S]*?setCockpitDisclosure\('display', false\);/,
   );
   assert.match(
-    ui,
+    radioPanelUi,
     /'gev:cockpit-context-expanded'[\s\S]*?setPanelCollapsed\('data-panel', true\);/,
   );
   assert.match(
@@ -368,12 +371,12 @@ test('Cockpit side surfaces behave as two single-expanded accordions', () => {
     /setSignalCollapsed\(collapsed, \{ user = false \} = \{\}\)[\s\S]*?if \(user\) this\.signalUserCollapsed = this\.signalCollapsed/,
   );
   assert.match(
-    ui,
-    /!displayOpen && !radioOpen[\s\S]*?this\.cockpitView\?\.active[\s\S]*?!this\.cockpitView\.signalUserCollapsed[\s\S]*?setSignalCollapsed\(false\)/,
+    radioPanelUi,
+    /!displayOpen && !radioOpen[\s\S]*?mgr\.cockpitView\?\.active[\s\S]*?!mgr\.cockpitView\.signalUserCollapsed[\s\S]*?setSignalCollapsed\(false\)/,
     'Live Signals should reopen only after both utility panels close and no manual collapse is retained',
   );
   assert.match(
-    ui,
+    radioPanelUi,
     /event\.target\?\.closest\?\.\('#left-panel-stack, #cockpit-context'\)\) return;[\s\S]*?setCockpitDisclosure\('display', false\);/,
     'left-side interactions must not collapse the independent Cockpit utilities',
   );
@@ -514,17 +517,17 @@ test('Location navigation releases immediate routes before flight and deferred r
 });
 
 test('Cockpit Radio station changes preserve first-person camera ownership', () => {
-  const cycleHelper = ui.match(/const cycleRadio = \(direction, \{ rotate = true \} = \{\}\) => \{([\s\S]*?)\n {4}\};/);
+  const cycleHelper = radioPanelUi.match(/const cycleRadio = \(direction, \{ rotate = true \} = \{\}\) => \{([\s\S]*?)\n {4}\};/);
   assert.ok(cycleHelper, 'shared Radio cycle helper is missing');
   assert.match(cycleHelper[1], /cycleStation\(direction, \{[\s\S]*?rotate,/);
-  assert.match(ui, /_radioPrevBtn\?\.addEventListener\('click', \(\) => cycleRadio\(-1\)\)/);
-  assert.match(ui, /_contextRadioMiniNextBtn\?\.addEventListener\('click', \(\) => cycleRadio\(1\)\)/);
+  assert.match(radioPanelUi, /_radioPrevBtn\?\.addEventListener\('click', \(\) => cycleRadio\(-1\)\)/);
+  assert.match(radioPanelUi, /_contextRadioMiniNextBtn\?\.addEventListener\('click', \(\) => cycleRadio\(1\)\)/);
   assert.match(
-    ui,
+    radioPanelUi,
     /_cockpitRadioPrevBtn\?\.addEventListener\('click', \(\) => cycleRadio\(-1, \{ rotate: false \}\)\)/,
   );
   assert.match(
-    ui,
+    radioPanelUi,
     /_cockpitRadioNextBtn\?\.addEventListener\('click', \(\) => cycleRadio\(1, \{ rotate: false \}\)\)/,
   );
 });
@@ -666,9 +669,9 @@ test('Cockpit Display portals shared HUD, Detection, Parameters, and 3D controls
   assert.equal((html.match(/id="param-slider-panel"/g) || []).length, 1);
   assert.match(html, /data-cockpit-display-slot="detection"[\s\S]*?data-cockpit-display-slot="parameters"[\s\S]*?data-cockpit-display-slot="models3d"/);
   assert.match(ui, /_revealStyleParameters\(\) \{[\s\S]*?if \(this\._cockpitDisplayPortalActive\) return;/);
-  assert.match(ui, /closest\?\.\('\.cockpit-vision-controls'\)\) return;/);
+  assert.match(radioPanelUi, /closest\?\.\('\.cockpit-vision-controls'\)\) return;/);
   assert.match(ui, /_revealCockpitStyleParameters\(\{ openDisplay = false \} = \{\}\) \{[\s\S]*?openDisplay[\s\S]*?_setCockpitDisclosure\?\.\('display', true\)[\s\S]*?aria-expanded'\) !== 'true'[\s\S]*?classList\.remove\('collapsed'\)/);
-  assert.match(ui, /if \(displayOpen\) this\._revealCockpitStyleParameters\(\);/);
+  assert.match(radioPanelUi, /if \(displayOpen\) mgr\._revealCockpitStyleParameters\(\);/);
   assert.match(cockpitView, /setVisionMode\(modes\[nextIndex\], \{ revealParameters: true \}\);/);
   assert.match(css, /\.cockpit-display-slot\s*\{[\s\S]*?display:\s*block;[\s\S]*?min-width:\s*0;/);
   assert.match(css, /#cockpit-display-panel \.pp-toggle-group\s*\{\s*width:\s*100%/);
