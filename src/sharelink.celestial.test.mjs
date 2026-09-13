@@ -1,3 +1,4 @@
+import { StyleManager } from './ui/applicationShell.js';
 import { _claimContextVisualAuthority, setContextMode } from './ui/contextActions.js';
 import { _initGlobalContextPanel } from './ui/contextBindings.js';
 import { test } from 'node:test';
@@ -6,9 +7,11 @@ import fs from 'node:fs';
 import { ShareLinkManager, decodeShareCreatedAtMs } from './sharelink.js';
 import { createDefaultLayerState } from './data/layerState.js';
 
-const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+const uiSource = fs.readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
 
 function sourceBlock(start, end) {
+  const name = start.trim().match(/^(?:async )?(\w+)\(/)?.[1];
+  if (typeof StyleManager.prototype[name] === 'function') return StyleManager.prototype[name].toString();
   const startIndex = uiSource.indexOf(start);
   const endIndex = uiSource.indexOf(end, startIndex + start.length);
   assert.ok(startIndex >= 0, `missing source block start: ${start}`);
@@ -194,7 +197,7 @@ test('a shared view reserves its own camera without cancelling its saved Follow'
   );
   // The shared view's own `cancelPendingSelection` must reach the stamp; other
   // stamp options may ride alongside it.
-  assert.match(deferred, /_stampNavigation\(\{ cancelPendingSelection[^)]*\}\)/);
+  assert.match(deferred, /_stampNavigation\(\{\s*cancelPendingSelection[^)]*\}\)/);
 });
 
 test('copy timestamp parsing is strict and rejects malformed or future values', () => {
@@ -472,7 +475,7 @@ test('explicit Context transitions claim the visual restore lane before transiti
     'the Context authority helper must claim the visual lane',
   );
 
-  assert.match(uiSource, /claimVisualAuthority: \(\) => this\.shareLinkManager\?\.claimRestoreLane\?\.\('visual'\)/);
+  assert.match(uiSource, /claimVisualAuthority: \(\) =>\s*this\.shareLinkManager\?\.claimRestoreLane\?\.\('visual'\)/);
   const contextPanel = _initGlobalContextPanel.toString();
   for (const [start, end, label] of [
     ["this.listen(this._globalContextFlightsBtn, 'click'", "this.listen(this._globalContextMissionsBtn, 'click'", 'Contacts tab'],

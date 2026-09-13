@@ -13,6 +13,17 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Drive share updates, Location feedback and Scene controls through immutable state snapshots and disposable subscriptions.
+- Keep stale lookup/load completions from publishing accepted results and retain shot rows during playback progress updates.
+- Export the existing Scene director with explicit playback and editing outcomes.
+
+- Separate UI assembly from standalone engine wiring, with dedicated panel layout, position, notice and recording owners.
+- Stop pending UI presentation and drag work during disposal; preserve accessible status text when stopping its decoration.
+- Organize component styles behind the same ordered stylesheet entry and include 3D model controls in the current-state snapshot.
+
+- Separate Scene controls and text presentation from project/playback operations; revoke replaced row listeners and suppress stale completion feedback.
+- Preserve shot-label identity on selection so double-click rename can complete.
+
 - Split Cockpit camera/controller, instruments, briefing, signals and layout into focused modules with explicit application operations.
 - Give Display portal moves cancellable focus/scroll restoration and stop Cockpit work before asynchronous UI teardown.
 

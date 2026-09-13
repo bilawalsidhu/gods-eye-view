@@ -1,3 +1,4 @@
+import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { _selectContextMode } from './ui/contextTransactions.js';
 import { _syncContextModeButtons } from './ui/contextPresentation.js';
 import { _initGlobalContextPanel } from './ui/contextBindings.js';
@@ -11,8 +12,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const ui = readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
+const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 test('Contacts and Space Missions both participate in the ordinary Tab sequence', () => {
   for (const id of ['global-context-flights-btn', 'global-context-missions-btn']) {

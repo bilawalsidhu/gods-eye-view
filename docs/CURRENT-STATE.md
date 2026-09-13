@@ -1,5 +1,42 @@
 # God's Eye View Current State
 
+## State and action outcomes
+
+Share preferences, place lookups and Scene playback expose immutable snapshots
+and disposable subscriptions. Share settings drive URL updates; lookup outcomes
+drive Location labels and busy/error feedback. Superseded or disposed lookups
+cannot publish accepted destinations. Each completion carries its own request
+identity so an older completion cannot clear the current search indicator.
+
+Scene controls consume playback state and editing outcomes from the director.
+Progress updates carry a small playback snapshot and preserve shot-row identity;
+editing outcomes include a copy of the affected scene or shot. Subscriptions
+start with current state, isolate listener failures and stop on disposal.
+`gods-eye-view/scenes` exports the same director used by the standalone app.
+
+## UI shell and component ownership
+
+The standalone entry composes the UI with the application's existing layer,
+terrain, navigation and rendering operations. The shell receives those instances
+and assembles the controls. Panel layout scheduling, position preferences and
+active drags, loading notices, recording presentation and DOM lookup have focused
+owners. Disposal revokes queued presentation and listeners before asynchronous
+Context restoration, cancels an unfinished drag without saving it, restores the
+recording HUD and releases status decoration without replacing accessible text.
+The ordinary control snapshot includes the current 3D model toggle and mode.
+
+`style.css` imports component styles in their original cascade order. Scene,
+share, HUD and layer engines retain their existing behavior and entry points.
+
+## Scene control ownership
+
+Scene controls own creation/deletion prompts, panel listeners, shot rows, playback/recording presentation
+and keyboard cancellation. The director supplies project reads and explicit
+editing/playback actions while retaining persistence, camera and layer sequencing.
+Shot selection updates the highlight without replacing the row, preserving
+native double-click rename. Replacing rows revokes their old listeners. Disposal stops controls immediately;
+late file and failed-action completions cannot update removed presentation.
+
 ## Cockpit component ownership
 
 Cockpit presentation is separated from its camera/controller behavior. Existing

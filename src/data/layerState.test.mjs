@@ -371,7 +371,7 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
     assert.match(source, /^let _models3dMode = 'proximity';/m,
       `${name}: and starts in proximity, matching the codec default`);
   }
-  const ui = await readFile(new URL('../ui.js', import.meta.url), 'utf8');
+  const ui = await readFile(new URL('../ui/applicationShell.js', import.meta.url), 'utf8');
   assert.match(ui, /^\s*this\._models3dEnabled = true;$/m,
     'ui.js: the DISPLAY rail believes 3D is on before any layer-state sync arrives');
   assert.match(ui, /this\._models3dMode = 'proximity';/,
@@ -379,7 +379,7 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
   const html = await readFile(new URL('../../index.html', import.meta.url), 'utf8');
   assert.match(html, /class="pp-toggle-btn active" id="models3d-toggle" aria-pressed="true"/,
     'index.html: the 3D button paints lit on first paint, before ui.js runs — and says so');
-  assert.match(ui, /this\._models3dBtn\?\.setAttribute\('aria-pressed', String\(this\._models3dEnabled\)\)/,
+  assert.match(ui, /this\._models3dBtn\?\.setAttribute\(\s*'aria-pressed',\s*String\(this\._models3dEnabled\),?\s*\)/,
     'ui.js: and keeps aria-pressed synchronized, so the lit state is not colour-only');
   assert.match(html, /class="pp-slider-row visible" id="models3d-mode-row"/,
     'index.html: and the Proximity/All row paints open with it');

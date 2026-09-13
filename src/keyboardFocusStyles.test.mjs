@@ -1,8 +1,9 @@
+import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 function ruleBody(selector) {
   const start = css.indexOf(selector);
