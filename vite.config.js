@@ -3493,7 +3493,7 @@ const DEFAULT_AUSTIN_MAX_SOURCES = 250;
  * (or any CCTV_*_MAX_SOURCES) if the catalog size costs more than it is worth
  * on your hardware.
  */
-const DEFAULT_CCTV_MAX_SOURCES = 1400;
+const DEFAULT_CCTV_MAX_SOURCES = 1700;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
@@ -3552,6 +3552,20 @@ const DEFAULT_DRIVEBC_MAX_SOURCES = 150;
 const VANCOUVER_CENTER = { lat: 49.2827, lon: -123.1207 };
 /** 8-point compass -> degrees, for sources that publish a coarse bearing. */
 const COMPASS_DEGREES = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315 };
+/** WSDOT (Washington). Free access code, emailed. Docs list http; https works. */
+const WSDOT_CAMERAS_URL = 'https://wsdot.wa.gov/Traffic/api/HighwayCameras/HighwayCamerasREST.svc/GetCamerasAsJson';
+const DEFAULT_WSDOT_MAX_SOURCES = 150;
+const SEATTLE_CENTER = { lat: 47.6062, lon: -122.3321 };
+/** Live Traffic NSW (Australia). Free API key via the Open Data portal. */
+const NSW_CAMERAS_URL = 'https://api.transport.nsw.gov.au/v1/live/cameras';
+const DEFAULT_NSW_MAX_SOURCES = 150;
+const SYDNEY_CENTER = { lat: -33.8688, lon: 151.2093 };
+/**
+ * The NSW webcam CDN serves frames only to browser-shaped clients: anything
+ * else gets HTTP 200 with an HTML "Page not found" body (verified 2026-09-14),
+ * which is a fake success rather than an error.
+ */
+const NSW_IMAGE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 /** LTA DataMall (Singapore) live traffic images. Requires a free AccountKey. */
 const LTA_TRAFFIC_IMAGES_URL = 'https://datamall2.mytransport.sg/ltaodataservice/Traffic-Imagesv2';
 const DEFAULT_LTA_MAX_SOURCES = 120;
@@ -4309,6 +4323,165 @@ export function driveBcCameraToSource(cam) {
   };
 }
 
+/**
+ * One WSDOT camera -> one catalog source, or null when unusable.
+ *
+ * WSDOT publishes `CameraLocation.Direction`, but most of it is NOT a bearing:
+ * of 1705 cameras, 1182 are "B" (both directions) and 13 are "O" (other). Only
+ * the four cardinal codes name where the camera actually looks, so the rest
+ * fall back to the id hash rather than pointing every second camera due north.
+ *
+ * @param {object} cam WSDOT camera record.
+ * @returns {?object}
+ */
+export function wsdotCameraToSource(cam) {
+  const rawId = String(cam?.CameraID ?? '').trim();
+  if (!rawId) return null;
+  if (cam?.IsActive === false) return null;
+  const lat = toFiniteNumber(cam?.DisplayLatitude ?? cam?.CameraLocation?.Latitude);
+  const lon = toFiniteNumber(cam?.DisplayLongitude ?? cam?.CameraLocation?.Longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const url = String(cam?.ImageURL || '');
+  if (!url.startsWith('https://')) return null;
+  const cameraId = `wsdot-${rawId}`;
+  const direction = String(cam?.CameraLocation?.Direction || '').trim().toUpperCase();
+  // "B" (both) and "O" (other) are not bearings; only the cardinals are.
+  const hasBearing = ['N', 'S', 'E', 'W'].includes(direction);
+  const road = String(cam?.CameraLocation?.RoadName || '').trim();
+  const title = String(cam?.Title || cam?.Description || `WSDOT ${rawId}`).trim();
+  return {
+    id: cameraId,
+    name: road ? `${title} (${road})` : title,
+    city: String(cam?.Region || 'Washington'),
+    cityId: 'washington',
+    provider: 'WSDOT',
+    lat,
+    lon,
+    headingDeg: hasBearing ? COMPASS_DEGREES[direction] : fallbackHeadingFromId(cameraId),
+    headingConfidence: hasBearing ? 'medium' : 'low',
+    pitchDeg: -11,
+    fovDeg: 50,
+    rangeM: 380,
+    mountHeightM: 9,
+    groundElevationM: 90, // Puget Sound lowland prior; one-shot snap corrects.
+    feedType: 'image',
+    url,
+    snapshotUrl: url,
+    sourceKind: 'wsdot',
+    license: 'Washington State Department of Transportation — wsdot.wa.gov',
+  };
+}
+
+/**
+ * One NSW Live Traffic camera feature -> one catalog source, or null.
+ *
+ * NSW is the best-described source here: every camera carries a compass
+ * `direction` AND a `view` sentence saying what it looks at. Directions are
+ * hyphenated ("N-E"), so they are de-hyphenated before the compass lookup.
+ *
+ * @param {object} feature GeoJSON feature from /v1/live/cameras.
+ * @returns {?object}
+ */
+export function nswCameraToSource(feature) {
+  const rawId = String(feature?.id || '').trim();
+  if (!rawId) return null;
+  const coords = feature?.geometry?.coordinates;
+  const lon = toFiniteNumber(coords?.[0]);
+  const lat = toFiniteNumber(coords?.[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const props = feature?.properties || {};
+  const url = String(props.href || '');
+  if (!url.startsWith('https://')) return null;
+  // "N-E" -> "NE"; the compass table has no hyphenated keys.
+  const direction = String(props.direction || '').trim().toUpperCase().replace(/-/g, '');
+  const hasBearing = Object.prototype.hasOwnProperty.call(COMPASS_DEGREES, direction);
+  const cameraId = `nsw-${rawId}`;
+  return {
+    id: cameraId,
+    name: String(props.title || `NSW ${rawId}`),
+    city: String(props.region || 'New South Wales').replace(/_/g, ' '),
+    cityId: 'nsw',
+    provider: 'Live Traffic NSW',
+    lat,
+    lon,
+    headingDeg: hasBearing ? COMPASS_DEGREES[direction] : fallbackHeadingFromId(cameraId),
+    headingConfidence: hasBearing ? 'medium' : 'low',
+    pitchDeg: -12,
+    fovDeg: 50,
+    rangeM: 340,
+    mountHeightM: 9,
+    groundElevationM: 25, // Sydney basin prior; one-shot snap corrects.
+    feedType: 'image',
+    url,
+    snapshotUrl: url,
+    // The NSW CDN answers 200 + HTML to non-browser clients; see
+    // fetchCctvImageFromUpstream. Without this every NSW camera would
+    // silently fall through to Street View.
+    imageUserAgent: NSW_IMAGE_USER_AGENT,
+    sourceKind: 'nsw-livetraffic',
+    license: 'Live Traffic NSW — Transport for NSW, CC BY 4.0',
+  };
+}
+
+/** Load WSDOT cameras (needs a free WSDOT_ACCESS_CODE). @returns {Promise<Array<object>>} */
+async function loadWsdotSources() {
+  const accessCode = String(process.env.WSDOT_ACCESS_CODE || '').trim();
+  if (!accessCode) return [];
+  try {
+    // WSDOT documents these endpoints as http://; force https so the proxy is
+    // not making a cleartext upstream call on the operator's behalf.
+    const url = `${WSDOT_CAMERAS_URL}?AccessCode=${encodeURIComponent(accessCode)}`;
+    const resp = await fetch(url, {
+      headers: { Accept: 'application/json', 'User-Agent': OVERPASS_USER_AGENT },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn('[CCTV] WSDOT download failed:', resp.status);
+      return [];
+    }
+    const body = await resp.json();
+    if (!Array.isArray(body)) return [];
+    const cameras = body.map(wsdotCameraToSource).filter(Boolean);
+    const maxRaw = Number(process.env.CCTV_WSDOT_MAX_SOURCES || DEFAULT_WSDOT_MAX_SOURCES);
+    const maxCount = Number.isFinite(maxRaw) ? Math.max(0, Math.min(900, Math.floor(maxRaw))) : DEFAULT_WSDOT_MAX_SOURCES;
+    if (maxCount === 0) return [];
+    const prioritized = prioritizeSources(cameras, maxCount, [SEATTLE_CENTER]);
+    console.log(`[CCTV] Loaded WSDOT sources: ${cameras.length} available (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] WSDOT download error:', error?.message || error);
+    return [];
+  }
+}
+
+/** Load NSW Live Traffic cameras (needs a free NSW_API_KEY). @returns {Promise<Array<object>>} */
+async function loadNswSources() {
+  const apiKey = String(process.env.NSW_API_KEY || '').trim();
+  if (!apiKey) return [];
+  try {
+    const resp = await fetch(NSW_CAMERAS_URL, {
+      headers: { Accept: 'application/json', Authorization: `apikey ${apiKey}` },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn(`[CCTV] NSW download failed: ${resp.status}${resp.status === 401 ? ' (check NSW_API_KEY and that the app is subscribed to Live Traffic Cameras)' : ''}`);
+      return [];
+    }
+    const body = await resp.json();
+    const features = Array.isArray(body?.features) ? body.features : [];
+    const cameras = features.map(nswCameraToSource).filter(Boolean);
+    const maxRaw = Number(process.env.CCTV_NSW_MAX_SOURCES || DEFAULT_NSW_MAX_SOURCES);
+    const maxCount = Number.isFinite(maxRaw) ? Math.max(0, Math.min(900, Math.floor(maxRaw))) : DEFAULT_NSW_MAX_SOURCES;
+    if (maxCount === 0) return [];
+    const prioritized = prioritizeSources(cameras, maxCount, [SYDNEY_CENTER]);
+    console.log(`[CCTV] Loaded NSW sources: ${cameras.length} available (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] NSW download error:', error?.message || error);
+    return [];
+  }
+}
+
 /** Load Finland weather cameras (keyless). @returns {Promise<Array<object>>} */
 async function loadDigitrafficSources() {
   try {
@@ -4626,6 +4799,9 @@ function normalizeSourceItem(item) {
     snapshotUrl: typeof item.snapshotUrl === 'string' ? item.snapshotUrl : '',
     license: String(item.license || item.licenseNote || ''),
     sourceKind: String(item.sourceKind || item.kind || 'configured'),
+    // Server-side only (never listed by /sources): lets a pack declare the
+    // User-Agent its image CDN requires. See fetchCctvImageFromUpstream.
+    imageUserAgent: typeof item.imageUserAgent === 'string' ? item.imageUserAgent : '',
     // Optional CAL badge input (cctv-v2 design §3b/§9.2, additive-only per the
     // global constraints — nothing else in this file changes): hand-authored
     // file/env catalog entries may declare poseSource:'curated' so the panel
@@ -4686,6 +4862,11 @@ async function refreshCctvSources() {
   const finlandEnabled = String(process.env.CCTV_FINLAND_ENABLED || '1').trim() !== '0';
   const ontarioEnabled = String(process.env.CCTV_ONTARIO_ENABLED || '1').trim() !== '0';
   const driveBcEnabled = String(process.env.CCTV_DRIVEBC_ENABLED || '1').trim() !== '0';
+  // Keyed packs: opt-in on the key alone, so a keyless clone is unchanged.
+  const wsdotEnabled = String(process.env.CCTV_WSDOT_ENABLED || '1').trim() !== '0'
+    && !!String(process.env.WSDOT_ACCESS_CODE || '').trim();
+  const nswEnabled = String(process.env.CCTV_NSW_ENABLED || '1').trim() !== '0'
+    && !!String(process.env.NSW_API_KEY || '').trim();
 
   let fromAustin = [];
   let fromCaltrans = [];
@@ -4694,8 +4875,10 @@ async function refreshCctvSources() {
   let fromFinland = [];
   let fromOntario = [];
   let fromDriveBc = [];
+  let fromWsdot = [];
+  let fromNsw = [];
   if (needsLiveSources) {
-    const [austinResult, caltransResult, tflResult, ltaResult, finlandResult, ontarioResult, driveBcResult] = await Promise.allSettled([
+    const [austinResult, caltransResult, tflResult, ltaResult, finlandResult, ontarioResult, driveBcResult, wsdotResult, nswResult] = await Promise.allSettled([
       loadAustinSourcesFromOpenData(),
       loadCaltransSourcesFromOpenData(),
       tflEnabled ? loadTflSourcesFromOpenData() : Promise.resolve([]),
@@ -4703,6 +4886,8 @@ async function refreshCctvSources() {
       finlandEnabled ? loadDigitrafficSources() : Promise.resolve([]),
       ontarioEnabled ? loadOntario511Sources() : Promise.resolve([]),
       driveBcEnabled ? loadDriveBcSources() : Promise.resolve([]),
+      wsdotEnabled ? loadWsdotSources() : Promise.resolve([]),
+      nswEnabled ? loadNswSources() : Promise.resolve([]),
     ]);
     fromAustin = austinResult.status === 'fulfilled' ? austinResult.value : [];
     fromCaltrans = caltransResult.status === 'fulfilled' ? caltransResult.value : [];
@@ -4711,11 +4896,13 @@ async function refreshCctvSources() {
     fromFinland = finlandResult.status === 'fulfilled' ? finlandResult.value : [];
     fromOntario = ontarioResult.status === 'fulfilled' ? ontarioResult.value : [];
     fromDriveBc = driveBcResult.status === 'fulfilled' ? driveBcResult.value : [];
+    fromWsdot = wsdotResult.status === 'fulfilled' ? wsdotResult.value : [];
+    fromNsw = nswResult.status === 'fulfilled' ? nswResult.value : [];
   }
   // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
   const merged = [
     ...fromAustin, ...fromCaltrans, ...fromTfl, ...fromLta,
-    ...fromFinland, ...fromOntario, ...fromDriveBc,
+    ...fromFinland, ...fromOntario, ...fromDriveBc, ...fromWsdot, ...fromNsw,
     ...fromFile, ...fromEnv,
   ];
 
@@ -4935,6 +5122,7 @@ async function proxyMediaResponse(res, upstream, { sourceHeader = 'upstream' } =
 export async function fetchCctvImageFromUpstream(url, {
   fetchImpl = fetch,
   timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS,
+  userAgent = '',
 } = {}) {
   if (!url || !/^https?:\/\//i.test(url)) return null;
   const controller = new AbortController();
@@ -4943,7 +5131,11 @@ export async function fetchCctvImageFromUpstream(url, {
   }, timeoutMs);
   try {
     const upstream = await fetchImpl(url, {
-      headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
+      // Per-source override: some CDNs serve frames only to browser-shaped
+      // clients. NSW's returns HTTP 200 with an HTML "Page not found" body to
+      // anything else — a fake success that the content-type guard below turns
+      // into an honest miss, but which no header choice here could otherwise fix.
+      headers: { 'User-Agent': userAgent || 'gods-eye-view-cctv-proxy/1.0' },
       signal: controller.signal,
     });
     const contentType = upstream.headers.get('content-type') || '';
@@ -5202,7 +5394,9 @@ function cctvProxy() {
             || source?.snapshotUrl
             || (!isVideoFeedType(normalizeFeedType(source?.feedType)) ? source?.url : '');
 
-          const upstreamImage = await fetchCctvImageFromUpstream(upstreamCandidate);
+          const upstreamImage = await fetchCctvImageFromUpstream(upstreamCandidate, {
+            userAgent: source?.imageUserAgent || '',
+          });
           if (upstreamImage?.ok) {
             setHealth(cameraId, {
               status: 'ok',

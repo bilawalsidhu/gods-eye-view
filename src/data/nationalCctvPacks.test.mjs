@@ -12,7 +12,9 @@ import {
   digitrafficPresetToSource,
   driveBcCameraToSource,
   headingFromDirectionText,
+  nswCameraToSource,
   ontario511ViewToSource,
+  wsdotCameraToSource,
 } from '../../vite.config.js';
 
 // ---------------------------------------------------------------------------
@@ -156,4 +158,99 @@ test('an unknown DriveBC orientation degrades to a flagged fallback', () => {
 test('a zero elevation is kept, not replaced by the prior', () => {
   // `|| 100` would silently move a sea-level camera to 100 m.
   assert.equal(driveBcCameraToSource({ ...BC_CAM, elevation: 0 }).groundElevationM, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Washington — WSDOT
+// ---------------------------------------------------------------------------
+
+const WA_CAM = {
+  CameraID: 9818,
+  Title: 'Anacortes Fuel',
+  Description: null,
+  CameraLocation: { Direction: 'W', Latitude: 48.498333, Longitude: -122.6625, RoadName: 'Airports' },
+  DisplayLatitude: 48.498333,
+  DisplayLongitude: -122.6625,
+  ImageURL: 'https://images.wsdot.wa.gov/airports/anafuel.jpg',
+  IsActive: true,
+  Region: 'Northwest',
+};
+
+test('a WSDOT camera maps with its cardinal direction as a bearing', () => {
+  const source = wsdotCameraToSource(WA_CAM);
+  assert.ok(source);
+  assert.equal(source.id, 'wsdot-9818');
+  assert.equal(source.lat, 48.498333);
+  assert.equal(source.headingDeg, 270, 'W is 270 degrees');
+  assert.equal(source.headingConfidence, 'medium');
+  assert.equal(source.snapshotUrl, 'https://images.wsdot.wa.gov/airports/anafuel.jpg');
+});
+
+test('WSDOT "B" and "O" are not bearings and must not be pointed north', () => {
+  // 1182 of 1705 live cameras are "B" (both directions) and 13 are "O".
+  // Treating those as a compass code would aim most of Washington due north.
+  for (const direction of ['B', 'O', '', null]) {
+    const source = wsdotCameraToSource({ ...WA_CAM, CameraLocation: { ...WA_CAM.CameraLocation, Direction: direction } });
+    assert.equal(source.headingConfidence, 'low', `direction ${direction} must be low confidence`);
+    assert.ok(Number.isFinite(source.headingDeg));
+  }
+});
+
+test('an inactive or unusable WSDOT camera is dropped', () => {
+  assert.equal(wsdotCameraToSource({ ...WA_CAM, IsActive: false }), null);
+  assert.equal(wsdotCameraToSource({ ...WA_CAM, ImageURL: 'http://images.wsdot.wa.gov/x.jpg' }), null);
+  assert.equal(wsdotCameraToSource({ ...WA_CAM, DisplayLatitude: undefined, CameraLocation: { ...WA_CAM.CameraLocation, Latitude: undefined } }), null);
+  assert.equal(wsdotCameraToSource(null), null);
+});
+
+test('WSDOT falls back to CameraLocation coordinates when Display ones are absent', () => {
+  const source = wsdotCameraToSource({ ...WA_CAM, DisplayLatitude: undefined, DisplayLongitude: undefined });
+  assert.equal(source.lat, 48.498333);
+  assert.equal(source.lon, -122.6625);
+});
+
+// ---------------------------------------------------------------------------
+// New South Wales — Live Traffic NSW
+// ---------------------------------------------------------------------------
+
+const NSW_FEATURE = {
+  type: 'Feature',
+  id: '023651ee-389c-4677-978e-d39b6c24c1e7',
+  geometry: { type: 'Point', coordinates: [151.10533, -34.02977] },
+  properties: {
+    region: 'SYD_SOUTH',
+    title: '5 Ways (Miranda)',
+    view: '5 Ways at The Boulevarde looking west towards Sutherland.',
+    direction: 'W',
+    href: 'https://webcams.transport.nsw.gov.au/livetraffic-webcams/cameras/5_ways_miranda.jpeg',
+  },
+};
+
+test('an NSW camera maps with its bearing and a browser User-Agent', () => {
+  const source = nswCameraToSource(NSW_FEATURE);
+  assert.ok(source);
+  assert.equal(source.id, 'nsw-023651ee-389c-4677-978e-d39b6c24c1e7');
+  assert.equal(source.lat, -34.02977, 'southern hemisphere latitude must stay negative');
+  assert.equal(source.lon, 151.10533);
+  assert.equal(source.headingDeg, 270);
+  assert.equal(source.headingConfidence, 'medium');
+  // Without this the CDN answers 200 + HTML and every NSW camera silently
+  // falls through to Street View.
+  assert.match(source.imageUserAgent, /Mozilla\/5\.0/);
+});
+
+test('NSW hyphenated compass directions are de-hyphenated before lookup', () => {
+  // The live feed uses "N-E"/"S-W", which the compass table has no key for.
+  const cases = { 'N-E': 45, 'N-W': 315, 'S-E': 135, 'S-W': 225, N: 0, S: 180 };
+  for (const [direction, deg] of Object.entries(cases)) {
+    const source = nswCameraToSource({ ...NSW_FEATURE, properties: { ...NSW_FEATURE.properties, direction } });
+    assert.equal(source.headingDeg, deg, direction);
+    assert.equal(source.headingConfidence, 'medium', direction);
+  }
+});
+
+test('an NSW feature without usable geometry or image is dropped', () => {
+  assert.equal(nswCameraToSource({ ...NSW_FEATURE, geometry: null }), null);
+  assert.equal(nswCameraToSource({ ...NSW_FEATURE, properties: { ...NSW_FEATURE.properties, href: '' } }), null);
+  assert.equal(nswCameraToSource({ ...NSW_FEATURE, id: '' }), null);
 });
