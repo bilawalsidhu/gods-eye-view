@@ -3566,6 +3566,17 @@ const SYDNEY_CENTER = { lat: -33.8688, lon: 151.2093 };
  * which is a fake success rather than an error.
  */
 const NSW_IMAGE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+/**
+ * Longest `view` sentence still usable as a map label.
+ *
+ * NSW occasionally repurposes `view` for a multi-paragraph works notice with
+ * URLs instead of a description of the shot — at the time of writing, Victoria
+ * Pass carries 518 characters explaining that the camera is switched off for
+ * highway reinstatement. Of 217 cameras that is the only one over 140; the real
+ * descriptions top out at 120. Anything past this, or containing a line break,
+ * is a notice rather than a label and falls back to the title.
+ */
+const NSW_MAX_VIEW_LABEL = 140;
 /** LTA DataMall (Singapore) live traffic images. Requires a free AccountKey. */
 const LTA_TRAFFIC_IMAGES_URL = 'https://datamall2.mytransport.sg/ltaodataservice/Traffic-Imagesv2';
 const DEFAULT_LTA_MAX_SOURCES = 120;
@@ -4373,6 +4384,28 @@ export function wsdotCameraToSource(cam) {
 }
 
 /**
+ * Label for one NSW camera: its `view` sentence when that is really a view.
+ *
+ * `view` is the most informative label any source in this file publishes — it
+ * names the cross street, the direction of the shot, and what is down it
+ * ("5 Ways at The Boulevarde looking west towards Sutherland"), where `title`
+ * gives only a suburb ("5 Ways (Miranda)"). It is also strictly better than
+ * pairing them: 155 of 217 views already begin with the title.
+ *
+ * The exception is the works-notice case guarded by NSW_MAX_VIEW_LABEL.
+ * @param {{view?:string, title?:string}} props
+ * @returns {string} Label, or '' when neither field is usable.
+ */
+export function nswCameraLabel(props) {
+  const view = String(props?.view || '').trim();
+  const title = String(props?.title || '').trim();
+  const viewIsALabel = view.length > 0
+    && view.length <= NSW_MAX_VIEW_LABEL
+    && !/[\r\n]/.test(view);
+  return viewIsALabel ? view : title;
+}
+
+/**
  * One NSW Live Traffic camera feature -> one catalog source, or null.
  *
  * NSW is the best-described source here: every camera carries a compass
@@ -4398,7 +4431,7 @@ export function nswCameraToSource(feature) {
   const cameraId = `nsw-${rawId}`;
   return {
     id: cameraId,
-    name: String(props.title || `NSW ${rawId}`),
+    name: nswCameraLabel(props) || `NSW ${rawId}`,
     city: String(props.region || 'New South Wales').replace(/_/g, ' '),
     cityId: 'nsw',
     provider: 'Live Traffic NSW',

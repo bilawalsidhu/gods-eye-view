@@ -12,6 +12,7 @@ import {
   digitrafficPresetToSource,
   driveBcCameraToSource,
   headingFromDirectionText,
+  nswCameraLabel,
   nswCameraToSource,
   ontario511ViewToSource,
   wsdotCameraToSource,
@@ -253,4 +254,44 @@ test('an NSW feature without usable geometry or image is dropped', () => {
   assert.equal(nswCameraToSource({ ...NSW_FEATURE, geometry: null }), null);
   assert.equal(nswCameraToSource({ ...NSW_FEATURE, properties: { ...NSW_FEATURE.properties, href: '' } }), null);
   assert.equal(nswCameraToSource({ ...NSW_FEATURE, id: '' }), null);
+});
+
+test('the NSW view sentence becomes the camera label', () => {
+  const source = nswCameraToSource(NSW_FEATURE);
+  // The view names the cross street, the direction, and what is down it; the
+  // title gives only a suburb.
+  assert.equal(source.name, '5 Ways at The Boulevarde looking west towards Sutherland.');
+});
+
+test('a works notice in `view` falls back to the title instead of becoming a label', () => {
+  // Verified live: Victoria Pass carries 518 characters of roadworks notice,
+  // including URLs and blank lines, in the `view` field.
+  const notice = [
+    'Transport for NSW is carrying out work at Victoria Pass to reinstate this section of',
+    'the Great Western Highway and reconnect the Blue Mountains with the Central West.',
+    'While the work is underway, the Live Traffic NSW camera at this location will be',
+    'switched off.',
+    '',
+    'More information: https://www.transport.nsw.gov.au/projects',
+  ].join('\n');
+  assert.equal(
+    nswCameraLabel({ title: 'Great Western Highway (Victoria Pass)', view: notice }),
+    'Great Western Highway (Victoria Pass)',
+  );
+  // Length alone is enough, even on a single line.
+  assert.equal(nswCameraLabel({ title: 'T', view: 'x'.repeat(141) }), 'T');
+  assert.equal(nswCameraLabel({ title: 'T', view: 'x'.repeat(140) }), 'x'.repeat(140), '140 is inclusive');
+  // A line break alone is enough, even when short.
+  assert.equal(nswCameraLabel({ title: 'T', view: 'short\nbut broken' }), 'T');
+});
+
+test('the NSW label degrades through view -> title -> id', () => {
+  assert.equal(nswCameraLabel({ title: 'Only title', view: '' }), 'Only title');
+  assert.equal(nswCameraLabel({ title: '', view: '   ' }), '');
+  assert.equal(nswCameraLabel(null), '');
+  const source = nswCameraToSource({
+    ...NSW_FEATURE,
+    properties: { ...NSW_FEATURE.properties, title: '', view: '' },
+  });
+  assert.equal(source.name, `nsw-${NSW_FEATURE.id}`.replace('nsw-', 'NSW '), 'falls back to the id');
 });
