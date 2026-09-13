@@ -253,6 +253,10 @@ async function main() {
 
       const page = await browser.newPage();
       await page.setViewport({ width: 1600, height: 900 });
+      await page.evaluateOnNewDocument(() => {
+        // This harness inspects cards, so keep first-run chrome out of the view.
+        localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
+      });
       page.on('pageerror', (err) => console.error(`    [page-error] ${err.message}`));
 
       await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -319,7 +323,10 @@ async function main() {
           orientation: { heading: p.heading, pitch: p.pitch, roll: 0 },
         });
       }, port);
-      const resettled = settled ? true : await page
+      // A changed camera invalidates the previous settled result. Let the new
+      // view schedule its tiles before checking readiness again.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const resettled = await page
         .waitForFunction(() => {
           const gev = window.__godsEyeView;
           const ais = gev.dataManager.getAll().find((l) => l.id === 'ais-live-vessels');

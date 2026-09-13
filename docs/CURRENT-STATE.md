@@ -1,5 +1,62 @@
 # God's Eye View Current State
 
+## Military-flight components and aircraft mechanics
+
+`gods-eye-view/layers/military` exports `createMilitaryFlightLayer`. It uses the
+same normalized observation contract as civil flights, with separate military
+classification, styling, model and tracking policy. Each instance owns its
+contacts, history, scratch objects, model loads and cancellation lifetime.
+Applications supply the existing scene services and resolve model asset URLs;
+`src/data/militaryFlights.js` keeps the standalone layer API and adsb.lol source.
+A source may retain a bounded stale-status reason; the standalone cached-feed
+behavior remains unchanged.
+
+`gods-eye-view/aircraft` exports the existing shared classification, icon,
+metadata, motion, altitude, model-anchor, proximity and selection calculations.
+It also exports `createMilitaryRegistry`, an explicitly constructed owner for
+known military identities and active-layer transitions. Its optional background
+poll consumes the optional `getIdentities` capability, falling back to normalized
+positioned records when a source has no identity-only capability. The adsb.lol
+adapter preserves known identities without requiring positions; those entries
+still cannot enter the renderer. Source replacement
+and disposal abort pending work and clear retained identities; construction
+starts no network request. Both standalone aircraft layers use one registry.
+
+## Civil-flight components
+
+`gods-eye-view/layers/flights` exports `createCivilFlightLayer`. Each instance
+owns its contacts, histories, model collections, scratch objects and lifecycle.
+State, ingestion, enrichment, motion/floor interpolation, rendering, tracking and
+queries live in separate files under `src/layers/flights`. The standalone
+`src/data/flights.js` assembles the existing OpenSky source and scene services.
+
+Applications supply the existing floor/snap, geoid, picking, sprite, camera,
+trail, focus, readout, context, aircraft presentation and render services.
+The factory never constructs a second application registry. Configure a source
+before initialization; replacing it while initialized is rejected. Model loads
+use the supplied asset resolver, including the preload path. Enrichment receives
+an abort signal and cannot update a later lifecycle after destruction. Existing
+camera, terrain floor, trail, selection and measured model-size policies remain.
+
+## Browser live-source observations
+
+Flights, Military Flights and AIS Vessels obtain snapshots and optional history
+through `gods-eye-view/sources/live`. The standalone adapters use the existing
+same-origin routes. Aircraft observations distinguish barometric metres from
+WGS84 ellipsoid metres and retain source position/contact epochs; vessel records
+retain separate heading/course and sea-surface datum. History is a best-effort
+addition to the locally accumulated trail, never a promise of complete coverage.
+
+Snapshot coverage, completeness and freshness are separate fields. A partially
+admitted aircraft snapshot retains absent contacts for up to five minutes before
+the usual missed-poll eviction. Unknown snapshot times remain unknown in stats. An invalid nonempty
+snapshot retains the previous display. Empty vessel refreshes retain the existing
+first-connect grace and warm-data behavior. Known source failures have bounded
+messages; arbitrary HTTP response bodies are not surfaced as diagnostics.
+Sources receive cancellation signals and check them after body parsing. The
+layer's existing lifecycle and selection guards continue to reject late work.
+
+
 ## State and action outcomes
 
 Share preferences, place lookups and Scene playback expose immutable snapshots

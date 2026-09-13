@@ -83,6 +83,17 @@ try {
       });
       return;
     }
+    // Space Missions is toggled by the Context cancellation checks below.
+    // Its catalog is unrelated to aircraft/Cockpit behavior; keep the network
+    // error gate meaningful without depending on Launch Library availability.
+    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/launches') {
+      request.respond({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ results: [] }),
+      });
+      return;
+    }
     // This harness verifies UI/lifecycle behavior, not DEM accuracy. Keep an
     // unrelated upstream terrain outage out of the rendered interaction gate.
     if (url.origin === new URL(appUrl).origin && url.pathname === '/api/terrain/heights') {

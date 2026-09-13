@@ -1,3 +1,4 @@
+import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -244,14 +245,14 @@ test('tracking layers write gevLabelModel and expose only their cached display p
     'militaryFlights.js',
     'satellites.js',
     'militaryInstallations.js',
-  ].map(async (name) => [name, await readFile(new URL(`./${name}`, import.meta.url), 'utf8')]));
+  ].map(async (name) => [name, readLayerSource(new URL(`./${name}`, import.meta.url))]));
   const sources = Object.fromEntries(files);
   for (const [name, source] of files) {
     assert.ok(source.includes('.gevLabelModel ='), `${name} writes the explicit model directly`);
     assert.ok(source.includes('.gevDisplayPosition ='), `${name} exposes a display-position cache`);
   }
-  assert.ok(sources['flights.js'].includes('gevDisplayPosition = _trackedDisplayCached'));
-  assert.ok(sources['militaryFlights.js'].includes('gevDisplayPosition = _trackedDisplayCached'));
+  assert.match(sources['flights.js'], /gevDisplayPosition\s*=\s*parts\.motion\._trackedDisplayCached/);
+  assert.match(sources['militaryFlights.js'], /gevDisplayPosition\s*=\s*parts\.motion\._trackedDisplayCached/);
   assert.ok(sources['satellites.js'].includes('gevDisplayPosition = _trackedDisplayCached'));
   assert.equal(sources['flights.js'].includes('_trackedEntity.label.text'), false);
   assert.equal(sources['militaryFlights.js'].includes('_trackedEntity.label.text'), false);
@@ -260,11 +261,11 @@ test('tracking layers write gevLabelModel and expose only their cached display p
 
 test('civilian and military trail heads use the lower-centre model anchor and weak-texture tint', async () => {
   const files = await Promise.all(['flights.js', 'militaryFlights.js'].map(async (name) => (
-    [name, await readFile(new URL(`./${name}`, import.meta.url), 'utf8')]
+    [name, readLayerSource(new URL(`./${name}`, import.meta.url))]
   )));
   for (const [name, source] of files) {
     assert.ok(
-      source.includes('const head = _trackedTrailCached() || _trackedDisplayPosition(_trackedIcao);'),
+      (/const\s*head\s*=\s*(?:parts\.motion\.)?_trackedTrailCached\(\s*,?\s*\)\s*\|\|\s*(?:parts\.motion\.)?_trackedDisplayPosition\(\s*(?:flightState\.)?_trackedIcao,?\s*\);/).test(source),
       `${name} trail head uses the dedicated lower-centre model anchor`,
     );
     assert.ok(source.includes('const MODEL_COLOR_BLEND_AMOUNT = 0.94;'),

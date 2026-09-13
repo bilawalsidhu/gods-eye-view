@@ -141,6 +141,10 @@
     "./ui/scenes": "./src/ui/scenes.js",
     "./ui/shell": "./src/ui/applicationShell.js",
     "./ui/styles": "./src/ui/styles.js",
-    "./scenes": "./src/scenes/director.js"
+    "./scenes": "./src/scenes/director.js",
+    "./sources/live": "./src/sources/live/index.js",
+    "./layers/flights": "./src/layers/flights/index.js",
+    "./layers/military": "./src/layers/military/index.js",
+    "./aircraft": "./src/layers/aircraft/index.js"
   }
 }
