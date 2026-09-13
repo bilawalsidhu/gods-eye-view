@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import {
   simplifyOverpassPayloadBody,
   isOverpassBoundaryQuery,
+  overpassMirrorDisposition,
   resolveOverpassPreflight,
 } from '../../vite.config.js';
 
@@ -184,6 +185,52 @@ test('boundary-class queries detected for the long disk TTL', () => {
   assert.equal(isOverpassBoundaryQuery(
     '[out:json][timeout:12];way["highway"~"motorway|trunk"](30.1,-97.9,30.5,-97.5);out geom;',
   ), false);
+});
+
+// A mirror that refuses THIS client (overpass-api.de answers 406 to blocklisted
+// User-Agents) used to be returned as an authoritative answer, ending the mirror
+// loop on the first entry. `/api/military-installations` treats any status >= 400
+// as a failure, so the layer read "temporarily unavailable" permanently while
+// healthy mirrors below it were never tried.
+test('a 4xx refusal is a skip, not an authoritative answer', () => {
+  assert.equal(
+    overpassMirrorDisposition({ status: 406, rateLimited: false, runtimeError: false }),
+    'CLIENT_ERROR',
+    '406 User-Agent block must fall through to the next mirror',
+  );
+  assert.equal(
+    overpassMirrorDisposition({ status: 403, rateLimited: false, runtimeError: false }),
+    'CLIENT_ERROR',
+  );
+  assert.equal(
+    overpassMirrorDisposition({ status: 404, rateLimited: false, runtimeError: false }),
+    'CLIENT_ERROR',
+  );
+});
+
+test('mirror disposition keeps the established skip and accept rules', () => {
+  assert.equal(
+    overpassMirrorDisposition({ status: 200, rateLimited: false, runtimeError: false }),
+    'ACCEPT',
+  );
+  assert.equal(
+    overpassMirrorDisposition({ status: 429, rateLimited: true, runtimeError: false }),
+    'RATE_LIMITED',
+  );
+  // A 200 body carrying a rate-limit remark still outranks its status code.
+  assert.equal(
+    overpassMirrorDisposition({ status: 200, rateLimited: true, runtimeError: false }),
+    'RATE_LIMITED',
+  );
+  assert.equal(
+    overpassMirrorDisposition({ status: 200, rateLimited: false, runtimeError: true }),
+    'SKIP',
+    'a 200 carrying a runtime error is transient, never authoritative',
+  );
+  assert.equal(
+    overpassMirrorDisposition({ status: 504, rateLimited: false, runtimeError: false }),
+    'SKIP',
+  );
 });
 
 /** Perpendicular distance (deg, planar approx) from p to segment a-b. */

@@ -51,10 +51,58 @@ function finiteLongitude(value) {
   return Number.isFinite(value) && value >= -180 && value <= 180;
 }
 
+/**
+ * Bounding-box centre of whatever geometry an element actually carries.
+ *
+ * Overpass geometry modes are EXCLUSIVE: the installation query asks for
+ * `out center tags geom`, and `geom` wins, so `center` is never emitted. Ways
+ * and relations arrive with `bounds` and `geometry` instead — which is how a
+ * viewport over Austin returned six features and rendered one, the lone tagged
+ * NODE, while Camp Mabry and the Texas National Guard sites were dropped for
+ * having no centre point.
+ *
+ * `bounds` is preferred because Overpass derives `out center` from exactly that
+ * box, so this reproduces the centre the caller originally asked for. Relations
+ * carry their geometry on members rather than on the element, so those are
+ * folded in too. Longitudes are averaged without dateline handling, matching
+ * Overpass's own `center`; the proxy already rejects cross-dateline and
+ * oversized request boxes, which bounds the error.
+ *
+ * @param {object} element Overpass element.
+ * @returns {?{latitude:number, longitude:number}}
+ */
+function geometryCentre(element) {
+  const bounds = element?.bounds;
+  if (bounds) {
+    const latitude = (Number(bounds.minlat) + Number(bounds.maxlat)) / 2;
+    const longitude = (Number(bounds.minlon) + Number(bounds.maxlon)) / 2;
+    if (finiteLatitude(latitude) && finiteLongitude(longitude)) return { latitude, longitude };
+  }
+  let minLat = Infinity; let maxLat = -Infinity;
+  let minLon = Infinity; let maxLon = -Infinity;
+  const extend = (points) => {
+    if (!Array.isArray(points)) return;
+    for (const point of points) {
+      const latitude = Number(point?.lat);
+      const longitude = Number(point?.lon);
+      if (!finiteLatitude(latitude) || !finiteLongitude(longitude)) continue;
+      if (latitude < minLat) minLat = latitude;
+      if (latitude > maxLat) maxLat = latitude;
+      if (longitude < minLon) minLon = longitude;
+      if (longitude > maxLon) maxLon = longitude;
+    }
+  };
+  extend(element?.geometry);
+  for (const member of Array.isArray(element?.members) ? element.members : []) extend(member?.geometry);
+  if (minLat > maxLat) return null;
+  return { latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2 };
+}
+
 function pointFrom(element) {
   const lat = Number(element?.lat ?? element?.center?.lat);
   const longitude = Number(element?.lon ?? element?.center?.lon);
-  return finiteLatitude(lat) && finiteLongitude(longitude) ? { latitude: lat, longitude } : null;
+  if (finiteLatitude(lat) && finiteLongitude(longitude)) return { latitude: lat, longitude };
+  return geometryCentre(element);
 }
 
 function footprintFrom(element) {
