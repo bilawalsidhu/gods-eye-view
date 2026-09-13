@@ -47,6 +47,14 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- **Docker install path.** `docker compose up` builds the pinned Node image and
+  serves the app on `http://localhost:4173` with no local Node install. The repo
+  is bind-mounted and the container runs as the host user, so keys saved from
+  Provider Settings, `.gev-cache`, and `.gev-logs` persist on the host exactly
+  as they do under `npm run dev`.
+
 ### Fixed
 
 - Traffic now retries a failed destination after city navigation without a layer
