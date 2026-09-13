@@ -2503,4 +2503,24 @@ const trafficLayer = {
   },
 };
 
+/**
+ * Unit-test seam for the module's pure helpers — query building, Overpass
+ * parsing, length/dot-budget math, and viewport geometry all run without a
+ * viewer or network (parseRoads' terrain sample no-ops when `_viewer` is
+ * null). Not part of the public layer API.
+ */
+export const _trafficInternalsForTest = {
+  buildOverpassQuery,
+  parseRoads,
+  estimateRoadLengthDeg,
+  computeDotCount,
+  allocateRoadDotBudgets,
+  visibleRoadsForAltitude,
+  boundsOverlap,
+  clampBounds,
+  getBoundsCenter,
+  distanceKm,
+  constants: { MAX_WAYPOINTS_PER_ROAD, DENSITY_MULT, SPEED_MPS },
+};
+
 export default trafficLayer;

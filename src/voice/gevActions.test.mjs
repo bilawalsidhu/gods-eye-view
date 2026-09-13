@@ -14,7 +14,9 @@ import {
   cctvVoiceFocusOutcome,
   formatTrackedEntityLabel,
   knownRadioLocation,
+  readLayerLifecycleSummary,
 } from './gevActions.js';
+import { CITY_POIS } from '../locations.js';
 
 test('track_entity narration names aircraft callsign → registration → icao24', () => {
   const found = { callsign: 'SWA696', registration: 'N123AB', icao24: 'ae1fa4' };
@@ -2989,4 +2991,103 @@ test('front5: 0.99 km due EAST is the subject, though a degree box rejects it', 
     assert.equal(result.count, 116, 'and gets the window number the panel shows');
     assert.equal(result.window.centeredOn, 'N546PC');
   });
+});
+
+// ─── Pure exported helpers: lifecycle summary + radio location resolution ──
+
+test('readLayerLifecycleSummary prefers lifecycle truth and surfaces uncertainty', () => {
+  // A real lifecycle record wins outright, whatever the legacy flag says.
+  assert.deepEqual(
+    readLayerLifecycleSummary({ getLayerLifecycleState: () => ({ enabled: true, lifecycleState: 'enabling' }) }, 'x'),
+    { enabled: true, lifecycleState: 'enabling', lifecycleUncertain: false },
+  );
+  // Uncertainty rides either alias.
+  assert.equal(
+    readLayerLifecycleSummary(
+      { getLayerLifecycleState: () => ({ enabled: true, lifecycleState: 'disabling', uncertain: true }) }, 'x',
+    ).lifecycleUncertain,
+    true,
+  );
+  assert.equal(
+    readLayerLifecycleSummary(
+      { getLayerLifecycleState: () => ({ enabled: false, lifecycleUncertain: 1 }) }, 'x',
+    ).lifecycleUncertain,
+    true,
+  );
+  // A missing state string is derived from the boolean, never invented.
+  assert.equal(
+    readLayerLifecycleSummary({ getLayerLifecycleState: () => ({ enabled: false }) }, 'x').lifecycleState,
+    'disabled',
+  );
+  assert.equal(
+    readLayerLifecycleSummary({ getLayerLifecycleState: () => ({}) }, 'x').lifecycleState,
+    'disabled',
+    'a lifecycle record with neither field reads as disabled',
+  );
+});
+
+test('readLayerLifecycleSummary falls back through adapters that fail or stay silent', () => {
+  // A throwing lifecycle adapter degrades to the lightweight isEnabled probe.
+  assert.deepEqual(
+    readLayerLifecycleSummary({
+      getLayerLifecycleState: () => { throw new Error('boom'); },
+      isEnabled: () => true,
+    }, 'x'),
+    { enabled: true, lifecycleState: 'enabled', lifecycleUncertain: false },
+  );
+  // isEnabled that has no answer retains the caller's observed fallback.
+  assert.deepEqual(
+    readLayerLifecycleSummary({ isEnabled: () => undefined }, 'x', { fallbackEnabled: true }),
+    { enabled: true, lifecycleState: 'enabled', lifecycleUncertain: false },
+  );
+  // A throwing isEnabled retains the fallback too — never a crash.
+  assert.deepEqual(
+    readLayerLifecycleSummary({
+      getLayerLifecycleState: () => null,
+      isEnabled: () => { throw new Error('boom'); },
+    }, 'x', { fallbackEnabled: true }),
+    { enabled: true, lifecycleState: 'enabled', lifecycleUncertain: false },
+  );
+  // A bare manager with no adapters at all reads as disabled.
+  assert.deepEqual(
+    readLayerLifecycleSummary({}, 'x'),
+    { enabled: false, lifecycleState: 'disabled', lifecycleUncertain: false },
+  );
+  assert.deepEqual(
+    readLayerLifecycleSummary(null, 'x'),
+    { enabled: false, lifecycleState: 'disabled', lifecycleUncertain: false },
+  );
+});
+
+test('knownRadioLocation resolves curated cities to their bounds midpoint', () => {
+  const austin = knownRadioLocation('', 'austin');
+  assert.equal(austin.label, 'Austin');
+  assert.equal(austin.country, '');
+  assert.ok(Math.abs(austin.lat - (30.10 + 30.52) / 2) < 1e-9, 'lat is the view-bounds midpoint');
+  assert.ok(Math.abs(austin.lon - (-97.95 + -97.55) / 2) < 1e-9, 'lon is the view-bounds midpoint');
+  // The query can carry the id when locationId is blank, and vice versa the
+  // explicit locationId wins over a conflicting query.
+  assert.deepEqual(knownRadioLocation('austin'), austin);
+  assert.deepEqual(knownRadioLocation('united states', 'austin'), austin);
+});
+
+test('knownRadioLocation falls back to country centers, then null', () => {
+  const us = knownRadioLocation('United States '); // trimmed + case-folded
+  assert.deepEqual(us, { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' });
+  assert.deepEqual(knownRadioLocation('usa'), us, 'aliases share one center');
+  assert.equal(knownRadioLocation('atlantis'), null, 'an unknown place resolves to nothing');
+  assert.equal(knownRadioLocation(null), null);
+  // A city without bounds falls back to its first POI's coordinates.
+  const syntheticId = '__test_no_bounds_city__';
+  CITY_POIS[syntheticId] = {
+    name: 'Nowhere',
+    pois: [{ name: 'First POI', lat: 12.34, lon: 56.78 }],
+  };
+  try {
+    assert.deepEqual(knownRadioLocation('', syntheticId), {
+      lat: 12.34, lon: 56.78, label: 'Nowhere', country: '',
+    });
+  } finally {
+    delete CITY_POIS[syntheticId];
+  }
 });

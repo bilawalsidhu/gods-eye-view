@@ -693,13 +693,42 @@ ordered by value-per-risk; each is self-contained and committable.
       `findByQuery` tiered identity matching (hex > callsign >
       registration), `getNearby` (range/sort/includeHidden), and
       `getAnalystRecords` truncation.
-- [ ] Then the REAL worst large modules in order: `mapStackController.js`
-      (38.2%), `traffic.js` (39.2%), `worldAnnotationRenderer.js` (47.6%),
-      `gevActions.js` (60.2%).
+- [x] Then the REAL worst large modules (2026-09-13, measured by c8 after):
+      `mapStackController.js` 38.2% → **100%** (14 tests: MAP_STACKS
+      contract, constructor fallbacks, unavailable/unknown-id refusals, the
+      OSM happy path with Re:Earth terrain, provider/terrain caching, the
+      flat-ellipsoid fallback + its cache, photoreal round-trip, the M7
+      stale-switch race with a deferred `IonImageryProvider.fromAssetId`
+      stub, error rollback, the ion world-terrain regime, silent switches,
+      unsupported-kind throw. Test seam lesson: Cesium's ESM namespace is
+      frozen — patch the mutable class statics
+      (`IonImageryProvider.fromAssetId`, `CesiumTerrainProvider.fromUrl`,
+      `Terrain.fromWorldTerrain`) and use the real offline-safe
+      constructors); `worldAnnotationRenderer.js` 47.6% → **97.7%** (10
+      tests through a real `CustomDataSource`: building volume/cage/glow
+      with ground-sampling percentile + anchor fallback + invalid-sample
+      rejection, area dash-vs-glow + synthesized alpha, the GevRouteFlow
+      per-frame uniform contract, arrow midpoint labels, ring-radius
+      clamps, alpha clamping, remove/destroy. The four browser globals
+      `HTMLCanvasElement/HTMLImageElement/ImageBitmap/OffscreenCanvas` are
+      stubbed per `hybridAnnotationRenderer.test.mjs` because Cesium's
+      Material factory touches them even for pure-GLSL fabrics);
+      `traffic.js` 39.2% → **46.35%** via a `_trafficInternalsForTest` seam
+      (12 tests locking the Overpass query shape, one-way semantics,
+      waypoint sub-sampling, dot-budget fairness/largest-remainder under a
+      starved cap, altitude spacing bands, and viewport geometry); the
+      residual gap is the viewer-bound render/animate/fetch lifecycle,
+      which the Puppeteer QA suites own. `gevActions.js` 60.2% → 60.3%: the
+      pure helpers (`readLayerLifecycleSummary` fallback chain,
+      `knownRadioLocation` bounds-midpoint/country-center branches) gained
+      4 tests; the rest of that module's gap is runner flow already
+      covered by 77 tests, diminishing returns. Net: `src/` 75.3% →
+      **80.16%** lines.
 - [ ] Milestone honesty: the 99% goal is aspirational; 80% lines on all
       `src/data/` + `functions/` is the credible 0.8 target (modules with
       heavy Cesium coupling are integration-tested via the QA harness
-      instead).
+      instead). src/ now sits at 80.16% — at the target line; the next
+      coverage wins are per-module judgement calls, not bulk campaigns.
 
 ### Batch 4 — Architecture debt (P1, unblocks everything else)
 
