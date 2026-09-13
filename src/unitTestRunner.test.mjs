@@ -57,11 +57,20 @@ test('npm test stays green on every supported engine, not only the calibrated on
   // range it advertises must not be narrower than what the runner tolerates.
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(pkg.scripts.test, 'node scripts/run-unit-tests.mjs');
+  // Coverage is measured by c8 (raw V8 coverage from every child process):
+  // Node's built-in reporter under-reports large heavily-tested files — it
+  // credited flights.js 34.80% while raw V8 coverage from the very same test
+  // processes recorded those functions executing (c8 measures 75.1%). The
+  // runner still owns plan discovery; --parallel-only keeps the allocation
+  // probes out, because coverage instrumentation allocates and would fail
+  // their calibrated budgets.
   assert.equal(
     pkg.scripts['test:coverage'],
-    'node scripts/run-unit-tests.mjs --coverage',
-    'coverage must go through the same runner (plan + allocation handling)',
+    'c8 node scripts/run-unit-tests.mjs --parallel-only',
+    'coverage must go through the same runner, wrapped in c8, parallel-only',
   );
+  assert.deepEqual(pkg.c8.include, ['src/**/*.js', 'functions/**/*.js']);
+  assert.ok(pkg.c8.exclude.includes('**/*.test.mjs'));
   const enginesNode = String(pkg.engines?.node || '');
   assert.ok(enginesNode, 'engines.node must be declared');
   // The runner throws for uncalibrated runtimes ONLY behind the explicit
@@ -69,6 +78,7 @@ test('npm test stays green on every supported engine, not only the calibrated on
   const runner = readFileSync(new URL('../scripts/run-unit-tests.mjs', import.meta.url), 'utf8');
   assert.match(runner, /GEV_REQUIRE_ALLOCATION_GATE/);
   assert.match(runner, /SKIPPED .*allocation microbenchmarks/);
+  assert.match(runner, /parallelOnly/);
   // Coverage must ride the parallel battery only: the allocation probes run
   // WITHOUT the coverage reporter so its overhead can't skew the budgets.
   assert.match(

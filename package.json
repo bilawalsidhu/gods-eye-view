@@ -44,9 +44,14 @@
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0",
     "test": "node scripts/run-unit-tests.mjs",
-    "test:coverage": "node scripts/run-unit-tests.mjs --coverage",
+    "test:coverage": "c8 node scripts/run-unit-tests.mjs --parallel-only",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs"
+  },
+  "c8": {
+    "reporter": ["text"],
+    "include": ["src/**/*.js", "functions/**/*.js"],
+    "exclude": ["**/*.test.mjs"]
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",
@@ -64,6 +69,7 @@
     "@types/react-dom": "^19.2.5",
     "@zip.js/zip.js": "^2.7.44",
     "axe-core": "^4.13.0",
+    "c8": "^12.0.0",
     "eslint": "^9.39.5",
     "globals": "^17.11.0",
     "playwright": "^1.62.1",

@@ -11,6 +11,7 @@ import flightsLayer, {
   _militaryLayerSuppressesForTest,
   _pendingFlightTrackingRestoreForTest,
   _setFlightTrackingRefreshOutcomeForTest,
+  _setCockpitDetectionSubjectForTest,
   _setTrackedFlightRefreshStateForTest,
   _floorGroundedDisplayPositionForTest,
   _clearDisplayFloorStateForTest,
@@ -1596,4 +1597,278 @@ test('tracked place context: the readout gains an "over <place>" line from the b
   await mod._requestPlaceContextForTest('cae772');
   assert.equal(placeHits, 1, 'the second lookup in the same cell is a cache hit');
   assert.ok(readLocalCache('oz:rg:30.201:-97.704').hit, 'the cell entry is in localStorage');
+});
+
+// --- Detection / query read surfaces -----------------------------------------
+// These drive the PUBLIC read APIs the detection overlay, cockpit, and voice
+// tools consume, over state seeded through the two test seams — no viewer.
+
+const COLLECTION = () => ({ show: true, remove() {} });
+const BB_AT = (lat, lon, altM, show = true) => ({
+  position: Cesium.Cartesian3.fromDegrees(lon, lat, altM),
+  show,
+});
+const META = (over = {}) => ({
+  callsign: 'TEST01',
+  klass: 'airliner',
+  rawLat: 30.2,
+  rawLon: -97.7,
+  altitude: 10_668,
+  velocity: 210,
+  true_track: 90,
+  onGround: false,
+  ...over,
+});
+
+function seedFleet({ tracked = null, entries }) {
+  const [first, ...rest] = entries;
+  _setTrackedFlightRefreshStateForTest({
+    icao24: first.icao24,
+    entity: { gevLabelModel: { title: 'T', details: [] } },
+    meta: first.meta,
+    billboard: first.billboard,
+    billboardCollection: COLLECTION(),
+    viewer: { camera: { positionCartographic: null }, scene: {} },
+    tracked: tracked !== null && tracked === first.icao24,
+  });
+  for (const entry of rest) {
+    _addFlightTrackingCandidateForTest(entry);
+  }
+}
+
+test('getDetectableObjects: gates on the collection being shown', () => {
+  seedFleet({ entries: [{ icao24: 'aaa001', meta: META(), billboard: BB_AT(30, -97, 10_000) }] });
+  _setTrackedFlightRefreshStateForTest({
+    icao24: 'aaa001',
+    entity: null,
+    meta: META(),
+    billboard: BB_AT(30, -97, 10_000),
+    billboardCollection: { show: false, remove() {} },
+    viewer: { camera: { positionCartographic: null }, scene: {} },
+    tracked: false,
+  });
+  assert.deepEqual(flightsLayer.getDetectableObjects(), []);
+  assert.deepEqual(flightsLayer.getDetectableObjects({ maxCount: 5 }), []);
+});
+
+test('getDetectableObjects: stride sampling honours maxCount and seed rotation', () => {
+  const entries = Array.from({ length: 6 }, (_, i) => ({
+    icao24: `bbb00${i}`,
+    meta: META({ callsign: `FLT${i}` }),
+    billboard: BB_AT(30 + i * 0.1, -97, 10_000),
+  }));
+  seedFleet({ entries });
+  const half = flightsLayer.getDetectableObjects({ maxCount: 3 });
+  assert.equal(half.length, 3, 'stride samples exactly maxCount contacts');
+  // Same underlying order, different starting offset: a second seed must NOT
+  // return the identical set unless the stride puts them there.
+  const shifted = flightsLayer.getDetectableObjects({ maxCount: 3, seed: 1 });
+  assert.equal(shifted.length, 3);
+  assert.notDeepEqual(
+    half.map((o) => o.sourceId).sort(),
+    shifted.map((o) => o.sourceId).sort(),
+    'seed 1 rotates the sampling window across the fleet',
+  );
+  // Every contact at once (maxCount ≥ size → stride 1) is the full fleet.
+  const all = flightsLayer.getDetectableObjects({ maxCount: 99 });
+  assert.equal(all.length, 6);
+  // maxCount floors at 1 even for 0/negative/NaN input.
+  assert.equal(flightsLayer.getDetectableObjects({ maxCount: 0 }).length, 1);
+  assert.equal(flightsLayer.getDetectableObjects({ maxCount: -4 }).length, 1);
+  assert.equal(flightsLayer.getDetectableObjects({ maxCount: NaN }).length, 6);
+});
+
+test('getDetectableObjects: hidden contacts are skipped; tracked contacts never are', () => {
+  seedFleet({
+    tracked: 'ccc000',
+    entries: [
+      { icao24: 'ccc000', meta: META({ callsign: 'TRK1' }), billboard: BB_AT(30, -97, 10_000, false) },
+      { icao24: 'ccc001', meta: META({ callsign: 'VIS1' }), billboard: BB_AT(30.1, -97, 10_000, true) },
+      { icao24: 'ccc002', meta: META({ callsign: 'HID1' }), billboard: BB_AT(30.2, -97, 10_000, false) },
+    ],
+  });
+  const objects = flightsLayer.getDetectableObjects();
+  const ids = objects.map((o) => o.sourceId);
+  assert.ok(ids.includes('ccc000'), 'the tracked contact stays detectable while its billboard is hidden');
+  assert.ok(ids.includes('ccc001'));
+  assert.ok(!ids.includes('ccc002'), 'a hidden untracked contact is not detectable');
+  const tracked = objects.find((o) => o.sourceId === 'ccc000');
+  assert.equal(tracked.skipLabel, true, 'the tracked contact declutters its own label');
+  assert.equal(objects.find((o) => o.sourceId === 'ccc001').skipLabel, false);
+});
+
+test('getDetectableObjects: detection objects are cached per contact across calls', () => {
+  seedFleet({ entries: [{ icao24: 'ddd001', meta: META({ callsign: 'CACH1' }), billboard: BB_AT(30, -97, 10_000) }] });
+  const first = flightsLayer.getDetectableObjects();
+  const second = flightsLayer.getDetectableObjects();
+  assert.equal(first[0], second[0], 'the same contact reuses its detection object (no per-call churn)');
+  assert.ok(second[0]._weldPos instanceof Cesium.Cartesian3);
+  // A metadata change flows into the SAME object.
+  _addFlightTrackingCandidateForTest({
+    icao24: 'ddd001',
+    meta: META({ callsign: 'CACH2', altitude: 9_144 }),
+    billboard: BB_AT(30, -97, 9_144),
+  });
+  const third = flightsLayer.getDetectableObjects();
+  assert.equal(third[0], first[0]);
+  assert.equal(third[0].id, 'CACH2', 'the card id tracks the callsign chain');
+  assert.match(third[0].metric, /FL300/, 'the metric restates the new altitude');
+});
+
+test('getDetectableObjects: the cockpit subject never detects itself', () => {
+  seedFleet({
+    entries: [
+      { icao24: 'eee001', meta: META({ callsign: 'ME1' }), billboard: BB_AT(30, -97, 10_000) },
+      { icao24: 'eee002', meta: META({ callsign: 'OTHER' }), billboard: BB_AT(30.1, -97, 10_000) },
+    ],
+  });
+  // Entering cockpit mode repaints the fleet with the shared contact pip,
+  // which draws on a canvas — headless node has no DOM, so the 2D context is
+  // a no-op stub for the duration of this test.
+  const noop = () => {};
+  const fakeCanvas = {
+    width: 0, height: 0,
+    getContext: () => ({
+      clearRect: noop, save: noop, restore: noop,
+      beginPath: noop, arc: noop, stroke: noop, fill: noop,
+    }),
+    toDataURL: () => 'data:image/png;base64,TESTDOT',
+  };
+  const originalDocument = globalThis.document;
+  globalThis.document = { createElement: () => ({ ...fakeCanvas }) };
+  try {
+    _setCockpitDetectionSubjectForTest(true, 'eee001');
+    const ids = flightsLayer.getDetectableObjects().map((o) => o.sourceId);
+    assert.ok(!ids.includes('eee001'), 'the pilot’s own airframe is excluded');
+    assert.ok(ids.includes('eee002'));
+  } finally {
+    _setCockpitDetectionSubjectForTest(false, null);
+    globalThis.document = originalDocument;
+  }
+  assert.ok(
+    flightsLayer.getDetectableObjects().some((o) => o.sourceId === 'eee001'),
+    'clearing cockpit mode restores the contact',
+  );
+});
+
+test('getAllPositions: round-trips billboard positions and clamps the limit', () => {
+  seedFleet({
+    entries: [
+      { icao24: 'fff001', meta: META({ callsign: 'P1' }), billboard: BB_AT(30, -97, 10_000) },
+      { icao24: 'fff002', meta: META({ callsign: 'P2' }), billboard: BB_AT(31, -98, 11_000) },
+    ],
+  });
+  const all = flightsLayer.getAllPositions();
+  assert.equal(all.length, 2);
+  const one = all.find((r) => r.id === 'fff001');
+  assert.match(one.label, /P1/);
+  assert.ok(Math.abs(one.latitude - 30) < 1e-6);
+  assert.ok(Math.abs(one.longitude + 97) < 1e-6);
+  assert.ok(Math.abs(one.altitudeM - 10_000) < 1);
+  assert.equal(one.airline, null, 'unset enrichment reads as null, not undefined');
+  // Truncation stops at the limit.
+  assert.equal(flightsLayer.getAllPositions(1).length, 1);
+  assert.equal(flightsLayer.getAllPositions(0).length, 1, 'the limit floors at 1');
+});
+
+test('getAllPositions: without route evidence the route fields are null', () => {
+  seedFleet({ entries: [{ icao24: 'ggg001', meta: META({ callsign: 'NORTE' }), billboard: BB_AT(30, -97, 10_000) }] });
+  const record = flightsLayer.getAllPositions()[0];
+  assert.equal(record.origin, null);
+  assert.equal(record.destination, null);
+});
+
+test('hasContact: answers null when it cannot know, false when it looked', () => {
+  // Disabled (hidden) collection → the layer declines to answer.
+  _setTrackedFlightRefreshStateForTest({
+    icao24: 'hhh001',
+    entity: null,
+    meta: META(),
+    billboard: BB_AT(30, -97, 10_000),
+    billboardCollection: { show: false, remove() {} },
+    viewer: { camera: { positionCartographic: null }, scene: {} },
+    tracked: false,
+  });
+  assert.equal(flightsLayer.hasContact('hhh001'), null, 'a hidden fleet must not read as an absent contact');
+  seedFleet({ entries: [{ icao24: 'hhh001', meta: META(), billboard: BB_AT(30, -97, 10_000) }] });
+  assert.equal(flightsLayer.hasContact('hhh001'), true);
+  assert.equal(flightsLayer.hasContact('  hhh001  '), true, 'input is trimmed');
+  assert.equal(flightsLayer.hasContact('HHH001'), true, 'case falls back to the stored lowercase hex');
+  assert.equal(flightsLayer.hasContact('hhh999'), false);
+  assert.equal(flightsLayer.hasContact(''), false, 'an empty query is a false, not a crash');
+  assert.equal(flightsLayer.hasContact(null), false);
+});
+
+test('findByQuery: tiered identity match with registration fallback', () => {
+  seedFleet({
+    entries: [
+      { icao24: 'iii001', meta: META({ callsign: 'JBU123', registration: 'N555JB' }), billboard: BB_AT(30, -97, 10_000) },
+      { icao24: 'iii002', meta: META({ callsign: 'JBU1234', registration: 'N777JB' }), billboard: BB_AT(31, -98, 11_000) },
+      { icao24: 'abc123', meta: META({ callsign: null, registration: null }), billboard: BB_AT(32, -99, 12_000) },
+    ],
+  });
+  // Hex exact wins outright.
+  assert.equal(flightsLayer.findByQuery('ABC123').icao24, 'abc123', 'hex match is case-insensitive');
+  // A registration never out-ranks a real callsign on feed order.
+  const byCallsign = flightsLayer.findByQuery('jbu123');
+  assert.equal(byCallsign.icao24, 'iii001', 'exact callsign beats the longer callsign that merely prefixes it');
+  // Registration search answers what the operator sees on the card.
+  assert.equal(flightsLayer.findByQuery('n777jb').icao24, 'iii002');
+  // Prefix and substring tiers.
+  assert.equal(flightsLayer.findByQuery('jbu1').icao24, 'iii001', 'prefix match still resolves');
+  // Descriptor shape: honest barometric altitude, dead-reckoned position.
+  const described = flightsLayer.findByQuery('jbu123');
+  assert.equal(described.altitudeM, 10_668);
+  assert.ok(described.position instanceof Cesium.Cartesian3);
+  assert.equal(typeof described.latitude, 'number');
+  assert.equal(described.onGround, false);
+  // Gates.
+  assert.equal(flightsLayer.findByQuery('   '), null, 'a blank query answers null');
+  assert.equal(flightsLayer.findByQuery('zzzzzz'), null, 'no match answers null');
+});
+
+test('getNearby: sorts by distance, filters range, and can include hidden contacts', () => {
+  seedFleet({
+    entries: [
+      { icao24: 'jjj001', meta: META({ callsign: 'NEAR' }), billboard: BB_AT(30.01, -97, 10_000, false) },
+      { icao24: 'jjj002', meta: META({ callsign: 'MID', velocity: null }), billboard: BB_AT(30.05, -97, 10_000, true) },
+      { icao24: 'jjj003', meta: META({ callsign: 'FAR' }), billboard: BB_AT(31.0, -97, 10_000, true) },
+    ],
+  });
+  const center = Cesium.Cartesian3.fromDegrees(-97, 30, 10_000);
+  // Hidden NEAR is excluded by default even though it is the closest; FAR
+  // (1° ≈ 111 km) is well inside a 500 km range.
+  const visible = flightsLayer.getNearby(center, 500_000);
+  assert.deepEqual(visible.map((r) => r.icao24), ['jjj002', 'jjj003']);
+  // includeHidden brings the grounded/hidden contact back, closest first.
+  const all = flightsLayer.getNearby(center, 500_000, 50, { includeHidden: true });
+  assert.deepEqual(all.map((r) => r.icao24), ['jjj001', 'jjj002', 'jjj003'], 'ascending distance order');
+  assert.ok(all[0].distance < all[1].distance);
+  assert.equal(all[0].callsign, 'NEAR');
+  assert.equal(all[1].velocityMps, null, 'missing kinematics read as null');
+  // Range filter drops the far contact.
+  const short = flightsLayer.getNearby(center, 20_000, 50, { includeHidden: true });
+  assert.ok(short.every((r) => r.distance <= 20_000));
+  // maxCount truncates AFTER sorting (nearest are kept).
+  const one = flightsLayer.getNearby(center, 500_000, 1, { includeHidden: true });
+  assert.equal(one.length, 1);
+  assert.equal(one[0].icao24, 'jjj001');
+  // Gates: no center or hidden collection → no results, never a throw.
+  assert.deepEqual(flightsLayer.getNearby(null, 1000), []);
+});
+
+test('getAnalystRecords: honours the visible-fleet gate and truncates', () => {
+  seedFleet({
+    entries: [
+      { icao24: 'kkk001', meta: META({ callsign: 'A1' }), billboard: BB_AT(30, -97, 10_000) },
+      { icao24: 'kkk002', meta: META({ callsign: 'A2' }), billboard: BB_AT(31, -98, 11_000) },
+    ],
+  });
+  const records = flightsLayer.getAnalystRecords(1);
+  assert.equal(records.length, 1, 'maxCount truncates the analyst snapshot');
+  assert.ok(records[0].icao24.startsWith('kkk'));
+  for (const record of records) {
+    assert.equal(record.operator, null, 'unset enrichment reads as null');
+    assert.equal(record.onGround, false);
+  }
 });

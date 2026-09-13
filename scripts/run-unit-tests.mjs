@@ -72,17 +72,32 @@ function runTests(args) {
   return result.status ?? 1;
 }
 
-export function runUnitTests({ coverage = false } = {}) {
+export function runUnitTests({ coverage = false, parallelOnly = false } = {}) {
   const plan = buildUnitTestPlan(discoverUnitTestFiles());
-  // Coverage comes from Node's built-in reporter over the parallel battery
-  // (`npm run test:coverage`). The GC-bracketed allocation probes run without
-  // it: they measure allocations, not code coverage, and the reporter's
-  // overhead would contaminate the budgets they exist to protect.
+  // Coverage measurement wraps the parallel battery. The GC-bracketed
+  // allocation probes never run under it: they measure allocations, not code
+  // coverage, and the instrumentation's own allocations contaminate the
+  // budgets they exist to protect (verified: the focus probe fails its
+  // calibrated median the moment coverage is enabled).
+  // `--coverage` uses Node's built-in reporter; `npm run test:coverage` wraps
+  // the run in c8 instead. c8 is the honest number: the built-in reporter
+  // under-reports large heavily-tested files (it credits flights.js 34.80%
+  // while raw V8 coverage from the very same child processes records those
+  // functions executing — c8 measures the same file at 75.1%, and agrees with
+  // the built-in reporter everywhere the built-in one is not wrong).
   const parallelArgs = coverage
     ? ['--test', '--experimental-test-coverage', ...plan.parallel]
     : ['--test', ...plan.parallel];
   const parallelStatus = runTests(parallelArgs);
   if (parallelStatus !== 0) return parallelStatus;
+  if (parallelOnly) {
+    console.warn(
+      `[unit] SKIPPED ${ALLOCATION_TEST_FILES.length} allocation microbenchmarks: `
+      + 'coverage instrumentation contaminates the calibrated budgets. '
+      + 'Run plain `npm test` for the allocation gate.',
+    );
+    return 0;
+  }
 
   // The GC-bracketed budgets are calibrated on Node 24 and are meaningless on
   // other allocators. A contributor's suite must stay green on any supported
@@ -109,5 +124,8 @@ export function runUnitTests({ coverage = false } = {}) {
 
 const invokedPath = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : '';
 if (import.meta.url === invokedPath) {
-  process.exitCode = runUnitTests({ coverage: process.argv.includes('--coverage') });
+  process.exitCode = runUnitTests({
+    coverage: process.argv.includes('--coverage'),
+    parallelOnly: process.argv.includes('--parallel-only'),
+  });
 }

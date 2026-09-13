@@ -82,8 +82,28 @@ Findings that drove the phases below:
 
 ## Phase 3 — Test coverage toward 99% (OPEN)
 
-The suite is the safety net for everything above: 2748+ co-located tests
+The suite is the safety net for everything above: 2891 co-located tests
 (`npm test`, headless, plus two serialized allocation probes). Gaps to close:
+
+**Coverage measurement integrity (2026-09-13):** `npm run test:coverage`
+now wraps the runner in **c8** (`--parallel-only`, new runner flag) instead
+of Node's built-in reporter. The built-in reporter under-reports large
+heavily-tested files: it credited `flights.js` **34.80%** while raw
+`NODE_V8_COVERAGE` dumps from the very same test child processes record the
+reporter's "uncovered" functions executing (verified: V8 count ≥ 1 on the
+`getDetectableObjects` function the reporter flagged; c8 measures the same
+file at **75.1%**). On every module checked where the two tools disagree,
+c8 agrees with the built-in reporter — so the historic per-module numbers
+below are reliable EXCEPT for flights.js, which was never the worst large
+module. Corrected c8 truth (2026-09-13): `src` **75.3%** lines,
+`functions/` **99.31%**. Real worst large modules now:
+`mapStackController.js` 38.2%, `traffic.js` 39.2%,
+`worldAnnotationRenderer.js` 47.6%, `firstRunExperience.js` 48.2%,
+`bikeshare.js` 57.8%. The allocation probes still never run under coverage:
+instrumentation itself allocates and would fail their calibrated budgets
+(the focus probe fails its median the moment coverage is enabled), so the
+runner now ships an explicit `--parallel-only` skip with a warning, and
+plain `npm test` keeps the allocation gate.
 
 - [x] Measure, don't guess (2026-08-29): baseline published via
       `npm run test:coverage` (Node's built-in reporter) and a CI `coverage`
@@ -656,11 +676,26 @@ ordered by value-per-risk; each is self-contained and committable.
 
 ### Batch 3 — Coverage campaign (P1, mechanical but large)
 
-- [ ] Pages Functions first: the 8 untested `.ts` handlers (small files,
-      node:test convention already established).
-- [ ] Then worst large modules in order: `flights.js` (34.69% — biggest
-      single win), `traffic.js`, `mapStackController.js`,
-      `gevActions.js`, `worldAnnotationRenderer.js`.
+- [x] Pages Functions first (2026-09-13): the four untested handlers
+      (ais-live, analytics, regional-brief, weather) now carry co-located
+      worker-safe tests locking their degradation contracts, CORS method
+      policy, and (weather) the host/path rewrite + upstream-error
+      pass-through; `functions/` measures **99.31% lines** (c8). Also
+      removed the stale pre-Batch-1 `overpass.ts` +
+      `military-installations.ts` duplicates that had been sitting on the
+      same Pages routes as their hardened `.js` ports since 45e8ad4.
+- [x] Measurement honesty (2026-09-13): coverage moved to c8 (see Phase 3
+      note); flights.js was mis-prioritized by the reporter bug — its true
+      coverage is 75.1%. 11 new flights tests (2026-09-13) lock the
+      detection/query read surfaces: `getDetectableObjects` (stride/seed
+      sampling, hidden-contact skip, cockpit self-exclusion, object-identity
+      caching), `getAllPositions`, `hasContact` (null-when-cannot-know),
+      `findByQuery` tiered identity matching (hex > callsign >
+      registration), `getNearby` (range/sort/includeHidden), and
+      `getAnalystRecords` truncation.
+- [ ] Then the REAL worst large modules in order: `mapStackController.js`
+      (38.2%), `traffic.js` (39.2%), `worldAnnotationRenderer.js` (47.6%),
+      `gevActions.js` (60.2%).
 - [ ] Milestone honesty: the 99% goal is aspirational; 80% lines on all
       `src/data/` + `functions/` is the credible 0.8 target (modules with
       heavy Cesium coupling are integration-tested via the QA harness
