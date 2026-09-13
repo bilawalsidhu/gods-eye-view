@@ -206,6 +206,18 @@ export const DATA_CREDITS = [
       'Some cameras are supplied by partners (TransLink, the City of Vancouver, the City of Surrey, Parks Canada and others); each names its provider in the CCTV panel.',
   },
   {
+    key: 'tallinn-cctv',
+    html:
+      'CCTV cameras &amp; frames (Tallinn): City of Tallinn — ' +
+      '<a href="https://ristmikud.tallinn.ee/" target="_blank" rel="noopener">ristmikud.tallinn.ee</a> (courtesy)',
+  },
+  {
+    key: 'tarktee-cctv',
+    html:
+      'CCTV cameras &amp; frames (Estonia road weather): Transpordiamet / Tarktee — ' +
+      '<a href="https://tarktee.transpordiamet.ee/" target="_blank" rel="noopener">tarktee.transpordiamet.ee</a> (courtesy)',
+  },
+  {
     key: 'telegeography',
     html:
       'Submarine cables: © TeleGeography — ' +

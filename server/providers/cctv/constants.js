@@ -176,6 +176,24 @@ export const DRIVEBC_ANCHORS = [
   { lat: 49.2827, lon: -123.1207 }, // Vancouver
   { lat: 48.4284, lon: -123.3656 }, // Victoria
 ];
+/** Tallinn intersection cameras: curated catalog + public stills on ristmikud.tallinn.ee. */
+export const DEFAULT_TALLINN_SOURCE_FILE = 'config/cctv_sources.tallinn.json';
+export const DEFAULT_TALLINN_MAX_SOURCES = 255;
+export const TALLINN_IMAGE_ORIGIN = 'https://ristmikud.tallinn.ee/';
+export const TALLINN_CENTER = { lat: 59.437, lon: 24.753 };
+/** Transpordiamet / Tarktee road-weather cameras: keyless DATEX2 feeds. */
+export const TARKTEE_LOCATIONS_URL =
+  'https://tarktee.transpordiamet.ee/api/v1/datex/roadCameraLocations';
+export const TARKTEE_IMAGES_URL =
+  'https://tarktee.transpordiamet.ee/api/v1/datex/roadCameraImages';
+export const TARKTEE_IMAGE_ORIGIN = 'https://tarktee.transpordiamet.ee/images/';
+export const DEFAULT_TARKTEE_MAX_SOURCES = 179;
+export const TARKTEE_ANCHORS = [
+  { lat: 59.437, lon: 24.753 }, // Tallinn
+  { lat: 58.378, lon: 26.729 }, // Tartu
+  { lat: 58.3859, lon: 24.4971 }, // Pärnu
+  { lat: 59.3797, lon: 28.1791 }, // Narva
+];
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one

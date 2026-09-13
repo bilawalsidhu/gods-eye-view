@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   DEFAULT_AUSTIN_ROWS_URL,
   DEFAULT_AUSTIN_MAX_SOURCES,
@@ -32,6 +34,15 @@ import {
   TXDOT_ANCHORS,
   TXDOT_DISTRICT_ELEVATION_M,
   TXDOT_DEFAULT_ELEVATION_M,
+  DEFAULT_TALLINN_SOURCE_FILE,
+  DEFAULT_TALLINN_MAX_SOURCES,
+  TALLINN_IMAGE_ORIGIN,
+  TALLINN_CENTER,
+  TARKTEE_LOCATIONS_URL,
+  TARKTEE_IMAGES_URL,
+  TARKTEE_IMAGE_ORIGIN,
+  DEFAULT_TARKTEE_MAX_SOURCES,
+  TARKTEE_ANCHORS,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
 } from './constants.js';
 import {
@@ -934,4 +945,256 @@ export async function loadTxdotSourcesFromOpenData() {
     `[CCTV] Loaded TxDOT camera sources: ${cameras.length} online across ${districts.join(',')} (using nearest ${prioritized.length})`,
   );
   return prioritized;
+}
+
+/**
+ * Load Tallinn intersection cameras from the curated catalog file.
+ *
+ * Frames are public JPEG stills on ristmikud.tallinn.ee (stable /last/camNNN.jpg
+ * URLs). The catalog ships coordinates + curated heading priors; only official
+ * ristmikud HTTPS URLs are kept (proxy fetches registered URLs only).
+ *
+ * @returns {Array<object>} Normalized camera source objects.
+ */
+export function loadTallinnSourcesFromCatalog({
+  sourceRoot = process.cwd(),
+} = {}) {
+  const sourceFile =
+    process.env.CCTV_TALLINN_SOURCES_FILE || DEFAULT_TALLINN_SOURCE_FILE;
+  const resolved = path.isAbsolute(sourceFile)
+    ? sourceFile
+    : path.resolve(sourceRoot, sourceFile);
+  let rows = [];
+  try {
+    if (!fs.existsSync(resolved)) {
+      console.warn('[CCTV] Tallinn source file missing:', resolved);
+      return [];
+    }
+    const parsed = JSON.parse(fs.readFileSync(resolved, 'utf8'));
+    rows = Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn(
+      '[CCTV] Tallinn source file read error:',
+      error?.message || error,
+    );
+    return [];
+  }
+
+  const cameras = [];
+  for (const item of rows) {
+    if (!item || typeof item !== 'object') continue;
+    const cameraId = String(item.id || '').trim();
+    if (!cameraId) continue;
+    const lat = toFiniteNumber(item.lat);
+    const lon = toFiniteNumber(item.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    // Rough Estonia/Tallinn metro sanity (allows nearby suburbs already in the pack).
+    if (lat < 59.2 || lat > 59.7 || lon < 24.3 || lon > 25.4) continue;
+
+    const imageUrl = String(item.url || item.snapshotUrl || '').trim();
+    if (!imageUrl.startsWith(TALLINN_IMAGE_ORIGIN)) continue;
+
+    const extractedHeading = toFiniteNumber(item.headingDeg, NaN);
+    const hasHeading = Number.isFinite(extractedHeading);
+    const headingDeg = hasHeading
+      ? ((extractedHeading % 360) + 360) % 360
+      : fallbackHeadingFromId(cameraId);
+    const headingConfidence = hasHeading
+      ? String(item.headingConfidence || '').toLowerCase() === 'low'
+        ? 'low'
+        : 'high'
+      : 'low';
+    cameras.push({
+      id: cameraId,
+      name: String(item.name || cameraId).trim(),
+      city: 'Tallinn',
+      cityId: 'tallinn',
+      provider: 'City of Tallinn',
+      lat,
+      lon,
+      headingDeg,
+      headingConfidence,
+      pitchDeg: headingConfidence === 'high' ? -24 : -18,
+      fovDeg: headingConfidence === 'high' ? 56 : 44,
+      rangeM: headingConfidence === 'high' ? 210 : 145,
+      mountHeightM: headingConfidence === 'high' ? 10 : 8,
+      groundElevationM: toFiniteNumber(item.groundElevationM, 15),
+      feedType: 'image',
+      url: imageUrl,
+      snapshotUrl: imageUrl,
+      sourceKind: 'tallinn-ristmikud',
+      license: 'Public City of Tallinn traffic camera data',
+      poseSource: hasHeading ? 'curated' : undefined,
+    });
+  }
+
+  const unique = Array.from(
+    new Map(cameras.map((camera) => [camera.id, camera])).values(),
+  );
+  const maxRaw = Number(
+    process.env.CCTV_TALLINN_MAX_SOURCES || DEFAULT_TALLINN_MAX_SOURCES,
+  );
+  const maxCount = Number.isFinite(maxRaw)
+    ? Math.max(8, Math.min(300, Math.floor(maxRaw)))
+    : DEFAULT_TALLINN_MAX_SOURCES;
+  const prioritized = prioritizeSources(unique, maxCount, [TALLINN_CENTER]);
+  console.log(
+    `[CCTV] Loaded Tallinn camera sources: ${unique.length} (using nearest ${prioritized.length})`,
+  );
+  return prioritized;
+}
+
+/**
+ * Extract DATEX2 predefined-location id → {name, lat, lon} from Tarktee XML.
+ *
+ * @param {string} xml
+ * @returns {Map<string,{name:string,lat:number,lon:number}>}
+ */
+export function parseTarkteeDatexLocations(xml) {
+  const out = new Map();
+  const blockRe =
+    /<predefinedLocation\s+id="([^"]+)"[^>]*>([\s\S]*?)<\/predefinedLocation>/g;
+  let match;
+  while ((match = blockRe.exec(String(xml || ''))) !== null) {
+    const id = match[1];
+    const body = match[2];
+    // Skip the group container (no coordinates of its own).
+    const latMatch = /<latitude>\s*(-?\d+(?:\.\d+)?)\s*<\/latitude>/i.exec(
+      body,
+    );
+    const lonMatch = /<longitude>\s*(-?\d+(?:\.\d+)?)\s*<\/longitude>/i.exec(
+      body,
+    );
+    if (!latMatch || !lonMatch) continue;
+    const lat = toFiniteNumber(latMatch[1]);
+    const lon = toFiniteNumber(lonMatch[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    const nameMatch = /<value\b[^>]*>\s*([^<]+?)\s*<\/value>/i.exec(body);
+    const name = nameMatch ? nameMatch[1].trim() : id;
+    out.set(id, { name, lat, lon });
+  }
+  return out;
+}
+
+/**
+ * Extract DATEX2 traffic-view location id → HTTPS image URL from Tarktee XML.
+ *
+ * @param {string} xml
+ * @returns {Map<string,string>}
+ */
+export function parseTarkteeDatexImages(xml) {
+  const out = new Map();
+  const blockRe = /<trafficView\b[^>]*>([\s\S]*?)<\/trafficView>/g;
+  let match;
+  while ((match = blockRe.exec(String(xml || ''))) !== null) {
+    const body = match[1];
+    const refMatch =
+      /<linearPredefinedLocationReference\b[^>]*\bid="([^"]+)"/i.exec(body);
+    const urlMatch = /<urlLinkAddress>\s*([^<\s]+)\s*<\/urlLinkAddress>/i.exec(
+      body,
+    );
+    if (!refMatch || !urlMatch) continue;
+    const url = urlMatch[1].trim();
+    if (!url.startsWith(TARKTEE_IMAGE_ORIGIN)) continue;
+    out.set(refMatch[1], url);
+  }
+  return out;
+}
+
+/**
+ * Fetch Estonian Transpordiamet / Tarktee road-weather cameras via DATEX2.
+ *
+ * Locations and current still URLs are keyless public feeds. Image paths on the
+ * ArcGIS MapServer layer go stale; DATEX always carries the current JPEG URL.
+ * Only https://tarktee.transpordiamet.ee/images/… URLs are registered.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadTarkteeSourcesFromDatex() {
+  try {
+    const [locResp, imgResp] = await Promise.all([
+      fetch(TARKTEE_LOCATIONS_URL, {
+        headers: { Accept: 'application/xml,text/xml,*/*' },
+        signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+      }),
+      fetch(TARKTEE_IMAGES_URL, {
+        headers: { Accept: 'application/xml,text/xml,*/*' },
+        signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+      }),
+    ]);
+    if (!locResp.ok) {
+      console.warn('[CCTV] Tarktee locations download failed:', locResp.status);
+      return [];
+    }
+    if (!imgResp.ok) {
+      console.warn('[CCTV] Tarktee images download failed:', imgResp.status);
+      return [];
+    }
+    const [locXml, imgXml] = await Promise.all([
+      locResp.text(),
+      imgResp.text(),
+    ]);
+    const locations = parseTarkteeDatexLocations(locXml);
+    const images = parseTarkteeDatexImages(imgXml);
+    if (!locations.size || !images.size) {
+      console.warn('[CCTV] Tarktee DATEX parse empty:', {
+        locations: locations.size,
+        images: images.size,
+      });
+      return [];
+    }
+
+    const cameras = [];
+    for (const [locationId, loc] of locations.entries()) {
+      const imageUrl = images.get(locationId);
+      if (!imageUrl) continue;
+      // Estonia bounding box (mainland + nearby islands).
+      if (loc.lat < 57.4 || loc.lat > 59.9 || loc.lon < 21.5 || loc.lon > 28.4)
+        continue;
+
+      const numMatch = /\/images\/(\d+)\//.exec(imageUrl);
+      const cameraId = numMatch
+        ? `ee-tarktee-${numMatch[1]}`
+        : `ee-tarktee-${locationId}`;
+      cameras.push({
+        id: cameraId,
+        name: loc.name,
+        city: loc.name,
+        cityId: 'estonia',
+        provider: 'Transpordiamet (Tarktee)',
+        lat: loc.lat,
+        lon: loc.lon,
+        headingDeg: fallbackHeadingFromId(cameraId),
+        headingConfidence: 'low',
+        pitchDeg: -18,
+        fovDeg: 44,
+        rangeM: 145,
+        mountHeightM: 8,
+        groundElevationM: 40,
+        feedType: 'image',
+        url: imageUrl,
+        snapshotUrl: imageUrl,
+        sourceKind: 'tarktee-datex',
+        license: 'Public Transpordiamet / Tarktee road weather camera data',
+      });
+    }
+
+    const maxRaw = Number(
+      process.env.CCTV_TARKTEE_MAX_SOURCES || DEFAULT_TARKTEE_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(300, Math.floor(maxRaw)))
+      : DEFAULT_TARKTEE_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, TARKTEE_ANCHORS);
+    console.log(
+      `[CCTV] Loaded Tarktee camera sources: ${cameras.length} with images (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Tarktee DATEX download error:',
+      error?.message || error,
+    );
+    return [];
+  }
 }

@@ -11,6 +11,8 @@ import {
   loadFintrafficSourcesFromOpenData,
   loadDriveBcSourcesFromOpenData,
   loadTxdotSourcesFromOpenData,
+  loadTallinnSourcesFromCatalog,
+  loadTarkteeSourcesFromDatex,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -54,6 +56,16 @@ const LIVE_PACKS = [
     name: 'txdot',
     enabled: () => envEnabled('CCTV_TXDOT_ENABLED'),
     load: loadTxdotSourcesFromOpenData,
+  },
+  {
+    name: 'tallinn',
+    enabled: () => envEnabled('CCTV_TALLINN_ENABLED'),
+    load: loadTallinnSourcesFromCatalog,
+  },
+  {
+    name: 'tarktee',
+    enabled: () => envEnabled('CCTV_TARKTEE_ENABLED'),
+    load: loadTarkteeSourcesFromDatex,
   },
 ];
 /**
@@ -157,7 +169,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     const liveResults = needsLiveSources
       ? await Promise.allSettled(
           LIVE_PACKS.map((pack) =>
-            pack.enabled() ? pack.load() : Promise.resolve([]),
+            pack.enabled() ? pack.load({ sourceRoot }) : Promise.resolve([]),
           ),
         )
       : [];
