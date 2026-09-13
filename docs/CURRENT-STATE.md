@@ -1,5 +1,22 @@
 # God's Eye View Current State
 
+## DriveBC CCTV source pack
+
+The CCTV catalog adds DriveBC highway cameras for British Columbia alongside the
+Austin, Caltrans and TfL packs. The server reads the keyless camera list that
+DriveBC.ca serves at `https://www.drivebc.ca/api/webcams/` and keeps cameras that
+are switched on and published. Frame URLs are built from each numeric camera id
+under `https://www.drivebc.ca/images/`; they are never taken from the payload.
+DriveBC's eight compass orientations become high-confidence heading priors, and
+its elevation (metres above sea level) seeds the ground height.
+
+By default the 250 cameras nearest downtown Vancouver and Victoria load.
+`CCTV_DRIVEBC_MAX_SOURCES` sets the pack cap (8–1200) and
+`CCTV_DRIVEBC_ENABLED=0` turns the pack off. The default catalog cap rises from
+900 to 1,050, the sum of the default pack caps, so no default camera is dropped.
+The Open Government Licence – British Columbia attribution is registered in the
+Data attribution popover.
+
 ## Location control ownership
 
 City/POI rows, search/reset bindings, location readouts and the orbit indicator
