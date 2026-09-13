@@ -36,7 +36,77 @@
   from ordinary text, so function markup does not reach TTS. Tool-result
   follow-ups use the backend's configured output budget; there is no
   client-side 80-token limit.
+## Civil-flight components
 
+`gods-eye-view/layers/flights` exports `createCivilFlightLayer`. Each instance
+owns its contacts, histories, model collections, scratch objects and lifecycle.
+State, ingestion, enrichment, motion/floor interpolation, rendering, tracking and
+queries live in separate files under `src/layers/flights`. The standalone
+`src/data/flights.js` assembles the existing OpenSky source and scene services.
+
+Applications supply the existing floor/snap, geoid, picking, sprite, camera,
+trail, focus, readout, context, aircraft presentation and render services.
+The factory never constructs a second application registry. Configure a source
+before initialization; replacing it while initialized is rejected. Model loads
+use the supplied asset resolver, including the preload path. Enrichment receives
+an abort signal and cannot update a later lifecycle after destruction. Existing
+camera, terrain floor, trail, selection and measured model-size policies remain.
+
+## Browser live-source observations
+
+Flights, Military Flights and AIS Vessels obtain snapshots and optional history
+through `gods-eye-view/sources/live`. The standalone adapters use the existing
+same-origin routes. Aircraft observations distinguish barometric metres from
+WGS84 ellipsoid metres and retain source position/contact epochs; vessel records
+retain separate heading/course and sea-surface datum. History is a best-effort
+addition to the locally accumulated trail, never a promise of complete coverage.
+
+Snapshot coverage, completeness and freshness are separate fields. A partially
+admitted aircraft snapshot retains absent contacts for up to five minutes before
+the usual missed-poll eviction. Unknown snapshot times remain unknown in stats. An invalid nonempty
+snapshot retains the previous display. Empty vessel refreshes retain the existing
+first-connect grace and warm-data behavior. Known source failures have bounded
+messages; arbitrary HTTP response bodies are not surfaced as diagnostics.
+Sources receive cancellation signals and check them after body parsing. The
+layer's existing lifecycle and selection guards continue to reject late work.
+
+
+## State and action outcomes
+
+Share preferences, place lookups and Scene playback expose immutable snapshots
+and disposable subscriptions. Share settings drive URL updates; lookup outcomes
+drive Location labels and busy/error feedback. Superseded or disposed lookups
+cannot publish accepted destinations. Each completion carries its own request
+identity so an older completion cannot clear the current search indicator.
+
+Scene controls consume playback state and editing outcomes from the director.
+Progress updates carry a small playback snapshot and preserve shot-row identity;
+editing outcomes include a copy of the affected scene or shot. Subscriptions
+start with current state, isolate listener failures and stop on disposal.
+`gods-eye-view/scenes` exports the same director used by the standalone app.
+
+## UI shell and component ownership
+
+The standalone entry composes the UI with the application's existing layer,
+terrain, navigation and rendering operations. The shell receives those instances
+and assembles the controls. Panel layout scheduling, position preferences and
+active drags, loading notices, recording presentation and DOM lookup have focused
+owners. Disposal revokes queued presentation and listeners before asynchronous
+Context restoration, cancels an unfinished drag without saving it, restores the
+recording HUD and releases status decoration without replacing accessible text.
+The ordinary control snapshot includes the current 3D model toggle and mode.
+
+`style.css` imports component styles in their original cascade order. Scene,
+share, HUD and layer engines retain their existing behavior and entry points.
+
+## Scene control ownership
+
+Scene controls own creation/deletion prompts, panel listeners, shot rows, playback/recording presentation
+and keyboard cancellation. The director supplies project reads and explicit
+editing/playback actions while retaining persistence, camera and layer sequencing.
+Shot selection updates the highlight without replacing the row, preserving
+native double-click rename. Replacing rows revokes their old listeners. Disposal stops controls immediately;
+late file and failed-action completions cannot update removed presentation.
 ## Cockpit component ownership
 
 Cockpit presentation is separated from its camera/controller behavior. Existing

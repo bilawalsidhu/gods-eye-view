@@ -1,3 +1,4 @@
+import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 // Regression test for the giant-military-jet bug: MODEL_SCALE must put every
 // rendered aircraft at REAL-WORLD size, whatever the GLB's native scale is.
 //
@@ -358,7 +359,7 @@ function nativeVisualCenter(file) {
 // --- per-layer constants, read from source (see header) --------------------
 
 function layerConstants(sourceFile) {
-  const src = fs.readFileSync(path.join(ROOT, sourceFile), 'utf8');
+  const src = readLayerSource(path.join(ROOT, sourceFile));
   const scale = src.match(/\bconst MODEL_SCALE = ([\d.]+);/);
   assert.ok(scale, `${sourceFile}: MODEL_SCALE not found`);
   const belly = src.match(/\bconst MODEL_BELLY_OFFSET_NATIVE = ([\d.]+);/);
@@ -367,8 +368,8 @@ function layerConstants(sourceFile) {
 }
 
 function normalBillboardScaleByDistance(sourceFile) {
-  const src = fs.readFileSync(path.join(ROOT, sourceFile), 'utf8');
-  const fn = src.match(/function _normalBillboardScaleByDistance\(\) \{([\s\S]*?)\n\}/);
+  const src = readLayerSource(path.join(ROOT, sourceFile));
+  const fn = src.match(/function (?:parts\.\w+\.)?_normalBillboardScaleByDistance\(\) \{([\s\S]*?)\n\}/);
   assert.ok(fn, `${sourceFile}: _normalBillboardScaleByDistance not found`);
   const scalar = fn[1].match(/NearFarScalar\((\d+), ([\d.]+), (\d+), ([\d.]+)\)/);
   assert.ok(scalar, `${sourceFile}: billboard NearFarScalar not found`);

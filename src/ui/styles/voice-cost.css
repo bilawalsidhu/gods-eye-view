@@ -1,0 +1,107 @@
+/* ------------------------------------------------------------------ *
+ * Voice cost control — model-tier toggle + running session estimate.
+ * Appended (not woven into the dock passes above) so the three existing
+ * #gev-voice-control cascades stay untouched; these rules only add the
+ * new .gev-voice-cost cluster inside the existing .gev-voice-heading row.
+ * ------------------------------------------------------------------ */
+.gev-voice-cost {
+  display: flex;
+  align-items: center;
+  gap: 0.22rem;
+  margin-left: auto; /* pin right; kicker + status keep their left cluster */
+  flex: 0 0 auto;
+}
+
+.gev-voice-tier-btn {
+  padding: 0 0.24rem;
+  height: 0.72rem;
+  min-width: 1.55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 212, 255, 0.06);
+  border: 1px solid rgba(0, 212, 255, 0.34);
+  border-radius: 0.18rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.4rem;
+  letter-spacing: 0.045rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+/* Local backend lifecycle on the provider button. Warming reads as busy, not
+   broken; a backend that failed to start must not look identical to a ready
+   one, which is the whole point of surfacing the state here. */
+.gev-voice-tier-btn[data-backend='starting'] {
+  color: #9fb4c7;
+  border-color: rgba(159, 180, 199, 0.5);
+  background: rgba(159, 180, 199, 0.1);
+}
+.gev-voice-tier-btn[data-backend='ready'] {
+  color: #7ce8a4;
+  border-color: rgba(124, 232, 164, 0.55);
+  background: rgba(124, 232, 164, 0.12);
+}
+.gev-voice-tier-btn[data-backend='stopped'],
+.gev-voice-tier-btn[data-backend='unavailable'] {
+  color: #ff9b9b;
+  border-color: rgba(255, 155, 155, 0.55);
+  background: rgba(255, 155, 155, 0.12);
+}
+
+/* `hidden` has to beat this button's own `display: inline-flex` — the bare
+   attribute selector in the UA sheet loses to a class. Applies when the LOCAL
+   backend is selected and the OpenAI tier/cost controls no longer apply. */
+.gev-voice-tier-btn[hidden],
+.gev-voice-cost-value[hidden] {
+  display: none;
+}
+
+.gev-voice-tier-btn:hover {
+  color: var(--text-primary);
+  border-color: rgba(0, 212, 255, 0.6);
+  background: rgba(0, 212, 255, 0.12);
+}
+
+/* MINI engaged — amber, distinct from the cyan default so the cheaper tier
+   is legible at a glance without reading the label. */
+.gev-voice-tier-btn[aria-pressed='true'] {
+  color: #ffc46b;
+  border-color: rgba(255, 196, 107, 0.55);
+  background: rgba(255, 196, 107, 0.12);
+}
+
+.gev-voice-cost-value {
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.4rem;
+  letter-spacing: 0.02rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  transition: color var(--transition-fast);
+}
+
+.gev-voice-cost-value[data-level='warn'] {
+  color: #ffc46b;
+}
+
+.gev-voice-cost-value[data-level='cap'] {
+  color: #ff6b6b;
+  font-weight: 600;
+}
+
+/* The dock heading row is 0.8rem tall; keep the cluster inside it. */
+#command-dock .gev-voice-cost {
+  max-height: 0.8rem;
+}
+
+/* The dock collapses the kicker/readout when a tray is open — the cost
+   cluster follows the same rule so the row never overflows. */
+#command-dock.tray-open .gev-voice-cost {
+  display: none;
+}

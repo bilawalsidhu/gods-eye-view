@@ -145,6 +145,12 @@
     "./ui/cockpit": "./src/ui/cockpit.js",
     "./ui/cockpit/math": "./src/cockpitMath.js",
     "./ui/cockpit/layout": "./src/cockpitUtilityLayout.js",
-    "./ui/cockpit/vision": "./src/cockpitVisionPolicy.js"
+    "./ui/cockpit/vision": "./src/cockpitVisionPolicy.js",
+    "./ui/scenes": "./src/ui/scenes.js",
+    "./ui/shell": "./src/ui/applicationShell.js",
+    "./ui/styles": "./src/ui/styles.js",
+    "./scenes": "./src/scenes/director.js",
+    "./sources/live": "./src/sources/live/index.js",
+    "./layers/flights": "./src/layers/flights/index.js"
   }
 }

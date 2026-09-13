@@ -1,3 +1,4 @@
+import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -297,7 +298,7 @@ test('Contacts live repaint restores only stable identity and never retargets an
 });
 
 test('Contacts continuation target is the visible explanatory note', () => {
-  const source = fs.readFileSync(new URL('./militaryAwareness.js', import.meta.url), 'utf8');
+  const source = readLayerSource(new URL('./militaryAwareness.js', import.meta.url));
   assert.match(
     source,
     /<p class="military-awareness-note" tabindex="-1" data-awareness-focus-continuation>Open-source mapped\/observed context\./,
@@ -1352,12 +1353,12 @@ test('hasContact declines while a layer is disabled, whatever its maps still hol
   // disable() hides the collection but keeps the records, so a map lookup
   // alone would report a preserved subject as FRESH from hidden stale data.
   for (const [name, source, guard] of [
-    ['flights', fs.readFileSync(new URL('./flights.js', import.meta.url), 'utf8'),
-      /hasContact\(icao24\) \{\s*\n\s*if \(!_billboardCollection \|\| !_billboardCollection\.show \|\| _billboards\.size === 0\) return null;/],
-    ['militaryFlights', fs.readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8'),
-      /hasContact\(icao24\) \{\s*\n\s*if \(!_billboardCollection \|\| !_billboardCollection\.show \|\| _billboards\.size === 0\) return null;/],
-    ['aisLiveVessels', fs.readFileSync(new URL('./aisLiveVessels.js', import.meta.url), 'utf8'),
-      /hasContact\(mmsi\) \{\s*\n\s*if \(!state\.enabled \|\| !state\.vesselMap \|\| state\.vesselMap\.size === 0\) return null;/],
+    ['flights', readLayerSource(new URL('./flights.js', import.meta.url)),
+      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!(?:flightState\.)?_billboardCollection\s*\|\|\s*!(?:flightState\.)?_billboardCollection\.show\s*\|\|\s*(?:flightState\.)?_billboards\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
+    ['militaryFlights', readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
+      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!(?:flightState\.)?_billboardCollection\s*\|\|\s*!(?:flightState\.)?_billboardCollection\.show\s*\|\|\s*(?:flightState\.)?_billboards\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
+    ['aisLiveVessels', readLayerSource(new URL('./aisLiveVessels.js', import.meta.url)),
+      /hasContact\(\s*mmsi,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!state\.enabled\s*\|\|\s*!state\.vesselMap\s*\|\|\s*state\.vesselMap\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
   ]) {
     assert.match(source, guard, `${name}.hasContact must decline while the layer is disabled`);
   }
@@ -1527,14 +1528,14 @@ test('a deliberate source clear still fully clears the subject', () => {
 test('production eviction sites actually tag their clears', () => {
   // The event contract above is worthless if the real cull paths never set the
   // origin, so pin the three production call sites.
-  const flightsSource = fs.readFileSync(new URL('./flights.js', import.meta.url), 'utf8');
-  const militarySource = fs.readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8');
-  const vesselsSource = fs.readFileSync(new URL('./aisLiveVessels.js', import.meta.url), 'utf8');
+  const flightsSource = readLayerSource(new URL('./flights.js', import.meta.url));
+  const militarySource = readLayerSource(new URL('./militaryFlights.js', import.meta.url));
+  const vesselsSource = readLayerSource(new URL('./aisLiveVessels.js', import.meta.url));
 
   for (const [name, source] of [['flights', flightsSource], ['militaryFlights', militarySource]]) {
     assert.match(
       source,
-      /if \(icao24 === _trackedIcao\) \{\s*\n\s*_clearTracking\(false, \{ evicted: true \}\);/,
+      /if\s*\(\s*icao24\s*===\s*(?:flightState\.)?_trackedIcao,?\s*\)\s*\{\s*\n\s*(?:parts\.\w+\.)?_clearTracking\(\s*false,\s*\{\s*evicted:\s*true\s*\},?\s*\);/,
       `${name} must mark its aged-out cull as an eviction`,
     );
     assert.match(
@@ -1553,7 +1554,7 @@ test('production eviction sites actually tag their clears', () => {
   // The tag alone is not enough — see the behavioral test in
   // firmsInteraction.test.mjs. The clear must also run BEFORE renderCurrentLod,
   // whose registration sweep deletes the record the clear needs to see.
-  const firmsSource = fs.readFileSync(new URL('./firmsHeatmap.js', import.meta.url), 'utf8');
+  const firmsSource = readLayerSource(new URL('./firmsHeatmap.js', import.meta.url));
   const evictedClear = firmsSource.indexOf('clearSelectedEntityContextForLayer(id, { evicted: true });');
   const lodRebuild = firmsSource.indexOf('renderCurrentLod(true);\n      if (reselected) selectFire(reselected);');
   assert.ok(evictedClear > 0, 'FIRMS must mark a refresh-vanished selection as an eviction');
@@ -1588,9 +1589,9 @@ test('cockpit blocks only non-aircraft Context camera flights', () => {
 });
 
 test('vessel entry and selection framing both use the 3 km focus radius', () => {
-  assert.match(militaryAwarenessSource, /const VESSEL_FOCUS_RADIUS_M = 3000;/);
+  assert.match(militaryAwarenessSource, /const\s*VESSEL_FOCUS_RADIUS_M\s*=\s*3000;/);
   const focusRadiusUses = militaryAwarenessSource.match(
-    /new Cesium\.BoundingSphere\(vessel\.position, VESSEL_FOCUS_RADIUS_M\)/g,
+    /new\s*Cesium\.BoundingSphere\(\s*vessel\.position,\s*VESSEL_FOCUS_RADIUS_M,?\s*\)/g,
   ) || [];
   assert.equal(focusRadiusUses.length, 2);
 });
