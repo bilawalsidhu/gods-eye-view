@@ -1259,8 +1259,10 @@ test('hasContact declines while a layer is disabled, whatever its maps still hol
   // disable() hides the collection but keeps the records, so a map lookup
   // alone would report a preserved subject as FRESH from hidden stale data.
   for (const [name, source, guard] of [
+    // flights' tracking state lives on the shared pipeline instance (flightsTracking.js),
+    // so its guard reads through the `p.` prefix.
     ['flights', fs.readFileSync(new URL('./flights.js', import.meta.url), 'utf8'),
-      /hasContact\(icao24\) \{\s*\n\s*if \(!_billboardCollection \|\| !_billboardCollection\.show \|\| _billboards\.size === 0\) return null;/],
+      /hasContact\(icao24\) \{\s*\n\s*if \(!p\._billboardCollection \|\| !p\._billboardCollection\.show \|\| p\._billboards\.size === 0\) return null;/],
     ['militaryFlights', fs.readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8'),
       /hasContact\(icao24\) \{\s*\n\s*if \(!_billboardCollection \|\| !_billboardCollection\.show \|\| _billboards\.size === 0\) return null;/],
     ['aisLiveVessels', fs.readFileSync(new URL('./aisLiveVessels.js', import.meta.url), 'utf8'),
@@ -1438,10 +1440,16 @@ test('production eviction sites actually tag their clears', () => {
   const militarySource = fs.readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8');
   const vesselsSource = fs.readFileSync(new URL('./aisLiveVessels.js', import.meta.url), 'utf8');
 
-  for (const [name, source] of [['flights', flightsSource], ['militaryFlights', militarySource]]) {
+  // flights' tracking state lives on the shared pipeline instance (flightsTracking.js),
+  // so its cull site reads _trackedIcao through the `p.` prefix — while its own
+  // _clearTracking seam stays a plain layer function passed into the factory.
+  for (const [name, source, trackedIcaoRef, clearTrackingRef] of [
+    ['flights', flightsSource, 'p\\._trackedIcao', '_clearTracking'],
+    ['militaryFlights', militarySource, '_trackedIcao', '_clearTracking'],
+  ]) {
     assert.match(
       source,
-      /if \(icao24 === _trackedIcao\) \{\s*\n\s*_clearTracking\(false, \{ evicted: true \}\);/,
+      new RegExp(`if \\(icao24 === ${trackedIcaoRef}\\) \\{\\s*\\n\\s*${clearTrackingRef}\\(false, \\{ evicted: true \\}\\);`),
       `${name} must mark its aged-out cull as an eviction`,
     );
     assert.match(

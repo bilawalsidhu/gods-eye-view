@@ -364,11 +364,19 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
   // The other three surfaces, read from source, because each is the literal a
   // first-run session actually boots from.
   const { readFile } = await import('node:fs/promises');
-  for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');
-    assert.match(source, /^let _models3dEnabled = true;$/m,
+  // flights' fleet-toggle state lives on the shared pipeline instance
+  // (flightsTracking.js); military still owns its module state inline.
+  const bootPins = [
+    ['flights.js', new URL('./flightsTracking.js', import.meta.url),
+      /^p\._models3dEnabled = true;$/m, /^p\._models3dMode = 'proximity';/m],
+    ['militaryFlights.js', new URL('./militaryFlights.js', import.meta.url),
+      /^let _models3dEnabled = true;$/m, /^let _models3dMode = 'proximity';/m],
+  ];
+  for (const [name, path, armed, proximity] of bootPins) {
+    const source = await readFile(path, 'utf8');
+    assert.match(source, armed,
       `${name}: the fleet starts armed, matching the codec default`);
-    assert.match(source, /^let _models3dMode = 'proximity';/m,
+    assert.match(source, proximity,
       `${name}: and starts in proximity, matching the codec default`);
   }
   const ui = await readFile(new URL('../ui.js', import.meta.url), 'utf8');

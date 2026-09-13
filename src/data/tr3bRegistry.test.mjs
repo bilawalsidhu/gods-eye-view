@@ -225,9 +225,18 @@ test('a conversion survives a poll refresh, in both the billboard and the tracke
   }
 });
 
+// flights' shared pipeline lives in flightsTracking.js — pins read the combined
+// layer+factory source, with pipeline state addressed through `p.`
+const FLIGHT_PIN_LAYERS = [
+  { name: 'flights.js', files: ['flights.js', 'flightsTracking.js'], px: 'p\\.' },
+  { name: 'militaryFlights.js', files: ['militaryFlights.js'], px: '' },
+];
+
 test('both flight layers keep a converted contact 2D and visible (render invariants)', async () => {
-  for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');
+  for (const { name, files, px } of FLIGHT_PIN_LAYERS) {
+    const source = (await Promise.all(
+      files.map((f) => readFile(new URL(`./${f}`, import.meta.url), 'utf8')),
+    )).join('\n');
 
     // 1. The 3D model handoff is SUPPRESSED for a converted contact — there is
     //    no TR-3B GLB, so the triangle billboard stays the visual.
@@ -237,13 +246,13 @@ test('both flight layers keep a converted contact 2D and visible (render invaria
     // (2026-08-19), so the suppression moved from a conjunct on
     // `_modelRegimeActive()` to an explicit early return. The invariant is
     // unchanged: a converted contact never reaches the model handoff.
-    assert.match(source, /if \(!_trackedIcao \|\| _cockpitContactMode \|\| isTr3b\(_trackedIcao\)\) \{/,
+    assert.match(source, new RegExp(`if \\(!${px}_trackedIcao \\|\\| ${px}_cockpitContactMode \\|\\| isTr3b\\(${px}_trackedIcao\\)\\) \\{`),
       `${name}: the standalone tracked model is suppressed for a converted contact`);
 
     // 2. The billboard is never hidden by that suppression — it must keep
     //    satisfying the getNearby/getDetectableObjects visibility guards, so a
     //    converted contact still works in Contacts and Cockpit.
-    assert.match(source, /if \(bb && id !== _trackedIcao\) bb\.show = true;|if \(modelled && id !== _trackedIcao\) modelled\.show = true;/,
+    assert.match(source, new RegExp(`if \\(bb && id !== ${px}_trackedIcao\\) bb\\.show = true;|if \\(modelled && id !== ${px}_trackedIcao\\) modelled\\.show = true;`),
       `${name}: converting restores the billboard the model handoff had hidden`);
 
     // 3. Every aircraftIcon() CALL SITE routes through the kind resolver, so no
@@ -253,7 +262,7 @@ test('both flight layers keep a converted contact 2D and visible (render invaria
     const callSites = code.match(/aircraftIcon\(\s*[^;]*?\)/g) || [];
     assert.equal(callSites.length >= 4, true, `${name}: expected the known aircraftIcon call sites`);
     for (const call of callSites) {
-      assert.match(call, /aircraftIcon\(\s*_iconKind\(/,
+      assert.match(call, new RegExp(`aircraftIcon\\(\\s*${px}_iconKind\\(`),
         `${name}: ${call.replace(/\s+/g, ' ')} must resolve its sprite kind through _iconKind`);
     }
 
@@ -405,11 +414,13 @@ test('a converted contact never consumes a 3D model CAP SLOT', async () => {
   // an ordinary contact. Structural pin: the eligibility loop itself is inline
   // in the fleet tick (no seam to drive headlessly), so this asserts the guard's
   // POSITION rather than replaying the four-pass selection.
-  for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');
+  for (const { name, files, px } of FLIGHT_PIN_LAYERS) {
+    const source = (await Promise.all(
+      files.map((f) => readFile(new URL(`./${f}`, import.meta.url), 'utf8')),
+    )).join('\n');
     // Anchor on the MODEL-eligibility loop (keepDistSq), not the unrelated
     // ambient-enrichment candidate loop that also builds a `cand`.
-    const loop = /const cand = \[\];\s*\n\s*for \(const \[icao, bb\] of _billboards\)[\s\S]*?cand\.push\(/.exec(source)?.[0];
+    const loop = new RegExp(`const cand = \\[\\];\\s*\\n\\s*for \\(const \\[icao, bb\\] of ${px}_billboards\\)[\\s\\S]*?cand\\.push\\(`).exec(source)?.[0];
     assert.ok(loop, `${name}: the model-eligibility candidate loop is present`);
     assert.match(loop, /keepDistSq/, `${name}: matched the model-eligibility loop`);
     assert.match(loop, /if \(isTr3b\(icao\)\) continue;/,

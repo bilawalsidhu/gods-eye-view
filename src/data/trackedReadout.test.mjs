@@ -239,32 +239,40 @@ test('trackedReadout cannot resurrect a dedicated canvas or render listener', as
 });
 
 test('tracking layers write gevLabelModel and expose only their cached display positions', async () => {
+  // flights' pipeline state (flightsTracking.js) is read alongside the layer.
+  const flightsSource = [
+    await readFile(new URL('./flights.js', import.meta.url), 'utf8'),
+    await readFile(new URL('./flightsTracking.js', import.meta.url), 'utf8'),
+  ].join('\n');
   const files = await Promise.all([
-    'flights.js',
     'militaryFlights.js',
     'satellites.js',
     'militaryInstallations.js',
   ].map(async (name) => [name, await readFile(new URL(`./${name}`, import.meta.url), 'utf8')]));
-  const sources = Object.fromEntries(files);
-  for (const [name, source] of files) {
+  const sources = { 'flights.js': flightsSource, ...Object.fromEntries(files) };
+  for (const [name, source] of Object.entries(sources)) {
     assert.ok(source.includes('.gevLabelModel ='), `${name} writes the explicit model directly`);
     assert.ok(source.includes('.gevDisplayPosition ='), `${name} exposes a display-position cache`);
   }
-  assert.ok(sources['flights.js'].includes('gevDisplayPosition = _trackedDisplayCached'));
+  // flights reads the cache through the pipeline instance; the others own it inline.
+  assert.ok(flightsSource.includes('gevDisplayPosition = p._trackedDisplayCached'));
   assert.ok(sources['militaryFlights.js'].includes('gevDisplayPosition = _trackedDisplayCached'));
   assert.ok(sources['satellites.js'].includes('gevDisplayPosition = _trackedDisplayCached'));
-  assert.equal(sources['flights.js'].includes('_trackedEntity.label.text'), false);
+  assert.equal(flightsSource.includes('_trackedEntity.label.text'), false);
   assert.equal(sources['militaryFlights.js'].includes('_trackedEntity.label.text'), false);
   assert.equal(sources['satellites.js'].includes('_trackedEntity.label.text'), false);
 });
 
 test('civilian and military trail heads use the lower-centre model anchor and weak-texture tint', async () => {
-  const files = await Promise.all(['flights.js', 'militaryFlights.js'].map(async (name) => (
-    [name, await readFile(new URL(`./${name}`, import.meta.url), 'utf8')]
-  )));
-  for (const [name, source] of files) {
+  const files = [
+    // flights' trail seam stays in the layer but reads pipeline state via `p.`
+    ['flights.js', 'const head = p._trackedTrailCached() || _trackedDisplayPosition(p._trackedIcao);'],
+    ['militaryFlights.js', 'const head = _trackedTrailCached() || _trackedDisplayPosition(_trackedIcao);'],
+  ];
+  for (const [name, headPin] of files) {
+    const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');
     assert.ok(
-      source.includes('const head = _trackedTrailCached() || _trackedDisplayPosition(_trackedIcao);'),
+      source.includes(headPin),
       `${name} trail head uses the dedicated lower-centre model anchor`,
     );
     assert.ok(source.includes('const MODEL_COLOR_BLEND_AMOUNT = 0.94;'),
