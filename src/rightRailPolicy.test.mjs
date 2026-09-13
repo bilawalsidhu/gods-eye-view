@@ -1,3 +1,4 @@
+import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -33,7 +34,7 @@ test('other HUD layouts keep collapsed right-rail launchers visible', () => {
 
 test('desktop Display participates in Tactical exclusivity without changing mobile Display behavior', () => {
   const ui = readFileSync(new URL('./ui/rightPanelRail.js', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
   assert.match(ui, /const isMobile = windowRef\.matchMedia\('\(max-width: 720px\)'\)\.matches/);
   assert.match(
     ui,

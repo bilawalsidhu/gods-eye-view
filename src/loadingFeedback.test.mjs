@@ -1,3 +1,4 @@
+import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -89,15 +90,15 @@ test('deferred terminal notices lose ownership to newer acquisition epochs and d
 });
 
 test('share-follow failures use the universal top-center status instead of the bottom toast', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const ui = readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
   const start = ui.indexOf('  _handleShareTrackingRestoreStatus(result) {');
   const end = ui.indexOf('\n  _initGlobalContextPanel() {', start);
   const handler = ui.slice(start, end);
   assert.match(handler, /this\._showGlobalStatusNotice\(message\)/);
   assert.match(handler, /this\.initialRestorePromise\.then\(showAfterStartupCover\)/);
-  assert.match(handler, /requestAnimationFrame\(\(\) => \{/);
-  assert.match(handler, /startupCover\.addEventListener\('transitionend', showOnce, \{ once: true \}\)/);
-  assert.match(handler, /fallbackTimer = setTimeout\(showOnce, 1000\)/);
+  assert.match(handler, /this\._lifetime\.frame\(\(\) => \{/);
+  assert.match(handler, /this\._lifetime\.listen\(\s*startupCover,\s*'transitionend',\s*showOnce,\s*\{ once: true \},?\s*\)/);
+  assert.match(handler, /fallbackTimer = this\._lifetime\.timeout\(showOnce, 1000\)/);
   assert.doesNotMatch(handler, /this\._showToast\(message\)/);
   assert.doesNotMatch(handler, /pushCockpitSignal/);
   assert.match(handler, /result\.classification === 'pending'/);
@@ -106,7 +107,7 @@ test('share-follow failures use the universal top-center status instead of the b
   assert.match(handler, /this\._shareTrackingNoticeGeneration \+= 1/);
   assert.match(handler, /canPresentDeferredStatusNotice\(/);
   assert.match(handler, /if \(this\._shareTrackingAcquiringKey\) return/);
-  assert.match(handler, /result\.classification === 'followed' \|\| result\.classification === 'cancelled'/);
+  assert.match(handler, /result\.classification === 'followed'\s*\|\|\s*result\.classification === 'cancelled'/);
 });
 
 test('universal notice masks active loading only for its own fixed dwell', () => {
@@ -195,13 +196,13 @@ test('replacement, repetition, and hidden-tab elapsed time use the newest fixed 
 });
 
 test('universal notice lifecycle clears on dispose and uses the one top-center live region', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const ui = readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const disposeStart = ui.indexOf('  async dispose() {');
   const disposeEnd = ui.indexOf('\n  }\n', disposeStart);
   const dispose = ui.slice(disposeStart, disposeEnd);
 
-  assert.match(dispose, /this\._globalStatusNotice = null;/);
+  assert.match(dispose, /this\._feedback\._globalStatusNotice = null;/);
   assert.match(dispose, /this\._shareTrackingNoticeGeneration \+= 1;/);
   assert.match(html, /<div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" hidden>/);
 });
@@ -235,14 +236,14 @@ test('reveals sustained loading and then a bounded completion state', () => {
 });
 
 test('terminal loading feedback centers its label without an empty detail slot', () => {
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
   assert.match(
     css,
-    /#global-loading-status:is\(\[data-state='complete'\], \[data-state='cancelled'\], \[data-state='error'\]\)\s*\{[\s\S]*?justify-content:\s*center;[\s\S]*?text-align:\s*center;/,
+    /#global-loading-status:is\(\s*\[data-state='complete'\],\s*\[data-state='cancelled'\],\s*\[data-state='error'\]\s*\)\s*\{[\s\S]*?justify-content:\s*center;[\s\S]*?text-align:\s*center;/,
   );
   assert.match(
     css,
-    /#global-loading-status:is\(\[data-state='complete'\], \[data-state='cancelled'\], \[data-state='error'\]\) #global-loading-detail\s*\{\s*display:\s*none;/,
+    /#global-loading-status:is\(\s*\[data-state='complete'\],\s*\[data-state='cancelled'\],\s*\[data-state='error'\]\s*\)\s*#global-loading-detail\s*\{\s*display:\s*none;/,
   );
 });
 
@@ -531,8 +532,8 @@ test('the settled traffic chip shows exactly one percentage — the coverage it 
 });
 
 test('the chip renderer clears the progress slot instead of stranding the last value', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const ui = readFileSync(new URL('./ui/shellFeedback.js', import.meta.url), 'utf8');
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
   const start = ui.indexOf('  _updateTrafficSyncChip(');
   assert.ok(start > 0, '_updateTrafficSyncChip is missing');
   const body = ui.slice(start, ui.indexOf('\n  }', start));
@@ -620,7 +621,7 @@ test('aggregates Mapped Installations refresh beside CCTV without changing eithe
 // stack layout contract — the ticker's lifecycle is pinned against ui.js
 // source. (perf rebase 2026-08-17)
 test('the loading ticker never runs hidden and stops after loading and notices settle', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const ui = readFileSync(new URL('./ui/shellFeedback.js', import.meta.url), 'utf8');
   // Scope every assertion to _armLoadingFeedbackTicker's own body. The
   // neighbouring _startTrafficChipTicker is a deliberately PERMANENT 500ms
   // safety-net poll, so its `if (document.hidden) return;` is correct there
@@ -655,7 +656,7 @@ test('the loading ticker never runs hidden and stops after loading and notices s
   //    Persistent ACQUIRING notices remain visible without a 60ms timer.
   assert.match(
     arm,
-    /const noticeNeedsTicker = Number\.isFinite\(this\._globalStatusNotice\?\.hideAt\);[\s\S]*?if \(this\._loadingFeedbackState\?\.phase === 'idle' && !noticeNeedsTicker\) \{\s*this\._stopLoadingFeedbackTicker\(\);\s*\}/,
+    /const noticeNeedsTicker = Number\.isFinite\(\s*this\._globalStatusNotice\?\.hideAt,?\s*\);[\s\S]*?if \(\s*this\._loadingFeedbackState\?\.phase === 'idle'\s*&&\s*!noticeNeedsTicker\s*\) \{\s*this\._stopLoadingFeedbackTicker\(\);\s*\}/,
     'an idle phase with no expiring notice must stop the ticker',
   );
   assert.match(
@@ -667,21 +668,21 @@ test('the loading ticker never runs hidden and stops after loading and notices s
   // 4. Returning to visible resamples, so a batch that finished while hidden
   //    is reconciled and a still-running one re-arms its ticker. The handler
   //    must live on the class that OWNS _updateGlobalLoadingFeedback
-  //    (StyleManager) — wiring it into a neighbouring controller instead
+  //    (ShellFeedback) — wiring it into a neighbouring controller instead
   //    throws on every visibilitychange — and must be torn down with the rest.
   assert.match(
     ui,
-    /this\._loadingVisibilityHandler = \(\) => \{\s*if \(!document\.hidden\) this\._updateGlobalLoadingFeedback\(\);\s*\};\s*document\.addEventListener\('visibilitychange', this\._loadingVisibilityHandler\);/,
+    /this\._loadingVisibilityHandler = \(\) => \{\s*if \(!document\.hidden\) this\._updateGlobalLoadingFeedback\(\);\s*else this\._stopLoadingFeedbackTicker\(\);\s*\};\s*document\.addEventListener\(\s*'visibilitychange',\s*this\._loadingVisibilityHandler,?\s*\);/,
     'visibilitychange must resample the chip on return',
   );
-  const styleManager = ui.slice(ui.indexOf('export class StyleManager'));
+  const styleManager = ui.slice(ui.indexOf('export class ShellFeedback'));
   assert.ok(
     styleManager.includes('this._loadingVisibilityHandler'),
-    'the resample handler must be owned by StyleManager, which defines _updateGlobalLoadingFeedback',
+    'the resample handler must be owned by ShellFeedback, which defines _updateGlobalLoadingFeedback',
   );
   assert.match(
     ui,
-    /document\.removeEventListener\('visibilitychange', this\._loadingVisibilityHandler\);/,
+    /document\.removeEventListener\(\s*'visibilitychange',\s*this\._loadingVisibilityHandler,?\s*\);/,
     'the resample handler must be removed on teardown',
   );
 });

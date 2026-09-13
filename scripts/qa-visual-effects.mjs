@@ -152,9 +152,20 @@ try {
     'bloom actions, effect state and saved snapshot agree',
     await page.evaluate(() => {
       const manager = window.__godsEyeView.styleManager;
+      const states = [];
+      const unsubscribe = manager.subscribeShareState((value) =>
+        states.push(value),
+      );
       const result = manager.setBloom({ enabled: true, intensityPct: 98 });
+      unsubscribe();
+      const published = states.at(-1);
       const snapshot = manager.getVisualState();
       return (
+        states[0].initial &&
+        states.length > 1 &&
+        Object.isFrozen(published.state.options) &&
+        published.state.bloomEnabled &&
+        published.state.options.bloomIntensity === 98 &&
         result.ok &&
         result.bloom.intensityPct === 98 &&
         snapshot.bloom.intensity === 98 &&

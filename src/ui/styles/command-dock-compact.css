@@ -1,0 +1,433 @@
+/* ── Compact accordion command dock ──────────── */
+#command-dock {
+  --dock-side-compact: clamp(9.5rem, 12vw, 10.5rem);
+  --dock-location-open: clamp(28rem, 40vw, 33rem);
+  --dock-presets-open: clamp(25rem, 36vw, 29rem);
+  --dock-voice-width: clamp(13.5rem, 17vw, 15rem);
+  display: flex;
+  grid-template-areas: none;
+  grid-template-columns: none;
+  align-items: center;
+  width: fit-content;
+  max-width: calc(100vw - 4vw);
+  min-height: 3.75rem;
+  padding: 0.2rem;
+  border-radius: 0.4rem;
+  transform: translateX(-50%);
+  transition:
+    transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity var(--transition-smooth),
+    visibility var(--transition-smooth);
+}
+
+#command-dock:has(#location-bar:not(.collapsed)) {
+  transform: translateX(
+    calc(-50% + (var(--dock-location-open) - var(--dock-side-compact)) / 2)
+  );
+}
+
+#command-dock:has(#control-panel:not(.collapsed)) {
+  transform: translateX(
+    calc(-50% - (var(--dock-presets-open) - var(--dock-side-compact)) / 2)
+  );
+}
+
+#command-dock > #location-bar,
+#command-dock > #control-panel {
+  flex: 0 0 var(--dock-side-compact);
+  align-self: stretch;
+  min-width: 0;
+  height: auto;
+  overflow: hidden;
+  border: 0;
+  transition: flex-basis 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+#command-dock > #location-bar:not(.collapsed) {
+  flex-basis: var(--dock-location-open);
+}
+
+#command-dock > #control-panel:not(.collapsed) {
+  flex-basis: var(--dock-presets-open);
+}
+
+#command-dock > #location-bar {
+  border-right: 1px solid rgba(123, 189, 211, 0.18);
+}
+
+#command-dock > #control-panel {
+  border-left: 1px solid rgba(123, 189, 211, 0.18);
+}
+
+#command-dock .panel-inner,
+#command-dock .location-inner,
+#command-dock #control-panel.collapsed .panel-inner,
+#command-dock #location-bar.collapsed .location-inner {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 3.75rem;
+  padding: 0.45rem 0.75rem;
+}
+
+#command-dock .panel-header,
+#command-dock .location-toolbar,
+#command-dock #control-panel.collapsed .panel-header {
+  flex: 0 0 auto;
+  min-width: calc(var(--dock-side-compact) - 1.5rem);
+  min-height: 1rem;
+  margin: 0;
+}
+
+#command-dock .panel-title,
+#command-dock .location-toolbar-label {
+  width: max-content;
+  font-size: 0.45rem;
+  letter-spacing: 0.12rem;
+  white-space: nowrap;
+}
+
+#command-dock .panel-title::after,
+#command-dock .location-toolbar-label::after {
+  content: '›';
+  margin-left: 0.45rem;
+  color: rgba(54, 220, 255, 0.68);
+  font-size: 0.7rem;
+}
+
+#command-dock #control-panel .panel-title::after {
+  content: '‹';
+  margin-right: 0.45rem;
+  margin-left: 0;
+  float: left;
+}
+
+#command-dock #location-bar.collapsed .location-city-row,
+#command-dock #location-bar.collapsed .poi-row-container,
+#command-dock #location-bar.collapsed .location-bar-divider,
+#command-dock #control-panel.collapsed .button-grid {
+  display: none !important;
+}
+
+#command-dock #location-bar:not(.collapsed) .location-toolbar,
+#command-dock #control-panel:not(.collapsed) .panel-header {
+  margin-bottom: 0.35rem;
+}
+
+#command-dock #location-bar:not(.collapsed) .location-city-row,
+#command-dock #control-panel:not(.collapsed) .button-grid {
+  display: flex !important;
+  animation: command-dock-reveal 220ms ease-out both;
+}
+
+#command-dock .location-city-row {
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  overflow: hidden;
+}
+
+#command-dock .location-search-wrap {
+  flex: 0 0 10.5rem;
+  min-width: 0;
+  padding-right: 0.4rem;
+}
+
+#command-dock .search-toggle-btn {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+#command-dock #location-search,
+#command-dock #location-search.expanded {
+  height: 1.75rem;
+  padding: 0.3rem 0.45rem;
+  font-size: 0.62rem;
+}
+
+#command-dock .location-pills {
+  display: flex;
+  gap: 0.3rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+#command-dock .location-pills::-webkit-scrollbar {
+  display: none;
+}
+
+#command-dock .location-pill,
+#command-dock .poi-pill {
+  flex: 0 0 auto;
+  min-height: 1.75rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: 0.2rem;
+  font-size: 0.52rem;
+  white-space: nowrap;
+}
+
+#command-dock .poi-row-container.expanded {
+  display: flex;
+  justify-content: flex-start;
+  gap: 0.3rem;
+  max-height: 2.1rem;
+  margin: 0 0 0.35rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  animation: command-dock-reveal 180ms ease-out both;
+  scrollbar-width: none;
+}
+
+#command-dock .poi-row-container.expanded::-webkit-scrollbar {
+  display: none;
+}
+
+#command-dock .location-bar-divider.visible {
+  display: none;
+}
+
+#command-dock .button-grid {
+  flex-wrap: nowrap;
+  gap: 0.3rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+#command-dock .button-grid::-webkit-scrollbar {
+  display: none;
+}
+
+#command-dock .style-btn {
+  flex: 0 0 3.2rem;
+  min-width: 3.2rem;
+  min-height: 2.45rem;
+  gap: 0.1rem;
+  padding: 0.3rem 0.25rem;
+  border-radius: 0.2rem;
+}
+
+#command-dock .btn-icon {
+  font-size: 0.78rem;
+}
+
+#command-dock .btn-label {
+  font-size: 0.43rem;
+  letter-spacing: 0.02rem;
+}
+
+#command-dock .btn-key {
+  display: none;
+}
+
+#command-dock > #gev-voice-control {
+  position: relative;
+  inset: auto;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: 3.2rem 1fr 3.6rem;
+  grid-template-rows: 0.8rem 2.55rem 0.8rem;
+  flex: 0 0 var(--dock-voice-width);
+  width: var(--dock-voice-width);
+  min-width: 0;
+  height: 4.9rem;
+  margin: -0.65rem 0;
+  padding: 0.3rem 0.65rem;
+  gap: 0 0.35rem;
+  overflow: hidden;
+  border-radius: var(--panel-radius);
+  transform: none;
+}
+
+#command-dock .gev-voice-kicker {
+  position: static;
+  grid-column: 2 / 4;
+  grid-row: 1;
+  align-self: center;
+  color: rgba(190, 221, 230, 0.58);
+  font-size: 0.39rem;
+  letter-spacing: 0.07rem;
+  text-align: center;
+}
+
+#command-dock #gev-voice-button {
+  grid-column: 1;
+  grid-row: 1 / 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  align-self: center;
+  gap: 0.15rem;
+  padding: 0;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 0.2rem rgba(0, 212, 255, 0.06),
+    0 0 1rem rgba(0, 212, 255, 0.12);
+}
+
+#command-dock .gev-mic-orbit {
+  display: grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+}
+
+#command-dock .gev-mic-orbit img {
+  width: 1.55rem;
+  height: 1.55rem;
+}
+
+#command-dock .gev-mic-label {
+  font-size: 0.35rem;
+  color: rgba(190, 221, 230, 0.72);
+  letter-spacing: 0.02rem;
+}
+
+#command-dock .gev-voice-visualizer {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  gap: 0.12rem;
+  height: 2.2rem;
+  padding: 0.2rem 0.1rem;
+  border-bottom: 1px solid rgba(54, 220, 255, 0.34);
+}
+
+#command-dock .gev-voice-visualizer span {
+  width: 0.18rem;
+  height: 0.55rem;
+  background: linear-gradient(to top, #28b9db, #71eaff);
+  box-shadow: 0 0 0.35rem rgba(54, 220, 255, 0.28);
+  transform-origin: bottom;
+}
+
+#command-dock .gev-voice-visualizer span:nth-child(3n) {
+  height: 1.35rem;
+}
+#command-dock .gev-voice-visualizer span:nth-child(4n) {
+  height: 0.95rem;
+}
+#command-dock .gev-voice-visualizer span:nth-child(5n) {
+  height: 1.7rem;
+}
+#command-dock .gev-voice-visualizer span:nth-child(7n) {
+  height: 0.75rem;
+}
+
+#command-dock
+  #gev-voice-control[data-status='listening']
+  .gev-voice-visualizer
+  span,
+#command-dock
+  #gev-voice-control[data-status='executing']
+  .gev-voice-visualizer
+  span {
+  animation: gev-voice-bar 680ms ease-in-out infinite alternate;
+  animation-delay: calc(var(--bar) * -45ms);
+}
+
+#command-dock .gev-voice-readout {
+  display: contents;
+}
+
+#command-dock #gev-voice-status {
+  grid-column: 3;
+  grid-row: 2;
+  align-self: start;
+  padding-top: 0.2rem;
+  font-size: 0.45rem;
+  text-align: right;
+}
+
+#command-dock #gev-voice-detail {
+  grid-column: 2 / 4;
+  grid-row: 3;
+  align-self: center;
+  max-width: none;
+  margin: 0;
+  font-size: 0.39rem;
+  letter-spacing: 0.08rem;
+  text-align: center;
+}
+
+@keyframes command-dock-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(0.2rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gev-voice-bar {
+  from {
+    transform: scaleY(0.35);
+    opacity: 0.5;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+/* Compact dock clearance keeps the reference-like low profile. */
+body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
+  bottom: calc(2vh + 4.7rem);
+}
+
+#intel-hud[data-variant='minimal'] .hud-bottom-left {
+  bottom: calc(2vh + 5.4rem);
+}
+
+#intel-hud[data-variant='minimal'] .hud-bottom-bar {
+  bottom: calc(2vh + 8.9rem);
+}
+
+@media (max-width: 900px) {
+  #command-dock {
+    --dock-popover-mobile-width: calc(100vw - 1.5rem);
+  }
+
+  #command-dock {
+    --dock-side-compact: 4.25rem;
+    --dock-location-open: calc(100vw - 7rem);
+    --dock-presets-open: calc(100vw - 7rem);
+    --dock-voice-width: 11.5rem;
+    max-width: calc(100vw - 1rem);
+  }
+
+  #command-dock:has(#location-bar:not(.collapsed)),
+  #command-dock:has(#control-panel:not(.collapsed)) {
+    transform: translateX(-50%);
+  }
+
+  #command-dock:has(#location-bar:not(.collapsed)) > #control-panel,
+  #command-dock:has(#control-panel:not(.collapsed)) > #location-bar {
+    flex-basis: 0;
+    border: 0;
+  }
+
+  #command-dock:has(#location-bar:not(.collapsed)) > #gev-voice-control,
+  #command-dock:has(#control-panel:not(.collapsed)) > #gev-voice-control {
+    flex-basis: 4.75rem;
+    width: 4.75rem;
+  }
+
+  #command-dock:has(#location-bar:not(.collapsed)) .gev-voice-visualizer,
+  #command-dock:has(#location-bar:not(.collapsed)) .gev-voice-kicker,
+  #command-dock:has(#location-bar:not(.collapsed)) .gev-voice-readout,
+  #command-dock:has(#control-panel:not(.collapsed)) .gev-voice-visualizer,
+  #command-dock:has(#control-panel:not(.collapsed)) .gev-voice-kicker,
+  #command-dock:has(#control-panel:not(.collapsed)) .gev-voice-readout {
+    visibility: hidden;
+  }
+
+  #command-dock .location-search-wrap {
+    flex-basis: 8.5rem;
+  }
+}

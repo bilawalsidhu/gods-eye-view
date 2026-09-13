@@ -1702,8 +1702,8 @@ async function main() {
             dataset: { ...stack.dataset },
           }];
         })),
-        preferredLeftPanelId: manager._leftStackPreferredPanelId,
-        preferredRightPanelId: manager._rightStackPreferredPanelId,
+        preferredLeftPanelId: manager._panelLayout._leftStackPreferredPanelId,
+        preferredRightPanelId: manager._panelLayout._rightStackPreferredPanelId,
         hudMode: manager.hud.getMode(),
         hudVariant: manager.hud.getVariant(),
         focusId: document.activeElement?.id || null,
@@ -1767,7 +1767,7 @@ async function main() {
         const scenePanel = document.getElementById('scene-panel');
         const contextPanel = document.getElementById('global-context-panel');
         result.tacticalAutoCollapse = {
-          latestOpenedPanel: manager._leftStackPreferredPanelId,
+          latestOpenedPanel: manager._panelLayout._leftStackPreferredPanelId,
           scenesExpanded: !scenePanel.classList.contains('collapsed'),
           dataCollapsed: dataPanel.classList.contains('layout-auto-collapsed'),
           dataHiddenWhileScenesOwnsLane: dataPanel.getBoundingClientRect().height === 0
@@ -1814,13 +1814,13 @@ async function main() {
         manager.hud.setMode(prior.hudMode);
         manager._updateHudButtonState();
         await new Promise((resolve) => setTimeout(resolve, 320));
-        if (manager._leftStackLayoutFrame !== null) {
-          cancelAnimationFrame(manager._leftStackLayoutFrame);
-          manager._leftStackLayoutFrame = null;
+        if (manager._panelLayout._leftStackLayoutFrame !== null) {
+          cancelAnimationFrame(manager._panelLayout._leftStackLayoutFrame);
+          manager._panelLayout._leftStackLayoutFrame = null;
         }
-        if (manager._rightStackLayoutFrame !== null) {
-          cancelAnimationFrame(manager._rightStackLayoutFrame);
-          manager._rightStackLayoutFrame = null;
+        if (manager._panelLayout._rightStackLayoutFrame !== null) {
+          cancelAnimationFrame(manager._panelLayout._rightStackLayoutFrame);
+          manager._panelLayout._rightStackLayoutFrame = null;
         }
         for (const [id, state] of Object.entries(prior.panels)) {
           const panel = document.getElementById(id);
@@ -1839,18 +1839,18 @@ async function main() {
           for (const key of Object.keys(stack.dataset)) delete stack.dataset[key];
           Object.assign(stack.dataset, state.dataset);
         }
-        manager._leftStackPreferredPanelId = prior.preferredLeftPanelId;
-        manager._rightStackPreferredPanelId = prior.preferredRightPanelId;
+        manager._panelLayout._leftStackPreferredPanelId = prior.preferredLeftPanelId;
+        manager._panelLayout._rightStackPreferredPanelId = prior.preferredRightPanelId;
         localStorage.clear();
         for (const [key, value] of Object.entries(prior.storage)) localStorage.setItem(key, value);
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        if (manager._leftStackLayoutFrame !== null) {
-          cancelAnimationFrame(manager._leftStackLayoutFrame);
-          manager._leftStackLayoutFrame = null;
+        if (manager._panelLayout._leftStackLayoutFrame !== null) {
+          cancelAnimationFrame(manager._panelLayout._leftStackLayoutFrame);
+          manager._panelLayout._leftStackLayoutFrame = null;
         }
-        if (manager._rightStackLayoutFrame !== null) {
-          cancelAnimationFrame(manager._rightStackLayoutFrame);
-          manager._rightStackLayoutFrame = null;
+        if (manager._panelLayout._rightStackLayoutFrame !== null) {
+          cancelAnimationFrame(manager._panelLayout._rightStackLayoutFrame);
+          manager._panelLayout._rightStackLayoutFrame = null;
         }
         // Disclosure restoration can wake the installed layout observers. Let
         // those observers settle, then restore the captured stack presentation
@@ -1880,8 +1880,8 @@ async function main() {
         result.restoreDetails = {
           panelsRestored,
           stacksRestored,
-          preferredPanelRestored: manager._leftStackPreferredPanelId === prior.preferredLeftPanelId,
-          preferredRightPanelRestored: manager._rightStackPreferredPanelId === prior.preferredRightPanelId,
+          preferredPanelRestored: manager._panelLayout._leftStackPreferredPanelId === prior.preferredLeftPanelId,
+          preferredRightPanelRestored: manager._panelLayout._rightStackPreferredPanelId === prior.preferredRightPanelId,
           hudModeRestored: manager.hud.getMode() === prior.hudMode,
           hudVariantRestored: manager.hud.getVariant() === prior.hudVariant,
           storageRestored: JSON.stringify(Object.fromEntries(Object.entries(localStorage))) === JSON.stringify(prior.storage),
@@ -2055,7 +2055,7 @@ async function main() {
         detectionMode: manager.getDetectionState().detectionMode,
         models3dEnabled: manager._models3dEnabled,
         models3dMode: manager._models3dMode,
-        preferredLeftPanelId: manager._leftStackPreferredPanelId,
+        preferredLeftPanelId: manager._panelLayout._leftStackPreferredPanelId,
         panels: Object.fromEntries([
           'data-panel',
           'global-context-panel',
@@ -2371,13 +2371,13 @@ async function main() {
         if (prior.utilityTop) hud.style.setProperty('--cockpit-utility-top', prior.utilityTop);
         else hud.style.removeProperty('--cockpit-utility-top');
         await waitForLayout();
-        if (manager._leftStackLayoutFrame !== null) {
-          cancelAnimationFrame(manager._leftStackLayoutFrame);
-          manager._leftStackLayoutFrame = null;
+        if (manager._panelLayout._leftStackLayoutFrame !== null) {
+          cancelAnimationFrame(manager._panelLayout._leftStackLayoutFrame);
+          manager._panelLayout._leftStackLayoutFrame = null;
         }
-        if (manager._rightStackLayoutFrame !== null) {
-          cancelAnimationFrame(manager._rightStackLayoutFrame);
-          manager._rightStackLayoutFrame = null;
+        if (manager._panelLayout._rightStackLayoutFrame !== null) {
+          cancelAnimationFrame(manager._panelLayout._rightStackLayoutFrame);
+          manager._panelLayout._rightStackLayoutFrame = null;
         }
         for (const [id, state] of Object.entries(prior.panels)) {
           const panel = document.getElementById(id);
@@ -2388,7 +2388,7 @@ async function main() {
           else panel.setAttribute('aria-hidden', state.ariaHidden);
           manager._syncPanelCollapseButton(panel);
         }
-        manager._leftStackPreferredPanelId = prior.preferredLeftPanelId;
+        manager._panelLayout._leftStackPreferredPanelId = prior.preferredLeftPanelId;
         localStorage.clear();
         for (const [key, value] of Object.entries(prior.storage)) localStorage.setItem(key, value);
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -2411,7 +2411,7 @@ async function main() {
               && panel.getAttribute('style') === state.style
               && panel.getAttribute('aria-hidden') === state.ariaHidden;
           })
-          && manager._leftStackPreferredPanelId === prior.preferredLeftPanelId
+          && manager._panelLayout._leftStackPreferredPanelId === prior.preferredLeftPanelId
           && JSON.stringify(Object.fromEntries(Object.entries(localStorage))) === JSON.stringify(prior.storage)
           && (!prior.focusId || document.activeElement?.id === prior.focusId);
       }

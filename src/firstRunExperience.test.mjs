@@ -1,3 +1,4 @@
+import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -183,7 +184,7 @@ test('no storage is touched from a default parameter position', () => {
 
 test('the JS and CSS lists of screen-claiming surfaces stay in step', () => {
   const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
-  const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
 
   assert.deepEqual(
     [...EXCLUSIVE_SURFACE_CLASSES].sort(),
@@ -233,7 +234,7 @@ test('the key handler refuses to act for a card that is not really on screen', (
 
 test('an overlay with NO class to watch still disarms the launcher', () => {
   const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
-  const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
 
   // The repro, pinned as the stacking it actually is: the attribution lightbox
   // is full-screen ABOVE the card and announces itself with nothing. The card
@@ -345,7 +346,7 @@ test('a surface class that never clears is an ACCEPTED no-show, not a timer', ()
 
 test('the scroll fade only appears when the list really overflows', () => {
   const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
-  const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
   // A fade on a card where all five tiles fit promises a sixth mission that does
   // not exist, which is worse than no affordance at all.
   assert.match(module, /const overflows = choiceList\.scrollHeight > choiceList\.clientHeight \+ 1;/);
@@ -551,7 +552,7 @@ test('the decision table is written down where the next editor will read it', ()
 test('markup, startup ordering and accessibility remain pinned', () => {
   const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const startup = fs.readFileSync(new URL('./standalone/startupChrome.js', import.meta.url), 'utf8');
-  const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
 
   assert.match(html, /id="first-run-launcher" role="dialog"[^>]*aria-labelledby="first-run-title"[^>]*hidden/);
   assert.equal((html.match(/data-first-run-choice=/g) || []).length, 4);
@@ -631,7 +632,7 @@ test('the launcher keeps focus, restores it, and never disables the focused butt
 });
 
 test('the DISPLAY rail starts collapsed on a first run, and a stored choice wins', () => {
-  const ui = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const ui = fs.readFileSync(new URL('./ui/panelPositionControls.js', import.meta.url), 'utf8');
   // The rail opened by default to advertise HUD / DETECT / 3D. Those default ON
   // now, so it was opening to offer controls for things already happening —
   // while competing with the mission card for the one first impression there is.
