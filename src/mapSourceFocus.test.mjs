@@ -1,3 +1,4 @@
+import { createHoverDisclosure, collapsePanelOnEscape } from './ui/panelDisclosure.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -43,6 +44,10 @@ function harness({ hidden = false, selected = true, noChips = false } = {}) {
       addEventListener(type, callback) {
         if (!listeners.has(type)) listeners.set(type, []);
         listeners.get(type).push(callback);
+      },
+      removeEventListener(type, callback) {
+        const values = listeners.get(type) || [];
+        listeners.set(type, values.filter((item) => item !== callback));
       },
       matches(selector) { return selector === ':hover' ? this.hovered : true; },
       closest() { return this.isDisclosure ? this : null; },
@@ -107,9 +112,12 @@ function harness({ hidden = false, selected = true, noChips = false } = {}) {
   const window = {
     setTimeout(callback, delay) { timers.set(++nextTimer, { callback, at: now + delay }); return nextTimer; },
   };
-  const methods = new Function('document', 'window', 'clearTimeout', 'performance', 'requestAnimationFrame',
+  window.clearTimeout = (id) => timers.delete(id);
+  window.performance = { now: () => now };
+  document.defaultView = window;
+  const methods = new Function('createHoverDisclosure', 'collapsePanelOnEscape', 'document', 'window', 'clearTimeout', 'performance', 'requestAnimationFrame',
     `return ({${source.slice(initStart, initEnd)},\n${source.slice(escapeStart, escapeEnd)},\n${source.slice(closeStart, closeEnd)},\n${source.slice(syncStart, syncEnd)}});`)(
-    document, window, (id) => timers.delete(id), { now: () => now }, () => {},
+    createHoverDisclosure, collapsePanelOnEscape, document, window, (id) => timers.delete(id), { now: () => now }, () => {},
   );
   const saves = [];
   const claims = [];
@@ -384,4 +392,62 @@ test('disposed UI cannot complete a pending handoff', () => {
   h.manager._disposed = true; h.show(); h.drain();
   assert.equal(h.document.activeElement, h.disclosure);
   assert.equal(h.calls(), 1); assert.equal(h.timers.size, 0);
+});
+
+
+test('destroying hover controls cancels pending opens and removes their event routes', () => {
+  const h = harness();
+  h.panel.hovered = true;
+  h.emit(h.panel, 'pointerenter', { pointerType: 'mouse' });
+  assert.ok(h.timers.size > 0);
+  const control = h.manager._hoverPanelControls.get('control-panel');
+  control.destroy();
+  control.destroy();
+  assert.equal(h.timers.size, 0);
+  for (const node of [h.panel, h.disclosure]) {
+    assert.equal([...node.listeners.values()].flat().length, 0);
+  }
+  h.key();
+  h.drain();
+  assert.equal(h.panel.classes.has('collapsed'), true);
+  assert.equal(h.calls(), 0);
+});
+
+test('destroying an open tray cancels close and focus work without changing saved state', () => {
+  const h = harness({ hidden: true });
+  h.key();
+  h.emit(h.panel, 'pointerleave', { pointerType: 'mouse' });
+  const callbacks = [...h.timers.values()].map((timer) => timer.callback);
+  const saves = h.saves.length;
+  h.manager._hoverPanelControls.get('control-panel').destroy();
+  assert.equal(h.timers.size, 0);
+  h.show();
+  for (const callback of callbacks) callback();
+  assert.equal(h.panel.classes.has('collapsed'), false);
+  assert.equal(h.saves.length, saves);
+  assert.equal(h.calls(), 0, 'even an already queued focus attempt is revoked');
+});
+
+test('replacing hover controls removes the previous listeners before rebinding', () => {
+  const h = harness();
+  h.manager._initAutoHoverPanel('control-panel');
+  h.key();
+  assert.equal(h.panel.classes.has('collapsed'), false, 'one activation toggles only once');
+  h.tick();
+  assert.equal(h.calls(), 1);
+});
+
+
+test('teardown during an opening callback cannot enqueue a later focus handoff', () => {
+  const h = harness({ hidden: true });
+  const change = h.manager.setPanelCollapsed.bind(h.manager);
+  h.manager.setPanelCollapsed = (...args) => {
+    change(...args);
+    h.manager._hoverPanelControls.get('control-panel').destroy();
+  };
+  h.key();
+  assert.equal(h.timers.size, 0);
+  h.show();
+  h.drain();
+  assert.equal(h.calls(), 0);
 });

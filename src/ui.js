@@ -1,14 +1,17 @@
+import { CctvControls } from './ui/cctv.js';
+import { RadioControls } from './ui/radio.js';
+import { LocationControls, LocationSearch } from './ui/location.js';
+import { bindClearLayersControl } from './ui/layers.js';
+import { createMapSourceControls } from './ui/mapSource.js';
+import { VisualEffects, STYLES, GLOBAL_POST_DEFAULTS, STYLE_PRESET_DEFAULTS, MILITARY_DETECTION_PRESET } from './ui/effects.js';
+import { bindDisplayControls } from './ui/displayControls.js';
+import { bindApplicationShortcuts, createStyleParameters } from './ui/visualInput.js';
+import { layoutLeftPanelRail, layoutRightPanelRail } from './ui/panelRails.js';
+import { bindPanelDisclosure, collapsePanelOnEscape, createHoverDisclosure } from './ui/panelDisclosure.js';
 import * as Cesium from 'cesium';
-import { retroShader } from './styles/retro.js';
-import { animeShader } from './styles/anime.js';
-import { noirShader } from './styles/noir.js';
-import { snowShader } from './styles/snow.js';
-import { nightVisionShader } from './styles/surveillance.js';
-import { thermalShader } from './styles/thermal.js';
 import {
   BLOOM_INTENSITY_DEFAULT,
   BLOOM_SCALE_VERSION,
-  bloomStrengthFromIntensity,
   clampBloomIntensity,
   decodeBloomIntensity,
 } from './bloom.js';
@@ -31,7 +34,6 @@ import {
   isExplicitLayerStateOrigin,
   LayerStateCoordinator,
 } from './data/layerState.js';
-import { renderMapStackChips, syncMapStackChips } from './mapStackChips.js';
 import { OrbitController } from './orbit.js';
 import {
   CelestialRing,
@@ -68,12 +70,7 @@ import militaryFlightsLayer from './data/militaryFlights.js';
 import { isTr3b, toggleTr3b } from './data/tr3bRegistry.js';
 import satellitesLayer from './data/satellites.js';
 import cctvLayer from './data/cctv.js';
-import radioLayer, {
-  buildRadioTunerTicks,
-  radioTunerCommitSlot,
-  radioTunerPointerPosition,
-  radioTunerSlot,
-} from './data/radio.js';
+import radioLayer from './data/radio.js';
 import bikeshareLayer from './data/bikeshare.js';
 import aisLiveVesselsLayer from './data/aisLiveVessels.js';
 import militaryAwarenessLayer from './data/militaryAwareness.js';
@@ -101,110 +98,11 @@ import {
   isExplicitUserIntentOrigin,
   mergeContextTransitionErrors,
   recordContextRestoreExplicitChange,
-  recordContextSessionUserChange,
-  runWithContextModeChanging,
-  settleContextModeChange,
   settleContextIntentReplay,
   settleUserFacingContextAction,
   shouldCaptureContextSession,
-  shouldDeferContextEntryDuringClear,
-  shouldExitContextForLayerChange,
-  spaceMissionEntryCancellationDisposition,
-  contextModeWord,
 } from './contextModePolicy.js';
-import {
-  shouldExpandGlobalContextPanel,
-  shouldHideCollapsedRightPanels,
-} from './rightRailPolicy.js';
-import {
-  allocatePanelStackHeights,
-  panelStackAutoCollapseIndices,
-  resolveLeftStackBottomBoundary,
-  resolvePanelStackCorridor,
-} from './panelStackLayout.js';
-import {
-  resolveCockpitUtilityAnchor,
-  resolveCockpitUtilityLayout,
-} from './cockpitUtilityLayout.js';
-import {
-  applyCockpitVisionStageIntensities,
-  captureCockpitVisionBaseline,
-  COCKPIT_VISION_MODES,
-  normalizeCockpitVisionMode,
-} from './cockpitVisionPolicy.js';
-import {
-  applyContactsDetection,
-  shareCacheNeedsHeal,
-  shareableDetectionState,
-} from './contactsDetectionPolicy.js';
-import { formatAwarenessLabel } from './data/militaryAwarenessEngine.js';
-import { runCctvLayerEnableTransition } from './cctvFocusPolicy.js';
-import {
-  registerCctvFocusRequestListener,
-  routeCctvFocusRequest,
-} from './cctvFocusRequest.js';
-import {
-  flyToWorldTarget,
-  registerWorldFocusRequestListener,
-  routeWorldFocusRequest,
-} from './worldFocus.js';
-import {
-  beginDeferredNavigation,
-  reassertNavigationHandoff,
-  registerNavigationAuthorityListener,
-  runExplicitNavigation,
-  stampInitialShareGesture,
-} from './navigationPolicy.js';
-import {
-  cachedGroundFloor,
-  cachedMeshFloor,
-  GROUND_FLOOR_LIFT_M,
-  meshFloorPreferred,
-  warmGroundFloor,
-} from './data/groundFloor.js';
-import { sampleMeshFloorCells } from './data/meshFloorSampler.js';
-import { holdContinuousRender, releaseContinuousRender, governorRequestRender } from './renderGovernor.js';
-import {
-  setScopeMaskEnabled,
-  isScopeMaskEnabled,
-  setScopeMaskFeather,
-  getScopeMaskFeather,
-  setScopeTerminusOverride,
-  getScopeTerminusOverride,
-  clampScopeTerminusPct,
-} from './scopeMask.js';
-import {
-  fetchRegionalBrief,
-  regionalDistanceM,
-  weatherCodeLabel,
-} from './data/regionalBrief.js';
-import {
-  altitudeRulerCurveInset,
-  altitudeRulerTicks,
-  bearingBetweenCoordinates,
-  cockpitAnchorCorrectionStep,
-  cockpitAltitudeDisplayFt,
-  cockpitGroundSafeHeight,
-  cockpitSurfaceWaitExpired,
-  cockpitUiUpdateDue,
-  compassDivisions,
-  formatAltitudeRulerTick,
-  formatCockpitContextScope,
-  formatCompassDivision,
-  formatSpeedRulerTick,
-  normalizeHeading,
-  relativeBearing,
-  resolveCockpitContextReadout,
-  resolveHudRailLayout,
-  resolveTrackedAircraftInfo,
-  slewHeading,
-  speedRulerTicks,
-} from './cockpitMath.js';
 
-/** Duration (ms) for shader intensity crossfade between style presets. */
-const TRANSITION_DURATION_MS = 500;
-/** Map of style name to its GLSL shader module for post-process stages. */
-const STYLES = { retro: retroShader, surveillance: nightVisionShader, thermal: thermalShader, anime: animeShader, noir: noirShader, snow: snowShader };
 /** Versioned localStorage namespace prefix to invalidate stale panel layouts. */
 const PANEL_LAYOUT_STORAGE_VERSION = 'v6';
 const SHARE_PANEL_STATE_SPECS = Object.freeze([
@@ -370,135 +268,13 @@ const STYLE_STATUS_LABELS = {
   noir: 'NOIR',
   snow: 'SNOW',
 };
-/**
- * The tactical detection look: Dense at 75%.
- *
- * Owner playtest 2026-08-18: "detection mode… 75% weighted, with the 16% fade
- * and 5% outside, whatever we had. I want that as the default. It should just
- * happen." Fade and outside opacity live in GLOBAL_POST_DEFAULTS, so "whatever
- * we had" still needs nothing here — but they are 7% and 1% now, the outside
- * default having moved 5 → 3 → 1 as the owner locked final tuning after field trials (2026-08-24). What the quote asked for is the
- * baseline of the day, not the two numbers it happened to name.
- *
- * ONE object, shared by the first-load baseline below, by every military style,
- * AND by the Contacts context mode (which OWNS detection while active and
- * restores the prior state on exit — see contactsDetectionPolicy.js). Cockpit
- * deliberately does NOT touch detection: entering it with SPARSE selected leaves
- * SPARSE. Declared ahead of GLOBAL_POST_DEFAULTS because that baseline now reads
- * from it.
- */
-const MILITARY_DETECTION_PRESET = Object.freeze({ mode: 'dense', densityPct: 75 });
 
-/** Baseline post-processing settings applied on first load (before share-link restore). */
-const GLOBAL_POST_DEFAULTS = {
-  bloom: { enabled: false, intensity: BLOOM_INTENSITY_DEFAULT },
-  sharpen: { enabled: true, intensity: 49 },
-  hudVariant: 'tactical',
-  hudVisible: true,
-  // Detection is ON for EVERY style on a first run, Normal included (owner
-  // directive 2026-08-22: "detect should also be on by default"). It is the
-  // same preset object the military styles and Contacts already apply, so there
-  // is one tactical look, not several that can drift.
-  //
-  // This is a first-LOAD baseline, not an override: `_applyGlobalPostDefaults`
-  // runs before any share-link restore, so a link's `dm`/`dd` still lands on top
-  // of it. It also deliberately leaves `_detectionUserOverridden` alone — the
-  // flag means the OPERATOR hand-edited detection, and a factory default is not
-  // that. Turning detection off by hand therefore still sets the flag and still
-  // suppresses the military-style auto-enable for the rest of the session.
-  detectionMode: MILITARY_DETECTION_PRESET.mode.toUpperCase(),
-  detectionDensity: MILITARY_DETECTION_PRESET.densityPct,
-  detectionAllocation: 'ELASTIC',
-  detectionFadePct: 7,
-  detectionOutsideOpacityPct: 1,
-  celestialRing: false,
-};
-
-// Tactical style defaults applied when users select military style presets.
-const STYLE_PRESET_DEFAULTS = {
-  retro: {
-    bloom: { enabled: false, intensity: BLOOM_INTENSITY_DEFAULT },
-    sharpen: { enabled: true, intensity: 49 },
-    styleParams: {
-      retro: {
-        pixelation: 1.0,
-        distortion: 0,
-        instability: 0.42,
-      },
-    },
-    hudVariant: 'tactical',
-    hudVisible: true,
-    detection: MILITARY_DETECTION_PRESET,
-  },
-  surveillance: {
-    bloom: { enabled: false, intensity: BLOOM_INTENSITY_DEFAULT },
-    sharpen: { enabled: true, intensity: 49 },
-    styleParams: {
-      surveillance: {
-        gain: 0.18,
-        bloom: 0.22,
-        scanlineStr: 0.96,
-        pixelation: 1.0,
-      },
-    },
-    hudVariant: 'tactical',
-    hudVisible: true,
-    detection: MILITARY_DETECTION_PRESET,
-  },
-  thermal: {
-    bloom: { enabled: false, intensity: BLOOM_INTENSITY_DEFAULT },
-    sharpen: { enabled: true, intensity: 49 },
-    styleParams: {
-      thermal: {
-        sensitivity: 0.85,
-        bloom: 0.2,
-        mode: 0.33,
-        pixelation: 1.0,
-      },
-    },
-    hudVariant: 'tactical',
-    hudVisible: true,
-    detection: MILITARY_DETECTION_PRESET,
-  },
-};
-
-/**
- * GLSL fragment shader implementing an unsharp-mask sharpening filter.
- * Samples a 3x3 neighborhood, computes box blur, then adds the
- * difference (center - blur) scaled by `amount` for edge enhancement.
- */
-const SHARPEN_SHADER = /* glsl */ `
-  uniform sampler2D colorTexture;
-  uniform vec2 colorTextureDimensions;
-  uniform float amount;
-  in vec2 v_textureCoordinates;
-
-  void main() {
-    vec2 uv = v_textureCoordinates;
-    vec2 texel = 1.0 / colorTextureDimensions;
-    vec4 center = texture(colorTexture, uv);
-    vec4 blur = (
-      texture(colorTexture, uv + vec2(-texel.x, -texel.y)) +
-      texture(colorTexture, uv + vec2( 0.0,     -texel.y)) +
-      texture(colorTexture, uv + vec2( texel.x, -texel.y)) +
-      texture(colorTexture, uv + vec2(-texel.x,  0.0))     +
-      center +
-      texture(colorTexture, uv + vec2( texel.x,  0.0))     +
-      texture(colorTexture, uv + vec2(-texel.x,  texel.y)) +
-      texture(colorTexture, uv + vec2( 0.0,      texel.y)) +
-      texture(colorTexture, uv + vec2( texel.x,  texel.y))
-    ) / 9.0;
-    vec4 sharpened = center + (center - blur) * amount;
-    out_FragColor = vec4(clamp(sharpened.rgb, 0.0, 1.0), center.a);
-  }
-`;
 
 /**
  * Central UI orchestrator for the God's Eye View application.
  *
  * Responsibilities:
- * - CesiumJS PostProcessStage pipeline: registers per-style GLSL stages
- *   (NVG, FLIR, CRT, anime, noir, snow) and manages intensity crossfades.
+ * - Visual controls and presets backed by the VisualEffects controller.
  * - Bloom and sharpen post-processing toggle/intensity control.
  * - Draggable/collapsible panel system with localStorage persistence,
  *   z-order stacking, and viewport-clamped positioning.
@@ -513,54 +289,6 @@ const SHARPEN_SHADER = /* glsl */ `
  * - Toast notification system.
  * - Intel HUD lifecycle and variant switching.
  */
-
-/** Shortest-wrap signed degrees, for heading offsets typed as absolute values. */
-const signedNormalizeDeg = (deg) => ((((deg + 180) % 360) + 360) % 360) - 180;
-
-/**
- * Field definitions for the CCTV click-to-edit pose readout. Chips DISPLAY the
- * camera's EFFECTIVE pose (not raw offsets — "HDG 135.0°" instead of the old
- * "HEADING 0°" nonsense); typed values convert back to calibration offsets
- * against the frozen basePose. ΔN/ΔE stay offset-denominated (absolute lat/lon
- * typing is user-hostile).
- */
-const CCTV_CAL_FIELDS = {
-  heading: {
-    label: 'HDG', unit: '°', decimals: 1,
-    get: (cam) => cam.headingDeg,
-    toPatch: (value, base) => ({ headingDeg: signedNormalizeDeg(value - base.headingDeg) }),
-  },
-  pitch: {
-    label: 'PITCH', unit: '°', decimals: 1,
-    get: (cam) => cam.pitchDeg,
-    toPatch: (value, base) => ({ pitchDeg: value - base.pitchDeg }),
-  },
-  fov: {
-    label: 'FOV', unit: '°', decimals: 0,
-    get: (cam) => cam.fovDeg,
-    toPatch: (value, base) => ({ fovDeg: value - base.fovDeg }),
-  },
-  range: {
-    label: 'RANGE', unit: 'm', decimals: 0,
-    get: (cam) => cam.rangeM,
-    toPatch: (value, base) => ({ rangeScale: base.rangeM > 0 ? value / base.rangeM : 1 }),
-  },
-  height: {
-    label: 'HGT', unit: 'm', decimals: 0,
-    get: (cam) => cam.mountHeightM,
-    toPatch: (value, base) => ({ heightM: value - base.mountHeightM }),
-  },
-  north: {
-    label: 'ΔN', unit: 'm', decimals: 1,
-    get: (cam) => cam.calibration?.offsetNorthM || 0,
-    toPatch: (value) => ({ offsetNorthM: value }),
-  },
-  east: {
-    label: 'ΔE', unit: 'm', decimals: 1,
-    get: (cam) => cam.calibration?.offsetEastM || 0,
-    toPatch: (value) => ({ offsetEastM: value }),
-  },
-};
 
 function formatCockpitBriefAge(value) {
   const timestamp = Date.parse(value);
@@ -2195,29 +1923,28 @@ export class StyleManager {
    * @param {Cesium.Viewer} viewer - The CesiumJS viewer instance.
    * @param {object} [options]
    */
-  constructor(viewer, { mapStackController = null } = {}) {
+  constructor(viewer, { mapStackController = null, placeSearch } = {}) {
     this.viewer = viewer;
     this.mapStackController = mapStackController;
-    this.stages = {};
+    this.placeSearch = placeSearch;
+    this._visualEffects = new VisualEffects({
+      viewer,
+      requestRender: governorRequestRender,
+      holdRender: holdContinuousRender,
+      releaseRender: releaseContinuousRender,
+    });
     this.activeStyle = 'normal';
     document.documentElement.dataset.gevStyle = this.activeStyle;
-    this.transitions = new Map();
-    this.startTime = Date.now();
 
     // True once the user manually changes detection (button/key/slider/voice).
     // Gates per-style detection defaults so they never stomp an explicit choice.
     this._detectionUserOverridden = false;
 
     // Bloom/sharpen state
-    this.bloomEnabled = false;
-    this.sharpenEnabled = false;
-    this._bloomStage = null;
-    this._sharpenStage = null;
     this._recordingMode = false;
     this._recordingConfig = { hidePanels: true, hudMode: 'minimal', safeFrame: '16:9' };
     this._preRecordingHudState = null;
     this._panelZCounter = PANEL_Z_BASE + 10;
-    this._animFrameId = null;
     this._lastLoadingFeedbackUpdateAt = 0;
     this._loadingFeedbackState = createLoadingFeedbackState();
     this._loadingFeedbackEvent = null;
@@ -2226,39 +1953,10 @@ export class StyleManager {
     this._shareTrackingAcquiringKey = null;
     this._shareTrackingNoticeGeneration = 0;
     this._globeResetPromise = null;
-    this._globeResetHandler = null;
     this._clearSelectedLayersPromise = null;
     this._clearSelectedLayersManagerPromise = null;
-    this._clearSelectedLayersHandler = null;
     this._dataManager = null;
-    this._cctvUnsubscribe = null;
-    this._radioUnsubscribe = null;
-    this._radioState = null;
-    this._radioCategorySignature = '';
-    this._radioTunerStations = [];
-    this._radioTunerPool = [];
-    this._radioTunerDragging = false;
-    this._radioTunerDragStartSlot = 0;
-    this._radioTunerDragSnapshot = null;
-    this._radioTunerLastSlot = 0;
-    this._radioTunerDragDirection = 0;
-    this._radioTunerCoordinate = 0;
-    this._radioTunerPointerId = null;
-    this._radioTunerKeyboardKey = null;
-    this._radioTunerAbort = null;
-    this._radioTunerBandSignature = '';
-    this._radioTunerSelectedId = null;
-    this._radioTunerBandPinnedForNavigation = false;
-    this._radioTunerCameraRemove = null;
-    this._refreshRadioTunerBand = null;
-    this._cctvState = null;
-    this._cctvSummaryTypingTimer = null;
-    this._lastCctvSummaryText = '';
-    // Auto-expand guard: last active camera id seen while the layer was
-    // enabled; routine state notifications with the same id never re-expand.
-    this._lastSeenCctvActiveId = null;
-    this._cctvChipHideTimer = null;
-    this._cctvChipWasBusy = false;
+
     this._leftStackLayoutFrame = null;
     this._leftStackReconsiderAutoCollapse = false;
     this._leftStackResizeObserver = null;
@@ -2427,8 +2125,6 @@ export class StyleManager {
     this._cctvCalibResetBtn = document.getElementById('cctv-calib-reset-btn');
     this._cctvFrame = document.getElementById('cctv-frame');
     this._cctvFrameWrap = document.getElementById('cctv-frame-wrap');
-    this._cctvFrameRequestToken = 0;
-    this._cctvFramePreloader = null;
     this._cctvSourceBadge = document.getElementById('cctv-source-badge');
     this._cctvMeta = document.getElementById('cctv-meta');
     this._cctvSummary = document.getElementById('cctv-summary');
@@ -2711,7 +2407,6 @@ export class StyleManager {
     this._initLocationBar();
     this._initShareButton();
     this._initClearSelectedLayersButton();
-    this._initResetGlobeButton();
     this._initHUDToggle();
     this._initModels3dToggle();
     this._applyGlobalPostDefaults();
@@ -2841,6 +2536,15 @@ export class StyleManager {
       },
     );
   }
+
+  // Compatibility reads for existing controls, scene snapshots and Cockpit.
+  get stages() { return this._visualEffects.stages; }
+  get transitions() { return this._visualEffects.transitions; }
+  get bloomEnabled() { return this._visualEffects.bloomEnabled; }
+  get sharpenEnabled() { return this._visualEffects.sharpenEnabled; }
+  get _bloomStage() { return this._visualEffects.bloomStage; }
+  get _sharpenStage() { return this._visualEffects.sharpenStage; }
+
 
   /** Advance camera authority and settle any older search UI immediately. */
   _stampNavigation({ cancelPendingSelection = true, clearSearchedLocation = true } = {}) {
@@ -3029,42 +2733,7 @@ export class StyleManager {
    * @returns {void}
    */
   _initStages() {
-    for (const [name, shader] of Object.entries(STYLES)) {
-      const uniforms = { intensity: 0.0 };
-
-      // Auto-detect time uniform — animated shaders (CRT scanlines, snow, etc.)
-      // declare `uniform float time` and receive elapsed seconds each frame.
-      if (shader.fragmentShader.includes('uniform float time')) {
-        uniforms.time = 0.0;
-      }
-
-      // Initialize custom uniforms from shader metadata (e.g. gain, pixelation)
-      if (shader.uniforms) {
-        for (const [uName, uMeta] of Object.entries(shader.uniforms)) {
-          uniforms[uName] = uMeta.default;
-        }
-      }
-
-      const stage = new Cesium.PostProcessStage({
-        name: `godsEyeView_${name}`,
-        fragmentShader: shader.fragmentShader,
-        uniforms,
-      });
-
-      // Zero-intensity stages are DISABLED (perf wave 1). History: the
-      // first attempt at this deleted the product's signature scope — the
-      // circular starfield mask was an EMERGENT artifact of these six
-      // stacked "identity" passes, not an implemented feature. The owner
-      // ruled to reimplement the scope explicitly (src/scopeMask.js, a
-      // featherable zero-per-frame canvas), which frees these passes for
-      // real. If the scope ever looks wrong, look there — not here.
-      stage.enabled = false;
-      this.viewer.scene.postProcessStages.add(stage);
-      this.stages[name] = stage;
-    }
-    // Frozen after init — cached so the per-frame animation loop doesn't
-    // rebuild Object.entries arrays every frame.
-    this._stageEntries = Object.entries(this.stages);
+    this._visualEffects.initStyles();
   }
 
   /**
@@ -3077,13 +2746,7 @@ export class StyleManager {
    * @returns {void}
    */
   _setStageIntensity(stage, value) {
-    if (!stage) return;
-    stage.uniforms.intensity = value;
-    stage.enabled = value > 0.001;
-    // An animated shader becoming visible needs the style loop (its clock)
-    // running again; the loop self-stops when nothing visible animates.
-    if (stage.enabled && stage.uniforms.time !== undefined) this._startAnimationLoop();
-    governorRequestRender('style-stage');
+    this._visualEffects.setStageIntensity(stage, value);
   }
 
   /**
@@ -3099,10 +2762,7 @@ export class StyleManager {
    * @returns {void}
    */
   _syncStagesEnabledFromIntensity() {
-    if (!this.stages) return;
-    for (const stage of Object.values(this.stages)) {
-      this._setStageIntensity(stage, stage.uniforms.intensity);
-    }
+    this._visualEffects.syncStagesEnabledFromIntensity();
   }
 
   /**
@@ -3264,37 +2924,15 @@ export class StyleManager {
    * @returns {void}
    */
   _initBloomSharpen() {
-    // Bloom — use Cesium's built-in bloom
-    this._bloomStage = this.viewer.scene.postProcessStages.bloom;
-    this._bloomStage.enabled = false;
-    this._bloomStage.uniforms.glowOnly = false;
-    this._bloomStage.uniforms.contrast = 256.0;
-    this._bloomStage.uniforms.brightness = -0.35;
-    this._bloomStage.uniforms.delta = 0.25;
-    this._bloomStage.uniforms.sigma = 0.35;
-    this._bloomStage.uniforms.stepSize = 1.0;
-
-    // Sharpen — custom unsharp mask PostProcessStage
-    this._sharpenStage = new Cesium.PostProcessStage({
-      name: 'godsEyeView_sharpen',
-      fragmentShader: SHARPEN_SHADER,
-      uniforms: {
-        amount: 1.3,
-      },
-    });
-    this._sharpenStage.enabled = false;
-    this.viewer.scene.postProcessStages.add(this._sharpenStage);
-    if (this._sharpenSlider) {
-      this._applySharpenIntensity(parseInt(this._sharpenSlider.value, 10) / 100);
-    }
+    this._visualEffects.initPostProcess(this._sharpenSlider ? parseInt(this._sharpenSlider.value, 10) / 100 : 0.6);
   }
 
   /**
-   * Reads the current bloom intensity percentage from the UI slider.
+   * Reads the current bloom intensity percentage from the effects controller.
    * @returns {number} Clamped bloom intensity (0-200).
    */
   _getBloomIntensity() {
-    return clampBloomIntensity(parseInt(this._bloomSlider?.value || `${BLOOM_INTENSITY_DEFAULT}`, 10));
+    return this._visualEffects.bloomIntensity;
   }
 
   /**
@@ -3303,9 +2941,7 @@ export class StyleManager {
    * @returns {void}
    */
   _syncBloomStageEnabled() {
-    if (!this._bloomStage) return;
-    const strength = bloomStrengthFromIntensity(this._getBloomIntensity());
-    this._bloomStage.enabled = this.bloomEnabled && strength > 0.06;
+    this._visualEffects.syncBloomEnabled();
   }
 
   /**
@@ -3332,22 +2968,7 @@ export class StyleManager {
    * @returns {void}
    */
   _applyBloomIntensity(intensity) {
-    if (!this._bloomStage) return;
-    const rawStrength = bloomStrengthFromIntensity(intensity);
-    // Dead-zone: strengths below 0.06 are imperceptible, clamp to zero.
-    const strength = rawStrength <= 0.06 ? 0.0 : ((rawStrength - 0.06) / 0.94);
-    // Smoothstep easing for perceptually linear bloom ramp
-    const eased = strength * strength * (3.0 - 2.0 * strength);
-
-    // Mapping tuned for intuitive UX:
-    // 0 => effectively no glow, 200 => strong glow.
-    // Keep threshold strict at low values so only very bright highlights bloom.
-    this._bloomStage.uniforms.contrast = 255.0 - (eased * 168.0);
-    this._bloomStage.uniforms.brightness = -0.5 + (eased * 0.36);
-    this._bloomStage.uniforms.sigma = 0.28 + (eased * 6.3);
-    this._bloomStage.uniforms.delta = 0.2 + (eased * 2.25);
-    this._bloomStage.uniforms.stepSize = 1.0 + (eased * 1.25);
-    this._syncBloomStageEnabled();
+    this._visualEffects.applyBloomIntensity(intensity);
   }
 
   /**
@@ -3357,7 +2978,7 @@ export class StyleManager {
    */
   _setBloomEnabled(enabled) {
     governorRequestRender('bloom');
-    this.bloomEnabled = !!enabled;
+    this._visualEffects.setBloomEnabled(enabled);
     this._syncBloomStageEnabled();
     this._bloomBtn.classList.toggle('active', this.bloomEnabled);
     this._bloomSliderRow.classList.toggle('visible', this.bloomEnabled);
@@ -3375,9 +2996,7 @@ export class StyleManager {
    * @returns {void}
    */
   _applySharpenIntensity(val) {
-    governorRequestRender('sharpen');
-    if (!this._sharpenStage || !this._sharpenStage.uniforms) return;
-    this._sharpenStage.uniforms.amount = 0.1 + val * 2.0;
+    this._visualEffects.applySharpenIntensity(val);
   }
 
   /**
@@ -3387,8 +3006,7 @@ export class StyleManager {
    */
   _setSharpenEnabled(enabled) {
     governorRequestRender('sharpen');
-    this.sharpenEnabled = !!enabled;
-    this._sharpenStage.enabled = this.sharpenEnabled;
+    this._visualEffects.setSharpenEnabled(enabled);
     this._sharpenBtn.classList.toggle('active', this.sharpenEnabled);
     if (this._sharpenSliderRow) {
       this._sharpenSliderRow.classList.toggle('visible', this.sharpenEnabled);
@@ -3408,159 +3026,141 @@ export class StyleManager {
    * @returns {void}
    */
   _initUI() {
-    // Style buttons
-    document.querySelectorAll('.style-btn').forEach(btn => {
-      btn.addEventListener('click', () => this.setStyle(btn.dataset.style));
+    this._applicationShortcuts?.destroy();
+    this._applicationShortcuts = bindApplicationShortcuts({
+      documentRef: document,
+      searchInput: this._locationSearch,
+      actions: {
+        setStyle: (style) => this.setStyle(style),
+        dismissSearch: () => {
+          if (this._locationSearch.classList.contains('expanded')) {
+            this._locationSearch.classList.remove('expanded');
+            this._locationSearch.value = '';
+            this._locationSearch.blur();
+          }
+        },
+        toggleHud: () => {
+          this.shareLinkManager?.claimRestoreLane?.('visual');
+          this.hud.toggle();
+          this._updateHudButtonState();
+          this._syncShareState();
+        },
+        toggleOrbit: () => this._toggleOrbit(),
+        toggleCleanView: () => this.toggleCleanView(),
+        toggleLayers: () => document.getElementById('data-panel').classList.toggle('active'),
+        cycleDetection: () => {
+          this.shareLinkManager?.claimRestoreLane?.('visual');
+          this._detectionUserOverridden = true;
+          cycleDetectionMode();
+          this._syncShareState();
+        },
+        toggleCctv: () => this._toggleCctvEnabled(),
+      },
     });
 
-    // Keyboard shortcuts: 1-7, H, Escape
-    this._globalKeydownHandler = (e) => {
-      // Ignore when interacting with a form control (except Escape). Global
-      // hotkeys ('1'-'7', 'h', 'o', 'v', 'd', 'c', 'f') otherwise fire while a
-      // <select> dropdown (e.g. HUD layout) is focused and its native
-      // type-ahead is in use, or while typing in a text field (M9).
-      const isFormControl = e.target?.matches?.('select, input, textarea')
-        || e.target === this._locationSearch;
-      if (isFormControl && e.key !== 'Escape') return;
-
-      const keyMap = {
-        '1': 'normal', '2': 'retro', '3': 'surveillance',
-        '4': 'thermal', '5': 'anime', '6': 'noir',
-        '7': 'snow',
-      };
-      if (keyMap[e.key]) this.setStyle(keyMap[e.key]);
-      if (e.key === 'Escape') {
-        if (this._locationSearch.classList.contains('expanded')) {
-          this._locationSearch.classList.remove('expanded');
-          this._locationSearch.value = '';
-          this._locationSearch.blur();
-        }
-      }
-      if (e.key.toLowerCase() === 'h') {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this.hud.toggle();
-        this._updateHudButtonState();
-        this._syncShareState();
-      }
-      if (e.key.toLowerCase() === 'o') this._toggleOrbit();
-      if (e.key.toLowerCase() === 'v') this.toggleCleanView();
-      if (e.key.toLowerCase() === 'f') {
-        document.getElementById('data-panel').classList.toggle('active');
-      }
-      if (e.key.toLowerCase() === 'd') {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this._detectionUserOverridden = true;
-        cycleDetectionMode();
-        this._syncShareState();
-      }
-      if (e.key.toLowerCase() === 'c') {
-        this._toggleCctvEnabled();
-      }
-    };
-    document.addEventListener('keydown', this._globalKeydownHandler);
-
-    // Bloom toggle
-    this._bloomBtn.addEventListener('click', () => {
-      this.shareLinkManager?.claimRestoreLane?.('visual');
-      this._setBloomEnabled(!this.bloomEnabled);
+    this._displayControls?.destroy();
+    this._displayControls = bindDisplayControls({
+      elements: {
+        styleButtons: document.querySelectorAll('.style-btn'),
+        bloomButton: this._bloomBtn, bloomSlider: this._bloomSlider,
+        sharpenButton: this._sharpenBtn, sharpenSlider: this._sharpenSlider,
+        scopeButton: this._scopeBtn, scopeFeatherSlider: this._scopeFeatherSlider,
+        hudLayout: this._hudLayoutSelect, hudButton: this._hudBtn,
+        cleanViewButton: this._cleanViewBtn, cleanViewExitButton: this._cleanViewExitBtn,
+        densitySlider: this._detectionDensitySlider, detectionButton: this._detectionBtn,
+        allocationButtons: this._detectionAllocationBtns,
+        fadeSliders: [this._detectionFadeSlider, this._detectionOpacitySlider],
+        celestialButton: this._celestialBtn,
+        modelsButton: this._models3dBtn,
+        modelModeButtons: this._models3dBtn ? this._models3dModeBtns : [],
+      },
+      actions: {
+        setStyle: (style) => this.setStyle(style),
+        toggleBloom: () => {
+          this.shareLinkManager?.claimRestoreLane?.('visual');
+          this._setBloomEnabled(!this.bloomEnabled);
+        },
+        setBloomIntensity: (value) => {
+          this.shareLinkManager?.claimRestoreLane?.('visual');
+          this._setBloomIntensity(value);
+        },
+        toggleSharpen: () => {
+          this.shareLinkManager?.claimRestoreLane?.('visual');
+          this._setSharpenEnabled(!this.sharpenEnabled);
+        },
+        toggleScope: () => {
+          this.shareLinkManager?.claimRestoreLane?.('visual');
+          const next = !isScopeMaskEnabled();
+          setScopeMaskEnabled(next);
+          this._scopeBtn.classList.toggle('active', next);
+          this._scopeBtn.setAttribute('aria-pressed', String(next));
+          this._syncShareState();
+        },
+        setScopeFeather: (value) => {
+          this.shareLinkManager?.claimRestoreLane?.('visual');
+          const pct = Math.max(0, Math.min(100, value || 0));
+          if (this._scopeFeatherValue) this._scopeFeatherValue.textContent = `${pct}%`;
+          setScopeMaskFeather(pct / 100);
+          this._syncShareState();
+        },
+        setSharpenIntensity: (pct) => {
+          this.shareLinkManager?.claimRestoreLane?.('visual');
+          if (this._sharpenSliderValue) this._sharpenSliderValue.textContent = `${pct}%`;
+          this._applySharpenIntensity(pct / 100);
+          this._syncShareState();
+        },
+        setHudLayout: (value) => {
+          this.shareLinkManager?.claimRestoreLane?.('visual');
+          this._setHudVariant(value);
+        },
+        toggleCleanView: () => this.toggleCleanView(),
+        exitCleanView: () => this.toggleCleanView(false),
+        setDensity: (value) => {
+          this.shareLinkManager?.claimRestoreLane?.('visual');
+          this._detectionUserOverridden = true;
+          const pct = canonicalizeDensity(value);
+          this._detectionDensitySlider.value = String(pct);
+          if (this._detectionDensityValue) this._detectionDensityValue.textContent = `${pct}%`;
+          this._applyDetectionDensityFromUi();
+          this._syncShareState();
+        },
+        setAllocation: (value) => {
+          this.shareLinkManager?.claimRestoreLane?.('visual');
+          this._detectionUserOverridden = true;
+          this._setDetectionAllocation(value);
+        },
+        setFade: () => {
+          this.shareLinkManager?.claimRestoreLane?.('visual');
+          this._applyDetectionFadeFromUi();
+          this._syncShareState();
+        },
+        toggleCelestial: () => {
+          const ringIsVisible = !!this.celestialRing?.visible;
+          if (!this.celestialRingEnabled || !ringIsVisible) {
+            this.setCelestialRingEnabled(true, { focus: true });
+          } else {
+            this.setCelestialRingEnabled(false);
+          }
+        },
+        toggleHud: () => {
+          this.shareLinkManager?.claimRestoreLane?.('visual');
+          this.hud.toggle();
+          this._updateHudButtonState();
+          this._syncShareState();
+        },
+        cycleDetection: () => {
+          this.shareLinkManager?.claimRestoreLane?.('visual');
+          this._detectionUserOverridden = true;
+          cycleDetectionMode();
+          this._syncShareState();
+        },
+        toggleModels: () => {
+          this._setModels3dEnabled(!this._models3dEnabled);
+          this._syncModels3dModeRow();
+        },
+        setModelsMode: (mode) => this._setModels3dMode(mode),
+      },
     });
-
-    // Bloom intensity slider
-    this._bloomSlider.addEventListener('input', () => {
-      this.shareLinkManager?.claimRestoreLane?.('visual');
-      this._setBloomIntensity(parseInt(this._bloomSlider.value, 10));
-    });
-
-    // Sharpen toggle
-    this._sharpenBtn.addEventListener('click', () => {
-      this.shareLinkManager?.claimRestoreLane?.('visual');
-      this._setSharpenEnabled(!this.sharpenEnabled);
-    });
-
-    // Scope mask — the explicit circular viewport treatment (owner ask:
-    // standalone toggle + featherable edge; see src/scopeMask.js).
-    this._scopeBtn?.addEventListener('click', () => {
-      this.shareLinkManager?.claimRestoreLane?.('visual');
-      const next = !isScopeMaskEnabled();
-      setScopeMaskEnabled(next);
-      this._scopeBtn.classList.toggle('active', next);
-      this._scopeBtn.setAttribute('aria-pressed', String(next));
-      this._syncShareState();
-    });
-    this._scopeFeatherSlider?.addEventListener('input', () => {
-      this.shareLinkManager?.claimRestoreLane?.('visual');
-      const pct = Math.max(0, Math.min(100, parseInt(this._scopeFeatherSlider.value, 10) || 0));
-      if (this._scopeFeatherValue) this._scopeFeatherValue.textContent = `${pct}%`;
-      setScopeMaskFeather(pct / 100);
-      this._syncShareState();
-    });
-
-    if (this._sharpenSlider) {
-      this._sharpenSlider.addEventListener('input', () => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        const pct = parseInt(this._sharpenSlider.value, 10);
-        if (this._sharpenSliderValue) {
-          this._sharpenSliderValue.textContent = `${pct}%`;
-        }
-        this._applySharpenIntensity(pct / 100);
-        this._syncShareState();
-      });
-    }
-
-    if (this._hudLayoutSelect) {
-      this._hudLayoutSelect.addEventListener('change', () => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this._setHudVariant(this._hudLayoutSelect.value);
-      });
-    }
-
-    if (this._cleanViewBtn) {
-      this._cleanViewBtn.addEventListener('click', () => this.toggleCleanView());
-    }
-    if (this._cleanViewExitBtn) {
-      this._cleanViewExitBtn.addEventListener('click', () => this.toggleCleanView(false));
-    }
-
-    if (this._detectionDensitySlider) {
-      this._detectionDensitySlider.addEventListener('input', () => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this._detectionUserOverridden = true;
-        const pct = canonicalizeDensity(this._detectionDensitySlider.value);
-        this._detectionDensitySlider.value = String(pct);
-        if (this._detectionDensityValue) {
-          this._detectionDensityValue.textContent = `${pct}%`;
-        }
-        this._applyDetectionDensityFromUi();
-        this._syncShareState();
-      });
-    }
-
-    for (const button of this._detectionAllocationBtns) {
-      button.addEventListener('click', () => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this._detectionUserOverridden = true;
-        this._setDetectionAllocation(button.dataset.allocation);
-      });
-    }
-
-    for (const slider of [this._detectionFadeSlider, this._detectionOpacitySlider]) {
-      slider?.addEventListener('input', () => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this._applyDetectionFadeFromUi();
-        this._syncShareState();
-      });
-    }
-
-    if (this._celestialBtn) {
-      this._celestialBtn.addEventListener('click', () => {
-        const ringIsVisible = !!this.celestialRing?.visible;
-        if (!this.celestialRingEnabled || !ringIsVisible) {
-          this.setCelestialRingEnabled(true, { focus: true });
-        } else {
-          this.setCelestialRingEnabled(false);
-        }
-      });
-    }
   }
 
   /**
@@ -3570,27 +3170,20 @@ export class StyleManager {
    * @returns {void}
    */
   _initMapStackControl() {
-    if (!this._mapStackChips || !this.mapStackController) return;
-
-    if (!this._mapStackChangeHandler) {
-      // Provider-driven transitions (notably Esri tile-error fallback) do not
-      // pass through `_setMapStack()`. Follow the controller's existing public
-      // event so the lit tile, the status line, AND the durable share state all
-      // describe the rendered source — without the share sync, a silent
-      // fallback leaves copyLink() encoding a stack that is no longer shown.
-      this._mapStackChangeHandler = (event) => {
-        this._renderMapStackState(event.detail);
-        this._syncShareState();
-      };
-      window.addEventListener('gev:map-stack-changed', this._mapStackChangeHandler);
-    }
-
-    renderMapStackChips(this._mapStackChips, this.mapStackController.getStacks(), {
-      activeId: this.mapStackController.getActiveId(),
-      onSelect: (stackId) => { this._setMapStack(stackId); },
+    if (!this.mapStackController) return;
+    this._mapSourceControls?.destroy();
+    this._mapSourceControls = createMapSourceControls({
+      container: this._mapStackChips,
+      statusElement: this._mapStackStatus,
+      controller: this.mapStackController,
+      subscribe: (onChange) => {
+        window.addEventListener('gev:map-stack-changed', onChange);
+        return () => window.removeEventListener('gev:map-stack-changed', onChange);
+      },
+      claimSelection: () => this.shareLinkManager?.claimRestoreLane?.('map'),
+      onStateChanged: () => this._syncShareState(),
+      onError: (message) => this._showToast(message),
     });
-
-    this._renderMapStackState(this.mapStackController.getState());
   }
 
   /**
@@ -3602,16 +3195,7 @@ export class StyleManager {
    */
   async _setMapStack(stackId, { syncShare = true } = {}) {
     if (!this.mapStackController) return;
-    if (syncShare) this.shareLinkManager?.claimRestoreLane?.('map');
-    const before = this.mapStackController.getActiveId();
-    this._renderMapStackState(this.mapStackController.getState('switching'));
-    const state = await this.mapStackController.setStack(stackId);
-    this._renderMapStackState(state);
-
-    if (state?.activeId === before && stackId !== before && state?.lastError) {
-      this._showToast(state.lastError);
-    }
-    if (syncShare) this._syncShareState();
+    return this._mapSourceControls.select(stackId, { syncShare });
   }
 
   /**
@@ -3622,16 +3206,7 @@ export class StyleManager {
    * @returns {void}
    */
   _renderMapStackState(state) {
-    if (!state) return;
-    syncMapStackChips(this._mapStackChips, state.activeId);
-    if (this._mapStackStatus) {
-      const stack = state.activeStack;
-      const label = state.status === 'switching'
-        ? '...'
-        : (stack?.shortLabel || stack?.label || 'MAP');
-      this._mapStackStatus.textContent = label;
-      this._mapStackStatus.classList.toggle('warn', !!state.lastError);
-    }
+    this._mapSourceControls?.render(state);
   }
 
   /**
@@ -3965,52 +3540,6 @@ export class StyleManager {
     this._trafficSyncChip.classList.toggle('visible', presentation.visible);
   }
 
-  /**
-   * Updates the CCTV loading chip (same pattern as the traffic sync chip)
-   * with staggered initial-load progress, e.g. "LOADING FRAMES 12/36".
-   * Shows a brief "camera grid ready" confirmation, then hides.
-   * @param {{active: boolean, loaded: number, total: number}|null|undefined} loading
-   *   Loading progress from the CCTV layer UI state.
-   * @param {boolean} enabled - Whether the CCTV layer is currently enabled.
-   * @returns {void}
-   */
-  _updateCctvSyncChip(loading, enabled) {
-    if (!this._cctvSyncChip || !this._cctvSyncLabel || !this._cctvSyncProgress) return;
-    const total = Number(loading?.total) || 0;
-    const loaded = Math.max(0, Math.min(Number(loading?.loaded) || 0, total));
-    const busy = !!enabled && !!loading?.active && total > 0;
-
-    if (busy) {
-      clearTimeout(this._cctvChipHideTimer);
-      this._cctvChipHideTimer = null;
-      this._cctvChipWasBusy = true;
-      setSplitFlapText(this._cctvSyncLabel, 'loading frames');
-      // The counter is left plain on purpose: it ticks every few frames
-      // during a grid load, and flapping it would read as a slot machine.
-      this._cctvSyncProgress.textContent = `${loaded}/${total}`;
-      this._cctvSyncChip.classList.add('visible');
-      return;
-    }
-
-    if (this._cctvChipWasBusy && enabled && total > 0) {
-      // Load just completed — flash the final count, then auto-hide.
-      this._cctvChipWasBusy = false;
-      setSplitFlapText(this._cctvSyncLabel, 'camera grid ready');
-      this._cctvSyncProgress.textContent = `${total}/${total}`;
-      this._cctvSyncChip.classList.add('visible');
-      clearTimeout(this._cctvChipHideTimer);
-      this._cctvChipHideTimer = window.setTimeout(() => {
-        this._cctvChipHideTimer = null;
-        this._cctvSyncChip.classList.remove('visible');
-      }, 1500);
-      return;
-    }
-
-    if (!this._cctvChipHideTimer) {
-      this._cctvChipWasBusy = false;
-      this._cctvSyncChip.classList.remove('visible');
-    }
-  }
 
   /**
    * Initializes panel collapse buttons and restores persisted collapsed state.
@@ -4018,23 +3547,24 @@ export class StyleManager {
    * @returns {void}
    */
   _initPanelChrome() {
-    const targets = new Set();
-    document.querySelectorAll('.panel-collapse-btn[data-collapse-target]').forEach((btn) => {
-      const targetId = btn.dataset.collapseTarget;
-      if (targetId) targets.add(targetId);
-      btn.addEventListener('click', () => {
-        const targetId = btn.dataset.collapseTarget;
-        if (!targetId) return;
-        const nextCollapsed = !document.getElementById(targetId)?.classList.contains('collapsed');
-        this.setPanelCollapsed(targetId, nextCollapsed, { explicit: true });
-      });
+    for (const control of this._panelDisclosureControls || []) control.destroy();
+    this._panelDisclosureControls = [];
+    const targets = new Map();
+    document.querySelectorAll('.panel-collapse-btn[data-collapse-target]').forEach((button) => {
+      const targetId = button.dataset.collapseTarget;
+      if (!targetId) return;
+      if (!targets.has(targetId)) targets.set(targetId, []);
+      targets.get(targetId).push(button);
     });
-
-    for (const targetId of targets) {
-      const panelEl = document.getElementById(targetId);
-      panelEl?.addEventListener('keydown', (event) => {
-        this._collapsePanelOnEscape(event, targetId);
-      });
+    for (const [targetId, buttons] of targets) {
+      const panel = document.getElementById(targetId);
+      if (!panel) continue;
+      this._panelDisclosureControls.push(bindPanelDisclosure({
+        panel,
+        buttons,
+        onChange: (collapsed, options) => this.setPanelCollapsed(targetId, collapsed, options),
+        onEscape: (event) => this._collapsePanelOnEscape(event, targetId),
+      }));
       this._restorePanelCollapsedState(targetId, {
         allowStored: !this._initialShareState,
       });
@@ -4061,33 +3591,16 @@ export class StyleManager {
    * @returns {boolean} Whether this panel handled the key.
    */
   _collapsePanelOnEscape(event, panelId) {
-    if (event.key !== 'Escape' || event.defaultPrevented) return false;
-    const panelEl = document.getElementById(panelId);
-    if (!panelEl || panelEl.classList.contains('collapsed') || !panelEl.contains(event.target)) {
-      return false;
-    }
-    const focusedPanel = event.target?.closest?.(
-      '.panel-collapsible:not(.collapsed), #param-slider-panel:not(.collapsed)',
-    );
-    if (focusedPanel && focusedPanel !== panelEl) return false;
-    event.preventDefault();
-    event.stopPropagation();
-    if (panelId === 'location-bar' && this._locationSearch) {
-      // The document-level Escape cleanup cannot run after this panel consumes
-      // the event. Mirror that cleanup here so reopening Location never reveals
-      // a hidden draft query or expanded search field.
-      this._locationSearch.classList.remove('expanded');
-      this._locationSearch.value = '';
-      this._locationSearch.blur();
-    }
-    this.setPanelCollapsed(panelId, true, { explicit: true });
-    const disclosure = panelEl.querySelector(`[data-dock-toggle-target="${panelId}"]`)
-      || panelEl.querySelector(`[data-collapse-target="${panelId}"]`);
-    const escapedFromDisclosure = event.target === disclosure
-      || disclosure?.contains?.(event.target);
-    if (escapedFromDisclosure) disclosure?.blur?.();
-    else disclosure?.focus?.({ preventScroll: true });
-    return true;
+    return collapsePanelOnEscape(event, {
+      panel: document.getElementById(panelId),
+      onChange: (collapsed, options) => this.setPanelCollapsed(panelId, collapsed, options),
+      beforeCollapse: () => {
+        if (panelId !== 'location-bar' || !this._locationSearch) return;
+        this._locationSearch.classList.remove('expanded');
+        this._locationSearch.value = '';
+        this._locationSearch.blur();
+      },
+    });
   }
 
   /**
@@ -4229,191 +3742,28 @@ export class StyleManager {
    * @returns {void}
    */
   _initAutoHoverPanel(panelId, { openDelayMs = 850, closeDelayMs = 1000 } = {}) {
-    const panelEl = document.getElementById(panelId);
-    if (!panelEl) return;
-    const disclosure = panelEl.querySelector(`[data-dock-toggle-target="${panelId}"]`);
-    let openTimer = null;
-    let closeTimer = null;
-    let lastWheelTime = 0;
-    let disclosureFocusTimer = null;
-    let focusRequest = 0;
-
-    const cancelMapSourceFocus = () => {
-      clearTimeout(disclosureFocusTimer);
-      disclosureFocusTimer = null;
-      focusRequest += 1;
-    };
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+    this._hoverPanelControls ??= new Map();
+    this._hoverPanelControls.get(panelId)?.destroy();
+    const controller = createHoverDisclosure({
+      panel,
+      documentRef: document,
+      disclosure: panel.querySelector(`[data-dock-toggle-target="${panelId}"]`),
+      openDelayMs,
+      closeDelayMs,
+      isActive: () => !this._disposed,
+      onChange: (collapsed, options) => this.setPanelCollapsed(panelId, collapsed, options),
+      onEscape: (event) => this._collapsePanelOnEscape(event, panelId),
+      focusTarget: panelId === 'control-panel' ? () => (
+        panel.querySelector('.map-stack-chip.active') || panel.querySelector('.map-stack-chip')
+      ) : null,
+    });
+    this._hoverPanelControls.set(panelId, controller);
     if (panelId === 'control-panel') {
       this._cancelMapSourceFocus?.();
-      this._cancelMapSourceFocus = cancelMapSourceFocus;
+      this._cancelMapSourceFocus = controller.cancelPendingFocus;
     }
-
-    const clearOpen = () => {
-      if (!openTimer) return;
-      clearTimeout(openTimer);
-      openTimer = null;
-    };
-
-    const clearClose = () => {
-      if (!closeTimer) return;
-      clearTimeout(closeTimer);
-      closeTimer = null;
-    };
-
-    const scheduleOpen = () => {
-      clearOpen();
-      openTimer = window.setTimeout(() => {
-        openTimer = null;
-        if (!panelEl.matches(':hover')) return;
-        if (performance.now() - lastWheelTime < 280) return;
-        if (!panelEl.classList.contains('collapsed')) return;
-        this.setPanelCollapsed(panelId, false);
-      }, openDelayMs);
-    };
-
-    // Focus inside the tray defers the unpinned auto-dismiss, but only for the
-    // KEYBOARD: the disclosure hands focus to a Map Source tile on Enter/Space,
-    // and closing the tray out from under that focus would strand the caret.
-    // Plain `document.activeElement` is the wrong test — Chromium focuses a
-    // <button> on mouse press, so once Map Source moved into this tray a tile
-    // CLICK left focus parked inside and the popover never dismissed on
-    // mouse-away (owner field report; Location, whose input is genuinely
-    // keyboard-focused when clicked, still dismissed). `:focus-visible` is the
-    // platform's own pointer-vs-keyboard focus signal, so a typed-into field
-    // still holds the tray open while a clicked tile does not. A browser
-    // without `:focus-visible` keeps the conservative hold.
-    const keyboardFocusInside = () => {
-      const active = document.activeElement;
-      if (!active || !panelEl.contains(active)) return false;
-      try { return active.matches(':focus-visible'); } catch { return true; }
-    };
-
-    const scheduleClose = () => {
-      clearClose();
-      closeTimer = window.setTimeout(() => {
-        closeTimer = null;
-        if (panelEl.matches(':hover') || keyboardFocusInside()) return;
-        if (panelEl.classList.contains('dock-pinned')) return;
-        if (panelEl.classList.contains('collapsed')) return;
-        this.setPanelCollapsed(panelId, true);
-      }, closeDelayMs);
-    };
-
-    panelEl.addEventListener('wheel', () => {
-      lastWheelTime = performance.now();
-      clearOpen();
-    }, { passive: true });
-
-    panelEl.addEventListener('click', (event) => {
-      if (event.target.closest('.panel-collapse-btn, .dock-tray-toggle')) return;
-      clearOpen();
-      clearClose();
-      if (panelEl.classList.contains('collapsed')) {
-        this.setPanelCollapsed(panelId, false, { explicit: true });
-      }
-    });
-
-    panelEl.addEventListener('pointerenter', (event) => {
-      const pointerType = event.pointerType || 'mouse';
-      if (pointerType !== 'mouse' && pointerType !== 'pen') return;
-      clearClose();
-      if (panelEl.classList.contains('collapsed')) {
-        scheduleOpen();
-      }
-    });
-
-    panelEl.addEventListener('pointerleave', (event) => {
-      const pointerType = event.pointerType || 'mouse';
-      if (pointerType !== 'mouse' && pointerType !== 'pen') return;
-      clearOpen();
-      scheduleClose();
-    });
-
-    panelEl.addEventListener('pointerdown', () => {
-      cancelMapSourceFocus();
-      clearOpen();
-      clearClose();
-    });
-
-    const focusMapSource = () => {
-      if (panelId !== 'control-panel') return false;
-      const chip = panelEl.querySelector('.map-stack-chip.active')
-        || panelEl.querySelector('.map-stack-chip');
-      if (!chip?.focus) return false;
-      chip.focus({ preventScroll: true });
-      // .focus() on a still-hidden element is a SILENT no-op, so the caller
-      // has to check whether focus actually landed rather than assume it did.
-      return document.activeElement === chip;
-    };
-
-    // The tray opens behind a 180ms `visibility` transition (.dock-popover-content
-    // in style.css), and a chip inside it cannot take focus until that lands.
-    // A single fixed delay therefore races the transition: when the machine is
-    // slow enough that the fade has not finished by the time the timer fires,
-    // focus() silently does nothing and the keyboard user is stranded on the
-    // disclosure with an open tray they cannot reach (#54). Retry on a short
-    // cadence until focus actually lands, bounded so a permanently hidden tray
-    // cannot spin.
-    const scheduleMapSourceFocus = () => {
-      cancelMapSourceFocus();
-      if (panelId !== 'control-panel') return;
-      const request = focusRequest;
-      let attempts = 0;
-      const attemptFocus = () => {
-        if (request !== focusRequest) return;
-        disclosureFocusTimer = null;
-        if (this._disposed || panelEl.classList.contains('collapsed')) return;
-        // A Tab or click elsewhere owns focus now. A delayed transition must
-        // not pull the keyboard back into a tray the user has already left.
-        if (document.activeElement !== disclosure) return;
-        if (focusMapSource()) return;
-        if (request !== focusRequest) return;
-        if (++attempts > 24) return; // ~720ms past the first try, then give up
-        disclosureFocusTimer = window.setTimeout(attemptFocus, 30);
-      };
-      disclosureFocusTimer = window.setTimeout(attemptFocus, 240);
-    };
-
-    const toggleDisclosure = ({ focusSource = false } = {}) => {
-      cancelMapSourceFocus();
-      clearOpen();
-      clearClose();
-      const shouldOpen = panelEl.classList.contains('collapsed');
-      this.setPanelCollapsed(panelId, !shouldOpen, { explicit: true });
-      if (shouldOpen && focusSource) scheduleMapSourceFocus();
-    };
-
-    disclosure?.addEventListener('click', (event) => {
-      event.stopPropagation();
-      // Keep native button activation semantics: Enter activates on keydown,
-      // Space on keyup, and pointer clicks report a non-zero detail. Scheduling
-      // focus from the synthesized click avoids a key latch that can outlive the
-      // disclosure after a long Enter hold moves focus into the tray.
-      toggleDisclosure({ focusSource: event.detail === 0 });
-    });
-    disclosure?.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter') return;
-      // Preserve immediate Enter activation while leaving Space to the native
-      // button path, which emits its synthesized click only after key release.
-      event.preventDefault();
-      event.stopPropagation();
-      if (event.repeat) return;
-      toggleDisclosure({ focusSource: true });
-    });
-
-    panelEl.addEventListener('focusin', () => clearClose());
-    panelEl.addEventListener('focusout', (event) => {
-      cancelMapSourceFocus();
-      if (panelEl.contains(event.relatedTarget)) return;
-      scheduleClose();
-    });
-    panelEl.addEventListener('keydown', (event) => {
-      if (event.key !== 'Escape') return;
-      if (!event.defaultPrevented) this._collapsePanelOnEscape(event, panelId);
-      cancelMapSourceFocus();
-      clearOpen();
-      clearClose();
-    });
   }
 
   /**
@@ -4643,27 +3993,8 @@ export class StyleManager {
       });
     }
     this._syncContextModeButtons();
-    if (this._cctvUnsubscribe) {
-      this._cctvUnsubscribe();
-      this._cctvUnsubscribe = null;
-    }
-    if (typeof cctvLayer.subscribe === 'function') {
-      this._cctvUnsubscribe = cctvLayer.subscribe((state) => {
-        this._renderCctvState(state);
-      });
-    }
-    if (typeof cctvLayer.getUIState === 'function') {
-      this._renderCctvState(cctvLayer.getUIState());
-    }
-    if (this._radioUnsubscribe) {
-      this._radioUnsubscribe();
-      this._radioUnsubscribe = null;
-    }
-    if (typeof radioLayer.subscribe === 'function') {
-      this._radioUnsubscribe = radioLayer.subscribe((state) => {
-        this._renderRadioState(state);
-      });
-    }
+    this._cctvControls.connect();
+    this._radioControls.connect();
     if (!this._awarenessSelectedHandler) {
       this._awarenessSelectedHandler = (event) => this._persistAwarenessSelection(event, false);
       this._awarenessClearedHandler = (event) => this._persistAwarenessSelection(event, true);
@@ -5477,826 +4808,83 @@ export class StyleManager {
 
   /** Wire the independent Radio companion controls. */
   _initRadioPanel() {
-    if (!this._radioPanel) return;
-    this._radioTunerAbort?.abort();
-    this._radioTunerAbort = new AbortController();
-    const tunerListenerOptions = { signal: this._radioTunerAbort.signal };
-    const setRadioDisclosure = (expanded, { returnFocus = false } = {}) => {
-      const open = Boolean(expanded);
-      this._contextRadioDock?.classList.toggle('disclosure-open', open);
-      if (this._contextRadioMini) this._contextRadioMini.hidden = !open;
-      this._syncContextRadioLauncherState();
-      if (!open && returnFocus) this._contextRadioToggleBtn?.focus({ preventScroll: true });
-    };
-    this._setRadioDisclosure = setRadioDisclosure;
-    const setCockpitDisclosure = (kind, expanded, { returnFocus = false } = {}) => {
-      const displayOpen = kind === 'display' && Boolean(expanded);
-      const radioOpen = kind === 'radio' && Boolean(expanded);
-      if (displayOpen || radioOpen) this.cockpitView?.setSignalCollapsed(true);
-      if (this._cockpitDisplayPanel) this._cockpitDisplayPanel.hidden = !displayOpen;
-      if (this._cockpitRadioPanel) this._cockpitRadioPanel.hidden = !radioOpen;
-      this._cockpitDisplayToggleBtn?.closest('.cockpit-utility-control')
-        ?.classList.toggle('is-expanded', displayOpen);
-      this._cockpitRadioToggleBtn?.closest('.cockpit-utility-control')
-        ?.classList.toggle('is-expanded', radioOpen);
-      this._cockpitDisplayToggleBtn?.setAttribute('aria-expanded', String(displayOpen));
-      this._cockpitRadioToggleBtn?.setAttribute('aria-expanded', String(radioOpen));
-      if (displayOpen) this._revealCockpitStyleParameters();
-      if (this._cockpitDisplayToggleBtn) {
-        const action = displayOpen ? 'Collapse' : 'Expand';
-        this._cockpitDisplayToggleBtn.textContent = displayOpen ? '▶' : '◀';
-        this._cockpitDisplayToggleBtn.setAttribute('aria-label', `${action} Cockpit display options`);
-        this._cockpitDisplayToggleBtn.title = `${action} Cockpit display options`;
-      }
-      if (this._cockpitRadioToggleBtn) {
-        const action = radioOpen ? 'Collapse' : 'Expand';
-        this._cockpitRadioToggleBtn.textContent = radioOpen ? '▶' : '◀';
-        this._cockpitRadioToggleBtn.setAttribute('aria-label', `${action} Cockpit Radio controls`);
-        this._cockpitRadioToggleBtn.title = `${action} Cockpit Radio controls`;
-      }
-      if (!expanded && returnFocus) {
-        (kind === 'display' ? this._cockpitDisplayToggleBtn : this._cockpitRadioToggleBtn)
-          ?.focus({ preventScroll: true });
-      }
-      if (!displayOpen && !radioOpen
-          && this.cockpitView?.active
-          && !this.cockpitView.signalUserCollapsed) {
-        this.cockpitView.setSignalCollapsed(false);
-      }
-      this.cockpitView?.scheduleContextLayout();
-    };
-    this._setCockpitDisclosure = setCockpitDisclosure;
-    const syncTunerTape = (coordinate) => {
-      const scale = this._radioTuner?.querySelector('.radio-tuner-scale');
-      const dial = this._radioTuner?.querySelector('.radio-tuner-dial');
-      if (!scale || !dial) return null;
-      const model = buildRadioTunerTicks(
-        coordinate,
-        this._radioTunerStations.length,
-        dial.getBoundingClientRect().width,
-      );
-      while (scale.children.length < model.ticks.length) {
-        const tick = document.createElement('span');
-        tick.className = 'radio-tuner-tick';
-        scale.append(tick);
-      }
-      while (scale.children.length > model.ticks.length) scale.lastElementChild?.remove();
-      model.ticks.forEach((entry, index) => {
-        const tick = scale.children[index];
-        tick.style.left = `${entry.xPx}px`;
-        tick.textContent = entry.label;
-        tick.dataset.stationIndex = String(entry.stationIndex);
-        tick.classList.toggle('is-current', entry.current);
-      });
-      scale.style.setProperty('--radio-tuner-tick-pitch', `${model.pitchPx}px`);
-      return model;
-    };
-    const tunerPreview = ({ coordinate = this._radioTunerCoordinate, syncStatic = true, rotate = true } = {}) => {
-      const slot = radioTunerSlot(this._radioTunerSlider?.value, this._radioTunerStations.length);
-      const station = slot.locked ? this._radioTunerStations[slot.stationIndex] || null : null;
-      const resolvedCoordinate = this._radioTunerStations.length <= 1
-        ? 0
-        : Math.min(this._radioTunerStations.length - 1, Math.max(0, Number(coordinate) || 0));
-      const ratio = this._radioTunerStations.length === 1
-        ? 0.5
-        : resolvedCoordinate / Math.max(1, this._radioTunerStations.length - 1);
-      this._radioTunerCoordinate = resolvedCoordinate;
-      this._radioTuner?.style.setProperty('--radio-tuner-ratio', String(ratio));
-      this._radioTuner?.classList.toggle('is-static', syncStatic ? false : Boolean(this._radioState?.tuningStatic));
-      syncTunerTape(resolvedCoordinate);
-      if (this._radioTunerValue) {
-        this._radioTunerValue.textContent = station
-          ? `CH ${String(slot.stationIndex + 1).padStart(2, '0')} / ${String(this._radioTunerStations.length).padStart(2, '0')}`
-          : 'NO STATIONS';
-      }
-      if (this._radioTunerStation) this._radioTunerStation.textContent = station?.name || 'NO STATION AVAILABLE';
-      if (this._radioTunerSlider) {
-        this._radioTunerSlider.setAttribute('aria-valuetext', station
-          ? `${station.name}, station ${slot.stationIndex + 1} of ${this._radioTunerStations.length}`
-          : 'No station available');
-      }
-      if (syncStatic) radioLayer.previewTuningStation(station?.id || null, { rotate });
-      return station;
-    };
-    const setTunerDirectory = (pool) => {
-      this._radioTunerPool = [...pool];
-      this._radioTunerStations = [...pool];
-      this._radioTunerBandSignature = this._radioTunerStations.map((station) => station.id).join('|');
-      if (this._radioTunerSlider) {
-        this._radioTunerSlider.min = '0';
-        this._radioTunerSlider.max = String(Math.max(0, this._radioTunerStations.length - 1));
-        this._radioTunerSlider.step = '1';
-      }
-    };
-    const refreshTunerBand = ({ force = false } = {}) => {
-      if (this._radioTunerDragging || this._radioTuner?.hidden || this._radioTunerSlider?.disabled) return false;
-      const selectedId = this._radioState?.selected?.id || null;
-      const pool = radioLayer.getTunerStations(750);
-      const poolSignature = pool.map((station) => station.id).join('|');
-      const currentPoolSignature = this._radioTunerPool.map((station) => station.id).join('|');
-      if (!force && poolSignature === currentPoolSignature && selectedId === this._radioTunerSelectedId) return false;
-      setTunerDirectory(pool);
-      this._radioTunerSelectedId = selectedId;
-      const selectedPoolIndex = pool.findIndex((station) => station.id === selectedId);
-      const slot = radioTunerSlot(selectedPoolIndex >= 0 ? selectedPoolIndex : 0, this._radioTunerStations.length);
-      this._radioTunerSlider.value = String(slot.slot);
-      this._radioTunerCoordinate = slot.stationIndex >= 0 ? slot.stationIndex : 0;
-      tunerPreview({ coordinate: this._radioTunerCoordinate, syncStatic: false });
-      return true;
-    };
-    this._refreshRadioTunerBand = refreshTunerBand;
-    const beginTuner = () => {
-      if (this._radioTunerDragging || this._radioTunerSlider?.disabled) return false;
-      refreshTunerBand();
-      if (!this._radioTunerStations.length || !radioLayer.beginTuning()) return false;
-      // A tuner-owned camera preview must never replace the frozen directory.
-      // Only an explicit globe pointer/wheel gesture releases camera pinning.
-      this._radioTunerBandPinnedForNavigation = true;
-      this._radioTunerDragging = true;
-      this._radioTuner?.classList.add('is-dragging');
-      const selectedIndex = this._radioTunerStations.findIndex((station) => station.id === this._radioState?.selected?.id);
-      const slot = radioTunerSlot(selectedIndex >= 0 ? selectedIndex : 0, this._radioTunerStations.length);
-      this._radioTunerSlider.value = String(slot.slot);
-      this._radioTunerCoordinate = slot.stationIndex >= 0 ? slot.stationIndex : 0;
-      this._radioTunerDragStartSlot = slot.slot;
-      this._radioTunerDragSnapshot = {
-        stations: [...this._radioTunerStations],
-        bandSignature: this._radioTunerBandSignature,
-        selectedId: this._radioTunerSelectedId,
-        slot: slot.slot,
-        coordinate: this._radioTunerCoordinate,
-      };
-      this._radioTunerLastSlot = slot.slot;
-      this._radioTunerDragDirection = 0;
-      tunerPreview({ coordinate: this._radioTunerCoordinate });
-      return true;
-    };
-    const finishTuner = (commit) => {
-      if (!this._radioTunerDragging) return;
-      const dragSnapshot = this._radioTunerDragSnapshot;
-      if (!commit && dragSnapshot) {
-        this._radioTunerStations = [...dragSnapshot.stations];
-        this._radioTunerPool = [...dragSnapshot.stations];
-        this._radioTunerBandSignature = dragSnapshot.bandSignature;
-        this._radioTunerSelectedId = dragSnapshot.selectedId;
-        if (this._radioTunerSlider) {
-          const startSlot = radioTunerSlot(dragSnapshot.slot, this._radioTunerStations.length);
-          this._radioTunerSlider.max = String(startSlot.max);
-          this._radioTunerSlider.value = String(startSlot.slot);
-        }
-        this._radioTunerCoordinate = Number.isFinite(dragSnapshot.coordinate)
-          ? dragSnapshot.coordinate
-          : dragSnapshot.slot;
-      } else if (!commit && this._radioTunerSlider) {
-        this._radioTunerSlider.value = String(this._radioTunerDragStartSlot);
-        this._radioTunerCoordinate = this._radioTunerDragStartSlot;
-      }
-      let station = tunerPreview({ coordinate: this._radioTunerCoordinate, rotate: commit });
-      if (commit && !station && this._radioTunerSlider) {
-        const snapped = radioTunerCommitSlot(
-          this._radioTunerSlider.value,
-          this._radioTunerStations.length,
-        );
-        this._radioTunerSlider.value = String(snapped.slot);
-        this._radioTunerCoordinate = snapped.stationIndex;
-        station = tunerPreview({ coordinate: this._radioTunerCoordinate });
-      }
-      let result = null;
-      if (commit && station) {
-        // Keep the exact band used by the drag so the selected channel cannot
-        // jump to a refreshed catalog slot while its camera flight settles.
-        this._radioTunerBandPinnedForNavigation = true;
-        result = radioLayer.commitTuningStation(station.id, { origin: 'user' });
-      } else if (!commit) {
-        radioLayer.cancelTuning();
-      } else {
-        radioLayer.endTuning();
-      }
-      // Radio emits selection/tuning state synchronously. Keep both the logical
-      // drag and the no-transition class active until that state has settled,
-      // then restore the exact selected slot before permitting CSS motion.
-      this._radioTunerDragging = false;
-      this._radioTunerPointerId = null;
-      this._radioTunerKeyboardKey = null;
-      if (commit && (!result || result.ok)) refreshTunerBand();
-      this._radioTunerDragSnapshot = null;
-      // Flush the snapped position while transitions are still disabled so
-      // removing the drag class cannot interpolate from the released gap.
-      void this._radioTunerNeedle?.offsetLeft;
-      this._radioTuner?.classList.remove('is-dragging');
-      if (result && !result.ok) {
-        this._radioTunerBandPinnedForNavigation = false;
-        if (result.reason === 'station-unavailable') {
-          if (this._radioTunerValue) this._radioTunerValue.textContent = 'OFF AIR';
-          if (this._radioTunerStation) this._radioTunerStation.textContent = 'STATION UNAVAILABLE';
-          this._radioTunerSlider?.setAttribute(
-            'aria-valuetext',
-            'Station unavailable after directory refresh',
-          );
-        }
-      }
-    };
-    const cycleRadio = (direction, { rotate = true } = {}) => {
-      this._radioTunerBandPinnedForNavigation = true;
-      const pool = this._radioTunerPool.length ? this._radioTunerPool : this._radioTunerStations;
-      const cycled = radioLayer.cycleStation(direction, {
-        rotate,
-        stationIds: pool.map((station) => station.id),
-        origin: 'user',
-      });
-      if (!cycled) {
-        this._radioTunerBandPinnedForNavigation = false;
-        return;
-      }
-    };
-    const toggleRadio = async (trigger) => {
-      if (!this._dataManager?.layers?.has('radio')) return;
-      if (trigger.getAttribute('aria-busy') === 'true') return;
-      const enabling = !this._dataManager.isEnabled('radio');
-      const revealAfterEnable = enabling && trigger === this._radioEnableBtn;
-      trigger.setAttribute('aria-disabled', 'true');
-      trigger.setAttribute('aria-busy', 'true');
-      try {
-        const toggled = await this._runUserFacingContextAction(
-          (notificationToken) => this._dataManager.setEnabled('radio', enabling, {
-            origin: 'user',
-            notificationToken,
-          }),
-          `Radio could not ${enabling ? 'start' : 'stop'} cleanly`,
-        );
-        if (toggled === false) return;
-        if (enabling && trigger === this._radioEnableBtn
-            && !document.getElementById('global-context-panel')?.classList.contains('collapsed')) {
-          this.setPanelCollapsed('radio-panel', false, { explicit: true });
-        }
-        if (revealAfterEnable) await this._revealRadioControlsAfterExplicitEnable(trigger);
-      } finally {
-        trigger.setAttribute('aria-disabled', 'false');
-        trigger.setAttribute('aria-busy', 'false');
-        if (revealAfterEnable && trigger.isConnected) trigger.focus({ preventScroll: true });
-      }
-    };
-    this._radioEnableBtn?.addEventListener('click', () => void toggleRadio(this._radioEnableBtn));
-    this._contextRadioMiniEnableBtn?.addEventListener('click', () => void toggleRadio(this._contextRadioMiniEnableBtn));
-    this._cockpitRadioEnableBtn?.addEventListener('click', () => void toggleRadio(this._cockpitRadioEnableBtn));
-    this._contextRadioToggleBtn?.addEventListener('click', () => {
-      const contextPanel = document.getElementById('global-context-panel');
-      if (contextPanel && !contextPanel.classList.contains('collapsed')) {
-        setRadioDisclosure(false);
-        this.setPanelCollapsed('radio-panel', false, { explicit: true });
-        void this._revealRadioPanelInsideContext({
-          focusTarget: this._radioPanel?.querySelector('[data-collapse-target="radio-panel"]'),
-        });
-        return;
-      }
-      setRadioDisclosure(!this._contextRadioDock?.classList.contains('disclosure-open'));
+    this._radioControls?.destroy();
+    this._radioControls = new RadioControls({
+      elements: {
+        _cockpitDisplayPanel: this._cockpitDisplayPanel,
+        _cockpitDisplayToggleBtn: this._cockpitDisplayToggleBtn,
+        _cockpitRadioEnableBtn: this._cockpitRadioEnableBtn,
+        _cockpitRadioNextBtn: this._cockpitRadioNextBtn,
+        _cockpitRadioPanel: this._cockpitRadioPanel,
+        _cockpitRadioPlayBtn: this._cockpitRadioPlayBtn,
+        _cockpitRadioPrevBtn: this._cockpitRadioPrevBtn,
+        _cockpitRadioStation: this._cockpitRadioStation,
+        _cockpitRadioToggleBtn: this._cockpitRadioToggleBtn,
+        _cockpitRadioVolume: this._cockpitRadioVolume,
+        _cockpitRadioVolumeValue: this._cockpitRadioVolumeValue,
+        _cockpitUtilityControls: this._cockpitUtilityControls,
+        _contextRadioDetailsBtn: this._contextRadioDetailsBtn,
+        _contextRadioDock: this._contextRadioDock,
+        _contextRadioMini: this._contextRadioMini,
+        _contextRadioMiniCloseBtn: this._contextRadioMiniCloseBtn,
+        _contextRadioMiniEnableBtn: this._contextRadioMiniEnableBtn,
+        _contextRadioMiniNextBtn: this._contextRadioMiniNextBtn,
+        _contextRadioMiniPlayBtn: this._contextRadioMiniPlayBtn,
+        _contextRadioMiniPrevBtn: this._contextRadioMiniPrevBtn,
+        _contextRadioMiniStation: this._contextRadioMiniStation,
+        _contextRadioMiniVolume: this._contextRadioMiniVolume,
+        _contextRadioMiniVolumeValue: this._contextRadioMiniVolumeValue,
+        _contextRadioToggleBtn: this._contextRadioToggleBtn,
+        _radioEnableBtn: this._radioEnableBtn,
+        _radioFilter: this._radioFilter,
+        _radioLayerState: this._radioLayerState,
+        _radioNextBtn: this._radioNextBtn,
+        _radioPanel: this._radioPanel,
+        _radioPlayBtn: this._radioPlayBtn,
+        _radioPlaybackState: this._radioPlaybackState,
+        _radioPrevBtn: this._radioPrevBtn,
+        _radioStationHomepage: this._radioStationHomepage,
+        _radioStationMeta: this._radioStationMeta,
+        _radioStationName: this._radioStationName,
+        _radioStationTags: this._radioStationTags,
+        _radioStopBtn: this._radioStopBtn,
+        _radioTuner: this._radioTuner,
+        _radioTunerBandLabel: this._radioTunerBandLabel,
+        _radioTunerNeedle: this._radioTunerNeedle,
+        _radioTunerSlider: this._radioTunerSlider,
+        _radioTunerStation: this._radioTunerStation,
+        _radioTunerValue: this._radioTunerValue,
+        _radioVolume: this._radioVolume,
+        _radioVolumeValue: this._radioVolumeValue,
+      },
+      radio: radioLayer,
+      canvas: this.viewer?.canvas,
+      actions: {
+        isRegistered: () => this._dataManager?.layers?.has('radio'),
+        isEnabled: () => this._dataManager?.isEnabled('radio'),
+        setEnabled: (enabled, options) => this._dataManager.setEnabled('radio', enabled, options),
+        setParams: (params, options) => this._dataManager?.setLayerParams('radio', params, options),
+        getLifecycle: () => this._dataManager?.getLayerLifecycleState?.('radio'),
+        runUserAction: (...args) => this._runUserFacingContextAction(...args),
+        setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
+        revealStyleParameters: () => this._revealCockpitStyleParameters(),
+        setSignalCollapsed: (value) => this.cockpitView?.setSignalCollapsed(value),
+        isCockpitActive: () => this.cockpitView?.active,
+        signalUserCollapsed: () => this.cockpitView?.signalUserCollapsed,
+        layoutCockpit: () => this.cockpitView?.scheduleContextLayout(),
+        preservePanelStateDuringClear: () => this._preservePanelStateDuringLayerClear,
+        scheduleLayout: () => this._scheduleRightPanelLayout(),
+      },
     });
-    this._contextRadioMiniCloseBtn?.addEventListener('click', () => {
-      setRadioDisclosure(false, { returnFocus: true });
-    });
-    this._contextRadioDetailsBtn?.addEventListener('click', () => {
-      if (!this.cockpitView?.active) this.setPanelCollapsed('global-context-panel', false, { explicit: true });
-      this.setPanelCollapsed('radio-panel', false, { explicit: true });
-      setRadioDisclosure(false);
-      this._radioEnableBtn?.focus({ preventScroll: true });
-    });
-    this._cockpitRadioToggleBtn?.addEventListener('click', () => {
-      const open = this._cockpitRadioToggleBtn.getAttribute('aria-expanded') === 'true';
-      setCockpitDisclosure('radio', !open);
-    });
-    document.addEventListener('pointerdown', (event) => {
-      if (!this._contextRadioDock?.classList.contains('disclosure-open')) return;
-      if (event.target?.closest?.('#context-radio-dock')) return;
-      setRadioDisclosure(false);
-    }, tunerListenerOptions);
-    document.addEventListener('pointerdown', (event) => {
-      if (!this._cockpitUtilityControls || event.target?.closest?.('#cockpit-utility-controls')) return;
-      if (event.target?.closest?.('.cockpit-vision-controls')) return;
-      if (event.target?.closest?.('#left-panel-stack, #cockpit-context')) return;
-      setCockpitDisclosure('display', false);
-      setCockpitDisclosure('radio', false);
-    }, tunerListenerOptions);
-    document.addEventListener('keydown', (event) => {
-      if (event.key !== 'Escape' || !this._contextRadioDock?.classList.contains('disclosure-open')) return;
-      event.preventDefault();
-      // Immediate: a plain stopPropagation() still lets every LATER listener on
-      // this same document run, so closing the disclosure ALSO dismissed the
-      // first-run launcher — one key, two actions. Matches the cockpit
-      // disclosure handler directly below.
-      event.stopImmediatePropagation();
-      const escapedFromDisclosure = event.target === this._contextRadioToggleBtn
-        || this._contextRadioToggleBtn?.contains?.(event.target);
-      setRadioDisclosure(false, { returnFocus: !escapedFromDisclosure });
-      if (escapedFromDisclosure) this._contextRadioToggleBtn?.blur?.();
-    }, { capture: true, signal: this._radioTunerAbort.signal });
-    document.addEventListener('keydown', (event) => {
-      if (event.key !== 'Escape') return;
-      const displayOpen = this._cockpitDisplayToggleBtn?.getAttribute('aria-expanded') === 'true';
-      const radioOpen = this._cockpitRadioToggleBtn?.getAttribute('aria-expanded') === 'true';
-      if (!displayOpen && !radioOpen) return;
-      const nestedPanel = event.target?.closest?.('.panel-collapsible:not(.collapsed), #param-slider-panel:not(.collapsed)');
-      if (nestedPanel) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      const kind = displayOpen ? 'display' : 'radio';
-      const disclosure = displayOpen ? this._cockpitDisplayToggleBtn : this._cockpitRadioToggleBtn;
-      const escapedFromDisclosure = event.target === disclosure || disclosure?.contains?.(event.target);
-      setCockpitDisclosure(kind, false, { returnFocus: !escapedFromDisclosure });
-      if (escapedFromDisclosure) disclosure?.blur?.();
-    }, { capture: true, signal: this._radioTunerAbort.signal });
-    window.addEventListener('gev:cockpit-mode-changed', (event) => {
-      if (event?.detail?.active) return;
-      setCockpitDisclosure('display', false);
-      setCockpitDisclosure('radio', false);
-    }, tunerListenerOptions);
-    window.addEventListener('gev:cockpit-signal-expanded', () => {
-      setCockpitDisclosure('display', false);
-    }, tunerListenerOptions);
-    window.addEventListener('gev:cockpit-context-expanded', () => {
-      this.setPanelCollapsed('data-panel', true);
-    }, tunerListenerOptions);
-    this._radioFilter?.addEventListener('change', () => {
-      const presentation = radioLayer.getUIState();
-      if (!presentation.presentationActive) {
-        this._radioFilter.value = presentation.filter;
-        return;
-      }
-      if (this._radioTunerDragging) finishTuner(false);
-      if (!this._dataManager?.setLayerParams('radio', {
-        filter: this._radioFilter.value,
-      }, { origin: 'user' })) {
-        this._radioFilter.value = radioLayer.getUIState().filter;
-        return;
-      }
-      this._radioTunerBandPinnedForNavigation = false;
-      this._radioTunerPool = [];
-      refreshTunerBand({ force: true });
-    });
-    this._radioPrevBtn?.addEventListener('click', () => cycleRadio(-1));
-    this._radioNextBtn?.addEventListener('click', () => cycleRadio(1));
-    this._radioPlayBtn?.addEventListener('click', () => void radioLayer.togglePlayback({ origin: 'user' }));
-    this._radioStopBtn?.addEventListener('click', () => radioLayer.stopPlayback({ origin: 'user' }));
-    this._radioVolume?.addEventListener('input', () => {
-      const value = Number(this._radioVolume.value);
-      if (this._radioVolumeValue) this._radioVolumeValue.textContent = `${value}%`;
-      this._dataManager?.setLayerParams('radio', { volume: value / 100 }, { origin: 'user' });
-    });
-    this._contextRadioMiniPrevBtn?.addEventListener('click', () => cycleRadio(-1));
-    this._contextRadioMiniNextBtn?.addEventListener('click', () => cycleRadio(1));
-    this._contextRadioMiniPlayBtn?.addEventListener('click', () => void radioLayer.togglePlayback({ origin: 'user' }));
-    // Cockpit owns the Cesium camera even though it intentionally clears
-    // viewer.trackedEntity. Station changes must never start the map-view
-    // rotation/fallback flights that would compete with its preUpdate pose.
-    this._cockpitRadioPrevBtn?.addEventListener('click', () => cycleRadio(-1, { rotate: false }));
-    this._cockpitRadioNextBtn?.addEventListener('click', () => cycleRadio(1, { rotate: false }));
-    this._cockpitRadioPlayBtn?.addEventListener('click', () => void radioLayer.togglePlayback({ origin: 'user' }));
-    this._contextRadioMiniVolume?.addEventListener('input', () => {
-      const value = Number(this._contextRadioMiniVolume.value);
-      if (this._contextRadioMiniVolumeValue) this._contextRadioMiniVolumeValue.textContent = `${value}%`;
-      this._dataManager?.setLayerParams('radio', { volume: value / 100 }, { origin: 'user' });
-    });
-    this._cockpitRadioVolume?.addEventListener('input', () => {
-      const value = Number(this._cockpitRadioVolume.value);
-      if (this._cockpitRadioVolumeValue) this._cockpitRadioVolumeValue.textContent = `${value}%`;
-      this._dataManager?.setLayerParams('radio', { volume: value / 100 }, { origin: 'user' });
-    });
-    const updateTunerFromPointer = (event) => {
-      const rect = this._radioTunerSlider?.getBoundingClientRect();
-      if (!rect || !this._radioTunerStations.length) return false;
-      const position = radioTunerPointerPosition(
-        event.clientX,
-        rect.left,
-        rect.width,
-        this._radioTunerStations.length,
-      );
-      if (position.stationIndex > this._radioTunerLastSlot) this._radioTunerDragDirection = 1;
-      else if (position.stationIndex < this._radioTunerLastSlot) this._radioTunerDragDirection = -1;
-      this._radioTunerLastSlot = position.stationIndex;
-      this._radioTunerCoordinate = position.coordinate;
-      this._radioTunerSlider.value = String(position.stationIndex);
-      tunerPreview({ coordinate: position.coordinate });
-      return true;
-    };
-    this._radioTunerSlider?.addEventListener('pointerdown', (event) => {
-      if (!beginTuner()) return;
-      this._radioTunerPointerId = event.pointerId;
-      this._radioTunerSlider.focus({ preventScroll: true });
-      try { this._radioTunerSlider.setPointerCapture(event.pointerId); } catch { /* capture is best effort */ }
-      updateTunerFromPointer(event);
-      event.preventDefault();
-    }, tunerListenerOptions);
-    this._radioTunerSlider?.addEventListener('pointermove', (event) => {
-      if (!this._radioTunerDragging || this._radioTunerPointerId !== event.pointerId) return;
-      updateTunerFromPointer(event);
-      event.preventDefault();
-    }, tunerListenerOptions);
-    this._radioTunerSlider?.addEventListener('input', () => {
-      if (this._radioTunerPointerId !== null || this._radioTunerKeyboardKey) return;
-      if (!this._radioTunerDragging && !beginTuner()) return;
-      const inputSlot = radioTunerSlot(this._radioTunerSlider.value, this._radioTunerStations.length);
-      if (inputSlot.slot > this._radioTunerLastSlot) this._radioTunerDragDirection = 1;
-      else if (inputSlot.slot < this._radioTunerLastSlot) this._radioTunerDragDirection = -1;
-      this._radioTunerLastSlot = inputSlot.slot;
-      this._radioTunerCoordinate = inputSlot.stationIndex;
-      tunerPreview({ coordinate: this._radioTunerCoordinate });
-    }, tunerListenerOptions);
-    this._radioTunerSlider?.addEventListener('change', () => {
-      if (this._radioTunerPointerId === null && !this._radioTunerKeyboardKey) finishTuner(true);
-    }, tunerListenerOptions);
-    this._radioTunerSlider?.addEventListener('pointerup', (event) => {
-      if (this._radioTunerPointerId !== event.pointerId) return;
-      updateTunerFromPointer(event);
-      finishTuner(true);
-      try { this._radioTunerSlider.releasePointerCapture(event.pointerId); } catch { /* already released */ }
-      event.preventDefault();
-    }, tunerListenerOptions);
-    this._radioTunerSlider?.addEventListener('pointercancel', (event) => {
-      if (this._radioTunerPointerId !== null && this._radioTunerPointerId !== event.pointerId) return;
-      try { this._radioTunerSlider.releasePointerCapture(event.pointerId); } catch { /* already released */ }
-      finishTuner(false);
-    }, tunerListenerOptions);
-    this._radioTunerSlider?.addEventListener('lostpointercapture', (event) => {
-      if (this._radioTunerDragging && this._radioTunerPointerId === event.pointerId) finishTuner(false);
-    }, tunerListenerOptions);
-    this._radioTunerSlider?.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && this._radioTunerDragging) {
-        event.preventDefault();
-        finishTuner(false);
-        return;
-      }
-      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) return;
-      if (!this._radioTunerDragging && !beginTuner()) return;
-      event.preventDefault();
-      this._radioTunerKeyboardKey = event.key;
-      const max = Math.max(0, this._radioTunerStations.length - 1);
-      const current = radioTunerSlot(this._radioTunerSlider.value, this._radioTunerStations.length).slot;
-      const page = Math.max(1, Math.round(max / 10));
-      const next = event.key === 'Home' ? 0
-        : event.key === 'End' ? max
-          : event.key === 'PageUp' ? current + page
-            : event.key === 'PageDown' ? current - page
-              : current + (event.key === 'ArrowRight' ? 1 : -1);
-      const slot = radioTunerSlot(next, this._radioTunerStations.length);
-      if (slot.slot > this._radioTunerLastSlot) this._radioTunerDragDirection = 1;
-      else if (slot.slot < this._radioTunerLastSlot) this._radioTunerDragDirection = -1;
-      this._radioTunerLastSlot = slot.slot;
-      this._radioTunerCoordinate = slot.stationIndex;
-      this._radioTunerSlider.value = String(slot.slot);
-      tunerPreview({ coordinate: this._radioTunerCoordinate });
-    }, tunerListenerOptions);
-    this._radioTunerSlider?.addEventListener('keyup', (event) => {
-      if (!this._radioTunerKeyboardKey || event.key !== this._radioTunerKeyboardKey) return;
-      event.preventDefault();
-      finishTuner(true);
-    }, tunerListenerOptions);
-    this._radioTunerSlider?.addEventListener('blur', () => finishTuner(true), tunerListenerOptions);
-    const releaseNavigationBand = () => {
-      this._radioTunerBandPinnedForNavigation = false;
-    };
-    this.viewer?.canvas?.addEventListener('pointerdown', releaseNavigationBand, tunerListenerOptions);
-    this.viewer?.canvas?.addEventListener('wheel', releaseNavigationBand, tunerListenerOptions);
-    // The directory order is catalog/filter authority, not camera authority.
-    // Globe motion therefore never rebuilds or re-ranks the frequency band.
-    this._radioTunerCameraRemove?.();
-    this._radioTunerCameraRemove = null;
-    this._radioSelectedHandler = () => this.setPanelCollapsed('radio-panel', false);
-    document.addEventListener('gev:radio-selected', this._radioSelectedHandler);
   }
 
-  /**
-   * Reveal the newly enabled directory and transport inside Context without
-   * moving focus, the page, or the globe. Only the expanded Enable path calls
-   * this helper.
-   * @param {HTMLElement} trigger Initiating Radio Enable button.
-   * @returns {Promise<boolean>} Whether the internal scroller moved.
-   */
-  async _revealRadioControlsAfterExplicitEnable(trigger) {
-    const contextPanel = document.getElementById('global-context-panel');
-    const scroller = contextPanel?.querySelector('.global-context-panel-inner');
-    const directory = this._radioPanel?.querySelector('.radio-directory-row');
-    const transport = this._radioPanel?.querySelector('.radio-transport');
-    if (!contextPanel || contextPanel.classList.contains('collapsed')
-        || !scroller || !directory || !transport || !this._radioState?.enabled) return false;
+  _setCockpitDisclosure(...args) { return this._radioControls?._setCockpitDisclosure?.(...args); }
 
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    if (!this._radioState?.enabled || !trigger?.isConnected) return false;
+  _setRadioDisclosure(...args) { return this._radioControls?._setRadioDisclosure?.(...args); }
 
-    const viewport = scroller.getBoundingClientRect();
-    const directoryRect = directory.getBoundingClientRect();
-    const transportRect = transport.getBoundingClientRect();
-    const margin = 10;
-    const minimum = scroller.scrollTop + transportRect.bottom - (viewport.bottom - margin);
-    const maximum = scroller.scrollTop + directoryRect.top - (viewport.top + margin);
-    const desired = minimum <= maximum
-      ? Math.min(Math.max(scroller.scrollTop, minimum), maximum)
-      : minimum;
-    const next = Math.min(
-      Math.max(0, scroller.scrollHeight - scroller.clientHeight),
-      Math.max(0, desired),
-    );
-    if (Math.abs(next - scroller.scrollTop) < 1) return false;
-    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-    scroller.scrollTo({ top: next, behavior: reducedMotion ? 'auto' : 'smooth' });
-    return true;
-  }
+  _syncContextRadioLauncherState(...args) { return this._radioControls?._syncContextRadioLauncherState?.(...args); }
 
-  /**
-   * Bring the embedded Radio section into the expanded Context scroller.
-   * This never changes Radio power, playback, selection, or Context mode.
-   * @param {{focusTarget?: HTMLElement|null}} [options]
-   * @returns {Promise<boolean>} Whether the internal scroller moved.
-   */
-  async _revealRadioPanelInsideContext({ focusTarget = null } = {}) {
-    const contextPanel = document.getElementById('global-context-panel');
-    const scroller = contextPanel?.querySelector('.global-context-panel-inner');
-    if (!contextPanel || contextPanel.classList.contains('collapsed')
-        || !scroller || !this._radioPanel || this._radioPanel.classList.contains('collapsed')) return false;
-
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    if (contextPanel.classList.contains('collapsed') || this._radioPanel.classList.contains('collapsed')) return false;
-
-    const viewport = scroller.getBoundingClientRect();
-    const radioRect = this._radioPanel.getBoundingClientRect();
-    const desired = scroller.scrollTop + radioRect.top - viewport.top - 10;
-    const next = Math.min(
-      Math.max(0, scroller.scrollHeight - scroller.clientHeight),
-      Math.max(0, desired),
-    );
-    const moved = Math.abs(next - scroller.scrollTop) >= 1;
-    if (moved) {
-      const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-      scroller.scrollTo({ top: next, behavior: reducedMotion ? 'auto' : 'smooth' });
-    }
-    focusTarget?.focus?.({ preventScroll: true });
-    return moved;
-  }
-
-  /** Keep the Context header Radio shortcut truthful for its current route. */
-  _syncContextRadioLauncherState() {
-    if (!this._contextRadioToggleBtn) return;
-    const contextPanel = document.getElementById('global-context-panel');
-    const contextExpanded = Boolean(contextPanel && !contextPanel.classList.contains('collapsed'));
-    if (contextExpanded) {
-      const radioExpanded = Boolean(this._radioPanel && !this._radioPanel.classList.contains('collapsed'));
-      this._contextRadioToggleBtn.setAttribute('aria-controls', 'radio-panel');
-      this._contextRadioToggleBtn.setAttribute('aria-expanded', String(radioExpanded));
-      const label = radioExpanded ? 'Go to expanded Radio section' : 'Expand Radio section in Context';
-      this._contextRadioToggleBtn.setAttribute('aria-label', label);
-      this._contextRadioToggleBtn.title = label;
-      return;
-    }
-    const compactOpen = Boolean(this._contextRadioDock?.classList.contains('disclosure-open'));
-    this._contextRadioToggleBtn.setAttribute('aria-controls', 'context-radio-mini');
-    this._contextRadioToggleBtn.setAttribute('aria-expanded', String(compactOpen));
-    const action = compactOpen ? 'Close' : 'Open';
-    this._contextRadioToggleBtn.setAttribute('aria-label', `${action} compact Radio controls`);
-    this._contextRadioToggleBtn.title = `${action} compact Radio controls`;
-  }
-
-  /** Render Radio state without making playback or Context decisions. */
-  _renderRadioState(state) {
-    if (!state || !this._radioPanel) return;
-    const lifecycle = this._dataManager?.getLayerLifecycleState?.('radio') || null;
-    const lifecycleState = lifecycle?.lifecycleState || (state.enabled ? 'enabled' : 'disabled');
-    state = {
-      ...state,
-      enabled: lifecycle ? lifecycle.enabled : state.enabled,
-      lifecycleState,
-      lifecycleUncertain: lifecycle?.uncertain || false,
-    };
-    this._radioState = state;
-    const enabled = Boolean(state.enabled);
-    const transitioning = lifecycleState === 'enabling' || lifecycleState === 'disabling';
-    const uncertain = Boolean(state.lifecycleUncertain);
-    const interactive = enabled && !transitioning && !uncertain;
-    const selected = state.selected || null;
-    const hasStations = state.filteredCount > 0;
-    const activePlayback = ['playing', 'buffering'].includes(state.audioState);
-    document.getElementById('title-bar')?.classList.toggle('radio-broadcasting', state.audioState === 'playing');
-    this._radioPanel.classList.toggle('radio-enabled', enabled);
-    this._radioPanel.classList.toggle('lifecycle-uncertain', uncertain);
-    this._contextRadioDock?.classList.toggle('active', enabled);
-    if (this._contextRadioToggleBtn) {
-      this._contextRadioToggleBtn.classList.toggle('active', enabled);
-    }
-    this._syncContextRadioLauncherState();
-    this._radioLayerState?.classList.toggle('active', enabled);
-    if (this._radioLayerState) {
-      this._radioLayerState.textContent = transitioning
-        ? lifecycleState.toUpperCase()
-        : (uncertain ? 'UNCERTAIN' : (state.loading ? 'SYNC' : (enabled ? `${state.filteredCount}/${state.stationCount}` : 'OFF')));
-    }
-    if (this._radioEnableBtn) {
-      this._radioEnableBtn.classList.toggle('active', enabled);
-      this._radioEnableBtn.setAttribute('aria-pressed', String(enabled));
-      this._radioEnableBtn.textContent = transitioning
-        ? lifecycleState.toUpperCase()
-        : (uncertain ? 'RECONCILE' : (enabled ? 'DISABLE' : 'ENABLE'));
-      this._radioEnableBtn.setAttribute(
-        'aria-label',
-        uncertain ? 'Reconcile Radio — lifecycle uncertain' : `${enabled ? 'Disable' : 'Enable'} Radio`,
-      );
-      this._radioEnableBtn.disabled = false;
-      this._radioEnableBtn.setAttribute('aria-disabled', String(transitioning));
-      this._radioEnableBtn.setAttribute('aria-busy', String(transitioning));
-    }
-    if (this._contextRadioMiniEnableBtn) {
-      this._contextRadioMiniEnableBtn.classList.toggle('active', enabled);
-      this._contextRadioMiniEnableBtn.setAttribute('aria-pressed', String(enabled));
-      this._contextRadioMiniEnableBtn.textContent = transitioning
-        ? lifecycleState.toUpperCase()
-        : (uncertain ? 'RECONCILE' : (enabled ? 'DISABLE' : 'ENABLE'));
-      this._contextRadioMiniEnableBtn.setAttribute(
-        'aria-label',
-        uncertain ? 'Reconcile Radio — lifecycle uncertain' : `${enabled ? 'Disable' : 'Enable'} Radio`,
-      );
-      this._contextRadioMiniEnableBtn.disabled = false;
-      this._contextRadioMiniEnableBtn.setAttribute('aria-disabled', String(transitioning));
-      this._contextRadioMiniEnableBtn.setAttribute('aria-busy', String(transitioning));
-    }
-    if (this._cockpitRadioEnableBtn) {
-      this._cockpitRadioEnableBtn.classList.toggle('active', enabled);
-      this._cockpitRadioEnableBtn.setAttribute('aria-pressed', String(enabled));
-      this._cockpitRadioEnableBtn.textContent = transitioning
-        ? lifecycleState.toUpperCase()
-        : (uncertain ? 'RECONCILE' : (enabled ? 'DISABLE' : 'ENABLE'));
-      this._cockpitRadioEnableBtn.setAttribute(
-        'aria-label',
-        uncertain ? 'Reconcile Radio — lifecycle uncertain' : `${enabled ? 'Disable' : 'Enable'} Radio`,
-      );
-      this._cockpitRadioEnableBtn.disabled = false;
-      this._cockpitRadioEnableBtn.setAttribute('aria-disabled', String(transitioning));
-      this._cockpitRadioEnableBtn.setAttribute('aria-busy', String(transitioning));
-    }
-
-    if (this._radioFilter) {
-      const prior = state.filter || 'all';
-      const categorySignature = state.categories
-        .map((category) => `${category.id}:${category.count}:${category.color}`)
-        .join('|');
-      if (categorySignature !== this._radioCategorySignature) {
-        this._radioFilter.replaceChildren(...state.categories.map((category) => {
-          const option = document.createElement('option');
-          option.value = category.id;
-          option.textContent = `● ${category.label} (${category.count})`;
-          option.dataset.radioColor = category.color;
-          option.style.color = category.color;
-          option.setAttribute('aria-label', `${category.label} (${category.count})`);
-          return option;
-        }));
-        this._radioCategorySignature = categorySignature;
-      }
-      this._radioFilter.value = prior;
-      const activeCategory = state.categories.find((category) => category.id === prior);
-      this._radioFilter.style.color = activeCategory?.color || '';
-      this._radioFilter.disabled = !interactive || !state.stationCount;
-    }
-
-    const tunerAvailable = interactive && state.filteredCount > 0;
-    if (this._radioTuner) this._radioTuner.hidden = !tunerAvailable;
-    if (this._radioTunerSlider) this._radioTunerSlider.disabled = !tunerAvailable;
-    if (this._radioTunerBandLabel) {
-      const activeCategory = state.categories.find((category) => category.id === state.filter);
-      this._radioTunerBandLabel.textContent = state.filter === 'all'
-        ? 'DIRECTORY BAND'
-        : `${String(activeCategory?.label || state.filter).toUpperCase()} BAND`;
-    }
-    this._radioTuner?.classList.toggle('is-static', Boolean(state.tuningStatic));
-    if (tunerAvailable) this._refreshRadioTunerBand?.();
-    if (!tunerAvailable && this._radioTunerDragging) {
-      this._radioTunerDragging = false;
-      this._radioTunerDragSnapshot = null;
-      this._radioTunerStations = [];
-      this._radioTuner?.classList.remove('is-static', 'is-dragging');
-    }
-    if (!tunerAvailable) {
-      this._radioTunerStations = [];
-      this._radioTunerPool = [];
-      this._radioTunerBandSignature = '';
-      this._radioTunerSelectedId = null;
-    }
-
-    if (this._radioStationName) this._radioStationName.textContent = selected?.name || 'NO STATION SELECTED';
-    if (this._radioStationMeta) {
-      const place = selected ? [selected.state, selected.countryCode].filter(Boolean).join(' · ') : '';
-      const signal = selected ? [selected.codec, selected.bitrate ? `${selected.bitrate} kbps` : ''].filter(Boolean).join(' · ') : '';
-      this._radioStationMeta.textContent = selected
-        ? [place, signal].filter(Boolean).join('  /  ') || 'Directory metadata only'
-        : (state.loading ? 'Loading station directory…' : 'Choose a globe marker or use next.');
-    }
-    if (this._radioStationTags) {
-      const tags = Array.isArray(selected?.tags) ? selected.tags.slice(0, 8) : [];
-      this._radioStationTags.textContent = tags.length ? `TAGS · ${tags.join(' · ')}` : '';
-    }
-    if (this._radioStationHomepage) {
-      const homepage = selected?.homepage || '';
-      this._radioStationHomepage.hidden = !homepage;
-      if (homepage) this._radioStationHomepage.href = homepage;
-      else this._radioStationHomepage.removeAttribute('href');
-    }
-
-    if (this._radioPrevBtn) this._radioPrevBtn.disabled = !interactive || !hasStations;
-    if (this._radioNextBtn) this._radioNextBtn.disabled = !interactive || !hasStations;
-    if (this._contextRadioMiniPrevBtn) this._contextRadioMiniPrevBtn.disabled = !interactive || !hasStations;
-    if (this._contextRadioMiniNextBtn) this._contextRadioMiniNextBtn.disabled = !interactive || !hasStations;
-    if (this._cockpitRadioPrevBtn) this._cockpitRadioPrevBtn.disabled = !interactive || !hasStations;
-    if (this._cockpitRadioNextBtn) this._cockpitRadioNextBtn.disabled = !interactive || !hasStations;
-    if (this._radioPlayBtn) {
-      const action = activePlayback ? 'Pause' : (state.audioState === 'paused' ? 'Resume' : 'Play');
-      this._radioPlayBtn.disabled = !interactive || !hasStations;
-      this._radioPlayBtn.classList.toggle('active', activePlayback);
-      this._radioPlayBtn.textContent = action.toUpperCase();
-      this._radioPlayBtn.setAttribute('aria-label', `${action} ${selected ? 'selected' : 'nearest'} radio station`);
-    }
-    if (this._contextRadioMiniPlayBtn) {
-      const action = activePlayback ? 'Pause' : (state.audioState === 'paused' ? 'Resume' : 'Play');
-      this._contextRadioMiniPlayBtn.disabled = !interactive || !hasStations;
-      this._contextRadioMiniPlayBtn.classList.toggle('active', activePlayback);
-      this._contextRadioMiniPlayBtn.textContent = activePlayback ? 'Ⅱ' : '▶';
-      this._contextRadioMiniPlayBtn.setAttribute('aria-label', `${action} ${selected ? 'selected' : 'nearest'} radio station`);
-      this._contextRadioMiniPlayBtn.title = action;
-    }
-    if (this._cockpitRadioPlayBtn) {
-      const action = activePlayback ? 'Pause' : (state.audioState === 'paused' ? 'Resume' : 'Play');
-      this._cockpitRadioPlayBtn.disabled = !interactive || !hasStations;
-      this._cockpitRadioPlayBtn.classList.toggle('active', activePlayback);
-      this._cockpitRadioPlayBtn.textContent = activePlayback ? 'Ⅱ' : '▶';
-      this._cockpitRadioPlayBtn.setAttribute('aria-label', `${action} ${selected ? 'selected' : 'nearest'} radio station`);
-      this._cockpitRadioPlayBtn.title = action;
-    }
-    if (this._radioStopBtn) this._radioStopBtn.disabled = !interactive || state.audioState === 'stopped';
-    if (this._radioVolume) this._radioVolume.disabled = !interactive;
-    if (this._radioVolume && document.activeElement !== this._radioVolume) {
-      this._radioVolume.value = String(Math.round(state.volume * 100));
-      if (this._radioVolumeValue) this._radioVolumeValue.textContent = `${Math.round(state.volume * 100)}%`;
-    }
-    if (this._contextRadioMiniVolume && document.activeElement !== this._contextRadioMiniVolume) {
-      this._contextRadioMiniVolume.value = String(Math.round(state.volume * 100));
-    }
-    if (this._contextRadioMiniVolume) this._contextRadioMiniVolume.disabled = !interactive;
-    if (this._contextRadioMiniVolumeValue) {
-      this._contextRadioMiniVolumeValue.textContent = `${Math.round(state.volume * 100)}%`;
-    }
-    if (this._cockpitRadioVolume && document.activeElement !== this._cockpitRadioVolume) {
-      this._cockpitRadioVolume.value = String(Math.round(state.volume * 100));
-    }
-    if (this._cockpitRadioVolume) this._cockpitRadioVolume.disabled = !interactive;
-    if (this._cockpitRadioVolumeValue) {
-      this._cockpitRadioVolumeValue.textContent = `${Math.round(state.volume * 100)}%`;
-    }
-    if (this._contextRadioMiniStation) {
-      this._contextRadioMiniStation.textContent = uncertain
-        ? 'RADIO STATE UNCERTAIN'
-        : (selected?.name || (state.loading ? 'SYNCING DIRECTORY' : 'RADIO READY'));
-    }
-    if (this._cockpitRadioStation) {
-      this._cockpitRadioStation.textContent = uncertain
-        ? 'UNCERTAIN'
-        : (selected?.name || (state.loading ? 'SYNCING' : 'READY'));
-    }
-    if (this._radioPlaybackState) {
-      const catalogSuffix = state.degraded
-        ? (state.stale ? ' · stale/degraded directory' : ' · degraded directory')
-        : (state.stale ? ' · stale directory' : '');
-      const outsideFilter = selected && state.selectedIndex < 0 ? ' · outside current filter' : '';
-      const messages = {
-        stopped: enabled ? 'Ready — playback starts only from your action' : 'Radio off',
-        loading: 'Connecting directly to broadcaster…',
-        buffering: 'Buffering broadcaster stream…',
-        playing: `Playing ${selected?.name || 'station'}`,
-        paused: `Paused ${selected?.name || 'station'}`,
-        error: state.audioError || 'Broadcaster stream unavailable',
-      };
-      const voiceSuffix = state.voiceDucked
-        ? ' · muted during voice interaction'
-        : (state.voiceRestoring ? ' · restoring volume after voice' : '');
-      const tuningSuffix = state.tuningAwaitingStationId
-        ? (state.audioState === 'error'
-          ? ' · static indicates no broadcaster audio'
-          : ' · tuning static until broadcaster starts')
-        : '';
-      const unavailable = state.tuningUnavailableStationId
-        ? 'Station unavailable after directory refresh — choose another channel'
-        : null;
-      const lifecycleMessage = transitioning
-        ? (lifecycleState === 'enabling' ? 'Radio is enabling…' : 'Radio is disabling…')
-        : null;
-      const uncertainMessage = uncertain
-        ? 'Radio lifecycle is uncertain — use Enable or Disable to reconcile'
-        : null;
-      this._radioPlaybackState.textContent = `${uncertainMessage || unavailable || lifecycleMessage || state.error || messages[state.audioState] || 'Ready'}${tuningSuffix}${voiceSuffix}${catalogSuffix}${outsideFilter}`;
-      this._radioPlaybackState.classList.toggle('error', Boolean(uncertainMessage || unavailable || state.error || state.audioState === 'error'));
-    }
-    if (
-      !enabled
-      && !transitioning
-      && !this._preservePanelStateDuringLayerClear
-      && !this._radioPanel.classList.contains('collapsed')
-    ) {
-      this.setPanelCollapsed('radio-panel', true);
-    }
-    this._scheduleRightPanelLayout();
-  }
+  _renderRadioState(...args) { return this._radioControls?._renderRadioState?.(...args); }
 
   /**
    * Activates an explicit CCTV target, then releases tracking before its camera
@@ -6312,351 +4900,50 @@ export class StyleManager {
     return this._runExplicitNavigation('camera', () => focus(cameraId));
   }
 
-  /**
-   * Wires up all CCTV panel controls: enable/disable, nearest/prev/next camera,
-   * camera select dropdown, focus, coverage, auto-hop, projection,
-   * manual calibration sliders, and save/reset buttons.
-   * @returns {void}
-   */
+  /** Compose camera panel controls from the existing camera port and application actions. */
   _initCctvPanel() {
-    if (!this._cctvPanel) return;
-
-    this._cctvEnableBtn?.addEventListener('click', async () => {
-      await this._toggleCctvEnabled();
-    });
-
-    this._cctvNearestBtn?.addEventListener('click', async () => {
-      if (!await this._toggleCctvEnabled(true)) return;
-      this._runExplicitCctvFocus(
-        () => cctvLayer.focusNearest({ focus: false }),
-        (cameraId) => cctvLayer.focusCamera(cameraId, 1.8),
-      );
-    });
-
-    this._cctvPrevBtn?.addEventListener('click', async () => {
-      if (!await this._toggleCctvEnabled(true)) return;
-      this._runExplicitCctvFocus(
-        () => cctvLayer.cycleCamera(-1),
-        (cameraId) => cctvLayer.focusCamera(cameraId, 1.4),
-      );
-    });
-
-    this._cctvNextBtn?.addEventListener('click', async () => {
-      if (!await this._toggleCctvEnabled(true)) return;
-      this._runExplicitCctvFocus(
-        () => cctvLayer.cycleCamera(1),
-        (cameraId) => cctvLayer.focusCamera(cameraId, 1.4),
-      );
-    });
-
-    this._cctvSelect?.addEventListener('change', async () => {
-      const cameraId = this._cctvSelect.value;
-      if (!cameraId) return;
-      if (!await this._toggleCctvEnabled(true)) return;
-      // Picking a camera from the dropdown flies to it. The catalog spans
-      // three metros, so a bare selection used to leave the view in the old
-      // city with a camera active thousands of km away.
-      this._runExplicitCctvFocus(
-        () => (cctvLayer.selectCamera(cameraId) ? cameraId : null),
-        (selectedId) => cctvLayer.focusCamera(selectedId, 2.2),
-      );
-      this._dataManager?.setLayerParams('cctv', { selectedCameraId: cameraId }, { origin: 'user' });
-    });
-
-    this._cctvFocusBtn?.addEventListener('click', async () => {
-      const selected = this._cctvState?.activeCameraId || this._cctvSelect?.value;
-      if (!selected) return;
-      if (!await this._toggleCctvEnabled(true)) return;
-      this._runExplicitCctvFocus(
-        () => selected,
-        (cameraId) => cctvLayer.focusCamera(cameraId, 1.9),
-      );
-      this._dataManager?.setLayerParams('cctv', { selectedCameraId: selected }, { origin: 'user' });
-    });
-
-    this._cctvCoverageBtn?.addEventListener('click', () => {
-      const current = this._cctvState?.coverageMode
-        || (this._cctvState?.showCoverage ? 'on' : 'off');
-      const next = current === 'off' ? 'on' : current === 'on' ? 'viewshed' : 'off';
-      this._dataManager?.setLayerParams('cctv', { coverageMode: next }, { origin: 'user' });
-    });
-
-    this._cctvAutoHopBtn?.addEventListener('click', () => {
-      const current = !!this._cctvState?.autoHop;
-      this._dataManager?.setLayerParams('cctv', { autoHop: !current }, { origin: 'user' });
-    });
-
-    this._cctvProjectionBtn?.addEventListener('click', () => {
-      const current = this._cctvState?.showProjection !== false;
-      this._dataManager?.setLayerParams('cctv', { showProjection: !current }, { origin: 'user' });
-    });
-
-    this._cctvAdjustBtn?.addEventListener('click', () => {
-      const current = !!this._cctvState?.calibrationMode;
-      this._dataManager?.setLayerParams('cctv', { calibrationMode: !current }, { origin: 'user' });
-    });
-
-    // Click-to-edit pose readout: each chip swaps to a number input; Enter or
-    // blur commits (converted to a calibration offset against basePose),
-    // Escape cancels. Delegated so re-renders never re-bind.
-    this._cctvCalReadout?.addEventListener('click', (event) => {
-      const chip = event.target.closest?.('.cctv-cal-value');
-      if (!chip || chip.disabled || chip.querySelector('input')) return;
-      this._beginCctvCalValueEdit(chip);
-    });
-
-    this._cctvCalibSaveBtn?.addEventListener('click', () => {
-      const cameraId = this._activeCctvCameraId();
-      if (!cameraId || !this._dataManager) return;
-      this._dataManager.setLayerParams('cctv', {
-        selectedCameraId: cameraId,
-        calibration: { cameraId, save: true },
-      }, { origin: 'user' });
-      this._showToast('CCTV calibration saved');
-    });
-
-    this._cctvCalibResetBtn?.addEventListener('click', () => {
-      this._resetCctvCalibration();
-    });
-
-    this._renderCctvState(null);
-    this._syncCctvPanelViewport();
-  }
-
-  /**
-   * Returns the currently active CCTV camera ID from state or the select dropdown.
-   * @returns {string} Camera ID, or empty string if none.
-   */
-  _activeCctvCameraId() {
-    return this._cctvState?.activeCameraId || this._cctvSelect?.value || '';
-  }
-
-  /**
-   * Clears the preview and invalidates any in-flight preload.
-   * @returns {void}
-   */
-  _clearCctvFrame() {
-    this._cctvFrameRequestToken += 1;
-    this._cctvFramePreloader = null;
-    if (this._cctvFrame) {
-      this._cctvFrame.classList.remove('active');
-      this._cctvFrame.removeAttribute('src');
-      this._cctvFrame.dataset.cameraId = '';
-      this._cctvFrame.dataset.currentSrc = '';
-      this._cctvFrame.dataset.loading = '';
-      this._cctvFrame.dataset.error = '';
-    }
-    this._cctvFrameWrap?.classList.remove('loading', 'has-frame');
-  }
-
-  /**
-   * Fetches a replacement frame OFF-DOM and assigns it to the live element
-   * only once it has decoded.
-   *
-   * The live <img> is never pointed at an unresolved URL. A completed
-   * preload is already in the HTTP cache, so assigning `src` swaps in a
-   * single paint — the browser's own atomic behavior. A slow or failed
-   * fetch never reaches the element at all, so settled pixels survive.
-   *
-   * (A two-slot crossfade was tried and reverted: with no z-index the slots
-   * paint in DOM order, so promotion was asymmetric and yanked the visible
-   * layer once per refresh — a flicker on every feed cycle. Measured against
-   * main, which never blanked on a successful refresh in the first place.)
-   *
-   * @param {string} src
-   * @param {string} cameraId
-   * @param {boolean} cameraChanged
-   * @returns {void}
-   */
-  _queueCctvFrame(src, cameraId, cameraChanged) {
-    if (!this._cctvFrame || !src) return;
-
-    if (cameraChanged) {
-      // A different camera gets an honest acquisition state. Never retain
-      // the prior camera's pixels under the newly selected metadata.
-      this._cctvFrame.classList.remove('active');
-      this._cctvFrame.removeAttribute('src');
-      this._cctvFrameWrap?.classList.remove('has-frame');
-    }
-
-    const token = ++this._cctvFrameRequestToken;
-    this._cctvFrame.dataset.cameraId = cameraId;
-    this._cctvFrame.dataset.currentSrc = src;
-    this._cctvFrame.dataset.loading = 'true';
-    this._cctvFrame.dataset.error = '';
-    this._cctvFrameWrap?.classList.toggle(
-      'loading',
-      !this._cctvFrameWrap?.classList.contains('has-frame')
-    );
-
-    const preloader = new Image();
-    this._cctvFramePreloader = preloader;
-    preloader.onload = () => this._settleCctvFrame(token, src, true);
-    preloader.onerror = () => this._settleCctvFrame(token, src, false);
-    preloader.src = src;
-  }
-
-  /**
-   * Commits a decoded frame to the live element, or records the failure
-   * without disturbing whatever is already on screen.
-   * @param {number} token - Request token; a stale one is ignored.
-   * @param {string} src
-   * @param {boolean} ok
-   * @returns {void}
-   */
-  _settleCctvFrame(token, src, ok) {
-    if (!this._cctvFrame || token !== this._cctvFrameRequestToken) return;
-    this._cctvFramePreloader = null;
-    this._cctvFrame.dataset.loading = '';
-    this._cctvFrameWrap?.classList.remove('loading');
-
-    const syncBadge = () => this._syncCctvSourceBadge(
-      this._cctvState?.activeCamera,
-      !!this._cctvState?.enabled && !!this._dataManager?.isEnabled('cctv')
-    );
-
-    if (!ok) {
-      // Leave the element untouched — a settled frame stays on screen.
-      this._cctvFrame.dataset.error = 'true';
-      syncBadge();
-      return;
-    }
-
-    this._cctvFrame.dataset.error = '';
-    this._cctvFrame.src = src;
-    this._cctvFrame.classList.add('active');
-    this._cctvFrameWrap?.classList.add('has-frame');
-    syncBadge();
-  }
-
-  /**
-   * Keeps the source badge truthful about the visible frame lifecycle. Health
-   * may already be OK while the browser is still decoding the requested image.
-   * @param {object|null} activeCamera
-   * @param {boolean} enabled
-   * @returns {void}
-   */
-  _syncCctvSourceBadge(activeCamera, enabled) {
-    if (!this._cctvSourceBadge) return;
-    if (!enabled || !activeCamera) {
-      this._cctvSourceBadge.textContent = 'SOURCE · UNKNOWN';
-      this._cctvSourceBadge.dataset.frameState = 'idle';
-      return;
-    }
-    const hasDisplayedFrame = this._cctvFrameWrap?.classList.contains('has-frame');
-    if (this._cctvFrame?.dataset.loading === 'true' && !hasDisplayedFrame) {
-      this._cctvSourceBadge.textContent = 'FRAME · LOADING';
-      this._cctvSourceBadge.dataset.frameState = 'loading';
-      return;
-    }
-    if (this._cctvFrame?.dataset.error === 'true' && !hasDisplayedFrame) {
-      this._cctvSourceBadge.textContent = 'FRAME · UNAVAILABLE';
-      this._cctvSourceBadge.dataset.frameState = 'error';
-      return;
-    }
-    const kind = String(activeCamera.sourceKind || activeCamera.feedType || 'unknown').toUpperCase();
-    const status = String(activeCamera.sourceStatus || 'unknown').toUpperCase();
-    this._cctvSourceBadge.textContent = `${kind} · ${status}`;
-    this._cctvSourceBadge.dataset.frameState = 'ready';
-  }
-
-  /**
-   * Resets calibration for the active CCTV camera to its server defaults.
-   * @returns {void}
-   */
-  _resetCctvCalibration() {
-    const cameraId = this._activeCctvCameraId();
-    if (!cameraId || !this._dataManager) return;
-    this._dataManager.setLayerParams('cctv', {
-      selectedCameraId: cameraId,
-      calibration: {
-        cameraId,
-        reset: true,
+    this._cctvControls?.destroy();
+    this._cctvControls = new CctvControls({
+      elements: {
+        _cctvAdjustBtn: this._cctvAdjustBtn,
+        _cctvAutoHopBtn: this._cctvAutoHopBtn,
+        _cctvCalReadout: this._cctvCalReadout,
+        _cctvCalibResetBtn: this._cctvCalibResetBtn,
+        _cctvCalibSaveBtn: this._cctvCalibSaveBtn,
+        _cctvCoverageBtn: this._cctvCoverageBtn,
+        _cctvEnableBtn: this._cctvEnableBtn,
+        _cctvFocusBtn: this._cctvFocusBtn,
+        _cctvFrame: this._cctvFrame,
+        _cctvFrameWrap: this._cctvFrameWrap,
+        _cctvMeta: this._cctvMeta,
+        _cctvNearestBtn: this._cctvNearestBtn,
+        _cctvNextBtn: this._cctvNextBtn,
+        _cctvPanel: this._cctvPanel,
+        _cctvPrevBtn: this._cctvPrevBtn,
+        _cctvProjectionBtn: this._cctvProjectionBtn,
+        _cctvQualityChip: this._cctvQualityChip,
+        _cctvSelect: this._cctvSelect,
+        _cctvSourceBadge: this._cctvSourceBadge,
+        _cctvSummary: this._cctvSummary,
+        _cctvSyncChip: this._cctvSyncChip,
+        _cctvSyncLabel: this._cctvSyncLabel,
+        _cctvSyncProgress: this._cctvSyncProgress,
       },
-    }, { origin: 'user' });
-    this._showToast('CCTV calibration reset');
-  }
-
-  /**
-   * Swaps a readout chip's text for an inline number input. Enter/blur commits
-   * (converted to a calibration offset patch), Escape cancels. The next state
-   * re-render restores the chip text either way.
-   * @param {HTMLButtonElement} chip - The clicked `.cctv-cal-value` element.
-   * @returns {void}
-   */
-  _beginCctvCalValueEdit(chip) {
-    const field = CCTV_CAL_FIELDS[chip.dataset.calField];
-    const activeCamera = this._cctvState?.activeCamera;
-    if (!field || !activeCamera?.basePose) return;
-    const startValue = field.get(activeCamera);
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.step = field.decimals > 0 ? '0.1' : '1';
-    input.value = Number(startValue).toFixed(field.decimals);
-    input.className = 'cctv-cal-input';
-    chip.textContent = `${field.label} `;
-    chip.appendChild(input);
-    input.focus();
-    input.select();
-
-    let finished = false;
-    const finish = (commit) => {
-      if (finished) return;
-      finished = true;
-      const typed = parseFloat(input.value);
-      input.remove();
-      if (commit && Number.isFinite(typed)) {
-        const cameraId = this._activeCctvCameraId();
-        if (cameraId && this._dataManager) {
-          this._dataManager.setLayerParams('cctv', {
-            selectedCameraId: cameraId,
-            calibration: { cameraId, patch: field.toPatch(typed, activeCamera.basePose) },
-          }, { origin: 'user' });
-          return; // re-render restores the chip text from fresh state
-        }
-      }
-      this._syncCctvCalReadout(!!this._cctvState?.enabled, this._cctvState?.activeCamera || null);
-    };
-    input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') finish(true);
-      else if (event.key === 'Escape') finish(false);
-      event.stopPropagation();
+      cctv: cctvLayer,
+      actions: {
+        isEnabled: () => this._dataManager?.isEnabled('cctv'),
+        setParams: (params, options) => this._dataManager?.setLayerParams('cctv', params, options),
+        toggleEnabled: (...args) => this._toggleCctvEnabled(...args),
+        runExplicitFocus: (...args) => this._runExplicitCctvFocus(...args),
+        setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
+        showToast: (message) => this._showToast(message),
+        syncViewport: () => this._syncCctvPanelViewport(),
+        setSplitFlapText,
+      },
     });
-    input.addEventListener('blur', () => finish(true));
-    input.addEventListener('click', (event) => event.stopPropagation());
   }
 
-  /**
-   * Synchronizes the pose readout chips, ADJUST button, and SAVE/RESET
-   * disabled states with the active camera.
-   * @param {boolean} enabled - Whether the CCTV layer is currently enabled.
-   * @param {object|null} activeCamera - The active camera data object (may be null).
-   * @returns {void}
-   */
-  _syncCctvCalReadout(enabled, activeCamera) {
-    const canCalibrate = !!enabled && !!activeCamera;
-    if (this._cctvAdjustBtn) {
-      const adjustOn = !!this._cctvState?.calibrationMode;
-      this._cctvAdjustBtn.classList.toggle('active', adjustOn && canCalibrate);
-      this._cctvAdjustBtn.textContent = adjustOn ? 'ADJUST ON' : 'ADJUST';
-      this._cctvAdjustBtn.disabled = !canCalibrate;
-    }
-    if (this._cctvCalReadout) {
-      for (const chip of this._cctvCalReadout.querySelectorAll('.cctv-cal-value')) {
-        if (chip.querySelector('input')) continue; // an edit is in flight — don't clobber
-        const field = CCTV_CAL_FIELDS[chip.dataset.calField];
-        if (!field) continue;
-        const value = canCalibrate ? field.get(activeCamera) : null;
-        chip.textContent = Number.isFinite(value)
-          ? `${field.label} ${Number(value).toFixed(field.decimals)}${field.unit}`
-          : `${field.label} --`;
-        chip.disabled = !canCalibrate;
-      }
-    }
-    for (const el of [this._cctvCalibSaveBtn, this._cctvCalibResetBtn]) {
-      if (el) el.disabled = !canCalibrate;
-    }
-  }
+
 
   /**
    * Toggles the CCTV layer enabled state. When enabling and no camera is active,
@@ -6665,6 +4952,7 @@ export class StyleManager {
    * @returns {Promise<boolean>} True if the layer is now in the requested state.
    */
   async _toggleCctvEnabled(forceState) {
+    if (this._disposed) return false;
     if (!this._dataManager || !this._dataManager.layers?.has('cctv')) {
       this._showToast('CCTV layer unavailable');
       return false;
@@ -6679,7 +4967,8 @@ export class StyleManager {
         trackedEntity: this.viewer?.trackedEntity,
         cockpitActive: !!this.cockpitView?.active,
       }),
-      shouldFocus: () => !this._cctvState?.activeCameraId,
+      shouldFocus: () => !this._disposed && this._dataManager.isEnabled('cctv')
+        && !this._cctvControls?.getState()?.activeCameraId,
       activate: () => cctvLayer.focusNearest({ focus: false }),
       fly: (cameraId) => this._runExplicitCctvFocus(
         () => cameraId,
@@ -6689,195 +4978,6 @@ export class StyleManager {
     return true;
   }
 
-  /**
-   * Maps a `deriveCalBadge` value (cctv.js) to its panel copy. Single source
-   * of truth for CAL-badge casing — used by both the quality chip and the
-   * meta line so the two never drift onto different label conventions.
-   * @param {'calibrated'|'curated'|'raw-prior'|null} badge - Badge state from cctv.js.
-   * @returns {string} Display label, or '--' when there is no active camera.
-   */
-  _calBadgeLabel(badge) {
-    switch (badge) {
-      case 'calibrated': return 'CALIBRATED';
-      case 'curated': return 'CURATED';
-      case 'raw-prior': return 'RAW PRIOR';
-      default: return '--';
-    }
-  }
-
-  /**
-   * Full re-render of the CCTV panel UI from a CCTV layer state snapshot.
-   * Updates enable button, camera select dropdown, navigation buttons,
-   * coverage/auto-hop/projection toggles, quality chip, source badge,
-   * metadata line, frame image, calibration controls, and summary text.
-   * @param {object|null} state - CCTV layer UI state, or null to render empty.
-   * @returns {void}
-   */
-  _renderCctvState(state) {
-    this._cctvState = state || null;
-    const cameras = state?.cameras || [];
-    const enabled = !!state?.enabled && !!this._dataManager?.isEnabled('cctv');
-    const activeId = state?.activeCameraId || '';
-    const activeCamera = state?.activeCamera || null;
-
-    // Auto-expand the panel when the active camera CHANGES to a new non-null
-    // id while the layer is enabled. Covers click-on-globe, panel controls,
-    // and voice (selectCamera/cycleCamera/focusNearest all notify through
-    // this subscription). The last-seen guard keeps routine notifications
-    // from re-expanding a panel the user deliberately collapsed, and timed
-    // auto-hop transitions only expand on the first activation so the panel
-    // does not pop open on every hop.
-    const effectiveActiveId = enabled ? (activeId || null) : null;
-    const isFirstActivation = this._lastSeenCctvActiveId === null;
-    if (effectiveActiveId
-      && effectiveActiveId !== this._lastSeenCctvActiveId
-      && (!state?.autoHop || isFirstActivation)) {
-      this.setPanelCollapsed('cctv-panel', false, { explicit: Boolean(state?.explicitSelection) });
-    }
-    this._lastSeenCctvActiveId = effectiveActiveId;
-
-    this._updateCctvSyncChip(state?.loading, enabled);
-
-    if (this._cctvEnableBtn) {
-      this._cctvEnableBtn.classList.toggle('active', enabled);
-      this._cctvEnableBtn.textContent = enabled ? 'CCTV ON' : 'CCTV OFF';
-    }
-
-    if (this._cctvSelect) {
-      const shouldRebuild = this._cctvSelect.options.length !== cameras.length
-        || cameras.some((cam, idx) => this._cctvSelect.options[idx]?.value !== cam.id);
-      if (shouldRebuild) {
-        this._cctvSelect.innerHTML = '';
-        for (const camera of cameras) {
-          const option = document.createElement('option');
-          option.value = camera.id;
-          option.textContent = `${camera.city} · ${camera.name}`;
-          this._cctvSelect.appendChild(option);
-        }
-      }
-      this._cctvSelect.disabled = !enabled || cameras.length === 0;
-      if (activeId && Array.from(this._cctvSelect.options).some((opt) => opt.value === activeId)) {
-        this._cctvSelect.value = activeId;
-      } else if (!activeId) {
-        this._cctvSelect.selectedIndex = -1;
-      }
-    }
-
-    for (const btn of [this._cctvNearestBtn, this._cctvPrevBtn, this._cctvNextBtn]) {
-      if (!btn) continue;
-      btn.disabled = !enabled || cameras.length === 0;
-    }
-    if (this._cctvFocusBtn) {
-      this._cctvFocusBtn.disabled = !enabled || cameras.length === 0 || !activeId;
-    }
-
-    if (this._cctvCoverageBtn) {
-      // Tri-state (viewshed design §3b): off → on (wireframes) → viewshed
-      // (color-coded volumes). The click handler cycles; this renders.
-      const mode = state?.coverageMode || (state?.showCoverage ? 'on' : 'off');
-      this._cctvCoverageBtn.classList.toggle('active', mode !== 'off');
-      this._cctvCoverageBtn.textContent = mode === 'viewshed'
-        ? 'VIEWSHED ON'
-        : mode === 'on' ? 'COVERAGE ON' : 'COVERAGE OFF';
-      this._cctvCoverageBtn.disabled = !enabled;
-    }
-
-    if (this._cctvAutoHopBtn) {
-      const autoHop = !!state?.autoHop;
-      this._cctvAutoHopBtn.classList.toggle('active', autoHop);
-      this._cctvAutoHopBtn.textContent = autoHop ? 'AUTO HOP ON' : 'AUTO HOP OFF';
-      this._cctvAutoHopBtn.disabled = !enabled;
-    }
-
-    if (this._cctvProjectionBtn) {
-      const showProjection = state?.showProjection !== false;
-      this._cctvProjectionBtn.classList.toggle('active', showProjection);
-      this._cctvProjectionBtn.textContent = showProjection ? 'PROJECTION ON' : 'PROJECTION OFF';
-      this._cctvProjectionBtn.disabled = !enabled;
-    }
-
-    if (this._cctvQualityChip) {
-      // CAL badge (cctv-v2 design §3b, amended by LOCKED §9.2 — panel-only,
-      // no in-world tint): three states driven by cctv.js's deriveCalBadge,
-      // no client-side scoring math. Casing is unified via _calBadgeLabel so
-      // the chip and the meta line never drift onto different conventions.
-      // Save-gated persistence (viewshed design §3e): unsaved live edits show
-      // EDITED on top of whatever the persisted badge state is — SAVE CAL
-      // promotes to CALIBRATED, RESET CAL clears.
-      const badge = activeCamera?.calBadge || null;
-      const dirty = !!activeCamera?.calDirty;
-      this._cctvQualityChip.textContent = dirty
-        ? 'CAL · EDITED (UNSAVED)'
-        : `CAL · ${this._calBadgeLabel(badge)}`;
-      this._cctvQualityChip.dataset.calBadge = dirty ? 'edited' : (badge || '');
-    }
-
-    this._syncCctvCalReadout(enabled, activeCamera);
-
-    if (this._cctvMeta) {
-      if (activeCamera) {
-        const provider = activeCamera.sourceLabel || activeCamera.provider || 'Configured Source';
-        const statusMsg = activeCamera.sourceMessage ? ` · ${activeCamera.sourceMessage}` : '';
-        const calBadge = activeCamera.calBadge ? this._calBadgeLabel(activeCamera.calBadge) : '';
-        const projLabel = state?.showProjection !== false ? 'MONITOR' : 'OFF';
-        this._cctvMeta.textContent = `${activeCamera.city} · HDG ${Math.round(activeCamera.headingDeg)}° · FOV ${Math.round(activeCamera.fovDeg)}° · RANGE ${Math.round(activeCamera.rangeM)}m · ${projLabel}${calBadge ? ` · ${calBadge}` : ''} · ${provider}${statusMsg}`;
-      } else if (cameras.length > 0) {
-        this._cctvMeta.textContent = enabled
-          ? `${cameras.length} cameras loaded · click a camera to activate`
-          : `${cameras.length} cameras loaded · enable CCTV to activate`;
-      } else {
-        this._cctvMeta.textContent = 'Enable CCTV to load camera intersections';
-      }
-    }
-
-    if (this._cctvFrame) {
-      const nextSrc = enabled ? activeCamera?.frameUrl : null;
-      const nextCameraId = enabled ? (activeCamera?.id || '') : '';
-      const cameraChanged = this._cctvFrame.dataset.cameraId !== nextCameraId;
-      const frameLoading = this._cctvFrame.dataset.loading === 'true';
-      // A same-camera refresh waits for the current image to settle. Replacing
-      // src every 10 seconds can cancel a slow but healthy decode forever and
-      // leave SNAPSHOT · OK beside a blank/loading preview. Camera changes are
-      // immediate so navigation never waits on the prior camera's request.
-      if (nextSrc && (cameraChanged || (!frameLoading && this._cctvFrame.dataset.currentSrc !== nextSrc))) {
-        this._queueCctvFrame(nextSrc, nextCameraId, cameraChanged);
-      }
-      if (!nextSrc) {
-        this._clearCctvFrame();
-      }
-    }
-
-    this._syncCctvSourceBadge(activeCamera, enabled);
-    this._typeCctvSummary(state?.summary || 'Enable CCTV to start camera-linked intelligence summaries.');
-  }
-
-  /**
-   * Typewriter-animates CCTV summary text into the summary element.
-   * Skips animation if the text hasn't changed since the last call.
-   * Advances 3 characters per 20ms tick for a fast teletype effect.
-   * @param {string} text - Summary text to display.
-   * @returns {void}
-   */
-  _typeCctvSummary(text) {
-    if (!this._cctvSummary) return;
-    const nextText = String(text || '').trim() || 'No summary available.';
-    if (nextText === this._lastCctvSummaryText) return;
-    this._lastCctvSummaryText = nextText;
-
-    clearInterval(this._cctvSummaryTypingTimer);
-    this._cctvSummary.textContent = '';
-    let idx = 0;
-    this._cctvSummaryTypingTimer = setInterval(() => {
-      idx += 3;
-      if (idx >= nextText.length) {
-        this._cctvSummary.textContent = nextText;
-        clearInterval(this._cctvSummaryTypingTimer);
-        this._cctvSummaryTypingTimer = null;
-        return;
-      }
-      this._cctvSummary.textContent = nextText.slice(0, idx);
-    }, 20);
-  }
 
   /**
    * Returns the versioned localStorage key for a panel's saved position.
@@ -7055,187 +5155,20 @@ export class StyleManager {
    * @returns {void}
    */
   _syncRightPanelAdaptiveLayout() {
-    const stack = this._rightPanelStack;
-    if (!stack) return;
-
-    const panels = [...stack.children].filter((panel) => panel.matches('[data-panel-id]'));
-    if (!this.hud.visible || this.hud.getVariant() !== 'tactical') {
-      for (const panel of panels.filter((item) => item.classList.contains('layout-auto-collapsed'))) {
-        panel.classList.remove('collapsed', 'layout-auto-collapsed');
-        this._syncPanelCollapseButton(panel);
-      }
-    }
-    const isMobile = window.matchMedia('(max-width: 720px)').matches;
-    const hasExpandedPanel = panels.some((panel) => (
-      !panel.classList.contains('collapsed') && (!isMobile || panel.id !== 'pp-toggles')
-    ));
-    const exclusive = shouldHideCollapsedRightPanels({
-      hudVariant: this.hud.getVariant(),
-      hasExpandedPanel,
+    layoutRightPanelRail({
+      stack: this._rightPanelStack,
+      obstacles: document.querySelectorAll(RIGHT_STACK_OBSTACLE_SELECTOR),
+      windowRef: window,
+      hud: { visible: this.hud.visible, variant: this.hud.getVariant() },
+      preferredPanelId: this._rightStackPreferredPanelId,
+      onCollapse: (panel) => this._syncPanelCollapseButton(panel),
+      onRetry: () => this._scheduleRightPanelLayout(),
+      leftStack: this._leftPanelStack,
+      displayPanel: this._ppToggles,
+      readDisplayScrollTop: () => this._displayPortalScrollRestoreOwner === 'standard'
+        ? this._standardDisplayScrollTop
+        : (this._ppToggles?.scrollTop || 0),
     });
-    stack.classList.toggle('layout-exclusive', exclusive);
-    for (const panel of panels) {
-      if (exclusive && panel.classList.contains('collapsed')) panel.setAttribute('aria-hidden', 'true');
-      else panel.removeAttribute('aria-hidden');
-    }
-
-    if (isMobile) {
-      stack.classList.remove('layout-focus');
-      stack.style.removeProperty('--right-stack-safe-top');
-      stack.style.removeProperty('--right-stack-max-height');
-      for (const panel of panels) panel.style.removeProperty('--right-panel-allocated-height');
-      stack.dataset.layoutMode = 'mobile';
-      return;
-    }
-
-    const viewportHeight = Math.max(1, window.innerHeight);
-    const safeGap = Math.max(8, viewportHeight * 0.012);
-    const stackRect = stack.getBoundingClientRect();
-    const leftStackTop = this._leftPanelStack?.getBoundingClientRect().top;
-    const alignedTop = Number.isFinite(leftStackTop)
-      ? leftStackTop
-      : viewportHeight * 0.26;
-    const obstacleRects = [];
-
-    for (const obstacle of document.querySelectorAll(RIGHT_STACK_OBSTACLE_SELECTOR)) {
-      if (stack.contains(obstacle)) continue;
-      let hiddenByAncestor = false;
-      for (let element = obstacle; element; element = element.parentElement) {
-        const style = getComputedStyle(element);
-        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) {
-          hiddenByAncestor = true;
-          break;
-        }
-      }
-      if (hiddenByAncestor) continue;
-      const rect = obstacle.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) continue;
-      obstacleRects.push({
-        left: rect.left,
-        right: rect.right,
-        top: rect.top,
-        bottom: rect.bottom,
-      });
-    }
-
-    const visiblePanels = panels.filter((panel) => (
-      !exclusive || !panel.classList.contains('collapsed')
-    ));
-    const displayScrollTop = this._displayPortalScrollRestoreOwner === 'standard'
-      ? this._standardDisplayScrollTop
-      : (this._ppToggles?.scrollTop || 0);
-    // Measure intrinsic content, not the allocation written by the previous
-    // layout pass. Display is the exception: its own scrollHeight already
-    // exposes every control, and removing its live allocation can reset the
-    // user's scroll position while HUD or preset content is settling.
-    for (const panel of visiblePanels) {
-      if (!panel.classList.contains('collapsed') && panel !== this._ppToggles) {
-        panel.style.removeProperty('--right-panel-allocated-height');
-      }
-    }
-    const gap = parseFloat(getComputedStyle(stack).rowGap) || 0;
-    const naturalHeight = visiblePanels.reduce((total, panel) => (
-      total + Math.max(
-        panel.getBoundingClientRect().height,
-        panel.scrollHeight || 0,
-        panel.classList.contains('collapsed') ? 42 : 0,
-      )
-    ), 0) + gap * Math.max(0, visiblePanels.length - 1);
-    const layout = resolveHudRailLayout({
-      viewportHeight,
-      panelHeight: naturalHeight,
-      laneLeft: stackRect.left,
-      laneRight: stackRect.right,
-      obstacles: obstacleRects,
-      baseTop: alignedTop,
-      baseBottom: viewportHeight * 0.96,
-      gap: safeGap,
-      align: 'start',
-    });
-    if (!layout) return;
-    const { safeTop, safeBottom, maxHeight: availableHeight } = layout;
-    const stabilityBand = viewportHeight * 0.01;
-    const wasFocused = stack.classList.contains('layout-focus');
-    const shouldFocus = wasFocused
-      ? naturalHeight > availableHeight - stabilityBand * 2
-      : naturalHeight > availableHeight - stabilityBand;
-    const layoutTop = shouldFocus ? safeTop : layout.top;
-    const collapsedHeight = visiblePanels.reduce((total, panel) => (
-      panel.classList.contains('collapsed')
-        ? total + panel.getBoundingClientRect().height
-        : total
-    ), 0);
-    const expandedPanelsInDomOrder = visiblePanels.filter((panel) => !panel.classList.contains('collapsed'));
-    const focusedExpandedPanel = expandedPanelsInDomOrder.find((panel) => panel.contains(document.activeElement));
-    const preferredExpandedPanel = expandedPanelsInDomOrder.find(
-      (panel) => panel.id === this._rightStackPreferredPanelId,
-    ) || focusedExpandedPanel;
-    // Match the left lane: allocation order follows the latest explicit
-    // disclosure, not DOM order. A focused panel is the fallback owner so
-    // temporary presentation collapse never strands keyboard focus.
-    const expandedPanels = preferredExpandedPanel
-      ? [preferredExpandedPanel, ...expandedPanelsInDomOrder.filter((panel) => panel !== preferredExpandedPanel)]
-      : expandedPanelsInDomOrder;
-    const expandedAvailableHeight = Math.max(
-      0,
-      safeBottom - layoutTop - collapsedHeight - gap * Math.max(0, visiblePanels.length - 1),
-    );
-    const expandedHeights = allocatePanelStackHeights({
-      naturalHeights: expandedPanels.map((panel) => Math.max(
-        panel.getBoundingClientRect().height,
-        panel.scrollHeight || 0,
-      )),
-      availableHeight: expandedAvailableHeight,
-    });
-    const autoCollapseIndices = this.hud.visible ? panelStackAutoCollapseIndices({
-      naturalHeights: expandedPanels.map((panel) => Math.max(
-        panel.getBoundingClientRect().height,
-        panel.scrollHeight || 0,
-      )),
-      allocatedHeights: expandedHeights,
-      collapseLaterPanels: shouldFocus && this.hud.getVariant() === 'tactical',
-    }) : [];
-    if (autoCollapseIndices.length) {
-      for (const index of autoCollapseIndices) {
-        const panel = expandedPanels[index];
-        panel.classList.add('collapsed', 'layout-auto-collapsed');
-        this._syncPanelCollapseButton(panel);
-      }
-      this._scheduleRightPanelLayout();
-      return;
-    }
-    // Write-if-changed. This pass runs on the 500 ms stats cadence, and an
-    // unconditional REMOVE-then-SET of an unchanged allocation is two style
-    // mutations per tick on `#pp-toggles` (the one panel the measure-strip
-    // above deliberately skips) — churn that reads as a genuine panel move to
-    // the world-overlay host's occluder observer and defeats parked-idle
-    // render savings. Only a real allocation change may touch the attribute.
-    expandedPanels.forEach((panel, index) => {
-      const next = `${expandedHeights[index].toFixed(1)}px`;
-      if (panel.style.getPropertyValue('--right-panel-allocated-height') !== next) {
-        panel.style.setProperty('--right-panel-allocated-height', next);
-      }
-    });
-    for (const panel of panels) {
-      if (expandedPanels.includes(panel)) continue;
-      panel.style.removeProperty('--right-panel-allocated-height');
-    }
-
-    stack.style.setProperty('--right-stack-safe-top', `${layoutTop.toFixed(1)}px`);
-    stack.style.setProperty('--right-stack-max-height', `${Math.max(0, safeBottom - layoutTop).toFixed(1)}px`);
-    stack.classList.toggle('layout-focus', shouldFocus);
-    stack.dataset.layoutMode = shouldFocus ? 'focus' : 'normal';
-    stack.dataset.safeTop = layoutTop.toFixed(1);
-    stack.dataset.safeBottom = safeBottom.toFixed(1);
-    stack.dataset.availableHeight = availableHeight.toFixed(1);
-    stack.dataset.requiredHeight = naturalHeight.toFixed(1);
-    stack.dataset.expandedCount = String(expandedPanels.length);
-
-    if (this._ppToggles && expandedPanels.includes(this._ppToggles)) {
-      const maxScrollTop = Math.max(0, this._ppToggles.scrollHeight - this._ppToggles.clientHeight);
-      this._ppToggles.scrollTop = Math.min(displayScrollTop, maxScrollTop);
-    }
-
   }
 
   /**
@@ -7340,264 +5273,23 @@ export class StyleManager {
   }
 
   /**
-   * Estimates an expanded panel's unconstrained content height from its
-   * visible direct children and their scroll extents. This avoids treating a
-   * flex-grown panel as naturally tall while still accounting for nested lists.
-   * @param {HTMLElement} panel - Expanded accordion panel.
-   * @returns {number} Natural height in rendered CSS pixels.
-   */
-  _measureLeftPanelNaturalHeight(panel) {
-    const inner = [...panel.children].find((child) => !child.classList.contains('panel-glow'));
-    if (!inner) return Math.ceil(panel.scrollHeight || panel.getBoundingClientRect().height);
-
-    const innerRect = inner.getBoundingClientRect();
-    const panelStyle = getComputedStyle(panel);
-    const innerStyle = getComputedStyle(inner);
-    const paddingBottom = parseFloat(innerStyle.paddingBottom) || 0;
-    let contentBottom = parseFloat(innerStyle.paddingTop) || 0;
-
-    for (const child of inner.children) {
-      const childStyle = getComputedStyle(child);
-      if (childStyle.display === 'none' || childStyle.visibility === 'hidden') continue;
-      const childRect = child.getBoundingClientRect();
-      const marginBottom = parseFloat(childStyle.marginBottom) || 0;
-      const naturalChildHeight = Math.max(childRect.height, child.scrollHeight || 0);
-      const childBottom = childRect.top - innerRect.top + naturalChildHeight + marginBottom;
-      contentBottom = Math.max(contentBottom, childBottom);
-    }
-
-    const wrapperChrome = (parseFloat(panelStyle.borderTopWidth) || 0)
-      + (parseFloat(panelStyle.borderBottomWidth) || 0)
-      + (parseFloat(panelStyle.paddingTop) || 0)
-      + (parseFloat(panelStyle.paddingBottom) || 0);
-    return Math.ceil(contentBottom + paddingBottom + wrapperChrome);
-  }
-
-  /**
    * Measures a live obstacle-free corridor for the left accordion and toggles
    * focus mode only when the expanded panel plus sibling labels cannot fit.
    * Safe boundaries are written as viewport-relative CSS values.
    * @returns {void}
    */
   _syncLeftPanelAdaptiveLayout() {
-    const stack = this._leftPanelStack;
-    if (!stack) return;
-
-    const panels = [...stack.querySelectorAll(':scope > [data-panel-id]')];
-    if (!panels.length) return;
-    if (!this.hud.visible || this.hud.getVariant() !== 'tactical') {
-      for (const panel of panels.filter((item) => item.classList.contains('layout-auto-collapsed'))) {
-        panel.classList.remove('collapsed', 'layout-auto-collapsed');
-        this._syncPanelCollapseButton(panel);
-      }
-    }
-
-    // The existing narrow-screen composition has its own full-width stack.
-    // Keep this desktop lane engine from fighting those dedicated rules.
-    if (window.matchMedia('(max-width: 720px)').matches) {
-      stack.classList.remove('layout-focus');
-      stack.classList.remove('layout-tail');
-      stack.style.removeProperty('--left-stack-safe-top');
-      stack.style.removeProperty('--left-stack-safe-bottom');
-      stack.style.removeProperty('--left-stack-centered-height');
-      stack.dataset.layoutMode = 'mobile';
-      for (const panel of panels) {
-        panel.removeAttribute('aria-hidden');
-        panel.style.removeProperty('--left-panel-allocated-height');
-      }
-      return;
-    }
-
-    const viewportHeight = Math.max(1, window.innerHeight);
-    const stackRect = stack.getBoundingClientRect();
-    const baseTop = viewportHeight * 0.26;
-    const baseBottomInset = viewportHeight * 0.04;
-    const safeGap = viewportHeight * 0.012;
-    let obstacleSafeTop = viewportHeight * 0.04;
-    let safeTop = baseTop;
-    let safeBottom = viewportHeight - baseBottomInset;
-    const bottomObstacles = [];
-
-    for (const obstacle of document.querySelectorAll(LEFT_STACK_OBSTACLE_SELECTOR)) {
-      if (stack.contains(obstacle)) continue;
-      let hiddenByAncestor = false;
-      for (let element = obstacle; element; element = element.parentElement) {
-        const style = getComputedStyle(element);
-        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) {
-          hiddenByAncestor = true;
-          break;
-        }
-      }
-      if (hiddenByAncestor) continue;
-      const rect = obstacle.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) continue;
-      const overlapsHorizontally = rect.right > stackRect.left && rect.left < stackRect.right;
-      if (!overlapsHorizontally) continue;
-
-      if (rect.top < baseTop && rect.bottom <= viewportHeight * 0.5) {
-        const obstacleBottom = rect.bottom + safeGap;
-        obstacleSafeTop = Math.max(obstacleSafeTop, obstacleBottom);
-        safeTop = Math.max(safeTop, obstacleBottom);
-      } else if (rect.top >= baseTop) {
-        bottomObstacles.push({ top: rect.top });
-      }
-    }
-    safeBottom = resolveLeftStackBottomBoundary({
-      baseBottom: safeBottom,
-      obstacles: bottomObstacles,
-      safeGap,
+    layoutLeftPanelRail({
+      stack: this._leftPanelStack,
+      obstacles: document.querySelectorAll(LEFT_STACK_OBSTACLE_SELECTOR),
+      windowRef: window,
+      hud: { visible: this.hud.visible, variant: this.hud.getVariant() },
+      preferredPanelId: this._leftStackPreferredPanelId,
+      onCollapse: (panel) => this._syncPanelCollapseButton(panel),
+      onRetry: () => this._scheduleLeftPanelLayout(),
+      collapsedHeights: this._leftStackCollapsedHeights,
+      onAligned: () => this._scheduleRightPanelLayout(),
     });
-
-    const obstacleSafeBottom = safeBottom;
-
-    // Keep the accordion visually centered when the balanced corridor remains
-    // useful. During live viewport-height changes, retain the aligned lane
-    // instead of extending a tiny midpoint corridor through a lower obstacle.
-    const minimumLaneHeight = viewportHeight * 0.16;
-    ({ safeTop, safeBottom } = resolvePanelStackCorridor({
-      viewportHeight,
-      safeTop,
-      safeBottom,
-      obstacleSafeTop,
-      obstacleSafeBottom,
-      minimumHeight: minimumLaneHeight,
-    }));
-    const viewportMidpoint = viewportHeight * 0.5;
-    for (const panel of panels) {
-      const rect = panel.getBoundingClientRect();
-      if (panel.classList.contains('collapsed') && rect.height > 0) {
-        this._leftStackCollapsedHeights.set(panel.id, rect.height);
-      }
-    }
-
-    const expandedPanelsInDomOrder = panels.filter((panel) => !panel.classList.contains('collapsed'));
-    const preferredExpandedPanel = expandedPanelsInDomOrder.find(
-      (panel) => panel.id === this._leftStackPreferredPanelId,
-    );
-    // Auto-collapse is a presentation fallback, not permission to undo the
-    // user's newest disclosure. Measure and allocate that explicitly opened
-    // panel first so an older expanded sibling yields when the corridor cannot
-    // usefully present both (for example Map Stack followed by Scenes).
-    const expandedPanels = preferredExpandedPanel
-      ? [preferredExpandedPanel, ...expandedPanelsInDomOrder.filter((panel) => panel !== preferredExpandedPanel)]
-      : expandedPanelsInDomOrder;
-    // Clear the prior pass before reading intrinsic heights. The allocated
-    // outer height and the inner scroller otherwise feed their constrained
-    // size back into the next HUD-mode calculation.
-    for (const panel of expandedPanels) {
-      panel.style.removeProperty('--left-panel-allocated-height');
-    }
-    const availableHeight = Math.max(0, safeBottom - safeTop);
-    const naturalExpandedHeights = expandedPanels.map((panel) => this._measureLeftPanelNaturalHeight(panel));
-    const naturalExpandedHeight = naturalExpandedHeights.reduce((sum, height) => sum + height, 0);
-    const siblingHeight = panels.reduce((total, panel) => {
-      if (!panel.classList.contains('collapsed')) return total;
-      const measured = this._leftStackCollapsedHeights.get(panel.id);
-      return total + (measured || panel.getBoundingClientRect().height || 0);
-    }, 0);
-    let requiredHeight = siblingHeight;
-
-    const rowGap = parseFloat(getComputedStyle(stack).rowGap) || 0;
-    if (expandedPanels.length) {
-      requiredHeight += naturalExpandedHeight;
-      requiredHeight += rowGap * Math.max(0, panels.length - 1);
-    } else {
-      requiredHeight += rowGap * Math.max(0, panels.length - 1);
-    }
-
-    const wasFocused = stack.classList.contains('layout-focus');
-    const wasTail = stack.classList.contains('layout-tail');
-    const wasConstrained = wasFocused || wasTail;
-    const stabilityBand = viewportHeight * 0.01;
-    const exceedsCenteredCorridor = expandedPanels.length > 0 && (wasConstrained
-      ? requiredHeight > availableHeight - stabilityBand * 2
-      : requiredHeight > availableHeight - stabilityBand);
-    const tailRequiredHeight = naturalExpandedHeight
-      + siblingHeight
-      + rowGap * Math.max(0, panels.length - 1);
-    // A compact expansion should not make the whole control stack jump down
-    // merely to center a few short rows. Preserve the normal top anchor when
-    // the centered stack would begin below it; tall stacks can still grow
-    // upward around the viewport midpoint as their content requires.
-    const centeredTailTop = viewportMidpoint - tailRequiredHeight * 0.5;
-    const tailLayoutTop = Math.min(centeredTailTop, safeTop);
-    const tailLayoutBottom = tailLayoutTop + tailRequiredHeight;
-    const tailAvailableHeight = Math.max(0, obstacleSafeBottom - obstacleSafeTop);
-    const tailTolerance = wasTail ? stabilityBand : -stabilityBand;
-    const shouldTail = expandedPanels.length > 0
-      && tailLayoutTop >= obstacleSafeTop - tailTolerance
-      && tailLayoutBottom <= obstacleSafeBottom + tailTolerance;
-    const shouldFocus = exceedsCenteredCorridor && !shouldTail;
-    // Focus mode owns the lane, so let every expanded panel share the full
-    // obstacle-safe corridor. Tail/normal layouts keep the balanced
-    // viewport centering used for compact accordion stacks.
-    const layoutTop = shouldFocus
-      ? obstacleSafeTop
-      : shouldTail ? tailLayoutTop : safeTop;
-    const layoutBottom = shouldFocus
-      ? obstacleSafeBottom
-      : shouldTail ? tailLayoutBottom : safeBottom;
-    const topPct = (layoutTop / viewportHeight) * 100;
-    const bottomPct = ((viewportHeight - layoutBottom) / viewportHeight) * 100;
-    const topValue = `${topPct.toFixed(3)}vh`;
-    const bottomValue = `${bottomPct.toFixed(3)}vh`;
-    const expandedAvailableHeight = shouldFocus
-      ? Math.max(0, layoutBottom - layoutTop
-        - rowGap * Math.max(0, expandedPanels.length - 1))
-      : naturalExpandedHeight;
-    const allocatedExpandedHeights = allocatePanelStackHeights({
-      naturalHeights: naturalExpandedHeights,
-      availableHeight: expandedAvailableHeight,
-    });
-    const autoCollapseIndices = this.hud.visible ? panelStackAutoCollapseIndices({
-      naturalHeights: naturalExpandedHeights,
-      allocatedHeights: allocatedExpandedHeights,
-      collapseLaterPanels: shouldFocus && this.hud.getVariant() === 'tactical',
-    }) : [];
-    if (autoCollapseIndices.length) {
-      for (const index of autoCollapseIndices) {
-        const panel = expandedPanels[index];
-        panel.classList.add('collapsed', 'layout-auto-collapsed');
-        this._syncPanelCollapseButton(panel);
-      }
-      this._scheduleLeftPanelLayout();
-      return;
-    }
-    if (stack.style.getPropertyValue('--left-stack-safe-top') !== topValue) {
-      stack.style.setProperty('--left-stack-safe-top', topValue);
-    }
-    if (stack.style.getPropertyValue('--left-stack-safe-bottom') !== bottomValue) {
-      stack.style.setProperty('--left-stack-safe-bottom', bottomValue);
-    }
-    stack.style.removeProperty('--left-stack-centered-height');
-    for (const panel of panels) panel.style.removeProperty('--left-panel-allocated-height');
-    expandedPanels.forEach((panel, index) => {
-      panel.style.setProperty('--left-panel-allocated-height', `${allocatedExpandedHeights[index].toFixed(1)}px`);
-    });
-
-    stack.classList.toggle('layout-focus', shouldFocus);
-    stack.classList.toggle('layout-tail', shouldTail);
-    stack.dataset.layoutMode = shouldFocus ? 'focus' : shouldTail ? 'tail' : 'normal';
-    stack.dataset.safeTopPct = topPct.toFixed(2);
-    stack.dataset.safeBottomPct = (100 - bottomPct).toFixed(2);
-    stack.dataset.availableHeightPct = ((availableHeight / viewportHeight) * 100).toFixed(2);
-    stack.dataset.requiredHeightPct = ((requiredHeight / viewportHeight) * 100).toFixed(2);
-    stack.dataset.tailAvailableHeightPct = ((tailAvailableHeight / viewportHeight) * 100).toFixed(2);
-    stack.dataset.expandedCount = String(expandedPanels.length);
-
-    // Cockpit Display/Radio live in the opposite margin and no longer borrow
-    // this corridor: the left accordion's top is solved against left-lane
-    // obstacles, which put the strip straight through the briefing card.
-    // CockpitView.syncSignalLayout() owns `--cockpit-utility-top` instead.
-
-    for (const panel of panels) {
-      const hiddenSibling = shouldFocus && panel.classList.contains('collapsed');
-      if (hiddenSibling) panel.setAttribute('aria-hidden', 'true');
-      else panel.removeAttribute('aria-hidden');
-    }
-    // The right controls share this top baseline; update them after the left
-    // accordion commits an HUD-variant or obstacle-driven position change.
-    this._scheduleRightPanelLayout();
   }
 
   /**
@@ -9108,7 +6800,8 @@ export class StyleManager {
    * @returns {void}
    */
   _updateSliderPanel(styleName, { reveal = false } = {}) {
-    this._sliderContainer.innerHTML = '';
+    this._styleParameters ||= createStyleParameters({ container: this._sliderContainer });
+    this._styleParameters.clear();
     const shader = STYLES[styleName];
 
     if (!shader || !shader.uniforms || styleName === 'normal') {
@@ -9117,44 +6810,19 @@ export class StyleManager {
       return;
     }
 
-    for (const [uName, uMeta] of Object.entries(shader.uniforms)) {
-      const row = document.createElement('div');
-      row.className = 'param-slider-row';
-
-      const label = document.createElement('span');
-      label.className = 'param-label';
-      label.textContent = uMeta.label;
-
-      const slider = document.createElement('input');
-      slider.type = 'range';
-      slider.className = 'param-slider';
-      slider.setAttribute('aria-label', uMeta.label);
-      slider.min = uMeta.min;
-      slider.max = uMeta.max;
-      slider.step = uMeta.max <= 1 ? '0.01' : '0.1';
-      slider.value = this.stages[styleName].uniforms[uName];
-
-      const valueDisplay = document.createElement('span');
-      valueDisplay.className = 'param-value';
-      valueDisplay.textContent = parseFloat(slider.value).toFixed(uMeta.max <= 1 ? 2 : 1);
-
-      slider.addEventListener('input', () => {
+    this._styleParameters.render({
+      uniforms: shader.uniforms,
+      readValue: (uName) => this.stages[styleName].uniforms[uName],
+      writeValue: (uName, val) => {
         this.shareLinkManager?.claimRestoreLane?.('visual');
-        const val = parseFloat(slider.value);
         this.stages[styleName].uniforms[uName] = val;
-        valueDisplay.textContent = val.toFixed(uMeta.max <= 1 ? 2 : 1);
-        // Uniform writes don't auto-render under the idle governor —
-        // without this the slider visibly does nothing until the next
-        // camera move (browser finding). (perf wave 2)
+      },
+      onChange: () => {
+        // Uniform writes need an explicit render under the idle governor.
         governorRequestRender('style-param-slider');
         this._syncShareState();
-      });
-
-      row.appendChild(label);
-      row.appendChild(slider);
-      row.appendChild(valueDisplay);
-      this._sliderContainer.appendChild(row);
-    }
+      },
+    });
 
     this._sliderPanel.classList.add('active');
     this._scheduleRightPanelLayout();
@@ -9265,12 +6933,7 @@ export class StyleManager {
    * @returns {void}
    */
   _startTransition(styleName, fromValue, toValue) {
-    this.transitions.set(styleName, {
-      start: performance.now(),
-      from: fromValue,
-      to: toValue,
-    });
-    this._startAnimationLoop();
+    this._visualEffects.startTransition(styleName, fromValue, toValue);
   }
 
   /**
@@ -9340,53 +7003,7 @@ export class StyleManager {
    * interval (see _startTrafficChipTicker).
    */
   _startAnimationLoop() {
-    if (this._animFrameId) return; // already running
-    const update = () => {
-      const now = performance.now();
-      const elapsedSec = (Date.now() - this.startTime) / 1000.0;
-
-      // Update transitions — interpolate each active crossfade
-      for (const [styleName, transition] of this.transitions) {
-        const elapsed = now - transition.start;
-        const t = Math.min(elapsed / TRANSITION_DURATION_MS, 1.0);
-        // Ease-in-out quadratic: smooth acceleration then deceleration
-        const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-        const value = transition.from + (transition.to - transition.from) * eased;
-
-        this._setStageIntensity(this.stages[styleName], value);
-
-        if (t >= 1.0) {
-          this._setStageIntensity(this.stages[styleName], transition.to);
-          this.transitions.delete(styleName);
-        }
-      }
-
-      // Update time uniforms for animated shaders. Zero-intensity stages
-      // are disabled (see _initStages — the scope is now the explicit
-      // scopeMask canvas), so enabled === visible here; only these keep
-      // the loop and its continuous-render hold alive.
-      let animatedStageVisible = false;
-      for (const [, stage] of this._stageEntries) {
-        if (stage.enabled && stage.uniforms.time !== undefined) {
-          stage.uniforms.time = elapsedSec;
-          // Chain mode keeps zero-intensity stages ENABLED for pass parity —
-          // only a stage that is actually VISIBLE keeps the loop (and the
-          // continuous-render hold) alive, or a settled CRT session would
-          // hold the loop forever via an invisible snow stage.
-          if (stage.uniforms.intensity > 0.001) animatedStageVisible = true;
-        }
-      }
-
-      const needed = this.transitions.size > 0 || animatedStageVisible;
-      if (needed) holdContinuousRender('style-anim');
-      else releaseContinuousRender('style-anim');
-      if (!needed) {
-        this._animFrameId = null;
-        return; // settled — the next transition/animated stage re-arms us
-      }
-      this._animFrameId = requestAnimationFrame(update);
-    };
-    this._animFrameId = requestAnimationFrame(update);
+    this._visualEffects.startAnimationLoop();
   }
 
   /**
@@ -9456,94 +7073,48 @@ export class StyleManager {
    * @returns {void}
    */
   _initLocationBar() {
-    const QWERTY_KEYS = ['Q', 'W', 'E', 'R', 'T'];
-
     this._savedLocations = loadSavedLocations();
     this._renderSavedLocations();
     this._saveLocationBtn?.addEventListener('click', () => this._saveCurrentLocation());
-
-    // Render city pills (no submenu wrappers — POI row is separate)
-    for (const [cityId, city] of Object.entries(CITY_POIS)) {
-      const pill = document.createElement('button');
-      pill.className = 'location-pill';
-      pill.dataset.locationId = cityId;
-      pill.textContent = city.name;
-      pill.addEventListener('click', () => this._onCityPillClick(cityId));
-      this._locationPills.appendChild(pill);
-    }
-
-    // QWERTY keyboard navigation for POIs
-    this._poiKeydownHandler = (e) => {
-      if (!this._expandedCityId) return;
-      // Bail while a form control is focused so POI hotkeys don't fire from a
-      // <select> dropdown's type-ahead or while typing in a field (M9).
-      const isFormControl = e.target?.matches?.('select, input, textarea')
-        || e.target === this._locationSearch;
-      if (isFormControl) return;
-
-      const keyIndex = QWERTY_KEYS.indexOf(e.key.toUpperCase());
-      if (keyIndex === -1) return;
-
-      const city = CITY_POIS[this._expandedCityId];
-      if (city && keyIndex < city.pois.length) {
-        this._onPoiClick(this._expandedCityId, keyIndex);
-      }
-    };
-    document.addEventListener('keydown', this._poiKeydownHandler);
-
-    // Search toggle (expand/collapse)
-    this._searchToggle.addEventListener('click', () => {
-      this._locationSearch.classList.toggle('expanded');
-      if (this._locationSearch.classList.contains('expanded')) {
-        this._locationSearch.focus();
-      }
+    this._locationControls?.destroy();
+    this._locationLookup?.destroy();
+    this._locationLookup = new LocationSearch({
+      input: this._locationSearch,
+      begin: () => this._beginDeferredNavigation('location'),
+      isCurrent: (generation) => !this._disposed && generation === this._navigationGeneration,
+      beforeFly: (generation) => this._reassertNavigationHandoff(generation),
+      search: (query, options) => searchAndFlyTo(this.viewer, query, {
+        placeSearch: this.placeSearch,
+        ...options,
+      }),
+      onStart: (generation) => { this._activeLocationSearchGeneration = generation; },
+      onResult: (destination, query) => {
+        this._searchedLocationLabel = destination.label || query;
+        this._setActiveLocation(null);
+        this._currentPoi = null;
+        this._collapsePOIRow();
+        this._updateLocationMiniStatus();
+      },
+      onMissing: () => this._showToast('Location not found'),
+      onError: (error) => {
+        console.error('[Search] Geocoding failed:', error);
+        this._showToast('Search failed');
+      },
+      onSettled: (generation) => this._settleLocationSearchUi(generation),
     });
-
-    // Search submit on Enter
-    this._locationSearch.addEventListener('keydown', async (e) => {
-      if (e.key === 'Enter') {
-        const query = this._locationSearch.value.trim();
-        if (!query) return;
-        const generation = this._beginDeferredNavigation('location');
-        if (generation === false) {
-          this._locationSearch.classList.remove('searching');
-          this._locationSearch.blur();
-          return;
-        }
-        this._activeLocationSearchGeneration = generation;
-        this._locationSearch.classList.add('searching');
-        try {
-          const destination = await searchAndFlyTo(this.viewer, query, {
-            beforeFly: () => this._reassertNavigationHandoff(generation),
-          });
-          if (this._disposed || generation !== this._navigationGeneration) return;
-          if (destination?.cancelled) {
-            // Authority changed while the lookup was resolving; remain inert.
-          } else if (destination) {
-            // The ACTIVE STYLE indicator reports the STYLE and nothing else.
-            // Writing the searched city here made the top-right corner read
-            // "ACTIVE STYLE / TOKYO"; where the camera is belongs to the
-            // LOCATION panel's own readout, which is updated below.
-            //
-            // Set before _setActiveLocation(null) so its own mini-status
-            // refresh already sees the destination — the readout never blinks
-            // through "Location: --" on the way to the searched place.
-            this._searchedLocationLabel = destination.label || query;
-            this._setActiveLocation(null);
-            this._currentPoi = null;
-            this._collapsePOIRow();
-            this._updateLocationMiniStatus();
-          } else {
-            this._showToast('Location not found');
-          }
-        } catch (err) {
-          console.error('[Search] Geocoding failed:', err);
-          if (this._disposed || generation !== this._navigationGeneration) return;
-          this._showToast('Search failed');
-        } finally {
-          this._settleLocationSearchUi(generation);
-        }
-      }
+    this._locationControls = new LocationControls({
+      elements: {
+        pills: this._locationPills, poiRow: this._poiRow, divider: this._locationBarDivider,
+        search: this._locationSearch, searchToggle: this._searchToggle,
+        resetButtons: [this._resetGlobeBtn, this._cockpitResetGlobeBtn],
+        statusCity: this._locationMiniCity, statusPoi: this._locationMiniPoi,
+      },
+      cities: CITY_POIS,
+      getExpandedCity: () => this._expandedCityId,
+      onCity: (id) => this._onCityPillClick(id),
+      onPoi: (id, index) => this._onPoiClick(id, index),
+      onSearch: (query) => this._locationLookup.run(query),
+      onReset: () => this.resetToGlobeView(),
     });
   }
 
@@ -9745,28 +7316,9 @@ export class StyleManager {
    * @returns {void}
    */
   _expandPOIRow(cityId) {
-    const QWERTY_KEYS = ['Q', 'W', 'E', 'R', 'T'];
-    const city = CITY_POIS[cityId];
-    if (!city) return;
-
+    if (!CITY_POIS[cityId]) return;
     this._expandedCityId = cityId;
-
-    // Build POI pill buttons
-    this._poiRow.innerHTML = '';
-    city.pois.forEach((poi, idx) => {
-      const pill = document.createElement('button');
-      pill.className = 'poi-pill';
-      pill.dataset.poiIndex = idx;
-      pill.innerHTML = `<span class="poi-pill-key">${QWERTY_KEYS[idx] || idx + 1}</span><span class="poi-pill-name">${poi.name}</span>`;
-      pill.addEventListener('click', () => this._onPoiClick(cityId, idx));
-      this._poiRow.appendChild(pill);
-    });
-
-    // Animate expansion
-    requestAnimationFrame(() => {
-      this._poiRow.classList.add('expanded');
-      this._locationBarDivider.classList.add('visible');
-    });
+    this._locationControls.showPois(cityId);
   }
 
   /**
@@ -9776,8 +7328,7 @@ export class StyleManager {
   _collapsePOIRow() {
     this._expandedCityId = null;
     this._activePoiIndex = null;
-    this._poiRow.classList.remove('expanded');
-    this._locationBarDivider.classList.remove('visible');
+    this._locationControls.hidePois();
   }
 
   /**
@@ -9785,9 +7336,7 @@ export class StyleManager {
    * @returns {void}
    */
   _updatePoiHighlight() {
-    this._poiRow.querySelectorAll('.poi-pill').forEach(pill => {
-      pill.classList.toggle('active', parseInt(pill.dataset.poiIndex) === this._activePoiIndex);
-    });
+    this._locationControls.highlightPoi(this._activePoiIndex);
   }
 
   /**
@@ -9813,9 +7362,7 @@ export class StyleManager {
     // free-text destination has been superseded. Clearing only on a real id
     // leaves the search path's own _setActiveLocation(null) untouched.
     if (locationId) this._searchedLocationLabel = null;
-    this._locationPills.querySelectorAll('.location-pill').forEach(pill => {
-      pill.classList.toggle('active', pill.dataset.locationId === locationId);
-    });
+    this._locationControls?.highlightCity(locationId);
     this._updateLocationMiniStatus();
   }
 
@@ -9825,14 +7372,11 @@ export class StyleManager {
    * @returns {void}
    */
   _updateLocationMiniStatus() {
-    if (!this._locationMiniCity || !this._locationMiniPoi) return;
-    const lines = locationMiniStatus({
+    this._locationControls?.renderStatus({
       city: this._activeLocationId ? CITY_POIS[this._activeLocationId] : null,
       currentPoi: this._currentPoi,
       searchedLabel: this._searchedLocationLabel,
     });
-    this._locationMiniCity.textContent = lines.city;
-    this._locationMiniPoi.textContent = lines.poi;
   }
 
   /**
@@ -9852,11 +7396,7 @@ export class StyleManager {
    * @returns {void}
    */
   _initOrbit() {
-    // Create orbit indicator element
-    this._orbitIndicator = document.createElement('div');
-    this._orbitIndicator.id = 'orbit-indicator';
-    this._orbitIndicator.innerHTML = '<span class="orbit-icon">&#x21BB;</span> ORBIT';
-    document.body.appendChild(this._orbitIndicator);
+    this._orbitIndicator = this._locationControls.createOrbitIndicator();
   }
 
   /**
@@ -9889,19 +7429,11 @@ export class StyleManager {
     }
   }
 
-  /** Wire the persistent reset control to the same route used by voice. */
-  _initResetGlobeButton() {
-    this._globeResetHandler = () => { this.resetToGlobeView(); };
-    for (const button of [this._resetGlobeBtn, this._cockpitResetGlobeBtn]) {
-      button?.addEventListener('click', this._globeResetHandler);
-    }
-  }
-
   /** Wire the top-center action that clears only manager-owned data layers. */
   _initClearSelectedLayersButton() {
     if (!this._clearSelectedLayersBtn) return;
-    this._clearSelectedLayersHandler = () => { void this.clearSelectedLayers(); };
-    this._clearSelectedLayersBtn.addEventListener('click', this._clearSelectedLayersHandler);
+    this._clearLayersControl?.destroy();
+    this._clearLayersControl = bindClearLayersControl(this._clearSelectedLayersBtn, () => this.clearSelectedLayers());
   }
 
   /**
@@ -9928,9 +7460,7 @@ export class StyleManager {
     this._preservePanelStateDuringLayerClear = true;
     this._syncContextModeButtons();
     this._userFacingContextNotificationTokens.add(notificationToken);
-    this._clearSelectedLayersBtn.setAttribute('aria-disabled', 'true');
-    this._clearSelectedLayersBtn.setAttribute('aria-busy', 'true');
-    this._clearSelectedLayersBtn.setAttribute('aria-label', 'Clearing selected data layers');
+    this._clearLayersControl?.setBusy(true);
 
     const managerOperation = this._dataManager.clearSelectedLayers({
       origin: 'user',
@@ -9962,9 +7492,7 @@ export class StyleManager {
         this._contextModeChanging = false;
         this._syncContextModeButtons();
       }
-      this._clearSelectedLayersBtn.setAttribute('aria-disabled', 'false');
-      this._clearSelectedLayersBtn.setAttribute('aria-busy', 'false');
-      this._clearSelectedLayersBtn.setAttribute('aria-label', 'Clear selected data layers');
+      this._clearLayersControl?.setBusy(false);
       this._preservePanelStateDuringLayerClear = false;
       this._clearSelectedLayersManagerPromise = null;
       this._clearSelectedLayersPromise = null;
@@ -10105,26 +7633,15 @@ export class StyleManager {
     this._layoutRightPanels();
   }
 
+  _syncModels3dModeRow() {
+    if (this._models3dModeRow) this._models3dModeRow.classList.toggle('visible', this._models3dEnabled);
+    this._layoutRightPanels();
+  }
+
   _initModels3dToggle() {
     if (!this._models3dBtn) return;
-    // The Proximity/All mode row is revealed only while 3D is on (mirrors the DETECT slider row).
-    const syncModeRow = () => {
-      if (this._models3dModeRow) this._models3dModeRow.classList.toggle('visible', this._models3dEnabled);
-      this._layoutRightPanels();
-    };
-    this._models3dBtn.addEventListener('click', () => {
-      this._setModels3dEnabled(!this._models3dEnabled);
-      syncModeRow();
-    });
-    for (const btn of this._models3dModeBtns) {
-      if (!btn) continue;
-      btn.addEventListener('click', () => {
-        const mode = btn.dataset.mode === 'all' ? 'all' : 'proximity';
-        this._setModels3dMode(mode);
-      });
-    }
     this._syncModels3dButtonState();
-    syncModeRow();
+    this._syncModels3dModeRow();
   }
 
   _setModels3dEnabled(enabled) {
@@ -10157,13 +7674,6 @@ export class StyleManager {
   }
 
   _initHUDToggle() {
-    this._hudBtn.addEventListener('click', () => {
-      this.shareLinkManager?.claimRestoreLane?.('visual');
-      this.hud.toggle();
-      this._updateHudButtonState();
-      this._syncShareState();
-    });
-
     if (this._hudLayoutSelect) {
       this._hudLayoutSelect.value = 'tactical';
     }
@@ -10171,13 +7681,6 @@ export class StyleManager {
     this.hud.setMode('on');
     this._updateHudButtonState();
 
-    // Detection toggle button
-    this._detectionBtn.addEventListener('click', () => {
-      this.shareLinkManager?.claimRestoreLane?.('visual');
-      this._detectionUserOverridden = true;
-      cycleDetectionMode();
-      this._syncShareState();
-    });
     this._cockpitDisplayToggleBtn?.addEventListener('click', () => {
       const open = this._cockpitDisplayToggleBtn.getAttribute('aria-expanded') === 'true';
       this._setCockpitDisclosure?.('display', !open);
@@ -10399,6 +7902,20 @@ export class StyleManager {
     this._globalStatusNotice = null;
     if (this._globalLoadingStatus) this._globalLoadingStatus.hidden = true;
     this._disposed = true;
+    this._applicationShortcuts?.destroy();
+    this._displayControls?.destroy();
+    this._mapSourceControls?.destroy();
+    this._clearLayersControl?.destroy();
+    this._locationControls?.destroy();
+    this._cctvControls?.destroy();
+    this._radioControls?.destroy();
+    this._visualEffects.stop();
+    this._styleParameters?.destroy();
+    for (const control of this._panelDisclosureControls || []) control.destroy();
+    this._panelDisclosureControls = [];
+    this._hoverPanelControls?.forEach((control) => control.destroy());
+    this._hoverPanelControls?.clear();
+    this._locationLookup?.destroy();
     this._cancelMapSourceFocus?.();
     // Revoke persistence/hash authority before teardown can emit manager changes.
     this._layerStateCoordinator?.destroy();
@@ -10421,10 +7938,7 @@ export class StyleManager {
       window.removeEventListener('gev:awareness-subject-cleared', this._awarenessClearedHandler);
       this._awarenessClearedHandler = null;
     }
-    if (this._mapStackChangeHandler) {
-      window.removeEventListener('gev:map-stack-changed', this._mapStackChangeHandler);
-      this._mapStackChangeHandler = null;
-    }
+
     // Invalidate any in-flight Context transaction the same way a newer request
     // would. Without this, a reinstatement already past its awaits could
     // re-enable a mode's entry layer and republish `_contextMode` while the
@@ -10479,17 +7993,7 @@ export class StyleManager {
     this._dataManagerVisibilityRequestUnsubscribe = null;
     this._dataManagerUnsubscribe?.();
     this._dataManagerUnsubscribe = null;
-    if (this._globeResetHandler) {
-      this._resetGlobeBtn?.removeEventListener('click', this._globeResetHandler);
-      this._cockpitResetGlobeBtn?.removeEventListener('click', this._globeResetHandler);
-      this._globeResetHandler = null;
-    }
-    if (this._clearSelectedLayersBtn && this._clearSelectedLayersHandler) {
-      this._clearSelectedLayersBtn.removeEventListener('click', this._clearSelectedLayersHandler);
-      this._clearSelectedLayersHandler = null;
-    }
-    this._cctvUnsubscribe?.();
-    this._cctvUnsubscribe = null;
+
     this._commandDockTrayObserver?.disconnect?.();
     this._commandDockTrayObserver = null;
     this._draggableResizeObserver?.disconnect();
@@ -10503,21 +8007,9 @@ export class StyleManager {
       this._loadingVisibilityHandler = null;
     }
     this._stopLoadingFeedbackTicker();
-    if (this._globalKeydownHandler) {
-      document.removeEventListener('keydown', this._globalKeydownHandler);
-      this._globalKeydownHandler = null;
-    }
-    if (this._poiKeydownHandler) {
-      document.removeEventListener('keydown', this._poiKeydownHandler);
-      this._poiKeydownHandler = null;
-    }
-    // Cancel the rAF animation loop and release its governor hold; also stop
-    // the traffic-chip ticker the loop no longer carries. (perf wave 2 fix)
-    if (this._animFrameId) {
-      cancelAnimationFrame(this._animFrameId);
-      this._animFrameId = null;
-    }
-    releaseContinuousRender('style-anim');
+
+    // Stop the independently owned traffic and loading feedback tickers.
+
     if (this._trafficChipTicker) {
       clearInterval(this._trafficChipTicker);
       this._trafficChipTicker = null;
@@ -10562,26 +8054,10 @@ export class StyleManager {
       window.removeEventListener('gev:cockpit-mode-changed', this._leftStackCockpitModeHandler);
       this._leftStackCockpitModeHandler = null;
     }
-    this._radioUnsubscribe?.();
-    this._radioUnsubscribe = null;
-    this._radioTunerAbort?.abort();
-    this._radioTunerAbort = null;
-    this._radioTunerBandPinnedForNavigation = false;
-    this._radioTunerDragSnapshot = null;
-    this._radioTunerPool = [];
-    this._radioTunerCameraRemove?.();
-    this._radioTunerCameraRemove = null;
-    this._refreshRadioTunerBand = null;
-    document.getElementById('title-bar')?.classList.remove('radio-broadcasting');
-    radioLayer.endTuning();
-    if (this._radioSelectedHandler) {
-      document.removeEventListener('gev:radio-selected', this._radioSelectedHandler);
-      this._radioSelectedHandler = null;
-    }
+
     destroyTrackedReadout();
     destroyDetection();
     destroyWorldOverlay();
-    // Clear transitions
-    this.transitions.clear();
+    this._visualEffects.destroy();
   }
 }

@@ -2833,7 +2833,9 @@ const militaryFlightsLayer = {
       _retryAt = 0;
       _lastError = null;
       const currentIcaos = new Set();
-      const receiptNowMs = Date.now();
+      const cacheAgeMs = Number(response.headers?.get?.('x-ads-b-cache-age-ms'));
+      const receiptNowMs = Date.now() - (Number.isFinite(cacheAgeMs) && cacheAgeMs > 0 ? cacheAgeMs : 0);
+      _backoff = response.headers?.get?.('x-ads-b-cache') === 'STALE';
       // Field-test fix (RS46): coarse floor cells to warm for the below-ground
       // clamp — collected during the loop (low airborne contacts only),
       // batch-resolved once after it. Never a fetch inside the loop.
@@ -3215,7 +3217,7 @@ const militaryFlightsLayer = {
       registerMilitaryIcaos(currentIcaos);
 
       _count = _billboards.size;
-      _lastUpdate = Date.now();
+      _lastUpdate = receiptNowMs;
       _lastTrackingRefreshOutcome = {
         epoch: trackingRefreshEpoch,
         status: 'accepted',

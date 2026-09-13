@@ -1,3 +1,4 @@
+import { createStandalonePlaceSearch } from './standalone/placeSearch.js';
 // Camera-framing mode contract for fly_to_location (field test 8 + rootcause doc §3):
 // parks/lakes/campuses and streets are NOT precise POIs — flying to "Zilker Park" at
 // building range (250 m) lands on a random rooftop. Pure mapping tests, no network.
@@ -62,7 +63,7 @@ async function runSearch(viewer, options, { result = AUSTIN_RESULT, query = 'aus
     json: async () => ({ status: 'OK', results: [result] }),
   });
   try {
-    return await searchAndFlyTo(viewer, query, options);
+    return await searchAndFlyTo(viewer, query, { placeSearch: createStandalonePlaceSearch({ resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ }), ...options });
   } finally {
     globalThis.fetch = priorFetch;
     if (hadWindow) globalThis.window = priorWindow;

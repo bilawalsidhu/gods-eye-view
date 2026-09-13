@@ -194,11 +194,11 @@ export function silenceRadioForVoice({ duckRadio, pauseRadio } = {}) {
  */
 const SUPERSEDED_RESPONSE_MEMORY = 8;
 
-export function initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector = null, annotations = null }) {
+export function initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector = null, annotations = null, placeSearch }) {
   if (window.__gevVoiceCommands && typeof window.__gevVoiceCommands.stop === 'function') {
     window.__gevVoiceCommands.stop({ removeUi: true });
   }
-  const runner = createGevActionRunner({ viewer, styleManager, dataManager, sceneDirector, annotations });
+  const runner = createGevActionRunner({ viewer, styleManager, dataManager, sceneDirector, annotations, placeSearch });
   const ui = createVoiceControl({ reset: true });
   const radioLayer = dataManager?.layers?.get('radio')?.module || null;
   const controller = new GevRealtimeController({ runner, ui, radioLayer, dataManager });
