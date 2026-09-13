@@ -67,6 +67,18 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'noaa-nws',
+    html:
+      'Tornado and tsunami alerts: ' +
+      '<a href="https://www.weather.gov/documentation/services-web-api" target="_blank" rel="noopener">NOAA National Weather Service</a>',
+  },
+  {
+    key: 'noaa-spc',
+    html:
+      'Preliminary tornado reports: ' +
+      '<a href="https://www.spc.noaa.gov" target="_blank" rel="noopener">NOAA Storm Prediction Center</a>',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +

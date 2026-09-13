@@ -2,6 +2,7 @@ import { openSkyProxy } from './aircraft/opensky.js';
 import { celestrakProxy, rocketLaunchesProxy } from './space.js';
 import { tomtomProxy } from './traffic.js';
 import { firmsProxy } from './firms.js';
+import { noaaHazardsProxy } from './noaa.js';
 import { terrainHeightsProxy } from './terrain.js';
 import { adsbdbProxy } from './aircraft/enrichment.js';
 import { overpassProxy } from './overpass.js';
@@ -26,6 +27,7 @@ function localProviderPlugins() {
     celestrakProxy(),
     tomtomProxy(),
     firmsProxy(),
+    noaaHazardsProxy(),
     rocketLaunchesProxy(),
     terrainHeightsProxy(),
     adsbdbProxy(),

@@ -113,6 +113,7 @@ test('an unflyable request never reaches the release policy', () => {
   }
   assert.equal(isValidWorldFocusTarget({ kind: 'vessel', id: '123', position: POSITION }), true);
   assert.equal(isValidWorldFocusTarget({ kind: 'fire', id: 'fire-1', position: POSITION }), true);
+  assert.equal(isValidWorldFocusTarget({ kind: 'hazard', id: 'hazard-1', position: POSITION }), true);
 });
 
 test('the transfer flight supersedes any flight in progress and keeps the operator heading', () => {
@@ -141,7 +142,7 @@ test('fires frame wider than vessels — a fire is read by its surroundings', ()
 
 test('every framing is a real oblique standoff, not a nadir or an inside-out sphere', () => {
   const kinds = Object.keys(WORLD_FOCUS_FRAMING);
-  assert.deepEqual(kinds.sort(), ['fire', 'vessel']);
+  assert.deepEqual(kinds.sort(), ['fire', 'hazard', 'vessel']);
   for (const kind of kinds) {
     const framing = WORLD_FOCUS_FRAMING[kind];
     // Looking DOWN at the target, but obliquely — a nadir drop reads as a map.
@@ -158,6 +159,7 @@ test('every framing is a real oblique standoff, not a nadir or an inside-out sph
   // Exact shipped values — a silent retune must show up as a failing test.
   assert.deepEqual({ ...WORLD_FOCUS_FRAMING.vessel }, { radiusM: 150, rangeM: 1200, pitchDeg: -30 });
   assert.deepEqual({ ...WORLD_FOCUS_FRAMING.fire }, { radiusM: 400, rangeM: 3000, pitchDeg: -35 });
+  assert.deepEqual({ ...WORLD_FOCUS_FRAMING.hazard }, { radiusM: 1200, rangeM: 5000, pitchDeg: -35 });
 });
 
 test('unknown kinds and missing viewers issue no flight', () => {

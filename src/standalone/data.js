@@ -2,6 +2,16 @@ import { DataLayerManager } from '../data/manager.js';
 import flightsLayer from '../data/flights.js';
 import militaryFlightsLayer from '../data/militaryFlights.js';
 import earthquakesLayer from '../data/earthquakes.js';
+import {
+  excessiveHeatLayer,
+  fireWeatherLayer,
+  floodsLayer,
+  highWindLayer,
+  severeThunderstormsLayer,
+  tornadoesLayer,
+  tsunamisLayer,
+  winterWeatherLayer,
+} from '../data/naturalHazards.js';
 import satellitesLayer from '../data/satellites.js';
 import rocketLaunchesLayer from '../data/rocketLaunches.js';
 import trafficLayer from '../data/traffic.js';
@@ -35,6 +45,14 @@ export function createStandaloneData({
   dataManager.register(flightsLayer);
   dataManager.register(militaryFlightsLayer);
   dataManager.register(earthquakesLayer);
+  dataManager.register(excessiveHeatLayer);
+  dataManager.register(fireWeatherLayer);
+  dataManager.register(floodsLayer);
+  dataManager.register(highWindLayer);
+  dataManager.register(severeThunderstormsLayer);
+  dataManager.register(tornadoesLayer);
+  dataManager.register(tsunamisLayer);
+  dataManager.register(winterWeatherLayer);
   dataManager.register(satellitesLayer);
   dataManager.register(rocketLaunchesLayer);
   rocketLaunchesLayer.attachDataManager(dataManager);
