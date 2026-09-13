@@ -1,5 +1,16 @@
 # God's Eye View Current State
 
+## Camera panel ownership
+
+CCTV controls receive the existing camera port and explicit application actions.
+Frame loading, calibration editing and status display have separate modules;
+providers, camera placement and navigation policy retain their existing owners.
+Changing cameras invalidates old image callbacks and cancels an unfinished
+calibration edit. Failed refreshes preserve settled pixels for the same camera,
+while a newly selected camera never shows the prior camera's image. Disposal
+releases listeners, subscriptions, image handlers, summary timers and chip-hide timers.
+
+
 ## UI disposal
 
 UI disposal releases the CCTV subscription, command-dock observer, legacy drag

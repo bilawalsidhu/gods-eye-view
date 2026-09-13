@@ -2,7 +2,8 @@
 /**
  * Deterministic browser proof for the Radio companion layer.
  *
- * Intercepts only `/api/radio/*` with a 750-station fixture and stubs the
+ * Intercepts Radio endpoints with a 750-station fixture, supplies fixed
+ * satellite/context support responses, and stubs the
  * browser media `play()` primitive. It proves marker scale/culling, dynamic
  * station-tag filtering, first-click selection, direct-action-only playback, panel/Context
  * independence, restoration without autoplay, responsive UI, and a clean
@@ -165,6 +166,28 @@ async function main() {
     let catalogResponseDelayMs = 0;
     page.on('request', (request) => {
       const url = new URL(request.url());
+
+    // These scenarios exercise Context lifecycle and keyboard ownership, not
+    // live orbit accuracy. Reuse the tracking suite's fixed element sets so
+    // CelesTrak outages cannot invalidate an otherwise clean UI run.
+    if (url.origin === APP_ORIGIN
+      && ['/api/celestrak/active', '/api/celestrak/starlink'].includes(url.pathname)) {
+      const dense = url.pathname.endsWith('/starlink');
+      request.respond({
+        status: 200,
+        contentType: 'text/plain',
+        body: (dense ? [
+          'STARLINK-1007',
+          '1 44713U 19074A   24001.50000000  .00016717  00000-0  10270-3 0  9004',
+          '2 44713  53.0000 247.4627 0006703 130.5360 325.0288 15.06000000 12345',
+        ] : [
+          'ISS (ZARYA)',
+          '1 25544U 98067A   24001.50000000  .00016717  00000-0  10270-3 0  9004',
+          '2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.49814310 12345',
+        ]).join('\n') + '\n',
+      });
+      return;
+    }
       if (url.origin === APP_ORIGIN && url.pathname === '/api/radio/stations') {
         const response = {
           status: 200,
@@ -2006,6 +2029,10 @@ async function main() {
         await new Promise((resolve) => setTimeout(resolve, 320));
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       };
+      const waitForHudSettle = async () => {
+        await new Promise((resolve) => setTimeout(resolve, 560));
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      };
       const prior = {
         cockpit: document.body.classList.contains('cockpit-mode'),
         cockpitActive: manager.cockpitView.active,
@@ -2055,7 +2082,7 @@ async function main() {
       manager._setHudVariant('tactical');
       manager.hud.setMode('on');
       manager._updateHudButtonState();
-      await waitForLayout();
+      await waitForHudSettle();
 
       const layoutSteps = [];
       // The two Cockpit lanes are solved independently: the accordion against
@@ -2110,10 +2137,6 @@ async function main() {
       };
       // The Intel HUD fades over 400ms and keeps its readout rects for the
       // whole transition, so both lanes are measured only once it has settled.
-      const waitForHudSettle = async () => {
-        await new Promise((resolve) => setTimeout(resolve, 560));
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      };
       for (let index = 0; index < 5; index += 1) {
         recordLayoutStep();
         if (index < 4) {
@@ -2280,6 +2303,7 @@ async function main() {
       }
       result = {
         cockpitPanelInteraction,
+        layoutSteps,
         displayOpened,
         sharedDisplayControlsPortaled,
         radioOpened,

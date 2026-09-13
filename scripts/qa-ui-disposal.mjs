@@ -51,10 +51,10 @@ try {
       '_leftStackMutationObserver',
       '_rightStackMutationObserver',
     ].filter(watchObserver);
-    const cctvUnsubscribe = ui._cctvUnsubscribe;
+    const cctvUnsubscribe = ui._cctvControls._cctvUnsubscribe;
     counts.cctv = 0;
     if (cctvUnsubscribe)
-      ui._cctvUnsubscribe = () => {
+      ui._cctvControls._cctvUnsubscribe = () => {
         counts.cctv++;
         return cctvUnsubscribe();
       };
@@ -82,10 +82,13 @@ try {
         observersReleased: observed.every(
           (name) => counts[name] === 1 && ui[name] === null,
         ),
-        subscriptionReleased: counts.cctv === 1 && ui._cctvUnsubscribe === null,
+        subscriptionReleased:
+          counts.cctv === 1 && ui._cctvControls._cctvUnsubscribe === null,
         resizeReleased: counts.resize === 1 && ui._windowResizeHandler === null,
         controlsReleased:
-          ui._radioControls.destroyed && ui._locationControls.destroyed,
+          ui._radioControls.destroyed &&
+          ui._locationControls.destroyed &&
+          ui._cctvControls.destroyed,
         idempotent: once === JSON.stringify(counts),
       };
     } finally {
@@ -109,7 +112,7 @@ try {
     result.resizeReleased,
   );
   check(
-    'Radio and Location controls are disposed with the UI',
+    'Radio, Location and CCTV controls are disposed with the UI',
     result.controlsReleased,
   );
   check('repeated UI disposal is inert', result.idempotent);

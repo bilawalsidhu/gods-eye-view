@@ -13,6 +13,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Separate camera-panel controls, frame loading, calibration editing and status display; cancel stale image and calibration work on camera changes or disposal.
+
 - Restore UI observer, resize-listener and CCTV subscription cleanup after Location extraction.
 
 - Extract Radio controls and tuner presentation with explicit actions and complete listener/subscription cleanup.

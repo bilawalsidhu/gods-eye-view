@@ -357,5 +357,17 @@
       "src/ui/radioTunerModel.js"
     ],
     "external": []
+  },
+  "cctv-controls": {
+    "exports": ["./ui/cctv"],
+    "modules": [
+      "src/ui/cctv.js",
+      "src/ui/cctvBindings.js",
+      "src/ui/cctvCalibration.js",
+      "src/ui/cctvControls.js",
+      "src/ui/cctvFrames.js",
+      "src/ui/cctvPresentation.js"
+    ],
+    "external": []
   }
 }

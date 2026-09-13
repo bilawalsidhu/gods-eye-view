@@ -295,3 +295,10 @@ receives the existing Radio port and explicit layer/layout actions, without
 importing the renderer or station providers. Pure tuner calculations retain
 compatibility exports from the data layer. Disposal revokes DOM listeners and
 subscriptions before ending the active tuning interaction.
+
+### Camera panel controls
+
+`ui/cctv` composes camera controls, frame loading, calibration editing and status
+presentation. It receives DOM elements, the existing camera port and explicit
+application actions; it imports no provider, layer or camera engine. Selection,
+placement, navigation and storage policy remain outside the component family.

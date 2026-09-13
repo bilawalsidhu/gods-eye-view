@@ -130,6 +130,7 @@
     "./ui/layers": "./src/ui/layers.js",
     "./ui/layers/feedback": "./src/loadingFeedback.js",
     "./ui/location": "./src/ui/location.js",
-    "./ui/radio": "./src/ui/radio.js"
+    "./ui/radio": "./src/ui/radio.js",
+    "./ui/cctv": "./src/ui/cctv.js"
   }
 }
