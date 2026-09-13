@@ -14,6 +14,9 @@ const radioPanelUi = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'radioPanel.js
 // Batch 5 seam 4: the adaptive panel-stack layout lives in
 // src/ui/panelAdaptiveLayout.js; StyleManager keeps thin delegates.
 const panelAdaptiveUi = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'panelAdaptiveLayout.js'), 'utf8');
+// Batch 5 seam 5: the location bar (pills, POI row, geocode search, world
+// jumps) lives in src/ui/locationBar.js; StyleManager keeps thin delegates.
+const locationBarUi = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'locationBar.js'), 'utf8');
 // Batch 5: the cockpit HUD loop (vision cycle, keyboard, Contact panel, signal
 // layout, briefing) lives in src/ui/CockpitViewController.js; StyleManager's
 // panel/portal/display wiring stays in ui.js.
@@ -497,8 +500,8 @@ test('Reset releases Contact camera ownership through its selection-preserving r
 
 test('Location navigation releases immediate routes before flight and deferred routes after resolution', () => {
   const releaseStart = ui.indexOf('  _releaseFollowCamera(');
-  const locationFlight = ui.indexOf('_flyWithTransition(cityChanged, flyAction)');
-  const search = ui.indexOf('searchAndFlyTo(this.viewer, query, {');
+  const locationFlight = locationBarUi.indexOf('function flyWithTransition(mgr, cityChanged, flyAction)');
+  const search = locationBarUi.indexOf('searchAndFlyTo(mgr.viewer, query, {');
   const voiceStart = voiceActions.indexOf('beginDeferredLocationNavigation');
 
   assert.ok(releaseStart >= 0, 'shared Location camera handoff is missing');
@@ -507,14 +510,23 @@ test('Location navigation releases immediate routes before flight and deferred r
     /militaryAwarenessLayer\.releaseCameraOwnership\?\.\(\{[\s\S]*?origin: trackingOrigin[\s\S]*?\}\)[\s\S]*?satellitesLayer\.stopTracking\?\.\(\{ origin: trackingOrigin \}\)[\s\S]*?rocketLaunchesLayer\.releaseCameraOwnership\?\.\(\)/,
   );
   assert.match(
-    ui.slice(locationFlight, locationFlight + 900),
-    /this\._runExplicitNavigation\('location',[\s\S]*?flyAction\(/,
+    locationBarUi.slice(locationFlight, locationFlight + 900),
+    /mgr\._runExplicitNavigation\('location',[\s\S]*?flyAction\(/,
   );
-  const cityHandler = ui.slice(ui.indexOf('_onCityPillClick(cityId) {'), ui.indexOf('_onPoiClick(cityId, poiIndex) {'));
-  const poiHandler = ui.slice(ui.indexOf('_onPoiClick(cityId, poiIndex) {'), ui.indexOf('_expandPOIRow(cityId) {'));
-  assert.match(cityHandler, /if \(result === false\) return;[\s\S]*?_setActiveLocation/);
-  assert.match(poiHandler, /if \(result === false\) return;[\s\S]*?_setActiveLocation/);
-  assert.match(ui.slice(search, search + 320), /beforeFly: \(\) => this\._reassertNavigationHandoff\(generation\)/);
+  const cityHandler = locationBarUi.slice(
+    locationBarUi.indexOf('function onCityPillClick(mgr, cityId) {'),
+    locationBarUi.indexOf('function onPoiClick(mgr, cityId, poiIndex) {'),
+  );
+  const poiHandler = locationBarUi.slice(
+    locationBarUi.indexOf('function onPoiClick(mgr, cityId, poiIndex) {'),
+    locationBarUi.indexOf('function expandPOIRow(mgr, cityId) {'),
+  );
+  assert.match(cityHandler, /if \(result === false\) return;[\s\S]*?setActiveLocation\(mgr/);
+  assert.match(poiHandler, /if \(result === false\) return;[\s\S]*?setActiveLocation\(mgr/);
+  assert.match(
+    locationBarUi.slice(search, search + 320),
+    /beforeFly: \(\) => mgr\._reassertNavigationHandoff\(generation\)/,
+  );
   assert.ok(voiceStart >= 0, 'voice Location must use the same handoff');
   assert.match(voiceActions, /styleManager\.reassertDeferredLocationNavigation\(generation\)/);
 });

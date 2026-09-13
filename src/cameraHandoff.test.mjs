@@ -17,6 +17,9 @@ const vessels = fs.readFileSync(path.join(ROOT, 'src', 'data', 'aisLiveVessels.j
 const voice = fs.readFileSync(path.join(ROOT, 'src', 'voice', 'gevActions.js'), 'utf8');
 const cameraVerbs = fs.readFileSync(path.join(ROOT, 'src', 'cameraVerbs.js'), 'utf8');
 const cockpitTracking = fs.readFileSync(path.join(ROOT, 'src', 'cockpitTracking.js'), 'utf8');
+// Batch 5 seam 5: the location bar (pills, POI row, geocode search) lives in
+// src/ui/locationBar.js; StyleManager keeps thin delegates.
+const locationBarUi = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'locationBar.js'), 'utf8');
 
 function body(source, pattern, label) {
   const match = source.match(pattern);
@@ -250,19 +253,19 @@ test('validated voice camera destinations share the UI navigation authority faca
 
 test('deferred search releases only after its final authority check', () => {
   const handler = body(
-    ui,
-    /this\._locationSearch\.addEventListener\('keydown', async \(e\) => \{([\s\S]*?)\n {4}\}\);/,
+    locationBarUi,
+    /mgr\._locationSearch\.addEventListener\('keydown', async \(e\) => \{([\s\S]*?)\n {4}\}\);/,
     'search handler',
   );
   ordered(handler, [
-    "this._beginDeferredNavigation('location')",
-    'this._activeLocationSearchGeneration = generation;',
-    'searchAndFlyTo(this.viewer, query',
-    'beforeFly: () => this._reassertNavigationHandoff(generation)',
-    'generation !== this._navigationGeneration',
+    "mgr._beginDeferredNavigation('location')",
+    'mgr._activeLocationSearchGeneration = generation;',
+    'searchAndFlyTo(mgr.viewer, query',
+    'beforeFly: () => mgr._reassertNavigationHandoff(generation)',
+    'generation !== mgr._navigationGeneration',
     'destination?.cancelled',
     'finally',
-    'this._settleLocationSearchUi(generation)',
+    'mgr._settleLocationSearchUi(generation)',
   ], 'deferred search');
   assert.doesNotMatch(handler.slice(0, handler.indexOf('searchAndFlyTo')), /_releaseFollowCamera/);
 });
@@ -351,29 +354,29 @@ test('teardown refuses deferred location work before geocoding begins', () => {
   assert.match(deferred, /disposed: this\._disposed/);
 
   const handler = body(
-    ui,
-    /this\._locationSearch\.addEventListener\('keydown', async \(e\) => \{([\s\S]*?)\n {4}\}\);/,
+    locationBarUi,
+    /mgr\._locationSearch\.addEventListener\('keydown', async \(e\) => \{([\s\S]*?)\n {4}\}\);/,
     'search handler',
   );
   ordered(handler, [
-    "const generation = this._beginDeferredNavigation('location');",
+    "const generation = mgr._beginDeferredNavigation('location');",
     'if (generation === false)',
-    'this._locationSearch.blur();',
-    'searchAndFlyTo(this.viewer, query',
+    'mgr._locationSearch.blur();',
+    'searchAndFlyTo(mgr.viewer, query',
   ], 'disposed search refusal');
-  assert.match(handler, /if \(generation === false\) \{[\s\S]*?return;[\s\S]*?\}\s*this\._activeLocationSearchGeneration/);
+  assert.match(handler, /if \(generation === false\) \{[\s\S]*?return;[\s\S]*?\}\s*mgr\._activeLocationSearchGeneration/);
 });
 
 test('refused canned destinations commit no location or POI state', () => {
   for (const [name, pattern] of [
-    ['city', /_onCityPillClick\(cityId\) \{([\s\S]*?)\n {2}\}/],
-    ['poi', /_onPoiClick\(cityId, poiIndex\) \{([\s\S]*?)\n {2}\}/],
+    ['city', /function onCityPillClick\(mgr, cityId\) \{([\s\S]*?)\n\}\n/],
+    ['poi', /function onPoiClick\(mgr, cityId, poiIndex\) \{([\s\S]*?)\n\}\n/],
   ]) {
-    const handler = body(ui, pattern, name);
+    const handler = body(locationBarUi, pattern, name);
     ordered(handler, [
-      'this._flyWithTransition(',
+      'flyWithTransition(mgr,',
       'if (result === false) return;',
-      'this._setActiveLocation(cityId);',
+      'setActiveLocation(mgr, cityId);',
     ], name);
   }
 });
