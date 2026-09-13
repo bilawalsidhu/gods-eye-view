@@ -10,6 +10,7 @@
  */
 import * as Cesium from 'cesium';
 import { api } from '../config/apiEndpoints.js';
+import { createOverlayEntry } from '../overlays/overlayEntry.js';
 import { cachedGroundFloor, warmGroundFloor } from './groundFloor.js';
 import { normalizeRadioCountryInput } from './radioCountry.js';
 import { normalizeRadioFilter } from './layerState.js';
@@ -399,7 +400,7 @@ export function radioGlobeLabel(station) {
 /** Build the protected selected-station text published through WorldOverlay. */
 export function createRadioSelectedOverlayEntry(station, position) {
   if (!station?.id || !station?.name || !position) return null;
-  return {
+  return createOverlayEntry({
     id: `selected:${station.id}`,
     position,
     variant: 'selected',
@@ -410,23 +411,20 @@ export function createRadioSelectedOverlayEntry(station, position) {
     priority: Number.MAX_SAFE_INTEGER,
     title: radioGlobeLabel(station),
     accent: radioCategoryColor(radioStationCategoryId(station)),
-    interactive: false,
     anchorRadiusPx: 20,
     minAnchorGapPx: 8,
     verticalOnly: true,
     placement: 'above',
     gapPx: 8,
     edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
     maxDistance: RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
-  };
+  });
 }
 
 /** Build one bounded ambient cluster badge for the shared overlay host. */
 export function createRadioClusterOverlayEntry({ id, position, text, accent, stationCount }) {
   if (!id || !position || !text) return null;
-  return {
+  return createOverlayEntry({
     id: `cluster:${id}`,
     position,
     variant: 'label',
@@ -435,7 +433,6 @@ export function createRadioClusterOverlayEntry({ id, position, text, accent, sta
     priority: Math.max(1, Number(stationCount) || 1),
     title: text,
     accent: accent || RADIO_CATEGORY_COLORS.other,
-    interactive: false,
     anchorRadiusPx: Math.min(13, 6 + Math.log2(Math.max(1, Number(stationCount) || 1)) * 0.8),
     minAnchorGapPx: 4,
     verticalOnly: true,
@@ -447,8 +444,6 @@ export function createRadioClusterOverlayEntry({ id, position, text, accent, sta
     // Collision, viewport rejection, and horizon culling remain host-owned.
     stateless: true,
     edgeFade: 'none',
-    horizonCull: true,
-    terrainOcclusion: false,
     // The camera can sit above 24,000 km in the supported full-globe view, and
     // horizon clusters are farther from it than the camera's surface altitude.
     maxDistance: RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
@@ -458,13 +453,13 @@ export function createRadioClusterOverlayEntry({ id, position, text, accent, sta
       far: RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
       farValue: 0.92,
     },
-  };
+  });
 }
 
 /** Build one ambient station label while Cesium retains its point and picking. */
 export function createRadioSingletonOverlayEntry({ station, position, priority = 1 }) {
   if (!station?.id || !station?.name || !position) return null;
-  return {
+  return createOverlayEntry({
     id: `station:${station.id}`,
     position,
     variant: 'label',
@@ -473,7 +468,6 @@ export function createRadioSingletonOverlayEntry({ station, position, priority =
     priority: Math.max(1, Number(priority) || 1),
     title: radioGlobeLabel(station),
     accent: radioCategoryColor(radioStationCategoryId(station)),
-    interactive: false,
     anchorRadiusPx: 9,
     minAnchorGapPx: 4,
     verticalOnly: true,
@@ -483,8 +477,6 @@ export function createRadioSingletonOverlayEntry({ station, position, priority =
     // cohort from fading over the current visible points.
     stateless: true,
     edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
     maxDistance: RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
     distanceScale: {
       near: 100_000,
@@ -492,7 +484,7 @@ export function createRadioSingletonOverlayEntry({ station, position, priority =
       far: RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
       farValue: 0.86,
     },
-  };
+  });
 }
 
 /** Return the bounded singleton-label allowance for the current camera scale. */

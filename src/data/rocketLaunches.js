@@ -13,6 +13,7 @@ import {
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
 
 import { api, apiEndpoints } from '../config/apiEndpoints.js';
+import { createOverlayEntry } from '../overlays/overlayEntry.js';
 
 const WINDOW_DAYS = 30;
 const API_URL = apiEndpoints.rocketLaunches;
@@ -515,7 +516,7 @@ export function createRocketMissionMarkerOverlayEntry(launch, position, selected
       ? `LAUNCH SITE · ${shortMissionLabel(siteName, 20).toUpperCase()}`
       : 'LAUNCH SITE']
     : [];
-  return {
+  return createOverlayEntry({
     id: `launch:${launch?.id}`,
     position,
     variant: 'label',
@@ -529,7 +530,6 @@ export function createRocketMissionMarkerOverlayEntry(launch, position, selected
     protected: selected,
     paintLane: selected ? 'selected' : 'ambient-label',
     collisionGroup: 'ambient-label',
-    interactive: false,
     distanceScale: {
       near: 1000,
       nearValue: 1.08,
@@ -540,9 +540,7 @@ export function createRocketMissionMarkerOverlayEntry(launch, position, selected
     verticalOnly: true,
     placement: 'above',
     edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
-  };
+  });
 }
 
 /**
@@ -567,7 +565,7 @@ export function createRocketMissionElementOverlayEntry({
   gapPx = 8,
 }) {
   const [title, ...details] = String(text || '').split('\n');
-  return {
+  return createOverlayEntry({
     id: String(id),
     position,
     variant: 'label',
@@ -579,14 +577,11 @@ export function createRocketMissionElementOverlayEntry({
     protected: true,
     paintLane: 'selected',
     collisionGroup: 'ambient-label',
-    interactive: false,
     gapPx,
     verticalOnly: true,
     placement: 'above',
     edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
-  };
+  });
 }
 
 /** Keep the newest ambient mission markers with stable identity tie-breaking. */

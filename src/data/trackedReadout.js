@@ -4,6 +4,7 @@ import {
   setOverlaySourceVisible,
 } from '../overlays/worldOverlay.js';
 import { WORLD_OVERLAY_STYLE } from '../overlays/worldOverlayTokens.js';
+import { createOverlayEntry } from '../overlays/overlayEntry.js';
 
 /**
  * @module trackedReadout
@@ -130,7 +131,7 @@ export function createTrackedOverlayEntry(entity) {
   }
   const title = String(model.title || '').trim();
   if (!title) return null;
-  return {
+  return createOverlayEntry({
     id,
     position: () => cachedTrackedVisualPosition(entity),
     variant: 'tracked',
@@ -149,10 +150,7 @@ export function createTrackedOverlayEntry(entity) {
     verticalOnly: true,
     viewportMargin: 6,
     edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
-    interactive: false,
-  };
+  });
 }
 
 function publishEntity(entity) {

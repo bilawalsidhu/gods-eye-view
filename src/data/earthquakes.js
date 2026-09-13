@@ -4,6 +4,7 @@ import {
   setOverlayEntries,
   setOverlaySourceVisible,
 } from '../overlays/worldOverlay.js';
+import { createOverlayEntry } from '../overlays/overlayEntry.js';
 
 /**
  * USGS earthquake discs — last 24 hours, M2.5+.
@@ -62,7 +63,7 @@ function depthColor(depthKm) {
  */
 export function createEarthquakeOverlayEntry({ id, position, magnitude, accent }) {
   const mag = Number(magnitude);
-  return {
+  return createOverlayEntry({
     id: String(id),
     position,
     variant: 'label',
@@ -71,14 +72,11 @@ export function createEarthquakeOverlayEntry({ id, position, magnitude, accent }
     priority: Math.round(mag * 1000),
     collisionGroup: 'ambient-label',
     paintLane: 'ambient-label',
-    interactive: false,
     edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
     gapPx: 15,
     verticalOnly: true,
     placement: 'above',
-  };
+  });
 }
 
 /** Keep the largest events, with stable identity as the tie-break. */

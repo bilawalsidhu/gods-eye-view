@@ -10,6 +10,7 @@ import {
   setOverlayEntries,
   setOverlaySourceVisible,
 } from '../overlays/worldOverlay.js';
+import { createOverlayEntry } from '../overlays/overlayEntry.js';
 
 const DEFAULT_LABEL_MAX = 900;
 const DEFAULT_LABEL_GRID_PX = 132;
@@ -116,7 +117,7 @@ export function createLocalInfrastructureOverlayEntry({
   accent,
 }) {
   const copy = localInfrastructureOverlayCopy(properties, layerId);
-  return {
+  return createOverlayEntry({
     id: String(id),
     source: layerId,
     position,
@@ -127,7 +128,6 @@ export function createLocalInfrastructureOverlayEntry({
     priority,
     collisionGroup: 'ambient-card',
     zIndex: 30,
-    interactive: false,
     minDistance: 0,
     maxDistance: LOCAL_OVERLAY_MAX_DISTANCE_M,
     distanceFadeStartRatio: LOCAL_OVERLAY_FADE_START_RATIO,
@@ -138,11 +138,9 @@ export function createLocalInfrastructureOverlayEntry({
       farValue: 0.62,
     },
     edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
     gapPx: 15,
     placement: 'above',
-  };
+  });
 }
 
 /**

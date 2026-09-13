@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { api } from '../config/apiEndpoints.js';
+import { createOverlayEntry } from '../overlays/overlayEntry.js';
 import { twoline2satrec, propagate, gstime, eciToGeodetic, degreesLong, degreesLat } from 'satellite.js';
 import { registerPickOwner, unregisterPickOwner, isOwnedByOtherLayer, resolvePickId } from './pickRegistry.js';
 import { findNextIssPass } from './issPass.js';
@@ -312,7 +313,7 @@ export function satelliteCatalogModeChanged(currentCatalog, requestedCatalog) {
 
 /** Build the persistent ISS ambient label from the cached point position. */
 export function createIssOverlayEntry(position) {
-  return {
+  return createOverlayEntry({
     id: String(ISS_NORAD),
     position,
     variant: 'label',
@@ -321,7 +322,6 @@ export function createIssOverlayEntry(position) {
     priority: 1000,
     collisionGroup: 'ambient-label',
     paintLane: 'ambient-label',
-    interactive: false,
     distanceScale: {
       near: 1_000_000,
       nearValue: 1,
@@ -332,9 +332,7 @@ export function createIssOverlayEntry(position) {
     verticalOnly: true,
     placement: 'above',
     edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
-  };
+  });
 }
 
 /** Cached ISS point only; never performs a fresh SGP4 propagation. */

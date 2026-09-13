@@ -4,6 +4,7 @@ import {
   setOverlayEntries,
   setOverlaySourceVisible,
 } from '../overlays/worldOverlay.js';
+import { createOverlayEntry } from '../overlays/overlayEntry.js';
 
 // TeleGeography submarine-cable data is bundled for an out-of-the-box
 // experience. IMPORTANT: it is CC BY-NC-SA 3.0 (NonCommercial + ShareAlike),
@@ -122,7 +123,7 @@ export function cableReferencePriority(distanceM) {
  */
 export function createCableOverlayEntry(record) {
   const kind = record?.kind === 'landing-point' ? 'landing-point' : 'cable';
-  return {
+  return createOverlayEntry({
     id: String(record?.id || ''),
     position: record?.tip,
     variant: 'label',
@@ -131,7 +132,6 @@ export function createCableOverlayEntry(record) {
     priority: cableReferencePriority(record?.distanceM),
     collisionGroup: 'ambient-label',
     paintLane: 'ambient-label',
-    interactive: false,
     minDistance: 0,
     maxDistance: CABLE_REFERENCE_LABEL_MAX_DISTANCE_M,
     distanceFadeStartRatio: 0.7,
@@ -144,12 +144,10 @@ export function createCableOverlayEntry(record) {
       farValue: 0.62,
     },
     edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
     gapPx: 14,
     verticalOnly: true,
     placement: 'above',
-  };
+  });
 }
 
 /**

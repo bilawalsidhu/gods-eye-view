@@ -37,6 +37,7 @@
  */
 
 import { CCTV_THUMBNAIL_STYLE } from '../overlays/worldOverlayTokens.js';
+import { createOverlayEntry } from '../overlays/overlayEntry.js';
 
 // ─── Card geometry / style constants ───────────────────────────────────────
 
@@ -314,7 +315,7 @@ export function createCctvThumbnailOverlayEntry({
   gapPx = 16,
 } = {}) {
   const hostGap = Math.max(14, (Number(gapPx) || 14) + 6);
-  return {
+  return createOverlayEntry({
     id,
     position,
     variant: 'thumbnail',
@@ -339,8 +340,6 @@ export function createCctvThumbnailOverlayEntry({
     altitudeFadeStart: CCTV_CARD_FADE_START_M,
     altitudeFadeEnd: CCTV_CARD_FADE_END_M,
     edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
     gapPx: hostGap,
     leaderOffsetPx: Math.max(2, hostGap - 6),
     verticalOnly: true,
@@ -375,5 +374,5 @@ export function createCctvThumbnailOverlayEntry({
     thumbnailRuleColor: CCTV_THUMBNAIL_STYLE.rule,
     thumbnailRuleHeight: CCTV_THUMBNAIL_STYLE.ruleHeight,
     thumbnailRadius: CCTV_THUMBNAIL_STYLE.radius,
-  };
+  });
 }

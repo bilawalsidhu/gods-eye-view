@@ -47,6 +47,7 @@
  */
 import * as Cesium from 'cesium';
 import { api } from '../config/apiEndpoints.js';
+import { createOverlayEntry } from '../overlays/overlayEntry.js';
 import { registerSpriteCollection, restoreSpriteOrder } from './spriteOrder.js';
 import {
   CCTV_ACTIVATION_RESULT,
@@ -428,7 +429,7 @@ export function _setCctvOverlayHostForTest(host = null) {
  * @returns {Object} Shared-host presentation entry.
  */
 export function createCctvProjectionOverlayEntry({ cameraId, name, position }) {
-  return {
+  return createOverlayEntry({
     id: String(cameraId),
     position,
     variant: 'selected',
@@ -440,14 +441,11 @@ export function createCctvProjectionOverlayEntry({ cameraId, name, position }) {
     title: String(name || cameraId || 'CAMERA'),
     details: [],
     accent: '#6be8ff',
-    interactive: false,
     gapPx: 6,
     verticalOnly: true,
     placement: 'above',
     edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
-  };
+  });
 }
 
 /**

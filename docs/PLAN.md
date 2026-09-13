@@ -774,7 +774,23 @@ ordered by value-per-risk; each is self-contained and committable.
       dev mount — added `vite/proxies/analytics.js`. NOTE for Batch 5: the
       whole `src/react/` tree is imported by nothing (unwired experiment);
       deletion or revival is an owner decision, only referenced here.
-- [ ] One `createOverlayEntry` helper for the 13 factory clones.
+- [x] One `createOverlayEntry` helper for the 13 factory clones. DONE
+      2026-09-13: `src/overlays/overlayEntry.js` now owns the three
+      host-default presentation flags (`interactive: false`,
+      `horizonCull: true`, `terrainOcclusion: false`) that all 13
+      `create*OverlayEntry` factories (earthquakes, satellites ISS, radio
+      ×3, bikeshare, trackedReadout, cctv projection, cctvCards
+      thumbnail, submarine cables, rocket launches ×2, local
+      infrastructure) re-declared verbatim. `...entry` wins, so genuine
+      per-entry decisions stay at the call site (CCTV thumbnails keep
+      `interactive: true`; local-infrastructure cards deliberately omit
+      `verticalOnly`). Verified against the host normalizer
+      (worldOverlay.js `_normalizeEntry`): an absent field normalizes
+      exactly as the baseline value, so outputs are behaviorally
+      identical. The two `apply*OverlayPolicy` merges
+      (vesselLabels, firmsHeatmap) deliberately stay explicit — they
+      spread `...card` first, so moving their flags to pre-spread
+      defaults would flip precedence.
 - [ ] Logger migration (see new findings) after Batch 1 lands.
 
 ### Batch 5 — Large refactors (P2, each needs its own plan + tests first)

@@ -12,6 +12,7 @@
 
 import * as Cesium from 'cesium';
 import { api } from '../config/apiEndpoints.js';
+import { createOverlayEntry } from '../overlays/overlayEntry.js';
 import { governorRequestRender } from '../renderGovernor.js';
 import { registerSpriteCollection, restoreSpriteOrder } from './spriteOrder.js';
 import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
@@ -994,7 +995,7 @@ export function createBikeshareSelectedOverlayEntry(key, record) {
   const position = record?.point?.position;
   if (!key || !position) return null;
   const [title, ...details] = buildSelectionLabel(record).split('\n');
-  return {
+  return createOverlayEntry({
     id: String(key),
     position,
     variant: 'selected',
@@ -1006,15 +1007,12 @@ export function createBikeshareSelectedOverlayEntry(key, record) {
     title,
     details,
     accent: '#00ffff',
-    interactive: false,
     anchorRadiusPx: 9,
     minAnchorGapPx: 11,
     verticalOnly: true,
     placement: 'above',
     edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
-  };
+  });
 }
 
 /**
