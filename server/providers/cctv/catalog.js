@@ -10,6 +10,7 @@ import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
   loadTflSourcesFromOpenData,
+  loadDriveBcSourcesFromOpenData,
 } from './sources.js';
 /**
  * Load CCTV sources from a local JSON file (CCTV_SOURCES_FILE env or default).
@@ -104,35 +105,45 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
       String(process.env.CCTV_FORCE_AUSTIN || '').trim() === '1';
     const preferAustin =
       String(process.env.CCTV_PREFER_AUSTIN || '1').trim() !== '0';
-    // Live open-data packs (Austin + Caltrans + TfL) load unless a file/env pack
-    // is configured and live packs aren't forced — same gate that governed the
-    // Austin-only fetch, now governing all three. Each pack fails independently.
+    // Live open-data packs (Austin + Caltrans + TfL + DriveBC) load unless a
+    // file/env pack is configured and live packs aren't forced — same gate that
+    // governed the Austin-only fetch, now governing all four. Each pack fails
+    // independently.
     const needsLiveSources =
       forceAustin || (fromFile.length + fromEnv.length === 0 && preferAustin);
     const tflEnabled =
       String(process.env.CCTV_TFL_ENABLED || '1').trim() !== '0';
+    const driveBcEnabled =
+      String(process.env.CCTV_DRIVEBC_ENABLED || '1').trim() !== '0';
 
     let fromAustin = [];
     let fromCaltrans = [];
     let fromTfl = [];
+    let fromDriveBc = [];
     if (needsLiveSources) {
-      const [austinResult, caltransResult, tflResult] =
+      const [austinResult, caltransResult, tflResult, driveBcResult] =
         await Promise.allSettled([
           loadAustinSourcesFromOpenData(),
           loadCaltransSourcesFromOpenData(),
           tflEnabled ? loadTflSourcesFromOpenData() : Promise.resolve([]),
+          driveBcEnabled
+            ? loadDriveBcSourcesFromOpenData()
+            : Promise.resolve([]),
         ]);
       fromAustin =
         austinResult.status === 'fulfilled' ? austinResult.value : [];
       fromCaltrans =
         caltransResult.status === 'fulfilled' ? caltransResult.value : [];
       fromTfl = tflResult.status === 'fulfilled' ? tflResult.value : [];
+      fromDriveBc =
+        driveBcResult.status === 'fulfilled' ? driveBcResult.value : [];
     }
     // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
     const merged = [
       ...fromAustin,
       ...fromCaltrans,
       ...fromTfl,
+      ...fromDriveBc,
       ...fromFile,
       ...fromEnv,
     ];

@@ -4,8 +4,9 @@ export const DEFAULT_AUSTIN_ROWS_URL =
   'https://data.austintexas.gov/api/views/b4k4-adkb/rows.json?accessType=DOWNLOAD';
 /** Default cap on Austin cameras after distance-based prioritization. */
 export const DEFAULT_AUSTIN_MAX_SOURCES = 250;
-/** Global cap on total CCTV sources served by the proxy. */
-export const DEFAULT_CCTV_MAX_SOURCES = 900;
+/** Global cap on total CCTV sources served by the proxy: the default per-pack
+ * caps summed (Austin 250 + Caltrans 300 + TfL 250 + DriveBC 250). */
+export const DEFAULT_CCTV_MAX_SOURCES = 1050;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 export const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
@@ -27,7 +28,20 @@ export const TFL_IMAGE_ORIGIN =
   'https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/';
 export const DEFAULT_TFL_MAX_SOURCES = 250;
 export const LONDON_CENTER = { lat: 51.5074, lon: -0.1278 };
-/** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL) infrequent. Frames are fetched per-request and are unaffected. */
+/** DriveBC highway cameras (British Columbia): the keyless camera list served by
+ * the DriveBC.ca site (github.com/bcgov/DriveBC.ca). The DataBC HighwayCams CSV
+ * lists the same cameras but still carries retired images.drivebc.ca frame URLs,
+ * so frames are built from the numeric camera id on the current image host. */
+export const DRIVEBC_WEBCAMS_URL = 'https://www.drivebc.ca/api/webcams/';
+export const DRIVEBC_IMAGE_URL = (id) =>
+  `https://www.drivebc.ca/images/${id}.jpg`;
+export const DEFAULT_DRIVEBC_MAX_SOURCES = 250;
+/** Prioritization anchors: downtown Vancouver and Victoria. */
+export const DRIVEBC_ANCHORS = [
+  { lat: 49.2827, lon: -123.1207 }, // Vancouver
+  { lat: 48.4284, lon: -123.3656 }, // Victoria
+];
+/** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + DriveBC) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
  * stalled upstream can't leave getCctvSources (and thus every CCTV route)

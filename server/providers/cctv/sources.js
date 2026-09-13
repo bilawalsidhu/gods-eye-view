@@ -10,6 +10,10 @@ import {
   TFL_IMAGE_ORIGIN,
   DEFAULT_TFL_MAX_SOURCES,
   LONDON_CENTER,
+  DRIVEBC_WEBCAMS_URL,
+  DRIVEBC_IMAGE_URL,
+  DEFAULT_DRIVEBC_MAX_SOURCES,
+  DRIVEBC_ANCHORS,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
 } from './constants.js';
 import {
@@ -331,6 +335,115 @@ export async function loadTflSourcesFromOpenData() {
     return prioritized;
   } catch (error) {
     console.warn('[CCTV] TfL JamCam download error:', error?.message || error);
+    return [];
+  }
+}
+
+/** DriveBC orientation codes (the eight compass points) as headings in degrees. */
+const DRIVEBC_ORIENTATION_HEADINGS = Object.freeze({
+  N: 0,
+  NE: 45,
+  E: 90,
+  SE: 135,
+  S: 180,
+  SW: 225,
+  W: 270,
+  NW: 315,
+});
+
+/**
+ * Fetch DriveBC highway cameras (British Columbia). Keyless: one list endpoint
+ * served by the DriveBC.ca site. Only cameras that are switched on and published
+ * (`is_on` and `should_appear`) with a positive integer id and finite coordinates
+ * are kept. Frame URLs are built from that id on the official image host and are
+ * never read from the payload. Orientation codes give a high-confidence heading;
+ * `elevation` is metres above sea level. Attribution: Open Government Licence –
+ * British Columbia (registered in src/data/dataCredits.js).
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadDriveBcSourcesFromOpenData() {
+  try {
+    const resp = await fetch(DRIVEBC_WEBCAMS_URL, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn('[CCTV] DriveBC camera download failed:', resp.status);
+      return [];
+    }
+    const rows = await resp.json();
+    if (!Array.isArray(rows)) return [];
+
+    const cameras = [];
+    for (const row of rows) {
+      if (row?.is_on !== true || row?.should_appear !== true) continue;
+      if (!Number.isSafeInteger(row.id) || row.id <= 0) continue;
+      // GeoJSON point order: [longitude, latitude].
+      const [lon, lat] = Array.isArray(row.location?.coordinates)
+        ? row.location.coordinates
+        : [];
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+      const cameraId = `drivebc-${row.id}`;
+      const heading =
+        DRIVEBC_ORIENTATION_HEADINGS[
+          String(row.orientation || '')
+            .trim()
+            .toUpperCase()
+        ];
+      const hasHeading = Number.isFinite(heading);
+      const region = String(row.region_name || '').trim();
+      const imageUrl = DRIVEBC_IMAGE_URL(row.id);
+      cameras.push({
+        id: cameraId,
+        name: String(row.name || '').trim() || `DriveBC camera ${row.id}`,
+        // DriveBC regions: Lower Mainland, Vancouver Island, Southern Interior,
+        // Northern, and "Border Cams" for the US crossings.
+        city:
+          region === 'Border Cams' ? 'BC Border' : region || 'British Columbia',
+        cityId: 'british-columbia',
+        provider: 'DriveBC',
+        lat,
+        lon,
+        headingDeg: hasHeading ? heading : fallbackHeadingFromId(cameraId),
+        headingConfidence: hasHeading ? 'high' : 'low',
+        // Same two pose personalities as the other packs: raw priors that the
+        // client's ground snap and manual calibration refine.
+        pitchDeg: hasHeading ? -24 : -18,
+        fovDeg: hasHeading ? 56 : 44,
+        rangeM: hasHeading ? 210 : 145,
+        mountHeightM: hasHeading ? 10 : 8,
+        // Clamped like Caltrans so a garbage value can't fling a camera
+        // kilometres up; sea level is the prior for the coastal default anchors.
+        groundElevationM: Number.isFinite(row.elevation)
+          ? Math.max(-100, Math.min(4000, row.elevation))
+          : 0,
+        feedType: 'image',
+        url: imageUrl,
+        snapshotUrl: imageUrl,
+        sourceKind: 'drivebc-open-data',
+        license: 'DriveBC, Open Government Licence – British Columbia',
+      });
+    }
+
+    const maxRaw = Number(
+      process.env.CCTV_DRIVEBC_MAX_SOURCES || DEFAULT_DRIVEBC_MAX_SOURCES,
+    );
+    // Up to the catalog ceiling, so a BC-only setup can load the whole province.
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(1200, Math.floor(maxRaw)))
+      : DEFAULT_DRIVEBC_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, DRIVEBC_ANCHORS);
+    console.log(
+      `[CCTV] Loaded DriveBC camera sources: ${cameras.length} published (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] DriveBC camera download error:',
+      error?.message || error,
+    );
     return [];
   }
 }
