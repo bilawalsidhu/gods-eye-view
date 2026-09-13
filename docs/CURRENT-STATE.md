@@ -2125,6 +2125,7 @@ its criteria cannot be silently ignored.
 | Dams ▰ | OpenInfraMap/OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Submarine Cables ◠ | TeleGeography public map (bundled) | `src/data/telegeographySubmarineCables.js` | — | static |
 | FIRMS Active Fires ▲ | NASA FIRMS live (VIIRS ×3 NRT, trailing 24h) | `src/data/firmsHeatmap.js` | `/api/firms` (`FIRMS_MAP_KEY`) | 10 min (proxy TTL 30 min) |
+| Mesh Network 📡 | MeshCore public node map (map.meshcore.io) | `src/data/meshcore.js` | `/api/meshcore/nodes` | 10 min (proxy TTL 10 min) |
 
 `src/data/militaryAwareness.js` remains registered internally as the Contacts
 coordinator, but it is not a user-visible Data Layers entry. Its visible entry
@@ -2793,6 +2794,14 @@ are omitted rather than framing the wrong part of the globe.
   pathological field and 5,200-object normal field without relaxing budgets.
 - `src/data/detectionDraw.js` performs the batched, DPI-crisp canvas drawing for tier-colored labels, corner brackets, callouts, and distance-scaled tracked boxes. Unit tests cover label measurement and draw geometry.
 - `src/data/trackedReadout.js` publishes a protected shared-host callout above tracked aircraft and satellites or selected mapped installations. It reads only each layer's cached display position—never a fresh entity position evaluation—preventing readout jitter against the rendered target. AIS selection remains in the vessel source's protected card path.
+
+### Mesh Network (September 2026)
+
+- `server/providers/meshcore.js` proxies the public, keyless `map.meshcore.io/api/v1/nodes?short=1` feed (the open data behind community deployments like cascadiamesh.org/map): memory + disk cache, 10 min TTL, single-flight refresh, serve-stale-on-failure — same shape as `firmsProxy`, chosen because the upstream has no bounding-box query support and a full refetch (~60k nodes, tens of MB) is the only option.
+- `src/data/meshcoreNodes.js` holds the pure record-trim/normalize logic (drops the embedded `meshcore://` deep link and inserted/updated-by keys — the biggest contributors to the raw feed's size), imported by both the server proxy and the client layer, and unit-tested independently.
+- `src/data/meshcore.js` renders every node as a `PointPrimitiveCollection` point, colored by last-heard freshness (recent/stale/old/extinct/manually-added — the same bucket convention the official MeshCore map uses) and sized by node type (Repeater/Room Server infrastructure renders larger than Client/Sensor). No terrain sampling at this node count — points sit at a small fixed height above the ellipsoid, the same trade-off satellites.js makes.
+- Click-to-inspect surfaces name, type, radio parameters (frequency/bandwidth/spreading factor/coding rate), last-seen time, and public key through the shared world-overlay selected-card system (`src/overlays/worldOverlay.js`), following the same hide-base-point-then-highlight-entity pattern as `bikeshare.js`.
+- Not yet wired into the voice agent (`src/voice/gevActions.js` / `server/providers/openai/tools.js`) — UI-toggle only for now.
 
 ### Not Currently in Runtime
 

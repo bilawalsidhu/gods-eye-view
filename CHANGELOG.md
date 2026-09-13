@@ -13,6 +13,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Add a Mesh Network data layer: the public MeshCore LoRa mesh (~60,000 community-reported Client/Repeater/Room Server/Sensor nodes worldwide — the same open data behind cascadiamesh.org/map), color-coded by last-seen freshness with click-to-inspect radio parameters. Keyless, no signup required.
+
 - Drive share updates, Location feedback and Scene controls through immutable state snapshots and disposable subscriptions.
 - Keep stale lookup/load completions from publishing accepted results and retain shot rows during playback progress updates.
 - Export the existing Scene director with explicit playback and editing outcomes.
