@@ -16,6 +16,6 @@ pipeline:
 
   streaming:
     transcription: true
-    llm: true
+    llm: false
     tts: false
     clause_chunking: false

@@ -14,35 +14,12 @@ import {
   weightsPresent,
 } from '../../scripts/setup-local-voice.mjs';
 
-const BACKEND_FIXTURE = `from mlx_cache import ThreadSafeLRUPromptCache
-
-            accumulated = []
-            last_response = None
-            for response in stream_generate(
-                model,
-            ):
-                # Emit a content delta. Structured reasoning / tool parsing
-                # happens on the final chunk so we don't fragment the state
-                # machine in v1.
-                yield backend_pb2.Reply(
-                    message=bytes(response.text, encoding='utf-8'),
-                    chat_deltas=[backend_pb2.ChatDelta(content=response.text)],
-                )
-                # Early stop on user-provided stop sequences
-                if stop_words and any(s in "".join(accumulated) for s in stop_words):
-                    break
-
-            # Final chunk:
-
-            if enable_thinking == "true":
+const BACKEND_FIXTURE = `            if enable_thinking == "true":
                 kwargs["enable_thinking"] = True
 `;
 
-test('LocalAI compatibility patch filters spoken function markup and honors thinking=false', () => {
+test('LocalAI compatibility patch honors thinking=false', () => {
   const patched = patchLocalAiBackendSource(BACKEND_FIXTURE);
-  assert.match(patched, /FunctionStreamFilter/);
-  assert.match(patched, /visible_text = function_filter\.push/);
-  assert.match(patched, /visible_tail = function_filter\.finish/);
   assert.match(patched, /enable_thinking in \{"true", "false"\}/);
   assert.equal(patchLocalAiBackendSource(patched), patched, 'patch must be idempotent');
 });
@@ -66,7 +43,6 @@ test('LocalAI compatibility patch skips the thinking fix when upstream already h
                 kwargs["enable_thinking"] = enable_thinking == "true"`,
   );
   const patched = patchLocalAiBackendSource(upstream);
-  assert.match(patched, /FunctionStreamFilter/);
   assert.match(patched, /enable_thinking in \("true", "false"\)/);
   assert.doesNotMatch(patched, /enable_thinking in \{"true", "false"\}/);
 });
@@ -167,6 +143,35 @@ test('a profile with no mlx stage installs off Apple Silicon', () => {
         environment: { GEV_LOCAL_AI_HOME: path.join(root, 'localai') },
       }),
       /setup incomplete/,
+    );
+
+    const installedModels = path.join(root, 'localai', 'models');
+    fs.mkdirSync(installedModels, { recursive: true });
+    for (const name of fs.readdirSync(models)) {
+      fs.copyFileSync(path.join(models, name), path.join(installedModels, name));
+    }
+    assert.equal(
+      setupLocalVoice({
+        profileDir: root,
+        platform: 'linux',
+        architecture: 'x64',
+        checkOnly: true,
+        environment: { GEV_LOCAL_AI_HOME: path.join(root, 'localai') },
+      }).ready,
+      true,
+    );
+
+    fs.appendFileSync(path.join(installedModels, 'gpt-realtime.yaml'), '# stale\n');
+    assert.throws(
+      () => setupLocalVoice({
+        profileDir: root,
+        platform: 'linux',
+        architecture: 'x64',
+        checkOnly: true,
+        environment: { GEV_LOCAL_AI_HOME: path.join(root, 'localai') },
+      }),
+      /model config gpt-realtime\.yaml/,
+      'readiness must reject an installed config from an older profile revision',
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

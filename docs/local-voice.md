@@ -99,28 +99,27 @@ mic panel selection is stored in the browser and takes precedence. A remote
 process on that host.
 
 The included pipeline disables MiniCPM thinking, retains four conversation
-items, and preloads the full stack before the microphone connects. Tool calls
-remain structured events; the MiniCPM `<function>` markup is withheld from the
-text passed to Kokoro so it cannot be spoken.
+items, and preloads the full stack before the microphone connects. LLM output
+is buffered until MiniCPM's parser has separated structured tool calls from
+ordinary text, so `<function>` markup never reaches Kokoro.
 
 ## Compatibility files
 
-LocalAI 4.9.0's MLX backend only forwarded `enable_thinking=true` and streamed
-raw MiniCPM function markup before converting it into a tool call. MLX-LM
-0.31.3 also lacked MiniCPM5 parser registration. The setup command patches
-those exact source shapes and stops with an error when the installed source is
-not compatible, rather than modifying an unknown version.
+LocalAI 4.9.0's MLX backend only forwarded `enable_thinking=true`, and MLX-LM
+0.31.3 lacked MiniCPM5 parser registration. The setup command patches those
+exact source shapes and stops with an error when the installed source is not
+compatible, rather than modifying an unknown version. The pipeline buffers LLM
+generation, so it does not need to patch LocalAI's streaming path.
 
 The thinking fix is now upstream in LocalAI
-([#11962](https://github.com/mudler/LocalAI/pull/11962), released after 4.9.0),
-so setup skips that patch when the installed backend already honors
+([#11962](https://github.com/mudler/LocalAI/pull/11962), merged after 4.9.0), so
+setup skips that patch when the installed backend already honors
 `enable_thinking=false`.
 
-The two small compatibility modules under `config/localai/compat` follow the
-MIT-licensed [LocalAI MLX backend](https://github.com/mudler/LocalAI/tree/v4.9.0/backend/python/mlx)
-and [MLX-LM tool parser](https://github.com/ml-explore/mlx-lm/tree/main/mlx_lm/tool_parsers)
-interfaces. They can be removed from this repository once released versions of
-both projects provide the same behavior.
+The small parser under `config/localai/compat` follows the MIT-licensed
+[MLX-LM tool parser](https://github.com/ml-explore/mlx-lm/tree/main/mlx_lm/tool_parsers)
+interface. It and the source compatibility step can be removed once released
+versions of both projects provide the same behavior.
 
 Live session events are written to `.gev-logs/realtime-conversations.jsonl`.
 Set `GEV_VOICE_LOG=0` to hide the compact voice trace in the dev-server output.

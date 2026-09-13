@@ -32,9 +32,10 @@
 - GEV starts only loopback LocalAI targets and owns only the child process it
   created. Remote targets must already be running. A spawned child is stopped
   with the dev server.
-- MiniCPM function markup is filtered before TTS while the unmodified output is
-  parsed into structured tool calls. Tool-result follow-ups use the backend's
-  configured output budget; there is no client-side 80-token limit.
+- MiniCPM output is buffered until its parser separates structured tool calls
+  from ordinary text, so function markup does not reach TTS. Tool-result
+  follow-ups use the backend's configured output budget; there is no
+  client-side 80-token limit.
 
 ## Terrain, traffic, fire and bike-share provider modules
 

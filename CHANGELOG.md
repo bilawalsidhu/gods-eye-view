@@ -53,6 +53,9 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Local voice setup skips the MLX thinking patch on LocalAI builds that already
   honor `enable_thinking=false` (merged upstream as mudler/LocalAI#11962), so
   setup and check keep working on newer LocalAI.
+- The MiniCPM voice stage buffers LLM output until tool calls are parsed. Kokoro
+  already synthesizes complete replies, so this removes the MLX streaming patch
+  without changing when speech begins.
 - Local voice sessions are excluded from OpenAI spend limits, wait for the
   pipeline to preload, and use the configured pipeline output limit after tool
   calls instead of the previous client-side 80-token cap.

@@ -1,6 +1,6 @@
 # LocalAI reference profile
 
-This directory contains configuration and compatibility source only. Model
+This directory contains configuration and one compatibility parser. Model
 weights and backend binaries are downloaded by LocalAI into its own data
 directory and are not committed to this repository.
 
@@ -15,4 +15,4 @@ Upstream sources:
 
 Each downloaded artifact remains subject to its upstream license. See
 [`docs/local-voice.md`](../../docs/local-voice.md) for installation and the
-scope of the two version-pinned compatibility fixes.
+scope of the version-pinned compatibility fixes.

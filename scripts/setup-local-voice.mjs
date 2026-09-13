@@ -28,63 +28,6 @@ const THINKING_HONORS_FALSE = /if enable_thinking in [({]"true", "false"[)}]:/;
 
 export function patchLocalAiBackendSource(source) {
   let output = source;
-  if (!output.includes('from function_stream_filter import FunctionStreamFilter')) {
-    output = replaceOnce(
-      output,
-      'from mlx_cache import ThreadSafeLRUPromptCache\n',
-      'from mlx_cache import ThreadSafeLRUPromptCache\nfrom function_stream_filter import FunctionStreamFilter\n',
-      'MLX stream filter import',
-    );
-  }
-  if (!output.includes('function_filter = FunctionStreamFilter()')) {
-    output = replaceOnce(
-      output,
-      '            accumulated = []\n            last_response = None\n            for response in stream_generate(',
-      '            accumulated = []\n            last_response = None\n            function_filter = FunctionStreamFilter()\n            for response in stream_generate(',
-      'MLX stream filter state',
-    );
-    output = replaceOnce(
-      output,
-      `                # Emit a content delta. Structured reasoning / tool parsing
-                # happens on the final chunk so we don't fragment the state
-                # machine in v1.
-                yield backend_pb2.Reply(
-                    message=bytes(response.text, encoding='utf-8'),
-                    chat_deltas=[backend_pb2.ChatDelta(content=response.text)],
-                )
-                # Early stop on user-provided stop sequences`,
-      `                # Keep ordinary text streaming, but withhold native
-                # <function ...></function> markup from the TTS stage. The raw
-                # output is still finalized into structured tool calls below.
-                visible_text = function_filter.push(response.text)
-                if visible_text:
-                    yield backend_pb2.Reply(
-                        message=bytes(visible_text, encoding='utf-8'),
-                        chat_deltas=[backend_pb2.ChatDelta(content=visible_text)],
-                    )
-                # Early stop on user-provided stop sequences`,
-      'MLX streaming output',
-    );
-    output = replaceOnce(
-      output,
-      `                if stop_words and any(s in "".join(accumulated) for s in stop_words):
-                    break
-
-            # Final chunk:`,
-      `                if stop_words and any(s in "".join(accumulated) for s in stop_words):
-                    break
-
-            visible_tail = function_filter.finish()
-            if visible_tail:
-                yield backend_pb2.Reply(
-                    message=bytes(visible_tail, encoding='utf-8'),
-                    chat_deltas=[backend_pb2.ChatDelta(content=visible_tail)],
-                )
-
-            # Final chunk:`,
-      'MLX streaming output tail',
-    );
-  }
   if (!THINKING_HONORS_FALSE.test(output)) {
     output = replaceOnce(
       output,
@@ -282,7 +225,6 @@ export function runLocalStep(step, { profileDir = PROFILE_DIR, modelsDir, backen
 function applyMlxCompatibility({ backendsDir, checkOnly, missing, profileDir }) {
   const mlxBackend = path.join(backendsDir, 'metal-mlx');
   const backendFile = path.join(mlxBackend, 'backend.py');
-  const streamFilterTarget = path.join(mlxBackend, 'function_stream_filter.py');
   if (!fs.existsSync(backendFile)) throw new Error(`MLX backend not found at ${mlxBackend}`);
   const sitePackages = findSitePackages(mlxBackend);
   const tokenizerFile = path.join(sitePackages, 'mlx_lm', 'tokenizer_utils.py');
@@ -297,14 +239,12 @@ function applyMlxCompatibility({ backendsDir, checkOnly, missing, profileDir }) 
   if (checkOnly) {
     if (patchedBackend !== backendSource) missing.push('LocalAI MLX compatibility patch');
     if (patchedTokenizer !== tokenizerSource) missing.push('MiniCPM5 parser registration');
-    if (!fs.existsSync(streamFilterTarget)) missing.push('stream function filter');
     if (!fs.existsSync(parserTarget)) missing.push('MiniCPM5 parser');
     return;
   }
 
   writeChanged(backendFile, patchedBackend);
   writeChanged(tokenizerFile, patchedTokenizer);
-  fs.copyFileSync(path.join(profileDir, 'compat', 'function_stream_filter.py'), streamFilterTarget);
   if (!fs.existsSync(parserTarget)) {
     fs.copyFileSync(path.join(profileDir, 'compat', 'minicpm5.py'), parserTarget);
   }
@@ -352,7 +292,11 @@ export function setupLocalVoice({
 
   const missing = [];
   for (const name of fs.readdirSync(path.join(profileDir, 'models'))) {
-    if (!fs.existsSync(path.join(modelsDir, name))) missing.push(`model config ${name}`);
+    const source = path.join(profileDir, 'models', name);
+    const installed = path.join(modelsDir, name);
+    if (!fs.existsSync(installed) || !fs.readFileSync(source).equals(fs.readFileSync(installed))) {
+      missing.push(`model config ${name}`);
+    }
   }
   for (const { name, repoId } of profile.weights) {
     if (!weightsPresent(modelsDir, repoId)) missing.push(`${name} weights (${repoId})`);
