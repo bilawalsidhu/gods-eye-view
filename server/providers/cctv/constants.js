@@ -17,6 +17,21 @@ export const CCTV_MAX_SOURCES_CEILING = 5000;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 export const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
+/** TxDOT ITS / TransGuide — San Antonio district camera catalog. */
+export const TXDOT_SAT_CCTV_STATUS_URL =
+  'https://its.txdot.gov/its/DistrictIts/GetCctvStatusListByDistrict?districtCode=SAT';
+
+/** TxDOT individual CCTV snapshot endpoint. */
+export const TXDOT_CCTV_SNAPSHOT_URL =
+  'https://its.txdot.gov/its/DistrictIts/GetCctvSnapshotByIcdId';
+
+export const DEFAULT_TXDOT_SAT_MAX_SOURCES = 320;
+
+/** Downtown San Antonio anchor for source prioritization. */
+export const SAN_ANTONIO_CENTER = {
+  lat: 29.4241,
+  lon: -98.4936,
+};
 export const CALTRANS_CCTV_URL = (district) =>
   `https://cwwp2.dot.ca.gov/data/d${district}/cctv/cctvStatusD${String(district).padStart(2, '0')}.json`;
 /** Districts fetched by default: SF Bay (4), LA (7), San Diego (11), Sacramento (3). */

@@ -10,6 +10,7 @@ import {
   loadOntarioSourcesFromOpenData,
   loadFintrafficSourcesFromOpenData,
   loadDriveBcSourcesFromOpenData,
+  loadTxdotSanAntonioSources,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -48,6 +49,11 @@ const LIVE_PACKS = [
     name: 'drivebc',
     enabled: () => envEnabled('CCTV_DRIVEBC_ENABLED'),
     load: loadDriveBcSourcesFromOpenData,
+  },
+  {
+    name: 'txdot',
+    enabled: () => envEnabled('CCTV_TXDOT_ENABLED'),
+    load: loadTxdotSanAntonioSources,
   },
 ];
 /**

@@ -239,6 +239,78 @@ export async function fetchCctvMediaUpstream(
 }
 
 /**
+ * Fetch and decode a TxDOT ITS / TransGuide snapshot.
+ *
+ * TxDOT returns JSON with a base64-encoded JPEG in `snippet`, rather than
+ * returning image/jpeg directly.
+ */
+export async function fetchTxdotSnapshot(
+  url,
+  { fetchImpl = fetch, timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS } = {},
+) {
+  if (!url) return null;
+
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+
+  if (
+    parsed.origin !== 'https://its.txdot.gov' ||
+    parsed.pathname !== '/its/DistrictIts/GetCctvSnapshotByIcdId'
+  ) {
+    return null;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const upstream = await fetchImpl(parsed.toString(), {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'gods-eye-view-cctv-proxy/1.0',
+      },
+      signal: controller.signal,
+    });
+
+    if (!upstream.ok) return null;
+
+    const payload = await upstream.json();
+
+    let snippet =
+      typeof payload?.snippet === 'string' ? payload.snippet.trim() : '';
+
+    if (!snippet) return null;
+
+    snippet = snippet.replace(/^data:image\/jpeg;base64,/i, '');
+
+    const body = Buffer.from(snippet, 'base64');
+
+    if (body.length < 4 || body.length > CCTV_FRAME_MAX_BODY_BYTES) {
+      return null;
+    }
+
+    if (body[0] !== 0xff || body[1] !== 0xd8 || body[2] !== 0xff) {
+      return null;
+    }
+
+    return {
+      ok: true,
+      body,
+      contentType: 'image/jpeg',
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+    controller.abort();
+  }
+}
+
+/**
  * Fetch one upstream CCTV image within the frame-refresh budget.
  *
  * A timeout is treated like every other upstream miss so the caller can

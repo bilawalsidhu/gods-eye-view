@@ -24,6 +24,10 @@ import {
   DRIVEBC_IMAGE_URL,
   DEFAULT_DRIVEBC_MAX_SOURCES,
   DRIVEBC_ANCHORS,
+  TXDOT_SAT_CCTV_STATUS_URL,
+  TXDOT_CCTV_SNAPSHOT_URL,
+  DEFAULT_TXDOT_SAT_MAX_SOURCES,
+  SAN_ANTONIO_CENTER,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
 } from './constants.js';
 import {
@@ -36,6 +40,7 @@ import {
   fallbackHeadingFromId,
   isLikelyFinlandCoordinate,
   fintrafficCameraName,
+  hashSeed,
   rowArrayToObject,
   prioritizeSources,
 } from './normalize.js';
@@ -772,6 +777,141 @@ export async function loadDriveBcSourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] DriveBC camera download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/**
+ * Fetch TxDOT ITS / TransGuide CCTV cameras for the San Antonio district.
+ *
+ * The status endpoint returns cameras grouped by roadway under
+ * `roadwayCctvStatuses`. Only online cameras with available snapshots and
+ * finite coordinates are exposed.
+ *
+ * Individual snapshots are fetched from GetCctvSnapshotByIcdId, which returns
+ * JSON containing a base64 JPEG in `.snippet`; the CCTV media layer handles
+ * decoding that response.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadTxdotSanAntonioSources() {
+  const endpoint =
+    process.env.CCTV_TXDOT_SAT_STATUS_URL || TXDOT_SAT_CCTV_STATUS_URL;
+
+  try {
+    const resp = await fetch(endpoint, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'gods-eye-view-cctv-proxy/1.0',
+      },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+
+    if (!resp.ok) {
+      console.warn('[CCTV] TxDOT SAT source download failed:', resp.status);
+      return [];
+    }
+
+    const payload = await resp.json();
+    const roadwayGroups = payload?.roadwayCctvStatuses;
+
+    if (!roadwayGroups || typeof roadwayGroups !== 'object') return [];
+
+    const rows = Object.values(roadwayGroups).flatMap((group) =>
+      Array.isArray(group) ? group : [],
+    );
+
+    const cameras = [];
+
+    for (const row of rows) {
+      const icdId = String(row?.icd_Id || row?.name || '').trim();
+      if (!icdId) continue;
+
+      if (row?.hasSnapshot !== true) continue;
+
+      const status = String(row?.statusDescription || '').trim();
+      if (status && status !== 'Device Online') continue;
+
+      const netId = String(row?.netId || '')
+        .trim()
+        .toUpperCase();
+      if (netId && netId !== 'SAT') continue;
+
+      const lat = toFiniteNumber(row?.latitude);
+      const lon = toFiniteNumber(row?.longitude);
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+      const direction = row?.dirDescription || row?.equipLoc?.direction || '';
+
+      const heading = directionToHeading(direction, true);
+
+      const slug = icdId
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+
+      const cameraId = `txdot-sat-${slug}-` + hashSeed(icdId).toString(16);
+
+      const snapshot = new URL(TXDOT_CCTV_SNAPSHOT_URL);
+      snapshot.searchParams.set('icdId', icdId);
+      snapshot.searchParams.set('districtCode', 'SAT');
+
+      cameras.push({
+        id: cameraId,
+        name: icdId,
+        city: 'San Antonio',
+        cityId: 'san-antonio',
+        provider: 'TxDOT TransGuide',
+        lat,
+        lon,
+
+        headingDeg: Number.isFinite(heading)
+          ? heading
+          : fallbackHeadingFromId(cameraId),
+
+        headingConfidence: Number.isFinite(heading) ? 'high' : 'low',
+
+        pitchDeg: Number.isFinite(heading) ? -24 : -18,
+        fovDeg: Number.isFinite(heading) ? 56 : 44,
+        rangeM: Number.isFinite(heading) ? 210 : 145,
+        mountHeightM: 10,
+        groundElevationM: 200,
+
+        feedType: 'image',
+
+        // TxDOT returns JSON with the JPEG encoded in payload.snippet.
+        url: snapshot.toString(),
+        snapshotUrl: snapshot.toString(),
+
+        sourceKind: 'txdot-transguide',
+        license: 'TxDOT ITS / TransGuide traffic camera',
+      });
+    }
+
+    const maxRaw = Number(
+      process.env.CCTV_TXDOT_SAT_MAX_SOURCES || DEFAULT_TXDOT_SAT_MAX_SOURCES,
+    );
+
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(400, Math.floor(maxRaw)))
+      : DEFAULT_TXDOT_SAT_MAX_SOURCES;
+
+    const prioritized = prioritizeSources(cameras, maxCount, [
+      SAN_ANTONIO_CENTER,
+    ]);
+
+    console.log(
+      `[CCTV] Loaded TxDOT San Antonio camera sources: ${cameras.length} ` +
+        `(using nearest ${prioritized.length})`,
+    );
+
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] TxDOT SAT source download error:',
       error?.message || error,
     );
     return [];
