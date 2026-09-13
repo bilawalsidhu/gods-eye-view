@@ -12,6 +12,7 @@
   ["local-dams", "q"],
   ["local-datacenters", "d"],
   ["local-firms", "w"],
+  ["meshcore", "0"],
   ["military", "m"],
   ["military-awareness", "g"],
   ["military-installations", "i"],

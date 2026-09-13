@@ -199,9 +199,10 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 28);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 28);
+  assert.equal(REGISTERED_LAYER_IDS.length, 29);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 29);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
+  assert.ok(REGISTERED_LAYER_IDS.includes('meshcore'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
     'ais-live-vessels': 'a',
@@ -239,7 +240,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  assert.equal(nextLayerStateToken(), '0');
+  assert.equal(nextLayerStateToken(), '3');
   assert.equal(
     nextLayerStateToken({ ...LAYER_STATE_TOKEN_RESERVATIONS, alpha: '0', bravo: '3' }),
     '4',
