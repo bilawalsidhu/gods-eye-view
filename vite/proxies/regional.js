@@ -8,7 +8,27 @@
 
 import { clientKey, coalesceProxyRequest, makeRateLimiter, readResponseJsonCapped, readResponseTextCapped } from './_shared.js';
 import { normalizeRegionalArticles, normalizeRegionalPlace, normalizeRegionalWeather } from '../../src/data/regionalBrief.js';
-import { requiredFiniteQueryNumber } from '../../src/data/overpassPolicy.js';
+import {
+  WEATHER_EFFECTS_CACHE_MS,
+  WEATHER_EFFECTS_MAX_CACHE,
+  WEATHER_EFFECTS_MAX_RESPONSE_BYTES,
+  WEATHER_EFFECTS_STALE_MS,
+  buildOpenMeteoWeatherUrl,
+  buildWeatherEffectsPayload,
+  validRegionalPoint,
+  regionalPointCacheKey,
+} from '../../src/data/weatherEffectsPolicy.js';
+
+// The weather-effects policy (validation, 0.1° cache key, upstream URL,
+// payload shape, TTLs) lives in the worker-safe
+// `src/data/weatherEffectsPolicy.js` so functions/api/weather-effects.js
+// cannot drift from this middleware. Re-exported for the test suite.
+export {
+  WEATHER_EFFECTS_CACHE_MS,
+  WEATHER_EFFECTS_MAX_RESPONSE_BYTES,
+  WEATHER_EFFECTS_STALE_MS,
+  validRegionalPoint,
+};
 
 // ---------------------------------------------------------------------------
 // Regional cockpit briefing proxy
@@ -27,14 +47,6 @@ export const _regionalBriefInFlight = new Map();
 
 export const _regionalBriefRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 30, globalMax: 90 });
 
-export const WEATHER_EFFECTS_CACHE_MS = 5 * 60_000;
-
-export const WEATHER_EFFECTS_STALE_MS = 30 * 60_000;
-
-export const WEATHER_EFFECTS_MAX_CACHE = 180;
-
-export const WEATHER_EFFECTS_MAX_RESPONSE_BYTES = 512 * 1024;
-
 export const _weatherEffectsCache = new Map();
 
 export const _weatherEffectsInFlight = new Map();
@@ -44,14 +56,6 @@ export const _weatherEffectsRateLimiter = makeRateLimiter({ windowMs: 60_000, ma
 export let _nominatimQueue = Promise.resolve();
 
 export let _nominatimLastRequestAt = 0;
-
-export function validRegionalPoint(params) {
-  const latitude = requiredFiniteQueryNumber(params, 'latitude');
-  const longitude = requiredFiniteQueryNumber(params, 'longitude');
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
-  return { latitude, longitude };
-}
 
 export function trimRegionalBriefCache() {
   while (_regionalBriefCache.size > REGIONAL_BRIEF_MAX_CACHE) {
@@ -203,14 +207,8 @@ export async function fetchRegionalNews(place) {
 }
 
 export async function fetchRegionalWeather(point) {
-  const params = new URLSearchParams({
-    latitude: point.latitude.toFixed(5),
-    longitude: point.longitude.toFixed(5),
-    current: 'temperature_2m,apparent_temperature,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,visibility',
-    timezone: 'UTC',
-  });
   try {
-    const payload = await fetchRegionalJson(`https://api.open-meteo.com/v1/forecast?${params}`, {
+    const payload = await fetchRegionalJson(buildOpenMeteoWeatherUrl(point), {
       maxBytes: WEATHER_EFFECTS_MAX_RESPONSE_BYTES,
     });
     return normalizeRegionalWeather(payload);
@@ -273,7 +271,7 @@ export function regionalBriefProxy() {
         res.end(JSON.stringify({ error: 'Valid latitude and longitude are required' }));
         return;
       }
-      const key = `${(Math.round(point.latitude * 10) / 10).toFixed(1)},${(Math.round(point.longitude * 10) / 10).toFixed(1)}`;
+      const key = regionalPointCacheKey(point);
       const now = Date.now();
       const cached = _regionalBriefCache.get(key);
       if (cached && now - cached.cachedAt <= REGIONAL_BRIEF_CACHE_MS) {
@@ -317,12 +315,7 @@ export function weatherEffectsProxy() {
   async function refresh(point, key) {
     const weather = await fetchRegionalWeather(point);
     if (!weather) throw new Error('Weather observation unavailable');
-    const payload = {
-      status: 'ready',
-      retrievedAt: new Date().toISOString(),
-      coordinates: point,
-      weather,
-    };
+    const payload = buildWeatherEffectsPayload(point, weather, new Date().toISOString());
     _weatherEffectsCache.set(key, { payload, cachedAt: Date.now() });
     trimWeatherEffectsCache();
     return payload;
@@ -347,7 +340,7 @@ export function weatherEffectsProxy() {
         res.end(JSON.stringify({ error: 'Valid latitude and longitude are required' }));
         return;
       }
-      const key = `${(Math.round(point.latitude * 10) / 10).toFixed(1)},${(Math.round(point.longitude * 10) / 10).toFixed(1)}`;
+      const key = regionalPointCacheKey(point);
       const now = Date.now();
       const cached = _weatherEffectsCache.get(key);
       if (cached && now - cached.cachedAt <= WEATHER_EFFECTS_CACHE_MS) {

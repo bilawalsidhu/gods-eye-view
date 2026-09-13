@@ -160,7 +160,7 @@ export function buildSplatInputs(cells, lod, bounds) {
   if (!Array.isArray(cells) || !cells.length || !(lod?.gridDegrees > 0)) return null;
 
   // Loop (not spread) — the cap is 3600 today but the V8 spread-arg limit bit
-  // this codebase once already (vite.config.js FIRMS RangeError).
+  // this codebase once already (vite/proxies/firms.js FIRMS RangeError).
   let maxScore = 1;
   for (const cell of cells) {
     const score = cellScore(cell);

@@ -3,7 +3,7 @@
  * CCTV source catalog + frame serving — the single source of truth for the
  * traffic-camera subsystem, shared by callers that cannot share anything else:
  *
- *   1. the dev-server CCTV middleware (`vite.config.js` → cctvProxy, `/api/cctv/*`)
+ *   1. the dev-server CCTV middleware (`vite/proxies/cctv.js`, `/api/cctv/*`)
  *   2. the Cloudflare Pages Function of the same routes
  *      (`functions/api/cctv/[[path]].js`)
  *   3. unit tests, which pin the frame-fetch timeout and the fallback chain
@@ -35,6 +35,7 @@
  */
 
 import { directionToHeading } from './directionText.js';
+import { api } from '../config/apiEndpoints.js';
 import { resolveGoogleApiKey } from './googlePlacesPolicy.js';
 
 /** Path to the optional static CCTV source list (JSON array). */
@@ -1124,10 +1125,8 @@ export function buildStreamPayload(source, cameraId) {
   return {
     id: cameraId,
     feedType,
-    mediaUrl: isVideoFeedType(feedType)
-      ? `/api/cctv/media/${encodeURIComponent(cameraId)}`
-      : null,
-    frameUrl: `/api/cctv/frame/${encodeURIComponent(cameraId)}`,
+    mediaUrl: isVideoFeedType(feedType) ? api.cctvMedia(cameraId) : null,
+    frameUrl: api.cctvFrame(cameraId),
     provider: source?.provider || '',
     sourceKind: source?.sourceKind || (source?.url ? 'configured' : 'fallback'),
   };

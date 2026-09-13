@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { api } from './config/apiEndpoints.js';
 import { viewportBias, placesNearViewRecovery } from './annotations/annotationResolver.js';
 import { findNaturalRegion } from './data/naturalEarthRegions.js';
 
@@ -945,7 +946,7 @@ async function resolveBuildingBounds(lat, lon, query) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 6000);
   try {
-    const response = await fetch('/api/overpass', {
+    const response = await fetch(api.overpass(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `data=${encodeURIComponent(overpassQuery)}`,

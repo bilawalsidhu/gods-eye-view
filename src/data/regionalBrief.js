@@ -1,3 +1,4 @@
+import { api } from '../config/apiEndpoints.js';
 const MAX_ARTICLES = 5;
 
 function cleanText(value, maxLength = 180) {
@@ -125,7 +126,7 @@ export function regionalDistanceM(from, to) {
 export async function fetchRegionalBrief(latitude, longitude, { signal } = {}) {
   if (![latitude, longitude].every(Number.isFinite)) throw new Error('Valid coordinates are required');
   const params = new URLSearchParams({ latitude: latitude.toFixed(5), longitude: longitude.toFixed(5) });
-  const response = await fetch(`/api/regional-brief?${params}`, { signal });
+  const response = await fetch(api.regionalBrief(params), { signal });
   if (!response.ok) throw new Error(`Regional brief unavailable (${response.status})`);
   return response.json();
 }

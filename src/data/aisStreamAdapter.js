@@ -1,6 +1,6 @@
 // Transport adapter for the AISStream watchdog.
 //
-// Extracted from vite.config.js so the socket lifecycle — the part that has
+// Extracted from the dev proxy (now `vite/proxies/ais-live.js`) so the socket lifecycle — the part that has
 // historically carried the defects — can be exercised offline with mock
 // sockets. The adapter owns sockets and translates watchdog ACTIONS into
 // transport calls; the watchdog owns policy and owns no I/O.

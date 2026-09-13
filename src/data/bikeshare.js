@@ -11,6 +11,7 @@
  */
 
 import * as Cesium from 'cesium';
+import { api } from '../config/apiEndpoints.js';
 import { governorRequestRender } from '../renderGovernor.js';
 import { registerSpriteCollection, restoreSpriteOrder } from './spriteOrder.js';
 import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
@@ -525,7 +526,7 @@ let _limitWarned = false;
  * @returns {string} Relative proxy URL.
  */
 function toProxyUrl(upstreamUrl) {
-  return `/api/gbfs/${encodeURIComponent(upstreamUrl)}`;
+  return api.gbfs(upstreamUrl);
 }
 
 /** Increment the loading reference count and mark loading state active. */

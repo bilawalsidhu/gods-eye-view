@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { api } from '../config/apiEndpoints.js';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
 import { isRateLimitedOutcome, resolveAnnotationTarget } from './annotationResolver.js';
 
@@ -1091,7 +1092,7 @@ async function fetchRoute(coordPairs, mode, externalSignal) {
   const timer = setTimeout(() => controller.abort(), 13000);
   try {
     const coords = coordPairs.map(([lon, lat]) => `${lon.toFixed(6)},${lat.toFixed(6)}`).join(';');
-    const res = await fetch(`/api/route?profile=${mode}&coords=${encodeURIComponent(coords)}`, { signal: controller.signal });
+    const res = await fetch(api.route(mode, coords), { signal: controller.signal });
     const data = await res.json();
     if (data?.ok && Array.isArray(data.geometry) && data.geometry.length >= 2) return data;
   } catch { /* routing unavailable / aborted → caller falls back to straight segments */ } finally {

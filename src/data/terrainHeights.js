@@ -29,6 +29,7 @@
 //      from a fresh page load, a different camera batch, etc.) consistently
 //      hit the same warm proxy cache entry.
 import { ensureGeoidReady, geoidHeight } from './geoid.js';
+import { api } from '../config/apiEndpoints.js';
 
 /** Max points per outgoing request to `/api/terrain/heights` (see file header, point 1). */
 const CHUNK_SIZE = 200;
@@ -99,7 +100,7 @@ async function fetchChunk(chunk) {
   // lon,lat order (matches the proxy's documented `points=lon,lat;…` contract
   // and Task 2's implementation).
   const pointsParam = chunk.map(({ lat, lon }) => `${lon.toFixed(5)},${lat.toFixed(5)}`).join(';');
-  const url = `/api/terrain/heights?points=${encodeURIComponent(pointsParam)}`;
+  const url = api.terrainHeights(pointsParam);
   const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
   if (!res.ok) throw new Error(`terrain heights proxy HTTP ${res.status}`);
   const body = await res.json();

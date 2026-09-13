@@ -4,7 +4,7 @@
  * masks, response normalization, and the context-priority ranking used by the
  * HUD scene-summary enrichment.
  *
- * Imported by BOTH runtimes — the dev middlewares in `vite.config.js`
+ * Imported by BOTH runtimes — the dev middlewares in `vite/proxies/*`
  * (`googlePlacesContextProxy`) and the Pages Function
  * (`functions/api/google/[[path]].js`) — so the key-holding proxy behaves
  * identically in dev and production.

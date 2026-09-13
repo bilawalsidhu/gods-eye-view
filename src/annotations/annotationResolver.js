@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { api } from '../config/apiEndpoints.js';
 import { lookupNeighborhoodRing } from '../data/neighborhoodPolygons.js';
 import { lookupNaturalRegionOutline, findNaturalRegion } from '../data/naturalEarthRegions.js';
 import { registerDynamicCredit, NATURAL_EARTH_CREDIT } from '../data/dataCredits.js';
@@ -706,7 +707,7 @@ async function placesTextSearch(query, centerLat, centerLon, radiusM, signal) {
     radiusM: String(radiusM),
   });
   try {
-    const response = await fetch(`/api/google/text-search?${params}`, { signal });
+    const response = await fetch(api.googleTextSearch(params), { signal });
     if (!response.ok) { negCache(placesCache, cacheKey, signal, false); return null; } // transient
     const data = await response.json();
     const hit = Array.isArray(data?.places)
@@ -839,7 +840,7 @@ async function overpassJson(query, timeoutMs = 14000, signal) {
   const detach = linkAbort(controller, signal);
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch('/api/overpass', {
+    const res = await fetch(api.overpass(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `data=${encodeURIComponent(query)}`,

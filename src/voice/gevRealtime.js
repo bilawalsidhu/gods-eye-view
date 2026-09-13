@@ -1,4 +1,5 @@
 import { createGevActionRunner, readLayerLifecycleSummary } from './gevActions.js';
+import { api } from '../config/apiEndpoints.js';
 import {
   DEFAULT_VOICE_TIER,
   createVoiceCostTracker,
@@ -9,7 +10,7 @@ import {
   serializeCostLimits,
 } from './voiceCost.js';
 
-const TOKEN_URL = '/api/realtime/token';
+const TOKEN_URL = api.realtimeToken();
 const REALTIME_CALLS_URL = 'https://api.openai.com/v1/realtime/calls';
 const STATUS = {
   idle: 'OFF',
@@ -31,7 +32,7 @@ const VIEWPORT_MAX_PIXELS = 1200 * 900; // ~1.08 MP, matches the old 1200px-wide
 const VIEWPORT_MAX_ENCODED_BYTES = 200 * 1024; // ~200 KB encoded ceiling
 const ERROR_LOG_LIMIT = 30;
 const ERROR_STORAGE_KEY = 'gev-realtime-errors';
-const DEBUG_LOG_URL = '/api/realtime/debug-log';
+const DEBUG_LOG_URL = api.realtimeDebugLog();
 // Voice cost control (repo-wide `godsEyeView.<feature>.<field>` convention;
 // the neighbouring ERROR_STORAGE_KEY predates it).
 const VOICE_TIER_STORAGE_KEY = 'godsEyeView.voiceCost.tier';

@@ -748,7 +748,32 @@ ordered by value-per-risk; each is self-contained and committable.
       parity fix is now in place: the four proxy suites run green against
       the modules directly (47/47), and a live smoke of all 20 dev proxies
       (keyless contracts + real upstream data) passed on the new assembly.
-- [ ] Consolidate `apiEndpoints.js` (31 bypassers).
+- [x] Consolidate `apiEndpoints.js` (31 bypassers). DONE 2026-09-13:
+      `src/config/apiEndpoints.js` now carries `api` — a single builder
+      inventory (34 builders) with one function per concrete client-callable
+      route; all ~36 call sites migrated byte-for-byte (asserted script,
+      one exact-match replacement per site), so no client code composes
+      `/api/...` literals anymore. The new
+      `src/config/apiEndpoints.test.mjs` locks the parity contract the
+      docs only used to assert: every inventory route must be served by
+      BOTH the dev middleware (walked from `createViteConfig()` plugins)
+      AND a Pages Function (walked from `functions/api/`), every dev mount
+      and every Pages route must be declared, and every builder must emit
+      the exact URL its call site used to compose. The test immediately
+      caught four routes with a dev middleware but NO Pages Function —
+      `/api/terrain/heights`, `/api/route`, `/api/weather-effects`,
+      `/api/gbfs` silently 404'd on Pages deployments (bikeshare, route,
+      camera-weather and ground-floor layers were prod-broken) — all four
+      now have workerd ports over shared worker-safe policy modules
+      (`src/data/routePolicy.js`, `weatherEffectsPolicy.js`, `gbfsPolicy.js`;
+      the dev middlewares were refactored onto the same code, so the
+      runtimes cannot drift). Inverse finding: `/api/weather` had a Pages
+      Function with no dev mount and no caller — dead endpoint deleted
+      (`functions/api/weather.ts` + test). Also closed: `/api/analytics`
+      had a client caller (`src/react/hooks/useSessionTracking.ts`) but no
+      dev mount — added `vite/proxies/analytics.js`. NOTE for Batch 5: the
+      whole `src/react/` tree is imported by nothing (unwired experiment);
+      deletion or revival is an owner decision, only referenced here.
 - [ ] One `createOverlayEntry` helper for the 13 factory clones.
 - [ ] Logger migration (see new findings) after Batch 1 lands.
 

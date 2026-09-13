@@ -3,7 +3,7 @@
  * Realtime session definition — the single source of truth for what a GEV
  * voice session IS, shared by callers that cannot share anything else:
  *
- *   1. the dev-server token endpoint (`vite.config.js` → `/api/realtime/token`)
+ *   1. the dev-server token endpoint (`vite/proxies/realtime.js` → `/api/realtime/token`)
  *   2. the Cloudflare Pages Function of the same route (`functions/api/realtime/token.js`)
  *   3. the Pages HUD-summary Function (`functions/api/openai/hud-summary.js`)
  *      via the OpenAI response-shape helpers below

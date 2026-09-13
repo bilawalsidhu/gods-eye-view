@@ -46,6 +46,7 @@
  * plus CCTV-specific methods (selectCamera, cycleCamera, focusNearest, etc.).
  */
 import * as Cesium from 'cesium';
+import { api } from '../config/apiEndpoints.js';
 import { registerSpriteCollection, restoreSpriteOrder } from './spriteOrder.js';
 import {
   CCTV_ACTIVATION_RESULT,
@@ -103,11 +104,6 @@ import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor
 // ---------------------------------------------------------------------------
 // API endpoints
 // ---------------------------------------------------------------------------
-const FRAME_ENDPOINT = '/api/cctv/frame';
-const SOURCE_ENDPOINT = '/api/cctv/sources';
-const HEALTH_ENDPOINT = '/api/cctv/health';
-const MEDIA_ENDPOINT = '/api/cctv/media';
-
 // ---------------------------------------------------------------------------
 // Timing and geometry constants
 // ---------------------------------------------------------------------------
@@ -1070,7 +1066,7 @@ function cityIdByName(cityName) {
  */
 async function loadCameraSources() {
   try {
-    const resp = await fetch(SOURCE_ENDPOINT, { cache: 'no-store' });
+    const resp = await fetch(api.cctvSources(), { cache: 'no-store' });
     if (!resp.ok) return [];
     const data = await resp.json();
     if (!Array.isArray(data?.sources)) return [];
@@ -1464,7 +1460,7 @@ function frameUrlFor(camera, refreshMs = ACTIVE_FRAME_REFRESH_MS) {
     pitch: String(Math.round(camera.pitchDeg || -10)),
     ts: String(tick),
   });
-  return `${FRAME_ENDPOINT}/${encodeURIComponent(camera.id)}?${params.toString()}`;
+  return api.cctvFrame(camera.id, `?${params.toString()}`);
 }
 
 /**
@@ -1473,7 +1469,7 @@ function frameUrlFor(camera, refreshMs = ACTIVE_FRAME_REFRESH_MS) {
  * @returns {string} Media URL.
  */
 function mediaUrlFor(camera) {
-  return `${MEDIA_ENDPOINT}/${encodeURIComponent(camera.id)}?ts=${Math.floor(Date.now() / 15000)}`;
+  return api.cctvMedia(camera.id, `?ts=${Math.floor(Date.now() / 15000)}`);
 }
 
 /**
@@ -4117,7 +4113,7 @@ async function syncHealthState(force = false) {
   _lastHealthSyncAt = now;
 
   try {
-    const resp = await fetch(HEALTH_ENDPOINT, { cache: 'no-store' });
+    const resp = await fetch(api.cctvHealth(), { cache: 'no-store' });
     if (!resp.ok) return;
     const data = await resp.json();
     const rows = Array.isArray(data?.cameras) ? data.cameras : [];

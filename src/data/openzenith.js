@@ -2,7 +2,7 @@
 /**
  * Browser client for the OpenZenith free geospatial API, via the same-origin
  * proxy (`functions/api/openzenith/[[path]].js`; dev serves the same contract
- * from `vite.config.js`). See docs/DATA_SERVICES_CATALOG.md for the
+ * from `vite/proxies/openzenith.js`). See docs/DATA_SERVICES_CATALOG.md for the
  * live-verified upstream contract.
  *
  * The proxy already caches per-isolate and their edge caches an hour; this
@@ -19,6 +19,7 @@
  */
 
 import { readLocalCache, writeLocalCache } from './localCache.js';
+import { api } from '../config/apiEndpoints.js';
 
 /** Address data is effectively immutable — persist across sessions. */
 const PLACE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -65,7 +66,7 @@ export async function reverseGeocodePlace(lat, lon) {
   const job = (async () => {
     try {
       const res = await fetch(
-        `/api/openzenith/reverse-geocode?lat=${lat.toFixed(COORD_PRECISION)}&lon=${lon.toFixed(COORD_PRECISION)}`,
+        api.openzenithReverseGeocode(lat.toFixed(COORD_PRECISION), lon.toFixed(COORD_PRECISION)),
         { headers: { Accept: 'application/json' } },
       );
       if (!res.ok) return null;

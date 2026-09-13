@@ -9,6 +9,7 @@
  * @module radio
  */
 import * as Cesium from 'cesium';
+import { api } from '../config/apiEndpoints.js';
 import { cachedGroundFloor, warmGroundFloor } from './groundFloor.js';
 import { normalizeRadioCountryInput } from './radioCountry.js';
 import { normalizeRadioFilter } from './layerState.js';
@@ -34,7 +35,7 @@ import {
 import { governorRequestRender } from '../renderGovernor.js';
 
 const RADIO_PREFIX = 'radio:';
-const DIRECTORY_ENDPOINT = '/api/radio/stations';
+const DIRECTORY_ENDPOINT = api.radioStations();
 const HORIZON_TICK_MS = 250;
 const HORIZON_CAMERA_MOVE_EPSILON_M = 1;
 const MARKER_LIFT_M = 2.5;
@@ -1763,7 +1764,7 @@ function tryRadioFallback(
 }
 
 function recordDirectoryClick(id) {
-  fetch(`/api/radio/click/${encodeURIComponent(id)}`, { method: 'POST' }).catch(() => {});
+  fetch(api.radioClick(id), { method: 'POST' }).catch(() => {});
 }
 
 /** Play the selected broadcaster stream after an explicit user action. */

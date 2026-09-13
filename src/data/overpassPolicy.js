@@ -2,7 +2,7 @@
 /**
  * The single Overpass policy module: query sanitization, bbox validation,
  * mirror fan-out and response simplification — shared by the dev middlewares
- * in `vite.config.js` AND the Pages Functions (`functions/api/overpass.js`,
+ * in `vite/proxies/overpass.js` AND the Pages Functions (`functions/api/overpass.js`,
  * `functions/api/military-installations.js`), so the two runtimes cannot
  * drift on what they send upstream or accept back.
  *

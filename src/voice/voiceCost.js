@@ -5,7 +5,7 @@
  * Pure module (no DOM, no network, no imports) so it can be shared by three
  * callers that cannot share anything else:
  *   1. the browser voice UI (`gevRealtime.js`) — live "~$0.42" readout + caps
- *   2. the dev-server token endpoint (`vite.config.js` → `/api/realtime/token`)
+ *   2. the dev-server token endpoint (`vite/proxies/realtime.js` → `/api/realtime/token`)
  *   3. unit tests (`voiceCost.test.mjs`)
  *
  * Two independent concerns live here:
@@ -33,7 +33,7 @@
  * Cross-check at release time (a wrong rate silently mis-sizes the spend cap,
  * and a wrong model id fails the session at connect time):
  *   - `standard` MUST stay in sync with OPENAI_REALTIME_MODEL / the
- *     OPENAI_REALTIME_MODEL_DEFAULT constant in vite.config.js.
+ *     OPENAI_REALTIME_MODEL_DEFAULT constant in src/voice/realtimeSession.js.
  *   - `mini` has no in-repo history — it is new here. OpenAI publishes both
  *     `gpt-realtime-2.1-mini` (current, used below) and an older
  *     `gpt-realtime-mini`; there is NO `gpt-realtime-2-mini`. If the id ever

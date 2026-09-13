@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { api } from '../config/apiEndpoints.js';
 import { aircraftIncludedInNearby } from './aircraftNearbyPolicy.js';
 import { registerPickOwner, unregisterPickOwner, isOwnedByOtherLayer, resolvePickId } from './pickRegistry.js';
 import { registerSpriteCollection, restoreSpriteOrder } from './spriteOrder.js';
@@ -82,7 +83,7 @@ import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor
 
 
 /** @constant {string} API endpoint proxied to adsb.lol military feed */
-const API_URL = '/api/adsblol';
+const API_URL = api.adsblol();
 /** @constant {number} Milliseconds to wait before retrying after a transient error */
 const ERROR_BACKOFF_INTERVAL = 20000;
 /** @constant {number} Longer cooldown (ms) after a 429 rate-limit, mirroring flights.js */
@@ -2205,7 +2206,7 @@ async function _backfillTrail(icao24, token, oldestFixEpochSec) {
   let baseEpochSec = null;
   let trace = null;
   try {
-    const response = await fetch(`/api/adsblol/trace?hex=${  encodeURIComponent(icao24)}`, {
+    const response = await fetch(api.adsblolTrace(icao24), {
       signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) return;

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { api } from '../config/apiEndpoints.js';
 import { twoline2satrec, propagate, gstime, eciToGeodetic, degreesLong, degreesLat } from 'satellite.js';
 import { registerPickOwner, unregisterPickOwner, isOwnedByOtherLayer, resolvePickId } from './pickRegistry.js';
 import { findNextIssPass } from './issPass.js';
@@ -1094,7 +1095,7 @@ async function _loadDenseCatalog({ signal = null } = {}) {
   _notifyRowControls();
   try {
     loadSignal.throwIfAborted();
-    const res = await fetch(`/api/celestrak/${DENSE_GROUP_PATH}`, { signal: loadSignal });
+    const res = await fetch(api.celestrak(DENSE_GROUP_PATH), { signal: loadSignal });
     if (!res.ok) {
       console.warn(`[Data:Satellites] Dense group '${DENSE_GROUP_PATH}' fetch failed (${res.status})`);
       _denseLoadFailed(token, `feed unavailable (${res.status})`);
@@ -1644,7 +1645,7 @@ const satellitesLayer = {
             const cachedEntries = parseTLE(cachedText);
             if (cachedEntries.length > 0) return { ...groupDef, entries: cachedEntries, ok: true };
           }
-          const res = await fetch(`/api/celestrak/${groupDef.path}`, { signal: updateSignal });
+          const res = await fetch(api.celestrak(groupDef.path), { signal: updateSignal });
           if (!res.ok) return { ...groupDef, entries: [], ok: false };
           const text = await res.text();
           writeCachedTle(groupDef.path, text);

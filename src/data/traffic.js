@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { api } from '../config/apiEndpoints.js';
 import { deriveFetchCenter, clampBoundsAroundCenter } from './trafficBounds.js';
 import { fetchFlowForBounds, getFlowSessionStats, resetFlowTileCache } from './flowTiles.js';
 import { matchFlowToRoads } from './flowMatch.js';
@@ -42,7 +43,7 @@ import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor
  */
 
 /** @const {string} Proxy endpoint for Overpass API queries */
-const OVERPASS_URL = '/api/overpass';
+const OVERPASS_URL = api.overpass();
 /** @const {number} Meters — hide all traffic dots above this camera altitude */
 const ACTIVATION_ALTITUDE = 8000;
 /** @const {number} Meters — above this altitude, only major roads are fetched */
@@ -1290,7 +1291,7 @@ export function trafficFeedPresentation({
  */
 function ensureFlowStatus() {
   if (!_flowStatusPromise) {
-    _flowStatusPromise = fetch('/api/tomtom/status')
+    _flowStatusPromise = fetch(api.tomtomStatus())
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
       .then((status) => {
         _liveMode = Boolean(status?.hasKey);

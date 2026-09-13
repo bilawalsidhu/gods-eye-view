@@ -10,7 +10,17 @@ import path from 'node:path';
 import { clientKey, makeRateLimiter, readResponseTextCapped } from './_shared.js';
 import { createHash } from 'node:crypto';
 import { fetchOverpassPayload, sanitizeOverpassBody } from '../../src/data/overpassPolicy.js';
-import { haversineKm } from '../../src/data/cctvSources.js';
+import {
+  ROUTE_CACHE_MAX_ENTRIES,
+  ROUTE_CACHE_MS,
+  ROUTE_MAX_RESPONSE_BYTES,
+  ROUTE_UPSTREAM_TIMEOUT_MS,
+  buildOsrmUrl,
+  normalizeRouteProfile,
+  osrmRoutePayload,
+  parseRouteCoords,
+  routeSpanError,
+} from '../../src/data/routePolicy.js';
 import { promises as fsp } from 'node:fs';
 
 // ---------------------------------------------------------------------------
@@ -133,9 +143,10 @@ export async function resolveOverpassPreflight({
     : { source: 'RATE_LIMITED', payload: null };
 }
 
-/** OSM routing (FOSSGIS OSRM) cache: profile|coords -> { payload, cachedAt }. */
-export const ROUTE_CACHE_MS = 600000;
-
+/** OSM routing (FOSSGIS OSRM) cache: profile|coords -> { payload, cachedAt }.
+ *  TTL, response cap and span abuse limits live in the shared
+ *  `src/data/routePolicy.js` (imported above) so the Pages Function at
+ *  `functions/api/route.js` cannot drift from this middleware. */
 export const _routeCache = new Map();
 
 // --- Abuse guards shared by the Overpass + route proxies --------------------
@@ -146,14 +157,6 @@ export const OVERPASS_MAX_BODY_BYTES = 24 * 1024; // 24 KB
 export const OVERPASS_MAX_CONCURRENT = 6;
 
 export let _overpassConcurrent = 0;
-
-/** Hard cap on the OSRM route response we will buffer. */
-export const ROUTE_MAX_RESPONSE_BYTES = 8 * 1024 * 1024; // 8 MB
-
-/** Reject routes whose straight-line spans are obviously abusive (km). */
-export const ROUTE_MAX_LEG_KM = 600;
-
-export const ROUTE_MAX_TOTAL_KM = 2500;
 
 export const _overpassRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 90, globalMax: 300 });
 
@@ -333,6 +336,9 @@ export function overpassProxy() {
 
       // Real OSM routing via the public FOSSGIS OSRM servers (foot/car/bike).
       // GET /api/route?profile=foot|car|bike&coords=lon,lat;lon,lat[;...]
+      // Validation, span limits and the upstream URL live in the shared
+      // `src/data/routePolicy.js` (worker-safe) — functions/api/route.js runs
+      // the same policy on Pages so the two runtimes cannot drift.
       server.middlewares.use('/api/route', async (req, res) => {
         const fail = (msg) => {
           res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -345,40 +351,13 @@ export function overpassProxy() {
             return;
           }
           const url = new URL(req.url, 'http://localhost');
-          const raw = (url.searchParams.get('profile') || 'foot').toLowerCase();
-          const profile = (raw === 'car' || raw === 'driving') ? 'car'
-            : (raw === 'bike' || raw === 'cycling' || raw === 'bicycle') ? 'bike'
-              : (raw === 'foot' || raw === 'walking' || raw === 'walk') ? 'foot'
-                : null;
+          const profile = normalizeRouteProfile(url.searchParams.get('profile'));
           if (!profile) return fail('invalid profile');
-          const osrmProfile = profile === 'car' ? 'driving' : profile;
-          const pairs = (url.searchParams.get('coords') || '').split(';').map((s) => s.trim()).filter(Boolean);
-          if (pairs.length < 2 || pairs.length > 12) return fail('need 2-12 coordinates');
-          const clean = [];
-          const pts = [];
-          for (const pr of pairs) {
-            const parts = pr.split(',');
-            if (parts.length !== 2) return fail('invalid coordinate');
-            const lon = Number(parts[0]);
-            const lat = Number(parts[1]);
-            if (!Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
-              return fail('invalid coordinate');
-            }
-            clean.push(`${lon},${lat}`);
-            pts.push([lon, lat]);
-          }
-          // Reject obviously-abusive spans — a real walking/driving route is local,
-          // so a cross-continent request is either a bug or an attempt to drive
-          // heavy upstream OSRM work.
-          let totalKm = 0;
-          for (let i = 1; i < pts.length; i += 1) {
-            // pts are [lon, lat]; existing haversineKm takes (lat1, lon1, lat2, lon2).
-            const legKm = haversineKm(pts[i - 1][1], pts[i - 1][0], pts[i][1], pts[i][0]);
-            if (legKm > ROUTE_MAX_LEG_KM) return fail('route leg too long');
-            totalKm += legKm;
-          }
-          if (totalKm > ROUTE_MAX_TOTAL_KM) return fail('route too long');
-          const coords = clean.join(';');
+          const parsed = parseRouteCoords(url.searchParams.get('coords'));
+          if (!parsed.ok) return fail(parsed.error);
+          const spanError = routeSpanError(parsed.pts);
+          if (spanError) return fail(spanError);
+          const coords = parsed.coords;
           const cacheKey = `${profile}|${coords}`;
           const now = Date.now();
           const cached = _routeCache.get(cacheKey);
@@ -387,12 +366,11 @@ export function overpassProxy() {
             res.end(JSON.stringify(cached.payload));
             return;
           }
-          const upstream = `https://routing.openstreetmap.de/routed-${profile}/route/v1/${osrmProfile}/${coords}?overview=full&geometries=geojson&alternatives=false&steps=false`;
           const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 12000);
+          const timer = setTimeout(() => controller.abort(), ROUTE_UPSTREAM_TIMEOUT_MS);
           let osrm;
           try {
-            const upstreamRes = await fetch(upstream, {
+            const upstreamRes = await fetch(buildOsrmUrl(profile, coords), {
               signal: controller.signal,
               headers: { 'User-Agent': 'gods-eye-view/dev (local)' },
             });
@@ -404,17 +382,10 @@ export function overpassProxy() {
           } finally {
             clearTimeout(timer);
           }
-          const route = osrm?.routes?.[0];
-          if (osrm?.code !== 'Ok' || !route?.geometry?.coordinates?.length) return fail('no route found');
-          const payload = {
-            ok: true,
-            profile,
-            distanceM: Math.round(route.distance),
-            durationS: Math.round(route.duration),
-            geometry: route.geometry.coordinates,
-          };
+          const payload = osrmRoutePayload(osrm, profile);
+          if (!payload.ok) return fail(payload.error);
           _routeCache.set(cacheKey, { payload, cachedAt: now });
-          if (_routeCache.size > 200) _routeCache.delete(_routeCache.keys().next().value);
+          if (_routeCache.size > ROUTE_CACHE_MAX_ENTRIES) _routeCache.delete(_routeCache.keys().next().value);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(payload));
         } catch (e) {

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { api } from './config/apiEndpoints.js';
 import { deriveWeatherEffectProfile, weatherAltitudeFactors } from './weatherEffectsMath.js';
 
 const WEATHER_REFRESH_MS = 5 * 60_000;
@@ -372,7 +373,7 @@ export class CockpitCloudEffectsController {
       latitude: point.latitude.toFixed(5),
       longitude: point.longitude.toFixed(5),
     });
-    this.pending = fetch(`/api/weather-effects?${params}`, { signal: this.abort.signal })
+    this.pending = fetch(api.weatherEffects(params), { signal: this.abort.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error(`Cloud weather unavailable (${response.status})`);
         const payload = await response.json();

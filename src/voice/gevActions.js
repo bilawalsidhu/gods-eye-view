@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { api } from '../config/apiEndpoints.js';
 import { CITY_POIS, findPoiByName, flyToGlobeView, flyToLandmark, flyToPOI, flyToPresetLocation, GLOBE_VIEW, searchAndFlyTo } from '../locations.js';
 import {
   getContextStore,
@@ -3075,7 +3076,7 @@ async function fetchNearbyPlaces(latitude, longitude, cameraHeightM) {
         lon: String(longitude),
         radiusM: String(radiusM),
       });
-      const response = await fetchWithTimeout(`/api/google/nearby-places?${params}`, {}, 5000);
+      const response = await fetchWithTimeout(api.googleNearbyPlaces(params), {}, 5000);
       const data = await response.json().catch(() => null);
       const places = response.ok && Array.isArray(data?.places)
       ? data.places.filter((place) => place?.name).slice(0, 12)

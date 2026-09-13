@@ -7,10 +7,11 @@
  * Privacy: no cookies, no PII, no cross-site tracking.
  */
 import { useEffect } from 'react';
+import { api } from '../../config/apiEndpoints.js';
 
 const SESSION_ID_KEY = '__gev_sid';
 const SESSION_START_KEY = '__gev_session_start';
-const ANALYTICS_ENDPOINT = '/api/analytics';
+const ANALYTICS_ENDPOINT = api.analytics();
 
 function getOrCreateSession(): { id: string; start: number } {
 	try {

@@ -12,7 +12,7 @@ import {
 } from '../overlays/worldOverlay.js';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
 
-import { apiEndpoints } from '../config/apiEndpoints.js';
+import { api, apiEndpoints } from '../config/apiEndpoints.js';
 
 const WINDOW_DAYS = 30;
 const API_URL = apiEndpoints.rocketLaunches;
@@ -3257,7 +3257,7 @@ function schedulePostTleRetry(token) {
 function ensureActiveTleLookup(token) {
   if (_activeTleText) return Promise.resolve(_activeTleText);
   if (_activeTlePromise && _activeTlePromiseToken === token) return _activeTlePromise;
-  const request = fetch('/api/celestrak/active')
+  const request = fetch(api.celestrak('active'))
     .then((activeResponse) => {
       if (!activeResponse.ok) throw new Error(`HTTP ${activeResponse.status}`);
       return activeResponse.text();

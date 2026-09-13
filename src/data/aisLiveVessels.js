@@ -46,7 +46,7 @@ import {
 import { requestWorldFocus } from '../worldFocus.js';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
 import { processChunked } from './processChunked.js';
-import { apiEndpoints } from '../config/apiEndpoints.js';
+import { api, apiEndpoints } from '../config/apiEndpoints.js';
 
 const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 
@@ -195,7 +195,7 @@ let _aisSessionSequence = 0;
 
 /**
  * Human-readable reasons for a non-'open' AISStream feed status, keyed to the
- * server's `_aisStreamStatus` values (see vite.config.js). Surfaced verbatim in
+ * server's `_aisStreamStatus` values (see vite/proxies/ais-live.js). Surfaced verbatim in
  * the layer chip so a dead feed reads "feed down" instead of a healthy-looking
  * "just now · 0 vessels".
  */
@@ -1890,7 +1890,7 @@ function startSelectedVesselTrail(record) {
 async function backfillVesselTrail(mmsi, token) {
   let samples = null;
   try {
-    const response = await fetch(`/api/ais-live/track?mmsi=${  encodeURIComponent(mmsi)}`, {
+    const response = await fetch(api.aisLiveTrack(mmsi), {
       signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) return;

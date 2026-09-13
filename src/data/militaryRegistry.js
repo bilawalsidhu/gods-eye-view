@@ -12,6 +12,7 @@
  *    poll (60s against the dev proxy's cached /api/adsblol/mil) so known
  *    military aircraft are still classified and styled amber.
  */
+import { api } from '../config/apiEndpoints.js';
 
 const MIL_POLL_INTERVAL_MS = 60000;
 
@@ -105,7 +106,7 @@ export function refreshMilitaryRegistryIfStale() {
   _polling = true;
   (async () => {
     try {
-      const response = await fetch('/api/adsblol/mil', { signal: AbortSignal.timeout(10000) });
+      const response = await fetch(api.adsblolMil(), { signal: AbortSignal.timeout(10000) });
       if (!response.ok) return;
       const data = await response.json();
       const aircraft = Array.isArray(data?.ac) ? data.ac : [];

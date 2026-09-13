@@ -26,6 +26,7 @@
  *  18. Track backfill (opensky-track / adsbdb-track)              → proxies/track-backfill.js
  *  19. OpenAI Realtime token + HUD summary + debug log            → proxies/realtime.js
  *  20. Google Places context                                      → proxies/google-places.js
+ *  21. Session-analytics acknowledge                              → proxies/analytics.js
  *
  * Shared infrastructure (rate limiters, same-site gates, capped readers,
  * OpenSky OAuth) lives in `vite/proxies/_shared.js`.
@@ -43,6 +44,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 import { adsbdbProxy } from './vite/proxies/adsbdb.js';
 import { adsbLolProxy } from './vite/proxies/adsblol.js';
+import { analyticsProxy } from './vite/proxies/analytics.js';
 import { aisLiveProxy } from './vite/proxies/ais-live.js';
 import { celestrakProxy } from './vite/proxies/celestrak.js';
 import { cctvProxy } from './vite/proxies/cctv.js';
@@ -106,6 +108,7 @@ export default defineConfig(({ mode }) => {
       trackBackfillProxies(),
       openAiRealtimeProxy(),
       googlePlacesContextProxy(),
+      analyticsProxy(),
       // ── PWA (CSR-first + offline-capable shell) ────────────────────────────
       // Generates the service worker (workbox) and registers it in the client
       // (main.js listens for `controllerchange` to show the update banner).

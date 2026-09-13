@@ -272,7 +272,7 @@ const _scratchModelBS = new Cesium.BoundingSphere(new Cesium.Cartesian3(), 1.0);
 /** Last limb taper per billboard, retained across class/ground/cockpit repaints. */
 const _billboardLimbScale = new WeakMap();
 
-import { apiEndpoints } from '../config/apiEndpoints.js';
+import { api, apiEndpoints } from '../config/apiEndpoints.js';
 
 /** @constant {string} API_URL - OpenSky aircraft state vectors */
 const API_URL = apiEndpoints.opensky;
@@ -891,7 +891,7 @@ export function _runEnrichJobForTest(key, url) {
 
 function _requestTypeEnrichment(icao24, priority = false) {
   if (!/^[0-9a-f]{6}$/i.test(icao24)) return;
-  _enqueueEnrich(`t:${icao24}`, `/api/adsbdb/type/${icao24.toLowerCase()}`, (data) => {
+  _enqueueEnrich(`t:${icao24}`, api.adsbdbType(icao24), (data) => {
     const meta = _flightData.get(icao24);
     if (!meta) return; // evicted while the lookup was in flight
     meta.typeCode = data.typeCode || meta.typeCode;
@@ -915,7 +915,7 @@ function _requestTypeEnrichment(icao24, priority = false) {
 function _requestRouteEnrichment(icao24) {
   const cs = String(_flightData.get(icao24)?.callsign || '').trim().toUpperCase();
   if (!/^[A-Z]{3}\d/.test(cs)) return; // airline-style callsigns only (LLL + digit); GA tails won't resolve
-  _enqueueEnrich(`r:${cs}`, `/api/adsbdb/route/${encodeURIComponent(cs)}`, (data) => {
+  _enqueueEnrich(`r:${cs}`, api.adsbdbRoute(cs), (data) => {
     const meta = _flightData.get(icao24);
     if (!meta) return;
     meta.airline = data.airline || meta.airline;
@@ -3162,7 +3162,7 @@ function _startTrail(icao24) {
 async function _backfillTrail(icao24, token, oldestFixEpochSec) {
   let path = null;
   try {
-    const response = await fetch(`/api/opensky-track?icao24=${  encodeURIComponent(icao24)}`, {
+    const response = await fetch(api.openskyTrack(icao24), {
       signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) return;
