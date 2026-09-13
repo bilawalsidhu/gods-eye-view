@@ -175,4 +175,6 @@ export default {
   'keySetup.unlocks.launch-library': 'Quota de requêtes plus élevé pour les missions spatiales',
 
   'scenes.status.actionFailed': 'Échec de l\'action de scène',
+
+  'scenes.status.projectExported': 'Projet exporté',
 };

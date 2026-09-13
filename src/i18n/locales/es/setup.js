@@ -128,4 +128,6 @@ export default {
   'keySetup.unlocks.launch-library': 'Mayor límite de peticiones para misiones espaciales',
 
   'scenes.status.actionFailed': 'La acción de escena falló',
+
+  'scenes.status.projectExported': 'Proyecto exportado',
 };

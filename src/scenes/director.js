@@ -1008,7 +1008,7 @@ export class SceneDirector {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    this._presentation.status = 'Project exported';
+    this._presentation.status = t('setup.scenes.status.projectExported');
     this._publish({ type: 'project-exported', project: this._project });
   }
 

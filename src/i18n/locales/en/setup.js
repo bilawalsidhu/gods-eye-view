@@ -179,4 +179,6 @@ export default {
   'keySetup.unlocks.launch-library': 'Higher space-missions request allowance',
 
   'scenes.status.actionFailed': 'Scene action failed',
+
+  'scenes.status.projectExported': 'Project exported',
 };
