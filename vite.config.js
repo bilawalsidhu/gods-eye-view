@@ -3504,6 +3504,27 @@ const TFL_JAMCAM_URL = 'https://api.tfl.gov.uk/Place/Type/JamCam';
 const TFL_IMAGE_ORIGIN = 'https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/';
 const DEFAULT_TFL_MAX_SOURCES = 250;
 const LONDON_CENTER = { lat: 51.5074, lon: -0.1278 };
+/** LTA DataMall (Singapore) live traffic images. Requires a free AccountKey. */
+const LTA_TRAFFIC_IMAGES_URL = 'https://datamall2.mytransport.sg/ltaodataservice/Traffic-Imagesv2';
+const DEFAULT_LTA_MAX_SOURCES = 120;
+const SINGAPORE_CENTER = { lat: 1.3521, lon: 103.8198 };
+/**
+ * How long a resolved LTA image link may be reused (ms).
+ *
+ * LTA hands out PRESIGNED S3 links carrying `X-Amz-Expires=900` — exactly
+ * CCTV_SOURCE_CACHE_MS. A link stored in the catalog at the start of a cache
+ * window is therefore dead by the end of it, and an expired link does not fail
+ * loudly: fetchCctvImageFromUpstream just misses and the camera silently drops
+ * to the Street View fallback, so a "working" live feed would quietly stop
+ * being live. Links are re-resolved on this much shorter cycle instead, which
+ * is one upstream call for the whole pack however many cameras are on screen.
+ */
+const LTA_LINK_CACHE_MS = 60_000;
+/** cameraId -> freshly resolved presigned image URL. */
+let _ltaLinkCache = new Map();
+let _ltaLinkCacheAt = 0;
+/** Single-flight for the shared link refresh. */
+let _ltaLinkInflight = null;
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL) infrequent. Frames are fetched per-request and are unaffected. */
 const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
@@ -4063,6 +4084,140 @@ async function loadCaltransSourcesFromOpenData() {
  *
  * @returns {Promise<Array<object>>} Normalized camera source objects.
  */
+/**
+ * One LTA DataMall camera -> one catalog source, or null when unusable.
+ *
+ * Pure and exported so the UPSTREAM FIELD CONTRACT is pinned by a test rather
+ * than assumed. The verified v2 shape is
+ * `{CameraID, Latitude, Longitude, ImageLink}`; a rename upstream must fail
+ * loudly here instead of yielding an empty Singapore pack, which is precisely
+ * how mapped installations silently dropped every way and relation.
+ *
+ * LTA publishes position only — no heading, pitch, or FOV — so poses take the
+ * id-hash fallback and 'low' confidence that the headingless TfL and Austin
+ * cameras already use, and the operator calibrates with the in-scene gizmo.
+ *
+ * @param {{CameraID?:string|number, Latitude?:number, Longitude?:number, ImageLink?:string}} cam
+ * @returns {?object} Catalog source.
+ */
+export function ltaCameraToSource(cam) {
+  const rawId = String(cam?.CameraID ?? '').trim();
+  const lat = toFiniteNumber(cam?.Latitude);
+  const lon = toFiniteNumber(cam?.Longitude);
+  if (!rawId || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const imageUrl = String(cam?.ImageLink || '');
+  // Presigned S3 over TLS only; anything else is not an LTA frame.
+  if (!imageUrl.startsWith('https://')) return null;
+  const cameraId = `lta-${rawId}`;
+  return {
+    id: cameraId,
+    name: `LTA Camera ${rawId}`,
+    city: 'Singapore',
+    cityId: 'singapore',
+    provider: 'LTA DataMall',
+    lat,
+    lon,
+    headingDeg: fallbackHeadingFromId(cameraId),
+    headingConfidence: 'low',
+    pitchDeg: -16,
+    fovDeg: 48,
+    rangeM: 180,
+    mountHeightM: 9,
+    groundElevationM: 12, // Low-lying island prior; one-shot snap corrects.
+    feedType: 'image',
+    url: imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind: 'lta-datamall',
+    license: 'Contains information from LTA DataMall, made available under the Singapore Open Data Licence version 1.0',
+  };
+}
+
+/**
+ * Fetch the raw LTA camera list. Returns [] when no key is configured — the
+ * pack is strictly opt-in so a keyless clone behaves exactly as before.
+ * @returns {Promise<Array<{CameraID:string, Latitude:number, Longitude:number, ImageLink:string}>>}
+ */
+async function fetchLtaTrafficImages() {
+  const accountKey = String(process.env.LTA_ACCOUNT_KEY || '').trim();
+  if (!accountKey) return [];
+  const resp = await fetch(LTA_TRAFFIC_IMAGES_URL, {
+    headers: { AccountKey: accountKey, Accept: 'application/json' },
+    signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+  });
+  if (!resp.ok) {
+    // 401 here means the key was rejected. Note LTA issues TWO keys: the API
+    // Account Key (base64, e.g. `…P7w==`) and a separate SDK Account Key (32
+    // hex chars) for the Extended OBU Library. Only the former works here, and
+    // the latter fails indistinguishably from an invented key.
+    console.warn(`[CCTV] LTA DataMall request failed: ${resp.status}${resp.status === 401 ? ' (check LTA_ACCOUNT_KEY — the SDK key is not the API key)' : ''}`);
+    return [];
+  }
+  const body = await resp.json();
+  return Array.isArray(body?.value) ? body.value : [];
+}
+
+/**
+ * Current presigned image URL for one LTA camera, refreshed on LTA_LINK_CACHE_MS
+ * rather than the catalog TTL (see that constant for why). One upstream call
+ * covers every camera in the pack; concurrent callers share it.
+ * @param {string} cameraId Catalog id, e.g. `lta-2701`.
+ * @returns {Promise<string>} Fresh link, or '' when unavailable.
+ */
+async function resolveLtaSnapshotUrl(cameraId) {
+  const now = Date.now();
+  if (now - _ltaLinkCacheAt > LTA_LINK_CACHE_MS && !_ltaLinkInflight) {
+    _ltaLinkInflight = fetchLtaTrafficImages()
+      .then((cameras) => {
+        if (!cameras.length) return;
+        const next = new Map();
+        for (const cam of cameras) {
+          const id = String(cam?.CameraID || '').trim();
+          if (id && typeof cam?.ImageLink === 'string') next.set(`lta-${id}`, cam.ImageLink);
+        }
+        _ltaLinkCache = next;
+        _ltaLinkCacheAt = Date.now();
+      })
+      // A failed refresh keeps the previous links: they may still be inside
+      // their 900 s window, which beats dropping the whole pack to fallback.
+      .catch((error) => { console.warn('[CCTV] LTA link refresh failed:', error?.message || error); })
+      .finally(() => { _ltaLinkInflight = null; });
+  }
+  if (_ltaLinkInflight) await _ltaLinkInflight;
+  return _ltaLinkCache.get(cameraId) || '';
+}
+
+/**
+ * Load Singapore cameras from LTA DataMall (opt-in via LTA_ACCOUNT_KEY).
+ *
+ * LTA publishes position only — CameraID, Latitude, Longitude, ImageLink — with
+ * no heading, pitch, or FOV, so poses get the same id-hash fallback and 'low'
+ * confidence the headingless TfL and Austin cameras use, and the operator
+ * calibrates with the in-scene gizmo.
+ * @returns {Promise<Array<object>>}
+ */
+async function loadLtaSourcesFromOpenData() {
+  try {
+    const raw = await fetchLtaTrafficImages();
+    if (!raw.length) return [];
+
+    const cameras = raw.map(ltaCameraToSource).filter(Boolean);
+
+    // Seed the link cache from this same response rather than paying a second
+    // upstream call on the first frame request.
+    _ltaLinkCache = new Map(cameras.map((c) => [c.id, c.snapshotUrl]));
+    _ltaLinkCacheAt = Date.now();
+
+    const maxRaw = Number(process.env.CCTV_LTA_MAX_SOURCES || DEFAULT_LTA_MAX_SOURCES);
+    const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(600, Math.floor(maxRaw))) : DEFAULT_LTA_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, [SINGAPORE_CENTER]);
+    console.log(`[CCTV] Loaded LTA DataMall sources: ${cameras.length} available (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] LTA DataMall download error:', error?.message || error);
+    return [];
+  }
+}
+
 async function loadTflSourcesFromOpenData() {
   try {
     const appKey = String(process.env.TFL_APP_KEY || '').trim();
@@ -4205,22 +4360,29 @@ async function refreshCctvSources() {
   // Austin-only fetch, now governing all three. Each pack fails independently.
   const needsLiveSources = forceAustin || ((fromFile.length + fromEnv.length) === 0 && preferAustin);
   const tflEnabled = String(process.env.CCTV_TFL_ENABLED || '1').trim() !== '0';
+  // LTA is opt-in on the key alone: no LTA_ACCOUNT_KEY, no Singapore pack, and
+  // a keyless clone behaves exactly as it did before this source existed.
+  const ltaEnabled = String(process.env.CCTV_LTA_ENABLED || '1').trim() !== '0'
+    && !!String(process.env.LTA_ACCOUNT_KEY || '').trim();
 
   let fromAustin = [];
   let fromCaltrans = [];
   let fromTfl = [];
+  let fromLta = [];
   if (needsLiveSources) {
-    const [austinResult, caltransResult, tflResult] = await Promise.allSettled([
+    const [austinResult, caltransResult, tflResult, ltaResult] = await Promise.allSettled([
       loadAustinSourcesFromOpenData(),
       loadCaltransSourcesFromOpenData(),
       tflEnabled ? loadTflSourcesFromOpenData() : Promise.resolve([]),
+      ltaEnabled ? loadLtaSourcesFromOpenData() : Promise.resolve([]),
     ]);
     fromAustin = austinResult.status === 'fulfilled' ? austinResult.value : [];
     fromCaltrans = caltransResult.status === 'fulfilled' ? caltransResult.value : [];
     fromTfl = tflResult.status === 'fulfilled' ? tflResult.value : [];
+    fromLta = ltaResult.status === 'fulfilled' ? ltaResult.value : [];
   }
   // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
-  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromFile, ...fromEnv];
+  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromLta, ...fromFile, ...fromEnv];
 
   // Deduplicate by camera ID (last-write wins because of Map.set)
   const byId = new Map();
@@ -4693,8 +4855,16 @@ function cctvProxy() {
 
           // Only use server-registered upstream URLs — never accept client-supplied URLs
           // (prevents SSRF via ?upstream= query parameter)
+          // LTA links are presigned and expire inside the catalog's own TTL, so
+          // they are re-resolved here rather than read from the cached catalog;
+          // a stale one would miss and silently demote a live camera to Street
+          // View. Falls back to the catalog copy if the refresh cannot answer.
+          const ltaFreshUrl = source?.sourceKind === 'lta-datamall'
+            ? await resolveLtaSnapshotUrl(source.id)
+            : '';
           const upstreamCandidate =
-            source?.snapshotUrl
+            ltaFreshUrl
+            || source?.snapshotUrl
             || (!isVideoFeedType(normalizeFeedType(source?.feedType)) ? source?.url : '');
 
           const upstreamImage = await fetchCctvImageFromUpstream(upstreamCandidate);
