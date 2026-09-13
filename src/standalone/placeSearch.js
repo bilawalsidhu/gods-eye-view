@@ -1,10 +1,13 @@
 import {
   createPlaceSearch,
+  createCoordinateGeocoder,
+  createPresetGeocoder,
   createGoogleGeocoder,
   createPhotonGeocoder,
 } from '../search/index.js';
+import { CITY_POIS } from '../locations.js';
 
-/** Google first when configured, then keyless Photon; transport stays local to setup. */
+/** Coordinates & bundled presets first, then Google when configured, then keyless Photon. */
 export function createStandalonePlaceSearch({
   resolveApiKey,
   fetchImpl = (...args) => fetch(...args),
@@ -13,6 +16,8 @@ export function createStandalonePlaceSearch({
   return createPlaceSearch({
     signal,
     providers: [
+      createCoordinateGeocoder(),
+      createPresetGeocoder({ presets: CITY_POIS }),
       createGoogleGeocoder({
         request(query, { bias, signal }) {
           const key = resolveApiKey?.();
