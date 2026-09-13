@@ -13,6 +13,9 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- CCTV Mesh adds Finland: Fintraffic road weather cameras, keyless, nationwide, 300 by default. Each camera view of a station is placed separately, and frames refresh on the source's 10-minute cadence.
+- The overall CCTV camera cap now defaults to 1,200 so all four packs load at their own limits instead of the last one being truncated.
+
 - Separate aircraft/vessel transport and normalization from layer rendering, preserving observation timestamps, altitude datums and optional history.
 - Retain absent aircraft during partially admitted snapshots and bound source error messages.
 

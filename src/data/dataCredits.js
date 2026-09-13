@@ -7,7 +7,8 @@ import * as Cesium from 'cesium';
  * docs/pre-ship-audit-2026-07-01.md): every third-party data layer this app can
  * display carries its own license and required attribution — ODbL (OSM
  * datacenters/dams, adsb.lol, Overpass roads), CC BY-NC-SA (TeleGeography
- * cables), NASA FIRMS, CelesTrak, USGS, City of Austin, GBFS operators, OpenSky.
+ * cables), NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic (CC BY 4.0),
+ * GBFS operators, OpenSky.
  * The MIT code license does NOT cover this data.
  *
  * These credits are registered ONCE at init as STATIC credits with
@@ -134,6 +135,13 @@ export const DATA_CREDITS = [
       'CCTV cameras &amp; frames (London): ' +
       '<a href="https://tfl.gov.uk/info-for/open-data-users/" target="_blank" rel="noopener">Powered by TfL Open Data</a>. ' +
       'Contains OS data © Crown copyright and database rights.',
+  },
+  {
+    key: 'fintraffic-cctv',
+    html:
+      'CCTV cameras &amp; frames (Finland): Fintraffic / ' +
+      '<a href="https://www.digitraffic.fi/en/" target="_blank" rel="noopener">digitraffic.fi</a>, ' +
+      'license CC BY 4.0',
   },
   {
     key: 'gbfs',
