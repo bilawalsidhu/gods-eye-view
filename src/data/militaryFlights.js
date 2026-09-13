@@ -1,3 +1,4 @@
+import { createAdsbLolSource } from '../sources/live/standalone.js';
 import * as Cesium from 'cesium';
 import { aircraftIncludedInNearby } from './aircraftNearbyPolicy.js';
 import { registerPickOwner, unregisterPickOwner, isOwnedByOtherLayer, resolvePickId } from './pickRegistry.js';
@@ -62,6 +63,8 @@ import {
 import { CONTACT_MATCH_TIER, contactMatchWins, rankContactMatch } from './contactMatch.js';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
 
+let _source = createAdsbLolSource();
+
 /**
  * @module militaryFlights
  * @description Real-time military flight tracking layer powered by the adsb.lol API.
@@ -79,12 +82,8 @@ import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor
  * rotation (camera.heading - track) with hysteresis.
  */
 
-/** @constant {string} API endpoint proxied to adsb.lol military feed */
-const API_URL = '/api/adsblol/mil';
 /** @constant {number} Milliseconds to wait before retrying after a transient error */
 const ERROR_BACKOFF_INTERVAL = 20000;
-/** @constant {number} Longer cooldown (ms) after a 429 rate-limit, mirroring flights.js */
-const BACKOFF_INTERVAL = 45000;
 /** @constant {number} Max position samples retained per aircraft for dead reckoning */
 const POSITION_HISTORY_LIMIT = 5;
 /** @constant {number} Base billboard display scale */
@@ -269,6 +268,7 @@ function _abortActiveUpdates() {
 }
 /** @type {number|null} HTTP status code from the last API response */
 let _lastStatus = null;
+let _lastSource = 'adsb.lol';
 /** @type {boolean} True once ensureGeoidReady() has resolved (awaited once at enable()). Mirror of flights.js. */
 let _geoidReady = false;
 /** @type {Map<string, number>} icao24 -> geoid undulation N (m), cached (negligible drift per-aircraft). */
@@ -284,7 +284,7 @@ let _lastTrackingRefreshOutcome = {
   epoch: 0,
   status: 'unavailable',
   ids: new Set(),
-  source: 'adsb.lol',
+  source: _lastSource,
 };
 /** @type {Cesium.Entity|null} Entity created for the tracked aircraft (camera follows this) */
 let _trackedEntity = null;
@@ -346,7 +346,7 @@ function _contextSubjectMetadata(icao24) {
     id: icao24,
     layerId: 'military',
     layerName: 'Military Flights',
-    source: 'adsb.lol',
+    source: _lastSource,
     label,
     latitude: described.latitude,
     longitude: described.longitude,
@@ -841,7 +841,7 @@ export function _setTrackedMilitaryRefreshStateForTest({
 export function _setMilitaryTrackingRefreshOutcomeForTest({
   status = 'accepted',
   ids = [],
-  source = 'adsb.lol',
+  source = _lastSource,
 } = {}) {
   const epoch = ++_trackingRefreshEpoch;
   _lastTrackingRefreshOutcome = {
@@ -2194,20 +2194,14 @@ function _startTrail(icao24) {
  * @returns {Promise<void>}
  */
 async function _backfillTrail(icao24, token, oldestFixEpochSec) {
-  let baseEpochSec = null;
   let trace = null;
   try {
-    const response = await fetch('/api/adsblol/trace?hex=' + encodeURIComponent(icao24), {
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!response.ok) return;
-    const data = await response.json();
-    baseEpochSec = Number(data?.timestamp);
-    trace = Array.isArray(data?.trace) ? data.trace : null;
+    const track = await _source.getTrack?.(_flightData.get(icao24)?.sourceReference ?? icao24, { signal: AbortSignal.timeout(8000) });
+    trace = track?.records ?? null;
   } catch {
     return; // silent fallback to the accumulated trail
   }
-  if (!trace || !Number.isFinite(baseEpochSec)) return;
+  if (!trace) return;
   if (token !== _trailBackfillToken || icao24 !== _trackedIcao) return;
 
   // Height-datum fix (Task 7, mirror of flights.js Task 6 _backfillTrail): a
@@ -2220,13 +2214,11 @@ async function _backfillTrail(icao24, token, oldestFixEpochSec) {
   // readsb trace points: [secondsAfterTimestamp, lat, lon, alt_ft|'ground'|null, gs_kt, track, flags, ...]
   const parsed = [];
   for (const point of trace) {
-    if (!Array.isArray(point)) continue;
-    const t = baseEpochSec + Number(point[0]);
-    const lat = Number(point[1]);
-    const lon = Number(point[2]);
+    const t = point.observedAtMs / 1000;
+    const lat = point.latitude, lon = point.longitude;
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
     if (!Number.isFinite(t) || t >= oldestFixEpochSec) continue;
-    parsed.push({ lat, lon, altFt: point[3] });
+    parsed.push({ lat, lon, baroAltitudeM: point.baroAltitudeM });
   }
   if (!parsed.length) return;
 
@@ -2247,10 +2239,8 @@ async function _backfillTrail(icao24, token, oldestFixEpochSec) {
 
   let older = [];
   let lastAltM = null; // carry-forward for ground points whose cell isn't warm yet
-  for (const { lat, lon, altFt } of parsed) {
-    const baroM = (altFt === 'ground' || altFt == null || !Number.isFinite(Number(altFt)))
-      ? null
-      : Number(altFt) * 0.3048 + geoidHeight(lat, lon);
+  for (const { lat, lon, baroAltitudeM } of parsed) {
+    const baroM = baroAltitudeM == null ? null : baroAltitudeM + geoidHeight(lat, lon);
     let altM = floorAltitudeM(baroM, cachedGroundFloor(lat, lon));
     // Ground/no-alt point with an unresolved floor: hold the previous
     // waypoint's altitude (continuity — never a dive to a made-up depth).
@@ -2386,12 +2376,7 @@ function _normalizeTrackedIcao(candidate) {
   return normalized || null;
 }
 
-function _isUsableMilitaryAircraft(aircraft) {
-  if (!aircraft || Array.isArray(aircraft) || typeof aircraft !== 'object') return false;
-  if (typeof aircraft.hex !== 'string' || !_normalizeTrackedIcao(aircraft.hex)) return false;
-  return Number.isFinite(_toFiniteNumber(aircraft.lon))
-    && Number.isFinite(_toFiniteNumber(aircraft.lat));
-}
+
 
 function _applyPendingTrackingRestore() {
   const pending = _pendingTrackingRestore;
@@ -2603,9 +2588,18 @@ const militaryFlightsLayer = {
   id: 'military',
   name: 'Military Flights',
   icon: '🎖️',
-  source: 'adsb.lol',
+  source: _lastSource,
   /** @type {number} Polling interval in ms between API fetches */
   updateInterval: 15000,
+
+  /** Configure the source before initialization; an active layer keeps its owner. */
+  setSource(source) {
+    if (_viewer) throw new Error('Configure the source before layer initialization');
+    if (typeof source?.getSnapshot !== 'function') throw new TypeError('A snapshot source is required');
+    _source = source;
+    _lastSource = source.label || _lastSource;
+    this.source = _lastSource;
+  },
 
   /**
    * Initialize the layer: create the billboard collection, reset all state,
@@ -2771,7 +2765,7 @@ const militaryFlightsLayer = {
       epoch: trackingRefreshEpoch,
       status: 'source-unavailable',
       ids: new Set(),
-      source: 'adsb.lol',
+      source: _lastSource,
     };
     if (_retryAt && nowMs < _retryAt) {
       _backoff = true;
@@ -2785,73 +2779,24 @@ const militaryFlightsLayer = {
       : resourceController.signal;
     try {
       updateSignal.throwIfAborted();
-      const response = await fetch(API_URL, { signal: updateSignal });
-      _lastStatus = response.status;
-
-      if (!response.ok) {
-        _backoff = true;
-        // Parity with flights.js: a 429 gets the LONGER cooldown + a friendly
-        // rate-limit label instead of the generic transient backoff, so we don't
-        // hammer the upstream and the UI reads honestly.
-        if (response.status === 429) {
-          _retryAt = nowMs + BACKOFF_INTERVAL;
-          _lastError = 'adsb.lol rate limited';
-          return;
-        }
-        _retryAt = nowMs + ERROR_BACKOFF_INTERVAL;
-        let detail = '';
-        try {
-          const body = await response.json();
-          updateSignal.throwIfAborted();
-          detail = _toCleanText(body?.error || body?.message);
-        } catch {
-          detail = '';
-        }
-        _lastError = detail || `adsb.lol HTTP ${response.status}`;
-        return;
-      }
-
-      // adsb.lol returns { ac: [...aircraft], msg: "...", ... }
-      const data = await response.json();
+      const snapshot = await _source.getSnapshot({}, { signal: updateSignal });
       updateSignal.throwIfAborted();
-      if (!data || !Array.isArray(data.ac)) {
-        _backoff = true;
-        _retryAt = nowMs + ERROR_BACKOFF_INTERVAL;
-        _lastError = 'Malformed adsb.lol response';
-        return;
-      }
-
-      const usableAircraft = data.ac.filter(_isUsableMilitaryAircraft);
-      if (data.ac.length > 0 && usableAircraft.length === 0) {
-        _backoff = true;
-        _retryAt = nowMs + ERROR_BACKOFF_INTERVAL;
-        _lastError = 'Malformed adsb.lol aircraft rows';
-        return;
-      }
-
-      _backoff = false;
+      _lastStatus = snapshot.status ?? 200;
+      _lastSource = snapshot.source;
+      militaryFlightsLayer.source = _lastSource;
+      const usableAircraft = snapshot.records;
+      _backoff = snapshot.stale || snapshot.freshness === 'unknown';
       _retryAt = 0;
-      _lastError = null;
+      _lastError = snapshot.freshness === 'unknown' ? 'Source snapshot time unavailable' : null;
       const currentIcaos = new Set();
-      const cacheAgeMs = Number(response.headers?.get?.('x-ads-b-cache-age-ms'));
-      const receiptNowMs = Date.now() - (Number.isFinite(cacheAgeMs) && cacheAgeMs > 0 ? cacheAgeMs : 0);
-      _backoff = response.headers?.get?.('x-ads-b-cache') === 'STALE';
+      const receiptNowMs = snapshot.observedAtMs;
       // Field-test fix (RS46): coarse floor cells to warm for the below-ground
       // clamp — collected during the loop (low airborne contacts only),
       // batch-resolved once after it. Never a fetch inside the loop.
       const _floorWarmPoints = [];
 
-      // -- Parse each aircraft record from the adsb.lol response --
-      // Fields used: hex (ICAO), lon, lat, alt_baro (ft, barometric/MSL),
-      // alt_geom (ft, geometric/WGS84 ellipsoidal — probed live 2026-07-05:
-      // present on ~45% of records; readsb omits it when the aircraft hasn't
-      // reported a geometric altitude this cycle), track (deg true), gs
-      // (ground speed in knots), seen_pos (age of last position, seconds),
-      // flight (callsign), t (type), r (registration), ownOp (operator).
       for (const aircraft of usableAircraft) {
-        const icao24 = _toCleanText(aircraft?.hex).toLowerCase();
-        const lon = _toFiniteNumber(aircraft?.lon);
-        const lat = _toFiniteNumber(aircraft?.lat);
+        const { id: icao24, longitude: lon, latitude: lat } = aircraft;
 
         currentIcaos.add(icao24);
         _missingPolls.delete(icao24);
@@ -2861,40 +2806,19 @@ const militaryFlightsLayer = {
         // separate boolean). Grounded planes fall back to their last known
         // altitude (field elevation is unknowable here), else 0 m — never the
         // 3 km airborne default (a parked plane must not float).
-        const rawAltBaro = aircraft?.alt_baro;
-        const onGround = typeof rawAltBaro === 'string' && rawAltBaro.trim().toLowerCase() === 'ground';
-        const altitudeFt = _toFiniteNumber(rawAltBaro);
-        const altitudeM = Number.isFinite(altitudeFt)
-          ? altitudeFt * 0.3048
-          : (onGround
-            ? (Number.isFinite(prevMeta?.altitudeFt) ? prevMeta.altitudeFt * 0.3048 : 0)
-            : 3048);
-        const track = _toFiniteNumber(aircraft?.track) || 0;
-        // Convert ground speed from knots to meters/sec for dead reckoning
-        const speedKt = _toFiniteNumber(aircraft?.gs);
-        const speedMps = Number.isFinite(speedKt) ? speedKt * 0.514444 : 0;
-        // Analyst seam (additive): readsb baro_rate is ft/min; keep m/s.
-        const baroRateFtMin = _toFiniteNumber(aircraft?.baro_rate);
-        const verticalRateMps = Number.isFinite(baroRateFtMin) ? baroRateFtMin * 0.00508 : null;
-
-        const callsign = _toCleanText(aircraft?.flight);
-        const type = _toCleanText(aircraft?.t);
-        const registration = _toCleanText(aircraft?.r);
-        const operator = _toCleanText(aircraft?.ownOp);
-        const seenSec = _toFiniteNumber(aircraft?.seen);
-
-        // Height-datum fix (Task 7, mirror of flights.js Task 6): `altitudeM`
-        // (above) stays the AVIATION field — the sticky barometric/MSL altitude
-        // read by labels (FL/altitude readout) and the landed-fast-cull
-        // heuristic. It is NEVER overwritten or renamed. Where the aircraft
-        // actually RENDERS on the ellipsoidal globe (billboard path only — a
-        // ground-snapped 3D MODEL uses groundSnap.js's own tileset sample and
-        // ignores this value entirely) is a SEPARATE value, renderAltitudeM:
-        // alt_geom when readsb reports it (already WGS84 ellipsoidal), else
-        // alt_baro+geoid as a visual fallback, else ground surface when parked.
-        const altGeomFt = _toFiniteNumber(aircraft?.alt_geom);
-        const geoAltitudeM = Number.isFinite(altGeomFt) ? altGeomFt * 0.3048 : null;
-        const baroAltitudeM = Number.isFinite(altitudeFt) ? altitudeFt * 0.3048 : null;
+        const onGround = aircraft.onGround;
+        const altitudeFt = aircraft.baroAltitudeM == null ? null : aircraft.baroAltitudeM / 0.3048;
+        const altitudeM = aircraft.baroAltitudeM
+          ?? (onGround ? (Number.isFinite(prevMeta?.altitudeFt) ? prevMeta.altitudeFt * 0.3048 : 0) : 3048);
+        const track = aircraft.courseDeg || 0;
+        const speedMps = aircraft.speedMps ?? 0;
+        const verticalRateMps = aircraft.verticalRateMps;
+        const callsign = aircraft.callsign;
+        const type = aircraft.typeCode;
+        const registration = aircraft.registration;
+        const operator = aircraft.operator;
+        const geoAltitudeM = aircraft.ellipsoidAltitudeM;
+        const baroAltitudeM = aircraft.baroAltitudeM;
 
         // geoid undulation N: cached per-aircraft (negligible drift — see
         // task brief) once the geoid grid has loaded; unavailable pre-load
@@ -2979,6 +2903,8 @@ const militaryFlightsLayer = {
         // last-known-good (bounded by the layer's eviction, which deletes the entry).
         const stickyType = stickyText(type, prevMeta?.type);
         const meta = {
+          sourceReference: aircraft.reference,
+          observedReceiptMs: Date.now(),
           callsign: stickyText(callsign, prevMeta?.callsign),
           type: stickyType,
           // Type outranks category automatically inside classifyAircraft.
@@ -2997,7 +2923,7 @@ const militaryFlightsLayer = {
           // Analyst seam (additive): sticky like the other kinematics.
           verticalRateMps: stickyNumber(verticalRateMps, prevMeta?.verticalRateMps, null),
           lastContactEpochMs: stickyNumber(
-            Number.isFinite(seenSec) ? receiptNowMs - seenSec * 1000 : null,
+            aircraft.contactTimeMs,
             prevMeta?.lastContactEpochMs,
             null,
           ),
@@ -3022,8 +2948,7 @@ const militaryFlightsLayer = {
         // report, so the fix epoch is receipt time minus that age. Only
         // append when the fix actually advances, so stale repeats don't
         // create zero-dt segments.
-        const seenPos = _toFiniteNumber(aircraft?.seen_pos);
-        const fixEpochMs = receiptNowMs - (Number.isFinite(seenPos) ? seenPos * 1000 : 0);
+        const fixEpochMs = aircraft.positionTimeMs ?? receiptNowMs;
         const fixTime = Cesium.JulianDate.fromDate(new Date(fixEpochMs));
         if (!_positionHistory.has(icao24)) {
           _positionHistory.set(icao24, []);
@@ -3175,6 +3100,8 @@ const militaryFlightsLayer = {
       // feed gap, and the full grace left phantom planes parked at airports.
       for (const [icao24, bb] of _billboards) {
         if (currentIcaos.has(icao24)) continue;
+        // Partial admissions do not prove absence, but stale retention is bounded.
+        if (!snapshot.complete && Date.now() - (_flightData.get(icao24)?.observedReceiptMs ?? 0) < 300000) continue;
         const misses = (_missingPolls.get(icao24) || 0) + 1;
         const limit = _likelyLanded(icao24) ? LANDED_MISSING_POLL_LIMIT : MISSING_POLL_LIMIT;
         if (misses < limit) {
@@ -3222,7 +3149,7 @@ const militaryFlightsLayer = {
         epoch: trackingRefreshEpoch,
         status: 'accepted',
         ids: currentIcaos,
-        source: 'adsb.lol',
+        source: _lastSource,
       };
       console.log(`[Data:Military] Updated: ${_count} aircraft`);
       _applyPendingTrackingRestore();
@@ -3233,8 +3160,10 @@ const militaryFlightsLayer = {
       }
       console.warn('[Data:Military] Fetch error:', e);
       _backoff = true;
-      _retryAt = Date.now() + ERROR_BACKOFF_INTERVAL;
-      _lastError = 'adsb.lol network error';
+      _retryAt = Date.now() + (e?.retryAfterMs ?? ERROR_BACKOFF_INTERVAL);
+      _lastStatus = e?.status ?? null;
+      if (e?.source) { _lastSource = e.source; this.source = _lastSource; }
+      _lastError = e?.name === 'LiveSourceError' ? e.message : 'Live data unavailable';
     } finally {
       _activeUpdateControllers.delete(resourceController);
     }
@@ -3308,7 +3237,7 @@ const militaryFlightsLayer = {
       epoch: _trackingRefreshEpoch,
       status: 'destroyed',
       ids: new Set(),
-      source: 'adsb.lol',
+      source: _lastSource,
     };
     _resetTrackedSelectionState(); // next lifecycle re-evaluates against the ENTER ceiling
     _viewer = null;
@@ -3670,7 +3599,7 @@ const militaryFlightsLayer = {
     if (outcome.status !== 'accepted') {
       return {
         status: 'source-unavailable',
-        reason: 'adsb.lol snapshot unavailable',
+        reason: `${_lastSource} snapshot unavailable`,
         refreshEpoch: outcome.epoch,
         source: outcome.source,
       };
@@ -3772,7 +3701,7 @@ const militaryFlightsLayer = {
       error: _lastError,
       status: _lastStatus,
       retryInSec,
-      source: 'adsb.lol',
+      source: _lastSource,
       fallback: false,
     };
   },

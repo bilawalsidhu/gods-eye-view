@@ -1,3 +1,4 @@
+import { createAisStreamSource } from '../sources/live/standalone.js';
 import * as Cesium from 'cesium';
 import {
   registerEntityContext,
@@ -46,13 +47,14 @@ import {
 import { requestWorldFocus } from '../worldFocus.js';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
 
+let _source = createAisStreamSource({ apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/ais-live' });
+
 const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 
 /** Camera pose signature at the last vessel rotation pass. */
 let _lastCamPoseSig = '';
 const _scratchFocusScreen = new Cesium.Cartesian2();
 
-const DEFAULT_API_URL = '/api/ais-live';
 const DEFAULT_RENDER_ROWS = 12000;
 const DEFAULT_ACTIVE_LABELS = 900;
 const REFRESH_MS = 60000;
@@ -342,6 +344,14 @@ const aisLiveVesselsLayer = {
   source: 'AISStream',
   updateInterval: REFRESH_MS,
   statsRefreshInterval: 1000,
+
+  /** Configure the source before initialization; an active layer keeps its owner. */
+  setSource(source) {
+    if (state.viewer) throw new Error('Configure the source before layer initialization');
+    if (typeof source?.getSnapshot !== 'function') throw new TypeError('A snapshot source is required');
+    _source = source;
+    this.source = source.label || this.source;
+  },
 
   init(viewer) {
     state.viewer = viewer;
@@ -844,33 +854,21 @@ async function loadLivePositions(viewer) {
   state.abort = requestController;
 
   try {
-    const url = liveApiUrl();
     // Combine the layer's teardown-abort with a hard timeout so a hung upstream
     // can't wedge the poll indefinitely (parity with the track fetch + flights).
     const signal = typeof AbortSignal.any === 'function'
       ? AbortSignal.any([requestController.signal, AbortSignal.timeout(10000)])
       : requestController.signal;
-    const response = await fetch(url, {
-      signal,
-      cache: 'no-store',
+    const snapshot = await _source.getSnapshot({ maxRows: renderRowLimit() }, { signal });
+    if (!ownsAisRequest(requestController, requestSessionId)) return;
+    aisLiveVesselsLayer.source = snapshot.source;
+    // Map observations into the existing display store; source fields stop here.
+    applyAisFeedSnapshot(viewer, {
+      rows: snapshot.records.map(vesselDisplayRow), status: snapshot.transportStatus,
+      lastMessageAt: snapshot.lastMessageAt, nextAttemptAt: snapshot.nextAttemptAt,
+      refreshing: snapshot.stale, newestPositionAt: snapshot.observedAtMs == null ? null : new Date(snapshot.observedAtMs).toISOString(),
+      silentForMs: snapshot.silentForMs, reconnectAttempt: snapshot.reconnectAttempt,
     });
-    if (!ownsAisRequest(requestController, requestSessionId)) return;
-    if (!response.ok) {
-      // The 503 key-absent / 502 stream-error bodies still carry {status,error}.
-      // Prefer a clean surfaced reason over a cryptic "AIS live HTTP 503".
-      let reason = `AIS live HTTP ${response.status}`;
-      try {
-        const errPayload = await response.json();
-        if (!ownsAisRequest(requestController, requestSessionId)) return;
-        reason = deriveAisFeedError(errPayload, 0)
-          || (typeof errPayload?.error === 'string' && errPayload.error.trim()) || reason;
-      } catch { /* non-JSON body — keep the HTTP status reason */ }
-      throw new Error(reason);
-    }
-
-    const payload = await response.json();
-    if (!ownsAisRequest(requestController, requestSessionId)) return;
-    applyAisFeedSnapshot(viewer, payload);
   } catch (error) {
     if (ownsAisRequest(requestController, requestSessionId) && error?.name !== 'AbortError') {
       markAisUnavailable(error?.message || 'AIS live load failed');
@@ -942,11 +940,15 @@ function applyAisFeedSnapshot(viewer, payload) {
   return { reconciled: true, ...snapshot };
 }
 
-function liveApiUrl() {
-  const base = import.meta.env?.VITE_AIS_LIVE_API_URL || DEFAULT_API_URL;
-  const url = new URL(base, window.location.origin);
-  url.searchParams.set('maxRows', String(renderRowLimit()));
-  return url.toString();
+function vesselDisplayRow(record) {
+  return {
+    mmsi: record.id, reference: record.reference, lat: record.latitude, lon: record.longitude,
+    name: record.name, imo: record.imo, type: record.type, destination: record.destination,
+    speed: record.speedMps == null ? null : record.speedMps / 0.514444,
+    course: record.courseDeg, heading: record.headingDeg,
+    last_position_epoch: record.observedAtMs == null ? null : record.observedAtMs / 1000,
+    last_position_UTC: record.observedAtMs == null ? '' : new Date(record.observedAtMs).toISOString(),
+  };
 }
 
 function renderRowLimit() {
@@ -1145,6 +1147,7 @@ function normalizeVessel(row) {
     lon,
     name: String(row.name || row.input_name || row.mmsi || row.input_identifier || 'VESSEL'),
     mmsi: String(row.mmsi || row.input_identifier || '').trim(),
+    reference: row.reference ?? String(row.mmsi || row.input_identifier || '').trim(),
     imo: String(row.imo || ''),
     type: String(row.type_specific || row.type || ''),
     destination: String(row.destination || ''),
@@ -1638,7 +1641,7 @@ function startSelectedVesselTrail(record) {
     state.trail = createTrail(state.viewer, { color: TRAIL_COLOR, width: 2.5 });
   }
   if (state.trail) state.trail.setPositions(state.trailPositions);
-  backfillVesselTrail(record.mmsi, state.trailBackfillToken);
+  backfillVesselTrail(record.mmsi, state.trailBackfillToken, record.reference);
 }
 
 /**
@@ -1651,15 +1654,11 @@ function startSelectedVesselTrail(record) {
  * @param {number} token - Backfill token captured at request time.
  * @returns {Promise<void>}
  */
-async function backfillVesselTrail(mmsi, token) {
+async function backfillVesselTrail(mmsi, token, reference = mmsi) {
   let samples = null;
   try {
-    const response = await fetch('/api/ais-live/track?mmsi=' + encodeURIComponent(mmsi), {
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!response.ok) return;
-    const payload = await response.json();
-    samples = Array.isArray(payload?.samples) ? payload.samples : null;
+    const track = await _source.getTrack?.(reference, { signal: AbortSignal.timeout(8000) });
+    samples = track?.records ?? null;
   } catch {
     return; // silent — keep the live-accumulated trail
   }
@@ -1668,8 +1667,8 @@ async function backfillVesselTrail(mmsi, token) {
 
   const older = [];
   for (const sample of samples) {
-    const lat = Number(sample?.lat);
-    const lon = Number(sample?.lon);
+    const lat = Number(sample?.latitude);
+    const lon = Number(sample?.longitude);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
     // Per-sample N (≤ TRAIL_MAX_POINTS lookups) — same sea-surface datum as
     // the live vertices so the spliced trail is height-continuous.
@@ -1735,7 +1734,7 @@ function registerSelectedContext(record) {
       id: `ais-${record.mmsi}`,
       layerId: 'ais-live-vessels',
       layerName: 'Live AIS Vessels',
-      source: 'AISStream',
+      source: aisLiveVesselsLayer.source,
       label: displayVesselName(record),
       latitude: record.lat,
       longitude: record.lon,

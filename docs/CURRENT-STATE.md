@@ -1,5 +1,24 @@
 # God's Eye View Current State
 
+## Browser live-source observations
+
+Flights, Military Flights and AIS Vessels obtain snapshots and optional history
+through `gods-eye-view/sources/live`. The standalone adapters use the existing
+same-origin routes. Aircraft observations distinguish barometric metres from
+WGS84 ellipsoid metres and retain source position/contact epochs; vessel records
+retain separate heading/course and sea-surface datum. History is a best-effort
+addition to the locally accumulated trail, never a promise of complete coverage.
+
+Snapshot coverage, completeness and freshness are separate fields. A partially
+admitted aircraft snapshot retains absent contacts for up to five minutes before
+the usual missed-poll eviction. Unknown snapshot times remain unknown in stats. An invalid nonempty
+snapshot retains the previous display. Empty vessel refreshes retain the existing
+first-connect grace and warm-data behavior. Known source failures have bounded
+messages; arbitrary HTTP response bodies are not surfaced as diagnostics.
+Sources receive cancellation signals and check them after body parsing. The
+layer's existing lifecycle and selection guards continue to reject late work.
+
+
 ## State and action outcomes
 
 Share preferences, place lookups and Scene playback expose immutable snapshots
