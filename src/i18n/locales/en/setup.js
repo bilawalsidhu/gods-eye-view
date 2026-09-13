@@ -177,4 +177,6 @@ export default {
   'keySetup.unlocks.cesium-ion': 'Bing imagery map stacks + world terrain',
   'keySetup.unlocks.opensky': 'More flight-polling credits (anonymous works without)',
   'keySetup.unlocks.launch-library': 'Higher space-missions request allowance',
+
+  'scenes.status.actionFailed': 'Scene action failed',
 };

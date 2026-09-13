@@ -173,4 +173,6 @@ export default {
   'keySetup.unlocks.cesium-ion': 'Piles de cartes Bing imagery + terrain mondial',
   'keySetup.unlocks.opensky': 'Plus de crédits d\'interrogation des vols (le mode anonyme fonctionne sans)',
   'keySetup.unlocks.launch-library': 'Quota de requêtes plus élevé pour les missions spatiales',
+
+  'scenes.status.actionFailed': 'Échec de l\'action de scène',
 };

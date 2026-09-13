@@ -126,4 +126,6 @@ export default {
   'keySetup.unlocks.cesium-ion': 'Conjuntos de mapas Bing imagery + terreno mundial',
   'keySetup.unlocks.opensky': 'Más créditos de consulta de vuelos (sin clave funciona el modo anónimo)',
   'keySetup.unlocks.launch-library': 'Mayor límite de peticiones para misiones espaciales',
+
+  'scenes.status.actionFailed': 'La acción de escena falló',
 };

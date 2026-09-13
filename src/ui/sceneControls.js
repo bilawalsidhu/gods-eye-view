@@ -67,7 +67,7 @@ export class SceneControls {
     const generation = ++this.actionGeneration;
     const failed = () => {
       if (!this.destroyed && generation === this.actionGeneration)
-        this.updateStatus('Scene action failed');
+        this.updateStatus(t('setup.scenes.status.actionFailed'));
     };
     try {
       const result = this.actions[action](...args);
