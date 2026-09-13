@@ -645,6 +645,28 @@ export async function loadFintrafficSourcesFromOpenData() {
   }
 }
 
+/**
+ * The DriveBC `credit` field mixes third-party image attribution ("Images
+ * courtesy of TransLink") with operational notes ("relies on solar power").
+ * Only the attribution kind is carried onto the camera, HTML stripped, so a
+ * partner-owned feed names its owner in the panel; everything else is dropped.
+ *
+ * @param {unknown} raw
+ * @returns {string}
+ */
+export function driveBcImageCredit(raw) {
+  const text = String(raw || '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return '';
+  return /courtesy|provided by|presented in cooperation|city of|parks canada/i.test(
+    text,
+  )
+    ? text
+    : '';
+}
+
 /** DriveBC orientation codes (the eight compass points) as headings in degrees. */
 const DRIVEBC_ORIENTATION_HEADINGS = Object.freeze({
   N: 0,
@@ -701,6 +723,7 @@ export async function loadDriveBcSourcesFromOpenData() {
       const hasHeading = Number.isFinite(heading);
       const region = String(row.region_name || '').trim();
       const imageUrl = DRIVEBC_IMAGE_URL(row.id);
+      const credit = driveBcImageCredit(row.credit);
       cameras.push({
         id: cameraId,
         name: String(row.name || '').trim() || `DriveBC camera ${row.id}`,
@@ -730,6 +753,7 @@ export async function loadDriveBcSourcesFromOpenData() {
         snapshotUrl: imageUrl,
         sourceKind: 'drivebc-open-data',
         license: 'DriveBC, Open Government Licence – British Columbia',
+        credit,
       });
     }
 

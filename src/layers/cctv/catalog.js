@@ -193,6 +193,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
         absoluteHeightM: groundElevationM + mountHeightM,
         pitchDeg,
         license: String(source.license || source.licenseNote || ''),
+        credit: String(source.credit || ''),
         poseSource,
       };
       parts.model.ensureCameraPose(camera);

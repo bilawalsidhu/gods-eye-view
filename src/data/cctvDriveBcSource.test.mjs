@@ -13,7 +13,10 @@ import {
   DEFAULT_TFL_MAX_SOURCES,
   DRIVEBC_WEBCAMS_URL,
 } from '../../server/providers/cctv/constants.js';
-import { loadDriveBcSourcesFromOpenData } from '../../server/providers/cctv/sources.js';
+import {
+  driveBcImageCredit,
+  loadDriveBcSourcesFromOpenData,
+} from '../../server/providers/cctv/sources.js';
 
 /** Set (or, for `undefined`, delete) environment variables for one test. */
 function withEnv(t, env) {
@@ -67,6 +70,8 @@ test('DriveBC loader keeps published cameras and builds frame URLs from the came
       driveBcRow(682, 49.0579, -123.0569, {
         orientation: 'se',
         elevation: null,
+        credit:
+          'Images courtesy of <a href="https://www.translink.ca/" target="_blank">TransLink</a>',
       }),
       driveBcRow(1, 49.2, -123.1, { is_on: false }),
       driveBcRow(2, 49.2, -123.1, { should_appear: false }),
@@ -94,6 +99,16 @@ test('DriveBC loader keeps published cameras and builds frame URLs from the came
   assert.equal(border.headingConfidence, 'high');
   assert.equal(border.groundElevationM, 10);
   assert.match(border.license, /Open Government Licence – British Columbia/);
+  assert.equal(
+    border.credit,
+    '',
+    'a provincial camera carries no partner credit',
+  );
+  assert.equal(
+    deltaport.credit,
+    'Images courtesy of TransLink',
+    'a partner-supplied camera names its owner, HTML stripped',
+  );
   assert.equal(deltaport.city, 'Lower Mainland');
   assert.equal(
     deltaport.headingDeg,
@@ -209,4 +224,30 @@ test('default per-pack camera caps fit inside the default catalog cap', () => {
     DEFAULT_CCTV_MAX_SOURCES <= CCTV_MAX_SOURCES_CEILING,
     'the default cap must sit inside the CCTV_MAX_SOURCES ceiling',
   );
+});
+
+test('DriveBC credit keeps partner attribution and drops operational notes', () => {
+  assert.equal(
+    driveBcImageCredit(
+      'Images courtesy of <a href="https://x.test/">TransLink</a>',
+    ),
+    'Images courtesy of TransLink',
+  );
+  assert.equal(
+    driveBcImageCredit('Camera image provided by City of Vancouver'),
+    'Camera image provided by City of Vancouver',
+  );
+  assert.equal(
+    driveBcImageCredit(
+      'BC HighwayCam presented in cooperation with AtkinsRéalis.',
+    ),
+    'BC HighwayCam presented in cooperation with AtkinsRéalis.',
+  );
+  assert.equal(
+    driveBcImageCredit(
+      'This camera is located in a remote area and relies on solar power. As a result, transmission delays may occur.',
+    ),
+    '',
+  );
+  assert.equal(driveBcImageCredit(null), '');
 });

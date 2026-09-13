@@ -196,7 +196,8 @@ export const DATA_CREDITS = [
       'CCTV cameras &amp; frames (British Columbia): ' +
       '<a href="https://www.drivebc.ca/" target="_blank" rel="noopener">DriveBC</a>. ' +
       'Contains information licensed under the ' +
-      '<a href="https://www2.gov.bc.ca/gov/content/data/open-data/open-government-licence-bc" target="_blank" rel="noopener">Open Government Licence – British Columbia</a>.',
+      '<a href="https://www2.gov.bc.ca/gov/content/data/open-data/open-government-licence-bc" target="_blank" rel="noopener">Open Government Licence – British Columbia</a>. ' +
+      'Some cameras are supplied by partners (TransLink, the City of Vancouver, the City of Surrey, Parks Canada and others); each names its provider in the CCTV panel.',
   },
   {
     key: 'telegeography',

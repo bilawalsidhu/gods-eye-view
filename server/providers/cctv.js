@@ -154,6 +154,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 source.sourceKind || (source.url ? 'configured' : 'fallback'),
               poseSource: source.poseSource,
               license: source.license,
+              credit: source.credit || '',
             })),
           };
           res.writeHead(200, {

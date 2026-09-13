@@ -449,6 +449,9 @@ export function normalizeSourceItem(item) {
     url: typeof item.url === 'string' ? item.url : '',
     snapshotUrl: typeof item.snapshotUrl === 'string' ? item.snapshotUrl : '',
     license: String(item.license || item.licenseNote || ''),
+    // Per-camera attribution for feeds a partner supplies inside a pack
+    // (DriveBC: TransLink, city cameras). Shown beside the provider.
+    credit: String(item.credit || '').trim(),
     sourceKind: String(item.sourceKind || item.kind || 'configured'),
     // Optional CAL badge input (cctv-v2 design §3b/§9.2, additive-only per the
     // global constraints — nothing else in this file changes): hand-authored
