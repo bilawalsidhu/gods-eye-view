@@ -19,7 +19,7 @@ const headful = process.argv.includes('--headful');
 const forceKeyless = process.argv.includes('--keyless')
   || process.env.QA_MAP_SOURCE_TRAY_KEYLESS === '1';
 const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH
-  || await puppeteer.executablePath().catch(() => null);
+  || await Promise.resolve().then(() => puppeteer.executablePath()).catch(() => null);
 
 if (!executablePath || !fs.existsSync(executablePath)) {
   throw new Error('Puppeteer Chrome for Testing is unavailable');

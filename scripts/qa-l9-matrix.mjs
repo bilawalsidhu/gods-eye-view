@@ -1205,7 +1205,7 @@ async function runBrowserGroup(record) {
   const emit = (id, res, ms) => { if (ids.includes(id)) record(CHECKS.find((c) => c.id === id), res, ms); };
   const only = (id) => ids.includes(id);
 
-  const exe = await puppeteer.executablePath().catch(() => null);
+  const exe = await Promise.resolve().then(() => puppeteer.executablePath()).catch(() => null);
   const browser = await puppeteer.launch({
     headless: HEADFUL ? false : 'new',
     ...(exe ? { executablePath: exe } : {}),
