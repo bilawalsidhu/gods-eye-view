@@ -414,5 +414,14 @@
       "src/ui/panelRailGeometry.js"
     ],
     "external": ["cesium"]
+  },
+  "scene-controls": {
+    "exports": ["./ui/scenes"],
+    "modules": [
+      "src/ui/scenes.js",
+      "src/ui/sceneControls.js",
+      "src/ui/scenePresentation.js"
+    ],
+    "external": []
   }
 }

@@ -208,5 +208,10 @@
   "src/ui/cockpitTrackingController.js",
   "src/cockpitMath.js",
   "src/cockpitUtilityLayout.js",
-  "src/cockpitVisionPolicy.js"
+  "src/cockpitVisionPolicy.js",
+  "src/ui/scenes.js",
+  "src/ui/sceneControls.js",
+  "src/ui/scenePresentation.js",
+  "src/ui/sceneControls.test.mjs",
+  "scripts/qa-scene-controls.mjs"
 ]

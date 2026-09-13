@@ -137,6 +137,7 @@
     "./ui/cockpit": "./src/ui/cockpit.js",
     "./ui/cockpit/math": "./src/cockpitMath.js",
     "./ui/cockpit/layout": "./src/cockpitUtilityLayout.js",
-    "./ui/cockpit/vision": "./src/cockpitVisionPolicy.js"
+    "./ui/cockpit/vision": "./src/cockpitVisionPolicy.js",
+    "./ui/scenes": "./src/ui/scenes.js"
   }
 }

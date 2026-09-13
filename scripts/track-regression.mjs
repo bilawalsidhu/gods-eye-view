@@ -3203,10 +3203,25 @@ async function main() {
           await fl.update(v);
           await window.__dfSettle(600);
         }
-        const bb1 = window.__dfFindBB('aaa097');
-        const d1 = bb1 ? window.__dfCarto(bb1.position) : null;
+        // The floor owner intentionally retains the previous cell near an
+        // edge. Sample inside a cell, beyond that hysteresis band, so the raw
+        // coordinate's floor is unambiguously the floor the sprite must use.
+        // Wait for geometry, not a passing height; a missing clamp still fails.
+        const interiorLimit = 0.0005 - gf.CELL_HYSTERESIS_DEG - 0.00002;
+        const sampleDeadline = Date.now() + 8000;
+        let d1 = null;
+        let sampleInterior = false;
+        do {
+          await window.__dfSettle(250);
+          const bb1 = window.__dfFindBB('aaa097');
+          d1 = bb1 ? window.__dfCarto(bb1.position) : null;
+          sampleInterior = !!d1
+            && Math.abs(d1.lat - cell(d1.lat)) < interiorLimit
+            && Math.abs(d1.lon - cell(d1.lon)) < interiorLimit;
+        } while (!sampleInterior && Date.now() < sampleDeadline);
         return {
           startCold,
+          sampleInterior,
           displayCell,
           fixCell,
           sameCellAsFix: displayCell.lat === fixCell.lat && displayCell.lon === fixCell.lon,
@@ -3248,6 +3263,10 @@ async function main() {
       record('display-floor/corridor: an off-path control cell stays cold (not ambient warming)',
         dfCorridor.controlFloor == null,
         `control cell floor = ${dfCorridor.controlFloor}`);
+
+      record('display-floor/corridor: the height sample clears cell-boundary hysteresis',
+        dfCorridor.sampleInterior === true,
+        'the sampled coordinate lies inside one unambiguous floor cell');
 
       record('display-floor/corridor: the sprite rides the corridor-warmed floor',
         Number.isFinite(dfCorridor.spriteH) && Number.isFinite(dfCorridor.spriteFloor)
