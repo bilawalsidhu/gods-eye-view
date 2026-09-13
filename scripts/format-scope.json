@@ -76,6 +76,7 @@
   "server/providers/cctv/media.js",
   "server/providers/cctv/normalize.js",
   "server/providers/cctv/sources.js",
+  "src/data/cctvFintraffic.test.mjs",
   "server/providers/radio.js",
   "server/providers/radio/catalog.js",
   "server/providers/radio/constants.js",

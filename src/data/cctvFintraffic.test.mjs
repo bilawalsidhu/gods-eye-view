@@ -12,12 +12,29 @@ import {
 } from '../../server/providers/cctv/constants.js';
 
 /** One station feature in the shape tie.digitraffic.fi actually returns. */
-function station(id, { name = `vt4_${id}`, status = 'GATHERING', lon = 24.9384, lat = 60.1699, altitude = 0, presets = [] } = {}) {
+function station(
+  id,
+  {
+    name = `vt4_${id}`,
+    status = 'GATHERING',
+    lon = 24.9384,
+    lat = 60.1699,
+    altitude = 0,
+    presets = [],
+  } = {},
+) {
   return {
     type: 'Feature',
     id,
     geometry: { type: 'Point', coordinates: [lon, lat, altitude] },
-    properties: { id, name, collectionStatus: status, dataUpdatedTime: '2026-09-13T03:25:36Z', presets, state: null },
+    properties: {
+      id,
+      name,
+      collectionStatus: status,
+      dataUpdatedTime: '2026-09-13T03:25:36Z',
+      presets,
+      state: null,
+    },
   };
 }
 
@@ -33,10 +50,17 @@ async function loadWith(features, { env = {}, capture = {} } = {}) {
   globalThis.fetch = async (url, options) => {
     capture.url = String(url);
     capture.options = options;
-    return new Response(JSON.stringify({ type: 'FeatureCollection', dataUpdatedTime: '2026-09-13T05:31:58Z', features }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        type: 'FeatureCollection',
+        dataUpdatedTime: '2026-09-13T05:31:58Z',
+        features,
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
   };
   try {
     return await loadFintrafficSourcesFromOpenData();
@@ -95,7 +119,10 @@ test('Fintraffic frame URLs are built on the official image origin', async () =>
 test('Fintraffic loader drops dead stations, uncollected presets and bad ids', async () => {
   const cameras = await loadWith([
     // Station off collection: every preset goes, live or not.
-    station('C01601', { status: 'REMOVED_TEMPORARILY', presets: [{ id: 'C0160101', inCollection: true }] }),
+    station('C01601', {
+      status: 'REMOVED_TEMPORARILY',
+      presets: [{ id: 'C0160101', inCollection: true }],
+    }),
     station('C01503', {
       presets: [
         { id: 'C0150301', inCollection: true },
@@ -108,7 +135,11 @@ test('Fintraffic loader drops dead stations, uncollected presets and bad ids', a
       ],
     }),
     // Coordinates nowhere near Finland (swapped lat/lon).
-    station('C01504', { lon: 60.1699, lat: 24.9384, presets: [{ id: 'C0150401', inCollection: true }] }),
+    station('C01504', {
+      lon: 60.1699,
+      lat: 24.9384,
+      presets: [{ id: 'C0150401', inCollection: true }],
+    }),
   ]);
 
   assert.deepEqual(
@@ -119,22 +150,37 @@ test('Fintraffic loader drops dead stations, uncollected presets and bad ids', a
 
 test('Fintraffic ground elevation uses a reported altitude and falls back otherwise', async () => {
   const cameras = await loadWith([
-    station('C08508', { altitude: 136, presets: [{ id: 'C0850801', inCollection: true }] }),
-    station('C01503', { altitude: 0, presets: [{ id: 'C0150301', inCollection: true }] }),
-    station('C03506', { altitude: 99_000, presets: [{ id: 'C0350601', inCollection: true }] }),
+    station('C08508', {
+      altitude: 136,
+      presets: [{ id: 'C0850801', inCollection: true }],
+    }),
+    station('C01503', {
+      altitude: 0,
+      presets: [{ id: 'C0150301', inCollection: true }],
+    }),
+    station('C03506', {
+      altitude: 99_000,
+      presets: [{ id: 'C0350601', inCollection: true }],
+    }),
   ]);
 
   const byId = new Map(cameras.map((camera) => [camera.id, camera]));
   assert.equal(byId.get('fi-c0850801').groundElevationM, 136);
   // 0 is "not reported", not sea level.
-  assert.equal(byId.get('fi-c0150301').groundElevationM, FINTRAFFIC_GROUND_ELEVATION_M);
+  assert.equal(
+    byId.get('fi-c0150301').groundElevationM,
+    FINTRAFFIC_GROUND_ELEVATION_M,
+  );
   // A garbage upstream value cannot fling a camera kilometres up.
   assert.equal(byId.get('fi-c0350601').groundElevationM, 1400);
 });
 
 test('Fintraffic loader identifies itself to Digitraffic and refuses redirects', async () => {
   const capture = {};
-  await loadWith([station('C01503', { presets: [{ id: 'C0150301', inCollection: true }] })], { capture });
+  await loadWith(
+    [station('C01503', { presets: [{ id: 'C0150301', inCollection: true }] })],
+    { capture },
+  );
 
   assert.equal(capture.url, FINTRAFFIC_STATIONS_URL);
   assert.equal(capture.options.headers['Digitraffic-User'], 'gods-eye-view');
@@ -144,7 +190,10 @@ test('Fintraffic loader identifies itself to Digitraffic and refuses redirects',
 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>
-    new Response(null, { status: 302, headers: { Location: 'https://example.com/stations' } });
+    new Response(null, {
+      status: 302,
+      headers: { Location: 'https://example.com/stations' },
+    });
   try {
     assert.deepEqual(await loadFintrafficSourcesFromOpenData(), []);
   } finally {
@@ -181,11 +230,20 @@ test('Fintraffic pack caps itself and fails to an empty list, never a throw', as
 });
 
 test('fintrafficCameraName unpacks the machine station name and the view number', () => {
-  assert.equal(fintrafficCameraName('vt3_Hyvinkää_Noppo', 'C01234', 'C0123402'), 'vt3 Hyvinkää Noppo (view 02)');
+  assert.equal(
+    fintrafficCameraName('vt3_Hyvinkää_Noppo', 'C01234', 'C0123402'),
+    'vt3 Hyvinkää Noppo (view 02)',
+  );
   // Nameless station still gets a usable label.
-  assert.equal(fintrafficCameraName('', 'C01234', 'C0123409'), 'Fintraffic C01234 (view 09)');
+  assert.equal(
+    fintrafficCameraName('', 'C01234', 'C0123409'),
+    'Fintraffic C01234 (view 09)',
+  );
   // A preset id that is just the station id has no view suffix to add.
-  assert.equal(fintrafficCameraName('vt4_Mäntsälä', 'C01234', 'C01234'), 'vt4 Mäntsälä');
+  assert.equal(
+    fintrafficCameraName('vt4_Mäntsälä', 'C01234', 'C01234'),
+    'vt4 Mäntsälä',
+  );
 });
 
 test('isLikelyFinlandCoordinate spans the catalog extent and rejects the rest', () => {
