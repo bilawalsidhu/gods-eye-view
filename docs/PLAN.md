@@ -810,22 +810,22 @@ ordered by value-per-risk; each is self-contained and committable.
 
 - [ ] Split `src/ui.js` along its existing section banners into
       `src/ui/*` — behavior-preserving, moved with their co-located
-      tests. IN PROGRESS 2026-09-13, seam 2 of ~5:
+      tests. IN PROGRESS 2026-09-13, seam 3 of ~5:
       `src/ui/CockpitViewController.js` (seam 1: the cockpit HUD loop,
-      1,616 lines, byte-identical; StyleManager keeps constructor
-      wiring + `_setCockpitVision`) and `src/ui/radioPanel.js` (seam
-      2: the five Radio panel methods — `_initRadioPanel` +
-      `_renderRadioState` + `_syncContextRadioLauncherState` + the two
-      reveal helpers — 815 lines, verified transform-identical against
-      HEAD's moved region; public three stay as thin delegates so the
-      method surface is unchanged). ui.js 10,500 → 8,041 lines.
-      Source-text contract tests re-pointed (radioMarkup,
-      contextSessionOrdering, cockpitMarkup, firstRunExperience read
-      `src/ui/radioPanel.js` for moved bodies). Gates: lint clean,
-      2,971 tests + 14 allocation probes, build ok, qa-radio 106/106
-      PASS, qa-cockpit-utility 52/52 PASS. Remaining seams: CCTV panel
-      (~600), panel-layout/adaptive stacks (~980), location bar
-      (~350).
+      1,616 lines, byte-identical), `src/ui/radioPanel.js` (seam 2:
+      the five Radio panel methods, 815 lines, transform-identical),
+      and `src/ui/cctvPanel.js` (seam 3: the thirteen CCTV panel
+      methods + the `CCTV_CAL_FIELDS` calibration table +
+      `signedNormalizeDeg`, 623 lines, transform-identical; public
+      three stay as thin delegates so the method surface is
+      unchanged). ui.js 10,500 → 7,445 lines. Source-text contract
+      tests re-pointed per seam. Gates per seam: lint clean, 2,971
+      tests + 14 allocation probes, build ok, and the matching QA
+      harnesses (seam 2: qa-radio 106/106, qa-cockpit-utility 52/52;
+      seam 3: qa-cctv-v2 48/48 after one live-data flake run — a real
+      camera parked at the scripted click point — didn't reproduce).
+      Remaining seams: panel-layout/adaptive stacks (~980), location
+      bar (~350).
 - [ ] Unify the flights fork: `militaryFlights.js` duplicates the
       ingestion → label → render pipeline of `flights.js` (9,312 lines
       combined). Extract the shared pipeline; keep separate data sources

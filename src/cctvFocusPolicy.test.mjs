@@ -73,8 +73,10 @@ test('CCTV enable retains a pre-await tracking snapshot when tracking clears dur
   assert.match(diagnostics[0][0], /before setEnabled await/);
   assert.match(diagnostics[1][0], /after setEnabled await/);
 
-  const uiSource = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-  assert.match(uiSource, /await runCctvLayerEnableTransition\(\{/);
+  // Batch 5 seam 3: the CCTV panel methods live in src/ui/cctvPanel.js;
+  // StyleManager keeps thin delegates.
+  const cctvPanelSource = readFileSync(new URL('./ui/cctvPanel.js', import.meta.url), 'utf8');
+  assert.match(cctvPanelSource, /await runCctvLayerEnableTransition\(\{/);
 });
 
 test('CCTV disable transition does not emit enable-ownership diagnostics', async () => {

@@ -67,8 +67,10 @@ import {
   activateCctvCameraFromWorldClick,
 } from '../cctvFocusRequest.js';
 
-const UI_SOURCE = fs.readFileSync(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui.js'),
+// Batch 5 seam 3: the CCTV panel methods live in src/ui/cctvPanel.js;
+// StyleManager keeps thin delegates.
+const CCTV_PANEL_SOURCE = fs.readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'cctvPanel.js'),
   'utf8',
 );
 
@@ -931,8 +933,8 @@ test('CCTV null-active coverage, auto-hop, cycling, and panel targets stay hones
     assert.equal(cctvCycleIndex(2, 1, records.length), 0);
     assert.equal(cctvCycleIndex(0, -1, records.length), records.length - 1);
 
-    const renderer = UI_SOURCE.match(/_renderCctvState\(state\) \{[\s\S]*?\n {2}\}\n/);
-    assert.ok(renderer, '_renderCctvState is missing');
+    const renderer = CCTV_PANEL_SOURCE.match(/function renderCctvState\(mgr, state\) \{[\s\S]*?\n\}\n/);
+    assert.ok(renderer, 'renderCctvState is missing');
     assert.match(renderer[0], /else if \(!activeId\)[\s\S]*?selectedIndex = -1/);
     assert.match(renderer[0], /_cctvFocusBtn\.disabled = !enabled \|\| cameras\.length === 0 \|\| !activeId/);
   } finally {
