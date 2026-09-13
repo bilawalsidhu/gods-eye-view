@@ -12,3 +12,4 @@ output/
 .gstack/
 3d-models/
 rust/firms-renderer/target/
+coverage/
