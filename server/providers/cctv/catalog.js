@@ -13,6 +13,7 @@ import {
   loadTxdotSourcesFromOpenData,
   loadTallinnSourcesFromCatalog,
   loadTarkteeSourcesFromDatex,
+  loadWarendorfSourcesFromCatalog,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -66,6 +67,11 @@ const LIVE_PACKS = [
     name: 'tarktee',
     enabled: () => envEnabled('CCTV_TARKTEE_ENABLED'),
     load: loadTarkteeSourcesFromDatex,
+  },
+  {
+    name: 'warendorf',
+    enabled: () => envEnabled('CCTV_WARENDORF_ENABLED'),
+    load: loadWarendorfSourcesFromCatalog,
   },
 ];
 /**

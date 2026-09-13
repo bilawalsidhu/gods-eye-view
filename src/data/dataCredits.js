@@ -218,6 +218,13 @@ export const DATA_CREDITS = [
       '<a href="https://tarktee.transpordiamet.ee/" target="_blank" rel="noopener">tarktee.transpordiamet.ee</a> (courtesy)',
   },
   {
+    key: 'warendorf-cctv',
+    html:
+      'Webcams (Warendorf): <a href="https://www.warendorf.de/" target="_blank" rel="noopener">Stadt Warendorf</a> and ' +
+      '<a href="https://www.kreis-warendorf.de/" target="_blank" rel="noopener">Kreis Warendorf</a> (courtesy); ' +
+      'camera poses derived from OpenStreetMap geometry, © OpenStreetMap contributors (ODbL)',
+  },
+  {
     key: 'telegeography',
     html:
       'Submarine cables: © TeleGeography — ' +

@@ -75,6 +75,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Add Estonia CCTV source packs: Tallinn intersection stills (`ristmikud.tallinn.ee`,
   curated catalog) and nationwide Transpordiamet / Tarktee road-weather cameras
   (DATEX2 locations + rotating JPEG URLs), with Tallinn city POIs and attribution.
+- Add a Warendorf (Germany) source pack: the Stadt Warendorf Marktplatz webcam and
+  the two Kreis Warendorf registration-office webcams, with curated poses.
 
 - Press backtick (`) to toggle a rendered-frame-rate readout beneath the logo.
   Typing fields retain the key; monitoring stops when hidden.

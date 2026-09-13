@@ -194,6 +194,13 @@ export const TARKTEE_ANCHORS = [
   { lat: 58.3859, lon: 24.4971 }, // Pärnu
   { lat: 59.3797, lon: 28.1791 }, // Narva
 ];
+/** Warendorf (Germany): three municipal webcams from a curated catalog file. */
+export const DEFAULT_WARENDORF_SOURCE_FILE =
+  'config/cctv_sources.warendorf.json';
+export const WARENDORF_IMAGE_ORIGINS = Object.freeze([
+  'http://webcam.warendorf.de/',
+  'https://www.kreis-warendorf.de/',
+]);
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
