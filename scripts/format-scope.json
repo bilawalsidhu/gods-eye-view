@@ -457,5 +457,6 @@
   "src/layers/cctv/health.js",
   "src/data/cctv.js",
   "src/data/cctvCatalogCap.test.mjs",
+  "src/data/cctvTxdotSource.test.mjs",
   "src/layers/cctv/source.test.mjs"
 ]

@@ -10,7 +10,7 @@ import {
   loadOntarioSourcesFromOpenData,
   loadFintrafficSourcesFromOpenData,
   loadDriveBcSourcesFromOpenData,
-  loadTxdotSanAntonioSources,
+  loadTxdotSourcesFromOpenData,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -53,7 +53,7 @@ const LIVE_PACKS = [
   {
     name: 'txdot',
     enabled: () => envEnabled('CCTV_TXDOT_ENABLED'),
-    load: loadTxdotSanAntonioSources,
+    load: loadTxdotSourcesFromOpenData,
   },
 ];
 /**

@@ -17,21 +17,90 @@ export const CCTV_MAX_SOURCES_CEILING = 5000;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 export const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
-/** TxDOT ITS / TransGuide — San Antonio district camera catalog. */
-export const TXDOT_SAT_CCTV_STATUS_URL =
-  'https://its.txdot.gov/its/DistrictIts/GetCctvStatusListByDistrict?districtCode=SAT';
-
-/** TxDOT individual CCTV snapshot endpoint. */
-export const TXDOT_CCTV_SNAPSHOT_URL =
-  'https://its.txdot.gov/its/DistrictIts/GetCctvSnapshotByIcdId';
-
-export const DEFAULT_TXDOT_SAT_MAX_SOURCES = 320;
-
-/** Downtown San Antonio anchor for source prioritization. */
-export const SAN_ANTONIO_CENTER = {
-  lat: 29.4241,
-  lon: -98.4936,
-};
+/** TxDOT ITS: one keyless JSON catalog per district (25 districts statewide). */
+export const TXDOT_ORIGIN = 'https://its.txdot.gov';
+export const TXDOT_CCTV_STATUS_URL = (district) =>
+  `${TXDOT_ORIGIN}/its/DistrictIts/GetCctvStatusListByDistrict?districtCode=${encodeURIComponent(district)}`;
+/** Per-camera frame. Returns JSON `{snippet:<base64 jpeg>}`, not an image body;
+ * media.js decodes it (fetchTxdotSnapshot) and only for this origin. */
+export const TXDOT_CCTV_SNAPSHOT_URL = `${TXDOT_ORIGIN}/its/DistrictIts/GetCctvSnapshotByIcdId`;
+/** Valid TxDOT district codes (the ITS map's own districtCodes list). */
+export const TXDOT_DISTRICTS = new Set([
+  'ABL',
+  'AMA',
+  'ATL',
+  'AUS',
+  'BMT',
+  'BWD',
+  'BRY',
+  'CHS',
+  'CRP',
+  'DAL',
+  'ELP',
+  'FTW',
+  'HOU',
+  'LRD',
+  'LBB',
+  'LFK',
+  'ODA',
+  'PAR',
+  'PHR',
+  'SJT',
+  'SAT',
+  'TYL',
+  'WAC',
+  'WFS',
+  'YKM',
+]);
+/** Districts fetched by default: Austin (the reference camera city) and San
+ * Antonio. A statewide default was rejected: per-pack prioritization is
+ * nearest-to-any-anchor, so Dallas's dense core would take most slots.
+ * CCTV_TXDOT_DISTRICTS opens up the rest ("AUS,SAT,HOU,DAL,FTW" for the five
+ * big metros, or any of the 25 codes). */
+export const DEFAULT_TXDOT_DISTRICTS = 'AUS,SAT';
+export const DEFAULT_TXDOT_MAX_SOURCES = 500;
+/** Prioritization anchors: downtown cores of the metro districts a user can
+ * select. Cameras rank by distance to the NEAREST anchor, so a widened
+ * CCTV_TXDOT_DISTRICTS still ranks sensibly instead of against Austin alone. */
+export const TXDOT_ANCHORS = [
+  { lat: 30.2672, lon: -97.7431 }, // Austin
+  { lat: 29.4241, lon: -98.4936 }, // San Antonio
+  { lat: 29.7604, lon: -95.3698 }, // Houston
+  { lat: 32.7767, lon: -96.797 }, // Dallas
+  { lat: 32.7555, lon: -97.3308 }, // Fort Worth
+];
+/** Ground-elevation priors in metres, by district. The TxDOT payload carries
+ * no elevation, and on a keyless (no-tileset) stack the client's ground snap
+ * never fires, so this prior is the only height a camera gets there. Texas
+ * spans sea level (Houston) to ~1,140 m (El Paso). */
+export const TXDOT_DISTRICT_ELEVATION_M = Object.freeze({
+  ABL: 520,
+  AMA: 1099,
+  ATL: 105,
+  AUS: 149,
+  BMT: 5,
+  BWD: 425,
+  BRY: 111,
+  CHS: 250,
+  CRP: 7,
+  DAL: 131,
+  ELP: 1140,
+  FTW: 199,
+  HOU: 15,
+  LRD: 132,
+  LBB: 992,
+  LFK: 91,
+  ODA: 890,
+  PAR: 185,
+  PHR: 30,
+  SJT: 585,
+  SAT: 198,
+  TYL: 165,
+  WAC: 143,
+  WFS: 289,
+  YKM: 70,
+});
+export const TXDOT_DEFAULT_ELEVATION_M = 150;
 export const CALTRANS_CCTV_URL = (district) =>
   `https://cwwp2.dot.ca.gov/data/d${district}/cctv/cctvStatusD${String(district).padStart(2, '0')}.json`;
 /** Districts fetched by default: SF Bay (4), LA (7), San Diego (11), Sacramento (3). */

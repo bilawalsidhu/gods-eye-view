@@ -32,6 +32,8 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
   'transport for london': 3 * 60 * 1000,
   caltrans: 3 * 60 * 1000,
   'ontario 511': 3 * 60 * 1000,
+  // TxDOT publishes roughly once a minute; 3 min matches the other highway packs.
+  txdot: 3 * 60 * 1000,
   // Digitraffic publishes a new weathercam frame on each station's
   // collectionInterval, 600 s for every station sampled; polling faster only
   // re-fetches the same JPEG.

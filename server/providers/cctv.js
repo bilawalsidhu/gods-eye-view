@@ -333,7 +333,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             : '');
 
         const upstreamImage =
-          source?.sourceKind === 'txdot-transguide'
+          source?.sourceKind === 'txdot-its'
             ? await fetchTxdotSnapshot(upstreamCandidate)
             : await fetchCctvImageFromUpstream(upstreamCandidate);
         if (upstreamImage?.ok) {

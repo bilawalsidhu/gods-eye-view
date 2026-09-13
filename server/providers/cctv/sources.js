@@ -24,10 +24,14 @@ import {
   DRIVEBC_IMAGE_URL,
   DEFAULT_DRIVEBC_MAX_SOURCES,
   DRIVEBC_ANCHORS,
-  TXDOT_SAT_CCTV_STATUS_URL,
+  TXDOT_CCTV_STATUS_URL,
   TXDOT_CCTV_SNAPSHOT_URL,
-  DEFAULT_TXDOT_SAT_MAX_SOURCES,
-  SAN_ANTONIO_CENTER,
+  TXDOT_DISTRICTS,
+  DEFAULT_TXDOT_DISTRICTS,
+  DEFAULT_TXDOT_MAX_SOURCES,
+  TXDOT_ANCHORS,
+  TXDOT_DISTRICT_ELEVATION_M,
+  TXDOT_DEFAULT_ELEVATION_M,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
 } from './constants.js';
 import {
@@ -784,136 +788,150 @@ export async function loadDriveBcSourcesFromOpenData() {
 }
 
 /**
- * Fetch TxDOT ITS / TransGuide CCTV cameras for the San Antonio district.
+ * Normalize one TxDOT district catalog into camera source objects. Split out
+ * from the fetch so the shape handling is unit-testable without a network.
  *
- * The status endpoint returns cameras grouped by roadway under
- * `roadwayCctvStatuses`. Only online cameras with available snapshots and
- * finite coordinates are exposed.
+ * The payload nests cameras under `roadwayCctvStatuses`, keyed by roadway.
+ * Only `Device Online` rows register: an offline TxDOT device keeps serving a
+ * stale frame that can be years old and would otherwise look live.
  *
- * Individual snapshots are fetched from GetCctvSnapshotByIcdId, which returns
- * JSON containing a base64 JPEG in `.snippet`; the CCTV media layer handles
- * decoding that response.
- *
- * @returns {Promise<Array<object>>} Normalized camera source objects.
+ * @param {object} payload - Parsed GetCctvStatusListByDistrict response.
+ * @param {string} district - TxDOT district code, e.g. 'AUS'.
+ * @returns {Array<object>} Normalized camera source objects.
  */
-export async function loadTxdotSanAntonioSources() {
-  const endpoint =
-    process.env.CCTV_TXDOT_SAT_STATUS_URL || TXDOT_SAT_CCTV_STATUS_URL;
+export function normalizeTxdotDistrictPayload(payload, district) {
+  const byRoadway = payload?.roadwayCctvStatuses;
+  if (!byRoadway || typeof byRoadway !== 'object') return [];
+  const code = String(district || '').toUpperCase();
+  const groundElevationM =
+    TXDOT_DISTRICT_ELEVATION_M[code] ?? TXDOT_DEFAULT_ELEVATION_M;
+  const cameras = [];
+  const seen = new Set();
 
-  try {
-    const resp = await fetch(endpoint, {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': 'gods-eye-view-cctv-proxy/1.0',
-      },
-      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
-    });
-
-    if (!resp.ok) {
-      console.warn('[CCTV] TxDOT SAT source download failed:', resp.status);
-      return [];
-    }
-
-    const payload = await resp.json();
-    const roadwayGroups = payload?.roadwayCctvStatuses;
-
-    if (!roadwayGroups || typeof roadwayGroups !== 'object') return [];
-
-    const rows = Object.values(roadwayGroups).flatMap((group) =>
-      Array.isArray(group) ? group : [],
-    );
-
-    const cameras = [];
-
+  for (const rows of Object.values(byRoadway)) {
+    if (!Array.isArray(rows)) continue;
     for (const row of rows) {
-      const icdId = String(row?.icd_Id || row?.name || '').trim();
-      if (!icdId) continue;
-
-      if (row?.hasSnapshot !== true) continue;
-
-      const status = String(row?.statusDescription || '').trim();
-      if (status && status !== 'Device Online') continue;
-
-      const netId = String(row?.netId || '')
-        .trim()
-        .toUpperCase();
-      if (netId && netId !== 'SAT') continue;
-
-      const lat = toFiniteNumber(row?.latitude);
-      const lon = toFiniteNumber(row?.longitude);
-
+      if (String(row?.statusDescription || '') !== 'Device Online') continue;
+      if (row?.hasSnapshot === false) continue;
+      // Coordinates must be present as numbers: Number(null) and Number('')
+      // are both 0, which would silently park a camera on null island.
+      const lat = typeof row?.latitude === 'number' ? row.latitude : NaN;
+      const lon = typeof row?.longitude === 'number' ? row.longitude : NaN;
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      if (lat === 0 && lon === 0) continue;
 
-      const direction = row?.dirDescription || row?.equipLoc?.direction || '';
+      // icd_Id is the device key the snapshot endpoint takes and is unique
+      // within a district. An interchange camera appears under both of its
+      // roadways, so dedupe on it.
+      const icdId = String(row?.icd_Id || '').trim();
+      if (!icdId || seen.has(icdId)) continue;
+      seen.add(icdId);
 
-      const heading = directionToHeading(direction, true);
-
-      const slug = icdId
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-
-      const cameraId = `txdot-sat-${slug}-` + hashSeed(icdId).toString(16);
-
+      const name = String(row?.name || icdId).trim();
+      // Heading comes from an explicit travel token in the NAME ("US-290 EB"),
+      // parsed in strict mode: bare cardinals are refused because Texas route
+      // names are full of them ("N Lamar", "West Ave"). Deliberately NOT from
+      // row.dirDescription / equipLoc.direction: that is the ROADWAY's
+      // canonical direction, not the camera's facing (it reads "North" for
+      // most Austin rows, including every east-west highway).
+      const heading = directionToHeading(name, false);
+      const hasHeading = Number.isFinite(heading);
+      const cameraId = `txdot-${code.toLowerCase()}-${hashSeed(icdId).toString(36)}`;
       const snapshot = new URL(TXDOT_CCTV_SNAPSHOT_URL);
       snapshot.searchParams.set('icdId', icdId);
-      snapshot.searchParams.set('districtCode', 'SAT');
+      snapshot.searchParams.set('districtCode', code);
 
       cameras.push({
         id: cameraId,
-        name: icdId,
-        city: 'San Antonio',
-        cityId: 'san-antonio',
-        provider: 'TxDOT TransGuide',
+        name,
+        city: String(row?.equipLoc?.roadway || code),
+        cityId: `tx-${code.toLowerCase()}`,
+        provider: 'TxDOT',
         lat,
         lon,
-
-        headingDeg: Number.isFinite(heading)
-          ? heading
-          : fallbackHeadingFromId(cameraId),
-
-        headingConfidence: Number.isFinite(heading) ? 'high' : 'low',
-
-        pitchDeg: Number.isFinite(heading) ? -24 : -18,
-        fovDeg: Number.isFinite(heading) ? 56 : 44,
-        rangeM: Number.isFinite(heading) ? 210 : 145,
-        mountHeightM: 10,
-        groundElevationM: 200,
-
+        headingDeg: hasHeading ? heading : fallbackHeadingFromId(cameraId),
+        headingConfidence: hasHeading ? 'high' : 'low',
+        // Same two pose personalities as the other packs: raw priors the
+        // client's ground snap and manual calibration refine.
+        pitchDeg: hasHeading ? -24 : -18,
+        fovDeg: hasHeading ? 56 : 44,
+        rangeM: hasHeading ? 210 : 145,
+        // TxDOT mounts run tall on highway poles and mast arms.
+        mountHeightM: hasHeading ? 12 : 10,
+        groundElevationM,
         feedType: 'image',
-
-        // TxDOT returns JSON with the JPEG encoded in payload.snippet.
+        // JSON carrying a base64 JPEG; media.js decodes it for this origin only.
         url: snapshot.toString(),
         snapshotUrl: snapshot.toString(),
-
-        sourceKind: 'txdot-transguide',
-        license: 'TxDOT ITS / TransGuide traffic camera',
+        sourceKind: 'txdot-its',
+        license: 'Public TxDOT traffic camera data',
       });
     }
-
-    const maxRaw = Number(
-      process.env.CCTV_TXDOT_SAT_MAX_SOURCES || DEFAULT_TXDOT_SAT_MAX_SOURCES,
-    );
-
-    const maxCount = Number.isFinite(maxRaw)
-      ? Math.max(8, Math.min(400, Math.floor(maxRaw)))
-      : DEFAULT_TXDOT_SAT_MAX_SOURCES;
-
-    const prioritized = prioritizeSources(cameras, maxCount, [
-      SAN_ANTONIO_CENTER,
-    ]);
-
-    console.log(
-      `[CCTV] Loaded TxDOT San Antonio camera sources: ${cameras.length} ` +
-        `(using nearest ${prioritized.length})`,
-    );
-
-    return prioritized;
-  } catch (error) {
-    console.warn(
-      '[CCTV] TxDOT SAT source download error:',
-      error?.message || error,
-    );
-    return [];
   }
+  return cameras;
+}
+
+/**
+ * Fetch TxDOT ITS highway cameras (Texas), keyless. Districts come from
+ * CCTV_TXDOT_DISTRICTS (comma-separated codes; empty string disables the
+ * pack). One official JSON catalog per district, identical schema statewide;
+ * districts fetch in parallel and fail independently.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadTxdotSourcesFromOpenData() {
+  const districtsRaw =
+    process.env.CCTV_TXDOT_DISTRICTS ?? DEFAULT_TXDOT_DISTRICTS;
+  const districts = [
+    ...new Set(
+      String(districtsRaw)
+        .split(',')
+        .map((token) => token.trim().toUpperCase())
+        .filter((code) => TXDOT_DISTRICTS.has(code)),
+    ),
+  ];
+  if (!districts.length) return [];
+
+  const settled = await Promise.allSettled(
+    districts.map(async (district) => {
+      const resp = await fetch(TXDOT_CCTV_STATUS_URL(district), {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'gods-eye-view-cctv-proxy/1.0',
+        },
+        signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+      });
+      if (!resp.ok) throw new Error(`${district} HTTP ${resp.status}`);
+      return { district, payload: await resp.json() };
+    }),
+  );
+
+  const cameras = [];
+  for (const result of settled) {
+    if (result.status !== 'fulfilled') {
+      console.warn(
+        '[CCTV] TxDOT district fetch failed:',
+        result.reason?.message || result.reason,
+      );
+      continue;
+    }
+    cameras.push(
+      ...normalizeTxdotDistrictPayload(
+        result.value.payload,
+        result.value.district,
+      ),
+    );
+  }
+
+  const maxRaw = Number(
+    process.env.CCTV_TXDOT_MAX_SOURCES || DEFAULT_TXDOT_MAX_SOURCES,
+  );
+  const maxCount = Number.isFinite(maxRaw)
+    ? Math.max(8, Math.min(2000, Math.floor(maxRaw)))
+    : DEFAULT_TXDOT_MAX_SOURCES;
+  const prioritized = prioritizeSources(cameras, maxCount, TXDOT_ANCHORS);
+  console.log(
+    `[CCTV] Loaded TxDOT camera sources: ${cameras.length} online across ${districts.join(',')} (using nearest ${prioritized.length})`,
+  );
+  return prioritized;
 }

@@ -68,6 +68,10 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   nearest Vancouver and Victoria by default, with Open Government Licence –
   British Columbia attribution. `CCTV_DRIVEBC_MAX_SOURCES` sets the cap and
   `CCTV_DRIVEBC_ENABLED=0` turns the pack off.
+- Add TxDOT highway cameras for Texas as a keyless CCTV pack: the Austin and
+  San Antonio districts by default (`CCTV_TXDOT_DISTRICTS` selects any of the
+  25), only cameras reporting Device Online, snapshots decoded from TxDOT's
+  JSON-wrapped JPEG for the official origin only.
 
 - Press backtick (`) to toggle a rendered-frame-rate readout beneath the logo.
   Typing fields retain the key; monitoring stops when hidden.

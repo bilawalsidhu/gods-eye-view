@@ -123,10 +123,10 @@ export const DATA_CREDITS = [
       '<a href="https://data.austintexas.gov" target="_blank" rel="noopener">data.austintexas.gov</a>',
   },
   {
-    key: 'txdot-transguide-cctv',
+    key: 'txdot-cctv',
     html:
-      'CCTV cameras &amp; frames (San Antonio): Texas Department of Transportation — ' +
-      '<a href="https://its.txdot.gov/its/District/SAT/cameras" target="_blank" rel="noopener">TxDOT ITS / TransGuide</a>',
+      'CCTV cameras &amp; frames (Texas): ' +
+      '<a href="https://its.txdot.gov/" target="_blank" rel="noopener">Texas Department of Transportation</a> (courtesy)',
   },
   {
     key: 'caltrans-cctv',
