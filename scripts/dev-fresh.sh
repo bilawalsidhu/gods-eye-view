@@ -21,7 +21,9 @@ CCTV_CALTRANS_DISTRICTS="${CCTV_CALTRANS_DISTRICTS-4,7,11,3}"
 CCTV_CALTRANS_MAX_SOURCES="${CCTV_CALTRANS_MAX_SOURCES:-300}"
 CCTV_TFL_ENABLED="${CCTV_TFL_ENABLED:-1}"
 CCTV_TFL_MAX_SOURCES="${CCTV_TFL_MAX_SOURCES:-250}"
-CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-900}"
+# Holds all four packs at their own caps (250+300+250+300) plus file/env room;
+# the merge truncates by position, so a low global cap starves the last pack.
+CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-1200}"
 
 # Capture which provider credentials genuinely came from the parent shell
 # before this launcher resolves dotenv and Keychain fallbacks. Only names are

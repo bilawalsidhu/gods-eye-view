@@ -4,8 +4,13 @@ export const DEFAULT_AUSTIN_ROWS_URL =
   'https://data.austintexas.gov/api/views/b4k4-adkb/rows.json?accessType=DOWNLOAD';
 /** Default cap on Austin cameras after distance-based prioritization. */
 export const DEFAULT_AUSTIN_MAX_SOURCES = 250;
-/** Global cap on total CCTV sources served by the proxy. */
-export const DEFAULT_CCTV_MAX_SOURCES = 900;
+/** Global cap on total CCTV sources served by the proxy. Sized to hold every
+ * pack at its own default cap at once (Austin 250 + Caltrans 300 + TfL 250 +
+ * Fintraffic 300 = 1,100) plus headroom for file/env entries, because the merge
+ * truncates by position: whatever the earlier packs already fill, a later pack
+ * loses. Equals the hard bound getCctvSources already clamps to, which is also
+ * what the health map is sized for (cctv.js HEALTH_MAX_ENTRIES). */
+export const DEFAULT_CCTV_MAX_SOURCES = 1200;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 export const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
