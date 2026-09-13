@@ -1,15 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import createViteConfig, {
-  adsbLolFallbackAnchor,
-  coalesceProxyRequest,
-  launchLibraryRequestHeaders,
-  LL2_CACHE_TTL_MS,
-  readResponseJsonCapped,
-  regionalBriefHasAnySource,
-  validMilitaryInstallationBox,
-  validRegionalPoint,
-} from '../../vite.config.js';
+import createViteConfig from '../../vite.config.js';
+// The extracted proxy modules are the true homes of these helpers now.
+import { adsbLolFallbackAnchor } from '../../vite/proxies/opensky.js';
+import { coalesceProxyRequest, readResponseJsonCapped } from '../../vite/proxies/_shared.js';
+import { launchLibraryRequestHeaders, LL2_CACHE_TTL_MS } from '../../vite/proxies/launches.js';
+import { regionalBriefHasAnySource, validRegionalPoint } from '../../vite/proxies/regional.js';
+import { validMilitaryInstallationBox } from '../../src/data/overpassPolicy.js';
 
 test('regional proxy rejects absent and blank coordinates instead of coercing them to zero', () => {
   assert.equal(validRegionalPoint(new URLSearchParams('longitude=12.5')), null);

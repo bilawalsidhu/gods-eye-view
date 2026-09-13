@@ -8,11 +8,13 @@
 // Run with: npm test   (node --test)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+// simplifyOverpassPayloadBody is pure policy shared with the Pages Function;
+// the preflight gate lives with the dev-side overpass proxy module.
+import { simplifyOverpassPayloadBody } from '../../src/data/overpassPolicy.js';
 import {
-  simplifyOverpassPayloadBody,
   isOverpassBoundaryQuery,
   resolveOverpassPreflight,
-} from '../../vite.config.js';
+} from '../../vite/proxies/overpass.js';
 
 test('preflight checks memory, in-flight, then disk before consuming limiter quota', async () => {
   const key = 'normalized query';

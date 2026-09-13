@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createRadioProxyMiddleware } from '../../vite.config.js';
+import { createRadioProxyMiddleware } from '../../vite/proxies/radio.js';
 import {
   isPublicRadioAddress,
   normalizeRadioBrowserStation,

@@ -58,7 +58,7 @@ test('registry exposes exactly the two tiers the UI offers', () => {
   assert.equal(DEFAULT_VOICE_TIER, 'standard');
 });
 
-test('standard tier still points at the model vite.config.js defaults to', () => {
+test('standard tier still points at the model the realtime session defaults to', () => {
   // If this fails, the client cost estimate is being computed against a
   // different model than the session actually runs on.
   assert.equal(VOICE_MODELS.standard.id, 'gpt-realtime-2');

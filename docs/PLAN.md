@@ -732,11 +732,22 @@ ordered by value-per-risk; each is self-contained and committable.
 
 ### Batch 4 — Architecture debt (P1, unblocks everything else)
 
-- [ ] Extract `vite.config.js` middlewares into per-endpoint modules
-      (issue #41; 5,957 lines today). Prerequisite for testing the dev
-      side of every parity fix and for the security-gate items. Shared
-      worker-safe logic goes in `functions/_lib.js`-style modules both
-      runtimes import.
+- [x] Extract `vite.config.js` middlewares into per-endpoint modules
+      (issue #41). DONE 2026-09-13: the config is now a ~290-line assembly
+      and each middleware lives in `vite/proxies/<endpoint>.js` (radio,
+      celestrak, launches, tomtom, firms, terrain-heights, openzenith,
+      adsbdb, overpass, opensky, adsblol, track-backfill, gbfs, cctv,
+      ais-live, realtime, google-places, military-installations, regional)
+      with shared infrastructure (rate limiters, same-site gates, capped
+      readers, OpenSky OAuth) in `vite/proxies/_shared.js`. Bodies moved
+      verbatim (line-integrity verified against the original); declarations
+      are exported so unit tests import the true homes
+      (`radioProxy/overpassProxy/installationProxy/regionalProxy.test.mjs`
+      repointed; the `export {…} from overpassPolicy` re-export shim in the
+      old config is gone). Prerequisite for testing the dev side of every
+      parity fix is now in place: the four proxy suites run green against
+      the modules directly (47/47), and a live smoke of all 20 dev proxies
+      (keyless contracts + real upstream data) passed on the new assembly.
 - [ ] Consolidate `apiEndpoints.js` (31 bypassers).
 - [ ] One `createOverlayEntry` helper for the 13 factory clones.
 - [ ] Logger migration (see new findings) after Batch 1 lands.

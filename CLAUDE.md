@@ -130,9 +130,9 @@ QA scripts under `scripts/qa-*.mjs` use Puppeteer for visual/behavioral testing 
 
 ## API Proxy
 
-`vite.config.js` acts as a server-side proxy for external APIs (OpenSky, CelesTrak, Overpass, GBFS, CCTV streams, AISStream WebSocket, TomTom, NASA FIRMS, Radio Browser, terrain heights). This keeps credentials server-side and adds caching/rate-limiting.
+`vite.config.js` is a slim assembly; each dev-server proxy middleware lives in its own module under `vite/proxies/` (radio, celestrak, launches, tomtom, firms, terrain-heights, openzenith, adsbdb, overpass, opensky, adsblol, track-backfill, gbfs, cctv, ais-live, realtime, google-places, military-installations, regional — shared infrastructure in `_shared.js`). This keeps credentials server-side and adds caching/rate-limiting; unit tests import the per-endpoint modules directly (`src/data/*Proxy.test.mjs`).
 
-**Dev/prod parity**: the keyless middlewares (celestrak, launches, adsbdb, opensky-track, adsblol mil/trace, cctv, openzenith, realtime token/debug-log, hud-summary) exist twice by design — as vite dev middlewares (vite.config.js, Node) and as Cloudflare Pages Functions (`functions/api/**`, workerd). Shared logic lives in worker-safe modules (`functions/_lib.js`, `functions/_upstream.js`, `functions/api/openzenith/_handler.js`, `src/data/cctvSources.js`) imported by BOTH runtimes; workerd has no `node:*`/`fs`/`Buffer`/`process`, so shared code sticks to web primitives (`Uint8Array`, `Request`/`Response`, `URLSearchParams`).
+**Dev/prod parity**: the keyless middlewares (celestrak, launches, adsbdb, opensky-track, adsblol mil/trace, cctv, openzenith, realtime token/debug-log, hud-summary) exist twice by design — as vite dev middlewares (`vite/proxies/*`, Node) and as Cloudflare Pages Functions (`functions/api/**`, workerd). Shared logic lives in worker-safe modules (`functions/_lib.js`, `functions/_upstream.js`, `functions/api/openzenith/_handler.js`, `src/data/cctvSources.js`) imported by BOTH runtimes; workerd has no `node:*`/`fs`/`Buffer`/`process`, so shared code sticks to web primitives (`Uint8Array`, `Request`/`Response`, `URLSearchParams`).
 
 ## Global Exposed API
 

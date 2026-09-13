@@ -14,17 +14,21 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+// Pure bbox/TTL policy is shared with the Pages Function; the disk-cache
+// lifecycle lives with the dev-side military-installations proxy module.
 import {
   militaryInstallationCacheKey,
+  quantizeMilitaryInstallationBox,
+  validMilitaryInstallationBox,
+} from '../../src/data/overpassPolicy.js';
+import {
   militaryInstallationDiskFresh,
   militaryInstallationDiskPath,
   migrateMilitaryInstallationEntry,
-  quantizeMilitaryInstallationBox,
   readMilitaryInstallationDisk,
   resolveMilitaryInstallationTier,
-  validMilitaryInstallationBox,
   writeMilitaryInstallationDisk,
-} from '../../vite.config.js';
+} from '../../vite/proxies/military-installations.js';
 
 const DAY_MS = 86_400_000;
 const TTL_MS = 30 * DAY_MS;
