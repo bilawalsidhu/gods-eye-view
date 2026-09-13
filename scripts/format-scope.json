@@ -248,5 +248,11 @@
   "src/ui/styles/cockpit.css",
   "src/ui/styles/command-dock-compact.css",
   "src/app/stateChannel.js",
-  "src/app/stateChannel.test.mjs"
+  "src/app/stateChannel.test.mjs",
+  "src/sources/live/aircraft.js",
+  "src/sources/live/contract.js",
+  "src/sources/live/contract.test.mjs",
+  "src/sources/live/index.js",
+  "src/sources/live/standalone.js",
+  "src/sources/live/vessels.js"
 ]

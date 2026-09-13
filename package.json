@@ -141,6 +141,7 @@
     "./ui/scenes": "./src/ui/scenes.js",
     "./ui/shell": "./src/ui/applicationShell.js",
     "./ui/styles": "./src/ui/styles.js",
-    "./scenes": "./src/scenes/director.js"
+    "./scenes": "./src/scenes/director.js",
+    "./sources/live": "./src/sources/live/index.js"
   }
 }
