@@ -2,6 +2,7 @@ import { DataLayerManager } from '../data/manager.js';
 import flightsLayer from '../data/flights.js';
 import militaryFlightsLayer from '../data/militaryFlights.js';
 import earthquakesLayer from '../data/earthquakes.js';
+import tectonicPlatesLayer from '../data/tectonicPlates.js';
 import satellitesLayer from '../data/satellites.js';
 import rocketLaunchesLayer from '../data/rocketLaunches.js';
 import trafficLayer from '../data/traffic.js';
@@ -13,6 +14,7 @@ import militaryInstallationsLayer from '../data/militaryInstallations.js';
 import militaryAwarenessLayer from '../data/militaryAwareness.js';
 import localDataLayers from '../data/localLayers.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
+
 
 /** Register the standalone layer catalog before allowing state restoration. */
 export function createStandaloneData({
@@ -35,6 +37,7 @@ export function createStandaloneData({
   dataManager.register(flightsLayer);
   dataManager.register(militaryFlightsLayer);
   dataManager.register(earthquakesLayer);
+  dataManager.register(tectonicPlatesLayer);
   dataManager.register(satellitesLayer);
   dataManager.register(rocketLaunchesLayer);
   rocketLaunchesLayer.attachDataManager(dataManager);
