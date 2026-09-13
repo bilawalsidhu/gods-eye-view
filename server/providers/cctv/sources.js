@@ -63,6 +63,10 @@ import {
   isLikelyFinlandCoordinate,
   fintrafficCameraName,
   hashSeed,
+  isPlausibleLatLon,
+  isLikelyBcCoordinate,
+  isLikelyTexasCoordinate,
+  isLikelyNswCoordinate,
   rowArrayToObject,
   prioritizeSources,
 } from './normalize.js';
@@ -738,7 +742,7 @@ export async function loadDriveBcSourcesFromOpenData() {
       const [lon, lat] = Array.isArray(row.location?.coordinates)
         ? row.location.coordinates
         : [];
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      if (!isLikelyBcCoordinate(lat, lon)) continue;
 
       const cameraId = `drivebc-${row.id}`;
       const heading =
@@ -835,8 +839,7 @@ export function normalizeTxdotDistrictPayload(payload, district) {
       // are both 0, which would silently park a camera on null island.
       const lat = typeof row?.latitude === 'number' ? row.latitude : NaN;
       const lon = typeof row?.longitude === 'number' ? row.longitude : NaN;
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-      if (lat === 0 && lon === 0) continue;
+      if (!isLikelyTexasCoordinate(lat, lon)) continue;
 
       // icd_Id is the device key the snapshot endpoint takes and is unique
       // within a district. An interchange camera appears under both of its
@@ -854,7 +857,15 @@ export function normalizeTxdotDistrictPayload(payload, district) {
       // most Austin rows, including every east-west highway).
       const heading = directionToHeading(name, false);
       const hasHeading = Number.isFinite(heading);
-      const cameraId = `txdot-${code.toLowerCase()}-${hashSeed(icdId).toString(36)}`;
+      // Readable slug of the device key plus a hash suffix: the slug keeps
+      // ids distinct for distinct keys (a bare 32-bit hash can collide), the
+      // hash keeps them distinct when two keys slug identically.
+      const slug = icdId
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 48);
+      const cameraId = `txdot-${code.toLowerCase()}-${slug || 'cam'}-${hashSeed(icdId).toString(36)}`;
       const snapshot = new URL(TXDOT_CCTV_SNAPSHOT_URL);
       snapshot.searchParams.set('icdId', icdId);
       snapshot.searchParams.set('districtCode', code);
@@ -990,15 +1001,23 @@ export function loadTallinnSourcesFromCatalog({
   const cameras = [];
   for (const item of rows) {
     if (!item || typeof item !== 'object') continue;
-    const cameraId = String(item.id || '').trim();
+    const cameraId =
+      typeof item.id === 'string' || typeof item.id === 'number'
+        ? String(item.id).trim()
+        : '';
     if (!cameraId) continue;
-    const lat = toFiniteNumber(item.lat);
-    const lon = toFiniteNumber(item.lon);
+    const lat = typeof item.lat === 'number' ? item.lat : NaN;
+    const lon = typeof item.lon === 'number' ? item.lon : NaN;
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
     // Rough Estonia/Tallinn metro sanity (allows nearby suburbs already in the pack).
     if (lat < 59.2 || lat > 59.7 || lon < 24.3 || lon > 25.4) continue;
 
-    const imageUrl = String(item.url || item.snapshotUrl || '').trim();
+    const imageUrl =
+      typeof item.url === 'string'
+        ? item.url.trim()
+        : typeof item.snapshotUrl === 'string'
+          ? item.snapshotUrl.trim()
+          : '';
     if (!imageUrl.startsWith(TALLINN_IMAGE_ORIGIN)) continue;
 
     const extractedHeading = toFiniteNumber(item.headingDeg, NaN);
@@ -1239,13 +1258,18 @@ export function loadWarendorfSourcesFromCatalog({
   const cameras = [];
   for (const item of rows) {
     if (!item || typeof item !== 'object') continue;
-    const id = String(item.id || '').trim();
-    const url = String(item.url || item.snapshotUrl || '').trim();
+    const id = typeof item.id === 'string' ? item.id.trim() : '';
+    const url =
+      typeof item.url === 'string'
+        ? item.url.trim()
+        : typeof item.snapshotUrl === 'string'
+          ? item.snapshotUrl.trim()
+          : '';
     if (!id || !WARENDORF_IMAGE_ORIGINS.some((o) => url.startsWith(o)))
       continue;
-    const lat = toFiniteNumber(item.lat);
-    const lon = toFiniteNumber(item.lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    const lat = typeof item.lat === 'number' ? item.lat : NaN;
+    const lon = typeof item.lon === 'number' ? item.lon : NaN;
+    if (!isPlausibleLatLon(lat, lon)) continue;
     cameras.push({
       ...item,
       id,
@@ -1290,9 +1314,11 @@ export function nswCameraToSource(feature) {
   const rawId = String(feature?.id || '').trim();
   if (!rawId) return null;
   const coords = feature?.geometry?.coordinates;
-  const lon = toFiniteNumber(coords?.[0]);
-  const lat = toFiniteNumber(coords?.[1]);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  // Numbers only: Number(null) and Number('') are 0, which would park a
+  // camera on the equator.
+  const lon = typeof coords?.[0] === 'number' ? coords[0] : NaN;
+  const lat = typeof coords?.[1] === 'number' ? coords[1] : NaN;
+  if (!isLikelyNswCoordinate(lat, lon)) return null;
   const props = feature?.properties || {};
   const url = String(props.href || '').trim();
   if (!url.startsWith(NSW_IMAGE_ORIGIN)) return null;

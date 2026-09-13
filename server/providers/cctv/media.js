@@ -248,68 +248,122 @@ export async function fetchCctvMediaUpstream(
  */
 export async function fetchTxdotSnapshot(
   url,
-  { fetchImpl = fetch, timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS } = {},
+  {
+    fetchImpl = fetch,
+    timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS,
+    maxBytes = CCTV_FRAME_MAX_BODY_BYTES,
+  } = {},
 ) {
   if (!url) return null;
-
   let parsed;
   try {
     parsed = new URL(url);
   } catch {
     return null;
   }
-
   if (
     parsed.origin !== 'https://its.txdot.gov' ||
     parsed.pathname !== '/its/DistrictIts/GetCctvSnapshotByIcdId'
   ) {
     return null;
   }
-
+  // Base64 inflates by 4/3; the JSON envelope adds a few bytes of framing.
+  const maxEnvelopeBytes = Math.ceil((maxBytes * 4) / 3) + 4096;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
   try {
+    // The snapshot endpoint answers directly; a redirect is not followed, so
+    // the origin/path pin above holds for the request that is actually made.
     const upstream = await fetchImpl(parsed.toString(), {
       headers: {
         Accept: 'application/json',
         'User-Agent': 'gods-eye-view-cctv-proxy/1.0',
       },
       signal: controller.signal,
+      redirect: 'manual',
     });
-
     if (!upstream.ok) return null;
-
-    const payload = await upstream.json();
-
+    const envelope = await readCappedResponseBytes(upstream, maxEnvelopeBytes);
+    if (!envelope) return null;
+    let payload;
+    try {
+      payload = JSON.parse(envelope.toString('utf8'));
+    } catch {
+      return null;
+    }
     let snippet =
       typeof payload?.snippet === 'string' ? payload.snippet.trim() : '';
-
     if (!snippet) return null;
-
     snippet = snippet.replace(/^data:image\/jpeg;base64,/i, '');
-
+    // Strict base64 only: Buffer.from() silently skips junk, which would let a
+    // non-image body decode into "something".
+    if (
+      snippet.length > maxEnvelopeBytes ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(snippet)
+    ) {
+      return null;
+    }
     const body = Buffer.from(snippet, 'base64');
-
-    if (body.length < 4 || body.length > CCTV_FRAME_MAX_BODY_BYTES) {
-      return null;
-    }
-
-    if (body[0] !== 0xff || body[1] !== 0xd8 || body[2] !== 0xff) {
-      return null;
-    }
-
-    return {
-      ok: true,
-      body,
-      contentType: 'image/jpeg',
-    };
+    if (body.length < 4 || body.length > maxBytes) return null;
+    if (body[0] !== 0xff || body[1] !== 0xd8 || body[2] !== 0xff) return null;
+    return { ok: true, body, contentType: 'image/jpeg' };
   } catch {
     return null;
   } finally {
     clearTimeout(timeoutId);
     controller.abort();
   }
+}
+
+/** Redirect hops the frame path will follow, and only within the same host. */
+const MAX_SAME_HOST_REDIRECTS = 2;
+
+/**
+ * Fetch a registered frame URL following redirects ONLY within the original
+ * hostname (at most MAX_SAME_HOST_REDIRECTS hops). Default redirect-following
+ * would let an upstream steer a host-pinned request, and its host-specific
+ * headers, to any origin.
+ *
+ * @param {string} url
+ * @param {object} init - fetch init (headers, signal).
+ * @param {typeof fetch} fetchImpl
+ * @returns {Promise<Response|null>} Final response, or null on an off-host or
+ *   over-long redirect chain.
+ */
+export async function fetchWithinHost(url, init, fetchImpl = fetch) {
+  let current;
+  try {
+    current = new URL(url);
+  } catch {
+    return null;
+  }
+  const host = current.hostname;
+  for (let hop = 0; hop <= MAX_SAME_HOST_REDIRECTS; hop++) {
+    const upstream = await fetchImpl(current.toString(), {
+      ...init,
+      redirect: 'manual',
+    });
+    // Anything that is not a 3xx (including a test double with no status) is
+    // the final answer.
+    const status = Number(upstream?.status);
+    if (!(status >= 300 && status < 400)) return upstream;
+    const location = upstream.headers.get('location');
+    try {
+      await upstream.body?.cancel();
+    } catch {
+      /* no-op */
+    }
+    if (!location || hop === MAX_SAME_HOST_REDIRECTS) return null;
+    let next;
+    try {
+      next = new URL(location, current);
+    } catch {
+      return null;
+    }
+    if (next.hostname !== host || !/^https?:$/.test(next.protocol)) return null;
+    current = next;
+  }
+  return null;
 }
 
 /**
@@ -369,10 +423,15 @@ export async function fetchCctvImageFromUpstream(
     );
   }, timeoutMs);
   try {
-    const upstream = await fetchImpl(url, {
-      headers: { 'User-Agent': cctvUpstreamUserAgent(url) },
-      signal: controller.signal,
-    });
+    const upstream = await fetchWithinHost(
+      url,
+      {
+        headers: { 'User-Agent': cctvUpstreamUserAgent(url) },
+        signal: controller.signal,
+      },
+      fetchImpl,
+    );
+    if (!upstream) return null;
     const contentType = upstream.headers.get('content-type') || '';
     if (!upstream.ok || !contentType.startsWith('image/')) {
       controller.abort();

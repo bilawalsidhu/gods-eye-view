@@ -69,6 +69,19 @@ test('TxDOT catalog keeps only online cameras with finite coordinates', () => {
     cameras[0].url,
     'https://its.txdot.gov/its/DistrictIts/GetCctvSnapshotByIcdId?icdId=a&districtCode=AUS',
   );
+  assert.match(cameras[0].id, /^txdot-aus-a-[0-9a-z]+$/);
+});
+
+test('TxDOT ids stay distinct for distinct device keys even when hashes collide', () => {
+  // These two keys share a 32-bit FNV hash; the slug keeps the ids apart.
+  const [a, b] = normalizeTxdotDistrictPayload(
+    districtPayload([
+      cameraRow({ icd_Id: 'costarring', name: 'costarring' }),
+      cameraRow({ icd_Id: 'liquid', name: 'liquid' }),
+    ]),
+    'AUS',
+  );
+  assert.notEqual(a.id, b.id);
 });
 
 test('TxDOT catalog dedupes a camera listed under two roadways', () => {
@@ -201,10 +214,52 @@ test('TxDOT snapshot decodes JSON only from the official origin and only as JPEG
   assert.equal(frame?.contentType, 'image/jpeg');
   assert.deepEqual(frame?.body, JPEG_BYTES);
 
+  // Off-origin with the right path, and right origin with the wrong path,
+  // are each refused on their own.
+  for (const bad of [
+    'https://evil.example/its/DistrictIts/GetCctvSnapshotByIcdId?icdId=x',
+    'https://its.txdot.gov/its/DistrictIts/Other?icdId=x',
+  ]) {
+    assert.equal(
+      await fetchTxdotSnapshot(bad, {
+        timeoutMs: 100,
+        fetchImpl: async () => jsonResponse({ snippet: JPEG_B64 }),
+      }),
+      null,
+      bad,
+    );
+  }
+  // A redirect is never followed, so the pin holds for the request made.
+  let calls = 0;
   assert.equal(
-    await fetchTxdotSnapshot('https://evil.example/frame.json', {
+    await fetchTxdotSnapshot(official, {
       timeoutMs: 100,
-      fetchImpl: async () => jsonResponse({ snippet: JPEG_B64 }),
+      fetchImpl: async (_url, init) => {
+        calls += 1;
+        assert.equal(init.redirect, 'manual');
+        return new Response(null, {
+          status: 302,
+          headers: { location: 'https://evil.example/x.json' },
+        });
+      },
+    }),
+    null,
+  );
+  assert.equal(calls, 1);
+  // Junk base64 and oversize bodies are refused before decoding.
+  assert.equal(
+    await fetchTxdotSnapshot(official, {
+      timeoutMs: 100,
+      fetchImpl: async () => jsonResponse({ snippet: '/9!@#j/4AA=' }),
+    }),
+    null,
+  );
+  assert.equal(
+    await fetchTxdotSnapshot(official, {
+      timeoutMs: 100,
+      maxBytes: 8,
+      fetchImpl: async () =>
+        jsonResponse({ snippet: Buffer.alloc(64, 0xff).toString('base64') }),
     }),
     null,
   );

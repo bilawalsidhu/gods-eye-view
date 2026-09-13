@@ -128,3 +128,49 @@ test('the browser User-Agent applies to the NSW image host only', async () => {
   );
   assert.deepEqual(seen, ['gods-eye-view-cctv-proxy/1.0']);
 });
+
+test('the frame path follows redirects within the host only', async () => {
+  const jpeg = () =>
+    new Response(Buffer.from([0xff, 0xd8, 0xff]), {
+      headers: { 'Content-Type': 'image/jpeg' },
+    });
+  const redirect = (location) =>
+    new Response(null, { status: 302, headers: { location } });
+  const start = 'https://cctv.austinmobility.io/image/1.jpg';
+
+  const sameHost = [];
+  const followed = await fetchCctvImageFromUpstream(start, {
+    timeoutMs: 100,
+    fetchImpl: async (url) => {
+      sameHost.push(url);
+      return sameHost.length === 1 ? redirect('/image/moved/1.jpg') : jpeg();
+    },
+  });
+  assert.equal(followed?.ok, true);
+  assert.deepEqual(sameHost, [
+    start,
+    'https://cctv.austinmobility.io/image/moved/1.jpg',
+  ]);
+
+  const offHost = [];
+  const refused = await fetchCctvImageFromUpstream(start, {
+    timeoutMs: 100,
+    fetchImpl: async (url) => {
+      offHost.push(url);
+      return redirect('https://evil.example/1.jpg');
+    },
+  });
+  assert.equal(refused, null);
+  assert.deepEqual(offHost, [start], 'the off-host target is never requested');
+
+  let hops = 0;
+  const looped = await fetchCctvImageFromUpstream(start, {
+    timeoutMs: 100,
+    fetchImpl: async () => {
+      hops += 1;
+      return redirect('/image/again.jpg');
+    },
+  });
+  assert.equal(looped, null);
+  assert.equal(hops, 3, 'at most two redirect hops are followed');
+});

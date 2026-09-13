@@ -11,6 +11,12 @@ import {
   CCTV_MAX_SOURCES_CEILING,
   DEFAULT_DRIVEBC_MAX_SOURCES,
   DEFAULT_TFL_MAX_SOURCES,
+  DEFAULT_ONTARIO_MAX_SOURCES,
+  DEFAULT_FINTRAFFIC_MAX_SOURCES,
+  DEFAULT_TXDOT_MAX_SOURCES,
+  DEFAULT_TALLINN_MAX_SOURCES,
+  DEFAULT_TARKTEE_MAX_SOURCES,
+  DEFAULT_NSW_MAX_SOURCES,
   DRIVEBC_WEBCAMS_URL,
 } from '../../server/providers/cctv/constants.js';
 import {
@@ -78,17 +84,22 @@ test('DriveBC loader keeps published cameras and builds frame URLs from the came
       driveBcRow('3', 49.2, -123.1),
       driveBcRow(4, null, -123.1),
       driveBcRow(5, 49.2, -123.1, { location: null }),
+      driveBcRow(6, 1000, -123.1),
+      driveBcRow(7, 34.05, -118.24),
     ]);
   });
 
   const cameras = await loadDriveBcSourcesFromOpenData();
 
   assert.deepEqual(requested, [DRIVEBC_WEBCAMS_URL]);
+  // Nearest to the Vancouver anchor first: the pack is always distance-sorted
+  // so the catalog-wide cap thins it from the far end.
   assert.deepEqual(
     cameras.map((camera) => camera.id),
-    ['drivebc-13', 'drivebc-682'],
+    ['drivebc-682', 'drivebc-13'],
   );
-  const [border, deltaport] = cameras;
+  const border = cameras.find((camera) => camera.id === 'drivebc-13');
+  const deltaport = cameras.find((camera) => camera.id === 'drivebc-682');
   assert.equal(border.url, 'https://www.drivebc.ca/images/13.jpg');
   assert.equal(border.snapshotUrl, border.url);
   assert.equal(border.name, 'Douglas (Peace Arch) Border Crossing');
@@ -211,11 +222,19 @@ test('CCTV catalog merges DriveBC cameras and CCTV_DRIVEBC_ENABLED=0 skips the r
 });
 
 test('default per-pack camera caps fit inside the default catalog cap', () => {
+  // Every default pack at its own cap (Warendorf ships 3 curated cameras).
   const packs =
     DEFAULT_AUSTIN_MAX_SOURCES +
     DEFAULT_CALTRANS_MAX_SOURCES +
     DEFAULT_TFL_MAX_SOURCES +
-    DEFAULT_DRIVEBC_MAX_SOURCES;
+    DEFAULT_ONTARIO_MAX_SOURCES +
+    DEFAULT_FINTRAFFIC_MAX_SOURCES +
+    DEFAULT_DRIVEBC_MAX_SOURCES +
+    DEFAULT_TXDOT_MAX_SOURCES +
+    DEFAULT_TALLINN_MAX_SOURCES +
+    DEFAULT_TARKTEE_MAX_SOURCES +
+    DEFAULT_NSW_MAX_SOURCES +
+    3;
   assert.ok(
     packs <= DEFAULT_CCTV_MAX_SOURCES,
     `default packs (${packs}) would be thinned by the catalog cap (${DEFAULT_CCTV_MAX_SOURCES})`,

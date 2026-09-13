@@ -316,6 +316,50 @@ export function isLikelyAustinCoordinate(lat, lon) {
  * @param {number} lon
  * @returns {boolean}
  */
+/** Finite, in range, and not the null island that Number(null) produces. */
+export function isPlausibleLatLon(lat, lon) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lon) <= 180 &&
+    !(lat === 0 && lon === 0)
+  );
+}
+
+/** British Columbia bounding box (with the neighbouring border crossings). */
+export function isLikelyBcCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 48 &&
+    lat <= 60.5 &&
+    lon >= -139.5 &&
+    lon <= -114
+  );
+}
+
+/** Texas bounding box. */
+export function isLikelyTexasCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 25.5 &&
+    lat <= 36.7 &&
+    lon >= -107 &&
+    lon <= -93.4
+  );
+}
+
+/** New South Wales bounding box (incl. the ACT and Lord Howe Island). */
+export function isLikelyNswCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= -38 &&
+    lat <= -28 &&
+    lon >= 140.9 &&
+    lon <= 159.2
+  );
+}
+
 export function isLikelyFinlandCoordinate(lat, lon) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
   return lat >= 59.5 && lat <= 70.5 && lon >= 19 && lon <= 32;
@@ -392,14 +436,15 @@ export function prioritizeSources(cameras, maxCount, anchors) {
   const anchorList = (Array.isArray(anchors) ? anchors : []).filter(
     (a) => Number.isFinite(a?.lat) && Number.isFinite(a?.lon),
   );
-  if (
-    !Number.isFinite(maxCount) ||
-    maxCount <= 0 ||
-    list.length <= maxCount ||
-    !anchorList.length
-  ) {
-    return list;
-  }
+  if (!anchorList.length) return list;
+  // Always sort when anchors exist, even when the pack fits its own cap: the
+  // catalog-wide cap (cap.js) thins a pack from the END of this order, so
+  // "nearest to an anchor first" has to hold whether or not the pack was
+  // trimmed here.
+  const cap =
+    Number.isFinite(maxCount) && maxCount > 0
+      ? Math.min(maxCount, list.length)
+      : list.length;
 
   const scored = list.map((camera, idx) => {
     const lat = Number(camera?.lat);
@@ -418,7 +463,7 @@ export function prioritizeSources(cameras, maxCount, anchors) {
     return a.idx - b.idx;
   });
 
-  return scored.slice(0, maxCount).map((entry) => entry.camera);
+  return scored.slice(0, cap).map((entry) => entry.camera);
 }
 
 /**

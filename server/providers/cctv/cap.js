@@ -42,8 +42,11 @@ export function allocateSourceCap(packs, maxCount) {
   }
   const lanes = packs.map((pack) => ({
     name: pack.name,
+    // Only the record that WON its id (the last occurrence anywhere, so also
+    // the last within this pack) takes a lane slot; earlier duplicates never
+    // count against the cap.
     queue: pack.sources.filter(
-      (source) => source?.id && owner.get(source.id)?.pack === pack.name,
+      (source) => source?.id && owner.get(source.id)?.source === source,
     ),
     next: 0,
     kept: 0,

@@ -180,8 +180,13 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
       forceAustin || (fromFile.length + fromEnv.length === 0 && preferAustin);
     const liveResults = needsLiveSources
       ? await Promise.allSettled(
+          // Invoked inside the promise so a loader that throws synchronously
+          // (a file-based pack on a malformed row) is isolated like any other
+          // failed pack instead of rejecting the whole refresh.
           LIVE_PACKS.map((pack) =>
-            pack.enabled() ? pack.load({ sourceRoot }) : Promise.resolve([]),
+            Promise.resolve().then(() =>
+              pack.enabled() ? pack.load({ sourceRoot }) : [],
+            ),
           ),
         )
       : [];

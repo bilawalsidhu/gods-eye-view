@@ -40,7 +40,7 @@ CCTV_TARKTEE_MAX_SOURCES="${CCTV_TARKTEE_MAX_SOURCES:-179}"
 CCTV_WARENDORF_ENABLED="${CCTV_WARENDORF_ENABLED:-1}"
 CCTV_NSW_ENABLED="${CCTV_NSW_ENABLED:-1}"
 CCTV_NSW_MAX_SOURCES="${CCTV_NSW_MAX_SOURCES:-250}"
-CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-3500}"
+CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-4000}"
 
 # Capture which provider credentials genuinely came from the parent shell
 # before this launcher resolves dotenv and Keychain fallbacks. Only names are

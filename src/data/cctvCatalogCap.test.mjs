@@ -52,6 +52,21 @@ test('over the cap the packs share it round-robin, and the last pack is never st
   );
 });
 
+test('a duplicate inside one pack takes one slot, not two', () => {
+  const dup = {
+    name: 'file',
+    sources: [{ id: 'x', v: 'old' }, { id: 'x', v: 'new' }, { id: 'y' }],
+  };
+  const { sources } = allocateSourceCap([dup], 2);
+  assert.deepEqual(
+    sources.map((s) => [s.id, s.v]),
+    [
+      ['x', 'new'],
+      ['y', undefined],
+    ],
+  );
+});
+
 test('a short pack releases its turns to the others', () => {
   const { packs } = allocateSourceCap([pack('a', 2), pack('b', 50)], 10);
   assert.deepEqual(
