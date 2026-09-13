@@ -12,8 +12,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0" rel="stylesheet" />
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <!-- Icon font subset: icon_names carries every Material Symbols glyph the
+       source renders (src/iconSubset.test.mjs extracts usage and fails when a
+       glyph is missing here — an unlisted glyph renders as its literal word
+       mid-cockpit). 330 KB variable font -> ~4 KB subset. -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0&icon_names=actionable,adjust,arrow_drop_down,arrow_forward,arrow_left,arrow_right,chevron_left,chevron_right,close,close_fullscreen,dark_mode,east,flare,flight,layers_clear,light_mode,local_fire_department,my_location,navigation,open_in_full,public,radar,radio,right_panel_close,right_panel_open,rocket_launch,skip_next,skip_previous,span,true" rel="stylesheet" />
   <!-- Cesium bundled by Vite from npm (cesium@1.124.0).
        CESIUM_BASE_URL define tells Cesium where to find Workers + Assets at runtime.
        Assets served from /cesium/ (same-origin, public/cesium/ at build time). -->

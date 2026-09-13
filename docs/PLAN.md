@@ -338,12 +338,20 @@ accessibility), fixed here:
 Open backlog, cheapest-first (re-verify each against this tree before
 acting — the audit described upstream's tree):
 
-- [ ] Icon font subsetting (PR #239): the full Material Symbols variable font
-      (~330 KB, render-blocking) serves 28 glyphs, and a second icon family
-      stylesheet nothing uses is fetched every boot. Subset via
-      `icon_names=`; generate the glyph list from source (element text AND
-      `textContent` assignments — a missing glyph renders the literal word
-      mid-cockpit, no missing-glyph box) and pin it with a test.
+- [x] Icon font subsetting (PR #239): DONE 2026-09-13. index.html requests
+      Material Symbols Outlined with `icon_names=` (30 entries extracted
+      from source — including ternary-assigned glyphs like
+      `right_panel_open` that a static-assignment scan alone would have
+      missed) and the unused `Material Icons Round` stylesheet is gone.
+      Measured with a Chrome UA: the variable font drops 330,416 → 3,972
+      bytes (−98.8%). `src/iconSubset.test.mjs` re-extracts candidates
+      with a deliberately broad window-scan (over-inclusion is safe —
+      Google ignores unknown `icon_names` names, verified 200 — while a
+      missing glyph renders as its literal word) and fails when a rendered
+      glyph is absent from the URL; a second test pins the unused-family
+      removal. Browser probe: `document.fonts` reports the subset loaded
+      and sampled icons render ligature-narrow, not word-wide. Gates:
+      lint 0, 2,981 tests, build ok.
 - [ ] Render-perf five (issue #8): gate `preserveDrawingBuffer` to capture
       modes (`main.js`), drop `msaaSamples: 4` → 2 or adaptive, replace the
       worst `backdrop-filter: blur()` panels (58 rules — compositor reads and
