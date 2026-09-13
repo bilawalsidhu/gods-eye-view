@@ -1,3 +1,7 @@
+import { _selectContextMode } from './ui/contextTransactions.js';
+import { _syncContextModeButtons } from './ui/contextPresentation.js';
+import { _initGlobalContextPanel } from './ui/contextBindings.js';
+import { clearSelectedLayers } from './ui/contextActions.js';
 import { readFileSync as readRadioSource } from 'node:fs';
 const radioBindings = readRadioSource(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
 const radioPresentation = readRadioSource(new URL('./ui/radioPresentation.js', import.meta.url), 'utf8');
@@ -18,16 +22,14 @@ test('Contacts and Space Missions both participate in the ordinary Tab sequence'
     assert.match(button[0], /tabindex="0"/);
   }
 
-  const sync = ui.match(/_syncContextModeButtons\(\) \{([\s\S]*?)\n  \}\n\n  \/\*\* Wire/);
-  assert.ok(sync, 'Context mode sync is missing');
-  assert.match(sync[1], /\[this\._globalContextFlightsBtn, this\._globalContextMissionsBtn\]/);
-  assert.match(sync[1], /button\.tabIndex = 0/);
-  assert.doesNotMatch(sync[1], /tabIndex\s*=\s*[^;]*\?\s*-1/);
+  const syncSource = _syncContextModeButtons.toString();
+  assert.match(syncSource, /\[\s*this\._globalContextFlightsBtn,\s*this\._globalContextMissionsBtn,?\s*\]/);
+  assert.match(syncSource, /button\.tabIndex = 0/);
+  assert.doesNotMatch(syncSource, /tabIndex\s*=\s*[^;]*\?\s*-1/);
 });
 
 test('Context transition state preserves focus and Tab availability until settle', () => {
-  const sync = ui.match(/_syncContextModeButtons\(\) \{([\s\S]*?)\n  \}\n\n  \/\*\* Wire/);
-  assert.ok(sync, 'Context mode sync is missing');
+  const syncSource = _syncContextModeButtons.toString();
 
   const attributes = () => new Map();
   const makeButton = () => {
@@ -56,6 +58,8 @@ test('Context transition state preserves focus and Tab availability until settle
   const priorDocument = globalThis.document;
   globalThis.document = { activeElement: missions, getElementById: () => panel };
   const owner = {
+    _globalContextPanel: panel,
+    actions: { syncDetection() {}, scheduleLayout() {} },
     _contextMode: null,
     _contextModeChanging: true,
     _globalContextFlightsBtn: contacts,
@@ -68,7 +72,7 @@ test('Context transition state preserves focus and Tab availability until settle
     _scheduleRightPanelLayout() {},
   };
   try {
-    Function(sync[1]).call(owner);
+    _syncContextModeButtons.call(owner);
     assert.equal(globalThis.document.activeElement, missions, 'busy sync retains focused Space Missions');
     for (const button of [contacts, missions]) {
       assert.equal(button.disabled, false);
@@ -79,7 +83,7 @@ test('Context transition state preserves focus and Tab availability until settle
 
     owner._contextModeChanging = false;
     owner._contextMode = 'space-missions';
-    Function(sync[1]).call(owner);
+    _syncContextModeButtons.call(owner);
     assert.equal(globalThis.document.activeElement, missions, 'settled sync retains focused Space Missions');
     for (const button of [contacts, missions]) {
       assert.equal(button.disabled, false);
@@ -93,32 +97,22 @@ test('Context transition state preserves focus and Tab availability until settle
 });
 
 test('Context activation and Clear All never native-disable tabs and guard repeated clicks', () => {
-  const init = ui.slice(
-    ui.indexOf('_initGlobalContextPanel() {'),
-    ui.indexOf('async _runUserFacingContextAction(', ui.indexOf('_initGlobalContextPanel() {')),
-  );
-  const select = ui.slice(
-    ui.indexOf('async _selectContextMode('),
-    ui.indexOf('async _deactivateContextForLayerChange(', ui.indexOf('async _selectContextMode(')),
-  );
-  const clear = ui.slice(
-    ui.indexOf('clearSelectedLayers() {'),
-    ui.indexOf('resetToGlobeView() {', ui.indexOf('clearSelectedLayers() {')),
-  );
-  assert.equal((init.match(/if \(this\._contextModeChanging \|\| this\._clearSelectedLayersPromise\) return;/g) || []).length, 2);
+  const init = _initGlobalContextPanel.toString();
+  const select = _selectContextMode.toString();
+  const clear = clearSelectedLayers.toString();
+  assert.equal((init.match(/if \(\s*this\.destroyed\s*\|\|\s*this\._contextModeChanging\s*\|\|\s*this\._clearSelectedLayersPromise\s*\)\s*return;/g) || []).length, 2);
   assert.doesNotMatch(select, /_globalContext(?:Flights|Missions)Btn\.disabled\s*=\s*true/);
   assert.doesNotMatch(clear, /_globalContext(?:Flights|Missions)Btn\.disabled\s*=\s*true/);
 });
 
 test('Context tablist retains Left, Right, Home, and End keyboard navigation', () => {
-  const init = ui.match(/_initGlobalContextPanel\(\) \{([\s\S]*?)\n    this\._globalContextFlightsBtn\?\.addEventListener/);
-  assert.ok(init, 'Context panel initialization is missing');
-  assert.match(init[1], /event\.key === 'ArrowRight'/);
-  assert.match(init[1], /event\.key === 'ArrowLeft'/);
-  assert.match(init[1], /event\.key === 'Home'/);
-  assert.match(init[1], /event\.key === 'End'/);
-  assert.match(init[1], /contextTabs\[nextIndex\]\.focus\(\{ preventScroll: true \}\)/);
-  assert.match(init[1], /contextTabs\[nextIndex\]\.click\(\)/);
+  const initSource = _initGlobalContextPanel.toString();
+  assert.match(initSource, /event\.key === 'ArrowRight'/);
+  assert.match(initSource, /event\.key === 'ArrowLeft'/);
+  assert.match(initSource, /event\.key === 'Home'/);
+  assert.match(initSource, /event\.key === 'End'/);
+  assert.match(initSource, /contextTabs\[nextIndex\]\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(initSource, /contextTabs\[nextIndex\]\.click\(\)/);
 });
 
 test('Context tabs draw a visible keyboard-focus outline including active tabs', () => {
@@ -136,16 +130,10 @@ test('Context tabs draw a visible keyboard-focus outline including active tabs',
 });
 
 test('Context async action buttons remain focused while busy', () => {
-  const init = ui.slice(
-    ui.indexOf('_initGlobalContextPanel() {'),
-    ui.indexOf('async _runUserFacingContextAction(', ui.indexOf('_initGlobalContextPanel() {')),
-  );
+  const init = _initGlobalContextPanel.toString();
   const radio = radioBindings.slice(radioBindings.indexOf('const toggleRadio = async (trigger) => {'), radioBindings.indexOf('this.listen(this._contextRadioToggleBtn,'));
   const radioSync = radioPresentation.slice(0, radioPresentation.indexOf('if (this._radioFilter)'));
-  const clear = ui.slice(
-    ui.indexOf('clearSelectedLayers() {'),
-    ui.indexOf('resetToGlobeView() {', ui.indexOf('clearSelectedLayers() {')),
-  );
+  const clear = clearSelectedLayers.toString();
 
   assert.match(init, /button\.getAttribute\('aria-busy'\) === 'true'/);
   assert.doesNotMatch(init, /button\.disabled\s*=\s*true/);
@@ -155,7 +143,7 @@ test('Context async action buttons remain focused while busy', () => {
     assert.match(radioSync, new RegExp(`${name}\\.disabled = false`));
   }
   assert.doesNotMatch(clear, /_clearSelectedLayersBtn\.disabled\s*=\s*true/);
-  assert.match(clear, /_clearLayersControl\?\.setBusy\(true\)/);
+  assert.match(clear, /this\.setClearBusy\(true\)/);
   const control = readFileSync(new URL('./ui/clearLayersControl.js', import.meta.url), 'utf8');
   assert.match(control, /button\.setAttribute\('aria-busy', String\(busy\)\)/);
   assert.doesNotMatch(control, /button\.disabled\s*=/);
