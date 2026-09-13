@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Add a Mesh Network data layer: the public MeshCore LoRa mesh (~60,000 community-reported Client/Repeater/Room Server/Sensor nodes worldwide — the same open data behind cascadiamesh.org/map), color-coded by last-seen freshness with click-to-inspect radio parameters. Keyless, no signup required.
+
 - Add Norway's road cameras from Statens vegvesen as a CCTV pack. The camera
   list is one keyless GeoJSON request to the agency's OGC API view of its
   DATEX 3.1 CCTV table, so no DATEX account is needed. Every working camera
