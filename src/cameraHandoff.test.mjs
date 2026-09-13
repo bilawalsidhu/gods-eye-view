@@ -6,6 +6,12 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui.js'), 'utf8');
+// Batch 5: the cockpit HUD loop (enter/exit, Context navigation) lives in its
+// own module; camera-authority stamping seams stay in StyleManager (ui.js).
+const cockpitView = fs.readFileSync(
+  path.join(ROOT, 'src', 'ui', 'CockpitViewController.js'),
+  'utf8',
+);
 const firms = fs.readFileSync(path.join(ROOT, 'src', 'data', 'firmsHeatmap.js'), 'utf8');
 const vessels = fs.readFileSync(path.join(ROOT, 'src', 'data', 'aisLiveVessels.js'), 'utf8');
 const voice = fs.readFileSync(path.join(ROOT, 'src', 'voice', 'gevActions.js'), 'utf8');
@@ -30,7 +36,7 @@ function ordered(source, needles, label) {
 
 test('Cockpit takeover invalidates deferred work before camera cancellation', () => {
   const enter = body(
-    ui,
+    cockpitView,
     /enter\(\) \{([\s\S]*?)\n {2}\}\n\n {2}exit\(/,
     'Cockpit enter',
   );
@@ -131,15 +137,15 @@ test('voice Cockpit next/previous shares the manual Context navigation path', ()
   // is what stamps. Divergence here is how a voice-only camera path escapes
   // the arbiter.
   assert.match(
-    ui,
+    cockpitView,
     /this\._listen\(this\.contextPrevious, 'click', \(\) => this\.navigateContext\(-1, \{ origin: 'user' \}\)\);/,
   );
   assert.match(
-    ui,
+    cockpitView,
     /this\._listen\(this\.contextNext, 'click', \(\) => this\.navigateContext\(1, \{ origin: 'user' \}\)\);/,
   );
   const funnel = body(
-    ui,
+    cockpitView,
     /navigateContext\(direction, options = \{\}\) \{([\s\S]*?)\n {2}\}\n\n {2}\/\*\* Adopt/,
     'Cockpit Context navigation funnel',
   );

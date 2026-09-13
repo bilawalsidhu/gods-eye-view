@@ -2427,8 +2427,13 @@ try {
   const KEYLESS_PATH = /^\/api\/(google\/(?:nearby-places|text-search)|openai\/hud-summary|realtime\/token|firms)$/;
   // Chrome logs every non-2xx subresource as "Failed to load resource: …
   // (status) [origin/path]" — map those texts back to their endpoint so the
-  // same tolerance applies to both record shapes.
-  const CONSOLE_RESOURCE_TEXT = /Failed to load resource: the server responded with a status of (\d+)[^[\]]*\[([^[\]]+)\]/;
+  // same tolerance applies to both record shapes. Bracket handling matters:
+  // an IPv6-literal base URL (http://[::1]:4173) puts ']' inside the URL, so
+  // the capture runs from the FIRST wrapper bracket to end-of-line and the
+  // single trailing wrapper bracket is stripped afterwards — a no-brackets
+  // class would truncate the URL at '::1' and strand keyless 503s as dirt.
+  const CONSOLE_RESOURCE_TEXT = /Failed to load resource: the server responded with a status of (\d+)\b[^[]*\[(.+)/;
+  const stripWrapperBracket = (target) => (target.endsWith(']') ? target.slice(0, -1) : target);
   // Records keep the full request target (path + query) so details identify
   // the exact request the page made.
   const parseEntry = (entry) => {
@@ -2443,7 +2448,7 @@ try {
   };
   const consoleResourcePath = (text) => {
     const match = CONSOLE_RESOURCE_TEXT.exec(text);
-    return match ? parseEntry(`${match[1]} ${match[2]}`) : null;
+    return match ? parseEntry(`${match[1]} ${stripWrapperBracket(match[2])}`) : null;
   };
   const keylessLocal = (entry) => {
     const parsed = /^503 /.test(entry) ? parseEntry(entry) : null;
