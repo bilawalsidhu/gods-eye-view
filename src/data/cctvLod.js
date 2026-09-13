@@ -31,6 +31,10 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
   'austin transportation & public works': 5 * 60 * 1000,
   'transport for london': 3 * 60 * 1000,
   caltrans: 3 * 60 * 1000,
+  // Digitraffic publishes a new weathercam frame on each station's
+  // collectionInterval, 600 s for every station sampled; polling faster only
+  // re-fetches the same JPEG.
+  fintraffic: 10 * 60 * 1000,
 });
 
 /**
