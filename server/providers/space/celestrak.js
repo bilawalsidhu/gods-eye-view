@@ -66,72 +66,74 @@ export function celestrakProxy() {
     return { at: Date.now(), body };
   }
 
-  return {
-    name: 'celestrak-proxy',
-    configureServer(server) {
-      server.middlewares.use('/api/celestrak', async (req, res) => {
-        const group = String(req.url || '')
-          .replace(/^\//, '')
-          .split('?')[0];
-        if (!/^[a-z0-9-]+$/i.test(group)) {
-          res.writeHead(400, { 'Content-Type': 'text/plain' });
-          res.end('invalid group');
+  const installMiddleware = (server) => {
+    server.middlewares.use('/api/celestrak', async (req, res) => {
+      const group = String(req.url || '')
+        .replace(/^\//, '')
+        .split('?')[0];
+      if (!/^[a-z0-9-]+$/i.test(group)) {
+        res.writeHead(400, { 'Content-Type': 'text/plain' });
+        res.end('invalid group');
+        return;
+      }
+      const send = (status, body, cacheStatus) => {
+        // Guard against a double-send (e.g. a throw AFTER a response already
+        // went out routing into the catch's send): writeHead after headersSent
+        // throws "Cannot set headers after they are sent".
+        if (res.headersSent) return;
+        res.writeHead(status, {
+          'Content-Type': 'text/plain',
+          'x-tle-cache': cacheStatus,
+        });
+        res.end(body);
+      };
+      try {
+        const now = Date.now();
+        let entry = mem.get(group);
+        if (!entry) {
+          entry = await readDisk(group);
+          if (entry) mem.set(group, entry);
+        }
+        if (entry && now - entry.at < TLE_TTL_MS) {
+          send(200, entry.body, 'HIT');
           return;
         }
-        const send = (status, body, cacheStatus) => {
-          // Guard against a double-send (e.g. a throw AFTER a response already
-          // went out routing into the catch's send): writeHead after headersSent
-          // throws "Cannot set headers after they are sent".
-          if (res.headersSent) return;
-          res.writeHead(status, {
-            'Content-Type': 'text/plain',
-            'x-tle-cache': cacheStatus,
-          });
-          res.end(body);
-        };
-        try {
-          const now = Date.now();
-          let entry = mem.get(group);
-          if (!entry) {
-            entry = await readDisk(group);
-            if (entry) mem.set(group, entry);
-          }
-          if (entry && now - entry.at < TLE_TTL_MS) {
-            send(200, entry.body, 'HIT');
-            return;
-          }
-          // Stale or missing → refresh, single-flight per group.
-          if (!inflight.has(group)) {
-            inflight.set(
-              group,
-              fetchUpstream(group)
-                .then(async (fresh) => {
-                  mem.set(group, fresh);
-                  await writeDisk(group, fresh);
-                  return fresh;
-                })
-                .catch((err) => {
-                  console.warn(
-                    '[celestrak-proxy] refresh failed — serving cache if any',
-                  );
-                  return null;
-                })
-                .finally(() => inflight.delete(group)),
-            );
-          }
-          const fresh = await inflight.get(group);
-          if (fresh) {
-            send(200, fresh.body, 'MISS');
-          } else if (entry) {
-            send(200, entry.body, 'STALE-ERROR'); // upstream down — stale beats empty
-          } else {
-            send(502, 'celestrak fetch failed and no cache available', 'NONE');
-          }
-        } catch (err) {
-          console.error('[celestrak-proxy] request failed');
-          send(500, 'celestrak proxy error', 'ERROR');
+        // Stale or missing → refresh, single-flight per group.
+        if (!inflight.has(group)) {
+          inflight.set(
+            group,
+            fetchUpstream(group)
+              .then(async (fresh) => {
+                mem.set(group, fresh);
+                await writeDisk(group, fresh);
+                return fresh;
+              })
+              .catch((err) => {
+                console.warn(
+                  '[celestrak-proxy] refresh failed — serving cache if any',
+                );
+                return null;
+              })
+              .finally(() => inflight.delete(group)),
+          );
         }
-      });
-    },
+        const fresh = await inflight.get(group);
+        if (fresh) {
+          send(200, fresh.body, 'MISS');
+        } else if (entry) {
+          send(200, entry.body, 'STALE-ERROR'); // upstream down — stale beats empty
+        } else {
+          send(502, 'celestrak fetch failed and no cache available', 'NONE');
+        }
+      } catch (err) {
+        console.error('[celestrak-proxy] request failed');
+        send(500, 'celestrak proxy error', 'ERROR');
+      }
+    });
+  };
+  return {
+    name: 'celestrak-proxy',
+    configureServer: installMiddleware,
+    configurePreviewServer: installMiddleware,
   };
 }

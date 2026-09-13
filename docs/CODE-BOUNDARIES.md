@@ -79,11 +79,10 @@ use build-only dependency exceptions.
 
 `server/standalone/vite.config.js` loads the root environment and passes selected
 browser keys, host/port and the ordered local provider plugins to this helper.
-`server/providers/local.js` still owns provider process state, routes and
-credential-store paths. Provider Settings writes to the same root `.env` or
-Pinokio store as before. `vite.config.js` preserves the default configuration and
-existing named provider exports for tools/tests. The provider module remains
-large; later extractions should split complete provider families and their tests.
+`server/providers/local.js` composes provider factories and re-exports existing
+helpers for compatibility. Provider Settings lives in `server/standalone/key-setup.js`
+and writes to the same root `.env` or Pinokio store as before. `vite.config.js`
+preserves the default configuration and named provider exports for tools/tests.
 
 ## Aircraft and vessel providers
 
@@ -152,3 +151,147 @@ checks each entry independently.
 Browser terrain sampling, traffic matching/drawing, fire overlays and bike-share
 layer lifecycle remain in their current modules. This extraction changes no
 source defaults, credentials, quotas, data interpretation or visual behavior.
+
+## Local search, regional context, voice and setup
+
+Node-only exports `server/providers/overpass`, `server/providers/military-installations`,
+`server/providers/regional` and `server/providers/openai` own request handling
+without importing the standalone configuration or browser rendering. Overpass
+separates query admission, geometry simplification, cache and transport; military
+search shares the bounded transport. Regional place/news/weather acquisition is
+separate from briefing and weather-effect response caches. Voice handlers share
+existing rate limits and request reading; schemas and instructions are separate.
+
+`server/standalone/key-setup` is explicitly standalone Node functionality.
+Its factory and the local voice factory accept `sourceRoot` for application-owned
+configuration/log files; defaults resolve the repository root. Local voice also
+accepts an optional `annotationGuidance` paragraph. Neither factory starts
+acquisition on import. Setup retains its pre-environment-load provenance capture
+and development-only registration. Package checks enumerate every owned module
+and reject browser imports of these Node entries.
+
+## Browser place search
+
+`gods-eye-view/search` exports an explicit geocoding service and Google/Photon
+adapters. The entry owns normalization, bounded caches, deadlines and fallback
+sequencing. It imports no application state, environment configuration, rendering
+or Node server code. Google transport is supplied by its caller.
+
+`src/standalone/placeSearch.js` constructs the configured Google request and
+keyless Photon fallback. The application passes this service to location
+controls, annotation resolution and voice/radio actions. Those consumers retain
+framing, landmark recovery, footprint matching and playback decisions. Existing
+reverse geocoding and nearby/text-search routes remain separate.
+
+## Panel controls
+
+`gods-eye-view/ui/panels` owns collapse-button binding, nearest-panel Escape
+handling, hover delays and delayed content-focus handoff. It accepts existing
+DOM elements and callbacks; importing it creates no browser state. `destroy()`
+removes owned listeners and cancels pending work without changing saved state
+or moving focus. Call it before removing or replacing the controls.
+
+`src/ui.js` retains panel layout, persistence, share restoration and application
+reactions to state changes. Map Source selection and Location draft cleanup are
+provided through callbacks. The component imports no globe, data, application
+or server modules. Package checks and scoped formatting cover this entry.
+
+## Surface keyboard handling
+
+`gods-eye-view/ui/surfaces` exports `createSurfaceKeyboard` from
+`src/ui/surfaceKeyboard.js`. It receives a root DOM node, an optional document,
+an `isActive` predicate, an `onEscape` action and an optional return-focus fallback.
+Construction is inert. `activate()` remembers the opener and installs one capture
+listener; repeated activation is harmless. `deactivate({ restoreFocus: true })`
+removes that listener and restores the opener when connected, otherwise invoking
+the supplied fallback. Omit return focus when yielding to another surface.
+`destroy()` permanently releases ownership without moving focus.
+
+The welcome launcher and Provider Settings retain content, visibility, initial
+focus, animation and screen-specific policy. Tab boundaries are read from the
+current visible/enabled controls for each key; ordinary movement within those
+boundaries remains native. The component honors already-handled keys and has no
+app, server, storage or network dependencies. Its package boundary is checked
+independently from the standalone screens that consume it.
+
+## Panel rail layout
+
+`gods-eye-view/ui/layout` exports synchronous `layoutLeftPanelRail` and
+`layoutRightPanelRail` passes, `measurePanelNaturalHeight`, and the existing pure
+corridor/allocation helpers. Separate modules own left placement, right placement,
+DOM height measurement and rail geometry. They import no application, renderer,
+server, storage or network modules; package checks build this entry independently.
+
+Callers supply rail/obstacle DOM nodes, the viewport, HUD state, the preferred
+panel, disclosure/retry callbacks and the left measurement cache. Right layout
+reads the caller's Display scroll value at measurement time and restores it
+within the resulting scroll range. The left pass notifies its caller after
+alignment so the right pass can follow. Neither pass installs listeners, timers
+or observers; construction/import does no work. Scheduling, preference writes,
+share restoration and movement of controls between containers remain caller-owned.
+Existing helper imports from `cockpitMath.js` and `rightRailPolicy.js` remain
+compatible through re-exports.
+
+## Visual input
+
+`gods-eye-view/ui/input` exports `bindApplicationShortcuts` and
+`createStyleParameters`. The shortcut binder owns one bubbling keydown listener
+and receives the document, editing target and explicit action callbacks.
+Parameter controls own only the supplied container's generated rows/listeners;
+uniform metadata and read/write/change operations come from the caller.
+Clearing permits reuse; destruction is final. Neither module imports the app,
+renderer, persistence or services. The facade retains panel visibility, share
+restore claims and render scheduling. Both controls are destroyed before the
+facade's asynchronous teardown can yield.
+
+## Display controls
+
+`ui/display` owns Display button, selector and slider subscriptions. It receives
+DOM elements and explicit actions, imports no application or effect singleton,
+and releases every listener on destruction. Settings and rendering remain with
+the caller.
+
+## Visual effects
+
+`ui/effects` exports the effects controller and existing preset definitions.
+It owns shader stages and their clock, with explicit render ownership callbacks.
+Construction installs no stages or frame callbacks. Stop animation before
+releasing UI consumers, then destroy to remove owned stages and restore the
+borrowed bloom state. `ui/effects/bloom` exposes the pure intensity/version helpers
+without loading the renderer. UI presentation and product-action coordination
+remain in their callers.
+
+## Map Source controls
+
+`ui/maps` owns source-chip presentation, selection feedback and its subscription
+lifetime. It receives the existing controller and explicit state/action callbacks;
+it imports no renderer or application. Source construction and availability policy
+remain with the map controller. Rebuilding controls removes their previous chip
+listeners, and destruction suppresses late completions without owning or destroying
+the supplied controller.
+
+## Layer panel
+
+`ui/layers` exports the Layers panel and clear-control binding. Callers supply
+snapshots, row descriptors, subscriptions and actions; the component imports no
+layer implementation or application bootstrap. Layer transactions remain with
+the caller. Hidden-page refresh scheduling remains an explicit callback.
+
+`ui/layers/feedback` exposes the existing pure loading/notice reducers separately
+from DOM controls. Scheduling and presentation stay with their callers.
+
+## Location controls
+
+`ui/location` exports Location controls, the cancellable lookup controller and
+the existing location-status formatter. Callers supply city data, search and
+navigation operations. The component owns DOM listeners and pending expansion;
+it imports no geocoder, camera engine, layer or application bootstrap. Existing
+camera authority and search providers remain supplied by the application.
+
+### Radio controls
+
+`ui/radio` owns Radio input, disclosures, tuner state and presentation. It
+receives the existing Radio port and explicit layer/layout actions, without
+importing the renderer or station providers. Pure tuner calculations retain
+compatibility exports from the data layer. Disposal revokes DOM listeners and
+subscriptions before ending the active tuning interaction.

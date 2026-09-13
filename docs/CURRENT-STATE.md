@@ -1,5 +1,193 @@
 # God's Eye View Current State
 
+## UI disposal
+
+UI disposal releases the CCTV subscription, command-dock observer, legacy drag
+resize observer and window resize listener. These remain independent of the
+Location component and are included in whole-UI browser teardown acceptance.
+
+## Radio controls
+
+Radio panel, compact controls and tuner presentation have a dedicated owner.
+It receives playback, layer actions and layout callbacks; station ingestion,
+marker placement, audio playback and camera policy stay with their existing
+owners. Tuner calculations have a pure entry, with existing layer exports
+preserved. Destruction removes listeners and state subscriptions before ending
+tuning; a delayed Enable result cannot reveal or refocus removed controls.
+
+
+## Location control ownership
+
+City/POI rows, search/reset bindings, location readouts and the orbit indicator
+have a dedicated component with explicit navigation actions. A separate lookup
+controller cancels superseded searches and checks camera authority before flight
+and result presentation. Existing search providers and camera handoff policy are
+preserved. Replacing or closing a POI row cancels its pending expansion frame;
+destruction releases listeners, pending searches and the orbit indicator.
+
+
+## Layer panel ownership
+
+Layer rows, feed feedback, counts, focus-preserving chips and toggle listeners
+are owned by a renderer-free panel component. The layer manager supplies current
+snapshots, lifecycle actions and row descriptors. Remount and teardown remove
+listeners and row subscriptions; obsolete completions do not repaint old rows.
+The clear control presents busy state while its existing action owns the transaction.
+
+
+## Map Source control ownership
+
+Map Source controls own chip listeners, source-state subscriptions and selection
+feedback. Loading remains with the supplied map controller. The active chip
+follows the source actually displayed, including fallback; obsolete completions
+cannot overwrite a newer selection. Refresh and destruction revoke old listeners
+and destruction suppresses late UI updates. Available choices and setup behavior
+remain unchanged.
+
+## Visual effects ownership
+
+VisualEffects owns style-stage creation, crossfades, animation scheduling, bloom
+and sharpen. Display supplies actions and renders settings; effect execution has
+no DOM dependency. Existing presets and the 500 ms transition remain unchanged.
+Stopping the controller revokes animation before asynchronous UI teardown; final
+destruction removes its stages and restores the borrowed bloom configuration.
+
+## Display control ownership
+
+Display button, selector and slider listeners have a single destroyable owner.
+The application supplies actions and retains effect settings, restore claims and
+rendering. Native keyboard editing, model modes and current defaults are preserved.
+Destroying the UI removes these listeners before asynchronous teardown.
+
+## Application shortcuts and shader parameter controls
+
+`ui/input` supplies the bubbling application shortcut listener and generated
+shader-parameter rows. Number/style keys, H/O/V/F/D/C actions, native form-control
+typing and Escape behavior retain their existing mappings. Capture-phase
+surfaces continue to arbitrate their own keyboard events first.
+
+The UI facade retains shader values, share-restore authority, render requests,
+search dismissal, visibility and Cockpit portal policy. Parameter rows preserve
+labels, bounds, steps and precision. Rebuilding rows removes their previous
+listeners; disposal removes shortcuts and parameter listeners synchronously
+before asynchronous application teardown.
+
+## Adaptive panel rail layout
+
+`ui/layout` supplies the left/right rail layout passes, natural-height
+measurement and pure corridor/allocation helpers. The UI facade passes live DOM
+nodes, obstacle nodes, HUD presentation, preferred panels and callbacks. It
+retains observers, frame scheduling, saved/share preferences and Cockpit portals.
+
+The left rail keeps its measured collapsed heights and obstacle-safe corridor;
+the right rail follows its top baseline and preserves Display's scroll owner.
+Automatic collapse remains presentation only, prioritizes the latest explicit
+panel, and honors keyboard focus on the right. Mobile layout still releases
+desktop allocation styles. Stable Display allocation avoids unnecessary style
+writes. This extraction does not change panel positions or layout defaults.
+
+
+## Surface keyboard lifecycle
+
+`ui/surfaces` owns the capture-phase keyboard listener, Tab cycling and return
+focus shared by the first-run launcher and Provider Settings. Each caller
+activates it while open and deactivates it on dismissal; destruction releases
+keyboard ownership without moving focus. Reopening captures the current opener.
+The launcher retains its hit-test/exclusive-surface arbitration and dismissal
+preferences. Provider Settings retains its existing visibility and save policy.
+Initial focus, transitions and DOM content remain with each screen. This
+component does not add modal semantics or make the map inert.
+
+
+## Panel disclosure lifecycle
+
+Panel collapse buttons, nested Escape handling and dock hover/focus timing now
+use `ui/panels`. The component receives existing DOM elements and callbacks for
+state changes and content focus. Panel layout, saved state, share restoration,
+Location draft cleanup and Map Source selection remain with their existing
+callers. Listener and timer cleanup is synchronous when controls are replaced
+or disposed, preventing old hover or focus work from changing a later view.
+
+
+## Military feed cooldown and loading guidance
+
+The adsb.lol military proxy reuses its last response during upstream 429/5xx
+failures and observes Retry-After, bounded to 5–120 seconds (defaults: 30 seconds
+for rate limits, 15 seconds for server errors). A failure with no cached data
+still reports an error. Cached responses carry their age; the browser preserves
+observation timestamps and marks fallback data stale instead of inventing fresh
+positions or reporting a failed load. Fresh responses clear that stale state.
+
+Mapped-installation zoom guidance appears in the layer row without counting as
+a global loading failure. Guidance statuses do not suppress independent refresh
+errors.
+
+
+## Places and CCTV request bounds
+
+With a Google key configured, nearby and text search reject missing, blank,
+non-numeric and out-of-range coordinates before the opt-in limiter and upstream
+request. Text search also requires a nonblank query. Keyless requests retain
+their `configured: false` response.
+
+CCTV media waits at most 15 seconds for upstream response headers and returns
+504 on timeout. Its timer stops when headers arrive, so live bodies can continue
+streaming; body idle deadlines are separate from this header deadline. Error
+responses are cancelled. Buffered snapshots have a 16 MiB streaming cap; an
+oversized image remains an upstream miss and uses the normal fallback chain.
+The existing declared media size ceiling remains 64 MiB.
+
+
+## GBFS upstream bounds
+
+GBFS refuses upstream redirects and enforces its 5 MiB response cap while
+streaming. The 12-second deadline includes reading the body, and rejected or
+stalled downloads are cancelled. Development and preview use the same handler.
+
+
+## Remaining local service modules
+
+Overpass query validation, geometry simplification, disk caching and upstream
+transport now have separate modules; military-installation search reuses that
+transport. Regional briefing combines separate place, news and weather sources,
+while weather effects uses only the weather source. Existing process-scoped
+caches, rate limits, stale fallbacks and route ordering are preserved.
+
+Local voice has separate HUD-summary, debug-log and Realtime-token handlers,
+with tool definitions and instructions in dedicated files. The factory accepts
+an optional `annotationGuidance` paragraph; its default instructions and all 28
+tool definitions remain unchanged. `sourceRoot` resolves debug logs against the
+application directory. Standalone key setup accepts the same directory option
+for its environment store and preserves boot provenance, loopback/origin guards,
+atomic credential writes and development-only registration.
+
+Node-only package entries expose Overpass, military installations, regional
+services, local voice and standalone key setup. Importing them starts no network
+acquisition. Browser layer lifecycle, rendering and voice execution stay in their
+existing modules.
+
+## Local build preview
+
+After `npm run build`, `npm run preview` serves the built app with the same data
+provider routes as development, including aircraft, satellites, terrain, traffic,
+FIRMS, GBFS, Overpass and CCTV/media. Unmatched `/api` requests return a JSON 404
+in both modes instead of the application HTML. Browser routes retain SPA fallback.
+Credential editing (`/api/setup/*` and Provider Settings) is development-only;
+preview returns JSON 404 for those endpoints. Server credentials come from the
+local environment; browser keys are captured at build time. Rebuild after changing
+a browser key. Preview is for local build verification, not a production server.
+
+
+## CCTV and radio provider modules
+
+CCTV catalog acquisition, source normalization and frame/media delivery now live
+in separate modules. Each CCTV factory owns its catalog and health state; its
+`sourceRoot` option resolves relative source files against the application root.
+Radio Browser station normalization, restricted outbound transport and directory
+caching are separate modules. Node-only package entries expose both provider
+factories. Routes, payloads, fallback behavior and existing dev/preview hook
+registration are preserved; browser rendering is unchanged.
+
 ## Terrain, traffic, fire and bike-share provider modules
 
 Local composition now imports separate Node modules for Re:Earth heights,
@@ -33,10 +221,10 @@ access. Callers retain validation, transport and response policy.
 
 `vite.config.js` delegates to `server/standalone/vite.config.js`, which loads
 this checkout's environment and constructs the local providers in their existing
-order. `server/providers/local.js` holds the existing middleware and process
-state; its named exports remain available through the root compatibility entry.
+order. `server/providers/local.js` is the composition and compatibility entry;
+provider families own their middleware and process state in focused modules.
 Provider URLs, key selection, cache behavior, setup restrictions and routes are
-unchanged. Individual provider families remain to be split into smaller modules.
+unchanged.
 
 `gods-eye-view/build/vite` is a Node-only export for explicit browser build
 settings: Cesium assets, caller-supplied plugins, browser key defines, server
@@ -75,9 +263,11 @@ See [component ownership and adoption](CODE-BOUNDARIES.md).
 Local Places nearby/text search and the CCTV Street View fallback prefer
 `GOOGLE_MAPS_SERVER_API_KEY`, falling back to `GOOGLE_MAPS_API_KEY` when the
 server key is blank or absent. Only the browser key is injected into client
-code. Both are optional and configured in the same ignored root `.env`, or
-Pinokio's ignored `pinokio/ENVIRONMENT`, through Provider Settings or manual
-editing. `.env.example` and `pinokio/_ENVIRONMENT` document the two entries.
+code. POWER UP presents one Google Maps entry for the browser key. The optional
+server key is configured manually in the same ignored root `.env`, or Pinokio's
+ignored `pinokio/ENVIRONMENT`; it is omitted from Provider Settings and its
+missing-key count. Existing server keys and the single-key fallback remain
+supported. `.env.example` and `pinokio/_ENVIRONMENT` document both entries.
 The Street View headings tool uses the same server-first selection after
 resolving environment overrides per variable; its explicit `--key` wins.
 
@@ -1166,12 +1356,20 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   settled dim contact always completes its release after tracking ends.
 > - **Terrain-height resilience:** `/api/terrain/heights` caches canonical
 >   5-decimal points individually, reconstructs reordered/overlapping batches
->   in exact request order, and refreshes only missing or stale points. Network,
->   429, and 5xx failures receive bounded jittered retries with `Retry-After`;
->   stale real heights remain usable per point, while an uncached absent height
->   still returns 502 rather than becoming a fabricated ground value. Client
->   geoid fallbacks wait 60 seconds before retrying and self-heal to Re:Earth on
->   the first later successful fetch.
+>   in exact request order, and refreshes only missing or stale points. Upstream
+>   calls and browser requests are both chunked at 64 points, sized to fit
+>   their 30s deadlines across Re:Earth's observed 87-186 ms/point range; a chunk
+>   that still fails contributes nulls for its own positions instead of
+>   discarding the chunks that resolved. Network, 429, and 5xx failures receive
+>   bounded jittered retries with `Retry-After`; stale real heights remain
+>   usable per point, while an uncached absent height still returns 502 rather
+>   than becoming a fabricated ground value. A position the upstream answers
+>   with a null ellipsoid is reported as an absent height rather than a refresh
+>   failure, and is left uncached so a later poll re-asks it. Client geoid
+>   fallbacks wait 60 seconds before retrying and self-heal to Re:Earth on the
+>   first later successful fetch. Smaller chunks reduce timeout risk; complete
+>   camera batches still wait for their sequential requests, and unresolved
+>   placement continues to use the existing prior until real heights arrive.
 > - **Overpass cache admission:** `/api/overpass` parses and sanitizes requests,
 >   then checks fresh memory, identical in-flight work, and fresh disk entries
 >   before invoking its local 90/min limiter. Cache and single-flight responses
@@ -2434,6 +2632,29 @@ silently demoting every later lookup for the session.
 - Input is the live basemap label context (place/street/nearby-place labels + enabled layers) — the model is instructed not to infer from coordinates.
 - Output is sanitized to exactly five words; falls back to the deterministic telemetry summary on error/timeout (5s abort); typewriter animation on update.
 
+### Place-search providers
+
+Location search/fly-to, annotations and Radio location lookup receive one
+`placeSearch.geocode(query, { bias, signal })` service. `src/standalone` composes
+Google first when configured and Photon/OpenStreetMap as fallback, including
+Google transport failures or declined requests. The portable `./search` export
+provides the service and adapters; it reads no environment or application state.
+Existing browser/server key setup is unchanged.
+
+Providers normalize coordinates, canonical name, label, place types and optional
+bounds. Camera framing, nearby landmark recovery and footprint selection remain
+in their consumers, including the Capitol identity/containment safeguards.
+Radio keeps localized country names in labels rather than station filters.
+Reverse geocoding and nearby/text-search endpoints retain their existing behavior.
+
+Only valid answers and definitive misses enter bounded caches; malformed replies,
+HTTP refusals and outages remain retryable. Searches share a 12-second total
+deadline, with Photon requests capped at six seconds each. Caller/application
+cancellation stops retries and late cache writes. Replacing a location search
+cancels the previous lookup; disposing its controls cancels the active lookup. Photon uses a soft proximity bias, up to five
+candidates, and an unbiased retry for name mismatches. Invalid/wrapped bounds
+are omitted rather than framing the wrong part of the globe.
+
 ### Map Stack Switcher (June 2026)
 
 - `src/mapStackController.js` switches between Google Photorealistic 3D (`photoreal`, the default when a Google or ion key is present), keyless Esri World Imagery (the zero-key default landing, with keyless terrain), Bing Aerial / Aerial-with-Labels via Cesium ion world imagery (require `CESIUM_ION_TOKEN`), and OSM tile fallback. Bing Road is **retired**: it is gone from `MAP_STACKS`, from the `set_map_stack` enum, and from the voice aliases (road phrasings now resolve to OSM, the one shipped road basemap). An old `map=bing-road` link is simply an unknown id and takes `setStack()`'s existing photoreal fallback with the Google 3D tile lit — pinned live in `scripts/qa-map-source-tray.mjs`.
@@ -2532,7 +2753,7 @@ silently demoting every later lookup for the session.
   eight-second timeout; the timer is cleared on every success or failure path.
 - OpenSky response cache stores successful upstream responses only; OAuth token refresh calls are coalesced.
 - A cold OpenSky failure uses the current camera subpoint only to request a cached adsb.lol point fallback capped at 250 nm. A fresh OpenSky response or last-good cache wins; a nominally successful worldwide snapshot more than two minutes old prefers viewport-scoped adsb.lol when available, otherwise the stale source is reported honestly. The fallback is visibly source-labeled and is never presented as a worldwide snapshot.
-- GBFS response size is capped; CCTV health map is bounded.
+- GBFS proxy refuses upstream redirects (`redirect: 'manual'`; any 3xx becomes a 502 and the redirect target is logged server-side only) and enforces its 5 MB response cap while the body streams, cancelling the upstream read past the cap; CCTV health map is bounded.
 - Proxy error payloads are sanitized (no internal error details returned to clients).
 - `OPENAI_API_KEY` is server-side only; the browser receives ephemeral Realtime client secrets from `/api/realtime/token`.
 - `AISSTREAM_API_KEY` is server-side only; the browser reads the same-origin `/api/ais-live` cache.

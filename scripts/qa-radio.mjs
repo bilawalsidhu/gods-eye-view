@@ -25,6 +25,10 @@ const option = (name, fallback) => {
 };
 const APP_URL = option('--url', process.env.QA_BASE_URL || 'http://localhost:4173');
 const APP_ORIGIN = new URL(APP_URL).origin;
+// Radio owns this harness's keyboard and pointer actions; the welcome dialog
+// has its own acceptance harness and must not intercept those gestures.
+const RADIO_URL = new URL(APP_URL);
+RADIO_URL.searchParams.set('welcome', '0');
 const HEADFUL = args.includes('--headful');
 
 const chromeCandidates = [
@@ -76,6 +80,22 @@ function check(name, ok, detail = '') {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Native pick buffers and clustered overlay entries settle on rendered frames,
+// not on wall-clock sleeps, particularly with software rendering.
+async function settleRadioFrames(page) {
+  await page.evaluate(() => new Promise((resolve, reject) => {
+    const scene = window.__godsEyeView.viewer.scene;
+    let remaining = 4;
+    const timeout = setTimeout(() => { remove(); reject(new Error('Radio rendered-frame deadline exceeded')); }, 10_000);
+    const remove = scene.postRender.addEventListener(() => {
+      if (--remaining === 0) { remove(); clearTimeout(timeout); resolve(); }
+      else requestAnimationFrame(() => scene.requestRender());
+    });
+    scene.requestRender();
+  }));
+}
+
+
 async function main() {
   const response = await fetch(APP_URL).catch(() => null);
   if (!response?.ok) {
@@ -87,7 +107,10 @@ async function main() {
     headless: HEADFUL ? false : 'new',
     ...(chrome ? { executablePath: chrome } : {}),
     args: [
-      '--no-sandbox', '--disable-setuid-sandbox', '--use-gl=angle',
+      '--no-sandbox', '--disable-setuid-sandbox',
+      ...(process.platform === 'darwin'
+        ? ['--use-angle=metal', '--enable-gpu']
+        : ['--use-gl=angle', '--use-angle=swiftshader']),
       '--disable-dev-shm-usage', '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding', '--window-size=1440,900',
     ],
@@ -213,7 +236,7 @@ async function main() {
       }
     });
 
-    await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await page.goto(RADIO_URL.href, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 60_000 });
     await page.waitForFunction(() => window.__godsEyeView?.styleManager?._dataManager?.layers?.has('radio'), { timeout: 60_000 });
     await page.waitForFunction(
@@ -281,7 +304,7 @@ async function main() {
         fullPlayEnabled: !document.getElementById('radio-play-btn').disabled,
         fullPlayLabel: document.getElementById('radio-play-btn').getAttribute('aria-label'),
         tunerVisible: !document.getElementById('radio-tuner').hidden,
-        tunerCount: window.__godsEyeView.styleManager._radioTunerStations.length,
+        tunerCount: window.__godsEyeView.styleManager._radioControls._radioTunerStations.length,
         tunerLabel: document.getElementById('radio-tuner-band-label').textContent,
       };
     });
@@ -332,19 +355,19 @@ async function main() {
       const staticResult = module.setTuningStatic(true);
       const filterBefore = module.getUIState().filter;
       const filterControl = document.getElementById('radio-filter');
-      const originalPinned = style._radioTunerBandPinnedForNavigation;
-      const originalPool = style._radioTunerPool;
-      style._radioTunerBandPinnedForNavigation = true;
+      const originalPinned = style._radioControls._radioTunerBandPinnedForNavigation;
+      const originalPool = style._radioControls._radioTunerPool;
+      style._radioControls._radioTunerBandPinnedForNavigation = true;
       filterControl.value = filterBefore === 'news' ? 'all' : 'news';
       filterControl.dispatchEvent(new Event('change', { bubbles: true }));
       const rejectedUIFilter = {
         moduleFilter: module.getUIState().filter,
         controlFilter: filterControl.value,
-        pinned: style._radioTunerBandPinnedForNavigation,
-        poolIdentityPreserved: style._radioTunerPool === originalPool,
+        pinned: style._radioControls._radioTunerBandPinnedForNavigation,
+        poolIdentityPreserved: style._radioControls._radioTunerPool === originalPool,
       };
-      style._radioTunerBandPinnedForNavigation = originalPinned;
-      style._radioTunerPool = originalPool;
+      style._radioControls._radioTunerBandPinnedForNavigation = originalPinned;
+      style._radioControls._radioTunerPool = originalPool;
       const filterResult = module.setFilter('news');
       const toggleResult = await module.togglePlayback({ origin: 'user' });
       const directSelect = module.selectStation(stationId, {
@@ -571,7 +594,14 @@ async function main() {
     await page.evaluate(() => window.__qaReleaseRadioEnable?.());
     await page.waitForFunction(() => window.__godsEyeView.dataManager.isEnabled('radio'));
     await page.evaluate(() => window.__qaRestoreRadioEnable?.());
-    await sleep(650);
+    await page.waitForFunction(() => {
+      const scroller = document.querySelector('#global-context-panel .global-context-panel-inner');
+      const viewport = scroller.getBoundingClientRect();
+      const directory = document.querySelector('#radio-panel .radio-directory-row').getBoundingClientRect();
+      const play = document.getElementById('radio-play-btn').getBoundingClientRect();
+      return directory.top >= viewport.top && directory.bottom <= viewport.bottom
+        && play.top >= viewport.top && play.bottom <= viewport.bottom;
+    }, { timeout: 10_000 });
     const explicitRevealAfter = await page.evaluate(() => {
       const gev = window.__godsEyeView;
       const scroller = document.querySelector('#global-context-panel .global-context-panel-inner');
@@ -638,6 +668,7 @@ async function main() {
           viewer.scene.requestRender();
         }, { lon: spec.lon, height: view.height });
         await sleep(700);
+        await settleRadioFrames(page);
         const sample = await page.evaluate(async () => {
           const viewer = window.__godsEyeView.viewer;
           const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
@@ -1320,12 +1351,9 @@ async function main() {
         && clusterBadge?.rect?.h > 0,
       JSON.stringify(clusterBadge),
     );
-    const highGlobalClusterLabels = await page.evaluate(async () => {
+    await page.evaluate(async () => {
       const viewer = window.__godsEyeView.viewer;
-      const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
       const ellipsoid = viewer.scene.globe.ellipsoid;
-      const { getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
-      const { distanceFade } = await import('/src/overlays/worldOverlayDraw.js');
       viewer.camera.cancelFlight();
       viewer.camera.setView({
         destination: ellipsoid.cartographicToCartesian({
@@ -1337,6 +1365,14 @@ async function main() {
       });
       viewer.scene.requestRender();
       await new Promise((resolve) => setTimeout(resolve, 500));
+    });
+    await settleRadioFrames(page);
+    const highGlobalClusterLabels = await page.evaluate(async () => {
+      const viewer = window.__godsEyeView.viewer;
+      const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
+      const ellipsoid = viewer.scene.globe.ellipsoid;
+      const { getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
+      const { distanceFade } = await import('/src/overlays/worldOverlayDraw.js');
       const source = radio.getOverlayDiagnostics();
       const cameraPosition = viewer.camera.positionWC;
       const cameraRadius = Math.hypot(cameraPosition.x, cameraPosition.y, cameraPosition.z);
@@ -1347,11 +1383,23 @@ async function main() {
       const points = Array.from({ length: viewer.dataSources.length }, (_, index) => viewer.dataSources.get(index))
         .find((item) => item.name === 'Radio stations')?.clustering?._clusterPointCollection;
       let clusterPoint = null;
+      // Pool order is not visibility order after a camera change. Choose an
+      // on-screen point independently of the native pick result being tested.
+      const visiblePoints = [];
       for (let index = 0; index < (points?.length || 0); index += 1) {
         const point = points.get(index);
         if (!point?.show || !Array.isArray(point.id) || !point.id.length) continue;
         const anchor = viewer.scene.cartesianToCanvasCoordinates(point.position);
         if (!anchor) continue;
+        if (anchor.x < 0 || anchor.y < 0 || anchor.x > viewer.canvas.clientWidth || anchor.y > viewer.canvas.clientHeight) continue;
+        visiblePoints.push({ point, anchor });
+      }
+      visiblePoints.sort((a, b) => (
+        Math.hypot(a.anchor.x - viewer.canvas.clientWidth / 2, a.anchor.y - viewer.canvas.clientHeight / 2)
+        - Math.hypot(b.anchor.x - viewer.canvas.clientWidth / 2, b.anchor.y - viewer.canvas.clientHeight / 2)
+      ));
+      if (visiblePoints.length) {
+        const { point, anchor } = visiblePoints[0];
         const exactPick = (viewer.scene.drillPick(anchor, 16) || []).find((picked) => (
           picked?.primitive === point && picked?.id === point.id
         ));
@@ -1359,7 +1407,6 @@ async function main() {
           maxDistance: point.distanceDisplayCondition?.far ?? null,
           pickable: Boolean(exactPick),
         };
-        break;
       }
       return {
         source,
@@ -1875,7 +1922,10 @@ async function main() {
         hudVariant: manager.hud.getVariant(),
         focusId: document.activeElement?.id || null,
       };
-      const waitForLayout = () => new Promise((resolve) => setTimeout(resolve, 320));
+      const waitForLayout = async () => {
+        await new Promise((resolve) => setTimeout(resolve, 320));
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      };
       const cases = [];
 
       manager.setPanelCollapsed('global-context-panel', true);
@@ -1952,7 +2002,10 @@ async function main() {
       // owns the real tracked-aircraft camera session. Hold the frame update so
       // the intentionally synthetic Cockpit shell is not auto-exited mid-check.
       const realCockpitUpdate = manager.cockpitView.update;
-      const waitForLayout = () => new Promise((resolve) => setTimeout(resolve, 320));
+      const waitForLayout = async () => {
+        await new Promise((resolve) => setTimeout(resolve, 320));
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      };
       const prior = {
         cockpit: document.body.classList.contains('cockpit-mode'),
         cockpitActive: manager.cockpitView.active,
@@ -2057,7 +2110,10 @@ async function main() {
       };
       // The Intel HUD fades over 400ms and keeps its readout rects for the
       // whole transition, so both lanes are measured only once it has settled.
-      const waitForHudSettle = () => new Promise((resolve) => setTimeout(resolve, 560));
+      const waitForHudSettle = async () => {
+        await new Promise((resolve) => setTimeout(resolve, 560));
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      };
       for (let index = 0; index < 5; index += 1) {
         recordLayoutStep();
         if (index < 4) {
@@ -2208,14 +2264,17 @@ async function main() {
         const stableTop = utility.getBoundingClientRect().top;
         const transitionTops = [];
         let sampling = true;
+        let sampleFrame = null;
         const sampleTop = () => {
+          if (!sampling) return;
           transitionTops.push(utility.getBoundingClientRect().top);
-          if (sampling) requestAnimationFrame(sampleTop);
+          sampleFrame = requestAnimationFrame(sampleTop);
         };
-        requestAnimationFrame(sampleTop);
+        sampleFrame = requestAnimationFrame(sampleTop);
         await manager._setMapStack('osm', { syncShare: false });
         await waitForLayout();
         sampling = false;
+        cancelAnimationFrame(sampleFrame);
         mapProviderUtilityStable = transitionTops.length > 1
           && transitionTops.every((top) => Math.abs(top - stableTop) < 1);
       }
@@ -2652,9 +2711,15 @@ async function main() {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
       await radio.play();
       const beforeSpace = radio.getUIState().audioState;
-      document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, code: 'Space', key: ' ' }));
+      // Simulate an already-started hold-Space session; click-started open mic
+      // deliberately ignores Space takeover, and short taps never claim voice.
+      const priorPushToTalkMode = voice.pushToTalkMode;
+      voice.pushToTalkMode = true;
+      document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: 'Space', key: ' ' }));
+      await new Promise((resolve) => setTimeout(resolve, 700));
       const afterSpace = radio.getUIState().audioState;
-      document.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, code: 'Space', key: ' ' }));
+      document.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, code: 'Space', key: ' ' }));
+      voice.pushToTalkMode = priorPushToTalkMode;
       await radio.play();
       voice.setVoiceSpeaker('ai');
       return { beforeSpace, afterSpace, afterAi: radio.getUIState().audioState };
@@ -2719,7 +2784,7 @@ async function main() {
       const dialRect = document.querySelector('.radio-tuner-dial').getBoundingClientRect();
       const sliderRect = slider.getBoundingClientRect();
       const panelRect = document.querySelector('.radio-panel-inner').getBoundingClientRect();
-      const count = style._radioTunerStations.length;
+      const count = style._radioControls._radioTunerStations.length;
       const usable = sliderRect.width - 14;
       const xFor = (coordinate) => sliderRect.left + 7 + usable * coordinate / Math.max(1, count - 1);
       const pointer = (type, x, pointerId = 71) => slider.dispatchEvent(new PointerEvent(type, {
@@ -2745,7 +2810,7 @@ async function main() {
         };
       };
       const playsBefore = window.__qaRadioPlayCalls.length;
-      const frozenSignature = style._radioTunerBandSignature;
+      const frozenSignature = style._radioControls._radioTunerBandSignature;
       pointer('pointerdown', xFor(0));
       const left = snapshot();
       const centerCoordinate = (count - 1) / 2;
@@ -2765,14 +2830,14 @@ async function main() {
         visible: !document.getElementById('radio-tuner').hidden,
         stationCount: count,
         sliderMax: Number(slider.max),
-        bandFrozen: style._radioTunerBandSignature === frozenSignature,
+        bandFrozen: style._radioControls._radioTunerBandSignature === frozenSignature,
         left,
         center,
         shifted,
         right,
-        leftExpectedId: style._radioTunerStations[0]?.id || null,
-        centerExpectedId: style._radioTunerStations[Math.floor(centerCoordinate + 0.5)]?.id || null,
-        rightExpectedId: style._radioTunerStations[count - 1]?.id || null,
+        leftExpectedId: style._radioControls._radioTunerStations[0]?.id || null,
+        centerExpectedId: style._radioControls._radioTunerStations[Math.floor(centerCoordinate + 0.5)]?.id || null,
+        rightExpectedId: style._radioControls._radioTunerStations[count - 1]?.id || null,
         centerExpected: Math.floor(centerCoordinate + 0.5),
         tapeDelta,
         needleDelta,
@@ -2817,7 +2882,7 @@ async function main() {
       const slider = document.getElementById('radio-tuner-slider');
       // Capture a fresh gesture's complete presentation anchor before moving
       // to a different absolute directory station.
-      const beforeStations = [...style._radioTunerStations];
+      const beforeStations = [...style._radioControls._radioTunerStations];
       const sliderRect = slider.getBoundingClientRect();
       const xFor = (index) => sliderRect.left + 7
         + (sliderRect.width - 14) * index / Math.max(1, beforeStations.length - 1);
@@ -2834,7 +2899,7 @@ async function main() {
       const flyToCalls = [];
       camera.flyTo = (options) => flyToCalls.push(options);
       const before = {
-        signature: style._radioTunerBandSignature,
+        signature: style._radioControls._radioTunerBandSignature,
         ids: beforeStations.map((station) => station.id),
         slot: Number(slider.value),
         selectedId: radio.getUIState().selected?.id || null,
@@ -2848,10 +2913,10 @@ async function main() {
         .find((entity) => String(entity.id).startsWith('radio:selected:'))?.id || null;
       const flyToCallsBeforeCancel = flyToCalls.length;
       pointer('pointercancel', targetIndex);
-      const afterStations = style._radioTunerStations;
+      const afterStations = style._radioControls._radioTunerStations;
       const afterState = radio.getUIState();
       const after = {
-        signature: style._radioTunerBandSignature,
+        signature: style._radioControls._radioTunerBandSignature,
         ids: afterStations.map((station) => station.id),
         slot: Number(slider.value),
         selectedId: afterState.selected?.id || null,
@@ -2972,7 +3037,7 @@ async function main() {
     const tunerRefreshTarget = await page.evaluate(() => {
       const gev = window.__godsEyeView;
       const slider = document.getElementById('radio-tuner-slider');
-      const stations = gev.styleManager._radioTunerStations;
+      const stations = gev.styleManager._radioControls._radioTunerStations;
       const targetIndex = 1;
       const rect = slider.getBoundingClientRect();
       const clientX = rect.left + 7 + (rect.width - 14) * targetIndex / Math.max(1, stations.length - 1);
@@ -3055,7 +3120,7 @@ async function main() {
       const max = Number(slider.max);
       const direction = startSlot < max ? 1 : -1;
       const targetIndex = startSlot + direction;
-      const targetId = gev.styleManager._radioTunerStations[targetIndex]?.id || null;
+      const targetId = gev.styleManager._radioControls._radioTunerStations[targetIndex]?.id || null;
       const rect = slider.getBoundingClientRect();
       const xFor = (index) => rect.left + 7 + (rect.width - 14) * index / Math.max(1, max);
       const pointer = (type, index) => slider.dispatchEvent(new PointerEvent(type, {
@@ -3106,18 +3171,18 @@ async function main() {
       const slider = document.getElementById('radio-tuner-slider');
       const targetIndex = 11;
       slider.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: 1 }));
-      const station = gev.styleManager._radioTunerStations[targetIndex];
+      const station = gev.styleManager._radioControls._radioTunerStations[targetIndex];
       const rect = slider.getBoundingClientRect();
       const currentRatio = Number(slider.value) / Math.max(1, Number(slider.max));
       window.__qaRadioDelayNextPlay = true;
       return {
         id: station.id,
         targetIndex,
-        count: gev.styleManager._radioTunerStations.length,
-        frozenSignature: gev.styleManager._radioTunerBandSignature,
+        count: gev.styleManager._radioControls._radioTunerStations.length,
+        frozenSignature: gev.styleManager._radioControls._radioTunerBandSignature,
         startX: rect.left + 7 + (rect.width - 14) * currentRatio,
         targetX: rect.left + 7 + (rect.width - 14) * targetIndex
-          / Math.max(1, gev.styleManager._radioTunerStations.length - 1),
+          / Math.max(1, gev.styleManager._radioControls._radioTunerStations.length - 1),
         y: rect.top + rect.height / 2,
       };
     });
@@ -3135,11 +3200,11 @@ async function main() {
         audioState: state.audioState,
         tuningStatic: state.tuningStatic,
         awaiting: state.tuningAwaitingStationId,
-        signatureStable: gev.styleManager._radioTunerBandSignature === target.frozenSignature,
-        selectedIndex: gev.styleManager._radioTunerStations.findIndex((item) => item.id === state.selected?.id),
+        signatureStable: gev.styleManager._radioControls._radioTunerBandSignature === target.frozenSignature,
+        selectedIndex: gev.styleManager._radioControls._radioTunerStations.findIndex((item) => item.id === state.selected?.id),
         sliderSlot: Number(slider.value),
         ratio: Number(document.getElementById('radio-tuner').style.getPropertyValue('--radio-tuner-ratio')),
-        pinned: gev.styleManager._radioTunerBandPinnedForNavigation,
+        pinned: gev.styleManager._radioControls._radioTunerBandPinnedForNavigation,
       };
     }, tunerCommitTarget);
     check(
@@ -3183,7 +3248,7 @@ async function main() {
         y: rect.top + rect.height / 2,
         ratio,
         usableWidth: rect.width - 14,
-        signature: style._radioTunerBandSignature,
+        signature: style._radioControls._radioTunerBandSignature,
       };
     });
     const microDragSamples = [];
@@ -3199,7 +3264,7 @@ async function main() {
           pixelDelta,
           slot: Number(slider.value),
           ratio: Number(document.getElementById('radio-tuner').style.getPropertyValue('--radio-tuner-ratio')),
-          signature: style._radioTunerBandSignature,
+          signature: style._radioControls._radioTunerBandSignature,
         };
       }, delta));
     }
@@ -3238,9 +3303,9 @@ async function main() {
       const gev = window.__godsEyeView;
       const style = gev.styleManager;
       const before = {
-        signature: style._radioTunerBandSignature,
-        ids: style._radioTunerStations.map((station) => station.id),
-        selectedIndex: style._radioTunerStations.findIndex((station) => station.id === selectedId),
+        signature: style._radioControls._radioTunerBandSignature,
+        ids: style._radioControls._radioTunerStations.map((station) => station.id),
+        selectedIndex: style._radioControls._radioTunerStations.findIndex((station) => station.id === selectedId),
         needle: Number(document.getElementById('radio-tuner').style.getPropertyValue('--radio-tuner-ratio')),
       };
       const current = gev.viewer.camera.positionCartographic;
@@ -3256,11 +3321,11 @@ async function main() {
       });
       gev.viewer.camera.changed.raiseEvent();
       await new Promise((resolve) => setTimeout(resolve, 400));
-      const stations = gev.styleManager._radioTunerStations;
+      const stations = gev.styleManager._radioControls._radioTunerStations;
       const selectedIndex = stations.findIndex((station) => station.id === selectedId);
       return {
         before,
-        signature: style._radioTunerBandSignature,
+        signature: style._radioControls._radioTunerBandSignature,
         ids: stations.map((station) => station.id),
         count: stations.length,
         selectedIndex,
@@ -3279,14 +3344,14 @@ async function main() {
     const nextNeedleBefore = await page.evaluate(() => {
       const style = window.__godsEyeView.styleManager;
       const selectedId = window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().selected?.id;
-      const selectedIndex = style._radioTunerStations.findIndex((station) => station.id === selectedId);
-      const selectedPoolIndex = style._radioTunerPool.findIndex((station) => station.id === selectedId);
-      const expectedPoolIndex = (selectedPoolIndex + 1) % style._radioTunerPool.length;
+      const selectedIndex = style._radioControls._radioTunerStations.findIndex((station) => station.id === selectedId);
+      const selectedPoolIndex = style._radioControls._radioTunerPool.findIndex((station) => station.id === selectedId);
+      const expectedPoolIndex = (selectedPoolIndex + 1) % style._radioControls._radioTunerPool.length;
       return {
-        signature: style._radioTunerBandSignature,
+        signature: style._radioControls._radioTunerBandSignature,
         selectedIndex,
-        count: style._radioTunerStations.length,
-        expectedId: style._radioTunerPool[expectedPoolIndex]?.id || null,
+        count: style._radioControls._radioTunerStations.length,
+        expectedId: style._radioControls._radioTunerPool[expectedPoolIndex]?.id || null,
       };
     });
     await page.$eval('#radio-next-btn', (button) => button.click());
@@ -3294,15 +3359,15 @@ async function main() {
     const nextNeedleAfter = await page.evaluate(() => {
       const style = window.__godsEyeView.styleManager;
       const selectedId = window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().selected?.id;
-      const selectedIndex = style._radioTunerStations.findIndex((station) => station.id === selectedId);
+      const selectedIndex = style._radioControls._radioTunerStations.findIndex((station) => station.id === selectedId);
       return {
-        signature: style._radioTunerBandSignature,
+        signature: style._radioControls._radioTunerBandSignature,
         selectedId,
         selectedIndex,
-        count: style._radioTunerStations.length,
+        count: style._radioControls._radioTunerStations.length,
         sliderSlot: Number(document.getElementById('radio-tuner-slider').value),
         ratio: Number(document.getElementById('radio-tuner').style.getPropertyValue('--radio-tuner-ratio')),
-        pinned: style._radioTunerBandPinnedForNavigation,
+        pinned: style._radioControls._radioTunerBandPinnedForNavigation,
       };
     });
     check(
@@ -3322,13 +3387,14 @@ async function main() {
       const slider = document.getElementById('radio-tuner-slider');
       const key = (type, value) => slider.dispatchEvent(new KeyboardEvent(type, {
         bubbles: true,
+        cancelable: true,
         key: value,
       }));
       const markerId = () => gev.viewer.entities.values
         .find((entity) => String(entity.id).startsWith('radio:selected:'))?.id || null;
       const startIndex = Number(slider.value);
-      const expectedIndex = Math.min(style._radioTunerStations.length - 1, startIndex + 1);
-      const expectedId = style._radioTunerStations[expectedIndex]?.id || null;
+      const expectedIndex = Math.min(style._radioControls._radioTunerStations.length - 1, startIndex + 1);
+      const expectedId = style._radioControls._radioTunerStations[expectedIndex]?.id || null;
       const playsBefore = window.__qaRadioPlayCalls.length;
       key('keydown', 'ArrowRight');
       const preview = {
@@ -3353,7 +3419,7 @@ async function main() {
         tuningActive: radio.getUIState().tuningActive,
         playDelta: window.__qaRadioPlayCalls.length - committedPlays,
       };
-      const count = style._radioTunerStations.length;
+      const count = style._radioControls._radioTunerStations.length;
       const pageStep = Math.max(1, Math.round((count - 1) / 10));
       const previewAndCancel = (value, expectedSlot) => {
         const beforePlays = window.__qaRadioPlayCalls.length;
@@ -3376,7 +3442,8 @@ async function main() {
         previewAndCancel('PageUp', Math.min(count - 1, base + pageStep)),
         previewAndCancel('PageDown', Math.max(0, base - pageStep)),
       ];
-      return { startIndex, expectedIndex, expectedId, preview, committed, cancelled, navigation };
+      return { startIndex, expectedIndex, expectedId, preview, committed, cancelled, navigation,
+        panelStayedOpen: !document.getElementById('radio-panel').classList.contains('collapsed') };
     });
     check(
       'keyboard preview is silent, key release commits once, and Escape restores the committed station',
@@ -3388,7 +3455,8 @@ async function main() {
         && !tunerKeyboard.committed.tuningActive && tunerKeyboard.committed.playDelta === 1
         && tunerKeyboard.cancelled.selectedId === tunerKeyboard.expectedId
         && tunerKeyboard.cancelled.slot === tunerKeyboard.expectedIndex
-        && !tunerKeyboard.cancelled.tuningActive && tunerKeyboard.cancelled.playDelta === 0,
+        && !tunerKeyboard.cancelled.tuningActive && tunerKeyboard.cancelled.playDelta === 0
+        && tunerKeyboard.panelStayedOpen,
       JSON.stringify(tunerKeyboard),
     );
     check(
@@ -3405,7 +3473,7 @@ async function main() {
       const radio = gev.dataManager.layers.get('radio').module;
       const slider = document.getElementById('radio-tuner-slider');
       const rect = slider.getBoundingClientRect();
-      const count = style._radioTunerStations.length;
+      const count = style._radioControls._radioTunerStations.length;
       const centerIndex = Math.floor((count - 1) / 2 + 0.5);
       const clientX = rect.left + rect.width / 2;
       slider.dispatchEvent(new PointerEvent('pointerdown', {
@@ -3425,7 +3493,7 @@ async function main() {
         ratio: Number(document.getElementById('radio-tuner').style.getPropertyValue('--radio-tuner-ratio')),
         markerId: gev.viewer.entities.values
           .find((entity) => String(entity.id).startsWith('radio:selected:'))?.id || null,
-        expectedId: style._radioTunerStations[centerIndex]?.id || null,
+        expectedId: style._radioControls._radioTunerStations[centerIndex]?.id || null,
       };
       slider.dispatchEvent(new PointerEvent('pointercancel', {
         bubbles: true,
@@ -3450,7 +3518,7 @@ async function main() {
     const fullPoolNavigation = await page.evaluate(() => {
       const gev = window.__godsEyeView;
       const radio = gev.dataManager.layers.get('radio').module;
-      const pool = gev.styleManager._radioTunerPool;
+      const pool = gev.styleManager._radioControls._radioTunerPool;
       const ids = pool.map((station) => station.id);
       const selectWithoutPlayback = (index) => radio.selectStation(ids[index], {
         autoplay: false,
@@ -3500,7 +3568,7 @@ async function main() {
       const gev = window.__godsEyeView;
       const slider = document.getElementById('radio-tuner-slider');
       const rect = slider.getBoundingClientRect();
-      const count = gev.styleManager._radioTunerStations.length;
+      const count = gev.styleManager._radioControls._radioTunerStations.length;
       const current = Number(slider.value);
       const target = Math.min(count - 1, current + 4);
       const xFor = (index) => rect.left + 7 + (rect.width - 14) * index / Math.max(1, count - 1);
@@ -3695,7 +3763,7 @@ async function main() {
       Array.from({ length: gev.viewer.dataSources.length }, (_, index) => gev.viewer.dataSources.get(index))
         .find((item) => item.name === 'Radio stations').clustering.enabled = true;
       radio.selectStation('00000000-0000-4000-8000-000000000001', { autoplay: false, focus: false });
-      const pool = gev.styleManager._radioTunerPool;
+      const pool = gev.styleManager._radioControls._radioTunerPool;
       const selectedIndex = pool.findIndex((station) => station.id === radio.getUIState().selected?.id);
       window.__qaRadioExpectedPrimary = pool[(selectedIndex + 1) % pool.length];
       window.__qaRadioExpectedFallback = pool[(selectedIndex + 2) % pool.length];
@@ -4390,7 +4458,10 @@ async function main() {
     });
     await page.click('#context-radio-toggle-btn');
     await page.waitForFunction(() => !document.getElementById('radio-panel').classList.contains('collapsed'));
-    await sleep(450);
+    await page.waitForFunction((priorScroll) => (
+      document.activeElement?.getAttribute('data-collapse-target') === 'radio-panel'
+      && document.querySelector('#global-context-panel .global-context-panel-inner').scrollTop > priorScroll
+    ), { timeout: 10_000 }, expandedContextRadioBefore.scrollTop);
     const expandedContextRadioAfter = await page.evaluate(() => {
       const gev = window.__godsEyeView;
       gev.styleManager._renderRadioState(gev.dataManager.layers.get('radio').module.getUIState());

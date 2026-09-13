@@ -44,11 +44,13 @@ test('a free-text search records its destination for the LOCATION mini-status', 
 });
 
 test('the mini-status reads its copy from the shared formatter', () => {
-  assert.match(ui, /import \{ locationMiniStatus \} from '\.\/locationStatus\.js';/);
+  const controls = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'locationControls.js'), 'utf8');
+  assert.match(controls, /import \{ locationMiniStatus \} from '\.\.\/locationStatus\.js';/);
+  assert.match(controls, /const lines = locationMiniStatus\(state\)/);
   const start = ui.indexOf('  _updateLocationMiniStatus() {');
   assert.ok(start > 0, '_updateLocationMiniStatus is missing');
   const body = ui.slice(start, ui.indexOf('\n  }', start));
-  assert.match(body, /locationMiniStatus\(\{[\s\S]*?searchedLabel: this\._searchedLocationLabel,[\s\S]*?\}\)/);
+  assert.match(body, /_locationControls\?\.renderStatus\(\{[\s\S]*?searchedLabel: this\._searchedLocationLabel,[\s\S]*?\}\)/);
   // No second copy of the placeholder strings to drift out of sync.
   assert.doesNotMatch(body, /Location: --/);
 });

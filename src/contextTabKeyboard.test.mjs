@@ -1,3 +1,7 @@
+import { readFileSync as readRadioSource } from 'node:fs';
+const radioBindings = readRadioSource(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
+const radioPresentation = readRadioSource(new URL('./ui/radioPresentation.js', import.meta.url), 'utf8');
+const radioControlsSource = readRadioSource(new URL('./ui/radioControls.js', import.meta.url), 'utf8');
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -136,14 +140,8 @@ test('Context async action buttons remain focused while busy', () => {
     ui.indexOf('_initGlobalContextPanel() {'),
     ui.indexOf('async _runUserFacingContextAction(', ui.indexOf('_initGlobalContextPanel() {')),
   );
-  const radio = ui.slice(
-    ui.indexOf('const toggleRadio = async (trigger) => {'),
-    ui.indexOf('this._contextRadioToggleBtn?.addEventListener', ui.indexOf('const toggleRadio = async (trigger) => {')),
-  );
-  const radioSync = ui.slice(
-    ui.indexOf('_renderRadioState(state) {'),
-    ui.indexOf('if (this._radioFilter)', ui.indexOf('_renderRadioState(state) {')),
-  );
+  const radio = radioBindings.slice(radioBindings.indexOf('const toggleRadio = async (trigger) => {'), radioBindings.indexOf('this.listen(this._contextRadioToggleBtn,'));
+  const radioSync = radioPresentation.slice(0, radioPresentation.indexOf('if (this._radioFilter)'));
   const clear = ui.slice(
     ui.indexOf('clearSelectedLayers() {'),
     ui.indexOf('resetToGlobeView() {', ui.indexOf('clearSelectedLayers() {')),
@@ -157,5 +155,8 @@ test('Context async action buttons remain focused while busy', () => {
     assert.match(radioSync, new RegExp(`${name}\\.disabled = false`));
   }
   assert.doesNotMatch(clear, /_clearSelectedLayersBtn\.disabled\s*=\s*true/);
-  assert.match(clear, /_clearSelectedLayersBtn\.setAttribute\('aria-busy', 'true'\)/);
+  assert.match(clear, /_clearLayersControl\?\.setBusy\(true\)/);
+  const control = readFileSync(new URL('./ui/clearLayersControl.js', import.meta.url), 'utf8');
+  assert.match(control, /button\.setAttribute\('aria-busy', String\(busy\)\)/);
+  assert.doesNotMatch(control, /button\.disabled\s*=/);
 });
