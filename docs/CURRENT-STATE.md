@@ -23,6 +23,8 @@
   reports supported/ready/step state and `POST` starts the profile's plan, both
   behind the same loopback admission gate as the key endpoints. The row shows
   `brew install localai` as a command rather than running a package manager.
+  Choosing LOCAL opens this panel when setup is missing; returning from the
+  terminal rechecks the binary and reveals INSTALL without a reload.
 - The backend status endpoint answers `ready`, `starting`, `needs-setup`,
   `unavailable` or `stopped`. `needs-setup` names the command that installs the
   missing piece and ends the session attempt instead of retrying; a warm-up

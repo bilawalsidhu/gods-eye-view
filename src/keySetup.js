@@ -17,6 +17,25 @@ import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
  */
 import { initLocalVoiceRow } from './voice/localVoiceRow.js';
 
+export const PROVIDER_SETTINGS_OPEN_EVENT = 'gev:provider-settings-open';
+
+/** Ask the loopback Provider Settings owner to reveal its panel. */
+export function requestProviderSettings(eventTarget = globalThis) {
+  const EventConstructor = eventTarget?.Event || globalThis.Event;
+  if (
+    typeof eventTarget?.dispatchEvent !== 'function' ||
+    typeof EventConstructor !== 'function'
+  ) {
+    return false;
+  }
+  try {
+    eventTarget.dispatchEvent(new EventConstructor(PROVIDER_SETTINGS_OPEN_EVENT));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Chip label — pure, exported for tests. */
 export function keySetupChipLabel(status) {
   const missing = Math.max(0, (status?.total || 0) - (status?.setCount || 0));
@@ -145,7 +164,12 @@ function buildRow(documentRef, key) {
  * Wire the chip + dialog. Fire-and-forget from main.js; resolves to null when
  * the surface has no business existing (prod build, LAN visitor, no markup).
  */
-export async function initKeySetup({ documentRef = globalThis.document, fetchImpl, signal } = {}) {
+export async function initKeySetup({
+  documentRef = globalThis.document,
+  eventTarget = globalThis,
+  fetchImpl,
+  signal,
+} = {}) {
   const chip = documentRef?.getElementById?.('key-setup-chip');
   const root = documentRef?.getElementById?.('key-setup');
   if (!chip || !root || root.dataset.initialized === 'true') return null;
@@ -154,11 +178,24 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
   let disposed = false;
   let disposeControls = () => {};
   let localVoiceRow = null;
+  let openRequested = false;
+  let openDialog = () => {
+    openRequested = true;
+  };
+  const onOpenRequest = () => openDialog();
+  eventTarget?.addEventListener?.(
+    PROVIDER_SETTINGS_OPEN_EVENT,
+    onOpenRequest,
+  );
   const destroy = () => {
     if (disposed) return;
     disposed = true;
     lifetime.abort();
     signal?.removeEventListener('abort', destroy);
+    eventTarget?.removeEventListener?.(
+      PROVIDER_SETTINGS_OPEN_EVENT,
+      onOpenRequest,
+    );
     disposeControls();
     chip.remove();
     root.remove();
@@ -212,17 +249,22 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
     onEscape: () => close(),
   });
 
-  const openDialog = () => {
+  openDialog = () => {
     if (disposed || open) return;
     open = true;
     keyboard.activate();
     root.hidden = false;
+    void localVoiceRow?.refresh?.();
     globalThis.requestAnimationFrame?.(() => {
       if (!open) return;
       root.classList.add('visible');
       root.querySelector('input')?.focus?.({ preventScroll: true });
     });
   };
+  if (openRequested) {
+    openRequested = false;
+    openDialog();
+  }
 
   const close = () => {
     if (!open) return;

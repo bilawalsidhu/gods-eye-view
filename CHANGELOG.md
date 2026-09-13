@@ -149,6 +149,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Local MiniCPM tool markup is converted to structured function calls without
   reaching speech output, and disabling model thinking reaches the MLX chat
   template as `enable_thinking=false`.
+- Choosing LOCAL now opens Provider Settings when setup is missing. Returning
+  from installing LocalAI refreshes the LOCAL VOICE row without a page reload.
 
 - Reduce terrain-height timeouts when Re:Earth slows down. Batches are
   sized against measured response latency on both browser and server to reduce

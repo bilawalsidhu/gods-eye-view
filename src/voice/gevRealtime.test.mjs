@@ -3753,7 +3753,15 @@ test('a genuinely different refused call still gets its own output', async () =>
 });
 
 test('a local backend that needs setup fails the session start with the fix, not a retry loop', async () => {
-  const controller = new GevRealtimeController({ ui: {}, runner: async () => ({}) });
+  let settingsOpened = 0;
+  const controller = new GevRealtimeController({
+    ui: {},
+    runner: async () => ({}),
+    openProviderSettings: () => {
+      settingsOpened += 1;
+      return true;
+    },
+  });
   const methods = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, options = {}) => {
@@ -3770,6 +3778,33 @@ test('a local backend that needs setup fails the session start with the fix, not
     assert.equal(result.ok, false);
     assert.match(result.detail, /npm run voice:local:setup/);
     assert.deepEqual(methods, ['POST'], 'a missing install is terminal, so it must not keep polling');
+    assert.equal(settingsOpened, 1, 'the explicit mic attempt reveals the setup path');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('switching to LOCAL reveals setup when the backend reports it missing', async () => {
+  let settingsOpened = 0;
+  const controller = new GevRealtimeController({
+    ui: {},
+    runner: async () => ({}),
+    openProviderSettings: () => {
+      settingsOpened += 1;
+      return true;
+    },
+  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    json: async () => ({
+      state: 'needs-setup',
+      detail: 'LocalAI is not installed — run: brew install localai',
+    }),
+  });
+  try {
+    await controller.ensureLocalBackend();
+    assert.equal(settingsOpened, 1);
+    assert.equal(controller.localBackendState.state, 'needs-setup');
   } finally {
     globalThis.fetch = originalFetch;
   }

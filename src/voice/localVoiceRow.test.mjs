@@ -74,10 +74,38 @@ test('the row offers one install and reports progress from the server', async ()
 test('a missing LocalAI shows the command instead of a button', async () => {
   const { parts, documentRef } = stubPanel();
   const fetchImpl = async () => ok({ binary: false, supported: true, ready: false, state: 'idle', steps: [] });
-  await initLocalVoiceRow({ documentRef, fetchImpl });
+  const row = await initLocalVoiceRow({ documentRef, fetchImpl });
   assert.equal(parts['[data-local-voice-command]'].hidden, false);
   assert.equal(parts['[data-local-voice-command]'].textContent, 'brew install localai');
   assert.equal(parts['[data-local-voice-install]'].hidden, true);
+  row.dispose();
+});
+
+test('returning from Homebrew replaces the command with INSTALL without a reload', async () => {
+  const { parts, documentRef } = stubPanel();
+  const eventTarget = new EventTarget();
+  let binary = false;
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls += 1;
+    return ok({ binary, supported: true, ready: false, state: 'idle', steps: [] });
+  };
+  const row = await initLocalVoiceRow({ documentRef, eventTarget, fetchImpl });
+  assert.equal(parts['[data-local-voice-command]'].hidden, false);
+
+  binary = true;
+  eventTarget.dispatchEvent(new Event('focus'));
+  await new Promise((resolve) => { setImmediate(resolve); });
+
+  assert.equal(calls, 2);
+  assert.equal(parts['[data-local-voice-command]'].hidden, true);
+  assert.equal(parts['[data-local-voice-install]'].hidden, false);
+  assert.equal(parts['[data-local-voice-install]'].textContent, 'INSTALL');
+  row.dispose();
+
+  eventTarget.dispatchEvent(new Event('focus'));
+  await new Promise((resolve) => { setImmediate(resolve); });
+  assert.equal(calls, 2, 'dispose removes the focus recheck');
 });
 
 test('the row removes itself where the endpoint cannot answer', async () => {

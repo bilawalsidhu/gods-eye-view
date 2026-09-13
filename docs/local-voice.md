@@ -40,16 +40,22 @@ command when LocalAI itself is missing rather than driving your package
 manager. The endpoints behind the row (`/api/setup/local-voice`) answer only
 the machine running the dev server, exactly like the key endpoints.
 
+Choosing **LOCAL** also opens POWER UP automatically when this setup is
+missing. If the row asks for `brew install localai`, run it in a terminal and
+return to the browser: the row checks again on focus and replaces the command
+with **INSTALL** without a page reload.
+
 Verify an existing installation without downloading or changing anything:
 
 ```sh
 npm run voice:local:check
 ```
 
-Start GEV normally and click **CLOUD** beside the mic to select **LOCAL**. The
-dev server starts LocalAI on demand, waits for all four stages to load, and
-stops the child process when the server exits. The first start is much slower
-than later sessions because every model must enter memory.
+Start GEV normally and click **CLOUD** beside the mic to select **LOCAL**. If
+setup is incomplete, POWER UP opens so the LOCAL VOICE row can finish it.
+Otherwise, the dev server starts LocalAI on demand, waits for all four stages
+to load, and stops the child process when the server exits. The first start is
+much slower than later sessions because every model must enter memory.
 
 The mic panel reports what the warm-up is actually doing — `Starting local
 backend`, `Downloading model weights… 412 MB so far`, then `Loading speech,

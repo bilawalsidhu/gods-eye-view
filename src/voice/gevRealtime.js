@@ -1,4 +1,5 @@
 import { createGevActionRunner, readLayerLifecycleSummary } from './gevActions.js';
+import { requestProviderSettings } from '../keySetup.js';
 import {
   DEFAULT_VOICE_TIER,
   VOICE_COST_LIMITS,
@@ -289,11 +290,18 @@ export function initGevVoiceCommands({ viewer, styleManager, dataManager, sceneD
 }
 
 export class GevRealtimeController {
-  constructor({ runner, ui, radioLayer = null, dataManager = null }) {
+  constructor({
+    runner,
+    ui,
+    radioLayer = null,
+    dataManager = null,
+    openProviderSettings = requestProviderSettings,
+  }) {
     this.runner = runner;
     this.ui = ui;
     this.radioLayer = radioLayer;
     this.dataManager = dataManager;
+    this.openProviderSettings = openProviderSettings;
     this.radioVoiceDucked = false;
     this.pc = null;
     this.dc = null;
@@ -2063,6 +2071,15 @@ export class GevRealtimeController {
     return this.voiceProvider;
   }
 
+  /** Reveal the local setup surface without making backend readiness depend on UI. */
+  requestLocalVoiceSetup() {
+    try {
+      return Boolean(this.openProviderSettings?.());
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Block a starting session until the local backend can actually serve it.
    *
@@ -2092,6 +2109,7 @@ export class GevRealtimeController {
       // needs-setup is not a failure to retry: the backend or the profile is
       // not installed, and the detail names the command that installs it.
       if (state === 'needs-setup') {
+        this.requestLocalVoiceSetup();
         return { ok: false, detail: data?.detail || 'Local voice needs setup — run npm run voice:local:setup' };
       }
       if (state === 'unavailable' || state === 'stopped') {
@@ -2117,14 +2135,15 @@ export class GevRealtimeController {
       const res = await fetch(LOCAL_BACKEND_URL, { method: 'POST', cache: 'no-store' });
       const data = await res.json().catch(() => null);
       this.setLocalBackendState(data?.state || 'unavailable', data?.detail || '');
-      if (data?.state === 'starting') this.watchLocalBackend();
+      if (data?.state === 'needs-setup') this.requestLocalVoiceSetup();
+      if (data?.state === 'starting') this.watchLocalBackend({ openSetup: true });
     } catch (error) {
       this.setLocalBackendState('unavailable', error?.message || 'Local backend unreachable');
     }
   }
 
   /** Poll the status endpoint until it settles on ready/stopped/unavailable. */
-  watchLocalBackend() {
+  watchLocalBackend({ openSetup = false } = {}) {
     this.stopWatchingLocalBackend();
     this.localBackendPollTimer = setInterval(async () => {
       // A switch back to CLOUD mid-warmup must not keep polling forever.
@@ -2137,6 +2156,9 @@ export class GevRealtimeController {
         const data = await res.json().catch(() => null);
         const state = data?.state || 'unavailable';
         this.setLocalBackendState(state, data?.detail || '');
+        if (openSetup && state === 'needs-setup') {
+          this.requestLocalVoiceSetup();
+        }
         if (state !== 'starting') this.stopWatchingLocalBackend();
       } catch {
         /* transient — the next tick retries */

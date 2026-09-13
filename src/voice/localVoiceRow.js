@@ -17,6 +17,7 @@ const POLL_MS = 2000;
 
 export async function initLocalVoiceRow({
   documentRef = globalThis.document,
+  eventTarget = globalThis,
   fetchImpl,
   signal,
 } = {}) {
@@ -32,6 +33,7 @@ export async function initLocalVoiceRow({
   const progress = root.querySelector('[data-local-voice-progress]');
   let timer = null;
   let disposed = false;
+  let lastStatus = null;
 
   const stopPolling = () => {
     if (timer) globalThis.clearTimeout?.(timer);
@@ -40,6 +42,7 @@ export async function initLocalVoiceRow({
 
   const paint = (status) => {
     if (disposed) return;
+    lastStatus = status;
     root.hidden = false;
     root.dataset.state = status.state || 'idle';
     root.dataset.ready = String(Boolean(status.ready));
@@ -93,11 +96,18 @@ export async function initLocalVoiceRow({
     button.disabled = true;
     void load('POST');
   };
+  const onFocus = () => {
+    // The user has usually just returned from running `brew install localai`.
+    // Re-probe once instead of requiring a page reload or polling a child
+    // process forever while the package is absent.
+    if (lastStatus?.binary === false) void load();
+  };
   const dispose = () => {
     if (disposed) return;
     disposed = true;
     stopPolling();
     button?.removeEventListener?.('click', onInstall);
+    eventTarget?.removeEventListener?.('focus', onFocus);
     signal?.removeEventListener?.('abort', dispose);
   };
   if (signal?.aborted) {
@@ -106,7 +116,8 @@ export async function initLocalVoiceRow({
   }
   signal?.addEventListener?.('abort', dispose, { once: true });
   button?.addEventListener?.('click', onInstall);
+  eventTarget?.addEventListener?.('focus', onFocus);
 
   await load();
-  return disposed ? null : { dispose };
+  return disposed ? null : { dispose, refresh: () => load() };
 }
