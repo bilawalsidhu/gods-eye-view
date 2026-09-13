@@ -21,6 +21,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   pipeline from the mic panel. The Apple Silicon reference profile combines
   Silero VAD, Parakeet STT, MiniCPM5-2B MLX 4-bit, and Kokoro TTS, with a
   repeatable setup/check command and the same 28 GEV tools.
+- Split Cockpit camera/controller, instruments, briefing, signals and layout into focused modules with explicit application operations.
+- Give Display portal moves cancellable focus/scroll restoration and stop Cockpit work before asynchronous UI teardown.
 
 - Separate Context controls, mode transitions and layer restoration; release tab listeners and suppress late panel/search feedback after disposal.
 

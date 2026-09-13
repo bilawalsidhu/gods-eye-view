@@ -1,3 +1,4 @@
+import { onKeyDown as cockpitKeyDown } from './ui/cockpitInput.js';
 import { readFileSync as readRadioSource } from 'node:fs';
 const radioBindings = readRadioSource(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
 const radioPresentation = readRadioSource(new URL('./ui/radioPresentation.js', import.meta.url), 'utf8');
@@ -139,7 +140,7 @@ test('panel chrome wires Escape for every declared collapse target', () => {
 });
 
 test('Cockpit Escape collapses Contact or Live Signals before exiting Cockpit', () => {
-  const onKeyDown = method('onKeyDown', 'enter');
+  const onKeyDown = cockpitKeyDown.toString();
   assert.match(
     onKeyDown,
     /event\.target\?\.closest\?\.\('\.cesium-credit-lightbox'\)[\s\S]*?return;/,

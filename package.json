@@ -141,6 +141,10 @@
     "./ui/radio": "./src/ui/radio.js",
     "./ui/cctv": "./src/ui/cctv.js",
     "./ui/context": "./src/ui/context.js",
-    "./ui/context/policy": "./src/contextModePolicy.js"
+    "./ui/context/policy": "./src/contextModePolicy.js",
+    "./ui/cockpit": "./src/ui/cockpit.js",
+    "./ui/cockpit/math": "./src/cockpitMath.js",
+    "./ui/cockpit/layout": "./src/cockpitUtilityLayout.js",
+    "./ui/cockpit/vision": "./src/cockpitVisionPolicy.js"
   }
 }

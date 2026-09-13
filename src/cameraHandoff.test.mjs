@@ -1,3 +1,5 @@
+import { enter as cockpitEnter, navigateContext } from './ui/cockpitTrackingController.js';
+import { CockpitViewController } from './ui/cockpitController.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -29,11 +31,7 @@ function ordered(source, needles, label) {
 }
 
 test('Cockpit takeover invalidates deferred work before camera cancellation', () => {
-  const enter = body(
-    ui,
-    /enter\(\) \{([\s\S]*?)\n  \}\n\n  exit\(/,
-    'Cockpit enter',
-  );
+  const enter = cockpitEnter.toString();
   ordered(enter, [
     'if (!info || !entity?.position) return false;',
     'this.onCameraTakeover?.();',
@@ -131,21 +129,18 @@ test('voice Cockpit next/previous shares the manual Context navigation path', ()
   // is what stamps. Divergence here is how a voice-only camera path escapes
   // the arbiter.
   assert.match(
-    ui,
-    /this\._listen\(this\.contextPrevious, 'click', \(\) => this\.navigateContext\(-1, \{ origin: 'user' \}\)\);/,
+    CockpitViewController.toString(),
+    /this\._listen\(this\.contextPrevious, 'click', \(\) =>\s*this\.navigateContext\(-1, \{ origin: 'user' \}\),?\s*\);/,
   );
   assert.match(
-    ui,
-    /this\._listen\(this\.contextNext, 'click', \(\) => this\.navigateContext\(1, \{ origin: 'user' \}\)\);/,
+    CockpitViewController.toString(),
+    /this\._listen\(this\.contextNext, 'click', \(\) =>\s*this\.navigateContext\(1, \{ origin: 'user' \}\),?\s*\);/,
   );
-  const funnel = body(
-    ui,
-    /navigateContext\(direction, options = \{\}\) \{([\s\S]*?)\n  \}\n\n  \/\*\* Adopt/,
-    'Cockpit Context navigation funnel',
-  );
+  const funnel = navigateContext.toString();
+  assert.match(funnel, /const navigationOptions = wasActive\s*\? \{ \.\.\.options, aircraftOnly: true \}\s*: options;/);
   ordered(funnel, [
     "const method = direction < 0 ? 'navigatePrevious' : 'navigateNext';",
-    'const navigationOptions = wasActive ? { ...options, aircraftOnly: true } : options;',
+    'const navigationOptions = wasActive',
     'militaryAwarenessLayer?.[method]?.(navigationOptions)',
     'this._adoptTrackedEntity(performance.now());',
   ], 'Cockpit Context navigation funnel');

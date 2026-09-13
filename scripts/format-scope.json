@@ -201,5 +201,22 @@
   "src/ui/contextPresentation.js",
   "src/ui/contextSession.js",
   "src/ui/contextSubscriptions.js",
-  "src/ui/contextTransactions.js"
+  "src/ui/contextTransactions.js",
+  "src/ui/cockpit.js",
+  "src/ui/cockpitBriefing.js",
+  "src/ui/cockpitCamera.js",
+  "src/ui/cockpitContext.js",
+  "src/ui/cockpitController.js",
+  "src/ui/cockpitController.test.mjs",
+  "src/ui/cockpitDisplayPortal.js",
+  "src/ui/cockpitDisplayPortal.test.mjs",
+  "src/ui/cockpitInput.js",
+  "src/ui/cockpitInstruments.js",
+  "src/ui/cockpitLayout.js",
+  "src/ui/cockpitPresentation.js",
+  "src/ui/cockpitSignals.js",
+  "src/ui/cockpitTrackingController.js",
+  "src/cockpitMath.js",
+  "src/cockpitUtilityLayout.js",
+  "src/cockpitVisionPolicy.js"
 ]

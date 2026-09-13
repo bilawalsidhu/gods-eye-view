@@ -412,5 +412,32 @@
       "src/ui/panelRailGeometry.js"
     ],
     "external": []
+  },
+  "cockpit-controls": {
+    "exports": [
+      "./ui/cockpit",
+      "./ui/cockpit/math",
+      "./ui/cockpit/layout",
+      "./ui/cockpit/vision"
+    ],
+    "modules": [
+      "src/ui/cockpit.js",
+      "src/ui/cockpitBriefing.js",
+      "src/ui/cockpitCamera.js",
+      "src/ui/cockpitContext.js",
+      "src/ui/cockpitController.js",
+      "src/ui/cockpitDisplayPortal.js",
+      "src/ui/cockpitInput.js",
+      "src/ui/cockpitInstruments.js",
+      "src/ui/cockpitLayout.js",
+      "src/ui/cockpitPresentation.js",
+      "src/ui/cockpitSignals.js",
+      "src/ui/cockpitTrackingController.js",
+      "src/cockpitMath.js",
+      "src/cockpitUtilityLayout.js",
+      "src/cockpitVisionPolicy.js",
+      "src/ui/panelRailGeometry.js"
+    ],
+    "external": ["cesium"]
   }
 }
