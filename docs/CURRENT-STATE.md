@@ -1,5 +1,12 @@
 # God's Eye View Current State
 
+Data Centers, Dams and Submarine Cables release their built Cesium data sources
+and record references when disabled. Parsed datasets remain cached for the layer
+lifetime, so re-enable rebuilds entities without downloading or parsing again;
+this can take longer than simply revealing hidden entities. Destruction clears
+the parsed cache as well. A disable during loading cannot leave a completed
+build hidden in the scene.
+
 CCTV exposes a factory through `./layers/cctv`. Catalog and health requests,
 frame/media URLs, camera records, ground placement, geometry queues, playback,
 projection, cards, calibration and interaction have separate components. The

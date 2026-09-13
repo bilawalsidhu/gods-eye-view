@@ -496,6 +496,14 @@ export function createTeleGeographySubmarineCableLayer({
   let _cableDataSource = null;
   let _landingDataSource = null;
   let _referenceDataSource = null;
+  /**
+   * Fetched cable/landing JSON kept across disable/enable. A disable RELEASES
+   * the three data sources (see releaseDataSources) instead of hiding them,
+   * so a re-enable has to rebuild the entities; the network/parse half of
+   * that rebuild is the expensive part users would notice, so it is cached.
+   */
+  let _cachedCableJson = null;
+  let _cachedLandingJson = null;
   let _referenceRecords = [];
   let _surfaceRecords = [];
   let _clickHandler = null;
@@ -553,11 +561,17 @@ export function createTeleGeographySubmarineCableLayer({
     const owns = () => generation === _loadGeneration && !abort.signal.aborted;
 
     try {
-      const [cableJson, landingJson] = await Promise.all([
-        fetchJson(cableUrl, abort.signal),
-        fetchJson(landingPointUrl, abort.signal),
-      ]);
-      if (!owns()) return;
+      let cableJson = _cachedCableJson;
+      let landingJson = _cachedLandingJson;
+      if (!cableJson || !landingJson) {
+        [cableJson, landingJson] = await Promise.all([
+          fetchJson(cableUrl, abort.signal),
+          fetchJson(landingPointUrl, abort.signal),
+        ]);
+        if (!owns()) return;
+        _cachedCableJson = cableJson;
+        _cachedLandingJson = landingJson;
+      }
 
       const cableFeatures = normalizeFeatures(cableJson, 'cable');
       const landingFeatures = normalizeFeatures(landingJson, 'landing');
@@ -703,6 +717,37 @@ export function createTeleGeographySubmarineCableLayer({
         _loading = false;
         if (_abort === abort) _abort = null;
       }
+    }
+  }
+
+  /**
+   * Remove the three data sources from the viewer and forget the built
+   * entities. Hiding them (`show = false`) is NOT enough: Cesium's
+   * DataSourceDisplay still walks every visualizer of a hidden source on
+   * every frame, and the thousands of hidden polylines/billboards keep
+   * costing CPU and GC pressure long after the user toggled the layer off —
+   * that is the "everything gets sluggish after I turn layers off" report.
+   * The fetched JSON stays cached, so the next enable rebuilds without a
+   * network round trip or a re-parse.
+   */
+  function releaseDataSources(viewer) {
+    const sources = [_cableDataSource, _landingDataSource, _referenceDataSource];
+    _cableDataSource = null;
+    _landingDataSource = null;
+    _referenceDataSource = null;
+    _referenceRecords = [];
+    _surfaceRecords = [];
+    _pickByEntity = new WeakMap();
+    _referenceLabelCount = 0;
+    _publishScratch.length = 0;
+    // The blend pass targets the collections being dropped; the rebuilt
+    // sources need their own pass.
+    _markerBlendDone = false;
+    _loaded = false;
+    _referenceSweepGate.reset();
+    for (const source of sources) {
+      if (!source) continue;
+      try { viewer?.dataSources?.remove(source, true); } catch { /* collection gone */ }
     }
   }
 
@@ -1093,7 +1138,6 @@ export function createTeleGeographySubmarineCableLayer({
 
     disable() {
       _enabled = false;
-      updateVisibility();
       _overlayPublisher.hide();
       resetPublishSignature();
       if (_loading && _abort) {
@@ -1101,6 +1145,10 @@ export function createTeleGeographySubmarineCableLayer({
         _loading = false;
         _loadingLabel = '';
       }
+      // Free the entities rather than hide them; enable() rebuilds from the
+      // cached JSON. An in-flight load's own post-await ownership check
+      // removes whatever that stale generation adds later.
+      releaseDataSources(_viewer);
     },
 
     update(viewer) {
@@ -1109,9 +1157,9 @@ export function createTeleGeographySubmarineCableLayer({
 
     destroy(viewer) {
       if (_abort) _abort.abort();
-      if (_cableDataSource && viewer) viewer.dataSources.remove(_cableDataSource, true);
-      if (_landingDataSource && viewer) viewer.dataSources.remove(_landingDataSource, true);
-      if (_referenceDataSource && viewer) viewer.dataSources.remove(_referenceDataSource, true);
+      releaseDataSources(viewer || _viewer);
+      _cachedCableJson = null;
+      _cachedLandingJson = null;
       // hide() clears every published host entry and goes invisible while
       // keeping the publisher reusable — the legacy layer supported re-init
       // after destroy, and hidden publishers already drop late publishes.

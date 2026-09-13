@@ -743,7 +743,15 @@ test('an abort landing at the post-cable-GeoJson boundary stops the stale load b
     env.layer.disable();
     env.layer.enable(env.viewer);
     await env.settle();
-    assert.equal(geojson.calls.length, 1, 'stale load A must not start the landing GeoJson build');
+    // A already cached the fetched JSON, so load B skips the network and goes
+    // straight to its own CABLE build; the only new GeoJson call must be that
+    // one — a landing build here would mean stale A ran on past its check.
+    assert.equal(env.pendingFetches.length, 0, 'load B rebuilds from the cached JSON without refetching');
+    assert.equal(geojson.calls.length, 2, 'stale load A must not start the landing GeoJson build');
+    assert.ok(
+      Cesium.Color.equals(geojson.calls[1][1].stroke, geojson.calls[0][1].stroke),
+      'the second GeoJson call is load B\'s cable build, not A\'s landing build',
+    );
 
     env.releaseAll();
     await env.settle();
@@ -1253,4 +1261,37 @@ test('an unchanged cohort never republishes, so a parked camera stays governor-i
   assert.equal(publishCount(), 3, 're-enable republishes after the hide cleared the source');
 
   env.layer.destroy(env.viewer);
+});
+
+test('a toggle-off releases every data source and a toggle-on rebuilds them without refetching', async () => {
+  const env = await createRealCableLayerHarness();
+  assert.equal(env.dataSources.length, 3, 'cable + landing + reference sources while on');
+  const before = env.layer.getStats().count;
+  assert.equal(before, 2);
+
+  // Any fetch after this point is a bug: the rebuild must come from the cache.
+  const originalFetch = globalThis.fetch;
+  let fetches = 0;
+  globalThis.fetch = async () => { fetches += 1; throw new Error('unexpected refetch'); };
+  try {
+    env.layer.disable();
+    assert.equal(env.dataSources.length, 0, 'hidden entities are not free; disable must remove the sources');
+
+    env.layer.enable(env.viewer);
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline && env.dataSources.length < 3) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(fetches, 0, 'the rebuild must not touch the network');
+    assert.equal(env.layer.getStats().error, null);
+    assert.equal(env.dataSources.length, 3, 're-enable rebuilds the trio');
+    assert.equal(env.layer.getStats().count, before);
+    const referenceSource = env.dataSources.find((ds) => /References/.test(ds.name || ''));
+    assert.ok(referenceSource?.entities.values.length > 0, 'reference stems are rebuilt');
+
+    env.layer.destroy(env.viewer);
+    assert.equal(env.dataSources.length, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

@@ -1,5 +1,11 @@
 # Changelog
 
+## Release disabled infrastructure rendering
+
+- Remove built Data Center, Dam and Submarine Cable entities when their layers
+  are disabled, avoiding retained visualizer work and entity memory.
+- Keep parsed datasets cached for re-enable; rebuild entities without refetching.
+
 ## Camera layer components
 
 - Separate camera source requests, placement, frames, projection, cards and calibration.
