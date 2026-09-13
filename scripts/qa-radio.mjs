@@ -783,10 +783,10 @@ async function main() {
       const originalRestoreEnabledLayerIds = dataManager.restoreEnabledLayerIds;
       const originalIsEnabled = dataManager.isEnabled;
       const originalIsEffectivelyEnabled = dataManager.isEffectivelyEnabled;
-      const originalClear = styleManager._clearLayersOutsideContextMode;
-      const originalCapture = styleManager._captureContextSessionSnapshot;
-      const originalContextMode = styleManager._contextMode;
-      const originalSnapshot = styleManager._contextSessionSnapshot;
+      const originalClear = styleManager._contextControls._clearLayersOutsideContextMode;
+      const originalCapture = styleManager._contextControls._captureContextSessionSnapshot;
+      const originalContextMode = styleManager._contextControls._contextMode;
+      const originalSnapshot = styleManager._contextControls._contextSessionSnapshot;
       const originalShowToast = styleManager._showToast;
       const installations = dataManager.layers.get('military-installations')?.module;
       const originalSearchNearby = installations?.searchNearby;
@@ -797,12 +797,12 @@ async function main() {
         const semanticFalseMessage = document.getElementById('toast').textContent;
 
         const enabled = new Set();
-        styleManager._captureContextSessionSnapshot = () => {};
+        styleManager._contextControls._captureContextSessionSnapshot = () => {};
         const runContextFailure = async (mode, phase, outcome) => {
           enabled.clear();
           enabled.add('local-datacenters');
-          styleManager._contextMode = null;
-          styleManager._contextSessionSnapshot = {
+          styleManager._contextControls._contextMode = null;
+          styleManager._contextControls._contextSessionSnapshot = {
             enabledLayerIds: new Set(enabled),
             userAdded: new Set(),
             userRemoved: new Set(),
@@ -822,7 +822,7 @@ async function main() {
             return true;
           };
           const result = await styleManager._runUserFacingContextAction(
-            () => styleManager._selectContextMode(mode),
+            () => styleManager._contextControls._selectContextMode(mode),
             `${mode} QA transition failed`,
           );
           await new Promise((resolve) => setTimeout(resolve, 0));
@@ -831,8 +831,8 @@ async function main() {
             phase,
             outcome,
             result,
-            visibleMode: styleManager._contextMode,
-            snapshotCleared: styleManager._contextSessionSnapshot === null,
+            visibleMode: styleManager._contextControls._contextMode,
+            snapshotCleared: styleManager._contextControls._contextSessionSnapshot === null,
             priorLayerRestored: enabled.has('local-datacenters'),
             entryEnabled: enabled.has(entryLayerId),
             flightsButtonDisabled: document.getElementById('global-context-flights-btn').disabled,
@@ -870,8 +870,8 @@ async function main() {
           for (const outcome of ['false', 'reject']) {
             enabled.clear();
             enabled.add('local-datacenters');
-            styleManager._contextMode = null;
-            styleManager._contextSessionSnapshot = {
+            styleManager._contextControls._contextMode = null;
+            styleManager._contextControls._contextSessionSnapshot = {
               enabledLayerIds: new Set(enabled),
               userAdded: new Set(),
               userRemoved: new Set(),
@@ -886,7 +886,7 @@ async function main() {
             dataManager.setEnabled = async (candidateId, shouldEnable, options = {}) => {
               if (!failureUsed && candidateId === 'local-datacenters' && !shouldEnable) {
                 failureUsed = true;
-                styleManager._handleContextLayerChange({
+                styleManager._contextControls._handleContextLayerChange({
                   type: 'visibility-failed',
                   layerId: candidateId,
                   enabled: shouldEnable,
@@ -905,7 +905,7 @@ async function main() {
               enabled: true,
               origin: 'user',
             });
-            styleManager._handleContextLayerChange({
+            styleManager._contextControls._handleContextLayerChange({
               type: 'visibility-blocked',
               layerId,
               enabled: true,
@@ -925,10 +925,10 @@ async function main() {
               reason,
               retryReason,
               toastMessages,
-              mode: styleManager._contextMode,
-              snapshotCleared: styleManager._contextSessionSnapshot === null,
+              mode: styleManager._contextControls._contextMode,
+              snapshotCleared: styleManager._contextControls._contextSessionSnapshot === null,
               priorLayerRestored,
-              modeChanging: styleManager._contextModeChanging,
+              modeChanging: styleManager._contextControls._contextModeChanging,
             });
           }
         }
@@ -937,8 +937,8 @@ async function main() {
         const directActivationFailures = [];
         for (const layerId of ['military-awareness', 'rocket-launches']) {
           enabled.clear();
-          styleManager._contextMode = null;
-          styleManager._contextSessionSnapshot = {
+          styleManager._contextControls._contextMode = null;
+          styleManager._contextControls._contextSessionSnapshot = {
             enabledLayerIds: new Set(['local-datacenters']),
             userAdded: new Set(),
             userRemoved: new Set(),
@@ -948,7 +948,7 @@ async function main() {
             shouldEnable ? enabled.add(candidateId) : enabled.delete(candidateId);
             return true;
           };
-          styleManager._handleContextLayerChange({
+          styleManager._contextControls._handleContextLayerChange({
             type: 'visibility-failed',
             layerId,
             enabled: true,
@@ -957,8 +957,8 @@ async function main() {
           await new Promise((resolve) => setTimeout(resolve, 50));
           directActivationFailures.push({
             layerId,
-            mode: styleManager._contextMode,
-            snapshotCleared: styleManager._contextSessionSnapshot === null,
+            mode: styleManager._contextControls._contextMode,
+            snapshotCleared: styleManager._contextControls._contextSessionSnapshot === null,
             priorLayerRestored: enabled.has('local-datacenters'),
             failedLayerDisabled: !enabled.has(layerId),
           });
@@ -967,8 +967,8 @@ async function main() {
         const directActivationRollbackFailures = [];
         for (const layerId of ['military-awareness', 'rocket-launches']) {
           enabled.clear();
-          styleManager._contextMode = null;
-          styleManager._contextSessionSnapshot = {
+          styleManager._contextControls._contextMode = null;
+          styleManager._contextControls._contextSessionSnapshot = {
             enabledLayerIds: new Set(['local-datacenters']),
             userAdded: new Set(),
             userRemoved: new Set(),
@@ -985,7 +985,7 @@ async function main() {
             shouldEnable ? enabled.add(candidateId) : enabled.delete(candidateId);
             return true;
           };
-          styleManager._handleContextLayerChange({
+          styleManager._contextControls._handleContextLayerChange({
             type: 'visibility-failed',
             layerId,
             enabled: true,
@@ -996,7 +996,7 @@ async function main() {
           directActivationRollbackFailures.push({
             layerId,
             toastMessages,
-            retryRetained: styleManager._contextSessionSnapshot?.enabledLayerIds?.has('local-datacenters') === true,
+            retryRetained: styleManager._contextControls._contextSessionSnapshot?.enabledLayerIds?.has('local-datacenters') === true,
           });
         }
 
@@ -1026,8 +1026,8 @@ async function main() {
           window.__gevQaRegisterLayer(dataManager, qaLayer);
           try {
             const enabledBeforeExit = dataManager.getEnabledLayerIds();
-            styleManager._contextMode = 'flights';
-            styleManager._contextSessionSnapshot = {
+            styleManager._contextControls._contextMode = 'flights';
+            styleManager._contextControls._contextSessionSnapshot = {
               enabledLayerIds: new Set([...enabledBeforeExit, layerId]),
               userAdded: new Set(),
               userRemoved: new Set(),
@@ -1039,13 +1039,13 @@ async function main() {
             };
             const unhandledBefore = unhandled.length;
             const result = await styleManager._runUserFacingContextAction(
-              (notificationToken) => styleManager._deactivateContextForLayerChange({ notificationToken }),
+              (notificationToken) => styleManager._contextControls._deactivateContextForLayerChange({ notificationToken }),
               `QA Context exit ${outcome} surfaced once`,
             );
-            const retainedForRetry = styleManager._contextSessionSnapshot?.enabledLayerIds?.has(layerId) === true;
+            const retainedForRetry = styleManager._contextControls._contextSessionSnapshot?.enabledLayerIds?.has(layerId) === true;
             enableOutcome = 'success';
             const retryResult = await styleManager._runUserFacingContextAction(
-              (notificationToken) => styleManager._deactivateContextForLayerChange({ notificationToken }),
+              (notificationToken) => styleManager._contextControls._deactivateContextForLayerChange({ notificationToken }),
               `QA Context exit ${outcome} retry failed`,
             );
             contextExitFailures.push({
@@ -1055,9 +1055,9 @@ async function main() {
               toastMessages,
               unhandledDelta: unhandled.length - unhandledBefore,
               retainedForRetry,
-              mode: styleManager._contextMode,
-              modeChanging: styleManager._contextModeChanging,
-              snapshotClearedAfterRetry: styleManager._contextSessionSnapshot === null,
+              mode: styleManager._contextControls._contextMode,
+              modeChanging: styleManager._contextControls._contextModeChanging,
+              snapshotClearedAfterRetry: styleManager._contextControls._contextSessionSnapshot === null,
               enabledAfterRetry: dataManager.isEnabled(layerId),
               toastRole: document.getElementById('toast').getAttribute('role'),
               toastLive: document.getElementById('toast').getAttribute('aria-live'),
@@ -1163,10 +1163,10 @@ async function main() {
         dataManager.restoreEnabledLayerIds = originalRestoreEnabledLayerIds;
         dataManager.isEnabled = originalIsEnabled;
         dataManager.isEffectivelyEnabled = originalIsEffectivelyEnabled;
-        styleManager._clearLayersOutsideContextMode = originalClear;
-        styleManager._captureContextSessionSnapshot = originalCapture;
-        styleManager._contextMode = originalContextMode;
-        styleManager._contextSessionSnapshot = originalSnapshot;
+        styleManager._contextControls._clearLayersOutsideContextMode = originalClear;
+        styleManager._contextControls._captureContextSessionSnapshot = originalCapture;
+        styleManager._contextControls._contextMode = originalContextMode;
+        styleManager._contextControls._contextSessionSnapshot = originalSnapshot;
         styleManager._showToast = originalShowToast;
         if (installations) installations.searchNearby = originalSearchNearby;
         window.removeEventListener('unhandledrejection', onUnhandled);
@@ -2031,6 +2031,10 @@ async function main() {
       };
       const waitForHudSettle = async () => {
         await new Promise((resolve) => setTimeout(resolve, 560));
+        // The synthetic shell below stops the aircraft/context update loop.
+        // Restore its layout pass after the HUD fade before measuring geometry;
+        // qa-cockpit-utility exercises scheduling with the real controller.
+        manager.cockpitView.scheduleContextLayout();
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       };
       const prior = {

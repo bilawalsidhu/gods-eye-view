@@ -13,6 +13,11 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Split Cockpit camera/controller, instruments, briefing, signals and layout into focused modules with explicit application operations.
+- Give Display portal moves cancellable focus/scroll restoration and stop Cockpit work before asynchronous UI teardown.
+
+- Separate Context controls, mode transitions and layer restoration; release tab listeners and suppress late panel/search feedback after disposal.
+
 - Separate camera-panel controls, frame loading, calibration editing and status display; cancel stale image and calibration work on camera changes or disposal.
 
 - Restore UI observer, resize-listener and CCTV subscription cleanup after Location extraction.

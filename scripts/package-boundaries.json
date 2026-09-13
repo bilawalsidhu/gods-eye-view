@@ -369,5 +369,50 @@
       "src/ui/cctvPresentation.js"
     ],
     "external": []
+  },
+  "context-controls": {
+    "exports": ["./ui/context", "./ui/context/policy"],
+    "modules": [
+      "src/ui/context.js",
+      "src/ui/contextActions.js",
+      "src/ui/contextBindings.js",
+      "src/ui/contextControls.js",
+      "src/ui/contextLayerChanges.js",
+      "src/ui/contextPresentation.js",
+      "src/ui/contextSession.js",
+      "src/ui/contextSubscriptions.js",
+      "src/ui/contextTransactions.js",
+      "src/contextModePolicy.js",
+      "src/rightRailPolicy.js",
+      "src/ui/panelRailGeometry.js"
+    ],
+    "external": []
+  },
+  "cockpit-controls": {
+    "exports": [
+      "./ui/cockpit",
+      "./ui/cockpit/math",
+      "./ui/cockpit/layout",
+      "./ui/cockpit/vision"
+    ],
+    "modules": [
+      "src/ui/cockpit.js",
+      "src/ui/cockpitBriefing.js",
+      "src/ui/cockpitCamera.js",
+      "src/ui/cockpitContext.js",
+      "src/ui/cockpitController.js",
+      "src/ui/cockpitDisplayPortal.js",
+      "src/ui/cockpitInput.js",
+      "src/ui/cockpitInstruments.js",
+      "src/ui/cockpitLayout.js",
+      "src/ui/cockpitPresentation.js",
+      "src/ui/cockpitSignals.js",
+      "src/ui/cockpitTrackingController.js",
+      "src/cockpitMath.js",
+      "src/cockpitUtilityLayout.js",
+      "src/cockpitVisionPolicy.js",
+      "src/ui/panelRailGeometry.js"
+    ],
+    "external": ["cesium"]
   }
 }

@@ -1,3 +1,4 @@
+import { _syncContextModeButtons } from './ui/contextPresentation.js';
 // Contacts-scoped detection (owner playtest 2026-08-18: "when you click on
 // Contacts, detections should just turn on, and they should stay on in Cockpit
 // or in third-person tracking inside Contacts").
@@ -292,10 +293,11 @@ test('detection is wired to the Contacts transaction, and cockpit no longer touc
     'ACTIVATION turns detection on REGARDLESS of the style-preset override flag',
   );
   assert.match(
-    uiSource,
-    /this\.cockpitView\?\.syncEntry\(\);[\s\S]{0,220}?this\._syncContactsDetection\(\);/,
+    _syncContextModeButtons.toString(),
+    /this\.cockpitView\?\.syncEntry\(\);[\s\S]{0,220}?this\.actions\.syncDetection\(\);/,
     'called from _syncContextModeButtons, the funnel every _contextMode mutation routes through',
   );
+  assert.match(uiSource, /syncDetection: \(\) => this\._syncContactsDetection\(\)/);
   // The cockpit vision hook — the old trigger — must be out of the detection
   // business entirely, or leaving the cockpit turns detections off again.
   const visionHook = uiSource.slice(
