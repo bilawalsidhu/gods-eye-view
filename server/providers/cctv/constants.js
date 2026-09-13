@@ -44,6 +44,33 @@ export const FINTRAFFIC_IMAGE_ORIGIN = 'https://weathercam.digitraffic.fi/';
 /** Digitraffic asks every client to identify itself on API calls. */
 export const DIGITRAFFIC_USER = 'gods-eye-view';
 export const DEFAULT_FINTRAFFIC_MAX_SOURCES = 300;
+/** Pose for a Fintraffic road-SURFACE preset (see FINTRAFFIC_SURFACE_SUFFIX).
+ * Each value is the boundary the client clamps poses to in src/data/cctv.js
+ * (pitch -55..-2, range 220..2200, mount 6..120), i.e. as steep, as short and
+ * as low as the renderer will honour — which is the closest a registered pose
+ * can get to a camera a couple of metres up staring at tarmac. Anything
+ * steeper or shorter would be silently rewritten to these numbers anyway.
+ * RAW PRIOR like every other pose here: the gizmo owns the truth. */
+export const FINTRAFFIC_SURFACE_POSE = Object.freeze({
+  pitchDeg: -55,
+  rangeM: 220,
+  mountHeightM: 6,
+});
+/** Preset-id suffix that marks a road-surface view.
+ *
+ * OBSERVED CONVENTION, NOT A DOCUMENTED CONTRACT. Digitraffic documents
+ * directionCode as 0 unknown / 1-2 road-register increasing-decreasing / 3-4
+ * crossing road / 5-99 "special", and says nothing about what any specific
+ * special code means. What is verifiable from the API, and was verified on
+ * 2026-09-13: a preset id is always its station id plus two digits and those
+ * two digits ARE its directionCode (575/575 presets over a systematic 202-
+ * station national sample, zero mismatches), and every suffix-09 preset in
+ * that sample is named "Tienpinta" — road surface — 140 of 140. A separate
+ * per-district sample did turn up one counterexample (C1853409, named
+ * "Rovaniemi"), so treat this as ~99% reliable rather than absolute. It steers
+ * a pose prior a user can drag, never which cameras exist, so a rare miss
+ * costs one gizmo nudge. */
+export const FINTRAFFIC_SURFACE_SUFFIX = '09';
 /** Ground-elevation prior, in metres, for stations that report no altitude.
  * 228 of 809 stations carry a real metre value (median 94 m); the rest report
  * 0, which means "not reported" rather than sea level — Kouvola (~80 m of real

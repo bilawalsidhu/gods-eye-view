@@ -15,6 +15,8 @@ import {
   FINTRAFFIC_GROUND_ELEVATION_M,
   DIGITRAFFIC_USER,
   DEFAULT_FINTRAFFIC_MAX_SOURCES,
+  FINTRAFFIC_SURFACE_POSE,
+  FINTRAFFIC_SURFACE_SUFFIX,
   FINLAND_ANCHORS,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
 } from './constants.js';
@@ -365,6 +367,10 @@ export async function loadTflSourcesFromOpenData() {
  * therefore takes the id-hash fallback and the low-confidence pose personality,
  * the same as headingless Austin and TfL cameras.
  *
+ * The one thing the preset id does say is whether the view points at the road
+ * surface; those get a steep look-down prior instead of the road pose. See
+ * FINTRAFFIC_SURFACE_SUFFIX for exactly how far that convention is verified.
+ *
  * Attribution: "Fintraffic / digitraffic.fi" (CC BY 4.0), registered in
  * src/data/dataCredits.js.
  *
@@ -432,6 +438,11 @@ export async function loadFintrafficSourcesFromOpenData() {
 
         const cameraId = `fi-${presetId.toLowerCase()}`;
         const imageUrl = `${FINTRAFFIC_IMAGE_ORIGIN}${presetId}.jpg`;
+        // A road-surface view looks down at the tarmac a couple of metres
+        // away, so the road pose below would aim it at the horizon and drape a
+        // grey rectangle across the scene. About a quarter of Finnish presets
+        // are these.
+        const isSurfaceView = presetId.endsWith(FINTRAFFIC_SURFACE_SUFFIX);
         cameras.push({
           id: cameraId,
           name: fintrafficCameraName(props.name, stationId, presetId),
@@ -443,10 +454,12 @@ export async function loadFintrafficSourcesFromOpenData() {
           // Headingless personality (see JSDoc), identical to TfL's.
           headingDeg: fallbackHeadingFromId(cameraId),
           headingConfidence: 'low',
-          pitchDeg: -18,
+          pitchDeg: isSurfaceView ? FINTRAFFIC_SURFACE_POSE.pitchDeg : -18,
           fovDeg: 44,
-          rangeM: 145,
-          mountHeightM: 8,
+          rangeM: isSurfaceView ? FINTRAFFIC_SURFACE_POSE.rangeM : 145,
+          mountHeightM: isSurfaceView
+            ? FINTRAFFIC_SURFACE_POSE.mountHeightM
+            : 8,
           groundElevationM,
           feedType: 'image',
           url: imageUrl,

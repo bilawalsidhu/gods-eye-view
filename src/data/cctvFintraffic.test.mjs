@@ -9,6 +9,7 @@ import {
   FINTRAFFIC_GROUND_ELEVATION_M,
   FINTRAFFIC_IMAGE_ORIGIN,
   FINTRAFFIC_STATIONS_URL,
+  FINTRAFFIC_SURFACE_POSE,
 } from '../../server/providers/cctv/constants.js';
 
 /** One station feature in the shape tie.digitraffic.fi actually returns. */
@@ -253,4 +254,38 @@ test('isLikelyFinlandCoordinate spans the catalog extent and rejects the rest', 
   assert.equal(isLikelyFinlandCoordinate(51.5074, -0.1278), false); // London
   assert.equal(isLikelyFinlandCoordinate(0, 0), false); // null island
   assert.equal(isLikelyFinlandCoordinate(NaN, 24.9384), false);
+});
+
+test('Fintraffic road-surface presets look down, road presets look out', async () => {
+  const cameras = await loadWith([
+    station('C01503', {
+      presets: [
+        { id: 'C0150301', inCollection: true }, // road view
+        { id: 'C0150309', inCollection: true }, // "Tienpinta" — road surface
+      ],
+    }),
+  ]);
+
+  const byId = new Map(cameras.map((camera) => [camera.id, camera]));
+  const road = byId.get('fi-c0150301');
+  const surface = byId.get('fi-c0150309');
+
+  assert.equal(road.pitchDeg, -18);
+  assert.equal(road.rangeM, 145);
+  assert.equal(road.mountHeightM, 8);
+
+  assert.equal(surface.pitchDeg, FINTRAFFIC_SURFACE_POSE.pitchDeg);
+  assert.equal(surface.rangeM, FINTRAFFIC_SURFACE_POSE.rangeM);
+  assert.equal(surface.mountHeightM, FINTRAFFIC_SURFACE_POSE.mountHeightM);
+  assert.ok(
+    surface.pitchDeg < road.pitchDeg,
+    'the surface pose must be the steeper of the two',
+  );
+  // Both stay inside the pose clamps src/data/cctv.js applies to every source,
+  // so nothing here is silently rewritten on the client.
+  for (const camera of [road, surface]) {
+    assert.ok(camera.pitchDeg >= -55 && camera.pitchDeg <= -2);
+    assert.ok(camera.mountHeightM >= 6 && camera.mountHeightM <= 120);
+    assert.ok(camera.fovDeg >= 20 && camera.fovDeg <= 125);
+  }
 });
