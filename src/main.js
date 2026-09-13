@@ -45,6 +45,7 @@ import {
   holdContinuousRender,
   releaseContinuousRender,
 } from './renderGovernor.js';
+import { setLogLevel, getLogLevel, peekLogBuffer, drainLogBuffer } from './logger.js';
 import { installScopeMask } from './scopeMask.js';
 import { initFirstRunExperience } from './firstRunExperience.js';
 
@@ -385,6 +386,12 @@ async function init() {
       cockpitCloudEffects,
       getRenderGovernorDiagnostics,
       requestRender: governorRequestRender,
+      logger: {
+        setLogLevel,
+        getLogLevel,
+        peekLogBuffer,
+        drainLogBuffer,
+      },
     };
     window.__godsEyeView.voiceCommands = initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector, annotations });
 

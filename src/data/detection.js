@@ -1,4 +1,5 @@
 import { governorRequestRender } from '../renderGovernor.js';
+import { logDebug, logWarn } from '../logger.js';
 import {
   DETECTION_ENABLE_FADE_MS,
   countAnimatingRenderEntries,
@@ -296,7 +297,7 @@ function getProjectionWorker() {
       }
     };
     _projectionWorker.onerror = (err) => {
-      console.warn('Detection projection worker error:', err.message);
+      logWarn('Detection', 'projection worker error:', err.message);
       _projectionWorker = null;
     };
   }
@@ -363,7 +364,7 @@ export function initDetection(viewer, layers, onModeChange) {
 
   setDetectionStyle('normal');
   _syncSurfaceVisibility();
-  console.log('[Detection] Initialized');
+  logDebug('Detection', 'Initialized');
 }
 
 /** Release the host lane and all retained detection runtime state. */
@@ -682,7 +683,7 @@ function _applyModeState() {
   }
 
   if (_onModeChange) _onModeChange(label);
-  console.log(`[Detection] Mode: ${label}`);
+  logDebug('Detection', `Mode: ${label}`);
 }
 
 /**

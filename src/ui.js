@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { logError, logWarn } from './logger.js';
 import { retroShader } from './styles/retro.js';
 import { animeShader } from './styles/anime.js';
 import { noirShader } from './styles/noir.js';
@@ -4478,14 +4479,14 @@ export class StyleManager {
             await this._clearLayersOutsideContextMode(entryMode, { notificationToken });
           } catch (error) {
             this._contextModeEntering = null;
-            console.warn(`[Context] ${change.layerId} isolation failed`, error);
+            logWarn('Context', `${change.layerId} isolation failed`, error);
             try {
               await this._restoreContextSession({
                 excludeLayerIds: [change.layerId],
                 notificationToken,
               });
             } catch (restoreError) {
-              console.warn(`[Context] ${change.layerId} rollback failed`, restoreError);
+              logWarn('Context', `${change.layerId} rollback failed`, restoreError);
             }
             return `${entryMode === 'space-missions' ? 'Space Missions' : 'Context'} could not start because another layer did not stop cleanly`;
           } finally {
@@ -4717,7 +4718,7 @@ export class StyleManager {
         operation: () => operation(notificationToken),
         falseIsFailure,
         onFailure: (error) => {
-          console.warn('[Context] user-facing transition failed', error);
+          logWarn('Context', 'user-facing transition failed', error);
           this._showToast(message);
         },
       });
@@ -4950,7 +4951,7 @@ export class StyleManager {
       } catch (error) {
         if (!isCurrent()) return false;
         let transitionError = error;
-        console.warn(`[Context] ${mode} isolation failed`, error);
+        logWarn('Context', `${mode} isolation failed`, error);
         this._contextMode = null;
         this._syncContextModeButtons();
         try {
@@ -5044,7 +5045,7 @@ export class StyleManager {
             entryLayerId,
           ])];
           this._contextTransitionFailedLayerIds = [...transitionError.failedLayerIds];
-          console.warn(`[Context] ${mode} activation failed; restoring previous layers`, activationError || 'not enabled');
+          logWarn('Context', `${mode} activation failed; restoring previous layers`, activationError || 'not enabled');
         }
         this._contextMode = null;
         this._contextModeEntryIntent = null;
@@ -9468,7 +9469,7 @@ export class StyleManager {
             this._showToast('Location not found');
           }
         } catch (err) {
-          console.error('[Search] Geocoding failed:', err);
+          logError('Search', 'Geocoding failed:', err);
           if (this._disposed || generation !== this._navigationGeneration) return;
           this._showToast('Search failed');
         } finally {
@@ -9507,7 +9508,7 @@ export class StyleManager {
           void this._flyToDestination(dest);
         });
       } catch (err) {
-        console.warn('[LocationSearch] Autocomplete setup failed:', err);
+        logWarn('LocationSearch', 'Autocomplete setup failed:', err);
       }
     });
   }
@@ -9847,7 +9848,7 @@ export class StyleManager {
       }
       return result;
     }).catch((error) => {
-      console.warn('[Data] clear selected layers failed', error);
+      logWarn('Data', 'clear selected layers failed', error);
       this._showToast('Selected data layers could not be cleared');
       return {
         targetIds: [],

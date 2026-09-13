@@ -791,7 +791,20 @@ ordered by value-per-risk; each is self-contained and committable.
       (vesselLabels, firmsHeatmap) deliberately stay explicit — they
       spread `...card` first, so moving their flags to pre-spread
       defaults would flip precedence.
-- [ ] Logger migration (see new findings) after Batch 1 lands.
+- [ ] Logger migration (see new findings) after Batch 1 lands. STARTED
+      2026-09-13: `src/logger.js` — level-gated (`?log=<level>` or
+      `window.__godsEyeView.logger.setLogLevel`, default `debug` so
+      migrated call sites keep their shipped console behavior) with a
+      bounded 500-entry ring buffer (`peekLogBuffer`/`drainLogBuffer`)
+      that records even gate-suppressed entries, plus
+      `recordDebugEvent` — the voice debug-log pipeline
+      (`gevRealtime.debugLog` → `/api/realtime/debug-log`) now lands its
+      sanitized records there too. Hot paths migrated (flights.js 9,
+      ui.js 8, detection.js 3 call sites; `console.log`→`logDebug` so
+      even the console METHOD is preserved for the boot-verification
+      lines QA asserts on). Remainder of the ~840 sites migrate
+      per-module as they're touched; `?debug`-gated logging stays
+      explicit.
 
 ### Batch 5 — Large refactors (P2, each needs its own plan + tests first)
 

@@ -21,6 +21,7 @@
  */
 import * as Cesium from 'cesium';
 import { aircraftIncludedInNearby } from './aircraftNearbyPolicy.js';
+import { logDebug, logWarn } from '../logger.js';
 import { readLocalCache, trimLocalCache, writeLocalCache } from './localCache.js';
 import { reverseGeocodePlace } from './openzenith.js';
 import { registerPickOwner, unregisterPickOwner, isOwnedByOtherLayer, resolvePickId } from './pickRegistry.js';
@@ -1667,8 +1668,9 @@ function _noteTrackedModelLoadFailure(url, err) {
   _trackedModelFailCount += 1;
   _trackedModelRetryAtMs = Date.now() + TRACKED_MODEL_RETRY_BACKOFF_MS;
   if (_trackedModelFailCount >= TRACKED_MODEL_MAX_LOAD_FAILS) {
-    console.warn(
-      `[Data:Flights] tracked 3D model gave up after ${_trackedModelFailCount} failed loads of ${url} — `
+    logWarn(
+      'Data:Flights',
+      `tracked 3D model gave up after ${_trackedModelFailCount} failed loads of ${url} — `
       + 'this contact stays 2D until another is selected',
       err,
     );
@@ -2807,7 +2809,7 @@ function _fleetTick() {
     }
     cand.sort((a, b) => a[1] - b[1]); // nearest first
     if (cand.length > cap && (nowMs - _lastModelCapWarnMs) > 5000) {
-      console.warn(`[Data:Flights] ${cand.length} planes in 3D range; capped at ${cap} (${_models3dMode}). On-screen planes are prioritized.`);
+      logWarn('Data:Flights', `${cand.length} planes in 3D range; capped at ${cap} (${_models3dMode}). On-screen planes are prioritized.`);
       _lastModelCapWarnMs = nowMs;
     }
     modelEligible = new Set();
@@ -3789,7 +3791,7 @@ function _trackFlight(icao24, { origin = 'programmatic' } = {}) {
 
   _publishTrackedSelection(icao24, origin);
 
-  console.log(`[Data:Flights] Tracking ${_contactLabel(icao24, info)} (${icao24})`);
+  logDebug('Data:Flights', `Tracking ${_contactLabel(icao24, info)} (${icao24})`);
 }
 
 /**
@@ -4081,7 +4083,7 @@ const flightsLayer = {
 
     restoreSpriteOrder(viewer);
 
-    console.log('[Data:Flights] Initialized with billboard icons');
+    logDebug('Data:Flights', 'Initialized with billboard icons');
   },
 
   /**
@@ -4215,7 +4217,7 @@ const flightsLayer = {
       const authReason = _toLowerText(response.headers.get('x-opensky-auth-reason'));
 
       if (response.status === 429) {
-        console.warn('[Data:Flights] Rate limited, backing off to 30s');
+        logWarn('Data:Flights', 'Rate limited, backing off to 30s');
         _backoff = true;
         _retryAt = nowMs + BACKOFF_INTERVAL;
         _lastError = authMode && authMode !== 'anon'
@@ -4225,7 +4227,7 @@ const flightsLayer = {
       }
 
       if (response.status === 401 || response.status === 403) {
-        console.warn(`[Data:Flights] OpenSky unavailable (${response.status}), backing off`);
+        logWarn('Data:Flights', `OpenSky unavailable (${response.status}), backing off`);
         _backoff = true;
         _retryAt = nowMs + BACKOFF_INTERVAL;
         let detail = '';
@@ -4245,7 +4247,7 @@ const flightsLayer = {
       }
 
       if (!response.ok) {
-        console.warn(`[Data:Flights] API returned ${response.status}`);
+        logWarn('Data:Flights', `API returned ${response.status}`);
         _backoff = true;
         _retryAt = nowMs + ERROR_BACKOFF_INTERVAL;
         let detail = '';
@@ -4741,14 +4743,14 @@ const flightsLayer = {
         source: _lastSource,
         coverage: _lastCoverage,
       };
-      console.log(`[Data:Flights] Updated: ${_count} aircraft`);
+      logDebug('Data:Flights', `Updated: ${_count} aircraft`);
       _applyPendingTrackingRestore();
 
     } catch (e) {
       if (updateSignal.aborted || e?.name === 'AbortError') {
         throw new DOMException('Flights update aborted', 'AbortError');
       }
-      console.warn('[Data:Flights] Fetch error:', e);
+      logWarn('Data:Flights', 'Fetch error:', e);
       _backoff = true;
       _retryAt = Date.now() + ERROR_BACKOFF_INTERVAL;
       _lastError = 'OpenSky network error';

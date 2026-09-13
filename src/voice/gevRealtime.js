@@ -1,5 +1,6 @@
 import { createGevActionRunner, readLayerLifecycleSummary } from './gevActions.js';
 import { api } from '../config/apiEndpoints.js';
+import { recordDebugEvent } from '../logger.js';
 import {
   DEFAULT_VOICE_TIER,
   createVoiceCostTracker,
@@ -2005,13 +2006,16 @@ export class GevRealtimeController {
   }
 
   debugLog(event, payload = {}) {
-    postDebugLog({
+    const record = {
       timestamp: new Date().toISOString(),
       sessionId: this.sessionId,
       event,
       status: this.status,
       payload: sanitizeDebugValue(payload),
-    });
+    };
+    // Retain locally for diagnosis (drainLogBuffer); posting is unchanged.
+    recordDebugEvent(event, record);
+    postDebugLog(record);
   }
 }
 
