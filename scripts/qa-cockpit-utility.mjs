@@ -184,21 +184,21 @@ try {
     const toasts = [];
     styleManager._showToast = (message) => { toasts.push(String(message)); };
     try {
-      if (styleManager._contextMode) await styleManager._selectContextMode(null);
-      const contactsResult = await styleManager._selectContextMode('flights');
-      const missionResult = await styleManager._selectContextMode('space-missions');
+      if (styleManager._contextControls._contextMode) await styleManager._contextControls._selectContextMode(null);
+      const contactsResult = await styleManager._contextControls._selectContextMode('flights');
+      const missionResult = await styleManager._contextControls._selectContextMode('space-missions');
       const switched = {
         contactsResult,
         missionResult,
-        mode: styleManager._contextMode,
+        mode: styleManager._contextControls._contextMode,
         missionsEnabled: dataManager.isEnabled('rocket-launches'),
         toasts: [...toasts],
       };
-      const exitResult = await styleManager._selectContextMode(null);
+      const exitResult = await styleManager._contextControls._selectContextMode(null);
       return {
         ...switched,
         exitResult,
-        modeAfterExit: styleManager._contextMode,
+        modeAfterExit: styleManager._contextControls._contextMode,
         missionsOffAfterExit: !dataManager.isEffectivelyEnabled('rocket-launches'),
       };
     } finally {
@@ -281,16 +281,16 @@ try {
       const deadline = performance.now() + 5_000;
       while (performance.now() < deadline) {
         if (
-          styleManager._contextModeEntering === null
-          && styleManager._contextSessionSnapshot === null
+          styleManager._contextControls._contextModeEntering === null
+          && styleManager._contextControls._contextSessionSnapshot === null
           && dataManager.isEnabled(siblingId)
           && !dataManager.isEffectivelyEnabled('rocket-launches')
         ) break;
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
       timedOut = !(
-        styleManager._contextModeEntering === null
-        && styleManager._contextSessionSnapshot === null
+        styleManager._contextControls._contextModeEntering === null
+        && styleManager._contextControls._contextSessionSnapshot === null
         && dataManager.isEnabled(siblingId)
         && !dataManager.isEffectivelyEnabled('rocket-launches')
       );
@@ -298,8 +298,8 @@ try {
         exercised: true,
         transitionResult,
         timedOut,
-        entering: styleManager._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextSessionSnapshot),
+        entering: styleManager._contextControls._contextModeEntering,
+        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
         siblingRestored: dataManager.isEnabled(siblingId),
         missionEffective: dataManager.isEffectivelyEnabled('rocket-launches'),
         toasts,
@@ -382,7 +382,7 @@ try {
     rocketEntry.module.disable = async () => true;
     styleManager._showToast = (message) => { toasts.push(String(message)); };
     try {
-      const entry = styleManager._selectContextMode('space-missions');
+      const entry = styleManager._contextControls._selectContextMode('space-missions');
       await updateStarted;
       const replacement = dataManager.setEnabled('rocket-launches', true, { origin: 'programmatic' });
       releaseUpdate();
@@ -390,15 +390,15 @@ try {
       const committed = {
         entryResult,
         replacementResult,
-        mode: styleManager._contextMode,
-        entering: styleManager._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextSessionSnapshot),
+        mode: styleManager._contextControls._contextMode,
+        entering: styleManager._contextControls._contextModeEntering,
+        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
         siblingIsolated: !dataManager.isEffectivelyEnabled(siblingId),
         missionEnabled: dataManager.isEnabled('rocket-launches'),
         missionEffective: dataManager.isEffectivelyEnabled('rocket-launches'),
         toasts: [...toasts],
       };
-      const exitResult = await styleManager._selectContextMode(null);
+      const exitResult = await styleManager._contextControls._selectContextMode(null);
       return {
         exercised: true,
         ...committed,
@@ -482,7 +482,7 @@ try {
     styleManager._showToast = (message) => { toasts.push(String(message)); };
     try {
       const entry = styleManager._runUserFacingContextAction(
-        (notificationToken) => styleManager._selectContextMode(
+        (notificationToken) => styleManager._contextControls._selectContextMode(
           'space-missions',
           { notificationToken },
         ),
@@ -498,9 +498,9 @@ try {
         exercised: true,
         entryResult,
         offResult,
-        mode: styleManager._contextMode,
-        entering: styleManager._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextSessionSnapshot),
+        mode: styleManager._contextControls._contextMode,
+        entering: styleManager._contextControls._contextModeEntering,
+        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
         siblingRestored: dataManager.isEnabled(siblingId),
         missionEffective: dataManager.isEffectivelyEnabled('rocket-launches'),
         toasts,
@@ -567,35 +567,35 @@ try {
       await new Promise((resolve) => setTimeout(resolve, 80));
       const voiceState = {
         voiceOn,
-        mode: styleManager._contextMode,
-        entering: styleManager._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextSessionSnapshot),
+        mode: styleManager._contextControls._contextMode,
+        entering: styleManager._contextControls._contextModeEntering,
+        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
         siblingIsolated: !dataManager.isEffectivelyEnabled(siblingId),
       };
-      const snapshotBeforeOff = [...(styleManager._contextSessionSnapshot?.enabledLayerIds || [])];
+      const snapshotBeforeOff = [...(styleManager._contextControls._contextSessionSnapshot?.enabledLayerIds || [])];
       const voiceOff = await dataManager.setEnabled('rocket-launches', false, { origin: 'voice' });
-      const reactionCountAfterOff = styleManager._contextLayerReactionPromises.size;
+      const reactionCountAfterOff = styleManager._contextControls._contextLayerReactionPromises.size;
       await styleManager._waitForContextLayerSettlement();
       const restoredSiblingEntry = dataManager.layers.get(siblingId);
       const voiceExit = {
         voiceOff,
         snapshotBeforeOff,
         reactionCountAfterOff,
-        mode: styleManager._contextMode,
-        entering: styleManager._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextSessionSnapshot),
+        mode: styleManager._contextControls._contextMode,
+        entering: styleManager._contextControls._contextModeEntering,
+        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
         siblingRestored: dataManager.isEffectivelyEnabled(siblingId),
         siblingEnabled: restoredSiblingEntry?.enabled,
         siblingLifecycle: restoredSiblingEntry?.lifecycleState,
-        restoreActive: Boolean(styleManager._contextRestoreState),
+        restoreActive: Boolean(styleManager._contextControls._contextRestoreState),
       };
 
       await dataManager.setEnabled('rocket-launches', true, { origin: 'programmatic' });
       await new Promise((resolve) => setTimeout(resolve, 40));
       const internalState = {
-        mode: styleManager._contextMode,
-        entering: styleManager._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextSessionSnapshot),
+        mode: styleManager._contextControls._contextMode,
+        entering: styleManager._contextControls._contextModeEntering,
+        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
         missionEnabled: dataManager.isEffectivelyEnabled('rocket-launches'),
       };
       await dataManager.setEnabled('rocket-launches', false, { origin: 'programmatic' });
@@ -707,7 +707,7 @@ try {
       const blockerEntry = dataManager.layers.get(blockerId);
       blockerEntry.initialized = true;
       await dataManager.setEnabled(blockerId, true, { origin: 'programmatic' });
-      const transition = styleManager._selectContextMode('flights');
+      const transition = styleManager._contextControls._selectContextMode('flights');
       const disableStart = await settleWithin(disableStarted, gateTimeoutMs);
       if (!disableStart.settled) {
         releaseDisable();
@@ -725,7 +725,7 @@ try {
       styleManager.cockpitView.syncEntry();
       const entry = document.getElementById('cockpit-entry');
       const pending = {
-        changing: styleManager._contextModeChanging,
+        changing: styleManager._contextControls._contextModeChanging,
         entryHidden: Boolean(entry?.hidden),
         enterResult: styleManager.cockpitView.enter(),
         trackerPreserved: viewer.trackedEntity === trackedEntityBefore,
@@ -763,7 +763,7 @@ try {
       // probe must not poison the checks that run after it.
       releaseDisable();
       if (!deferCleanup && dataManager.layers.has(blockerId)) {
-        if (styleManager._contextSessionSnapshot) await styleManager._selectContextMode(null);
+        if (styleManager._contextControls._contextSessionSnapshot) await styleManager._contextControls._selectContextMode(null);
         await window.__gevQaUnregisterLayer(dataManager, blockerId);
         styleManager.cockpitView.syncEntry();
       }
@@ -872,7 +872,7 @@ try {
       let requestSeen = false;
       let transition = null;
       try {
-        await styleManager._selectContextMode(null);
+        await styleManager._contextControls._selectContextMode(null);
         await dataManager.setEnabled('military-installations', false, { origin: 'programmatic' });
 
         // Hold the first Overpass request open, honouring the module's own
@@ -913,7 +913,7 @@ try {
           });
         };
 
-        transition = styleManager._selectContextMode('flights');
+        transition = styleManager._contextControls._selectContextMode('flights');
         // The activation promise stays PENDING while the first fetch is out, and
         // the Contacts panel comes up behind it — that is what a deferred
         // dependency is for. Verified live on :4272: the panel renders and reads
@@ -984,8 +984,8 @@ try {
         released = true;
         window.fetch = realFetch;
         if (transition) await settleWithin(transition, 20_000);
-        if (styleManager._contextMode !== 'flights') {
-          await settleWithin(styleManager._selectContextMode('flights'), 15_000);
+        if (styleManager._contextControls._contextMode !== 'flights') {
+          await settleWithin(styleManager._contextControls._selectContextMode('flights'), 15_000);
         }
       }
     });
@@ -1060,7 +1060,7 @@ try {
     return {
       before: before ? { layerId: before.layerId, id: before.id } : null,
       after: after ? { layerId: after.layerId, id: after.id } : null,
-      mode: styleManager._contextMode,
+      mode: styleManager._contextControls._contextMode,
       released,
       refocused,
       trackedId: trackedInfo?.icao24 || trackedInfo?.id || null,
@@ -1206,9 +1206,9 @@ try {
     // Start from outside both, so activation is a real edge.
     cockpit.exit({ restoreTracking: true });
     await settle();
-    await styleManager._selectContextMode(null);
+    await styleManager._contextControls._selectContextMode(null);
     await settle(400);
-    const cleanupSnapshotCleared = styleManager._contextSessionSnapshot === null;
+    const cleanupSnapshotCleared = styleManager._contextControls._contextSessionSnapshot === null;
     const cleanupBlockerId = '__qa_slow_contacts_sibling__';
     const cleanupUnregistered = await window.__gevQaUnregisterLayer(
       window.__godsEyeView.dataManager,
@@ -1224,7 +1224,7 @@ try {
     const overriddenBeforeContacts = styleManager._detectionUserOverridden;
 
     // 1. Activating Contacts forces the tactical preset on.
-    const contactsOn = await styleManager._selectContextMode('flights');
+    const contactsOn = await styleManager._contextControls._selectContextMode('flights');
     await settle(400);
     const afterContactsOn = mode();
     const afterContactsOnDensity = density();
@@ -1254,7 +1254,7 @@ try {
     await settle();
 
     // 4. Deactivating Contacts restores the pre-Contacts state.
-    await styleManager._selectContextMode(null);
+    await styleManager._contextControls._selectContextMode(null);
     await settle(400);
     const afterContactsOff = mode();
     const afterContactsOffDensity = density();
@@ -1268,7 +1268,7 @@ try {
     await settle();
 
     // Leave the session exactly as the following checks expect it.
-    const restoredContacts = await styleManager._selectContextMode('flights');
+    const restoredContacts = await styleManager._contextControls._selectContextMode('flights');
     await settle(400);
     const restoredCockpit = await enterCockpit();
     styleManager._detectionUserOverridden = originalOverridden;
@@ -1348,8 +1348,8 @@ try {
         step,
         cockpitActive: cockpit.active,
         bodyCockpit: document.body.classList.contains('cockpit-mode'),
-        contextMode: styleManager._contextMode,
-        contextChanging: styleManager._contextModeChanging,
+        contextMode: styleManager._contextControls._contextMode,
+        contextChanging: styleManager._contextControls._contextModeChanging,
         subject: context?.subject ? `${context.subject.layerId}:${context.subject.id}` : null,
         tracked: tracker?.gevTrackedId || null,
         density: styleManager.getDetectionState().densityPct,

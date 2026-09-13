@@ -302,3 +302,21 @@ subscriptions before ending the active tuning interaction.
 presentation. It receives DOM elements, the existing camera port and explicit
 application actions; it imports no provider, layer or camera engine. Selection,
 placement, navigation and storage policy remain outside the component family.
+
+### Context coordination
+
+`ui/context` owns mode controls, transactions, session restoration and manager
+subscriptions. Composition supplies the manager, installations search and
+explicit visual/panel actions. `ui/context/policy` exposes the existing pure
+mode and restoration rules. No source transport or renderer is imported by
+these components; initial state and action results retain their existing shape.
+
+## Cockpit controls
+
+`ui/cockpit` supplies the Cockpit controller and Display portal. Camera updates,
+instruments, Context readouts, briefings, signals, layout and input have separate
+modules. Composition supplies the existing aircraft/awareness operations, terrain
+cache and sampling operations, continuous-render owner and regional briefing
+service. Pure math, utility layout and vision helpers have explicit exports.
+Disposal releases subscriptions and pending work; portal moves preserve the
+original Display groups, independent scroll positions and current focus owner.

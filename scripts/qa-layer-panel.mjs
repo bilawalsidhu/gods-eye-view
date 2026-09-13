@@ -87,9 +87,9 @@ try {
       result.push([
         'native clear activation presents busy state',
         ui._clearSelectedLayersBtn.getAttribute('aria-busy') === 'true' &&
-          !!ui._clearSelectedLayersPromise,
+          !!ui._contextControls._clearSelectedLayersPromise,
       ]);
-      await ui._clearSelectedLayersPromise;
+      await ui._contextControls._clearSelectedLayersPromise;
       result.push([
         'clear settles through the existing layer transaction',
         !manager.isEnabled(id) &&
