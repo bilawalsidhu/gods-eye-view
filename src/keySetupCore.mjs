@@ -48,12 +48,50 @@ export const KEY_SETUP_KEYS = Object.freeze([
     hidden: true,
   }),
   Object.freeze({
+    id: 'ai-provider',
+    title: 'AI PROVIDER',
+    unlocks: 'Active AI Provider for HUD Intelligence & Voice Control',
+    envVars: Object.freeze(['AI_PROVIDER']),
+    tier: 'free',
+    options: Object.freeze([
+      Object.freeze({ value: 'openai', label: 'OpenAI (GPT / Realtime)' }),
+      Object.freeze({ value: 'anthropic', label: 'Anthropic (Claude)' }),
+      Object.freeze({ value: 'gemini', label: 'Google Gemini' }),
+      Object.freeze({ value: 'ollama', label: 'Ollama (Local / Custom)' }),
+    ]),
+    defaultValue: 'openai',
+  }),
+  Object.freeze({
     id: 'openai',
     title: 'OPENAI',
-    unlocks: 'Voice control — talk to the planet',
+    unlocks: 'Voice control (WebRTC Realtime) & HUD intelligence',
     getUrl: 'https://platform.openai.com/api-keys',
     envVars: Object.freeze(['OPENAI_API_KEY']),
     tier: 'metered',
+  }),
+  Object.freeze({
+    id: 'anthropic',
+    title: 'ANTHROPIC',
+    unlocks: 'Claude intelligence for HUD summaries & voice fallback',
+    getUrl: 'https://console.anthropic.com/settings/keys',
+    envVars: Object.freeze(['ANTHROPIC_API_KEY']),
+    tier: 'metered',
+  }),
+  Object.freeze({
+    id: 'gemini',
+    title: 'GOOGLE GEMINI',
+    unlocks: 'Gemini intelligence for HUD summaries & voice fallback',
+    getUrl: 'https://aistudio.google.com/app/apikey',
+    envVars: Object.freeze(['GEMINI_API_KEY']),
+    tier: 'metered',
+  }),
+  Object.freeze({
+    id: 'ollama',
+    title: 'OLLAMA',
+    unlocks: 'Local models (e.g. Llama 3) for HUD & voice fallback',
+    getUrl: 'https://ollama.com',
+    envVars: Object.freeze(['OLLAMA_BASE_URL']),
+    tier: 'free',
   }),
   Object.freeze({
     id: 'aisstream',
@@ -308,6 +346,9 @@ export function keySetupStatus(env = {}) {
   const keys = KEY_SETUP_KEYS.filter((entry) => !entry.hidden).map((entry) => {
     const values = entry.envVars.map((name) => String(env[name] ?? '').trim());
     const set = values.every((value) => value.length > 0);
+    const currentValue = entry.options
+      ? (String(env[entry.envVars[0]] ?? '').trim() || entry.defaultValue || entry.options[0]?.value)
+      : undefined;
     return {
       id: entry.id,
       title: entry.title,
@@ -316,6 +357,9 @@ export function keySetupStatus(env = {}) {
       envVars: [...entry.envVars],
       tier: entry.tier,
       clientExposed: Boolean(entry.clientExposed),
+      options: entry.options ? [...entry.options] : undefined,
+      defaultValue: entry.defaultValue,
+      currentValue,
       set,
     };
   });

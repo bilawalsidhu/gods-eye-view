@@ -87,3 +87,8 @@ export { validMilitaryInstallationBox } from './military-installations/query.js'
 export { militaryInstallationFailureReason } from './military-installations/query.js';
 export { validRegionalPoint } from './regional/query.js';
 export { regionalBriefHasAnySource } from './regional/briefing.js';
+export {
+  activeAiKey,
+  generateMultiProviderHudSummary,
+  generateMultiProviderChat,
+} from './ai.js';

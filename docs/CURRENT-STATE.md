@@ -2770,12 +2770,18 @@ silently demoting every later lookup for the session.
 - Client render cap `VITE_AIS_LIVE_MAX_ROWS` (default 12,000); type-colored ship icons (tanker/cargo/passenger/fishing/tug); screen-space label clustering caps active labels at `VITE_AIS_LIVE_LABEL_MAX_ROWS` (default 900).
 - Click-to-inspect wired into the voice context store.
 
-### Voice Control (June 2026)
+### Voice Control (Multi-Provider Support)
 
-`GEV MIC` button (bottom UI) starts an OpenAI Realtime session over WebRTC:
+`GEV MIC` button (bottom UI) operates in two modes depending on `AI_PROVIDER` (`openai`, `anthropic`, `gemini`, `ollama`):
 
-- **Token flow**: browser fetches a short-lived client secret from `/api/realtime/token`; the Vite middleware holds `OPENAI_API_KEY` and posts the full session config (instructions, tool schemas, VAD, truncation) to `api.openai.com/v1/realtime/client_secrets`. SDP exchange goes directly to `api.openai.com/v1/realtime/calls` with the ephemeral token.
-- **Session defaults** (env-tunable): model `gpt-realtime-2` (or `gpt-realtime-2.1-mini` when the MINI tier is selected — see the model-tier entry below), voice `marin`, reasoning effort `low`, semantic VAD with low eagerness, no response interruption, context window truncated to ~3,000 post-instruction tokens with 0.5 retention ratio — the conversational window stays short because map state is fetched live per turn.
+- **OpenAI Mode (WebRTC Realtime):**
+  - **Token flow**: browser fetches a short-lived client secret from `/api/realtime/token`; the Vite middleware holds `OPENAI_API_KEY` and posts the session config (instructions, tool schemas, VAD, truncation) to `api.openai.com/v1/realtime/client_secrets`. SDP exchange goes directly to `api.openai.com/v1/realtime/calls` with the ephemeral token.
+  - **Session defaults** (env-tunable): model `gpt-realtime-2` (or `gpt-realtime-2.1-mini` when MINI tier is selected), voice `marin`, reasoning effort `low`, semantic VAD with low eagerness.
+- **Anthropic / Gemini / Ollama Mode (Web Speech STT/TTS Fallback):**
+  - Uses browser `SpeechRecognition` / `webkitSpeechRecognition` for speech-to-text.
+  - Spoken commands and scene context are posted to `/api/ai/chat` which delegates to the active provider via `AiProviderRegistry`.
+  - Function calls are dispatched to local action handlers (`src/voice/gevActions.js`) and status confirmations are spoken back using `window.speechSynthesis`.
+
 - **Twenty-eight tools** (schemas defined server-side in `vite.config.js`, executed client-side in `src/voice/gevActions.js`): `fly_to_location`, `select_nearest_aircraft`, `adjust_camera_zoom`, `zoom_to_globe`, `set_layer_visibility`, `show_data_layers_menu`, `set_panel_open`, `set_visual_style`, `get_entity_context`, `get_current_view_state`, `set_hud`, `set_detection`, `set_map_stack`, `set_post_processing`, `control_scene`, `control_cctv`, `set_context_mode`, `control_cockpit`, `control_radio`, `track_entity`, `stop_tracking`, `frame_overhead`, `annotate_map`, `clear_annotations`, `move_camera`, `fly_route`, `analyst_query`, and `next_iss_pass`.
 > **Reading `npm test` totals:** the count depends on the Node major. The two
 > GC-bracketed allocation microbenchmarks (`src/data/focusAllocations.test.mjs`
@@ -2819,11 +2825,12 @@ silently demoting every later lookup for the session.
   2. **Contacts OFF** → "nearby" means **in view**; "near \<place\>" means a radius around that place. A radius query with Contacts active and no explicit centre is centred on the **active contact**, not the camera.
   3. **Every count names its scope in words** — "42 in your window", "8 in view", "about 30 within 250 km of Austin" — never a bare number. `analyst_query` returns `scopeLabel` so this is mechanical. Two different numbers with named scopes are not a contradiction.
   4. **The loaded-data caveat is stated once when relevant**: counts cover loaded data, and the flights layer loads where you look (appended to `coverage.note` for radius/view scopes over viewport-loaded layers).
-- **Degradation**: without `OPENAI_API_KEY`, `/api/realtime/token` returns 503 and the mic button surfaces the error; the rest of the app is unaffected.
+- **Degradation**: without a configured AI provider key, voice and HUD summary endpoints return informative errors and the mic button surfaces the state; the rest of the app is unaffected.
 
-### AI HUD Summary (June 2026)
+### AI HUD Summary (Multi-Provider)
 
-- HUD `SUMMARY` readout requests a five-word intelligence-style summary from `/api/openai/hud-summary` (model `OPENAI_HUD_SUMMARY_MODEL`, default `gpt-5-nano`, minimal reasoning).
+- HUD `SUMMARY` readout requests a five-word intelligence-style summary from `/api/ai/hud-summary` (aliased to `/api/openai/hud-summary` for backwards compatibility).
+- Dispatches to the active provider via `AiProviderRegistry` (OpenAI `OPENAI_HUD_SUMMARY_MODEL`, Anthropic Claude, Google Gemini, or Ollama).
 - Input is the live basemap label context (place/street/nearby-place labels + enabled layers) — the model is instructed not to infer from coordinates.
 - Output is sanitized to exactly five words; falls back to the deterministic telemetry summary on error/timeout (5s abort); typewriter animation on update.
 
