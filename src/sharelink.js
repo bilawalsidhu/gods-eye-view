@@ -26,6 +26,7 @@ const STYLE_TO_URL = {
   anime: 'anime',
   noir: 'noir',
   snow: 'snow',
+  sonar: 'sonar',
 };
 
 const SHARE_UI_STATE_PARAM = 'ui';
@@ -83,6 +84,12 @@ const SHARE_STYLE_PARAM_REGISTRY = Object.freeze({
   snow: Object.freeze([
     { key: 'density', token: 'd', min: 0, max: 1 },
     { key: 'wind', token: 'w', min: 0, max: 1 },
+  ]),
+  sonar: Object.freeze([
+    { key: 'sweepSpeed', token: 's', min: 0.1, max: 3 },
+    { key: 'ringDensity', token: 'r', min: 1, max: 10 },
+    { key: 'persistence', token: 'p', min: 0.1, max: 1 },
+    { key: 'gain', token: 'g', min: 0.5, max: 2.5 },
   ]),
 });
 
