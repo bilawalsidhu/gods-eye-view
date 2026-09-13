@@ -2036,7 +2036,8 @@ body.ui-clean-view #scene-runtime.active {
   transform: translateX(-50%);
 }
 
-#top-center-actions button {
+#top-center-actions button,
+#top-center-actions .top-center-weather-link {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2060,7 +2061,9 @@ body.ui-clean-view #scene-runtime.active {
 }
 
 #top-center-actions button:hover,
-#top-center-actions button:focus-visible {
+#top-center-actions button:focus-visible,
+#top-center-actions .top-center-weather-link:hover,
+#top-center-actions .top-center-weather-link:focus-visible {
   border-color: var(--glass-border-hover);
   background: rgba(255, 255, 255, 0.06);
   transform: scale(1.1);
@@ -2078,6 +2081,11 @@ body.ui-clean-view #scene-runtime.active {
 
 #top-center-actions .material-symbols-outlined {
   font-size: 18px;
+}
+
+#top-center-actions .top-center-weather-link {
+  color: var(--text-secondary);
+  text-decoration: none;
 }
 
 #global-loading-status {

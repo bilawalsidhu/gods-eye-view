@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101316">
+  <title>Weather Harness</title>
+  <style>
+    :root { color-scheme: dark; --ink: #eef2ed; --muted: #9ba8a1; --line: #2a3531; --panel: #151b19; --accent: #f2b66d; --accent-2: #8ed7bd; --bg: #0d1110; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; color: var(--ink); background: radial-gradient(circle at 85% 0%, #23362f 0, transparent 34rem), var(--bg); font: 15px/1.45 system-ui, sans-serif; }
+    main { width: min(1080px, calc(100% - 32px)); margin: 0 auto; padding: 42px 0 56px; }
+    header { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
+    h1, h2, p { margin: 0; } h1 { font-size: clamp(2rem, 5vw, 4.4rem); line-height: .95; letter-spacing: -.06em; } h2 { font-size: 1rem; letter-spacing: .08em; text-transform: uppercase; }
+    .eyebrow { margin-bottom: 10px; color: var(--accent); font-size: .72rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+    .search { display: flex; width: min(390px, 100%); border: 1px solid var(--line); background: #101614; }
+    input, button { border: 0; color: var(--ink); font: inherit; } input { min-width: 0; flex: 1; padding: 13px 14px; outline: 0; background: transparent; } input:focus { box-shadow: inset 0 0 0 2px var(--accent-2); } button { padding: 0 17px; cursor: pointer; background: var(--accent); color: #1b211e; font-weight: 700; } button:hover { filter: brightness(1.08); }
+    .location { display: flex; align-items: baseline; gap: 10px; margin-bottom: 18px; } .location h2 { font-size: 1.7rem; letter-spacing: -.03em; text-transform: none; } .location span { color: var(--muted); }
+    .current { display: grid; grid-template-columns: 1.3fr 1fr; gap: 1px; border: 1px solid var(--line); background: var(--line); }
+    .hero, .metrics, .forecast { background: var(--panel); } .hero { padding: clamp(24px, 5vw, 52px); } .condition { color: var(--accent-2); font-weight: 650; letter-spacing: .06em; text-transform: uppercase; } .temperature { margin: 8px 0 2px; font-size: clamp(4.5rem, 13vw, 9rem); line-height: .9; letter-spacing: -.09em; } .feels { color: var(--muted); }
+    .metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); } .metric { display: grid; align-content: center; min-height: 120px; padding: 20px; background: var(--panel); } .metric strong { margin-top: 5px; font-size: 1.35rem; } .metric span { color: var(--muted); font-size: .76rem; letter-spacing: .1em; text-transform: uppercase; }
+    .forecast { margin-top: 24px; border: 1px solid var(--line); padding: 22px; } .forecast-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; } .units { display: inline-flex; border: 1px solid var(--line); } .units button { padding: 6px 10px; background: transparent; color: var(--muted); } .units button.active { background: var(--accent-2); color: #102019; }
+    .days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; } .day { min-width: 0; padding: 14px 8px; border-top: 2px solid var(--line); text-align: center; } .day.today { border-color: var(--accent); } .day-name { font-size: .74rem; color: var(--muted); text-transform: uppercase; } .day-icon { margin: 16px 0 12px; font-size: 1.7rem; } .day-temp { font-weight: 700; } .day-low { color: var(--muted); }
+    .status { min-height: 24px; margin-top: 14px; color: var(--muted); } .status.error { color: #ff9a8c; } footer { margin-top: 22px; color: var(--muted); font-size: .76rem; } footer a { color: var(--accent-2); }
+    @media (max-width: 720px) { main { width: min(100% - 22px, 560px); padding-top: 24px; } header { display: block; } .search { margin-top: 24px; width: 100%; } .current { grid-template-columns: 1fr; } .days { overflow-x: auto; grid-template-columns: repeat(7, minmax(82px, 1fr)); } .forecast { padding: 16px 10px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div><p class="eyebrow">Open-Meteo / live conditions</p><h1>Weather<br>harness</h1></div>
+      <form class="search" id="search-form" role="search"><input id="city-input" name="city" autocomplete="off" placeholder="Search a city" aria-label="Search for a city"><button type="submit">Search</button></form>
+    </header>
+    <div class="location"><h2 id="place-name">New York</h2><span id="place-region">New York, United States</span></div>
+    <section class="current" aria-live="polite">
+      <div class="hero"><div class="condition" id="condition">Loading conditions</div><div class="temperature" id="temperature">--</div><div class="feels" id="feels">Feels like --</div></div>
+      <div class="metrics"><div class="metric"><span>Humidity</span><strong id="humidity">--</strong></div><div class="metric"><span>Wind</span><strong id="wind">--</strong></div><div class="metric"><span>Precipitation</span><strong id="precipitation">--</strong></div><div class="metric"><span>Visibility</span><strong id="visibility">--</strong></div></div>
+    </section>
+    <p class="status" id="status" role="status">Fetching live conditions...</p>
+    <section class="forecast"><div class="forecast-head"><h2>7-day forecast</h2><div class="units" aria-label="Temperature units"><button type="button" data-unit="c" class="active">°C</button><button type="button" data-unit="f">°F</button></div></div><div class="days" id="days"></div></section>
+    <footer>Weather and location data by <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>.</footer>
+  </main>
+  <script>
+    const state = { latitude: 40.7128, longitude: -74.006, timezone: 'America/New_York', unit: 'c', place: 'New York', region: 'New York, United States' };
+    const $ = (id) => document.getElementById(id);
+    const conditions = { 0: ['Clear', '☀'], 1: ['Mainly clear', '🌤'], 2: ['Partly cloudy', '⛅'], 3: ['Overcast', '☁'], 45: ['Fog', '〰'], 48: ['Rime fog', '〰'], 51: ['Drizzle', '🌦'], 53: ['Drizzle', '🌦'], 55: ['Drizzle', '🌦'], 61: ['Rain', '🌧'], 63: ['Rain', '🌧'], 65: ['Heavy rain', '🌧'], 71: ['Snow', '🌨'], 73: ['Snow', '🌨'], 75: ['Heavy snow', '🌨'], 80: ['Rain showers', '🌦'], 81: ['Rain showers', '🌦'], 82: ['Heavy showers', '🌧'], 95: ['Thunderstorm', '⛈'], 96: ['Thunderstorm', '⛈'], 99: ['Thunderstorm', '⛈'] };
+    const condition = (code) => conditions[code] || ['Mixed conditions', '◌'];
+    const temp = (value) => `${Math.round(state.unit === 'f' ? value * 9 / 5 + 32 : value)}°`;
+    const date = (value, options) => new Intl.DateTimeFormat(undefined, { timeZone: state.timezone, ...options }).format(new Date(`${value}T12:00:00`));
+    function setStatus(message, error = false) { $('status').textContent = message; $('status').classList.toggle('error', error); }
+    function render(data) {
+      const current = data.current; const units = data.current_units; const daily = data.daily;
+      const [label, icon] = condition(current.weather_code); $('condition').textContent = `${icon}  ${label}`; $('temperature').textContent = temp(current.temperature_2m); $('feels').textContent = `Feels like ${temp(current.apparent_temperature)}`;
+      $('humidity').textContent = `${Math.round(current.relative_humidity_2m)}%`; $('wind').textContent = `${Math.round(current.wind_speed_10m)} ${units.wind_speed_10m}`; $('precipitation').textContent = `${current.precipitation} ${units.precipitation}`; $('visibility').textContent = `${(current.visibility / 1000).toFixed(1)} km`;
+      $('days').innerHTML = daily.time.map((day, index) => { const [dayLabel, dayIcon] = condition(daily.weather_code[index]); return `<article class="day${index === 0 ? ' today' : ''}"><div class="day-name">${index === 0 ? 'Today' : date(day, { weekday: 'short' })}</div><div class="day-icon" title="${dayLabel}">${dayIcon}</div><div class="day-temp">${temp(daily.temperature_2m_max[index])}</div><div class="day-low">${temp(daily.temperature_2m_min[index])}</div></article>`; }).join('');
+    }
+    async function loadWeather() { setStatus(`Loading conditions for ${state.place}...`); const params = new URLSearchParams({ latitude: state.latitude, longitude: state.longitude, current: 'temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,visibility', daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max', forecast_days: 7, timezone: 'auto' }); try { const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`); if (!response.ok) throw new Error('Weather service unavailable'); const data = await response.json(); state.timezone = data.timezone; render(data); setStatus(`Updated ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`); } catch (error) { setStatus(error.message || 'Unable to load weather', true); } }
+    async function searchCity(query) { if (!query.trim()) return; setStatus(`Searching for ${query.trim()}...`); try { const params = new URLSearchParams({ name: query.trim(), count: 1, language: 'en', format: 'json' }); const response = await fetch(`https://geocoding-api.open-meteo.com/v1/search?${params}`); const data = await response.json(); const place = data.results?.[0]; if (!place) throw new Error('No matching city found'); Object.assign(state, { latitude: place.latitude, longitude: place.longitude, timezone: place.timezone, place: place.name, region: [place.admin1, place.country].filter(Boolean).join(', ') }); $('place-name').textContent = state.place; $('place-region').textContent = state.region; await loadWeather(); } catch (error) { setStatus(error.message || 'Search failed', true); } }
+    $('search-form').addEventListener('submit', (event) => { event.preventDefault(); searchCity($('city-input').value); });
+    document.querySelectorAll('[data-unit]').forEach((button) => button.addEventListener('click', () => { state.unit = button.dataset.unit; document.querySelectorAll('[data-unit]').forEach((item) => item.classList.toggle('active', item === button)); loadWeather(); }));
+    loadWeather();
+  </script>
+</body>
+</html>

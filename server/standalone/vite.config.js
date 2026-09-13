@@ -12,11 +12,24 @@ export default defineConfig(({ mode }) => {
   for (const [key, value] of Object.entries(loaded)) {
     if (process.env[key] === undefined) process.env[key] = value;
   }
-  return createBrowserViteConfig({
+  const browserConfig = createBrowserViteConfig({
     plugins: [...localProviderPlugins(), apiNotFoundPlugin()],
     googleApiKey: process.env.GOOGLE_MAPS_API_KEY,
     cesiumToken: process.env.CESIUM_ION_TOKEN,
     host: process.env.HOST,
     port: process.env.PORT,
   });
+  return {
+    ...browserConfig,
+    build: {
+      ...browserConfig.build,
+      rollupOptions: {
+        ...browserConfig.build?.rollupOptions,
+        input: {
+          main: `${root}/index.html`,
+          weather: `${root}/weather-harness.html`,
+        },
+      },
+    },
+  };
 });
