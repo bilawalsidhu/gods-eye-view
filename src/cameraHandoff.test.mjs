@@ -243,22 +243,22 @@ test('validated voice camera destinations share the UI navigation authority faca
 });
 
 test('deferred search releases only after its final authority check', () => {
-  const handler = body(
-    ui,
-    /this\._locationSearch\.addEventListener\('keydown', async \(e\) => \{([\s\S]*?)\n    \}\);/,
-    'search handler',
-  );
-  ordered(handler, [
-    "this._beginDeferredNavigation('location')",
-    'this._activeLocationSearchGeneration = generation;',
-    'searchAndFlyTo(this.viewer, query',
-    'beforeFly: () => this._reassertNavigationHandoff(generation)',
-    'generation !== this._navigationGeneration',
+  const search = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'locationSearch.js'), 'utf8');
+  ordered(search, [
+    'const authority = this.begin();',
+    'this.onStart(authority);',
+    'await this.search(query',
+    'beforeFly: () => current() && this.beforeFly(authority)',
+    'if (!current() || controller.signal.aborted) return;',
     'destination?.cancelled',
     'finally',
-    'this._settleLocationSearchUi(generation)',
-  ], 'deferred search');
-  assert.doesNotMatch(handler.slice(0, handler.indexOf('searchAndFlyTo')), /_releaseFollowCamera/);
+    'this.onSettled(authority)',
+  ], 'deferred search component');
+  assert.match(ui, /begin: \(\) => this\._beginDeferredNavigation\('location'\)/);
+  assert.match(ui, /beforeFly: \(generation\) => this\._reassertNavigationHandoff\(generation\)/);
+  assert.match(ui, /isCurrent: \(generation\) => !this\._disposed && generation === this\._navigationGeneration/);
+  assert.match(ui, /onSettled: \(generation\) => this\._settleLocationSearchUi\(generation\)/);
+  assert.doesNotMatch(search.slice(0, search.indexOf('await this.search')), /_releaseFollowCamera/);
 });
 
 test('a direct globe gesture retires delayed camera and selection restore only', () => {
@@ -337,25 +337,18 @@ test('teardown synchronously closes immediate camera entry points', () => {
 });
 
 test('teardown refuses deferred location work before geocoding begins', () => {
-  const deferred = body(
-    ui,
-    /_beginDeferredNavigation\(noun = 'location', \{ cancelPendingSelection = true \} = \{\}\) \{([\s\S]*?)\n  \}/,
-    'deferred navigation',
-  );
+  const deferred = body(ui, /_beginDeferredNavigation\(noun = 'location', \{ cancelPendingSelection = true \} = \{\}\) \{([\s\S]*?)\n  \}/, 'deferred navigation');
   assert.match(deferred, /disposed: this\._disposed/);
-
-  const handler = body(
-    ui,
-    /this\._locationSearch\.addEventListener\('keydown', async \(e\) => \{([\s\S]*?)\n    \}\);/,
-    'search handler',
-  );
-  ordered(handler, [
-    "const generation = this._beginDeferredNavigation('location');",
-    'if (generation === false)',
-    'this._locationSearch.blur();',
-    'searchAndFlyTo(this.viewer, query',
+  const search = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'locationSearch.js'), 'utf8');
+  ordered(search, [
+    'if (!query || this.destroyed) return;',
+    'const authority = this.begin();',
+    'if (authority === false)',
+    'this.input.blur();',
+    'this.onStart(authority);',
+    'await this.search(query',
   ], 'disposed search refusal');
-  assert.match(handler, /if \(generation === false\) \{[\s\S]*?return;[\s\S]*?\}\s*this\._activeLocationSearchGeneration/);
+  assert.match(search, /if \(authority === false\) \{[\s\S]*?return;[\s\S]*?\}\s*this\.controller/);
 });
 
 test('refused canned destinations commit no location or POI state', () => {

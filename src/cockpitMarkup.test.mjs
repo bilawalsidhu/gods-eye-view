@@ -468,11 +468,11 @@ test('Reset releases Contact camera ownership through its selection-preserving r
   assert.ok(contextRelease > resetStart);
   assert.ok(satelliteRelease > contextRelease);
   assert.match(ui, /this\._cockpitResetGlobeBtn = document\.getElementById\('cockpit-reset-globe'\)/);
-  assert.match(
-    ui,
-    /for \(const button of \[this\._resetGlobeBtn, this\._cockpitResetGlobeBtn\]\) \{[\s\S]*?addEventListener\('click', this\._globeResetHandler\)/,
-    'both reset controls must delegate to the one shared reset route',
-  );
+  const controls = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'locationControls.js'), 'utf8');
+  assert.match(ui, /resetButtons: \[this\._resetGlobeBtn, this\._cockpitResetGlobeBtn\]/);
+  assert.match(ui, /onReset: \(\) => this\.resetToGlobeView\(\)/);
+  assert.match(controls, /for \(const button of elements\.resetButtons\)[\s\S]*?this\.bind\(button, 'click', onReset\)/,
+    'both reset controls delegate to the same supplied reset action');
   assert.match(ui, /if \(this\.resetGlobeButton\) this\.resetGlobeButton\.hidden = false;/);
   assert.match(ui, /if \(this\.resetGlobeButton\) this\.resetGlobeButton\.hidden = true;/);
 });
@@ -496,7 +496,10 @@ test('Location navigation releases immediate routes before flight and deferred r
   const poiHandler = ui.slice(ui.indexOf('_onPoiClick(cityId, poiIndex) {'), ui.indexOf('_expandPOIRow(cityId) {'));
   assert.match(cityHandler, /if \(result === false\) return;[\s\S]*?_setActiveLocation/);
   assert.match(poiHandler, /if \(result === false\) return;[\s\S]*?_setActiveLocation/);
-  assert.match(ui.slice(search, search + 320), /beforeFly: \(\) => this\._reassertNavigationHandoff\(generation\)/);
+  assert.match(ui, /beforeFly: \(generation\) => this\._reassertNavigationHandoff\(generation\)/);
+  assert.match(ui.slice(search, search + 180), /\.\.\.options/);
+  const lookup = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'locationSearch.js'), 'utf8');
+  assert.match(lookup, /beforeFly: \(\) => current\(\) && this\.beforeFly\(authority\)/);
   assert.ok(voiceStart >= 0, 'voice Location must use the same handoff');
   assert.match(voiceActions, /styleManager\.reassertDeferredLocationNavigation\(generation\)/);
 });
@@ -525,12 +528,10 @@ test('Cockpit panel corridors reserve the owned topline readouts', () => {
   assert.match(rightObstacles[1], /#cockpit-hud \.cockpit-topline/);
   assert.match(leftObstacles[1], /#cockpit-hud \.cockpit-topline > div/);
   assert.match(rightObstacles[1], /#cockpit-hud \.cockpit-topline > div/);
-  const leftLayout = ui.match(
-    /_syncLeftPanelAdaptiveLayout\(\) \{([\s\S]*?)\n  \}\n\n  \/\*\*/,
-  );
+  const leftLayout = fs.readFileSync(new URL('./ui/leftPanelRail.js', import.meta.url), 'utf8');
   assert.ok(leftLayout, 'left accordion layout pass is missing');
   assert.doesNotMatch(
-    leftLayout[1],
+    leftLayout,
     /setProperty\('--cockpit-utility-top'/,
     'the right margin must not borrow the left accordion corridor: it is solved '
       + 'against left-lane obstacles and put the strip through the briefing card',
@@ -585,17 +586,15 @@ test('an expanded Cockpit left panel stays above Contact, HUD, and attribution',
     /COCKPIT_PASSABLE_LEFT_OBSTACLE_SELECTOR|cockpitOverlaysPassable/,
     'Cockpit obstacles must never be bypassed by an expanded map panel',
   );
-  const leftLayout = ui.match(
-    /_syncLeftPanelAdaptiveLayout\(\) \{([\s\S]*?)\n  \}\n\n  \/\*\*/,
-  );
+  const leftLayout = fs.readFileSync(new URL('./ui/leftPanelRail.js', import.meta.url), 'utf8');
   assert.ok(leftLayout, 'left accordion layout pass is missing');
   assert.match(
-    leftLayout[1],
+    leftLayout,
     /rect\.top >= baseTop\) \{\s*\n\s*bottomObstacles\.push\(\{ top: rect\.top \}\);/,
     'every rendered lower-lane obstacle must constrain the panel corridor',
   );
   assert.match(
-    leftLayout[1],
+    leftLayout,
     /safeBottom = resolveLeftStackBottomBoundary\(\{[\s\S]*?safeGap,\s*\n\s*\}\);/,
   );
   const cockpitHud = css.match(/#cockpit-hud\s*\{[\s\S]*?z-index:\s*(\d+);/);
@@ -750,7 +749,9 @@ test('Global Context names its mixed contact cycle without changing the stable m
 
 test('Global Context uses its dedicated right rail without a duplicate Data Layers row', () => {
   assert.match(contextLayer, /id:\s*'military-awareness'[\s\S]*?showInTogglePanel:\s*false/);
-  assert.match(manager, /if \(!layer\.showInTogglePanel\) continue;/);
+  const panel = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'layerPanel.js'), 'utf8');
+  assert.match(panel, /if \(!layer\.showInTogglePanel\) continue;/);
+  assert.match(manager, /getLayers: \(\) => this\.getAll\(\)/);
   assert.match(html, /id="global-context-panel"/);
   assert.match(html, /id="global-context-flights-btn"/);
   assert.match(html, /id="global-context-missions-btn"/);

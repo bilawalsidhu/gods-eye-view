@@ -157,5 +157,8 @@ test('Context async action buttons remain focused while busy', () => {
     assert.match(radioSync, new RegExp(`${name}\\.disabled = false`));
   }
   assert.doesNotMatch(clear, /_clearSelectedLayersBtn\.disabled\s*=\s*true/);
-  assert.match(clear, /_clearSelectedLayersBtn\.setAttribute\('aria-busy', 'true'\)/);
+  assert.match(clear, /_clearLayersControl\?\.setBusy\(true\)/);
+  const control = readFileSync(new URL('./ui/clearLayersControl.js', import.meta.url), 'utf8');
+  assert.match(control, /button\.setAttribute\('aria-busy', String\(busy\)\)/);
+  assert.doesNotMatch(control, /button\.disabled\s*=/);
 });

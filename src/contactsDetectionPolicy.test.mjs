@@ -26,7 +26,9 @@ import {
 } from './data/detection.js';
 import { canonicalizeDensity } from './data/detectionPolicy.js';
 
-const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+// Follow the UI wiring and its extracted preset definitions.
+const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8')
+  + '\n' + fs.readFileSync(new URL('./ui/visualPresets.js', import.meta.url), 'utf8');
 
 /**
  * The tactical preset ui.js hands Contacts. Read out of the source so this test
@@ -34,7 +36,7 @@ const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
  */
 const MILITARY_PRESET = (() => {
   const match = uiSource.match(
-    /const MILITARY_DETECTION_PRESET = Object\.freeze\(\{ mode: '(\w+)', densityPct: (\d+) \}\)/,
+    /const MILITARY_DETECTION_PRESET = Object\.freeze\(\{\s*mode: '(\w+)',\s*densityPct: (\d+),?\s*\}\)/,
   );
   assert.ok(match, 'ui.js must expose one shared military detection preset');
   return { mode: match[1].toUpperCase(), densityPct: Number(match[2]) };

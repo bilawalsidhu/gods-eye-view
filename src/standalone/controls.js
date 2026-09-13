@@ -7,10 +7,14 @@ import { t } from '../i18n/index.js';
 export function createStandaloneControls({
   scene: { viewer, mapStackController },
   loaderStatus,
+  placeSearch,
   defer,
 }) {
   // Initialize the style manager (post-processing, HUD, locations, share links)
-  const styleManager = new StyleManager(viewer, { mapStackController });
+  const styleManager = new StyleManager(viewer, {
+    mapStackController,
+    placeSearch,
+  });
   defer(() => styleManager.orbitController.stop());
   defer(() => styleManager.hud.destroy());
   defer(() => styleManager.dispose());

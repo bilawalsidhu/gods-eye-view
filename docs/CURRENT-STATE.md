@@ -1,6 +1,154 @@
 # God's Eye View Current State
 
-Updated: September 11, 2026
+## Location control ownership
+
+City/POI rows, search/reset bindings, location readouts and the orbit indicator
+have a dedicated component with explicit navigation actions. A separate lookup
+controller cancels superseded searches and checks camera authority before flight
+and result presentation. Existing search providers and camera handoff policy are
+preserved. Replacing or closing a POI row cancels its pending expansion frame;
+destruction releases listeners, pending searches and the orbit indicator.
+
+
+## Layer panel ownership
+
+Layer rows, feed feedback, counts, focus-preserving chips and toggle listeners
+are owned by a renderer-free panel component. The layer manager supplies current
+snapshots, lifecycle actions and row descriptors. Remount and teardown remove
+listeners and row subscriptions; obsolete completions do not repaint old rows.
+The clear control presents busy state while its existing action owns the transaction.
+
+
+## Map Source control ownership
+
+Map Source controls own chip listeners, source-state subscriptions and selection
+feedback. Loading remains with the supplied map controller. The active chip
+follows the source actually displayed, including fallback; obsolete completions
+cannot overwrite a newer selection. Refresh and destruction revoke old listeners
+and destruction suppresses late UI updates. Available choices and setup behavior
+remain unchanged.
+
+## Visual effects ownership
+
+VisualEffects owns style-stage creation, crossfades, animation scheduling, bloom
+and sharpen. Display supplies actions and renders settings; effect execution has
+no DOM dependency. Existing presets and the 500 ms transition remain unchanged.
+Stopping the controller revokes animation before asynchronous UI teardown; final
+destruction removes its stages and restores the borrowed bloom configuration.
+
+## Display control ownership
+
+Display button, selector and slider listeners have a single destroyable owner.
+The application supplies actions and retains effect settings, restore claims and
+rendering. Native keyboard editing, model modes and current defaults are preserved.
+Destroying the UI removes these listeners before asynchronous teardown.
+
+## Application shortcuts and shader parameter controls
+
+`ui/input` supplies the bubbling application shortcut listener and generated
+shader-parameter rows. Number/style keys, H/O/V/F/D/C actions, native form-control
+typing and Escape behavior retain their existing mappings. Capture-phase
+surfaces continue to arbitrate their own keyboard events first.
+
+The UI facade retains shader values, share-restore authority, render requests,
+search dismissal, visibility and Cockpit portal policy. Parameter rows preserve
+labels, bounds, steps and precision. Rebuilding rows removes their previous
+listeners; disposal removes shortcuts and parameter listeners synchronously
+before asynchronous application teardown.
+
+## Adaptive panel rail layout
+
+`ui/layout` supplies the left/right rail layout passes, natural-height
+measurement and pure corridor/allocation helpers. The UI facade passes live DOM
+nodes, obstacle nodes, HUD presentation, preferred panels and callbacks. It
+retains observers, frame scheduling, saved/share preferences and Cockpit portals.
+
+The left rail keeps its measured collapsed heights and obstacle-safe corridor;
+the right rail follows its top baseline and preserves Display's scroll owner.
+Automatic collapse remains presentation only, prioritizes the latest explicit
+panel, and honors keyboard focus on the right. Mobile layout still releases
+desktop allocation styles. Stable Display allocation avoids unnecessary style
+writes. This extraction does not change panel positions or layout defaults.
+
+
+## Surface keyboard lifecycle
+
+`ui/surfaces` owns the capture-phase keyboard listener, Tab cycling and return
+focus shared by the first-run launcher and Provider Settings. Each caller
+activates it while open and deactivates it on dismissal; destruction releases
+keyboard ownership without moving focus. Reopening captures the current opener.
+The launcher retains its hit-test/exclusive-surface arbitration and dismissal
+preferences. Provider Settings retains its existing visibility and save policy.
+Initial focus, transitions and DOM content remain with each screen. This
+component does not add modal semantics or make the map inert.
+
+
+## Panel disclosure lifecycle
+
+Panel collapse buttons, nested Escape handling and dock hover/focus timing now
+use `ui/panels`. The component receives existing DOM elements and callbacks for
+state changes and content focus. Panel layout, saved state, share restoration,
+Location draft cleanup and Map Source selection remain with their existing
+callers. Listener and timer cleanup is synchronous when controls are replaced
+or disposed, preventing old hover or focus work from changing a later view.
+
+
+## Military feed cooldown and loading guidance
+
+The adsb.lol military proxy reuses its last response during upstream 429/5xx
+failures and observes Retry-After, bounded to 5–120 seconds (defaults: 30 seconds
+for rate limits, 15 seconds for server errors). A failure with no cached data
+still reports an error. Cached responses carry their age; the browser preserves
+observation timestamps and marks fallback data stale instead of inventing fresh
+positions or reporting a failed load. Fresh responses clear that stale state.
+
+Mapped-installation zoom guidance appears in the layer row without counting as
+a global loading failure. Guidance statuses do not suppress independent refresh
+errors.
+
+
+## Places and CCTV request bounds
+
+With a Google key configured, nearby and text search reject missing, blank,
+non-numeric and out-of-range coordinates before the opt-in limiter and upstream
+request. Text search also requires a nonblank query. Keyless requests retain
+their `configured: false` response.
+
+CCTV media waits at most 15 seconds for upstream response headers and returns
+504 on timeout. Its timer stops when headers arrive, so live bodies can continue
+streaming; body idle deadlines are separate from this header deadline. Error
+responses are cancelled. Buffered snapshots have a 16 MiB streaming cap; an
+oversized image remains an upstream miss and uses the normal fallback chain.
+The existing declared media size ceiling remains 64 MiB.
+
+
+## GBFS upstream bounds
+
+GBFS refuses upstream redirects and enforces its 5 MiB response cap while
+streaming. The 12-second deadline includes reading the body, and rejected or
+stalled downloads are cancelled. Development and preview use the same handler.
+
+
+## Remaining local service modules
+
+Overpass query validation, geometry simplification, disk caching and upstream
+transport now have separate modules; military-installation search reuses that
+transport. Regional briefing combines separate place, news and weather sources,
+while weather effects uses only the weather source. Existing process-scoped
+caches, rate limits, stale fallbacks and route ordering are preserved.
+
+Local voice has separate HUD-summary, debug-log and Realtime-token handlers,
+with tool definitions and instructions in dedicated files. The factory accepts
+an optional `annotationGuidance` paragraph; its default instructions and all 28
+tool definitions remain unchanged. `sourceRoot` resolves debug logs against the
+application directory. Standalone key setup accepts the same directory option
+for its environment store and preserves boot provenance, loopback/origin guards,
+atomic credential writes and development-only registration.
+
+Node-only package entries expose Overpass, military installations, regional
+services, local voice and standalone key setup. Importing them starts no network
+acquisition. Browser layer lifecycle, rendering and voice execution stay in their
+existing modules.
 
 ## Local build preview
 
@@ -57,10 +205,10 @@ access. Callers retain validation, transport and response policy.
 
 `vite.config.js` delegates to `server/standalone/vite.config.js`, which loads
 this checkout's environment and constructs the local providers in their existing
-order. `server/providers/local.js` holds the existing middleware and process
-state; its named exports remain available through the root compatibility entry.
+order. `server/providers/local.js` is the composition and compatibility entry;
+provider families own their middleware and process state in focused modules.
 Provider URLs, key selection, cache behavior, setup restrictions and routes are
-unchanged. Individual provider families remain to be split into smaller modules.
+unchanged.
 
 `gods-eye-view/build/vite` is a Node-only export for explicit browser build
 settings: Cesium assets, caller-supplied plugins, browser key defines, server
@@ -1192,12 +1340,20 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   settled dim contact always completes its release after tracking ends.
 > - **Terrain-height resilience:** `/api/terrain/heights` caches canonical
 >   5-decimal points individually, reconstructs reordered/overlapping batches
->   in exact request order, and refreshes only missing or stale points. Network,
->   429, and 5xx failures receive bounded jittered retries with `Retry-After`;
->   stale real heights remain usable per point, while an uncached absent height
->   still returns 502 rather than becoming a fabricated ground value. Client
->   geoid fallbacks wait 60 seconds before retrying and self-heal to Re:Earth on
->   the first later successful fetch.
+>   in exact request order, and refreshes only missing or stale points. Upstream
+>   calls and browser requests are both chunked at 64 points, sized to fit
+>   their 30s deadlines across Re:Earth's observed 87-186 ms/point range; a chunk
+>   that still fails contributes nulls for its own positions instead of
+>   discarding the chunks that resolved. Network, 429, and 5xx failures receive
+>   bounded jittered retries with `Retry-After`; stale real heights remain
+>   usable per point, while an uncached absent height still returns 502 rather
+>   than becoming a fabricated ground value. A position the upstream answers
+>   with a null ellipsoid is reported as an absent height rather than a refresh
+>   failure, and is left uncached so a later poll re-asks it. Client geoid
+>   fallbacks wait 60 seconds before retrying and self-heal to Re:Earth on the
+>   first later successful fetch. Smaller chunks reduce timeout risk; complete
+>   camera batches still wait for their sequential requests, and unresolved
+>   placement continues to use the existing prior until real heights arrive.
 > - **Overpass cache admission:** `/api/overpass` parses and sanitizes requests,
 >   then checks fresh memory, identical in-flight work, and fresh disk entries
 >   before invoking its local 90/min limiter. Cache and single-flight responses
@@ -1858,7 +2014,6 @@ Historical planning documents may not match runtime behavior.
 - 3D aircraft/model tracking surfaces in `src/data/flights.js` and `src/data/militaryFlights.js`
 - Detection overlay and tracked-target readout in `src/data/detection.js`, `src/data/detectionDraw.js`, and `src/data/trackedReadout.js`
 - Proxy middleware and API wiring in `vite.config.js`
-- EN/ES localization in `src/i18n/` (catalogs, locale resolution, `t()`, DOM application; see the Internationalization section below)
 
 ### Active Data Layers in Runtime
 
@@ -2286,68 +2441,6 @@ silently demoting every later lookup for the session.
 - **Track trails**: server accumulates per-MMSI ring buffers (`/api/ais-live/track?mmsi=`, Float32+Uint32, 64 samples, 30s/25m thinning); aircraft backfill proxies `/api/opensky-track` (OAuth, own credit bucket) and `/api/adsblol/trace` (tar1090 readsb, ~24h history, ODbL — credit adsb.lol).
 - Shared `src/data/pickRegistry.js` stops the two flight layers' click handlers from fighting over the camera.
 
-### Internationalization / EN+ES localization (September 2026)
-
-The application-owned UI renders in English and Spanish. English is the
-default, the source catalog, and the fallback; a key missing in Spanish
-renders its English value. The subsystem lives in `src/i18n/`:
-
-- **File map.** `src/i18n/locale.js` owns locale resolution, guarded storage
-  (`gev:locale:v1`), the one-shot `?lang=` override, and `<html lang>`/`<html
-  dir>` metadata. `src/i18n/index.js` owns the catalog registry, `t()`
-  (interpolation + `Intl.PluralRules` plural selection), `formatNumber` /
-  `formatDate`, `applyDocumentTranslations()`, and
-  `persistLocaleAndReload()`. Catalogs are four flat message maps per locale —
-  `src/i18n/locales/{en,es,fr}/{shell,cockpit,layers,setup}.js` — mirrored
-  key-for-key (898 keys per locale at the time of writing; fr holds English
-  seed values pending stage-B translation).
-- **Selector.** The command dock carries a compact locale switch: a static
-  `.dock-locale-switch` group container in `index.html` whose buttons
-  (`.dock-locale-btn`) are rendered at runtime by `ui.js`
-  `_initLocaleSelector()` — one per locale in the configured pair. A click
-  persists the choice and reloads the page with the hash preserved, so no
-  live re-apply of already-rendered dynamic panels is needed.
-- **Locale pair config.** `GEV_DEFAULT_LOCALE` (default `en`) and
-  `GEV_SECONDARY_LOCALE` (default `es`) in `.env`, injected as
-  `import.meta.env` defines by `vite.config.js`; the offered set is
-  `dedup([default, secondary, 'en'])` and invalid/degenerate pairs fall back
-  to en+es (dev-only warn).
-- **Resolution order.** `?lang=<locale>` (search string only; never
-  persisted, never written into share links; stripped by
-  `persistLocaleAndReload`; accepted only for offered locales) → stored
-  `gev:locale:v1` (re-checked against the pair) →
-  `navigator.languages` (regional variants normalize to the primary tag:
-  `es-MX`/`es_419` → `es`) → the CONFIGURED default locale. Unsupported
-  values defer to the next
-  step rather than forcing English.
-- **Gates** (all under `node --test src/i18n/`, 31 tests):
-  `catalog.test.mjs` enforces en/es key, placeholder-name, and
-  plural-shape parity with the strict exact-parity flip ON
-  (`REQUIRE_FULL_ES_PARITY`; `GEV_I18N_REQUIRE_FULL_ES_PARITY=0` opts out
-  for staged work — flipped by commit `c91a923`);
-  `markupCoverage.test.mjs` requires every `data-i18n*` attribute in
-  `index.html` to resolve in both catalogs and rejects unknown attribute
-  spellings; `i18n.test.mjs` pins precedence, guards, fallback,
-  interpolation, plurals, and DOM application; `repairPass.test.mjs`
-  anchors the reviewed translations — en byte-identity for extracted
-  literals and the eleven corrected es strings.
-- **Accepted deferrals (do not "fix" silently):**
-  - The military-awareness subject header literal `FLIGHT / VESSEL WINDOW`
-    (`src/data/militaryAwareness.js`) stays English; the literal is
-    test-pinned in `src/data/militaryAwareness.test.mjs`.
-  - The visible cockpit-brief tab tokens `SIG` / `NEWS` / `LOCAL`
-    (`index.html`) stay untranslated to match the runtime keys; their
-    `aria-label`s ARE localized (`cockpit.brief.tab*AriaLabel`).
-  - `src/voice/gevActions.js` tool-result confirmation strings stay English
-    by contract (voice tool schemas and spoken confirmations are
-    keep-English; see the ownership manifest).
-  - Number formatting is still the pre-i18n `toLocaleString` policy at:
-    `src/ui.js:1442`, `src/data/satellites.js:829`,
-    `src/data/flights.js:436` (`'en-US'` pinned), and
-    `src/data/rocketLaunches.js:2281/2299/2364/2371/2374`
-    (default-locale). A locale-aware number-format policy is deferred; the
-    `formatNumber` helper exists in `src/i18n/index.js` when that lands.
-
 ### Overpass proxy mirror rotation (September 2026)
 
 - `/api/overpass` fans out across four public mirrors. `overpassPayloadIsData()` governs cache reads, writes, and stale fallback: only a 2xx that is neither rate-limited nor a body-level runtime error qualifies. Previously stored refusals are ignored on both fresh and stale reads, so upgrading does not require manually clearing the disk cache.
@@ -2523,6 +2616,29 @@ renders its English value. The subsystem lives in `src/i18n/`:
 - Input is the live basemap label context (place/street/nearby-place labels + enabled layers) — the model is instructed not to infer from coordinates.
 - Output is sanitized to exactly five words; falls back to the deterministic telemetry summary on error/timeout (5s abort); typewriter animation on update.
 
+### Place-search providers
+
+Location search/fly-to, annotations and Radio location lookup receive one
+`placeSearch.geocode(query, { bias, signal })` service. `src/standalone` composes
+Google first when configured and Photon/OpenStreetMap as fallback, including
+Google transport failures or declined requests. The portable `./search` export
+provides the service and adapters; it reads no environment or application state.
+Existing browser/server key setup is unchanged.
+
+Providers normalize coordinates, canonical name, label, place types and optional
+bounds. Camera framing, nearby landmark recovery and footprint selection remain
+in their consumers, including the Capitol identity/containment safeguards.
+Radio keeps localized country names in labels rather than station filters.
+Reverse geocoding and nearby/text-search endpoints retain their existing behavior.
+
+Only valid answers and definitive misses enter bounded caches; malformed replies,
+HTTP refusals and outages remain retryable. Searches share a 12-second total
+deadline, with Photon requests capped at six seconds each. Caller/application
+cancellation stops retries and late cache writes. Replacing a location search
+cancels the previous lookup; disposing its controls cancels the active lookup. Photon uses a soft proximity bias, up to five
+candidates, and an unbiased retry for name mismatches. Invalid/wrapped bounds
+are omitted rather than framing the wrong part of the globe.
+
 ### Map Stack Switcher (June 2026)
 
 - `src/mapStackController.js` switches between Google Photorealistic 3D (`photoreal`, the default when a Google or ion key is present), keyless Esri World Imagery (the zero-key default landing, with keyless terrain), Bing Aerial / Aerial-with-Labels via Cesium ion world imagery (require `CESIUM_ION_TOKEN`), and OSM tile fallback. Bing Road is **retired**: it is gone from `MAP_STACKS`, from the `set_map_stack` enum, and from the voice aliases (road phrasings now resolve to OSM, the one shipped road basemap). An old `map=bing-road` link is simply an unknown id and takes `setStack()`'s existing photoreal fallback with the Google 3D tile lit — pinned live in `scripts/qa-map-source-tray.mjs`.
@@ -2621,7 +2737,7 @@ renders its English value. The subsystem lives in `src/i18n/`:
   eight-second timeout; the timer is cleared on every success or failure path.
 - OpenSky response cache stores successful upstream responses only; OAuth token refresh calls are coalesced.
 - A cold OpenSky failure uses the current camera subpoint only to request a cached adsb.lol point fallback capped at 250 nm. A fresh OpenSky response or last-good cache wins; a nominally successful worldwide snapshot more than two minutes old prefers viewport-scoped adsb.lol when available, otherwise the stale source is reported honestly. The fallback is visibly source-labeled and is never presented as a worldwide snapshot.
-- GBFS response size is capped; CCTV health map is bounded.
+- GBFS proxy refuses upstream redirects (`redirect: 'manual'`; any 3xx becomes a 502 and the redirect target is logged server-side only) and enforces its 5 MB response cap while the body streams, cancelling the upstream read past the cap; CCTV health map is bounded.
 - Proxy error payloads are sanitized (no internal error details returned to clients).
 - `OPENAI_API_KEY` is server-side only; the browser receives ephemeral Realtime client secrets from `/api/realtime/token`.
 - `AISSTREAM_API_KEY` is server-side only; the browser reads the same-origin `/api/ais-live` cache.

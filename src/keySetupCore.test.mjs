@@ -28,10 +28,10 @@ test('the boot provenance snapshot survives in-process Vite config re-evaluation
   // panel save has already set its values live on process.env. A recomputed
   // snapshot would classify the panel's own keys as external (read-only) until
   // a full process relaunch, so the first evaluation's snapshot must win.
-  const source = readFileSync(new URL('../server/providers/local.js', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../server/standalone/key-setup.js', import.meta.url), 'utf8');
   assert.match(
     source,
-    /const PROVIDER_ENV_AT_BOOT = globalThis\.__GEV_PROVIDER_ENV_AT_BOOT \?\?= Object\.freeze\(/,
+    /const PROVIDER_ENV_AT_BOOT\s*=\s*\(?globalThis\.__GEV_PROVIDER_ENV_AT_BOOT\s*\?\?=\s*Object\.freeze\(/,
   );
 });
 

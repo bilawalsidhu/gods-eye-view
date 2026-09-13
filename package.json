@@ -102,6 +102,33 @@
     },
     "./server/providers/radio": {
       "node": "./server/providers/radio.js"
-    }
+    },
+    "./server/providers/overpass": {
+      "node": "./server/providers/overpass.js"
+    },
+    "./server/providers/military-installations": {
+      "node": "./server/providers/military-installations.js"
+    },
+    "./server/providers/regional": {
+      "node": "./server/providers/regional.js"
+    },
+    "./server/providers/openai": {
+      "node": "./server/providers/openai.js"
+    },
+    "./server/standalone/key-setup": {
+      "node": "./server/standalone/key-setup.js"
+    },
+    "./search": "./src/search/index.js",
+    "./ui/panels": "./src/ui/panelDisclosure.js",
+    "./ui/surfaces": "./src/ui/surfaceKeyboard.js",
+    "./ui/layout": "./src/ui/panelRails.js",
+    "./ui/input": "./src/ui/visualInput.js",
+    "./ui/display": "./src/ui/displayControls.js",
+    "./ui/effects": "./src/ui/effects.js",
+    "./ui/effects/bloom": "./src/bloom.js",
+    "./ui/maps": "./src/ui/mapSource.js",
+    "./ui/layers": "./src/ui/layers.js",
+    "./ui/layers/feedback": "./src/loadingFeedback.js",
+    "./ui/location": "./src/ui/location.js"
   }
 }

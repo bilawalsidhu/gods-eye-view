@@ -1,6 +1,11 @@
 import { Readable } from 'node:stream';
 import { hashSeed, escapeXml } from './normalize.js';
-import { CCTV_FRAME_FETCH_TIMEOUT_MS } from './constants.js';
+import {
+  CCTV_FRAME_FETCH_TIMEOUT_MS,
+  CCTV_FRAME_MAX_BODY_BYTES,
+  CCTV_MEDIA_FETCH_TIMEOUT_MS,
+  CCTV_MEDIA_MAX_BODY_BYTES,
+} from './constants.js';
 /**
  * Generate a synthetic SVG billboard image for a CCTV camera placeholder.
  *
@@ -120,10 +125,9 @@ export async function proxyMediaResponse(
   // Cheap defense: reject an upstream that DECLARES an oversized fixed body.
   // Live MJPEG/HLS streams are unbounded by design and send no content-length,
   // so they pipe normally (piping streams to the client, never buffering).
-  const MEDIA_DECLARED_CAP_BYTES = 64 * 1024 * 1024;
   if (
     Number.isFinite(Number(contentLength)) &&
-    Number(contentLength) > MEDIA_DECLARED_CAP_BYTES
+    Number(contentLength) > CCTV_MEDIA_MAX_BODY_BYTES
   ) {
     res.writeHead(502, {
       'Content-Type': 'application/json',
@@ -153,6 +157,87 @@ export async function proxyMediaResponse(
   stream.pipe(res);
 }
 
+/** Read a snapshot incrementally, retaining at most maxBytes of owned chunks. */
+async function readCappedResponseBytes(upstream, maxBytes) {
+  const declared = Number(upstream.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    try {
+      await upstream.body?.cancel();
+    } catch {
+      /* no-op */
+    }
+    return null;
+  }
+  if (!upstream.body) return null;
+  const chunks = [];
+  let total = 0;
+  // Every retained chunk is an OWNED copy: a chunk can be a small view over a
+  // much larger backing ArrayBuffer, and keeping the view would retain that
+  // whole allocation while the byte accounting only counted the view.
+  const keep = (chunk) => {
+    total += chunk.byteLength;
+    if (total > maxBytes) return false;
+    chunks.push(Buffer.from(chunk));
+    return true;
+  };
+  if (typeof upstream.body[Symbol.asyncIterator] === 'function') {
+    for await (const chunk of upstream.body) {
+      if (!keep(chunk)) {
+        try {
+          await upstream.body.cancel();
+        } catch {
+          /* no-op */
+        }
+        return null;
+      }
+    }
+    return Buffer.concat(chunks, total);
+  }
+  // No async iterator: stream through a reader so the cap still applies while
+  // reading. A body that cannot be streamed at all is refused rather than
+  // buffered uncapped — the helper's whole contract is the cap.
+  const reader =
+    typeof upstream.body.getReader === 'function'
+      ? upstream.body.getReader()
+      : null;
+  if (!reader) return null;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!keep(value)) {
+        try {
+          await reader.cancel();
+        } catch {
+          /* already closed */
+        }
+        return null;
+      }
+    }
+    return Buffer.concat(chunks, total);
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/** Open registered media within a header deadline; leave timely live bodies running. */
+export async function fetchCctvMediaUpstream(
+  url,
+  {
+    headers = {},
+    fetchImpl = fetch,
+    timeoutMs = CCTV_MEDIA_FETCH_TIMEOUT_MS,
+  } = {},
+) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetchImpl(url, { headers, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 /**
  * Fetch one upstream CCTV image within the frame-refresh budget.
  *
@@ -164,11 +249,16 @@ export async function proxyMediaResponse(
  * @param {object} [options]
  * @param {typeof fetch} [options.fetchImpl=fetch] - Fetch implementation.
  * @param {number} [options.timeoutMs=CCTV_FRAME_FETCH_TIMEOUT_MS] - Abort timeout.
+ * @param {number} [options.maxBytes=CCTV_FRAME_MAX_BODY_BYTES] - Snapshot byte cap.
  * @returns {Promise<{ok:true,body:Buffer,contentType:string}|null>}
  */
 export async function fetchCctvImageFromUpstream(
   url,
-  { fetchImpl = fetch, timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS } = {},
+  {
+    fetchImpl = fetch,
+    timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS,
+    maxBytes = CCTV_FRAME_MAX_BODY_BYTES,
+  } = {},
 ) {
   if (!url || !/^https?:\/\//i.test(url)) return null;
   const controller = new AbortController();
@@ -183,15 +273,17 @@ export async function fetchCctvImageFromUpstream(
       signal: controller.signal,
     });
     const contentType = upstream.headers.get('content-type') || '';
-    if (!upstream.ok || !contentType.startsWith('image/')) return null;
-    return {
-      ok: true,
-      body: Buffer.from(await upstream.arrayBuffer()),
-      contentType,
-    };
+    if (!upstream.ok || !contentType.startsWith('image/')) {
+      controller.abort();
+      return null;
+    }
+    const body = await readCappedResponseBytes(upstream, maxBytes);
+    if (!body) return null;
+    return { ok: true, body, contentType };
   } catch {
     return null;
   } finally {
     clearTimeout(timeoutId);
+    controller.abort();
   }
 }

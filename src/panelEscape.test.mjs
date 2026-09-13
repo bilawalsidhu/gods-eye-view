@@ -1,3 +1,4 @@
+import { bindPanelDisclosure, collapsePanelOnEscape } from './ui/panelDisclosure.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
@@ -38,7 +39,7 @@ function panelFixture({ id = 'data-panel', nested = false, nestedCollapsed = fal
     disclosure.closest = () => panel;
   }
   const document = { getElementById: (candidate) => candidate === id ? panel : null };
-  const manager = new Function('document', `return {${method('_collapsePanelOnEscape', '_initCommandDockPins')}};`)(document);
+  const manager = new Function('document', 'collapsePanelOnEscape', `return {${method('_collapsePanelOnEscape', '_initCommandDockPins')}};`)(document, collapsePanelOnEscape);
   manager.setPanelCollapsed = (candidate, value, options) => {
     assert.equal(candidate, id);
     assert.equal(value, true);
@@ -128,8 +129,9 @@ test('Location Escape clears a hidden draft search before restoring disclosure f
 
 test('panel chrome wires Escape for every declared collapse target', () => {
   const init = method('_initPanelChrome', '_collapsePanelOnEscape');
-  assert.match(init, /for \(const targetId of targets\)[\s\S]*?addEventListener\('keydown'[\s\S]*?_collapsePanelOnEscape\(event, targetId\)/);
-  assert.match(source, /_initAutoHoverPanel[\s\S]*?if \(event\.key !== 'Escape'\) return;[\s\S]*?_collapsePanelOnEscape\(event, panelId\)[\s\S]*?clearOpen\(\);[\s\S]*?clearClose\(\);/);
+  assert.match(init, /for \(const \[targetId, buttons\] of targets\)/);
+  assert.match(init, /bindPanelDisclosure\(\{[\s\S]*?onEscape: \(event\) => this\._collapsePanelOnEscape\(event, targetId\)/);
+  assert.match(source, /createHoverDisclosure\(\{[\s\S]*?onEscape: \(event\) => this\._collapsePanelOnEscape\(event, panelId\)/);
 });
 
 test('Cockpit Escape collapses Contact or Live Signals before exiting Cockpit', () => {
@@ -166,4 +168,36 @@ test('Cockpit utility Escape leaves an expanded nested Parameters panel to the s
     /_contextRadioDock\?\.classList\.contains\('disclosure-open'\)[\s\S]*?escapedFromDisclosure[\s\S]*?setRadioDisclosure\(false, \{ returnFocus: !escapedFromDisclosure \}\)[\s\S]*?_contextRadioToggleBtn\?\.blur/,
     'compact Radio disclosure clears its own focus when Escape closes it',
   );
+});
+
+
+test('panel bindings have a single owner and are inert after destruction', () => {
+  const panel = new EventTarget();
+  const button = new EventTarget();
+  let collapsed = true;
+  let changes = 0;
+  let keys = 0;
+  panel.classList = { contains: () => collapsed };
+  const bind = () => bindPanelDisclosure({
+    panel, buttons: [button, button],
+    onChange(value, options) { collapsed = value; changes += 1; assert.equal(options.explicit, true); },
+    onEscape() { keys += 1; },
+  });
+  const first = bind();
+  button.dispatchEvent(new Event('click'));
+  panel.dispatchEvent(new Event('keydown'));
+  assert.equal(collapsed, false);
+  assert.equal(changes, 1);
+  assert.equal(keys, 1);
+  first.destroy();
+  first.destroy();
+  button.dispatchEvent(new Event('click'));
+  panel.dispatchEvent(new Event('keydown'));
+  assert.equal(changes, 1);
+  assert.equal(keys, 1);
+  const second = bind();
+  button.dispatchEvent(new Event('click'));
+  assert.equal(changes, 2);
+  assert.equal(collapsed, true);
+  second.destroy();
 });

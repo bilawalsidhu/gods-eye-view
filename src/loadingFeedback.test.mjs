@@ -685,3 +685,28 @@ test('the loading ticker never runs hidden and stops after loading and notices s
     'the resample handler must be removed on teardown',
   );
 });
+
+test('a guidance status such as zoom-in never counts as a participant failure', () => {
+  const zoomIn = { id: 'military-installations', name: 'Mapped Installations', enabled: true,
+    stats: { status: 'zoom-in', error: 'Zoom in to load mapped installation context', loading: true, count: 0 } };
+  const loading = aggregateLayerLoading([zoomIn]);
+  assert.equal(loading.records[0].error, null);
+  assert.equal(loading.records[0].degraded, false);
+  let state = reduceLoadingFeedback(createLoadingFeedbackState(), loading, 1000);
+  state = reduceLoadingFeedback(state, loading, 1200);
+  const settled = aggregateLayerLoading([{ ...zoomIn, stats: { ...zoomIn.stats, loading: false } }]);
+  state = reduceLoadingFeedback(state, settled, 1500);
+  assert.equal(state.terminal, 'complete');
+  assert.equal(presentLoadingFeedback(state, settled, 1500).label, 'MAPPED SITES LOADED');
+});
+
+
+test('guidance does not suppress independent manager and feed failures', () => {
+  for (const field of ['lastError', 'managerRefreshError']) {
+    const record = normalizeLayerLoading({
+      id: 'militaryInstallations', enabled: true,
+      stats: { status: 'zoom-in', error: 'Zoom in to load mapped sites.', [field]: 'Network unavailable' },
+    });
+    assert.equal(record.error, 'Network unavailable');
+  }
+});

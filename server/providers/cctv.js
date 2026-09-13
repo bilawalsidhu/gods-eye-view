@@ -8,6 +8,7 @@ import {
   buildSyntheticCctvSvg,
   proxyMediaResponse,
   fetchCctvImageFromUpstream,
+  fetchCctvMediaUpstream,
 } from './cctv/media.js';
 import { CCTV_FRAME_FETCH_TIMEOUT_MS } from './cctv/constants.js';
 import { googleServerApiKey } from './places/google-key.js';
@@ -216,11 +217,16 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             };
             const requestRange = req.headers?.range;
             if (requestRange) upstreamHeaders.Range = requestRange;
-            const upstream = await fetch(mediaUrl, {
+            const upstream = await fetchCctvMediaUpstream(mediaUrl, {
               headers: upstreamHeaders,
             });
             const contentType = upstream.headers.get('content-type') || '';
             if (!upstream.ok) {
+              try {
+                await upstream.body?.cancel();
+              } catch {
+                /* already closed */
+              }
               setHealth(cameraId, {
                 status: 'degraded',
                 sourceKind: 'upstream',
@@ -270,17 +276,25 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             });
             return;
           } catch (error) {
+            const timedOut =
+              error?.name === 'AbortError' || error?.name === 'TimeoutError';
             setHealth(cameraId, {
               status: 'degraded',
               sourceKind: 'upstream',
               label: source?.provider || 'Configured source',
               message: error?.message || 'Media fetch failed',
             });
-            res.writeHead(502, {
+            res.writeHead(timedOut ? 504 : 502, {
               'Content-Type': 'application/json',
               'Cache-Control': 'no-store',
             });
-            res.end(JSON.stringify({ error: 'Media proxy failed' }));
+            res.end(
+              JSON.stringify({
+                error: timedOut
+                  ? 'Upstream media timeout'
+                  : 'Media proxy failed',
+              }),
+            );
             return;
           }
         }

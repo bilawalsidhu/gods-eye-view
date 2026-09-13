@@ -1,3 +1,4 @@
+import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -216,14 +217,16 @@ test('exclusiveSurfaceActive reads the live body classes', () => {
 
 test('the key handler refuses to act for a card that is not really on screen', () => {
   const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
+  assert.match(module, /isActive: \(\) => !closing && isTopmost\(\)/);
   // Real visibility, not just the class: the class survives while CSS hides the
   // card, which is precisely how a Scene left an invisible ESC handler armed.
   assert.match(module, /const isTopmost = \(\) => root\.isConnected/);
   assert.match(module, /&& root\.getClientRects\(\)\.length > 0\s*\n\s*&& !coveredByOverlay\(\);/);
-  const handler = module.slice(module.indexOf('function onKeyDown(event) {'));
+  const keyboard = fs.readFileSync(new URL('./ui/surfaceKeyboard.js', import.meta.url), 'utf8');
+  const handler = keyboard.slice(keyboard.indexOf('const onKeyDown = (event) => {'));
   assert.match(
     handler.slice(0, handler.indexOf("if (event.key === 'Escape')")),
-    /if \(closing \|\| !isTopmost\(\)\) return;/,
+    /!isActive\(\)/,
     'the handler must bail before consuming anything when it is not topmost',
   );
 });
@@ -276,10 +279,11 @@ test('one ESC does one thing — the radio disclosure stops the launcher outrigh
 
   // Belt on the launcher side: a key another surface already marked is not ours,
   // whether or not that surface remembered to silence us.
-  const handler = module.slice(module.indexOf('function onKeyDown(event) {'));
+  const keyboard = fs.readFileSync(new URL('./ui/surfaceKeyboard.js', import.meta.url), 'utf8');
+  const handler = keyboard.slice(keyboard.indexOf('const onKeyDown = (event) => {'));
   assert.match(
     handler.slice(0, handler.indexOf("if (event.key === 'Escape')")),
-    /if \(event\.defaultPrevented\) return;/,
+    /event\.defaultPrevented\) return;/,
     'a marked key must be somebody else\'s key',
   );
 });
@@ -310,7 +314,7 @@ test('a refused write takes the tick back instead of promising "never again"', (
 
   const handler = module.slice(
     module.indexOf('const onSuppressChange = (event) => {'),
-    module.indexOf('function onKeyDown(event) {'),
+    module.indexOf('  const keyboard = createSurfaceKeyboard({'),
   );
   assert.match(handler, /if \(setFirstRunSuppressed\(wanted, storage\)\) return;/);
   assert.match(handler, /box\.checked = !wanted;/, 'a refused write must revert the tick');
@@ -616,11 +620,14 @@ test('the launcher keeps focus, restores it, and never disables the focused butt
   assert.match(module, /button\.setAttribute\('aria-disabled', String\(next\)\)/);
   assert.doesNotMatch(module, /button\.disabled = /);
   // Tab is confined to the launcher, and ESC always releases it.
-  assert.match(module, /event\.key !== 'Tab'/);
-  assert.match(module, /event\.key === 'Escape'/);
-  assert.match(module, /previouslyFocused\?\.focus/);
+  const keyboard = fs.readFileSync(new URL('./ui/surfaceKeyboard.js', import.meta.url), 'utf8');
+  assert.match(module, /keyboard\.activate\(\)/);
+  assert.match(module, /keyboard\.deactivate\(\{ restoreFocus \}\)/);
+  assert.match(keyboard, /event\.key !== 'Tab'/);
+  assert.match(keyboard, /event\.key === 'Escape'/);
+  assert.match(keyboard, /target\?\.focus/);
   // Capture phase, so the app's global letter hotkeys cannot eat the launcher's keys.
-  assert.match(module, /addEventListener\('keydown', onKeyDown, true\)/);
+  assert.match(keyboard, /addEventListener\('keydown', onKeyDown, true\)/);
 });
 
 test('the DISPLAY rail starts collapsed on a first run, and a stored choice wins', () => {
@@ -645,37 +652,31 @@ test('the DISPLAY rail starts collapsed on a first run, and a stored choice wins
   );
 });
 
-// ── Voice: instruction-only, tool schema byte-unchanged ─────────────────────
+// ── Voice: instruction-only, tool schema unchanged ─────────────────────
 
-test('the voice TOOL SCHEMA is byte-identical to main — the mission mapping is instructions only', () => {
-  const src = fs.readFileSync(new URL('../server/providers/local.js', import.meta.url), 'utf8');
-  const start = src.indexOf('const GEV_REALTIME_TOOLS = [');
-  assert.ok(start > 0, 'GEV_REALTIME_TOOLS must still be a single literal array');
-  const end = src.indexOf('\n];\n', start);
-  const block = src.slice(start, end + 4);
-
-  // Re-pinned 2026-08-28: the Provider Settings / Esri release DELIBERATELY
-  // extends set_map_stack's enum with 'esri-imagery' (a real new basemap —
-  // exactly the kind of schema change this pin exists to make loud). The
-  // guarded claim is unchanged: first-run missions ride existing tools, and
-  // any NEW drift from this recorded schema still fails here.
-  assert.equal(block.length, 31189, 'tool schema byte length drifted from the pinned release schema');
+test('the voice TOOL SCHEMA matches the pinned release — the mission mapping is instructions only', () => {
+  // Canonical serialization pins every tool name, description, property and
+  // ordering while allowing source formatting. Derived from the unchanged
+  // release schema before formatting (the previous source-byte pin passed).
+  const block = JSON.stringify(GEV_REALTIME_TOOLS);
+  assert.equal(block.length, 26121, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '73aaabdb169a5478893d28688f327a21edd32ed3ec16fc6287bd944ed77beecf',
+    '11680affb4a7aebf142642c8185b28f2ee7d523407054c5b0c3962d933b045eb',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
+  const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');
 
   // ...and the mapping that makes them reachable by voice is one instruction
   // string, whose rollback is deleting that string. Anchored to a LIVE array
   // entry — a quote at the start of its own line — so commenting the paragraph
   // out reads as the removal it is, not as a passing substring match.
   assert.match(
-    src,
+    instructions,
     /\n\s+'NAMED VIEWS are shorthand/,
     'the mission mapping must be an active instruction entry, not commented out',
   );
-  const mapping = src.slice(src.indexOf('NAMED VIEWS are shorthand'));
+  const mapping = instructions.slice(instructions.indexOf('NAMED VIEWS are shorthand'));
   const paragraph = mapping.slice(0, mapping.indexOf("',\n"));
   for (const layerId of [
     'local-datacenters', 'local-dams', 'telegeography-submarine-cables', 'local-firms', 'earthquakes',
@@ -687,7 +688,7 @@ test('the voice TOOL SCHEMA is byte-identical to main — the mission mapping is
 });
 
 test('every layer a mission drives is already in the shipped set_layer_visibility enum', () => {
-  const src = fs.readFileSync(new URL('../server/providers/local.js', import.meta.url), 'utf8');
+  const src = fs.readFileSync(new URL('../server/providers/openai/tools.js', import.meta.url), 'utf8');
   const tool = src.slice(src.indexOf("name: 'set_layer_visibility'"), src.indexOf("name: 'show_data_layers_menu'"));
   const missionLayerIds = Object.values(FIRST_RUN_MISSIONS).flatMap((mission) => mission.layerIds || []);
   assert.ok(missionLayerIds.length > 0);
