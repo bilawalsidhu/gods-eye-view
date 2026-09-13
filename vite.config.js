@@ -140,9 +140,34 @@ const OPENSKY_SOURCE_STALE_MS = 120_000;
 // ---------------------------------------------------------------------------
 // Overpass API proxy constants and cache state
 // ---------------------------------------------------------------------------
+/**
+ * User-Agent sent to every Overpass mirror.
+ *
+ * The OSM API usage policy requires a User-Agent that identifies the
+ * application AND carries a contact route, so an operator seeing bad traffic
+ * can reach a human instead of reaching for a block rule. The previous string,
+ * `gods-eye-view-overpass-proxy/1.0`, satisfied neither and is now blocklisted
+ * by overpass-api.de: that exact prefix answers 406 to every request — even
+ * GET /api/status with no query — while generic strings like `overpass-proxy/1.0`
+ * are served normally (measured 2026-09-13). Since the mirror loop treated a
+ * 4xx as an authoritative answer, that single 406 took Mapped Installations
+ * down permanently. Keep this string honest and stable; if it is ever blocked
+ * again, that is a signal to cut query volume, not to rename the client.
+ */
+const OVERPASS_USER_AGENT = 'gods-eye-view/0.1 (+https://github.com/bilawalsidhu/gods-eye-view)';
 /** Ordered list of Overpass API mirrors; tried sequentially on failure/rate-limit. */
 const OVERPASS_UPSTREAMS = [
   'https://overpass-api.de/api/interpreter',
+  // Full-planet community mirror, added 2026-09-13. A health sweep found the
+  // list had no fast survivor whenever the .de cluster is unhappy: kumi failed
+  // the real installation query in every measurement (504 at 55 s, then a 22 s
+  // abort) while answering a trivial query in ~24 s, and private.coffee did not
+  // answer it inside 180 s. This mirror returned features for Austin, Mumbai,
+  // and Tokyo in 0.6-8 s (one 504 of four regions), so it sits ABOVE the two
+  // slow entries: leaving it below them cost ~22 s of dead time on every cold
+  // request before the answer arrived. It stays BELOW the canonical instance,
+  // which fails fast (~7 s) when overloaded.
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
   'https://lz4.overpass-api.de/api/interpreter',
   // Community full-planet instance (privateforge nonprofit) — added 2026-07-30
@@ -2471,6 +2496,37 @@ function overpassLooksRuntimeError(bodyText) {
     || text.includes('out of memory');
 }
 
+/**
+ * What the mirror loop should do with one upstream response.
+ *
+ * The mirror list exists so that a sick upstream costs latency, not the answer —
+ * but the loop only ever fell through on rate-limits, runtime errors, and 5xx.
+ * A 4xx was treated as authoritative and RETURNED, which ends the loop on the
+ * FIRST mirror and makes the remaining ones unreachable. That is how a single
+ * mirror refusing this client took the whole feed down: overpass-api.de answers
+ * 406 to some clients (it blocklists specific User-Agents), the loop returned
+ * that 406 immediately, and `/api/military-installations` — which treats any
+ * `status >= 400` as a failure — reported "temporarily unavailable" forever
+ * while two healthy mirrors sat untried below it.
+ *
+ * A 4xx is now a SKIP, but it is remembered: if EVERY mirror declines, the most
+ * informative refusal is still returned rather than a bare "all upstreams
+ * failed", so a genuinely malformed query (400 on every mirror) still surfaces
+ * its own error text instead of being flattened into a network failure.
+ *
+ * @param {{status:number, rateLimited:boolean, runtimeError:boolean}} payload
+ * @returns {'ACCEPT'|'SKIP'|'RATE_LIMITED'|'CLIENT_ERROR'}
+ */
+export function overpassMirrorDisposition({ status, rateLimited, runtimeError } = {}) {
+  if (rateLimited) return 'RATE_LIMITED';
+  // A 200 body carrying a runtime error / timeout is a transient upstream
+  // failure — skip to the next mirror rather than returning or caching it.
+  if (runtimeError) return 'SKIP';
+  if (status >= 500) return 'SKIP';
+  if (status >= 400) return 'CLIENT_ERROR';
+  return 'ACCEPT';
+}
+
 /** Evict oldest Overpass cache entries until size is within the cap. */
 function trimOverpassCache() {
   while (_overpassCache.size > OVERPASS_CACHE_MAX_ENTRIES) {
@@ -2500,9 +2556,10 @@ function sendOverpassResponse(res, payload, cacheStatus = 'MISS') {
 /**
  * Try each Overpass upstream in order until one succeeds.
  *
- * Skips rate-limited or 5xx responses and falls through to the next
- * mirror. If all mirrors fail, returns the last rate-limited payload
- * (if any) or throws the last error.
+ * Skips rate-limited, 4xx, 5xx, and runtime-error responses and falls through
+ * to the next mirror (see overpassMirrorDisposition for why 4xx must not end
+ * the loop). If every mirror declines, returns the last rate-limited payload,
+ * else the last 4xx payload, else throws the last transport error.
  *
  * @param {string} body - URL-encoded Overpass QL query body.
  * @param {number} [maxResponseBytes] Endpoint-specific response cap.
@@ -2511,6 +2568,7 @@ function sendOverpassResponse(res, payload, cacheStatus = 'MISS') {
 async function fetchOverpassPayload(body, maxResponseBytes = OVERPASS_MAX_RESPONSE_BYTES) {
   let lastError = null;
   let lastRateLimitPayload = null;
+  let lastClientErrorPayload = null;
 
   for (const endpoint of OVERPASS_UPSTREAMS) {
     const controller = new AbortController();
@@ -2521,7 +2579,7 @@ async function fetchOverpassPayload(body, maxResponseBytes = OVERPASS_MAX_RESPON
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'gods-eye-view-overpass-proxy/1.0',
+          'User-Agent': OVERPASS_USER_AGENT,
         },
         body,
         signal: controller.signal,
@@ -2541,18 +2599,23 @@ async function fetchOverpassPayload(body, maxResponseBytes = OVERPASS_MAX_RESPON
         runtimeError,
       };
 
-      if (rateLimited) {
+      const disposition = overpassMirrorDisposition(payload);
+      if (disposition === 'RATE_LIMITED') {
         lastRateLimitPayload = payload;
         continue;
       }
-      // A 200 body carrying a runtime error / timeout is a transient upstream
-      // failure — skip to the next mirror rather than returning or caching it.
-      if (runtimeError) {
-        lastError = new Error(`Overpass runtime error (${endpoint})`);
+      if (disposition === 'CLIENT_ERROR') {
+        // A mirror refusing THIS client (406/403 User-Agent blocks, 404s on a
+        // mirror that does not serve this path) must not speak for the mirrors
+        // below it. Remembered so an all-mirror refusal keeps its error text.
+        lastClientErrorPayload = payload;
+        lastError = new Error(`Overpass upstream returned ${status} (${endpoint})`);
         continue;
       }
-      if (status >= 500) {
-        lastError = new Error(`Overpass upstream returned ${status} (${endpoint})`);
+      if (disposition === 'SKIP') {
+        lastError = new Error(runtimeError
+          ? `Overpass runtime error (${endpoint})`
+          : `Overpass upstream returned ${status} (${endpoint})`);
         continue;
       }
 
@@ -2568,6 +2631,7 @@ async function fetchOverpassPayload(body, maxResponseBytes = OVERPASS_MAX_RESPON
   }
 
   if (lastRateLimitPayload) return lastRateLimitPayload;
+  if (lastClientErrorPayload) return lastClientErrorPayload;
   throw lastError || new Error('All Overpass upstreams failed');
 }
 
@@ -6773,7 +6837,13 @@ function trimMilitaryInstallationCache() {
 function militaryInstallationsProxy() {
   async function refresh(box, key) {
     const bbox = `${box.south},${box.west},${box.north},${box.east}`;
-    const ql = `[out:json][timeout:20];(nwr["military"~"^(airfield|naval_base|range|barracks|base)$"](${bbox});nwr["landuse"="military"](${bbox}););out center tags geom ${MILITARY_INSTALLATION_ELEMENT_CAP};`;
+    // `geom` only — NOT `center geom`. Overpass geometry modes are exclusive and
+    // `geom` wins, so the `center` this used to ask for was never in the reply;
+    // ways and relations came back with `bounds`/`geometry` alone and the client
+    // dropped every one of them for having no centre point (Austin: six features
+    // mapped, one drawn). Callers derive the centre from `bounds`, which is the
+    // same box `out center` would have used. See normalizeMilitaryInstallations.
+    const ql = `[out:json][timeout:20];(nwr["military"~"^(airfield|naval_base|range|barracks|base)$"](${bbox});nwr["landuse"="military"](${bbox}););out tags geom ${MILITARY_INSTALLATION_ELEMENT_CAP};`;
     const upstream = await fetchOverpassPayload(
       `data=${encodeURIComponent(ql)}`,
       MILITARY_INSTALLATION_MAX_RESPONSE_BYTES,
