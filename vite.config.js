@@ -3482,8 +3482,18 @@ const DEFAULT_CCTV_SOURCE_FILE = 'config/cctv_sources.austin.json';
 const DEFAULT_AUSTIN_ROWS_URL = 'https://data.austintexas.gov/api/views/b4k4-adkb/rows.json?accessType=DOWNLOAD';
 /** Default cap on Austin cameras after distance-based prioritization. */
 const DEFAULT_AUSTIN_MAX_SOURCES = 250;
-/** Global cap on total CCTV sources served by the proxy. */
-const DEFAULT_CCTV_MAX_SOURCES = 900;
+/**
+ * Global cap on total CCTV sources served by the proxy.
+ *
+ * Raised from 900 when the keyless Finland, Ontario and DriveBC packs were
+ * added: the three existing packs already fill 800, so 900 would have let the
+ * per-pack caps be silently overridden by a global `slice()` — the new packs
+ * are appended last, so they, not Austin or TfL, would have been the ones
+ * truncated. 1400 leaves headroom for 800 + three 150-camera packs. Lower it
+ * (or any CCTV_*_MAX_SOURCES) if the catalog size costs more than it is worth
+ * on your hardware.
+ */
+const DEFAULT_CCTV_MAX_SOURCES = 1400;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
@@ -3504,6 +3514,44 @@ const TFL_JAMCAM_URL = 'https://api.tfl.gov.uk/Place/Type/JamCam';
 const TFL_IMAGE_ORIGIN = 'https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/';
 const DEFAULT_TFL_MAX_SOURCES = 250;
 const LONDON_CENTER = { lat: 51.5074, lon: -0.1278 };
+/** Fintraffic Digitraffic weather cameras (Finland). Keyless. */
+const DIGITRAFFIC_STATIONS_URL = 'https://tie.digitraffic.fi/api/weathercam/v1/stations';
+/**
+ * Digitraffic image URL pattern.
+ *
+ * The BULK station list returns presets as `{id, inCollection}` only — the
+ * `imageUrl` and `direction` fields exist solely on the per-station detail
+ * endpoint, and 811 of those against a 60 req/min limit is ~14 minutes, which
+ * cannot run at startup. The documented pattern below is verified live and
+ * gets the whole country from ONE call; the cost is that heading falls back to
+ * the id hash, exactly as the headingless TfL and Austin cameras already do.
+ */
+const DIGITRAFFIC_IMAGE_URL = (presetId) => `https://weathercam.digitraffic.fi/${presetId}.jpg`;
+/**
+ * Digitraffic asks every client to identify itself with this header and grants
+ * a higher rate limit in return. `Accept-Encoding: gzip` is MANDATORY on the
+ * JSON interfaces — without it Digitraffic answers 406, which looks exactly
+ * like a User-Agent block and would send the next debugger down the wrong path.
+ */
+const DIGITRAFFIC_HEADERS = {
+  Accept: 'application/json',
+  'Accept-Encoding': 'gzip',
+  'Digitraffic-User': 'gods-eye-view',
+  'User-Agent': OVERPASS_USER_AGENT,
+};
+const DEFAULT_FINLAND_MAX_SOURCES = 150;
+const HELSINKI_CENTER = { lat: 60.1699, lon: 24.9384 };
+/** Ontario 511 — the one 511 deployment that serves cameras without a key. */
+const ONTARIO_511_URL = 'https://511on.ca/api/v2/get/cameras';
+const DEFAULT_ONTARIO_MAX_SOURCES = 150;
+const TORONTO_CENTER = { lat: 43.6532, lon: -79.3832 };
+/** DriveBC (British Columbia). Keyless, and uniquely ships orientation + elevation. */
+const DRIVEBC_WEBCAMS_URL = 'https://www.drivebc.ca/api/webcams/';
+const DRIVEBC_IMAGE_ORIGIN = 'https://www.drivebc.ca';
+const DEFAULT_DRIVEBC_MAX_SOURCES = 150;
+const VANCOUVER_CENTER = { lat: 49.2827, lon: -123.1207 };
+/** 8-point compass -> degrees, for sources that publish a coarse bearing. */
+const COMPASS_DEGREES = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315 };
 /** LTA DataMall (Singapore) live traffic images. Requires a free AccountKey. */
 const LTA_TRAFFIC_IMAGES_URL = 'https://datamall2.mytransport.sg/ltaodataservice/Traffic-Imagesv2';
 const DEFAULT_LTA_MAX_SOURCES = 120;
@@ -4085,6 +4133,273 @@ async function loadCaltransSourcesFromOpenData() {
  * @returns {Promise<Array<object>>} Normalized camera source objects.
  */
 /**
+ * One Digitraffic PRESET -> one catalog source, or null when unusable.
+ *
+ * A Finnish station is a mast carrying several presets, each a fixed view in a
+ * different direction, so the preset — not the station — is the camera. Pure
+ * and exported so the upstream shape is pinned by tests.
+ *
+ * @param {object} feature GeoJSON station feature.
+ * @param {{id?:string, inCollection?:boolean}} preset One of its presets.
+ * @returns {?object}
+ */
+export function digitrafficPresetToSource(feature, preset) {
+  const presetId = String(preset?.id || '').trim();
+  if (!presetId || preset?.inCollection === false) return null;
+  // GeoJSON is [lon, lat, elevation].
+  const coords = feature?.geometry?.coordinates;
+  const lon = toFiniteNumber(coords?.[0]);
+  const lat = toFiniteNumber(coords?.[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const props = feature?.properties || {};
+  // A station that is not gathering has no current frame to show.
+  if (props.collectionStatus && props.collectionStatus !== 'GATHERING') return null;
+  const cameraId = `fi-${presetId}`;
+  const stationName = String(props.names?.en || props.name || props.id || presetId);
+  return {
+    id: cameraId,
+    name: `${stationName} (${presetId})`,
+    city: String(props.municipality || 'Finland'),
+    cityId: 'finland',
+    provider: 'Fintraffic Digitraffic',
+    lat,
+    lon,
+    // The bulk list carries no per-preset bearing (see DIGITRAFFIC_IMAGE_URL).
+    headingDeg: fallbackHeadingFromId(cameraId),
+    headingConfidence: 'low',
+    pitchDeg: -10,
+    fovDeg: 54,
+    rangeM: 400,
+    mountHeightM: 7,
+    // `||` not `??` ON PURPOSE: Digitraffic's third coordinate is a placeholder
+    // that is 0.000000 for every station, so 0 means "no elevation published"
+    // rather than "sea level" and must fall through to the prior. (DriveBC is
+    // the opposite case — it publishes real elevations, so a 0 there is kept.)
+    groundElevationM: toFiniteNumber(coords?.[2]) || 30,
+    feedType: 'image',
+    url: DIGITRAFFIC_IMAGE_URL(presetId),
+    snapshotUrl: DIGITRAFFIC_IMAGE_URL(presetId),
+    sourceKind: 'digitraffic',
+    license: 'Contains data from Fintraffic Digitraffic, CC BY 4.0',
+  };
+}
+
+/**
+ * One Ontario 511 camera VIEW -> one catalog source, or null when unusable.
+ *
+ * A 511 camera record holds several `Views`, each a separately addressable
+ * image with its own description ("Toronto Bound", "Looking Down"), so the view
+ * is the camera. Unusually for this codebase's sources, that description often
+ * names a compass bearing, which is a better heading signal than an id hash.
+ *
+ * @param {object} camera 511 camera record.
+ * @param {{Id?:number, Url?:string, Status?:string, Description?:string}} view
+ * @returns {?object}
+ */
+export function ontario511ViewToSource(camera, view) {
+  const viewId = String(view?.Id ?? '').trim();
+  if (!viewId) return null;
+  // Disabled views serve nothing; rendering them would be a dead camera.
+  if (view?.Status && String(view.Status).toLowerCase() !== 'enabled') return null;
+  const url = String(view?.Url || '');
+  if (!url.startsWith('https://')) return null;
+  const lat = toFiniteNumber(camera?.Latitude);
+  const lon = toFiniteNumber(camera?.Longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const cameraId = `on511-${viewId}`;
+  const description = String(view?.Description || '').trim();
+  const heading = headingFromDirectionText(`${description} ${camera?.Direction || ''}`);
+  const location = String(camera?.Location || camera?.Roadway || `Camera ${viewId}`);
+  return {
+    id: cameraId,
+    name: description ? `${location} — ${description}` : location,
+    city: String(camera?.Roadway || 'Ontario'),
+    cityId: 'ontario',
+    provider: 'Ontario 511',
+    lat,
+    lon,
+    headingDeg: Number.isFinite(heading) ? heading : fallbackHeadingFromId(cameraId),
+    headingConfidence: Number.isFinite(heading) ? 'medium' : 'low',
+    pitchDeg: -12,
+    fovDeg: 50,
+    rangeM: 320,
+    mountHeightM: 9,
+    groundElevationM: 120, // Ontario plateau prior; one-shot snap corrects.
+    feedType: 'image',
+    url,
+    snapshotUrl: url,
+    sourceKind: 'ontario-511',
+    license: 'Ontario 511 — Open Government Licence – Ontario',
+  };
+}
+
+/**
+ * Compass bearing from a free-text direction, or NaN when it names none.
+ *
+ * 511 and DriveBC describe views in words ("Toronto Bound", "northbound", "NE").
+ * Only an unambiguous compass word counts: a travel direction like "Toronto
+ * Bound" says where the ROAD goes, not where the camera looks, so it must not
+ * be promoted to a surveyed heading.
+ * @param {string} text
+ * @returns {number} Degrees, or NaN.
+ */
+export function headingFromDirectionText(text) {
+  const value = String(text || '').toLowerCase();
+  // Longest-first so "northeast" is not shortened to "north".
+  const words = [
+    ['northeast', 45], ['northwest', 315], ['southeast', 135], ['southwest', 225],
+    ['northbound', 0], ['southbound', 180], ['eastbound', 90], ['westbound', 270],
+    ['north', 0], ['south', 180], ['east', 90], ['west', 270],
+  ];
+  for (const [word, deg] of words) {
+    if (value.includes(word)) return deg;
+  }
+  const token = value.trim().toUpperCase();
+  return Object.prototype.hasOwnProperty.call(COMPASS_DEGREES, token)
+    ? COMPASS_DEGREES[token]
+    : NaN;
+}
+
+/**
+ * One DriveBC webcam -> one catalog source, or null when unusable.
+ *
+ * The richest upstream in this file: DriveBC publishes a real `orientation`
+ * (8-point compass) AND a real `elevation`, so these cameras carry a measured
+ * bearing and ground height instead of the priors every other source needs.
+ * `marked_stale` cameras are dropped — DriveBC is saying the frame is old.
+ *
+ * @param {object} cam DriveBC webcam record.
+ * @returns {?object}
+ */
+export function driveBcCameraToSource(cam) {
+  const rawId = String(cam?.id ?? '').trim();
+  if (!rawId) return null;
+  if (cam?.marked_stale === true) return null;
+  const coords = cam?.location?.coordinates;
+  const lon = toFiniteNumber(coords?.[0]);
+  const lat = toFiniteNumber(coords?.[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const imagePath = String(cam?.links?.imageDisplay || '');
+  if (!imagePath.startsWith('/')) return null;
+  const url = `${DRIVEBC_IMAGE_ORIGIN}${imagePath}`;
+  const cameraId = `bc-${rawId}`;
+  const orientation = String(cam?.orientation || '').trim().toUpperCase();
+  const hasBearing = Object.prototype.hasOwnProperty.call(COMPASS_DEGREES, orientation);
+  return {
+    id: cameraId,
+    name: String(cam?.name_override || cam?.name || `DriveBC ${rawId}`),
+    city: String(cam?.region_name || 'British Columbia'),
+    cityId: 'britishcolumbia',
+    provider: 'DriveBC',
+    lat,
+    lon,
+    headingDeg: hasBearing ? COMPASS_DEGREES[orientation] : fallbackHeadingFromId(cameraId),
+    // Published but only 8-point, so 'medium': real, not surveyed-exact.
+    headingConfidence: hasBearing ? 'medium' : 'low',
+    pitchDeg: -10,
+    fovDeg: 52,
+    rangeM: 500,
+    mountHeightM: 8,
+    groundElevationM: toFiniteNumber(cam?.elevation) ?? 100,
+    feedType: 'image',
+    url,
+    snapshotUrl: url,
+    sourceKind: 'drivebc',
+    license: 'DriveBC.ca — Province of British Columbia',
+  };
+}
+
+/** Load Finland weather cameras (keyless). @returns {Promise<Array<object>>} */
+async function loadDigitrafficSources() {
+  try {
+    const resp = await fetch(DIGITRAFFIC_STATIONS_URL, {
+      headers: DIGITRAFFIC_HEADERS,
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn(`[CCTV] Digitraffic download failed: ${resp.status}${resp.status === 406 ? ' (406 means the gzip Accept-Encoding was dropped, not a UA block)' : ''}`);
+      return [];
+    }
+    const body = await resp.json();
+    const features = Array.isArray(body?.features) ? body.features : [];
+    const cameras = [];
+    for (const feature of features) {
+      for (const preset of feature?.properties?.presets || []) {
+        const source = digitrafficPresetToSource(feature, preset);
+        if (source) cameras.push(source);
+      }
+    }
+    const maxRaw = Number(process.env.CCTV_FINLAND_MAX_SOURCES || DEFAULT_FINLAND_MAX_SOURCES);
+    const maxCount = Number.isFinite(maxRaw) ? Math.max(0, Math.min(900, Math.floor(maxRaw))) : DEFAULT_FINLAND_MAX_SOURCES;
+    if (maxCount === 0) return [];
+    const prioritized = prioritizeSources(cameras, maxCount, [HELSINKI_CENTER]);
+    console.log(`[CCTV] Loaded Digitraffic sources: ${cameras.length} available (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] Digitraffic download error:', error?.message || error);
+    return [];
+  }
+}
+
+/** Load Ontario 511 cameras (keyless). @returns {Promise<Array<object>>} */
+async function loadOntario511Sources() {
+  try {
+    const resp = await fetch(ONTARIO_511_URL, {
+      headers: { Accept: 'application/json', 'User-Agent': OVERPASS_USER_AGENT },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn('[CCTV] Ontario 511 download failed:', resp.status);
+      return [];
+    }
+    const body = await resp.json();
+    if (!Array.isArray(body)) return [];
+    const cameras = [];
+    for (const camera of body) {
+      for (const view of Array.isArray(camera?.Views) ? camera.Views : []) {
+        const source = ontario511ViewToSource(camera, view);
+        if (source) cameras.push(source);
+      }
+    }
+    const maxRaw = Number(process.env.CCTV_ONTARIO_MAX_SOURCES || DEFAULT_ONTARIO_MAX_SOURCES);
+    const maxCount = Number.isFinite(maxRaw) ? Math.max(0, Math.min(900, Math.floor(maxRaw))) : DEFAULT_ONTARIO_MAX_SOURCES;
+    if (maxCount === 0) return [];
+    const prioritized = prioritizeSources(cameras, maxCount, [TORONTO_CENTER]);
+    console.log(`[CCTV] Loaded Ontario 511 sources: ${cameras.length} available (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] Ontario 511 download error:', error?.message || error);
+    return [];
+  }
+}
+
+/** Load DriveBC webcams (keyless). @returns {Promise<Array<object>>} */
+async function loadDriveBcSources() {
+  try {
+    const resp = await fetch(DRIVEBC_WEBCAMS_URL, {
+      headers: { Accept: 'application/json', 'User-Agent': OVERPASS_USER_AGENT },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn('[CCTV] DriveBC download failed:', resp.status);
+      return [];
+    }
+    const body = await resp.json();
+    if (!Array.isArray(body)) return [];
+    const cameras = body.map(driveBcCameraToSource).filter(Boolean);
+    const maxRaw = Number(process.env.CCTV_DRIVEBC_MAX_SOURCES || DEFAULT_DRIVEBC_MAX_SOURCES);
+    const maxCount = Number.isFinite(maxRaw) ? Math.max(0, Math.min(900, Math.floor(maxRaw))) : DEFAULT_DRIVEBC_MAX_SOURCES;
+    if (maxCount === 0) return [];
+    const prioritized = prioritizeSources(cameras, maxCount, [VANCOUVER_CENTER]);
+    console.log(`[CCTV] Loaded DriveBC sources: ${cameras.length} available (using nearest ${prioritized.length})`);
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] DriveBC download error:', error?.message || error);
+    return [];
+  }
+}
+
+/**
  * One LTA DataMall camera -> one catalog source, or null when unusable.
  *
  * Pure and exported so the UPSTREAM FIELD CONTRACT is pinned by a test rather
@@ -4365,24 +4680,44 @@ async function refreshCctvSources() {
   const ltaEnabled = String(process.env.CCTV_LTA_ENABLED || '1').trim() !== '0'
     && !!String(process.env.LTA_ACCOUNT_KEY || '').trim();
 
+  // Keyless national packs. Each is independently switchable, and each pack's
+  // own CCTV_*_MAX_SOURCES=0 also turns it off, so the catalog size stays the
+  // operator's call rather than being fixed by whatever upstreams exist.
+  const finlandEnabled = String(process.env.CCTV_FINLAND_ENABLED || '1').trim() !== '0';
+  const ontarioEnabled = String(process.env.CCTV_ONTARIO_ENABLED || '1').trim() !== '0';
+  const driveBcEnabled = String(process.env.CCTV_DRIVEBC_ENABLED || '1').trim() !== '0';
+
   let fromAustin = [];
   let fromCaltrans = [];
   let fromTfl = [];
   let fromLta = [];
+  let fromFinland = [];
+  let fromOntario = [];
+  let fromDriveBc = [];
   if (needsLiveSources) {
-    const [austinResult, caltransResult, tflResult, ltaResult] = await Promise.allSettled([
+    const [austinResult, caltransResult, tflResult, ltaResult, finlandResult, ontarioResult, driveBcResult] = await Promise.allSettled([
       loadAustinSourcesFromOpenData(),
       loadCaltransSourcesFromOpenData(),
       tflEnabled ? loadTflSourcesFromOpenData() : Promise.resolve([]),
       ltaEnabled ? loadLtaSourcesFromOpenData() : Promise.resolve([]),
+      finlandEnabled ? loadDigitrafficSources() : Promise.resolve([]),
+      ontarioEnabled ? loadOntario511Sources() : Promise.resolve([]),
+      driveBcEnabled ? loadDriveBcSources() : Promise.resolve([]),
     ]);
     fromAustin = austinResult.status === 'fulfilled' ? austinResult.value : [];
     fromCaltrans = caltransResult.status === 'fulfilled' ? caltransResult.value : [];
     fromTfl = tflResult.status === 'fulfilled' ? tflResult.value : [];
     fromLta = ltaResult.status === 'fulfilled' ? ltaResult.value : [];
+    fromFinland = finlandResult.status === 'fulfilled' ? finlandResult.value : [];
+    fromOntario = ontarioResult.status === 'fulfilled' ? ontarioResult.value : [];
+    fromDriveBc = driveBcResult.status === 'fulfilled' ? driveBcResult.value : [];
   }
   // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
-  const merged = [...fromAustin, ...fromCaltrans, ...fromTfl, ...fromLta, ...fromFile, ...fromEnv];
+  const merged = [
+    ...fromAustin, ...fromCaltrans, ...fromTfl, ...fromLta,
+    ...fromFinland, ...fromOntario, ...fromDriveBc,
+    ...fromFile, ...fromEnv,
+  ];
 
   // Deduplicate by camera ID (last-write wins because of Map.set)
   const byId = new Map();
@@ -4395,7 +4730,7 @@ async function refreshCctvSources() {
 
   const mergedSources = Array.from(byId.values());
   const maxRaw = Number(process.env.CCTV_MAX_SOURCES || DEFAULT_CCTV_MAX_SOURCES);
-  const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(1200, Math.floor(maxRaw))) : DEFAULT_CCTV_MAX_SOURCES;
+  const maxCount = Number.isFinite(maxRaw) ? Math.max(8, Math.min(2000, Math.floor(maxRaw))) : DEFAULT_CCTV_MAX_SOURCES;
   if (mergedSources.length > maxCount) {
     console.warn(`[CCTV] source catalog ${mergedSources.length} exceeds cap ${maxCount}; keeping the first ${maxCount} (raise CCTV_MAX_SOURCES or lower a per-pack cap to change which).`);
   }
