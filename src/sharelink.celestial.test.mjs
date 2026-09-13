@@ -1,3 +1,5 @@
+import { _claimContextVisualAuthority, setContextMode } from './ui/contextActions.js';
+import { _initGlobalContextPanel } from './ui/contextBindings.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -464,19 +466,17 @@ test('explicit Context transitions claim the visual restore lane before transiti
     assert.ok(claimIndex < mutationIndex, `${label} must claim before mutation`);
   };
 
-  const helper = sourceBlock(
-    '  _claimContextVisualAuthority() {',
-    '  async _selectContextMode(mode, {',
-  );
+  const helper = _claimContextVisualAuthority.toString();
   assert.ok(
-    helper.includes("claimRestoreLane?.('visual')"),
+    helper.includes('this.actions.claimVisualAuthority()'),
     'the Context authority helper must claim the visual lane',
   );
 
-  const contextPanel = sourceBlock('  _initGlobalContextPanel() {', '  async _runUserFacingContextAction(');
+  assert.match(uiSource, /claimVisualAuthority: \(\) => this\.shareLinkManager\?\.claimRestoreLane\?\.\('visual'\)/);
+  const contextPanel = _initGlobalContextPanel.toString();
   for (const [start, end, label] of [
-    ["this._globalContextFlightsBtn?.addEventListener('click'", "this._globalContextMissionsBtn?.addEventListener('click'", 'Contacts tab'],
-    ["this._globalContextMissionsBtn?.addEventListener('click'", 'CONTEXT_PANEL_END', 'Space Missions tab'],
+    ["this.listen(this._globalContextFlightsBtn, 'click'", "this.listen(this._globalContextMissionsBtn, 'click'", 'Contacts tab'],
+    ["this.listen(this._globalContextMissionsBtn, 'click'", 'CONTEXT_PANEL_END', 'Space Missions tab'],
   ]) {
     const startIndex = contextPanel.indexOf(start);
     const endIndex = end === 'CONTEXT_PANEL_END'
@@ -487,7 +487,7 @@ test('explicit Context transitions claim the visual restore lane before transiti
   }
 
   // The voice/tool facade validates the mode first, then transitions.
-  const facade = sourceBlock('  async setContextMode(mode, {', '  getCockpitState() {');
+  const facade = setContextMode.toString();
   assertContextClaimsBefore(facade, 'this._selectContextMode(', 'setContextMode facade');
   // Authority is taken per validated branch, never ahead of validation. The
   // OFF branch is validated by its own guard; the named-mode branch must claim
@@ -517,8 +517,8 @@ test('explicit Context transitions claim the visual restore lane before transiti
 // detection: `_detectionUserOverridden` is what suppresses the military-style
 // auto-enable for the rest of the session. Contacts entry is not that.
 test('Context lane claims never set the session detection-override flag', () => {
-  const contextPanel = sourceBlock('  _initGlobalContextPanel() {', '  async _runUserFacingContextAction(');
-  const facade = sourceBlock('  async setContextMode(mode, {', '  getCockpitState() {');
+  const contextPanel = _initGlobalContextPanel.toString();
+  const facade = setContextMode.toString();
   for (const [block, label] of [
     [contextPanel, 'Context panel'],
     [facade, 'setContextMode facade'],
