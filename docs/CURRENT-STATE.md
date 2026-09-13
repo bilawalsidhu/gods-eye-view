@@ -210,6 +210,22 @@ owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
+## DriveBC CCTV source pack
+
+The CCTV catalog adds DriveBC highway cameras for British Columbia alongside the
+Austin, Caltrans and TfL packs. The server reads the keyless camera list that
+DriveBC.ca serves at `https://www.drivebc.ca/api/webcams/` and keeps cameras that
+are switched on and published. Frame URLs are built from each numeric camera id
+under `https://www.drivebc.ca/images/`; they are never taken from the payload.
+DriveBC's eight compass orientations become high-confidence heading priors, and
+its elevation (metres above sea level) seeds the ground height.
+
+By default the 250 cameras nearest downtown Vancouver and Victoria load.
+`CCTV_DRIVEBC_MAX_SOURCES` sets the pack cap (8–1200) and
+`CCTV_DRIVEBC_ENABLED=0` turns the pack off. The default catalog cap rises from
+900 to 1,050, the sum of the default pack caps, so no default camera is dropped.
+The Open Government Licence – British Columbia attribution is registered in the
+Data attribution popover.
 
 ## Location control ownership
 
@@ -2243,7 +2259,7 @@ its criteria cannot be silently ignored.
 | Satellites | CelesTrak | `src/data/satellites.js` | `/api/celestrak` | 120s |
 | Space Missions (30d) | Launch Library 2 + CelesTrak | `src/data/rocketLaunches.js` | `/api/launches` + `/api/celestrak/active` | 5 min |
 | Traffic | OSM Overpass (+ optional TomTom live flow) | `src/data/traffic.js` | `/api/overpass` + `/api/tomtom` | viewport-driven |
-| CCTV | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
+| CCTV | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
 | Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
 | Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
 | Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |

@@ -191,6 +191,14 @@ export const DATA_CREDITS = [
       'part of NASA’s Earth Observing System Data and Information System (EOSDIS)',
   },
   {
+    key: 'drivebc-cctv',
+    html:
+      'CCTV cameras &amp; frames (British Columbia): ' +
+      '<a href="https://www.drivebc.ca/" target="_blank" rel="noopener">DriveBC</a>. ' +
+      'Contains information licensed under the ' +
+      '<a href="https://www2.gov.bc.ca/gov/content/data/open-data/open-government-licence-bc" target="_blank" rel="noopener">Open Government Licence – British Columbia</a>.',
+  },
+  {
     key: 'telegeography',
     html:
       'Submarine cables: © TeleGeography — ' +

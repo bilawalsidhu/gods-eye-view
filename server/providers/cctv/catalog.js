@@ -9,6 +9,7 @@ import {
   loadTflSourcesFromOpenData,
   loadOntarioSourcesFromOpenData,
   loadFintrafficSourcesFromOpenData,
+  loadDriveBcSourcesFromOpenData,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -42,6 +43,11 @@ const LIVE_PACKS = [
     name: 'fintraffic',
     enabled: () => envEnabled('CCTV_FINTRAFFIC_ENABLED'),
     load: loadFintrafficSourcesFromOpenData,
+  },
+  {
+    name: 'drivebc',
+    enabled: () => envEnabled('CCTV_DRIVEBC_ENABLED'),
+    load: loadDriveBcSourcesFromOpenData,
   },
 ];
 /**

@@ -64,6 +64,10 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Add Ontario 511 as a keyless CCTV source pack, including Kitchener-area
   highway cameras, with server-registered still URLs and attribution.
 - CCTV Mesh adds Finland: Fintraffic road weather cameras, keyless, nationwide, 300 by default. Each camera view of a station is placed separately, and frames refresh on the source's 10-minute cadence.
+- Add DriveBC highway cameras for British Columbia to the CCTV layer: the 250
+  nearest Vancouver and Victoria by default, with Open Government Licence –
+  British Columbia attribution. `CCTV_DRIVEBC_MAX_SOURCES` sets the cap and
+  `CCTV_DRIVEBC_ENABLED=0` turns the pack off.
 
 - Press backtick (`) to toggle a rendered-frame-rate readout beneath the logo.
   Typing fields retain the key; monitoring stops when hidden.
@@ -120,6 +124,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 - Extract shared surface keyboard handling for the welcome launcher and Provider
   Settings, preserving Tab/Escape behavior and releasing the listener on teardown.
+
+### Added
 
 ### Security
 
