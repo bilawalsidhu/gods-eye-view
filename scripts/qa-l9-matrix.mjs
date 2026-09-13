@@ -1379,7 +1379,11 @@ async function runBrowserGroup(record) {
         const mod = dm.layers.get(id)?.module;
         const s = mod?.getStats ? mod.getStats() : null;
         const projected = dm.getAll().find((l) => l.id === id) || {};
-        return { stats: s, lifecycleState: projected.lifecycleState, enabled: projected.enabled };
+        // Prefer the manager's NORMALIZED stats: _normalizedStats derives
+        // `loading` from the entry lifecycle (enabling/disabling), which raw
+        // module getStats() lacks — without it an enable queued behind other
+        // lifecycle work reads as a silent empty layer (run 5, C11).
+        return { stats: projected.stats || s, lifecycleState: projected.lifecycleState, enabled: projected.enabled };
       }, layerId);
       if (!snap) continue;
       stats = snap.stats;
@@ -1417,6 +1421,36 @@ async function runBrowserGroup(record) {
       }
     }, null, 45000);
     await new Promise((r) => setTimeout(r, 4000));
+  };
+  // quiesce() ISSUES the disable transactions but races each at 3 s; their
+  // teardown (57k entities under SwiftShader) keeps draining in the manager's
+  // serialized lifecycle queue long after it returns. Any verdict read inside
+  // that window — a quiet-stage re-enable (C11) or a control lookup (C16) —
+  // is answered by a main thread that cannot breathe. Wait for the drain.
+  const drainLifecycleQueue = async () => {
+    // Each read is an INSTANTANEOUS eval and the waiting happens here in Node:
+    // one long in-page sleep loop is itself a victim of the saturation it is
+    // measuring (run 6: two 200 s eval timeouts back to back — the page could
+    // not give the loop a timer tick for minutes), while a snapshot eval either
+    // answers in seconds or fails fast and gets retried. null therefore means
+    // "never got one readable snapshot in 3 minutes", not "busy".
+    const deadline = Date.now() + 180000;
+    let lastRead = null;
+    while (Date.now() < deadline) {
+      const snap = await evalBounded(() => {
+        const dm = window.__godsEyeView.dataManager;
+        return dm.getAll().filter((l) => l.lifecycleState === 'enabling'
+          || l.lifecycleState === 'disabling').map((l) => l.id);
+      }, null, 15000);
+      if (snap === null) {
+        await new Promise((r) => setTimeout(r, 5000));
+        continue;
+      }
+      lastRead = snap;
+      if (snap.length === 0) return snap;
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    return lastRead;
   };
 
   await step('C2', async () => {
@@ -1744,13 +1778,32 @@ async function runBrowserGroup(record) {
       // down and measure again: that is conclusive either way.
       const contested = zero.map((o) => o.split('=')[0]);
       await quiesce();
+      // quiesce() just issued ~9 disable transactions and the manager's
+      // lifecycle queue SERIALIZES them (57k-entity teardown can outlast a
+      // fixed budget under SwiftShader). A re-enable issued now queues BEHIND
+      // that drain, and its stats read count=0/error=none the whole time — the
+      // exact signature of "empty". Wait for the drain before judging;
+      // otherwise the verdict is guesswork (run 5, C11). One retry after a
+      // null read distinguishes a mid-run starved main thread from a page
+      // that is genuinely gone (the same idiom the C16 city setup uses).
+      let draining = await drainLifecycleQueue();
+      if (draining === null) {
+        await new Promise((r) => setTimeout(r, 8000));
+        draining = await drainLifecycleQueue();
+      }
+      if (draining === null) {
+        return crash(`could not read the layer lifecycle queue after quiesce (page eval timed out twice) — a quiet-stage re-enable cannot be judged while teardown work may still own the queue`);
+      }
+      if (draining.length > 0) {
+        return crash(`layer lifecycle queue never drained after quiesce: ${draining.join(', ')} — quiet-stage bundled-layer verdicts would be guesswork`);
+      }
       const retried = [];
       const stillZero = [];
       for (const label of contested) {
         const id = bundled.find((b2) => b2.replace(/^local-|^telegeography-/, '') === label);
         if (!id) continue;
 
-        const r2 = await settle(id, 45);
+        const r2 = await settle(id, 90);
         const count = r2.stats?.count ?? 0;
         // Judge the quiet-stage retry with the same rigor as the first pass:
         // confirm the enable is actually effective, and carry the module's own
@@ -1762,7 +1815,13 @@ async function runBrowserGroup(record) {
         }
         retried.push(`${label}=${count}`);
         if (!(count > 0)) {
-          stillZero.push(`${label}=0 (error=${r2.stats?.error || 'none'}, phase=${life2.phase ?? '?'})`);
+          // "Still enabling when the budget expired" is the manager's loading
+          // state, not an empty layer (normalized stats carry it; raw module
+          // stats do not). That is an inconclusive measurement.
+          if (r2.stats?.loading || r2.lifecycleState === 'enabling') {
+            return crash(`${label} was still enabling when the 90 s quiet-stage budget expired (lifecycle=${r2.lifecycleState ?? '?'}) — this check could not determine whether it renders, so it verified nothing`);
+          }
+          stillZero.push(`${label}=0 (error=${r2.stats?.error || 'none'}, phase=${life2.phase ?? r2.lifecycleState ?? '?'})`);
         }
       }
       if (stillZero.length) {
@@ -1782,15 +1841,31 @@ async function runBrowserGroup(record) {
     // but nothing on the map is a PRODUCT failure; nothing from either is a
     // positively-identified upstream-data condition.
     const box = { name: 'San Diego / Coronado', lat: 32.70, lon: -117.18, span: 0.6 };
-    const api = await jget(`/api/military-installations?south=${(box.lat - box.span).toFixed(5)}&west=${(box.lon - box.span).toFixed(5)}&north=${(box.lat + box.span).toFixed(5)}&east=${(box.lon + box.span).toFixed(5)}`, { timeoutMs: 60000 })
-      .catch((e) => ({ status: 0, json: null, text: String(e?.message || e) }));
-    const apiRows = Array.isArray(api.json?.features) ? api.json.features.length
-      : (Array.isArray(api.json?.elements) ? api.json.elements.length
-        : (Array.isArray(api.json) ? api.json.length : null));
+    // The API cross-check is deliberately NOT fired here even though every
+    // verdict below needs it: settle() (next) enables the layer at this camera,
+    // and the layer's first fetch hits the SAME dev-proxy route with the SAME
+    // bbox as this probe. Two near-simultaneous identical Overpass queries
+    // serialize upstream, and the layer's fetch — the thing under test — is
+    // the one that waits (run 6: loading=true/lifecycle=enabling for the whole
+    // poll budget, then a false "API answered but the layer rendered 0"). The
+    // probe runs only in the branches that actually consume it, after the
+    // layer has had the field to itself.
     // The layer gates on the camera's COMPUTED VIEW RECTANGLE (<=10 degrees,
     // MAX_VIEWPORT_DEGREES), not on the request box. An oblique camera sees to
     // the horizon and blows past that even from low altitude, so look straight
     // down: nadir at 25 km spans well under a degree.
+    // Any enable transaction the bundled settles raced at 20 s and left half-
+    // done must land BEFORE this segment starts, or settle() below queues the
+    // re-enable behind it and the poll measures a backlog instead of a load.
+    let draining = await drainLifecycleQueue();
+    if (draining === null) {
+      await new Promise((r) => setTimeout(r, 8000));
+      draining = await drainLifecycleQueue();
+    }
+    if (draining === null) return crash('could not read the layer lifecycle queue before the installations segment (page eval timed out twice)');
+    if (draining.length > 0) {
+      return crash(`layer lifecycle queue never drained before the installations segment: ${draining.join(', ')} — the enable under test would queue behind it, so the poll would measure a backlog, not a load`);
+    }
     await evalBounded(async (b) => {
       const g = window.__godsEyeView;
       g.viewer.camera.cancelFlight();
@@ -1800,28 +1875,65 @@ async function runBrowserGroup(record) {
     // `zoom-in` is a TRANSIENT: the layer evaluates the viewport at enable time
     // and republishes after the camera settles. settle() breaks on the first
     // truthy `error`, so it latched that transient and never saw the real load.
-    // Poll for a definitive outcome instead, and only then judge.
+    // Poll for a definitive outcome instead, and only then judge. Every
+    // verdict below carries lifecycle/loading evidence: an enable still queued
+    // behind the bundled settles (each raced at 20 s) leaves this module
+    // untouched, and a first fetch in flight keeps `status` at its initial
+    // 'idle' — neither of those is "rendered 0" (isolated run 6 confused them).
     const mi = await settle('military-installations', 5);
     let ms = mi.stats || {};
-    for (let i = 0; i < 40; i += 1) {
+    let miLife = (await probeLifecycle('military-installations')) || {};
+    let sawLoading = ms.loading === true;
+    for (let i = 0; i < 60; i += 1) {
       if (ms.count > 0) break;
       if (ms.error && !/zoom.?in/i.test(String(ms.error))) break;
-       
+
       const snap = await evalBounded(() => {
         const dm = window.__godsEyeView.dataManager;
-        // Nudge the viewport-driven reload: the layer reloads on camera settle.
-        try { dm.layers.get('military-installations')?.module?.refresh?.(); } catch { /* optional */ }
+        // Nudge the reload through the layer's OWN trigger — camera moveEnd
+        // (scheduleLoad). This module has no `refresh()`; the previous nudge
+        // here was a silent no-op. A ~1 m reissue at the same nadir re-fires
+        // moveEnd without meaningfully moving the viewport under test — the
+        // second chance a panning user gets for free.
+        try {
+          const g = window.__godsEyeView;
+          const cam = g.viewer.camera;
+          cam.cancelFlight();
+          const c = cam.positionCartographic;
+          cam.setView({
+            destination: g.viewer.scene.globe.ellipsoid.cartographicToCartesian({
+              longitude: c.longitude + 1e-5,
+              latitude: c.latitude,
+              height: c.height,
+            }),
+            orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+          });
+        } catch { /* best-effort nudge */ }
         return dm.layers.get('military-installations')?.module?.getStats?.() ?? null;
       }, null, 10000);
       if (snap) ms = snap;
-       
+      if (ms.loading === true) sawLoading = true;
+
       await new Promise((r) => setTimeout(r, 1000));
     }
+    miLife = (await probeLifecycle('military-installations')) || miLife;
     if (mi.missing) return fail(`military-installations layer is not registered [bundled: ${out.join(', ')}]`);
     if (ms.count > 0) return pass(`${out.join(', ')}, military-installations=${ms.count} over ${box.name}${loadNote}`);
+    if (miLife.enabled === false) {
+      return fail(`military-installations did not enable: lifecycle=${miLife.phase ?? '?'} uncertain=${miLife.uncertain ?? '?'} — the enable request never became effective [bundled: ${out.join(', ')}]`);
+    }
     if (/zoom-in/.test(String(ms.status || ''))) {
       return fail(`military-installations refused the ${box.span * 2}° box over ${box.name} as too wide (status=${ms.status}, error="${ms.error}") — the probe camera and the layer's own ≤10° gate disagree`);
     }
+    if (ms.loading === true || miLife.phase === 'enabling' || mi.lifecycleState === 'enabling') {
+      return crash(`military-installations was still loading when the budget expired (status=${ms.status}, loading=${ms.loading}, lifecycle=${miLife.phase ?? mi.lifecycleState ?? '?'}, loading observed=${sawLoading}) — this check could not determine whether it renders over ${box.name}, so it verified nothing`);
+    }
+    // The layer had the field to itself; NOW the cross-check is safe to fire.
+    const api = await jget(`/api/military-installations?south=${(box.lat - box.span).toFixed(5)}&west=${(box.lon - box.span).toFixed(5)}&north=${(box.lat + box.span).toFixed(5)}&east=${(box.lon + box.span).toFixed(5)}`, { timeoutMs: 60000 })
+      .catch((e) => ({ status: 0, json: null, text: String(e?.message || e) }));
+    const apiRows = Array.isArray(api.json?.features) ? api.json.features.length
+      : (Array.isArray(api.json?.elements) ? api.json.elements.length
+        : (Array.isArray(api.json) ? api.json.length : null));
     if (api.status !== 200) {
       // Distinguish an honest upstream outage from a broken route: the proxy
       // has a documented degraded shape (503 + "temporarily unavailable") for
@@ -1835,7 +1947,7 @@ async function runBrowserGroup(record) {
     }
     if (apiRows === null) return crash(`could not read a row count from /api/military-installations to cross-check the empty layer: ${String(api.text || '').slice(0, 100)}`);
     if (apiRows > 0) {
-      return fail(`/api/military-installations returned ${apiRows} features over ${box.name} but the layer rendered 0 (status=${ms.status}, error=${ms.error || 'none'}) [bundled: ${out.join(', ')}]`);
+      return fail(`/api/military-installations returned ${apiRows} features over ${box.name} but the layer rendered 0 (status=${ms.status}, error=${ms.error || 'none'}, lifecycle=${miLife.phase ?? '?'}, loading observed=${sawLoading}) [bundled: ${out.join(', ')}]`);
     }
     return skip(`bundled layers OK (${out.join(', ')}); military-installations rendered 0 AND its API returned 0 features over ${box.name} — positively an upstream-data condition, not a render failure`, 'ENV');
   });
@@ -2023,9 +2135,24 @@ async function runBrowserGroup(record) {
 
   await step('C16', async () => {
     await quiesce();
+    // The disable transactions quiesce() issues keep tearing down (57k
+    // entities) in the manager's serialized queue long after it returns, and
+    // a lookup issued inside that window hits a main thread that cannot
+    // breathe (run 4: 60 s at the city setup; run 6: 30 s at this first
+    // lookup). Drain before judging. One retry after a null read
+    // distinguishes a mid-run starved main thread from a page that is gone.
+    let draining = await drainLifecycleQueue();
+    if (draining === null) {
+      await new Promise((r) => setTimeout(r, 8000));
+      draining = await drainLifecycleQueue();
+    }
+    if (draining === null) return crash('could not read the layer lifecycle queue after quiesce (page eval timed out twice)');
+    if (draining.length > 0) {
+      return crash(`layer lifecycle queue never drained after quiesce: ${draining.join(', ')} — the reset-control lookup would be guesswork`);
+    }
     // L6 shipped two entry points into one release route: the map control
     // (#reset-globe-view) and the cockpit-native one (#cockpit-reset-globe).
-    const foundR = await mustEval(() => {
+    const lookupControl = () => mustEval(() => {
       const el = document.getElementById('reset-globe-view');
       if (!el) return null;
       return {
@@ -2033,6 +2160,11 @@ async function runBrowserGroup(record) {
         cockpitTwin: Boolean(document.getElementById('cockpit-reset-globe')),
       };
     });
+    let foundR = await lookupControl();
+    if (!foundR.ok && foundR.unresponsive) {
+      await new Promise((r) => setTimeout(r, 8000));
+      foundR = await lookupControl();
+    }
     if (!foundR.ok) return crash(`could not look for the reset-to-globe control: ${foundR.reason}`);
     const found = foundR.value;
     if (!found) return fail('#reset-globe-view is missing from the DOM (L6 shipped it)');
@@ -2045,11 +2177,31 @@ async function runBrowserGroup(record) {
     // control at all.
     const citySetup = () => mustEval(async () => {
       const g = window.__godsEyeView;
-      g.viewer.camera.cancelFlight();
-      g.styleManager.applyCameraState({ lat: 30.2672, lon: -97.7431, alt: 3000, heading: 0, pitch: -35 }, 1.5);
-      await new Promise((r) => setTimeout(r, 3000));
-      return { altKm: g.viewer.camera.positionCartographic.height / 1000 };
-    }, null, 60000);
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const altKm = () => g.viewer.camera.positionCartographic.height / 1000;
+      // A fixed 3 s sleep is not a setup: under the loaded C-phase stage the
+      // main thread can deliver ZERO rAF ticks in that window, so the flight
+      // has not even started when the altitude is read (run 5: crash at
+      // exactly the C11 14,000 km hold). Poll the observable instead, and
+      // re-issue the flight when the altitude stalls high — a stalled camera
+      // means either no tick landed or the flight was superseded; cancelFlight
+      // + re-fly is idempotent either way.
+      let reissues = 0;
+      const trail = [];
+      for (let i = 0; i < 90; i += 1) {
+        await wait(1000);
+        const h = altKm();
+        trail.push(Math.round(h));
+        if (h < 5000) return { altKm: h, reissues, trail };
+        if (i >= 4 && trail.at(-1) === trail.at(-2) && trail.at(-2) === trail.at(-3)) {
+          if (reissues >= 3) break;
+          reissues += 1;
+          g.viewer.camera.cancelFlight();
+          g.styleManager.applyCameraState({ lat: 30.2672, lon: -97.7431, alt: 3000, heading: 0, pitch: -35 }, 1.5);
+        }
+      }
+      return { altKm: altKm(), reissues, trail };
+    }, null, 120000);
     // The setup is idempotent (cancelFlight first), so one re-issue after a
     // deadline expiry distinguishes a mid-run starved main thread (quiesce's
     // teardown still draining — run 4 crashed here with "page did not answer
@@ -2064,7 +2216,7 @@ async function runBrowserGroup(record) {
     const before = setupR.value?.altKm;
     if (!Number.isFinite(before)) return crash('the city-altitude setup returned no altitude — cannot establish a starting point');
     if (before > 5000) {
-      return crash(`the camera is still at ${Math.round(before)} km after the city-altitude setup, so "returns to the global band" cannot be tested from here`);
+      return crash(`the camera is still at ${Math.round(before)} km after the city-altitude setup (${setupR.value.reissues} flight re-issues, km trail ${JSON.stringify(setupR.value.trail)}), so "returns to the global band" cannot be tested from here`);
     }
     const clickR = await mustEval(() => {
       const el = document.getElementById('reset-globe-view');

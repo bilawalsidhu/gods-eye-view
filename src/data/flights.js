@@ -2400,6 +2400,24 @@ export function _floorGroundedDisplayPositionForTest(
   return _floorGroundedDisplayPosition(icao24, info, pos, modelOwnsVisual, nowMs);
 }
 
+/** Test seam: the per-contact display-floor state the clamp actually used —
+ *  the sticky cell (boundary hysteresis) and the effective floor after the
+ *  hold chain. Browser harness scenarios compare a rendered height against
+ *  THIS floor rather than re-deriving one from raw coordinates: the clamp
+ *  deliberately keeps the cell it already holds when the contact drifts
+ *  across a boundary, so a raw read at the displayed coordinate can disagree
+ *  by a whole cell and misreport a correct clamp. */
+export function _displayFloorStateForTest(icao24) {
+  const state = _displayFloorState.get(icao24);
+  if (!state) return null;
+  return {
+    cell: state.cell ? { lat: state.cell.lat, lon: state.cell.lon } : null,
+    effectiveM: state.effectiveM,
+    heldM: state.heldM,
+    heldActive: state.heldActive,
+  };
+}
+
 /** Test hook: drops the per-contact display-floor state (hysteresis + rebuild
  *  cache) so each case starts clean. There is no cross-contact state to reset —
  *  the clamp is per-contact all the way down. */
@@ -3992,6 +4010,7 @@ const flightsLayer = {
   source: 'OpenSky Network',
   // Browser-harness seam: isolates synthetic display-floor scenarios without
   // changing any production lifecycle or cache policy.
+  _displayFloorStateForTest,
   _clearDisplayFloorStateForTest,
   _clearGroundSnapStateForTest,
   /** @type {number} Polling interval (ms) between update() calls */

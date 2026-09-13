@@ -94,6 +94,32 @@ async function waitForRevealScroll(page) {
   await sleep(150);
 }
 
+// A single postRender can belong to a frame that was already in flight when
+// the camera moved — under SwiftShader one frame can take seconds, so the
+// first postRender after setView frequently renders the PREVIOUS camera and a
+// drillPick against its pick buffer misses primitives that are plainly on
+// screen (matrix run 5: weather-global 16 painted / 9 pickable, cluster dot
+// pickable:false — both unreproducible with a fresh pick buffer). Wait out
+// that in-flight frame and then one more frame that started after the move;
+// callers sample only from the second.
+async function awaitRenderedFrame(page) {
+  return page.evaluate(() => new Promise((resolve) => {
+    const viewer = window.__godsEyeView.viewer;
+    let frames = 0;
+    const remove = viewer.scene.postRender.addEventListener(() => {
+      frames += 1;
+      if (frames < 2) return;
+      remove();
+      resolve(viewer.scene.frameState.frameNumber);
+    });
+    viewer.scene.requestRender();
+    setTimeout(() => {
+      remove();
+      resolve(-1);
+    }, 30_000);
+  }));
+}
+
 async function main() {
   const response = await fetch(APP_URL).catch(() => null);
   if (!response?.ok) {
@@ -678,7 +704,11 @@ async function main() {
           });
           viewer.scene.requestRender();
         }, { lon: spec.lon, height: view.height });
-        await sleep(700);
+        // The camera move must own at least one completed frame before any
+        // convergence read: the painted>0 early-break would otherwise fire on
+        // the previous view's stale overlay diagnostics, and the pick below
+        // would race a pick buffer from the old camera (see awaitRenderedFrame).
+        await awaitRenderedFrame(page);
         const sample = await page.evaluate(async () => {
           const viewer = window.__godsEyeView.viewer;
           const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
@@ -1392,7 +1422,25 @@ async function main() {
         orientation: { heading: 15 * Math.PI / 180, pitch: -Math.PI / 2, roll: 0 },
       });
       viewer.scene.requestRender();
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Same fresh-pick-buffer contract as the sparse-view sampler: a fixed
+      // sleep can elapse without a single rAF tick under load, and the first
+      // postRender after the move can still be the in-flight previous-camera
+      // frame — either way drillPick reads a stale pick buffer and the cluster
+      // dot reports unpickable (matrix run 5). Wait for a frame that started
+      // after the move instead.
+      await new Promise((resolve) => {
+        let frames = 0;
+        const remove = viewer.scene.postRender.addEventListener(() => {
+          frames += 1;
+          if (frames < 2) return;
+          remove();
+          resolve();
+        });
+        setTimeout(() => {
+          remove();
+          resolve();
+        }, 30_000);
+      });
       const source = radio.getOverlayDiagnostics();
       const cameraPosition = viewer.camera.positionWC;
       const cameraRadius = Math.hypot(cameraPosition.x, cameraPosition.y, cameraPosition.z);
@@ -1770,8 +1818,16 @@ async function main() {
           contextAriaExpanded: contextPanel.querySelector('[data-collapse-target="global-context-panel"]')?.getAttribute('aria-expanded'),
         };
 
-        manager.setPanelCollapsed('scene-panel', true);
-        manager.setPanelCollapsed('pp-toggles', true);
+        // Close the lane owners the way a user does — through the installed
+        // collapse buttons, which call setPanelCollapsed with explicit:true and
+        // so transfer lane ownership (ui.js clears the preferred owner and
+        // schedules reconsiderAutoCollapse, which releases layout-auto-collapsed
+        // siblings). The bare manager API without explicit deliberately does NOT
+        // rewrite disclosure ownership, so driving it here would leave the
+        // auto-collapsed siblings parked forever and fail the restore contract
+        // below for a reason no user can produce (matrix run 5).
+        setPanelThroughInstalledControl('scene-panel', true);
+        setPanelThroughInstalledControl('pp-toggles', true);
         await new Promise((resolve) => setTimeout(resolve, 360));
         manager._syncLeftPanelAdaptiveLayout();
         manager._syncRightPanelAdaptiveLayout();

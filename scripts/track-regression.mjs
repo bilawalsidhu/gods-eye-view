@@ -3174,9 +3174,18 @@ async function main() {
           const c = window.__dfCarto(pos);
           const info = fl.getTrackedInfo();
           const subject = fl.getTrackedSubject();
+          // The clamp reads its STICKY cell (boundary hysteresis), so a raw
+          // floor read at the displayed coordinate can disagree by a whole
+          // cell and misreport a correct clamp (run 5: seed 215.1, sticky
+          // hold 203.0, raw read 192.4 — three cells for one contact).
+          // `effective` is the floor the product actually clamped against;
+          // the raw read stays for diagnostics.
+          const floorState = fl._displayFloorStateForTest?.('aaa097') || null;
           return {
             h: c.h,
             floor: gf.cachedGroundFloor(c.lat, c.lon),
+            effective: floorState?.effectiveM ?? null,
+            stickyCell: floorState?.cell ?? null,
             reportedAltM: info?.altitudeM,
             subjectH: subject?.position ? window.__dfCarto(subject.position).h : null,
             camH: window.__dfCamH(),
@@ -3229,8 +3238,23 @@ async function main() {
         // aaa097's pick id (a real defect, and the case the old scene-wide
         // probe reported as a pass).
         const anyModelsIn = window.__dfCountModels();
-        await window.__dfSettle(600);
-        const zoomedIn = readTracked();
+        // The clamp stands aside on the first DR tick AFTER the model's
+        // handoff frame, and a fixed settle races that flip: under
+        // SwiftShader it can expire between frames and read the
+        // still-clamped entity (run 5: model rendering, entity left clamped
+        // at 204.5 m while baro read 0). Poll for the stand-aside itself —
+        // the tracked entity rejoining its raw dead-reckon height. A
+        // grounded contact's DR anchor is its fix position, so `subjectH` is
+        // the raw value and the comparison is floor-free: the harness cannot
+        // see the product's sticky cell, and it must not have to.
+        const standAsideDeadline = Date.now() + 15000;
+        let zoomedIn = readTracked();
+        while (Date.now() < standAsideDeadline && zoomedIn
+          && !(Number.isFinite(zoomedIn.h) && Number.isFinite(zoomedIn.subjectH)
+            && Math.abs(zoomedIn.h - zoomedIn.subjectH) <= 3)) {
+          await window.__dfSettle(250);
+          zoomedIn = readTracked();
+        }
         if (!zoomedIn) return { error: 'tracked entity has no position (zoomed in)' };
 
         // --- Regime OUT: camera above the exit ceiling ----------------------
@@ -3257,6 +3281,7 @@ async function main() {
           coldModelH,
           coldEntityH: coldTracked ? coldTracked.h : null,
           coldFloor: coldTracked ? coldTracked.floor : null,
+          coldEffective: coldTracked ? coldTracked.effective : null,
           warmModelH,
           zoomedIn,
           zoomedOut,
@@ -3298,10 +3323,20 @@ async function main() {
       //    whatever distance the operator has pulled out to.
       const dfIn = dfTracked.zoomedIn || {};
       const dfOut = dfTracked.zoomedOut || {};
-      const dfOutFloored = Number.isFinite(dfOut.h) && Number.isFinite(dfOut.floor)
-        && dfOut.h >= dfOut.floor + DISPLAY_FLOOR_LIFT_M - 0.5;
-      const dfInStandsAside = Number.isFinite(dfIn.h) && Number.isFinite(dfIn.floor)
-        && dfIn.h < dfIn.floor + DISPLAY_FLOOR_LIFT_M - 0.5;
+      // The floor each floored half is judged against is the one the product
+      // CLAMPED with (its sticky cell), falling back to the raw displayed-cell
+      // read only when the clamp state is absent. Judging OUT against the raw
+      // read alone passed run 5 by luck of the read being the LOWER of the
+      // two — the same disagreement failed IN outright.
+      const dfOutFloor = Number.isFinite(dfOut.effective) ? dfOut.effective : dfOut.floor;
+      const dfOutFloored = Number.isFinite(dfOut.h) && Number.isFinite(dfOutFloor)
+        && dfOut.h >= dfOutFloor + DISPLAY_FLOOR_LIFT_M - 0.5;
+      // IN is judged on the stand-aside contract itself: with the model the
+      // visual, the tracked entity rejoins its raw dead-reckon (the fix
+      // position for a grounded contact, within DR slack). No floor
+      // comparison can express this half — it asserts the clamp NOT acting.
+      const dfInStandsAside = Number.isFinite(dfIn.h) && Number.isFinite(dfIn.subjectH)
+        && Math.abs(dfIn.h - dfIn.subjectH) <= 3;
       const dfInModelOwns = dfIn.models?.rendering > 0;
       const dfOutBillboardOwns = dfOut.models?.rendering === 0;
       const dfRegimeName = 'display-floor/regime: the TRACKED grounded contact is floored exactly when the billboard is the visual';
@@ -3311,14 +3346,16 @@ async function main() {
       // still floored. Before this pin the same run reported "1 aaa097 model(s)
       // rendering, entity left at -26.8 m under a 215.1 m floor" as a PASS —
       // the model was rendering 242 m under the apron and nothing said so.
+      const dfColdFloor = Number.isFinite(dfTracked.coldEffective)
+        ? dfTracked.coldEffective : dfTracked.coldFloor;
       const dfColdFloored = Number.isFinite(dfTracked.coldEntityH)
-        && Number.isFinite(dfTracked.coldFloor)
-        && dfTracked.coldEntityH >= dfTracked.coldFloor + DISPLAY_FLOOR_LIFT_M - 0.5;
+        && Number.isFinite(dfColdFloor)
+        && dfTracked.coldEntityH >= dfColdFloor + DISPLAY_FLOOR_LIFT_M - 0.5;
       record('display-floor/gate: with NO resolved ground the grounded model is withheld and the billboard is floored',
         !dfTracked.error && dfTracked.coldModelsRendering === 0
           && dfTracked.coldModelsShown === 0 && dfColdFloored,
         dfTracked.error
-          || `cold skin: ${dfTracked.coldModelsRendering} aaa097 model(s) rendering / ${dfTracked.coldModelsShown} shown (placed height ${dfTracked.coldModelH == null ? 'none — never placed' : `${Number(dfTracked.coldModelH).toFixed(1)  } m`}), billboard at ${Number(dfTracked.coldEntityH).toFixed(1)} m on a ${Number(dfTracked.coldFloor).toFixed(1)} m floor`);
+          || `cold skin: ${dfTracked.coldModelsRendering} aaa097 model(s) rendering / ${dfTracked.coldModelsShown} shown (placed height ${dfTracked.coldModelH == null ? 'none — never placed' : `${Number(dfTracked.coldModelH).toFixed(1)  } m`}), billboard at ${Number(dfTracked.coldEntityH).toFixed(1)} m on a ${Number(dfColdFloor).toFixed(1)} m floor`);
 
       // WARM ground, camera IN: the placement. The model is not merely visible,
       // it is standing ON the floor — within one class belly offset above it,
@@ -3349,8 +3386,8 @@ async function main() {
             && Number.isFinite(dfIn.camH) && dfIn.camH < dfTracked.enter
             && Number.isFinite(dfOut.camH) && dfOut.camH > dfTracked.exit,
           dfTracked.error
-            || `IN @ ${(dfIn.camH / 1000).toFixed(0)} km (< ${(dfTracked.enter / 1000).toFixed(0)} km enter): ${dfIn.models?.rendering} aaa097 model(s) rendering, entity left at ${Number(dfIn.h).toFixed(1)} m under a ${Number(dfIn.floor).toFixed(1)} m floor (groundSnap owns it); `
-              + `OUT @ ${(dfOut.camH / 1000).toFixed(0)} km (> ${(dfTracked.exit / 1000).toFixed(1)} km exit): ${dfOut.models?.rendering} aaa097 model(s) rendering, billboard owns it again, ${Number(dfIn.h).toFixed(1)} m → ${Number(dfOut.h).toFixed(1)} m on a ${Number(dfOut.floor).toFixed(1)} m floor`);
+            || `IN @ ${(dfIn.camH / 1000).toFixed(0)} km (< ${(dfTracked.enter / 1000).toFixed(0)} km enter): ${dfIn.models?.rendering} aaa097 model(s) rendering, entity at raw dead-reckon ${Number(dfIn.h).toFixed(1)} m (fix ${Number(dfIn.subjectH).toFixed(1)} m, baro ${dfIn.reportedAltM} — groundSnap owns it); `
+              + `OUT @ ${(dfOut.camH / 1000).toFixed(0)} km (> ${(dfTracked.exit / 1000).toFixed(1)} km exit): ${dfOut.models?.rendering} aaa097 model(s) rendering, billboard owns it again, ${Number(dfIn.h).toFixed(1)} m → ${Number(dfOut.h).toFixed(1)} m on a ${Number(dfOutFloor).toFixed(1)} m floor (sticky cell ${dfOut.stickyCell ? `${dfOut.stickyCell.lat}, ${dfOut.stickyCell.lon}` : 'n/a'})`);
       }
 
       // The visual/data split is INTENTIONAL: pixels are floored, measurements
@@ -3434,14 +3471,20 @@ async function main() {
           }
         }
         // The viewer is request-render driven. Directly seeding the test seam
-        // does not itself schedule a frame, so explicitly request one before
-        // reading the CallbackProperty again. Production floor warming already
-        // runs inside the app's render/update lifecycle; this keeps the harness
-        // from mistaking a cached same-frame position for a failed clamp.
-        v.scene.requestRender();
-        await window.__dfSettle(900);
-        const ent2 = v.trackedEntity?.position?.getValue(Cesium.JulianDate.now());
-        const c2 = ent2 ? window.__dfCarto(ent2) : null;
+        // does not itself schedule a frame, and the clamp lands with the next
+        // RENDERED frame — a fixed settle can expire with zero of those under
+        // SwiftShader (the loading read below caught exactly that in run 5).
+        // Poll to convergence like the fleet control above instead of
+        // mistaking a not-yet-re-rendered position for a failed clamp.
+        const retainedDeadline = Date.now() + 15000;
+        let ent2 = v.trackedEntity?.position?.getValue(Cesium.JulianDate.now());
+        let c2 = ent2 ? window.__dfCarto(ent2) : null;
+        while (Date.now() < retainedDeadline
+          && (!c2 || !Number.isFinite(c2.h) || c2.h < seeded + 1)) {
+          await window.__dfSettle(250);
+          ent2 = v.trackedEntity?.position?.getValue(Cesium.JulianDate.now());
+          c2 = ent2 ? window.__dfCarto(ent2) : null;
+        }
         const out = {
           toggleOff,
           enter: window.__dfRegime.enter,
@@ -3574,17 +3617,29 @@ async function main() {
         const seededFleet = d0.h + 45;
         floorAround(d0, seededFleet);
         // reportMeshFloorCell is a direct test seam and does not schedule a
-        // Cesium frame. Force the CallbackProperty to re-evaluate before the
-        // assertion, matching the request-render fix in the retained-model
-        // scenario above.
-        v.scene.requestRender();
-        await window.__dfSettle(900);
-        const bbAfter = window.__dfFindBB('aaa097');
+        // Cesium frame, and the billboard rewrite happens inside the fleet
+        // pass — which only runs inside a RENDERED frame. A fixed settle can
+        // expire with neither behind it and read the PREVIOUS scenario's
+        // clamp as this one's answer (run 5: 242.5 m = the retained-model
+        // 241.0 + 1.5 under a freshly planted 287.5 m floor). Poll to
+        // convergence like the fleet control above.
+        const fleetClampDeadline = Date.now() + 15000;
+        let bbAfter = window.__dfFindBB('aaa097');
+        let fleetH = bbAfter ? window.__dfCarto(bbAfter.position).h : null;
+        while (Date.now() < fleetClampDeadline
+          && (!Number.isFinite(fleetH) || fleetH < seededFleet + 1)) {
+          await window.__dfSettle(250);
+          bbAfter = window.__dfFindBB('aaa097');
+          fleetH = bbAfter ? window.__dfCarto(bbAfter.position).h : null;
+        }
         out.fleetModelReady = fleetModel.ready;
         out.fleetModelShow = fleetModel.show;
         out.fleetBillboardVisible = Boolean(bbAfter?.show);
         out.fleetSeeded = seededFleet;
-        out.fleetH = bbAfter ? window.__dfCarto(bbAfter.position).h : null;
+        out.fleetH = fleetH;
+        // What the product clamped against — diagnostics that distinguish
+        // "clamped onto the planted floor" from "lifted by a stale hold".
+        out.fleetEffectiveM = fl._displayFloorStateForTest?.('aaa097')?.effectiveM ?? null;
         delete fleetModel.ready;
         delete fleetModel.show;
         fl.setParams({ models3d: false });
@@ -3611,7 +3666,6 @@ async function main() {
         fl.trackById('aaa097');
         fl.setParams({ models3d: true });
         v.scene.requestRender();
-        await new Promise((r) => setTimeout(r, 120)); // inside the load window
         const countRendering = () => {
           let n = 0;
           const walk = (coll) => {
@@ -3627,10 +3681,28 @@ async function main() {
           walk(v.scene.primitives);
           return n;
         };
-        out.renderingModelsDuringLoad = countRendering();
-        const entLoad = v.trackedEntity?.position?.getValue(Cesium.JulianDate.now());
+        // Sample at the first moment the clamp has visibly applied — the
+        // trackById re-frame holds continuous rendering, so this is normally
+        // the first polled frame — but stop early if a model finishes
+        // loading and takes the visual, because that legitimately ENDS the
+        // load window under test (the record below reports which way it
+        // went). A blind 120 ms sleep cannot tell "still in the window" from
+        // "no frame has rendered since the plant".
+        const loadWindowDeadline = Date.now() + 8000;
+        let entLoad = v.trackedEntity?.position?.getValue(Cesium.JulianDate.now());
+        let loadH = entLoad ? window.__dfCarto(entLoad).h : null;
+        let rendering = countRendering();
+        while (Date.now() < loadWindowDeadline && rendering === 0
+          && (!Number.isFinite(loadH) || loadH < seededTracked + 1)) {
+          await window.__dfSettle(250);
+          entLoad = v.trackedEntity?.position?.getValue(Cesium.JulianDate.now());
+          loadH = entLoad ? window.__dfCarto(entLoad).h : null;
+          rendering = countRendering();
+        }
+        out.renderingModelsDuringLoad = rendering;
         out.trackedSeeded = seededTracked;
-        out.trackedLoadH = entLoad ? window.__dfCarto(entLoad).h : null;
+        out.trackedLoadH = loadH;
+        out.trackedEffectiveM = fl._displayFloorStateForTest?.('aaa097')?.effectiveM ?? null;
         fl.setParams({ models3d: false });
         fl.stopTracking();
         await window.__dfSettle(300);
@@ -3646,7 +3718,7 @@ async function main() {
             && Number.isFinite(dfLoading.fleetH)
             && dfLoading.fleetH >= dfLoading.fleetSeeded + DISPLAY_FLOOR_LIFT_M - 0.5,
           dfLoading.error
-            || `model show=${dfLoading.fleetModelShow} ready=${dfLoading.fleetModelReady}, billboard visible=${dfLoading.fleetBillboardVisible} at ${Number(dfLoading.fleetH).toFixed(1)} m on a ${Number(dfLoading.fleetSeeded).toFixed(1)} m floor`);
+            || `model show=${dfLoading.fleetModelShow} ready=${dfLoading.fleetModelReady}, billboard visible=${dfLoading.fleetBillboardVisible} at ${Number(dfLoading.fleetH).toFixed(1)} m on a ${Number(dfLoading.fleetSeeded).toFixed(1)} m floor (product clamp floor ${dfLoading.fleetEffectiveM == null ? 'none' : `${Number(dfLoading.fleetEffectiveM).toFixed(1)} m`})`);
       }
 
       record('display-floor/loading: tracked regime active with no rendering model stays floored',
@@ -3654,7 +3726,7 @@ async function main() {
           && Number.isFinite(dfLoading.trackedLoadH)
           && dfLoading.trackedLoadH >= dfLoading.trackedSeeded + DISPLAY_FLOOR_LIFT_M - 0.5,
         dfLoading.error
-          || `rendering models during load=${dfLoading.renderingModelsDuringLoad}, entity at ${Number(dfLoading.trackedLoadH).toFixed(1)} m on a ${Number(dfLoading.trackedSeeded).toFixed(1)} m floor`);
+          || `rendering models during load=${dfLoading.renderingModelsDuringLoad}, entity at ${Number(dfLoading.trackedLoadH).toFixed(1)} m on a ${Number(dfLoading.trackedSeeded).toFixed(1)} m floor (product clamp floor ${dfLoading.trackedEffectiveM == null ? 'none' : `${Number(dfLoading.trackedEffectiveM).toFixed(1)} m`})`);
 
       // ---- F5: a taxi-invalidated snap HOLDS, bounded by drift -------------
       // The gate above ("no evidence ⇒ no model") is right for a contact that

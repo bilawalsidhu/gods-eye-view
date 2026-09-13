@@ -616,6 +616,43 @@ ordered by value-per-risk; each is self-contained and committable.
       count=0/error=none — the enable transaction never landed), C16
       (post-quiesce camera flight did not move), D7 (cockpit-exit listener
       arithmetic 4→4 vs expected +1), D8 (3 radio overlay-paint records).
+      **Run-5 residual unit (2026-09-12, all verified on the fixed
+      build):** the unifying defect was *frame-scarcity reads* — under
+      SwiftShader a fixed settle can expire with zero rendered rAF ticks,
+      so any assertion sampled after one races the mechanism that was
+      supposed to deliver the state. **D1** (`track-regression`): product
+      seam `_displayFloorStateForTest()` (flights.js) exposes the clamp's
+      sticky cell + post-hold effective floor, so floor assertions read
+      the product's truth instead of a raw-cell harness recomputation
+      (a sticky boundary cell made run 5 read 203.0 vs the harness's
+      192.4); regime IN now polls for the stand-aside contract
+      (`|entityH − subjectH| ≤ 3` while the GLB owns the visual) and the
+      loading records poll to convergence instead of blind settles.
+      100/0/0. **D7** (`qa-cockpit-utility`): product fix — ui.js
+      `restoreTrackingFrame` gains a `refocusTrackedById` fallback so
+      cockpit-exit tracking restoration survives an entity-id swap;
+      harness: camera-reframe convergence poll (probe proved the reframe
+      lands in 250–500 ms, the old 180 ms sample just expired) and an
+      attrition-hardened cockpit entry (3× recover-via-ensureTrackedFlight).
+      READY, 0 failures. **D8**: held, 106/0/0. **C11/C16**
+      (`qa-l9-matrix`): two harness defects, product exonerated by an
+      isolated probe (installations: ready, 81 records, ~3 s on a quiet
+      page). (a) C11 fired its `/api/military-installations` cross-check
+      seconds before settle() enabled the layer at the same camera — two
+      near-simultaneous identical Overpass queries serialize upstream and
+      the layer's fetch (the thing under test) is the one that waits:
+      loading=true / lifecycle=enabling for the whole poll budget. The
+      probe now runs only in branches that consume it, after the poll;
+      the lifecycle queue is drained (with a busy-queue CRASH guard)
+      before the segment; the poll is 60×1 s. (b) the post-quiesce
+      drain was one long in-page sleep loop — itself a victim of the
+      saturation it measures (two 200 s eval timeouts back to back); it
+      is now Node-side short-eval snapshots (instantaneous reads, 5 s
+      fail-fast retries, 3 min budget) where null honestly means "never
+      got one readable snapshot". Verdict discipline kept: still-loading
+      at budget expiry is a CRASH (inconclusive) carrying
+      status/loading/lifecycle/observed evidence, never a bare
+      "rendered 0".
 
 ### Batch 3 — Coverage campaign (P1, mechanical but large)
 

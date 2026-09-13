@@ -2448,8 +2448,22 @@ export class StyleManager {
         const [layerId, ...idParts] = String(entity?.gevTrackedId || '').split(':');
         const trackedId = idParts.join(':');
         if (!trackedId) return false;
-        if (layerId === 'flights') return flightsLayer.refocusTrackedById?.(trackedId) === true;
-        if (layerId === 'military') return militaryFlightsLayer.refocusTrackedById?.(trackedId) === true;
+        // Refocus-only assumes the layer still owns this tracking. Under live
+        // feed attrition the module can re-track or drop the subject WHILE the
+        // cockpit session holds its own adopted entity — refocus then refuses
+        // (its gates compare against the module's drifted state) and exit()'
+        // restore would leave viewer.trackedEntity set with NO camera-frame
+        // listener. Mirror the Contacts focus route's fallback: re-point the
+        // layer at the surviving cockpit subject, which rebuilds tracking and
+        // installs exactly one camera-frame listener.
+        if (layerId === 'flights') {
+          return flightsLayer.refocusTrackedById?.(trackedId) === true
+            || flightsLayer.trackById?.(trackedId) === true;
+        }
+        if (layerId === 'military') {
+          return militaryFlightsLayer.refocusTrackedById?.(trackedId) === true
+            || militaryFlightsLayer.trackById?.(trackedId) === true;
+        }
         return false;
       },
     });

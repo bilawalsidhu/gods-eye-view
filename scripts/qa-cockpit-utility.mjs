@@ -698,6 +698,29 @@ try {
       console.log('WARN cockpit session did not re-engage after entry');
     }
   };
+  // The entry button exists only for a healthy ICAO24-tracked subject, so a
+  // subject dying at exactly the wrong moment (live-feed attrition) kills
+  // the whole run in a wait timeout — every later check re-enters through
+  // this button. Recover through the app's own paths and re-wait instead of
+  // letting one window of feed churn end the suite.
+  const enterThroughCockpitEntryButton = async () => {
+    let ready = false;
+    for (let attempt = 0; attempt < 3 && !ready; attempt += 1) {
+      try {
+        await page.waitForFunction(() => {
+          const entry = document.getElementById('cockpit-entry');
+          return entry && !entry.hidden && !entry.disabled;
+        }, { timeout: 10_000, polling: 500 });
+        ready = true;
+      } catch {
+        await ensureTrackedFlight();
+      }
+    }
+    if (!ready) {
+      throw new Error('cockpit entry never became available after attrition recovery');
+    }
+    await page.$eval('#cockpit-entry', (entry) => entry.click());
+  };
   const preselectedContactAdoption = await page.evaluate(async () => {
     const { styleManager, dataManager, viewer } = window.__godsEyeView;
     const flights = dataManager.layers.get('flights')?.module;
@@ -1122,8 +1145,19 @@ try {
     );
     const zoomedRange = cameraRange();
     const refocused = awareness?.focusCurrent?.() === true;
-    await new Promise((resolve) => setTimeout(resolve, 180));
-    const focusedRange = cameraRange();
+    // The reframe is delivered by the tracked camera's per-frame listener, so
+    // it lands with a RENDERED frame — under SwiftShader those can be
+    // seconds apart, and a fixed 180 ms sample caught the camera still
+    // parked at the zoomed-out range (focusedRange === zoomedRange; a
+    // standalone probe shows the same reframe landing between the 250 ms and
+    // 500 ms marks). Poll to convergence instead of sampling a race.
+    const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const reframeDeadline = Date.now() + 8000;
+    let focusedRange = cameraRange();
+    while (Date.now() < reframeDeadline && focusedRange >= 50_000) {
+      await settle(250);
+      focusedRange = cameraRange();
+    }
     const after = awareness?.getContextSnapshot?.()?.subject || null;
     return {
       before: before ? { layerId: before.layerId, id: before.id } : null,
@@ -1146,11 +1180,7 @@ try {
     JSON.stringify(zoomedOutContactRefocus),
   );
   await ensureTrackedFlight();
-  await page.waitForFunction(() => {
-    const entry = document.getElementById('cockpit-entry');
-    return entry && !entry.hidden && !entry.disabled;
-  }, { timeout: 10_000 });
-  await page.$eval('#cockpit-entry', (entry) => entry.click());
+  await enterThroughCockpitEntryButton();
   await page.waitForFunction(
     () => document.body.classList.contains('cockpit-mode')
       && window.__godsEyeView.styleManager.cockpitView.active
@@ -1559,11 +1589,7 @@ try {
     JSON.stringify(cockpitPanelRoundTrip),
   );
   await ensureTrackedFlight();
-  await page.waitForFunction(() => {
-    const entry = document.getElementById('cockpit-entry');
-    return entry && !entry.hidden && !entry.disabled;
-  }, { timeout: 10_000 });
-  await page.$eval('#cockpit-entry', (entry) => entry.click());
+  await enterThroughCockpitEntryButton();
   await page.waitForFunction(
     () => document.body.classList.contains('cockpit-mode')
       && window.__godsEyeView.styleManager.cockpitView.active,
