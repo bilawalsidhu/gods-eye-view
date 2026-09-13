@@ -263,14 +263,14 @@ test('an overlay with NO class to watch still disarms the launcher', () => {
 });
 
 test('one ESC does one thing — the radio disclosure stops the launcher outright', () => {
-  const ui = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const ui = fs.readFileSync(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
   const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
 
   // stopPropagation() does NOT stop later listeners on the SAME document, so the
   // disclosure's earlier capture handler closed the disclosure and the launcher
   // dismissed itself off the same key. The earlier listener is the only one that
   // can stop the later one — and only the immediate form does it.
-  const radioEsc = ui.slice(ui.indexOf("if (event.key !== 'Escape' || !this._contextRadioDock"));
+  const radioEsc = ui.slice(ui.indexOf("event.key !== 'Escape' ||"));
   const claim = radioEsc.slice(0, radioEsc.indexOf('setRadioDisclosure(false'));
   assert.match(claim, /event\.preventDefault\(\);/);
   assert.match(claim, /event\.stopImmediatePropagation\(\);/);

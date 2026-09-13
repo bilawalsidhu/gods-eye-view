@@ -1,15 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { afterEach } from 'node:test';
 import { formatAwarenessLabel } from './data/militaryAwarenessEngine.js';
-import { t } from './i18n/index.js';
-
-const source = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-const renderStart = source.indexOf('  renderCockpitSignals() {');
-const renderEnd = source.indexOf('  setContextCollapsed(', renderStart);
-assert.ok(renderStart >= 0 && renderEnd > renderStart);
-const clickSource = source.match(/this\._listen\(this\.signalList, 'click', (\(event\) => \{[\s\S]*?\n    \})\);/)?.[1];
-assert.ok(clickSource, 'the installed signal click route exists');
+import { CockpitViewController } from './ui/cockpitController.js';
+const previousDocument = globalThis.document;
+afterEach(() => { globalThis.document = previousDocument; });
 
 // Model native focus loss on removal AND on ordinary DOM moves. Keeping an
 // object reference alone is insufficient if reconciliation disconnects it.
@@ -85,8 +80,9 @@ function fixture() {
   document.body = new Node('body');
   document.createElement = (tag) => new Node(tag);
   document.activeElement = document.body;
-  const controller = new (new Function('document', 'formatAwarenessLabel', 't',
-    `return class { ${source.slice(renderStart, renderEnd)} };`)(document, formatAwarenessLabel, t))();
+  globalThis.document = document;
+  const controller = Object.create(CockpitViewController.prototype);
+  controller.services = { formatAwarenessLabel };
   controller.signalList = new Node('ol');
   controller.signalToggle = new Node('button');
   controller.briefTabs = [new Node('button'), new Node('button'), new Node('button')];
@@ -99,9 +95,8 @@ function fixture() {
   const outside = new Node('button');
   document.body.append(controller.signalToggle, controller.signalList, ...controller.briefTabs, display, radio, outside);
   const selected = [];
-  const click = new Function('militaryAwarenessLayer', `return ${clickSource};`)({
-    focusTarget: (...args) => selected.push(args),
-  });
+  controller.services.militaryAwarenessLayer = { focusTarget: (...args) => selected.push(args) };
+  const click = event => controller.handleSignalClick(event);
   const buttons = () => controller.signalList.querySelectorAll('button');
   const tab = () => {
     const nodes = document.body.querySelectorAll('button');

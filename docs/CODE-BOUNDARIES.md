@@ -287,3 +287,43 @@ the existing location-status formatter. Callers supply city data, search and
 navigation operations. The component owns DOM listeners and pending expansion;
 it imports no geocoder, camera engine, layer or application bootstrap. Existing
 camera authority and search providers remain supplied by the application.
+
+### Radio controls
+
+`ui/radio` owns Radio input, disclosures, tuner state and presentation. It
+receives the existing Radio port and explicit layer/layout actions, without
+importing the renderer or station providers. Pure tuner calculations retain
+compatibility exports from the data layer. Disposal revokes DOM listeners and
+subscriptions before ending the active tuning interaction.
+
+### Camera panel controls
+
+`ui/cctv` composes camera controls, frame loading, calibration editing and status
+presentation. It receives DOM elements, the existing camera port and explicit
+application actions; it imports no provider, layer or camera engine. Selection,
+placement, navigation and storage policy remain outside the component family.
+
+### Context coordination
+
+`ui/context` owns mode controls, transactions, session restoration and manager
+subscriptions. Composition supplies the manager, installations search and
+explicit visual/panel actions. `ui/context/policy` exposes the existing pure
+mode and restoration rules. No source transport or renderer is imported by
+these components; initial state and action results retain their existing shape.
+
+## Cockpit controls
+
+`ui/cockpit` supplies the Cockpit controller and Display portal. Camera updates,
+instruments, Context readouts, briefings, signals, layout and input have separate
+modules. Composition supplies the existing aircraft/awareness operations, terrain
+cache and sampling operations, continuous-render owner and regional briefing
+service. Pure math, utility layout and vision helpers have explicit exports.
+Disposal releases subscriptions and pending work; portal moves preserve the
+original Display groups, independent scroll positions and current focus owner.
+
+## Scene controls
+
+`ui/scenes` owns Scene prompts, panel input, project/shot rows, playback button and runtime
+presentation. It receives project reads and explicit actions, with no imports of
+the director, source modules, camera engine or storage. Replacement and disposal
+release listeners; pending action feedback is limited to its current owner.

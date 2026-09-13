@@ -1,3 +1,4 @@
+import { dispatchCockpitModeChanged, enter, exit, _adoptTrackedEntity } from '../ui/cockpitTrackingController.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -14,7 +15,6 @@ import militaryFlightsLayer, {
 const SUBJECT = 'abc123';
 const NEXT_SUBJECT = 'def456';
 
-const UI_SOURCE = readFileSync(new URL('../ui.js', import.meta.url), 'utf8');
 const FLIGHTS_SOURCE = readFileSync(new URL('./flights.js', import.meta.url), 'utf8');
 const MILITARY_SOURCE = readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8');
 
@@ -84,16 +84,24 @@ function candidateIds(layer) {
 }
 
 test('Cockpit lifecycle publishes one normalized aircraft identity to both detection owners', () => {
-  const dispatcher = /dispatchCockpitModeChanged\(active, info = null\) \{[\s\S]*?\n  \}/
-    .exec(UI_SOURCE)?.[0];
-  assert.ok(dispatcher, 'Cockpit event dispatcher is defined');
-  assert.match(dispatcher, /info\?\.icao24/);
-  assert.match(dispatcher, /\.trim\(\)\.toLowerCase\(\)/);
-  assert.match(dispatcher, /\['flights', 'military'\]\.includes\(info\?\.layerId\)/);
-  assert.match(dispatcher, /detail: \{ active: active === true, subjectId, layerId \}/);
-  assert.match(UI_SOURCE, /this\.dispatchCockpitModeChanged\(true, info\);/,
-    'entry and in-Cockpit handoff publish the active subject');
-  assert.match(UI_SOURCE, /this\.dispatchCockpitModeChanged\(false\);/,
+  const previousWindow = globalThis.window;
+  const details = [];
+  globalThis.window = { dispatchEvent: event => details.push(event.detail) };
+  try {
+    dispatchCockpitModeChanged(true, { icao24: ' ABC123 ', layerId: 'military' });
+    dispatchCockpitModeChanged(true, { icao24: ' DEF456 ', layerId: 'other' });
+    dispatchCockpitModeChanged(false);
+    assert.deepEqual(details, [
+      { active: true, subjectId: 'abc123', layerId: 'military' },
+      { active: true, subjectId: 'def456', layerId: null },
+      { active: false, subjectId: null, layerId: null },
+    ]);
+  } finally { globalThis.window = previousWindow; }
+  for (const action of [enter, _adoptTrackedEntity]) {
+    assert.match(action.toString(), /this\.dispatchCockpitModeChanged\(true, info\);/,
+      'entry and in-Cockpit handoff each publish the active subject');
+  }
+  assert.match(exit.toString(), /this\.dispatchCockpitModeChanged\(false\);/,
     'exit clears the active subject');
 
   for (const [name, source] of [
