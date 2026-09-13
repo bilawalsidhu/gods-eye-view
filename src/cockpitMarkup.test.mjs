@@ -11,6 +11,9 @@ const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui.js'), 'utf8');
 // Batch 5 seam 2: the Cockpit compact Radio/Display disclosure lives in
 // src/ui/radioPanel.js; StyleManager keeps thin delegates.
 const radioPanelUi = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'radioPanel.js'), 'utf8');
+// Batch 5 seam 4: the adaptive panel-stack layout lives in
+// src/ui/panelAdaptiveLayout.js; StyleManager keeps thin delegates.
+const panelAdaptiveUi = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'panelAdaptiveLayout.js'), 'utf8');
 // Batch 5: the cockpit HUD loop (vision cycle, keyboard, Contact panel, signal
 // layout, briefing) lives in src/ui/CockpitViewController.js; StyleManager's
 // panel/portal/display wiring stays in ui.js.
@@ -297,8 +300,8 @@ test('Display orders 3D above Celestial, Clean UI below it, and Parameters below
   );
   assert.equal((html.match(/id="param-slider-panel"/g) || []).length, 1, 'Parameters must have one DOM owner');
   assert.match(
-    ui,
-    /const detectionGroup = this\._detectionBtn\?\.closest\('\.pp-toggle-group'\);[\s\S]*?detectionGroup\.after\(this\._sliderPanel\)/,
+    panelAdaptiveUi,
+    /const detectionGroup = mgr\._detectionBtn\?\.closest\('\.pp-toggle-group'\);[\s\S]*?detectionGroup\.after\(mgr\._sliderPanel\)/,
   );
   assert.match(
     ui,
@@ -533,15 +536,15 @@ test('Cockpit Radio station changes preserve first-person camera ownership', () 
 });
 
 test('Cockpit panel corridors reserve the owned topline readouts', () => {
-  const leftObstacles = ui.match(/const LEFT_STACK_OBSTACLE_SELECTOR = \[([\s\S]*?)\]\.join/);
-  const rightObstacles = ui.match(/const RIGHT_STACK_OBSTACLE_SELECTOR = \[([\s\S]*?)\]\.join/);
+  const leftObstacles = panelAdaptiveUi.match(/const LEFT_STACK_OBSTACLE_SELECTOR = \[([\s\S]*?)\]\.join/);
+  const rightObstacles = panelAdaptiveUi.match(/const RIGHT_STACK_OBSTACLE_SELECTOR = \[([\s\S]*?)\]\.join/);
   assert.ok(leftObstacles && rightObstacles, 'responsive panel obstacle selectors are missing');
   assert.match(leftObstacles[1], /#cockpit-hud \.cockpit-topline/);
   assert.match(rightObstacles[1], /#cockpit-hud \.cockpit-topline/);
   assert.match(leftObstacles[1], /#cockpit-hud \.cockpit-topline > div/);
   assert.match(rightObstacles[1], /#cockpit-hud \.cockpit-topline > div/);
-  const leftLayout = ui.match(
-    /_syncLeftPanelAdaptiveLayout\(\) \{([\s\S]*?)\n {2}\}\n\n {2}\/\*\*/,
+  const leftLayout = panelAdaptiveUi.match(
+    /function syncLeftPanelAdaptiveLayout\(mgr\) \{([\s\S]*?)\n\}\n/,
   );
   assert.ok(leftLayout, 'left accordion layout pass is missing');
   assert.doesNotMatch(
@@ -574,8 +577,8 @@ test('Cockpit panel corridors reserve the owned topline readouts', () => {
     /function isRenderedOnScreen\(element\) \{[\s\S]*?style\.display === 'none' \|\| style\.visibility === 'hidden' \|\| Number\(style\.opacity\) === 0[\s\S]*?rect\.width > 0 && rect\.height > 0;/,
   );
   assert.match(
-    ui,
-    /_leftStackHudTransitionHandler = \(event\) => \{[\s\S]*?_scheduleLeftPanelLayout\(\{ reconsiderAutoCollapse: true \}\);[\s\S]*?this\.cockpitView\?\.scheduleContextLayout\(\);/,
+    panelAdaptiveUi,
+    /mgr\._leftStackHudTransitionHandler = \(event\) => \{[\s\S]*?scheduleLeftPanelLayout\(mgr, \{ reconsiderAutoCollapse: true \}\);[\s\S]*?mgr\.cockpitView\?\.scheduleContextLayout\(\);/,
     'the strip must remeasure on the same HUD fade the accordion does — the REC '
       + 'readout keeps its rect until the transition ends',
   );
@@ -595,13 +598,15 @@ test('Cockpit panel corridors reserve the owned topline readouts', () => {
 });
 
 test('an expanded Cockpit left panel stays above Contact, HUD, and attribution', () => {
-  assert.doesNotMatch(
-    ui,
-    /COCKPIT_PASSABLE_LEFT_OBSTACLE_SELECTOR|cockpitOverlaysPassable/,
-    'Cockpit obstacles must never be bypassed by an expanded map panel',
-  );
-  const leftLayout = ui.match(
-    /_syncLeftPanelAdaptiveLayout\(\) \{([\s\S]*?)\n {2}\}\n\n {2}\/\*\*/,
+  for (const source of [ui, panelAdaptiveUi]) {
+    assert.doesNotMatch(
+      source,
+      /COCKPIT_PASSABLE_LEFT_OBSTACLE_SELECTOR|cockpitOverlaysPassable/,
+      'Cockpit obstacles must never be bypassed by an expanded map panel',
+    );
+  }
+  const leftLayout = panelAdaptiveUi.match(
+    /function syncLeftPanelAdaptiveLayout\(mgr\) \{([\s\S]*?)\n\}\n/,
   );
   assert.ok(leftLayout, 'left accordion layout pass is missing');
   assert.match(

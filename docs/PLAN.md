@@ -810,22 +810,29 @@ ordered by value-per-risk; each is self-contained and committable.
 
 - [ ] Split `src/ui.js` along its existing section banners into
       `src/ui/*` — behavior-preserving, moved with their co-located
-      tests. IN PROGRESS 2026-09-13, seam 3 of ~5:
+      tests. IN PROGRESS 2026-09-13, seam 4 of ~5:
       `src/ui/CockpitViewController.js` (seam 1: the cockpit HUD loop,
       1,616 lines, byte-identical), `src/ui/radioPanel.js` (seam 2:
       the five Radio panel methods, 815 lines, transform-identical),
-      and `src/ui/cctvPanel.js` (seam 3: the thirteen CCTV panel
+      `src/ui/cctvPanel.js` (seam 3: the thirteen CCTV panel
       methods + the `CCTV_CAL_FIELDS` calibration table +
       `signedNormalizeDeg`, 623 lines, transform-identical; public
       three stay as thin delegates so the method surface is
-      unchanged). ui.js 10,500 → 7,445 lines. Source-text contract
-      tests re-pointed per seam. Gates per seam: lint clean, 2,971
-      tests + 14 allocation probes, build ok, and the matching QA
-      harnesses (seam 2: qa-radio 106/106, qa-cockpit-utility 52/52;
-      seam 3: qa-cctv-v2 48/48 after one live-data flake run — a real
-      camera parked at the scripted click point — didn't reproduce).
-      Remaining seams: panel-layout/adaptive stacks (~980), location
-      bar (~350).
+      unchanged), and `src/ui/panelAdaptiveLayout.js` (seam 4: the six
+      adaptive rail/accordion methods + the two obstacle-selector
+      constants, ~770 lines, transform-identical; all six stay as thin
+      delegates because qa-radio calls the sync methods at runtime).
+      ui.js 10,500 → 6,731 lines. Source-text contract tests re-pointed
+      per seam. Gates per seam: lint clean, 2,971 tests + 14
+      allocation probes, build ok, and the matching QA harnesses
+      (seam 2: qa-radio 106/106, qa-cockpit-utility 52/52; seam 3:
+      qa-cctv-v2 48/48 after one live-data flake run — a real camera
+      parked at the scripted click point — didn't reproduce; seam 4:
+      qa-radio 106/106, qa-cockpit-utility 52/52 after one live-data
+      flake run — the tracked flight was attrited from the live
+      adsb.lol feed mid subject-transition, dropping Cockpit out;
+      rerun didn't reproduce).
+      Remaining seam: location bar (~350).
 - [ ] Unify the flights fork: `militaryFlights.js` duplicates the
       ingestion → label → render pipeline of `flights.js` (9,312 lines
       combined). Extract the shared pipeline; keep separate data sources
