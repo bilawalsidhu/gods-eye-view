@@ -4,7 +4,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DataLayerManager } from '../data/manager.js';
-import { controlRadio, createGevActionRunner } from './gevActions.js';
+import { controlRadio as runControlRadio, createGevActionRunner as createActionRunner } from './gevActions.js';
+import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 import {
   computeDownscale,
   renderFreshCesiumFrame,
@@ -3203,6 +3204,54 @@ test('F1: the toggle still records the next-session preference while live', () =
   assert.match(ui.tierButton.title, /this session stays on/i);
 });
 
+test('provider preference changes do not alter the live session follow-up policy', () => {
+  const localUi = { tierButton: {}, costValue: {} };
+  const local = new GevRealtimeController({
+    ui: localUi,
+    runner: async () => ({}),
+  });
+  let localEvent = null;
+  local.status = 'listening';
+  local.dc = { readyState: 'open' };
+  local.sessionVoiceProvider = 'local';
+  local.voiceProvider = 'openai';
+  local.pendingResponseInstructions = 'Confirm the completed tool.';
+  local.syncProviderUi();
+  local.sendRealtimeEvent = (event) => {
+    localEvent = event;
+    return true;
+  };
+  local.flushPendingResponse();
+  assert.equal(localEvent.response.localai_classifier.enabled, false);
+  assert.equal(localEvent.response.tool_choice, 'none');
+  assert.equal(localUi.costValue.hidden, true, 'live LOCAL cost stays hidden');
+
+  const cloudUi = { tierButton: {}, costValue: {} };
+  const cloud = new GevRealtimeController({
+    ui: cloudUi,
+    runner: async () => ({}),
+  });
+  let cloudEvent = null;
+  cloud.status = 'listening';
+  cloud.dc = { readyState: 'open' };
+  cloud.sessionVoiceProvider = 'openai';
+  cloud.voiceProvider = 'local';
+  cloud.pendingResponseInstructions = 'Confirm the completed tool.';
+  cloud.syncProviderUi();
+  cloud.sendRealtimeEvent = (event) => {
+    cloudEvent = event;
+    return true;
+  };
+  cloud.flushPendingResponse();
+  assert.equal('localai_classifier' in cloudEvent.response, false);
+  assert.equal('tool_choice' in cloudEvent.response, false);
+  assert.equal(
+    cloudUi.costValue.hidden,
+    false,
+    'live CLOUD cost stays visible',
+  );
+});
+
 test('F1: when idle, toggling does re-price the preview meter', () => {
   const { controller } = costControllerHarness();
   controller.status = 'idle';
@@ -3539,6 +3588,7 @@ test('a failed local tool requests one unclassified correction', async () => {
   const { controller } = toolDispatchController();
   const sent = [];
   controller.voiceProvider = 'local';
+  controller.sessionVoiceProvider = 'local';
   controller.runner = async () => ({ ok: false, action: 'fly_to_location', error: 'Nothing matched' });
   controller.sendRealtimeEvent = (payload, label) => {
     sent.push({ payload, label });
@@ -3724,3 +3774,6 @@ test('a local backend that needs setup fails the session start with the fix, not
     globalThis.fetch = originalFetch;
   }
 });
+const testPlaceSearch = () => createStandalonePlaceSearch({ resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ });
+function createGevActionRunner(options) { return createActionRunner({ placeSearch: testPlaceSearch(), ...options }); }
+function controlRadio(viewer, manager, args, options) { return runControlRadio(viewer, manager, args, { placeSearch: testPlaceSearch(), ...options }); }

@@ -57,10 +57,10 @@ language and voice models`. Two outcomes are distinct on purpose:
 
 - **needs setup** names the command to run (`brew install localai`, then `npm
   run voice:local:setup`) instead of reporting a missing pipeline id.
-- **unavailable** means the warm-up stopped moving: a download with no new bytes
-  for 45s, or a load that never finished. A download that keeps arriving is
-  never cut off by the clock, so a slow connection no longer fails and then
-  mysteriously works on the next click.
+- **unavailable** means a download received no new bytes for 45s, the backend
+  did not answer, or model loading exceeded its three-minute deadline. A
+  download that keeps arriving is not cut off by the load deadline, so a slow
+  connection no longer fails and then mysteriously works on the next click.
 
 ## Swapping a stage
 
@@ -78,8 +78,8 @@ Setup reads the stages, installs the backend each config names, pulls the stages
 that resolve to LocalAI gallery models, and downloads Hugging Face weights for
 configs whose `parameters.model` is a repo id such as `openbmb/MiniCPM5-2B-MLX`.
 `npm run voice:local:check` verifies exactly those pieces. The MiniCPM tool
-parser patch and the Apple Silicon requirement apply only while a stage runs on
-the `mlx` backend.
+parser patch applies only while the profile selects the shipped MiniCPM5 MLX
+weights. The Apple Silicon requirement applies to every `mlx` stage.
 
 ## Configuration
 

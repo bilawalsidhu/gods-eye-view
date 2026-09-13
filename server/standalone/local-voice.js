@@ -3,15 +3,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { localVoiceInstallPlan } from '../src/voice/localVoiceSetupCore.mjs';
-import { incompleteDownloadBytes } from './local-ai-realtime.mjs';
+import { localVoiceInstallPlan } from '../../src/voice/localVoiceSetupCore.mjs';
+import { incompleteDownloadBytes } from '../providers/localai/files.js';
 import {
   readProfile,
   runLocalStep,
   setupLocalVoice,
   stepCommand,
   weightsPresent,
-} from './setup-local-voice.mjs';
+} from '../../scripts/setup-local-voice.mjs';
 
 /**
  * The dev server's half of the in-app local voice install.
@@ -29,19 +29,23 @@ export function createLocalVoiceInstaller({
   homeDirectory = os.homedir(),
   profileDir = undefined,
   downloadedBytes = null,
-  probeBinary = (executable) => spawnSync(executable, ['--version'], { encoding: 'utf8' }).status === 0,
+  probeBinary = (executable) =>
+    spawnSync(executable, ['--version'], { encoding: 'utf8' }).status === 0,
 } = {}) {
   let steps = [];
   let state = 'idle';
   let error = '';
 
-  const home = () => path.resolve(
-    environment.GEV_LOCAL_AI_HOME || path.join(homeDirectory, '.local', 'share', 'localai'),
-  );
+  const home = () =>
+    path.resolve(
+      environment.GEV_LOCAL_AI_HOME ||
+        path.join(homeDirectory, '.local', 'share', 'localai'),
+    );
   const modelsDir = () => path.join(home(), 'models');
   const backendsDir = () => path.join(home(), 'backends');
   const profileOptions = profileDir ? { profileDir } : {};
-  const bytes = () => (downloadedBytes ? downloadedBytes() : incompleteDownloadBytes(modelsDir()));
+  const bytes = () =>
+    downloadedBytes ? downloadedBytes() : incompleteDownloadBytes(modelsDir());
   const childEnvironment = () => ({
     ...environment,
     GEV_LOCAL_AI_HOME: home(),
@@ -76,7 +80,13 @@ export function createLocalVoiceInstaller({
 
   function readiness() {
     try {
-      setupLocalVoice({ environment, platform, architecture, checkOnly: true, ...profileOptions });
+      setupLocalVoice({
+        environment,
+        platform,
+        architecture,
+        checkOnly: true,
+        ...profileOptions,
+      });
       return { ready: true, detail: '' };
     } catch (failure) {
       return { ready: false, detail: String(failure?.message || failure) };
@@ -93,7 +103,12 @@ export function createLocalVoiceInstaller({
       state,
       error,
       bytes: state === 'running' ? bytes() : 0,
-      steps: steps.map(({ id, kind, label, state: stepState }) => ({ id, kind, label, state: stepState })),
+      steps: steps.map(({ id, kind, label, state: stepState }) => ({
+        id,
+        kind,
+        label,
+        state: stepState,
+      })),
     };
   }
 
@@ -105,10 +120,23 @@ export function createLocalVoiceInstaller({
         shell: false,
         stdio: 'inherit',
       });
-      child.once('error', reject);
-      child.once('exit', (code) => (code === 0
-        ? resolve()
-        : reject(new Error(`${path.basename(spec.command)} ${spec.args[0]} exited with ${code}`))));
+      let settled = false;
+      const finish = (failure) => {
+        if (settled) return;
+        settled = true;
+        if (failure) reject(failure);
+        else resolve();
+      };
+      child.once('error', finish);
+      child.once('exit', (code) => {
+        finish(
+          code === 0
+            ? null
+            : new Error(
+                `${path.basename(spec.command)} ${spec.args[0]} exited with ${code}`,
+              ),
+        );
+      });
     });
   }
 
@@ -124,7 +152,12 @@ export function createLocalVoiceInstaller({
           environment: childEnvironment(),
         });
         if (spec) await runCommand(spec);
-        else runLocalStep(step, { ...profileOptions, modelsDir: modelsDir(), backendsDir: backendsDir() });
+        else
+          runLocalStep(step, {
+            ...profileOptions,
+            modelsDir: modelsDir(),
+            backendsDir: backendsDir(),
+          });
         step.state = 'done';
       } catch (failure) {
         step.state = 'failed';
@@ -155,13 +188,21 @@ export function createLocalVoiceInstaller({
       error = 'LocalAI is not installed — run: brew install localai';
       return status();
     }
-    fs.mkdirSync(modelsDir(), { recursive: true });
-    fs.mkdirSync(backendsDir(), { recursive: true });
-    const cachedRepos = profile.weights
-      .filter(({ repoId }) => weightsPresent(modelsDir(), repoId))
-      .map(({ repoId }) => repoId);
-    steps = localVoiceInstallPlan(profile, { cachedRepos })
-      .map((step) => ({ ...step, state: step.cached ? 'done' : 'pending' }));
+    try {
+      fs.mkdirSync(modelsDir(), { recursive: true });
+      fs.mkdirSync(backendsDir(), { recursive: true });
+      const cachedRepos = profile.weights
+        .filter(({ repoId }) => weightsPresent(modelsDir(), repoId))
+        .map(({ repoId }) => repoId);
+      steps = localVoiceInstallPlan(profile, { cachedRepos }).map((step) => ({
+        ...step,
+        state: step.cached ? 'done' : 'pending',
+      }));
+    } catch (failure) {
+      state = 'failed';
+      error = String(failure?.message || failure);
+      return status();
+    }
     state = 'running';
     error = '';
     void run();

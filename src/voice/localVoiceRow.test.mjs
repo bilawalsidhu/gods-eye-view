@@ -12,6 +12,9 @@ function stubElement() {
     textContent: '',
     handlers: {},
     addEventListener(type, handler) { this.handlers[type] = handler; },
+    removeEventListener(type, handler) {
+      if (this.handlers[type] === handler) delete this.handlers[type];
+    },
     click() { this.handlers.click?.(); },
   };
 }
@@ -64,6 +67,8 @@ test('the row offers one install and reports progress from the server', async ()
   assert.match(parts['[data-local-voice-progress]'].textContent, /Download openbmb\/MiniCPM5-2B-MLX — 250 MB \(1\/1\)/);
   assert.equal(parts['[data-local-voice-install]'].hidden, true, 'no second start while it runs');
   row.dispose();
+  parts['[data-local-voice-install]'].click();
+  assert.equal(calls.length, 2, 'dispose removes the install listener');
 });
 
 test('a missing LocalAI shows the command instead of a button', async () => {

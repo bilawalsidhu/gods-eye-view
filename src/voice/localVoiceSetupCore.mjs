@@ -15,6 +15,16 @@ function megabytes(bytes) {
   return `${Math.round(Number(bytes || 0) / 1e6)} MB`;
 }
 
+export const LOCAL_VOICE_COMPATIBILITY = Object.freeze({
+  mlxThinking: 'mlx-thinking',
+  minicpm5Parser: 'minicpm5-parser',
+});
+
+const COMPATIBILITY_LABELS = Object.freeze({
+  [LOCAL_VOICE_COMPATIBILITY.mlxThinking]: 'Apply MLX thinking compatibility',
+  [LOCAL_VOICE_COMPATIBILITY.minicpm5Parser]: 'Install MiniCPM5 tool parser',
+});
+
 /**
  * The ordered install plan for a profile.
  *
@@ -25,12 +35,26 @@ function megabytes(bytes) {
 export function localVoiceInstallPlan(profile, { cachedRepos = [] } = {}) {
   const steps = [];
   for (const backend of profile?.backends || []) {
-    steps.push({ id: `backend:${backend}`, kind: 'backend', arg: backend, label: `Install ${backend} backend` });
+    steps.push({
+      id: `backend:${backend}`,
+      kind: 'backend',
+      arg: backend,
+      label: `Install ${backend} backend`,
+    });
   }
   for (const model of profile?.gallery || []) {
-    steps.push({ id: `model:${model}`, kind: 'model', arg: model, label: `Install ${model}` });
+    steps.push({
+      id: `model:${model}`,
+      kind: 'model',
+      arg: model,
+      label: `Install ${model}`,
+    });
   }
-  steps.push({ id: 'configs', kind: 'configs', label: 'Copy pipeline configs' });
+  steps.push({
+    id: 'configs',
+    kind: 'configs',
+    label: 'Copy pipeline configs',
+  });
   for (const { name, repoId } of profile?.weights || []) {
     const cached = cachedRepos.includes(repoId);
     steps.push({
@@ -41,8 +65,15 @@ export function localVoiceInstallPlan(profile, { cachedRepos = [] } = {}) {
       label: cached ? `${repoId} already downloaded` : `Download ${repoId}`,
     });
   }
-  if ((profile?.backends || []).includes('mlx')) {
-    steps.push({ id: 'compat', kind: 'compat', label: 'Apply MLX compatibility patches' });
+  for (const compatibility of profile?.compatibility || []) {
+    const label = COMPATIBILITY_LABELS[compatibility];
+    if (!label) continue;
+    steps.push({
+      id: `compat:${compatibility}`,
+      kind: 'compat',
+      arg: compatibility,
+      label,
+    });
   }
   return steps;
 }
@@ -51,19 +82,30 @@ export function localVoiceInstallPlan(profile, { cachedRepos = [] } = {}) {
  * One line for the panel. A download reports megabytes because that is the only
  * number that moves during the long step; everything else reports position.
  */
-export function localVoiceProgressLine({ state = 'idle', steps = [], bytes = 0, error = '' } = {}) {
-  if (state === 'failed') return `Install failed — ${error || 'see the dev server log'}`;
+export function localVoiceProgressLine({
+  state = 'idle',
+  steps = [],
+  bytes = 0,
+  error = '',
+} = {}) {
+  if (state === 'failed')
+    return `Install failed — ${error || 'see the dev server log'}`;
   if (state === 'done') return 'Local voice is installed';
   if (state !== 'running') return '';
   const done = steps.filter((step) => step.state === 'done').length;
   const current = steps.find((step) => step.state === 'running');
   if (!current) return `Installing… (${done}/${steps.length})`;
-  const suffix = current.kind === 'weights' && bytes > 0 ? ` — ${megabytes(bytes)}` : '';
+  const suffix =
+    current.kind === 'weights' && bytes > 0 ? ` — ${megabytes(bytes)}` : '';
   return `${current.label}${suffix} (${done + 1}/${steps.length})`;
 }
 
 /** The row's headline, in the panel's voice. */
-export function localVoiceRowLabel({ supported = true, ready = false, state = 'idle' } = {}) {
+export function localVoiceRowLabel({
+  supported = true,
+  ready = false,
+  state = 'idle',
+} = {}) {
   if (!supported) return 'NOT SUPPORTED ON THIS MACHINE';
   if (state === 'running') return 'INSTALLING';
   if (ready) return 'READY';
@@ -76,7 +118,11 @@ export function localVoiceRowLabel({ supported = true, ready = false, state = 'i
  * running install both have nothing to click, and a ready install is offered
  * again only as a repair.
  */
-export function localVoiceActionLabel({ supported = true, ready = false, state = 'idle' } = {}) {
+export function localVoiceActionLabel({
+  supported = true,
+  ready = false,
+  state = 'idle',
+} = {}) {
   if (!supported || state === 'running') return null;
   if (ready) return 'REINSTALL';
   if (state === 'failed') return 'RETRY INSTALL';

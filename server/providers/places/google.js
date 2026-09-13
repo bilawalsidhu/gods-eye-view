@@ -21,6 +21,27 @@ function googleRateLimiter() {
   return _googleRateLimiter;
 }
 
+/** Validate raw lat/lon presence and WGS84 bounds before consuming request quota. */
+export function validatePlacesCoordinates(searchParams) {
+  const rawLat = searchParams.get('lat');
+  const rawLon = searchParams.get('lon');
+  if (rawLat === null || rawLon === null || !rawLat.trim() || !rawLon.trim()) {
+    return { ok: false, error: 'lat and lon are required' };
+  }
+  const latitude = Number(rawLat);
+  const longitude = Number(rawLon);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return { ok: false, error: 'Valid lat and lon are required' };
+  }
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    return {
+      ok: false,
+      error: 'lat must be within [-90, 90] and lon within [-180, 180]',
+    };
+  }
+  return { ok: true, latitude, longitude };
+}
+
 /** Nearby place labels and view-biased text search, with request-time key resolution. */
 export function googlePlacesContextProxy({
   resolveApiKey = googleServerApiKey,
@@ -47,6 +68,16 @@ export function googlePlacesContextProxy({
         return;
       }
 
+      const requestUrl = new URL(req.url || '', 'http://localhost');
+      const coordinates = validatePlacesCoordinates(requestUrl.searchParams);
+      if (!coordinates.ok) {
+        res.statusCode = 400;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: coordinates.error, places: [] }));
+        return;
+      }
+      const { latitude, longitude } = coordinates;
+
       // Opt-in per-IP throttle (GEV_RATELIMIT_GOOGLE_PER_MIN). No-op when unset.
       // Inlined (not the shared helper) so the 429 body keeps this endpoint's
       // `places: []` contract that the client expects on every error response.
@@ -59,24 +90,10 @@ export function googlePlacesContextProxy({
         return;
       }
 
-      const requestUrl = new URL(req.url || '', 'http://localhost');
-      const latitude = Number(requestUrl.searchParams.get('lat'));
-      const longitude = Number(requestUrl.searchParams.get('lon'));
       const radiusM = Math.max(
         25,
         Math.min(5000, Number(requestUrl.searchParams.get('radiusM')) || 250),
       );
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        res.statusCode = 400;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(
-          JSON.stringify({
-            error: 'Valid lat and lon are required',
-            places: [],
-          }),
-        );
-        return;
-      }
 
       try {
         const response = await fetch(
@@ -160,6 +177,25 @@ export function googlePlacesContextProxy({
         return;
       }
 
+      const requestUrl = new URL(req.url || '', 'http://localhost');
+      const textQuery = String(requestUrl.searchParams.get('q') || '').trim();
+      if (!textQuery) {
+        res.statusCode = 400;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(
+          JSON.stringify({ error: 'q, lat and lon are required', places: [] }),
+        );
+        return;
+      }
+      const coordinates = validatePlacesCoordinates(requestUrl.searchParams);
+      if (!coordinates.ok) {
+        res.statusCode = 400;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: coordinates.error, places: [] }));
+        return;
+      }
+      const { latitude, longitude } = coordinates;
+
       // Opt-in per-IP throttle (GEV_RATELIMIT_GOOGLE_PER_MIN). No-op when unset.
       // Inlined (like nearby-places) so the 429 body keeps the `places: []`
       // contract the client expects on every error response.
@@ -172,26 +208,10 @@ export function googlePlacesContextProxy({
         return;
       }
 
-      const requestUrl = new URL(req.url || '', 'http://localhost');
-      const textQuery = String(requestUrl.searchParams.get('q') || '').trim();
-      const latitude = Number(requestUrl.searchParams.get('lat'));
-      const longitude = Number(requestUrl.searchParams.get('lon'));
       const radiusM = Math.max(
         50,
         Math.min(50000, Number(requestUrl.searchParams.get('radiusM')) || 4000),
       );
-      if (
-        !textQuery ||
-        !Number.isFinite(latitude) ||
-        !Number.isFinite(longitude)
-      ) {
-        res.statusCode = 400;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(
-          JSON.stringify({ error: 'q, lat and lon are required', places: [] }),
-        );
-        return;
-      }
 
       try {
         const response = await fetch(

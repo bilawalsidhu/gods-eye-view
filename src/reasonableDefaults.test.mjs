@@ -41,7 +41,9 @@ import {
 } from './scopeMask.js';
 import { ShareLinkManager } from './sharelink.js';
 
-const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+// Follow the UI wiring and its extracted preset definitions.
+const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8')
+  + '\n' + fs.readFileSync(new URL('./ui/visualPresets.js', import.meta.url), 'utf8');
 const indexHtml = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const shareSource = fs.readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8');
 
@@ -210,7 +212,7 @@ test('first run opens with detection on, in every style, using the one tactical 
   // Normal used to start OFF while only CRT/NVG/FLIR auto-applied the preset.
   // It is now the baseline for all of them, reusing the SAME frozen object, so
   // "the tactical look" cannot fork into two definitions.
-  assert.match(uiSource, /const MILITARY_DETECTION_PRESET = Object\.freeze\(\{ mode: 'dense', densityPct: 75 \}\);/,
+  assert.match(uiSource, /const MILITARY_DETECTION_PRESET = Object\.freeze\(\{\s*mode: 'dense',\s*densityPct: 75,?\s*\}\);/,
     'the tactical look is still Dense @ 75%');
   const baseline = uiBlock('const GLOBAL_POST_DEFAULTS = {', '\n};');
   assert.match(baseline, /detectionMode: MILITARY_DETECTION_PRESET\.mode\.toUpperCase\(\),/,
@@ -246,7 +248,9 @@ test('detection-on-by-default is a default, not an operator override', () => {
   // preset consults the flag, and the detection button sets it.
   assert.match(uiSource, /if \(preset\.detection && !this\._detectionUserOverridden\) \{/,
     'a style preset still yields to an operator who changed detection by hand');
-  const detectionButton = uiBlock("this._detectionBtn.addEventListener('click'", 'cycleDetectionMode()');
+  const displayActions = uiSource.slice(uiSource.indexOf('this._displayControls ='));
+  const detectionButton = displayActions.slice(displayActions.indexOf('cycleDetection:'), displayActions.indexOf('toggleModels:'));
+  assert.match(detectionButton, /cycleDetectionMode\(\)/, 'the button still invokes the detection action');
   assert.match(detectionButton, /this\._detectionUserOverridden = true;/,
     'and the detection control still claims the override when the operator uses it');
 

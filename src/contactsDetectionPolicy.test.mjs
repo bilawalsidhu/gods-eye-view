@@ -1,3 +1,4 @@
+import { _syncContextModeButtons } from './ui/contextPresentation.js';
 // Contacts-scoped detection (owner playtest 2026-08-18: "when you click on
 // Contacts, detections should just turn on, and they should stay on in Cockpit
 // or in third-person tracking inside Contacts").
@@ -26,7 +27,9 @@ import {
 } from './data/detection.js';
 import { canonicalizeDensity } from './data/detectionPolicy.js';
 
-const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+// Follow the UI wiring and its extracted preset definitions.
+const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8')
+  + '\n' + fs.readFileSync(new URL('./ui/visualPresets.js', import.meta.url), 'utf8');
 
 /**
  * The tactical preset ui.js hands Contacts. Read out of the source so this test
@@ -34,7 +37,7 @@ const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
  */
 const MILITARY_PRESET = (() => {
   const match = uiSource.match(
-    /const MILITARY_DETECTION_PRESET = Object\.freeze\(\{ mode: '(\w+)', densityPct: (\d+) \}\)/,
+    /const MILITARY_DETECTION_PRESET = Object\.freeze\(\{\s*mode: '(\w+)',\s*densityPct: (\d+),?\s*\}\)/,
   );
   assert.ok(match, 'ui.js must expose one shared military detection preset');
   return { mode: match[1].toUpperCase(), densityPct: Number(match[2]) };
@@ -290,10 +293,11 @@ test('detection is wired to the Contacts transaction, and cockpit no longer touc
     'ACTIVATION turns detection on REGARDLESS of the style-preset override flag',
   );
   assert.match(
-    uiSource,
-    /this\.cockpitView\?\.syncEntry\(\);[\s\S]{0,220}?this\._syncContactsDetection\(\);/,
+    _syncContextModeButtons.toString(),
+    /this\.cockpitView\?\.syncEntry\(\);[\s\S]{0,220}?this\.actions\.syncDetection\(\);/,
     'called from _syncContextModeButtons, the funnel every _contextMode mutation routes through',
   );
+  assert.match(uiSource, /syncDetection: \(\) => this\._syncContactsDetection\(\)/);
   // The cockpit vision hook — the old trigger — must be out of the detection
   // business entirely, or leaving the cockpit turns detections off again.
   const visionHook = uiSource.slice(

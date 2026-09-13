@@ -15,7 +15,11 @@ import {
 /** Matches the mic panel's backend polling; an install is minutes, not seconds. */
 const POLL_MS = 2000;
 
-export async function initLocalVoiceRow({ documentRef = globalThis.document, fetchImpl } = {}) {
+export async function initLocalVoiceRow({
+  documentRef = globalThis.document,
+  fetchImpl,
+  signal,
+} = {}) {
   const root = documentRef?.querySelector?.('[data-local-voice]');
   if (!root || root.dataset.initialized === 'true') return null;
   const doFetch = fetchImpl || globalThis.fetch?.bind(globalThis);
@@ -27,6 +31,7 @@ export async function initLocalVoiceRow({ documentRef = globalThis.document, fet
   const command = root.querySelector('[data-local-voice-command]');
   const progress = root.querySelector('[data-local-voice-progress]');
   let timer = null;
+  let disposed = false;
 
   const stopPolling = () => {
     if (timer) globalThis.clearTimeout?.(timer);
@@ -34,6 +39,7 @@ export async function initLocalVoiceRow({ documentRef = globalThis.document, fet
   };
 
   const paint = (status) => {
+    if (disposed) return;
     root.hidden = false;
     root.dataset.state = status.state || 'idle';
     root.dataset.ready = String(Boolean(status.ready));
@@ -54,14 +60,17 @@ export async function initLocalVoiceRow({ documentRef = globalThis.document, fet
   };
 
   const load = async (method = 'GET') => {
+    if (disposed) return null;
     try {
       const response = await doFetch('/api/setup/local-voice', {
         method,
         cache: 'no-store',
+        signal,
         ...(method === 'POST' ? { headers: { 'Content-Type': 'application/json' }, body: '{}' } : {}),
       });
       if (!response.ok) throw new Error(String(response.status));
       const status = await response.json();
+      if (disposed) return null;
       paint(status);
       stopPolling();
       if (status.state === 'running') {
@@ -73,18 +82,31 @@ export async function initLocalVoiceRow({ documentRef = globalThis.document, fet
       return status;
     } catch {
       // Prod build or a refused admission: the surface cannot work, so it goes.
-      stopPolling();
-      root.hidden = true;
+      if (!disposed) root.hidden = true;
+      dispose();
       return null;
     }
   };
 
-  button?.addEventListener?.('click', () => {
-    if (button.disabled) return;
+  const onInstall = () => {
+    if (!button || button.disabled) return;
     button.disabled = true;
     void load('POST');
-  });
+  };
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    stopPolling();
+    button?.removeEventListener?.('click', onInstall);
+    signal?.removeEventListener?.('abort', dispose);
+  };
+  if (signal?.aborted) {
+    dispose();
+    return null;
+  }
+  signal?.addEventListener?.('abort', dispose, { once: true });
+  button?.addEventListener?.('click', onInstall);
 
   await load();
-  return { dispose: stopPolling };
+  return disposed ? null : { dispose };
 }

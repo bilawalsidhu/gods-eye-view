@@ -239,11 +239,11 @@ export function silenceRadioForVoice({ duckRadio, pauseRadio } = {}) {
  */
 const SUPERSEDED_RESPONSE_MEMORY = 8;
 
-export function initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector = null, annotations = null }) {
+export function initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector = null, annotations = null, placeSearch }) {
   if (window.__gevVoiceCommands && typeof window.__gevVoiceCommands.stop === 'function') {
     window.__gevVoiceCommands.stop({ removeUi: true });
   }
-  const runner = createGevActionRunner({ viewer, styleManager, dataManager, sceneDirector, annotations });
+  const runner = createGevActionRunner({ viewer, styleManager, dataManager, sceneDirector, annotations, placeSearch });
   const ui = createVoiceControl({ reset: true });
   const radioLayer = dataManager?.layers?.get('radio')?.module || null;
   const controller = new GevRealtimeController({ runner, ui, radioLayer, dataManager });
@@ -313,6 +313,7 @@ export class GevRealtimeController {
     this.responseCreatePending = false;
     this.userTurnPending = false;
     this.pendingSessionUpdate = null;
+    this.sessionVoiceProvider = null;
     this.pendingResponseInstructions = null;
     this.pendingUserTextResponse = false;
     this.activeResponseId = null;
@@ -429,6 +430,8 @@ export class GevRealtimeController {
     this.voiceTier = readStoredVoiceTier();
     this.voiceLimits = readStoredVoiceLimits();
     this.voiceProvider = readStoredVoiceProvider();
+    this.sessionVoiceProvider = this.voiceProvider;
+    const sessionVoiceProvider = this.sessionVoiceProvider;
     this.costCapStopped = false;
     // Provisional meter (tier-priced) so the readout shows $0.00 while
     // connecting. It is REPLACED below with one bound to the model the server
@@ -442,10 +445,11 @@ export class GevRealtimeController {
     // Clicking the mic with LOCAL remembered from a previous run used to go
     // straight to the SDP post and surface a raw 502; starting the backend is
     // part of starting a session, so wait for it here with live progress.
-    if (this.voiceProvider === 'local') {
+    if (sessionVoiceProvider === 'local') {
       const ready = await this.awaitLocalBackendReady(epoch);
       if (epoch !== this.startEpoch) return;
       if (!ready.ok) {
+        this.sessionVoiceProvider = null;
         this.setStatus('error', ready.detail || 'Local backend unavailable');
         this.reportError('Local voice backend', new Error(ready.detail || 'Local backend unavailable'));
         return;
@@ -455,12 +459,16 @@ export class GevRealtimeController {
     this.debugLog('session.starting', {
       epoch,
       tier: this.voiceTier,
+      provider: sessionVoiceProvider,
       connection: this.connectionDiagnostics(),
     });
     let localStream = null;
     let localPc = null;
     try {
-      const minted = await fetchRealtimeToken(this.voiceTier, this.voiceProvider);
+      const minted = await fetchRealtimeToken(
+        this.voiceTier,
+        sessionVoiceProvider,
+      );
       const token = minted.token;
       if (this.abandonStart(epoch, { localStream, localPc })) return;
       // Bind the session meter to the model actually served. An env override
@@ -496,7 +504,13 @@ export class GevRealtimeController {
       });
       if (this.abandonStart(epoch, { localStream, localPc })) return;
       this.stream = localStream;
-      this.setMicrophoneEnabled(!this.pushToTalkMode || this.pushToTalkKeyHeld);
+      // A local session receives its instructions and tools over the data
+      // channel. Keep its microphone muted until that update lands so audio
+      // captured during the handshake cannot become an unconfigured first turn.
+      this.setMicrophoneEnabled(
+        sessionVoiceProvider !== 'local' &&
+          (!this.pushToTalkMode || this.pushToTalkKeyHeld),
+      );
       this.startVoiceVisualizer(localStream);
 
       document.querySelectorAll('audio[data-gev-realtime-audio="true"]').forEach((el) => el.remove());
@@ -538,11 +552,26 @@ export class GevRealtimeController {
         // pushed over the channel. Sent FIRST so the very first user turn
         // already has the tools available.
         if (this.pendingSessionUpdate) {
-          this.sendRealtimeEvent({
-            type: 'session.update',
-            session: this.pendingSessionUpdate,
-          }, 'client.session.update');
+          const sent = this.sendRealtimeEvent(
+            {
+              type: 'session.update',
+              session: this.pendingSessionUpdate,
+            },
+            'client.session.update',
+          );
+          if (!sent) {
+            this.fatalError(
+              'Realtime session configuration',
+              new Error('Could not send the local session configuration'),
+            );
+            return;
+          }
           this.pendingSessionUpdate = null;
+        }
+        if (sessionVoiceProvider === 'local') {
+          this.setMicrophoneEnabled(
+            !this.pushToTalkMode || this.pushToTalkKeyHeld,
+          );
         }
         const detail = this.pushToTalkMode
           ? (this.pushToTalkKeyHeld ? 'Release Space to send' : 'Hold Space to talk')
@@ -995,6 +1024,8 @@ export class GevRealtimeController {
     this.responseCreatePending = false;
     this.userTurnPending = false;
     this.pendingSessionUpdate = null;
+    this.sessionVoiceProvider = null;
+    this.syncProviderUi();
     this.pendingResponseInstructions = null;
     this.pendingUserTextResponse = false;
     this.activeResponseId = null;
@@ -2138,6 +2169,8 @@ export class GevRealtimeController {
    */
   syncProviderUi() {
     const isLocal = this.voiceProvider === 'local';
+    const liveProvider = this.sessionVoiceProvider || this.voiceProvider;
+    const liveIsLocal = liveProvider === 'local';
     if (this.ui?.providerButton) {
       const backend = isLocal ? (this.localBackendState?.state || null) : null;
       const suffix = { starting: '…', ready: '', stopped: ' !', unavailable: ' !', 'needs-setup': ' ?' };
@@ -2149,12 +2182,15 @@ export class GevRealtimeController {
       // failed to start must not look the same as one that is ready.
       if (backend) this.ui.providerButton.dataset.backend = backend;
       else delete this.ui.providerButton.dataset.backend;
+      const pending = this.sessionVoiceProvider && liveProvider !== this.voiceProvider
+        ? ` Applies next session; this session stays on ${liveProvider.toUpperCase()}.`
+        : '';
       this.ui.providerButton.title = isLocal
-        ? `Voice backend: LOCAL — ${this.localBackendState?.detail || 'self-hosted Realtime endpoint'}. Click for OpenAI`
-        : 'Voice backend: CLOUD (OpenAI Realtime) — click for local';
+        ? `Voice backend: LOCAL — ${this.localBackendState?.detail || 'self-hosted Realtime endpoint'}. Click for OpenAI.${pending}`
+        : `Voice backend: CLOUD (OpenAI Realtime) — click for local.${pending}`;
     }
-    if (this.ui?.tierButton) this.ui.tierButton.hidden = isLocal;
-    if (this.ui?.costValue) this.ui.costValue.hidden = isLocal;
+    if (this.ui?.tierButton) this.ui.tierButton.hidden = liveIsLocal;
+    if (this.ui?.costValue) this.ui.costValue.hidden = liveIsLocal;
   }
 
   /**
@@ -2313,7 +2349,7 @@ export class GevRealtimeController {
     this.pendingResponseInstructions = null;
     this.responseCreatePending = true;
     const response = { instructions };
-    if (this.voiceProvider === 'local') {
+    if (this.sessionVoiceProvider === 'local') {
       // Keep LocalAI in its native audio modality so the configured Kokoro TTS
       // returns speech over the negotiated WebRTC audio track.
       response.tools = [];

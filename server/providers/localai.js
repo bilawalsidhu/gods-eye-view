@@ -1,51 +1,22 @@
 import { spawn as spawnProcess } from 'node:child_process';
-import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { incompleteDownloadBytes } from './localai/files.js';
+import {
+  LOCAL_AI_REALTIME_MODEL_DEFAULT,
+  LOCAL_AI_REALTIME_URL_DEFAULT,
+} from './localai/constants.js';
 
-export const LOCAL_AI_REALTIME_URL_DEFAULT = 'http://localhost:8080/v1/realtime/calls';
-export const LOCAL_AI_REALTIME_MODEL_DEFAULT = 'gpt-realtime';
+export { incompleteDownloadBytes } from './localai/files.js';
+export {
+  LOCAL_AI_REALTIME_MODEL_DEFAULT,
+  LOCAL_AI_REALTIME_URL_DEFAULT,
+} from './localai/constants.js';
 const LOCAL_AI_READY_TIMEOUT_MS = 180_000;
 /** How long a warm-up may make NO measurable progress before it counts as failed. */
 const LOCAL_AI_STALL_TIMEOUT_MS = 45_000;
 /** A first run downloads gigabytes, so the load request itself gets a long leash. */
 const LOCAL_AI_PRELOAD_TIMEOUT_MS = 30 * 60_000;
-
-/**
- * Bytes of unfinished Hugging Face downloads under a LocalAI models directory.
- *
- * Hugging Face writes each blob to a ".incomplete" file first, so this is a
- * real progress signal for the first cold start — it separates "downloading a
- * 1.3 GB model" from "wedged", which a wall-clock timeout cannot do.
- */
-export function incompleteDownloadBytes(modelsDir, fsImpl = fs) {
-  let total = 0;
-  let repos = [];
-  try {
-    repos = fsImpl.readdirSync(modelsDir);
-  } catch {
-    return 0;
-  }
-  for (const repo of repos) {
-    if (!repo.startsWith('models--')) continue;
-    const blobs = path.join(modelsDir, repo, 'blobs');
-    let names = [];
-    try {
-      names = fsImpl.readdirSync(blobs);
-    } catch {
-      continue;
-    }
-    for (const name of names) {
-      if (!name.endsWith('.incomplete')) continue;
-      try {
-        total += fsImpl.statSync(path.join(blobs, name)).size;
-      } catch {
-        // The file finished and was renamed mid-scan; the next poll sees it.
-      }
-    }
-  }
-  return total;
-}
 
 function readRequestBody(req, maxBytes = 1024 * 1024) {
   return new Promise((resolve, reject) => {
@@ -76,7 +47,12 @@ export function localAiOrigin(realtimeUrl = LOCAL_AI_REALTIME_URL_DEFAULT) {
 export function isLoopbackOrigin(origin) {
   try {
     const host = new URL(origin).hostname;
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+    return (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '::1' ||
+      host === '[::1]'
+    );
   } catch {
     return false;
   }
@@ -109,11 +85,13 @@ export function createLocalAiRealtime({
   let progressMark = '';
   let progressAt = 0;
 
-  const localAiHome = () => environment.GEV_LOCAL_AI_HOME
-    || path.join(homeDirectory, '.local', 'share', 'localai');
-  const pendingBytes = () => (downloadedBytes
-    ? downloadedBytes()
-    : incompleteDownloadBytes(path.join(localAiHome(), 'models')));
+  const localAiHome = () =>
+    environment.GEV_LOCAL_AI_HOME ||
+    path.join(homeDirectory, '.local', 'share', 'localai');
+  const pendingBytes = () =>
+    downloadedBytes
+      ? downloadedBytes()
+      : incompleteDownloadBytes(path.join(localAiHome(), 'models'));
   /** Seconds since the warm-up last changed state; resets whenever it moves. */
   const sinceProgress = (mark) => {
     if (mark !== progressMark || progressAt === 0) {
@@ -122,13 +100,16 @@ export function createLocalAiRealtime({
     }
     return now() - progressAt;
   };
-  const grace = (ms) => new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    timer?.unref?.();
-  });
+  const grace = (ms) =>
+    new Promise((resolve) => {
+      const timer = setTimeout(resolve, ms);
+      timer?.unref?.();
+    });
 
-  const realtimeUrl = () => environment.GEV_LOCAL_REALTIME_URL || LOCAL_AI_REALTIME_URL_DEFAULT;
-  const modelName = () => environment.GEV_LOCAL_REALTIME_MODEL || LOCAL_AI_REALTIME_MODEL_DEFAULT;
+  const realtimeUrl = () =>
+    environment.GEV_LOCAL_REALTIME_URL || LOCAL_AI_REALTIME_URL_DEFAULT;
+  const modelName = () =>
+    environment.GEV_LOCAL_REALTIME_MODEL || LOCAL_AI_REALTIME_MODEL_DEFAULT;
   const origin = () => localAiOrigin(realtimeUrl());
   const isChildRunning = () => child && child.exitCode === null;
 
@@ -164,6 +145,7 @@ export function createLocalAiRealtime({
   function preload(model) {
     if (preloadedModel === model) return Promise.resolve(true);
     if (preloadPromise) return preloadPromise;
+    preloadError = null;
     const attempt = (async () => {
       const response = await fetchImpl(`${origin()}/backend/load`, {
         method: 'POST',
@@ -173,7 +155,11 @@ export function createLocalAiRealtime({
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(body?.error || body?.message || `Pipeline preload failed (${response.status})`);
+        throw new Error(
+          body?.error ||
+            body?.message ||
+            `Pipeline preload failed (${response.status})`,
+        );
       }
       preloadedModel = model;
       return true;
@@ -181,22 +167,41 @@ export function createLocalAiRealtime({
     preloadPromise = attempt;
     // The racing caller may walk away; keep the rejection from going unhandled
     // and remember it so the next poll can report it.
-    attempt.catch((error) => { preloadError = error?.message || String(error); });
-    attempt.finally(() => { if (preloadPromise === attempt) preloadPromise = null; });
+    void attempt.then(
+      () => {
+        if (preloadPromise === attempt) preloadPromise = null;
+      },
+      (error) => {
+        preloadError = error?.message || String(error);
+        if (preloadPromise === attempt) preloadPromise = null;
+      },
+    );
     return attempt;
   }
 
   async function start() {
-    if (await reachable()) return { started: false, reason: 'already-running' };
+    if (await reachable()) {
+      // A POST is an explicit retry. Once a failed preload has settled, let a
+      // new session try it again without requiring a dev-server restart.
+      if (!preloadPromise && preloadError) {
+        preloadError = null;
+        progressMark = '';
+        progressAt = 0;
+      }
+      return { started: false, reason: 'already-running' };
+    }
     preloadedModel = null;
     preloadError = null;
     progressMark = '';
     progressAt = 0;
     if (isChildRunning()) return { started: false, reason: 'starting' };
-    if (!isLoopbackOrigin(origin())) return { started: false, reason: 'remote-target' };
+    if (!isLoopbackOrigin(origin()))
+      return { started: false, reason: 'remote-target' };
 
     const executable = environment.GEV_LOCAL_AI_BIN || 'local-ai';
-    const home = environment.GEV_LOCAL_AI_HOME || path.join(homeDirectory, '.local', 'share', 'localai');
+    const home =
+      environment.GEV_LOCAL_AI_HOME ||
+      path.join(homeDirectory, '.local', 'share', 'localai');
     const port = new URL(origin()).port || '8080';
 
     try {
@@ -224,13 +229,20 @@ export function createLocalAiRealtime({
           settled = true;
           resolve(value);
         };
-        spawned.once('spawn', () => finish({ started: true, reason: 'spawned' }));
+        spawned.once('spawn', () =>
+          finish({ started: true, reason: 'spawned' }),
+        );
         spawned.once('error', (error) => {
-          lastError = error?.code === 'ENOENT'
-            ? `${executable} not found on PATH — install it or set GEV_LOCAL_AI_BIN`
-            : error?.message || String(error);
+          lastError =
+            error?.code === 'ENOENT'
+              ? `${executable} not found on PATH — install it or set GEV_LOCAL_AI_BIN`
+              : error?.message || String(error);
           if (child === spawned) child = null;
-          finish({ started: false, reason: error?.code === 'ENOENT' ? 'missing-binary' : 'spawn-failed' });
+          finish({
+            started: false,
+            reason:
+              error?.code === 'ENOENT' ? 'missing-binary' : 'spawn-failed',
+          });
         });
         spawned.once('exit', (code) => {
           if (code) lastError = `local-ai exited with code ${code}`;
@@ -262,52 +274,98 @@ export function createLocalAiRealtime({
     if (startRequested) {
       const result = await start();
       if (result.reason === 'missing-binary') {
-        return at('needs-setup', 'LocalAI is not installed — run: brew install localai, then npm run voice:local:setup');
+        return at(
+          'needs-setup',
+          'LocalAI is not installed — run: brew install localai, then npm run voice:local:setup',
+        );
       }
       if (result.reason === 'spawn-failed') {
-        return at('unavailable', lastError || 'Could not start the local backend');
+        return at(
+          'unavailable',
+          lastError || 'Could not start the local backend',
+        );
       }
       if (result.reason === 'remote-target') {
-        return at('unavailable', `${origin()} is remote — start LocalAI on that host`);
+        return at(
+          'unavailable',
+          `${origin()} is remote — start LocalAI on that host`,
+        );
       }
     }
 
     if (!(await reachable())) {
-      if (!isChildRunning()) return at('stopped', lastError || 'Local backend is not running');
+      if (!isChildRunning())
+        return at('stopped', lastError || 'Local backend is not running');
       const elapsedMs = now() - startedAt;
       if (elapsedMs > readyTimeoutMs) {
-        return at('unavailable', `Local backend did not answer within ${Math.round(readyTimeoutMs / 1000)}s`);
+        return at(
+          'unavailable',
+          `Local backend did not answer within ${Math.round(readyTimeoutMs / 1000)}s`,
+        );
       }
-      return at('starting', `Starting local backend… ${Math.round(elapsedMs / 1000)}s`);
+      return at(
+        'starting',
+        `Starting local backend… ${Math.round(elapsedMs / 1000)}s`,
+      );
     }
 
     if (!(await pipelineReady(model))) {
       // LocalAI serves HTTP before it finishes reading model configs, so only
       // call the profile missing once that window has passed.
       if (isChildRunning() && now() - startedAt < configGraceMs) {
-        return at('starting', `Starting local backend… ${Math.round((now() - startedAt) / 1000)}s`);
+        return at(
+          'starting',
+          `Starting local backend… ${Math.round((now() - startedAt) / 1000)}s`,
+        );
       }
-      return at('needs-setup', `LocalAI has no "${model}" pipeline — run npm run voice:local:setup`);
+      return at(
+        'needs-setup',
+        `LocalAI has no "${model}" pipeline — run npm run voice:local:setup`,
+      );
     }
 
-    if (preloadError) return at('unavailable', `Local voice pipeline failed to load: ${preloadError}`);
-    await Promise.race([preload(model).catch(() => false), grace(readyGraceMs)]);
-    if (preloadedModel === model) return at('ready', 'Local voice pipeline loaded');
-    if (preloadError) return at('unavailable', `Local voice pipeline failed to load: ${preloadError}`);
+    if (preloadError)
+      return at(
+        'unavailable',
+        `Local voice pipeline failed to load: ${preloadError}`,
+      );
+    await Promise.race([
+      preload(model).catch(() => false),
+      grace(readyGraceMs),
+    ]);
+    if (preloadedModel === model)
+      return at('ready', 'Local voice pipeline loaded');
+    if (preloadError)
+      return at(
+        'unavailable',
+        `Local voice pipeline failed to load: ${preloadError}`,
+      );
 
     const bytes = pendingBytes();
     if (bytes > 0) {
       const stalledMs = sinceProgress(`download:${bytes}`);
       if (stalledMs > stallTimeoutMs) {
-        return at('unavailable', 'Model download stalled — check the connection, then choose LOCAL again');
+        return at(
+          'unavailable',
+          'Model download stalled — check the connection, then choose LOCAL again',
+        );
       }
-      return at('starting', `Downloading model weights… ${Math.round(bytes / 1e6)} MB so far (first run only)`);
+      return at(
+        'starting',
+        `Downloading model weights… ${Math.round(bytes / 1e6)} MB so far (first run only)`,
+      );
     }
     const loadingMs = sinceProgress('load');
     if (loadingMs > readyTimeoutMs) {
-      return at('unavailable', `Local voice pipeline did not load within ${Math.round(readyTimeoutMs / 1000)}s`);
+      return at(
+        'unavailable',
+        `Local voice pipeline did not load within ${Math.round(readyTimeoutMs / 1000)}s`,
+      );
     }
-    return at('starting', `Loading speech, language and voice models… ${Math.round(loadingMs / 1000)}s`);
+    return at(
+      'starting',
+      `Loading speech, language and voice models… ${Math.round(loadingMs / 1000)}s`,
+    );
   }
 
   async function backendRoute(req, res) {
@@ -331,12 +389,9 @@ export function createLocalAiRealtime({
       res.end(JSON.stringify({ error: 'Method not allowed' }));
       return;
     }
-    let model = modelName();
-    try {
-      model = new URL(req.url || '', 'http://localhost').searchParams.get('model') || model;
-    } catch {
-      // Keep the configured model for a malformed relative request URL.
-    }
+    // The server configuration owns the pipeline id. A browser or LAN caller
+    // cannot use this relay to select and load another installed model.
+    const model = modelName();
     try {
       const offer = await readRequestBody(req, 1024 * 1024);
       const upstream = await fetchImpl(realtimeUrl(), {
@@ -349,7 +404,12 @@ export function createLocalAiRealtime({
       if (!upstream.ok) {
         res.statusCode = upstream.status;
         res.setHeader('Content-Type', 'application/json');
-        res.end(raw || JSON.stringify({ error: `Local realtime endpoint HTTP ${upstream.status}` }));
+        res.end(
+          raw ||
+            JSON.stringify({
+              error: `Local realtime endpoint HTTP ${upstream.status}`,
+            }),
+        );
         return;
       }
       let answerSdp = '';
@@ -361,7 +421,11 @@ export function createLocalAiRealtime({
       if (!answerSdp) {
         res.statusCode = 502;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Local realtime endpoint returned no SDP answer' }));
+        res.end(
+          JSON.stringify({
+            error: 'Local realtime endpoint returned no SDP answer',
+          }),
+        );
         return;
       }
       res.statusCode = 200;
@@ -370,9 +434,11 @@ export function createLocalAiRealtime({
     } catch (error) {
       res.statusCode = 502;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({
-        error: `Local voice backend unreachable at ${realtimeUrl()} — is it running? (${error?.message || error})`,
-      }));
+      res.end(
+        JSON.stringify({
+          error: `Local voice backend unreachable at ${realtimeUrl()} — is it running? (${error?.message || error})`,
+        }),
+      );
     }
   }
 
@@ -391,4 +457,19 @@ export function createLocalAiRealtime({
   }
 
   return { install, dispose, status, start, callsRoute, backendRoute };
+}
+
+/** Vite provider for LocalAI lifecycle, status, and WebRTC signalling. */
+export function localAiRealtimeProxy(options = {}) {
+  const localAi = createLocalAiRealtime(options);
+  const configure = (server) => {
+    localAi.install(server.middlewares);
+    server.httpServer?.on('close', localAi.dispose);
+  };
+  return {
+    name: 'localai-realtime-proxy',
+    configureServer: configure,
+    configurePreviewServer: configure,
+    closeBundle: localAi.dispose,
+  };
 }

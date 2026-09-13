@@ -569,7 +569,13 @@ try {
       trusted: event.isTrusted, detail: event.detail ?? null,
       style: event.target.closest('.style-btn')?.dataset.style || null,
     });
-    for (const type of ['keydown', 'keyup', 'click']) grid.addEventListener(type, record, true);
+    // A claimed hold deliberately blurs the button. Repeats and release then
+    // target the document body, so observe Space beyond the original grid.
+    const recordSpace = (event) => {
+      if (event.code === 'Space') record(event);
+    };
+    for (const type of ['keydown', 'keyup']) document.addEventListener(type, recordSpace, true);
+    grid.addEventListener('click', record, true);
     manager.setStyle = function (...args) {
       probe.activations.push(args[0]);
       return originalSetStyle.apply(this, args);
@@ -597,6 +603,11 @@ try {
       voiceBefore: probe.voiceBefore, voiceNow: voiceState(),
       selectedStyle: manager.activeStyle, selectedMap: manager.mapStackController.getActiveId(),
       focusedStyle: document.activeElement?.dataset.style || null,
+      holdObservation: {
+        pageFocused: document.hasFocus(), visibility: document.visibilityState,
+        timerPending: Boolean(voice.pushToTalkHoldTimer),
+        focusOwnerMatches: document.activeElement === voice.pushToTalkHoldFocusOwner,
+      },
     });
     probe.reset = () => {
       probe.events.length = 0;
@@ -609,7 +620,8 @@ try {
       manager.setStyle = originalSetStyle;
       voice.start = originalVoiceStart;
       observer.disconnect();
-      for (const type of ['keydown', 'keyup', 'click']) grid.removeEventListener(type, record, true);
+      for (const type of ['keydown', 'keyup']) document.removeEventListener(type, recordSpace, true);
+      grid.removeEventListener('click', record, true);
     };
     window.__qaStyleKeyProbe = probe;
   });
@@ -638,9 +650,11 @@ try {
     await page.keyboard.down('Space');
     styleSpaceIsDown = true;
     longSpaceDown = await page.evaluate(() => window.__qaStyleKeyProbe.snapshot());
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    // Use the browser's clock, like the production hold timer. Runner-side
+    // delays can finish while Chromium's timer is still pending under load.
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 250)));
     await page.keyboard.down('Space'); // exercise repeat without resetting the hold deadline
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 400)));
     longSpaceHeld = await page.evaluate(() => window.__qaStyleKeyProbe.snapshot());
     await page.keyboard.up('Space');
     styleSpaceIsDown = false;
@@ -1466,6 +1480,20 @@ try {
       for (const width of [1000, 620, 480]) {
         await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
         await page.evaluate(() => window.__godsEyeView.styleManager.setPanelCollapsed('data-panel', false, { persist: false, syncShare: false }));
+        // Resizing schedules rail placement on animation frames. Wait for that
+        // pass and its CSS transitions before comparing a focus rectangle with
+        // hit testing; a fixed Tab delay can observe two different positions.
+        await page.evaluate(() => new Promise((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        }));
+        await page.waitForFunction((expectedWidth) => {
+          const stack = document.getElementById('left-panel-stack');
+          if (innerWidth !== expectedWidth || !stack) return false;
+          if ((stack.dataset.layoutMode === 'mobile') !== (expectedWidth <= 720)) return false;
+          return !stack.getAnimations({ subtree: true }).some((animation) => (
+            animation instanceof CSSTransition && animation.playState === 'running'
+          ));
+        }, { timeout: 5_000 }, width);
         await page.focus('#data-panel .panel-collapse-btn');
         const targets = [[dataSetup.offId, 'OFF', false], [dataSetup.fixtureIds[0], 'ON', true], [dataSetup.fixtureIds[1], 'STALE', true]];
         for (const [id, label, enabled] of targets) {

@@ -5,30 +5,40 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { createLocalVoiceInstaller } from '../../scripts/local-voice-installer.mjs';
+import { createLocalVoiceInstaller } from '../../server/standalone/local-voice.js';
 
 /** A profile with no mlx stage, so the fixture installs on any machine. */
 function fixtureProfile() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gev-install-'));
   const models = path.join(root, 'profile', 'models');
   fs.mkdirSync(models, { recursive: true });
-  fs.writeFileSync(path.join(models, 'gpt-realtime.yaml'), [
-    'name: gpt-realtime',
-    'pipeline:',
-    '  vad: silero-vad-ggml',
-    '  transcription: whisper-large',
-    '  llm: my-gguf-llm',
-    '  tts: kokoro',
-    '',
-  ].join('\n'));
-  fs.writeFileSync(path.join(models, 'my-gguf-llm.yaml'), [
-    'name: my-gguf-llm',
-    'backend: llama-cpp',
-    'parameters:',
-    '  model: my-model-Q4_K_M.gguf',
-    '',
-  ].join('\n'));
-  return { root, profileDir: path.join(root, 'profile'), home: path.join(root, 'localai') };
+  fs.writeFileSync(
+    path.join(models, 'gpt-realtime.yaml'),
+    [
+      'name: gpt-realtime',
+      'pipeline:',
+      '  vad: silero-vad-ggml',
+      '  transcription: whisper-large',
+      '  llm: my-gguf-llm',
+      '  tts: kokoro',
+      '',
+    ].join('\n'),
+  );
+  fs.writeFileSync(
+    path.join(models, 'my-gguf-llm.yaml'),
+    [
+      'name: my-gguf-llm',
+      'backend: llama-cpp',
+      'parameters:',
+      '  model: my-model-Q4_K_M.gguf',
+      '',
+    ].join('\n'),
+  );
+  return {
+    root,
+    profileDir: path.join(root, 'profile'),
+    home: path.join(root, 'localai'),
+  };
 }
 
 function installerFor({ profileDir, home, exitCode = 0, calls = [] }) {
@@ -48,8 +58,14 @@ function installerFor({ profileDir, home, exitCode = 0, calls = [] }) {
 }
 
 async function settle(installer) {
-  for (let tick = 0; tick < 500 && installer.status().state === 'running'; tick += 1) {
-    await new Promise((resolve) => { setImmediate(resolve); });
+  for (
+    let tick = 0;
+    tick < 500 && installer.status().state === 'running';
+    tick += 1
+  ) {
+    await new Promise((resolve) => {
+      setImmediate(resolve);
+    });
   }
   return installer.status();
 }
@@ -60,7 +76,11 @@ test('the in-app install runs the profile plan and flips the row to ready', asyn
   try {
     const installer = installerFor({ profileDir, home, calls });
     const before = installer.status();
-    assert.equal(before.supported, true, 'a profile without mlx installs anywhere');
+    assert.equal(
+      before.supported,
+      true,
+      'a profile without mlx installs anywhere',
+    );
     assert.equal(before.ready, false, 'nothing is installed yet');
     assert.equal(before.state, 'idle');
 
@@ -68,7 +88,10 @@ test('the in-app install runs the profile plan and flips the row to ready', asyn
     const done = await settle(installer);
 
     assert.equal(done.state, 'done', done.error);
-    assert.deepEqual(done.steps.map((step) => step.state), done.steps.map(() => 'done'));
+    assert.deepEqual(
+      done.steps.map((step) => step.state),
+      done.steps.map(() => 'done'),
+    );
     assert.deepEqual(calls, [
       'local-ai backends install opus',
       'local-ai backends install llama-cpp',
@@ -77,7 +100,10 @@ test('the in-app install runs the profile plan and flips the row to ready', asyn
       'local-ai models install my-gguf-llm',
       'local-ai models install kokoro',
     ]);
-    assert.ok(fs.existsSync(path.join(home, 'models', 'gpt-realtime.yaml')), 'pipeline config copied');
+    assert.ok(
+      fs.existsSync(path.join(home, 'models', 'gpt-realtime.yaml')),
+      'pipeline config copied',
+    );
     assert.equal(done.ready, true, 'the check passes once the plan has run');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -93,7 +119,11 @@ test('a failed step stops the run and reports which command failed', async () =>
     assert.equal(failed.state, 'failed');
     assert.match(failed.error, /exited with 1/);
     assert.equal(failed.steps[0].state, 'failed');
-    assert.equal(failed.steps[1].state, 'pending', 'the run stops instead of grinding through');
+    assert.equal(
+      failed.steps[1].state,
+      'pending',
+      'the run stops instead of grinding through',
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -104,10 +134,16 @@ test('an mlx profile off Apple Silicon is reported unsupported instead of attemp
     environment: { GEV_LOCAL_AI_HOME: '/tmp/gev-unused' },
     platform: 'linux',
     architecture: 'x64',
-    spawnImpl() { throw new Error('must not spawn'); },
+    spawnImpl() {
+      throw new Error('must not spawn');
+    },
   });
   const status = installer.status();
-  assert.equal(status.supported, false, 'the shipped profile runs an mlx stage');
+  assert.equal(
+    status.supported,
+    false,
+    'the shipped profile runs an mlx stage',
+  );
   assert.equal(installer.start().state, 'failed');
   assert.match(installer.status().error, /Apple Silicon/);
 });
@@ -121,7 +157,9 @@ test('a missing LocalAI names the one command that stays in the terminal', () =>
       architecture: 'x64',
       profileDir,
       probeBinary: () => false,
-      spawnImpl() { throw new Error('must not spawn'); },
+      spawnImpl() {
+        throw new Error('must not spawn');
+      },
     });
     assert.equal(installer.status().binary, false);
     assert.equal(installer.start().state, 'failed');
