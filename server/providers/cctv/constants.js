@@ -4,8 +4,16 @@ export const DEFAULT_AUSTIN_ROWS_URL =
   'https://data.austintexas.gov/api/views/b4k4-adkb/rows.json?accessType=DOWNLOAD';
 /** Default cap on Austin cameras after distance-based prioritization. */
 export const DEFAULT_AUSTIN_MAX_SOURCES = 250;
-/** Global cap on total CCTV sources served by the proxy. */
-export const DEFAULT_CCTV_MAX_SOURCES = 900;
+/**
+ * Catalog-wide safety ceiling on served cameras. Each pack already caps
+ * itself (nearest-to-anchor first); this bound only matters when the packs
+ * together exceed it, and it is then filled round-robin across packs (see
+ * cap.js) so no region is silently dropped. Sized above the sum of the
+ * default per-pack caps so a default install never trims.
+ */
+export const DEFAULT_CCTV_MAX_SOURCES = 3000;
+/** Hard upper bound for CCTV_MAX_SOURCES; also sizes the health map. */
+export const CCTV_MAX_SOURCES_CEILING = 5000;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 export const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */

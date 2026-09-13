@@ -141,6 +141,7 @@
     "exports": ["./server/providers/cctv"],
     "modules": [
       "server/providers/cctv.js",
+      "server/providers/cctv/cap.js",
       "server/providers/cctv/catalog.js",
       "server/providers/cctv/constants.js",
       "server/providers/cctv/media.js",

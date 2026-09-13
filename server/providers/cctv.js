@@ -10,7 +10,10 @@ import {
   fetchCctvImageFromUpstream,
   fetchCctvMediaUpstream,
 } from './cctv/media.js';
-import { CCTV_FRAME_FETCH_TIMEOUT_MS } from './cctv/constants.js';
+import {
+  CCTV_FRAME_FETCH_TIMEOUT_MS,
+  CCTV_MAX_SOURCES_CEILING,
+} from './cctv/constants.js';
 import { googleServerApiKey } from './places/google-key.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
@@ -30,10 +33,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const getCctvSources = createCctvCatalog({ sourceRoot });
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
-  /** Cap on health map entries to prevent unbounded growth. Sized to cover the
-   * full served catalog (CCTV_MAX_SOURCES hard-bounds at 1200) so health/status
-   * observability isn't silently evicted for a default 800-camera catalog. */
-  const HEALTH_MAX_ENTRIES = 1200;
+  /** Cap on health map entries to prevent unbounded growth. Sized to the
+   * CCTV_MAX_SOURCES ceiling so health/status observability is never evicted
+   * for any catalog the proxy can actually serve. */
+  const HEALTH_MAX_ENTRIES = CCTV_MAX_SOURCES_CEILING;
 
   /** Update the health entry for a camera, evicting the oldest entry if at capacity. */
   const setHealth = (cameraId, patch) => {

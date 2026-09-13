@@ -1,16 +1,37 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-  DEFAULT_CCTV_SOURCE_FILE,
-  DEFAULT_CCTV_MAX_SOURCES,
-  CCTV_SOURCE_CACHE_MS,
-} from './constants.js';
+import { DEFAULT_CCTV_SOURCE_FILE, CCTV_SOURCE_CACHE_MS } from './constants.js';
+import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { normalizeSourceItem } from './normalize.js';
 import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
   loadTflSourcesFromOpenData,
 } from './sources.js';
+
+/** Env kill switch: unset or anything but "0" means enabled. */
+const envEnabled = (name) => String(process.env[name] || '1').trim() !== '0';
+
+/**
+ * Live open-data packs, in merge order. Adding a region is one entry here
+ * plus its loader in sources.js; the catalog cap is shared across entries
+ * round-robin (cap.js), so a new pack never silently evicts an older one.
+ * Each pack fails independently (allSettled) and is gated by its own env
+ * kill switch.
+ */
+const LIVE_PACKS = [
+  { name: 'austin', enabled: () => true, load: loadAustinSourcesFromOpenData },
+  {
+    name: 'caltrans',
+    enabled: () => true,
+    load: loadCaltransSourcesFromOpenData,
+  },
+  {
+    name: 'tfl',
+    enabled: () => envEnabled('CCTV_TFL_ENABLED'),
+    load: loadTflSourcesFromOpenData,
+  },
+];
 /**
  * Load CCTV sources from a local JSON file (CCTV_SOURCES_FILE env or default).
  *
@@ -65,9 +86,9 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
   /**
    * Assemble and cache the merged CCTV source list.
    *
-   * Merges sources from three origins (Austin Open Data, local file,
-   * env variable), deduplicates by ID, applies the global max cap, and
-   * caches for CCTV_SOURCE_CACHE_MS.
+   * Merges every source pack (live open-data packs, local file, env
+   * variable), deduplicates by ID, shares the catalog cap fairly across
+   * packs, and caches for CCTV_SOURCE_CACHE_MS.
    *
    * @returns {Promise<Array<object>>} Deduplicated, capped source list.
    */
@@ -104,64 +125,51 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
       String(process.env.CCTV_FORCE_AUSTIN || '').trim() === '1';
     const preferAustin =
       String(process.env.CCTV_PREFER_AUSTIN || '1').trim() !== '0';
-    // Live open-data packs (Austin + Caltrans + TfL) load unless a file/env pack
-    // is configured and live packs aren't forced — same gate that governed the
-    // Austin-only fetch, now governing all three. Each pack fails independently.
+    // Live open-data packs load unless a file/env pack is configured and live
+    // packs aren't forced — the same gate that governed the Austin-only fetch
+    // now governs every entry in LIVE_PACKS.
     const needsLiveSources =
       forceAustin || (fromFile.length + fromEnv.length === 0 && preferAustin);
-    const tflEnabled =
-      String(process.env.CCTV_TFL_ENABLED || '1').trim() !== '0';
-
-    let fromAustin = [];
-    let fromCaltrans = [];
-    let fromTfl = [];
-    if (needsLiveSources) {
-      const [austinResult, caltransResult, tflResult] =
-        await Promise.allSettled([
-          loadAustinSourcesFromOpenData(),
-          loadCaltransSourcesFromOpenData(),
-          tflEnabled ? loadTflSourcesFromOpenData() : Promise.resolve([]),
-        ]);
-      fromAustin =
-        austinResult.status === 'fulfilled' ? austinResult.value : [];
-      fromCaltrans =
-        caltransResult.status === 'fulfilled' ? caltransResult.value : [];
-      fromTfl = tflResult.status === 'fulfilled' ? tflResult.value : [];
-    }
-    // Live sources first so file/env overrides win on duplicate IDs (Map last-write).
-    const merged = [
-      ...fromAustin,
-      ...fromCaltrans,
-      ...fromTfl,
-      ...fromFile,
-      ...fromEnv,
+    const liveResults = needsLiveSources
+      ? await Promise.allSettled(
+          LIVE_PACKS.map((pack) =>
+            pack.enabled() ? pack.load() : Promise.resolve([]),
+          ),
+        )
+      : [];
+    // Live packs first so file/env overrides win on duplicate IDs; each pack
+    // keeps its own priority order and the catalog cap is shared fairly.
+    const normalizePack = (name, items) => ({
+      name,
+      sources: items
+        .filter((item) => item && typeof item === 'object')
+        .map((item) => normalizeSourceItem(item))
+        .filter((item) => item.id),
+    });
+    const packs = [
+      ...LIVE_PACKS.map((pack, index) =>
+        normalizePack(
+          pack.name,
+          liveResults[index]?.status === 'fulfilled'
+            ? liveResults[index].value
+            : [],
+        ),
+      ),
+      normalizePack('file', fromFile),
+      normalizePack('env', fromEnv),
     ];
-
-    // Deduplicate by camera ID (last-write wins because of Map.set)
-    const byId = new Map();
-    for (const item of merged) {
-      if (!item || typeof item !== 'object') continue;
-      const normalized = normalizeSourceItem(item);
-      if (!normalized.id) continue;
-      byId.set(normalized.id, normalized);
-    }
-
-    const mergedSources = Array.from(byId.values());
-    const maxRaw = Number(
-      process.env.CCTV_MAX_SOURCES || DEFAULT_CCTV_MAX_SOURCES,
-    );
-    const maxCount = Number.isFinite(maxRaw)
-      ? Math.max(8, Math.min(1200, Math.floor(maxRaw)))
-      : DEFAULT_CCTV_MAX_SOURCES;
-    if (mergedSources.length > maxCount) {
+    const maxCount = resolveCatalogCap(process.env.CCTV_MAX_SOURCES);
+    const allocation = allocateSourceCap(packs, maxCount);
+    const capped = allocation.sources;
+    const trimmed = allocation.packs.filter((pack) => pack.kept < pack.offered);
+    if (trimmed.length) {
+      const detail = trimmed
+        .map((pack) => `${pack.name} ${pack.kept}/${pack.offered}`)
+        .join(', ');
       console.warn(
-        `[CCTV] source catalog ${mergedSources.length} exceeds cap ${maxCount}; keeping the first ${maxCount} (raise CCTV_MAX_SOURCES or lower a per-pack cap to change which).`,
+        `[CCTV] source catalog exceeds cap ${maxCount}; shared round-robin across packs (${detail}). Raise CCTV_MAX_SOURCES or lower a per-pack cap to change the mix.`,
       );
     }
-    const capped =
-      mergedSources.length > maxCount
-        ? mergedSources.slice(0, maxCount)
-        : mergedSources;
     if (capped.length > 0 || _cctvSourceCache.length === 0) {
       _cctvSourceCache = capped;
     } else {

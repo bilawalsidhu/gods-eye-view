@@ -71,6 +71,7 @@
   "src/data/firmsCsv.test.mjs",
   "src/tooling/environmentProviders.test.mjs",
   "server/providers/cctv.js",
+  "server/providers/cctv/cap.js",
   "server/providers/cctv/catalog.js",
   "server/providers/cctv/constants.js",
   "server/providers/cctv/media.js",
@@ -455,5 +456,6 @@
   "src/layers/cctv/ground.js",
   "src/layers/cctv/health.js",
   "src/data/cctv.js",
+  "src/data/cctvCatalogCap.test.mjs",
   "src/layers/cctv/source.test.mjs"
 ]

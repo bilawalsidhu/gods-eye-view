@@ -21,7 +21,7 @@ CCTV_CALTRANS_DISTRICTS="${CCTV_CALTRANS_DISTRICTS-4,7,11,3}"
 CCTV_CALTRANS_MAX_SOURCES="${CCTV_CALTRANS_MAX_SOURCES:-300}"
 CCTV_TFL_ENABLED="${CCTV_TFL_ENABLED:-1}"
 CCTV_TFL_MAX_SOURCES="${CCTV_TFL_MAX_SOURCES:-250}"
-CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-900}"
+CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-3000}"
 
 # Capture which provider credentials genuinely came from the parent shell
 # before this launcher resolves dotenv and Keychain fallbacks. Only names are
