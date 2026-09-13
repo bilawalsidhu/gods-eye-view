@@ -713,15 +713,28 @@ function parseStationInformation(payload) {
   const stationMap = new Map();
 
   for (const raw of stations) {
-    // Accept both GBFS 2.x (station_id) and alternate (id) field names
+    // Accept both GBFS (station_id) and alternate (id) field names
     const stationId = String(raw?.station_id ?? raw?.id ?? '').trim();
     const lat = Number(raw?.lat ?? raw?.latitude);
     const lon = Number(raw?.lon ?? raw?.longitude);
     if (!stationId || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
 
+    let name;
+    if (payload?.version >= 3) {
+      const handleLocalizedString = (array, locale) => {
+        return array.find(localizedString => 
+          localizedString.language.toLowerCase() === "en") || array[0];
+      };
+      name = String(
+        handleLocalizedString(raw?.name).text || 
+        handleLocalizedString(raw?.short_name).text || '').trim();
+    } else {
+      name = String(raw?.name || raw?.short_name || '').trim();
+    }
+
     stationMap.set(stationId, {
       stationId,
-      name: String(raw?.name || raw?.short_name || '').trim(),
+      name,
       lat,
       lon,
       capacity: toNonNegativeInteger(raw?.capacity),
