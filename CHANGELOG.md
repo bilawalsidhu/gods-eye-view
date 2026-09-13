@@ -13,6 +13,9 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Separate aircraft/vessel transport and normalization from layer rendering, preserving observation timestamps, altitude datums and optional history.
+- Retain absent aircraft during partially admitted snapshots and bound source error messages.
+
 - Drive share updates, Location feedback and Scene controls through immutable state snapshots and disposable subscriptions.
 - Keep stale lookup/load completions from publishing accepted results and retain shot rows during playback progress updates.
 - Export the existing Scene director with explicit playback and editing outcomes.

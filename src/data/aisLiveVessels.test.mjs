@@ -1641,3 +1641,28 @@ test('a vessel analyst record carries the MMSI the tracker keys on', () => {
   assert.equal(nameless.id, '366999124');
   assert.equal(nameless.mmsi, '366999124');
 });
+
+test('vessel selection passes the opaque source reference to optional history', async () => {
+  const { createAisStreamSource } = await import('../sources/live/standalone.js');
+  _setVesselStateForTest({ enabled: false });
+  const requests = [];
+  aisLiveVesselsLayer.setSource({
+    label: 'Test vessel source',
+    getSnapshot: async () => ({ records: [] }),
+    getTrack: async (reference, options) => { requests.push({ reference, options }); return { records: [] }; },
+  });
+  const harness = installWireHarness(undefined, { selectedRecord: null, trailMmsi: null });
+  try {
+    harness.record.reference = 'opaque:test-reference';
+    assert.equal(aisLiveVesselsLayer.selectById(harness.record.mmsi), true);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].reference, 'opaque:test-reference');
+    assert.ok(requests[0].options.signal instanceof AbortSignal);
+    assert.equal(aisLiveVesselsLayer.source, 'Test vessel source');
+  } finally {
+    harness.cleanup();
+    _setVesselStateForTest({ enabled: false });
+    aisLiveVesselsLayer.setSource(createAisStreamSource());
+  }
+});

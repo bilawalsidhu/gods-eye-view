@@ -1,3 +1,4 @@
+import { createOpenSkySource } from '../sources/live/standalone.js';
 /**
  * @module flights
  * @description Real-time flight tracking layer powered by the OpenSky Network API
@@ -94,6 +95,8 @@ import {
 } from './contextStore.js';
 import { CONTACT_MATCH_TIER, contactMatchWins, rankContactMatch } from './contactMatch.js';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
+
+let _source = createOpenSkySource();
 
 const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 
@@ -269,11 +272,6 @@ const _scratchModelBS = new Cesium.BoundingSphere(new Cesium.Cartesian3(), 1.0);
 /** Last limb taper per billboard, retained across class/ground/cockpit repaints. */
 const _billboardLimbScale = new WeakMap();
 
-/** @constant {string} API_URL - Vite proxy endpoint for OpenSky /states/all */
-const API_URL = '/api/opensky';
-const SOURCE_STALE_MS = 120_000;
-/** @constant {number} BACKOFF_INTERVAL - Cooldown (ms) after 429 / auth errors */
-const BACKOFF_INTERVAL = 45000; // 45s on rate limit
 /** @constant {number} ERROR_BACKOFF_INTERVAL - Cooldown (ms) after transient errors */
 const ERROR_BACKOFF_INTERVAL = 20000; // transient error retry
 /** @constant {number} POSITION_HISTORY_LIMIT - Max position samples kept per aircraft for dead reckoning */
@@ -322,17 +320,12 @@ let _lastSource = 'OpenSky Network';
 /** @type {string} Completeness boundary for the latest successful snapshot. */
 let _lastCoverage = 'worldwide upstream snapshot';
 
-function _flightApiUrl(viewer) {
+function _flightQuery(viewer) {
   const cartographic = viewer?.camera?.positionCartographic;
-  if (!cartographic) return API_URL;
-  const latitude = Cesium.Math.toDegrees(cartographic.latitude);
-  const longitude = Cesium.Math.toDegrees(cartographic.longitude);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return API_URL;
-  const params = new URLSearchParams({
-    lat: latitude.toFixed(4),
-    lon: longitude.toFixed(4),
-  });
-  return `${API_URL}?${params}`;
+  return cartographic ? {
+    latitude: Cesium.Math.toDegrees(cartographic.latitude),
+    longitude: Cesium.Math.toDegrees(cartographic.longitude),
+  } : {};
 }
 
 // ---------------------------------------------------------------------------
@@ -348,7 +341,7 @@ let _lastTrackingRefreshOutcome = {
   epoch: 0,
   status: 'unavailable',
   ids: new Set(),
-  source: 'OpenSky Network',
+  source: _lastSource,
   coverage: null,
 };
 /** @type {Cesium.Entity|null} Entity used for camera tracking */
@@ -420,7 +413,7 @@ function _contextSubjectMetadata(icao24) {
     id: icao24,
     layerId: 'flights',
     layerName: 'Live Flights',
-    source: 'OpenSky Network',
+    source: _lastSource,
     label: _contactLabel(icao24, _flightData.get(icao24)),
     latitude: described.latitude,
     longitude: described.longitude,
@@ -785,10 +778,10 @@ let _enrichDripTimer = null;
 const _enrichQueue = [];
 const _enrichSeen = new Set();
 
-function _enqueueEnrich(key, url, onData, priority = false) {
+function _enqueueEnrich(key, query, onData, priority = false) {
   if (_enrichSeen.has(key)) return;
   _enrichSeen.add(key);
-  const job = { url, onData };
+  const job = { query, onData };
   // Priority (tracked / model-eligible) goes to the FRONT so a deep ambient
   // backlog can never delay the plane the user just clicked or zoomed into.
   if (priority) _enrichQueue.unshift(job); else _enrichQueue.push(job);
@@ -810,8 +803,7 @@ function _drainEnrich() {
     _enrichLastDispatchMs = Date.now();
     const job = _enrichQueue.shift();
     _enrichActive += 1;
-    fetch(job.url)
-      .then((r) => (r.ok ? r.json() : null))
+    Promise.resolve(_source.getEnrichment?.(job.query))
       .then((data) => { if (data && data.found) job.onData(data); })
       .catch(() => { /* enrichment never surfaces errors */ })
       .finally(() => { _enrichActive -= 1; _drainEnrich(); });
@@ -820,7 +812,7 @@ function _drainEnrich() {
 
 function _requestTypeEnrichment(icao24, priority = false) {
   if (!/^[0-9a-f]{6}$/i.test(icao24)) return;
-  _enqueueEnrich(`t:${icao24}`, `/api/adsbdb/type/${icao24.toLowerCase()}`, (data) => {
+  _enqueueEnrich(`t:${icao24}`, { kind: 'type', id: icao24.toLowerCase() }, (data) => {
     const meta = _flightData.get(icao24);
     if (!meta) return; // evicted while the lookup was in flight
     meta.typeCode = data.typeCode || meta.typeCode;
@@ -844,7 +836,7 @@ function _requestTypeEnrichment(icao24, priority = false) {
 function _requestRouteEnrichment(icao24) {
   const cs = String(_flightData.get(icao24)?.callsign || '').trim().toUpperCase();
   if (!/^[A-Z]{3}\d/.test(cs)) return; // airline-style callsigns only (LLL + digit); GA tails won't resolve
-  _enqueueEnrich(`r:${cs}`, `/api/adsbdb/route/${encodeURIComponent(cs)}`, (data) => {
+  _enqueueEnrich(`r:${cs}`, { kind: 'route', id: cs }, (data) => {
     const meta = _flightData.get(icao24);
     if (!meta) return;
     meta.airline = data.airline || meta.airline;
@@ -1006,15 +998,6 @@ let _drReconcileValid = false;
 let _drReconcileIcao = null;
 
 /**
- * Normalize a value to a trimmed lowercase string.
- * @param {*} value - Any value (typically a header string or null).
- * @returns {string} Lowercase trimmed string, or '' if falsy.
- */
-function _toLowerText(value) {
-  return String(value || '').trim().toLowerCase();
-}
-
-/**
  * Normalize a value to a trimmed string. A whitespace-only field ("   ") is
  * truthy, so every label chain must trim FIRST and then fall through.
  * @param {*} value - Any value (typically a metadata string or null).
@@ -1042,45 +1025,6 @@ function _toCleanText(value) {
  */
 function _contactLabel(icao24, info) {
   return _toCleanText(info?.callsign) || _toCleanText(info?.registration) || icao24;
-}
-
-/**
- * Map OpenSky proxy response headers into a human-readable auth error string.
- * The Vite proxy forwards `x-opensky-auth-mode-used` and `x-opensky-auth-reason`
- * headers so the client can display a meaningful diagnostic.
- * @param {object} params
- * @param {string} params.detail  - Error body text from the proxy, if any.
- * @param {string} params.authMode - Normalized auth mode header value.
- * @param {string} params.authReason - Normalized auth reason header value.
- * @returns {string} Concise error description for UI display.
- */
-function _deriveOpenSkyAuthError({ detail, authMode, authReason }) {
-  const reason = _toLowerText(authReason);
-  const mode = _toLowerText(authMode);
-
-  if (reason === 'oauth_invalid_or_missing') {
-    return 'OpenSky OAuth client missing/invalid';
-  }
-  if (reason === 'oauth_invalid_credentials') {
-    return 'OpenSky OAuth rejected credentials';
-  }
-  if (reason === 'basic_invalid_credentials') {
-    return 'OpenSky username/password rejected';
-  }
-  if (reason === 'missing_basic_creds' || reason === 'missing_oauth_and_basic_creds') {
-    return 'OpenSky auth missing';
-  }
-  if (reason === 'auth_required') {
-    return 'OpenSky auth required';
-  }
-  if (reason.startsWith('oauth_') || reason.startsWith('basic_')) {
-    return 'OpenSky auth invalid';
-  }
-  if (reason === 'forced_anonymous' || mode === 'anon') {
-    return 'OpenSky auth required';
-  }
-  if (detail) return detail;
-  return 'OpenSky auth failed';
 }
 
 /**
@@ -3041,12 +2985,8 @@ function _startTrail(icao24) {
 async function _backfillTrail(icao24, token, oldestFixEpochSec) {
   let path = null;
   try {
-    const response = await fetch('/api/opensky-track?icao24=' + encodeURIComponent(icao24), {
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!response.ok) return;
-    const data = await response.json();
-    path = Array.isArray(data?.path) ? data.path : null;
+    const track = await _source.getTrack?.(_flightData.get(icao24)?.sourceReference ?? icao24, { signal: AbortSignal.timeout(8000) });
+    path = track?.records ?? null;
   } catch {
     return; // silent fallback to the accumulated trail
   }
@@ -3061,8 +3001,8 @@ async function _backfillTrail(icao24, token, oldestFixEpochSec) {
   await ensureGeoidReady();
   const parsed = [];
   for (const waypoint of path) {
-    if (!Array.isArray(waypoint)) continue;
-    const [time, lat, lon, baroAlt] = waypoint;
+    const { observedAtMs, latitude: lat, longitude: lon, baroAltitudeM: baroAlt } = waypoint;
+    const time = observedAtMs / 1000;
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
     if (!Number.isFinite(time) || time >= oldestFixEpochSec) continue;
     parsed.push({ lat, lon, baroAlt });
@@ -3213,12 +3153,6 @@ function _normalizeTrackedIcao(candidate) {
   return normalized || null;
 }
 
-function _isUsableOpenSkyState(state) {
-  if (!Array.isArray(state) || typeof state[0] !== 'string' || !_normalizeTrackedIcao(state[0])) {
-    return false;
-  }
-  return Number.isFinite(state[5]) && Number.isFinite(state[6]);
-}
 
 /**
  * Whether the Military layer suppresses this civil duplicate right now.
@@ -3882,12 +3816,21 @@ const flightsLayer = {
   id: 'flights',
   name: 'Live Flights',
   icon: '✈️',
-  source: 'OpenSky Network',
+  source: _lastSource,
   // Browser-harness seam: isolates synthetic display-floor scenarios without
   // changing any production lifecycle or cache policy.
   _clearDisplayFloorStateForTest,
   /** @type {number} Polling interval (ms) between update() calls */
   updateInterval: 30000,
+
+  /** Configure the source before initialization; an active layer keeps its owner. */
+  setSource(source) {
+    if (_viewer) throw new Error('Configure the source before layer initialization');
+    if (typeof source?.getSnapshot !== 'function') throw new TypeError('A snapshot source is required');
+    _source = source;
+    _lastSource = source.label || _lastSource;
+    this.source = _lastSource;
+  },
 
   /**
    * Initialize the flights layer.
@@ -3928,7 +3871,7 @@ const flightsLayer = {
     _retryAt = 0;
     _lastError = null;
     _lastStatus = null;
-    _lastSource = 'OpenSky Network';
+    _lastSource = _source.label || 'OpenSky Network';
     _lastCoverage = 'worldwide upstream snapshot';
     _trackedIcao = null;
     _resetTrackedSelectionState();
@@ -4076,90 +4019,22 @@ const flightsLayer = {
       : resourceController.signal;
     try {
       updateSignal.throwIfAborted();
-      const response = await fetch(_flightApiUrl(viewer || _viewer), { signal: updateSignal });
-      _lastStatus = response.status;
-      const responseSource = response.headers.get('x-flight-source');
-      const responseCoverage = response.headers.get('x-flight-coverage');
-      const authMode = _toLowerText(
-        response.headers.get('x-opensky-auth-mode-used') || response.headers.get('x-opensky-auth')
-      );
-      const authReason = _toLowerText(response.headers.get('x-opensky-auth-reason'));
-
-      if (response.status === 429) {
-        console.warn('[Data:Flights] Rate limited, backing off to 30s');
-        _backoff = true;
-        _retryAt = nowMs + BACKOFF_INTERVAL;
-        _lastError = authMode && authMode !== 'anon'
-          ? 'OpenSky rate limited'
-          : 'OpenSky rate limited (anonymous)';
-        return;
-      }
-
-      if (response.status === 401 || response.status === 403) {
-        console.warn(`[Data:Flights] OpenSky unavailable (${response.status}), backing off`);
-        _backoff = true;
-        _retryAt = nowMs + BACKOFF_INTERVAL;
-        let detail = '';
-        try {
-          const body = await response.json();
-          updateSignal.throwIfAborted();
-          detail = typeof body?.error === 'string' ? body.error.trim() : '';
-        } catch {
-          detail = '';
-        }
-        _lastError = _deriveOpenSkyAuthError({
-          detail,
-          authMode,
-          authReason,
-        });
-        return;
-      }
-
-      if (!response.ok) {
-        console.warn(`[Data:Flights] API returned ${response.status}`);
-        _backoff = true;
-        _retryAt = nowMs + ERROR_BACKOFF_INTERVAL;
-        let detail = '';
-        try {
-          const body = await response.json();
-          updateSignal.throwIfAborted();
-          detail = typeof body?.error === 'string' ? body.error.trim() : '';
-        } catch {
-          detail = '';
-        }
-        _lastError = detail || `OpenSky HTTP ${response.status}`;
-        return;
-      }
-
-      const data = await response.json();
+      const snapshot = await _source.getSnapshot(_flightQuery(viewer || _viewer), { signal: updateSignal });
       updateSignal.throwIfAborted();
-      if (!data || !Array.isArray(data.states)) {
-        _backoff = true;
-        _retryAt = nowMs + ERROR_BACKOFF_INTERVAL;
-        _lastError = 'Malformed OpenSky response';
-        return;
-      }
-
-      const usableStates = data.states.filter(_isUsableOpenSkyState);
-      if (data.states.length > 0 && usableStates.length === 0) {
-        _backoff = true;
-        _retryAt = nowMs + ERROR_BACKOFF_INTERVAL;
-        _lastError = 'Malformed OpenSky aircraft rows';
-        return;
-      }
-
-      const sourceEpochMs = Number.isFinite(Number(data.time)) && Number(data.time) > 0
-        ? Number(data.time) * 1000
-        : null;
-      const sourceAgeMs = sourceEpochMs == null ? 0 : Math.max(0, Date.now() - sourceEpochMs);
-      const sourceStale = sourceAgeMs > SOURCE_STALE_MS;
+      _lastStatus = snapshot.status ?? 200;
+      const usableStates = snapshot.records;
+      const sourceEpochMs = snapshot.observedAtMs;
+      const sourceAgeMs = snapshot.ageMs;
+      const sourceStale = snapshot.stale || snapshot.freshness === 'unknown';
       _backoff = sourceStale;
       _retryAt = 0;
       _lastError = sourceStale
-        ? `Source snapshot ${Math.max(2, Math.round(sourceAgeMs / 60_000))} min old`
+        ? sourceAgeMs == null ? 'Source snapshot time unavailable'
+          : `Source snapshot ${Math.max(2, Math.round(sourceAgeMs / 60_000))} min old`
         : null;
-      _lastSource = responseSource || 'OpenSky Network';
-      _lastCoverage = responseCoverage || 'worldwide upstream snapshot';
+      _lastSource = snapshot.source;
+      _lastCoverage = snapshot.coverage;
+      flightsLayer.source = _lastSource;
       const currentIcaos = new Set();
       const acceptedSnapshotIcaos = new Set();
       const now = Cesium.JulianDate.now();
@@ -4171,20 +4046,13 @@ const flightsLayer = {
       const viewerLonDeg = viewerCarto ? Cesium.Math.toDegrees(viewerCarto.longitude) : null;
       const floorWarmPoints = [];
 
-      // Destructure OpenSky state vector array (indices per API spec):
-      // [0] icao24, [1] callsign, [2] origin_country, [3] time_position,
-      // [4] last_contact, [5] longitude, [6] latitude, [7] baro_altitude,
-      // [8] on_ground, [9] velocity, [10] true_track, [11] vertical_rate,
-      // [12] sensors, [13] geo_altitude (WGS84 ellipsoidal — the CORRECT
-      // globe-render height when present; height-datum fix Task 6).
-      // Keep military classification fresh while the military layer is off
+      // Classification and display policy consume source-independent observations.
       refreshMilitaryRegistryIfStale();
-
-      for (const state of usableStates) {
-        const [rawIcao24, callsign, origin_country, time_position, last_contact, lon, lat, baro_alt, on_ground, velocity, true_track, , , geo_alt] = state;
-        const icao24 = _normalizeTrackedIcao(rawIcao24);
-        const category = Number.isFinite(state[17]) ? state[17] : null; // extended=1 emitter category
-        const vertical_rate = Number.isFinite(state[11]) ? state[11] : null; // m/s, + = climbing
+      for (const observation of usableStates) {
+        const { id: icao24, callsign, originCountry: origin_country,
+          longitude: lon, latitude: lat, baroAltitudeM: baro_alt, onGround: on_ground,
+          speedMps: velocity, courseDeg: true_track, ellipsoidAltitudeM: geo_alt,
+          category, verticalRateMps: vertical_rate } = observation;
         acceptedSnapshotIcaos.add(icao24);
         const onGround = on_ground === true;
 
@@ -4347,6 +4215,8 @@ const flightsLayer = {
         // Store flight metadata for click-to-track labels
         const cat = stickyNumber(category, prevMeta?.category, null);
         const meta = {
+          sourceReference: observation.reference,
+          observedReceiptMs: Date.now(),
           callsign: stickyText(callsign, prevMeta?.callsign),
           altitude: alt,
           // geoAltitudeM/renderAltitudeM are ADDITIVE fields alongside the
@@ -4378,7 +4248,7 @@ const flightsLayer = {
           // contact time so a temporarily old position does not hard-freeze
           // while fresh velocity/track messages are still arriving.
           lastContactEpochMs: stickyNumber(
-            Number.isFinite(last_contact) ? last_contact * 1000 : null,
+            observation.contactTimeMs,
             prevMeta?.lastContactEpochMs,
             null,
           ),
@@ -4404,8 +4274,8 @@ const flightsLayer = {
         // 5-15s stale and receipt-time stamping is what caused the
         // back/forward oscillation. Only append when the fix actually
         // advances, so stale repeats don't create zero-dt segments.
-        const fixEpochMs = Number.isFinite(time_position) && time_position > 0
-          ? time_position * 1000
+        const fixEpochMs = Number.isFinite(observation.positionTimeMs) && observation.positionTimeMs > 0
+          ? observation.positionTimeMs
           : Date.now();
         const fixTime = Cesium.JulianDate.fromDate(new Date(fixEpochMs));
         if (!_positionHistory.has(icao24)) {
@@ -4527,6 +4397,8 @@ const flightsLayer = {
       // feed gap, and the full grace left phantom planes parked at airports.
       for (const [icao24, bb] of _billboards) {
         if (currentIcaos.has(icao24)) continue;
+        // Partial admissions do not prove absence, but stale retention is bounded.
+        if (!snapshot.complete && Date.now() - (_flightData.get(icao24)?.observedReceiptMs ?? 0) < 300000) continue;
         const misses = (_missingPolls.get(icao24) || 0) + 1;
         const limit = _likelyLanded(icao24) ? LANDED_MISSING_POLL_LIMIT : MISSING_POLL_LIMIT;
         if (misses < limit) {
@@ -4605,7 +4477,7 @@ const flightsLayer = {
       _count = _billboards.size;
       // Freshness belongs to the source snapshot, not the moment this browser
       // received a cached 200 response.
-      _lastUpdate = sourceEpochMs ?? Date.now();
+      _lastUpdate = sourceEpochMs;
       _lastTrackingRefreshOutcome = {
         epoch: trackingRefreshEpoch,
         status: 'accepted',
@@ -4622,8 +4494,10 @@ const flightsLayer = {
       }
       console.warn('[Data:Flights] Fetch error:', e);
       _backoff = true;
-      _retryAt = Date.now() + ERROR_BACKOFF_INTERVAL;
-      _lastError = 'OpenSky network error';
+      _retryAt = Date.now() + (e?.retryAfterMs ?? ERROR_BACKOFF_INTERVAL);
+      _lastStatus = e?.status ?? null;
+      if (e?.source) { _lastSource = e.source; this.source = _lastSource; }
+      _lastError = e?.name === 'LiveSourceError' ? e.message : 'Live data unavailable';
     } finally {
       _activeUpdateControllers.delete(resourceController);
     }

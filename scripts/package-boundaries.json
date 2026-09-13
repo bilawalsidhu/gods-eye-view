@@ -565,5 +565,16 @@
       "src/contextModePolicy.js"
     ],
     "external": ["cesium"]
+  },
+  "live-observations": {
+    "exports": ["./sources/live"],
+    "modules": [
+      "src/sources/live/aircraft.js",
+      "src/sources/live/contract.js",
+      "src/sources/live/index.js",
+      "src/sources/live/standalone.js",
+      "src/sources/live/vessels.js"
+    ],
+    "external": []
   }
 }
