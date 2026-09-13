@@ -94,6 +94,7 @@ export function normalizeTargetKey(target) {
 }
 
 export function createAnnotationEngine({
+  placeSearch,
   viewer,
   renderer,
   outlineRetryDelaysMs = OUTLINE_RETRY_DELAYS_MS,
@@ -393,7 +394,7 @@ export function createAnnotationEngine({
       for (const pt of points) {
         const name = pt.target ?? pt.name ?? null;
         const r = await resolveTarget({
-          viewer,
+          placeSearch,          viewer,
           target: name,
           latitude: pt.latitude,
           longitude: pt.longitude,
@@ -436,7 +437,7 @@ export function createAnnotationEngine({
     }
     if (type === 'arrow') {
       const from = await resolveTarget({
-        viewer,
+          placeSearch,        viewer,
         target: spec.target,
         latitude: spec.latitude,
         longitude: spec.longitude,
@@ -446,7 +447,7 @@ export function createAnnotationEngine({
         signal,
       });
       const to = await resolveTarget({
-        viewer,
+          placeSearch,        viewer,
         target: spec.toTarget,
         latitude: spec.toLatitude,
         longitude: spec.toLongitude,
@@ -471,7 +472,7 @@ export function createAnnotationEngine({
     }
     const wantFootprint = type === 'area' ? spec.footprint !== false : Boolean(spec.footprint);
     return resolveTarget({
-      viewer,
+          placeSearch,      viewer,
       target: spec.target,
       latitude: spec.latitude,
       longitude: spec.longitude,

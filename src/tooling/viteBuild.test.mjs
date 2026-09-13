@@ -63,10 +63,11 @@ test('root config retains existing named exports and standalone provider order',
     assert.equal(compatibility[name], value, name);
   const config = standaloneConfig({ mode: 'test' });
   assert.deepEqual(
-    config.plugins.slice(1).map((plugin) => plugin.name),
+    config.plugins.slice(1, -1).map((plugin) => plugin.name),
     providers.localProviderPlugins().map((plugin) => plugin.name),
   );
-  assert.equal(config.plugins.at(-1).name, 'gev-key-setup');
+  assert.equal(config.plugins.at(-2).name, 'gev-key-setup');
+  assert.equal(config.plugins.at(-1).name, 'api-not-found');
 });
 
 test('build export resolves in Node and has no browser fallback', async () => {

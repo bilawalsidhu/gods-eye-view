@@ -1,3 +1,5 @@
+import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
+import { createPlaceSearch } from '../search/placeSearch.js';
 // Footprint-selection contract tests — pure fixtures, no network, no browser.
 //
 // Locks the field-test-7 monument fix (docs/field-test-rootcause-2026-06-30.md §1):
@@ -12,7 +14,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  resolveAnnotationTarget,
+  resolveAnnotationTarget as resolveTarget,
   selectFootprint,
   refineScope,
   isGroundsLikeAsk,
@@ -431,3 +433,192 @@ test('a genuine geocoded feature name still canonicalizes an alternate user name
   const result = await resolveAnnotationTarget({ viewer: capitolViewer(), target: 'Congress meeting building', footprint: true });
   assert.deepEqual(result.ring, capitol.geometry.map(p => [p.lon, p.lat]));
 });
+
+// ── Keyless geocoding ────────────────────────────────────────────────────────
+//
+// `geocodePlace` was Google-only: no key returned null, and so did a key whose
+// Geocoding API is not enabled (Google answers HTTP 200 with REQUEST_DENIED).
+// Either way the annotation silently failed to place. Both now fall through to
+// Photon. These drive the second case, because it reaches the SAME fallback
+// through a running Google branch — the no-key branch cannot be driven from
+// `node --test`, since the key expression reads `import.meta.env`, which only
+// Vite defines.
+
+/** Photon's GeoJSON shape, trimmed to the properties the adapter consumes. */
+function photonFeature({ name, lat, lon, tags = {}, extent = null, ...rest }) {
+  return {
+    geometry: { type: 'Point', coordinates: [lon, lat] },
+    properties: { name, ...tags, ...rest, ...(extent ? { extent } : {}) },
+  };
+}
+
+const GOOGLE_FOUND_NOTHING = { ok: true, json: async () => ({ status: 'ZERO_RESULTS', results: [] }) };
+
+test('keyless: a key that geocodes to nothing still anchors the annotation', async (t) => {
+  const requests = [];
+  installGoogleMocks(t, async (url) => {
+    requests.push(String(url));
+    if (String(url).startsWith('https://maps.googleapis.com/')) return GOOGLE_FOUND_NOTHING;
+    return {
+      ok: true,
+      json: async () => ({
+        features: [photonFeature({
+          name: 'Lady Bird Lake',
+          lat: 30.25,
+          lon: -97.73,
+          city: 'Austin',
+          state: 'Texas',
+          country: 'United States',
+          tags: { osm_key: 'natural', osm_value: 'water' },
+          // Photon orders extent [west, north, east, south] — a naive [w,s,e,n]
+          // read would invert the box and still look like a valid viewport.
+          extent: [-97.8, 30.28, -97.68, 30.24],
+        })],
+      }),
+    };
+  });
+
+  const resolved = await resolveAnnotationTarget({
+    viewer: closeViewportViewer(),
+    target: 'Lady Bird Lake',
+  });
+
+  assert.ok(resolved, 'a Google miss must not leave the annotation unplaced');
+  assert.equal(resolved.source, 'geocode');
+  assert.deepEqual([resolved.lat, resolved.lon], [30.25, -97.73]);
+  // The label is shortened the same way a Google `formatted_address` is.
+  assert.equal(resolved.label, 'Lady Bird Lake');
+  // Photon's extent reaches the framing code in the Places `{low,high}` shape,
+  // right way up — this is what sizes a grounds disc and the flyTo box.
+  assert.deepEqual(resolved.viewport, {
+    low: { latitude: 30.24, longitude: -97.8 },
+    high: { latitude: 30.28, longitude: -97.68 },
+  });
+  // Google is asked first and exactly once; one Photon call answers it.
+  assert.equal(requests.filter((url) => url.includes('maps.googleapis.com')).length, 1);
+  assert.equal(requests.filter((url) => url.includes('photon.komoot.io')).length, 1);
+});
+
+test('keyless: OSM matching uses the feature\'s canonical name, not the user\'s words', async (t) => {
+  // The reason `primaryName` is carried out of Photon at all. The ask names a
+  // landmark AND its surroundings; the geocoded feature is called just "Tejano
+  // Monument". Score the OSM candidates on the raw utterance and the locality
+  // tokens win — this is the Thompson-Austin bug (field test 7) reached through
+  // the keyless path. Score them on the canonical name and the monument wins.
+  const decoy = squareWay(ANCHOR, -250, -250, 3000, {
+    building: 'yes', tourism: 'hotel', name: 'Texas Capitol Austin Visitor Center',
+  });
+  const monument = squareWay(ANCHOR, 5, 5, 300, { tourism: 'artwork', name: 'Tejano Monument' });
+
+  installGoogleMocks(t, async (url, init) => {
+    const href = String(url);
+    if (href.startsWith('https://maps.googleapis.com/')) return GOOGLE_FOUND_NOTHING;
+    if (href.startsWith('/api/google/text-search')) return { ok: true, json: async () => ({ places: [] }) };
+    if (href.startsWith('https://photon.komoot.io/')) {
+      return {
+        ok: true,
+        json: async () => ({
+          features: [photonFeature({
+            name: 'Tejano Monument',
+            lat: ANCHOR.lat,
+            lon: ANCHOR.lon,
+            city: 'Austin',
+            tags: { osm_key: 'historic', osm_value: 'memorial' },
+          })],
+        }),
+      };
+    }
+    assert.equal(href, '/api/overpass');
+    assert.equal(init?.method, 'POST');
+    return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ elements: [decoy, monument] }) };
+  });
+
+  const resolved = await resolveAnnotationTarget({
+    viewer: closeViewportViewer(),
+    target: 'the monument near the Texas Capitol, Austin',
+    footprint: true,
+  });
+
+  assert.ok(resolved.ring, 'the monument polygon is monument-scale and exactly named — it must outline');
+  // The anchor re-centres on the chosen polygon, so its position IS the verdict:
+  // the monument sits on the anchor, the decoy 354 m south-west of it.
+  assert.ok(
+    approximateMetres(resolved.lat, resolved.lon, ANCHOR.lat, ANCHOR.lon) < 50,
+    `outlined a polygon ${Math.round(approximateMetres(resolved.lat, resolved.lon, ANCHOR.lat, ANCHOR.lon))} m from the monument`,
+  );
+});
+
+/** Metres between two coordinates — enough precision for a few hundred metres. */
+function approximateMetres(lat1, lon1, lat2, lon2) {
+  const mLat = 111320;
+  const dy = (lat1 - lat2) * mLat;
+  const dx = (lon1 - lon2) * mLat * Math.cos((lat1 * Math.PI) / 180);
+  return Math.hypot(dx, dy);
+}
+
+test('keyless: a Photon outage is not remembered as "no such place"', async (t) => {
+  // Google answering ZERO_RESULTS is a verdict about GOOGLE. Photon holds
+  // plenty of places Google does not — that asymmetry is why this fallback
+  // exists — so a Google verdict plus a Photon timeout must leave the query
+  // open. Caching it would keep an annotation unplaceable for the rest of the
+  // session, on a network that has since recovered.
+  const photonUp = {
+    ok: true,
+    json: async () => ({
+      features: [photonFeature({
+        name: 'Waller Creek', lat: 30.2665, lon: -97.7385, city: 'Austin',
+        tags: { osm_key: 'waterway', osm_value: 'stream' },
+      })],
+    }),
+  };
+  let photonReachable = false;
+  const requests = [];
+  installGoogleMocks(t, async (url) => {
+    requests.push(String(url));
+    if (String(url).startsWith('https://maps.googleapis.com/')) return GOOGLE_FOUND_NOTHING;
+    if (!photonReachable) throw new Error('network down');
+    return photonUp;
+  });
+
+  const target = 'Waller Creek';
+  assert.equal(await resolveAnnotationTarget({ viewer: closeViewportViewer(), target }), null);
+  const duringOutage = requests.length;
+
+  photonReachable = true;
+  const retried = await resolveAnnotationTarget({ viewer: closeViewportViewer(), target });
+
+  assert.ok(retried, 'the same target must resolve once the network is back');
+  assert.deepEqual([retried.lat, retried.lon], [30.2665, -97.7385]);
+  assert.ok(
+    requests.length > duringOutage,
+    'the retry was served from a poisoned cache instead of asking again',
+  );
+});
+
+test('a not-found is remembered only when every source consulted gave a verdict', async () => {
+  // The full truth table, because the no-key row is the one the behavioural
+  // tests above cannot reach: `import.meta.env` only exists under Vite, so
+  // `node --test` can never take the branch that skips Google entirely.
+  const cases = [
+    // no key: Photon is the only source, so Photon alone decides
+    [{ googleConsulted: false, photonAnswered: true }, true],
+    [{ googleConsulted: false, photonAnswered: false }, false],
+    // with a key: Google must have said "no such place", AND Photon must have replied
+    [{ googleConsulted: true, googleSaysNoSuchPlace: true, photonAnswered: true }, true],
+    [{ googleConsulted: true, googleSaysNoSuchPlace: true, photonAnswered: false }, false],
+    // Google declined (REQUEST_DENIED / OVER_QUERY_LIMIT) — never a verdict
+    [{ googleConsulted: true, googleSaysNoSuchPlace: false, photonAnswered: true }, false],
+    [{ googleConsulted: true, googleSaysNoSuchPlace: false, photonAnswered: false }, false],
+  ];
+  for (const [sources, expected] of cases) {
+    const providers = [sources.googleConsulted ? Boolean(sources.googleSaysNoSuchPlace) : true, sources.photonAnswered]
+      .map((answered) => ({ geocode: async () => ({ place: null, answered }) }));
+    assert.equal((await createPlaceSearch({ providers }).geocode('miss')).answered, expected, JSON.stringify(sources));
+  }
+  // An omitted Google verdict defaults to "did not say no such place".
+
+});
+
+function resolveAnnotationTarget(options) {
+  return resolveTarget({ placeSearch: createStandalonePlaceSearch({ resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ }), ...options });
+}

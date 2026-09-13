@@ -13,6 +13,70 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Separate camera-panel controls, frame loading, calibration editing and status display; cancel stale image and calibration work on camera changes or disposal.
+
+- Restore UI observer, resize-listener and CCTV subscription cleanup after Location extraction.
+
+- Extract Radio controls and tuner presentation with explicit actions and complete listener/subscription cleanup.
+
+- Extract Location controls and cancellable search presentation; preserve navigation handoff and prevent delayed POI expansion after closing the row.
+
+- Separate Layers panel presentation and clear-control bindings from layer lifecycle operations; revoke listeners and subscriptions on replacement or teardown.
+
+- Extract Map Source controls with listener cleanup and protection against obsolete selection feedback.
+
+- Separate visual effects, presets and animation from Display controls, with explicit stage ownership and teardown.
+
+- Extract Display control bindings with synchronous listener cleanup; preserve existing visual actions and native input behavior.
+
+- Extract application shortcuts and shader-parameter controls into reusable UI
+  components, preserving inputs and cleaning up listeners on rebuild/disposal.
+
+- Extract adaptive panel rail placement and measurement into reusable UI modules,
+  preserving obstacle clearance, responsive allocation, disclosure and scroll behavior.
+
+- Extract shared surface keyboard handling for the welcome launcher and Provider
+  Settings, preserving Tab/Escape behavior and releasing the listener on teardown.
+
+### Security
+
+- Validate configured Google Places coordinates and text queries before rate
+  limiting or upstream requests; preserve the keyless capability response.
+- Bound CCTV media response headers to 15 seconds and cancel error bodies.
+  Cap buffered snapshot downloads at 16 MiB while streaming.
+
+
+- Cancel the active location lookup when its controls are disposed.
+
+
+### Fixed
+
+- Extract panel disclosure and hover/focus controls into a reusable module;
+  cancel their listeners and pending work during replacement and teardown.
+
+- Reuse cached military aircraft during adsb.lol rate limits and server errors,
+  honor bounded retry delays, and preserve cached observation times and stale
+  indicators. Show installation zoom guidance without a false LOAD FAILED.
+
+- GBFS rejects upstream redirects, caps streamed responses at 5 MiB, and keeps
+  its deadline active through body reads. Rejected downloads are cancelled.
+
+
+- Split Overpass/installation search, regional briefing/weather, local voice
+  handlers and standalone key setup into focused modules. Preserve routes,
+  source behavior, tool schemas and credential restrictions.
+
+- Restore data-provider routes under local build preview and return JSON 404s
+  for unmatched API requests. Credential editing remains development-only.
+
+- Extract CCTV catalog/media and Radio Browser directory providers into focused
+  Node modules, preserving their routes and policies and isolating CCTV catalogs
+  by provider instance and application root.
+
+- Simplify POWER UP to one Google Maps entry. Keep the optional server key
+  available through environment configuration without a second setup row or
+  missing-key reminder.
+
 - Separate terrain, traffic, FIRMS and GBFS middleware into focused provider
   modules, preserving local configuration, routes and cache/error behavior.
 
@@ -47,6 +111,14 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   those exports separate from app startup and local Node services.
 
 ### Fixed
+
+- Reduce terrain-height timeouts when Re:Earth slows down. Batches are
+  sized against measured response latency on both browser and server to reduce
+  request timeouts, and a partial upstream failure now
+  keeps the heights that did resolve rather than discarding them. A position
+  the upstream answers with no height is reported as an absent reading instead
+  of a failed refresh, so the log distinguishes a slow or broken upstream from
+  one that simply has no value for a coordinate.
 
 - Separate optional Google server credentials for Places and Street View from
   the browser key, contributed by Tom-Neverwinter (#110). Provider Settings,
@@ -166,6 +238,27 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Existing cached refusals are now ignored immediately, including during
   stale-data fallback. Concurrent identical requests share the same last-good
   fallback when all mirrors refuse, without duplicating upstream requests.
+- A keyless place lookup no longer remembers a network failure as "no such
+  place". A blip while Photon was answering used to be memoized for the rest of
+  the session, so the query kept returning not-found from memory on a network
+  that had since recovered. A miss is now cached only when every source
+  consulted actually returned a verdict.
+
+### Added
+
+- Keyless place search. The LOCATION search box and the `fly_to_location` voice
+  tool now resolve place names through Photon (komoot, over OpenStreetMap) when
+  no Google Maps key is configured — previously the lookup threw. Google stays
+  the primary path and is unchanged when it answers; the fallback also covers a
+  key whose Geocoding API is not enabled, which Google reports as HTTP 200 with
+  `REQUEST_DENIED`, so an empty result is the detector rather than an error.
+- The same keyless fallback now covers the remaining two place lookups: map
+  annotations ("annotate the botanical garden") and the Radio layer's
+  "near \<place>" selection. Radio previously threw without a key, which
+  surfaced as a failed voice turn rather than as a station it could not place;
+  annotations silently failed to anchor. Annotation footprints match OSM on the
+  resolved feature's canonical name, so locality words in the request cannot
+  pull the outline onto a neighbouring building.
 
 - Refresh vulnerable transitive dependencies and update browser/image tooling
   to Puppeteer 25.10.0 and Sharp 0.35.4. Cesium remains on 1.138.0.

@@ -1,3 +1,5 @@
+export { resolveHudRailLayout } from './ui/panelRailGeometry.js';
+
 /** Normalize a heading into the [0, 360) range. */
 export function normalizeHeading(value) {
   if (!Number.isFinite(value)) return 0;
@@ -280,47 +282,5 @@ export function resolveCockpitContextReadout({ snapshot = null, info = null } = 
     // A lost contact holds its last-known values: recomputing them against a
     // frozen position would present stale geometry as a live reading.
     contactLost,
-  };
-}
-
-/**
- * Resolve a vertically centered panel slot inside a HUD rail while respecting
- * live rectangles that intersect that rail above or below the viewport center.
- */
-export function resolveHudRailLayout({
-  viewportHeight,
-  panelHeight,
-  laneLeft,
-  laneRight,
-  obstacles = [],
-  baseTop,
-  baseBottom,
-  gap = 12,
-  align = 'center',
-}) {
-  if (![viewportHeight, panelHeight, laneLeft, laneRight, baseTop, baseBottom]
-    .every(Number.isFinite) || viewportHeight <= 0 || laneRight <= laneLeft) return null;
-  const midpoint = viewportHeight * 0.5;
-  let safeTop = Math.max(0, baseTop);
-  let safeBottom = Math.min(viewportHeight, baseBottom);
-
-  for (const rect of obstacles) {
-    if (![rect?.left, rect?.right, rect?.top, rect?.bottom].every(Number.isFinite)) continue;
-    if (rect.right <= laneLeft || rect.left >= laneRight || rect.bottom <= rect.top) continue;
-    if (rect.bottom <= midpoint) safeTop = Math.max(safeTop, rect.bottom + gap);
-    else if (rect.top >= midpoint) safeBottom = Math.min(safeBottom, rect.top - gap);
-  }
-
-  safeBottom = Math.max(safeTop, safeBottom);
-  const availableHeight = Math.max(0, safeBottom - safeTop);
-  const renderedHeight = Math.min(Math.max(0, panelHeight), availableHeight);
-  return {
-    top: align === 'start'
-      ? safeTop
-      : safeTop + Math.max(0, (availableHeight - renderedHeight) * 0.5),
-    maxHeight: availableHeight,
-    safeTop,
-    safeBottom,
-    constrained: panelHeight > availableHeight,
   };
 }

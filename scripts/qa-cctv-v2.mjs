@@ -94,7 +94,9 @@ const getOpt = (name, dflt) => {
 const getFlag = (name) => argv.includes(name);
 
 const BASE_URL = process.env.QA_BASE_URL || 'http://localhost:4173';
-const APP_URL = getOpt('--url', BASE_URL);
+const CCTV_URL = new URL(getOpt('--url', BASE_URL));
+CCTV_URL.searchParams.set('welcome', '0');
+const APP_URL = CCTV_URL.href;
 const HEADFUL = getFlag('--headful');
 const SHOTS_DIR = path.join(REPO_ROOT, 'qa-shots', 'cctv-v2');
 

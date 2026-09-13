@@ -1,3 +1,4 @@
+import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 // Voice-annotation resilience contract tests — pure logic, no network, no browser.
 //
 // Locks the 2026-07-21 field-test fixes:
@@ -385,7 +386,7 @@ test('targetKey: empty / absent targets stay null (coord and pixel specs never p
   assert.equal(normalizeTargetKey(undefined), null);
 });
 
-test('outline upgrade updates the rendered element in place without remove/add', async (t) => {
+test('outline upgrade updates the rendered element in place without remove/add', { timeout: 5000 }, async (t) => {
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
   const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
   const originalWindow = globalThis.window;
@@ -466,7 +467,7 @@ test('outline upgrade updates the rendered element in place without remove/add',
     sync() {},
   };
   const viewer = {};
-  const engine = createAnnotationEngine({ viewer, renderer });
+  const engine = createAnnotationEngine({ viewer, renderer, placeSearch: createStandalonePlaceSearch({ resolveApiKey: () => 'unit-test-key' }) });
   const upgraded = new Promise((resolve) => engine.onOutlineEvent(resolve));
 
   const result = await engine.annotate([{

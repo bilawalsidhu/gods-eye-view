@@ -425,12 +425,18 @@ function scheduleLoad() {
 async function loadInstallations() {
   if (!state.enabled || !state.viewer) return;
   const box = viewportBox(state.viewer);
+  // Guidance, not a fault: the layer chose not to query because the view is
+  // unbounded (a global view, or Cockpit looking at the horizon). Keep it out
+  // of `error` — the manager derives refresh failures and the global status
+  // chip derives LOAD FAILED from that field, and a "zoom in" prompt turned
+  // every Cockpit refresh into a reported failure. The row and toast read the
+  // prompt from `statusMessage` (installationFeedback) instead.
   if (!box) {
     state.abort?.abort();
     state.abort = null;
     state.loading = false;
     clearUnavailableRetry();
-    setInstallationStatus('zoom-in', 'Zoom in to load mapped installation context');
+    setInstallationStatus('zoom-in');
     return;
   }
   state.abort?.abort();
