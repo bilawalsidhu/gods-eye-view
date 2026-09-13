@@ -1401,6 +1401,12 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   letter-spacing: 0.6px;
   padding: 2px 6px;
   outline: none;
+  color-scheme: dark;
+}
+
+.pp-select option {
+  background: #0c0c14;
+  color: var(--text-primary);
 }
 
 /* Proximity / All segmented control under the 3D toggle */
