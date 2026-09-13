@@ -12,6 +12,8 @@
  * State is persisted to localStorage and can be exported/imported as JSON.
  */
 
+import { createStateChannel } from '../app/stateChannel.js';
+import { SceneControls } from '../ui/scenes.js';
 import * as Cesium from 'cesium';
 import { SCENE_RECIPES } from './recipes.js';
 import { sceneLayerPlan, sceneRequiresContextModeExit } from './scenePolicy.js';
@@ -21,8 +23,6 @@ import {
   decodeBloomIntensity,
 } from '../bloom.js';
 
-/** @constant {string} Key code used to abort a running scene */
-const ESCAPE_KEY = 'Escape';
 /** @constant {string} localStorage key for the serialized project */
 const STORAGE_KEY = 'godsEyeView.sceneProject.v2';
 /** @constant {number} Current schema version for project migration */
@@ -31,15 +31,6 @@ const PROJECT_VERSION = 3;
 const DEFAULT_SHOT_DURATION_SEC = 4;
 /** @constant {number} Default hold/pause after a shot completes (seconds) */
 const DEFAULT_HOLD_SEC = 0.9;
-
-/**
- * Clamp a numeric value to the [0, 1] range.
- * @param {number} value
- * @returns {number}
- */
-function clamp01(value) {
-  return Math.max(0, Math.min(1, value));
-}
 
 /**
  * Generate a short random identifier with the given prefix.
@@ -298,7 +289,6 @@ export class SceneDirector {
   constructor(viewer, styleManager, dataManager) {
     this._destroyed = false;
     this._pendingWork = new Set();
-    this._uiRemovers = [];
     this.viewer = viewer;
     this.styleManager = styleManager;
     this.dataManager = dataManager;
@@ -321,39 +311,16 @@ export class SceneDirector {
     this._lastRun = null;
     /** @type {string} JSON string of _lastRun for download */
     this._lastRunJson = '';
-    this._onKeyDown = this._onKeyDown.bind(this);
 
     this._project = this._loadProject();
     this._selectedSceneId = this._project.scenes[0]?.id || null;
     this._selectedShotId = this._project.scenes[0]?.shots[0]?.id || null;
 
-    // Cache DOM element references for the scene panel UI
-    this._scenePanel = document.getElementById('scene-panel');
-    this._sceneSelect = document.getElementById('scene-select');
-    this._sceneNewBtn = document.getElementById('scene-new-btn');
-    this._sceneDeleteBtn = document.getElementById('scene-delete-btn');
-    this._sceneCaptureBtn = document.getElementById('scene-capture-btn');
-    this._sceneUpdateShotBtn = document.getElementById('scene-update-shot-btn');
-    this._sceneShotList = document.getElementById('scene-shot-list');
-    this._sceneStartBtn = document.getElementById('scene-start-btn');
-    this._sceneStopBtn = document.getElementById('scene-stop-btn');
-    this._sceneNextBtn = document.getElementById('scene-next-btn');
-    this._sceneExportBtn = document.getElementById('scene-export-btn');
-    this._sceneImportBtn = document.getElementById('scene-import-btn');
-    this._sceneImportFile = document.getElementById('scene-import-file');
-    this._sceneDownloadBtn = document.getElementById('scene-download-btn');
-    this._sceneStatus = document.getElementById('scene-status');
-    this._sceneProgressFill = document.getElementById('scene-progress-fill');
-    this._sceneRuntime = document.getElementById('scene-runtime');
-
+    this._presentation = { status: 'Ready', progress: 0, runtime: '', playbackActive: false, keyboardEnabled: false };
+    this._state = createStateChannel(() => ({ ...this.getPlaybackStatus(), ...this._presentation, hasRun: !!this._lastRunJson }));
     this._initUI();
   }
 
-  _listen(target, type, listener) {
-    if (!target) return;
-    target.addEventListener(type, listener);
-    this._uiRemovers.push(() => target.removeEventListener(type, listener));
-  }
 
   _trackWork(promise) {
     this._pendingWork ||= new Set();
@@ -367,18 +334,16 @@ export class SceneDirector {
   destroy() {
     if (this._destroyPromise) return this._destroyPromise;
     this._destroyed = true;
+    this._controls?.destroy();
+    this._state.destroy();
     this._destroyPromise = Promise.resolve().then(async () => {
       this.stopScene('Stopped');
       this._loadAbort?.abort();
       this._loadGeneration++;
       this.viewer.camera.cancelFlight();
-      for (const remove of this._uiRemovers || []) remove();
-      this._uiRemovers = [];
-      if (this._sceneShotList) this._sceneShotList.textContent = '';
       clearTimeout(this._storageToastTimer);
       await Promise.allSettled(this._pendingWork || []);
       clearInterval(this._progressTimer);
-      document.removeEventListener('keydown', this._onKeyDown);
     });
     return this._destroyPromise;
   }
@@ -429,84 +394,66 @@ export class SceneDirector {
     } catch { /* toast is best-effort */ }
   }
 
+  /** Immutable playback snapshots and completed editing actions. */
+  subscribe(listener, options) { return this._state.subscribe(listener, options); }
+
+  _publish(change) { this._state?.publish(change); }
+
+  _shotOutcome(type, scene, shot, index = scene.shots.indexOf(shot)) {
+    if (type === 'shot-loaded') this._presentation.status = `Loaded: ${scene.title} / ${shot.title}`;
+    this._publish({ type, sceneId: scene.id, sceneTitle: scene.title, shot, index });
+  }
+
   /**
    * Wire up all scene-panel DOM event listeners and render the initial UI state.
    * Exits silently if the scene-select element is missing (headless/test mode).
    */
   _initUI() {
-    if (!this._sceneSelect) return;
-
-    this._renderSceneSelect();
-    this._renderShotList();
-
-    this._listen(this._sceneSelect, 'change', () => {
-      this._selectedSceneId = this._sceneSelect.value;
-      const scene = this._getSelectedScene();
-      this._selectedShotId = scene?.shots[0]?.id || null;
-      this._renderShotList();
+    this._controls = new SceneControls({
+      subscribe: (listener) => this.subscribe(listener),
+      read: () => ({
+        scenes: this._project.scenes,
+        selectedSceneId: this._selectedSceneId,
+        selectedShotId: this._selectedShotId,
+        running: this._running,
+        hasRun: !!this._lastRunJson,
+      }),
+      actions: {
+        selectScene: (id) => {
+          this._selectedSceneId = id;
+          this._selectedShotId = this._getSelectedScene()?.shots[0]?.id || null;
+          this._renderShotList();
+        },
+        selectShot: (id) => { this._selectedShotId = id; this._publish({ type: 'selection-changed' }); },
+        renameShot: (sceneId, shotId, title) => {
+          const { scene, shot } = this._getShot(sceneId, shotId);
+          if (!shot) return;
+          shot.title = title.trim() || shot.title;
+          this._saveProject();
+          this._shotOutcome('shot-renamed', scene, shot);
+        },
+        create: (name) => this._createScene(name),
+        deleteScene: () => this._deleteSelectedScene(),
+        capture: () => this.captureShot(),
+        update: () => this.updateSelectedShot(),
+        start: (id) => this.startScene(id),
+        stop: (reason) => this.stopScene(reason),
+        next: () => this.runNextScene(),
+        export: () => this.exportProject(),
+        import: (file) => this.importProjectFile(file),
+        download: () => this.downloadLastRunMetadata(),
+        load: (sceneId, shotId) => this.loadShot(sceneId, shotId),
+        deleteShot: (sceneId, shotId) => this.deleteShot(sceneId, shotId),
+      },
     });
-
-    this._listen(this._sceneNewBtn, 'click', () => this._createScene());
-    this._listen(this._sceneDeleteBtn, 'click', () => this._deleteSelectedScene());
-    this._listen(this._sceneCaptureBtn, 'click', () => this.captureShot());
-    this._listen(this._sceneUpdateShotBtn, 'click', () => this.updateSelectedShot());
-
-    this._listen(this._sceneStartBtn, 'click', () => {
-      this.startScene(this._selectedSceneId);
-    });
-
-    this._listen(this._sceneStopBtn, 'click', () => {
-      this.stopScene('Stopped');
-    });
-
-    this._listen(this._sceneNextBtn, 'click', () => {
-      this.runNextScene();
-    });
-
-    this._listen(this._sceneExportBtn, 'click', () => {
-      this.exportProject();
-    });
-
-    this._listen(this._sceneImportBtn, 'click', () => {
-      this._sceneImportFile?.click();
-    });
-
-    this._listen(this._sceneImportFile, 'change', async () => {
-      const file = this._sceneImportFile?.files?.[0];
-      if (!file) return;
-      await this.importProjectFile(file);
-      this._sceneImportFile.value = '';
-    });
-
-    this._listen(this._sceneDownloadBtn, 'click', () => {
-      this.downloadLastRunMetadata();
-    });
-
-    this._updateStatus('Ready');
-    this._setProgress(0);
-    this._setButtons(false);
   }
 
   /** Rebuild the scene dropdown options and sync the selected value. */
   _renderSceneSelect() {
-    if (!this._sceneSelect) return;
-
-    this._sceneSelect.innerHTML = '';
-    for (const scene of this._project.scenes) {
-      const option = document.createElement('option');
-      option.value = scene.id;
-      option.textContent = scene.title;
-      this._sceneSelect.appendChild(option);
-    }
-
-    // Reset selection if the previously selected scene no longer exists
     if (!this._project.scenes.some((scene) => scene.id === this._selectedSceneId)) {
       this._selectedSceneId = this._project.scenes[0]?.id || null;
     }
-
-    if (this._selectedSceneId) {
-      this._sceneSelect.value = this._selectedSceneId;
-    }
+    this._publish({ type: 'scene-options-changed' });
   }
 
   /**
@@ -515,79 +462,11 @@ export class SceneDirector {
    * LOAD/DEL action buttons. Supports click-to-select and double-click rename.
    */
   _renderShotList() {
-    if (!this._sceneShotList) return;
-
     const scene = this._getSelectedScene();
-    this._sceneShotList.innerHTML = '';
-
-    if (!scene || scene.shots.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'scene-shot-empty';
-      empty.textContent = 'No shots yet. Use CAPTURE SHOT to save current look.';
-      this._sceneShotList.appendChild(empty);
-      return;
-    }
-
-    // Auto-select first shot if current selection is stale
-    if (!scene.shots.some((shot) => shot.id === this._selectedShotId)) {
+    if (scene?.shots.length && !scene.shots.some((shot) => shot.id === this._selectedShotId)) {
       this._selectedShotId = scene.shots[0].id;
     }
-
-    for (const shot of scene.shots) {
-      const row = document.createElement('div');
-      row.className = 'scene-shot-row';
-      row.classList.toggle('active', shot.id === this._selectedShotId);
-
-      const top = document.createElement('div');
-      top.className = 'scene-shot-top';
-
-      const label = document.createElement('div');
-      label.className = 'scene-shot-label';
-      label.textContent = shot.title;
-      label.addEventListener('click', () => {
-        this._selectedShotId = shot.id;
-        this._renderShotList();
-      });
-      label.addEventListener('dblclick', () => {
-        const nextTitle = window.prompt('Shot title', shot.title);
-        if (!nextTitle) return;
-        shot.title = nextTitle.trim() || shot.title;
-        this._saveProject();
-        this._renderShotList();
-      });
-
-      const actions = document.createElement('div');
-      actions.className = 'scene-shot-actions';
-
-      const loadBtn = document.createElement('button');
-      loadBtn.className = 'scene-shot-btn';
-      loadBtn.textContent = 'LOAD';
-      loadBtn.addEventListener('click', () => {
-        this.loadShot(scene.id, shot.id);
-      });
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'scene-shot-btn scene-shot-danger';
-      deleteBtn.textContent = 'DEL';
-      deleteBtn.addEventListener('click', () => {
-        this.deleteShot(scene.id, shot.id);
-      });
-
-      actions.appendChild(loadBtn);
-      actions.appendChild(deleteBtn);
-      top.appendChild(label);
-      top.appendChild(actions);
-
-      const meta = document.createElement('div');
-      meta.className = 'scene-shot-meta';
-      const mode = shot.visual?.detection?.mode || 'OFF';
-      const style = shot.visual?.style || 'normal';
-      meta.textContent = `${style.toUpperCase()} · ${mode} · ${shot.durationSec.toFixed(1)}s + ${shot.holdSec.toFixed(1)}s`;
-
-      row.appendChild(top);
-      row.appendChild(meta);
-      this._sceneShotList.appendChild(row);
-    }
+    this._publish({ type: 'shots-changed' });
   }
 
   /**
@@ -610,9 +489,8 @@ export class SceneDirector {
     return { scene, shot };
   }
 
-  /** Prompt the user for a name and append a new empty scene to the project. */
-  _createScene() {
-    const sceneName = window.prompt('New scene name', `Scene ${this._project.scenes.length + 1}`);
+  /** Append a named empty scene after the controls accept the creation prompt. */
+  _createScene(sceneName) {
     if (!sceneName) return;
 
     const scene = {
@@ -625,17 +503,13 @@ export class SceneDirector {
     this._selectedSceneId = scene.id;
     this._selectedShotId = null;
     this._saveProject();
-    this._renderSceneSelect();
-    this._renderShotList();
+    this._publish({ type: 'scene-created', scene });
   }
 
   /** Delete the currently selected scene after user confirmation. Resets to defaults if empty. */
   _deleteSelectedScene() {
     const scene = this._getSelectedScene();
     if (!scene) return;
-
-    const ok = window.confirm(`Delete scene "${scene.title}" and all shots?`);
-    if (!ok) return;
 
     this._project.scenes = this._project.scenes.filter((item) => item.id !== scene.id);
     // Restore default recipes if the user deleted all scenes
@@ -646,8 +520,7 @@ export class SceneDirector {
     this._selectedSceneId = this._project.scenes[0]?.id || null;
     this._selectedShotId = this._project.scenes[0]?.shots[0]?.id || null;
     this._saveProject();
-    this._renderSceneSelect();
-    this._renderShotList();
+    this._publish({ type: 'scene-deleted', scene });
   }
 
   /**
@@ -693,7 +566,7 @@ export class SceneDirector {
     scene.shots.push(shot);
     this._selectedShotId = shot.id;
     this._saveProject();
-    this._renderShotList();
+    this._shotOutcome('shot-captured', scene, shot);
     this._updateStatus(`Captured: ${scene.title} / ${shot.title}`);
   }
 
@@ -719,7 +592,7 @@ export class SceneDirector {
     shot.layers = this._captureLayerStates();
 
     this._saveProject();
-    this._renderShotList();
+    this._shotOutcome('shot-updated', scene, shot);
     this._updateStatus(`Updated: ${scene.title} / ${shot.title}`);
   }
 
@@ -732,13 +605,11 @@ export class SceneDirector {
     const { scene, shot } = this._getShot(sceneId, shotId);
     if (!scene || !shot) return;
 
-    const ok = window.confirm(`Delete shot "${shot.title}"?`);
-    if (!ok) return;
-
+    const index = scene.shots.indexOf(shot);
     scene.shots = scene.shots.filter((item) => item.id !== shot.id);
     this._selectedShotId = scene.shots[0]?.id || null;
     this._saveProject();
-    this._renderShotList();
+    this._shotOutcome('shot-deleted', scene, shot, index);
   }
 
   /**
@@ -789,7 +660,7 @@ export class SceneDirector {
     if (token.cancelled) return;
 
     if (this._loadAbort === controller) this._loadAbort = null;
-    this._updateStatus(`Loaded: ${scene.title} / ${shot.title}`);
+    this._shotOutcome('shot-loaded', scene, shot);
     this._updateRuntime('');
   }
 
@@ -893,6 +764,9 @@ export class SceneDirector {
     return {
       running: this._running,
       selectedSceneId: this._selectedSceneId,
+      selectedShotId: this._selectedShotId,
+      elapsedMs: this._activeRun ? Math.max(0, Date.now() - Date.parse(this._activeRun.startedAt)) : null,
+      estimatedDurationMs: this._activeRun ? Math.round(this._activeRun.estimatedDurationSec * 1000) : null,
       sceneCount: this._project.scenes.length,
     };
   }
@@ -949,7 +823,7 @@ export class SceneDirector {
 
     // Transition to running state
     this._running = true;
-    document.body.classList.add('scene-playback-mode');
+    this._setPlaybackActive(true);
     this._setButtons(true);
     this._setProgress(0);
 
@@ -984,7 +858,7 @@ export class SceneDirector {
 
     this._startProgressTicker(estimatedDurationSec || 1);
     this._logEvent('scene_run_start', { count: queue.length });
-    document.addEventListener('keydown', this._onKeyDown);
+    this._setPlaybackKeyboardEnabled(true);
 
     try {
       // Main shot sequencing loop
@@ -1106,6 +980,8 @@ export class SceneDirector {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+    this._presentation.status = 'Project exported';
+    this._publish({ type: 'project-exported', project: this._project });
   }
 
   /**
@@ -1122,8 +998,7 @@ export class SceneDirector {
       this._selectedSceneId = this._project.scenes[0]?.id || null;
       this._selectedShotId = this._project.scenes[0]?.shots[0]?.id || null;
       this._saveProject();
-      this._renderSceneSelect();
-      this._renderShotList();
+      this._publish({ type: 'project-imported', project: this._project });
       this._updateStatus(`Imported ${file.name}`);
     } catch {
       this._updateStatus('Import failed (invalid JSON)');
@@ -1340,14 +1215,14 @@ export class SceneDirector {
   _finishRun() {
     clearInterval(this._progressTimer);
     this._progressTimer = null;
-    document.removeEventListener('keydown', this._onKeyDown);
+    this._setPlaybackKeyboardEnabled(false);
     // Covers the error path too: a run that threw mid-shot must not leave a
     // layer transition running against a director that has stopped watching.
     this._runAbort?.abort();
     this._runAbort = null;
 
     this.styleManager.setRecordingMode(false);
-    document.body.classList.remove('scene-playback-mode');
+    this._setPlaybackActive(false);
     this._updateRuntime('');
     this._running = false;
 
@@ -1369,21 +1244,16 @@ export class SceneDirector {
    * Editing controls are disabled during a run; stop is disabled when idle.
    * @param {boolean} isRunning
    */
-  _setButtons(isRunning) {
-    if (this._sceneStartBtn) this._sceneStartBtn.disabled = isRunning;
-    if (this._sceneNextBtn) this._sceneNextBtn.disabled = isRunning;
-    if (this._sceneSelect) this._sceneSelect.disabled = isRunning;
+  _setButtons(isRunning) { this._publish({ type: 'buttons-changed', running: isRunning }); }
 
-    if (this._sceneNewBtn) this._sceneNewBtn.disabled = isRunning;
-    if (this._sceneDeleteBtn) this._sceneDeleteBtn.disabled = isRunning;
-    if (this._sceneCaptureBtn) this._sceneCaptureBtn.disabled = isRunning;
-    if (this._sceneUpdateShotBtn) this._sceneUpdateShotBtn.disabled = isRunning;
-    if (this._sceneExportBtn) this._sceneExportBtn.disabled = isRunning;
-    if (this._sceneImportBtn) this._sceneImportBtn.disabled = isRunning;
+  _setPlaybackActive(active) {
+    this._presentation.playbackActive = active;
+    this._publish({ type: 'playback-presentation' });
+  }
 
-    if (this._sceneStopBtn) this._sceneStopBtn.disabled = !isRunning;
-    if (this._sceneDownloadBtn) this._sceneDownloadBtn.disabled = !this._lastRunJson;
-    if (this._scenePanel) this._scenePanel.classList.toggle('running', isRunning);
+  _setPlaybackKeyboardEnabled(enabled) {
+    this._presentation.keyboardEnabled = enabled;
+    this._publish({ type: 'playback-keyboard' });
   }
 
   /**
@@ -1391,10 +1261,8 @@ export class SceneDirector {
    * @param {number} progress - Value in [0, 1]
    */
   _setProgress(progress) {
-    if (!this._sceneProgressFill) return;
-    const pct = Math.round(clamp01(progress) * 100);
-    this._sceneProgressFill.style.width = `${pct}%`;
-    this._sceneProgressFill.textContent = `${pct}%`;
+    this._presentation.progress = progress;
+    this._publish({ type: 'progress-changed' });
   }
 
   /**
@@ -1402,7 +1270,8 @@ export class SceneDirector {
    * @param {string} text
    */
   _updateStatus(text) {
-    if (this._sceneStatus) this._sceneStatus.textContent = text;
+    this._presentation.status = text;
+    this._publish({ type: 'status-changed' });
   }
 
   /**
@@ -1410,9 +1279,8 @@ export class SceneDirector {
    * @param {string} text - Empty string hides the label
    */
   _updateRuntime(text) {
-    if (!this._sceneRuntime) return;
-    this._sceneRuntime.textContent = text;
-    this._sceneRuntime.classList.toggle('active', !!text);
+    this._presentation.runtime = text;
+    this._publish({ type: 'runtime-changed' });
   }
 
   /**
@@ -1422,6 +1290,7 @@ export class SceneDirector {
    */
   _logEvent(type, payload) {
     if (!this._activeRun) return;
+    this._publish({ type: 'run-event', event: type, detail: payload || null });
     this._activeRun.events.push({
       t: new Date().toISOString(),
       type,
@@ -1429,13 +1298,4 @@ export class SceneDirector {
     });
   }
 
-  /**
-   * Global keydown handler registered during a run. Escape cancels the run.
-   * @param {KeyboardEvent} event
-   */
-  _onKeyDown(event) {
-    if (event.key === ESCAPE_KEY && this._running) {
-      this.stopScene('Stopped (Esc)');
-    }
-  }
 }

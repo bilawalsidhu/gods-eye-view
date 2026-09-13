@@ -28,7 +28,7 @@ import {
 import { canonicalizeDensity } from './data/detectionPolicy.js';
 
 // Follow the UI wiring and its extracted preset definitions.
-const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8')
+const uiSource = fs.readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8')
   + '\n' + fs.readFileSync(new URL('./ui/visualPresets.js', import.meta.url), 'utf8');
 
 /**

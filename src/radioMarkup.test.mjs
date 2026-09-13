@@ -1,3 +1,4 @@
+import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { readFileSync as readRadioSource } from 'node:fs';
 const radioBindings = readRadioSource(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
 const radioPresentation = readRadioSource(new URL('./ui/radioPresentation.js', import.meta.url), 'utf8');
@@ -8,12 +9,12 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+const ui = readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
 const radio = readFileSync(new URL('./data/radio.js', import.meta.url), 'utf8');
 const rocketLaunches = readFileSync(new URL('./data/rocketLaunches.js', import.meta.url), 'utf8');
 const realtime = readFileSync(new URL('./voice/gevRealtime.js', import.meta.url), 'utf8');
 const voice = ['tools', 'instructions'].map(name => readFileSync(new URL(`../server/providers/openai/${name}.js`, import.meta.url), 'utf8')).join('\n');
-const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 /** Parse the Realtime tool array out of the Vite config as real data. */
 function realtimeTools() {
@@ -206,7 +207,7 @@ test('Radio volume and mission speed share the Sharpen slider visual language', 
   assert.match(css, /\.gev-quantitative-slider::-webkit-slider-runnable-track\s*\{[\s\S]*?height: 3px;[\s\S]*?background: rgba\(255, 255, 255, 0\.08\);/);
   assert.match(css, /\.gev-quantitative-slider::-webkit-slider-thumb\s*\{[\s\S]*?width: 10px;[\s\S]*?height: 10px;[\s\S]*?border-radius: 50%;[\s\S]*?background: var\(--accent\);/);
   assert.match(css, /\.gev-quantitative-slider:focus-visible\s*\{[\s\S]*?outline: 1px solid/);
-  assert.match(css, /\.gev-quantitative-slider:disabled\s*\{[\s\S]*?opacity: \.42;[\s\S]*?cursor: not-allowed;/);
+  assert.match(css, /\.gev-quantitative-slider:disabled\s*\{[\s\S]*?opacity: 0\.42;[\s\S]*?cursor: not-allowed;/);
   assert.match(css, /\.gev-slider-value\s*\{[\s\S]*?color: var\(--accent\);[\s\S]*?font-size: 9px;/);
   assert.doesNotMatch(css, /#space-mission-panel \[data-mission-replay-speed\]::-webkit-slider-thumb/);
 });
@@ -244,13 +245,13 @@ test('Radio is nested inside Context with separate disclosure and power controls
   assert.match(css, /\.radio-tuner\.is-static/);
   assert.match(css, /\.radio-tuner-tick\s*\{/);
   assert.doesNotMatch(css, /radio-tuner-scale-(?:left|right)/);
-  assert.match(css, /\.radio-tuner-needle\s*\{[\s\S]*?transition: left \.18s ease-out;/);
+  assert.match(css, /\.radio-tuner-needle\s*\{[\s\S]*?transition: left 0\.18s ease-out;/);
   assert.match(css, /\.radio-tuner\.is-dragging \.radio-tuner-needle,[\s\S]*?\.radio-tuner\.is-dragging \.radio-tuner-tick\s*\{\s*transition: none;/);
   assert.match(css, /\.radio-tuner\s*\{[\s\S]*?max-width: 100%;[\s\S]*?overflow: hidden;/);
   assert.match(css, /#radio-tuner-slider\s*\{[\s\S]*?max-width: 100%;[\s\S]*?touch-action: none;/);
   assert.match(css, /#title-bar\.radio-broadcasting \.title-logo::before/);
   assert.match(css, /#title-bar\.radio-broadcasting \.title-logo::after/);
-  assert.match(css, /--radio-broadcast-opacity: \.17/);
+  assert.match(css, /--radio-broadcast-opacity: 0\.17/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.radio-tuner-needle,[\s\S]*?\.radio-tuner-tick\s*\{\s*transition: none;/);
   assert.doesNotMatch(ui, /_radioTunerCameraRemove = this\.viewer\?\.camera\?\.changed/);
   assert.match(radioPresentation, /classList\.toggle\('radio-broadcasting', state\.audioState === 'playing'\)/);
@@ -302,7 +303,7 @@ test('panel collapse is presentation-only and Radio exposes explicit voice playb
   );
   assert.doesNotMatch(disclosureBindings, /setPanelCollapsed\('radio-panel', !/);
   assert.match(ui, /setAttribute\('aria-expanded', String\(/);
-  assert.match(ui, /\.hidden = !/);
+  assert.match(readFileSync(new URL('./ui/shellFeedback.js', import.meta.url), 'utf8'), /\.hidden = !/);
   assert.doesNotMatch(method, /panelId === 'global-context-panel'[\s\S]*?this\._radioState\?\.enabled[\s\S]*?setPanelCollapsed\('radio-panel', false\)/);
 });
 
