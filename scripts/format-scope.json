@@ -459,6 +459,7 @@
   "src/data/cctvCatalogCap.test.mjs",
   "src/data/cctvEstonia.test.mjs",
   "src/data/cctvWarendorf.test.mjs",
+  "src/data/cctvNswSource.test.mjs",
   "src/data/cctvTxdotSource.test.mjs",
   "src/layers/cctv/source.test.mjs"
 ]

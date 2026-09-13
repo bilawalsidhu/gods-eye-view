@@ -14,6 +14,7 @@ import {
   loadTallinnSourcesFromCatalog,
   loadTarkteeSourcesFromDatex,
   loadWarendorfSourcesFromCatalog,
+  loadNswSourcesFromOpenData,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -72,6 +73,11 @@ const LIVE_PACKS = [
     name: 'warendorf',
     enabled: () => envEnabled('CCTV_WARENDORF_ENABLED'),
     load: loadWarendorfSourcesFromCatalog,
+  },
+  {
+    name: 'nsw',
+    enabled: () => envEnabled('CCTV_NSW_ENABLED'),
+    load: loadNswSourcesFromOpenData,
   },
 ];
 /**

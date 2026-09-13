@@ -225,6 +225,13 @@ export const DATA_CREDITS = [
       'camera poses derived from OpenStreetMap geometry, © OpenStreetMap contributors (ODbL)',
   },
   {
+    key: 'nsw-cctv',
+    html:
+      'CCTV cameras &amp; frames (New South Wales): ' +
+      '<a href="https://www.livetraffic.com/" target="_blank" rel="noopener">Live Traffic NSW</a> — Transport for NSW ' +
+      '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)',
+  },
+  {
     key: 'telegeography',
     html:
       'Submarine cables: © TeleGeography — ' +

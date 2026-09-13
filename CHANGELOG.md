@@ -77,6 +77,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   (DATEX2 locations + rotating JPEG URLs), with Tallinn city POIs and attribution.
 - Add a Warendorf (Germany) source pack: the Stadt Warendorf Marktplatz webcam and
   the two Kreis Warendorf registration-office webcams, with curated poses.
+- Add Live Traffic NSW (Transport for NSW, CC BY 4.0) as a keyless CCTV pack: 217
+  Sydney and regional cameras with compass headings and view descriptions.
 
 - Press backtick (`) to toggle a rendered-frame-rate readout beneath the logo.
   Typing fields retain the key; monitoring stops when hidden.

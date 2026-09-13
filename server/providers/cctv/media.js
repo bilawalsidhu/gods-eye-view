@@ -5,6 +5,8 @@ import {
   CCTV_FRAME_MAX_BODY_BYTES,
   CCTV_MEDIA_FETCH_TIMEOUT_MS,
   CCTV_MEDIA_MAX_BODY_BYTES,
+  NSW_IMAGE_ORIGIN,
+  NSW_IMAGE_USER_AGENT,
 } from './constants.js';
 /**
  * Generate a synthetic SVG billboard image for a CCTV camera placeholder.
@@ -311,6 +313,33 @@ export async function fetchTxdotSnapshot(
 }
 
 /**
+ * Image hosts that only serve frames to browser-identified clients, keyed by
+ * exact hostname. Every other upstream sees the proxy's own identifying
+ * User-Agent. Keyed on host, not on a URL substring, so a look-alike host or a
+ * path that merely mentions the host never inherits the header.
+ */
+const CCTV_IMAGE_USER_AGENT_BY_HOST = Object.freeze({
+  [new URL(NSW_IMAGE_ORIGIN).hostname]: NSW_IMAGE_USER_AGENT,
+});
+
+/**
+ * User-Agent for one upstream frame request.
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+export function cctvUpstreamUserAgent(url) {
+  try {
+    return (
+      CCTV_IMAGE_USER_AGENT_BY_HOST[new URL(url).hostname] ||
+      'gods-eye-view-cctv-proxy/1.0'
+    );
+  } catch {
+    return 'gods-eye-view-cctv-proxy/1.0';
+  }
+}
+
+/**
  * Fetch one upstream CCTV image within the frame-refresh budget.
  *
  * A timeout is treated like every other upstream miss so the caller can
@@ -341,7 +370,7 @@ export async function fetchCctvImageFromUpstream(
   }, timeoutMs);
   try {
     const upstream = await fetchImpl(url, {
-      headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
+      headers: { 'User-Agent': cctvUpstreamUserAgent(url) },
       signal: controller.signal,
     });
     const contentType = upstream.headers.get('content-type') || '';
