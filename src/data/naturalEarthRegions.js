@@ -197,6 +197,7 @@ function toResult(entry) {
     featurecla: entry.featurecla,
     kind: entry.kind,
     polygons: entry.polygons,
+    bbox: entry.bbox,
     bboxDiagonalKm: entry.bboxDiagonalKm,
     areaKm2: entry.areaKm2,
   };
@@ -210,8 +211,9 @@ function toResult(entry) {
  *
  * @param {string} query e.g. "the Alps", "Rockies", "Gulf of Mexico"
  * @returns {Promise<{name:string, featurecla:string, kind:'natural'|'marine',
- *   polygons:Array<Array<[number,number]>>, bboxDiagonalKm:number,
- *   areaKm2:number}|null>} largest-area match, or null when nothing matches.
+ *   polygons:Array<Array<[number,number]>>, bbox:[number,number,number,number],
+ *   bboxDiagonalKm:number, areaKm2:number}|null>} largest-area match (bbox is
+ *   [minLon, minLat, maxLon, maxLat]), or null when nothing matches.
  */
 export async function findNaturalRegion(query) {
   const norm = normalizeName(query);

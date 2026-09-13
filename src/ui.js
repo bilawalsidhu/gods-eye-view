@@ -106,7 +106,7 @@ import {
 } from './contextModePolicy.js';
 import {
   shouldExpandGlobalContextPanel,
-  shouldHideCollapsedRightPanels,
+  shouldHideCollapsedLanePanels,
 } from './rightRailPolicy.js';
 import {
   allocatePanelStackHeights,
@@ -6904,7 +6904,7 @@ export class StyleManager {
     const hasExpandedPanel = panels.some((panel) => (
       !panel.classList.contains('collapsed') && (!isMobile || panel.id !== 'pp-toggles')
     ));
-    const exclusive = shouldHideCollapsedRightPanels({
+    const exclusive = shouldHideCollapsedLanePanels({
       hudVariant: this.hud.getVariant(),
       hasExpandedPanel,
     });
@@ -7035,6 +7035,23 @@ export class StyleManager {
         const panel = expandedPanels[index];
         panel.classList.add('collapsed', 'layout-auto-collapsed');
         this._syncPanelCollapseButton(panel);
+      }
+      // Commit the lane's exclusive hiding in the SAME pass as the collapse.
+      // The exclusive toggle at the top ran while these panels were still
+      // expanded, and deferring aria-hidden/display to the rescheduled frame
+      // left freshly collapsed siblings visible — and screen-reader
+      // reachable — for a frame (or far longer when frames are scarce).
+      const collapsedExclusive = shouldHideCollapsedLanePanels({
+        hudVariant: this.hud.getVariant(),
+        hasExpandedPanel: panels.some((panel) => !panel.classList.contains('collapsed')),
+      });
+      stack.classList.toggle('layout-exclusive', collapsedExclusive);
+      for (const panel of panels) {
+        if (collapsedExclusive && panel.classList.contains('collapsed')) {
+          panel.setAttribute('aria-hidden', 'true');
+        } else {
+          panel.removeAttribute('aria-hidden');
+        }
       }
       this._scheduleRightPanelLayout();
       return;
@@ -7219,6 +7236,15 @@ export class StyleManager {
         this._syncPanelCollapseButton(panel);
       }
     }
+    // Same lane contract as the right rail: under a tactical HUD an expanded
+    // panel owns the lane and collapsed sibling launchers are hidden. The
+    // commitment must also be re-stated in the same pass that auto-collapses a
+    // competitor (see the early return below) so aria state never lags.
+    const exclusive = shouldHideCollapsedLanePanels({
+      hudVariant: this.hud.getVariant(),
+      hasExpandedPanel: panels.some((panel) => !panel.classList.contains('collapsed')),
+    });
+    stack.classList.toggle('layout-exclusive', exclusive);
 
     // The existing narrow-screen composition has its own full-width stack.
     // Keep this desktop lane engine from fighting those dedicated rules.
@@ -7230,7 +7256,13 @@ export class StyleManager {
       stack.style.removeProperty('--left-stack-centered-height');
       stack.dataset.layoutMode = 'mobile';
       for (const panel of panels) {
-        panel.removeAttribute('aria-hidden');
+        // Mobile keeps the tactical lane contract: a collapsed sibling the
+        // exclusive rule hides is still aria-hidden, not merely invisible.
+        if (exclusive && panel.classList.contains('collapsed')) {
+          panel.setAttribute('aria-hidden', 'true');
+        } else {
+          panel.removeAttribute('aria-hidden');
+        }
         panel.style.removeProperty('--left-panel-allocated-height');
       }
       return;
@@ -7388,6 +7420,22 @@ export class StyleManager {
         panel.classList.add('collapsed', 'layout-auto-collapsed');
         this._syncPanelCollapseButton(panel);
       }
+      // Restate the lane's exclusive hiding for the panels this pass just
+      // collapsed — the top-of-pass toggle ran while they were still
+      // expanded, and waiting for the rescheduled frame would leave them
+      // visible and screen-reader reachable until it lands.
+      const collapsedExclusive = shouldHideCollapsedLanePanels({
+        hudVariant: this.hud.getVariant(),
+        hasExpandedPanel: panels.some((panel) => !panel.classList.contains('collapsed')),
+      });
+      stack.classList.toggle('layout-exclusive', collapsedExclusive);
+      for (const panel of panels) {
+        if (collapsedExclusive && panel.classList.contains('collapsed')) {
+          panel.setAttribute('aria-hidden', 'true');
+        } else if (!stack.classList.contains('layout-focus')) {
+          panel.removeAttribute('aria-hidden');
+        }
+      }
       this._scheduleLeftPanelLayout();
       return;
     }
@@ -7419,7 +7467,10 @@ export class StyleManager {
     // CockpitView.syncSignalLayout() owns `--cockpit-utility-top` instead.
 
     for (const panel of panels) {
-      const hiddenSibling = shouldFocus && panel.classList.contains('collapsed');
+      // Focus mode hides collapsed siblings through the corridor engine's own
+      // `layout-focus` rule; the tactical lane contract hides them through
+      // `layout-exclusive`. Either way the hidden launcher is aria-hidden.
+      const hiddenSibling = (shouldFocus || exclusive) && panel.classList.contains('collapsed');
       if (hiddenSibling) panel.setAttribute('aria-hidden', 'true');
       else panel.removeAttribute('aria-hidden');
     }

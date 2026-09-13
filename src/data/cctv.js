@@ -51,7 +51,7 @@ import {
   CCTV_ACTIVATION_RESULT,
   activateCctvCameraFromWorldClick,
 } from '../cctvFocusRequest.js';
-import { bindTrackingClickGesture, isTrackingClickGesture } from './trackingClickGesture.js';
+import { bindTrackingClickGesture, domEventPressClock, isTrackingClickGesture } from './trackingClickGesture.js';
 import {
   clearOverlaySource,
   hitTestWorldOverlay,
@@ -287,6 +287,10 @@ let _autoHopSec = 18;
 let _lastHopAt = 0;
 let _lastViewContext = '';
 let _clickHandler = null;
+// Press-duration clock fed to the click gesture: DOM event stamps, immune to
+// main-thread queueing delay (an instant tap must not read as a long press
+// just because a render frame sat between the two events under load).
+let _clickPressClock = null;
 let _count = 0;
 let _lastUpdate = null;
 let _lastHealthSyncAt = 0;
@@ -4335,6 +4339,7 @@ const cctvLayer = {
     refreshHorizonCulling();
 
     _clickHandler = new Cesium.ScreenSpaceEventHandler(_viewer.scene.canvas);
+    _clickPressClock = domEventPressClock(_viewer.scene.canvas);
     bindCctvWorldClickGesture(_clickHandler, (click) => {
       if (!_enabled) return;
       const picked = _viewer.scene.pick(click.position);
@@ -4370,6 +4375,11 @@ const cctvLayer = {
         deactivateActiveCamera();
       }
     }, {
+      // Measure press duration from DOM event stamps: under load the
+      // LEFT_UP action runs long after the physical release, and a
+      // processing-time duration would reject every instant tap as a
+      // long-press (empty-space deselect died exactly this way).
+      now: _clickPressClock.now,
       // Item B: hover summons a card on a cardless camera icon. The gesture
       // classifier owns MOUSE_MOVE too, so chain hover work through its seam
       // instead of replacing the travel accumulator's handler.
@@ -4507,6 +4517,8 @@ const cctvLayer = {
       _clickHandler.destroy();
       _clickHandler = null;
     }
+    _clickPressClock?.dispose();
+    _clickPressClock = null;
     if (teardownViewer?.scene?.screenSpaceCameraController) {
       teardownViewer.scene.screenSpaceCameraController.enableInputs = true;
     }

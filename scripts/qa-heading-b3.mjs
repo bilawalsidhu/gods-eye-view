@@ -464,18 +464,40 @@ async function main() {
 
   const consoleErrors = [];
   const failedResponses = [];
+  // Server-owned statuses on local API targets are environmental (same
+  // contract as qa-cockpit-utility): a 5xx means the upstream or the proxy
+  // failed — /api/terrain/heights 502s come and go within seconds — and
+  // 429/420 mean this harness's own polling exhausted a shared budget. A page
+  // cannot fabricate either; 4xx and non-API hosts stay failures.
+  const isEnvironmentStatus = (s) => s >= 500 || s === 429 || s === 420;
+  const isLocalApiPath = (url) => {
+    try { return new URL(url, APP_URL).pathname.startsWith('/api/'); } catch { return false; }
+  };
+  let toleratedEnvironment = 0;
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
         const text = msg.text();
-        if (!/Failed to load resource.*404/i.test(text)) consoleErrors.push(text);
+        if (/Failed to load resource.*404/i.test(text)) return;
+        const status = Number(/status of (\d{3})/.exec(text)?.[1]);
+        if (Number.isFinite(status) && isEnvironmentStatus(status)
+          && isLocalApiPath(msg.location()?.url || '')) {
+          toleratedEnvironment += 1;
+          return;
+        }
+        consoleErrors.push(text);
       }
     });
     page.on('pageerror', (err) => consoleErrors.push(`pageerror: ${err.message}`));
     page.on('response', (response) => {
-      if (response.status() >= 500) failedResponses.push(`${response.status()} ${response.url()}`);
+      if (response.status() < 500) return;
+      if (isEnvironmentStatus(response.status()) && isLocalApiPath(response.url())) {
+        toleratedEnvironment += 1;
+        return;
+      }
+      failedResponses.push(`${response.status()} ${response.url()}`);
     });
 
     // ---- Turning-plane fetch shim (installed before any app code runs) ------
@@ -529,6 +551,26 @@ async function main() {
         if (url.includes('/api/adsblol/trace')) {
           return Promise.resolve(jsonResponse({ timestamp: Math.floor(nowSec), trace: [] }));
         }
+        // The military LAYER polls /api/adsblol (militaryFlights.js API_URL);
+        // /api/adsblol/mil feeds the known-military REGISTRY. Intercepting only
+        // the registry left the layer's own poll live, so ingest counted REAL
+        // adsb.lol contacts while every synthetic hex was absent — the jet
+        // model then "never became ready" because nothing was tracking
+        // TRNMIL1. Same shim pair as track-regression.mjs.
+        if (url.includes('/api/adsblol') && !url.includes('/api/adsblol/mil')) {
+          window.__TURN_HITS.mil++;
+          const ac = T.military.map((m) => {
+            const s = T.stateAt(m, tRel);
+            return {
+              hex: m.hex, flight: m.flight,
+              lon: s.lon, lat: s.lat, alt_baro: m.altFt,
+              track: s.course, gs: s.speedMps * 1.9438,
+              t: m.t, r: m.r, ownOp: 'SYNTH AF',
+              seen_pos: Math.max(0, -(T.timeOffsetSec || 0)),
+            };
+          });
+          return Promise.resolve(jsonResponse({ msg: 'No error', now: Date.now(), ac }));
+        }
         if (url.includes('/api/opensky')) {
           T.__hitsGuard = ++window.__TURN_HITS.opensky;
           const row = (id, callsign, s, altM, category) => [
@@ -567,6 +609,15 @@ async function main() {
         // it rather than letting one unrelated public-provider 502 turn a
         // renderer/heading result into a console-cleanliness false negative.
         if (url.includes('/api/adsbdb/')) return Promise.resolve(jsonResponse({ found: false }));
+        // Nearby-places enrichment for tracked contacts: answering with an
+        // empty result keeps the run hermetic (a live lookup depends on the
+        // dev proxy's key state AND bills the owner's Google quota when
+        // present) — the keyless 503 otherwise lands as 15 console errors and
+        // fails the cleanliness gate below for a reason this scenario cannot
+        // even exercise. Same stub as track-regression.mjs.
+        if (url.includes('/api/google/nearby-places')) {
+          return Promise.resolve(jsonResponse({ places: [] }));
+        }
         return realFetch(input, init);
       };
     }, TURN);
@@ -1089,7 +1140,10 @@ async function main() {
       });
     }
 
-    record('no console errors during QA run', consoleErrors.length === 0,
+    if (toleratedEnvironment > 0) {
+      console.log(`  INFO environment responses tolerated: ${toleratedEnvironment} (local /api/ 5xx+429+420)`);
+    }
+    record('no console errors during QA run', consoleErrors.length === 0 && failedResponses.length === 0,
       consoleErrors.length
         ? `${consoleErrors.length}: ${consoleErrors.slice(0, 3).join(' | ')}; responses=${failedResponses.slice(0, 3).join(' | ') || 'unidentified'}`
         : 'clean');

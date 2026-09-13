@@ -83,7 +83,7 @@ function linkAbort(controller, externalSignal) {
  * @returns {Promise<null | {
  *   lon: number, lat: number, height: number,
  *   ring: Array<[number, number]> | null,
- *   label: string | null, source: string,
+ *   label: string | null, source: string,  // 'coordinate'|'places'|'geocode'|'pixel'|'osm-local'|'natural-region'
  *   viewport: object | null,
  *   resolveOutline?: () => Promise<undefined | null | { rateLimited: true, retryAfterMs: number | null }
  *     | { ring, footprintKind, buildingHeight, synthesized, lat, lon, height }>,
@@ -178,6 +178,23 @@ export async function resolveAnnotationTarget({
               trace.places = placeHit ? 'far-ignored' : 'miss';
             }
           }
+        }
+      }
+      // OFFLINE natural-region anchor rung (L9 matrix D10): when neither Places
+      // nor the geocoder can anchor the name, the bundled Natural Earth pack
+      // still may — "outline the Alps" must work with zero keys and zero
+      // network, and the outline rung below re-validates containment before it
+      // grants the ring. Anchored at the bbox centre; a 'natural-region' source
+      // is a trusted offline fact, so the proximity gate below skips it.
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        const ne = await findNaturalRegion(query).catch(() => null);
+        const bbox = ne?.bbox;
+        if (Array.isArray(bbox) && bbox.every(Number.isFinite)) {
+          lat = (bbox[1] + bbox[3]) / 2;
+          lon = (bbox[0] + bbox[2]) / 2;
+          label = ne.name;
+          source = 'natural-region';
+          trace.geocode = `offline NE: ${ne.name}`;
         }
       }
     }
@@ -603,7 +620,12 @@ function ringAreaM2(ring) {
  * viewport so "the marina" resolves near where the user is looking.
  */
 async function geocodePlace(query, biasRect, signal) {
-  const apiKey = window.__GOOGLE_MAPS_API_KEY__ || import.meta.env.GOOGLE_MAPS_API_KEY;
+  // typeof guard keeps the bare-env read safe under plain node (unit tests);
+  // the exact member expression below stays intact for vite's static define.
+  const envKey = typeof import.meta.env === 'object' && import.meta.env
+    ? import.meta.env.GOOGLE_MAPS_API_KEY
+    : undefined;
+  const apiKey = window.__GOOGLE_MAPS_API_KEY__ || envKey;
   if (!apiKey) return null;
 
   const cacheKey = `${query.toLowerCase()}|${biasRect || ''}`;

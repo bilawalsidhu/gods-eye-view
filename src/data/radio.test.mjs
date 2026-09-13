@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   buildRadioTunerBand,
@@ -1798,4 +1799,30 @@ test('voice playback confirmation accepts fallback buffering but times out safel
   });
   assert.equal(confirmed, false);
   assert.ok(Date.now() - startedAt >= 8);
+});
+
+test('cluster dirty toggles republish overlay entries only after the rebuild frame', () => {
+  // The dirty toggle empties Cesium's cluster point collection until the next
+  // rendered frame. A publish scheduled in the same tick snapshots that empty
+  // set and blanks every cluster callout until an unrelated re-publish, so
+  // each toggle site must defer its publish to the postRender follow-up.
+  const source = readFileSync(new URL('./radio.js', import.meta.url), 'utf8');
+  const toggle = '_dataSource.clustering.clusterPoints = clusterPoints;';
+  const immediate = 'scheduleRadioOverlayPublish();';
+  const deferred = 'scheduleRadioOverlayPublishAfterClusterRebuild();';
+  const toggleSites = [];
+  for (let at = source.indexOf(toggle); at !== -1; at = source.indexOf(toggle, at + 1)) {
+    toggleSites.push(at);
+  }
+  assert.equal(toggleSites.length, 2, 'expected the param and tuner filter paths to dirty clustering');
+  for (const at of toggleSites) {
+    const nextCall = [immediate, deferred]
+      .map((call) => ({ call, index: source.indexOf(call, at) }))
+      .sort((a, b) => a.index - b.index)[0];
+    assert.equal(
+      nextCall.call,
+      deferred,
+      'the first publish after a dirty toggle must wait for the cluster rebuild frame',
+    );
+  }
 });

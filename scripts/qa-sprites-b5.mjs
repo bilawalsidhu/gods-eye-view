@@ -233,6 +233,26 @@ async function main() {
         if (url.includes('/api/adsblol/trace')) {
           return Promise.resolve(jsonResponse({ timestamp: Math.floor(nowSec), trace: [] }));
         }
+        // The military LAYER polls /api/adsblol (militaryFlights.js API_URL);
+        // /api/adsblol/mil feeds the known-military REGISTRY. Intercepting only
+        // the registry left the layer's own poll live, so the B1 ingest
+        // assertion read REAL adsb.lol contacts and scored military=0/12
+        // synthetic even though every shim branch was being served. Same shim
+        // pair as track-regression.mjs.
+        if (url.includes('/api/adsblol') && !url.includes('/api/adsblol/mil')) {
+          window.__SPR_HITS.mil++;
+          const ac = S.military.map((m) => {
+            const s = S.stateAt(m, tRel);
+            return {
+              hex: m.hex, flight: m.flight,
+              lon: s.lon, lat: s.lat, alt_baro: m.altFt,
+              track: s.course, gs: s.speedMps * 1.9438,
+              t: m.t, r: `SY-${m.hex.slice(-3)}`, ownOp: 'SYNTH AF',
+              seen_pos: Math.max(0, -(S.timeOffsetSec || 0)),
+            };
+          });
+          return Promise.resolve(jsonResponse({ msg: 'No error', now: Date.now(), ac }));
+        }
         if (url.includes('/api/opensky')) {
           window.__SPR_HITS.opensky++;
           const states = S.flights.map((f) => {
@@ -268,6 +288,13 @@ async function main() {
         // so keep an unavailable public enrichment provider from generating an
         // unrelated console error.
         if (url.includes('/api/adsbdb/')) return Promise.resolve(jsonResponse({ found: false }));
+        // Nearby-places enrichment for tracked contacts: answer empty to keep
+        // the run hermetic (a live lookup depends on the dev proxy's key state
+        // AND bills the owner's Google quota when present). Same stub as
+        // track-regression.mjs.
+        if (url.includes('/api/google/nearby-places')) {
+          return Promise.resolve(jsonResponse({ places: [] }));
+        }
         return realFetch(input, init);
       };
     }, SPRITES);

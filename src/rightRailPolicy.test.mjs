@@ -3,29 +3,29 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   shouldExpandGlobalContextPanel,
-  shouldHideCollapsedRightPanels,
+  shouldHideCollapsedLanePanels,
 } from './rightRailPolicy.js';
 
-test('Tactical HUD hides collapsed right-rail siblings while one panel is expanded', () => {
-  assert.equal(shouldHideCollapsedRightPanels({
+test('Tactical HUD hides collapsed lane siblings while one panel is expanded', () => {
+  assert.equal(shouldHideCollapsedLanePanels({
     hudVariant: 'tactical',
     hasExpandedPanel: true,
   }), true);
 });
 
 test('collapsed launchers remain when Tactical has no expanded panel', () => {
-  assert.equal(shouldHideCollapsedRightPanels({
+  assert.equal(shouldHideCollapsedLanePanels({
     hudVariant: 'tactical',
     hasExpandedPanel: false,
   }), false);
 });
 
-test('other HUD layouts keep collapsed right-rail launchers visible', () => {
-  assert.equal(shouldHideCollapsedRightPanels({
+test('other HUD layouts keep collapsed lane launchers visible', () => {
+  assert.equal(shouldHideCollapsedLanePanels({
     hudVariant: 'minimal',
     hasExpandedPanel: true,
   }), false);
-  assert.equal(shouldHideCollapsedRightPanels({
+  assert.equal(shouldHideCollapsedLanePanels({
     hudVariant: 'full',
     hasExpandedPanel: true,
   }), false);
@@ -45,6 +45,20 @@ test('desktop Display participates in Tactical exclusivity without changing mobi
   );
   assert.match(ui, /if \(exclusive && panel\.classList\.contains\('collapsed'\)\) panel\.setAttribute\('aria-hidden', 'true'\)/);
   assert.match(css, /#right-context-rail\.layout-exclusive > \[data-panel-id\]\.collapsed \{/);
+  assert.match(css, /#left-panel-stack\.layout-exclusive > \[data-panel-id\]\.collapsed \{/);
+});
+
+test('both lanes restate Tactical exclusivity in the same pass that auto-collapses', () => {
+  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  // Each lane engine's auto-collapse early return must commit the exclusive
+  // class and aria-hidden itself: deferring to the rescheduled frame leaves
+  // the freshly collapsed launcher visible and screen-reader reachable until
+  // it lands (unbounded under a starved render loop).
+  assert.equal(
+    (ui.match(/collapsedExclusive = shouldHideCollapsedLanePanels/g) || []).length,
+    2,
+    'the left accordion and the right rail must both restate exclusivity on auto-collapse',
+  );
 });
 
 test('explicit Contacts, Space Missions, and Cockpit actions expand Global Context after success', () => {

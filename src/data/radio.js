@@ -214,6 +214,8 @@ let _requestGeneration = 0;
 let _sessionGeneration = 0;
 let _removeClusterListener = null;
 let _overlayPublishTimer = null;
+/** Guard + handle for the postRender re-publish after a cluster dirty toggle. */
+let _clusterRepublishListener = false;
 let _clusterOverlayIdentitySequence = 0;
 let _clusterOverlayIdentities = [];
 let _overlayDiagnostics = {
@@ -2008,8 +2010,10 @@ export function setRadioParams(params = {}) {
       _dataSource.clustering.clusterPoints = !clusterPoints;
       _dataSource.clustering.clusterPoints = clusterPoints;
       _viewer?.scene?.requestRender();
+      scheduleRadioOverlayPublishAfterClusterRebuild();
+    } else {
+      scheduleRadioOverlayPublish();
     }
-    scheduleRadioOverlayPublish();
   }
   emitState();
   return true;
@@ -2123,6 +2127,27 @@ function updateSelectionEntity() {
 
 function clusterPointCollection() {
   return _dataSource?.clustering?._clusterPointCollection || null;
+}
+
+/**
+ * Re-publish overlay entries on the first rendered frame. The cluster dirty
+ * toggle below empties Cesium's cluster point collection until its next
+ * update pass, so a publish scheduled in the same tick would snapshot that
+ * empty set and blank every cluster callout until an unrelated publish.
+ * @returns {void}
+ */
+function scheduleRadioOverlayPublishAfterClusterRebuild() {
+  if (!_viewer?.scene?.postRender) {
+    scheduleRadioOverlayPublish();
+    return;
+  }
+  if (_clusterRepublishListener) return;
+  _clusterRepublishListener = true;
+  const remove = _viewer.scene.postRender.addEventListener(() => {
+    _clusterRepublishListener = false;
+    remove();
+    scheduleRadioOverlayPublish();
+  });
 }
 
 function publishRadioOverlayEntries() {
@@ -2396,8 +2421,12 @@ export function setRadioFilter(categoryId) {
     _dataSource.clustering.clusterPoints = !clusterPoints;
     _dataSource.clustering.clusterPoints = clusterPoints;
     _viewer?.scene?.requestRender();
+    // Publish after the rebuild: the dirty toggle empties the cluster point
+    // collection, so an immediate publish would snapshot zero clusters.
+    scheduleRadioOverlayPublishAfterClusterRebuild();
+  } else {
+    scheduleRadioOverlayPublish();
   }
-  scheduleRadioOverlayPublish();
   emitState();
   return true;
 }

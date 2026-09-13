@@ -4571,7 +4571,11 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   display: block;
   flex: 0 0 auto;
 }
-#right-context-rail.layout-focus.layout-exclusive > [data-panel-id].collapsed {
+/* Exclusive alone must hide collapsed siblings — the class is committed in
+ * the same pass that auto-collapses a competitor, and layout-focus may not be
+ * (re)solved until the rescheduled frame. Keeping the hide tied to focus
+ * would let a stale focus state leave the launcher visible for a frame. */
+#right-context-rail.layout-exclusive > [data-panel-id].collapsed {
   display: none;
 }
 #right-context-rail.layout-focus > #pp-toggles:not(.collapsed),
@@ -6362,6 +6366,13 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
  * live HUD/attribution-safe corridor.
  */
 #left-panel-stack.layout-focus > [data-panel-id].collapsed {
+  display: none;
+}
+
+/* Tactical lane contract: an expanded panel owns the accordion, and collapsed
+ * sibling launchers are hidden (aria-hidden by the engine) — mirroring the
+ * right rail's layout-exclusive rule. */
+#left-panel-stack.layout-exclusive > [data-panel-id].collapsed {
   display: none;
 }
 

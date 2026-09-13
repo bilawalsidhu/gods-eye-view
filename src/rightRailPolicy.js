@@ -1,13 +1,15 @@
 /**
- * Tactical HUD gives an expanded right-rail panel the whole control lane.
- * Other HUD layouts keep collapsed launchers visible for quick switching.
+ * Tactical HUD gives an expanded panel the whole control lane. Other HUD
+ * layouts keep collapsed launchers visible for quick switching. The rule is
+ * lane-agnostic: it governs the left accordion (Data/CCTV/Scenes) and the
+ * right rail (Display/CCTV/Context) identically.
  *
- * @param {object} input Current rail state.
+ * @param {object} input Current lane state.
  * @param {string} input.hudVariant Active HUD layout variant.
- * @param {boolean} input.hasExpandedPanel Whether any rail panel is expanded.
+ * @param {boolean} input.hasExpandedPanel Whether any panel in the lane is expanded.
  * @returns {boolean} Whether collapsed sibling launchers should be hidden.
  */
-export function shouldHideCollapsedRightPanels({ hudVariant, hasExpandedPanel }) {
+export function shouldHideCollapsedLanePanels({ hudVariant, hasExpandedPanel }) {
   return hudVariant === 'tactical' && Boolean(hasExpandedPanel);
 }
 

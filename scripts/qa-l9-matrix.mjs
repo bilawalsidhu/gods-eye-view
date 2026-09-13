@@ -330,7 +330,10 @@ const tail = (s, n = 220) => (s || '').trim().split('\n').slice(-3).join(' | ').
 // "first hit wins". A parser that accepts the first match will happily read a
 // scoreboard that has trailing garbage on it, or take the first of two
 // contradictory scoreboards — both of which let a broken harness pass.
-const RESULT_RE = /^[^\S\n]*RESULT:[^\S\n]*(\d+)[^\S\n]+passed,[^\S\n]*(\d+)[^\S\n]+failed(?:,[^\S\n]*(\d+)[^\S\n]+(?:skipped|inconclusive))?[^\S\n]*$/gm;
+// The optional trailing parenthetical covers suites that annotate the skip
+// count — e.g. qa-attribution-b12's "3 skipped (owner decision)". Without it
+// a fully-green run parses as HARNESS-CRASH (observed matrix run 5, D6).
+const RESULT_RE = /^[^\S\n]*RESULT:[^\S\n]*(\d+)[^\S\n]+passed,[^\S\n]*(\d+)[^\S\n]+failed(?:,[^\S\n]*(\d+)[^\S\n]+(?:skipped|inconclusive))?(?:[^\S\n]*\([^)\n]*\))?[^\S\n]*$/gm;
 const COCKPIT_RE = /^[^\S\n]*RESULT:[^\S\n]*(READY|NOT_READY)[^\S\n]*\((\d+)[^\S\n]+failures\)[^\S\n]*$/gm;
 const FLOOR_RE = /^[^\S\n]*VERDICT:[^\S\n]*(PASS|INCONCLUSIVE|FAIL)[^\S\n]*$/gm;
 const OVERLAY_RE = /^[^\S\n]*Summary:[^\S\n]*(\d+)[^\S\n]+measured[^\S\n]*·[^\S\n]*(\d+)[^\S\n]+skipped[^\S\n]*·[^\S\n]*(\d+)[^\S\n]+errors[^\S\n]*$/gm;
@@ -1684,17 +1687,49 @@ async function runBrowserGroup(record) {
     const out = [];
     const stillLoading = [];
     let loadNote = '';
+    // An enable that did not take is NOT an empty layer, and an enable that
+    // THREW is not a zero count: settle() races the enable promise and reports
+    // only stats, so a refused/superseded transaction used to collapse into
+    // `label=0` and accuse a healthy layer of rendering nothing (run 4 said
+    // datacenters=0; the same layer renders 4362 on a warm boot). Read the
+    // authoritative lifecycle next to the count and distinguish the two.
+    const probeLifecycle = (id) => evalBounded((lid) => {
+      const dm = window.__godsEyeView.dataManager;
+      const state = dm.getLayerLifecycleState(lid);
+      return state
+        ? { enabled: state.enabled, phase: state.lifecycleState, uncertain: state.uncertain }
+        : { enabled: null, phase: 'unregistered', uncertain: null };
+    }, id, 15000);
     for (const id of bundled) {
-       
-      const r = await settle(id, 45);
-      const s = r.stats || {};
       const label = id.replace(/^local-|^telegeography-/, '');
-      out.push(`${label}=${r.missing ? 'MISSING' : (s.count ?? 0)}`);
+      let r = await settle(id, 45);
+      if (r.enableError) {
+        // One throw can be a supersede race under full-run load; retry before
+        // judging, then treat a second throw as the product failure it is.
+        r = await settle(id, 30);
+      }
+      if (r.missing) { out.push(`${label}=MISSING`); continue; }
+      if (r.enableError) {
+        return fail(`${label} enable transaction failed twice — a broken enable, not an empty layer: ${r.enableError}`);
+      }
+      const s = r.stats || {};
+      const life = (await probeLifecycle(id)) || {};
+      if (life.enabled === false) {
+        // We asked for enable but the manager says the layer is off. One
+        // explicit re-request; only a second refusal is a product failure,
+        // reported with the phase evidence instead of a bare count.
+        await settle(id, 20);
+        const life2 = (await probeLifecycle(id)) || {};
+        if (life2.enabled === false) {
+          return fail(`${label} did not enable: lifecycle=${life2.phase ?? '?'} uncertain=${life2.uncertain ?? '?'} stats=${JSON.stringify(s)} — the enable request never became effective`);
+        }
+      }
+      out.push(`${label}=${s.count ?? 0}`);
       // "Still loading when my budget expired" is not "empty". Under full-run
       // load these can take longer than an isolated run, and calling that a
       // product failure is a false accusation — say the measurement was
       // inconclusive instead.
-      if (!r.missing && !(s.count > 0) && (s.loading || s.loadingLabel) && !s.error) stillLoading.push(label);
+      if (!(s.count > 0) && (s.loading || s.loadingLabel) && !s.error) stillLoading.push(label);
     }
     if (stillLoading.length) {
       return crash(`still loading when the ${45}s budget expired: ${stillLoading.join(', ')} [all: ${out.join(', ')}] — this check could not determine whether they render, so it verified nothing`);
@@ -1710,16 +1745,28 @@ async function runBrowserGroup(record) {
       const contested = zero.map((o) => o.split('=')[0]);
       await quiesce();
       const retried = [];
+      const stillZero = [];
       for (const label of contested) {
         const id = bundled.find((b2) => b2.replace(/^local-|^telegeography-/, '') === label);
         if (!id) continue;
-         
+
         const r2 = await settle(id, 45);
-        retried.push(`${label}=${r2.stats?.count ?? 0}`);
+        const count = r2.stats?.count ?? 0;
+        // Judge the quiet-stage retry with the same rigor as the first pass:
+        // confirm the enable is actually effective, and carry the module's own
+        // error string (dataset unavailable/malformed) into the verdict —
+        // neither may be collapsed into a bare "rendered 0".
+        const life2 = (await probeLifecycle(id)) || {};
+        if (life2.enabled === false) {
+          return fail(`${label} still not enabled on a quiet stage: lifecycle=${life2.phase ?? '?'} uncertain=${life2.uncertain ?? '?'} enableError=${r2.enableError || 'none'}`);
+        }
+        retried.push(`${label}=${count}`);
+        if (!(count > 0)) {
+          stillZero.push(`${label}=0 (error=${r2.stats?.error || 'none'}, phase=${life2.phase ?? '?'})`);
+        }
       }
-      const stillZero = retried.filter((o) => /=0$/.test(o));
       if (stillZero.length) {
-        return fail(`empty bundled layer(s) even on a quiet stage: ${stillZero.join(', ')} [under load: ${out.join(', ')}]`);
+        return fail(`enabled but empty bundled layer(s) even on a quiet stage: ${stillZero.join(', ')} [under load: ${out.join(', ')}]`);
       }
       // Do NOT return here: the installations assertion below is part of this
       // check's claim and must still run.
@@ -1855,6 +1902,25 @@ async function runBrowserGroup(record) {
   });
 
   await step('C13', async () => {
+    // The operator deliberately detached the Cesium credit container on
+    // 2026-08-29 (src/main.js: the decision AND the Google Maps Platform ToS
+    // caveat — visible attribution is required for Photorealistic 3D Tiles —
+    // are recorded in the comment there). Failing the fleet forever on a
+    // recorded owner decision is noise, but skipping it silently would hide
+    // a live compliance question — so probe the container: if it is ever
+    // re-attached this reverts to the real visibility contract; until then
+    // every run surfaces the open item as an owner decision.
+    const attR = await mustEval(() => Boolean(document.getElementById('cesium-credits')), null, 10000);
+    if (!attR.ok) return crash(`could not probe the credit container: ${attR.reason}`);
+    if (!attR.value) {
+      return skip(
+        'visible Google/Cesium attribution is absent by OPERATOR DECISION (2026-08-29): '
+        + 'main.js deliberately detaches #cesium-credits and records that Google Maps Platform ToS '
+        + 'requires visible attribution for Photorealistic 3D Tiles — restore the strip or ship an '
+        + 'equivalent attribution surface (tracked in PLAN.md Batch 6)',
+        'OWNER-RUN',
+      );
+    }
     const stR = await mustEval(async () => {
       const viewer = window.__godsEyeView.viewer;
       window.__godsEyeView.styleManager.setCleanView(true);
@@ -1862,7 +1928,6 @@ async function runBrowserGroup(record) {
       // measuring, or a healthy credit reads as 0x0.
       for (let i = 0; i < 4; i += 1) {
         viewer.scene.requestRender();
-         
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       }
       await new Promise((r) => setTimeout(r, 1200));
@@ -1978,13 +2043,23 @@ async function runBrowserGroup(record) {
     // and the inherited camera happened to already be above the global
     // threshold, this check would "pass" while proving nothing about the reset
     // control at all.
-    const setupR = await mustEval(async () => {
+    const citySetup = () => mustEval(async () => {
       const g = window.__godsEyeView;
       g.viewer.camera.cancelFlight();
       g.styleManager.applyCameraState({ lat: 30.2672, lon: -97.7431, alt: 3000, heading: 0, pitch: -35 }, 1.5);
       await new Promise((r) => setTimeout(r, 3000));
       return { altKm: g.viewer.camera.positionCartographic.height / 1000 };
     }, null, 60000);
+    // The setup is idempotent (cancelFlight first), so one re-issue after a
+    // deadline expiry distinguishes a mid-run starved main thread (quiesce's
+    // teardown still draining — run 4 crashed here with "page did not answer
+    // within 60000 ms") from a page that is genuinely gone. A page that
+    // answers neither time still crashes the check honestly.
+    let setupR = await citySetup();
+    if (!setupR.ok && setupR.unresponsive) {
+      await new Promise((r) => setTimeout(r, 8000));
+      setupR = await citySetup();
+    }
     if (!setupR.ok) return crash(`could not put the camera at city altitude to test the reset: ${setupR.reason}`);
     const before = setupR.value?.altKm;
     if (!Number.isFinite(before)) return crash('the city-altitude setup returned no altitude — cannot establish a starting point');

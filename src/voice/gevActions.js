@@ -1260,7 +1260,12 @@ async function resolveRadioLocation(args = {}, coordinates = radioCoordinatePair
   const known = knownRadioLocation(query, args.locationId);
   if (known) return known;
   if (!query) return null;
-  const apiKey = window.__GOOGLE_MAPS_API_KEY__ || import.meta.env.GOOGLE_MAPS_API_KEY;
+  // typeof guard keeps the bare-env read safe under plain node (unit tests);
+  // the exact member expression below stays intact for vite's static define.
+  const envKey = typeof import.meta.env === 'object' && import.meta.env
+    ? import.meta.env.GOOGLE_MAPS_API_KEY
+    : undefined;
+  const apiKey = window.__GOOGLE_MAPS_API_KEY__ || envKey;
   if (!apiKey) throw new Error('No Google Maps API key available for Radio location search');
   const controller = new AbortController();
   const cancelFromTurn = () => controller.abort();

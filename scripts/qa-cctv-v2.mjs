@@ -413,6 +413,25 @@ async function main() {
       if (!entry.enabled) await dm.toggle('cctv');
     });
 
+    // The catalog must actually load before any counter math: CCTV sources
+    // arrive through the dev proxy, and an upstream outage yields a 0-camera
+    // layer where every downstream counter read degenerates to NaN (observed
+    // 2026-09-12: Δ=NaN cascaded through the drain/activation checks after a
+    // mid-run page reload reset the counters shim and the layer state).
+    // Record the environmental abort instead of cascading meaningless
+    // failures through every downstream check.
+    const catalogReady = await page.waitForFunction(
+      () => (window.__godsEyeView?.dataManager?.layers?.get('cctv')?.module?.getUIState?.().count ?? 0) > 0,
+      { timeout: 90000 },
+    ).then(() => true).catch(() => false);
+    record('cctv catalog loads (>=1 camera from upstream sources)', catalogReady,
+      catalogReady
+        ? 'sources resolved'
+        : '0 cameras within 90s — upstream source fetch or app state failed this run; counter-sensitive checks skipped');
+    if (!catalogReady) {
+      return; // finally closes the browser; the summary still prints
+    }
+
     // Wait for the staggered geometry-load queue to drain (shared mesh-floor
     // sampling: <=1 sampleHeight per coarse cell, gated on tiles-ready). The
     // budget scales with catalog size: the queue staggers ~4 records/120ms
@@ -500,11 +519,21 @@ async function main() {
     // -----------------------------------------------------------------------
     console.log('Waiting for tiles + the one-shot completion pass...');
     const tilesSeenLoaded = await waitForTilesLoaded(page, 45000);
+    // The completion pass fires on the module's own observation of a
+    // tiles-loaded edge, which can lag the suite's observation by several
+    // update ticks (observed 2026-09-12: first real sample ~60s after the
+    // suite saw tilesLoaded, so a fixed 30s floor wait recorded 0 samples
+    // while the pass's tail then bled into the idle/calibration windows as
+    // Δ=4/Δ=8). Wait for the floor on the module's timeline, not a fixed
+    // one: the budget covers the update cadence plus slow first samples
+    // (~1s per real sampleHeight under SwiftShader).
     let sampleFloorOk = false;
     if (tilesSeenLoaded) {
+      const floorBudgetMs = Math.max(90000, camCount * 600 + 60000);
+      console.log(`Waiting for the one-shot floor (first real sample, budget ${Math.round(floorBudgetMs / 1000)}s)...`);
       sampleFloorOk = await page.waitForFunction(
         (base) => window.__qaCounters.sampleHeight - base >= 1,
-        { timeout: 30000 },
+        { timeout: floorBudgetMs },
         c0.sampleHeight
       ).then(() => true).catch(() => false);
     }
@@ -526,19 +555,27 @@ async function main() {
     // ~1s under SwiftShader — at N=250 that tail is ~4 minutes, and the old
     // fixed 60s cap expired mid-pass, bleeding legitimate one-shot samples
     // into the idle window (observed 2026-07-05: idle Δ=12, pose-edit Δ=5).
+    // The quiet wait only counts once the floor has fired — before that,
+    // stillness just means the pass has not started yet (the 2026-09-12
+    // sequencing hole: quiet 12s at counter=0, then the pass began and
+    // invalidated both flatness windows).
     let completionPassQuiet = false;
     {
       const settleBudgetMs = Math.max(60000, camCount * 1200 + 30000);
-      console.log(`Waiting for the one-shot completion pass to go quiet (budget ${Math.round(settleBudgetMs / 1000)}s)...`);
+      const floorFired = (await readCounters()).sampleHeight > c0.sampleHeight;
+      // No floor → the pass never started → stillness proves nothing; leave
+      // completionPassQuiet false so the flatness checks report null instead
+      // of burning the full budget waiting for a pass that never fires.
+      console.log(`Waiting for the one-shot completion pass to go quiet (budget ${Math.round(settleBudgetMs / 1000)}s, floor fired=${floorFired})...`);
       let last = (await readCounters()).sampleHeight;
       let quietMs = 0;
       const settleStart = Date.now();
-      while (quietMs < 12000 && Date.now() - settleStart < settleBudgetMs) {
+      while (floorFired && quietMs < 12000 && Date.now() - settleStart < settleBudgetMs) {
         await sleep(1000);
         const cur = (await readCounters()).sampleHeight;
-        if (cur === last) {
+        if (cur === last && cur > c0.sampleHeight) {
           quietMs += 1000;
-        } else {
+        } else if (cur !== last) {
           quietMs = 0;
           last = cur;
         }
@@ -903,35 +940,69 @@ async function main() {
     // Group 5: installed canvas-click ownership + true-empty deselection
     // =========================================================================
     console.log('Checking installed canvas click ownership and empty-space deselection...');
-    const emptyClickPoint = await page.evaluate(async () => {
-      const gev = window.__godsEyeView;
-      const viewer = gev.viewer;
-      const scene = viewer.scene;
-      const canvas = scene.canvas;
-      const rect = canvas.getBoundingClientRect();
-      const { hitTestWorldOverlay } = await import('/src/overlays/worldOverlay.js');
-      const candidates = [
-        [0.55, 0.72], [0.45, 0.72], [0.62, 0.62], [0.38, 0.62],
-        [0.58, 0.22], [0.42, 0.22], [0.5, 0.52],
-      ];
-      const resolveId = (picked) => {
-        const direct = picked?.id?.id ?? picked?.id;
-        if (direct !== undefined && direct !== null) return String(direct);
-        const primitive = picked?.primitive?.id?.id ?? picked?.primitive?.id;
-        return primitive === undefined || primitive === null ? null : String(primitive);
-      };
-      for (const [fx, fy] of candidates) {
-        const x = Math.round(canvas.clientWidth * fx);
-        const y = Math.round(canvas.clientHeight * fy);
-        const picked = scene.pick({ x, y });
-        const card = hitTestWorldOverlay(x, y, { sourceId: 'cctv' });
-        const top = document.elementFromPoint(rect.left + x, rect.top + y);
-        if (resolveId(picked) === null && !card && (top === canvas || canvas.contains(top))) {
-          return { x: rect.left + x, y: rect.top + y, canvasX: x, canvasY: y };
-        }
+    // The group-1 focus flight can still be settling long after focusNearest
+    // under software rendering (probe evidence: heading/height were still
+    // changing ~6 s after the call, ~800 ms per BeginFrame). A pose baseline
+    // taken mid-flight fails every poseSame comparison in this group, and a
+    // click target chosen pre-settle lands on different scene content once
+    // the camera stops. Hold for a stable camera signature first.
+    await page.evaluate(async () => {
+      const cam = window.__godsEyeView.viewer.camera;
+      cam.cancelFlight();
+      const sig = () => [cam.heading, cam.pitch, cam.roll,
+        cam.positionWC.x, cam.positionWC.y, cam.positionWC.z]
+        .map((v) => v.toFixed(6)).join('|');
+      const deadline = performance.now() + 60000;
+      let last = sig();
+      let stableAt = performance.now();
+      while (performance.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 400));
+        const now = sig();
+        if (now === last && performance.now() - stableAt >= 1500) return;
+        if (now !== last) stableAt = performance.now();
+        last = now;
       }
-      return null;
+      console.log('[qa-cctv] camera never fully settled; continuing with current pose');
     });
+    // Reusable emptiness finder: the active monitor plane's screen extent
+    // shifts with projection rewrites, so a point verified empty at search
+    // time can be owned by the time of a later click. Every consumer below
+    // re-verifies through this finder right before it clicks.
+    await page.evaluate(() => {
+      window.__qaFindEmptyClickPoint = async () => {
+        const gev = window.__godsEyeView;
+        const viewer = gev.viewer;
+        const scene = viewer.scene;
+        const canvas = scene.canvas;
+        const rect = canvas.getBoundingClientRect();
+        const { hitTestWorldOverlay } = await import('/src/overlays/worldOverlay.js');
+        const candidates = [
+          [0.55, 0.72], [0.45, 0.72], [0.62, 0.62], [0.38, 0.62],
+          [0.58, 0.22], [0.42, 0.22], [0.5, 0.52],
+          [0.08, 0.5], [0.92, 0.5], [0.5, 0.08], [0.5, 0.92],
+          [0.1, 0.15], [0.9, 0.15], [0.1, 0.85], [0.9, 0.85],
+          [0.25, 0.35], [0.75, 0.35], [0.25, 0.65], [0.75, 0.65],
+        ];
+        const resolveId = (picked) => {
+          const direct = picked?.id?.id ?? picked?.id;
+          if (direct !== undefined && direct !== null) return String(direct);
+          const primitive = picked?.primitive?.id?.id ?? picked?.primitive?.id;
+          return primitive === undefined || primitive === null ? null : String(primitive);
+        };
+        for (const [fx, fy] of candidates) {
+          const x = Math.round(canvas.clientWidth * fx);
+          const y = Math.round(canvas.clientHeight * fy);
+          const picked = scene.pick({ x, y });
+          const card = hitTestWorldOverlay(x, y, { sourceId: 'cctv' });
+          const top = document.elementFromPoint(rect.left + x, rect.top + y);
+          if (resolveId(picked) === null && !card && (top === canvas || canvas.contains(top))) {
+            return { x: rect.left + x, y: rect.top + y, canvasX: x, canvasY: y };
+          }
+        }
+        return null;
+      };
+    });
+    const emptyClickPoint = await page.evaluate(() => window.__qaFindEmptyClickPoint());
     record('true-empty canvas target is available (no scene owner or CCTV card)', Boolean(emptyClickPoint),
       emptyClickPoint ? `canvas=(${emptyClickPoint.canvasX},${emptyClickPoint.canvasY})` : 'no clean canvas point found');
 
@@ -953,13 +1024,72 @@ async function main() {
       const cameraPoseMatches = (a, b, epsilon = 1e-5) => {
         const vectorKeys = ['position', 'direction', 'up', 'right', 'transform'];
         const scalarKeys = ['heading', 'pitch', 'roll'];
-        return vectorKeys.every((key) => (
-          Array.isArray(a?.[key])
-          && Array.isArray(b?.[key])
-          && a[key].length === b[key].length
-          && a[key].every((value, index) => Math.abs(value - b[key][index]) <= epsilon)
-        )) && scalarKeys.every((key) => Math.abs(a?.[key] - b?.[key]) <= epsilon)
-          && a?.trackedId === b?.trackedId;
+        // Name every mismatching field in the detail line: poseSame=false
+        // with zero visible drift is undiagnosable from a bare boolean.
+        const poseMismatches = [];
+        const vectorOk = vectorKeys.every((key) => {
+          const ok = Array.isArray(a?.[key])
+            && Array.isArray(b?.[key])
+            && a[key].length === b[key].length
+            && a[key].every((value, index) => Math.abs(value - b[key][index]) <= epsilon);
+          if (!ok) {
+            const worst = Array.isArray(a?.[key]) && Array.isArray(b?.[key])
+              ? Math.max(...a[key].map((value, index) => Math.abs(value - b[key][index])))
+              : NaN;
+            poseMismatches.push(`${key}(Δ=${Number.isFinite(worst) ? worst.toExponential(2) : 'shape'})`);
+          }
+          return ok;
+        });
+        const scalarOk = scalarKeys.every((key) => {
+          const ok = Math.abs(a?.[key] - b?.[key]) <= epsilon;
+          if (!ok) poseMismatches.push(`${key}(${a?.[key]}→${b?.[key]})`);
+          return ok;
+        });
+        const trackedOk = a?.trackedId === b?.trackedId;
+        if (!trackedOk) poseMismatches.push(`trackedId(${a?.trackedId}→${b?.trackedId})`);
+        cameraPoseMatches.lastMismatches = poseMismatches;
+        return vectorOk && scalarOk && trackedOk;
+      };
+      // Render-fresh pose stabilization: under requestRenderMode the camera
+      // signature is FROZEN between frames, so a no-render settle cannot see
+      // pending corrections — the first forced render (sibling entity, click
+      // frames) then applies Cesium's terrain collision nudge (~4m observed
+      // 2026-09-12) and the pose check misattributes it to the click. Stabilize
+      // by rendering until the signature stops changing, then re-baseline so
+      // each check measures only what its own interaction moved.
+      const stabilizePose = async () => {
+        const scene = viewer.scene;
+        const deadline = performance.now() + 60000;
+        const sig = () => {
+          const s = snapshotPose();
+          return [...s.position, ...s.direction, ...s.up, ...s.right,
+            s.heading, s.pitch, s.roll].map((v) => v.toFixed(6)).join('|');
+        };
+        let last = sig();
+        let stableAt = performance.now();
+        while (performance.now() < deadline) {
+          await new Promise((resolve) => {
+            let frames = 0;
+            const remove = scene.postRender.addEventListener(() => {
+              if (++frames < 2) {
+                scene.requestRender();
+                return;
+              }
+              remove();
+              resolve();
+            });
+            scene.requestRender();
+          });
+          const now = sig();
+          if (now === last) {
+            if (performance.now() - stableAt >= 1500) return true;
+          } else {
+            stableAt = performance.now();
+            last = now;
+          }
+        }
+        console.log('[qa-cctv] pose never stabilized under forced rendering; using best-effort baseline');
+        return false;
       };
       window.__qaCctvClickEvidence?.dispose?.();
       const evidence = {
@@ -970,6 +1100,10 @@ async function main() {
         pose: snapshotPose(),
         snapshotPose,
         cameraPoseMatches,
+        restabilize: async () => {
+          await stabilizePose();
+          evidence.pose = snapshotPose();
+        },
       };
       evidence.lastActiveId = evidence.activeId;
       evidence.unsubscribe = mod.subscribe((state) => {
@@ -991,6 +1125,7 @@ async function main() {
     });
 
     if (emptyClickPoint) {
+      await page.evaluate(() => window.__qaCctvClickEvidence.restabilize());
       await page.evaluate(() => {
         window.__godsEyeView.dataManager.layers.get('cctv').module
           .setParams({ calibrationMode: true });
@@ -1007,17 +1142,30 @@ async function main() {
           publications: evidence.publications.length,
           focusEvents: evidence.focusEvents,
           poseSame: evidence.cameraPoseMatches(evidence.snapshotPose(), evidence.pose),
+          poseMismatch: evidence.cameraPoseMatches.lastMismatches.join(','),
         };
       });
       record('ADJUST-mode true-empty canvas click preserves active camera',
         adjustClick.activeId === clickEvidenceSetup.activeId
           && adjustClick.focusEvents === 0
           && adjustClick.poseSame,
-        `active=${adjustClick.activeId} focus=${adjustClick.focusEvents} poseSame=${adjustClick.poseSame}`);
+        `active=${adjustClick.activeId} focus=${adjustClick.focusEvents} poseSame=${adjustClick.poseSame}${adjustClick.poseMismatch ? ` mismatch=${adjustClick.poseMismatch}` : ''}`);
     } else {
       record('ADJUST-mode true-empty canvas click preserves active camera', false, 'no true-empty target');
     }
 
+    // The sibling must be placed on a ray that is empty NOW — re-verify (and
+    // relocate if the monitor plane grew over the original point) so the
+    // sibling's pick ownership is measured against a known-clean anchor.
+    let trueEmptyClickTarget = emptyClickPoint;
+    const siblingAnchor = await page.evaluate(async (previous) => {
+      if (!previous) return null;
+      const scene = window.__godsEyeView.viewer.scene;
+      const { resolvePickId } = await import('/src/data/pickRegistry.js');
+      const picked = scene.pick({ x: previous.canvasX, y: previous.canvasY });
+      if (resolvePickId(picked) === null) return previous;
+      return (await window.__qaFindEmptyClickPoint()) ?? previous;
+    }, emptyClickPoint);
     const siblingTarget = await page.evaluate(async (emptyPoint) => {
       if (!emptyPoint) return null;
       const gev = window.__godsEyeView;
@@ -1074,7 +1222,7 @@ async function main() {
         ownsExactObject: picked?.id === owner,
         projectionDelta: Math.hypot(projected.x - canvasPoint.x, projected.y - canvasPoint.y),
       };
-    }, emptyClickPoint);
+    }, siblingAnchor);
     record('sibling test object owns its canvas pick',
       siblingTarget
         ? siblingTarget.pickedId === 'qa-cctv-sibling-owner' && siblingTarget.ownsExactObject
@@ -1083,6 +1231,7 @@ async function main() {
         ? `picked=${siblingTarget.pickedId} exactOwner=${siblingTarget.ownsExactObject} projectionΔ=${siblingTarget.projectionDelta}`
         : 'no previously verified empty canvas ray was available');
     if (siblingTarget?.pickedId === 'qa-cctv-sibling-owner' && siblingTarget.ownsExactObject) {
+      await page.evaluate(() => window.__qaCctvClickEvidence.restabilize());
       await page.mouse.click(siblingTarget.x, siblingTarget.y);
       await sleep(250);
     }
@@ -1100,6 +1249,7 @@ async function main() {
         baselineTransitions: evidence.siblingBaselineTransitions,
         focusEvents: evidence.focusEvents,
         poseSame: evidence.cameraPoseMatches(evidence.snapshotPose(), evidence.pose),
+        poseMismatch: evidence.cameraPoseMatches.lastMismatches.join(','),
       };
     });
     record('sibling canvas click passes through without CCTV selection or deselection',
@@ -1109,10 +1259,49 @@ async function main() {
           && siblingClick.focusEvents === 0
           && siblingClick.poseSame
         : null,
-      `active=${siblingClick.activeId} transitions=${siblingClick.transitions - siblingClick.baselineTransitions} focus=${siblingClick.focusEvents} poseSame=${siblingClick.poseSame}`);
+      `active=${siblingClick.activeId} transitions=${siblingClick.transitions - siblingClick.baselineTransitions} focus=${siblingClick.focusEvents} poseSame=${siblingClick.poseSame}${siblingClick.poseMismatch ? ` mismatch=${siblingClick.poseMismatch}` : ''}`);
 
     if (emptyClickPoint) {
-      await page.mouse.click(emptyClickPoint.x, emptyClickPoint.y);
+      // Two click-time hazards to clear before the "true empty" click:
+      // (1) the sibling owner was just removed — under requestRenderMode no
+      // frame may have rendered since, so scene.pick still hits the STALE
+      // billboard; render the removal in. (2) The active monitor plane's
+      // screen extent shifts with projection rewrites — a point empty at
+      // search time can be owned by click time, so re-verify through the
+      // finder and relocate if scene content now owns the anchor.
+      const emptyClickAnchor = siblingTarget ?? emptyClickPoint;
+      await page.evaluate(async (canvasPoint) => {
+        const scene = window.__godsEyeView.viewer.scene;
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+          scene.requestRender();
+          await new Promise((resolve) => {
+            let frames = 0;
+            const remove = scene.postRender.addEventListener(() => {
+              if (++frames < 3) {
+                scene.requestRender();
+                return;
+              }
+              remove();
+              resolve();
+            });
+          });
+          let picked = null;
+          try { picked = scene.pick(canvasPoint); } catch { picked = null; }
+          const identified = picked && (picked.id != null || picked.primitive?.id != null);
+          if (!identified) return;
+        }
+      }, { x: emptyClickAnchor.canvasX, y: emptyClickAnchor.canvasY });
+      const trueEmptyPoint = await page.evaluate(async (previous) => {
+        const scene = window.__godsEyeView.viewer.scene;
+        const { resolvePickId } = await import('/src/data/pickRegistry.js');
+        const picked = scene.pick({ x: previous.canvasX, y: previous.canvasY });
+        if (resolvePickId(picked) === null) return previous;
+        window.__qaCctvEmptyTargetRelocated = true;
+        return (await window.__qaFindEmptyClickPoint()) ?? previous;
+      }, emptyClickAnchor);
+      trueEmptyClickTarget = trueEmptyPoint;
+      await page.evaluate(() => window.__qaCctvClickEvidence.restabilize());
+      await page.mouse.click(trueEmptyPoint.x, trueEmptyPoint.y);
       await sleep(250);
     }
     const firstEmptyClick = await page.evaluate(() => {
@@ -1126,6 +1315,8 @@ async function main() {
         lastTransition: evidence.activeTransitions.at(-1) ?? null,
         focusEvents: evidence.focusEvents,
         poseSame: evidence.cameraPoseMatches(evidence.snapshotPose(), evidence.pose),
+        poseMismatch: evidence.cameraPoseMatches.lastMismatches.join(','),
+        relocated: Boolean(window.__qaCctvEmptyTargetRelocated),
       };
     });
     record('real true-empty canvas click publishes one active-to-null transition',
@@ -1135,13 +1326,22 @@ async function main() {
         && firstEmptyClick.transitions === firstEmptyClick.baselineTransitions + 1
         && firstEmptyClick.lastTransition?.[0] === clickEvidenceSetup.activeId
         && firstEmptyClick.lastTransition?.[1] === null,
-      `active=${firstEmptyClick.activeId} enabled=${firstEmptyClick.enabled} transitions=${firstEmptyClick.transitions - firstEmptyClick.baselineTransitions}`);
+      `active=${firstEmptyClick.activeId} enabled=${firstEmptyClick.enabled} transitions=${firstEmptyClick.transitions - firstEmptyClick.baselineTransitions}${firstEmptyClick.relocated ? ' (target relocated at click time)' : ''}`);
     record('real true-empty deselection preserves pose/tracking and emits no focus request',
       Boolean(emptyClickPoint) && firstEmptyClick.poseSame && firstEmptyClick.focusEvents === 0,
-      `poseSame=${firstEmptyClick.poseSame} focus=${firstEmptyClick.focusEvents}`);
+      `poseSame=${firstEmptyClick.poseSame} focus=${firstEmptyClick.focusEvents}${firstEmptyClick.poseMismatch ? ` mismatch=${firstEmptyClick.poseMismatch}` : ''}`);
 
-    if (emptyClickPoint) {
-      await page.mouse.click(emptyClickPoint.x, emptyClickPoint.y);
+    if (trueEmptyClickTarget) {
+      // The repeat click must also land on empty space: a camera icon under
+      // it would ACTIVATE rather than stay null-idempotent.
+      const repeatPoint = await page.evaluate(async (previous) => {
+        const scene = window.__godsEyeView.viewer.scene;
+        const { resolvePickId } = await import('/src/data/pickRegistry.js');
+        const picked = scene.pick({ x: previous.canvasX, y: previous.canvasY });
+        if (resolvePickId(picked) === null) return previous;
+        return (await window.__qaFindEmptyClickPoint()) ?? previous;
+      }, trueEmptyClickTarget);
+      await page.mouse.click(repeatPoint.x, repeatPoint.y);
       await sleep(250);
     }
     const repeatEmptyClick = await page.evaluate(() => {
@@ -1165,14 +1365,17 @@ async function main() {
 
     // Explicit navigation from null must remain available for the remaining
     // coverage and gizmo groups. NEXT is the product route pinned by N4.
-    const resumedId = await page.evaluate(() => {
+    // Assert the pre-state: "resumes from null" is only proven when the
+    // active id was actually null before the cycle.
+    const resumed = await page.evaluate(() => {
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
+      const before = mod.getUIState().activeCameraId;
       mod.cycleCamera(1);
-      return mod.getUIState().activeCameraId;
+      return { before, after: mod.getUIState().activeCameraId };
     });
     record('explicit NEXT resumes from null at the first catalog camera',
-      typeof resumedId === 'string' && Boolean(resumedId),
-      `active=${resumedId}`);
+      resumed.before === null && typeof resumed.after === 'string' && Boolean(resumed.after),
+      `before=${resumed.before} after=${resumed.after}`);
 
     // =========================================================================
     // Group 6: viewshed mode (v3 design §3b — coverage tri-state + volumes)

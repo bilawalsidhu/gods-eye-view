@@ -77,6 +77,23 @@ function check(name, ok, detail = '') {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// The Context reveals scroll their inner scroller with smooth scrolling after a
+// double-rAF wait, and under SwiftShader rAFs only fire on rendered frames
+// (render governor) — the reveal can land more than a second after the
+// triggering action. Sample the scroller until two consecutive reads agree and
+// the reveal actually moved, then let the caller measure the settled state.
+async function waitForRevealScroll(page) {
+  await page.evaluate(() => { delete window.__qaRevealSample; });
+  await page.waitForFunction(() => {
+    const scroller = document.querySelector('#global-context-panel .global-context-panel-inner');
+    const top = scroller ? scroller.scrollTop : -1;
+    if (top > 0 && top === window.__qaRevealSample) return true;
+    window.__qaRevealSample = top;
+    return false;
+  }, { polling: 150, timeout: 6000 }).catch(() => null);
+  await sleep(150);
+}
+
 async function main() {
   const response = await fetch(APP_URL).catch(() => null);
   if (!response?.ok) {
@@ -97,6 +114,10 @@ async function main() {
   const browser = await puppeteer.launch({
     headless: HEADFUL ? false : 'new',
     ...(chrome ? { executablePath: chrome } : {}),
+    // Software WebGL (SwiftShader) shades the full-size globe canvas on CPU;
+    // individual frames and the evaluates that await them can take minutes.
+    // The 180s default protocol timeout aborts the run mid-suite otherwise.
+    protocolTimeout: 600_000,
     args: [
       // webglLaunchArgs() (not a bare --use-gl=angle): without a real
       // --use-angle backend this box has no GPU to fall back to, Cesium never
@@ -227,7 +248,13 @@ async function main() {
       }
     });
 
-    await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    // `?welcome=0` is the product's own support/demo suppression seam for the
+    // first-run mission launcher (src/firstRunExperience.js show policy). A
+    // fresh puppeteer profile always replays the launcher, and its full-screen
+    // modal measurably interfered with the globe-label, panel-lane, and
+    // Context-expansion checks below (L9 matrix D8): the harness is not
+    // testing onboarding — qa-firstrun.mjs owns that surface.
+    await page.goto(`${APP_URL}${APP_URL.includes('?') ? '&' : '?'}welcome=0`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 60_000 });
     await page.waitForFunction(() => window.__godsEyeView?.styleManager?._dataManager?.layers?.has('radio'), { timeout: 60_000 });
     await page.waitForFunction(
@@ -585,7 +612,7 @@ async function main() {
     await page.evaluate(() => window.__qaReleaseRadioEnable?.());
     await page.waitForFunction(() => window.__godsEyeView.dataManager.isEnabled('radio'));
     await page.evaluate(() => window.__qaRestoreRadioEnable?.());
-    await sleep(650);
+    await waitForRevealScroll(page);
     const explicitRevealAfter = await page.evaluate(() => {
       const gev = window.__godsEyeView;
       const scroller = document.querySelector('#global-context-panel .global-context-panel-inner');
@@ -659,6 +686,23 @@ async function main() {
             .find((item) => item.name === 'Radio stations');
           const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
           const { radioStationIdFromPick } = await import('/src/data/radio.js');
+          // Wait for the overlay's first converged solve at this camera before
+          // sampling: the label solve completes asynchronously after the view
+          // change, and under software WebGL a full-size frame can take longer
+          // than any fixed sleep. Converged = radio painted something, the view
+          // has no entries at all, or the solve revision stopped advancing.
+          let lastRevision = -1;
+          let stableRounds = 0;
+          for (let waited = 0; waited < 12_000; waited += 250) {
+            const hostNow = getWorldOverlayDiagnostics();
+            const overlayNow = radio.getOverlayDiagnostics();
+            if (overlayNow.entryCount === 0 || (hostNow.paintedBySource?.radio || 0) > 0) break;
+            if (hostNow.solveRevision === lastRevision) stableRounds += 1;
+            else stableRounds = 0;
+            lastRevision = hostNow.solveRevision;
+            if (stableRounds >= 6) break;
+            await new Promise((resolve) => setTimeout(resolve, 250));
+          }
           return new Promise((resolve) => {
             let removePostRender = null;
             const finish = () => {
@@ -1363,7 +1407,11 @@ async function main() {
         const point = points.get(index);
         if (!point?.show || !Array.isArray(point.id) || !point.id.length) continue;
         const anchor = viewer.scene.cartesianToCanvasCoordinates(point.position);
-        if (!anchor) continue;
+        // At a full-size viewport the first dot in the collection can sit
+        // off-screen; drillPick there would always miss and report a false
+        // pickability failure. Sample a visible dot.
+        if (!anchor || anchor.x < 0 || anchor.y < 0
+          || anchor.x > viewer.canvas.clientWidth || anchor.y > viewer.canvas.clientHeight) continue;
         const exactPick = (viewer.scene.drillPick(anchor, 16) || []).find((picked) => (
           picked?.primitive === point && picked?.id === point.id
         ));
@@ -1797,7 +1845,9 @@ async function main() {
         // Disclosure restoration can wake the installed layout observers. Let
         // those observers settle, then restore the captured stack presentation
         // once more so this synthetic scenario cannot leak derived lane state
-        // into the Radio interactions that follow.
+        // into the Radio interactions that follow. The settled passes rewrite
+        // panel presentation too (allocated heights, exclusive hiding), so the
+        // captured panels get the same second restore pass the stacks get.
         for (const [id, state] of Object.entries(prior.stacks)) {
           const stack = document.getElementById(id);
           stack.className = state.className;
@@ -1805,6 +1855,15 @@ async function main() {
           else stack.setAttribute('style', state.style);
           for (const key of Object.keys(stack.dataset)) delete stack.dataset[key];
           Object.assign(stack.dataset, state.dataset);
+        }
+        for (const [id, state] of Object.entries(prior.panels)) {
+          const panel = document.getElementById(id);
+          panel.className = state.className;
+          if (state.style === null) panel.removeAttribute('style');
+          else panel.setAttribute('style', state.style);
+          if (state.ariaHidden === null) panel.removeAttribute('aria-hidden');
+          else panel.setAttribute('aria-hidden', state.ariaHidden);
+          manager._syncPanelCollapseButton(panel);
         }
         if (prior.focusId) document.getElementById(prior.focusId)?.focus({ preventScroll: true });
         const panelsRestored = Object.entries(prior.panels).every(([id, state]) => {
@@ -2070,7 +2129,30 @@ async function main() {
       // The Intel HUD fades over 400ms and keeps its readout rects for the
       // whole transition, so both lanes are measured only once it has settled.
       const waitForHudSettle = () => new Promise((resolve) => setTimeout(resolve, 560));
+      // Both lanes are re-solved on animation frames, so the 560ms settle can
+      // still sample a mid-transition strip under software WebGL (its layout
+      // moves after the fade's timer has run out). Measure only once the
+      // strip's inputs stop moving across an animation frame. Timers backstop
+      // the frame wait so a starved render loop cannot stall the block.
+      const waitForStripSettle = async () => {
+        const stripSignature = () => {
+          const utility = document.getElementById('cockpit-utility-controls')
+            .getBoundingClientRect();
+          return `${utility.top.toFixed(1)}|${signal.getBoundingClientRect().top.toFixed(1)}`;
+        };
+        let previous = stripSignature();
+        for (let guard = 0; guard < 20; guard += 1) {
+          await Promise.race([
+            new Promise((resolve) => requestAnimationFrame(resolve)),
+            new Promise((resolve) => setTimeout(resolve, 2000)),
+          ]);
+          const next = stripSignature();
+          if (next === previous) return;
+          previous = next;
+        }
+      };
       for (let index = 0; index < 5; index += 1) {
+        await waitForStripSettle();
         recordLayoutStep();
         if (index < 4) {
           if (index < 2) {
@@ -2214,6 +2296,7 @@ async function main() {
       const photorealAvailable = manager.mapStackController?.getStacks()
         .some((stack) => stack.id === 'photoreal' && stack.available);
       let mapProviderUtilityStable = true;
+      let mapProviderUtilityTrace = { sampledFrames: 0, skipped: true };
       if (photorealAvailable) {
         await manager._setMapStack('photoreal', { syncShare: false });
         await waitForLayout();
@@ -2226,10 +2309,26 @@ async function main() {
         };
         requestAnimationFrame(sampleTop);
         await manager._setMapStack('osm', { syncShare: false });
-        await waitForLayout();
+        // The swap resolves when the imagery provider is wired, but the
+        // strip's stability contract covers the whole visible transition —
+        // keep sampling until a few frames have landed. Timers backstop the
+        // frame wait: under a starved software-render loop rAF alone could
+        // stall the block indefinitely.
+        const frameOrTimeout = () => Promise.race([
+          new Promise((resolve) => requestAnimationFrame(resolve)),
+          new Promise((resolve) => setTimeout(resolve, 2000)),
+        ]);
+        for (let guard = 0; guard < 20 && transitionTops.length < 4; guard += 1) {
+          await frameOrTimeout();
+        }
         sampling = false;
         mapProviderUtilityStable = transitionTops.length > 1
           && transitionTops.every((top) => Math.abs(top - stableTop) < 1);
+        mapProviderUtilityTrace = {
+          sampledFrames: transitionTops.length,
+          stableTop,
+          tops: transitionTops.map((top) => Math.round(top * 10) / 10),
+        };
       }
       result = {
         cockpitPanelInteraction,
@@ -2273,6 +2372,7 @@ async function main() {
             && step.flightsMode === expectedMode
             && step.militaryMode === expectedMode;
         }),
+        mapProviderUtilityTrace,
       };
       } finally {
         if (prior.mapStack) await manager._setMapStack(prior.mapStack, { syncShare: false });
@@ -2450,7 +2550,11 @@ async function main() {
         const point = points.get(index);
         if (!point.show || !Array.isArray(point.id) || !point.id.length) continue;
         const canvasPoint = gev.viewer.scene.cartesianToCanvasCoordinates(point.position);
-        if (!canvasPoint) continue;
+        // The physical mouse click below needs an on-screen dot; at a
+        // full-size viewport the first collection entry can be off-screen.
+        if (!canvasPoint || canvasPoint.x < 0 || canvasPoint.y < 0
+          || canvasPoint.x > gev.viewer.canvas.clientWidth
+          || canvasPoint.y > gev.viewer.canvas.clientHeight) continue;
         return {
           x: canvasPoint.x,
           y: canvasPoint.y,
@@ -2488,11 +2592,30 @@ async function main() {
     );
 
     await page.select('#radio-filter', 'weather');
-    await sleep(700);
-    const weatherCluster = await page.evaluate(() => {
-      const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
-      return { texts: radio.getOverlayDiagnostics().clusterTexts };
-    });
+    // The filter change dirties Cesium's cluster set and the layer republishes
+    // overlay entries on the rebuild frame. Convergence takes a couple of
+    // rendered frames — seconds under software WebGL — so poll for it instead
+    // of sampling a fixed delay that can land inside the rebuild window.
+    let weatherClusterTexts = null;
+    try {
+      await page.waitForFunction(() => (
+        window.__godsEyeView.dataManager.layers.get('radio').module
+          .getOverlayDiagnostics().clusterTexts.length > 0
+      ), { polling: 250, timeout: 15_000 });
+      weatherClusterTexts = await page.evaluate(() => (
+        window.__godsEyeView.dataManager.layers.get('radio').module
+          .getOverlayDiagnostics().clusterTexts
+      ));
+    } catch {
+      weatherClusterTexts = null;
+    }
+    const weatherCluster = {
+      texts: weatherClusterTexts || await page.evaluate(() => (
+        window.__godsEyeView.dataManager.layers.get('radio').module
+          .getOverlayDiagnostics().clusterTexts
+      )),
+      converged: weatherClusterTexts !== null,
+    };
     check(
       'Weather / Emergency view labels its cluster callouts WEATHER',
       weatherCluster.texts.length > 0 && weatherCluster.texts.every((text) => /^\d+ WEATHER$/.test(text)),
@@ -4022,18 +4145,27 @@ async function main() {
       let selectedNativePick = null;
       let selectedPointPick = null;
       let selectedBillboardPick = null;
+      // The published cesium package ships minified class names (a
+      // PointPrimitive's constructor is "Ho", a Billboard's "Zr"), so type
+      // detection must read the primitive's own shape, not its name — the
+      // same idiom qa-floor-verify.mjs uses for primitive walks.
+      const primitiveIsPoint = (primitive) => Boolean(primitive
+        && primitive.pixelSize !== undefined
+        && primitive.image === undefined
+        && primitive.alignedAxis === undefined);
+      const primitiveIsBillboard = (primitive) => Boolean(primitive
+        && primitive.image !== undefined
+        && primitive.alignedAxis !== undefined);
       // Retry on the STRICT anchor: waiting only for "any pick" let a
       // billboard satisfy the loop while the point anchor was still missing.
       for (let attempt = 0; entityAnchor && attempt < 8 && !selectedPointPick; attempt += 1) {
         const picks = viewer.scene.drillPick(entityAnchor, 16) || [];
         selectedNativePick = picks.find((picked) => picked?.id === selectedEntity);
         selectedPointPick = picks.find((picked) => (
-          picked?.id === selectedEntity
-          && String(picked?.primitive?.constructor?.name || '').includes('PointPrimitive')
+          picked?.id === selectedEntity && primitiveIsPoint(picked?.primitive)
         ));
         selectedBillboardPick = picks.find((picked) => (
-          picked?.id === selectedEntity
-          && String(picked?.primitive?.constructor?.name || '').includes('Billboard')
+          picked?.id === selectedEntity && primitiveIsBillboard(picked?.primitive)
         ));
         if (!selectedPointPick) {
           await new Promise((resolve) => {
@@ -4441,7 +4573,7 @@ async function main() {
         JSON.stringify(expandedContextRadioAfter),
       );
     } else {
-      await sleep(450);
+      await waitForRevealScroll(page);
     const expandedContextRadioAfter = await page.evaluate(() => {
       const gev = window.__godsEyeView;
       gev.styleManager._renderRadioState(gev.dataManager.layers.get('radio').module.getUIState());

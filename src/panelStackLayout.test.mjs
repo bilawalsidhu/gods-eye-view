@@ -182,7 +182,11 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
     'focus mode must hide every collapsed sibling, including presentation-only auto-collapses',
   );
   assert.doesNotMatch(css, /layout-focus > \[data-panel-id\]\.collapsed:not\(\.layout-auto-collapsed\)/);
-  assert.match(ui, /const hiddenSibling = shouldFocus && panel\.classList\.contains\('collapsed'\);/);
+  assert.match(
+    ui,
+    /const hiddenSibling = \(shouldFocus \|\| exclusive\) && panel\.classList\.contains\('collapsed'\);/,
+    'collapsed siblings hidden by focus mode or the tactical lane contract are aria-hidden',
+  );
 });
 
 test('share-panel state excludes responsive collapse and preserves recipient preferences', () => {

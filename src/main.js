@@ -1,4 +1,18 @@
 import * as Cesium from 'cesium';
+// Cesium's widget stylesheets size the viewer chain (`.cesium-viewer` →
+// `.cesium-viewer-cesiumWidgetContainer` → `.cesium-widget` → canvas) to its
+// container. They used to arrive transitively from vite-plugin-cesium; since
+// that plugin was removed (PWA phase 1.2) the canvas kept its intrinsic
+// 300x150 size and the globe rendered in a corner box while every
+// screen-space overlay projected into the same tiny viewport (L9 matrix
+// D-wave). CesiumWidget.css alone was still not enough: without Viewer.css
+// the `.cesium-viewer`/container wrappers have auto height, so the widget's
+// 100% height resolves against nothing and the canvas collapses to a strip —
+// 280px of a 760px viewport on mobile (attribution lightbox, 2026-09-12).
+// All of this app's Cesium widget chrome is disabled with `!important` rules
+// in style.css, so these stock sheets cannot resurrect it.
+import '../node_modules/cesium/Source/Widgets/CesiumWidget/CesiumWidget.css';
+import '../node_modules/cesium/Source/Widgets/Viewer/Viewer.css';
 import { StyleManager } from './ui.js';
 import { flyToAustin } from './camera.js';
 import { DataLayerManager } from './data/manager.js';

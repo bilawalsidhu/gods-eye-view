@@ -4,6 +4,7 @@ import { registerPickOwner, unregisterPickOwner, isOwnedByOtherLayer, resolvePic
 import { registerSpriteCollection, restoreSpriteOrder } from './spriteOrder.js';
 import {
   bindTrackingClickGesture,
+  domEventPressClock,
   isTrackingClickGesture,
   isTrackingSelectionGesture,
 } from './trackingClickGesture.js';
@@ -299,6 +300,12 @@ let _trackedModelGen = 0;
 let _trackedModelLoading = false;
 /** @type {Cesium.ScreenSpaceEventHandler|null} Click handler for selecting aircraft */
 let _clickHandler = null;
+/**
+ * Press-duration clock for the click gesture: DOM event stamps, immune to
+ * main-thread queueing delay (under load an instant tap must not read as a
+ * long press just because a render frame sat between the two events).
+ */
+let _clickPressClock = null;
 /** @type {Cesium.Viewer|null} Cached viewer reference */
 let _viewer = null;
 /** Cockpit presentation switches ambient AIR contacts between near aircraft and far dots. */
@@ -2726,6 +2733,8 @@ const militaryFlightsLayer = {
       _clickHandler.destroy();
       _clickHandler = null;
     }
+    _clickPressClock?.dispose();
+    _clickPressClock = null;
     if (_trackedEntityChangedRemove) {
       _trackedEntityChangedRemove();
       _trackedEntityChangedRemove = null;
@@ -3253,6 +3262,8 @@ const militaryFlightsLayer = {
       _clickHandler.destroy();
       _clickHandler = null;
     }
+    _clickPressClock?.dispose();
+    _clickPressClock = null;
     if (_trackedEntityChangedRemove) {
       _trackedEntityChangedRemove();
       _trackedEntityChangedRemove = null;
@@ -3809,6 +3820,7 @@ function _installClickHandler(viewer) {
   }
 
   _clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+  _clickPressClock = domEventPressClock(viewer.scene.canvas);
   bindTrackingClickGesture(_clickHandler, (click, gesture) => {
     // Camera drags never select or deselect, even if they finish over a plane.
     // Duration alone is allowed through so a stationary long press can still
@@ -3867,7 +3879,7 @@ function _installClickHandler(viewer) {
       _cancelPendingTrackingRestore();
       _clearTracking(false, { origin: 'user' });
     }
-  });
+  }, { now: _clickPressClock.now });
 
   document.addEventListener('keydown', _onKeyDown);
 }

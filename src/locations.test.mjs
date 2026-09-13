@@ -597,3 +597,102 @@ test('search without an authority hook preserves the existing caller contract', 
   assert.equal(result.navigationMode, 'city-overview');
   assert.equal(viewer.flights.length, 1);
 });
+
+// ── Offline Natural Earth fallback (L9 matrix D10) ─────────────────────────
+// "fly to the Alps" used to hard-throw keyless even though the bundled
+// Natural Earth pack resolves the range with zero network. The fallback must
+// fire BOTH on the keyless path (before any geocode attempt) and after a
+// keyed geocode that finds nothing.
+
+async function runKeylessSearch(viewer, query, options = {}) {
+  const hadWindow = Object.hasOwn(globalThis, 'window');
+  const priorWindow = globalThis.window;
+  const priorFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.window = { __GOOGLE_MAPS_API_KEY__: '' };
+  // The keyless path must be fully offline: any fetch is a failure.
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    throw new Error('keyless search must not touch the network');
+  };
+  try {
+    return { result: await searchAndFlyTo(viewer, query, options), fetchCalls };
+  } finally {
+    globalThis.fetch = priorFetch;
+    if (hadWindow) globalThis.window = priorWindow;
+    else delete globalThis.window;
+  }
+}
+
+async function runMissSearch(viewer, query, options = {}) {
+  const hadWindow = Object.hasOwn(globalThis, 'window');
+  const priorWindow = globalThis.window;
+  const priorFetch = globalThis.fetch;
+  globalThis.window = { __GOOGLE_MAPS_API_KEY__: 'test-key' };
+  // Geocode finds nothing; places-near-view recovery answers with no places.
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes('maps.googleapis.com')) {
+      return { ok: true, json: async () => ({ status: 'ZERO_RESULTS', results: [] }) };
+    }
+    return { ok: true, json: async () => ({ places: [] }) };
+  };
+  try {
+    return await searchAndFlyTo(viewer, query, options);
+  } finally {
+    globalThis.fetch = priorFetch;
+    if (hadWindow) globalThis.window = priorWindow;
+    else delete globalThis.window;
+  }
+}
+
+test('keyless search flies a Natural Earth swath with zero network', async () => {
+  const viewer = stubViewer();
+  const { result, fetchCalls } = await runKeylessSearch(viewer, 'the Alps');
+  assert.equal(fetchCalls, 0, 'keyless NE fallback must be fully offline');
+  assert.equal(result.label, 'Alps');
+  assert.equal(result.navigationMode, 'natural-region-swath');
+  assert.equal(result.rangeM, 280000);
+  // The flight is the landmark-style swath flight (range-capped, oblique).
+  assert.equal(viewer.flights.length, 1);
+  const sphere = viewer.flights[0].sphere;
+  assert.ok(sphere, 'expected a flyToBoundingSphere swath flight');
+  const carto = Cesium.Cartographic.fromCartesian(sphere.center);
+  const lat = Cesium.Math.toDegrees(carto.latitude);
+  const lon = Cesium.Math.toDegrees(carto.longitude);
+  assert.ok(lat > 42 && lat < 50, `swath center lat ${lat.toFixed(1)} not in the Alps`);
+  assert.ok(lon > 3 && lon < 18, `swath center lon ${lon.toFixed(1)} not in the Alps`);
+  assert.equal(viewer.flights[0].offset.range, 280000);
+});
+
+test('keyless search on a pack miss still throws the geocode error', async () => {
+  const viewer = stubViewer();
+  await assert.rejects(
+    () => runKeylessSearch(viewer, 'zzz no such range'),
+    /No Google Maps API key available for geocoding/,
+  );
+  assert.equal(viewer.flights.length, 0);
+});
+
+test('keyless search honors a beforeFly veto from the Natural Earth fallback', async () => {
+  const viewer = stubViewer();
+  const { result } = await runKeylessSearch(viewer, 'the Alps', { beforeFly: () => false });
+  assert.equal(result, CANCELLED_SEARCH);
+  assert.equal(viewer.flights.length, 0);
+});
+
+test('keyed search that geocodes to nothing falls back to the Natural Earth pack', async () => {
+  const viewer = stubViewer();
+  const result = await runMissSearch(viewer, 'the Alps');
+  assert.equal(result.label, 'Alps');
+  assert.equal(result.navigationMode, 'natural-region-swath');
+  assert.equal(result.rangeM, 280000);
+  assert.equal(viewer.flights.length, 1);
+});
+
+test('keyed search that finds nothing anywhere returns null without a flight', async () => {
+  const viewer = stubViewer();
+  const result = await runMissSearch(viewer, 'zzz no such range');
+  assert.equal(result, null);
+  assert.equal(viewer.flights.length, 0);
+});

@@ -362,3 +362,61 @@ test('ask-side admin bypass: admin level 2/3 result types never grant a township
     'both township-level admin result types stay guarded',
   );
 });
+
+// ── Offline Natural Earth anchor rung (L9 matrix D10) ──────────────────────
+// Keyless, the Places proxy 503s and geocodePlace returns null — a named
+// natural region used to die as "could not resolve location" even though the
+// bundled pack knows the range offline. The anchor rung must anchor it, and
+// the outline rung must then grant the real ring.
+test('keyless natural-region target anchors offline and resolves the real ring', async (t) => {
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+  globalThis.window = { __GOOGLE_MAPS_API_KEY__: '' };
+  // Keyless: the Places text-search proxy degrades to 503; the geocoder is
+  // never fetched (geocodePlace returns null before any network).
+  globalThis.fetch = async () => ({ ok: false, status: 503, json: async () => ({}) });
+  t.after(() => {
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+  });
+
+  const resolved = await resolveAnnotationTarget({
+    viewer: closeViewportViewer(),
+    target: 'the Alps',
+    footprint: true, // the area draw asks for the outline inline
+  });
+
+  assert.ok(resolved, 'a curated natural region must resolve with zero keys');
+  // A resolved ring is reported as the 'footprint' source; 'natural-region' is
+  // the pre-outline anchor source (visible in the resolver trace).
+  assert.equal(resolved.source, 'footprint');
+  assert.equal(resolved.synthesized, false, 'must be the real Natural Earth polygon, not a blob');
+  assert.equal(resolved.footprintKind, 'area');
+  assert.equal(resolved.label, 'Alps');
+  assert.ok(Array.isArray(resolved.ring) && resolved.ring.length >= 8,
+    `expected the Natural Earth range ring, got ${resolved.ring?.length}`);
+  // Ring centroid sits in the Alps, not at a far geocoded city.
+  const latMean = resolved.ring.reduce((sum, [, lat]) => sum + lat, 0) / resolved.ring.length;
+  const lonMean = resolved.ring.reduce((sum, [lon]) => sum + lon, 0) / resolved.ring.length;
+  assert.ok(latMean > 42 && latMean < 50, `ring lat ${latMean.toFixed(1)} not in the Alps`);
+  assert.ok(lonMean > 3 && lonMean < 18, `ring lon ${lonMean.toFixed(1)} not in the Alps`);
+});
+
+test('a name outside the Natural Earth pack still fails honestly when geocoding is unavailable', async (t) => {
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+  globalThis.window = { __GOOGLE_MAPS_API_KEY__: '' };
+  globalThis.fetch = async () => ({ ok: false, status: 503, json: async () => ({}) });
+  t.after(() => {
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+  });
+
+  const resolved = await resolveAnnotationTarget({
+    viewer: closeViewportViewer(),
+    target: 'zzz no such place',
+  });
+  assert.equal(resolved, null);
+});

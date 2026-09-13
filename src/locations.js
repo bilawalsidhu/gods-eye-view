@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { viewportBias, placesNearViewRecovery } from './annotations/annotationResolver.js';
+import { findNaturalRegion } from './data/naturalEarthRegions.js';
 
 /**
  * Points of Interest per city.
@@ -342,13 +343,87 @@ export function findPoiByName(query) {
 export const CANCELLED_SEARCH = Object.freeze({ cancelled: true });
 
 /**
+ * Offline natural-region fallback for searchAndFlyTo (L9 matrix D10,
+ * 2026-09-09): the bundled Natural Earth pack knows named physical features
+ * ("the Alps", "Sahara", "Gulf of Mexico") with no network at all, but the
+ * keyless path used to throw before ever consulting it. Frame the region's
+ * bbox with the same swath/full logic the geocode path uses.
+ *
+ * Returns the searchAndFlyTo result shape, CANCELLED_SEARCH when a beforeFly
+ * veto fires, or null when the pack has no match (caller then throws or
+ * returns null exactly as before).
+ */
+async function flyNaturalRegionFallback(viewer, query, options) {
+  const region = await findNaturalRegion(query).catch(() => null);
+  const bbox = region?.bbox;
+  if (!region || !Array.isArray(bbox) || !bbox.every(Number.isFinite)) return null;
+
+  const [minLon, minLat, maxLon, maxLat] = bbox;
+  const viewport = {
+    southwest: { lat: minLat, lng: minLon },
+    northeast: { lat: maxLat, lng: maxLon },
+  };
+  const beforeFly = typeof options.beforeFly === 'function' ? options.beforeFly : null;
+  const mayFly = () => beforeFly === null || beforeFly() !== false;
+  const duration = finitePositive(options.duration) || 3.0;
+
+  const swath = regionFramingPlan(viewport);
+  if (swath?.mode === 'swath') {
+    if (!mayFly()) return CANCELLED_SEARCH;
+    flyToLandmark(viewer, swath.centerLat, swath.centerLng, {
+      range: swath.rangeM,
+      pitch: swath.pitchDeg,
+      heading: swath.headingDeg,
+      buildingHeight: 0,
+      duration,
+      onStart: options.onStart,
+      onComplete: options.onComplete,
+      onCancel: options.onCancel,
+    });
+    return {
+      label: region.name,
+      navigationMode: 'natural-region-swath',
+      rangeM: swath.rangeM,
+    };
+  }
+
+  // Small-enough region (or degenerate metrics): frame the whole bbox, exactly
+  // like an administrative geocode would have.
+  const flight = flyToViewportBounds(viewer, viewport, {
+    duration,
+    navigationMode: 'region-overview',
+    beforeFly: mayFly,
+    onStart: options.onStart,
+    onComplete: options.onComplete,
+    onCancel: options.onCancel,
+  });
+  if (flight === CANCELLED_SEARCH) return CANCELLED_SEARCH;
+  if (!flight) return null;
+  return { label: region.name, navigationMode: 'region-overview', rangeM: null };
+}
+
+/**
  * Geocode a place name using Google Geocoding API, then fly there at a scale
  * appropriate to the request. Countries and cities use their viewport by
  * default; precise landmarks/buildings use close landmark framing.
  */
 export async function searchAndFlyTo(viewer, query, options = {}) {
-  const apiKey = window.__GOOGLE_MAPS_API_KEY__ || import.meta.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) throw new Error('No Google Maps API key available for geocoding');
+  // `typeof import.meta.env` keeps the bare-env read safe under plain node
+  // (unit tests) while leaving the exact `import.meta.env.GOOGLE_MAPS_API_KEY`
+  // member expression intact for vite.config.js's static define replacement —
+  // rewriting it to `?.` would miss the define and silently drop the key from
+  // production builds.
+  const envKey = typeof import.meta.env === 'object' && import.meta.env
+    ? import.meta.env.GOOGLE_MAPS_API_KEY
+    : undefined;
+  const apiKey = window.__GOOGLE_MAPS_API_KEY__ || envKey;
+  if (!apiKey) {
+    // Keyless deployment: resolve the bundled Natural Earth pack before giving
+    // up, so "fly to the Alps" works with zero keys and zero network.
+    const offline = await flyNaturalRegionFallback(viewer, query, options);
+    if (offline) return offline;
+    throw new Error('No Google Maps API key available for geocoding');
+  }
 
   const beforeFly = typeof options.beforeFly === 'function' ? options.beforeFly : null;
   const mayFly = () => beforeFly === null || beforeFly() !== false;
@@ -380,6 +455,12 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
     types = recovered.types || [];
     viewport = placesViewportToBounds(recovered.viewport) || viewport;
   } else if (!result) {
+    // Geocode found nothing and nothing was recovered near the view: try the
+    // offline Natural Earth pack (natural/marine regions don't always geocode
+    // cleanly, and the pack resolves them without any network) before
+    // reporting a miss.
+    const offline = await flyNaturalRegionFallback(viewer, query, options);
+    if (offline) return offline;
     return null;
   }
 

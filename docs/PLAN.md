@@ -558,6 +558,64 @@ ordered by value-per-risk; each is self-contained and committable.
       cap how many fleet runs can share one warm server; a4/a10-style
       feed-fallback attrition (UUID row ids) is environmental for
       cockpit-trackable checks.
+      Wave 2 (2026-09-12, box reboot): the D-wave triage reached root
+      cause on D4 and D6 and shipped product fixes, not harness
+      tolerances.
+      **D4 — empty-space deselect eaten on every click.** The
+      tracking-click duration gate measured handler-processing time:
+      under SwiftShader the LEFT_UP action runs 0.5–2.6 s after the
+      physical release, so every instant tap exceeded the 400 ms window.
+      Three stacked product fixes in `trackingClickGesture.js`: the
+      clock measures press duration from DOM event stamps (stamps
+      survive queue delay), a quantization floor
+      `max(2 × recent-peak rAF gap, learned tap-quantization baseline)`
+      forgives burst-frame stamp gaps (both estimates decay with
+      τ = 30 s; a press is never forgiven by its own gap), and when the
+      floor itself reaches the click window all presses report instant —
+      a machine that cannot express the tap/hold distinction must not
+      lose working clicks; travel stays the only enforceable gate. The
+      final defect looked like a stale vite module but was not: CDP
+      headless Chrome generates NO compatibility mousedown/mouseup —
+      only `pointerdown`/`pointerup` — so the stamp clock (and any
+      mouse-bound listener) silently never ran while Cesium's
+      pointer-based handler kept working. `domEventPressClock` now binds
+      pointer events with a mouse fallback (never both), plus
+      pointercancel. Harness side: group 5 of `qa-cctv-v2` settles the
+      camera before searching, re-verifies empty targets at click time
+      (the monitor plane's screen extent shifts), re-baselines pose with
+      forced renders (under requestRenderMode the signature is frozen,
+      so the first forced render applied Cesium's ~4 m terrain-collision
+      nudge and framed the click for it), waits for the one-shot
+      mesh-floor pass on the module's timeline instead of fixed budgets,
+      and aborts cleanly when the upstream camera catalog 404s. Result:
+      48 passed / 0 failed / 6 inconclusive (the documented headless
+      patterns: GL drain, late-floor viewshed rebuild, gizmo-drag chain).
+      **D6 — attribution lightbox (and the globe itself) broke on
+      mobile.** `main.js` imported CesiumWidget.css but not Viewer.css,
+      so `.cesium-viewer`/`.cesium-viewer-cesiumWidgetContainer` had
+      auto height and the widget's `height:100%` resolved against
+      nothing — the canvas collapsed to 280px of a 760px mobile
+      viewport (and rode ~80% on desktop). Importing Viewer.css fills
+      the chain; the app's `!important` chrome hides keep stock UI
+      dead. `qa-attribution-b12`: 21/0/3 owner-decision skips. D9
+      (`qa-floor-verify`) PASS on the same build.
+      **Matrix run 5 (2026-09-12, full 70-check pass, 98.2 min):** 42 PASS /
+      2 PASS-with-skips / 4 FAIL / 2 CRASH / 20 SKIPPED. D2, D3, D4 (49/0/5),
+      D5, D9, D10, D12 all green on the fixed build — the D-wave product
+      fixes held under the full fleet. Arbitration of the residuals:
+      D6's CRASH is a parser artifact already fixed on disk (the suite's
+      own RESULT line, "21 passed, 0 failed, 3 skipped (owner decision)",
+      carried a trailing parenthetical the RESULT_RE rejected; verified
+      standalone at 21/0/3). D1's two display-floor records are harness
+      calibration, not product: the regime assertion reads the floor at
+      the billboard's DISPLAY cell while the billboard sits at its FIX-cell
+      floor + lift (204.5 = 203.0 + 1.5 exactly); with the full-height
+      canvas streaming better tile coverage the mesh floor now resolves
+      per-cell where a smooth DEM fallback used to agree within the 1.0 m
+      tolerance. Remaining for the next unit: C11 (bundled layers read
+      count=0/error=none — the enable transaction never landed), C16
+      (post-quiesce camera flight did not move), D7 (cockpit-exit listener
+      arithmetic 4→4 vs expected +1), D8 (3 radio overlay-paint records).
 
 ### Batch 3 — Coverage campaign (P1, mechanical but large)
 
@@ -606,6 +664,14 @@ ordered by value-per-risk; each is self-contained and committable.
       CCTV source-pack validation, `.overpass` mirrors, FIRMS IPv6,
       DATA_PRESET honesty, accessible-name test, allocation gates on
       Node 26, Google server-key split, keyless geocoding).
+- [ ] **Google ToS attribution (owner decision owed, surfaced by matrix
+      C13 every run)**: the operator detached the Cesium credit container on
+      2026-08-29 (src/main.js — decision + caveat recorded there), but
+      Google Maps Platform ToS requires visible attribution for
+      Photorealistic 3D Tiles. Either restore a visible credit line or ship
+      an equivalent attribution surface; until then the L9 matrix reports
+      C13 as SKIPPED[OWNER-RUN] rather than silently dropping the
+      compliance signal.
 
 ### Process debt
 
