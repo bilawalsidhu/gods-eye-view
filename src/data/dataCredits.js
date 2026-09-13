@@ -193,6 +193,15 @@ export const DATA_CREDITS = [
  * credit only appears once live traffic-flow mode activates.
  * @type {{ key: string, html: string }}
  */
+/** Registered once a keyed WiGLE search actually returns data (BYOK — keyless installs never show it). */
+export const WIGLE_CREDIT = {
+  key: 'wigle',
+  html:
+    'Wi-Fi network observations: ' +
+    '<a href="https://wigle.net" target="_blank" rel="noopener">WiGLE.net</a> ' +
+    '(crowdsourced; subject to the WiGLE EULA)',
+};
+
 export const TOMTOM_CREDIT = {
   key: 'tomtom',
   html:

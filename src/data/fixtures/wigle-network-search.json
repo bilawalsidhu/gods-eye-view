@@ -1,0 +1,57 @@
+{
+  "success": true,
+  "totalResults": 4,
+  "first": 0,
+  "last": 4,
+  "resultCount": 4,
+  "results": [
+    {
+      "trilat": 30.26759338,
+      "trilong": -97.74306488,
+      "ssid": "austin-public-wifi",
+      "netid": "00:11:22:33:44:55",
+      "encryption": "none",
+      "channel": 6,
+      "type": "infra",
+      "firsttime": "2019-04-02T00:00:00.000Z",
+      "lasttime": "2026-08-14T00:00:00.000Z",
+      "qos": 4
+    },
+    {
+      "trilat": 30.26881,
+      "trilong": -97.74022,
+      "ssid": "CoffeeShop_5G",
+      "netid": "AA:BB:CC:DD:EE:01",
+      "encryption": "wpa3",
+      "channel": 149,
+      "type": "infra",
+      "firsttime": "2021-06-11T00:00:00.000Z",
+      "lasttime": "2025-02-03T00:00:00.000Z",
+      "qos": 2
+    },
+    {
+      "trilat": 30.27011,
+      "trilong": -97.73918,
+      "ssid": "",
+      "netid": "AA:BB:CC:DD:EE:02",
+      "encryption": "wep",
+      "channel": "",
+      "type": "infra",
+      "firsttime": "2013-01-20T00:00:00.000Z",
+      "lasttime": "2014-05-30T00:00:00.000Z",
+      "qos": 0
+    },
+    {
+      "trilat": 0,
+      "trilong": 0,
+      "ssid": "untriangulated-row",
+      "netid": "AA:BB:CC:DD:EE:03",
+      "encryption": "wpa2",
+      "channel": 11,
+      "type": "infra",
+      "firsttime": "2020-01-01T00:00:00.000Z",
+      "lasttime": "2020-01-02T00:00:00.000Z",
+      "qos": 0
+    }
+  ]
+}

@@ -2452,6 +2452,19 @@ silently demoting every later lookup for the session.
 - Client render cap `VITE_AIS_LIVE_MAX_ROWS` (default 12,000); type-colored ship icons (tanker/cargo/passenger/fishing/tug); screen-space label clustering caps active labels at `VITE_AIS_LIVE_LABEL_MAX_ROWS` (default 900).
 - Click-to-inspect wired into the voice context store.
 
+### WiGLE Wi-Fi networks (September 2026)
+
+- Opt-in BYOK layer, id `wigle-networks`, token `k`, off by default and unavailable without credentials.
+- `server/providers/wigle.js` holds `WIGLE_API_NAME`/`WIGLE_API_TOKEN` and does the Basic-Auth query; the browser only ever calls same-origin `/api/wigle/status` and `/api/wigle/search`.
+- WiGLE's per-account daily allowance is small, so the whole design is about spending it slowly: viewport capped at 0.4° (`WIGLE_MAX_VIEWPORT_DEGREES`), 24h memory + disk cache keyed on the rounded bbox (access points do not move), in-flight coalescing so a burst of pans costs one query, and a soft daily counter defaulting to 50 (`WIGLE_DAILY_QUERY_BUDGET`). The counter reuses `normalizeBudget`/`isOverBudget` from `src/data/tomtomTiles.js` but rolls on `wiglePacificDayKey()` — WiGLE resets at US/Pacific midnight, not UTC.
+- The counter is in-memory and resets on server restart. That is deliberate for now; TomTom's persisted `budget.json` is the upgrade path if it proves insufficient.
+- Per-client rate limit 60/min (global backstop 300), 15s upstream timeout, 4 MB body cap, redirects not followed.
+- **Upstream message text is never relayed to the browser.** WiGLE answers HTTP 200 with `{success:false}` for several real failures, so status alone cannot distinguish them; `wigleClientError()` maps status to our own wording and keeps the three distinctions that change what the user should do (credentials rejected / allowance exhausted / everything else). The upstream message is logged locally only.
+- Rows with `trilat`/`trilong` of `0,0` are untriangulated and dropped rather than plotted off West Africa. A blank `channel` reads as missing rather than `0` (`Number('')` is `0`).
+- Observations are crowdsourced sightings, frequently years stale. `wigleNetworkFreshness()` buckets `lasttime` into recent (<=90d) / aged (<=1y) / old / unknown and the layer renders the age rather than implying current presence.
+- **Licensing constrains where this can run.** WiGLE's licence is single-machine, one-person-at-a-time, and bars distribution for commercial benefit; commercial use needs a separate licence from WiGLE. Correct for a local instance with the user's own account; must stay disabled in any shared or hosted deployment without that licence. See DATA_SOURCES.md.
+- Tests run offline against `src/data/fixtures/wigle-network-search.json` injected through the proxy's `fetchImpl`.
+
 ### Voice Control (June 2026)
 
 `GEV MIC` button (bottom UI) starts an OpenAI Realtime session over WebRTC:

@@ -12,6 +12,7 @@ import { cctvProxy } from './cctv.js';
 import { defaultSourceRoot } from './common/source-root.js';
 import { radioBrowserProxy } from './radio.js';
 import { gbfsProxy } from './gbfs.js';
+import { wigleProxy } from './wigle.js';
 import { adsbLolProxy } from './aircraft/adsb-lol.js';
 import { aisLiveProxy } from './vessels/ais-live.js';
 import { trackBackfillProxies } from './aircraft/tracks.js';
@@ -36,6 +37,7 @@ function localProviderPlugins() {
     cctvProxy({ sourceRoot: defaultSourceRoot }),
     radioBrowserProxy(),
     gbfsProxy(),
+    wigleProxy(),
     adsbLolProxy(),
     aisLiveProxy(),
     trackBackfillProxies(),

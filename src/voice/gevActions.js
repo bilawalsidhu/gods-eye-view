@@ -177,6 +177,9 @@ const LAYER_ALIASES = new Map([
   ['firms', 'local-firms'],
   ['fires', 'local-firms'],
   ['active fires', 'local-firms'],
+  ['wigle', 'wigle-networks'],
+  ['wifi networks', 'wigle-networks'],
+  ['wi-fi networks', 'wigle-networks'],
 ]);
 
 const CITY_ALIASES = new Map([
