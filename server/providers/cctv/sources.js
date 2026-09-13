@@ -857,15 +857,10 @@ export function normalizeTxdotDistrictPayload(payload, district) {
       // most Austin rows, including every east-west highway).
       const heading = directionToHeading(name, false);
       const hasHeading = Number.isFinite(heading);
-      // Readable slug of the device key plus a hash suffix: the slug keeps
-      // ids distinct for distinct keys (a bare 32-bit hash can collide), the
-      // hash keeps them distinct when two keys slug identically.
-      const slug = icdId
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, 48);
-      const cameraId = `txdot-${code.toLowerCase()}-${slug || 'cam'}-${hashSeed(icdId).toString(36)}`;
+      // The device key itself, base64url-encoded, so every distinct key gets
+      // a distinct id (a hash or a slug can collide) and the key is
+      // recoverable from the id.
+      const cameraId = `txdot-${code.toLowerCase()}-${Buffer.from(icdId, 'utf8').toString('base64url')}`;
       const snapshot = new URL(TXDOT_CCTV_SNAPSHOT_URL);
       snapshot.searchParams.set('icdId', icdId);
       snapshot.searchParams.set('districtCode', code);

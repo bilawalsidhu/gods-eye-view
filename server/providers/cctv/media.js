@@ -295,11 +295,14 @@ export async function fetchTxdotSnapshot(
       typeof payload?.snippet === 'string' ? payload.snippet.trim() : '';
     if (!snippet) return null;
     snippet = snippet.replace(/^data:image\/jpeg;base64,/i, '');
-    // Strict base64 only: Buffer.from() silently skips junk, which would let a
-    // non-image body decode into "something".
+    // Canonical base64 only (4-char groups, padding only at the end):
+    // Buffer.from() silently skips junk, which would let a non-image body
+    // decode into "something".
     if (
       snippet.length > maxEnvelopeBytes ||
-      !/^[A-Za-z0-9+/]+={0,2}$/.test(snippet)
+      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+        snippet,
+      )
     ) {
       return null;
     }
@@ -320,9 +323,10 @@ const MAX_SAME_HOST_REDIRECTS = 2;
 
 /**
  * Fetch a registered frame URL following redirects ONLY within the original
- * hostname (at most MAX_SAME_HOST_REDIRECTS hops). Default redirect-following
- * would let an upstream steer a host-pinned request, and its host-specific
- * headers, to any origin.
+ * origin (scheme, host and port; at most MAX_SAME_HOST_REDIRECTS hops).
+ * Default redirect-following would let an upstream steer a host-pinned
+ * request, and its host-specific headers, to any origin, another port, or a
+ * plaintext downgrade.
  *
  * @param {string} url
  * @param {object} init - fetch init (headers, signal).
@@ -337,7 +341,7 @@ export async function fetchWithinHost(url, init, fetchImpl = fetch) {
   } catch {
     return null;
   }
-  const host = current.hostname;
+  const origin = current.origin;
   for (let hop = 0; hop <= MAX_SAME_HOST_REDIRECTS; hop++) {
     const upstream = await fetchImpl(current.toString(), {
       ...init,
@@ -360,7 +364,7 @@ export async function fetchWithinHost(url, init, fetchImpl = fetch) {
     } catch {
       return null;
     }
-    if (next.hostname !== host || !/^https?:$/.test(next.protocol)) return null;
+    if (next.origin !== origin) return null;
     current = next;
   }
   return null;

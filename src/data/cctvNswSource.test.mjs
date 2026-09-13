@@ -141,7 +141,8 @@ test('the frame path follows redirects within the host only', async () => {
   const sameHost = [];
   const followed = await fetchCctvImageFromUpstream(start, {
     timeoutMs: 100,
-    fetchImpl: async (url) => {
+    fetchImpl: async (url, init) => {
+      assert.equal(init.redirect, 'manual', 'the fetch itself never follows');
       sameHost.push(url);
       return sameHost.length === 1 ? redirect('/image/moved/1.jpg') : jpeg();
     },
@@ -162,6 +163,25 @@ test('the frame path follows redirects within the host only', async () => {
   });
   assert.equal(refused, null);
   assert.deepEqual(offHost, [start], 'the off-host target is never requested');
+
+  // Same host on another port, a plaintext downgrade, and a protocol-relative
+  // other host are all a different origin and are refused.
+  for (const target of [
+    'https://cctv.austinmobility.io:8443/image/1.jpg',
+    'http://cctv.austinmobility.io/image/1.jpg',
+    '//evil.example/1.jpg',
+  ]) {
+    const seen = [];
+    const result = await fetchCctvImageFromUpstream(start, {
+      timeoutMs: 100,
+      fetchImpl: async (url) => {
+        seen.push(url);
+        return redirect(target);
+      },
+    });
+    assert.equal(result, null, target);
+    assert.deepEqual(seen, [start], target);
+  }
 
   let hops = 0;
   const looped = await fetchCctvImageFromUpstream(start, {

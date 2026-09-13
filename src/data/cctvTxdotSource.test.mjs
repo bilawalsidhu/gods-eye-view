@@ -69,19 +69,32 @@ test('TxDOT catalog keeps only online cameras with finite coordinates', () => {
     cameras[0].url,
     'https://its.txdot.gov/its/DistrictIts/GetCctvSnapshotByIcdId?icdId=a&districtCode=AUS',
   );
-  assert.match(cameras[0].id, /^txdot-aus-a-[0-9a-z]+$/);
+  assert.equal(
+    cameras[0].id,
+    `txdot-aus-${Buffer.from('a').toString('base64url')}`,
+  );
 });
 
-test('TxDOT ids stay distinct for distinct device keys even when hashes collide', () => {
-  // These two keys share a 32-bit FNV hash; the slug keeps the ids apart.
-  const [a, b] = normalizeTxdotDistrictPayload(
+test('TxDOT ids stay distinct for distinct device keys, whatever they hash or slug to', () => {
+  const ids = normalizeTxdotDistrictPayload(
     districtPayload([
+      // These two share a 32-bit FNV hash.
       cameraRow({ icd_Id: 'costarring', name: 'costarring' }),
       cameraRow({ icd_Id: 'liquid', name: 'liquid' }),
+      // These two share a lowercase slug and a hash.
+      cameraRow({ icd_Id: 'abcDEfaBCDEFAbcdEFABCdEfAbcdeFaB', name: 'x' }),
+      cameraRow({ icd_Id: 'ABcDeFABCDefaBCDeFAbCdeFabcdefAB', name: 'y' }),
     ]),
     'AUS',
+  ).map((camera) => camera.id);
+  assert.equal(new Set(ids).size, 4);
+  assert.equal(
+    Buffer.from(ids[0].replace(/^txdot-aus-/, ''), 'base64url').toString(
+      'utf8',
+    ),
+    'costarring',
+    'the device key is recoverable from the id',
   );
-  assert.notEqual(a.id, b.id);
 });
 
 test('TxDOT catalog dedupes a camera listed under two roadways', () => {
@@ -254,12 +267,46 @@ test('TxDOT snapshot decodes JSON only from the official origin and only as JPEG
     }),
     null,
   );
+  // Malformed padding is refused even though Buffer.from() would decode it.
+  assert.equal(
+    await fetchTxdotSnapshot(official, {
+      timeoutMs: 100,
+      fetchImpl: async () => jsonResponse({ snippet: '/9j/4AA==' }),
+    }),
+    null,
+  );
+  // A real JPEG larger than the frame cap is refused after decoding...
+  const bigJpeg = Buffer.concat([JPEG_BYTES, Buffer.alloc(59, 0x11)]);
+  assert.equal(bigJpeg.length, 64);
   assert.equal(
     await fetchTxdotSnapshot(official, {
       timeoutMs: 100,
       maxBytes: 8,
       fetchImpl: async () =>
-        jsonResponse({ snippet: Buffer.alloc(64, 0xff).toString('base64') }),
+        jsonResponse({ snippet: bigJpeg.toString('base64') }),
+    }),
+    null,
+  );
+  assert.equal(
+    (
+      await fetchTxdotSnapshot(official, {
+        timeoutMs: 100,
+        maxBytes: 64,
+        fetchImpl: async () =>
+          jsonResponse({ snippet: bigJpeg.toString('base64') }),
+      })
+    )?.body.length,
+    64,
+    'the same frame passes when it fits the cap',
+  );
+  // ...and an envelope that overflows the streaming cap never gets parsed.
+  const hugeJpeg = Buffer.concat([JPEG_BYTES, Buffer.alloc(8192, 0x11)]);
+  assert.equal(
+    await fetchTxdotSnapshot(official, {
+      timeoutMs: 100,
+      maxBytes: 8,
+      fetchImpl: async () =>
+        jsonResponse({ snippet: hugeJpeg.toString('base64') }),
     }),
     null,
   );
