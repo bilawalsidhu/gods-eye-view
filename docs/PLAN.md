@@ -883,8 +883,25 @@ ordered by value-per-risk; each is self-contained and committable.
       manifest — don't precache multi-MB datasets that can lazy-load on
       first layer enable.
 - [ ] Bundle budgets in CI (issue #40) once the diet lands.
-- [ ] `window.prompt` → accessible modal in `director.js` (a11y +
+- [x] `window.prompt` → accessible modal in `director.js` (a11y +
       testability; blocking dialogs also freeze the render loop).
+      DONE 2026-09-13: new `src/ui/promptDialog.js` provides
+      `promptDialog()` / `confirmDialog()` on the native `<dialog>`
+      element — `showModal()` supplies the focus trap, inert page, and
+      focus restoration; the field is visibly labelled, `aria-labelledby`
+      names the dialog, initial text is preselected like `window.prompt`,
+      and Enter explicitly activates Confirm (implicit form submission
+      would hit the first submitter — Cancel — silently inverting the
+      gesture; caught by the browser probe, pinned by a unit test).
+      All four blocking calls in `director.js` are replaced (shot
+      rename, new scene, delete scene, delete shot); the styled dialogs
+      live in `style.css` (token-based, AAA contrast, `:focus-visible`
+      rings, reduced-motion guarded). A scratch Puppeteer probe verified
+      in real Chrome: modal opens focused, requestAnimationFrame keeps
+      firing while the dialog is up (the render loop no longer freezes),
+      Enter creates the scene, Esc cancels, Cancel keeps, Confirm
+      deletes; 6 unit tests pin the wiring + no-blocking-dialogs source
+      pin. Gates: lint 0, 2,979 tests, build ok.
 - [ ] Remaining Phase 7 backlog items (portable tests, panel clamping,
       CCTV source-pack validation, `.overpass` mirrors, FIRMS IPv6,
       DATA_PRESET honesty, accessible-name test, allocation gates on

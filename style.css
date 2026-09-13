@@ -9140,3 +9140,116 @@ body.scene-playback-mode #first-run-launcher {
   /* Scrolling a tile into view must not animate either. */
   .first-run-choices { scroll-behavior: auto; }
 }
+
+/* ============================================================================
+ * Modal dialogs (scene director rename/new-scene/delete confirms)
+ * Native <dialog> chrome: showModal() traps focus, Esc cancels, the page
+ * behind the dialog is inert, and focus returns to the invoker on close.
+ * ========================================================================== */
+
+.gev-prompt-dialog,
+.gev-confirm-dialog {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  min-width: 300px;
+  max-width: min(380px, calc(100vw - 32px));
+  padding: 18px 20px;
+}
+
+.gev-prompt-dialog::backdrop,
+.gev-confirm-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.gev-dialog-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  margin: 0 0 12px;
+}
+
+.gev-dialog-message {
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+
+.gev-dialog-label {
+  color: var(--text-secondary);
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  margin-bottom: 6px;
+}
+
+.gev-dialog-input {
+  /* Matches the page surface: an opaque field over the dialog's translucent
+   * panel keeps caret/selection readable over the live globe. */
+  background: var(--bg-dark);
+  border: 1px solid var(--glass-border-hover);
+  border-radius: var(--btn-radius);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin-bottom: 14px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.gev-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.gev-dialog-btn {
+  border-radius: var(--btn-radius);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  padding: 7px 14px;
+  transition: none;
+}
+
+.gev-dialog-btn:disabled {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .gev-dialog-btn {
+    transition: all var(--transition-fast);
+  }
+}
+
+.gev-dialog-cancel {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  /* #e8eaed on the 5% white veil over #0a0a0f — comfortably above AAA. */
+  color: var(--text-primary);
+}
+
+.gev-dialog-cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.gev-dialog-confirm {
+  /* Dark text on the cyan accent: ~9:1. */
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #001318;
+}
+
+.gev-dialog-confirm:hover {
+  background: var(--accent-glow);
+}
+
+.gev-prompt-dialog :focus-visible,
+.gev-confirm-dialog :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

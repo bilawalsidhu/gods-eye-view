@@ -20,6 +20,7 @@ import {
   BLOOM_SCALE_VERSION,
   decodeBloomIntensity,
 } from '../bloom.js';
+import { confirmDialog, promptDialog } from '../ui/promptDialog.js';
 
 /** @constant {string} Key code used to abort a running scene */
 const ESCAPE_KEY = 'Escape';
@@ -516,11 +517,13 @@ export class SceneDirector {
         this._renderShotList();
       });
       label.addEventListener('dblclick', () => {
-        const nextTitle = window.prompt('Shot title', shot.title);
-        if (!nextTitle) return;
-        shot.title = nextTitle.trim() || shot.title;
-        this._saveProject();
-        this._renderShotList();
+        promptDialog({ title: 'Rename shot', label: 'Shot title', value: shot.title })
+          .then((nextTitle) => {
+            if (!nextTitle) return;
+            shot.title = nextTitle.trim() || shot.title;
+            this._saveProject();
+            this._renderShotList();
+          });
       });
 
       const actions = document.createElement('div');
@@ -578,8 +581,12 @@ export class SceneDirector {
   }
 
   /** Prompt the user for a name and append a new empty scene to the project. */
-  _createScene() {
-    const sceneName = window.prompt('New scene name', `Scene ${this._project.scenes.length + 1}`);
+  async _createScene() {
+    const sceneName = await promptDialog({
+      title: 'New scene',
+      label: 'Scene name',
+      value: `Scene ${this._project.scenes.length + 1}`,
+    });
     if (!sceneName) return;
 
     const scene = {
@@ -597,11 +604,14 @@ export class SceneDirector {
   }
 
   /** Delete the currently selected scene after user confirmation. Resets to defaults if empty. */
-  _deleteSelectedScene() {
+  async _deleteSelectedScene() {
     const scene = this._getSelectedScene();
     if (!scene) return;
 
-    const ok = window.confirm(`Delete scene "${scene.title}" and all shots?`);
+    const ok = await confirmDialog({
+      title: 'Delete scene',
+      message: `Delete scene "${scene.title}" and all shots?`,
+    });
     if (!ok) return;
 
     this._project.scenes = this._project.scenes.filter((item) => item.id !== scene.id);
@@ -695,11 +705,14 @@ export class SceneDirector {
    * @param {string} sceneId
    * @param {string} shotId
    */
-  deleteShot(sceneId, shotId) {
+  async deleteShot(sceneId, shotId) {
     const { scene, shot } = this._getShot(sceneId, shotId);
     if (!scene || !shot) return;
 
-    const ok = window.confirm(`Delete shot "${shot.title}"?`);
+    const ok = await confirmDialog({
+      title: 'Delete shot',
+      message: `Delete shot "${shot.title}"?`,
+    });
     if (!ok) return;
 
     scene.shots = scene.shots.filter((item) => item.id !== shot.id);
