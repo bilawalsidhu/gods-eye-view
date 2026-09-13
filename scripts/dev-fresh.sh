@@ -11,10 +11,11 @@ PORT="${PORT:-4173}"
 HOST="${HOST:-localhost}"
 # CCTV source packs (all keyless): Austin (~815 live upstream), Caltrans
 # districts 4,7,11,3 = SF/LA/San Diego/Sacramento (~1,860 live upstream),
-# TfL London JamCams (~870 live upstream), and Ontario 511 (~944 live upstream,
-# including Kitchener-area highways). Caps keep the densest cores per pack;
-# override per-run for lighter/heavier loads. Kill switches:
-# CCTV_CALTRANS_DISTRICTS='', CCTV_TFL_ENABLED=0, and CCTV_ONTARIO_ENABLED=0.
+# TfL London JamCams (~870 live upstream), Ontario 511 (~944 live upstream,
+# including Kitchener-area highways), and Fintraffic Finland weathercams
+# (~2,260 live presets). Caps keep the densest cores per pack; override
+# per-run for lighter/heavier loads. Kill switches: CCTV_CALTRANS_DISTRICTS='',
+# CCTV_TFL_ENABLED=0, CCTV_ONTARIO_ENABLED=0 and CCTV_FINTRAFFIC_ENABLED=0.
 CCTV_AUSTIN_MAX_SOURCES="${CCTV_AUSTIN_MAX_SOURCES:-250}"
 # Use `-` not `:-` so an explicit empty string (the documented kill switch)
 # is preserved rather than replaced by the default. Still set-u-safe when unset.
@@ -24,6 +25,8 @@ CCTV_TFL_ENABLED="${CCTV_TFL_ENABLED:-1}"
 CCTV_TFL_MAX_SOURCES="${CCTV_TFL_MAX_SOURCES:-250}"
 CCTV_ONTARIO_ENABLED="${CCTV_ONTARIO_ENABLED:-1}"
 CCTV_ONTARIO_MAX_SOURCES="${CCTV_ONTARIO_MAX_SOURCES:-1000}"
+CCTV_FINTRAFFIC_ENABLED="${CCTV_FINTRAFFIC_ENABLED:-1}"
+CCTV_FINTRAFFIC_MAX_SOURCES="${CCTV_FINTRAFFIC_MAX_SOURCES:-300}"
 CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-3000}"
 
 # Capture which provider credentials genuinely came from the parent shell
@@ -370,6 +373,8 @@ put_env CCTV_TFL_MAX_SOURCES "${CCTV_TFL_MAX_SOURCES}"
 put_env CCTV_ONTARIO_ENABLED "${CCTV_ONTARIO_ENABLED}"
 put_env CCTV_ONTARIO_MAX_SOURCES "${CCTV_ONTARIO_MAX_SOURCES}"
 put_env_if_set TFL_APP_KEY "${TFL_APP_KEY:-}"
+put_env CCTV_FINTRAFFIC_ENABLED "${CCTV_FINTRAFFIC_ENABLED}"
+put_env CCTV_FINTRAFFIC_MAX_SOURCES "${CCTV_FINTRAFFIC_MAX_SOURCES}"
 put_env CCTV_MAX_SOURCES "${CCTV_MAX_SOURCES}"
 put_env OPENSKY_AUTH_MODE "${OPENSKY_AUTH_MODE}"
 put_env_if_set OPENSKY_CREDENTIALS_FILE "${OPENSKY_CREDENTIALS_FILE}"

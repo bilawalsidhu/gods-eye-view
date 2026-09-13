@@ -307,6 +307,45 @@ export function isLikelyAustinCoordinate(lat, lon) {
 }
 
 /**
+ * Bounding-box sanity check: is this coordinate plausibly on the Finnish road
+ * network? Generous around the observed catalog extent (59.86..70.09 N,
+ * 19.62..31.28 E) so a real new station is never dropped, tight enough that a
+ * swapped lat/lon or a null island record is.
+ *
+ * @param {number} lat
+ * @param {number} lon
+ * @returns {boolean}
+ */
+export function isLikelyFinlandCoordinate(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+  return lat >= 59.5 && lat <= 70.5 && lon >= 19 && lon <= 32;
+}
+
+/**
+ * Human label for one Fintraffic preset (camera view).
+ *
+ * Station names are machine-shaped road codes ("vt3_Hyvinkää_Noppo"); the
+ * underscores become spaces. A preset id is always its station id plus a
+ * two-digit view number, so the remainder distinguishes the several views that
+ * share one station position. The station list endpoint carries no
+ * presentationName ("Helsinkiin"); that lives only on the per-station detail
+ * endpoint, which would cost one request per station.
+ *
+ * @param {string} stationName - Raw `properties.name`.
+ * @param {string} stationId - Raw `properties.id` (e.g. "C01503").
+ * @param {string} presetId - Raw preset id (e.g. "C0150301").
+ * @returns {string}
+ */
+export function fintrafficCameraName(stationName, stationId, presetId) {
+  const base =
+    String(stationName || '')
+      .replace(/_/g, ' ')
+      .trim() || `Fintraffic ${stationId}`;
+  const view = String(presetId || '').slice(String(stationId || '').length);
+  return view ? `${base} (view ${view})` : base;
+}
+
+/**
  * Derive a deterministic fallback heading from a camera ID hash.
  *
  * Produces one of 16 evenly-spaced compass directions (0, 22.5, 45, ...).

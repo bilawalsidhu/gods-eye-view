@@ -8,6 +8,7 @@ import {
   loadCaltransSourcesFromOpenData,
   loadTflSourcesFromOpenData,
   loadOntarioSourcesFromOpenData,
+  loadFintrafficSourcesFromOpenData,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -36,6 +37,11 @@ const LIVE_PACKS = [
     name: 'ontario',
     enabled: () => envEnabled('CCTV_ONTARIO_ENABLED'),
     load: loadOntarioSourcesFromOpenData,
+  },
+  {
+    name: 'fintraffic',
+    enabled: () => envEnabled('CCTV_FINTRAFFIC_ENABLED'),
+    load: loadFintrafficSourcesFromOpenData,
   },
 ];
 /**

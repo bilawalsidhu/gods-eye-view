@@ -14,6 +14,12 @@ import {
   ONTARIO_511_IMAGE_ORIGIN,
   DEFAULT_ONTARIO_MAX_SOURCES,
   ONTARIO_ANCHORS,
+  FINTRAFFIC_STATIONS_URL,
+  FINTRAFFIC_IMAGE_ORIGIN,
+  FINTRAFFIC_GROUND_ELEVATION_M,
+  DIGITRAFFIC_USER,
+  DEFAULT_FINTRAFFIC_MAX_SOURCES,
+  FINLAND_ANCHORS,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
 } from './constants.js';
 import {
@@ -24,6 +30,8 @@ import {
   extractAustinHeading,
   isLikelyAustinCoordinate,
   fallbackHeadingFromId,
+  isLikelyFinlandCoordinate,
+  fintrafficCameraName,
   rowArrayToObject,
   prioritizeSources,
 } from './normalize.js';
@@ -493,6 +501,140 @@ export async function loadOntarioSourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] Ontario 511 camera download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/**
+ * Fetch Fintraffic road weather cameras (all of Finland) from Digitraffic.
+ * Keyless; one GeoJSON station list per refresh (~37 KB gzipped, 809 stations
+ * / 2,275 presets), identifying itself with the `Digitraffic-User` header the
+ * service asks for. One PRESET — one fixed view of a station — is one camera
+ * here; the presets of a station share its position, and the id-hash fallback
+ * heading fans their gizmos apart instead of stacking them on one bearing.
+ *
+ * Skips stations whose `collectionStatus` is anything but GATHERING and presets
+ * with `inCollection: false`, so the mesh carries no dead cameras. Frame URLs
+ * are BUILT from the official image origin and a strictly-validated preset id
+ * rather than read from the payload, which pins the frame proxy to
+ * weathercam.digitraffic.fi by construction; the catalog fetch refuses
+ * redirects (`redirect: 'manual'`) so the list host cannot be steered either.
+ *
+ * No compass heading exists anywhere in this dataset: the per-preset
+ * `direction` on the detail endpoint is road-register relative
+ * (INCREASING_DIRECTION = "towards higher road addresses"), not a bearing, and
+ * converting it would need road geometry this app does not load. Every preset
+ * therefore takes the id-hash fallback and the low-confidence pose personality,
+ * the same as headingless Austin and TfL cameras.
+ *
+ * Attribution: "Fintraffic / digitraffic.fi" (CC BY 4.0), registered in
+ * src/data/dataCredits.js.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadFintrafficSourcesFromOpenData() {
+  try {
+    const resp = await fetch(FINTRAFFIC_STATIONS_URL, {
+      headers: {
+        Accept: 'application/json',
+        'Accept-Encoding': 'gzip',
+        'Digitraffic-User': DIGITRAFFIC_USER,
+      },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn(
+        '[CCTV] Fintraffic station list redirected; redirects are not followed',
+      );
+      return [];
+    }
+    if (!resp.ok) {
+      console.warn('[CCTV] Fintraffic station download failed:', resp.status);
+      return [];
+    }
+    const payload = await resp.json();
+    const features = Array.isArray(payload?.features) ? payload.features : [];
+    if (!features.length) return [];
+
+    const cameras = [];
+    let stationsSeen = 0;
+    for (const feature of features) {
+      const props = feature?.properties || {};
+      const stationId = String(props.id || '').trim();
+      if (!stationId) continue;
+      // GATHERING is the only status that means "this station is collecting
+      // images right now"; REMOVED_TEMPORARILY and friends would render as
+      // permanent Street View / synthetic fallbacks.
+      if (String(props.collectionStatus || '').toUpperCase() !== 'GATHERING')
+        continue;
+
+      const coords = feature?.geometry?.coordinates;
+      const lon = toFiniteNumber(coords?.[0]);
+      const lat = toFiniteNumber(coords?.[1]);
+      if (!isLikelyFinlandCoordinate(lat, lon)) continue;
+      // Third coordinate is metres, but 0 means "not reported" rather than sea
+      // level, so only a positive value is a real reading. Prior only: the
+      // client's one-shot ground snap corrects it on 3D-tile stacks, and on a
+      // no-tileset stack this height is what freezes in.
+      const reportedElevation = toFiniteNumber(coords?.[2], 0);
+      const groundElevationM =
+        reportedElevation > 0
+          ? Math.min(1400, reportedElevation)
+          : FINTRAFFIC_GROUND_ELEVATION_M;
+
+      stationsSeen += 1;
+      for (const preset of props.presets || []) {
+        if (preset?.inCollection !== true) continue;
+        const presetId = String(preset?.id || '').trim();
+        // Strict id shape (station id + two-digit view). Also the guard that
+        // keeps a hostile id out of the synthesized frame URL's path.
+        if (!/^C\d{7}$/.test(presetId)) continue;
+        if (!presetId.startsWith(stationId)) continue;
+
+        const cameraId = `fi-${presetId.toLowerCase()}`;
+        const imageUrl = `${FINTRAFFIC_IMAGE_ORIGIN}${presetId}.jpg`;
+        cameras.push({
+          id: cameraId,
+          name: fintrafficCameraName(props.name, stationId, presetId),
+          city: 'Finland',
+          cityId: 'finland',
+          provider: 'Fintraffic',
+          lat,
+          lon,
+          // Headingless personality (see JSDoc), identical to TfL's.
+          headingDeg: fallbackHeadingFromId(cameraId),
+          headingConfidence: 'low',
+          pitchDeg: -18,
+          fovDeg: 44,
+          rangeM: 145,
+          mountHeightM: 8,
+          groundElevationM,
+          feedType: 'image',
+          url: imageUrl,
+          snapshotUrl: imageUrl,
+          sourceKind: 'fintraffic-open-data',
+          license: 'Fintraffic / digitraffic.fi (CC BY 4.0)',
+        });
+      }
+    }
+
+    const maxRaw = Number(
+      process.env.CCTV_FINTRAFFIC_MAX_SOURCES || DEFAULT_FINTRAFFIC_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(600, Math.floor(maxRaw)))
+      : DEFAULT_FINTRAFFIC_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, FINLAND_ANCHORS);
+    console.log(
+      `[CCTV] Loaded Fintraffic camera sources: ${cameras.length} live presets across ${stationsSeen} stations (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Fintraffic station download error:',
       error?.message || error,
     );
     return [];

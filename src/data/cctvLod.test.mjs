@@ -41,7 +41,9 @@ test('cctvLodBudgets scales the card budget from 20 to 40 with view height', () 
   assert.equal(CCTV_AMBIENT_CARD_MAX, 40);
   assert.deepEqual(cctvLodBudgets(500), { cardLimit: CCTV_AMBIENT_CARD_MIN });
   assert.deepEqual(cctvLodBudgets(8_000), { cardLimit: CCTV_AMBIENT_CARD_MID });
-  assert.deepEqual(cctvLodBudgets(30_000), { cardLimit: CCTV_AMBIENT_CARD_MAX });
+  assert.deepEqual(cctvLodBudgets(30_000), {
+    cardLimit: CCTV_AMBIENT_CARD_MAX,
+  });
 });
 
 test('selectCctvLod caps ambient cards at the 40 hard cap regardless of catalog size', () => {
@@ -54,19 +56,30 @@ test('selectCctvLod uses only in-view cameras and orders by viewer distance', ()
   const input = candidates(20, { hiddenAt: 0 }).reverse();
   const selected = selectCctvLod(input, { cameraHeightM: 500 });
   assert.equal(selected.cardIds.includes('cam-000'), false);
-  assert.deepEqual(selected.cardIds.slice(0, 3), ['cam-001', 'cam-002', 'cam-003']);
+  assert.deepEqual(selected.cardIds.slice(0, 3), [
+    'cam-001',
+    'cam-002',
+    'cam-003',
+  ]);
 });
 
 test('video cameras never consume ambient card slots', () => {
-  const selected = selectCctvLod(candidates(30, { videoAt: 0 }), { cameraHeightM: 500 });
+  const selected = selectCctvLod(candidates(30, { videoAt: 0 }), {
+    cameraHeightM: 500,
+  });
   assert.equal(selected.cardIds.includes('cam-000'), false);
   assert.equal(selected.cardIds.length, CCTV_AMBIENT_CARD_MIN);
 });
 
 test('selectCctvLod tolerates malformed candidate rows', () => {
   const selected = selectCctvLod(
-    [null, {}, { id: '', inView: true }, { id: 'cam-ok', inView: true, distanceKm: NaN }],
-    { cameraHeightM: 500 }
+    [
+      null,
+      {},
+      { id: '', inView: true },
+      { id: 'cam-ok', inView: true, distanceKm: NaN },
+    ],
+    { cameraHeightM: 500 },
   );
   assert.deepEqual(selected.cardIds, ['cam-ok']);
 });
@@ -84,7 +97,9 @@ test('selectCctvLod: a carded camera outranks a slightly-nearer non-carded one',
   // incumbent at 5.0 km holds its card against a newcomer at 4.5 km (only
   // 10% closer).
   const anchors = Array.from({ length: CCTV_AMBIENT_CARD_MIN - 1 }, (_, i) => ({
-    id: `anchor-${String(i).padStart(2, '0')}`, distanceKm: i / 100, inView: true,
+    id: `anchor-${String(i).padStart(2, '0')}`,
+    distanceKm: i / 100,
+    inView: true,
   }));
   const contested = [
     { id: 'incumbent', distanceKm: 5.0, inView: true },
@@ -101,7 +116,9 @@ test('selectCctvLod: a carded camera outranks a slightly-nearer non-carded one',
 
 test('selectCctvLod: a meaningfully (>20%) closer camera still displaces an incumbent', () => {
   const anchors = Array.from({ length: CCTV_AMBIENT_CARD_MIN - 1 }, (_, i) => ({
-    id: `anchor-${String(i).padStart(2, '0')}`, distanceKm: i / 100, inView: true,
+    id: `anchor-${String(i).padStart(2, '0')}`,
+    distanceKm: i / 100,
+    inView: true,
   }));
   const contested = [
     { id: 'incumbent', distanceKm: 5.0, inView: true },
@@ -111,13 +128,19 @@ test('selectCctvLod: a meaningfully (>20%) closer camera still displaces an incu
     cameraHeightM: 500,
     incumbentIds: new Set(['incumbent']),
   });
-  assert.ok(selected.cardIds.includes('newcomer'), 'meaningfully closer camera wins');
+  assert.ok(
+    selected.cardIds.includes('newcomer'),
+    'meaningfully closer camera wins',
+  );
   assert.equal(selected.cardIds.includes('incumbent'), false);
 });
 
 test('selectCctvLod: no incumbents means plain nearest-first (unchanged behavior)', () => {
   const plain = selectCctvLod(candidates(20), { cameraHeightM: 500 });
-  const withEmpty = selectCctvLod(candidates(20), { cameraHeightM: 500, incumbentIds: new Set() });
+  const withEmpty = selectCctvLod(candidates(20), {
+    cameraHeightM: 500,
+    incumbentIds: new Set(),
+  });
   assert.deepEqual(plain.cardIds, withEmpty.cardIds);
 });
 
@@ -129,25 +152,39 @@ test('distributeCctvCards spreads clustered candidates across cells', () => {
   // sits alone bottom-right. Nearest-first would take the whole cluster —
   // distribution gives every occupied cell its best first.
   const clustered = Array.from({ length: 4 }, (_, i) => ({
-    id: `center-${i}`, sx: 50 + i * 10, sy: 50, rankKm: i,
+    id: `center-${i}`,
+    sx: 50 + i * 10,
+    sy: 50,
+    rankKm: i,
   }));
   const lonely = { id: 'periphery', sx: 950, sy: 750, rankKm: 30 };
   assert.deepEqual(
-    distributeCctvCards([...clustered, lonely], { budget: 2, viewW: 1000, viewH: 800 }),
-    ['center-0', 'periphery']
+    distributeCctvCards([...clustered, lonely], {
+      budget: 2,
+      viewW: 1000,
+      viewH: 800,
+    }),
+    ['center-0', 'periphery'],
   );
 });
 
 test('distributeCctvCards: leftover budget falls back to global rank order', () => {
   const clustered = Array.from({ length: 4 }, (_, i) => ({
-    id: `center-${i}`, sx: 50 + i * 10, sy: 50, rankKm: i,
+    id: `center-${i}`,
+    sx: 50 + i * 10,
+    sy: 50,
+    rankKm: i,
   }));
   const lonely = { id: 'periphery', sx: 950, sy: 750, rankKm: 30 };
   // 2 occupied cells, budget 4: both cell winners, then the cluster's next
   // two by rank.
   assert.deepEqual(
-    distributeCctvCards([...clustered, lonely], { budget: 4, viewW: 1000, viewH: 800 }),
-    ['center-0', 'periphery', 'center-1', 'center-2']
+    distributeCctvCards([...clustered, lonely], {
+      budget: 4,
+      viewW: 1000,
+      viewH: 800,
+    }),
+    ['center-0', 'periphery', 'center-1', 'center-2'],
   );
 });
 
@@ -155,64 +192,101 @@ test('distributeCctvCards: empty cells are skipped, budget respected', () => {
   // Everything in ONE cell — the 19 empty cells claim nothing; the single
   // occupied cell fills the whole budget in rank order.
   const oneCell = Array.from({ length: 5 }, (_, i) => ({
-    id: `c-${i}`, sx: 20 + i * 5, sy: 20, rankKm: i,
+    id: `c-${i}`,
+    sx: 20 + i * 5,
+    sy: 20,
+    rankKm: i,
   }));
-  const ids = distributeCctvCards(oneCell, { budget: 3, viewW: 1000, viewH: 800 });
+  const ids = distributeCctvCards(oneCell, {
+    budget: 3,
+    viewW: 1000,
+    viewH: 800,
+  });
   assert.deepEqual(ids, ['c-0', 'c-1', 'c-2']);
 });
 
 test('distributeCctvCards: an under-budget cut keeps the nearest cell winners', () => {
-  const ids = distributeCctvCards([
-    { id: 'far-cell', sx: 900, sy: 700, rankKm: 9 },
-    { id: 'near-cell', sx: 100, sy: 100, rankKm: 1 },
-  ], { budget: 1, viewW: 1000, viewH: 800 });
+  const ids = distributeCctvCards(
+    [
+      { id: 'far-cell', sx: 900, sy: 700, rankKm: 9 },
+      { id: 'near-cell', sx: 100, sy: 100, rankKm: 1 },
+    ],
+    { budget: 1, viewW: 1000, viewH: 800 },
+  );
   assert.deepEqual(ids, ['near-cell']);
 });
 
 test('distributeCctvCards: incumbency (effective distance) is honored inside a cell', () => {
   // Same cell: the incumbent at 5.0 km (discounted to 4.0) beats the
   // non-carded newcomer at 4.5 km for the cell slot.
-  const ids = distributeCctvCards([
-    { id: 'newcomer', sx: 100, sy: 100, rankKm: incumbentRankKm(4.5, false) },
-    { id: 'incumbent', sx: 120, sy: 100, rankKm: incumbentRankKm(5.0, true) },
-  ], { budget: 1, viewW: 1000, viewH: 800 });
+  const ids = distributeCctvCards(
+    [
+      { id: 'newcomer', sx: 100, sy: 100, rankKm: incumbentRankKm(4.5, false) },
+      { id: 'incumbent', sx: 120, sy: 100, rankKm: incumbentRankKm(5.0, true) },
+    ],
+    { budget: 1, viewW: 1000, viewH: 800 },
+  );
   assert.deepEqual(ids, ['incumbent']);
 });
 
 test('distributeCctvCards: malformed rows dropped; offscreen anchors clamp to edge cells', () => {
-  const ids = distributeCctvCards([
-    null,
-    { id: '', sx: 10, sy: 10, rankKm: 0 },
-    { id: 'nan', sx: NaN, sy: 10, rankKm: 0 },
-    { id: 'ok', sx: 10, sy: 10, rankKm: 1 },
-    // Margin candidates just outside the viewport land in the edge cells.
-    { id: 'edge', sx: -20, sy: 850, rankKm: 2 },
-  ], { budget: 5, viewW: 1000, viewH: 800 });
+  const ids = distributeCctvCards(
+    [
+      null,
+      { id: '', sx: 10, sy: 10, rankKm: 0 },
+      { id: 'nan', sx: NaN, sy: 10, rankKm: 0 },
+      { id: 'ok', sx: 10, sy: 10, rankKm: 1 },
+      // Margin candidates just outside the viewport land in the edge cells.
+      { id: 'edge', sx: -20, sy: 850, rankKm: 2 },
+    ],
+    { budget: 5, viewW: 1000, viewH: 800 },
+  );
   assert.deepEqual(ids.sort(), ['edge', 'ok']);
-  assert.deepEqual(distributeCctvCards([], { budget: 5, viewW: 1000, viewH: 800 }), []);
+  assert.deepEqual(
+    distributeCctvCards([], { budget: 5, viewW: 1000, viewH: 800 }),
+    [],
+  );
 });
 
 test('selectCctvLod with viewport dims routes the fill through screen distribution', () => {
   // A cluster larger than the street budget sits mid-screen; a periphery
   // camera ranks past the budget. Nearest-first drops it — distribution
   // keeps it because its cell is otherwise empty.
-  const clustered = Array.from({ length: CCTV_AMBIENT_CARD_MIN + 2 }, (_, i) => ({
-    id: `center-${String(i).padStart(2, '0')}`,
-    distanceKm: i / 10,
+  const clustered = Array.from(
+    { length: CCTV_AMBIENT_CARD_MIN + 2 },
+    (_, i) => ({
+      id: `center-${String(i).padStart(2, '0')}`,
+      distanceKm: i / 10,
+      inView: true,
+      sx: 400 + (i % 5) * 8,
+      sy: 300 + Math.floor(i / 5) * 8,
+    }),
+  );
+  const periphery = {
+    id: 'periphery',
+    distanceKm: 9,
     inView: true,
-    sx: 400 + (i % 5) * 8,
-    sy: 300 + Math.floor(i / 5) * 8,
-  }));
-  const periphery = { id: 'periphery', distanceKm: 9, inView: true, sx: 950, sy: 750 };
+    sx: 950,
+    sy: 750,
+  };
   const selected = selectCctvLod([...clustered, periphery], {
-    cameraHeightM: 500, viewW: 1000, viewH: 800,
+    cameraHeightM: 500,
+    viewW: 1000,
+    viewH: 800,
   });
-  assert.equal(selected.cardIds.length, CCTV_AMBIENT_CARD_MIN, 'budget respected');
-  assert.ok(selected.cardIds.includes('periphery'), 'periphery cell holds a card');
+  assert.equal(
+    selected.cardIds.length,
+    CCTV_AMBIENT_CARD_MIN,
+    'budget respected',
+  );
+  assert.ok(
+    selected.cardIds.includes('periphery'),
+    'periphery cell holds a card',
+  );
   // Without screen info the original nearest-first cap applies unchanged.
   const plain = selectCctvLod(
     [...clustered, periphery].map(({ sx, sy, ...rest }) => rest),
-    { cameraHeightM: 500 }
+    { cameraHeightM: 500 },
   );
   assert.equal(plain.cardIds.includes('periphery'), false);
 });
@@ -253,11 +327,13 @@ test('non-finite positive viewport dimensions retain exact legacy nearest-first 
   const legacy = selectCctvLod(input, { cameraHeightM: 500 });
 
   assert.deepEqual(
-    selectCctvLod(input, { cameraHeightM: 500, viewW: Infinity, viewH: 800 }).cardIds,
+    selectCctvLod(input, { cameraHeightM: 500, viewW: Infinity, viewH: 800 })
+      .cardIds,
     legacy.cardIds,
   );
   assert.deepEqual(
-    selectCctvLod(input, { cameraHeightM: 500, viewW: 1000, viewH: Infinity }).cardIds,
+    selectCctvLod(input, { cameraHeightM: 500, viewW: 1000, viewH: Infinity })
+      .cardIds,
     legacy.cardIds,
   );
 
@@ -266,7 +342,8 @@ test('non-finite positive viewport dimensions retain exact legacy nearest-first 
     { id: 'normal', distanceKm: 2, inView: true },
   ];
   assert.deepEqual(
-    selectCctvLod(legacyEdgeIds, { cameraHeightM: 500, viewW: 0, viewH: 800 }).cardIds,
+    selectCctvLod(legacyEdgeIds, { cameraHeightM: 500, viewW: 0, viewH: 800 })
+      .cardIds,
     ['   ', 'normal'],
     'invalid viewport preserves every non-empty string ID accepted by the legacy path',
   );
@@ -294,18 +371,34 @@ test('center weighting deterministically favors center without starving peripher
   const { edge, center } = edgeVsCenterPool();
   const view = { cameraHeightM: 500, viewW: 1000, viewH: 800 };
   const selected = selectCctvLod([...edge, ...center], view);
-  const reordered = selectCctvLod([...center].reverse().concat([...edge].reverse()), view);
+  const reordered = selectCctvLod(
+    [...center].reverse().concat([...edge].reverse()),
+    view,
+  );
 
   assert.equal(selected.cardIds.length, CCTV_AMBIENT_CARD_MIN);
-  assert.equal(selected.cardIds.filter((id) => id.startsWith('center-')).length, 10);
-  assert.equal(selected.cardIds.filter((id) => id.startsWith('edge-')).length, 10);
-  assert.deepEqual(reordered.cardIds, selected.cardIds, 'input order cannot affect winners or ordering');
+  assert.equal(
+    selected.cardIds.filter((id) => id.startsWith('center-')).length,
+    10,
+  );
+  assert.equal(
+    selected.cardIds.filter((id) => id.startsWith('edge-')).length,
+    10,
+  );
+  assert.deepEqual(
+    reordered.cardIds,
+    selected.cardIds,
+    'input order cannot affect winners or ordering',
+  );
 
   const legacy = selectCctvLod(
     [...edge, ...center].map(({ sx, sy, ...candidate }) => candidate),
     { cameraHeightM: 500 },
   );
-  assert.equal(legacy.cardIds.filter((id) => id.startsWith('center-')).length, 0);
+  assert.equal(
+    legacy.cardIds.filter((id) => id.startsWith('center-')).length,
+    0,
+  );
 });
 
 test('ineligible video, hidden, and malformed-distance rows cannot alter eligible winners', () => {
@@ -322,13 +415,26 @@ test('ineligible video, hidden, and malformed-distance rows cannot alter eligibl
       sx: 500,
       sy: 400,
     })),
-    { id: 'hidden-outlier', distanceKm: 9_000, inView: false, sx: 900, sy: 700 },
+    {
+      id: 'hidden-outlier',
+      distanceKm: 9_000,
+      inView: false,
+      sx: 900,
+      sy: 700,
+    },
     { id: 'bad-distance', distanceKm: NaN, inView: true, sx: 900, sy: 700 },
     { id: '', distanceKm: 0, inView: true, sx: 500, sy: 400 },
   ];
 
-  assert.deepEqual(selectCctvLod([...eligible, ...noise], view).cardIds, baseline);
-  assert.deepEqual(selectCctvLod([...noise].reverse().concat([...eligible].reverse()), view).cardIds, baseline);
+  assert.deepEqual(
+    selectCctvLod([...eligible, ...noise], view).cardIds,
+    baseline,
+  );
+  assert.deepEqual(
+    selectCctvLod([...noise].reverse().concat([...eligible].reverse()), view)
+      .cardIds,
+    baseline,
+  );
 });
 
 test('malformed-distance rows remain slot-neutral when valid candidates leave spare capacity', () => {
@@ -339,7 +445,9 @@ test('malformed-distance rows remain slot-neutral when valid candidates leave sp
   ];
 
   assert.deepEqual(selectCctvLod(candidates, view).cardIds, ['valid']);
-  assert.deepEqual(selectCctvLod([...candidates].reverse(), view).cardIds, ['valid']);
+  assert.deepEqual(selectCctvLod([...candidates].reverse(), view).cardIds, [
+    'valid',
+  ]);
 });
 
 test('duplicate IDs are slot-neutral and choose a deterministic representative', () => {
@@ -353,7 +461,10 @@ test('duplicate IDs are slot-neutral and choose a deterministic representative',
     { ...center[0], distanceKm: NaN, sx: 500, sy: 400 },
   ];
 
-  assert.deepEqual(selectCctvLod([...eligible, ...duplicates], view).cardIds, baseline);
+  assert.deepEqual(
+    selectCctvLod([...eligible, ...duplicates], view).cardIds,
+    baseline,
+  );
   assert.deepEqual(
     selectCctvLod([...duplicates, ...eligible].reverse(), view).cardIds,
     baseline,
@@ -362,13 +473,16 @@ test('duplicate IDs are slot-neutral and choose a deterministic representative',
 });
 
 test('center weighting has deterministic ID ties and preserves invalid-anchor eligibility', () => {
-  const anchors = Array.from({ length: CCTV_AMBIENT_CARD_MIN - 1 }, (_, index) => ({
-    id: `anchor-${String(index).padStart(2, '0')}`,
-    distanceKm: index / 100,
-    inView: true,
-    sx: 500,
-    sy: 400,
-  }));
+  const anchors = Array.from(
+    { length: CCTV_AMBIENT_CARD_MIN - 1 },
+    (_, index) => ({
+      id: `anchor-${String(index).padStart(2, '0')}`,
+      distanceKm: index / 100,
+      inView: true,
+      sx: 500,
+      sy: 400,
+    }),
+  );
   const tied = [
     { id: 'tie-b', distanceKm: 10, inView: true, sx: 500, sy: 400 },
     { id: 'tie-a', distanceKm: 10, inView: true, sx: 500, sy: 400 },
@@ -380,13 +494,26 @@ test('center weighting has deterministic ID ties and preserves invalid-anchor el
     viewH: 800,
   });
   assert.ok(selected.cardIds.includes('tie-a'));
-  assert.equal(selected.cardIds.includes('tie-b'), false, 'ID breaks an exact contested tie');
-  assert.equal(selected.cardIds.includes('invalid-anchor'), false, 'invalid anchor does not displace valid winners');
+  assert.equal(
+    selected.cardIds.includes('tie-b'),
+    false,
+    'ID breaks an exact contested tie',
+  );
+  assert.equal(
+    selected.cardIds.includes('invalid-anchor'),
+    false,
+    'invalid anchor does not displace valid winners',
+  );
 
-  const onlyInvalid = selectCctvLod([
-    { id: 'invalid-only', distanceKm: 1, inView: true, sx: NaN, sy: NaN },
-  ], { cameraHeightM: 500, viewW: 1000, viewH: 800 });
-  assert.deepEqual(onlyInvalid.cardIds, ['invalid-only'], 'defensive top-up preserves eligibility');
+  const onlyInvalid = selectCctvLod(
+    [{ id: 'invalid-only', distanceKm: 1, inView: true, sx: NaN, sy: NaN }],
+    { cameraHeightM: 500, viewW: 1000, viewH: 800 },
+  );
+  assert.deepEqual(
+    onlyInvalid.cardIds,
+    ['invalid-only'],
+    'defensive top-up preserves eligibility',
+  );
 });
 
 test('applyEvictionGrace keeps a fallen-out card and clears grace when it returns', () => {
@@ -480,7 +607,11 @@ test('applyEvictionGrace never exceeds the hard cap; graced cards go first, olde
   // cam-c is newly selected and enters immediately despite grace pressure.
   assert.ok(result.keepIds.includes('cam-c'));
   assert.ok(result.keepIds.includes('cam-new'), 'newest grace entry survives');
-  assert.deepEqual(result.evictIds, ['cam-old'], 'oldest grace entry evicted for the cap');
+  assert.deepEqual(
+    result.evictIds,
+    ['cam-old'],
+    'oldest grace entry evicted for the cap',
+  );
 });
 
 test('applyEvictionGrace with a full selection keeps no graced cards', () => {
@@ -497,10 +628,18 @@ test('applyEvictionGrace with a full selection keeps no graced cards', () => {
 });
 
 test('staticFrameRefreshMs follows known pack cadences and bounds explicit values', () => {
-  assert.equal(staticFrameRefreshMs({ provider: 'Austin Transportation & Public Works' }), 300_000);
-  assert.equal(staticFrameRefreshMs({ provider: 'Transport for London' }), 180_000);
+  assert.equal(
+    staticFrameRefreshMs({ provider: 'Austin Transportation & Public Works' }),
+    300_000,
+  );
+  assert.equal(
+    staticFrameRefreshMs({ provider: 'Transport for London' }),
+    180_000,
+  );
   assert.equal(staticFrameRefreshMs({ provider: 'Caltrans' }), 180_000);
   assert.equal(staticFrameRefreshMs({ provider: 'Ontario 511' }), 180_000);
+  // Digitraffic publishes one weathercam frame per 600 s collection interval.
+  assert.equal(staticFrameRefreshMs({ provider: 'Fintraffic' }), 600_000);
   assert.equal(staticFrameRefreshMs({ frameRefreshMs: 5_000 }), 60_000);
   assert.equal(staticFrameRefreshMs({ frameRefreshMs: 3_000_000 }), 1_200_000);
   assert.equal(staticFrameRefreshMs({ provider: 'Unknown Provider' }), 300_000);

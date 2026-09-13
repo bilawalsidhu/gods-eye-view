@@ -2243,7 +2243,7 @@ its criteria cannot be silently ignored.
 | Satellites | CelesTrak | `src/data/satellites.js` | `/api/celestrak` | 120s |
 | Space Missions (30d) | Launch Library 2 + CelesTrak | `src/data/rocketLaunches.js` | `/api/launches` + `/api/celestrak/active` | 5 min |
 | Traffic | OSM Overpass (+ optional TomTom live flow) | `src/data/traffic.js` | `/api/overpass` + `/api/tomtom` | viewport-driven |
-| CCTV | Austin + Caltrans (CA) + TfL London + Ontario 511 Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
+| CCTV | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
 | Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
 | Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
 | Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |
@@ -2595,8 +2595,15 @@ silently demoting every later lookup for the session.
   1,003 rows). City packs (2026-07-04): Caltrans (districts 4/7/11/3 — SF, LA, San Diego,
   Sacramento; cap 300) and TfL London JamCams (cap 250) join Austin (cap 250) as keyless default
   sources. Ontario 511 (2026-09-12) adds keyless highway cameras including Kitchener-area routes
-  (cap 1,000, all enabled rows from the current ~944-camera catalog). The default global CCTV cap is
-  1,800, all sources are RAW PRIOR poses, and the layer is stills-first.
+  (cap 1,000, all enabled rows from the current ~944-camera catalog). All sources are RAW PRIOR
+  poses, and the layer is stills-first.
+  sources. Fintraffic Finland road weather cameras (2026-09-13; cap 300, `CCTV_FINTRAFFIC_MAX_SOURCES`,
+  kill switch `CCTV_FINTRAFFIC_ENABLED=0`) are the fourth pack: one keyless GeoJSON station list
+  covering the whole country, where one *preset* (a station's fixed view) is one camera — 806
+  GATHERING stations carry 2,256 in-collection presets, prioritized to 300 against seven anchors
+  on the main road spine. `CCTV_MAX_SOURCES` is a 3,000 catalog-wide ceiling shared round-robin
+  across packs, so a lower global cap thins every region instead of starving the last pack.
+  ~1,100 cameras total, all RAW PRIOR poses, stills-first.
 - **CCTV v3 UX — viewshed + calibration gizmo** (built 2026-07-05 and field
   validated 2026-07-21): the COVERAGE toggle is a
   tri-state cycle `OFF → ON → VIEWSHED`; viewshed mode renders each visible camera's frustum
@@ -2629,7 +2636,8 @@ silently demoting every later lookup for the session.
   2026-08-02): the LOD-selected nearby static cameras (20/28/40 by zoom,
   `cctvLod.js`) get **screen-space thumbnail cards** through the shared world-overlay host
   showing paced static frames — reselection on `camera.moveEnd` only, at most one frame fetch
-  per second layer-wide, per-source cadences (Austin 5 min, TfL/Caltrans 3 min). Zero-flicker:
+  per second layer-wide, per-source cadences (Austin 5 min, TfL/Caltrans 3 min, Fintraffic 10 min
+  — its stations publish on a 600 s collection interval). Zero-flicker:
   a card renders nothing until its first frame, a drawn frame persists through failed fetches,
   and eviction grace (2-pass/5 s) stops budget-edge churn. Camera icons stay visible at every
   zoom. Eligible candidates are filtered to in-view stills with valid IDs,

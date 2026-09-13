@@ -63,6 +63,7 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 - Add Ontario 511 as a keyless CCTV source pack, including Kitchener-area
   highway cameras, with server-registered still URLs and attribution.
+- CCTV Mesh adds Finland: Fintraffic road weather cameras, keyless, nationwide, 300 by default. Each camera view of a station is placed separately, and frames refresh on the source's 10-minute cadence.
 
 - Press backtick (`) to toggle a rendered-frame-rate readout beneath the logo.
   Typing fields retain the key; monitoring stops when hidden.

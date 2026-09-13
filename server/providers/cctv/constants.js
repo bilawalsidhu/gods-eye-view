@@ -48,6 +48,35 @@ export const ONTARIO_ANCHORS = [
   { lat: 42.9849, lon: -81.2453 }, // London, Ontario
   { lat: 42.3149, lon: -83.0364 }, // Windsor
 ];
+/** Fintraffic road weather cameras (Digitraffic): one keyless GeoJSON list
+ * covering all of Finland. Each STATION carries N presets (fixed camera views)
+ * that share the station position; one preset is one camera here. */
+export const FINTRAFFIC_STATIONS_URL =
+  'https://tie.digitraffic.fi/api/weathercam/v1/stations';
+/** Frames: `<origin><presetId>.jpg`. Preset ids are synthesized into this
+ * origin rather than read from the payload, so no upstream field can steer the
+ * frame proxy off-host. */
+export const FINTRAFFIC_IMAGE_ORIGIN = 'https://weathercam.digitraffic.fi/';
+/** Digitraffic asks every client to identify itself on API calls. */
+export const DIGITRAFFIC_USER = 'gods-eye-view';
+export const DEFAULT_FINTRAFFIC_MAX_SOURCES = 300;
+/** Ground-elevation prior, in metres, for stations that report no altitude.
+ * 228 of 809 stations carry a real metre value (median 94 m); the rest report
+ * 0, which means "not reported" rather than sea level — Kouvola (~80 m of real
+ * elevation) reports 0. The observed median stands in for those. */
+export const FINTRAFFIC_GROUND_ELEVATION_M = 90;
+/** Prioritization anchors: the population centres strung along Finland's main
+ * road spine (vt1 Turku, vt3 Tampere, vt4 Jyväskylä–Oulu–Rovaniemi, vt5
+ * Kuopio), so a cap keeps national coverage rather than just the capital. */
+export const FINLAND_ANCHORS = [
+  { lat: 60.1699, lon: 24.9384 }, // Helsinki
+  { lat: 60.4518, lon: 22.2666 }, // Turku
+  { lat: 61.4978, lon: 23.761 }, // Tampere
+  { lat: 62.2426, lon: 25.7473 }, // Jyväskylä
+  { lat: 62.8924, lon: 27.677 }, // Kuopio
+  { lat: 65.0121, lon: 25.4651 }, // Oulu
+  { lat: 66.5039, lon: 25.7294 }, // Rovaniemi
+];
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
