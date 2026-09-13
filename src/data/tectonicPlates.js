@@ -51,36 +51,50 @@ export function normalizeTectonicPlateSnapshot(geojson) {
       return null;
     }
 
-    if (feature?.geometry?.type !== 'LineString') {
+const geometryType = feature?.geometry?.type;
+
+if (geometryType !== 'LineString' && geometryType !== 'MultiLineString') {
+  return null;
+}
+  }
+const rawPaths = geometryType === 'LineString'
+  ? [feature.geometry.coordinates]
+  : feature.geometry.coordinates;
+
+if (!Array.isArray(rawPaths) || rawPaths.length === 0) {
+  return null;
+}
+
+const normalizedPaths = [];
+
+for (const path of rawPaths) {
+  if (!Array.isArray(path) || path.length < 2) {
+    return null;
+  }
+
+  const normalizedCoordinates = [];
+
+  for (const coordinate of path) {
+    if (!Array.isArray(coordinate) || coordinate.length < 2) {
       return null;
     }
 
-    const coordinates = feature.geometry.coordinates;
+    const [lon, lat] = coordinate;
 
-    if (!Array.isArray(coordinates) || coordinates.length < 2) {
+    if (
+      !Number.isFinite(lon)
+      || !Number.isFinite(lat)
+      || Math.abs(lon) > 180
+      || Math.abs(lat) > 90
+    ) {
       return null;
     }
 
-    const normalizedCoordinates = [];
+    normalizedCoordinates.push([lon, lat]);
+  }
 
-    for (const coordinate of coordinates) {
-      if (!Array.isArray(coordinate) || coordinate.length < 2) {
-        return null;
-      }
-
-      const [lon, lat] = coordinate;
-
-      if (
-        !Number.isFinite(lon)
-        || !Number.isFinite(lat)
-        || Math.abs(lon) > 180
-        || Math.abs(lat) > 90
-      ) {
-        return null;
-      }
-
-      normalizedCoordinates.push([lon, lat]);
-    }
+  normalizedPaths.push(normalizedCoordinates);
+}
 
     const rawId = feature.id ?? feature.properties?.OBJECTID ?? `feature-${index + 1}`;
     const id = String(rawId);
@@ -94,18 +108,23 @@ export function normalizeTectonicPlateSnapshot(geojson) {
     const rawName = feature.properties?.NAME;
     const rawLabel = feature.properties?.LABEL;
 
-    rows.push({
-      id,
-      name: typeof rawName === 'string' && rawName.trim()
-        ? rawName.trim()
-        : null,
-      boundaryType: normalizeBoundaryType(rawLabel),
-      sourceLabel: typeof rawLabel === 'string' && rawLabel.trim()
-        ? rawLabel.trim()
-        : null,
-      coordinates: normalizedCoordinates,
-    });
-  }
+  for (const [pathIndex, coordinates] of normalizedPaths.entries()) {
+  const rowId = normalizedPaths.length === 1
+    ? id
+    : `${id}:${pathIndex + 1}`;
+
+  rows.push({
+    id: rowId,
+    name: typeof rawName === 'string' && rawName.trim()
+      ? rawName.trim()
+      : null,
+    boundaryType: normalizeBoundaryType(rawLabel),
+    sourceLabel: typeof rawLabel === 'string' && rawLabel.trim()
+      ? rawLabel.trim()
+      : null,
+    coordinates,
+  });
+}
 
   return rows;
 }
