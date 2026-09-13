@@ -1,3 +1,4 @@
+import { createStandalonePlaceSearch } from './placeSearch.js';
 import { createApplication } from '../app/application.js';
 import { createStandaloneScene } from './scene.js';
 import { createStandaloneControls } from './controls.js';
@@ -18,19 +19,25 @@ export function createStandaloneApplication({
   constructed = true;
   const loadingScreen = document.getElementById('loading-screen');
   const loaderStatus = loadingScreen.querySelector('.loader-status');
+  let placeSearch;
   return createApplication({
-    createScene: (context) =>
-      createStandaloneScene({
+    createScene: (context) => {
+      placeSearch = createStandalonePlaceSearch({
+        resolveApiKey: () => googleApiKey,
+        signal: context.signal,
+      });
+      return createStandaloneScene({
         ...context,
         googleApiKey,
         cesiumToken,
         loaderStatus,
-      }),
+      });
+    },
     createControls: (context) =>
-      createStandaloneControls({ ...context, loaderStatus }),
+      createStandaloneControls({ ...context, loaderStatus, placeSearch }),
     createData: (context) =>
       createStandaloneData({ ...context, allowQaRegistration }),
     createTools: (context) =>
-      createStandaloneTools({ ...context, loadingScreen }),
+      createStandaloneTools({ ...context, loadingScreen, placeSearch }),
   });
 }

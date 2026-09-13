@@ -105,6 +105,7 @@ test('renders ordinary layer rows without recreating a panel-hidden coordinator'
       },
       appendChild(child) { this.children.push(child); return child; },
       addEventListener() {},
+      removeEventListener() {},
       setAttribute(name, value) { this.attributes[name] = String(value); },
       querySelector(selector) {
         if (selector.startsWith('[data-layer-id="')) {
@@ -2756,6 +2757,7 @@ function makeControlElement() {
     },
     focus() { if (globalThis.document) globalThis.document.activeElement = this; },
     addEventListener(name, handler) { this.listeners[name] = handler; },
+    removeEventListener(name, handler) { if (this.listeners[name] === handler) delete this.listeners[name]; },
     setAttribute(name, value) { this.attributes[name] = String(value); },
     getAttribute(name) { return this.attributes[name] ?? null; },
     closest(selector) {
@@ -3252,6 +3254,50 @@ test('a layer that surrenders its row controls hides the block entirely', async 
     assert.equal(collectByClass(controls, 'data-toggle-chip').length, 1);
   } finally {
     await mgr.destroyAll();
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+});
+
+test('layer metadata shows a guidance prompt without reporting it as a fault', () => {
+  const mgr = new DataLayerManager({});
+  const text = mgr._buildMetaText({
+    enabled: true,
+    source: 'OpenStreetMap',
+    stats: { status: 'zoom-in', error: null, count: 0, statusMessage: 'Zoom in to search mapped installations' },
+  });
+  assert.match(text, /Zoom in to search mapped installations$/);
+  assert.doesNotMatch(text, /UNAVAILABLE|DEGRADED/);
+});
+
+
+test('panel remount releases old listeners and destruction revokes retained controls', async () => {
+  const originalDocument = globalThis.document;
+  globalThis.document = { createElement: makeControlElement, activeElement: null };
+  const manager = new DataLayerManager({});
+  const layer = makeSlowLayer('lifecycle-panel', { updateInterval: -1 });
+  let rowListener;
+  layer.module.getRowControls = () => ({ chips: [] });
+  layer.module.setRowControlsListener = (listener) => { rowListener = listener; };
+  manager.register(layer.module);
+  try {
+    const first = makeControlElement();
+    manager.buildTogglePanel(first);
+    const oldButton = first.querySelector('.data-toggle-btn');
+    const retainedClick = oldButton.listeners.click;
+    const second = makeControlElement();
+    manager.buildTogglePanel(second);
+    assert.equal(oldButton.listeners.click, undefined);
+    await retainedClick();
+    assert.equal(layer.calls.enable, 0, 'a revoked generation cannot issue actions');
+    const currentButton = second.querySelector('.data-toggle-btn');
+    assert.equal(typeof currentButton.listeners.click, 'function');
+    assert.equal(typeof rowListener, 'function');
+    await manager.destroyAll();
+    assert.equal(currentButton.listeners.click, undefined);
+    assert.equal(rowListener, null);
+  } finally {
+    await manager.destroyAll();
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
   }

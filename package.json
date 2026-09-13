@@ -2,7 +2,7 @@
   "name": "gods-eye-view",
   "private": true,
   "version": "0.1.1",
-  "description": "A real-time intelligence console for planet Earth — photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
+  "description": "A real-time intelligence console for planet Earth \u2014 photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
   "type": "module",
   "license": "MIT",
   "author": "Bilawal Sidhu",
@@ -117,6 +117,30 @@
     },
     "./server/standalone/key-setup": {
       "node": "./server/standalone/key-setup.js"
-    }
+    },
+    "./search": "./src/search/index.js",
+    "./ui/panels": "./src/ui/panelDisclosure.js",
+    "./ui/surfaces": "./src/ui/surfaceKeyboard.js",
+    "./ui/layout": "./src/ui/panelRails.js",
+    "./ui/input": "./src/ui/visualInput.js",
+    "./ui/display": "./src/ui/displayControls.js",
+    "./ui/effects": "./src/ui/effects.js",
+    "./ui/effects/bloom": "./src/bloom.js",
+    "./ui/maps": "./src/ui/mapSource.js",
+    "./ui/layers": "./src/ui/layers.js",
+    "./ui/layers/feedback": "./src/loadingFeedback.js",
+    "./ui/location": "./src/ui/location.js",
+    "./ui/radio": "./src/ui/radio.js",
+    "./ui/cctv": "./src/ui/cctv.js",
+    "./ui/context": "./src/ui/context.js",
+    "./ui/context/policy": "./src/contextModePolicy.js",
+    "./ui/cockpit": "./src/ui/cockpit.js",
+    "./ui/cockpit/math": "./src/cockpitMath.js",
+    "./ui/cockpit/layout": "./src/cockpitUtilityLayout.js",
+    "./ui/cockpit/vision": "./src/cockpitVisionPolicy.js",
+    "./ui/scenes": "./src/ui/scenes.js",
+    "./ui/shell": "./src/ui/applicationShell.js",
+    "./ui/styles": "./src/ui/styles.js",
+    "./scenes": "./src/scenes/director.js"
   }
 }

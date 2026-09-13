@@ -1,3 +1,4 @@
+import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -6,11 +7,12 @@ import { getContextStore, registerEntityContext } from '../data/contextStore.js'
 import { DataLayerManager } from '../data/manager.js';
 import { getActiveCameraMotion, interruptCameraMotion, moveCamera } from '../cameraVerbs.js';
 import { reassertNavigationHandoff, runExplicitNavigation } from '../navigationPolicy.js';
+import { normalizeRadioCountryInput } from '../data/radioCountry.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
 import {
   controlCctv,
-  controlRadio,
-  createGevActionRunner,
+  controlRadio as runControlRadio,
+  createGevActionRunner as createActionRunner,
   cctvVoiceFocusOutcome,
   formatTrackedEntityLabel,
   knownRadioLocation,
@@ -3017,3 +3019,124 @@ test('front5: 0.99 km due EAST is the subject, though a degree box rejects it', 
     assert.equal(result.window.centeredOn, 'N546PC');
   });
 });
+
+// ── Keyless Radio location ───────────────────────────────────────────────────
+//
+// `resolveRadioLocation` used to be Google-only: no key threw, and a key that
+// geocoded to nothing returned null, which the caller reports as "Could not
+// resolve Radio location". Both now fall through to Photon. These drive the
+// second case, because it reaches the SAME fallback through a running Google
+// branch — the no-key branch cannot be driven here, since the key expression
+// reads `import.meta.env`, which only Vite defines.
+
+/** Photon's GeoJSON shape, trimmed to the properties the adapter consumes. */
+function photonFeature({ name, lat, lon, city = '', country = '' }) {
+  return {
+    geometry: { type: 'Point', coordinates: [lon, lat] },
+    properties: { name, city, country, osm_key: 'place', osm_value: 'city' },
+  };
+}
+
+/** A Radio layer that records what it was asked to select. */
+function radioSelectionHarness() {
+  let enabled = false;
+  const calls = [];
+  const state = {
+    stationCount: 4, filter: 'all', selected: null,
+    audioState: 'stopped', volume: 0.8, voiceDucked: false,
+  };
+  const radio = {
+    getUIState: () => ({ ...state }),
+    selectRequestedStation(criteria, options) {
+      calls.push({ criteria, options });
+      state.selected = { id: 'kl-1', name: 'Keyless FM' };
+      return state.selected;
+    },
+  };
+  return {
+    calls,
+    dataManager: {
+      layers: new Map([['radio', { module: radio }]]),
+      isEnabled: () => enabled,
+      async setEnabled(_id, value) { enabled = value; },
+    },
+  };
+}
+
+/** Install a Google key plus a fetch stub, restoring both afterwards. */
+function installKeyedFetch(t, handler) {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const priorKey = globalThis.window.__GOOGLE_MAPS_API_KEY__;
+  const priorFetch = globalThis.fetch;
+  globalThis.window.__GOOGLE_MAPS_API_KEY__ = 'unit-test-key';
+  globalThis.fetch = handler;
+  t.after(() => {
+    globalThis.fetch = priorFetch;
+    if (priorKey === undefined) delete globalThis.window.__GOOGLE_MAPS_API_KEY__;
+    else globalThis.window.__GOOGLE_MAPS_API_KEY__ = priorKey;
+  });
+}
+
+test('voice Radio: a key that geocodes to nothing still places the station, keylessly', async (t) => {
+  const { calls, dataManager } = radioSelectionHarness();
+  const requests = [];
+  installKeyedFetch(t, async (url) => {
+    requests.push(String(url));
+    if (String(url).startsWith('https://maps.googleapis.com/')) {
+      return { ok: true, json: async () => ({ status: 'ZERO_RESULTS', results: [] }) };
+    }
+    assert.match(String(url), /^https:\/\/photon\.komoot\.io\/api\/\?/);
+    return {
+      ok: true,
+      json: async () => ({
+        features: [photonFeature({
+          name: 'Hạ Long Bay', lat: 20.9101, lon: 107.1839, city: 'Hạ Long', country: 'Việt Nam',
+        })],
+      }),
+    };
+  });
+
+  const result = await controlRadio({}, dataManager, {
+    action: 'select', locationQuery: 'Hạ Long Bay',
+  });
+
+  // Before the fallback existed this was `ok: false, "Could not resolve Radio location"`.
+  assert.equal(result.ok, true);
+  assert.equal(result.requestedLocation, 'Hạ Long Bay, Hạ Long, Việt Nam');
+  assert.equal(calls.length, 1);
+  assert.ok(Math.abs(calls[0].criteria.anchor.lat - 20.9101) < 1e-9);
+  assert.ok(Math.abs(calls[0].criteria.anchor.lon - 107.1839) < 1e-9);
+  // Google is asked first and exactly once; Photon answers unbiased, in one call.
+  assert.equal(requests.filter((url) => url.includes('maps.googleapis.com')).length, 1);
+  assert.equal(requests.filter((url) => url.includes('photon.komoot.io')).length, 1);
+  assert.match(requests.at(-1), /[?&]q=H%E1%BA%A1\+Long\+Bay/);
+  assert.doesNotMatch(requests.at(-1), /[?&](lat|lon|bbox)=/, 'a named radio location is not viewport-biased');
+});
+
+test('voice Radio: the keyless path applies no country filter the keyed path would not', async (t) => {
+  // Photon reports the country in the feature's own language ("Việt Nam"), and
+  // `rankRadioStationsForRequest` fails CLOSED on a country it cannot map —
+  // returning NO stations. Forwarding it would make a keyless install answer
+  // "No Radio station matched" for exactly the places it just resolved, while a
+  // keyed install placed a station. The label may carry it; the filter may not.
+  const { calls, dataManager } = radioSelectionHarness();
+  installKeyedFetch(t, async (url) => (String(url).startsWith('https://maps.googleapis.com/')
+    ? { ok: true, json: async () => ({ status: 'ZERO_RESULTS', results: [] }) }
+    : {
+      ok: true,
+      json: async () => ({
+        features: [photonFeature({ name: 'Kraków', lat: 50.0614, lon: 19.9366, country: 'Polska' })],
+      }),
+    }));
+
+  const result = await controlRadio({}, dataManager, { action: 'select', locationQuery: 'Kraków' });
+
+  assert.equal(result.ok, true);
+  assert.equal(calls[0].criteria.country, '', 'a localized country name must never reach the station filter');
+  assert.equal(normalizeRadioCountryInput('Polska').valid, false, 'and this is why: it would match nothing');
+  assert.equal(result.requestedLocation, 'Kraków, Polska', 'the label still names the country honestly');
+});
+
+const testPlaceSearch = () => createStandalonePlaceSearch({ resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ });
+function createGevActionRunner(options) { return createActionRunner({ placeSearch: testPlaceSearch(), ...options }); }
+function controlRadio(viewer, manager, args, options) { return runControlRadio(viewer, manager, args, { placeSearch: testPlaceSearch(), ...options }); }

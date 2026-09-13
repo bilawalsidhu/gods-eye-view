@@ -1,3 +1,4 @@
+import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -5,8 +6,8 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
-const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui.js'), 'utf8');
+const css = readStylesheet(path.join(ROOT, 'style.css'));
+const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'applicationShell.js'), 'utf8');
 
 /*
  * Required-attribution keep-out pin.
@@ -165,7 +166,7 @@ function flattenRules(source) {
       rules.push({
         order: rules.length,
         media: [...mediaStack],
-        parts: splitTopLevel(head, ',').map((part) => part.trim()).filter(Boolean),
+        parts: splitTopLevel(head, ',').map((part) => part.trim().replace(/\(\s+/g, '(').replace(/\s+\)/g, ')')).filter(Boolean),
         decls,
       });
       index = close + 1;
@@ -436,20 +437,21 @@ test('custom properties inside modelled offsets are provably non-negative', () =
     assert.doesNotMatch(decl.value, /-\s*\d/, `${decl.prop} has a negative CSS default: ${decl.value}`);
     assert.match(decl.value, /^(0|0px)$/, `${decl.prop} default is not a vetted shape: ${decl.value}`);
   }
-  const start = ui.indexOf('_updateCommandDockTrayStack() {');
+  const layout = fs.readFileSync(new URL('./ui/panelLayoutController.js', import.meta.url), 'utf8');
+  const start = layout.indexOf('_updateCommandDockTrayStack() {');
   assert.ok(start > 0, '_updateCommandDockTrayStack is missing');
-  const writer = ui.slice(start, start + 1800);
+  const writer = layout.slice(start, layout.indexOf('  _scheduleAdaptivePanelLayout(', start));
   // Every value traces back to a rect height, floored at 0 and rounded up.
-  assert.match(writer, /const locationHeight = [\s\S]{0,120}?getBoundingClientRect\(\)\.height \|\| 0;/);
-  assert.match(writer, /const presetsHeight = [\s\S]{0,120}?getBoundingClientRect\(\)\.height \|\| 0;/);
-  assert.match(writer, /const lowerPinnedHeight = [\s\S]{0,160}?getBoundingClientRect\(\)\.height \|\| 0;/);
+  assert.match(writer, /const locationHeight =\s*[\s\S]{0,180}?getBoundingClientRect\(\)\.height\s*\|\| 0;/);
+  assert.match(writer, /const presetsHeight =\s*[\s\S]{0,180}?getBoundingClientRect\(\)\.height\s*\|\| 0;/);
+  assert.match(writer, /const lowerPinnedHeight =\s*[\s\S]{0,220}?getBoundingClientRect\(\)\.height\s*\|\| 0;/);
   assert.match(writer, /const locationHeightPx = Math\.ceil\(locationHeight\);/);
   assert.match(writer, /const presetsHeightPx = Math\.ceil\(presetsHeight\);/);
-  assert.match(writer, /'--dock-location-pinned-height', `\$\{locationHeightPx\}px`/);
-  assert.match(writer, /'--dock-presets-pinned-height', `\$\{presetsHeightPx\}px`/);
-  assert.match(writer, /'--dock-lower-pinned-height', `\$\{Math\.ceil\(lowerPinnedHeight\)\}px`/);
+  assert.match(writer, /'--dock-location-pinned-height',\s*`\$\{locationHeightPx\}px`/);
+  assert.match(writer, /'--dock-presets-pinned-height',\s*`\$\{presetsHeightPx\}px`/);
+  assert.match(writer, /'--dock-lower-pinned-height',\s*`\$\{Math\.ceil\(lowerPinnedHeight\)\}px`/);
   assert.match(writer, /'--dock-pinned-stack-height', stackHeight/);
-  assert.match(writer, /const stackHeight = pinnedCount > 1[\s\S]{0,160}?`calc\(\$\{locationHeightPx\}px \+ \$\{presetsHeightPx\}px \+ 1\.2rem\)`/);
+  assert.match(writer, /const stackHeight =\s*pinnedCount > 1[\s\S]{0,160}?`calc\(\$\{locationHeightPx\}px \+ \$\{presetsHeightPx\}px \+ 1\.2rem\)`/);
 });
 
 test('the inputs behind the measured constants are unchanged', () => {
@@ -479,9 +481,10 @@ test('the full-width rail cannot inherit a height that overrides its floor', () 
   // over-constrained. It is safe only because the rail's layout pass switches
   // to a mobile mode at the SAME breakpoint and removes both the class and the
   // custom property. Pin that, or the exemption above is unearned.
-  const gate = ui.indexOf("window.matchMedia('(max-width: 720px)')");
+  const rail = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'rightPanelRail.js'), 'utf8');
+  const gate = rail.indexOf("windowRef.matchMedia('(max-width: 720px)')");
   assert.ok(gate > 0, 'the rail layout pass no longer keys off (max-width: 720px)');
-  const mobileBranch = ui.slice(gate, ui.indexOf("layoutMode = 'mobile'", gate) + 40);
+  const mobileBranch = rail.slice(gate, rail.indexOf("layoutMode = 'mobile'", gate) + 40);
   assert.match(mobileBranch, /stack\.classList\.remove\('layout-focus'\)/);
   assert.match(mobileBranch, /stack\.style\.removeProperty\('--right-stack-max-height'\)/);
 });

@@ -1,0 +1,624 @@
+/* ═══════════════════════════════════════════════
+   GOD'S EYE VIEW — Dark Sci-Fi UI
+   Apple meets Blade Runner
+   ═══════════════════════════════════════════════ */
+
+:root {
+  --bg-dark: #0a0a0f;
+  --glass-bg: rgba(12, 12, 20, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-hover: rgba(255, 255, 255, 0.15);
+  --accent: #00d4ff;
+  --accent-dim: rgba(0, 212, 255, 0.15);
+  --accent-glow: rgba(0, 212, 255, 0.4);
+  --text-primary: #e8eaed;
+  --text-secondary: rgba(232, 234, 237, 0.5);
+  --text-dim: rgba(232, 234, 237, 0.3);
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --panel-radius: 16px;
+  --btn-radius: 10px;
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --left-stack-x: 52px;
+  --right-rail-x: 52px;
+  --left-stack-top: 26vh;
+  --left-stack-gap: 72px;
+  --left-collapsed-width: 176px;
+  --display-panel-expanded-width: 272px;
+  --cockpit-radio-collapsed-width: 148px;
+  --cockpit-radio-expanded-width: 232px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Keyboard focus is an app-wide state and must survive selected/active button
+   skins. Individual controls can choose an inset/outset offset, but no local
+   `outline: none` rule may erase the ring. */
+:where(
+  button,
+  a[href],
+  input,
+  select,
+  textarea,
+  summary,
+  [tabindex],
+  [role='button'],
+  [role='checkbox'],
+  [role='combobox'],
+  [role='link'],
+  [role='listbox'],
+  [role='menuitem'],
+  [role='menuitemcheckbox'],
+  [role='menuitemradio'],
+  [role='option'],
+  [role='radio'],
+  [role='searchbox'],
+  [role='slider'],
+  [role='spinbutton'],
+  [role='switch'],
+  [role='tab'],
+  [role='textbox'],
+  [role='treeitem']
+):focus-visible {
+  outline: 2px solid var(--text-primary) !important;
+  outline-offset: 2px;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-dark);
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Cesium Container ─────────────────────────── */
+#cesiumContainer {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* Unified world-overlay host: detection uses one host-owned blend surface
+   beneath the shared text/card canvas; both share one frame path. The root
+   holds ONLY the card canvas — it is a stacking context (z-index below), and
+   a canvas that blends against the scene cannot live inside one. */
+#world-overlay-root {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+#world-overlay-detection-surface,
+#world-overlay-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Scope mask — the explicit circular viewport treatment (see
+   src/scopeMask.js for the emergent-artifact history). z2 keeps it above
+   the WebGL scene but under the z5 detection surface, preserving the old
+   compositing order where detection's blend rode the masked scene. */
+#scope-mask {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* z1 like the celestial ring; the ring is appended LATER so DOM order
+     keeps it ABOVE the mask — matching the old stacking, where the DOM
+     ring rode above the in-scene scope artifact. Detection (z5) and the
+     overlay root (z6) stay above both. */
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* The detection surface is host-owned but parented into #cesiumContainer
+   (position:absolute, z-index:auto — NOT a stacking context) so its
+   `mix-blend-mode: screen` composites against the WebGL scene. z5 keeps it
+   under the z6 root that carries the shared card canvas; do not move this
+   surface inside #world-overlay-root, which would isolate the blend. */
+#world-overlay-detection-surface {
+  z-index: 5;
+}
+
+/* Canvas cards retain their spatial renderer; this parallel focusable list
+   exposes only the currently painted actionable targets to assistive tech. */
+.world-overlay-accessibility {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Source-backed cockpit weather ─────────────
+   Low-resolution GPU cloud pass composited only inside the cockpit keyhole. */
+#cockpit-cloud-effects {
+  position: fixed;
+  inset: 0;
+  z-index: 7;
+  display: none;
+  width: 100vw;
+  height: 100vh;
+  opacity: 0;
+  pointer-events: none;
+  clip-path: circle(min(40vw, 52vh) at 50% 50%);
+  filter: blur(0.7px) saturate(0.72) contrast(1.08);
+  transform: translateZ(0);
+  transition: opacity 900ms ease;
+}
+
+body.cockpit-mode #cockpit-cloud-effects.active {
+  display: block;
+  opacity: 0.86;
+}
+
+/* ── Full-globe celestial keyhole ring ─────── */
+.celestial-ring-overlay {
+  position: absolute;
+  inset: 0;
+  /* Above the z1 scope mask regardless of DOM order (the ring is built by
+     StyleManager before the scope installs) — the ring always rode above
+     the scope treatment. Detection (z5) and the overlay root (z6) stay on
+     top of both. */
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 300ms ease,
+    visibility 300ms ease;
+}
+
+.celestial-ring-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.celestial-ring-overlay.disabled {
+  display: none;
+}
+
+.celestial-ring-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  transform-origin: 50% 50%;
+  will-change: transform, opacity;
+}
+
+.celestial-ring-outline {
+  position: absolute;
+  box-sizing: border-box;
+  border: 0.8px solid rgba(151, 218, 232, 0.095);
+  border-radius: 50%;
+  will-change: width, height;
+}
+
+.celestial-marker {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  font-family: 'Material Symbols Outlined';
+  font-size: 20px;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 20;
+  transition: opacity 120ms linear;
+  user-select: none;
+}
+
+.celestial-sun {
+  color: rgba(231, 194, 72, 0.92);
+  text-shadow:
+    0 0 7px rgba(231, 194, 72, 0.72),
+    0 0 18px rgba(231, 194, 72, 0.3);
+}
+
+.celestial-moon {
+  color: rgba(55, 211, 239, 0.84);
+  text-shadow:
+    0 0 7px rgba(55, 211, 239, 0.65),
+    0 0 17px rgba(55, 211, 239, 0.25);
+}
+
+#celestial-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+/* Hide Cesium default UI elements */
+.cesium-viewer-toolbar,
+.cesium-viewer-animationContainer,
+.cesium-viewer-timelineContainer,
+.cesium-viewer-bottom,
+.cesium-viewer-fullscreenContainer,
+.cesium-viewer-vrContainer,
+.cesium-viewer-geocoderContainer,
+.cesium-viewer-selectionIndicatorContainer,
+.cesium-viewer-infoBoxContainer {
+  display: none !important;
+}
+
+/* Data-source attribution (Google Maps / 3D Tiles, etc.).
+   Required by the Google Maps Platform Terms of Service — keep it visible.
+   Styled to be unobtrusive but legible against the dark UI. */
+#cesium-credits {
+  position: fixed;
+  /* Bottom-LEFT corner, mirrored from the GEV mic pill (right:36/bottom:36) so the two bottom
+     corners are symmetric; sits below the coordinate HUD (.hud-bottom-left, bottom:180). Was
+     dead-center at the bottom, tucked under the LOCATIONS/STYLE panels. Must stay visible (Google
+     /Cesium attribution ToS). */
+  bottom: 36px;
+  left: 36px;
+  z-index: 90;
+  max-width: 90vw;
+  /* Keep the Google logo + "Data attribution" link on ONE line — they were wrapping to a second
+     row (looked like it was falling over). nowrap + a roomy max-width holds them inline. */
+  white-space: nowrap;
+  pointer-events: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: rgba(232, 234, 237, 0.55);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+#cesium-credits .cesium-credit-logoContainer,
+#cesium-credits .cesium-credit-textContainer,
+#cesium-credits .cesium-credit-expand-link {
+  display: inline-block;
+  vertical-align: middle;
+}
+#cesium-credits a,
+#cesium-credits .cesium-credit-expand-link {
+  color: rgba(232, 234, 237, 0.7);
+}
+
+/* Cesium's stock attribution lightbox grows with every registered data source.
+   Keep the title and close affordance fixed while the complete, unabridged
+   credit list wraps and scrolls inside a compact panel. */
+.cesium-credit-lightbox-overlay {
+  z-index: 200 !important;
+}
+
+.cesium-credit-lightbox {
+  display: flex;
+  flex-direction: column;
+  width: 470px;
+  max-width: calc(100vw - 2rem);
+  max-height: min(70dvh, 36rem);
+  overflow: hidden;
+}
+
+.cesium-credit-lightbox > ul {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 8px 20px 14px 40px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  font-size: 12px !important;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.cesium-credit-lightbox > ul > li {
+  padding-bottom: 5px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 575px) {
+  .cesium-credit-lightbox {
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+  }
+}
+/* Clean-view / recording: the Google + Cesium attribution MUST stay visible.
+   Google Maps Platform ToS and Cesium's terms require the credit whenever the
+   content is displayed — and these are exactly the modes used to record demos
+   and launch videos, so hiding #cesium-credits here (as it was before) shipped
+   non-compliant footage. The full credit line — Cesium/Ion logo, "Google Maps",
+   and the "Data attribution" link that opens the per-layer license popover —
+   stays on screen; it's already styled small and unobtrusive above. The GEV
+   chrome (panels/HUD) still fades via its own rules; only the required notice
+   is exempt. (Note: Cesium re-applies inline styles on the credit elements each
+   frame, so the on-screen credit content is owned by Cesium's update loop, not
+   CSS overrides — we deliberately don't fight it here.) */
+
+#gev-voice-control {
+  position: fixed;
+  right: 36px;
+  bottom: 36px;
+  /* Z ladder: panels 100-139, voice pill 150, toast 200, clean-view-exit 300 */
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 214px;
+  padding: 9px 14px;
+  color: var(--text-primary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 0 20px rgba(0, 212, 255, 0.08);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  font-family: var(--font-mono);
+  pointer-events: auto;
+}
+
+#gev-voice-button {
+  width: 72px;
+  height: 34px;
+  flex: 0 0 auto;
+  color: var(--accent);
+  background: rgba(0, 212, 255, 0.06);
+  border: 1px solid rgba(0, 212, 255, 0.28);
+  border-radius: var(--btn-radius);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+#gev-voice-button:hover {
+  color: #ffffff;
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.22);
+}
+
+.gev-voice-readout {
+  min-width: 0;
+  line-height: 1.2;
+  text-align: right;
+}
+
+#gev-voice-status {
+  font-size: 10px;
+  color: var(--accent);
+}
+
+#gev-voice-detail {
+  max-width: 132px;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#gev-voice-control[data-status='listening'] {
+  border-color: rgba(92, 255, 198, 0.45);
+}
+
+#gev-voice-control[data-status='listening'] #gev-voice-status {
+  color: #5cffc6;
+}
+
+#gev-voice-control[data-status='executing'] {
+  border-color: rgba(255, 220, 120, 0.55);
+}
+
+#gev-voice-control[data-status='executing'] #gev-voice-status {
+  color: #ffdc78;
+}
+
+#gev-voice-control[data-status='error'] {
+  align-items: flex-start;
+  width: min(440px, calc(100vw - 72px));
+  border-color: rgba(255, 92, 110, 0.6);
+  /* Multi-line error block reads as a panel, not a capsule */
+  border-radius: var(--panel-radius);
+}
+
+#gev-voice-control[data-status='error'] #gev-voice-status {
+  color: #ff5c6e;
+}
+
+#gev-voice-control[data-status='error'] .gev-voice-readout {
+  flex: 1;
+  text-align: left;
+}
+
+#gev-voice-control[data-status='error'] #gev-voice-detail {
+  max-width: none;
+  overflow: visible;
+  color: #ffb4bd;
+  line-height: 1.45;
+  text-overflow: clip;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+/* ── Title Bar ────────────────────────────────── */
+#title-bar {
+  position: fixed;
+  top: 32px;
+  left: 36px;
+  z-index: 100;
+  pointer-events: none;
+  user-select: none;
+}
+
+#title-bar .title-glow {
+  position: absolute;
+  top: -20px;
+  left: -20px;
+  width: 200px;
+  height: 80px;
+  background: radial-gradient(ellipse, var(--accent-dim) 0%, transparent 70%);
+  filter: blur(20px);
+  opacity: 0.6;
+}
+
+#title-bar h1 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 8px;
+  color: var(--text-primary);
+  text-shadow: 0 0 30px var(--accent-glow);
+  position: relative;
+}
+
+#title-bar .title-logo {
+  position: relative;
+  display: block;
+  width: 52px;
+  height: auto;
+  filter: drop-shadow(0 0 12px rgba(0, 246, 255, 0.5));
+}
+
+#title-bar .title-logo::before,
+#title-bar .title-logo::after {
+  --radio-broadcast-opacity: 0.28;
+  content: '';
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: -9px;
+  width: 13px;
+  height: 7px;
+  border: 1px solid var(--accent);
+  border-bottom: 0;
+  border-radius: 999px 999px 0 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transform-origin: 50% 100%;
+}
+
+#title-bar .title-logo::after {
+  --radio-broadcast-opacity: 0.17;
+  top: -15px;
+  width: 27px;
+  height: 13px;
+}
+
+#title-bar.radio-broadcasting .title-logo::before,
+#title-bar.radio-broadcasting .title-logo::after {
+  opacity: var(--radio-broadcast-opacity);
+  animation: title-radio-broadcast 1.8s ease-in-out infinite;
+}
+
+#title-bar.radio-broadcasting .title-logo::after {
+  animation-delay: 0.28s;
+}
+
+@keyframes title-radio-broadcast {
+  0%,
+  100% {
+    opacity: calc(var(--radio-broadcast-opacity) * 0.55);
+    transform: translateX(-50%) scale(0.94);
+  }
+  50% {
+    opacity: var(--radio-broadcast-opacity);
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #title-bar.radio-broadcasting .title-logo::before,
+  #title-bar.radio-broadcasting .title-logo::after {
+    animation: none;
+  }
+}
+
+.brand-logo {
+  aspect-ratio: 775 / 520;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.brand-logo > img,
+.brand-logo > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#title-bar .title-accent,
+.loader-content .title-accent {
+  color: var(--accent);
+  font-weight: 300;
+}
+
+#title-bar .subtitle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 5px;
+  color: var(--text-dim);
+  margin-top: 8px;
+  text-transform: uppercase;
+}
+
+/* ── Style Indicator ──────────────────────────── */
+#style-indicator {
+  position: fixed;
+  top: 32px;
+  right: 36px;
+  z-index: 100;
+  pointer-events: none;
+  user-select: none;
+  text-align: right;
+}
+
+#style-indicator .indicator-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+#style-indicator .indicator-value {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 5px;
+  color: var(--accent);
+  margin-top: 4px;
+  text-shadow: 0 0 20px var(--accent-glow);
+  transition: var(--transition-smooth);
+}

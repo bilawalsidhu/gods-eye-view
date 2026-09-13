@@ -1,3 +1,4 @@
+import { readStylesheet } from './testSupport/readStylesheet.mjs';
 // MAP STACK chip row — the dropdown's replacement control surface.
 //
 // The owner's complaint was two clicks (open panel → open dropdown) to change
@@ -262,7 +263,7 @@ test('a missing row or document is inert rather than throwing during boot', () =
 });
 
 test('the active cyan survives hover', () => {
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
   const hover = css.indexOf('.map-stack-chip:hover');
   const active = css.indexOf('.map-stack-chip.active {');
   const unavailable = css.indexOf('.map-stack-chip.unavailable');
@@ -282,7 +283,7 @@ test('the keyboard focus ring survives on the ACTIVE chip', () => {
   // `outline: none` — so a focus state built only from those properties is
   // INVISIBLE on the active chip. The ring must live on a property no other
   // chip-state rule sets.
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
   const stripComments = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '');
   const chipRules = [...css.matchAll(/([^{}]*\.map-stack-chip[^{}]*)\{([^{}]*)\}/g)]
     .map(([, selector, body], order) => ({
@@ -329,7 +330,7 @@ test('the keyboard focus ring survives on the ACTIVE chip', () => {
 
 test('the Visual Presets tray owns Map Source and the retired left panel is absent', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const ui = readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
 
   assert.doesNotMatch(html, /map-stack-select/, 'the SOURCE dropdown is replaced by the chip row');
   assert.match(
@@ -343,29 +344,26 @@ test('the Visual Presets tray owns Map Source and the retired left panel is abse
     /<button id="control-panel-toggle"[\s\S]*?data-dock-toggle-target="control-panel"[\s\S]*?aria-controls="control-panel-popover"/,
     'the compact wing must expose a semantic keyboard disclosure',
   );
-  assert.match(ui, /event\.key !== 'Escape'[\s\S]*?disclosure\?\.focus/);
-  assert.match(ui, /querySelector\('\.map-stack-chip\.active'\)\s*\|\| panelEl\.querySelector\('\.map-stack-chip'\)/);
+  const panels = readFileSync(new URL('./ui/panelDisclosure.js', import.meta.url), 'utf8');
+  assert.match(panels, /event\.key !== 'Escape'[\s\S]*?disclosure\?\.focus/);
+  assert.match(ui, /querySelector\(\s*'\.map-stack-chip\.active',?\s*\)\s*\|\|\s*panel\.querySelector\('\.map-stack-chip'\)/);
 
-  assert.match(
-    ui,
-    /renderMapStackChips\(this\._mapStackChips, this\.mapStackController\.getStacks\(\), \{[\s\S]*?onSelect: \(stackId\) => \{ this\._setMapStack\(stackId\); \}/,
-    'chips must dispatch through the same _setMapStack path the dropdown used',
-  );
-  assert.match(
-    ui,
-    /_renderMapStackState\(state\) \{[\s\S]*?syncMapStackChips\(this\._mapStackChips, state\.activeId\)/,
-    'the active chip must be re-synced from controller state',
-  );
-  assert.match(
-    ui,
-    /window\.addEventListener\('gev:map-stack-changed', this\._mapStackChangeHandler\)/,
-    'provider-driven fallback must re-sync the UI without a user click',
-  );
-  assert.match(
-    ui,
-    /window\.removeEventListener\('gev:map-stack-changed', this\._mapStackChangeHandler\)/,
-    'the provider-driven state listener must be released with StyleManager',
-  );
+  const controls = readFileSync(new URL('./ui/mapSourceControls.js', import.meta.url), 'utf8');
+  assert.match(ui, /return this\._mapSourceControls\.select\(stackId, \{ syncShare \}\)/,
+    'the application action uses the component selection path');
+  assert.match(controls, /onSelect: [\s\S]*?select\(id\)/,
+    'chip clicks use the same component selection path');
+  assert.match(controls, /await controller\.setStack\(stackId\)/,
+    'selection still delegates source loading to the map controller');
+  assert.match(controls, /render\(controller\.getState\(\)\)/,
+    'the active chip is re-synced from actual controller state');
+  assert.match(ui, /window\.addEventListener\('gev:map-stack-changed', onChange\)/,
+    'provider-driven fallback reaches the component without a user click');
+  assert.match(ui, /window\.removeEventListener\('gev:map-stack-changed', onChange\)/,
+    'the provider-driven subscription has an explicit remover');
+  assert.match(controls, /unsubscribe\?\.\(\)/,
+    'component destruction releases its subscription');
+
 });
 
 test('Esri fallbacks report and attribute the imagery source actually rendered', () => {

@@ -1,15 +1,4 @@
-/**
- * Tactical HUD gives an expanded right-rail panel the whole control lane.
- * Other HUD layouts keep collapsed launchers visible for quick switching.
- *
- * @param {object} input Current rail state.
- * @param {string} input.hudVariant Active HUD layout variant.
- * @param {boolean} input.hasExpandedPanel Whether any rail panel is expanded.
- * @returns {boolean} Whether collapsed sibling launchers should be hidden.
- */
-export function shouldHideCollapsedRightPanels({ hudVariant, hasExpandedPanel }) {
-  return hudVariant === 'tactical' && Boolean(hasExpandedPanel);
-}
+export { shouldHideCollapsedRightPanels } from './ui/panelRailGeometry.js';
 
 const GLOBAL_CONTEXT_EXPLICIT_ACTIONS = new Set([
   'contacts',
