@@ -839,9 +839,30 @@ ordered by value-per-risk; each is self-contained and committable.
       including the Location-pill → world-jump → Contact-handoff check
       that drives the moved code).
 - [ ] Unify the flights fork: `militaryFlights.js` duplicates the
-      ingestion → label → render pipeline of `flights.js` (9,312 lines
-      combined). Extract the shared pipeline; keep separate data sources
-      and styling.
+      ingestion → label → render pipeline of `flights.js` (9,358 lines
+      combined). SCOPED 2026-09-13, execution plan: function-level
+      diff of the two files (78 shared names of 124/89 top-level fns)
+      found 45 VERBATIM-IDENTICAL functions (11.3 KB), 11
+      near-identical (≥0.85 similarity, every delta parameterizable:
+      color/scale constants, `velocity|true_track` vs
+      `speedMps|track` ingestion field names, per-spec model heading
+      offset, trail-floor + label-builder hooks; two are comment-only),
+      and 22 genuinely divergent (dead reckoning, describe/context
+      metadata, TR3B refresh — stay per-layer). The shared pipeline is
+      a closure over ~79 module-state items (declared identically in
+      both files), so the seam is a FACTORY: new
+      `src/data/flightsTracking.js` exporting
+      `createFlightTrackingPipeline(config)` that owns the shared
+      state as factory locals and returns the 45 verbatim + ~9
+      parameterized functions verbatim-as-closures; config carries the
+      ~12 layer knobs/hooks above. Divergent fns stay in each layer
+      file and read the factory's exposed state (mechanical `_x` →
+      `pipe._x` rename on the state-identifier set). Ingestion,
+      normalization and styling stay per-layer. Sub-units, each with
+      transform-identity proof + gates + QA: (a) factory with the 45
+      verbatim fns + their state; (b) the 9 parameterizable fns;
+      (c) trail/floor + model-spec config; (d) exported `_ForTest`
+      surface preserved (both layers' test files pin it).
 
 ### Batch 6 — Perf, bundle, a11y remainder (P2/P3)
 
