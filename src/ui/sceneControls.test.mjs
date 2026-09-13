@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createStateChannel } from '../app/stateChannel.js';
 import { SceneControls } from './sceneControls.js';
 import { SceneDirector } from '../scenes/director.js';
 
@@ -346,6 +347,43 @@ test('the real director preserves a selected shot label for the following double
   } finally {
     await director?.destroy();
     globalThis.localStorage = previousStorage;
+    f.restore();
+  }
+});
+
+test('Scene controls consume current state, preserve rows on progress, and unsubscribe on destruction', () => {
+  const f = fixture();
+  try {
+    f.owner.destroy();
+    Object.assign(f.state, {
+      status: 'Ready to resume',
+      progress: 0.25,
+      runtime: '',
+      playbackActive: false,
+      keyboardEnabled: false,
+    });
+    const channel = createStateChannel(() => f.state);
+    const owner = new SceneControls({
+      read: () => f.state,
+      actions: f.actions,
+      elements: f.elements,
+      subscribe: (listener) => channel.subscribe(listener),
+    });
+    assert.equal(f.elements.status.textContent, 'Ready to resume');
+    const row = f.elements.shots.children[0];
+    f.state.progress = 0.5;
+    channel.publish({ type: 'progress-changed' });
+    assert.equal(f.elements.shots.children[0], row);
+    f.state.status = 'Project exported';
+    channel.publish({ type: 'project-exported' });
+    assert.equal(f.elements.status.textContent, 'Project exported');
+    owner.destroy();
+    f.state.status = 'Late';
+    channel.publish({ type: 'status-changed' });
+    assert.equal(f.elements.status.textContent, 'Project exported');
+    assert.equal(owner.unsubscribe, null);
+    channel.destroy();
+  } finally {
     f.restore();
   }
 });

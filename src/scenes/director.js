@@ -12,6 +12,7 @@
  * State is persisted to localStorage and can be exported/imported as JSON.
  */
 
+import { createStateChannel } from '../app/stateChannel.js';
 import { SceneControls } from '../ui/scenes.js';
 import * as Cesium from 'cesium';
 import { SCENE_RECIPES } from './recipes.js';
@@ -341,6 +342,8 @@ export class SceneDirector {
     this._selectedSceneId = this._project.scenes[0]?.id || null;
     this._selectedShotId = this._project.scenes[0]?.shots[0]?.id || null;
 
+    this._presentation = { status: t('setup.scenes.statusReady'), progress: 0, runtime: '', playbackActive: false, keyboardEnabled: false };
+    this._state = createStateChannel(() => ({ ...this.getPlaybackStatus(), ...this._presentation, hasRun: !!this._lastRunJson }));
     this._initUI();
   }
 
@@ -358,6 +361,7 @@ export class SceneDirector {
     if (this._destroyPromise) return this._destroyPromise;
     this._destroyed = true;
     this._controls?.destroy();
+    this._state.destroy();
     this._destroyPromise = Promise.resolve().then(async () => {
       this.stopScene('Stopped');
       this._loadAbort?.abort();
@@ -416,12 +420,23 @@ export class SceneDirector {
     } catch { /* toast is best-effort */ }
   }
 
+  /** Immutable playback snapshots and completed editing actions. */
+  subscribe(listener, options) { return this._state.subscribe(listener, options); }
+
+  _publish(change) { this._state?.publish(change); }
+
+  _shotOutcome(type, scene, shot, index = scene.shots.indexOf(shot)) {
+    if (type === 'shot-loaded') this._presentation.status = t('setup.scenes.status.loaded', { scene: scene.title, shot: shot.title });
+    this._publish({ type, sceneId: scene.id, sceneTitle: scene.title, shot, index });
+  }
+
   /**
    * Wire up all scene-panel DOM event listeners and render the initial UI state.
    * Exits silently if the scene-select element is missing (headless/test mode).
    */
   _initUI() {
     this._controls = new SceneControls({
+      subscribe: (listener) => this.subscribe(listener),
       read: () => ({
         // Scene titles surface in the panel through SceneControls; built-in
         // recipe titles display their localized name until renamed by the user.
@@ -437,13 +452,13 @@ export class SceneDirector {
           this._selectedShotId = this._getSelectedScene()?.shots[0]?.id || null;
           this._renderShotList();
         },
-        selectShot: (id) => { this._selectedShotId = id; },
+        selectShot: (id) => { this._selectedShotId = id; this._publish({ type: 'selection-changed' }); },
         renameShot: (sceneId, shotId, title) => {
-          const { shot } = this._getShot(sceneId, shotId);
+          const { scene, shot } = this._getShot(sceneId, shotId);
           if (!shot) return;
           shot.title = title.trim() || shot.title;
           this._saveProject();
-          this._renderShotList();
+          this._shotOutcome('shot-renamed', scene, shot);
         },
         create: (name) => this._createScene(name),
         deleteScene: () => this._deleteSelectedScene(),
@@ -466,7 +481,7 @@ export class SceneDirector {
     if (!this._project.scenes.some((scene) => scene.id === this._selectedSceneId)) {
       this._selectedSceneId = this._project.scenes[0]?.id || null;
     }
-    this._controls?.renderSceneSelect();
+    this._publish({ type: 'scene-options-changed' });
   }
 
   /**
@@ -479,7 +494,7 @@ export class SceneDirector {
     if (scene?.shots.length && !scene.shots.some((shot) => shot.id === this._selectedShotId)) {
       this._selectedShotId = scene.shots[0].id;
     }
-    this._controls?.renderShotList();
+    this._publish({ type: 'shots-changed' });
   }
 
   /**
@@ -516,8 +531,7 @@ export class SceneDirector {
     this._selectedSceneId = scene.id;
     this._selectedShotId = null;
     this._saveProject();
-    this._renderSceneSelect();
-    this._renderShotList();
+    this._publish({ type: 'scene-created', scene });
   }
 
   /** Delete the currently selected scene after user confirmation. Resets to defaults if empty. */
@@ -534,8 +548,7 @@ export class SceneDirector {
     this._selectedSceneId = this._project.scenes[0]?.id || null;
     this._selectedShotId = this._project.scenes[0]?.shots[0]?.id || null;
     this._saveProject();
-    this._renderSceneSelect();
-    this._renderShotList();
+    this._publish({ type: 'scene-deleted', scene });
   }
 
   /**
@@ -581,7 +594,7 @@ export class SceneDirector {
     scene.shots.push(shot);
     this._selectedShotId = shot.id;
     this._saveProject();
-    this._renderShotList();
+    this._shotOutcome('shot-captured', scene, shot);
     this._updateStatus(t('setup.scenes.status.captured', { scene: scene.title, shot: shot.title }));
   }
 
@@ -607,7 +620,7 @@ export class SceneDirector {
     shot.layers = this._captureLayerStates();
 
     this._saveProject();
-    this._renderShotList();
+    this._shotOutcome('shot-updated', scene, shot);
     this._updateStatus(t('setup.scenes.status.updated', { scene: scene.title, shot: shot.title }));
   }
 
@@ -620,10 +633,11 @@ export class SceneDirector {
     const { scene, shot } = this._getShot(sceneId, shotId);
     if (!scene || !shot) return;
 
+    const index = scene.shots.indexOf(shot);
     scene.shots = scene.shots.filter((item) => item.id !== shot.id);
     this._selectedShotId = scene.shots[0]?.id || null;
     this._saveProject();
-    this._renderShotList();
+    this._shotOutcome('shot-deleted', scene, shot, index);
   }
 
   /**
@@ -674,7 +688,7 @@ export class SceneDirector {
     if (token.cancelled) return;
 
     if (this._loadAbort === controller) this._loadAbort = null;
-    this._updateStatus(t('setup.scenes.status.loaded', { scene: scene.title, shot: shot.title }));
+    this._shotOutcome('shot-loaded', scene, shot);
     this._updateRuntime('');
   }
 
@@ -778,6 +792,9 @@ export class SceneDirector {
     return {
       running: this._running,
       selectedSceneId: this._selectedSceneId,
+      selectedShotId: this._selectedShotId,
+      elapsedMs: this._activeRun ? Math.max(0, Date.now() - Date.parse(this._activeRun.startedAt)) : null,
+      estimatedDurationMs: this._activeRun ? Math.round(this._activeRun.estimatedDurationSec * 1000) : null,
       sceneCount: this._project.scenes.length,
     };
   }
@@ -834,7 +851,7 @@ export class SceneDirector {
 
     // Transition to running state
     this._running = true;
-    this._controls?.setPlaybackActive(true);
+    this._setPlaybackActive(true);
     this._setButtons(true);
     this._setProgress(0);
 
@@ -869,7 +886,7 @@ export class SceneDirector {
 
     this._startProgressTicker(estimatedDurationSec || 1);
     this._logEvent('scene_run_start', { count: queue.length });
-    this._controls?.setPlaybackKeyboardEnabled(true);
+    this._setPlaybackKeyboardEnabled(true);
 
     try {
       // Main shot sequencing loop
@@ -991,6 +1008,8 @@ export class SceneDirector {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+    this._presentation.status = 'Project exported';
+    this._publish({ type: 'project-exported', project: this._project });
   }
 
   /**
@@ -1007,8 +1026,7 @@ export class SceneDirector {
       this._selectedSceneId = this._project.scenes[0]?.id || null;
       this._selectedShotId = this._project.scenes[0]?.shots[0]?.id || null;
       this._saveProject();
-      this._renderSceneSelect();
-      this._renderShotList();
+      this._publish({ type: 'project-imported', project: this._project });
       this._updateStatus(`Imported ${file.name}`);
     } catch {
       this._updateStatus('Import failed (invalid JSON)');
@@ -1225,14 +1243,14 @@ export class SceneDirector {
   _finishRun() {
     clearInterval(this._progressTimer);
     this._progressTimer = null;
-    this._controls?.setPlaybackKeyboardEnabled(false);
+    this._setPlaybackKeyboardEnabled(false);
     // Covers the error path too: a run that threw mid-shot must not leave a
     // layer transition running against a director that has stopped watching.
     this._runAbort?.abort();
     this._runAbort = null;
 
     this.styleManager.setRecordingMode(false);
-    this._controls?.setPlaybackActive(false);
+    this._setPlaybackActive(false);
     this._updateRuntime('');
     this._running = false;
 
@@ -1254,25 +1272,44 @@ export class SceneDirector {
    * Editing controls are disabled during a run; stop is disabled when idle.
    * @param {boolean} isRunning
    */
-  _setButtons(isRunning) { this._controls?.setButtons(isRunning); }
+  _setButtons(isRunning) { this._publish({ type: 'buttons-changed', running: isRunning }); }
+
+  _setPlaybackActive(active) {
+    this._presentation.playbackActive = active;
+    this._publish({ type: 'playback-presentation' });
+  }
+
+  _setPlaybackKeyboardEnabled(enabled) {
+    this._presentation.keyboardEnabled = enabled;
+    this._publish({ type: 'playback-keyboard' });
+  }
 
   /**
    * Update the progress bar fill width and label.
    * @param {number} progress - Value in [0, 1]
    */
-  _setProgress(progress) { this._controls?.setProgress(progress); }
+  _setProgress(progress) {
+    this._presentation.progress = progress;
+    this._publish({ type: 'progress-changed' });
+  }
 
   /**
    * Set the status line text in the scene panel.
    * @param {string} text
    */
-  _updateStatus(text) { this._controls?.updateStatus(text); }
+  _updateStatus(text) {
+    this._presentation.status = text;
+    this._publish({ type: 'status-changed' });
+  }
 
   /**
    * Set the runtime label (scene/shot name) and toggle its active class.
    * @param {string} text - Empty string hides the label
    */
-  _updateRuntime(text) { this._controls?.updateRuntime(text); }
+  _updateRuntime(text) {
+    this._presentation.runtime = text;
+    this._publish({ type: 'runtime-changed' });
+  }
 
   /**
    * Append a timestamped telemetry event to the active run log.
@@ -1281,6 +1318,7 @@ export class SceneDirector {
    */
   _logEvent(type, payload) {
     if (!this._activeRun) return;
+    this._publish({ type: 'run-event', event: type, detail: payload || null });
     this._activeRun.events.push({
       t: new Date().toISOString(),
       type,

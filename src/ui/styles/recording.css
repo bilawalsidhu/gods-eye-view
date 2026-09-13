@@ -1,0 +1,32 @@
+/* ── Recording Mode ─────────────────────────── */
+body.recording-mode #title-bar,
+body.recording-mode #style-indicator,
+body.recording-mode #top-center-actions,
+body.recording-mode #global-loading-status,
+body.recording-mode #traffic-sync-chip,
+body.recording-mode #cctv-sync-chip,
+body.recording-mode #pp-toggles,
+body.recording-mode #clean-view-exit,
+body.recording-mode #param-slider-panel,
+body.recording-mode #control-panel,
+body.recording-mode #location-bar,
+body.recording-mode #data-panel,
+body.recording-mode #cctv-panel,
+body.recording-mode #radio-panel,
+body.recording-mode #global-context-panel,
+body.recording-mode #gev-voice-control,
+body.recording-mode #scene-panel {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+body.recording-mode #scene-runtime.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Scene playback owns layer and camera sequencing until Stop or completion. */
+body.scene-playback-mode :is(#clear-selected-layers, #reset-globe-view) {
+  display: none !important;
+}

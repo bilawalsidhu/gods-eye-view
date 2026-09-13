@@ -87,7 +87,7 @@ test('the eleven reviewed es one-string fixes stay fixed', () => {
 });
 
 test('the es CCTV clip fix is scoped to html[lang="es"] and leaves the base rule unwrapped', () => {
-  const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../../src/ui/styles/cctv.css', import.meta.url), 'utf8');
   const baseStart = css.indexOf('.cctv-controls {');
   const baseBody = css.slice(baseStart, css.indexOf('}', baseStart));
   assert.ok(!baseBody.includes('flex-wrap'), 'base .cctv-controls must stay unwrapped (EN pixel-identical)');

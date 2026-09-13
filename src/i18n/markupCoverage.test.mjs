@@ -11,7 +11,7 @@ import { getCatalog } from './index.js';
 import { CATALOG_LOCALES, availableLocales } from './locale.js';
 
 const INDEX_HTML = new URL('../../index.html', import.meta.url);
-const UI_JS = new URL('../../src/ui.js', import.meta.url);
+const UI_JS = new URL('../../src/ui/applicationShell.js', import.meta.url);
 
 // The four spellings applyDocumentTranslations() knows about. Anything else
 // (a typo like data-i18n-lable) must fail here, not silently never apply.

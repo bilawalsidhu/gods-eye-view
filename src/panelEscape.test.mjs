@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
-const source = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+const source = fs.readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
 
 function method(name, nextName) {
   const start = source.indexOf(`  ${name}(`);

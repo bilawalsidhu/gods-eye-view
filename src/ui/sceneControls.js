@@ -11,7 +11,7 @@ import {
 } from './scenePresentation.js';
 
 export class SceneControls {
-  constructor({ read, actions, elements = sceneElements() }) {
+  constructor({ read, actions, subscribe, elements = sceneElements() }) {
     this.read = read;
     this.actions = actions;
     this.elements = elements;
@@ -21,8 +21,14 @@ export class SceneControls {
     this.rowRemovers = [];
     this.playbackKeyRemover = null;
     if (!elements.select) return;
-    this.renderSceneSelect();
-    this.renderShotList();
+    if (subscribe)
+      this.unsubscribe = subscribe((notification) =>
+        this.present(notification),
+      );
+    else {
+      this.renderSceneSelect();
+      this.renderShotList();
+    }
     this.listen(elements.select, 'change', () =>
       this.run('selectScene', elements.select.value),
     );
@@ -48,9 +54,57 @@ export class SceneControls {
       await this.run('import', file);
       if (!this.destroyed) elements.file.value = '';
     });
-    this.updateStatus(t('setup.scenes.statusReady'));
-    this.setProgress(0);
-    this.setButtons(false);
+    if (!subscribe) {
+      this.updateStatus(t('setup.scenes.statusReady'));
+      this.setProgress(0);
+      this.setButtons(false);
+    }
+  }
+
+  /** Apply only the presentation affected by an action; selection keeps row identity. */
+  present({ state, change, initial }) {
+    if (this.destroyed) return;
+    const type = change?.type;
+    if (
+      initial ||
+      [
+        'scene-options-changed',
+        'scene-created',
+        'scene-deleted',
+        'project-imported',
+      ].includes(type)
+    )
+      this.renderSceneSelect();
+    if (
+      initial ||
+      [
+        'shots-changed',
+        'scene-created',
+        'scene-deleted',
+        'shot-captured',
+        'shot-updated',
+        'shot-renamed',
+        'shot-deleted',
+        'project-imported',
+      ].includes(type)
+    )
+      this.renderShotList();
+    if (type === 'selection-changed')
+      presentSceneSelection(this.elements.shots, state.selectedShotId);
+    if (initial || type === 'buttons-changed') this.setButtons(state.running);
+    if (initial || type === 'progress-changed')
+      this.setProgress(state.progress);
+    if (initial || type === 'status-changed') this.updateStatus(state.status);
+    if (initial || type === 'runtime-changed')
+      this.updateRuntime(state.runtime);
+    if (initial || type === 'playback-presentation')
+      this.setPlaybackActive(state.playbackActive);
+    if (initial || type === 'playback-keyboard')
+      this.setPlaybackKeyboardEnabled(state.keyboardEnabled);
+    if (type === 'project-exported') this.updateStatus(state.status);
+    if (type === 'shot-loaded') this.updateStatus(state.status);
+    if (type === 'run-event' && change.event === 'shot_start')
+      this.setButtons(state.running);
   }
 
   listen(target, type, callback, removers = this.removers) {
@@ -176,6 +230,8 @@ export class SceneControls {
     if (this.destroyed) return;
     this.destroyed = true;
     this.actionGeneration++;
+    this.unsubscribe?.();
+    this.unsubscribe = null;
     this.setPlaybackKeyboardEnabled(false);
     for (const remove of [
       ...this.removers.splice(0),
