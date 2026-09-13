@@ -286,7 +286,7 @@ esac
 echo "Google Maps key source: ${GOOGLE_MAPS_API_KEY_SOURCE}"
 echo "Tip: after server starts, hard refresh browser (Cmd+Shift+R)."
 echo "If panels are still missing, run this once in browser console:"
-echo "localStorage.removeItem('godsEyeView.v6.panelPos.cctv-panel'); location.reload();"
+echo "localStorage.removeItem('godsEyeView.v8.panelPos.cctv-panel'); location.reload();"
 echo "OpenSky auth mode: ${OPENSKY_AUTH_MODE}"
 if [[ -n "${OPENSKY_CREDENTIALS_FILE}" ]]; then
   if [[ -f "${OPENSKY_CREDENTIALS_FILE}" ]]; then

@@ -6,6 +6,7 @@
   "scripts/format.mjs",
   "scripts/check-package-boundaries.mjs",
   "src/tooling/format.test.mjs",
+  "src/tooling/panelStorageDocs.test.mjs",
   "src/tooling/packageBoundaries.test.mjs",
   "src/data/infrastructure.js",
   "src/data/infrastructure.test.mjs",
