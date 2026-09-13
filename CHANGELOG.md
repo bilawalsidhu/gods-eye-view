@@ -13,6 +13,9 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Separate Scene controls and text presentation from project/playback operations; revoke replaced row listeners and suppress stale completion feedback.
+- Preserve shot-label identity on selection so double-click rename can complete.
+
 - Split Cockpit camera/controller, instruments, briefing, signals and layout into focused modules with explicit application operations.
 - Give Display portal moves cancellable focus/scroll restoration and stop Cockpit work before asynchronous UI teardown.
 
