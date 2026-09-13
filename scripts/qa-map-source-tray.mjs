@@ -918,15 +918,15 @@ try {
     });
     const waitForQueuedNotice = async (label, timeoutMs = 1000) => {
       const deadline = performance.now() + timeoutMs;
-      while (styleManager._globalStatusNotice?.label !== label
+      while (styleManager._feedback._globalStatusNotice?.label !== label
           && performance.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 16));
       }
-      return styleManager._globalStatusNotice?.label === label;
+      return styleManager._feedback._globalStatusNotice?.label === label;
     };
     const baseNow = performance.now();
     try {
-      styleManager._loadingFeedbackState = {
+      styleManager._feedback._loadingFeedbackState = {
         phase: 'idle', visible: false, startedAt: 0, showAt: 0, hideAt: 0,
         activeIds: [], batchOutcome: null, terminal: null, operation: null,
       };
@@ -946,7 +946,7 @@ try {
       styleManager._updateGlobalLoadingFeedback(baseNow);
       styleManager._updateGlobalLoadingFeedback(baseNow + 200);
       dataManager.getAll = () => [];
-      styleManager._loadingFeedbackEvent = {
+      styleManager._feedback._loadingFeedbackEvent = {
         type: 'visibility-failed',
         layerId: 'qa-unrelated-layer',
         error: new Error('QA offline'),

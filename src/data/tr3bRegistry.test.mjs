@@ -270,7 +270,7 @@ test('conversions are session-scoped and no lifecycle path clears them', async (
   // personally clicked, and re-tracking the same aircraft after a layer restart
   // should still show the triangle. Only a page reload resets it — so no
   // production code may clear the registry.
-  for (const name of ['flights.js', 'militaryFlights.js', '../ui.js']) {
+  for (const name of ['flights.js', 'militaryFlights.js', '../ui/applicationShell.js']) {
     const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');
     assert.doesNotMatch(source, /clearTr3bRegistry/,
       `${name}: teardown must not clear session conversions`);
