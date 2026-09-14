@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { twoline2satrec } from 'satellite.js';
 import { findNextIssPass, lookAnglesAt } from './issPass.js';
+import { findNextSatellitePass } from './satellitePass.js';
 
 // Canonical archived ISS TLE (valid checksums; epoch 2008-09-20 ~12:25 UTC).
 const L1 = '1 25544U 98067A   08264.51782528 -.00002182  00000-0 -11606-4 0  2927';
@@ -25,6 +26,13 @@ test('finds a structurally-consistent ISS pass within 24h of the TLE epoch', () 
   assert.ok(peak && Math.abs(peak.elevDeg - pass.maxElevDeg) < 1.5);
   const before = lookAnglesAt(satrec, pass.riseMs - 60_000, AUSTIN.latDeg, AUSTIN.lonDeg);
   assert.ok(before && before.elevDeg < 10);
+});
+
+test('forwards its original 30 s coarse step and fineStepSec to the pass engine', () => {
+  const satrec = twoline2satrec(L1, L2);
+  const opts = { satrec, ...AUSTIN, fromMs: FROM_MS, minElevDeg: 10, fineStepSec: 30 };
+  assert.deepEqual(findNextIssPass(opts), findNextSatellitePass({ ...opts, coarseStepSec: 30 }));
+  assert.notDeepEqual(findNextIssPass(opts), findNextIssPass({ ...opts, fineStepSec: 5 }));
 });
 
 test('returns null when no pass clears an absurd threshold', () => {

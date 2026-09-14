@@ -7,7 +7,7 @@ import {
   degreesLat,
   twoline2satrec,
 } from 'satellite.js';
-import { findNextIssPass } from '../../data/issPass.js';
+import { findNextSatellitePass } from '../../data/satellitePass.js';
 import { ORBIT_PATH_STEPS, ISS_NORAD } from './policy.js';
 
 export function createOrbits({ state: layerState, services, parts, source }) {
@@ -136,17 +136,51 @@ export function createOrbits({ state: layerState, services, parts, source }) {
   /**
    * Next ISS pass for an observer. Requires the catalog to have loaded (the
    * satellites layer enabled at least once this session).
+   * @param {Object} options
+   * @param {number} options.latDeg Observer latitude
+   * @param {number} options.lonDeg Observer longitude
+   * @param {number} [options.minElevDeg=10] Elevation that defines rise and set, in degrees
    * @returns {{status:'no-tle'}|{status:'none'}|{status:'ok', pass:{riseMs:number,setMs:number,maxElevDeg:number,maxElevMs:number,riseAzDeg:number}}}
    */
 
-  function getNextIssPass({ latDeg, lonDeg, minElevDeg = 10 }) {
-    const sat = layerState._catalog.get(ISS_NORAD);
+  function getNextIssPass({
+    latDeg,
+    lonDeg,
+    minElevDeg = 10,
+    fromMs = Date.now(),
+  }) {
+    return getNextSatellitePass(ISS_NORAD, {
+      latDeg,
+      lonDeg,
+      minElevDeg,
+      fromMs,
+    });
+  }
+
+  /**
+   * Next pass of any catalog satellite for an observer.
+   * @param {number} noradId NORAD satellite catalog ID
+   * @param {Object} options
+   * @param {number} options.latDeg Observer latitude
+   * @param {number} options.lonDeg Observer longitude
+   * @param {number} [options.minElevDeg=10] Elevation that defines rise and set, in degrees
+   * @param {number} [options.fromMs=Date.now()] Search start time in UTC milliseconds
+   * @returns {{status:'no-tle'}|{status:'none'}|{status:'ok', pass:Object}}
+   */
+
+  function getNextSatellitePass(
+    noradId,
+    { latDeg, lonDeg, minElevDeg = 10, fromMs = Date.now() },
+  ) {
+    const id = Number(noradId);
+    if (!Number.isFinite(id)) return { status: 'no-tle' };
+    const sat = layerState._catalog.get(id);
     if (!sat || !sat.satrec) return { status: 'no-tle' };
-    const pass = findNextIssPass({
+    const pass = findNextSatellitePass({
       satrec: sat.satrec,
       latDeg,
       lonDeg,
-      fromMs: Date.now(),
+      fromMs,
       minElevDeg,
     });
     return pass ? { status: 'ok', pass } : { status: 'none' };
@@ -316,6 +350,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     orbitalPeriodSeconds,
     computeOrbitPath,
     getNextIssPass,
+    getNextSatellitePass,
     scoreSatelliteNameMatch,
     internationalDesignatorYear,
     lookupTleEntries,

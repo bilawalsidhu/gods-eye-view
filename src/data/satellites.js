@@ -41,6 +41,7 @@ export const _clearSatelliteLabelLifecycleForTest =
 export const applySatellitePointFocusDeemphasis =
   layer.applySatellitePointFocusDeemphasis;
 export const getNextIssPass = layer.getNextIssPass;
+export const getNextSatellitePass = layer.getNextSatellitePass;
 export const scoreSatelliteNameMatch = layer.scoreSatelliteNameMatch;
 export const findSatelliteOrbitTrackInTle = layer.findSatelliteOrbitTrackInTle;
 export const getSatelliteOrbitTrack = layer.getSatelliteOrbitTrack;
