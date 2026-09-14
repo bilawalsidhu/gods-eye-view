@@ -16,6 +16,8 @@ import {
   loadTarkteeSourcesFromDatex,
   loadWarendorfSourcesFromCatalog,
   loadNswSourcesFromOpenData,
+  loadPkcSourcesFromCatalog,
+  loadScotlandWebcamSourcesFromCatalog,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -79,6 +81,16 @@ const LIVE_PACKS = [
     name: 'nsw',
     enabled: () => envEnabled('CCTV_NSW_ENABLED'),
     load: loadNswSourcesFromOpenData,
+  },
+  {
+    name: 'pkc',
+    enabled: () => envEnabled('CCTV_PKC_ENABLED'),
+    load: loadPkcSourcesFromCatalog,
+  },
+  {
+    name: 'scotland-webcams',
+    enabled: () => envEnabled('CCTV_SCOTLAND_WEBCAMS_ENABLED'),
+    load: loadScotlandWebcamSourcesFromCatalog,
   },
 ];
 /**

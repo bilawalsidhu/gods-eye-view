@@ -2305,7 +2305,7 @@ its criteria cannot be silently ignored.
 | Satellites | CelesTrak | `src/data/satellites.js` | `/api/celestrak` | 120s |
 | Space Missions (30d) | Launch Library 2 + CelesTrak | `src/data/rocketLaunches.js` | `/api/launches` + `/api/celestrak/active` | 5 min |
 | Traffic | OSM Overpass (+ optional TomTom live flow) | `src/data/traffic.js` | `/api/overpass` + `/api/tomtom` | viewport-driven |
-| CCTV | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
+| CCTV | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW Open Data + Perth & Kinross + Scottish mountain webcams (curated) + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
 | Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
 | Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
 | Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |
@@ -2665,7 +2665,13 @@ silently demoting every later lookup for the session.
   GATHERING stations carry 2,256 in-collection presets, prioritized to 300 against seven anchors
   on the main road spine. `CCTV_MAX_SOURCES` is a 4,000 catalog-wide ceiling shared round-robin
   across packs, so a lower global cap thins every region instead of starving the last pack.
-  ~1,100 cameras total, all RAW PRIOR poses, stills-first.
+  ~1,100 cameras total, all RAW PRIOR poses, stills-first. Scotland (2026-09-14) arrives as two
+  curated catalog packs on the Warendorf pattern: Perth & Kinross Council's 23 road cameras
+  (`config/cctv_sources.pkc.json`, `CCTV_PKC_ENABLED`; 15-minute stills, headings from the
+  frame captions, 20 CURATED) and 22 mountain/ski webcams (`config/cctv_sources.scotland_webcams.json`,
+  `CCTV_SCOTLAND_WEBCAMS_ENABLED`; Cairngorm, Glencoe, Glenshee, Aboyne, Ben Nevis, Leadhills).
+  Both loaders accept only their registered operator hosts. Traffic Scotland's trunk-road cameras
+  were evaluated and rejected: its copyright page forbids direct hyperlinking to the images.
 - **CCTV v3 UX — viewshed + calibration gizmo** (built 2026-07-05 and field
   validated 2026-07-21): the COVERAGE toggle is a
   tri-state cycle `OFF → ON → VIEWSHED`; viewshed mode renders each visible camera's frustum

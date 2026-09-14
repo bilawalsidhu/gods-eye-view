@@ -45,6 +45,10 @@ import {
   TARKTEE_ANCHORS,
   DEFAULT_WARENDORF_SOURCE_FILE,
   WARENDORF_IMAGE_ORIGINS,
+  DEFAULT_PKC_SOURCE_FILE,
+  PKC_IMAGE_ORIGINS,
+  DEFAULT_SCOTLAND_WEBCAMS_SOURCE_FILE,
+  SCOTLAND_WEBCAM_IMAGE_ORIGINS,
   NSW_CAMERAS_URL,
   NSW_IMAGE_ORIGIN,
   DEFAULT_NSW_MAX_SOURCES,
@@ -1279,6 +1283,128 @@ export function loadWarendorfSourcesFromCatalog({
   }
   console.log('[CCTV] Loaded Warendorf camera sources:', cameras.length);
   return cameras;
+}
+
+/**
+ * Read one curated still-image catalog file and keep only rows that name a
+ * registered official image host with plausible coordinates. Shared by the
+ * Scottish packs below; every other field on a row passes through to
+ * normalizeSourceItem unchanged.
+ *
+ * @param {object} options
+ * @param {string} options.label - Pack name for log lines.
+ * @param {string} options.sourceFile - Catalog path, absolute or sourceRoot-relative.
+ * @param {string} options.sourceRoot - Application root for relative paths.
+ * @param {readonly string[]} options.imageOrigins - Allowed URL prefixes.
+ * @param {string} options.sourceKind - sourceKind stamped on every camera.
+ * @param {string} options.cityId - Default cityId when a row has none.
+ * @returns {Array<object>} Camera source objects ready for normalizeSourceItem.
+ */
+function loadCuratedStillCatalog({
+  label,
+  sourceFile,
+  sourceRoot,
+  imageOrigins,
+  sourceKind,
+  cityId,
+}) {
+  const resolved = path.isAbsolute(sourceFile)
+    ? sourceFile
+    : path.resolve(sourceRoot, sourceFile);
+  let rows = [];
+  try {
+    if (!fs.existsSync(resolved)) {
+      console.warn(`[CCTV] ${label} source file missing:`, resolved);
+      return [];
+    }
+    const parsed = JSON.parse(fs.readFileSync(resolved, 'utf8'));
+    rows = Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn(
+      `[CCTV] ${label} source file read error:`,
+      error?.message || error,
+    );
+    return [];
+  }
+  const cameras = [];
+  const seen = new Set();
+  for (const item of rows) {
+    if (!item || typeof item !== 'object') continue;
+    const id = typeof item.id === 'string' ? item.id.trim() : '';
+    const url =
+      typeof item.url === 'string'
+        ? item.url.trim()
+        : typeof item.snapshotUrl === 'string'
+          ? item.snapshotUrl.trim()
+          : '';
+    if (!id || seen.has(id)) continue;
+    if (!imageOrigins.some((origin) => url.startsWith(origin))) continue;
+    const lat = typeof item.lat === 'number' ? item.lat : NaN;
+    const lon = typeof item.lon === 'number' ? item.lon : NaN;
+    if (!isPlausibleLatLon(lat, lon)) continue;
+    seen.add(id);
+    const headingDeg =
+      typeof item.headingDeg === 'number' && Number.isFinite(item.headingDeg)
+        ? item.headingDeg
+        : fallbackHeadingFromId(id);
+    cameras.push({
+      ...item,
+      id,
+      url,
+      snapshotUrl: url,
+      headingDeg,
+      cityId: String(item.cityId || cityId),
+      feedType: 'image',
+      sourceKind,
+    });
+  }
+  console.log(`[CCTV] Loaded ${label} camera sources:`, cameras.length);
+  return cameras;
+}
+
+/**
+ * Load the Perth & Kinross Council road cameras (Scotland) from the curated
+ * catalog file. The council publishes 15-minute stills on one host but no
+ * catalog, so positions are hand-placed and directional cameras take their
+ * heading from the caption burned into each frame.
+ *
+ * @param {object} [options]
+ * @param {string} [options.sourceRoot=process.cwd()]
+ * @returns {Array<object>} Camera source objects.
+ */
+export function loadPkcSourcesFromCatalog({ sourceRoot = process.cwd() } = {}) {
+  return loadCuratedStillCatalog({
+    label: 'Perth & Kinross',
+    sourceFile: process.env.CCTV_PKC_SOURCES_FILE || DEFAULT_PKC_SOURCE_FILE,
+    sourceRoot,
+    imageOrigins: PKC_IMAGE_ORIGINS,
+    sourceKind: 'council-road-camera',
+    cityId: 'perth-kinross',
+  });
+}
+
+/**
+ * Load the Scottish mountain and ski webcams from the curated catalog file.
+ * Each operator publishes a plain still URL on its own host and no catalog;
+ * only the registered operator hosts are accepted.
+ *
+ * @param {object} [options]
+ * @param {string} [options.sourceRoot=process.cwd()]
+ * @returns {Array<object>} Camera source objects.
+ */
+export function loadScotlandWebcamSourcesFromCatalog({
+  sourceRoot = process.cwd(),
+} = {}) {
+  return loadCuratedStillCatalog({
+    label: 'Scottish mountain webcam',
+    sourceFile:
+      process.env.CCTV_SCOTLAND_WEBCAMS_SOURCES_FILE ||
+      DEFAULT_SCOTLAND_WEBCAMS_SOURCE_FILE,
+    sourceRoot,
+    imageOrigins: SCOTLAND_WEBCAM_IMAGE_ORIGINS,
+    sourceKind: 'mountain-webcam',
+    cityId: 'scotland',
+  });
 }
 
 /**
