@@ -10,13 +10,13 @@ import { createHybridAnnotationRenderer } from './hybridAnnotationRenderer.js';
  * footprints + screen-space SVG for callouts/rings/arrows. The engine, resolver,
  * and voice tool wiring are identical to the other two branches.
  */
-export function initAnnotations({ viewer, tileset = null }) {
+export function initAnnotations({ viewer, tileset = null, placeSearch }) {
   // World-space footprint draping; clamped marks can use the photoreal tiles.
   if (tileset) {
     try { tileset.enableCollision = true; } catch { /* older tileset */ }
   }
   const renderer = createHybridAnnotationRenderer(viewer);
-  const engine = createAnnotationEngine({ viewer, renderer });
+  const engine = createAnnotationEngine({ viewer, renderer, placeSearch });
   window.__gevAnnotations = engine;
   return engine;
 }

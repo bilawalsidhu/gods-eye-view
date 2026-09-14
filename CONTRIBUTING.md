@@ -44,6 +44,15 @@ Open `http://localhost:4173`. Before sending a PR run `npm run build`, `npm test
 If you change runtime behavior, update `docs/CURRENT-STATE.md` and
 `CHANGELOG.md` in the same PR. For a deeper catalog of what each harness
 checks and what it needs to run, see [TESTING.md](TESTING.md).
+## Checking a built app locally
+
+Run `npm run build` followed by `npm run preview`. Preview serves the built
+frontend and local data-provider APIs. Keep optional server credentials in the
+ignored `.env`; browser keys are embedded during the build, so rebuild after
+changing them. Provider Settings and `/api/setup/*` are development-only: edit
+configuration through the development app or environment file. Unknown API
+paths return JSON 404 responses. Vite preview is for checking a local build;
+it is not a production server.
 
 ## Good first contributions
 
@@ -51,7 +60,7 @@ The highest-leverage places to jump in:
 
 - **🌆 Add a CCTV source pack.** Austin is the reference camera source. Adding another city means a clean public camera catalog with coordinates, attribution, and server-registered frame URLs (the proxy only fetches registered URLs — never client-supplied ones, see [SECURITY.md](SECURITY.md)). City packs are the best first lane.
 - **🛰️ Add or improve a data layer.** Each layer is one self-contained module in `src/data/<layer>.js` implementing the layer interface (`init/enable/disable/update/destroy/getStats`, optional `getDetectableObjects`/`getStats`). Use an existing layer as a template.
-- **🎙️ Extend voice control.** Voice tools are declared server-side (`GEV_REALTIME_TOOLS` in `vite.config.js`) and executed client-side (`src/voice/gevActions.js`). Keep the tool surface tight and the responses honest (confirm only what actually happened).
+- **🎙️ Extend voice control.** Voice tools are declared server-side (`GEV_REALTIME_TOOLS` in `server/providers/openai/tools.js`) and executed client-side (`src/voice/gevActions.js`). Keep the tool surface tight and the responses honest (confirm only what actually happened).
 - **🎨 Add a visual style.** Styles are GLSL post-process shaders in `src/styles/`.
 - **🐛 Fix bugs / improve the first-run experience.** See [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
 
@@ -59,7 +68,7 @@ The highest-leverage places to jump in:
 
 - **No framework.** Vanilla JS + [CesiumJS](https://cesium.com/platform/cesiumjs/) + [Vite](https://vitejs.dev/).
 - **UI lives in `src/ui.js`** (panels, HUD, styles, the control facade). **Layer logic lives in `src/data/<layer>.js`.** Keep them separate.
-- **Secrets stay server-side.** Anything needing a private key goes through a Vite proxy in `vite.config.js`. The browser only ever sees the Google Maps key (which you restrict) and ephemeral tokens.
+- **Secrets stay server-side.** Anything needing a private key goes through a local proxy under `server/providers/`. The browser only ever sees the Google Maps key (which you restrict) and ephemeral tokens.
 - `docs/CURRENT-STATE.md` is the authoritative runtime reference — read it first.
 
 ## Coding style
@@ -68,6 +77,22 @@ The highest-leverage places to jump in:
 - JSDoc on exported/public functions.
 - Match the surrounding code — comment density, naming, and idiom.
 - Prefer small, reviewable commits. Conventional-commit-style prefixes (`feat:`, `fix:`, `perf:`, `docs:`) are appreciated but not required.
+
+## Formatting and reusable components
+
+Run `npm run format` before submitting changes to adopted modules, then
+`npm run format:check` and `npm run check:boundaries`. Formatting uses the
+explicit file list in `scripts/format-scope.json`; add newly extracted modules
+and tests there in a separate mechanical commit. Keep unadopted files consistent
+with their surrounding style. CI checks all adopted files and package boundaries
+on Linux and Windows.
+
+Reusable package exports own their state and receive application operations
+through explicit callbacks. They must not import the standalone bootstrap or
+local Node services. Update `scripts/package-boundaries.json` and consumer tests
+when adding an export or expanding a component. See
+[formatting and component boundaries](docs/CODE-BOUNDARIES.md) for the current
+ownership and adoption process.
 
 ## Pull requests
 

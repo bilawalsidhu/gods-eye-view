@@ -1,0 +1,1004 @@
+{
+  "infrastructure": {
+    "exports": [
+      "./infrastructure",
+      "./infrastructure/geojson",
+      "./infrastructure/lod"
+    ],
+    "modules": [
+      "src/data/infrastructure.js",
+      "src/data/localGeojsonCore.js",
+      "src/data/localGeojsonLod.js"
+    ],
+    "external": ["cesium"]
+  },
+  "application": {
+    "exports": ["./application"],
+    "modules": ["src/app/application.js"],
+    "external": []
+  },
+  "viewer": {
+    "exports": ["./application/viewer"],
+    "modules": ["src/app/viewer.js"],
+    "external": ["cesium"]
+  },
+  "vite-build": {
+    "runtime": "node",
+    "exports": ["./build/vite"],
+    "modules": ["build/vite.js"],
+    "external": ["vite-plugin-cesium"]
+  },
+  "live-providers": {
+    "runtime": "node",
+    "exports": ["./server/providers/live"],
+    "modules": [
+      "server/providers/live.js",
+      "server/providers/common/http.js",
+      "server/providers/common/query.js",
+      "server/providers/aircraft/opensky.js",
+      "server/providers/aircraft/adsb-lol.js",
+      "server/providers/aircraft/enrichment.js",
+      "server/providers/aircraft/tracks.js",
+      "server/providers/vessels/ais-store.js",
+      "server/providers/vessels/ais-live.js",
+      "src/data/adsbLolFallback.js",
+      "src/data/aisStreamAdapter.js",
+      "src/data/aisWatchdog.js"
+    ],
+    "external": ["ws"]
+  },
+  "adsb-lol-source": {
+    "exports": ["./sources/adsb-lol"],
+    "modules": ["src/data/adsbLolFallback.js"],
+    "external": []
+  },
+  "place-providers": {
+    "runtime": "node",
+    "exports": ["./server/providers/places"],
+    "modules": [
+      "server/providers/places.js",
+      "server/providers/places/google.js",
+      "server/providers/places/google-key.js",
+      "server/providers/places/routes.js",
+      "server/providers/common/rate-limit.js",
+      "server/providers/common/geo.js",
+      "server/providers/common/http.js",
+      "scripts/google-server-key.mjs",
+      "src/data/placeProviderPayloads.js"
+    ],
+    "external": []
+  },
+  "place-payloads": {
+    "exports": ["./sources/places"],
+    "modules": ["src/data/placeProviderPayloads.js"],
+    "external": []
+  },
+  "space-providers": {
+    "runtime": "node",
+    "exports": ["./server/providers/space"],
+    "modules": [
+      "server/providers/space.js",
+      "server/providers/space/celestrak.js",
+      "server/providers/space/launch-library.js",
+      "server/providers/common/http.js",
+      "src/data/spaceProviderRequests.js"
+    ],
+    "external": []
+  },
+  "space-requests": {
+    "exports": ["./sources/space"],
+    "modules": ["src/data/spaceProviderRequests.js"],
+    "external": []
+  },
+  "terrain-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/terrain"],
+    "modules": [
+      "server/providers/terrain.js",
+      "src/data/terrainHeightsProxy.js"
+    ],
+    "external": []
+  },
+  "terrain-source": {
+    "exports": ["./sources/terrain"],
+    "modules": ["src/data/terrainHeightsProxy.js"],
+    "external": []
+  },
+  "traffic-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/traffic"],
+    "modules": ["server/providers/traffic.js", "src/data/tomtomTiles.js"],
+    "external": []
+  },
+  "traffic-source": {
+    "exports": ["./sources/traffic"],
+    "modules": ["src/data/tomtomTiles.js"],
+    "external": []
+  },
+  "firms-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/firms"],
+    "modules": ["server/providers/firms.js", "src/data/firmsCsv.js"],
+    "external": []
+  },
+  "gbfs-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/gbfs"],
+    "modules": [
+      "server/providers/gbfs.js",
+      "server/providers/common/http.js",
+      "src/data/gbfsSource.js"
+    ],
+    "external": []
+  },
+  "gbfs-source": {
+    "exports": ["./sources/gbfs"],
+    "modules": ["src/data/gbfsSource.js"],
+    "external": []
+  },
+  "cctv-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/cctv"],
+    "modules": [
+      "server/providers/cctv.js",
+      "server/providers/cctv/cap.js",
+      "server/providers/cctv/groundHeights.js",
+      "server/providers/cctv/catalog.js",
+      "server/providers/cctv/constants.js",
+      "server/providers/cctv/media.js",
+      "server/providers/cctv/normalize.js",
+      "server/providers/cctv/sources.js",
+      "src/data/directionText.js",
+      "server/providers/common/geo.js",
+      "server/providers/places/google-key.js",
+      "scripts/google-server-key.mjs",
+      "src/data/cctvFootprint.js"
+    ],
+    "external": []
+  },
+  "radio-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/radio"],
+    "modules": [
+      "server/providers/radio.js",
+      "server/providers/radio/catalog.js",
+      "server/providers/radio/constants.js",
+      "server/providers/radio/stations.js",
+      "server/providers/radio/transport.js",
+      "src/data/radioCountry.js",
+      "server/providers/common/http.js"
+    ],
+    "external": []
+  },
+  "overpass-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/overpass"],
+    "modules": [
+      "server/providers/common/geo.js",
+      "server/providers/common/http.js",
+      "server/providers/common/rate-limit.js",
+      "server/providers/common/request.js",
+      "server/providers/overpass.js",
+      "server/providers/overpass/cache.js",
+      "server/providers/overpass/constants.js",
+      "server/providers/overpass/geometry.js",
+      "server/providers/overpass/query.js",
+      "server/providers/overpass/transport.js",
+      "server/providers/places/routes.js",
+      "src/data/placeProviderPayloads.js"
+    ],
+    "external": []
+  },
+  "military-installations-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/military-installations"],
+    "modules": [
+      "server/providers/common/http.js",
+      "server/providers/common/query.js",
+      "server/providers/common/rate-limit.js",
+      "server/providers/military-installations.js",
+      "server/providers/military-installations/cache.js",
+      "server/providers/military-installations/constants.js",
+      "server/providers/military-installations/query.js",
+      "server/providers/overpass/constants.js",
+      "server/providers/overpass/geometry.js",
+      "server/providers/overpass/transport.js"
+    ],
+    "external": []
+  },
+  "regional-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/regional"],
+    "modules": [
+      "server/providers/common/http.js",
+      "server/providers/common/query.js",
+      "server/providers/common/rate-limit.js",
+      "server/providers/regional.js",
+      "server/providers/regional/briefing.js",
+      "server/providers/regional/http.js",
+      "server/providers/regional/news.js",
+      "server/providers/regional/place.js",
+      "server/providers/regional/query.js",
+      "server/providers/regional/weather-effects.js",
+      "server/providers/regional/weather.js",
+      "src/data/regionalBrief.js"
+    ],
+    "external": []
+  },
+  "openai-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/openai"],
+    "modules": [
+      "server/providers/common/rate-limit.js",
+      "server/providers/common/request.js",
+      "server/providers/common/source-root.js",
+      "server/providers/openai.js",
+      "server/providers/openai/constants.js",
+      "server/providers/openai/debug-log.js",
+      "server/providers/openai/hud-summary.js",
+      "server/providers/openai/instructions.js",
+      "server/providers/openai/rate-limit.js",
+      "server/providers/openai/realtime.js",
+      "server/providers/openai/tools.js",
+      "src/hudSummaryResponse.js",
+      "src/voice/voiceCost.js"
+    ],
+    "external": []
+  },
+  "standalone-key-setup": {
+    "runtime": "node",
+    "exports": ["./server/standalone/key-setup"],
+    "modules": [
+      "scripts/pinokio-environment.mjs",
+      "server/providers/common/source-root.js",
+      "server/standalone/key-setup.js",
+      "src/keySetupCore.mjs",
+      "src/keySetupHardening.mjs"
+    ],
+    "external": []
+  },
+  "place-search": {
+    "exports": ["./search"],
+    "modules": [
+      "src/search/index.js",
+      "src/search/placeSearch.js",
+      "src/search/google.js",
+      "src/keylessGeocoder.js"
+    ],
+    "external": []
+  },
+  "panel-disclosure": {
+    "exports": ["./ui/panels"],
+    "modules": ["src/ui/panelDisclosure.js"],
+    "external": []
+  },
+  "surface-keyboard": {
+    "exports": ["./ui/surfaces"],
+    "modules": ["src/ui/surfaceKeyboard.js"],
+    "external": []
+  },
+  "panel-rail-layout": {
+    "exports": ["./ui/layout"],
+    "modules": [
+      "src/ui/panelRails.js",
+      "src/ui/leftPanelRail.js",
+      "src/ui/rightPanelRail.js",
+      "src/ui/panelMeasurement.js",
+      "src/ui/panelRailGeometry.js",
+      "src/panelStackLayout.js"
+    ],
+    "external": []
+  },
+  "visual-input": {
+    "exports": ["./ui/input"],
+    "modules": [
+      "src/ui/visualInput.js",
+      "src/ui/applicationShortcuts.js",
+      "src/ui/styleParameters.js"
+    ],
+    "external": []
+  },
+  "display-controls": {
+    "exports": ["./ui/display"],
+    "modules": ["src/ui/displayControls.js"],
+    "external": []
+  },
+  "visual-effects": {
+    "exports": ["./ui/effects", "./ui/effects/bloom"],
+    "modules": [
+      "src/ui/effects.js",
+      "src/ui/visualEffects.js",
+      "src/ui/visualPresets.js",
+      "src/bloom.js",
+      "src/styles/retro.js",
+      "src/styles/surveillance.js",
+      "src/styles/thermal.js",
+      "src/styles/anime.js",
+      "src/styles/noir.js",
+      "src/styles/snow.js"
+    ],
+    "external": ["cesium"]
+  },
+  "map-source-controls": {
+    "exports": ["./ui/maps"],
+    "modules": [
+      "src/ui/mapSource.js",
+      "src/ui/mapSourceControls.js",
+      "src/mapStackChips.js",
+      "src/keySetupCore.mjs"
+    ],
+    "external": []
+  },
+  "layer-panel": {
+    "exports": ["./ui/layers", "./ui/layers/feedback"],
+    "modules": [
+      "src/ui/layers.js",
+      "src/ui/layerPanel.js",
+      "src/ui/clearLayersControl.js",
+      "src/loadingFeedback.js",
+      "src/data/installationFeedback.js"
+    ],
+    "external": []
+  },
+  "location-controls": {
+    "exports": ["./ui/location"],
+    "modules": [
+      "src/ui/location.js",
+      "src/ui/locationControls.js",
+      "src/ui/locationSearch.js",
+      "src/locationStatus.js",
+      "src/app/stateChannel.js"
+    ],
+    "external": []
+  },
+  "radio-controls": {
+    "exports": ["./ui/radio"],
+    "modules": [
+      "src/ui/radio.js",
+      "src/ui/radioControls.js",
+      "src/ui/radioBindings.js",
+      "src/ui/radioPresentation.js",
+      "src/ui/radioTunerModel.js"
+    ],
+    "external": []
+  },
+  "cctv-controls": {
+    "exports": ["./ui/cctv"],
+    "modules": [
+      "src/ui/cctv.js",
+      "src/ui/cctvBindings.js",
+      "src/ui/cctvCalibration.js",
+      "src/ui/cctvControls.js",
+      "src/ui/cctvFrames.js",
+      "src/ui/cctvPresentation.js"
+    ],
+    "external": []
+  },
+  "context-controls": {
+    "exports": ["./ui/context", "./ui/context/policy"],
+    "modules": [
+      "src/ui/context.js",
+      "src/ui/contextActions.js",
+      "src/ui/contextBindings.js",
+      "src/ui/contextControls.js",
+      "src/ui/contextLayerChanges.js",
+      "src/ui/contextPresentation.js",
+      "src/ui/contextSession.js",
+      "src/ui/contextSubscriptions.js",
+      "src/ui/contextTransactions.js",
+      "src/contextModePolicy.js",
+      "src/rightRailPolicy.js",
+      "src/ui/panelRailGeometry.js"
+    ],
+    "external": []
+  },
+  "cockpit-controls": {
+    "exports": [
+      "./ui/cockpit",
+      "./ui/cockpit/math",
+      "./ui/cockpit/layout",
+      "./ui/cockpit/vision"
+    ],
+    "modules": [
+      "src/ui/cockpit.js",
+      "src/ui/cockpitBriefing.js",
+      "src/ui/cockpitCamera.js",
+      "src/ui/cockpitContext.js",
+      "src/ui/cockpitController.js",
+      "src/ui/cockpitDisplayPortal.js",
+      "src/ui/cockpitInput.js",
+      "src/ui/cockpitInstruments.js",
+      "src/ui/cockpitLayout.js",
+      "src/ui/cockpitPresentation.js",
+      "src/ui/cockpitSignals.js",
+      "src/ui/cockpitTrackingController.js",
+      "src/cockpitMath.js",
+      "src/cockpitUtilityLayout.js",
+      "src/cockpitVisionPolicy.js",
+      "src/ui/panelRailGeometry.js"
+    ],
+    "external": ["cesium"]
+  },
+  "scene-controls": {
+    "exports": ["./ui/scenes"],
+    "modules": [
+      "src/ui/scenes.js",
+      "src/ui/sceneControls.js",
+      "src/ui/scenePresentation.js"
+    ],
+    "external": []
+  },
+  "ui-shell": {
+    "exports": ["./ui/shell"],
+    "modules": [
+      "src/bloom.js",
+      "src/cctvFocusPolicy.js",
+      "src/cctvFocusRequest.js",
+      "src/cockpitMath.js",
+      "src/cockpitTracking.js",
+      "src/cockpitUtilityLayout.js",
+      "src/cockpitVisionPolicy.js",
+      "src/contactsDetectionPolicy.js",
+      "src/contextModePolicy.js",
+      "src/data/detectionPolicy.js",
+      "src/data/installationFeedback.js",
+      "src/data/layerState.js",
+      "src/data/militaryAwarenessEngine.js",
+      "src/keySetupCore.mjs",
+      "src/loadingFeedback.js",
+      "src/locationStatus.js",
+      "src/mapStackChips.js",
+      "src/navigationPolicy.js",
+      "src/panelStackLayout.js",
+      "src/rightRailPolicy.js",
+      "src/splitFlap.js",
+      "src/styles/anime.js",
+      "src/styles/noir.js",
+      "src/styles/retro.js",
+      "src/styles/snow.js",
+      "src/styles/surveillance.js",
+      "src/styles/thermal.js",
+      "src/ui/applicationShell.js",
+      "src/ui/applicationShortcuts.js",
+      "src/ui/cctv.js",
+      "src/ui/cctvBindings.js",
+      "src/ui/cctvCalibration.js",
+      "src/ui/cctvControls.js",
+      "src/ui/cctvFrames.js",
+      "src/ui/cctvPresentation.js",
+      "src/ui/clearLayersControl.js",
+      "src/ui/cockpit.js",
+      "src/ui/cockpitBriefing.js",
+      "src/ui/cockpitCamera.js",
+      "src/ui/cockpitContext.js",
+      "src/ui/cockpitController.js",
+      "src/ui/cockpitDisplayPortal.js",
+      "src/ui/cockpitInput.js",
+      "src/ui/cockpitInstruments.js",
+      "src/ui/cockpitLayout.js",
+      "src/ui/cockpitPresentation.js",
+      "src/ui/cockpitSignals.js",
+      "src/ui/cockpitTrackingController.js",
+      "src/ui/context.js",
+      "src/ui/contextActions.js",
+      "src/ui/contextBindings.js",
+      "src/ui/contextControls.js",
+      "src/ui/contextLayerChanges.js",
+      "src/ui/contextPresentation.js",
+      "src/ui/contextSession.js",
+      "src/ui/contextSubscriptions.js",
+      "src/ui/contextTransactions.js",
+      "src/ui/displayControls.js",
+      "src/ui/effects.js",
+      "src/ui/layerPanel.js",
+      "src/ui/layers.js",
+      "src/ui/leftPanelRail.js",
+      "src/ui/location.js",
+      "src/ui/locationControls.js",
+      "src/ui/locationSearch.js",
+      "src/ui/mapSource.js",
+      "src/ui/mapSourceControls.js",
+      "src/ui/panelDisclosure.js",
+      "src/ui/panelLayoutController.js",
+      "src/ui/panelMeasurement.js",
+      "src/ui/panelPositionControls.js",
+      "src/ui/panelRailGeometry.js",
+      "src/ui/panelRails.js",
+      "src/ui/radio.js",
+      "src/ui/radioBindings.js",
+      "src/ui/radioControls.js",
+      "src/ui/radioPresentation.js",
+      "src/ui/radioTunerModel.js",
+      "src/ui/recordingControls.js",
+      "src/ui/rightPanelRail.js",
+      "src/ui/sceneControls.js",
+      "src/ui/scenePresentation.js",
+      "src/ui/scenes.js",
+      "src/ui/shellElements.js",
+      "src/ui/shellFeedback.js",
+      "src/ui/styleParameters.js",
+      "src/ui/surfaceKeyboard.js",
+      "src/ui/visualEffects.js",
+      "src/ui/visualInput.js",
+      "src/ui/visualPresets.js",
+      "src/worldFocus.js",
+      "src/ui/uiLifetime.js",
+      "src/app/stateChannel.js",
+      "src/ui/frameRateMonitor.js"
+    ],
+    "external": ["cesium"]
+  },
+  "ui-styles": {
+    "exports": ["./ui/styles"],
+    "modules": [
+      "src/ui/styles.js",
+      "style.css",
+      "src/ui/styles/foundation.css",
+      "src/ui/styles/controls.css",
+      "src/ui/styles/location.css",
+      "src/ui/styles/status.css",
+      "src/ui/styles/cockpit.css",
+      "src/ui/styles/overlays.css",
+      "src/ui/styles/layers.css",
+      "src/ui/styles/radio.css",
+      "src/ui/styles/cctv.css",
+      "src/ui/styles/scenes.css",
+      "src/ui/styles/recording.css",
+      "src/ui/styles/responsive.css",
+      "src/ui/styles/command-dock.css",
+      "src/ui/styles/command-dock-compact.css",
+      "src/ui/styles/command-dock-trays.css",
+      "src/ui/styles/command-dock-sliding.css",
+      "src/ui/styles/voice-cost.css",
+      "src/ui/styles/first-run.css",
+      "src/ui/styles/provider-settings.css"
+    ],
+    "external": []
+  },
+  "scenes": {
+    "exports": ["./scenes"],
+    "modules": [
+      "src/scenes/director.js",
+      "src/scenes/recipes.js",
+      "src/scenes/scenePolicy.js",
+      "src/bloom.js",
+      "src/app/stateChannel.js",
+      "src/ui/scenes.js",
+      "src/ui/sceneControls.js",
+      "src/ui/scenePresentation.js",
+      "src/contextModePolicy.js"
+    ],
+    "external": ["cesium"]
+  },
+  "live-observations": {
+    "exports": ["./sources/live"],
+    "modules": [
+      "src/sources/live/aircraft.js",
+      "src/sources/live/contract.js",
+      "src/sources/live/index.js",
+      "src/sources/live/standalone.js",
+      "src/sources/live/vessels.js"
+    ],
+    "external": []
+  },
+  "civil-flights": {
+    "exports": ["./layers/flights"],
+    "modules": [
+      "src/data/aircraftClass.js",
+      "src/data/aircraftIcons.js",
+      "src/data/aircraftMeta.js",
+      "src/data/aircraftNearbyPolicy.js",
+      "src/data/cockpitAirLod.js",
+      "src/data/cockpitContactDot.js",
+      "src/data/contactMatch.js",
+      "src/data/iconOrientation.js",
+      "src/data/layerState.js",
+      "src/data/modelVisualAnchor.js",
+      "src/data/motionModel.js",
+      "src/data/renderAltitude.js",
+      "src/data/routePlausible.js",
+      "src/data/trackedModelRegime.js",
+      "src/data/trackingClickGesture.js",
+      "src/layers/flights/controller.js",
+      "src/layers/flights/enrichment.js",
+      "src/layers/flights/evidence.js",
+      "src/layers/flights/index.js",
+      "src/layers/flights/ingestion.js",
+      "src/layers/flights/lifecycle.js",
+      "src/layers/flights/motion.js",
+      "src/layers/flights/policy.js",
+      "src/layers/flights/queries.js",
+      "src/layers/flights/rendering.js",
+      "src/layers/flights/state.js",
+      "src/layers/flights/testing.js",
+      "src/layers/flights/tracking.js"
+    ],
+    "external": ["cesium"]
+  },
+  "military-flights": {
+    "exports": ["./layers/military"],
+    "modules": [
+      "src/data/aircraftClass.js",
+      "src/data/aircraftIcons.js",
+      "src/data/aircraftMeta.js",
+      "src/data/aircraftNearbyPolicy.js",
+      "src/data/cockpitAirLod.js",
+      "src/data/cockpitContactDot.js",
+      "src/data/contactMatch.js",
+      "src/data/iconOrientation.js",
+      "src/data/layerState.js",
+      "src/data/modelVisualAnchor.js",
+      "src/data/motionModel.js",
+      "src/data/renderAltitude.js",
+      "src/data/trackedModelRegime.js",
+      "src/data/trackingClickGesture.js",
+      "src/layers/military/controller.js",
+      "src/layers/military/index.js",
+      "src/layers/military/ingestion.js",
+      "src/layers/military/lifecycle.js",
+      "src/layers/military/motion.js",
+      "src/layers/military/policy.js",
+      "src/layers/military/queries.js",
+      "src/layers/military/rendering.js",
+      "src/layers/military/state.js",
+      "src/layers/military/testing.js",
+      "src/layers/military/tracking.js"
+    ],
+    "external": ["cesium"]
+  },
+  "aircraft-mechanics": {
+    "exports": ["./aircraft"],
+    "modules": [
+      "src/data/aircraftClass.js",
+      "src/data/aircraftIcons.js",
+      "src/data/aircraftMeta.js",
+      "src/data/aircraftNearbyPolicy.js",
+      "src/data/cockpitAirLod.js",
+      "src/data/cockpitContactDot.js",
+      "src/data/contactMatch.js",
+      "src/data/iconOrientation.js",
+      "src/data/layerState.js",
+      "src/data/modelVisualAnchor.js",
+      "src/data/motionModel.js",
+      "src/data/renderAltitude.js",
+      "src/data/routePlausible.js",
+      "src/data/trackedModelRegime.js",
+      "src/data/trackingClickGesture.js",
+      "src/layers/aircraft/classification.js",
+      "src/layers/aircraft/index.js"
+    ],
+    "external": ["cesium"]
+  },
+  "vessel-layer": {
+    "exports": ["./layers/vessels"],
+    "modules": [
+      "src/layers/vessels/cards.js",
+      "src/layers/vessels/evidence.js",
+      "src/layers/vessels/index.js",
+      "src/layers/vessels/ingestion.js",
+      "src/layers/vessels/lifecycle.js",
+      "src/layers/vessels/policy.js",
+      "src/layers/vessels/queries.js",
+      "src/layers/vessels/rendering.js",
+      "src/layers/vessels/selection.js",
+      "src/layers/vessels/state.js",
+      "src/layers/vessels/store.js",
+      "src/layers/vessels/testing.js",
+      "src/layers/vessels/tracking.js",
+      "src/data/iconOrientation.js",
+      "src/data/vesselLabels.js"
+    ],
+    "external": ["cesium"]
+  },
+  "earthquakes": {
+    "exports": ["./layers/earthquakes"],
+    "modules": [
+      "src/layers/earthquakes/index.js",
+      "src/layers/earthquakes/model.js",
+      "src/layers/earthquakes/source.js"
+    ],
+    "external": ["cesium"]
+  },
+  "fire-layer": {
+    "exports": ["./layers/firms"],
+    "modules": [
+      "src/data/firmsAdapt.js",
+      "src/data/firmsLabels.js",
+      "src/data/iconOrientation.js",
+      "src/layers/firms/anchors.js",
+      "src/layers/firms/cards.js",
+      "src/layers/firms/index.js",
+      "src/layers/firms/ingestion.js",
+      "src/layers/firms/lifecycle.js",
+      "src/layers/firms/model.js",
+      "src/layers/firms/policy.js",
+      "src/layers/firms/queries.js",
+      "src/layers/firms/rendering.js",
+      "src/layers/firms/selection.js",
+      "src/layers/firms/source.js",
+      "src/layers/firms/state.js",
+      "src/layers/firms/viewport.js"
+    ],
+    "external": ["cesium"]
+  },
+  "satellites-layer": {
+    "exports": ["./layers/satellites"],
+    "modules": [
+      "src/data/issPass.js",
+      "src/data/satelliteClass.js",
+      "src/layers/satellites/catalog.js",
+      "src/layers/satellites/controls.js",
+      "src/layers/satellites/index.js",
+      "src/layers/satellites/ingestion.js",
+      "src/layers/satellites/interaction.js",
+      "src/layers/satellites/labels.js",
+      "src/layers/satellites/lifecycle.js",
+      "src/layers/satellites/orbits.js",
+      "src/layers/satellites/policy.js",
+      "src/layers/satellites/rendering.js",
+      "src/layers/satellites/source.js",
+      "src/layers/satellites/state.js",
+      "src/layers/satellites/testing.js",
+      "src/layers/satellites/tracking.js"
+    ],
+    "external": ["cesium", "satellite.js"]
+  },
+  "launches-layer": {
+    "exports": ["./layers/launches"],
+    "modules": [
+      "src/layers/launches/camera.js",
+      "src/layers/launches/controls.js",
+      "src/layers/launches/index.js",
+      "src/layers/launches/ingestion.js",
+      "src/layers/launches/launchPad.js",
+      "src/layers/launches/lifecycle.js",
+      "src/layers/launches/model.js",
+      "src/layers/launches/orbitRendering.js",
+      "src/layers/launches/overlays.js",
+      "src/layers/launches/panel.js",
+      "src/layers/launches/paths.js",
+      "src/layers/launches/policy.js",
+      "src/layers/launches/policyHelpers.js",
+      "src/layers/launches/rendering.js",
+      "src/layers/launches/replay.js",
+      "src/layers/launches/selection.js",
+      "src/layers/launches/source.js",
+      "src/layers/launches/state.js",
+      "src/layers/launches/testing.js"
+    ],
+    "external": ["cesium"]
+  },
+  "installations-layer": {
+    "exports": ["./layers/installations"],
+    "modules": [
+      "src/data/installationFeedback.js",
+      "src/data/militaryInstallationData.js",
+      "src/layers/installations/controls.js",
+      "src/layers/installations/index.js",
+      "src/layers/installations/ingestion.js",
+      "src/layers/installations/lifecycle.js",
+      "src/layers/installations/model.js",
+      "src/layers/installations/policy.js",
+      "src/layers/installations/rendering.js",
+      "src/layers/installations/selection.js",
+      "src/layers/installations/source.js",
+      "src/layers/installations/state.js",
+      "src/layers/installations/viewport.js"
+    ],
+    "external": ["cesium"]
+  },
+  "awareness-layer": {
+    "exports": ["./layers/awareness"],
+    "modules": [
+      "src/cockpitMath.js",
+      "src/data/iconOrientation.js",
+      "src/data/militaryAwarenessEngine.js",
+      "src/layers/awareness/controls.js",
+      "src/layers/awareness/dependencies.js",
+      "src/layers/awareness/focus.js",
+      "src/layers/awareness/history.js",
+      "src/layers/awareness/index.js",
+      "src/layers/awareness/ingestion.js",
+      "src/layers/awareness/lifecycle.js",
+      "src/layers/awareness/model.js",
+      "src/layers/awareness/navigation.js",
+      "src/layers/awareness/panel.js",
+      "src/layers/awareness/policy.js",
+      "src/layers/awareness/queries.js",
+      "src/layers/awareness/rendering.js",
+      "src/layers/awareness/state.js",
+      "src/layers/awareness/subject.js",
+      "src/layers/awareness/testing.js",
+      "src/ui/panelRailGeometry.js"
+    ],
+    "external": ["cesium"]
+  },
+  "traffic-layer": {
+    "exports": ["./layers/traffic"],
+    "modules": [
+      "src/data/flowMatch.js",
+      "src/data/tomtomTiles.js",
+      "src/data/trafficBounds.js",
+      "src/data/trafficFlowStyle.js",
+      "src/data/trafficPresetStyle.js",
+      "src/data/trafficQueue.js",
+      "src/layers/traffic/animation.js",
+      "src/layers/traffic/controls.js",
+      "src/layers/traffic/flow.js",
+      "src/layers/traffic/flowDecode.js",
+      "src/layers/traffic/flowSource.js",
+      "src/layers/traffic/index.js",
+      "src/layers/traffic/ingestion.js",
+      "src/layers/traffic/lifecycle.js",
+      "src/layers/traffic/model.js",
+      "src/layers/traffic/policy.js",
+      "src/layers/traffic/rendering.js",
+      "src/layers/traffic/source.js",
+      "src/layers/traffic/state.js",
+      "src/layers/traffic/style.js",
+      "src/layers/traffic/timing.js",
+      "src/layers/traffic/viewport.js"
+    ],
+    "external": ["cesium", "pbf", "@mapbox/vector-tile"]
+  },
+  "bikeshare-layer": {
+    "exports": ["./layers/bikeshare"],
+    "modules": [
+      "src/layers/bikeshare/controls.js",
+      "src/layers/bikeshare/index.js",
+      "src/layers/bikeshare/ingestion.js",
+      "src/layers/bikeshare/lifecycle.js",
+      "src/layers/bikeshare/model.js",
+      "src/layers/bikeshare/policy.js",
+      "src/layers/bikeshare/queries.js",
+      "src/layers/bikeshare/registry.js",
+      "src/layers/bikeshare/rendering.js",
+      "src/layers/bikeshare/selection.js",
+      "src/layers/bikeshare/source.js",
+      "src/layers/bikeshare/state.js",
+      "src/layers/bikeshare/testing.js",
+      "src/layers/bikeshare/viewport.js"
+    ],
+    "external": ["cesium"]
+  },
+  "cctv-layer": {
+    "exports": ["./layers/cctv"],
+    "modules": [
+      "src/data/cctvCards.js",
+      "src/data/cctvGizmo.js",
+      "src/data/cctvLod.js",
+      "src/data/cctvViewshed.js",
+      "src/data/iconOrientation.js",
+      "src/data/trackingClickGesture.js",
+      "src/layers/cctv/calibration.js",
+      "src/layers/cctv/cards.js",
+      "src/layers/cctv/catalog.js",
+      "src/layers/cctv/controls.js",
+      "src/layers/cctv/frames.js",
+      "src/layers/cctv/geometry.js",
+      "src/layers/cctv/geometryQueue.js",
+      "src/layers/cctv/ground.js",
+      "src/layers/cctv/health.js",
+      "src/layers/cctv/hover.js",
+      "src/layers/cctv/index.js",
+      "src/layers/cctv/ingestion.js",
+      "src/layers/cctv/lifecycle.js",
+      "src/layers/cctv/model.js",
+      "src/layers/cctv/navigation.js",
+      "src/layers/cctv/policy.js",
+      "src/layers/cctv/presentation.js",
+      "src/layers/cctv/projection.js",
+      "src/layers/cctv/rendering.js",
+      "src/layers/cctv/selection.js",
+      "src/layers/cctv/source.js",
+      "src/layers/cctv/state.js",
+      "src/layers/cctv/testing.js",
+      "src/overlays/worldOverlayTokens.js",
+      "src/data/cctvFootprint.js"
+    ],
+    "external": ["cesium"]
+  },
+  "alpr-cameras": {
+    "exports": ["./layers/alpr"],
+    "modules": [
+      "src/layers/alpr/index.js",
+      "src/layers/alpr/model.js",
+      "src/layers/alpr/policy.js",
+      "src/layers/alpr/presentation.js",
+      "src/layers/alpr/source.js"
+    ],
+    "external": ["cesium"]
+  },
+  "radio-layer": {
+    "exports": ["./layers/radio"],
+    "modules": [
+      "src/data/iconOrientation.js",
+      "src/data/layerState.js",
+      "src/data/radioCountry.js",
+      "src/layers/radio/catalogModel.js",
+      "src/layers/radio/categories.js",
+      "src/layers/radio/clustering.js",
+      "src/layers/radio/controls.js",
+      "src/layers/radio/index.js",
+      "src/layers/radio/ingestion.js",
+      "src/layers/radio/interaction.js",
+      "src/layers/radio/labels.js",
+      "src/layers/radio/lifecycle.js",
+      "src/layers/radio/model.js",
+      "src/layers/radio/navigation.js",
+      "src/layers/radio/playback.js",
+      "src/layers/radio/policy.js",
+      "src/layers/radio/presentation.js",
+      "src/layers/radio/queries.js",
+      "src/layers/radio/rendering.js",
+      "src/layers/radio/selection.js",
+      "src/layers/radio/source.js",
+      "src/layers/radio/state.js",
+      "src/layers/radio/tuning.js",
+      "src/layers/radio/tuningNoise.js",
+      "src/layers/radio/volume.js",
+      "src/ui/radioTunerModel.js"
+    ],
+    "external": ["cesium"]
+  },
+  "submarine-cables": {
+    "exports": ["./layers/submarine-cables"],
+    "modules": [
+      "src/layers/submarineCables/geometry.js",
+      "src/layers/submarineCables/index.js",
+      "src/layers/submarineCables/ingestion.js",
+      "src/layers/submarineCables/interaction.js",
+      "src/layers/submarineCables/lifecycle.js",
+      "src/layers/submarineCables/overlay.js",
+      "src/layers/submarineCables/policy.js",
+      "src/layers/submarineCables/rendering.js",
+      "src/layers/submarineCables/state.js",
+      "src/layers/submarineCables/surface.js"
+    ],
+    "external": ["cesium"]
+  },
+  "bundled-cables": {
+    "exports": ["./sources/bundled-cables"],
+    "modules": [
+      "src/layers/submarineCables/bundledSource.js",
+      "src/data/local_data/telegeography_submarine_cables/cable-geo.json",
+      "src/data/local_data/telegeography_submarine_cables/landing-point-geo.json"
+    ],
+    "external": []
+  },
+  "geography": {
+    "exports": ["./geography/natural-earth", "./geography/neighborhoods"],
+    "modules": [
+      "src/data/naturalEarthRegions.js",
+      "src/data/neighborhoodPolygons.js",
+      "src/data/retryableLoad.js",
+      "src/data/local_data/neighborhoods/san-francisco.json",
+      "src/data/local_data/natural_earth/regions.json",
+      "src/data/local_data/natural_earth/marine.json"
+    ],
+    "external": []
+  },
+  "maps": {
+    "exports": [
+      "./maps/controller",
+      "./maps/catalog",
+      "./maps/imagery",
+      "./maps/terrain",
+      "./maps/3d",
+      "./maps/defaults"
+    ],
+    "modules": [
+      "src/maps/availability.js",
+      "src/maps/catalog.js",
+      "src/maps/controller.js",
+      "src/maps/credits.js",
+      "src/maps/defaultSources.js",
+      "src/maps/google3d.js",
+      "src/maps/imagery.js",
+      "src/maps/registry.js",
+      "src/maps/terrain.js",
+      "src/keySetupCore.mjs"
+    ],
+    "external": ["cesium"]
+  }
+}

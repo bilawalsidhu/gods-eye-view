@@ -14,18 +14,19 @@
 /** Longest accepted key/token value. Real provider keys are all far shorter. */
 export const KEY_SETUP_VALUE_LIMIT = 512;
 
-/** Most env vars accepted in one save. The registry defines nine. */
+/** Most env vars accepted in one save. The registry defines ten. */
 export const KEY_SETUP_UPDATE_LIMIT = 16;
 
 /** Header line written above keys the panel appends to a .env file. */
 export const KEY_SETUP_APPEND_HEADER = '# Keys added by the in-app POWER UP panel';
 
 /**
- * Every key the panel offers, in the order it offers them — most magic per
+ * Provider credentials, in display order — most magic per
  * minute first. `tier` mirrors the README's color legend: 'metered' (🔴) is a
  * billing-enabled account, 'free' (🟡) is a register-and-paste key.
  * `clientExposed` marks the two keys that are injected into the browser
  * bundle by design (restrict them at the provider, per SECURITY.md).
+ * `hidden` keeps advanced configuration out of the panel and missing-key count.
  */
 export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
@@ -36,6 +37,15 @@ export const KEY_SETUP_KEYS = Object.freeze([
     envVars: Object.freeze(['GOOGLE_MAPS_API_KEY']),
     tier: 'metered',
     clientExposed: true,
+  }),
+  Object.freeze({
+    id: 'google-maps-server',
+    title: 'GOOGLE MAPS — SERVER',
+    unlocks: 'Places context + Street View fallback; optional separate key',
+    getUrl: 'https://developers.google.com/maps/documentation/places/web-service/get-api-key',
+    envVars: Object.freeze(['GOOGLE_MAPS_SERVER_API_KEY']),
+    tier: 'metered',
+    hidden: true,
   }),
   Object.freeze({
     id: 'openai',
@@ -266,7 +276,7 @@ export function knownKeySetupEnvVars() {
 /** Tooltip guidance for a control gated by one registry entry. */
 export function keySetupRequirement(id) {
   const entry = KEY_SETUP_KEYS.find((candidate) => candidate.id === id);
-  if (!entry) return '';
+  if (!entry || entry.hidden) return '';
   return `Needs ${entry.envVars.join(' + ')} — add it in Provider Settings`;
 }
 
@@ -295,7 +305,7 @@ export function isKeySetupExternallyManaged({
  * @param {Record<string, string|undefined>} env e.g. process.env
  */
 export function keySetupStatus(env = {}) {
-  const keys = KEY_SETUP_KEYS.map((entry) => {
+  const keys = KEY_SETUP_KEYS.filter((entry) => !entry.hidden).map((entry) => {
     const values = entry.envVars.map((name) => String(env[name] ?? '').trim());
     const set = values.every((value) => value.length > 0);
     return {

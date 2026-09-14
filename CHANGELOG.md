@@ -1,12 +1,358 @@
 # Changelog
 
+## ALPR camera locations
+
+- Label the loaded camera count as nearby, show a purple-dot legend, and add
+  SHOW NEAREST to frame and select a loaded camera when none are on screen,
+  using the available 3D-tile or globe terrain height.
+
+- Keep nearby camera markers and selection stable during rotation, use bounded
+  ground-centered coverage instead of the horizon rectangle, and reuse in-flight queries.
+
+- Add optional, source-labeled OpenStreetMap ALPR camera locations, bounded city queries,
+  cached-response and coverage notices, selection cards, share links, and voice toggles.
+- Separate the request adapter, camera model, presentation, and instance lifecycle.
+  Source cancellation also guards late response bodies and rejects invalid query bounds.
+
+## Release disabled infrastructure rendering
+
+- Remove built Data Center, Dam and Submarine Cable entities when their layers
+  are disabled, avoiding retained visualizer work and entity memory.
+- Keep parsed datasets cached for re-enable; rebuild entities without refetching.
+
+## Camera layer components
+
+- Separate camera source requests, placement, frames, projection, cards and calibration.
+- Own visibility listeners and pending initialization within each layer lifetime.
+- Preserve existing camera catalogs, URL families, geometry and playback behavior.
+
+## Traffic and bikeshare components
+
+- Separate traffic loading, animation, styling and lifecycle into factory-owned components.
+- Give each flow source its own bounded decode cache and cancellation checks.
+- Separate bikeshare registry, station requests, rendering, selection and proximity handling.
+
+## Installation and context components
+
+- Separate mapped-site requests, records, placement, selection and viewport lifecycle.
+- Separate proximity queries, subject tracking, navigation/history, panel and direction rendering.
+- Retain source and ground-floor ownership in standalone composition; reject malformed
+  installation snapshots and ignore failures from cancelled requests.
+
+## Satellite and mission layer components
+
+- Separate catalog loading, orbit calculations, display, tracking and interaction
+  into instance-owned satellite components.
+- Separate mission ingestion, paths, placement, cards, roster, replay and camera
+  operations, retaining existing layer controls and satellite coordination.
+- Cancel late mission source work and reject malformed launch snapshots.
+
+## Fire layer components
+
+- Split fire source loading, state, rendering, cards, selection and viewport work
+  into reusable components with application-owned scene services.
+- Cancel late refreshes, retain good data after malformed responses, and preserve
+  selection identity without repeating a user-selection notification on refresh.
+
+## Earthquake components
+
+- Separate earthquake snapshot loading, record validation, and display ownership.
+- Cancel pending earthquake refreshes on disable or destruction, retaining the
+  last good snapshot after malformed or failed refreshes.
+
+## September 8, 2026
+
+Earthquake refreshes validate the complete feed and construct replacement entities before clearing the previous snapshot. Malformed rows and duplicate rendered IDs retain the last good entities, overlays, count and timestamp and report a malformed response; unknown magnitude is excluded from M2.5+ rendering.
+
+Non-object or array-valued properties reject the response instead of being treated as an unknown magnitude.
+
+Launch payloads with missing records now say PAYLOAD DATA UNAVAILABLE. Missing names use Unnamed payload; absent or invalid mass stays unknown instead of appearing as 0 KG.
+
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
 ## [Unreleased]
 
+- Separate map source factories from switching and resource ownership; retain current source IDs, attribution and fallbacks.
+
+- Separate radio directory loading, station selection, globe presentation and playback into composed components with an explicit metadata source.
+
+- Separate submarine cable sources and rendering components, and export bundled geography lookup modules.
+
 ### Fixed
 
+- Traffic now retries a failed destination after city navigation without a layer
+  toggle. Camera departure cancels pending work, arrival checks the final view,
+  and superseded requests cannot keep a newer view loading.
+
+### Added
+
+- Add Ontario 511 as a keyless CCTV source pack, including Kitchener-area
+  highway cameras, with server-registered still URLs and attribution.
+- CCTV Mesh adds Finland: Fintraffic road weather cameras, keyless, nationwide, 300 by default. Each camera view of a station is placed separately; ambient stills refresh on the source's 10-minute cadence (the active camera keeps the usual 10-second refresh).
+- Add DriveBC highway cameras for British Columbia to the CCTV layer: the 250
+  nearest Vancouver and Victoria by default, with Open Government Licence –
+  British Columbia attribution. `CCTV_DRIVEBC_MAX_SOURCES` sets the cap and
+  `CCTV_DRIVEBC_ENABLED=0` turns the pack off.
+- Add TxDOT highway cameras for Texas as a keyless CCTV pack: the Austin and
+  San Antonio districts by default (`CCTV_TXDOT_DISTRICTS` selects any of the
+  25), only cameras reporting Device Online, snapshots decoded from TxDOT's
+  JSON-wrapped JPEG for the official origin only.
+- Add Estonia CCTV source packs: Tallinn intersection stills (`ristmikud.tallinn.ee`,
+  curated catalog) and nationwide Transpordiamet / Tarktee road-weather cameras
+  (DATEX2 locations + rotating JPEG URLs), with Tallinn city POIs and attribution.
+- Add a Warendorf (Germany) source pack: the Stadt Warendorf Marktplatz webcam, with a
+  curated pose.
+- Add Live Traffic NSW (Transport for NSW, CC BY 4.0) as a keyless CCTV pack: 217
+  Sydney and regional cameras with compass headings and view descriptions.
+- CCTV monitor planes no longer clip into the terrain. The plane is lifted
+  rigidly by the largest clearance deficit over a 3×3 grid of support points
+  against the ground under each (the ground at the mount where nothing finer is
+  known), and the client honours pack ranges instead of inflating them to 220 m.
+  `src/data/local_data/cctv_ground_heights/` ships precomputed ground heights under
+  every camera's mount and plane footprint (3,445 of 3,446 cameras), aligned to work
+  with Google Photorealistic 3D Tiles; cameras with shipped heights are placed
+  with zero runtime sampling, and the rest resolve the ground under their plane
+  from the Re:Earth DEM on activation. The footprint lift is capped at 60 m
+  above the mount-based lift so a tower under a far edge cannot launch the plane.
+
+- Press backtick (`) to toggle a rendered-frame-rate readout beneath the logo.
+  Typing fields retain the key; monitoring stops when hidden.
+
+
+- Extract vessel feed, store, rendering, selection, trail and card components with explicit source and scene services.
+- Bound contact retention for incomplete vessel observations, preserve source freshness and refresh history references in place.
+- Cancel pending vessel history during selection and layer teardown.
+
+- Split military flights into instance-owned state, ingestion, motion, rendering, tracking and query components. Share the existing aircraft calculations and give military classification an explicit source and cleanup lifecycle. Preserve known military identities even when the source has no position for them.
+
+- Split civil flights into instance-owned state, ingestion, motion, rendering, tracking and query components. Cancel enrichment on teardown and resolve model assets through the application.
+
+- Separate aircraft/vessel transport and normalization from layer rendering, preserving observation timestamps, altitude datums and optional history.
+- Retain absent aircraft during partially admitted snapshots and bound source error messages.
+
+- Drive share updates, Location feedback and Scene controls through immutable state snapshots and disposable subscriptions.
+- Keep stale lookup/load completions from publishing accepted results and retain shot rows during playback progress updates.
+- Export the existing Scene director with explicit playback and editing outcomes.
+
+- Separate UI assembly from standalone engine wiring, with dedicated panel layout, position, notice and recording owners.
+- Stop pending UI presentation and drag work during disposal; preserve accessible status text when stopping its decoration.
+- Organize component styles behind the same ordered stylesheet entry and include 3D model controls in the current-state snapshot.
+
+- Separate Scene controls and text presentation from project/playback operations; revoke replaced row listeners and suppress stale completion feedback.
+- Preserve shot-label identity on selection so double-click rename can complete.
+
+- Split Cockpit camera/controller, instruments, briefing, signals and layout into focused modules with explicit application operations.
+- Give Display portal moves cancellable focus/scroll restoration and stop Cockpit work before asynchronous UI teardown.
+
+- Separate Context controls, mode transitions and layer restoration; release tab listeners and suppress late panel/search feedback after disposal.
+
+- Separate camera-panel controls, frame loading, calibration editing and status display; cancel stale image and calibration work on camera changes or disposal.
+
+- Restore UI observer, resize-listener and CCTV subscription cleanup after Location extraction.
+
+- Extract Radio controls and tuner presentation with explicit actions and complete listener/subscription cleanup.
+
+- Extract Location controls and cancellable search presentation; preserve navigation handoff and prevent delayed POI expansion after closing the row.
+
+- Separate Layers panel presentation and clear-control bindings from layer lifecycle operations; revoke listeners and subscriptions on replacement or teardown.
+
+- Extract Map Source controls with listener cleanup and protection against obsolete selection feedback.
+
+- Separate visual effects, presets and animation from Display controls, with explicit stage ownership and teardown.
+
+- Extract Display control bindings with synchronous listener cleanup; preserve existing visual actions and native input behavior.
+
+- Extract application shortcuts and shader-parameter controls into reusable UI
+  components, preserving inputs and cleaning up listeners on rebuild/disposal.
+
+- Extract adaptive panel rail placement and measurement into reusable UI modules,
+  preserving obstacle clearance, responsive allocation, disclosure and scroll behavior.
+
+- Extract shared surface keyboard handling for the welcome launcher and Provider
+  Settings, preserving Tab/Escape behavior and releasing the listener on teardown.
+
+### Added
+
+### Security
+
+- Validate configured Google Places coordinates and text queries before rate
+  limiting or upstream requests; preserve the keyless capability response.
+- Bound CCTV media response headers to 15 seconds and cancel error bodies.
+  Cap buffered snapshot downloads at 16 MiB while streaming.
+
+
+- Cancel the active location lookup when its controls are disposed.
+
+
+### Fixed
+
+- Extract panel disclosure and hover/focus controls into a reusable module;
+  cancel their listeners and pending work during replacement and teardown.
+
+- Reuse cached military aircraft during adsb.lol rate limits and server errors,
+  honor bounded retry delays, and preserve cached observation times and stale
+  indicators. Show installation zoom guidance without a false LOAD FAILED.
+
+- GBFS rejects upstream redirects, caps streamed responses at 5 MiB, and keeps
+  its deadline active through body reads. Rejected downloads are cancelled.
+
+
+- Split Overpass/installation search, regional briefing/weather, local voice
+  handlers and standalone key setup into focused modules. Preserve routes,
+  source behavior, tool schemas and credential restrictions.
+
+- Restore data-provider routes under local build preview and return JSON 404s
+  for unmatched API requests. Credential editing remains development-only.
+
+- Extract CCTV catalog/media and Radio Browser directory providers into focused
+  Node modules, preserving their routes and policies and isolating CCTV catalogs
+  by provider instance and application root.
+
+- Simplify POWER UP to one Google Maps entry. Keep the optional server key
+  available through environment configuration without a second setup row or
+  missing-key reminder.
+
+- Separate terrain, traffic, FIRMS and GBFS middleware into focused provider
+  modules, preserving local configuration, routes and cache/error behavior.
+
+- Split satellite and launch-feed server providers into focused modules with
+  portable request URL builders, preserving routes and cache/error behavior.
+
+- Keep landmark names when geocoding returns only address components, preventing
+  the United States Capitol annotation from moving to a Washington hotel.
+  Unrelated outlines leave the valid geocoded marker in place.
+
+- Split aircraft and vessel server providers into focused modules for source
+  fetching, AIS records/tracks and shared request helpers; preserve existing
+  routes, local setup, fallback behavior and rendering.
+
+
+### Changed
+- Separate explicit browser build settings from standalone environment loading
+  and local provider middleware. Preserve provider behavior and root named exports.
+- Rename standalone browser startup to `src/standalone/` and add a Node-only
+  `gods-eye-view/build/vite` export with checked package ownership.
+
+
+### Development
+
+- Extract application lifecycle and viewer exports. Split standalone startup into
+  scene setup, controls, layer registration, tools and loading UI. Startup failure
+  and terminal shutdown release acquired resources and cancel delayed work.
+
+- Adopt Prettier tooling contributed by RohanDaCoder (#227), with an explicit
+  file scope, pinned formatter and Linux/Windows CI checks. Format the reusable
+  infrastructure modules and their consumer tests. Package boundary checks keep
+  those exports separate from app startup and local Node services.
+
+### Fixed
+
+- Reduce terrain-height timeouts when Re:Earth slows down. Batches are
+  sized against measured response latency on both browser and server to reduce
+  request timeouts, and a partial upstream failure now
+  keeps the heights that did resolve rather than discarding them. A position
+  the upstream answers with no height is reported as an absent reading instead
+  of a failed refresh, so the log distinguishes a slow or broken upstream from
+  one that simply has no value for a coordinate.
+
+- Separate optional Google server credentials for Places and Street View from
+  the browser key, contributed by Tom-Neverwinter (#110). Provider Settings,
+  Pinokio's app-specific credential handling and setup diagnostics recognize
+  both keys. The Street View tool prefers the server key across environment
+  and `.env` sources. Existing single-key and keyless setups remain supported.
+
+- Complete the first-run, view-target prewarm, cockpit-plates and floor-hold
+  browser harness renderer portability fixes contributed by Tom-Neverwinter.
+  macOS retains Metal; other platforms default to SwiftShader. Cockpit renderer
+  assertions and evidence labels follow the actual selected mode. Floor-hold
+  explicitly selects its measured 2D billboard mode and keeps its mesh and terrain assertions; software runs are not real-GPU evidence.
+  First-run QA now checks the existing attribution Escape-close/focus-return
+  behavior while preserving the launcher-underneath regression checks.
+
+
+- Datacenter and dam factories are available through scoped package exports with
+  explicit context, overlay and render callbacks. The standalone app uses the
+  same implementation and bundled datasets.
+
+- Local GeoJSON layers share concurrent loads, cancel pending fetches on destruction,
+  discard late results, and remove their entity-context records on teardown.
+
+- Unchanged local infrastructure overlays no longer sustain idle rendering.
+  Ground samples wait for visible terrain to settle and cannot place a marker
+  below its loaded surface; roofs and valid below-sea-level heights are retained.
+  Already sampled markers also follow higher terrain as close-up tiles refine.
+
+- Datacenter and dam marker stems use bounded, zoom-dependent active sets with
+  stable selection during camera motion. Close-up stems scale to the actual
+  camera distance; source totals and submarine cables remain unchanged.
+
+- Keyboard focus rings now survive active/selected button styles across the
+  interface. Visual Styles, Location cities and points of interest, search,
+  Context/mission actions, Cockpit utilities, and sliders retain a distinct
+  focus indicator.
+- A short Space press activates a focused control only on key release. Holding
+  Space for 500 ms blurs that control before push-to-talk starts, and release is
+  then consumed so it cannot also activate the old control. The same hold works
+  from the map or page background; text-entry controls remain protected.
+- The Location disclosure is reachable with Tab and shows keyboard focus;
+  its city, point-of-interest, and search controls do too. Escape from inside
+  the tray returns focus to its disclosure and discards any unfinished search;
+  Escape on the disclosure itself closes the tray and clears that focus.
+- Data Layers ON/OFF buttons show a keyboard focus ring independently of
+  their enabled and feed-status colors.
+- Display buttons, layout selectors, mode buttons, and sliders show a visible
+  keyboard focus ring, including the controls used in Cockpit Display. Enabled
+  CCTV camera dropdowns also show keyboard focus.
+- Context tabs keep a distinct keyboard ring when selected. Their existing
+  Left/Right arrow navigation continues to switch Contacts and Space Missions,
+  and both choices remain reachable through ordinary Tab navigation.
+- Tabbing through the Space Missions roster now drives the same temporary globe
+  rotation and mission-marker highlight as pointer hover, without selecting the
+  mission. Keyboard and pointer previews no longer cancel each other.
+- Radio power controls, Search Nearby Sites, and Clear Selected Layers retain
+  keyboard focus while their async work is busy. They expose that busy state to
+  assistive technology and ignore repeated activation until the work settles.
+- Live Contacts results retain keyboard focus by contact identity when counts,
+  distance order, or pages refresh. If a focused contact departs or rotates off
+  the visible page, focus moves to the named explanatory note at the end of the
+  list and survives later refreshes there, so the next Tab proceeds beyond the
+  list instead of restarting at Contacts or silently selecting another contact.
+- Cockpit Live Signals retains keyboard focus during live updates and contact
+  reordering, allowing Tab to continue to Display and Radio. If the focused
+  contact leaves the list, focus moves to the current briefing tab.
+- Cockpit-only Display and Radio launchers show complete inset focus rings.
+- Escape collapses the nearest expanded panel containing keyboard focus and
+  returns focus to that panel's disclosure when closing from its contents.
+  Escape on the disclosure itself closes without leaving the collapsed control
+  focused. Cockpit Contact and Live Signals panels follow the same nesting rule.
+- Cesium's bottom-left Data attribution control and lightbox Close control are
+  in the Tab order and support Enter and Space. Close, Escape, and backdrop
+  dismissal restore focus and synchronize the disclosure state.
+
+- CCTV testing uses the normal launcher for keyless startup, credential loading,
+  localhost binding, and explicit LAN-exposure warnings while retaining its
+  smaller source-pack limits.
+- CelesTrak, Launch Library, terrain-height, and aircraft-enrichment failures
+  return generic error messages. Related diagnostics omit raw exception details
+  and upstream error bodies; response statuses and cache fallback remain intact.
+  Includes the security fixes contributed by Tom-Neverwinter in PR #171.
+
+### Fixed
+
+- Map Source keyboard opening retries focus until the selected tile is visible.
+  Leaving the disclosure, pointer interaction, or closing the tray cancels the
+  pending handoff so delayed work cannot pull focus back.
+
+- Scope, Bloom, Sharpen, location search and generated style sliders expose
+  explicit accessible names. The first-run checkbox retains its native label.
+- FIRMS records a source as successful only after appending its rows, avoiding
+  contradictory success/failure status if aggregation throws.
+- Radio country filtering and voice country requests now resolve common English
+  names and exonyms that `Intl.DisplayNames`' primary label omits, so requests
+  like "play radio in Turkey" no longer fail closed (Turkey → Türkiye, plus
+  Myanmar/Burma, UAE, Holland, Swaziland, East Timor, Cabo Verde, Vatican).
+  Ambiguous names such as a bare "Congo" or "Korea" still fail closed.
 - Mapped-site outages show their scheduled retry countdown and distinguish
   known Overpass rate limits, timeouts, and query failures. Search feedback no
   longer claims a refresh succeeded while the layer is unavailable or loading.
@@ -28,6 +374,31 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Existing cached refusals are now ignored immediately, including during
   stale-data fallback. Concurrent identical requests share the same last-good
   fallback when all mirrors refuse, without duplicating upstream requests.
+- A keyless place lookup no longer remembers a network failure as "no such
+  place". A blip while Photon was answering used to be memoized for the rest of
+  the session, so the query kept returning not-found from memory on a network
+  that had since recovered. A miss is now cached only when every source
+  consulted actually returned a verdict.
+
+### Added
+
+- Keyless place search. The LOCATION search box and the `fly_to_location` voice
+  tool now resolve place names through Photon (komoot, over OpenStreetMap) when
+  no Google Maps key is configured — previously the lookup threw. Google stays
+  the primary path and is unchanged when it answers; the fallback also covers a
+  key whose Geocoding API is not enabled, which Google reports as HTTP 200 with
+  `REQUEST_DENIED`, so an empty result is the detector rather than an error.
+- The same keyless fallback now covers the remaining two place lookups: map
+  annotations ("annotate the botanical garden") and the Radio layer's
+  "near \<place>" selection. Radio previously threw without a key, which
+  surfaced as a failed voice turn rather than as a station it could not place;
+  annotations silently failed to anchor. Annotation footprints match OSM on the
+  resolved feature's canonical name, so locality words in the request cannot
+  pull the outline onto a neighbouring building.
+
+- Refresh vulnerable transitive dependencies and update browser/image tooling
+  to Puppeteer 25.10.0 and Sharp 0.35.4. Cesium remains on 1.138.0.
+  Browser QA awaits the new asynchronous executable-path lookup.
 
 ## [0.1.1] — 2026-09-01 — Installation and live-data fixes
 

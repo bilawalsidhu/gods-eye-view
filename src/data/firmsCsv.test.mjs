@@ -14,10 +14,11 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = fs.readFileSync(
   path.join(__dirname, 'fixtures', 'firms-viirs-noaa20-sample.csv'),
-  'utf8'
+  'utf8',
 );
 
-const HEADER = 'latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight';
+const HEADER =
+  'latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight';
 
 test('fixture parses to 45 records with finite lat/lon/frp', () => {
   const records = parseFirmsCsv(FIXTURE);
@@ -48,15 +49,24 @@ test('fixture first row maps every field, categorical confidence preserved raw',
 });
 
 test('acquisitionMsUtc: "1006" = 10:06 UTC', () => {
-  assert.equal(acquisitionMsUtc('2026-07-16', '1006'), Date.UTC(2026, 6, 16, 10, 6));
+  assert.equal(
+    acquisitionMsUtc('2026-07-16', '1006'),
+    Date.UTC(2026, 6, 16, 10, 6),
+  );
 });
 
 test('acquisitionMsUtc: non-zero-padded "45" = 00:45 UTC', () => {
-  assert.equal(acquisitionMsUtc('2026-07-16', '45'), Date.UTC(2026, 6, 16, 0, 45));
+  assert.equal(
+    acquisitionMsUtc('2026-07-16', '45'),
+    Date.UTC(2026, 6, 16, 0, 45),
+  );
 });
 
 test('acquisitionMsUtc: "0" = midnight UTC; garbage → NaN', () => {
-  assert.equal(acquisitionMsUtc('2026-07-16', '0'), Date.UTC(2026, 6, 16, 0, 0));
+  assert.equal(
+    acquisitionMsUtc('2026-07-16', '0'),
+    Date.UTC(2026, 6, 16, 0, 0),
+  );
   assert.ok(Number.isNaN(acquisitionMsUtc('not-a-date', '1006')));
   assert.ok(Number.isNaN(acquisitionMsUtc('2026-07-16', 'xx')));
 });
@@ -118,7 +128,12 @@ test('filterTrailing24h: window is [now − 24 h, now + 2 h] inclusive', () => {
   const kept = filterTrailing24h(records, now);
   assert.deepEqual(
     kept.map((r) => `${r.acqDate} ${r.acqTime}`),
-    ['2026-07-15 1200', '2026-07-15 1201', '2026-07-16 1130', '2026-07-16 1400']
+    [
+      '2026-07-15 1200',
+      '2026-07-15 1201',
+      '2026-07-16 1130',
+      '2026-07-16 1400',
+    ],
   );
 });
 

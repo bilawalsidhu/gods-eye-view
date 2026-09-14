@@ -148,6 +148,7 @@ test('doctor reads the dotenv ladder without requiring Vite to be installed', ()
 test('doctor describes the credential ladder without exposing values', () => {
   const credentials = {
     GOOGLE_MAPS_API_KEY: { configured: false },
+    GOOGLE_MAPS_SERVER_API_KEY: { configured: false },
     CESIUM_ION_TOKEN: { configured: true, source: 'environment' },
     OPENAI_API_KEY: { configured: true, source: 'dotenv files' },
     AISSTREAM_API_KEY: { configured: false },
@@ -191,6 +192,7 @@ test('doctor describes the credential ladder without exposing values', () => {
 test('doctor sends Keychain-backed reports to dev-fresh and describes OpenSky as presence only', () => {
   const credentials = Object.fromEntries([
     'GOOGLE_MAPS_API_KEY',
+    'GOOGLE_MAPS_SERVER_API_KEY',
     'CESIUM_ION_TOKEN',
     'OPENAI_API_KEY',
     'AISSTREAM_API_KEY',
@@ -222,6 +224,7 @@ test('doctor sends Keychain-backed reports to dev-fresh and describes OpenSky as
 test('doctor never calls a dependency-missing setup ready', () => {
   const credentials = Object.fromEntries([
     'GOOGLE_MAPS_API_KEY',
+    'GOOGLE_MAPS_SERVER_API_KEY',
     'CESIUM_ION_TOKEN',
     'OPENAI_API_KEY',
     'AISSTREAM_API_KEY',

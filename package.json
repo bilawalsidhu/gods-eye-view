@@ -2,7 +2,7 @@
   "name": "gods-eye-view",
   "private": true,
   "version": "0.1.1",
-  "description": "A real-time intelligence console for planet Earth — photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
+  "description": "A real-time intelligence console for planet Earth \u2014 photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
   "type": "module",
   "license": "MIT",
   "author": "Bilawal Sidhu",
@@ -33,6 +33,8 @@
   ],
   "scripts": {
     "doctor": "node scripts/setup-doctor.mjs",
+    "format": "node scripts/format.mjs --write",
+    "format:check": "node scripts/format.mjs --check",
     "dev": "vite",
     "dev:secure": "./scripts/dev-secure.sh",
     "opensky:import": "./scripts/opensky-import-client.sh",
@@ -40,7 +42,8 @@
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
-    "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs"
+    "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
+    "check:boundaries": "node scripts/check-package-boundaries.mjs"
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",
@@ -51,10 +54,119 @@
     "satellite.js": "^6.0.2"
   },
   "devDependencies": {
-    "puppeteer": "^24.37.5",
-    "sharp": "^0.34.5",
+    "prettier": "3.9.6",
+    "puppeteer": "^25.10.0",
+    "sharp": "^0.35.4",
     "vite": "^6.0.0",
     "vite-plugin-cesium": "^1.2.23",
     "ws": "^8.21.0"
+  },
+  "exports": {
+    "./infrastructure": "./src/data/infrastructure.js",
+    "./infrastructure/geojson": "./src/data/localGeojsonCore.js",
+    "./infrastructure/lod": "./src/data/localGeojsonLod.js",
+    "./application": "./src/app/application.js",
+    "./application/viewer": "./src/app/viewer.js",
+    "./build/vite": {
+      "node": "./build/vite.js"
+    },
+    "./server/providers/live": {
+      "node": "./server/providers/live.js"
+    },
+    "./sources/adsb-lol": "./src/data/adsbLolFallback.js",
+    "./server/providers/places": {
+      "node": "./server/providers/places.js"
+    },
+    "./sources/places": "./src/data/placeProviderPayloads.js",
+    "./server/providers/space": {
+      "node": "./server/providers/space.js"
+    },
+    "./sources/space": "./src/data/spaceProviderRequests.js",
+    "./server/providers/terrain": {
+      "node": "./server/providers/terrain.js"
+    },
+    "./sources/terrain": "./src/data/terrainHeightsProxy.js",
+    "./server/providers/traffic": {
+      "node": "./server/providers/traffic.js"
+    },
+    "./sources/traffic": "./src/data/tomtomTiles.js",
+    "./server/providers/firms": {
+      "node": "./server/providers/firms.js"
+    },
+    "./server/providers/gbfs": {
+      "node": "./server/providers/gbfs.js"
+    },
+    "./sources/gbfs": "./src/data/gbfsSource.js",
+    "./server/providers/cctv": {
+      "node": "./server/providers/cctv.js"
+    },
+    "./server/providers/radio": {
+      "node": "./server/providers/radio.js"
+    },
+    "./server/providers/overpass": {
+      "node": "./server/providers/overpass.js"
+    },
+    "./server/providers/military-installations": {
+      "node": "./server/providers/military-installations.js"
+    },
+    "./server/providers/regional": {
+      "node": "./server/providers/regional.js"
+    },
+    "./server/providers/openai": {
+      "node": "./server/providers/openai.js"
+    },
+    "./server/standalone/key-setup": {
+      "node": "./server/standalone/key-setup.js"
+    },
+    "./search": "./src/search/index.js",
+    "./ui/panels": "./src/ui/panelDisclosure.js",
+    "./ui/surfaces": "./src/ui/surfaceKeyboard.js",
+    "./ui/layout": "./src/ui/panelRails.js",
+    "./ui/input": "./src/ui/visualInput.js",
+    "./ui/display": "./src/ui/displayControls.js",
+    "./ui/effects": "./src/ui/effects.js",
+    "./ui/effects/bloom": "./src/bloom.js",
+    "./ui/maps": "./src/ui/mapSource.js",
+    "./ui/layers": "./src/ui/layers.js",
+    "./ui/layers/feedback": "./src/loadingFeedback.js",
+    "./ui/location": "./src/ui/location.js",
+    "./ui/radio": "./src/ui/radio.js",
+    "./ui/cctv": "./src/ui/cctv.js",
+    "./ui/context": "./src/ui/context.js",
+    "./ui/context/policy": "./src/contextModePolicy.js",
+    "./ui/cockpit": "./src/ui/cockpit.js",
+    "./ui/cockpit/math": "./src/cockpitMath.js",
+    "./ui/cockpit/layout": "./src/cockpitUtilityLayout.js",
+    "./ui/cockpit/vision": "./src/cockpitVisionPolicy.js",
+    "./ui/scenes": "./src/ui/scenes.js",
+    "./ui/shell": "./src/ui/applicationShell.js",
+    "./ui/styles": "./src/ui/styles.js",
+    "./scenes": "./src/scenes/director.js",
+    "./sources/live": "./src/sources/live/index.js",
+    "./layers/flights": "./src/layers/flights/index.js",
+    "./layers/military": "./src/layers/military/index.js",
+    "./aircraft": "./src/layers/aircraft/index.js",
+    "./layers/vessels": "./src/layers/vessels/index.js",
+    "./layers/earthquakes": "./src/layers/earthquakes/index.js",
+    "./layers/firms": "./src/layers/firms/index.js",
+    "./layers/satellites": "./src/layers/satellites/index.js",
+    "./layers/launches": "./src/layers/launches/index.js",
+    "./layers/installations": "./src/layers/installations/index.js",
+    "./layers/awareness": "./src/layers/awareness/index.js",
+    "./layers/traffic": "./src/layers/traffic/index.js",
+    "./layers/bikeshare": "./src/layers/bikeshare/index.js",
+    "./layers/cctv": "./src/layers/cctv/index.js",
+    "./layers/alpr": "./src/layers/alpr/index.js",
+    "./layers/radio": "./src/layers/radio/index.js",
+    "./layers/submarine-cables": "./src/layers/submarineCables/index.js",
+    "./sources/bundled-cables": "./src/layers/submarineCables/bundledSource.js",
+    "./geography/natural-earth": "./src/data/naturalEarthRegions.js",
+    "./geography/neighborhoods": "./src/data/neighborhoodPolygons.js",
+    "./maps/controller": "./src/maps/controller.js",
+    "./maps/catalog": "./src/maps/catalog.js",
+    "./maps/imagery": "./src/maps/imagery.js",
+    "./maps/terrain": "./src/maps/terrain.js",
+    "./maps/3d": "./src/maps/google3d.js",
+    "./maps/defaults": "./src/maps/defaultSources.js"
   }
 }

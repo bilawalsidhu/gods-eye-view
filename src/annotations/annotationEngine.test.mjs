@@ -1,3 +1,4 @@
+import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 // Voice-annotation resilience contract tests — pure logic, no network, no browser.
 //
 // Locks the 2026-07-21 field-test fixes:
@@ -385,7 +386,7 @@ test('targetKey: empty / absent targets stay null (coord and pixel specs never p
   assert.equal(normalizeTargetKey(undefined), null);
 });
 
-test('outline upgrade updates the rendered element in place without remove/add', async (t) => {
+test('outline upgrade updates the rendered element in place without remove/add', { timeout: 5000 }, async (t) => {
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
   const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
   const originalWindow = globalThis.window;
@@ -466,7 +467,7 @@ test('outline upgrade updates the rendered element in place without remove/add',
     sync() {},
   };
   const viewer = {};
-  const engine = createAnnotationEngine({ viewer, renderer });
+  const engine = createAnnotationEngine({ viewer, renderer, placeSearch: createStandalonePlaceSearch({ resolveApiKey: () => 'unit-test-key' }) });
   const upgraded = new Promise((resolve) => engine.onOutlineEvent(resolve));
 
   const result = await engine.annotate([{
@@ -667,4 +668,45 @@ test('duplicate-replacement: a throw AFTER partial renderer state leaves nothing
   ]);
   assert.equal(retry.drawn, 1);
   assert.equal(live.size, 1, 'the recoloured mark redraws once, with no orphan underneath');
+});
+
+test('destroy releases the renderer and prevents subsequent annotation work', async (t) => {
+  installAnimationFrameStubs(t);
+  const { renderer, calls } = fakeRenderer();
+  let destroyed = 0;
+  renderer.destroy = () => { destroyed++; };
+  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  const drawn = await engine.annotate([{ type: 'pin', longitude: -97.74, latitude: 30.27 }]);
+  assert.equal(drawn.drawn, 1);
+  engine.destroy();
+  const additions = calls.add;
+  const result = await engine.annotate([{ type: 'pin', target: 'Must not resolve' }]);
+  assert.equal(result.error, 'destroyed');
+  assert.equal(calls.add, additions);
+  assert.equal(engine.count(), 0);
+  engine.destroy();
+  assert.equal(destroyed, 1);
+  assert.ok(!getRenderGovernorDiagnostics().holds.includes('annotations'));
+});
+
+test('a late annotation resolver cannot redraw after destruction', async (t) => {
+  installAnimationFrameStubs(t);
+  const { renderer, calls } = fakeRenderer();
+  renderer.destroy = () => {};
+  let release;
+  let signal;
+  const engine = createAnnotationEngine({
+    viewer: {}, renderer,
+    resolveTarget: (options) => {
+      signal = options.signal;
+      return new Promise((resolve) => { release = resolve; });
+    },
+  });
+  const pending = engine.annotate([{ type: 'pin', target: 'Pending place' }]);
+  engine.destroy();
+  assert.equal(signal.aborted, true);
+  release({ lon: -97.74, lat: 30.27 });
+  await pending;
+  assert.equal(calls.add, 0);
+  assert.equal(engine.count(), 0);
 });
