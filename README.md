@@ -264,7 +264,7 @@ Twenty-eight tools, four jobs — the commands below come straight from the prod
 
 ## 🛰️ What's on the Globe
 
-Thirteen layers and map sources. **Eleven have a keyless path.** Some offer additional capabilities with a provider key. (🟢 no key · 🟡 free key · 🔴 metered.)
+Fifteen layers and map sources. **Thirteen have a keyless path.** Some offer additional capabilities with a provider key. (🟢 no key · 🟡 free key · 🔴 metered.)
 
 | Layer | What you get | Source | Auth |
 |-------|--------------|--------|------|
@@ -281,6 +281,8 @@ Thirteen layers and map sources. **Eleven have a keyless path.** Some offer addi
 | 🔥 **Active Fires** | Live NASA FIRMS detections, trailing 24h | NASA FIRMS | 🟡 |
 | 🚀 **Space Missions** | Rolling 30-day launches with payload, stage, and recovery detail | Launch Library 2 | 🟢 (🟡 optional token raises the allowance) |
 | 🎖️ **Mapped Installations** | Viewport-bounded military-site context from community mapping — incomplete by nature, and labeled that way | OpenStreetMap | 🟢 |
+| 🌊 **Ocean Conditions** | ~900 NDBC buoys — waves, wind, SST, pressure — plus marine forecast lines, and a person-in-water drift ensemble on any ocean click | NOAA NDBC · Open-Meteo Marine | 🟢 |
+| 🌀 **Ocean Currents** | The surface-current field itself, animated: HF radar at 1–6 km where the network reaches, the HYCOM global forecast everywhere else (0.25° altimetry as fallback), each labeled with its age, physics and coverage | IOOS HF radar · US Navy HYCOM · NOAA CoastWatch | 🟢 |
 
 **The basemap ladder — what each tier buys you:**
 

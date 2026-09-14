@@ -182,17 +182,24 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'fly_to_location',
     'select_nearest_aircraft',
     'set_map_stack',
+    // ALPR and the ocean layers extend the two layer enums; the ocean layers
+    // also extend analyst_query. Those three are excluded from the digest.
+    'set_layer_visibility',
+    'show_data_layers_menu',
+    'analyst_query',
   ]);
   const unchanged = realtimeTools()
     .filter((tool) => !TOUCHED.has(tool.name))
     .sort((a, b) => a.name.localeCompare(b.name));
-  assert.equal(unchanged.length, 21);
+  assert.equal(unchanged.length, 18);
   const digest = createHash('sha256')
     .update(JSON.stringify(unchanged))
     .digest('hex')
     .slice(0, 16);
-  // ALPR intentionally extends the two layer enums; retain the complete pin.
-  assert.equal(digest, '6963175a0c9a76de', 'an unchanged Realtime tool definition drifted');
+  // Digest of the 18 tools neither ALPR nor the ocean layers touch. It is
+  // unchanged from the pre-ALPR ocean branch, which is the evidence that the
+  // upstream merge (v0.1.1 → 2026-09-13 main) moved none of them.
+  assert.equal(digest, 'b11a836daed7875c', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {

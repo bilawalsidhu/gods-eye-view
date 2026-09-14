@@ -9,6 +9,7 @@ import { militaryInstallationsProxy } from './military-installations.js';
 import { regionalBriefProxy } from './regional/briefing.js';
 import { weatherEffectsProxy } from './regional/weather-effects.js';
 import { cctvProxy } from './cctv.js';
+import { oceanProxy } from './ocean.js';
 import { defaultSourceRoot } from './common/source-root.js';
 import { radioBrowserProxy } from './radio.js';
 import { gbfsProxy } from './gbfs.js';
@@ -33,6 +34,7 @@ function localProviderPlugins() {
     militaryInstallationsProxy(),
     regionalBriefProxy(),
     weatherEffectsProxy(),
+    oceanProxy(),
     cctvProxy({ sourceRoot: defaultSourceRoot }),
     radioBrowserProxy(),
     gbfsProxy(),
@@ -87,3 +89,17 @@ export { validMilitaryInstallationBox } from './military-installations/query.js'
 export { militaryInstallationFailureReason } from './military-installations/query.js';
 export { validRegionalPoint } from './regional/query.js';
 export { regionalBriefHasAnySource } from './regional/briefing.js';
+export {
+  normalizeOceanObs,
+  buildMarineGridAxes,
+  buildMarineGridParams,
+  marineHoursToMs,
+  normalizeMarineGridUpstream,
+  fetchOceanObs,
+  buildEtopoBox,
+  normalizeEtopoUpstream,
+  resolveServedAxes,
+  oceanSeparationM,
+  georeferenceMarineGrid,
+  oceanProxy,
+} from './ocean.js';

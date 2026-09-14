@@ -660,11 +660,17 @@ test('the voice TOOL SCHEMA matches the pinned release — the mission mapping i
   // Canonical serialization pins every tool name, description, property and
   // ordering while allowing source formatting. Derived from the unchanged
   // release schema before formatting (the previous source-byte pin passed).
+  //
+  // Re-pinned 2026-09-13: the ocean layers DELIBERATELY extend the same two
+  // layer menus (ocean-conditions, ocean-field) and analyst_query's layer enum
+  // and filter-field description (ocean-conditions) over the 26,208-byte ALPR
+  // pin (+424 B). The guarded claim is unchanged: first-run missions ride
+  // EXISTING tools, and any NEW drift from this recorded schema fails here.
   const block = JSON.stringify(GEV_REALTIME_TOOLS);
-  assert.equal(block.length, 26208, 'serialized tool schema length drifted');
+  assert.equal(block.length, 26632, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '135d4ec66239777da34a8476cdf8348574421d7afd2e981cc3490909a5bc8686',
+    '48c09ab813efcb81a191bbad4f4a0a1ad0f2d648ae18d3f402223fda090bbc4c',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');

@@ -38,6 +38,11 @@ remain subject to their own licenses and terms. Notably:
     Open Database License (ODbL) 1.0 — attribution + share-alike on the data.
   - NASA FIRMS active-fire snapshot: CC0 / U.S. public domain (citation
     requested).
+  - GSHHG land/sea mask (src/data/local_data/gshhg_mask/): LGPL-3.0 — a
+    derived raster of GSHHG v2.3.7 shoreline data (Wessel & Smith), which is
+    LGPL-licensed, so the derived work keeps those terms. Attribution
+    required; the regeneration script is committed at
+    scripts/build-land-sea-mask.mjs.
 
 Live sources (Google Maps, OpenSky, adsb.lol, AISStream, CelesTrak, USGS,
 OSM Overpass, City of Austin, GBFS) are fetched at runtime under each

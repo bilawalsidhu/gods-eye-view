@@ -11,7 +11,7 @@ import flightsLayer from './flights.js';
 import aisLiveVesselsLayer from './aisLiveVessels.js';
 import { createFirmsHeatmapLayer } from './firmsHeatmap.js';
 
-const ORDER = ['cctv', 'firms', 'bikeshare', 'ais', 'military', 'flights'];
+const ORDER = ['cctv', 'firms', 'bikeshare', 'ocean-drift', 'ais', 'military', 'flights'];
 
 function makePrimitives(initial = []) {
   return {
@@ -43,13 +43,14 @@ test('restoreSpriteOrder raises live collections bottom-to-top and skips destroy
     collections.cctv,
     collections.bikeshare,
     collections.military,
+    collections['ocean-drift'],
   ]);
 
   restoreSpriteOrder({ scene: { primitives } });
 
-  assert.deepEqual(primitives.calls, ['cctv', 'bikeshare', 'ais', 'military', 'flights']);
+  assert.deepEqual(primitives.calls, ['cctv', 'bikeshare', 'ocean-drift', 'ais', 'military', 'flights']);
   assert.deepEqual(primitives.items.map((item) => item.id), [
-    'cctv', 'bikeshare', 'ais', 'military', 'flights',
+    'cctv', 'bikeshare', 'ocean-drift', 'ais', 'military', 'flights',
   ]);
 
   for (const id of ORDER) unregisterSpriteCollection(id);

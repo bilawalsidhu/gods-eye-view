@@ -30,6 +30,8 @@ export function createBrowserViteConfig({
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
     },
+    // The bundled land/sea mask ships as a raw .bin asset (url import).
+    assetsInclude: ['**/*.bin'],
     build: { chunkSizeWarningLimit: 1500 },
   };
 }

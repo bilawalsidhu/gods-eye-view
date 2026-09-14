@@ -1,5 +1,46 @@
 # God's Eye View Current State
 
+> **2026-09-01 — Ocean Currents field** (`src/data/oceanField.js`,
+> `src/data/oceanFieldMath.js`, `src/server/ocean/*`, `/api/ocean/field`,
+> layer id `ocean-field`, share token `n`). The surface-current field is now
+> **drawn**, as nullschool-style animated streaklines on a 2-D canvas layered
+> over the globe (`#ocean-field-canvas`, z-index 2, below `#world-overlay-root`).
+>
+> **Why a canvas and a raster.** Particles are advected in SCREEN space:
+> unprojecting 4,000 particles per frame is unaffordable, so the layer rebuilds
+> a coarse screen-space velocity raster (one node per 16 px) whenever the camera
+> settles, each node holding the screen displacement of one second of the local
+> current. Particles bilinearly interpolate that raster. A cell touching any
+> no-data node is refused, so a particle at the edge of coverage is retired
+> rather than advected on a half-invented velocity.
+>
+> **Two tiers, always named on screen.** `/api/ocean/field` analyses IOOS
+> HF-radar totals (1–6 km, hourly) through QC gates and two-pass Barnes where
+> the network reaches, and fills the rest from the **HYCOM ESPC-D-V02** global
+> forecast (0.04°×0.08°, 3-hourly, carries tides and wind drift), falling back
+> to NOAA CoastWatch's blended geostrophic 0.25° analysis when HYCOM is
+> unreachable. Measured live 2026-09-01 over a 0.6° box off Monterey:
+> 629 QC-passing vectors, holdout RMSE **0.069 m/s**, 99.9% coverage on a 72×57
+> lattice at ~0.95 km. The legend renders from `provenance` and distinguishes
+> `OBSERVED` (radar, hours old) from `MODELED` — naming which global product
+> served and what physics it carries, since the two fills are not equivalent.
+>
+> **Coverage is measured over water, not over the view** (`waterCells.js`,
+> using the bundled GSHHG mask). Counting land against a coastal analysis
+> demoted exactly the views HF radar exists for: the same radar hour scored 20%
+> over a 1°×1° box centred on Monterey Bay and 99.9% over a box moved offshore.
+> Land cells are blanked rather than drawn — Barnes extrapolates up to 3L.
+>
+> **Three drift defects fixed alongside**, because the field shares the forcing
+> pipeline: the marine grid is georeferenced to the coordinates Open-Meteo
+> **served** rather than requested (3.82 km median / 3.87 km max over the
+> Monterey grid, bounded by the 5.94 km cell half-diagonal at 36.8°N, worth
+> 1.315 km on a 10.2 km 24 h drift) — a separate population, the nodes upstream
+> answered with a *different* cell's water because the request landed on land,
+> was observed up to 22.5 km away and is now **dropped** rather than
+> georeferenced at all; `forecast_days` now covers the 48 h
+> horizon the panel offers, and time clamping is reported separately from value
+> gaps; and overlapping `start()` calls no longer leak a collection and a panel.
 The optional **ALPR Cameras** layer shows community-mapped OpenStreetMap locations,
 not camera footage or plate records. City-scale queries use the existing Overpass
 provider, with capped results, retry, cached-data and incomplete-coverage notices.
@@ -2291,6 +2332,7 @@ its criteria cannot be silently ignored.
 | CCTV | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW Open Data + Street View fallback | `src/data/cctv.js` | `/api/cctv` | 10s (active) |
 | Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
 | Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
+| Ocean Conditions 🌊 | NOAA NDBC bulk observations + Open-Meteo Marine forecasts | `src/data/oceanConditions.js` | `/api/ocean/obs`, `/api/ocean/marine`, `/api/ocean/marine-grid` | 10 min |
 | Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Dams ▰ | OpenInfraMap/OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Submarine Cables ◠ | TeleGeography public map (bundled) | `src/data/telegeographySubmarineCables.js` | — | static |
@@ -2973,6 +3015,63 @@ are omitted rather than framing the wrong part of the globe.
   pathological field and 5,200-object normal field without relaxing budgets.
 - `src/data/detectionDraw.js` performs the batched, DPI-crisp canvas drawing for tier-colored labels, corner brackets, callouts, and distance-scaled tracked boxes. Unit tests cover label measurement and draw geometry.
 - `src/data/trackedReadout.js` publishes a protected shared-host callout above tracked aircraft and satellites or selected mapped installations. It reads only each layer's cached display position—never a fresh entity position evaluation—preventing readout jitter against the rendered target. AIS selection remains in the vessel source's protected card path.
+
+### Ocean Conditions + Drift Simulation (August 2026)
+
+- `ocean-conditions` renders ~900 NOAA NDBC stations from one server-cached
+  bulk feed (`/api/ocean/obs`, 10 min TTL, 60 min stale window, non-fatal
+  name join from `activestations.xml`) as static-geometry entities
+  color-banded by significant wave height; wave-reporting stations publish
+  ambient height labels through the shared overlay host. Cards show OBSERVED
+  station values with absent fields omitted, and append `FC`-prefixed
+  Open-Meteo Marine forecast lines (`/api/ocean/marine`, 0.1° cells) so
+  observation and forecast are never conflated. Clicking open water with
+  nothing selected drops an ocean-point forecast card; no usable marine data
+  renders `NO MARINE DATA` and suppresses the drift action (the MVP land/sea
+  mask). Analyst queries cover waveHeightM/wavePeriodS/windSpeedMs/gustMs/
+  sstC/pressureHpa. Share token `o`.
+- The `▶ DRIFT` chip (its own interactive overlay source beside the selected
+  card) runs a person-in-water leeway Monte Carlo: USCG taxonomy PIW-1
+  coefficients (Allen & Plourde 1999 / Allen 2005; Breivik & Allen 2008
+  formulation, citations in `src/sim/leeway.js`), 10⁴ particles, 24 h
+  forecast horizon, forced by a 5×5 × 0.5° Open-Meteo marine+wind grid
+  (`/api/ocean/marine-grid`, two multi-point upstream calls). The ensemble
+  runs in a worker (`src/sim/leeway.worker.mjs`), renders as a
+  `PointPrimitiveCollection` in the `ocean-drift` sprite slot, and scrubs
+  through a self-contained panel labeled `SIMULATED DRIFT ENSEMBLE — NOT A
+  SAR PRODUCT`. Forcing gaps are zero-filled and flagged `⚠ forcing gaps`;
+  forecast currents are coarse model output (no nearshore eddies, tides, or
+  Stokes drift), and the visualization makes no operational claim.
+- **Land/sea mask + beaching (August 2026).** A bundled global 1/8°
+  three-state GSHHG-derived raster (`src/data/local_data/gshhg_mask/`,
+  1.04 MB, loader `src/data/landSeaMask.js`) gates ocean-point clicks
+  synchronously: pure land → no card at all; pure water → card + DRIFT chip
+  before any fetch; coastal-mixed cells (~14 km) fall back to the live
+  marine-probe path so the coarse mask never lies. Drift particles beach:
+  the ensemble takes a land tester built from `/api/ocean/etopo` bathymetry
+  (NOAA ETOPO1 via CoastWatch ERDDAP, 2 arc-min stride over a ±1.5° box,
+  7-day cache, stale-forever; `z ≥ 0` ⇒ land) with the bundled bitmask as
+  fallback — a beached particle freezes at its last water position from
+  `beachedAtFrame` onward, recolors to slate (frame-derived, so scrubbing
+  back reverts), never resumes, and the scrub panel counts `⚓ N beached`.
+  Coastal bitmask cells never beach. The no-mask ensemble path is
+  bit-for-bit unchanged (regression-pinned). Mask regeneration:
+  `node scripts/build-land-sea-mask.mjs path/to/gshhs_i.b`.
+- **Drift numerics + parameters (August 2026).** Integration is classical
+  RK4 (four forcing samples per step, per-stage latitude metric;
+  convergence-pinned against a closed-form latitude-varying trajectory at
+  1e-9 where Euler misses by ~1e-3 deg). Per-step turbulent diffusion
+  (`sigmaTurbMs`, default 0.05 m/s) adds N(0, σ) velocity noise per
+  particle per step; particle 0 is a deterministic control track (no
+  scatter, no residuals, no crosswind, no jibe, no noise) whose RNG draws
+  are consumed-and-discarded so the perturbed streams stay bit-stable.
+  Backward mode integrates with negative dt over a forcing grid that now
+  includes `past_days=2`; results carry `meanEndLat/meanEndLon/spreadKm`.
+  The scrub panel exposes horizon (6/12/24/48 h; dt auto-derives 10/20 min
+  to hold ≤145 frames), particle count (≤25,000; 32 MB frame-buffer budget
+  asserted in `resolveDriftParams`), turbulence σ, direction, and RERUN
+  (same seed, merged params); a diagnostics line shows
+  `Δ km @ bearing · ± spread`.
 
 ### Not Currently in Runtime
 

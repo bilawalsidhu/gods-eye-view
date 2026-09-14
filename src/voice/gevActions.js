@@ -177,6 +177,22 @@ const LAYER_ALIASES = new Map([
   ['firms', 'local-firms'],
   ['fires', 'local-firms'],
   ['active fires', 'local-firms'],
+  ['ocean', 'ocean-conditions'],
+  ['ocean conditions', 'ocean-conditions'],
+  ['buoys', 'ocean-conditions'],
+  ['buoy', 'ocean-conditions'],
+  ['sea state', 'ocean-conditions'],
+  ['waves', 'ocean-conditions'],
+  ['marine', 'ocean-conditions'],
+  ['ndbc', 'ocean-conditions'],
+  // The current FIELD is a different layer from the buoy observations, and
+  // "ocean currents" resolved to the buoys because it had no aliases at all.
+  // Bare 'ocean' stays with ocean-conditions: it is the more general request.
+  ['ocean currents', 'ocean-field'],
+  ['ocean current', 'ocean-field'],
+  ['currents', 'ocean-field'],
+  ['current field', 'ocean-field'],
+  ['surface currents', 'ocean-field'],
   ['alpr', 'alpr-cameras'],
   ['alpr cameras', 'alpr-cameras'],
   ['flock cameras', 'alpr-cameras'],
