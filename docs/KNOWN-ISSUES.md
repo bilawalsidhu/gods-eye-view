@@ -42,6 +42,11 @@ Workaround:
   - `localStorage.removeItem('godsEyeView.v6.panelCollapsed.cctv-panel');`
   - `location.reload();`
 
+Deleting the key resets that panel to its default placement; it does not restore
+a saved position. The map-mode right rail ignores position keys from earlier
+versions, so a panel placed before the current version is already laid out from
+scratch.
+
 Related keys (current versions):
 - Panel positions: `godsEyeView.v8.panelPos.<panel-id>`
 - Panel collapsed state: `godsEyeView.v6.panelCollapsed.<panel-id>`
