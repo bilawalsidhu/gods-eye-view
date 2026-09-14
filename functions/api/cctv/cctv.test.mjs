@@ -16,6 +16,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { onRequest } from './[[path]].js';
+import { streetViewFallback } from '../../../src/data/cctvSources.js';
 
 const CCTV_SOURCES_JSON = JSON.stringify([
   {
@@ -293,6 +294,59 @@ test('an empty catalog still serves the contract shapes without upstream calls',
     assert.equal(res.headers.get('X-CCTV-Source'), 'synthetic');
     assert.match(await res.text(), /NO UPSTREAM CONFIGURED/);
     assert.equal(stub.calls.length, 0);
+  } finally {
+    stub.restore();
+  }
+});
+
+// ── Street View fallback input clamps (body-cap/bbox-clamp sweep) ──────────
+// streetViewFallback is shared by both runtimes; out-of-range or hostile
+// inputs must never become a Google quota call.
+test('Street View fallback rejects off-planet coordinates without fetching', async () => {
+  const stub = stubFetch(() => { throw new Error('must not fetch'); });
+  try {
+    for (const coords of [
+      { lat: 91, lon: 0 },
+      { lat: -91, lon: 0 },
+      { lat: 0, lon: 181 },
+      { lat: 0, lon: -181 },
+      { lat: Number.NaN, lon: 0 },
+    ]) {
+      const result = await streetViewFallback({
+        ...coords,
+        heading: 90,
+        fov: 90,
+        pitch: 0,
+        apiKey: 'test-key',
+      });
+      assert.equal(result, null, JSON.stringify(coords));
+    }
+    assert.equal(stub.calls.length, 0, 'no off-planet coordinate may reach Google');
+  } finally {
+    stub.restore();
+  }
+});
+
+test('Street View fallback normalizes heading and clamps fov/pitch into the upstream URL', async () => {
+  let captured;
+  const stub = stubFetch((url) => {
+    captured = url;
+    return Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'Content-Type': 'image/jpeg' } }));
+  });
+  try {
+    const result = await streetViewFallback({
+      lat: 30.2672,
+      lon: -97.7431,
+      heading: 405,
+      fov: 999,
+      pitch: -120,
+      apiKey: 'test-key',
+    });
+    assert.equal(result?.ok, true);
+    const params = new URL(captured).searchParams;
+    assert.equal(params.get('heading'), '45', 'heading wraps into [0, 360)');
+    assert.equal(params.get('fov'), '120', 'fov clamps to the Google max');
+    assert.equal(params.get('pitch'), '-40', 'pitch clamps to the Google min');
   } finally {
     stub.restore();
   }

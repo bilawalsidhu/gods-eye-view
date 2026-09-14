@@ -412,9 +412,19 @@ acting — the audit described upstream's tree):
       widget never initializes. Extract the middleware out of
       `vite.config.js` (issue #41) first so these are testable per-module.
       The `functions/api/**` review happened (sweep above): tomtom forwarder
-      replaced, firms/ais-live/token/debug-log hardened; remaining
-      functions need the body-cap/bbox-clamp treatment (see backlog item
-      on Overpass/military-installations).
+      replaced, firms/ais-live/token/debug-log hardened; the remaining
+      body-cap/bbox-clamp treatment is DONE (2026-09-13 sweep): overpass
+      (24 KB) / hud-summary (64 KB) / debug-log body caps and the
+      icao24/hex regex gates were already in place; the last gaps were
+      `/api/opensky` — which forwarded a raw `bbox=` passthrough no client
+      ever sent and fed unvalidated lat/lon strings into the upstream query
+      (now a validated, planet-clamped ~250 km camera box with the raw
+      passthrough removed; `buildOpenSkyStatesUrl` pinned by
+      `functions/api/opensky.test.mjs`) — and the shared Street View
+      fallback, which now range-checks coordinates and wraps/clamps
+      heading/fov/pitch before they reach Google (pinned in the CCTV
+      contract tests). Remaining request-body readers: none; upstream
+      response reads are bounded where the upstream is untrusted (GBFS).
 - [x] Split server-side Google key from the browser key (PR #110, issue #33):
       DONE 2026-09-13 — `resolveServerGoogleApiKey(env)` in the shared policy
       module reads `GOOGLE_MAPS_SERVER_API_KEY || GOOGLE_MAPS_API_KEY` (with

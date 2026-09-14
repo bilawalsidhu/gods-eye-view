@@ -1,36 +1,47 @@
 /**
  * Cloudflare Pages Function — /api/opensky
  * Proxies to OpenSky Network states API with optional Basic auth.
+ *
+ * Viewport scoping: the flights layer sends its camera position as
+ * `lat`/`lon`; the handler derives a ~250 km query box. Inputs are validated
+ * (finite, in range) and out-of-range/absent coordinates degrade to the
+ * global states fetch — the same shape the dev middleware serves. The
+ * former raw `bbox=lamax,lamin,lomin,romax` passthrough was removed: no
+ * client ever sent it, and it forwarded unvalidated strings into the
+ * upstream query string (the body-cap/bbox-clamp sweep, docs/PLAN.md
+ * Phase 7).
  */
+
+/** Camera-position coordinates quantize into this half-width query box (deg). */
+export const OPENSKY_BOX_HALF_DEG = 2.5;
+
+/**
+ * Build the states/all upstream query from validated request params.
+ * @param {URLSearchParams} searchParams the incoming request's query
+ * @returns {URL} the upstream URL (global box when inputs are absent/invalid)
+ */
+export function buildOpenSkyStatesUrl(searchParams) {
+  const url = new URL('https://opensky-network.org/api/states/all');
+  const lat = Number.parseFloat(searchParams.get('lat') ?? '');
+  const lon = Number.parseFloat(searchParams.get('lon') ?? '');
+  const validLat = Number.isFinite(lat) && lat >= -90 && lat <= 90;
+  const validLon = Number.isFinite(lon) && lon >= -180 && lon <= 180;
+  if (validLat && validLon) {
+    const halfDeg = OPENSKY_BOX_HALF_DEG;
+    url.searchParams.set('lamin', String(Math.max(-90, lat - halfDeg)));
+    url.searchParams.set('lamax', String(Math.min(90, lat + halfDeg)));
+    url.searchParams.set('lomin', String(Math.max(-180, lon - halfDeg)));
+    url.searchParams.set('romax', String(Math.min(180, lon + halfDeg)));
+  }
+  return url;
+}
 
 export async function onRequest({ request, env }) {
   if (request.method === 'OPTIONS') {
     return corsResponse();
   }
   try {
-    const url = new URL('https://opensky-network.org/api/states/all');
-    const reqUrl = new URL(request.url);
-
-    // Accept explicit bbox=lamax,lamin,lomin,romax
-    const bbox = reqUrl.searchParams.get('bbox');
-    if (bbox) {
-      const [lamax, lamin, lomin, romax] = bbox.split(',');
-      if (lamax) url.searchParams.set('lamax', lamax);
-      if (lamin) url.searchParams.set('lamin', lamin);
-      if (lomin) url.searchParams.set('lomin', lomin);
-      if (romax) url.searchParams.set('romax', romax);
-    } else {
-      // Accept lat/lon with implied radius — convert to ~250km bounding box
-      const lat = parseFloat(reqUrl.searchParams.get('lat') ?? '');
-      const lon = parseFloat(reqUrl.searchParams.get('lon') ?? '');
-      if (Number.isFinite(lat) && Number.isFinite(lon)) {
-        const halfDeg = 2.5; // ~250 km radius
-        url.searchParams.set('lamin', String(lat - halfDeg));
-        url.searchParams.set('lamax', String(lat + halfDeg));
-        url.searchParams.set('lomin', String(lon - halfDeg));
-        url.searchParams.set('romax', String(lon + halfDeg));
-      }
-    }
+    const url = buildOpenSkyStatesUrl(new URL(request.url).searchParams);
 
     const headers = {
       'User-Agent': 'gods-eye-view/1.0 (+https://github.com/bilawalsidhu/gods-eye-view)',
@@ -39,13 +50,10 @@ export async function onRequest({ request, env }) {
       headers['Authorization'] = `Basic ${btoa(`${env.OPENSKY_USERNAME}:${env.OPENSKY_PASSWORD}`)}`;
     }
 
-    console.log('[/api/opensky] fetching:', url.toString().substring(0, 100));
     const res = await fetch(url.toString(), { headers, signal: AbortSignal.timeout(15_000) });
-    console.log('[/api/opensky] upstream status:', res.status);
     return proxyResponse(res);
   } catch (err) {
-    console.error('[/api/opensky] error:', err.message, err.cause);
-    return errorResponse(`OpenSky proxy error: ${err.message}`, 500);
+    return errorResponse(`OpenSky proxy error: ${err?.message || 'upstream failed'}`, 500);
   }
 }
 

@@ -1044,12 +1044,16 @@ export async function streetViewFallback({ lat, lon, heading, fov, pitch, apiKey
   // a placeholder-configured deployment falls through to the synthetic frame
   // instead of requesting frames Google will only 400.
   const streetViewKey = resolveGoogleApiKey(apiKey);
-  if (!streetViewKey || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  // Coordinates must be finite AND on the planet — out-of-range requests just
+  // earn a Google 400 and a wasted quota call (bbox-clamp sweep, PLAN Phase 7).
+  if (!streetViewKey) return null;
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90) return null;
+  if (!Number.isFinite(lon) || lon < -180 || lon > 180) return null;
   try {
     const sv = new URL('https://maps.googleapis.com/maps/api/streetview');
     sv.searchParams.set('size', '960x540');
     sv.searchParams.set('location', `${lat},${lon}`);
-    sv.searchParams.set('heading', String(Number.isFinite(heading) ? heading : 0));
+    sv.searchParams.set('heading', String(Number.isFinite(heading) ? ((heading % 360) + 360) % 360 : 0));
     sv.searchParams.set('fov', String(Number.isFinite(fov) ? Math.max(20, Math.min(120, fov)) : 80));
     sv.searchParams.set('pitch', String(Number.isFinite(pitch) ? Math.max(-40, Math.min(20, pitch)) : 0));
     sv.searchParams.set('source', 'outdoor');
