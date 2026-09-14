@@ -2898,6 +2898,7 @@ silently demoting every later lookup for the session.
 - HUD `SUMMARY` readout requests a five-word intelligence-style summary from `/api/openai/hud-summary` (model `OPENAI_HUD_SUMMARY_MODEL`, default `gpt-5-nano`, minimal reasoning).
 - Input is the live basemap label context (place/street/nearby-place labels + enabled layers) — the model is instructed not to infer from coordinates.
 - Output is sanitized to exactly five words; falls back to the deterministic telemetry summary on error/timeout (5s abort); typewriter animation on update.
+- `HUD_SUMMARY_BASE_URL` (optional) routes the same request to any OpenAI-compatible `chat/completions` host (z.ai coding plan, a local proxy, Ollama); `HUD_SUMMARY_API_KEY` overrides `OPENAI_API_KEY` for that host. The system/user split carries the identical instructions. Unset, the `api.openai.com` Responses request is byte-identical to before. The doctor's `HUD:` line names the resolved host.
 
 ### Place-search providers
 
