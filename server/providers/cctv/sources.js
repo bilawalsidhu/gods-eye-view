@@ -1543,15 +1543,25 @@ export async function loadCalgarySourcesFromOpenData() {
       redirect: 'manual',
       signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
     });
+    // A response this loader will not read still owns its transport until the
+    // body is released, so every rejection path cancels before returning.
+    const discard = async () => {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return [];
+    };
     if (resp.status >= 300 && resp.status < 400) {
       console.warn(
         '[CCTV] Calgary catalog redirected; redirects are not followed',
       );
-      return [];
+      return discard();
     }
     if (!resp.ok) {
       console.warn('[CCTV] Calgary camera download failed:', resp.status);
-      return [];
+      return discard();
     }
     const rows = await readResponseJsonCapped(resp, CALGARY_MAX_CATALOG_BYTES);
     if (!Array.isArray(rows)) return [];

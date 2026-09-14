@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import {
   calgaryCameraId,
   calgaryCameraName,
@@ -16,7 +16,26 @@ import {
 } from '../../server/providers/cctv/constants.js';
 import { CAMERA_CODE_MAX_CHARS } from '../../server/providers/cctv/normalize.js';
 import { allocateSourceCap } from '../../server/providers/cctv/cap.js';
+import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
 import { directionToHeading } from './directionText.js';
+
+/**
+ * A response whose body is a live stream, plus a flag that flips when the
+ * stream is cancelled. A rejection path that returns without cancelling holds
+ * the transport open, so the flag is what the refusal tests actually assert.
+ */
+const streamingResponse = (init = {}) => {
+  const state = { cancelled: false };
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('['));
+    },
+    cancel() {
+      state.cancelled = true;
+    },
+  });
+  return { response: new Response(body, init), state };
+};
 
 /** One Open Calgary row, shaped like the live `k7p9-kppz` payload. */
 const row = (overrides = {}) => ({
@@ -178,14 +197,14 @@ test('the loader reads the keyless catalog and collapses duplicate ids', async (
   assert.equal(cameras[0].name, 'Bow Trail / 37 Street SW');
 });
 
-test('an upstream failure yields an empty pack, never a throw', async (t) => {
+test('an upstream failure yields an empty pack and releases the response', async (t) => {
   t.mock.method(console, 'warn', () => {});
-  t.mock.method(
-    globalThis,
-    'fetch',
-    async () => new Response('', { status: 503 }),
-  );
+  // A 503 can still arrive with a streaming body; returning without cancelling
+  // it would hold the connection until the socket times out.
+  const failed = streamingResponse({ status: 503 });
+  t.mock.method(globalThis, 'fetch', async () => failed.response);
   assert.deepEqual(await loadCalgarySourcesFromOpenData(), []);
+  assert.equal(failed.state.cancelled, true, 'the failed body is cancelled');
 
   t.mock.restoreAll();
   t.mock.method(console, 'warn', () => {});
@@ -209,17 +228,24 @@ test('the unselected label is the intersection, trimmed to the code width', () =
 
 test('the catalog fetch refuses redirects and oversized bodies', async (t) => {
   t.mock.method(console, 'warn', () => {});
-  // A redirect is never followed: the list host cannot be steered.
+  // A redirect is never followed: the list host cannot be steered. Its body is
+  // a live stream, so the test also proves the refusal releases the transport.
   const seen = [];
+  const redirected = streamingResponse({
+    status: 302,
+    headers: { location: 'https://evil.example/rows.json' },
+  });
   t.mock.method(globalThis, 'fetch', async (url, init) => {
     seen.push([String(url), init.redirect]);
-    return new Response(null, {
-      status: 302,
-      headers: { location: 'https://evil.example/rows.json' },
-    });
+    return redirected.response;
   });
   assert.deepEqual(await loadCalgarySourcesFromOpenData(), []);
   assert.deepEqual(seen, [[DEFAULT_CALGARY_ROWS_URL, 'manual']]);
+  assert.equal(
+    redirected.state.cancelled,
+    true,
+    'the redirect body is cancelled',
+  );
 
   // A body over the cap is refused rather than buffered.
   t.mock.restoreAll();
@@ -280,13 +306,84 @@ test('a reduced catalog cap thins every pack instead of dropping Calgary', () =>
   );
 });
 
-test('Calgary is a registered live pack with its own kill switch', () => {
-  const catalog = readFileSync(
-    new URL('../../server/providers/cctv/catalog.js', import.meta.url),
-    'utf8',
-  );
-  assert.match(catalog, /name: 'calgary'/);
-  assert.match(catalog, /envEnabled\('CCTV_CALGARY_ENABLED'\)/);
-  // The shipped ceiling is not raised to make room for this pack.
+/**
+ * Serve the Calgary catalog to the Calgary endpoint and an empty payload to
+ * every other pack, so one catalog refresh exercises the registration without
+ * reaching the network. Returns the URLs that were requested.
+ */
+const runCatalogWithMockedUpstreams = async (t) => {
+  const requested = [];
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    const href = String(url);
+    requested.push(href);
+    if (href.startsWith('https://data.calgary.ca/')) {
+      return Response.json([
+        row(),
+        row({
+          camera_url: { url: 'http://trafficcam.calgary.ca/loc86.jpg' },
+          camera_location: 'Stoney Trail / Deerfoot Trail SE',
+          point: { type: 'Point', coordinates: [-113.9766063, 50.9007257] },
+        }),
+      ]);
+    }
+    return Response.json([]);
+  });
+  // A source root with no curated catalogs or ground-height sidecar, so the
+  // file-based packs contribute nothing and only the live lanes are in play.
+  const sources = await createCctvCatalog({ sourceRoot: '/nonexistent' })();
+  return { requested, sources };
+};
+
+test('the Calgary lane is wired into the catalog and its loader runs', async (t) => {
+  const saved = { ...process.env };
+  try {
+    delete process.env.CCTV_SOURCES_FILE;
+    delete process.env.CCTV_SOURCES_JSON;
+    delete process.env.CCTV_CALGARY_ENABLED;
+    const { requested, sources } = await runCatalogWithMockedUpstreams(t);
+    assert.ok(
+      requested.includes(DEFAULT_CALGARY_ROWS_URL),
+      'the catalog refresh invokes the Calgary loader',
+    );
+    assert.deepEqual(
+      sources.filter((s) => s.cityId === 'calgary').map((s) => s.id),
+      ['calgary-142', 'calgary-86'],
+      'Calgary cameras reach the served catalog through the registered lane',
+    );
+  } finally {
+    for (const key of Object.keys(process.env)) {
+      if (!(key in saved)) delete process.env[key];
+    }
+    Object.assign(process.env, saved);
+  }
+});
+
+test('CCTV_CALGARY_ENABLED=0 keeps the lane from being loaded at all', async (t) => {
+  const saved = { ...process.env };
+  try {
+    delete process.env.CCTV_SOURCES_FILE;
+    delete process.env.CCTV_SOURCES_JSON;
+    process.env.CCTV_CALGARY_ENABLED = '0';
+    const { requested, sources } = await runCatalogWithMockedUpstreams(t);
+    assert.equal(
+      requested.includes(DEFAULT_CALGARY_ROWS_URL),
+      false,
+      'the disabled lane never reaches its upstream',
+    );
+    assert.deepEqual(
+      sources.filter((s) => s.cityId === 'calgary'),
+      [],
+    );
+  } finally {
+    for (const key of Object.keys(process.env)) {
+      if (!(key in saved)) delete process.env[key];
+    }
+    Object.assign(process.env, saved);
+  }
+});
+
+test('the shipped catalog ceiling is not raised to make room for this pack', () => {
   assert.equal(DEFAULT_CCTV_MAX_SOURCES, 4000);
 });
