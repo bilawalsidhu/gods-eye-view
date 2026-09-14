@@ -77,16 +77,16 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    * @returns {boolean}
    */
   function hasShippedFootprint(record) {
-    const camera = record?.camera;
-    const shipped = camera?.groundHeights;
-    if (!shipped || typeof shipped !== 'object' || !camera.servedPose)
-      return false;
+    const shipped = record?.camera?.groundHeights;
+    if (!shipped || typeof shipped !== 'object') return false;
     if (parts.ground.currentSurfaceRegime() !== 'google-3d') return false;
-    // Samples describe the pose as served; any manual calibration moves the
-    // footprint, so an edited camera falls back to its own DEM footprint.
-    if (!parts.calibration.isDefaultCalibration(camera.calibration))
-      return false;
-    return shipped.poseHash === poseHash(camera.servedPose);
+    // Samples describe the pose as served. Any calibration, client clamp or
+    // activation range clamp changes the rendered pose and its hash, and the
+    // camera then falls back to its own DEM footprint.
+    return (
+      Number.isFinite(shipped.mountGroundM) &&
+      shipped.poseHash === poseHash(footprintPose(record))
+    );
   }
 
   /**

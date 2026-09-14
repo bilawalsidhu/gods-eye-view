@@ -321,6 +321,9 @@ export function createCalibration({
       endPatch: (draggedRecord) => {
         const record = liveRecord(draggedRecord);
         if (!record) return;
+        // The drag changed the plane's footprint; resolve the ground under
+        // the released pose once (revision-guarded, cached proxy).
+        void parts.ground.resolveFootprintGround(record);
         if (record.calibrationAnchorDirty) {
           record.calibrationAnchorDirty = false;
           parts.ground.resolveCommittedGroundAnchor(record);

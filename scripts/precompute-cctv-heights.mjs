@@ -193,8 +193,14 @@ export async function sampleCell(
   cameras,
   sampler,
   now = () => new Date().toISOString(),
+  existing = null,
 ) {
+  // Seed with the prior entries so a resumed camera keeps every valid height
+  // it already has (mergeCameraSamples only replaces misses).
   const entries = Object.create(null);
+  for (const camera of cameras) {
+    if (existing?.[camera.id]) entries[camera.id] = existing[camera.id];
+  }
   let pending = cameras;
   for (const [index, size] of BATCH_SIZES.entries()) {
     const retry = [];
@@ -436,7 +442,12 @@ async function main() {
       };
       for (const cell of cells) {
         const cellStarted = Date.now();
-        const entries = await sampleCell(cell.cameras, sampler);
+        const entries = await sampleCell(
+          cell.cameras,
+          sampler,
+          undefined,
+          sidecar?.cameras,
+        );
         sidecar = mergeSidecar(sidecar, entries, new Date().toISOString());
         await writeSidecar(output, sidecar);
         const tally = counts(cell.cameras, entries);

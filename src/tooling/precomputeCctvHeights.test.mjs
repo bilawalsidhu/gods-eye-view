@@ -337,3 +337,29 @@ test('deadline rejects hung calls and passes successful or rejected operations t
   );
   await assert.rejects(withDeadline(new Promise(() => {}), 5), /timed out/);
 });
+
+test('a resumed camera keeps its valid heights when the retry only fails', async () => {
+  const prior = mergeCameraSamples(
+    pose,
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    undefined,
+    1,
+    't0',
+  );
+  const partial = {
+    ...prior,
+    supports: { ...prior.supports, tr: null },
+    misses: ['tr'],
+  };
+  const sampler = {
+    sample: async (batch) => batch.map(() => Array(10).fill(undefined)),
+    recycle: async () => {},
+  };
+  const entries = await sampleCell([{ id: 'cam', pose }], sampler, () => 't1', {
+    cam: partial,
+  });
+  assert.equal(entries.cam.status, 'ok');
+  assert.equal(entries.cam.mountGroundM, 1);
+  assert.equal(entries.cam.supports.bl, 2);
+  assert.deepEqual(entries.cam.misses, ['tr']);
+});
