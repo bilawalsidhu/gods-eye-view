@@ -274,9 +274,41 @@ Order of work, cheapest-first:
       wired. Needs a dense-catalog scene added to `profile-runtime.mjs`
       before it qualifies (same bar the FIRMS work met). SIMD only for
       splatting/inner loops that are already vectorizable.
-- [ ] Concurrency: audit every `await`-in-loop over large cohorts for
+- [x] Concurrency: audit every `await`-in-loop over large cohorts for
       parallelizable fan-out; verify the workers are actually parallel on the
       paths that matter (visibility, projection, label solve).
+      DONE 2026-09-13 — brace-tracked census of every loop containing `await`
+      in src/vite/functions (scripts excluded: sequential page-driving is
+      their job). Verdict: every runtime await-in-loop is sequential BY
+      DESIGN, and each says so in place — overpass/radio mirror failover
+      (first success wins; parallelizing would multiply upstream load),
+      annotationResolver best-first pivots (result N decides whether N+1 is
+      fetched at all), satellites dense create (chunked with explicit
+      setTimeout(0) yields), manager epoch chases/visibility guards/teardown
+      (short-circuit + deterministic order), director shot sequencing,
+      gevRealtime sibling tool calls, terrain-heights chunks (per-chunk
+      failure isolation + geoid fallback), FIRMS source loop (quota
+      courtesy), and the stream-read `for(;;)` readers (not fan-outs). The
+      ONE true large-cohort fan-out, the radio catalog broker's
+      `mapRadioConcurrent`, already runs a bounded pool (concurrency 3).
+      Worker verification found a REAL bug: both `aisVisibility.worker.js`
+      and `detectionProjection.worker.js` hand-rolled Cesium's
+      EllipsoidalOccluder with a dimensionally-broken "camera height" whose
+      threshold degenerates to ~0, inverting the predicate — `dot > 0` is
+      exactly the OCCLUDED hemisphere — so when a worker result was
+      consumed, near-side objects were hidden and over-the-horizon ones
+      drawn, contradicting the main-thread fallback they replace (the
+      consumer gates — `!doRotations && !cameraPosChanged`, first-frame
+      fallback — hid it in practice). Both workers now port Cesium's exact
+      scaled-space test (`isScaledSpacePointVisible`); pinned by
+      `src/workers/aisVisibility.worker.test.mjs` (including a sweep that
+      re-implements the Cesium reference independently and asserts
+      agreement across altitudes 2 km/500 km/5,000 km and latitudes) and
+      `src/workers/detectionProjection.worker.test.mjs` (row-major
+      view-projection layout, zeroed occluded/clip-rejected rows, AIR
+      reticle near/far plateaus + clamps, latest-requestId consumption).
+      Label solve is main-thread O(n) by design, cadence already pinned at
+      125 ms in `src/data/detectionHost.test.mjs`.
 
 ## Phase 6 — CI/CD, release, deploy (PARTIALLY DONE)
 

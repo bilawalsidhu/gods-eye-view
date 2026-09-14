@@ -36,10 +36,6 @@
 const WGS84_A = 6378137.0;
 const WGS84_F = 1 / 298.257223563;
 const WGS84_B = WGS84_A * (1 - WGS84_F);
-const WGS84_A2 = WGS84_A * WGS84_A;
-const WGS84_B2 = WGS84_B * WGS84_B;
-const WGS84_A2_INV = 1 / WGS84_A2;
-const WGS84_B2_INV = 1 / WGS84_B2;
 
 // Billboard scale-by-distance constants (must match detection.js)
 const BILL_NEAR = 1000;
@@ -66,40 +62,37 @@ function nearFarScale(dist, near, nearScale, far, farScale) {
 }
 
 /**
- * Cesium EllipsoidalOccluder.isPointVisible — pure JS reimplementation.
- * A point is visible if dot(normalize(cameraToPoint), downwardAtPoint) >
- * (cameraHeight / (cameraHeight + ellipsoidRadiiSquared.z))
+ * Cesium EllipsoidalOccluder.isPointVisible — exact port of the scaled-space
+ * horizon test (`isScaledSpacePointVisible`): divide all positions by the
+ * ellipsoid radii so the ellipsoid becomes the unit sphere, then test the
+ * camera→point ray against the horizon cone.
+ *
+ * History: an earlier port used `dot(dir, normal) > h/(h+B)` with a
+ * dimensionally-broken "camera height" that degenerated to `dot > 0` — the
+ * OCCLUDED hemisphere — inverting results versus the main-thread Cesium
+ * occluder (found 2026-09-13 by src/workers/detectionProjection.worker.test.mjs).
  */
-function computeSurfaceNormal(x, y, z) {
-  const nx = x * WGS84_A2_INV;
-  const ny = y * WGS84_A2_INV;
-  const nz = z * WGS84_B2_INV;
-  const mag = Math.sqrt(nx * nx + ny * ny + nz * nz);
-  return { nx: nx / mag, ny: ny / mag, nz: nz / mag };
-}
-
 function ellipsoidalIsPointVisible(camX, camY, camZ, px, py, pz) {
-  const dx = px - camX;
-  const dy = py - camY;
-  const dz = pz - camZ;
-  const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  if (dist === 0) return true;
+  const cvx = camX / WGS84_A;
+  const cvy = camY / WGS84_A;
+  const cvz = camZ / WGS84_B;
+  const ptx = px / WGS84_A;
+  const pty = py / WGS84_A;
+  const ptz = pz / WGS84_B;
 
-  const invDist = 1 / dist;
-  const dirX = dx * invDist;
-  const dirY = dy * invDist;
-  const dirZ = dz * invDist;
+  const vh = cvx * cvx + cvy * cvy + cvz * cvz - 1;
 
-  const { nx, ny, nz } = computeSurfaceNormal(px, py, pz);
-  const dot = dirX * nx + dirY * ny + dirZ * nz;
+  const vtx = ptx - cvx;
+  const vty = pty - cvy;
+  const vtz = ptz - cvz;
+  const vtDotVc = -(vtx * cvx + vty * cvy + vtz * cvz);
 
-  const { mag: camDist } = computeSurfaceNormal(camX, camY, camZ);
-  const cameraHeight = camDist - Math.sqrt(
-    (camX * camX / WGS84_A2) + (camY * camY / WGS84_A2) + (camZ * camZ / WGS84_B2)
-  );
-  const threshold = cameraHeight / (cameraHeight + WGS84_B);
+  const occluded = vh < 0
+    ? vtDotVc > 0
+    : vtDotVc > vh
+      && (vtDotVc * vtDotVc) / (vtx * vtx + vty * vty + vtz * vtz) > vh;
 
-  return dot > threshold;
+  return !occluded;
 }
 
 self.onmessage = (e) => {

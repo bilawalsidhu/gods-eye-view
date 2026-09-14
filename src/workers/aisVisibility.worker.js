@@ -20,66 +20,46 @@
 const WGS84_A = 6378137.0;        // equatorial radius
 const WGS84_F = 1 / 298.257223563; // flattening
 const WGS84_B = WGS84_A * (1 - WGS84_F); // polar radius
-const WGS84_A2 = WGS84_A * WGS84_A;
-const WGS84_B2 = WGS84_B * WGS84_B;
-const WGS84_A2_INV = 1 / WGS84_A2;
-const WGS84_B2_INV = 1 / WGS84_B2;
 
 /**
- * Compute the outward surface normal at a point on the WGS84 ellipsoid.
- * @param {number} x @param {number} y @param {number} z
- * @returns {{nx: number, ny: number, nz: number, mag: number}}
- */
-function computeSurfaceNormal(x, y, z) {
-  const nx = x * WGS84_A2_INV;
-  const ny = y * WGS84_A2_INV;
-  const nz = z * WGS84_B2_INV;
-  const mag = Math.sqrt(nx * nx + ny * ny + nz * nz);
-  return { nx: nx / mag, ny: ny / mag, nz: nz / mag, mag };
-}
-
-/**
- * EllipsoidalOccluder.isPointVisible — returns true if the point is above the horizon
- * as seen from the camera position.
+ * EllipsoidalOccluder.isPointVisible — exact port of Cesium's scaled-space
+ * horizon test (`isScaledSpacePointVisible`): divide all positions by the
+ * ellipsoid radii so the ellipsoid becomes the unit sphere, then a point is
+ * occluded iff the camera→point ray passes the horizon cone.
  *
- * From Cesium EllipsoidalOccluder.js:
- * A point is visible if dot(normalize(cameraToPoint), downwardAtPoint) >
- * (cameraHeight / (cameraHeight + ellipsoidRadiiSquared.z))
+ * History: an earlier port used `dot(dir, normal) > h/(h+B)` with a
+ * dimensionally-broken "camera height", which degenerated to `dot > 0` —
+ * the OCCLUDED hemisphere — so the worker returned exactly inverted results
+ * versus the main-thread Cesium occluder it was replacing (found 2026-09-13
+ * by src/workers/aisVisibility.worker.test.mjs).
  *
  * @param {number} camX @param {number} camY @param {number} camZ  — camera position
  * @param {number} px @param {number} py @param {number} pz        — surface position
  * @returns {boolean}
  */
 function isPointVisible(camX, camY, camZ, px, py, pz) {
-  // Camera to point vector
-  const dx = px - camX;
-  const dy = py - camY;
-  const dz = pz - camZ;
-  const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  if (dist === 0) return true; // camera at point — visible
+  // Scaled space: camera and point on/above the unit sphere.
+  const cvx = camX / WGS84_A;
+  const cvy = camY / WGS84_A;
+  const cvz = camZ / WGS84_B;
+  const ptx = px / WGS84_A;
+  const pty = py / WGS84_A;
+  const ptz = pz / WGS84_B;
 
-  const invDist = 1 / dist;
-  // Normalized direction from camera to point
-  const dirX = dx * invDist;
-  const dirY = dy * invDist;
-  const dirZ = dz * invDist;
+  // Horizon "distance to limb" in scaled space (≥ 0 for a camera above the surface).
+  const vh = cvx * cvx + cvy * cvy + cvz * cvz - 1;
 
-  // Surface normal at the point
-  const { nx, ny, nz } = computeSurfaceNormal(px, py, pz);
+  const vtx = ptx - cvx;
+  const vty = pty - cvy;
+  const vtz = ptz - cvz;
+  const vtDotVc = -(vtx * cvx + vty * cvy + vtz * cvz);
 
-  // Dot product — positive means point is "above" the local horizon
-  const dot = dirX * nx + dirY * ny + dirZ * nz;
+  const occluded = vh < 0
+    ? vtDotVc > 0 // camera below the surface: only the far hemisphere is hidden
+    : vtDotVc > vh
+      && (vtDotVc * vtDotVc) / (vtx * vtx + vty * vty + vtz * vtz) > vh;
 
-  // Camera height above ellipsoid at camera position
-  const { mag: camDist } = computeSurfaceNormal(camX, camY, camZ);
-  const cameraHeight = camDist - Math.sqrt(
-    (camX * camX / WGS84_A2) + (camY * camY / WGS84_A2) + (camZ * camZ / WGS84_B2)
-  );
-
-  // Visibility threshold from Cesium
-  const threshold = cameraHeight / (cameraHeight + WGS84_B);
-
-  return dot > threshold;
+  return !occluded;
 }
 
 self.onmessage = (e) => {
