@@ -177,4 +177,8 @@ export default {
   'scenes.status.actionFailed': 'Échec de l\'action de scène',
 
   'scenes.status.projectExported': 'Projet exporté',
+
+  'voice.tierNextSession': 'Prochaine session : {pendingId} — cette session reste sur {modelId}',
+  'voice.tierSwitchHint': 'Modèle vocal : {pendingId} — cliquez pour passer à {target} ; effectif à la prochaine session',
+  'voice.costTooltip': 'Coût de session estimé sur {modelId} — {responses} réponse(s). Avertit à {warn}, met fin à la session à {cap}.',
 };

@@ -469,4 +469,8 @@ export default {
   'weather.mixed': 'MIXED CONDITIONS',
 
   'missions.roster.keyboardHint': 'TAB PREVIEWS · ENTER / SPACE SELECTS',
+
+  'vessel.awaitingPositions': 'awaiting usable AIS positions…',
+  'vessel.awaitingFirstMessage': 'awaiting first AIS message…',
+  'missions.estDownrange': 'EST. DOWNRANGE',
 };

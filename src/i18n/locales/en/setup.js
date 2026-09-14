@@ -181,4 +181,8 @@ export default {
   'scenes.status.actionFailed': 'Scene action failed',
 
   'scenes.status.projectExported': 'Project exported',
+
+  'voice.tierNextSession': 'Next session: {pendingId} — this session stays on {modelId}',
+  'voice.tierSwitchHint': 'Voice model: {pendingId} — click to switch to {target}; applies next session',
+  'voice.costTooltip': 'Estimated session cost on {modelId} — {responses} response(s). Warns at {warn}, ends the session at {cap}.',
 };

@@ -130,4 +130,8 @@ export default {
   'scenes.status.actionFailed': 'La acción de escena falló',
 
   'scenes.status.projectExported': 'Proyecto exportado',
+
+  'voice.tierNextSession': 'Sesión siguiente: {pendingId} — esta sesión sigue en {modelId}',
+  'voice.tierSwitchHint': 'Modelo de voz: {pendingId} — toca para cambiar a {target}; se aplica en la próxima sesión',
+  'voice.costTooltip': 'Coste de sesión estimado en {modelId} — {responses} respuesta(s). Avisa a {warn} y cierra la sesión a {cap}.',
 };

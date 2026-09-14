@@ -1818,17 +1818,22 @@ export class GevRealtimeController {
       this.ui.tierButton.setAttribute('aria-pressed', isMini ? 'true' : 'false');
       const pendingId = resolveVoiceModel(pendingTier).id;
       this.ui.tierButton.title = this.isActive() && state.modelId !== pendingId
-        ? `Next session: ${pendingId} — this session stays on ${state.modelId}`
-        : `Voice model: ${pendingId} — click to switch to ${
-          isMini ? 'standard' : 'mini'
-        }; applies next session`;
+        ? t('setup.voice.tierNextSession', { pendingId, modelId: state.modelId })
+        : t('setup.voice.tierSwitchHint', {
+          pendingId,
+          target: isMini ? 'standard' : 'mini',
+        });
     }
     if (this.ui?.costValue) {
       this.ui.costValue.textContent = state.display;
       this.ui.costValue.dataset.level = state.level;
       this.ui.costValue.title =
-        `Estimated session cost on ${state.modelId} — ${state.responses} response(s). ` +
-        `Warns at ${formatCostUsd(state.warnUsd)}, ends the session at ${formatCostUsd(state.capUsd)}.`
+        t('setup.voice.costTooltip', {
+          modelId: state.modelId,
+          responses: state.responses,
+          warn: formatCostUsd(state.warnUsd),
+          cap: formatCostUsd(state.capUsd),
+        })
         + (state.note ? ` ${state.note}` : '');
     }
   }

@@ -445,4 +445,8 @@ export default {
   'weather.mixed': 'CONDICIONES MIXTAS',
 
   'missions.roster.keyboardHint': 'TAB VISTAS PREVIAS · INTRO / ESPACIO SELECCIONA',
+
+  'vessel.awaitingPositions': 'esperando posiciones AIS utilizables…',
+  'vessel.awaitingFirstMessage': 'esperando el primer mensaje AIS…',
+  'missions.estDownrange': 'DIST. ESTIMADA',
 };

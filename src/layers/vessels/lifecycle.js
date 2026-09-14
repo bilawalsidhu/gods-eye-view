@@ -60,8 +60,8 @@ export function createLifecycle({
       state.firstConnectPhase = 'unavailable';
       state.loadingLabel = '';
       state.error = state.lastMessageAt
-        ? 'awaiting usable AIS positions…'
-        : 'awaiting first AIS message…';
+        ? t('layers.vessel.awaitingPositions')
+        : t('layers.vessel.awaitingFirstMessage');
       state.stale = state.count > 0;
     }, delayMs);
   }
