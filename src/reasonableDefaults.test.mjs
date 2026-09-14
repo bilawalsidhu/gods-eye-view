@@ -1,3 +1,4 @@
+import { expandApplicationHtml } from '../build/application-html.js';
 // src/reasonableDefaults.test.mjs
 //
 // What the console looks like the FIRST time it opens — before any share link,
@@ -44,7 +45,7 @@ import { ShareLinkManager } from './sharelink.js';
 // Follow the UI wiring and its extracted preset definitions.
 const uiSource = fs.readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8')
   + '\n' + fs.readFileSync(new URL('./ui/visualPresets.js', import.meta.url), 'utf8');
-const indexHtml = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const indexHtml = expandApplicationHtml(fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
 const shareSource = fs.readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8');
 
 /** Slice ui.js between two literal anchors, so a pin reads one method, not the file. */
