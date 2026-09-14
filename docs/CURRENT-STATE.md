@@ -466,7 +466,9 @@ The existing declared media size ceiling remains 64 MiB.
 
 ## GBFS upstream bounds
 
-GBFS refuses upstream redirects and enforces its 5 MiB response cap while
+The station reader addresses the proxy as `/api/gbfs/<encoded feed URL>`; the
+feed address is read from the path, and a query-string form is refused with a
+400. GBFS refuses upstream redirects and enforces its 5 MiB response cap while
 streaming. The 12-second deadline includes reading the body, and rejected or
 stalled downloads are cancelled. Development and preview use the same handler.
 
