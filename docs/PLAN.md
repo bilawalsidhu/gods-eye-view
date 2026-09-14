@@ -543,9 +543,17 @@ acting — the audit described upstream's tree):
       (4/4 stable) plus a `checkSkip` path for Google-key-bound assertions.
       The macOS-only `--use-angle=metal` default that broke every `qa-*`
       script on Linux moved into `scripts/lib/webglLaunchArgs.mjs`.
-- [ ] Accessible-name invariant test (PR #216): every `<input>` in
-      `index.html` carries `aria-label`, `aria-labelledby`, or an associated
-      `<label>` — feeds Phase 4.
+- [x] Accessible-name invariant test (PR #216): DONE 2026-09-14 —
+      `src/inputAccessibleNames.test.mjs` extracts every form control in
+      `index.html` (17 inputs/selects) with a quote-aware tag parser
+      (multi-line tags like `radio-tuner-slider` parse correctly) and fails
+      unless each resolves an accessible name via aria-label,
+      aria-labelledby, `<label for>`, or a wrapping `<label>` (boolean
+      `hidden`/type=hidden controls are exempt — not in the accessibility
+      tree). A second test pins the verbatim census (control → naming
+      mechanism) so a mechanism swap shows in review. Complements the
+      runtime axe pass, which can't see controls added later without a
+      browser.
 - [ ] Panel viewport clamping + legacy localStorage key purge (PRs
       #215/#190; local tree is at layout `v6`/position `v8` and only
       notifies about `v6`).
