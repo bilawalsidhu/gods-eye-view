@@ -416,12 +416,39 @@ acting — the audit described upstream's tree):
   `#first-run-launcher` aria-allowed-role (aside+role=dialog → div).
   The landmark pass landed separately (see the Phase 4 axe entry): qa-a11y
   is now 0 violations in both states.
-- [ ] Security gate for key-bearing endpoints (PR #242, issues #16–#18,
-      #22–#24): REMAINING after the 2026-09-10 sweep — same-site request
-      gate for `/api/openai/hud-summary` and `/api/google/nearby-places`
-      (token + debug-log are done); default-on rate limiting for exposed
-      deployments (the opt-in `GEV_RATELIMIT_*` pattern exists); server-side
-      redaction/shape validation for debug-log beyond the nesting fix.
+- [x] Security gate for key-bearing endpoints (PR #242, issues #16–#18,
+      #22–#24): DONE 2026-09-13/14. All three limbs landed and verified
+      against this tree:
+  1. Same-site request gate on every cost-bearing endpoint — realtime
+     token + debug-log (2026-09-10 sweep) and, verified in place,
+     `/api/openai/hud-summary` (dev `vite/proxies/realtime.js` +
+     `functions/api/openai/hud-summary.js`) and `/api/google/nearby-places`
+     (dev `vite/proxies/google-places.js` both routes +
+     `functions/api/google/[[path]].js`). Origin check for POSTs,
+     `Sec-Fetch-Site` fallback for GETs, 403 on violation.
+  2. Default-ON rate limiting for exposed deployments — the Pages Functions
+     throttle per-IP with NO env configured
+     (`createDefaultOnRateLimiter`, 30/min for the OpenAI-cost trio token +
+     hud-summary + debug-log, 60/min for Google; global backstop 20×;
+     `GEV_RATELIMIT_*` overrides, `0` disables). Dev stays opt-in: the
+     localhost proxy serves the QA suites, and default throttles there
+     would 429 the app's own tests.
+  3. Server-side debug-log redaction/shape validation (2026-09-14): the
+     endpoint is unauthenticated, so the client's sanitizer pass is never
+     trusted. One worker-safe implementation
+     (`sanitizeDebugRecord` in `src/voice/realtimeSession.js`, deduped
+     onto by the client's `sanitizeDebugValue` so all three runtimes
+     redact identically) validates the body is a JSON object (else 400
+     `record must be a JSON object` in both runtimes), re-redacts
+     secret-like KEYS and credential-shaped string VALUES (OpenAI
+     sk-/sk-proj- keys, Bearer headers, client_secret, ek_ ephemeral keys
+     — including the escaped-JSON-embedding case the test surfaced — and
+     JWTs), and bounds the walk with depth (10), width (500 entries), and
+     string (50 k chars) caps that mark visibly instead of throwing on
+     hostile payloads. Pinned in `src/voice/realtimeSession.test.mjs`,
+     the Pages adapter tests, and a new dev-middleware adapter test
+     (`src/voice/realtimeProxy.test.mjs`) that drives the real registered
+     handler against the real file sink.
       Note the CSP trap PR #242 verified: Knockout
       inside `@cesium/widgets` needs `'unsafe-eval'` in `script-src` or the
       widget never initializes. Extract the middleware out of

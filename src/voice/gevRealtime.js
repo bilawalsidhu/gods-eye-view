@@ -10,6 +10,10 @@ import {
   resolveVoiceModel,
   serializeCostLimits,
 } from './voiceCost.js';
+// The debug-record redaction is SHARED with the server runtimes
+// (vite/proxies/realtime.js + functions/api/realtime/debug-log.js) so the
+// client pass and the server re-check can never drift apart.
+import { sanitizeDebugValue } from './realtimeSession.js';
 
 const TOKEN_URL = api.realtimeToken();
 const REALTIME_CALLS_URL = 'https://api.openai.com/v1/realtime/calls';
@@ -2145,43 +2149,6 @@ function postDebugLog(record) {
   } catch {
     // Debug logging must never affect voice control.
   }
-}
-
-function sanitizeDebugValue(value, depth = 0) {
-  if (depth > 10) return '[MaxDepth]';
-  if (value == null || typeof value === 'number' || typeof value === 'boolean') return value;
-  if (typeof value === 'string') return sanitizeDebugString(value);
-  if (Array.isArray(value)) return value.map((item) => sanitizeDebugValue(item, depth + 1));
-  if (typeof value !== 'object') return String(value);
-
-  const output = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (isSecretLikeKey(key)) {
-      output[key] = '[Redacted]';
-      continue;
-    }
-    output[key] = sanitizeDebugValue(item, depth + 1);
-  }
-  return output;
-}
-
-function sanitizeDebugString(value) {
-  if (value.startsWith('data:image/')) {
-    return `[Redacted image data URL, ${value.length} chars]`;
-  }
-  const redacted = value
-    .replace(/sk-(?:proj-)?[A-Za-z0-9_-]{20,}/g, '[Redacted OpenAI API key]')
-    .replace(/Bearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [Redacted]')
-    .replace(/"client_secret"\s*:\s*"[^"]+"/gi, '"client_secret":"[Redacted]"')
-    .replace(/"value"\s*:\s*"ek_[^"]+"/gi, '"value":"[Redacted ephemeral key]"');
-  const maxLength = 50000;
-  return redacted.length > maxLength
-    ? `${redacted.slice(0, maxLength)}...[Truncated ${redacted.length - maxLength} chars]`
-    : redacted;
-}
-
-function isSecretLikeKey(key) {
-  return /(?:api[_-]?key|authorization|bearer|client[_-]?secret|token|secret|password)/i.test(key);
 }
 
 async function captureViewportImage() {

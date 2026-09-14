@@ -8,7 +8,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT, OPENAI_REALTIME_CONTEXT_RETENTION_DEFAULT, OPENAI_REALTIME_CONTEXT_TOKENS_DEFAULT, OPENAI_REALTIME_MODEL_DEFAULT, OPENAI_REALTIME_MODEL_MINI_DEFAULT, OPENAI_REALTIME_REASONING_DEFAULT, OPENAI_REALTIME_VOICE_DEFAULT, buildRealtimeSessionConfig, extractOpenAiResponseText, toFiveWordHudSummary } from '../../src/voice/realtimeSession.js';
+import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT, OPENAI_REALTIME_CONTEXT_RETENTION_DEFAULT, OPENAI_REALTIME_CONTEXT_TOKENS_DEFAULT, OPENAI_REALTIME_MODEL_DEFAULT, OPENAI_REALTIME_MODEL_MINI_DEFAULT, OPENAI_REALTIME_REASONING_DEFAULT, OPENAI_REALTIME_VOICE_DEFAULT, buildRealtimeSessionConfig, extractOpenAiResponseText, sanitizeDebugRecord, toFiveWordHudSummary } from '../../src/voice/realtimeSession.js';
 import { clientKey, makeOptInRateLimiter, sameSiteViolation, sendSameSiteRejection } from './_shared.js';
 import { isKnownVoiceTier, resolveVoiceModel } from '../../src/voice/voiceCost.js';
 
@@ -138,7 +138,17 @@ export function openAiRealtimeProxy() {
         // GEV_RATELIMIT_OPENAI_PER_MIN). No-op when unset.
         if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
         const body = await readRequestBody(req, REALTIME_DEBUG_LOG_MAX_BYTES);
-        const record = JSON.parse(body || '{}');
+        // Server-side redaction + shape validation (Pages parity): the
+        // endpoint is unauthenticated, so the client's own sanitizer pass is
+        // never trusted — records are re-redacted here, and only a JSON
+        // object is a debug record at all.
+        const record = sanitizeDebugRecord(JSON.parse(body || 'null'));
+        if (!record) {
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: 'record must be a JSON object' }));
+          return;
+        }
         fs.mkdirSync(REALTIME_DEBUG_LOG_DIR, { recursive: true });
         // Nested under `record` (Pages parity): a spread would let a
         // client-supplied `loggedAt` override the server timestamp.

@@ -64,6 +64,46 @@ test('invalid JSON is rejected with the dev 400 shape', async () => {
   }
 });
 
+test('a valid-JSON non-object body is rejected: only objects are debug records', async () => {
+  const lines = [];
+  const original = console.log;
+  console.log = (line) => lines.push(line);
+  try {
+    for (const body of ['[1,2,3]', 'null', '42', '"spoof"']) {
+      const res = await onRequest(post(body));
+      assert.equal(res.status, 400, body);
+      assert.deepEqual(await res.json(), { error: 'record must be a JSON object' }, body);
+    }
+    assert.equal(lines.length, 0, 'nothing reaches the sink for a non-object record');
+  } finally {
+    console.log = original;
+  }
+});
+
+test('credential-bearing records are redacted server-side before the sink', async () => {
+  const lines = [];
+  const original = console.log;
+  console.log = (line) => lines.push(line);
+  try {
+    const res = await onRequest(post(JSON.stringify({
+      event: 'session.starting',
+      apiKey: 'sk-CCCCCCCCCCCCCCCCCCCCCCCCCCCC',
+      payload: {
+        note: 'Bearer supersecretvalue123',
+        innocuous: 'lat 30.2672',
+      },
+    })));
+    assert.equal(res.status, 204);
+    const line = lines[0];
+    assert.match(line, /"apiKey":"\[Redacted\]"/, 'secret-like KEY is replaced outright');
+    assert.match(line, /Bearer \[Redacted\]/, 'Bearer VALUE is replaced');
+    assert.match(line, /lat 30\.2672/, 'ordinary telemetry is untouched');
+    assert.doesNotMatch(line, /sk-CCC|supersecretvalue123/, 'no raw secret survives anywhere in the emitted line');
+  } finally {
+    console.log = original;
+  }
+});
+
 test('oversized records are refused before parsing', async () => {
   const lines = [];
   const original = console.log;

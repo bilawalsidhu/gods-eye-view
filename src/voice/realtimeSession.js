@@ -35,6 +35,119 @@ export const OPENAI_HUD_SUMMARY_MODEL_DEFAULT = 'gpt-5-nano';
 /** Reject oversized debug-log bodies before parsing them. */
 export const REALTIME_DEBUG_LOG_MAX_BYTES = 8 * 1024 * 1024;
 
+// --- Server-side debug-record redaction (Phase 7 security gate) ---
+//
+// The voice client sanitizes its debug payloads before posting them
+// (`gevRealtime.js` posts through `sanitizeDebugValue` below), but the
+// `/api/realtime/debug-log` endpoint is unauthenticated: any same-site page
+// — or script injected into one — can POST a record that skipped the client
+// pass. The server therefore re-runs the SAME redaction itself and never
+// trusts the client to have done it, so the log sink cannot be used to
+// launder credentials into files an operator later pastes into bug reports.
+// One implementation serves client, dev middleware, and Pages Function so
+// the three can never drift.
+
+/** Recursion ceiling — mirrors the client's old `[MaxDepth]` guard. */
+export const DEBUG_RECORD_MAX_DEPTH = 10;
+/** Per-string ceiling — a debug string is telemetry, not a bulk channel. */
+export const DEBUG_STRING_MAX_CHARS = 50_000;
+/** Per-object/array ceiling — bounds the walk on hostile wide payloads. */
+export const DEBUG_RECORD_MAX_ENTRIES = 500;
+
+const SECRET_LIKE_KEY = /(?:api[_-]?key|authorization|bearer|client[_-]?secret|token|secret|password)/i;
+
+/**
+ * Keys whose VALUE never belongs in a debug log, whatever the sender claims.
+ * Matches the client list exactly; anything matching is replaced, not kept.
+ * @param {string} key
+ * @returns {boolean}
+ */
+export function isSecretLikeKey(key) {
+  return SECRET_LIKE_KEY.test(String(key));
+}
+
+/**
+ * Redact credential-shaped content inside a string, then cap its length.
+ * The patterns cover OpenAI keys (sk-…/sk-proj-…), Authorization headers,
+ * JSON-embedded client secrets, ek_ ephemeral realtime keys, and JWTs —
+ * the value shapes a compromised session could exfiltrate. `data:image/`
+ * payloads (viewport captures) are dropped for size, not secrets.
+ * @param {string} value
+ * @returns {string}
+ */
+export function sanitizeDebugString(value) {
+  if (value.startsWith('data:image/')) {
+    return `[Redacted image data URL, ${value.length} chars]`;
+  }
+  const redacted = value
+    .replace(/sk-(?:proj-)?[A-Za-z0-9_-]{20,}/g, '[Redacted OpenAI API key]')
+    .replace(/Bearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [Redacted]')
+    .replace(/"client_secret"\s*:\s*"[^"]+"/gi, '"client_secret":"[Redacted]"')
+    // Unanchored ek_ backstop: the JSON-shaped rule above misses an
+    // ephemeral key embedded in an ESCAPED string value
+    // (`"note":"{\"client_secret\":\"ek_…\"}"`), where the quotes the
+    // pattern expects are backslash-escaped. The token itself is the
+    // sensitive atom; catch it in any quoting context.
+    .replace(/(^|[^A-Za-z0-9_-])ek_[A-Za-z0-9_-]{10,}/g, '$1[Redacted ephemeral key]')
+    .replace(/eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}/g, '[Redacted JWT]');
+  return redacted.length > DEBUG_STRING_MAX_CHARS
+    ? `${redacted.slice(0, DEBUG_STRING_MAX_CHARS)}...[Truncated ${redacted.length - DEBUG_STRING_MAX_CHARS} chars]`
+    : redacted;
+}
+
+function redactValue(value, depth) {
+  if (depth > DEBUG_RECORD_MAX_DEPTH) return '[MaxDepth]';
+  if (value === null) return null;
+  const type = typeof value;
+  if (type === 'number' || type === 'boolean') return value;
+  if (type === 'string') return sanitizeDebugString(value);
+  if (Array.isArray(value)) {
+    const out = [];
+    const kept = Math.min(value.length, DEBUG_RECORD_MAX_ENTRIES);
+    for (let i = 0; i < kept; i += 1) out.push(redactValue(value[i], depth + 1));
+    if (value.length > kept) out.push(`[Truncated ${value.length - kept} entries]`);
+    return out;
+  }
+  if (type !== 'object') return String(value);
+  const keys = Object.keys(value);
+  const kept = Math.min(keys.length, DEBUG_RECORD_MAX_ENTRIES);
+  const out = {};
+  for (let i = 0; i < kept; i += 1) {
+    const key = keys[i];
+    if (isSecretLikeKey(key)) {
+      out[key] = '[Redacted]';
+      continue;
+    }
+    out[key] = redactValue(value[key], depth + 1);
+  }
+  if (keys.length > kept) out['[Truncated]'] = `${keys.length - kept} entries dropped`;
+  return out;
+}
+
+/**
+ * The client-side shape: same redaction, no plain-object requirement — the
+ * client only ever sanitizes object literals it just built.
+ * @param {Record<string, unknown>} value
+ * @returns {Record<string, unknown>}
+ */
+export function sanitizeDebugValue(value) {
+  return /** @type {Record<string, unknown>} */ (redactValue(value, 0));
+}
+
+/**
+ * The server-side shape: validate FIRST, then redact. The wire record is
+ * whatever an unauthenticated POST body parsed to, so `null` returns mean
+ * "reject with 400" — arrays, primitives, and missing bodies are not debug
+ * records and are never appended to the sink.
+ * @param {unknown} record Parsed request body.
+ * @returns {Record<string, unknown>|null} Redacted record, or null when the
+ *   body is not a JSON object.
+ */
+export function sanitizeDebugRecord(record) {
+  if (record === null || typeof record !== 'object' || Array.isArray(record)) return null;
+  return sanitizeDebugValue(record);
+}
+
 /**
  * HUD summary system instructions — the dev proxy and the Pages Function must
  * ask for the same five-word summary, or the two deployments drift in tone.

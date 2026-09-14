@@ -21,9 +21,19 @@
  *   POST { ...record }   → 204 (empty)
  *   non-POST             → 405 { error: 'Method not allowed' }
  *   cross-site request   → 403 { error: 'cross-origin requests are rejected' }
+ *   non-object record    → 400 { error: 'record must be a JSON object' }
  *   oversized/invalid    → 400 { error }
+ *
+ * The record is SERVER-SIDE REDACTED (sanitizeDebugRecord, shared with the
+ * dev middleware and the client) before it reaches the sink: the endpoint is
+ * unauthenticated, so the client's own sanitizer pass is never trusted, and
+ * credential-shaped content (API keys, Bearer headers, client secrets, JWTs)
+ * never reaches the structured log an operator may paste elsewhere.
  */
-import { REALTIME_DEBUG_LOG_MAX_BYTES } from '../../../src/voice/realtimeSession.js';
+import {
+  REALTIME_DEBUG_LOG_MAX_BYTES,
+  sanitizeDebugRecord,
+} from '../../../src/voice/realtimeSession.js';
 import {
   PAGES_RATELIMIT_OPENAI_PER_MIN,
   allowRequest,
@@ -57,11 +67,17 @@ export async function onRequest(context) {
   const body = await readJsonBody(request, REALTIME_DEBUG_LOG_MAX_BYTES);
   if (!body.ok) return jsonResponse({ error: body.error }, { status: body.status });
 
+  // Server-side redaction + shape validation (dev parity): only a JSON
+  // object is a debug record, and credential-shaped content is redacted
+  // here regardless of what the client already sanitized.
+  const record = sanitizeDebugRecord(body.value);
+  if (!record) return jsonResponse({ error: 'record must be a JSON object' }, { status: 400 });
+
   // One JSON line per record — the same line the dev middleware appends to
   // .gev-logs/realtime-conversations.jsonl. The record is NESTED under
   // `record`, never spread: a spread would let a client-supplied `loggedAt`
   // key override the server timestamp and corrupt the tail ordering.
-  console.log(JSON.stringify({ loggedAt: new Date().toISOString(), record: body.value }));
+  console.log(JSON.stringify({ loggedAt: new Date().toISOString(), record }));
 
   return new Response(null, { status: 204 });
 }
