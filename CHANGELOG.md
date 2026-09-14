@@ -253,6 +253,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   last good picture kept after a failed refresh — and the one feature that sends
   imagery anywhere: the voice assistant's viewport screenshot. Contributed by
   Lob26 (#357).
+- Pinokio's Update shows what it is about to install before it installs it: the
+  tracking branch, the remote it fetched from (with any credentials in the URL
+  removed), the incoming commits and their diffstat. It fetches once and applies
+  exactly the revision it named, so a commit that lands mid-update cannot be
+  installed unannounced, and a git read it cannot complete is reported as such
+  instead of as "already up to date". Contributed by Lob26 (#356).
 
 - Extract panel disclosure and hover/focus controls into a reusable module;
   cancel their listeners and pending work during replacement and teardown.
