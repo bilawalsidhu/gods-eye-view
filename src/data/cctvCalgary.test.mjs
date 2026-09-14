@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   calgaryCameraId,
   calgaryCameraName,
@@ -9,8 +10,12 @@ import {
 } from '../../server/providers/cctv/sources.js';
 import {
   CALGARY_IMAGE_ORIGIN,
+  CALGARY_MAX_CATALOG_BYTES,
   DEFAULT_CALGARY_ROWS_URL,
+  DEFAULT_CCTV_MAX_SOURCES,
 } from '../../server/providers/cctv/constants.js';
+import { CAMERA_CODE_MAX_CHARS } from '../../server/providers/cctv/normalize.js';
+import { allocateSourceCap } from '../../server/providers/cctv/cap.js';
 import { directionToHeading } from './directionText.js';
 
 /** One Open Calgary row, shaped like the live `k7p9-kppz` payload. */
@@ -188,4 +193,100 @@ test('an upstream failure yields an empty pack, never a throw', async (t) => {
     throw new Error('network down');
   });
   assert.deepEqual(await loadCalgarySourcesFromOpenData(), []);
+});
+
+test('the unselected label is the intersection, trimmed to the code width', () => {
+  assert.equal(calgaryCameraToSource(row()).code, 'BOW TRAIL / 37 STREET SW');
+  const long = calgaryCameraToSource(
+    row({
+      camera_location: 'Bow Trail & Old Banff Coach Rd SW / Strathcona Blvd SW',
+    }),
+  );
+  assert.equal(long.code.length, CAMERA_CODE_MAX_CHARS);
+  assert.ok(long.code.endsWith('…'));
+  assert.ok(long.code.startsWith('BOW TRAIL & OLD BANFF'));
+});
+
+test('the catalog fetch refuses redirects and oversized bodies', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  // A redirect is never followed: the list host cannot be steered.
+  const seen = [];
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    seen.push([String(url), init.redirect]);
+    return new Response(null, {
+      status: 302,
+      headers: { location: 'https://evil.example/rows.json' },
+    });
+  });
+  assert.deepEqual(await loadCalgarySourcesFromOpenData(), []);
+  assert.deepEqual(seen, [[DEFAULT_CALGARY_ROWS_URL, 'manual']]);
+
+  // A body over the cap is refused rather than buffered.
+  t.mock.restoreAll();
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(globalThis, 'fetch', async () => {
+    const body = JSON.stringify([row()]);
+    return new Response(body, {
+      headers: {
+        'Content-Type': 'application/json',
+        'content-length': String(CALGARY_MAX_CATALOG_BYTES + 1),
+      },
+    });
+  });
+  assert.deepEqual(await loadCalgarySourcesFromOpenData(), []);
+
+  // So is a body that only declares its size once it is already too long.
+  t.mock.restoreAll();
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(globalThis, 'fetch', async () => {
+    const oversized = 'x'.repeat(CALGARY_MAX_CATALOG_BYTES + 1024);
+    return new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(oversized));
+          controller.close();
+        },
+      }),
+      { headers: { 'Content-Type': 'application/json' } },
+    );
+  });
+  assert.deepEqual(await loadCalgarySourcesFromOpenData(), []);
+});
+
+test('a reduced catalog cap thins every pack instead of dropping Calgary', () => {
+  // Calgary merges last in LIVE_PACKS, so a positional slice would delete it
+  // outright. The round-robin allocation must give it its share.
+  const lane = (name, count) => ({
+    name,
+    sources: Array.from({ length: count }, (_, i) => ({ id: `${name}-${i}` })),
+  });
+  const { sources, packs } = allocateSourceCap(
+    [lane('austin', 250), lane('nsw', 217), lane('calgary', 215)],
+    30,
+  );
+  assert.equal(sources.length, 30);
+  assert.deepEqual(
+    packs.map((p) => [p.name, p.kept]),
+    [
+      ['austin', 10],
+      ['nsw', 10],
+      ['calgary', 10],
+    ],
+  );
+  // Calgary contributes its own highest-priority cameras, in its own order.
+  assert.deepEqual(
+    sources.filter((s) => s.id.startsWith('calgary-')).map((s) => s.id),
+    Array.from({ length: 10 }, (_, i) => `calgary-${i}`),
+  );
+});
+
+test('Calgary is a registered live pack with its own kill switch', () => {
+  const catalog = readFileSync(
+    new URL('../../server/providers/cctv/catalog.js', import.meta.url),
+    'utf8',
+  );
+  assert.match(catalog, /name: 'calgary'/);
+  assert.match(catalog, /envEnabled\('CCTV_CALGARY_ENABLED'\)/);
+  // The shipped ceiling is not raised to make room for this pack.
+  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 4000);
 });

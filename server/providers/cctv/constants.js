@@ -231,6 +231,10 @@ export const CALGARY_IMAGE_ORIGIN = 'https://trafficcam.calgary.ca/';
 export const DEFAULT_CALGARY_MAX_SOURCES = 220;
 /** Centre Street / 7 Avenue: the prioritization anchor. */
 export const CALGARY_DOWNTOWN = { lat: 51.0461, lon: -114.0626 };
+/** Hard ceiling on the Calgary catalog body. The whole city is ~215 rows and
+ * under 100 KB; this only exists so an upstream that streams an unbounded
+ * body cannot be buffered without limit. */
+export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;

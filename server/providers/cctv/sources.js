@@ -54,6 +54,7 @@ import {
   CALGARY_IMAGE_ORIGIN,
   DEFAULT_CALGARY_MAX_SOURCES,
   CALGARY_DOWNTOWN,
+  CALGARY_MAX_CATALOG_BYTES,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
 } from './constants.js';
 import {
@@ -77,6 +78,7 @@ import {
   prioritizeSources,
 } from './normalize.js';
 import { directionToHeading } from '../../../src/data/directionText.js';
+import { readResponseJsonCapped } from '../common/http.js';
 /**
  * Fetch and parse Austin traffic camera records from the city Open Data portal.
  *
@@ -1520,6 +1522,9 @@ export function calgaryCameraToSource(record) {
     sourceKind: 'calgary-open-data',
     license:
       'Contains information licensed under the Open Government Licence – City of Calgary',
+    // Unselected-label code: the intersection, so a camera at rest reads as a
+    // place rather than as its id.
+    code: cameraDisplayCode(name.toUpperCase()),
   };
 }
 
@@ -1535,13 +1540,20 @@ export async function loadCalgarySourcesFromOpenData() {
       process.env.CCTV_CALGARY_ROWS_URL || DEFAULT_CALGARY_ROWS_URL;
     const resp = await fetch(endpoint, {
       headers: { Accept: 'application/json' },
+      redirect: 'manual',
       signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
     });
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn(
+        '[CCTV] Calgary catalog redirected; redirects are not followed',
+      );
+      return [];
+    }
     if (!resp.ok) {
       console.warn('[CCTV] Calgary camera download failed:', resp.status);
       return [];
     }
-    const rows = await resp.json();
+    const rows = await readResponseJsonCapped(resp, CALGARY_MAX_CATALOG_BYTES);
     if (!Array.isArray(rows)) return [];
     const cameras = [];
     const seen = new Set();
