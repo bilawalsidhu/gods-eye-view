@@ -405,9 +405,10 @@ Add these if you need higher polling allowances.
 where each configured provider was found without printing credential values.
 On macOS its Keychain-aware result previews `./scripts/dev-fresh.sh`; plain
 `npm run dev` reads only explicit environment and Vite dotenv values. The
-OpenSky summary reports only OAuth client-pair presence, not the resolved
-runtime mode or credential validity; Basic and credentials-file modes remain
-advanced `dev-fresh.sh` configuration.
+OpenSky summary reports keyless anonymous access for explicit `anon` or when
+no OAuth client pair is present, and retains presence-only wording for a
+complete OAuth pair unless `anon` is selected. Basic and credentials-file
+modes remain advanced `dev-fresh.sh` configuration.
 
 <details>
 <summary>Advanced setup: environment variables and macOS Keychain</summary>

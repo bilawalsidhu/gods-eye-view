@@ -67,6 +67,11 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Fixed
 
+- Make `npm run doctor` report keyless anonymous OpenSky access for explicit
+  `OPENSKY_AUTH_MODE=anon` and missing OAuth client pairs while retaining the
+  existing OAuth-pair capability wording. OpenSky proxy authentication is
+  unchanged.
+
 - Traffic now retries a failed destination after city navigation without a layer
   toggle. Camera departure cancels pending work, arrival checks the final view,
   and superseded requests cannot keep a newer view loading.

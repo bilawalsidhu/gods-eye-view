@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { selectMapStartupRoute } from '../src/mapStartup.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const OPENSKY_AUTH_MODE_DEFAULT = 'oauth';
+const OPENSKY_AUTH_MODES = new Set(['basic', 'oauth', 'auto', 'anon']);
 
 export const CREDENTIALS = Object.freeze([
   { name: 'GOOGLE_MAPS_API_KEY', label: 'Google Maps', keychain: [['google-maps-api', 'api-key'], ['google-maps-api', 'default'], ['google-maps-api', 'key']] },
@@ -100,6 +102,21 @@ export function readDoctorDotenvValue(
   return String(values[key] ?? '');
 }
 
+/** Resolve the OpenSky auth mode using the same environment and dotenv precedence as the launcher. */
+export function resolveOpenSkyAuthMode({
+  authoritativeEnvironment = false,
+  environment = process.env,
+  rootDir = ROOT,
+} = {}) {
+  const environmentDefinesMode = Object.prototype.hasOwnProperty.call(environment, 'OPENSKY_AUTH_MODE');
+  const environmentMode = String(environment.OPENSKY_AUTH_MODE || '').trim();
+  const dotenvMode = authoritativeEnvironment && environmentDefinesMode
+    ? ''
+    : readDoctorDotenvValue('OPENSKY_AUTH_MODE', rootDir);
+  const mode = (environmentMode || dotenvMode).trim().toLowerCase();
+  return OPENSKY_AUTH_MODES.has(mode) ? mode : OPENSKY_AUTH_MODE_DEFAULT;
+}
+
 function hasKeychainItem(service, account) {
   if (process.platform !== 'darwin') return false;
   const result = spawnSync('security', [
@@ -127,8 +144,13 @@ export function resolveCredential(spec, {
   return { configured: false, source: null };
 }
 
-export function buildCapabilitySummary(credentials) {
+export function buildCapabilitySummary(
+  credentials,
+  { openSkyAuthMode = OPENSKY_AUTH_MODE_DEFAULT } = {},
+) {
   const configured = (name) => credentials[name]?.configured === true;
+  const hasOAuthCredentials = configured('OPENSKY_CLIENT_ID') && configured('OPENSKY_CLIENT_SECRET');
+  const anonymousOpenSkyMode = String(openSkyAuthMode || '').trim().toLowerCase() === 'anon';
   const route = selectMapStartupRoute({
     googleApiKey: configured('GOOGLE_MAPS_API_KEY') ? 'configured' : '',
     cesiumToken: configured('CESIUM_ION_TOKEN') ? 'configured' : '',
@@ -139,9 +161,9 @@ export function buildCapabilitySummary(credentials) {
       : route === 'google-ion'
         ? 'Google Photorealistic 3D Tiles through Cesium ion; Bing and world-terrain stacks available'
         : 'Esri World Imagery (keyless satellite basemap) with keyless terrain',
-    flights: configured('OPENSKY_CLIENT_ID') && configured('OPENSKY_CLIENT_SECRET')
+    flights: hasOAuthCredentials && !anonymousOpenSkyMode
       ? 'OpenSky OAuth credentials present (runtime mode and validity not verified)'
-      : 'OpenSky OAuth credentials not configured',
+      : 'OpenSky keyless anonymous access (rate-limited)',
     voice: configured('OPENAI_API_KEY') ? 'available' : 'off until an OpenAI key is added',
     vessels: configured('AISSTREAM_API_KEY') ? 'live AISStream feed' : 'off until an AISStream key is added',
     fires: configured('FIRMS_MAP_KEY') ? 'live NASA FIRMS feed' : 'off until a FIRMS key is added',
@@ -172,7 +194,9 @@ export function inspectSetup({ includeKeychain = true, authoritativeEnvironment 
       : { available: false, version: null },
     dependenciesInstalled,
     credentials,
-    capabilities: buildCapabilitySummary(credentials),
+    capabilities: buildCapabilitySummary(credentials, {
+      openSkyAuthMode: resolveOpenSkyAuthMode({ authoritativeEnvironment }),
+    }),
   };
 }
 
