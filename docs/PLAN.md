@@ -420,11 +420,18 @@ acting — the audit described upstream's tree):
       CI fails on an uncalibrated runtime (better than upstream's silent
       skip), but budgets are Node-24-only while `package.json` advertises
       Node 24 and 26.
-- [ ] Bundle budgets (issue #40): egm96-universal 2.77 MB (1.87 MB gzip),
-      regions 1.99 MB, index 1.35 MB, plus multi-MB datasets; audit what
-      ships by default vs loads on layer enable, then add CI chunk budgets.
-      Pairs with the PWA precache manifest (don't precache what you can
-      lazy-load).
+- [x] Bundle budgets (issue #40): DONE 2026-09-13 in two moves — the precache
+      diet (Batch 6 icon-subset entry: shell-only `globPatterns`, 19 MB →
+      6.0 MB precache) decided what ships by default vs lazy-loads, and
+      `npm run check:budgets` (`scripts/check-bundle-budgets.mjs` + policy
+      table `src/config/bundleBudgets.js`) now gates the build output in CI's
+      build job: per-chunk ceilings over the measured artifacts (index chunk
+      capped AT workbox's 6 MiB per-file limit, egm96 3.0 MB, regions 2.15 MB,
+      marine 0.7 MB, SF 0.26 MB, CSS 220 KB, 512 KB default for unbudgeted
+      chunks), a precache-shell total, a dist-total ceiling, and a cross-check
+      that the built sw.js manifest still lists every shell file — workbox
+      silently drops over-cap files, which breaks the offline shell without
+      any other signal.
 - [ ] Test-suite portability: `.gitattributes` (`* text=auto eol=lf`) +
       newline-agnostic source anchors (issue #88; several tests regex
       `src/ui.js`), and note the formatter constraint (PR #227): ~86 tests
@@ -927,7 +934,15 @@ ordered by value-per-risk; each is self-contained and committable.
 - [ ] Icon font subsetting (PR #239) + precache diet: audit the 6.1 MB
       manifest — don't precache multi-MB datasets that can lazy-load on
       first layer enable.
-- [ ] Bundle budgets in CI (issue #40) once the diet lands.
+- [x] Bundle budgets in CI (issue #40) once the diet lands — DONE
+      2026-09-13: `npm run check:budgets` after the production build in the
+      CI build job; policy table `src/config/bundleBudgets.js` (7 unit tests:
+      table shape, real-artifact classification, every violation mode, and
+      source pins on the workbox globPatterns/cap and the CI wiring), CLI
+      `scripts/check-bundle-budgets.mjs` (prints the measured-vs-budget
+      table, exits non-zero, `--json` for machine runs). Verified against the
+      fresh build: dist 30.3 MB, precache shell 6.15 MB / 6.35 MB budget,
+      index chunk 5.91 / 6.00 MiB (workbox cap), all 9 artifacts OK, PASS.
 - [x] `window.prompt` → accessible modal in `director.js` (a11y +
       testability; blocking dialogs also freeze the render loop).
       DONE 2026-09-13: new `src/ui/promptDialog.js` provides

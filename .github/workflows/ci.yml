@@ -10,7 +10,9 @@
 #     instead of silently skipping the budgets;
 #   - a coverage job publishing the measured number (no threshold gate yet —
 #     see Phase 3 of docs/PLAN.md);
-#   - production build (vite build) — the artifact a Pages deploy ships.
+#   - production build (vite build) — the artifact a Pages deploy ships —
+#     followed by the bundle-budgets gate so dist growth is a reviewed
+#     decision (docs/PLAN.md Phase 7, issue #40).
 #
 # Deployment stays manual (`npx wrangler pages deploy dist --project-name
 # globe --branch main`, see docs/RUNBOOK.md) — this workflow does not
@@ -101,6 +103,12 @@ jobs:
         run: npm run build:wasm
       - name: Production build
         run: npm run build
+      # Bundle budgets (docs/PLAN.md Phase 7, issue #40): dist growth is a
+      # reviewed decision — the gate also verifies the built sw.js precache
+      # manifest still lists the shell, so workbox's per-file cap can never
+      # silently drop the offline shell.
+      - name: Bundle budgets
+        run: npm run check:budgets
       - name: Archive dist
         uses: actions/upload-artifact@v4
         with:

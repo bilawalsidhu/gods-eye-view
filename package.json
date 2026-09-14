@@ -40,6 +40,7 @@
     "dev:secure": "./scripts/dev-secure.sh",
     "opensky:import": "./scripts/opensky-import-client.sh",
     "build": "node scripts/copy-cesium-assets.mjs && vite build",
+    "check:budgets": "node scripts/check-bundle-budgets.mjs",
     "build:wasm": "wasm-pack build rust/firms-renderer --target web --release --out-dir ../../public/wasm/firms-renderer --out-name firms_renderer",
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0",
