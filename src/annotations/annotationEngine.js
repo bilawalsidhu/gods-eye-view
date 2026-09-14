@@ -1128,6 +1128,9 @@ function manualPairs(list) {
  */
 function resolveManualSpec(spec, type, viewer) {
   if (type === 'route') {
+    // height 0 is a placeholder, not a placement: the world renderer draws a
+    // route with clampToGround + CESIUM_3D_TILE classification, so the line is
+    // draped onto the photoreal surface whatever this number says.
     const pts = manualPairs(spec.path).map(([lon, lat]) => ({ lon, lat, height: 0 }));
     if (pts.length < 2) throw new Error('a drawn line needs at least 2 points');
     let distanceM = 0;

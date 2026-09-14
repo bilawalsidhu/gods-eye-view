@@ -850,6 +850,12 @@
 .draw-color-select {
   flex: 0 0 74px;
 }
+.draw-clear-btn {
+  flex: 0 0 auto;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+}
 .draw-hint {
   flex-basis: 100%;
   font-family: var(--font-mono);

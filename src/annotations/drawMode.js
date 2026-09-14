@@ -6,8 +6,13 @@
  * shape being drawn and its vertices), decides when a shape is finishable, and
  * turns a finished session into the SAME annotation spec the engine already
  * accepts (`type: area | route | pin`, geometry supplied, `manual: true`), so a
- * hand-drawn mark renders, persists, de-dups, exports to GeoJSON, and clears
- * exactly like a spoken one.
+ * hand-drawn mark renders, persists, de-dups and clears exactly like a spoken
+ * one.
+ *
+ * A vertex is a lon/lat and nothing more. The world renderer drapes every mark
+ * onto the photoreal surface (`clampToGround` + `CESIUM_3D_TILE`), so there is
+ * no such thing as a vertex at a height here: the height under the click is
+ * used for the live preview and is deliberately dropped at finish.
  *
  * No Cesium, no DOM — importable under `node --test`. The Cesium/DOM half is
  * `drawTool.js`.
@@ -15,21 +20,17 @@
 
 export const DRAW_SHAPES = Object.freeze(['area', 'line', 'pin']);
 export const MIN_VERTICES = Object.freeze({ area: 3, line: 2, pin: 1 });
+/**
+ * Hard ceiling on vertices in one shape. Every vertex is a live preview entity
+ * and a position in the finished geometry, so a stuck mouse button or a script
+ * must not be able to grow one shape without limit.
+ */
+export const MAX_VERTICES = 512;
 /** Two clicks closer than this are one vertex: a double-click to finish must not add a stray point. */
 export const MIN_VERTEX_SEPARATION_M = 0.5;
-
-let drawModeActive = false;
-
-/** Whether a manual draw session owns scene clicks right now (read by click gestures). */
-export function isDrawModeActive() {
-  return drawModeActive;
-}
-
-/** @param {boolean} active */
-export function setDrawModeActive(active) {
-  drawModeActive = Boolean(active);
-  return drawModeActive;
-}
+/** A line shorter than this, or an area thinner than this, is a mis-click rather than a shape. */
+export const MIN_PATH_LENGTH_M = 1;
+export const MIN_AREA_M2 = 1;
 
 /** @param {string} shape @returns {'area'|'line'|'pin'} */
 export function normalizeShape(shape) {
@@ -63,18 +64,33 @@ export function greatCircleM(a, b) {
  * @returns {{added: boolean, reason?: 'invalid'|'duplicate'}}
  */
 export function addVertex(session, vertex, { minSeparationM = MIN_VERTEX_SEPARATION_M } = {}) {
-  if (!session || !vertex || !Number.isFinite(vertex.lon) || !Number.isFinite(vertex.lat)) {
-    return { added: false, reason: 'invalid' };
-  }
-  const v = { lon: vertex.lon, lat: vertex.lat, height: Number.isFinite(vertex.height) ? vertex.height : 0 };
+  if (!session || !isFiniteCoordinate(vertex)) return { added: false, reason: 'invalid' };
+  const v = {
+    lon: vertex.lon,
+    lat: vertex.lat,
+    height: Number.isFinite(vertex.height) ? vertex.height : 0,
+  };
   if (session.shape === 'pin') {
     session.vertices = [v];
     return { added: true };
   }
+  if (session.vertices.length >= MAX_VERTICES) return { added: false, reason: 'full' };
   const last = session.vertices[session.vertices.length - 1];
   if (last && greatCircleM(last, v) < minSeparationM) return { added: false, reason: 'duplicate' };
   session.vertices.push(v);
   return { added: true };
+}
+
+/** A usable click position: finite, and on the globe rather than past its edges. */
+export function isFiniteCoordinate(vertex) {
+  if (!vertex) return false;
+  const { lon, lat } = vertex;
+  return (
+    Number.isFinite(lon) &&
+    Number.isFinite(lat) &&
+    Math.abs(lon) <= 180 &&
+    Math.abs(lat) <= 90
+  );
 }
 
 /** Remove the last vertex. @returns {boolean} whether one was removed */
@@ -84,10 +100,29 @@ export function removeLastVertex(session) {
   return true;
 }
 
-/** @returns {boolean} whether the session has enough vertices to become an annotation */
+/**
+ * Why a session can or cannot become an annotation.
+ * - `too-few`: not enough vertices yet.
+ * - `degenerate`: enough vertices, but they describe nothing — three collinear
+ *   points enclose no area, and a line that doubles back on itself has no
+ *   length. Drawing one of those and calling it a mark would put an invisible
+ *   entity on the board that the person cannot see, select or explain.
+ * @returns {'ok'|'too-few'|'degenerate'|'invalid'}
+ */
+export function finishReason(session) {
+  if (!session || !Array.isArray(session.vertices)) return 'invalid';
+  if (session.vertices.some((vertex) => !isFiniteCoordinate(vertex))) return 'invalid';
+  if (session.vertices.length < (MIN_VERTICES[session.shape] || 1)) return 'too-few';
+  if (session.shape === 'line' && pathLengthM(session.vertices) < MIN_PATH_LENGTH_M)
+    return 'degenerate';
+  if (session.shape === 'area' && ringAreaM2(session.vertices) < MIN_AREA_M2)
+    return 'degenerate';
+  return 'ok';
+}
+
+/** @returns {boolean} whether the session can become an annotation right now */
 export function canFinish(session) {
-  if (!session) return false;
-  return session.vertices.length >= (MIN_VERTICES[session.shape] || 1);
+  return finishReason(session) === 'ok';
 }
 
 /** Length of an open path in metres. */
@@ -141,6 +176,12 @@ export function formatMeasure(session) {
  * The annotation spec for a finished session, in the shape `annotationEngine.annotate()`
  * takes. Null when the session cannot finish. Geometry is supplied outright and
  * `manual: true` tells the engine to skip name resolution.
+ *
+ * The per-vertex height from the click is dropped here, deliberately and in one
+ * place: the world renderer drapes areas and routes onto the photoreal surface,
+ * so a height carried this far would be discarded further downstream instead,
+ * silently. What the person gets is the outline they drew, lying on the
+ * surface under it.
  * @param {object} session
  * @param {{label?: string, color?: string}} [opts]
  */
@@ -165,5 +206,11 @@ export function drawHint(session) {
   if (session.shape === 'pin') return n ? 'Enter to place the pin, Esc to cancel.' : 'Click where the pin goes.';
   const need = MIN_VERTICES[session.shape] - n;
   if (need > 0) return `Click ${need} more point${need === 1 ? '' : 's'}.`;
-  return `${formatMeasure(session)} · double-click or Enter to finish, Backspace undoes, Esc cancels.`;
+  if (finishReason(session) === 'degenerate') {
+    return session.shape === 'area'
+      ? 'Those points are in a line — move one off it to enclose an area.'
+      : 'That line has no length — click somewhere further away.';
+  }
+  const full = n >= MAX_VERTICES ? ` · ${MAX_VERTICES}-point limit reached` : '';
+  return `${formatMeasure(session)} · double-click or Enter to finish, Backspace undoes, Esc cancels.${full}`;
 }

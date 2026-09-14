@@ -13,8 +13,9 @@ import {
   ringCentroid,
   formatMeasure,
   drawHint,
-  isDrawModeActive,
-  setDrawModeActive,
+  finishReason,
+  isFiniteCoordinate,
+  MAX_VERTICES,
   MIN_VERTICES,
 } from './drawMode.js';
 
@@ -96,10 +97,63 @@ test('the measure and the hint follow the shape and the vertex count', () => {
   assert.equal(drawHint(null), 'Pick a shape, then click the map.');
 });
 
-test('the draw-mode flag is a plain module switch the click gesture can read', () => {
-  assert.equal(isDrawModeActive(), false);
-  assert.equal(setDrawModeActive(true), true);
-  assert.equal(isDrawModeActive(), true);
-  setDrawModeActive(false);
-  assert.equal(isDrawModeActive(), false);
+test('a vertex must be a finite coordinate on the globe', () => {
+  assert.equal(isFiniteCoordinate({ lon: 12, lat: -4 }), true);
+  assert.equal(isFiniteCoordinate({ lon: 0, lat: 90 }), true);
+  for (const bad of [
+    null,
+    {},
+    { lon: NaN, lat: 0 },
+    { lon: 0, lat: Infinity },
+    { lon: 181, lat: 0 },
+    { lon: 0, lat: -90.5 },
+    { lon: '10', lat: 10 },
+  ]) {
+    assert.equal(isFiniteCoordinate(bad), false, JSON.stringify(bad));
+  }
+  const line = createDrawSession('line');
+  assert.deepEqual(addVertex(line, { lon: 200, lat: 0 }), { added: false, reason: 'invalid' });
+  assert.equal(line.vertices.length, 0);
+});
+
+test('one shape holds at most MAX_VERTICES points', () => {
+  const line = createDrawSession('line');
+  for (let i = 0; i < MAX_VERTICES + 25; i += 1) addVertex(line, { lon: i * 0.001, lat: 0 });
+  assert.equal(line.vertices.length, MAX_VERTICES);
+  assert.deepEqual(addVertex(line, { lon: 99, lat: 1 }), { added: false, reason: 'full' });
+  assert.match(drawHint(line), /512-point limit reached/);
+
+  // A pin replaces its one vertex forever: the ceiling cannot strand it.
+  const pin = createDrawSession('pin');
+  for (let i = 0; i < MAX_VERTICES + 5; i += 1) assert.equal(addVertex(pin, { lon: i * 0.01, lat: 0 }).added, true);
+  assert.equal(pin.vertices.length, 1);
+});
+
+test('a shape that encloses nothing is refused, with a reason', () => {
+  // Three points on one meridian are not an area.
+  const collinear = createDrawSession('area');
+  for (const lat of [0, 0.001, 0.002]) addVertex(collinear, { lon: 0, lat });
+  assert.equal(collinear.vertices.length, 3);
+  assert.equal(finishReason(collinear), 'degenerate');
+  assert.equal(canFinish(collinear), false);
+  assert.equal(finishSpec(collinear), null);
+  assert.match(drawHint(collinear), /in a line/);
+
+  // Moving one point off that line makes it a shape again.
+  collinear.vertices[2].lon = 0.001;
+  assert.equal(finishReason(collinear), 'ok');
+  assert.ok(finishSpec(collinear));
+
+  // A line whose two ends are a handful of centimetres apart has no length.
+  const stub = createDrawSession('line');
+  addVertex(stub, { lon: 0, lat: 0 });
+  addVertex(stub, { lon: 0.000007, lat: 0 }, { minSeparationM: 0.01 });
+  assert.equal(stub.vertices.length, 2);
+  assert.equal(finishReason(stub), 'degenerate');
+  assert.equal(finishSpec(stub), null);
+  assert.match(drawHint(stub), /no length/);
+
+  // And the states in between are named, not lumped together.
+  assert.equal(finishReason(createDrawSession('area')), 'too-few');
+  assert.equal(finishReason(null), 'invalid');
 });
