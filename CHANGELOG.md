@@ -280,6 +280,9 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   helper that resolves the root, and a case that builds a symlinked temp root
   explicitly keeps it covered on Linux, whose own temp root is not symlinked.
   Contributed by VassagoDevteam (#301).
+- Remove the annotation GeoJSON conversion module and its tests. Nothing in the
+  application read or wrote it, so it carried no behavior. Annotations are
+  unchanged. Contributed by raiyan22 (#293).
 
 - Extract application lifecycle and viewer exports. Split standalone startup into
   scene setup, controls, layer registration, tools and loading UI. Startup failure
