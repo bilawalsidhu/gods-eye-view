@@ -18,6 +18,8 @@ export function tierImageryOptions(tier, frame) {
       version: '1.3.0',
       format: 'image/png',
       transparent: true,
+      // Empty string is the server's default style.
+      styles: tier.wmsStyle || '',
       TIME: frame.validTime,
     },
     tilingScheme: new Cesium.WebMercatorTilingScheme(),

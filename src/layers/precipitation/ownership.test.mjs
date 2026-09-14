@@ -262,3 +262,17 @@ test('the level bands never overlap, so one tier is drawn at a time', () => {
   const inlay = PRECIPITATION_TIERS.find((t) => t.role === 'inlay');
   assert.equal(inlay.minimumTerrainLevel, primary.maximumTerrainLevel + 1);
 });
+
+test('the model asks for the continuous palette, not the classed one', () => {
+  // GeoMet's default style renders eight classes, which merges neighbouring
+  // 15 km cells into ~42 km plateaus. The linear ramp keeps the native grid.
+  const frame = { validTime: '2026-09-14T15:00:00Z', referenceTime: null };
+  const primary = PRECIPITATION_TIERS.find((tier) => tier.role === 'primary');
+  assert.equal(
+    tierImageryOptions(primary, frame).parameters.styles,
+    'PRECIPPRTMMH-LINEAR',
+  );
+  // Anything without an explicit style takes the server default.
+  const inlay = PRECIPITATION_TIERS.find((tier) => tier.role === 'inlay');
+  assert.equal(tierImageryOptions(inlay, frame).parameters.styles, '');
+});

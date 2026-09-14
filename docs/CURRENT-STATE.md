@@ -25,8 +25,12 @@ handover from each placement's rectangle and level band, so no camera listener
 runs. The two level bands are derived from one ceiling and never overlap, so
 exactly one tier is drawn at any zoom — a coarse 15 km wash sitting on top of
 1 km radar was the alternative. The model draws to tile level 3 and stops:
-GeoMet renders GDPS in roughly 42 km blocks on the ground whatever pixel size is
-requested, so below about 6,000 km of altitude — where level 4 first appears —
+The model requests GeoMet's continuous `PRECIPPRTMMH-LINEAR` palette rather than
+the default: the default renders eight classes, so neighbouring 15 km cells of
+similar value merge into one flat plateau and the field reads as roughly 42 km
+squares, while the linear ramp gives 714 distinct colours over the same extent
+and keeps the native grid. The cells are still visible, so below about
+6,000 km of altitude — where level 4 first appears —
 the field reads as visible squares. Past that level the radar inlay is the only
 source, which means precipitation outside its footprint is shown at hemisphere
 scale only. The inlay's footprint ends on a straight

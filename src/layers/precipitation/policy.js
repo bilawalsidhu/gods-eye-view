@@ -63,6 +63,12 @@ export const PRECIPITATION_TIERS = Object.freeze([
     origin: GEOMET_ORIGIN,
     service: `${GEOMET_ORIGIN}/geomet`,
     wmsLayer: 'GDPS_15km_PrecipRate',
+    // GeoMet's default palette buckets the field into eight classes, so
+    // neighbouring 15 km cells of similar value merge into one flat plateau and
+    // the field reads as ~42 km squares. The linear ramp renders 714 distinct
+    // colours over the same extent and the apparent structure drops to ~18 km,
+    // which is the native grid.
+    wmsStyle: 'PRECIPPRTMMH-LINEAR',
     frameKey: `${GEOMET_ORIGIN}/geomet|GDPS_15km_PrecipRate`,
     // A model field valid now, never an observation of now. getStats() reports
     // the run and the resulting forecast lead so the row cannot imply otherwise.
@@ -84,6 +90,7 @@ export const PRECIPITATION_TIERS = Object.freeze([
     origin: NOWCOAST_ORIGIN,
     service: `${NOWCOAST_ORIGIN}/geoserver/observations/weather_radar/ows`,
     wmsLayer: 'base_reflectivity_mosaic',
+    wmsStyle: null,
     frameKey: `${NOWCOAST_ORIGIN}/geoserver/observations/weather_radar/ows|base_reflectivity_mosaic`,
     forecast: false,
     alpha: 0.68,

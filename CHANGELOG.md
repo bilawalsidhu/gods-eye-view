@@ -2,6 +2,8 @@
 
 ## Precipitation layer
 
+- Render the model with GeoMet's continuous palette rather than its eight-class
+  default, which merged neighbouring cells into flat plateaus.
 - Add an optional **Precipitation** layer: ECCC GDPS global modelled precipitation
   with a NOAA/NWS MRMS observed-radar inlay over the lower 48, both keyless and
   read directly from the browser.
