@@ -389,10 +389,23 @@ Order of work, cheapest-first:
       count + a proven-cheap generation cost). The proxy gained a keyless
       source (NASA's public 24h SNPP VIIRS CSV) so the layer works without a
       MAP_KEY and CI/QA exercise it for free.
-- [ ] WASM candidate 2 — SGP4 batch propagation for dense catalogs: NOT
-      wired. Needs a dense-catalog scene added to `profile-runtime.mjs`
-      before it qualifies (same bar the FIRMS work met). SIMD only for
-      splatting/inner loops that are already vectorizable.
+- [x] WASM candidate 2 — SGP4 batch propagation for dense catalogs:
+      **MEASURED, DOES NOT QUALIFY** (2026-09-14). The bar this bullet set —
+      a dense-catalog scene in `profile-runtime.mjs` — is now met:
+      `--scene satellitesDense` loads the real Starlink shell through the
+      CelesTrak proxy (11,542 satellites: 833 core + 10,709 dense) and the
+      module publishes propagation telemetry in `getStats()` (`corePassMs`,
+      `denseChunkMs`, `densePurePassMs`). Verdict: steady-state SGP4 costs
+      ≈ 0.3 ms/frame (round-robin slice) + ~0.14 ms/frame-equivalent (1 s
+      core pass) ≈ 2.6% of a frame budget, and no SGP4 function appears in
+      the scene's CPU self-time top-10 (Cesium/SwiftShader rasterization owns
+      the frame). The one large number — 191.9 ms for a full 10,709-prop
+      pure-SGP4 pass — is a path the round-robin deliberately never takes in
+      one frame, and even a 4× WASM kernel (~50 ms) would not fit a frame
+      budget; a future full-cadence requirement calls for workerization, not
+      WASM. Full capture: docs/PERFORMANCE.md "SGP4 propagation baseline".
+      SIMD only for splatting/inner loops that are already vectorizable —
+      moot here.
 - [x] Concurrency: audit every `await`-in-loop over large cohorts for
       parallelizable fan-out; verify the workers are actually parallel on the
       paths that matter (visibility, projection, label solve).
@@ -1347,9 +1360,10 @@ ordered by value-per-risk; each is self-contained and committable.
 
 ### Process debt
 
-- [ ] Version-bump discipline: `package.json` rode at 0.1.0 until v0.7.0 —
-      add "bump version + changelog" to the release checklist so tags and
-      package version never diverge again.
+- [x] Version-bump discipline: `package.json` rode at 0.1.0 until v0.7.0 —
+      "bump version + changelog" is now step 1–2 of the pre-release checklist
+      in docs/RUNBOOK.md ("Deploying to production"), so tags and package
+      version never diverge again.
 - [ ] GitForge pipeline (task #7 of the session plan) remains BLOCKED on
       the interactive `gitforge auth --login`; the gateway rejects the
       CLI's stored credentials and the orchestrator is down. No gitforge

@@ -201,6 +201,9 @@ Optional performance acceleration via WebAssembly:
 - Verified (2026-09-10, headless Chrome + dev server): real NASA data
   (37,437 detections), regional band 527 cells → 1 entity, splat pass
   14.8 ms regional / 42.6 ms global; numbers in `docs/PERFORMANCE.md`.
-- Next WASM candidate (NOT wired): SGP4 batch propagation for dense satellite
-  catalogs — requires a dense-catalog profiler scene first (docs/PLAN.md
-  Phase 5).
+- Next WASM candidate (SGP4 batch propagation): MEASURED 2026-09-14 via the
+  `satellitesDense` profiler scene — DOES NOT QUALIFY. Steady-state SGP4 is
+  ~0.3 ms/frame (round-robin design keeps it off the hot path) and never
+  appears in the CPU self-time top-10; the 191.9 ms full 10.7k-satellite pass
+  is a path the design never takes per frame. Numbers in
+  `docs/PERFORMANCE.md`. No WASM candidate is currently open.

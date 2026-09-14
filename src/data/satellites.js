@@ -250,6 +250,24 @@ let _denseLoadPromise = null;
 let _denseStatus = 'idle';
 /** @type {string|null} Why the last dense load failed, for the chip tooltip. */
 let _denseError = null;
+
+// Propagation-cost telemetry (getStats). The profiler scene
+// (scripts/profile-runtime.mjs --scene satellites-dense) reads these instead
+// of patching timers from outside, so numbers are attributable to the real
+// tick paths.
+/** Last full core-fleet propagation pass, ms (updated every POSITION_UPDATE_MS). */
+let _corePassMs = null;
+/** Last round-robin dense slice, ms (updated every frame it runs). */
+let _denseChunkMs = null;
+/**
+ * One-off pure-SGP4 full pass over the dense set, ms, timed once per dense
+ * load. This is the "what would full-cadence dense propagation cost" input
+ * for the WASM decision in docs/PLAN.md — NOT a per-frame cost; steady state
+ * stays at the _denseChunkMs slice budget.
+ */
+let _densePurePassMs = null;
+/** Satellites actually propagated inside the timed pure pass. */
+let _densePurePassCount = 0;
 /** Bumped on every bulk catalog mutation; keys the row-legend tally cache. */
 let _catalogRevision = 0;
 let _classTallyCache = { revision: -1, counts: null };
@@ -1025,10 +1043,14 @@ function _trackSatellite(noradId, { origin = 'programmatic' } = {}) {
 
 /**
  * Propagate all CORE satellite positions and update point primitives.
- * (~840 sats ≈ 1.6 ms/pass — fine at the 1s/200ms cadence.) Dense extras are
- * excluded: they refresh on the round-robin budget in _propagateDenseChunk.
+ * ~840 sats; the live pass cost is published as getStats().corePassMs
+ * (measured 1.6 ms on the macOS workstation, 8.6 ms in the SwiftShader
+ * container — see docs/PERFORMANCE.md). Fine at the 1s/200ms cadence. Dense
+ * extras are excluded: they refresh on the round-robin budget in
+ * _propagateDenseChunk.
  */
 function _propagateAll() {
+  const t0 = performance.now();
   const now = new Date();
   let updated = 0;
 
@@ -1045,6 +1067,7 @@ function _propagateAll() {
     }
   }
 
+  _corePassMs = Math.round((performance.now() - t0) * 100) / 100;
   return updated;
 }
 
@@ -1058,6 +1081,7 @@ function _propagateAll() {
  */
 function _propagateDenseChunk() {
   if (_denseIds.length === 0) return;
+  const t0 = performance.now();
   const perFrame = Math.max(1, Math.ceil(_denseIds.length / DENSE_REFRESH_FRAMES));
   const now = new Date();
   for (let i = 0; i < perFrame; i++) {
@@ -1072,6 +1096,7 @@ function _propagateDenseChunk() {
       point.position = Cesium.Cartesian3.fromDegrees(pos.longitude, pos.latitude, pos.altitude);
     }
   }
+  _denseChunkMs = Math.round((performance.now() - t0) * 100) / 100;
 }
 
 /**
@@ -1158,6 +1183,7 @@ async function _loadDenseCatalog({ signal = null } = {}) {
       return { status: 'source-unavailable', reason: 'feed returned no satellites' };
     }
 
+    _timePureDensePass(now);
     _count = _points.size;
     _catalogRevision++;
     _denseStatus = 'ready';
@@ -1177,6 +1203,26 @@ async function _loadDenseCatalog({ signal = null } = {}) {
   } finally {
     if (_denseLoadController === resourceController) _denseLoadController = null;
   }
+}
+
+/**
+ * One-off pure-SGP4 full pass over the loaded dense set, timed for
+ * getStats().densePurePassMs. Runs once per dense load, before 'ready' is
+ * announced. The round-robin keeps steady-state cost at the per-frame slice
+ * budget (_denseChunkMs), so this number answers a different question: what a
+ * full-cadence dense pass WOULD cost — the input the profiler scene
+ * (satellites-dense) feeds to the WASM candidate decision in docs/PLAN.md.
+ * @param {Date} now Propagation epoch (the load's own, so the sample is free).
+ */
+function _timePureDensePass(now) {
+  const t0 = performance.now();
+  let propagated = 0;
+  for (const noradId of _denseIds) {
+    const sat = _catalog.get(noradId);
+    if (sat && propagatePosition(sat.satrec, now)) propagated++;
+  }
+  _densePurePassCount = propagated;
+  _densePurePassMs = Math.round((performance.now() - t0) * 100) / 100;
 }
 
 /**
@@ -1212,6 +1258,9 @@ function _removeDenseCatalog() {
   }
   _denseIds = [];
   _denseCursor = 0;
+  _denseChunkMs = null;
+  _densePurePassMs = null;
+  _densePurePassCount = 0;
   _count = _points.size;
   _catalogRevision++;
 }
@@ -2196,6 +2245,11 @@ const satellitesLayer = {
         ? 'unavailable'
         : (_lastError ? 'degraded' : 'nominal'),
       error: _lastError,
+      corePassMs: _corePassMs,
+      denseCount: _denseIds.length,
+      denseChunkMs: _denseChunkMs,
+      densePurePassMs: _densePurePassMs,
+      densePurePassCount: _densePurePassCount,
     };
   },
 };

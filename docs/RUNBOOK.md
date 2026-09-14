@@ -47,6 +47,21 @@ Notes that save time:
 
 ## Deploying to production
 
+### Pre-release checklist (run when cutting a version tag)
+
+`package.json` rode at 0.1.0 until v0.7.0 shipped — tags and the package
+version diverged for the project's whole first life. Never again:
+
+1. **Bump `package.json` version** to match the release; `npm install` to
+   refresh the lockfile entry.
+2. **Changelog**: add the release section (user-visible changes, not commit
+   logs) before tagging, so the tag documents itself.
+3. Tag `vX.Y.Z` on the release commit; tag and `package.json` must match
+   exactly.
+4. Full gate battery: `npm run lint && npm test && npm run build && npm run
+   check:budgets && npm run check:audit`.
+5. Push `main` + the tag; then deploy (below).
+
 Deploys are explicit and manual (Cloudflare Pages, project `globe`); there is
 no auto-deploy job in CI by design.
 

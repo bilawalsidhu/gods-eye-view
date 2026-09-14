@@ -207,6 +207,38 @@ Reading, honestly:
   compositing artifact) — content was verified by canvas pixel probe, not
   by screenshot.
 
+## SGP4 propagation baseline (2026-09-14, same container)
+
+The `satellitesDense` scene (`scripts/profile-runtime.mjs --scene
+satellitesDense`) loads the real Starlink shell through the dev server's
+CelesTrak proxy and reads the propagation telemetry the satellites module now
+publishes in `getStats()` (`corePassMs`, `denseChunkMs`, `densePurePassMs`).
+This is the evidence docs/PLAN.md requires before any SGP4-in-WASM rewrite
+qualifies. Captured: 11,542 satellites total — 833 core + 10,709 dense.
+
+| Path | Cost | Cadence | Amortized/frame |
+|---|---|---|---|
+| Core pass (`corePassMs`) | 8.6 ms (833 sats, incl. `fromDegrees` + point writes) | every 1 s | ~0.14 ms |
+| Dense round-robin slice (`denseChunkMs`) | 0.3 ms (~36 props + point writes) | every frame | 0.3 ms |
+| Full pure-SGP4 dense pass (`densePurePassMs`) | 191.9 ms (10,709 props ≈ 17.9 µs/prop, cold at load) | never (by design) | — |
+
+Reading, honestly:
+- **The WASM candidate does not qualify.** Steady-state SGP4 costs ≈ 0.44 ms
+  per frame-equivalent — about 2.6% of a 16.7 ms frame budget — and no
+  satellites/SGP4 function appears anywhere in the scene's top-10 CPU
+  self-time (33% Cesium render, 19% `getBufferData`, 21.9% idle; software GL
+  rasterization owns the frame). The "must appear in the profiler before
+  anyone rewrites it in Rust" bar fails outright.
+- **The one large number is a path the app never takes.** 191.9 ms is what a
+  full-cadence dense pass would cost, and the round-robin design exists
+  precisely so that path never runs inside one frame. Even a hypothetical 4×
+  WASM kernel (~50 ms) would still not fit a frame budget; the correct fix
+  for a future full-cadence requirement is workerization, not WASM.
+- Hardware note: the in-code comment "~840 sats ≈ 1.6 ms/pass" was measured
+  on the macOS workstation; 8.6 ms here is this container's CPU. The
+  `getStats()` telemetry publishes the live number per machine, so both age
+  honestly.
+
 ## Controls for a future capture
 Use the same controls before attributing a difference to the application:
 

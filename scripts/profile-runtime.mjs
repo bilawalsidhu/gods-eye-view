@@ -16,6 +16,9 @@
  *   storm     heavy layer set enabled, scripted camera orbit, 12 s sample
  *   detection flights (synthetic feed) + detection density 100%, 12 s sample
  *   idle      parked camera, no extra layers, 8 s sample (render-governor check)
+ * Added since (same instrument, later candidates):
+ *   firms / firms-entities  FIRMS cells band, WASM splat vs entity A/B pair
+ *   satellitesDense         Starlink shell — the SGP4 WASM-candidate baseline
  *
  * Usage:
  *   node scripts/profile-runtime.mjs                     # all scenes
@@ -364,6 +367,108 @@ const SCENES = {
 
   async firmsEntities(page, cdp) {
     return firmsScene(page, cdp, 'firms-entities', '?firmsWasm=0');
+  },
+
+  /**
+   * Dense satellite catalog (Starlink shell) — the SGP4 WASM-candidate scene
+   * docs/PLAN.md Phase 5 requires before any Rust rewrite qualifies (the same
+   * bar the FIRMS pair met). Runs against the dev server's real CelesTrak
+   * proxy: real TLEs, real satellite.js propagation, nothing mocked.
+   *
+   * Evidence the scene produces (the WASM question is settled by these
+   * numbers, not instinct):
+   *   - densePurePassMs — one full pure-SGP4 pass over the loaded shell,
+   *     timed by the module at load completion (getStats). This is the
+   *     "what would full-cadence dense propagation cost" input.
+   *   - corePassMs / denseChunkMs — the steady-state costs the tick paths
+   *     actually incur (1 s core pass; per-frame round-robin slice).
+   *   - CPU self-time attribution over the sample window (top list).
+   * If the amortized round-robin design already keeps SGP4 out of the frame
+   * budget, the candidate does not qualify no matter how large the full pass
+   * is — that verdict lives in docs/PLAN.md next to this scene.
+   */
+  async satellitesDense(page, cdp) {
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await page.waitForFunction(
+      () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.dataManager,
+      { timeout: 90_000, polling: 200 },
+    );
+    await sleep(3_000);
+    const enabled = await enableLayers(page, ['satellites']);
+    const flip = await page.evaluate(() => {
+      const dm = window.__godsEyeView?.dataManager;
+      try {
+        return dm?.setLayerParams?.('satellites', { catalog: 'dense' }, { origin: 'programmatic' })
+          ? 'setLayerParams ok'
+          : 'setLayerParams unavailable';
+      } catch (error) {
+        return `error:${String(error?.message || error).slice(0, 80)}`;
+      }
+    });
+    // The Starlink shell is a multi-megabyte TLE fetch plus ~7-9k satrec
+    // builds in 1.5k chunks; a CelesTrak 502 reverts to core and the chip
+    // says so (captured below) — a bare timeout must not be the only signal.
+    const loaded = await withTimeout(page.waitForFunction(() => {
+      const s = window.__godsEyeView?.dataManager?.layers?.get?.('satellites')?.module?.getStats?.();
+      return s && s.denseCount > 0 && s.densePurePassMs != null;
+    }, { timeout: 150_000, polling: 500 }).then(() => true).catch(() => false), 155_000, 'dense load');
+    await sleep(2_000);
+    const chip = await page.evaluate(() => {
+      const controls = window.__godsEyeView?.dataManager?.layers?.get?.('satellites')
+        ?.module?.getRowControls?.();
+      const c = controls?.chips?.find?.((x) => x.id === 'catalog');
+      return c ? { label: c.label, state: c.state } : null;
+    });
+    // Slow global orbit: keeps the scene in continuous render so the
+    // preRender tick (core pass + dense round-robin) actually runs during the
+    // sample window — the same pattern the storm scene uses.
+    await page.evaluate(() => {
+      const viewer = window.__godsEyeView.viewer;
+      const C3 = viewer.camera.positionWC.constructor;
+      window.__gevOrbit = {
+        last: performance.now(),
+        elapsed: 0,
+        remove: null,
+        listener: (_scene, _time) => {
+          const now = performance.now();
+          window.__gevOrbit.elapsed += now - window.__gevOrbit.last;
+          window.__gevOrbit.last = now;
+          viewer.camera.setView({
+            destination: C3.fromDegrees(-100, 30, 2.2e7),
+            orientation: { heading: (window.__gevOrbit.elapsed / 1000) * (Math.PI / 6), pitch: -Math.PI / 2.1 },
+          });
+        },
+      };
+      window.__gevOrbit.remove = viewer.scene.preRender.addEventListener(window.__gevOrbit.listener);
+    });
+    const fps = await sampleFps(page, 12_000);
+    await page.evaluate(() => {
+      window.__gevOrbit?.remove?.();
+      window.__gevOrbit = null;
+    });
+    const snap = await snapshot(page);
+    const sgp4 = await page.evaluate(() => {
+      const s = window.__godsEyeView?.dataManager?.layers?.get?.('satellites')?.module?.getStats?.() || {};
+      return {
+        count: s.count,
+        corePassMs: s.corePassMs,
+        denseCount: s.denseCount,
+        denseChunkMs: s.denseChunkMs,
+        densePurePassMs: s.densePurePassMs,
+        densePurePassCount: s.densePurePassCount,
+      };
+    });
+    return {
+      name: 'satellites-dense',
+      layerEnable: enabled,
+      denseFlip: flip,
+      denseLoaded: loaded,
+      denseChip: chip,
+      sgp4,
+      ...snap,
+      ...fps,
+      profile: await stopProfiler(cdp, 'satellites-dense'),
+    };
   },
 };
 
