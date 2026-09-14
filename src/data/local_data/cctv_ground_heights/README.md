@@ -24,13 +24,14 @@ Runtime output: `cctv_ground_heights.json`
     "<camera id>": {
       "poseHash": "p1-…",          // hash of the served pose the samples describe
       "status": "ok" | "miss",
-      "mountGroundM": <number>,    // ground under the camera position
-      "supports": {                // ground under the plane's 3×3 support grid
+      "mountGroundM": <number>,    // ground under the camera position (absent on a miss)
+      "supports": {                // ground under the plane's 3×3 support grid; a value is
+                                   // null where that point had no sample (absent on a miss)
         "bl","bm","br",            // bottom row (left, middle, right)
         "ml","mc","mr",            // middle row
         "tl","tm","tr"             // top row
       },
-      "misses": [<support keys with no sample>],
+      "misses": [<keys with no sample: "mount" and/or support keys>],
       "sampledAt": "<ISO>",
       "attempts": <n>
     }
@@ -52,5 +53,6 @@ incomplete are re-sampled):
 GEV_BASE=http://localhost:4173 node scripts/precompute-cctv-heights.mjs
 ```
 
-Coverage at generation (2026-09-14): 3,445 of 3,446 cameras, 43 minutes on a
-real GPU. Regenerate whenever a pack changes its poses or a new pack lands.
+Coverage at generation (2026-09-14): 3,445 of 3,446 cameras `ok` (six of them
+with one or more null supports), 34,444 sampled heights, 43 minutes on a real
+GPU. Regenerate whenever a pack changes its poses or a new pack lands.
