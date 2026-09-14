@@ -1,14 +1,18 @@
-// Markup coverage gate (phase 2): every data-i18n* attribute in index.html
-// must name a key that resolves in EVERY shipped catalog via the real
-// catalog builder — a renamed or dropped catalog key can no longer strand a
-// static extraction silently behind the key-itself fallback. Regex parsing is
-// deliberate: no DOM dependency in unit tests.
+// Markup coverage gate (phase 2): every data-i18n* attribute in the static
+// application markup must name a key that resolves in EVERY shipped catalog
+// via the real catalog builder — a renamed or dropped catalog key can no
+// longer strand a static extraction silently behind the key-itself fallback.
+// index.html is now assembled from src/ui/templates/*.html by
+// build/application-html.js before Vite processes it, so the gate expands the
+// same templates the build serves and scans that assembled markup. Regex
+// parsing is deliberate: no DOM dependency in unit tests.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { getCatalog } from './index.js';
 import { CATALOG_LOCALES, availableLocales } from './locale.js';
+import { expandApplicationHtml } from '../../build/application-html.js';
 
 const INDEX_HTML = new URL('../../index.html', import.meta.url);
 const UI_JS = new URL('../../src/ui/applicationShell.js', import.meta.url);
@@ -23,12 +27,20 @@ const KNOWN_ATTRIBUTE_NAMES = new Set([
   'data-i18n-placeholder',
 ]);
 
-const html = readFileSync(INDEX_HTML, 'utf8');
+const html = expandApplicationHtml(readFileSync(INDEX_HTML, 'utf8'));
 
 const references = [...html.matchAll(I18N_ATTRIBUTE_PATTERN)].map((match) => match[1]);
 
 test('index.html carries static i18n references', () => {
   assert.ok(references.length > 0, 'no data-i18n* attributes found — extraction missing?');
+});
+
+test('index.html sources its body from the application templates', () => {
+  const raw = readFileSync(INDEX_HTML, 'utf8');
+  assert.ok(raw.includes('<!-- gev:template '),
+    'index.html must keep the gev:template markers the build expands');
+  assert.equal((raw.match(/data-i18n/g) || []).length, 0,
+    'data-i18n markup belongs in src/ui/templates/*.html, not the marker shell');
 });
 
 test('every data-i18n* attribute value resolves in every shipped catalog', () => {

@@ -299,6 +299,25 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   color: rgba(232, 234, 237, 0.7);
 }
 
+/* Keep the ALPR source overflow reachable even after its brief on-map credit
+   collapses. Wrap whole entries only while the optional layer is on. */
+body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
+  #cesium-credits {
+  white-space: normal;
+}
+body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
+  #cesium-credits
+  .cesium-credit-wrapper {
+  display: inline-block !important;
+  white-space: nowrap;
+}
+body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
+  #cesium-credits
+  .cesium-credit-expand-link {
+  /* Keep the complete link at the left edge, clear of the Power Up button. */
+  display: block !important;
+}
+
 /* Cesium's stock attribution lightbox grows with every registered data source.
    Keep the title and close affordance fixed while the complete, unabridged
    credit list wraps and scrolls inside a compact panel. */
@@ -589,6 +608,15 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   color: var(--text-dim);
   margin-top: 8px;
   text-transform: uppercase;
+}
+
+#title-bar .frame-rate-readout {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 1px;
+  color: var(--accent);
 }
 
 /* ── Style Indicator ──────────────────────────── */

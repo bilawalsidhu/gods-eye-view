@@ -156,6 +156,8 @@ export function _renderCctvState(state) {
       const statusMsg = activeCamera.sourceMessage
         ? ` · ${activeCamera.sourceMessage}`
         : '';
+      // A partner-supplied feed inside a pack names its owner here.
+      const credit = activeCamera.credit ? ` · ${activeCamera.credit}` : '';
       const calBadge = activeCamera.calBadge
         ? this._calBadgeLabel(activeCamera.calBadge)
         : '';
@@ -171,7 +173,7 @@ export function _renderCctvState(state) {
         projection: projLabel,
         calBadge: calBadge ? ` · ${calBadge}` : '',
         provider,
-        status: statusMsg,
+        status: `${credit}${statusMsg}`,
       });
     } else if (cameras.length > 0) {
       this._cctvMeta.textContent = enabled

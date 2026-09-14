@@ -41,6 +41,19 @@
     width: 36px;
   }
 
+  #title-bar .frame-rate-readout {
+    position: fixed;
+    top: 52px;
+    left: 20px;
+    margin: 0;
+    font-size: 10px;
+    line-height: 12px;
+  }
+
+  #title-bar:has(.frame-rate-readout:not([hidden])) .subtitle {
+    visibility: hidden;
+  }
+
   #location-bar {
     left: 16px;
     right: 16px;

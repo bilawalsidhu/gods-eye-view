@@ -1,0 +1,108 @@
+  <div id="left-panel-stack">
+  <!-- Data Layer Toggle Panel -->
+  <div id="data-panel" class="panel-collapsible collapsed active" data-panel-id="data-panel">
+    <div class="panel-glow"></div>
+    <div class="data-panel-inner">
+      <div class="panel-header">
+        <span class="panel-title"  data-i18n="shell.panels.dataLayers">DATA LAYERS</span>
+        <span class="panel-divider"></span>
+        <button class="panel-collapse-btn" data-collapse-target="data-panel" title="Collapse panel"  data-i18n-title="shell.panels.collapseTitle">+</button>
+      </div>
+      <div id="data-toggles" class="data-toggle-list"></div>
+    </div>
+  </div>
+
+  <!-- CCTV Coverage Panel -->
+  <div id="cctv-panel" class="panel-collapsible collapsed" data-panel-id="cctv-panel">
+    <div class="panel-glow"></div>
+    <div class="cctv-panel-inner">
+      <div class="panel-header">
+        <span class="panel-title"  data-i18n="layers.cctv.panelTitle">CCTV</span>
+        <span class="panel-divider"></span>
+        <button class="panel-collapse-btn" data-collapse-target="cctv-panel" title="Collapse panel"  data-i18n-title="layers.cctv.collapseTitle">+</button>
+      </div>
+      <div id="cctv-frame-wrap" class="cctv-frame-wrap">
+        <img id="cctv-frame" alt="CCTV feed frame" />
+      </div>
+      <div id="cctv-source-badge" role="status" aria-live="polite"  data-i18n="layers.cctv.sourceUnknown">SOURCE · UNKNOWN</div>
+      <div id="cctv-meta"  data-i18n="layers.cctv.metaIdle">Enable CCTV to load camera intersections</div>
+      <div class="cctv-controls">
+        <button id="cctv-enable-btn" class="scene-btn"  data-i18n="layers.cctv.toggleOff">CCTV OFF</button>
+        <button id="cctv-nearest-btn" class="scene-btn"  data-i18n="layers.cctv.nearest">NEAREST</button>
+      </div>
+      <div class="cctv-controls">
+        <button id="cctv-prev-btn" class="scene-btn"  data-i18n="layers.cctv.prev">PREV</button>
+        <select id="cctv-camera-select" aria-label="CCTV camera"  data-i18n-aria-label="layers.cctv.cameraAriaLabel"></select>
+        <button id="cctv-next-btn" class="scene-btn"  data-i18n="layers.cctv.next">NEXT</button>
+      </div>
+      <div class="cctv-controls">
+        <button id="cctv-focus-btn" class="scene-btn"  data-i18n="layers.cctv.focus">FOCUS</button>
+        <button id="cctv-coverage-btn" class="scene-btn"  data-i18n="layers.cctv.coverageOff">COVERAGE OFF</button>
+        <button id="cctv-auto-hop-btn" class="scene-btn"  data-i18n="layers.cctv.autoHopOff">AUTO HOP OFF</button>
+      </div>
+      <div class="cctv-controls">
+        <button id="cctv-projection-btn" class="scene-btn"  data-i18n="layers.cctv.projectionOn">PROJECTION ON</button>
+        <span id="cctv-quality-chip">CAL · --</span>
+      </div>
+      <div class="cctv-calibration-block">
+        <div class="cctv-calibration-header">
+          <div class="cctv-summary-label"  data-i18n="layers.cctv.calibrationLabel">CALIBRATION</div>
+          <button id="cctv-adjust-btn" class="scene-btn" title="Drag the camera in the world: rings rotate, arrows move, handles set range/FOV"  data-i18n-title="layers.cctv.adjustTitle"  data-i18n="layers.cctv.adjustLabel">ADJUST</button>
+        </div>
+        <div id="cctv-cal-readout" class="cctv-cal-readout" aria-label="Camera pose — click a value to type"  data-i18n-aria-label="layers.cctv.calPoseAriaLabel">
+          <button class="cctv-cal-value" data-cal-field="heading" title="Heading (compass °) — click to type"  data-i18n-title="layers.cctv.calHeadingTitle">HDG --</button>
+          <button class="cctv-cal-value" data-cal-field="pitch" title="Pitch (° up/down) — click to type"  data-i18n-title="layers.cctv.calPitchTitle">PITCH --</button>
+          <button class="cctv-cal-value" data-cal-field="fov" title="Horizontal FOV (°) — click to type"  data-i18n-title="layers.cctv.calFovTitle">FOV --</button>
+          <button class="cctv-cal-value" data-cal-field="range" title="Range / monitor-plane distance (m) — click to type"  data-i18n-title="layers.cctv.calRangeTitle">RANGE --</button>
+          <button class="cctv-cal-value" data-cal-field="height" title="Mount height above ground (m) — click to type"  data-i18n-title="layers.cctv.calHeightTitle">HGT --</button>
+          <button class="cctv-cal-value" data-cal-field="north" title="North offset from catalog position (m) — click to type"  data-i18n-title="layers.cctv.calNorthTitle">ΔN --</button>
+          <button class="cctv-cal-value" data-cal-field="east" title="East offset from catalog position (m) — click to type"  data-i18n-title="layers.cctv.calEastTitle">ΔE --</button>
+        </div>
+        <div class="cctv-controls cctv-calibration-actions">
+          <button id="cctv-calib-save-btn" class="scene-btn"  data-i18n="layers.cctv.saveCal">SAVE CAL</button>
+          <button id="cctv-calib-reset-btn" class="scene-btn"  data-i18n="layers.cctv.resetCal">RESET CAL</button>
+        </div>
+      </div>
+      <div class="cctv-summary-label"  data-i18n="layers.cctv.summaryLabel">SCENE SUMMARY</div>
+      <div id="cctv-summary"  data-i18n="layers.cctv.summaryIdle">Enable CCTV to start camera-linked intelligence summaries.</div>
+    </div>
+  </div>
+
+  <!-- Scene Director Panel -->
+  <div id="scene-panel" class="panel-collapsible collapsed" data-panel-id="scene-panel">
+    <div class="panel-glow"></div>
+    <div class="scene-panel-inner">
+      <div class="panel-header">
+        <span class="panel-title"  data-i18n="setup.scenes.panelTitle">SCENES</span>
+        <span class="panel-divider"></span>
+        <button class="panel-collapse-btn" data-collapse-target="scene-panel" title="Collapse panel"  data-i18n-title="setup.scenes.collapseTitle">+</button>
+      </div>
+      <div class="scene-controls">
+        <select id="scene-select" aria-label="Scene recipe"  data-i18n-aria-label="setup.scenes.recipeAriaLabel"></select>
+        <button id="scene-new-btn" class="scene-btn"  data-i18n="setup.scenes.new">NEW</button>
+        <button id="scene-delete-btn" class="scene-btn scene-btn-danger"  data-i18n="setup.scenes.delete">DEL</button>
+      </div>
+      <div class="scene-controls">
+        <button id="scene-capture-btn" class="scene-btn"  data-i18n="setup.scenes.capture">CAPTURE SHOT</button>
+        <button id="scene-update-shot-btn" class="scene-btn"  data-i18n="setup.scenes.updateShot">UPDATE SHOT</button>
+      </div>
+      <div id="scene-shot-list" class="scene-shot-list"></div>
+      <div class="scene-controls">
+        <button id="scene-start-btn" class="scene-btn"  data-i18n="setup.scenes.start">START</button>
+        <button id="scene-stop-btn" class="scene-btn scene-btn-danger"  data-i18n="setup.scenes.stop">STOP</button>
+        <button id="scene-next-btn" class="scene-btn"  data-i18n="setup.scenes.next">NEXT</button>
+      </div>
+      <div class="scene-controls">
+        <button id="scene-export-btn" class="scene-btn"  data-i18n="setup.scenes.exportPresets">EXPORT PRESETS</button>
+        <button id="scene-import-btn" class="scene-btn"  data-i18n="setup.scenes.import">IMPORT</button>
+        <button id="scene-download-btn" class="scene-btn"  data-i18n="setup.scenes.runLog">RUN LOG</button>
+        <input type="file" id="scene-import-file" accept="application/json,.json" hidden />
+      </div>
+      <div class="scene-progress">
+        <div id="scene-progress-fill">0%</div>
+      </div>
+      <div id="scene-status"  data-i18n="setup.scenes.statusReady">Ready</div>
+    </div>
+  </div>
+
+  </div>

@@ -194,6 +194,9 @@ export function getActiveTrackedReadoutId() {
   return _activeEntryId;
 }
 
+/** Static-context layers whose click selection publishes the readout card. */
+const READOUT_CONTEXT_LAYERS = new Set(['military-installations', 'alpr-cameras']);
+
 /**
  * Initialize the model bridge and selection listeners. No render listener is
  * installed; the already-initialized world-overlay host owns the frame lane.
@@ -210,7 +213,7 @@ export function initTrackedReadout(viewer) {
   }) || null;
   _contextSelectedHandler = (event) => {
     const record = event.detail;
-    if (record?.layerId === 'military-installations') {
+    if (READOUT_CONTEXT_LAYERS.has(record?.layerId)) {
       _selectedContext = record;
       publishEntity(record.entity);
       return;

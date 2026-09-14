@@ -1,3 +1,4 @@
+import { readLayerSource } from './testSupport/readLayerSource.mjs';
 import { StyleManager } from './ui/applicationShell.js';
 import { enter as cockpitEnter, navigateContext } from './ui/cockpitTrackingController.js';
 import { CockpitViewController } from './ui/cockpitController.js';
@@ -9,8 +10,8 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'applicationShell.js'), 'utf8');
-const firms = fs.readFileSync(path.join(ROOT, 'src', 'data', 'firmsHeatmap.js'), 'utf8');
-const vessels = fs.readFileSync(path.join(ROOT, 'src', 'data', 'aisLiveVessels.js'), 'utf8');
+const firms = readLayerSource(path.join(ROOT, 'src', 'data', 'firmsHeatmap.js'));
+const vessels = readLayerSource(path.join(ROOT, 'src', 'data', 'aisLiveVessels.js'));
 const voice = fs.readFileSync(path.join(ROOT, 'src', 'voice', 'gevActions.js'), 'utf8');
 const cameraVerbs = fs.readFileSync(path.join(ROOT, 'src', 'cameraVerbs.js'), 'utf8');
 const cockpitTracking = fs.readFileSync(path.join(ROOT, 'src', 'cockpitTracking.js'), 'utf8');
@@ -381,7 +382,7 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
   }
   const vesselClick = body(
     vessels,
-    /handler\.setInputAction\(\(click\) => \{([\s\S]*?)\n  \}, Cesium\.ScreenSpaceEventType\.LEFT_CLICK\);/,
+    /handler\.setInputAction\(\s*\(click\) => \{([\s\S]*?)\n\s*\},\s*Cesium\.ScreenSpaceEventType\.LEFT_CLICK,?\s*\);/,
     'vessel click',
   );
   ordered(vesselClick, [
@@ -391,7 +392,7 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
   ], 'vessel sibling ownership');
   const vesselFocus = body(
     vessels,
-    /function selectAndFocusVessel\(record\) \{([\s\S]*?)\n\}/,
+    /function selectAndFocusVessel\(record\) \{([\s\S]*?)\n  \}/,
     'vessel focus helper',
   );
   assert.match(vesselFocus, /requestWorldFocus\(\{/);

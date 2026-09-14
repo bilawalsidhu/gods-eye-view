@@ -1,3 +1,4 @@
+import { createFrameRateMonitor } from './frameRateMonitor.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import { setSplitFlapText } from '../splitFlap.js';
 import { UiLifetime } from './uiLifetime.js';
@@ -294,7 +295,7 @@ export class StyleManager {
     this._orbitIndicator = null;
 
     // Intel HUD
-    this.hud = new IntelHUD(viewer);
+    this.hud = new IntelHUD(viewer, { placeSearch });
     this._recording.hud = this.hud;
     this._cockpitVisionMode = 'optical';
     this._cockpitVisionRestore = null;
@@ -1391,6 +1392,11 @@ export class StyleManager {
       setScopeMaskFeather,
     } = this.services;
     this._applicationShortcuts?.destroy();
+    this._frameRateMonitor?.destroy();
+    this._frameRateMonitor = createFrameRateMonitor({
+      viewer: this.viewer,
+      documentRef: document,
+    });
     this._applicationShortcuts = bindApplicationShortcuts({
       documentRef: document,
       searchInput: this._locationSearch,
@@ -5448,6 +5454,7 @@ export class StyleManager {
     this._panelLayout.destroy();
     this._applicationShortcuts?.destroy();
     this._displayControls?.destroy();
+    this._frameRateMonitor?.destroy();
     this._mapSourceControls?.destroy();
     this._clearLayersControl?.destroy();
     this._locationControls?.destroy();

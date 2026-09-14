@@ -710,3 +710,19 @@ test('a late annotation resolver cannot redraw after destruction', async (t) => 
   assert.equal(calls.add, 0);
   assert.equal(engine.count(), 0);
 });
+
+test('only an explicit navigation request permits resolving distant annotation targets', async (t) => {
+  installAnimationFrameStubs(t);
+  _resetRenderGovernorForTest();
+  t.after(() => _resetRenderGovernorForTest());
+  const { renderer } = throwingRendererHarness();
+  renderer.destroy = () => {};
+  const received = [];
+  const engine = createAnnotationEngine({ viewer: {}, renderer,
+    resolveTarget: async (options) => { received.push(options); return null; },
+  });
+  await engine.annotate([{ type: 'point', target: 'Remote landmark' }]);
+  await engine.annotate([{ type: 'point', target: 'Remote landmark' }], { flyTo: true });
+  assert.deepEqual(received.map(options => options.allowDistant), [false, true]);
+  engine.destroy();
+});

@@ -1,0 +1,123 @@
+  <!-- Post-processing toggles (top-right) -->
+  <div id="pp-toggles" class="panel-collapsible collapsed" data-panel-id="pp-toggles">
+    <div class="compact pp-header-row">
+      <span class="pp-header-label">DISPLAY</span>
+      <span class="panel-divider" aria-hidden="true"></span>
+      <button class="panel-collapse-btn pp-collapse-btn" data-collapse-target="pp-toggles" title="Collapse panel"  data-i18n-title="cockpit.display.collapseTitle">&#x25C0;</button>
+    </div>
+    <div class="pp-toggle-group">
+      <button class="pp-toggle-btn" id="hud-toggle" title="Intelligence HUD (H)"  data-i18n-title="cockpit.display.hudToggleTitle">
+        <span class="pp-icon">&#x25CE;</span>
+        <span class="pp-label">HUD</span>
+      </button>
+      <div class="pp-slider-row" id="hud-layout-row">
+        <span class="pp-slider-mini-label"  data-i18n="cockpit.display.hudLayoutLabel">Layout</span>
+        <select id="hud-layout-select" class="pp-select" aria-label="HUD layout"  data-i18n-aria-label="cockpit.display.hudLayoutAriaLabel">
+          <option value="tactical"  data-i18n="cockpit.display.hudLayoutTactical">Tactical</option>
+          <option value="operator"  data-i18n="cockpit.display.hudLayoutOperator">Operator</option>
+          <option value="minimal"  data-i18n="cockpit.display.hudLayoutMinimal">Minimal</option>
+        </select>
+      </div>
+    </div>
+    <div class="pp-toggle-group">
+      <button class="pp-toggle-btn" id="detection-toggle" title="Detection Overlay (D)" aria-label="Detection overlay" aria-pressed="false"  data-i18n-title="cockpit.display.detectionToggleTitle"  data-i18n-aria-label="cockpit.display.detectionAriaLabel">
+        <span class="pp-icon">&#x25A3;</span>
+        <span class="pp-label"  data-i18n="cockpit.display.detectionLabel">DETECT</span>
+      </button>
+      <div class="pp-slider-row detection-slider-row" id="detection-slider-row">
+        <label class="pp-slider-mini-label" for="detection-density-slider"  data-i18n="cockpit.display.densityLabel">Density</label>
+        <input type="range" class="pp-slider" id="detection-density-slider" min="0" max="100" step="25" value="50" aria-label="Detection label density"  data-i18n-aria-label="cockpit.display.densityAriaLabel" />
+        <span class="pp-slider-value" id="detection-density-value">50%</span>
+      </div>
+      <div class="pp-slider-row detection-allocation-row" id="detection-allocation-row">
+        <span class="pp-slider-mini-label"  data-i18n="cockpit.display.allocationLabel">Allocation</span>
+        <div class="pp-mode-seg detection-allocation-seg" role="radiogroup" aria-label="Detection label allocation"  data-i18n-aria-label="cockpit.display.allocationAriaLabel">
+          <button class="pp-mode-btn active" id="detection-allocation-elastic" data-allocation="ELASTIC" role="radio" aria-checked="true"  data-i18n="cockpit.display.allocationElastic">Elastic</button>
+          <button class="pp-mode-btn" id="detection-allocation-weighted" data-allocation="WEIGHTED" role="radio" aria-checked="false"  data-i18n="cockpit.display.allocationWeighted">Weighted</button>
+        </div>
+      </div>
+      <div class="pp-slider-row detection-fade-row" id="detection-fade-row">
+        <label class="pp-slider-mini-label" for="detection-fade-slider"  data-i18n="cockpit.display.fadeLabel">Fade</label>
+        <input type="range" class="pp-slider" id="detection-fade-slider" min="0" max="40" step="1" value="7" aria-label="Detection fade distance" title="World-overlay fade distance outside the keyhole as a percentage of its radius"  data-i18n-aria-label="cockpit.display.fadeAriaLabel"  data-i18n-title="cockpit.display.fadeTitle" />
+        <span class="pp-slider-value" id="detection-fade-value">7%</span>
+      </div>
+      <div class="pp-slider-row detection-opacity-row" id="detection-opacity-row">
+        <label class="pp-slider-mini-label" for="detection-opacity-slider"  data-i18n="cockpit.display.outsideLabel">Outside</label>
+        <input type="range" class="pp-slider" id="detection-opacity-slider" min="0" max="100" step="1" value="1" aria-label="Detection opacity outside the keyhole" title="World-overlay label and card opacity beyond the fade distance"  data-i18n-aria-label="cockpit.display.outsideAriaLabel"  data-i18n-title="cockpit.display.outsideTitle" />
+        <span class="pp-slider-value" id="detection-opacity-value">1%</span>
+      </div>
+    </div>
+    <!-- The one shared preset-parameter surface is inserted here at runtime. -->
+    <div id="param-slider-panel">
+      <div class="param-panel-header">
+        <span class="param-panel-title"  data-i18n="cockpit.display.parametersTitle">PARAMETERS</span>
+        <span class="param-panel-divider"></span>
+        <button class="panel-collapse-btn" id="param-panel-collapse-btn" data-collapse-target="param-slider-panel" title="Collapse panel"  data-i18n-title="cockpit.display.parametersCollapseTitle">−</button>
+      </div>
+      <div id="param-sliders"></div>
+    </div>
+    <div class="pp-toggle-group">
+      <!-- 3D aircraft is DEFAULT-ON in Proximity (owner directive 2026-08-22), so the
+           button ships lit and the mode row ships open — the same markup-carries-the-default
+           convention as #scope-toggle. ui.js re-syncs both from durable layer state, which
+           is what flips them back for a share link or a stored session carrying 3D off. -->
+      <button class="pp-toggle-btn active" id="models3d-toggle" aria-pressed="true" title="3D aircraft — flat icons zoomed out, 3D models up close"  data-i18n-title="cockpit.display.modelsToggleTitle">
+        <span class="pp-icon">&#x2708;</span>
+        <span class="pp-label">3D</span>
+      </button>
+      <div class="pp-slider-row visible" id="models3d-mode-row">
+        <span class="pp-slider-mini-label"  data-i18n="cockpit.display.modelsLabel">Models</span>
+        <div class="pp-mode-seg" role="radiogroup" aria-label="3D model coverage"  data-i18n-aria-label="cockpit.display.modelsCoverageAriaLabel">
+          <button class="pp-mode-btn active" id="models3d-mode-proximity" data-mode="proximity" role="radio" aria-checked="true"  data-i18n="cockpit.display.modelsModeProximity">Proximity</button>
+          <button class="pp-mode-btn" id="models3d-mode-all" data-mode="all" role="radio" aria-checked="false"  data-i18n="cockpit.display.modelsModeAll">All</button>
+        </div>
+      </div>
+    </div>
+    <div class="pp-toggle-group">
+      <button class="pp-toggle-btn active" id="scope-toggle" title="Scope — the circular viewport mask" aria-pressed="true"  data-i18n-title="cockpit.display.scopeToggleTitle">
+        <span class="pp-icon material-symbols-outlined" aria-hidden="true">adjust</span>
+        <span class="pp-label"  data-i18n="cockpit.display.scopeLabel">Scope</span>
+      </button>
+      <div class="pp-slider-row visible" id="scope-slider-row">
+        <span class="pp-slider-mini-label"  data-i18n="cockpit.display.featherLabel">Feather</span>
+        <!-- Feather starts at an 11% soft scope-mask edge (owner final lock
+             2026-08-24, superseding the 08-22 hard-crop and 08-23 8% rulings);
+             mirrors SCOPE_FEATHER_RATIO_DEFAULT in src/scopeMask.js. Feather
+             softens the black mask edge; label fading is the separate Fade
+             slider. -->
+        <input type="range" class="pp-slider" id="scope-feather-slider" min="0" max="100" value="11" aria-label="Scope edge feather" title="Scope edge feather as a percentage of the keyhole radius"  data-i18n-aria-label="cockpit.display.featherAria"  data-i18n-title="cockpit.display.featherTitle" />
+        <span class="pp-slider-value" id="scope-feather-value">11%</span>
+      </div>
+    </div>
+    <div class="pp-toggle-group">
+      <button class="pp-toggle-btn" id="celestial-toggle" title="Celestial ring — reveal the full globe" aria-pressed="false"  data-i18n-title="cockpit.display.celestialToggleTitle">
+        <span class="pp-icon material-symbols-outlined" aria-hidden="true">flare</span>
+        <span class="pp-label"  data-i18n="cockpit.display.celestialLabel">Celestial</span>
+      </button>
+    </div>
+    <button class="pp-toggle-btn" id="clean-view-toggle" title="Hide UI chrome"  data-i18n-title="cockpit.display.cleanViewToggleTitle">
+      <span class="pp-icon">&#x25A1;</span>
+      <span class="pp-label"  data-i18n="cockpit.display.cleanViewLabel">Clean UI</span>
+    </button>
+    <div class="pp-toggle-group">
+      <button class="pp-toggle-btn" id="bloom-toggle" title="Bloom / Glow"  data-i18n-title="cockpit.display.bloomToggleTitle">
+        <span class="pp-icon">&#x2728;</span>
+        <span class="pp-label"  data-i18n="cockpit.display.bloomLabel">Bloom</span>
+      </button>
+      <div class="pp-slider-row" id="bloom-slider-row">
+        <input type="range" class="pp-slider" id="bloom-intensity-slider" min="0" max="200" value="0" aria-label="Bloom intensity"  data-i18n-aria-label="cockpit.display.bloomAria" />
+        <span class="pp-slider-value" id="bloom-intensity-value">0%</span>
+      </div>
+    </div>
+    <div class="pp-toggle-group">
+      <button class="pp-toggle-btn" id="sharpen-toggle" title="Sharpening"  data-i18n-title="cockpit.display.sharpenToggleTitle">
+        <span class="pp-icon">&#x1F50D;</span>
+        <span class="pp-label"  data-i18n="cockpit.display.sharpenLabel">Sharpen</span>
+      </button>
+      <div class="pp-slider-row" id="sharpen-slider-row">
+        <input type="range" class="pp-slider" id="sharpen-intensity-slider" min="0" max="100" value="49" aria-label="Sharpen intensity"  data-i18n-aria-label="cockpit.display.sharpenAria" />
+        <span class="pp-slider-value" id="sharpen-intensity-value">49%</span>
+      </div>
+    </div>
+  </div>
+  <button id="clean-view-exit" title="Return UI controls"  data-i18n-title="cockpit.display.cleanViewExitTitle"  data-i18n="cockpit.display.cleanViewExitLabel">EXIT CLEAN VIEW</button>

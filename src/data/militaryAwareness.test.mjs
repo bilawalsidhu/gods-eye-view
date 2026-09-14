@@ -43,7 +43,7 @@ import {
 } from './militaryAwarenessEngine.js';
 import { NAVIGATION_AUTHORITY_EVENT } from '../navigationPolicy.js';
 
-const militaryAwarenessSource = fs.readFileSync(
+const militaryAwarenessSource = readLayerSource(
   new URL('./militaryAwareness.js', import.meta.url),
   'utf8',
 );
@@ -1556,7 +1556,7 @@ test('production eviction sites actually tag their clears', () => {
   // whose registration sweep deletes the record the clear needs to see.
   const firmsSource = readLayerSource(new URL('./firmsHeatmap.js', import.meta.url));
   const evictedClear = firmsSource.indexOf('clearSelectedEntityContextForLayer(id, { evicted: true });');
-  const lodRebuild = firmsSource.indexOf('renderCurrentLod(true);\n      if (reselected) selectFire(reselected);');
+  const lodRebuild = firmsSource.indexOf('components.rendering.renderCurrentLod(true);\n      if (reselected) components.selection.selectFire(reselected, false);');
   assert.ok(evictedClear > 0, 'FIRMS must mark a refresh-vanished selection as an eviction');
   assert.ok(lodRebuild > 0, 'the FIRMS refresh must settle its selection before rebuilding');
   assert.ok(

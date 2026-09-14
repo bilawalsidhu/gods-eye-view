@@ -29,7 +29,7 @@ export function normalizeLayerLoading(layer = {}) {
     stats.refreshing === true;
   const count = finiteCount(stats.count);
   const stoppingInstallations =
-    layer.id === 'military-installations' && disabling;
+    ['military-installations', 'alpr-cameras'].includes(layer.id) && disabling;
   // Guidance statuses ask the user to act (zoom in, run a search). They are
   // normal operation, never a batch failure — mirrors layerFeedState's carve-out
   // so a prompt stored alongside the status cannot turn the chip red.
@@ -62,6 +62,14 @@ export function normalizeLayerLoading(layer = {}) {
     unavailable,
     keyRequired,
     degraded,
+    cameraRetry:
+      layer.id === 'alpr-cameras' && layer.enabled && !disabling
+        ? {
+            retryAt: Number(stats.retryAt) || 0,
+            retrying: stats.retrying === true,
+            error,
+          }
+        : null,
     installationRetry:
       layer.id === 'military-installations' && layer.enabled && !disabling
         ? {
@@ -368,6 +376,30 @@ export function reduceLoadingFeedback(previous, summary, nowMs, event = null) {
 
 /** Build the user-facing status copy for the current loading state. */
 export function presentLoadingFeedback(state, summary, nowMs) {
+  const camera = summary.records.find(
+    (record) => record.cameraRetry?.retryAt > 0,
+  );
+  const otherCameraFailure =
+    summary.records.some(
+      (record) =>
+        record.id !== 'alpr-cameras' &&
+        (state?.activeIds || []).includes(record.id) &&
+        (record.error || record.unavailable || record.keyRequired),
+    ) || (state?.failedEventIds || []).some((id) => id !== 'alpr-cameras');
+  if (camera && !summary.active.length && !otherCameraFailure) {
+    const seconds = Math.max(
+      0,
+      Math.ceil((camera.cameraRetry.retryAt - Date.now()) / 1000),
+    );
+    return {
+      state: 'retry',
+      label: (
+        camera.cameraRetry.error || 'Overpass temporarily unavailable'
+      ).toUpperCase(),
+      detail: `ALPR cameras · ${seconds ? `retrying in ${seconds}s` : 'retry pending'}`,
+    };
+  }
+
   const site = summary.records.find(
     (record) => record.installationRetry?.retryAt > 0,
   );
@@ -404,6 +436,16 @@ export function presentLoadingFeedback(state, summary, nowMs) {
     return { state: state.terminal, label, detail: '' };
   }
   const active = summary.active;
+  if (active.length === 1 && active[0].cameraRetry && !summary.disabling) {
+    return {
+      state: 'loading',
+      label: active[0].cameraRetry.retrying
+        ? 'RETRYING ALPR CAMERAS'
+        : 'FETCHING ALPR CAMERAS',
+      detail: 'OpenStreetMap · Overpass',
+    };
+  }
+
   if (
     active.length === 1 &&
     active[0].installationRetry &&

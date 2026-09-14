@@ -1,3 +1,5 @@
+import { applicationServices } from '../services/application.js';
+import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
 import { lookupNeighborhoodRing } from '../data/neighborhoodPolygons.js';
 import { lookupNaturalRegionOutline, findNaturalRegion } from '../data/naturalEarthRegions.js';
@@ -92,7 +94,7 @@ function linkAbort(controller, externalSignal) {
 export async function resolveAnnotationTarget({
   placeSearch = unavailablePlaceSearch,
   viewer, target, latitude, longitude, footprint = false, intent = 'the_thing',
-  entityKind = null, labelHint = null, deferFootprint = false, screenX, screenY, signal,
+  entityKind = null, labelHint = null, deferFootprint = false, allowDistant = false, screenX, screenY, signal,
 }) {
   let lon = Number(longitude);
   let lat = Number(latitude);
@@ -124,7 +126,7 @@ export async function resolveAnnotationTarget({
       // miss we fall through to geocode + fetchLocalMonument below. The model's entityKind counts too:
       // a point_feature by fact ("Heroes of the Alamo" — no monument word) deserves the same path.
       if (center && (isMonumentLikeQuery(query) || isGroundsLikeQuery(query) || entityKind === 'point_feature')) {
-        const placeHit = await placesTextSearch(query, center.lat, center.lon, 6000, signal);
+        const placeHit = await placesTextSearch(query, center.lat, center.lon, 6000, signal, placeSearch);
         if (placeHit) {
           trace.places = `${placeHit.lat.toFixed(5)},${placeHit.lon.toFixed(5)}`;
           if (placeHit.distanceM <= PLACES_MAX_DISTANCE_M) {
@@ -157,13 +159,13 @@ export async function resolveAnnotationTarget({
         // LOOKING AT. If the geocode missed or landed far from the view centre, try a view-biased
         // Places Text Search; a hit within the trust bound overrides + skips the gate. Local geocodes
         // (neighborhoods, nearby buildings) are NOT far, so they keep the geocode + scope/polygon path.
-        if (center && trace.places === 'skipped' && !bypassNearViewGuards) {
+        if (center && trace.places === 'skipped' && !bypassNearViewGuards && !allowDistant) {
           let geocodeFar = source !== 'geocode';
           if (source === 'geocode' && approximateDistanceM(center.lat, center.lon, lat, lon) / 1000 > MIN_DRIFT_FLOOR_KM) {
             geocodeFar = true;
           }
           if (geocodeFar) {
-            const placeHit = await placesTextSearch(query, center.lat, center.lon, 6000, signal);
+            const placeHit = await placesTextSearch(query, center.lat, center.lon, 6000, signal, placeSearch);
             if (placeHit && placeHit.distanceM <= PLACES_MAX_DISTANCE_M) {
               lat = placeHit.lat;
               lon = placeHit.lon;
@@ -242,7 +244,7 @@ export async function resolveAnnotationTarget({
     const limitKm = Math.max(VIEWPORT_DRIFT_FACTOR * vpGate.radiusKm, MIN_DRIFT_FLOOR_KM);
     return driftKm > limitKm ? { driftKm, limitKm } : null;
   };
-  if (fromGeocode && !bypassNearViewGuards) {
+  if (fromGeocode && !bypassNearViewGuards && !allowDistant) {
     const drift = gateDrift(lat, lon);
     if (drift) {
       if (trace.query) {
@@ -627,7 +629,7 @@ function normalizeGeocodeViewport(vp) {
   };
 }
 
-const placesCache = new Map(); // Text Search hits, keyed by query + rounded view centre
+const placesCaches = new WeakMap(); // Cache isolated by provider configuration
 
 /**
  * View-biased Google Places TEXT SEARCH for a named landmark/POI. Geocoding
@@ -640,7 +642,9 @@ const placesCache = new Map(); // Text Search hits, keyed by query + rounded vie
  * @returns {Promise<null | { lat:number, lon:number, label:string|null, distanceM:number,
  *   viewport:{low:{latitude:number,longitude:number},high:{latitude:number,longitude:number}}|null }>}
  */
-async function placesTextSearch(query, centerLat, centerLon, radiusM, signal) {
+async function placesTextSearch(query, centerLat, centerLon, radiusM, signal, service = defaultGeospatial) {
+  const placesCache = placesCaches.get(service) || new Map();
+  placesCaches.set(service, placesCache);
   const q = String(query || '').trim();
   if (!q || !Number.isFinite(centerLat) || !Number.isFinite(centerLon)) return null;
 
@@ -648,16 +652,10 @@ async function placesTextSearch(query, centerLat, centerLon, radiusM, signal) {
   const cached = cacheRead(placesCache, cacheKey);
   if (cached !== undefined) return cached;
 
-  const params = new URLSearchParams({
-    q,
-    lat: String(centerLat),
-    lon: String(centerLon),
-    radiusM: String(radiusM),
-  });
   try {
-    const response = await fetch(`/api/google/text-search?${params}`, { signal });
-    if (!response.ok) { negCache(placesCache, cacheKey, signal, false); return null; } // transient
-    const data = await response.json();
+    const data = { places: await service.textSearch?.(q, {
+      latitude: centerLat, longitude: centerLon, radiusM,
+    }, { signal }) };
     const hit = Array.isArray(data?.places)
       ? data.places.find((p) => Number.isFinite(p?.latitude) && Number.isFinite(p?.longitude))
       : null;
@@ -742,26 +740,9 @@ export function refineScope(scope, entityKind) {
   return scope;
 }
 
-/** True when an HTTP-200 Overpass body actually signals a runtime FAILURE (server-side
- *  timeout / out-of-memory) via its `remark` — a transient error, not an authoritative
- *  empty result, so callers must not cache it as a definitive not-found. */
-function overpassHasError(data) {
-  const remark = String(data?.remark || '').toLowerCase();
-  return remark.includes('runtime error') || remark.includes('timed out') || remark.includes('out of memory');
-}
-
 /** A distinct Overpass throttle result that must not enter the ordinary transient ladder. */
 export function isRateLimitedOutcome(value) {
   return value?.rateLimited === true;
-}
-
-/** Parse Retry-After seconds or an HTTP date into a non-negative millisecond delay. */
-function parseRetryAfterMs(value) {
-  if (value == null || String(value).trim() === '') return null;
-  const seconds = Number(value);
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds * 1000);
-  const at = Date.parse(String(value));
-  return Number.isFinite(at) ? Math.max(0, at - Date.now()) : null;
 }
 
 /** POST an Overpass QL query and return elements, a transient null, or a throttle object. */
@@ -770,20 +751,7 @@ async function overpassJson(query, timeoutMs = 14000, signal) {
   const detach = linkAbort(controller, signal);
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch('/api/overpass', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `data=${encodeURIComponent(query)}`,
-      signal: controller.signal,
-    });
-    const retryAfter = res.headers?.get?.('Retry-After');
-    if (res.status === 429 || (res.status === 503 && retryAfter != null)) {
-      return { rateLimited: true, retryAfterMs: parseRetryAfterMs(retryAfter) };
-    }
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (overpassHasError(data)) return null; // 200 with a body-level timeout/error → transient
-    return Array.isArray(data?.elements) ? data.elements : null;
+    return await applicationServices.boundaries.query(query, { signal: controller.signal });
   } catch {
     return null;
   } finally {
@@ -1788,13 +1756,13 @@ export function viewportBias(viewer) {
  * plain geocode path. Returns the Places hit
  * ({ lat, lon, label, types, viewport, distanceM, … }) or null.
  */
-export async function placesNearViewRecovery(viewer, query, geocoded = null, signal = undefined) {
+export async function placesNearViewRecovery(viewer, query, geocoded = null, signal = undefined, placeSearch = defaultGeospatial) {
   const center = pickWorldFromScreen(viewer, 0.5, 0.5) || viewportProximity(viewer);
   if (!center) return null;
   const geocodeFar = !geocoded
     || approximateDistanceM(center.lat, center.lon, geocoded.lat, geocoded.lon) / 1000 > MIN_DRIFT_FLOOR_KM;
   if (!geocodeFar) return null;
-  const hit = await placesTextSearch(query, center.lat, center.lon, 6000, signal);
+  const hit = await placesTextSearch(query, center.lat, center.lon, 6000, signal, placeSearch);
   return (hit && hit.distanceM <= PLACES_MAX_DISTANCE_M) ? hit : null;
 }
 

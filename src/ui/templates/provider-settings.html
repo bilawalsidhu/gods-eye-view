@@ -1,0 +1,25 @@
+  <!-- POWER UP — in-app key setup. Dev-server only: src/keySetup.js removes
+       both the chip and this dialog outright when /api/setup/status is not
+       there to answer (prod builds, LAN visitors). Rows are rendered from
+       that payload, so the key registry lives in src/keySetupCore.mjs alone. -->
+  <button id="key-setup-chip" type="button" hidden aria-haspopup="dialog" aria-controls="key-setup">
+    <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
+    <span data-key-setup-chip-label  data-i18n="setup.keySetup.chip">POWER UP</span>
+  </button>
+  <aside id="key-setup" role="dialog" aria-labelledby="key-setup-title" aria-describedby="key-setup-description" hidden>
+    <div class="key-setup-scanline" aria-hidden="true"></div>
+    <header class="key-setup-header">
+      <span class="key-setup-kicker"  data-i18n="setup.keySetup.kicker">GROUND STATION · PROVIDER SETTINGS</span>
+      <button type="button" class="key-setup-close" data-key-setup-close aria-label="Close key setup"  data-i18n-aria-label="setup.keySetup.closeAriaLabel">
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+      </button>
+    </header>
+    <h2 id="key-setup-title"  data-i18n="setup.keySetup.title">Power up the globe</h2>
+    <p id="key-setup-description"  data-i18n="setup.keySetup.description">The globe already flies keyless. Every key below switches on another real feed — paste one and it's saved into this app's local configuration, then the server restarts itself. Server-side keys stay on this machine; Google Maps and Cesium ion run in the browser and must be provider-restricted. Keys you configured elsewhere are shown but never touched.</p>
+    <div class="key-setup-rows" data-key-setup-rows></div>
+    <div class="key-setup-footer">
+      <button type="button" class="key-setup-apply" data-key-setup-apply  data-i18n="setup.keySetup.apply">SAVE KEYS</button>
+      <span class="key-setup-hint"  data-i18n="setup.keySetup.hint">ESC to close</span>
+    </div>
+    <p class="key-setup-note" data-key-setup-status role="status" aria-live="polite"  data-i18n="setup.keySetup.note">The Google Maps key buys the photorealistic planet — everything else stacks on top.</p>
+  </aside>

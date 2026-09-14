@@ -1,3 +1,5 @@
+import { expandApplicationHtml } from '../build/application-html.js';
+import { readLayerSource } from './testSupport/readLayerSource.mjs';
 import { PanelLayoutController } from './ui/panelLayoutController.js';
 import { readShellElements } from './ui/shellElements.js';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
@@ -25,12 +27,12 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+const html = expandApplicationHtml(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'));
 const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'applicationShell.js'), 'utf8');
 const css = readStylesheet(path.join(ROOT, 'style.css'));
 const sceneDirector = fs.readFileSync(path.join(ROOT, 'src', 'scenes', 'director.js'), 'utf8');
 const manager = fs.readFileSync(path.join(ROOT, 'src', 'data', 'manager.js'), 'utf8');
-const contextLayer = fs.readFileSync(path.join(ROOT, 'src', 'data', 'militaryAwareness.js'), 'utf8');
+const contextLayer = readLayerSource(path.join(ROOT, 'src', 'data', 'militaryAwareness.js'), 'utf8');
 const voiceActions = fs.readFileSync(path.join(ROOT, 'src', 'voice', 'gevActions.js'), 'utf8');
 
 test('Cockpit has one reset action beside its bottom exit path', () => {
