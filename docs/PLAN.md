@@ -165,15 +165,19 @@ visual identities) and fixes AAA-level items where they are free.
       Chrome DOES run in the primary dev container with
       `executablePath: /usr/bin/google-chrome` and `--no-sandbox` — the
       profiling harness runs it daily. The axe pass can run here too.)
-- [ ] Live axe pass over HUD, layer panel, first-run launcher, and voice
-      overlay; triage the report into fixes. First finding on record
-      (qa-a11y 2026-09-13, boot + panel-expanded): axe `region` — page
-      content outside landmarks (`.cesium-widget > canvas`, the app
-      `h1`/`.subtitle`, `#style-indicator`). Needs a real landmark pass
-      (`header`/`main`/`complementary` on the app shell) — a wrapper must
-      not introduce a transform/filter that would re-anchor the fixed
-      full-screen canvas. Fixed alongside: `#first-run-launcher`
-      aria-allowed-role (aside + role=dialog → div, 2026-09-13).
+- [x] Live axe pass over HUD, layer panel, first-run launcher, and voice
+      overlay; triage the report into fixes. DONE 2026-09-13 — qa-a11y
+      (boot + panel-expanded) reports 0 violations across
+      wcag2a/2aa/21aa/2aaa/21aaa + best-practice. Findings fixed:
+      `#first-run-launcher` aria-allowed-role (aside + role=dialog → div);
+      axe `region` landmark pass — named roles on the EXISTING shell
+      containers (no wrappers, so nothing can re-anchor the fixed
+      full-screen canvas): `#cesiumContainer` role=application, `#title-bar`
+      role=banner, `#style-indicator` + the dock/panel trays role=region
+      with unique labels. Along the way: the first-run launcher's
+      `<header>` became a div — its parents are not sectioning content, so
+      it exposed a second banner landmark (axe
+      landmark-no-duplicate-banner). Pinned by `src/shellLandmarks.test.mjs`.
 - [ ] Keyboard: verify focus order in the DISPLAY rail and layer rows; every
       click-only custom control needs a key path.
 - [ ] ARIA states for the async chips (loading/failed) — `aria-busy` and
@@ -395,7 +399,8 @@ acting — the audit described upstream's tree):
   axe `region` — top-level content (Cesium canvas, h1/subtitle,
   #style-indicator) sits outside landmarks; fixed this pass:
   `#first-run-launcher` aria-allowed-role (aside+role=dialog → div).
-  Landmark structure is its own backlog item below.
+  The landmark pass landed separately (see the Phase 4 axe entry): qa-a11y
+  is now 0 violations in both states.
 - [ ] Security gate for key-bearing endpoints (PR #242, issues #16–#18,
       #22–#24): REMAINING after the 2026-09-10 sweep — same-site request
       gate for `/api/openai/hud-summary` and `/api/google/nearby-places`

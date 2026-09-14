@@ -23,7 +23,10 @@
   <!-- React is bundled by Vite from npm — no CDN needed. -->
 </head>
 <body>
-  <div id="cesiumContainer"></div>
+  <!-- Landmarks: every persistent chrome region is named (axe `region`),
+       via roles on the existing containers — no wrappers, so nothing can
+       re-anchor the fixed-position canvas. -->
+  <div id="cesiumContainer" role="application" aria-label="Interactive 3D globe"></div>
   <div id="world-overlay-root" aria-hidden="true">
     <canvas id="world-overlay-canvas"></canvas>
   </div>
@@ -33,14 +36,14 @@
   </div>
 
   <!-- Title -->
-  <div id="title-bar">
+  <div id="title-bar" role="banner">
     <div class="title-glow"></div>
     <h1><span class="title-logo brand-logo" data-logo-gaze data-logo-src="/logo.svg" aria-hidden="true"><img src="/logo.svg" alt="" /></span> <span>GOD'S EYE <span class="title-accent">VIEW</span></span></h1>
     <p class="subtitle">NO PLACE LEFT BEHIND</p>
   </div>
 
   <!-- Style indicator -->
-  <div id="style-indicator">
+  <div id="style-indicator" role="region" aria-label="Active visual style" aria-live="polite">
     <span class="indicator-label">ACTIVE STYLE</span>
     <span class="indicator-value" id="active-style-name">NORMAL</span>
   </div>
@@ -364,7 +367,7 @@
   </nav>
 
   <!-- Post-processing toggles (top-right) -->
-  <div id="pp-toggles" class="panel-collapsible collapsed" data-panel-id="pp-toggles">
+  <div id="pp-toggles" class="panel-collapsible collapsed" data-panel-id="pp-toggles" role="region" aria-label="Display toggles">
     <div class="compact pp-header-row">
       <span class="pp-header-label">DISPLAY</span>
       <span class="panel-divider" aria-hidden="true"></span>
@@ -488,7 +491,7 @@
   <button id="clean-view-exit" title="Return UI controls">EXIT CLEAN VIEW</button>
 
   <!-- Unified bottom command dock: locations, voice (injected at runtime), visual presets -->
-  <div id="command-dock" aria-label="Navigation, voice, and visual preset controls">
+  <div id="command-dock" role="region" aria-label="Navigation, voice, and visual preset controls">
   <!-- Control panel -->
   <div id="control-panel" class="panel-collapsible collapsed">
     <div class="panel-glow"></div>
@@ -585,7 +588,7 @@
 
   <div id="left-panel-stack">
   <!-- Data Layer Toggle Panel -->
-  <div id="data-panel" class="panel-collapsible collapsed active" data-panel-id="data-panel">
+  <div id="data-panel" class="panel-collapsible collapsed active" data-panel-id="data-panel" role="region" aria-label="Data layers">
     <div class="panel-glow"></div>
     <div class="data-panel-inner">
       <div class="panel-header">
@@ -598,7 +601,7 @@
   </div>
 
   <!-- CCTV Coverage Panel -->
-  <div id="cctv-panel" class="panel-collapsible collapsed" data-panel-id="cctv-panel">
+  <div id="cctv-panel" class="panel-collapsible collapsed" data-panel-id="cctv-panel" role="region" aria-label="CCTV cameras">
     <div class="panel-glow"></div>
     <div class="cctv-panel-inner">
       <div class="panel-header">
@@ -654,7 +657,7 @@
   </div>
 
   <!-- Scene Director Panel -->
-  <div id="scene-panel" class="panel-collapsible collapsed" data-panel-id="scene-panel">
+  <div id="scene-panel" class="panel-collapsible collapsed" data-panel-id="scene-panel" role="region" aria-label="Scenes">
     <div class="panel-glow"></div>
     <div class="scene-panel-inner">
       <div class="panel-header">
@@ -694,7 +697,7 @@
 
   <!-- Global Context is deliberately independent from the left layer accordion. -->
   <aside id="right-context-rail">
-    <div id="global-context-panel" class="panel-collapsible collapsed" data-panel-id="global-context-panel">
+    <div id="global-context-panel" class="panel-collapsible collapsed" data-panel-id="global-context-panel" role="region" aria-label="Global context">
       <div class="panel-glow"></div>
       <div class="global-context-panel-inner">
         <div class="panel-header">
@@ -845,9 +848,12 @@
        src/firstRunExperience.js for the full show policy. -->
   <div id="first-run-launcher" role="dialog" aria-labelledby="first-run-title" aria-describedby="first-run-description" hidden>
     <div class="first-run-scanline" aria-hidden="true"></div>
-    <header class="first-run-header">
+    <!-- Not a header element: this dialog's parents are not sectioning
+         content, so a real header here would expose a second banner landmark
+         alongside #title-bar (axe landmark-no-duplicate-banner). -->
+    <div class="first-run-header">
       <span class="first-run-kicker">MISSION CONTROL · FIRST LAUNCH</span>
-    </header>
+    </div>
     <h2 id="first-run-title">Choose your first view</h2>
     <!-- The card's one persuasive line, final and VERBATIM (2026-08-23)
          — including the unspaced em dash. The arc it has to carry: this looks
