@@ -156,6 +156,33 @@ export async function proxyMediaResponse(
   stream.on('error', () => {
     if (!res.writableEnded) res.end();
   });
+
+  // A live camera feed has no end of its own. When the viewer goes away the
+  // upstream connection must go with it, or every abandoned view leaves a
+  // stream open against the camera host for as long as that host will hold it.
+  let released = false;
+  const releaseUpstream = () => {
+    if (released) return;
+    released = true;
+    stream.unpipe(res);
+    // Destroying the Node stream cancels the web body it wraps; the direct
+    // cancel covers a body that was never wrapped, and rejects harmlessly when
+    // the reader is already held.
+    stream.destroy();
+    try {
+      const cancelled = upstream.body?.cancel?.();
+      if (typeof cancelled?.catch === 'function') cancelled.catch(() => {});
+    } catch {
+      /* already closed */
+    }
+  };
+  res.once('close', () => {
+    if (!res.writableEnded) releaseUpstream();
+  });
+  res.once('error', releaseUpstream);
+  stream.once('end', () => {
+    released = true;
+  });
   stream.pipe(res);
 }
 

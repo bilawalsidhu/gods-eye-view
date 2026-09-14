@@ -7,6 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import net from 'node:net';
 import { Readable } from 'node:stream';
 import { cctvProxy } from '../../server/providers/cctv.js';
 import { sanitizeCctvRangeHeader } from '../../server/providers/cctv/range.js';
@@ -356,16 +357,22 @@ test('an oversized declared body is refused even when a bounded range asked for 
   assert.match(res.body, /exceeds size cap/);
 });
 
-test('a client that disconnects mid-stream does not fault the camera', async (t) => {
-  // A live feed the upstream keeps open, so the pipe is still running when the
-  // client goes away.
-  const slowBody = () =>
+test('a client that disconnects mid-stream stops the upstream read', async (t) => {
+  // A live feed with no end of its own, counting what it is asked to produce.
+  let produced = 0;
+  let stopped = false;
+  const endlessBody = () =>
     Readable.toWeb(
       Readable.from(
         (async function* () {
-          for (let i = 0; i < 40; i++) {
-            yield Buffer.from('frame-chunk-');
-            await new Promise((resolve) => setTimeout(resolve, 10));
+          try {
+            for (;;) {
+              produced += 1;
+              yield Buffer.from('frame-chunk-');
+              await new Promise((resolve) => setTimeout(resolve, 10));
+            }
+          } finally {
+            stopped = true;
           }
         })(),
       ),
@@ -377,7 +384,7 @@ test('a client that disconnects mid-stream does not fault the camera', async (t)
       get: (name) =>
         String(name).toLowerCase() === 'content-type' ? 'video/mp4' : null,
     },
-    body: slowBody(),
+    body: endlessBody(),
     arrayBuffer: async () => Buffer.alloc(0),
   }));
 
@@ -399,7 +406,7 @@ test('a client that disconnects mid-stream does not fault the camera', async (t)
       {
         host: '127.0.0.1',
         port,
-        path: `/api/cctv/media/${CAMERA.id}`,
+        path: `/media/${CAMERA.id}`.replace(/^/, '/api/cctv'),
         headers: { Range: 'bytes=0-1023' },
       },
       (response) => {
@@ -414,8 +421,18 @@ test('a client that disconnects mid-stream does not fault the camera', async (t)
     );
     request.on('error', reject);
   });
-  await new Promise((resolve) => setTimeout(resolve, 200));
 
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const afterDisconnect = produced;
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  // The point: the camera host is no longer being read from. Without the
+  // release this counter keeps climbing for as long as the upstream will feed.
+  assert.equal(
+    produced,
+    afterDisconnect,
+    `the upstream was still being read after the client left (${afterDisconnect} → ${produced} chunks)`,
+  );
+  assert.equal(stopped, true, 'the upstream body was never released');
   assert.deepEqual(
     failures.map((error) => error?.message),
     [],
@@ -425,4 +442,92 @@ test('a client that disconnects mid-stream does not fault the camera', async (t)
   // The camera was serving fine; the client left. Nothing about that is a
   // camera fault other viewers should see.
   assert.equal(entry.status, 'ok');
+});
+
+test('a folded CR/LF range never reaches the upstream through a real client', async (t) => {
+  // Node's own parser, not a hand-built headers object, so the reachability of
+  // this shape through an ordinary HTTP request is shown rather than assumed.
+  const app = mount(t, () =>
+    upstreamResponse({
+      status: 200,
+      headers: { 'content-type': 'video/mp4' },
+      body: 'whole body',
+    }),
+  );
+  const server = http.createServer((req, res) => {
+    req.url = req.url.replace('/api/cctv', '') || '/';
+    Promise.resolve(app.handler(req, res)).catch(() => {});
+  });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+
+  // A client can fold a value across a continuation line; Node's parser
+  // rejoins it, so what the route sees contains whitespace a header cannot
+  // carry back out.
+  const raw = await new Promise((resolve, reject) => {
+    const socket = net.connect(port, '127.0.0.1', () => {
+      socket.write(
+        `GET /api/cctv/media/${CAMERA.id} HTTP/1.1\r\n` +
+          'Host: 127.0.0.1\r\n' +
+          'Range: bytes=0-10\r\n\tX-Injected: 1\r\n' +
+          'Connection: close\r\n\r\n',
+      );
+    });
+    let text = '';
+    socket.on('data', (chunk) => {
+      text += chunk.toString('utf8');
+    });
+    socket.on('end', () => resolve(text));
+    socket.on('error', reject);
+  });
+
+  // Either Node's parser refuses the request outright, or it reaches the route
+  // and the route drops the value — but it must never be forwarded.
+  const reachedRoute = app.requests.length > 0;
+  assert.match(raw, /^HTTP\/1\.1 (200|400)/);
+  if (reachedRoute) {
+    assert.equal(
+      app.requests.at(-1).headers.Range,
+      undefined,
+      'nothing was forwarded',
+    );
+    assert.match(raw, /^HTTP\/1\.1 200/);
+  } else {
+    assert.match(raw, /^HTTP\/1\.1 400/);
+  }
+  console.log(
+    `    [range] folded CR/LF request ${reachedRoute ? 'reached the route and was dropped' : 'was refused by the HTTP parser'}`,
+  );
+  const entry = await app.health();
+  assert.doesNotMatch(JSON.stringify(entry ?? {}), /X-Injected/);
+});
+
+test('two sequential seeks are served as two partial responses', async (t) => {
+  const app = mount(t, ({ init }) => {
+    const range = init?.headers?.Range || '';
+    const [, first, last] = /bytes=(\d+)-(\d+)/.exec(range) || [];
+    return upstreamResponse({
+      status: 206,
+      headers: {
+        'content-type': 'video/mp4',
+        'content-range': `bytes ${first}-${last}/4096`,
+        'content-length': String(Number(last) - Number(first) + 1),
+        'accept-ranges': 'bytes',
+      },
+      body: `chunk-${first}`,
+    });
+  });
+  const first = await app.call(`/media/${CAMERA.id}`, { range: 'bytes=0-99' });
+  const second = await app.call(`/media/${CAMERA.id}`, {
+    range: 'bytes=100-199',
+  });
+  assert.equal(app.requests[0].headers.Range, 'bytes=0-99');
+  assert.equal(app.requests[1].headers.Range, 'bytes=100-199');
+  assert.equal(first.statusCode, 206);
+  assert.equal(second.statusCode, 206);
+  assert.equal(first.headers['Content-Range'], 'bytes 0-99/4096');
+  assert.equal(second.headers['Content-Range'], 'bytes 100-199/4096');
+  assert.equal(first.body, 'chunk-0');
+  assert.equal(second.body, 'chunk-100');
 });

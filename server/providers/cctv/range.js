@@ -9,11 +9,18 @@ const RANGE_MAX_DIGITS = 16;
  *
  * The route used to copy `req.headers.range` through verbatim. Two things
  * follow from that. A multi-range value makes the upstream answer
- * `multipart/byteranges`, a body whose size the relay's single
- * `Content-Length` check cannot account for. And a value the outbound request
- * refuses to carry — anything with CR or LF in it — made `fetch` throw, and
- * the route recorded that error text, which contains the client's own string,
- * as the camera's health message.
+ * `multipart/byteranges`: when that body declares its length the relay's
+ * ceiling still applies to it, but the parts inside are the upstream's to
+ * choose and nothing here reads them, and a multipart body sent without a
+ * declared length streams through uncapped like any other length-less body.
+ * And a value the outbound request refuses to carry — anything with CR or LF
+ * in it — made `fetch` throw, and the route recorded that error text, which
+ * contains the client's own string, as the camera's health message.
+ *
+ * Bounding the Range bounds what is ASKED FOR, not what arrives: an upstream
+ * that ignores the Range and answers with a length-less chunked body still
+ * streams without a ceiling. That is how live feeds are served and is not
+ * changed here.
  *
  * Anything that is not a single well-formed `bytes=` range is DROPPED and the
  * request proceeds with no Range, which is what RFC 7233 §3.1 prescribes for a
