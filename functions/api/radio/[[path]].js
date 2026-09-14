@@ -48,7 +48,18 @@
 import { jsonResponse } from '../../_lib.js';
 import { createRadioCatalogBroker } from './_broker.js';
 
-let broker = createRadioCatalogBroker();
+/**
+ * The broker is created LAZILY on the first request, not at module scope:
+ * workerd forbids generating random values (the broker stamps its catalog
+ * with crypto.randomUUID) at global scope, and a top-level instantiation
+ * made the whole Functions bundle fail to deploy ("Disallowed operation
+ * called within global scope"). Per-isolate single instance is preserved.
+ */
+let broker = null;
+
+function getBroker() {
+  return broker ?? (broker = createRadioCatalogBroker());
+}
 
 function subPath(pathname) {
   return pathname.startsWith('/api/radio') ? pathname.slice('/api/radio'.length) || '/' : pathname;
@@ -85,7 +96,7 @@ export async function onRequest({ request }) {
   if (pathname === '/stations') {
     if (request.method !== 'GET') return methodNotAllowed('GET');
     try {
-      return withCors(jsonResponse(await broker.catalogResponseBody(), { cacheControl: 'no-store' }));
+      return withCors(jsonResponse(await getBroker().catalogResponseBody(), { cacheControl: 'no-store' }));
     } catch (error) {
       return withCors(jsonResponse({
         error: 'Radio directory is temporarily unavailable',
@@ -99,10 +110,10 @@ export async function onRequest({ request }) {
   if (clickMatch) {
     if (request.method !== 'POST') return methodNotAllowed('POST');
     const id = clickMatch[1].toLowerCase();
-    if (!broker.isServedStation(id)) {
+    if (!getBroker().isServedStation(id)) {
       return withCors(jsonResponse({ error: 'Unknown radio station' }, { status: 404, cacheControl: 'no-store' }));
     }
-    broker.pingStation(id);
+    getBroker().pingStation(id);
     return withCors(new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } }));
   }
 
