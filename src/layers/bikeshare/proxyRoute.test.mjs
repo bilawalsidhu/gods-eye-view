@@ -11,6 +11,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { gbfsProxy } from '../../../server/providers/gbfs.js';
+import { localProviderPlugins } from '../../../server/providers/local.js';
 import { createBikeshareSource } from './source.js';
 import { createModel } from './model.js';
 import { CITY_BY_ID } from './registry.js';
@@ -58,9 +59,11 @@ const STATION_STATUS = {
  *
  * @returns {(input: string, init?: object) => Promise<Response>}
  */
-function mountGbfsProxy() {
+function mountGbfsProxy(
+  install = (server) => gbfsProxy().configureServer(server),
+) {
   const routes = new Map();
-  gbfsProxy().configureServer({
+  install({
     middlewares: {
       use(route, handler) {
         routes.set(route, handler);
@@ -230,3 +233,68 @@ test('the mounted route still refuses a host outside the allowlist', async () =>
     assert.deepEqual(requested, []);
   });
 });
+
+/**
+ * The GBFS plugin as the application actually composes it.
+ *
+ * Mounting `gbfsProxy()` directly proves the handler agrees with the client,
+ * but not that the application still registers it. These take the plugin out
+ * of the real provider list by name, so dropping GBFS from the composition —
+ * or from the preview half of it — fails here rather than in a browser.
+ */
+function composedGbfsPlugin() {
+  const plugin = localProviderPlugins().find(
+    (entry) => entry.name === 'gbfs-proxy',
+  );
+  assert.ok(plugin, 'the application must compose a GBFS provider');
+  return plugin;
+}
+
+for (const hook of ['configureServer', 'configurePreviewServer']) {
+  test(`the composed application serves the client's GBFS URL through ${hook}`, async () => {
+    const plugin = composedGbfsPlugin();
+    assert.equal(
+      typeof plugin[hook],
+      'function',
+      `the composed GBFS provider must register on ${hook}`,
+    );
+
+    const { info, status, requested } = await withUpstream(
+      {
+        [AUSTIN.stationInformationUrl]: STATION_INFORMATION,
+        [AUSTIN.stationStatusUrl]: STATION_STATUS,
+      },
+      async (requested) => {
+        const source = createBikeshareSource({
+          fetchImpl: mountGbfsProxy((server) => plugin[hook](server)),
+        });
+        const info = await source.getStations(AUSTIN.stationInformationUrl);
+        const status = await source.getStations(AUSTIN.stationStatusUrl);
+        return { info, status, requested };
+      },
+    );
+
+    assert.deepEqual(requested, [
+      AUSTIN.stationInformationUrl,
+      AUSTIN.stationStatusUrl,
+    ]);
+
+    const model = createModel({});
+    const station = model.parseStationInformation(info).get('2537');
+    const availability = model.parseStationStatus(status).get('2537');
+    assert.deepEqual(
+      {
+        name: station?.name,
+        capacity: station?.capacity,
+        bikesAvailable: availability?.bikesAvailable,
+        docksAvailable: availability?.docksAvailable,
+      },
+      {
+        name: 'Republic Square',
+        capacity: 13,
+        bikesAvailable: 4,
+        docksAvailable: 9,
+      },
+    );
+  });
+}
