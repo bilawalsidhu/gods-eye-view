@@ -612,5 +612,7 @@
   "src/layers/vessels/snapshotRenderer.js",
   "src/layers/vessels/records.test.mjs",
   "src/layers/vessels/ingestion.test.mjs",
-  "src/cityPresets.test.mjs"
+  "src/cityPresets.test.mjs",
+  "server/providers/cctv/range.js",
+  "src/data/cctvMediaRange.test.mjs"
 ]

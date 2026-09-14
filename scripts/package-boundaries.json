@@ -152,6 +152,7 @@
       "server/providers/cctv/constants.js",
       "server/providers/cctv/media.js",
       "server/providers/cctv/normalize.js",
+      "server/providers/cctv/range.js",
       "server/providers/cctv/sources.js",
       "src/data/directionText.js",
       "server/providers/common/geo.js",

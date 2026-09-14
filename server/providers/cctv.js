@@ -15,6 +15,7 @@ import {
   CCTV_FRAME_FETCH_TIMEOUT_MS,
   CCTV_MAX_SOURCES_CEILING,
 } from './cctv/constants.js';
+import { sanitizeCctvRangeHeader } from './cctv/range.js';
 import { googleServerApiKey } from './places/google-key.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
@@ -222,7 +223,9 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             const upstreamHeaders = {
               'User-Agent': 'gods-eye-view-cctv-proxy/1.0',
             };
-            const requestRange = req.headers?.range;
+            // Never forward the client's own string: a Range this proxy does
+            // not accept is dropped and the request proceeds without one.
+            const requestRange = sanitizeCctvRangeHeader(req.headers?.range);
             if (requestRange) upstreamHeaders.Range = requestRange;
             const upstream = await fetchCctvMediaUpstream(mediaUrl, {
               headers: upstreamHeaders,

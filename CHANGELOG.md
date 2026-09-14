@@ -212,6 +212,20 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Security
 
+- The CCTV media route no longer forwards a client `Range` header to the upstream
+  camera host as it arrived. A single `bytes=` range is canonicalized and
+  forwarded, with every accepted form — explicit span, open-ended and suffix —
+  bounded to 64 MiB, the ceiling the relay already applies to a response that
+  declares its length. (Streamed live media has no declared length and is not
+  capped; that is unchanged.) Multi-range, malformed, inverted, non-`bytes` and
+  unsafe-integer values are dropped and the request proceeds without a `Range`,
+  as RFC 7233 §3.1 prescribes; a multi-range value previously made the upstream
+  answer `multipart/byteranges`, whose size that ceiling cannot account for. A
+  value carrying CR or LF made the outbound request throw, and the route recorded
+  the thrown message — which contains the caller's own string — as that camera's
+  entry in the health report. Ordinary seeking is unaffected. Contributed by
+  Maher-Reven (#253).
+
 - Validate configured Google Places coordinates and text queries before rate
   limiting or upstream requests; preserve the keyless capability response.
 - Bound CCTV media response headers to 15 seconds and cancel error bodies.
