@@ -220,6 +220,18 @@ export const NSW_IMAGE_USER_AGENT =
  * out around 120 characters.
  */
 export const NSW_MAX_VIEW_LABEL = 140;
+/** Open Calgary traffic cameras: one keyless Socrata endpoint for the whole
+ * city; frames are stills on a City of Calgary host. */
+export const DEFAULT_CALGARY_ROWS_URL =
+  'https://data.calgary.ca/resource/k7p9-kppz.json?$limit=500';
+/** The only origin Calgary camera frames may come from. The catalog publishes
+ * most rows as `http://`; that host serves HTTPS and 301-redirects to it, so
+ * URLs are upgraded and then pinned here before registration. */
+export const CALGARY_IMAGE_ORIGIN = 'https://trafficcam.calgary.ca/';
+export const DEFAULT_CALGARY_MAX_SOURCES = 220;
+/** Centre Street / 7 Avenue: the prioritization anchor. */
+export const CALGARY_DOWNTOWN = { lat: 51.0461, lon: -114.0626 };
+
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one

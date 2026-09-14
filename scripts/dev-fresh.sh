@@ -16,7 +16,8 @@ HOST="${HOST:-localhost}"
 # including Kitchener-area highways), and Fintraffic Finland weathercams
 # (~2,260 live presets). Caps keep the densest cores per pack; override
 # per-run for lighter/heavier loads. Kill switches: CCTV_CALTRANS_DISTRICTS='',
-# CCTV_TFL_ENABLED=0, CCTV_ONTARIO_ENABLED=0 and CCTV_FINTRAFFIC_ENABLED=0.
+# CCTV_TFL_ENABLED=0, CCTV_ONTARIO_ENABLED=0, CCTV_FINTRAFFIC_ENABLED=0 and
+# CCTV_CALGARY_ENABLED=0 (Open Calgary, ~215 live upstream).
 CCTV_AUSTIN_MAX_SOURCES="${CCTV_AUSTIN_MAX_SOURCES:-250}"
 # Use `-` not `:-` so an explicit empty string (the documented kill switch)
 # is preserved rather than replaced by the default. Still set-u-safe when unset.
@@ -41,6 +42,8 @@ CCTV_TARKTEE_MAX_SOURCES="${CCTV_TARKTEE_MAX_SOURCES:-179}"
 CCTV_WARENDORF_ENABLED="${CCTV_WARENDORF_ENABLED:-1}"
 CCTV_NSW_ENABLED="${CCTV_NSW_ENABLED:-1}"
 CCTV_NSW_MAX_SOURCES="${CCTV_NSW_MAX_SOURCES:-250}"
+CCTV_CALGARY_ENABLED="${CCTV_CALGARY_ENABLED:-1}"
+CCTV_CALGARY_MAX_SOURCES="${CCTV_CALGARY_MAX_SOURCES:-220}"
 CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-4000}"
 
 # Capture which provider credentials genuinely came from the parent shell
@@ -402,6 +405,8 @@ put_env CCTV_TARKTEE_MAX_SOURCES "${CCTV_TARKTEE_MAX_SOURCES}"
 put_env CCTV_WARENDORF_ENABLED "${CCTV_WARENDORF_ENABLED}"
 put_env CCTV_NSW_ENABLED "${CCTV_NSW_ENABLED}"
 put_env CCTV_NSW_MAX_SOURCES "${CCTV_NSW_MAX_SOURCES}"
+put_env CCTV_CALGARY_ENABLED "${CCTV_CALGARY_ENABLED}"
+put_env CCTV_CALGARY_MAX_SOURCES "${CCTV_CALGARY_MAX_SOURCES}"
 put_env CCTV_MAX_SOURCES "${CCTV_MAX_SOURCES}"
 put_env OPENSKY_AUTH_MODE "${OPENSKY_AUTH_MODE}"
 put_env_if_set OPENSKY_CREDENTIALS_FILE "${OPENSKY_CREDENTIALS_FILE}"

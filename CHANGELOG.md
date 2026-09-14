@@ -123,6 +123,15 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Added
 
+- Add Open Calgary traffic cameras as a keyless CCTV source pack (thanks
+  @rileygramlich): the public City of Calgary catalog, frames pinned to the
+  city's own host and upgraded to HTTPS, with the Open Government Licence –
+  City of Calgary attribution. The dataset publishes no camera facing — its
+  quadrant field and the quadrant suffix on each camera name are Calgary's
+  address grid — so headings use the shared id-hash fallback at low confidence
+  and are corrected with the calibration gizmo. `CCTV_CALGARY_MAX_SOURCES` sets
+  the cap and `CCTV_CALGARY_ENABLED=0` turns the pack off.
+
 - Add Ontario 511 as a keyless CCTV source pack, including Kitchener-area
   highway cameras, with server-registered still URLs and attribution.
 - CCTV Mesh adds Finland: Fintraffic road weather cameras, keyless, nationwide, 300 by default. Each camera view of a station is placed separately; ambient stills refresh on the source's 10-minute cadence (the active camera keeps the usual 10-second refresh).
