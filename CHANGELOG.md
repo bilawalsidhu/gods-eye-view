@@ -292,6 +292,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 
 ### Changed
+
+- The interface asks Google Fonts for only the icon glyphs it draws, instead of
+  the whole variable icon font, and no longer requests a second icon family that
+  nothing renders. A check fails when a source names a glyph the request is
+  missing, because an absent glyph does not draw a placeholder — the element
+  renders the glyph's name as text. Contributed by mml-studio (#239).
 - Separate explicit browser build settings from standalone environment loading
   and local provider middleware. Preserve provider behavior and root named exports.
 - Rename standalone browser startup to `src/standalone/` and add a Node-only
