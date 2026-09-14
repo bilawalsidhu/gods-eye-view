@@ -283,6 +283,15 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Remove the annotation GeoJSON conversion module and its tests. Nothing in the
   application read or wrote it, so it carried no behavior. Annotations are
   unchanged. Contributed by raiyan22 (#293).
+- Check the destination preset table as data: every entry carries the keys the
+  camera reads, its numbers are finite, its coordinates are on Earth, its camera
+  angle is one a camera can hold, `viewBounds` latitudes are not swapped, every
+  landmark lies inside its own destination's `viewBounds` (wrapped, so a view
+  across the antimeridian is valid), and every `LOCATIONS` row matches the
+  destination it names. This is a structural guard on the hand-written table for
+  whoever adds the next destination; it passes on the current entries and makes
+  no claim about how well any destination is framed. Contributed by daikaginza
+  (#168).
 
 - Extract application lifecycle and viewer exports. Split standalone startup into
   scene setup, controls, layer registration, tools and loading UI. Startup failure
