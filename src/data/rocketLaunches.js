@@ -183,8 +183,8 @@ export function missionPathPresentation(launch, replayAvailable = false) {
   const orbitAllowed = launchStatusAllowsOrbit(launch?.status);
   const suppliedTrajectoryPoints = Array.isArray(launch?.trajectory)
     ? launch.trajectory.filter((point) => (
-      Number.isFinite(Number(point?.latitude))
-      && Number.isFinite(Number(point?.longitude))
+      finiteNumberOrNull(point?.latitude) !== null
+      && finiteNumberOrNull(point?.longitude) !== null
     )).length
     : 0;
   return {
@@ -2091,25 +2091,38 @@ function startMissionReplay(launchId) {
   return true;
 }
 
-function finiteCoordinate(value) {
+/**
+ * Coerce an upstream numeric field to a finite number WITHOUT the
+ * Number(null)==0 / Number('')==0 trap — an unknown must stay null, never
+ * become a fabricated zero (DATA_PRESET honesty, PR #197 pattern). Real
+ * zeros pass through: only null/undefined/'' are treated as absent.
+ * @param {*} value
+ * @returns {?number}
+ */
+function finiteNumberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
 
-function normalizePayloadFlights(launch) {
+function finiteCoordinate(value) {
+  return finiteNumberOrNull(value);
+}
+
+export function normalizePayloadFlights(launch) {
   const flights = launch.rocket?.payloads || launch.payloads || launch.mission?.payloads || [];
   if (!Array.isArray(flights)) return [];
   return flights.map((flight, index) => {
     const payload = flight.payload || flight;
     return {
       id: String(flight.id || payload.id || `payload-${index}`),
-      name: payload.name || flight.name || 'Undisclosed payload',
+      name: payload.name || flight.name || 'UNNAMED PAYLOAD',
       type: payload.type?.name || flight.type?.name || null,
       manufacturer: payload.manufacturer?.name || null,
       operator: payload.operator?.name || null,
       destination: flight.destination || payload.destination || null,
-      amount: Number.isFinite(Number(flight.amount)) ? Number(flight.amount) : 1,
-      massKg: Number.isFinite(Number(payload.mass)) ? Number(payload.mass) : null,
+      amount: finiteNumberOrNull(flight.amount) ?? 1,
+      massKg: finiteNumberOrNull(payload.mass),
     };
   });
 }
@@ -2252,6 +2265,30 @@ function setMissionPanelField(selector, value, title = '') {
   else output.removeAttribute('title');
 }
 
+/**
+ * One payload row's cells for the mission panel (DATA_PRESET honesty,
+ * PR #197 pattern): a slot with no data renders an explicit unavailable
+ * marker — never a fabricated or borrowed value. A payload with no
+ * recorded destination does NOT inherit the mission's orbit (a launch-level
+ * fact with its own panel field), and a missing mass stays missing rather
+ * than rendering as a guessed figure.
+ *
+ * @param {object} payload Normalized payload record (normalizePayloadFlights).
+ * @returns {string} Three <td> cells.
+ */
+export function payloadRowCells(payload) {
+  const detail = [
+    payload.manufacturer,
+    payload.operator && payload.operator !== payload.manufacturer ? payload.operator : null,
+    Number.isFinite(payload.massKg) ? `${payload.massKg.toLocaleString()} KG` : null,
+  ].filter(Boolean).join(' · ');
+  return [
+    `<td>${escapeMissionText(payload.name)}${payload.amount > 1 ? ` ×${payload.amount}` : ''}${detail ? `<small>${escapeMissionText(detail)}</small>` : ''}</td>`,
+    `<td>${escapeMissionText(payload.type || 'UNSPECIFIED')}</td>`,
+    `<td>${escapeMissionText(payload.destination || 'UNAVAILABLE')}</td>`,
+  ].join('');
+}
+
 function renderMissionPanel() {
   if (!_missionPanel) return;
   const launch = _launches.find((item) => item.id === _selectedLaunchId);
@@ -2270,14 +2307,7 @@ function renderMissionPanel() {
   setMissionPanelField('[data-mission-orbit]', pathPresentation.orbit);
   _missionPanel.querySelector('[data-mission-ascent-source]').textContent = pathPresentation.ascent;
   const payloadRows = launch.payloads.length
-    ? launch.payloads.slice(0, 5).map((payload) => {
-      const detail = [
-        payload.manufacturer,
-        payload.operator && payload.operator !== payload.manufacturer ? payload.operator : null,
-        Number.isFinite(payload.massKg) ? `${payload.massKg.toLocaleString()} KG` : null,
-      ].filter(Boolean).join(' · ');
-      return `<tr><td>${escapeMissionText(payload.name)}${payload.amount > 1 ? ` ×${payload.amount}` : ''}${detail ? `<small>${escapeMissionText(detail)}</small>` : ''}</td><td>${escapeMissionText(payload.type || 'UNSPECIFIED')}</td><td>${escapeMissionText(payload.destination || launch.orbit?.name || 'UNAVAILABLE')}</td></tr>`;
-    })
+    ? launch.payloads.slice(0, 5).map((payload) => `<tr>${payloadRowCells(payload)}</tr>`)
     : [];
   if (launch.payloads.length > 5) {
     payloadRows.push(`<tr><td colspan="3" class="mission-table-empty">+${launch.payloads.length - 5} additional payload records</td></tr>`);
@@ -2285,7 +2315,7 @@ function renderMissionPanel() {
   _missionPanel.querySelector('[data-mission-payloads]').innerHTML = missionTableRows(
     payloadRows,
     3,
-    'CLASSIFIED / MULTI-PAYLOAD',
+    'PAYLOAD DATA UNAVAILABLE',
   );
   const stageRows = launch.recoveryStages.map((stage) => {
     const endpoint = stage.endpoint;
@@ -2786,8 +2816,11 @@ export function normalizeRocketLaunches(payload, now = new Date()) {
     const location = pad.location || {};
     const coordinates = location.coordinates || '';
     const [coordinateLon, coordinateLat] = String(coordinates).split(',').map(Number);
-    const lat = Number.isFinite(Number(pad.latitude)) ? Number(pad.latitude) : coordinateLat;
-    const lon = Number.isFinite(Number(pad.longitude)) ? Number(pad.longitude) : coordinateLon;
+    // finiteNumberOrNull keeps the fallback chain ALIVE for nulls — the old
+    // Number.isFinite(Number(null)) turned a missing pad latitude into 0
+    // instead of falling through to the pad's coordinate string.
+    const lat = finiteNumberOrNull(pad.latitude) ?? coordinateLat;
+    const lon = finiteNumberOrNull(pad.longitude) ?? coordinateLon;
     const payloads = normalizePayloadFlights(launch);
     return {
       id: String(launch.id || launch.slug || launch.name || `launch-${date}`),
@@ -2881,7 +2914,7 @@ function addLaunchEntity(launch, activeTleText = _activeTleText) {
     },
   });
   const points = launch.trajectory
-    .filter((point) => Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude)))
+    .filter((point) => finiteNumberOrNull(point.latitude) !== null && finiteNumberOrNull(point.longitude) !== null)
     .map((point) => ({
       stage: String(point.stage || point.stage_name || point.phase || point.stageName || 'trajectory'),
       position: Cesium.Cartesian3.fromDegrees(Number(point.longitude), Number(point.latitude), Number(point.altitude || 0)),

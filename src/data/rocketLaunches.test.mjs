@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readSource } from '../testSupport/readSource.js';
 import * as Cesium from 'cesium';
 import { gstime } from 'satellite.js';
 import rocketLaunchesLayer, {
@@ -1252,4 +1253,75 @@ test('disable reports a semantic failure while restoring the satellites dependen
     () => rocketLaunchesLayer.disable(),
     /could not restore the satellites layer/,
   );
+});
+
+// --- DATA_PRESET honesty (PR #197 pattern): never fabricate a slot value ---
+
+test('normalizePayloadFlights preserves unknowns as null (mass stays null)', async () => {
+  const { normalizePayloadFlights } = await import('./rocketLaunches.js');
+  const launch = {
+    payloads: [
+      {
+        id: 'p1',
+        name: 'Starlink Group 12-4',
+        mass: '5400',
+        amount: '20',
+        type: { name: 'Communications' },
+        manufacturer: { name: 'SpaceX' },
+        destination: 'LEO',
+      },
+      { id: 'p2' }, // nothing but an id — every other slot is UNKNOWN
+      { id: 'p3', payload: { name: 'Rideshare A', mass: null } }, // explicit null mass
+    ],
+  };
+  const [known, bare, nullMass] = normalizePayloadFlights(launch);
+  assert.equal(known.massKg, 5400, 'numeric strings convert');
+  assert.equal(known.amount, 20, 'numeric string amounts convert');
+  assert.equal(known.type, 'Communications');
+  assert.equal(known.destination, 'LEO');
+
+  assert.equal(bare.massKg, null, 'a missing mass must stay null, never 0 or a guess');
+  assert.equal(bare.type, null);
+  assert.equal(bare.destination, null);
+  assert.equal(bare.manufacturer, null);
+  assert.equal(bare.operator, null);
+  assert.equal(bare.name, 'UNNAMED PAYLOAD');
+  assert.equal(bare.amount, 1);
+
+  assert.equal(nullMass.massKg, null, 'an explicit upstream null stays null');
+  assert.equal(nullMass.name, 'Rideshare A');
+});
+
+test('payloadRowCells renders unavailable markers, never borrowed values', async () => {
+  const { payloadRowCells } = await import('./rocketLaunches.js');
+
+  const bare = payloadRowCells({ id: 'x', name: 'UNNAMED PAYLOAD', amount: 1 });
+  assert.match(bare, /UNSPECIFIED/, 'a missing type says so');
+  assert.match(bare, /UNAVAILABLE/, 'a missing destination says so');
+  assert.ok(!bare.includes('KG'), 'a missing mass must not render as a figure');
+  // The fabrication the plan calls out: the payload cell must NOT inherit
+  // the launch's orbit name as if it were the payload's destination.
+  assert.ok(!bare.includes('SSO') && !bare.includes('SUN-SYNCHRONOUS'));
+
+  const rich = payloadRowCells({
+    id: 'y',
+    name: 'Rideshare A',
+    amount: 3,
+    type: 'Technology',
+    destination: 'SSO',
+    manufacturer: 'Exolaunch',
+    massKg: 1200,
+  });
+  assert.match(rich, /Rideshare A ×3/);
+  assert.match(rich, /1,200 KG/);
+  assert.match(rich, /Exolaunch/);
+  assert.match(rich, /SSO/);
+});
+
+test('mission panel payload table states PAYLOAD DATA UNAVAILABLE, never CLASSIFIED', async () => {
+  const source = readSource('./rocketLaunches.js', import.meta.url);
+  assert.match(source, /'PAYLOAD DATA UNAVAILABLE'/, 'empty manifest renders the honest marker');
+  assert.doesNotMatch(source, /CLASSIFIED/, '"classified" fabricates secrecy where there is merely no data');
+  assert.doesNotMatch(source, /Undisclosed payload/);
+  assert.match(source, /payloadRowCells\(payload\)/, 'renderMissionPanel renders through the pure helper');
 });

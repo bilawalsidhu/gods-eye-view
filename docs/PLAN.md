@@ -612,10 +612,24 @@ acting — the audit described upstream's tree):
       `FIRMS_KEEP_AUTO_SELECT_FAMILY=1` opts out for IPv6-primary networks.
       New `src/data/firmsProxy.test.mjs` pins plugin shape, the /api/firms
       mount, default pin, and the opt-out.
-- [ ] DATA_PRESET honesty (PR #197 pattern): never fabricate a value to fill
-      a slot ("CLASSIFIED" vs "PAYLOAD DATA UNAVAILABLE", preserve null mass
-      as null). Port the normalization tests where the launch payload
-      rendering matches.
+- [x] DATA_PRESET honesty (PR #197 pattern) in the launch payload path:
+      the empty-payloads table label no longer claims "CLASSIFIED / 
+      MULTI-PAYLOAD" — it says "PAYLOAD DATA UNAVAILABLE"; a payload with no
+      recorded destination no longer inherits the launch's orbit name (the
+      orbit keeps its own panel field); the name fallback "Undisclosed
+      payload" (fabricates intent) became "UNNAMED PAYLOAD". The real bug
+      under the doctrine: `Number(null)`/`Number('')` are 0, so an explicit
+      upstream null mass rendered as **0 KG**, a null payload amount as 0,
+      null landing coordinates as **0,0** (Gulf of Guinea), and a null pad
+      latitude short-circuited to 0 instead of falling through to the pad's
+      coordinate string (the fallback existed but was dead for nulls). All
+      coercion now runs through `finiteNumberOrNull` (null/undefined/''
+      absent; real zeros preserved) across `normalizePayloadFlights`,
+      `finiteCoordinate`, the trajectory-point validation filters, and the
+      pad-coordinate chain. Row rendering extracted to the pure exported
+      `payloadRowCells`; `normalizePayloadFlights` exported. 3 new tests
+      (null-preservation matrix, unavailable-marker rendering, source
+      anchors: no CLASSIFIED/Undisclosed left, helper wired).
 
 ## Phase 8 — Post-0.7.0 gap analysis & systematic roadmap (2026-09-10)
 
