@@ -65,6 +65,11 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Fixed
 
+- Bikeshare stations load again. The extracted station source addressed the
+  proxy as `/api/gbfs?url=`, but the proxy reads its upstream target from the
+  path, so every request answered 400 and the layer reported a fetch error for
+  every city.
+
 - Traffic now retries a failed destination after city navigation without a layer
   toggle. Camera departure cancels pending work, arrival checks the final view,
   and superseded requests cannot keep a newer view loading.

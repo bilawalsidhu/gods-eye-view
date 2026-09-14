@@ -18,9 +18,9 @@ test('station source keeps upstream URLs behind the fixed GBFS endpoint', async 
   assert.equal(calls.length, 0);
   await source.getStations('https://example.test/stations.json');
   const url = new URL(calls[0][0], 'https://app.example');
-  assert.equal(url.pathname, '/api/gbfs');
+  assert.equal(url.search, '');
   assert.equal(
-    url.searchParams.get('url'),
+    decodeURIComponent(url.pathname.replace(/^\/api\/gbfs\//, '')),
     'https://example.test/stations.json',
   );
 });
