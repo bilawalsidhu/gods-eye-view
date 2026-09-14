@@ -2077,5 +2077,10 @@
       "src/layers/vessels/recordPolicy.js"
     ],
     "external": []
+  },
+  "directions-layer": {
+    "exports": ["./layers/directions"],
+    "modules": ["src/layers/directions/index.js", "src/data/routeSteps.js"],
+    "external": ["cesium"]
   }
 }

@@ -156,6 +156,7 @@
     "./layers/awareness": "./src/layers/awareness/index.js",
     "./layers/traffic": "./src/layers/traffic/index.js",
     "./layers/bikeshare": "./src/layers/bikeshare/index.js",
+    "./layers/directions": "./src/layers/directions/index.js",
     "./layers/cctv": "./src/layers/cctv/index.js",
     "./layers/alpr": "./src/layers/alpr/index.js",
     "./layers/radio": "./src/layers/radio/index.js",

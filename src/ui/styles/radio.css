@@ -881,3 +881,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* A list line that states a limit rather than offering an action. */
+.data-row-list-item.note {
+  cursor: default;
+  opacity: 0.75;
+  font-style: italic;
+}

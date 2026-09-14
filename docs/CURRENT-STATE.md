@@ -2391,8 +2391,9 @@ kilometre and a half below the city. Clicking a dot opens a protected
 shared-host card with the instruction, the leg after it, and the next
 instruction; Escape or a click on empty globe clears it. Below the chips the
 row lists the turns in order — distance and instruction per step, each one a
-button a keyboard can reach; clicking one opens that maneuver's card, and the
-step the camera is on is highlighted and scrolled into view during FLY. SWAP
+button a keyboard can reach; clicking one opens that maneuver's card once its
+ground cell has resolved, and the step the camera is on is highlighted and
+scrolled into view during FLY. SWAP
 reverses the endpoints and reroutes; changing the mode reroutes; CLEAR removes
 everything. The row meta reads `OSM routing · 21 km · 25 min · Drive`; while
 routing it shows `Routing…`, and a router miss reads
@@ -2414,14 +2415,18 @@ shell's "Exit cockpit to fly to a route" toast, because FLY now goes through
 the same navigation authority as every other camera destination.
 
 **Clicks and the camera.** Arming SET A or SET B claims the shared pointer
-(`src/data/inputOwnership.js`) as owner `directions`, so no other layer selects
-whatever was under the placing click; the claim is released on placement,
-cancel, Escape, CLEAR, disable and destroy, and if another tool already holds
-it nothing is armed and the row says so. Maneuver-dot selection is an ordinary
-ambient handler and yields while any tool holds the pointer. FLY runs through
-the UI shell's immediate-navigation facade — the same camera authority
-validated voice destinations use — and is handed the shared ground-floor read
-and corridor warm, so the dolly does not fly a mountain corridor at sea level.
+(`src/data/inputOwnership.js`) as owner `directions`. The claim is held until
+the click that uses it has finished being dispatched — every layer binds its
+own handler to the same canvas and they all run inside one browser event, so a
+claim dropped the instant the endpoint is placed would hand the rest of that
+same click to the ambient handlers bound after this one. It is returned on the
+next tick after placement, and immediately on cancel, Escape, CLEAR, disable
+and destroy; if another tool already holds it nothing is armed and the row says
+so. Maneuver-dot selection is an ordinary ambient handler and yields while any
+tool holds the pointer. FLY runs through the UI shell's immediate-navigation
+facade — the same camera authority validated voice destinations use — and is
+handed the shared ground-floor read and corridor warm, so the dolly does not
+fly a mountain corridor at sea level. A reroute (SWAP, or a profile change),
 CLEAR, disable and destroy stop the flight *this layer started* and only that
 one: `flyRoute` returns a motion id and `interruptCameraMotionIfActive` refuses
 to stop a motion someone else began.
@@ -2431,10 +2436,25 @@ when the request does (`steps=1`), so a caller that does not read them — the
 voice route annotation, `fly_route` — gets the same small response it always
 did; a cached response that carries steps still serves those callers their own
 shape. Identical requests that are in flight at the same time share one
-upstream call. `src/data/routeSteps.js` turns OSRM maneuver type / modifier /
-exit / road name into one plain-English sentence per decision, folding
+upstream call. Outbound calls pass a shared gate that spaces them at least one
+second apart across every client and profile, which is the rate the routing
+service's usage policy states; past a bounded queue the answer is a 429 with a
+`Retry-After` rather than a queue that grows until everything times out. The
+upstream host is pinned and a redirect is refused rather than followed, and a
+rate limit from the routing service is reported as one instead of as "no route
+found". `src/data/routeSteps.js` turns OSRM maneuver type / modifier / exit /
+road name into one plain-English sentence per decision, folding
 `exit roundabout` steps into the roundabout they leave, and caps one route at
-200 maneuvers.
+200 maneuvers — a route past that cap is reported as cut off, in the row
+summary and as the last line of the list, because the arrival step is among
+the ones dropped.
+
+A step's card opens from its dot on the globe or from its line in the list, and
+the list covers every step including departure and arrival, which have no dot.
+What a card needs is a resolved ground anchor: a step whose ground cell has not
+answered yet opens nothing rather than a card hanging at sea level. The cells
+are re-read for up to 90 seconds, which outlasts a cold terrain round trip;
+reroute, CLEAR and disable cancel that.
 
 `src/data/militaryAwareness.js` remains registered internally as the Contacts
 coordinator, but it is not a user-visible Data Layers entry. Its visible entry

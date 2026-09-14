@@ -339,15 +339,33 @@ try {
   );
   check('A is marked on the globe', state.markerCount === 1);
 
+  // A handler bound to the canvas AFTER this layer's own sees the same click.
+  // That is every ambient selection handler in the app, and it is the one that
+  // used to place B and deselect whatever was under it in the same gesture.
+  await page.evaluate(() => {
+    window.__gevQaLateHandler = [];
+    const canvas = window.__godsEyeView.viewer.scene.canvas;
+    canvas.addEventListener('pointerup', () => {
+      window.__gevQaLateHandler.push(window.__gevQa.pointerOwner());
+    });
+  });
+
   await clickChip('set-b');
   at = await screenAt(GGPARK.lat, GGPARK.lon);
   check('Golden Gate Park is on screen', !!at, JSON.stringify(at));
   await page.mouse.click(at.x, at.y);
+  const lateOwners = await page.evaluate(() => window.__gevQaLateHandler);
+  check(
+    'a handler later in the same click still sees the pointer as taken',
+    lateOwners.length > 0 &&
+      lateOwners.every((owner) => owner === 'directions'),
+    `saw ${JSON.stringify(lateOwners)}`,
+  );
   await waitForRoute();
   await sleep(2000);
   state = await layerState();
   check(
-    'placing B releases the pointer claim too',
+    'once that click is over, the pointer claim is returned',
     state.pointerOwner === null,
     `owner=${state.pointerOwner}`,
   );
@@ -458,7 +476,14 @@ try {
     rapid.stats.coverage,
   );
 
-  // ── 6. Failure states, stubbed at the network edge (only /api/route). ────
+  // ── 6. What the row says for each shape the proxy can answer with.
+  //
+  // These stub the proxy's RESPONSE, so they test this layer's handling of it
+  // and nothing about the proxy itself. What the proxy actually answers for a
+  // routing-service rate limit, a redirect, an over-long route and a full
+  // outbound queue is covered where it can be observed — the provider tests in
+  // src/tooling/placeProviders.test.mjs. The bodies below are the ones those
+  // tests pin, so the two halves meet. ─────────────────────────────────────
   const cdp = await page.target().createCDPSession();
   let stub = null;
   cdp.on('Fetch.requestPaused', async ({ requestId }) => {
@@ -500,10 +525,25 @@ try {
       expect: /No route found between A and B/,
     },
     {
-      name: 'rate limited (429)',
-      stub: { status: 429, body: '{"ok":false,"error":"rate limited"}' },
+      // The exact body the proxy sends when the routing service rate-limits
+      // US (pinned by the provider test of the same name).
+      name: 'the routing service rate-limited us (429)',
+      stub: {
+        status: 429,
+        body: '{"ok":false,"error":"routing service is rate limited"}',
+      },
       wait: 3500,
-      expect: /rate limited/i,
+      expect: /routing service is rate limited/i,
+    },
+    {
+      // And when our own outbound queue is full.
+      name: 'our own outbound queue is full (429)',
+      stub: {
+        status: 429,
+        body: '{"ok":false,"error":"routing busy — too many routes at once"}',
+      },
+      wait: 3500,
+      expect: /routing busy/i,
     },
     {
       name: 'upstream never answers (timeout)',
@@ -562,6 +602,23 @@ try {
     `dom index ${flying.domCurrent}`,
   );
   await shot(`02-${LABEL}-mid-flight.jpg`);
+
+  // A reroute replaces the route the dolly is flying; the dolly has to land
+  // first rather than keep flying a route that no longer exists.
+  await setMode('foot');
+  await sleep(1200);
+  const afterReroute = await layerState();
+  check(
+    'changing profile mid-flight lands the flight it replaced',
+    afterReroute.cameraMotion === null,
+    JSON.stringify(afterReroute.cameraMotion),
+  );
+  await waitForMode('Walk');
+  await setMode('car');
+  await waitForMode('Drive');
+  await sleep(800);
+  check('FLY is offered again after the reroute', await clickChip('fly'));
+  await sleep(2000);
 
   await clickChip('clear');
   await sleep(500);
@@ -646,12 +703,19 @@ try {
         return { dots: collection.length, shown: heights.length, heights };
       });
       check('Denver has maneuver dots', denver.dots > 0, `${denver.dots} dots`);
+      check(
+        'every Denver dot resolved its ground cell — none left hidden',
+        denver.dots > 0 && denver.shown === denver.dots,
+        `${denver.shown} of ${denver.dots} shown`,
+      );
       // Denver's ground is ~1.58-1.65 km ellipsoidal (~1.6 km orthometric plus
       // the local geoid separation). A dot left at a few metres would fail this
       // by a kilometre and a half.
       check(
-        'every visible Denver dot is anchored on the ground, not at sea level',
-        denver.shown > 0 && denver.heights.every((h) => h > 1400 && h < 1900),
+        'every Denver dot is anchored on the ground, not at sea level',
+        denver.dots > 0 &&
+          denver.heights.length === denver.dots &&
+          denver.heights.every((h) => h > 1400 && h < 1900),
         `heights ${denver.heights.map((h) => Math.round(h)).join(', ')}`,
       );
       await shot(`03-${LABEL}-denver-markers.jpg`);
@@ -659,9 +723,15 @@ try {
   }
 
   // ── 10. Disable: nothing is left behind. ────────────────────────────────
-  const beforeDisable = await page.evaluate(
-    () => window.__godsEyeView.viewer.entities.values.length,
-  );
+  const { beforeDisable, directionsBeforeDisable } = await page.evaluate(() => {
+    const entities = [...window.__godsEyeView.viewer.entities.values];
+    return {
+      beforeDisable: entities.length,
+      directionsBeforeDisable: entities.filter((entity) =>
+        String(entity.id).startsWith('directions:'),
+      ).length,
+    };
+  });
   await page.evaluate(() =>
     window.__godsEyeView.dataManager.setEnabled('directions', false, {
       origin: 'user',
@@ -718,9 +788,9 @@ try {
   );
   check('disabling leaves no camera motion running', off.motion === null);
   check(
-    'no other layer lost entities',
-    off.totalEntities <= beforeDisable,
-    `${beforeDisable} -> ${off.totalEntities}`,
+    'exactly the Directions entities went away, and nothing else did',
+    off.totalEntities === beforeDisable - directionsBeforeDisable,
+    `${beforeDisable} total (${directionsBeforeDisable} ours) -> ${off.totalEntities}`,
   );
 
   check(

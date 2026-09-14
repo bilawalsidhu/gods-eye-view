@@ -358,6 +358,8 @@ export class LayerPanel {
       const bodyText = String(item.text ?? '');
       if (lead && lead.textContent !== leadText) lead.textContent = leadText;
       if (text && text.textContent !== bodyText) text.textContent = bodyText;
+      button.disabled = Boolean(item.disabled);
+      button.classList.toggle('note', Boolean(item.disabled));
       button.classList.toggle('active', Boolean(item.active));
       button.classList.toggle('current', Boolean(item.current));
       button.setAttribute('aria-current', item.current ? 'step' : 'false');

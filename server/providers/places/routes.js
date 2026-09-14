@@ -30,6 +30,73 @@ const _routeInflight = new Map();
 /** Hard cap on the OSRM route response we will buffer. */
 const ROUTE_MAX_RESPONSE_BYTES = 8 * 1024 * 1024; // 8 MB
 
+/**
+ * Minimum gap between two OUTBOUND route requests, across every client and
+ * every profile. The FOSSGIS servers publish "one request per second max", and
+ * the per-client rate limiter below cannot honour that on its own: two
+ * different clients, or one client switching DRIVE to WALK, are two different
+ * cache keys and left 48 ms apart upstream. This is the gate that makes the
+ * app's outbound rate what the policy says it may be.
+ */
+export const ROUTE_UPSTREAM_MIN_INTERVAL_MS = 1000;
+
+/**
+ * How many requests may be waiting for that gate at once. Past this the answer
+ * is an honest 429 rather than a queue that grows until everything times out.
+ */
+export const ROUTE_UPSTREAM_QUEUE_MAX = 8;
+
+/** The interval actually in force; only a test ever shortens it. */
+let _upstreamIntervalMs = ROUTE_UPSTREAM_MIN_INTERVAL_MS;
+
+/** Earliest wall-clock time the next outbound request may leave. */
+let _nextUpstreamAt = 0;
+/** Requests currently holding or waiting for the outbound slot. */
+let _upstreamQueueDepth = 0;
+
+/** Thrown when the outbound queue is full; answered as a 429. */
+class RouteBusyError extends Error {
+  constructor(retryAfterMs) {
+    super('routing busy');
+    this.name = 'RouteBusyError';
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
+/** Thrown when the routing service itself rate-limited us. */
+class UpstreamRateLimitError extends Error {
+  constructor(retryAfterSec) {
+    super('routing service is rate limited');
+    this.name = 'UpstreamRateLimitError';
+    this.retryAfterSec = retryAfterSec;
+  }
+}
+
+/**
+ * Run one outbound request no sooner than the shared gate allows.
+ * @template T
+ * @param {() => Promise<T>} run The request.
+ * @returns {Promise<T>}
+ */
+async function throughUpstreamGate(run) {
+  if (_upstreamQueueDepth >= ROUTE_UPSTREAM_QUEUE_MAX) {
+    throw new RouteBusyError(
+      Math.max(0, _nextUpstreamAt - Date.now()) + _upstreamIntervalMs,
+    );
+  }
+  _upstreamQueueDepth += 1;
+  try {
+    const now = Date.now();
+    const slot = Math.max(now, _nextUpstreamAt);
+    _nextUpstreamAt = slot + _upstreamIntervalMs;
+    const wait = slot - now;
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    return await run();
+  } finally {
+    _upstreamQueueDepth -= 1;
+  }
+}
+
 /** Reject routes whose straight-line spans are obviously abusive (km). */
 const ROUTE_MAX_LEG_KM = 600;
 
@@ -44,6 +111,20 @@ const _routeRateLimiter = makeRateLimiter({
 /** Test seam: forget the outbound state this module keeps between requests. */
 export function _resetRouteUpstreamForTest() {
   _routeInflight.clear();
+  _nextUpstreamAt = 0;
+  _upstreamQueueDepth = 0;
+  _upstreamIntervalMs = ROUTE_UPSTREAM_MIN_INTERVAL_MS;
+}
+
+/**
+ * Test seam: shorten the outbound gate so a queue-overflow test does not have
+ * to wait out the real one-per-second policy. The policy value itself is
+ * asserted separately.
+ * @param {number} ms
+ */
+export function _setRouteUpstreamIntervalForTest(ms) {
+  _upstreamIntervalMs =
+    Number.isFinite(ms) && ms >= 0 ? ms : ROUTE_UPSTREAM_MIN_INTERVAL_MS;
 }
 
 /** Test seam: how many upstream calls are coalescing right now. */
@@ -89,11 +170,22 @@ async function fetchRoute({
   const timer = setTimeout(() => controller.abort(), 12000);
   let osrm;
   try {
-    const upstreamRes = await fetchImpl(upstream, {
-      signal: controller.signal,
-      redirect: 'error',
-      headers: { 'User-Agent': 'gods-eye-view/dev (local)' },
-    });
+    const upstreamRes = await throughUpstreamGate(() =>
+      fetchImpl(upstream, {
+        signal: controller.signal,
+        // The endpoint is configured above; a redirect is the one way out of
+        // it, so it is refused rather than followed.
+        redirect: 'error',
+        headers: { 'User-Agent': 'gods-eye-view/dev (local)' },
+      }),
+    );
+    if (upstreamRes.status === 429) {
+      await cancelBody(upstreamRes);
+      const retryAfter = Number(upstreamRes.headers.get('retry-after'));
+      throw new UpstreamRateLimitError(
+        Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 5,
+      );
+    }
     if (!upstreamRes.ok) {
       await cancelBody(upstreamRes);
       return { payload: null, error: 'no route found' };
@@ -115,7 +207,11 @@ async function fetchRoute({
   if (osrm?.code !== 'Ok' || !route?.geometry?.coordinates?.length)
     return { payload: null, error: 'no route found' };
   const payload = projectRouteResult(route, profile);
-  if (withSteps) payload.steps = normalizeOsrmSteps(route);
+  if (withSteps) {
+    const { steps, truncated } = normalizeOsrmSteps(route);
+    payload.steps = steps;
+    if (truncated) payload.stepsTruncated = true;
+  }
   return { payload, error: null };
 }
 
@@ -135,13 +231,16 @@ export function installRouteMiddleware(
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: false, error: msg }));
     };
+    const rateLimited = (msg, retryAfterSec) => {
+      res.writeHead(429, {
+        'Content-Type': 'application/json',
+        'Retry-After': String(Math.max(1, Math.round(retryAfterSec || 5))),
+      });
+      res.end(JSON.stringify({ ok: false, error: msg }));
+    };
     try {
       if (!_routeRateLimiter(clientKey(req))) {
-        res.writeHead(429, {
-          'Content-Type': 'application/json',
-          'Retry-After': '5',
-        });
-        res.end(JSON.stringify({ ok: false, error: 'rate limited' }));
+        rateLimited('rate limited', 5);
         return;
       }
       const url = new URL(req.url, 'http://localhost');
@@ -232,7 +331,27 @@ export function installRouteMiddleware(
         };
         pending.then(settle, settle);
       }
-      const { payload, error } = await pending;
+      let payload;
+      let error;
+      try {
+        ({ payload, error } = await pending);
+      } catch (upstreamError) {
+        if (upstreamError instanceof RouteBusyError) {
+          return rateLimited(
+            'routing busy — too many routes at once',
+            Math.ceil(upstreamError.retryAfterMs / 1000),
+          );
+        }
+        if (upstreamError instanceof UpstreamRateLimitError) {
+          // Reporting this as "no route found" would blame the map for
+          // something the routing service said about us.
+          return rateLimited(
+            'routing service is rate limited',
+            upstreamError.retryAfterSec,
+          );
+        }
+        throw upstreamError;
+      }
       if (error || !payload) return fail(error || 'no route found');
       _routeCache.set(cacheKey, {
         payload,

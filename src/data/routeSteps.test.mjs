@@ -167,7 +167,8 @@ test('normalizeOsrmSteps flattens legs, folds roundabout exits, and drops steps 
       },
     ],
   };
-  const steps = normalizeOsrmSteps(route);
+  const { steps, truncated } = normalizeOsrmSteps(route);
+  assert.equal(truncated, false, 'a short route is complete');
   assert.deepEqual(
     steps.map((s) => s.type),
     ['depart', 'roundabout', 'arrive'],
@@ -185,21 +186,30 @@ test('normalizeOsrmSteps flattens legs, folds roundabout exits, and drops steps 
   assert.equal(steps[2].instruction, 'Arrive at your destination, on the left');
   assert.equal(steps[0].lon, 24.9384);
   assert.equal(steps[0].lat, 60.1699);
-  assert.deepEqual(normalizeOsrmSteps(null), []);
-  assert.deepEqual(normalizeOsrmSteps({ legs: [{ steps: null }] }), []);
+  assert.deepEqual(normalizeOsrmSteps(null), { steps: [], truncated: false });
+  assert.deepEqual(normalizeOsrmSteps({ legs: [{ steps: null }] }), {
+    steps: [],
+    truncated: false,
+  });
 });
 
-test('the step list is capped', () => {
-  const steps = Array.from({ length: ROUTE_STEPS_MAX + 50 }, (_, i) => ({
+test('the step list is capped, and the cap is reported rather than hidden', () => {
+  const many = Array.from({ length: ROUTE_STEPS_MAX + 50 }, (_, i) => ({
     maneuver: { type: 'turn', modifier: 'left', location: [i * 0.001, 0.5] },
     name: `Street ${i}`,
     distance: 10,
     duration: 2,
   }));
-  assert.equal(
-    normalizeOsrmSteps({ legs: [{ steps }] }).length,
-    ROUTE_STEPS_MAX,
-  );
+  const cut = normalizeOsrmSteps({ legs: [{ steps: many }] });
+  assert.equal(cut.steps.length, ROUTE_STEPS_MAX);
+  // The arrival step is among the ones dropped; a caller that is not told so
+  // would present a route that simply stops in the middle of a road.
+  assert.equal(cut.truncated, true);
+  const exact = normalizeOsrmSteps({
+    legs: [{ steps: many.slice(0, ROUTE_STEPS_MAX - 1) }],
+  });
+  assert.equal(exact.steps.length, ROUTE_STEPS_MAX - 1);
+  assert.equal(exact.truncated, false, 'a route that fits is not cut');
 });
 
 test('distance and duration formatting', () => {

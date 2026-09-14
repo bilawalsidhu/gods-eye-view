@@ -14,9 +14,15 @@ import directionsLayer, {
   directionsStepList,
   normalizeDirectionsParams,
   normalizeRoutePayload,
+  stepAnchorDelayMs,
   stepIndexAtDistance,
   stepMarkerHeightM,
   stepMarkerIndices,
+  placeDirectionsEndpoint,
+  STEP_ANCHOR_DEADLINE_MS,
+  STEP_ANCHOR_RETRY_MS,
+  STEP_ANCHOR_SLOW_RETRY_MS,
+  STEP_ANCHOR_FAST_ATTEMPTS,
   _setDirectionsOverlayHostForTest,
 } from './directions.js';
 import { GROUND_FLOOR_LIFT_M } from './groundFloor.js';
@@ -306,15 +312,16 @@ test('maneuver dots skip departure and arrival and ride the shared ground floor'
   );
   // Denver: ground is ~1.6 km ellipsoidal. A dot fixed near zero would sit a
   // kilometre and a half under the junction it marks.
-  assert.equal(stepMarkerHeightM(1609.3), 1609.3 + GROUND_FLOOR_LIFT_M);
-  assert.equal(stepMarkerHeightM(0), GROUND_FLOOR_LIFT_M);
+  const lift = GROUND_FLOOR_LIFT_M;
+  assert.equal(stepMarkerHeightM(1609.3, lift), 1609.3 + lift);
+  assert.equal(stepMarkerHeightM(0, lift), lift);
   assert.equal(
-    stepMarkerHeightM(null),
+    stepMarkerHeightM(null, lift),
     null,
     'a cold cell has no honest height',
   );
-  assert.equal(stepMarkerHeightM(undefined), null);
-  assert.equal(stepMarkerHeightM(Number.NaN), null);
+  assert.equal(stepMarkerHeightM(undefined, lift), null);
+  assert.equal(stepMarkerHeightM(Number.NaN, lift), null);
 });
 
 test('the turn-by-turn list is ordered, labelled, and highlights the flown step', () => {
@@ -531,4 +538,129 @@ test('a release names this layer, so it cannot free a successor tool claim', (t)
   directionsLayer.setParams({ clear: true });
   assert.equal(pointerOwner(), 'draw');
   releasePointer('draw');
+});
+
+test('the pointer claim outlives the click that consumed it', async (t) => {
+  ownershipFixture(t);
+  // Every layer binds its own handler to the same canvas and they all run
+  // inside ONE browser event. Releasing the claim the moment the endpoint is
+  // placed hands the rest of that same click to every ambient handler
+  // registered after this one — which is how placing A on top of a bikeshare
+  // station also deselected the station.
+  directionsLayer.setParams({ arm: 'a' });
+  assert.equal(pointerOwner(), DIRECTIONS_POINTER_OWNER);
+
+  assert.equal(
+    placeDirectionsEndpoint('a', { lat: 37.7955, lon: -122.3937 }),
+    true,
+  );
+  // Still inside the dispatch: an ambient handler that runs after this one
+  // asks the same question the real ones ask, and must be told to stand down.
+  assert.equal(
+    isPointerFree(),
+    false,
+    'a later handler in the same click yields',
+  );
+  assert.equal(pointerOwner(), DIRECTIONS_POINTER_OWNER);
+  // A microtask checkpoint runs BETWEEN two DOM listeners, so the release must
+  // not be on one.
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(
+    isPointerFree(),
+    false,
+    'a microtask is not the end of the click',
+  );
+
+  // The click is over; the pointer goes back.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(
+    isPointerFree(),
+    true,
+    'the claim is returned once the click ends',
+  );
+
+  // A bad placement request changes nothing.
+  directionsLayer.setParams({ arm: 'b' });
+  assert.equal(placeDirectionsEndpoint('c', { lat: 1, lon: 1 }), false);
+  assert.equal(
+    placeDirectionsEndpoint('b', { lat: Number.NaN, lon: 1 }),
+    false,
+  );
+  assert.equal(pointerOwner(), DIRECTIONS_POINTER_OWNER, 'still armed');
+});
+
+test('a teardown during the pending release still frees the pointer at once', async (t) => {
+  ownershipFixture(t);
+  directionsLayer.setParams({ arm: 'a' });
+  placeDirectionsEndpoint('a', { lat: 37.7955, lon: -122.3937 });
+  assert.equal(isPointerFree(), false);
+  // Disabling mid-click must not wait for a timer that may never be reached.
+  directionsLayer.disable(null);
+  assert.equal(isPointerFree(), true);
+  // And the pending timer cannot then release someone else's later claim.
+  claimPointer('draw');
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(pointerOwner(), 'draw');
+  releasePointer('draw');
+});
+
+test('a cold ground cell is re-read for as long as the terrain proxy can take', () => {
+  // The proxy behind the shared floor can take tens of seconds on a cold
+  // cache. Twelve quick retries covered four seconds of that.
+  assert.ok(
+    STEP_ANCHOR_DEADLINE_MS >= 60_000,
+    `the budget must outlast a slow terrain round trip, is ${STEP_ANCHOR_DEADLINE_MS} ms`,
+  );
+  assert.equal(stepAnchorDelayMs(0, 0), STEP_ANCHOR_RETRY_MS);
+  assert.equal(
+    stepAnchorDelayMs(STEP_ANCHOR_FAST_ATTEMPTS - 1, 1000),
+    STEP_ANCHOR_RETRY_MS,
+  );
+  assert.equal(
+    stepAnchorDelayMs(STEP_ANCHOR_FAST_ATTEMPTS, 2000),
+    STEP_ANCHOR_SLOW_RETRY_MS,
+    'the re-reads back off once the quick ones have not settled it',
+  );
+  // The last wait never overshoots the budget, and past it there is no wait.
+  assert.equal(stepAnchorDelayMs(50, STEP_ANCHOR_DEADLINE_MS - 100), 100);
+  assert.equal(stepAnchorDelayMs(50, STEP_ANCHOR_DEADLINE_MS), null);
+  assert.equal(stepAnchorDelayMs(50, STEP_ANCHOR_DEADLINE_MS + 1), null);
+  assert.equal(stepAnchorDelayMs(0, Number.NaN), null);
+});
+
+test('a route cut off at the step cap says so instead of ending at a random turn', () => {
+  const cut = { ...route, stepsTruncated: true };
+  const list = directionsStepList({ route: cut });
+  assert.equal(list.items.length, route.steps.length + 1);
+  const last = list.items.at(-1);
+  assert.match(last.text, /Only the first 3 turns of this route are shown/);
+  assert.equal(last.disabled, true, 'the note is not an action');
+  assert.equal(last.params, undefined, 'and carries no command');
+  assert.match(
+    directionsStats({ ...idle, a: A, b: B, status: 'ready', route: cut })
+      .coverage,
+    /first 3 turns$/,
+  );
+  // A complete route says nothing extra.
+  assert.equal(directionsStepList({ route }).items.length, route.steps.length);
+  assert.equal(
+    normalizeRoutePayload(
+      { ok: true, geometry: route.geometry, steps: route.steps },
+      'car',
+    ).stepsTruncated,
+    false,
+  );
+  assert.equal(
+    normalizeRoutePayload(
+      {
+        ok: true,
+        geometry: route.geometry,
+        steps: route.steps,
+        stepsTruncated: true,
+      },
+      'car',
+    ).stepsTruncated,
+    true,
+  );
 });

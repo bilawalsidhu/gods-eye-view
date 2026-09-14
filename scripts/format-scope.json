@@ -632,5 +632,6 @@
   "src/data/routeSteps.test.mjs",
   "src/data/directions.js",
   "src/data/directions.test.mjs",
-  "src/app/layers/directions.js"
+  "src/app/layers/directions.js",
+  "src/layers/directions/index.js"
 ]

@@ -137,9 +137,14 @@ export function instructionFor(step) {
  * "exit roundabout" / "exit rotary" steps are folded into the roundabout
  * step before them (their distance is the road after the roundabout), so a
  * reader gets one instruction per decision.
+ * A route with more maneuvers than `ROUTE_STEPS_MAX` is cut off there and
+ * reported as cut off, because the last step of a route is its arrival: a
+ * silently truncated list reads as a complete set of directions that simply
+ * stops in the middle of a motorway.
  * @param {{legs?: Array<{steps?: object[]}>}} route OSRM route object.
- * @returns {Array<{index:number, type:string, modifier:string|null, exit:number|null,
- *   name:string, ref:string|null, distanceM:number, durationS:number, lon:number, lat:number, instruction:string}>}
+ * @returns {{steps: Array<{index:number, type:string, modifier:string|null, exit:number|null,
+ *   name:string, ref:string|null, distanceM:number, durationS:number, lon:number, lat:number,
+ *   instruction:string}>, truncated: boolean}}
  */
 export function normalizeOsrmSteps(route) {
   const out = [];
@@ -182,10 +187,10 @@ export function normalizeOsrmSteps(route) {
       }
       step.instruction = instructionFor(step);
       out.push(step);
-      if (out.length >= ROUTE_STEPS_MAX) return out;
+      if (out.length >= ROUTE_STEPS_MAX) return { steps: out, truncated: true };
     }
   }
-  return out;
+  return { steps: out, truncated: false };
 }
 
 /**
