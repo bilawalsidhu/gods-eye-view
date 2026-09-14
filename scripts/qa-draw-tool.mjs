@@ -46,9 +46,6 @@ function check(name, passed, detail = '') {
   );
   if (!passed) failures++;
 }
-function note(name, detail) {
-  console.log(`[NOTE] ${name} — ${detail}`);
-}
 fs.mkdirSync(SHOT_DIR, { recursive: true });
 const shot = (name) =>
   page.screenshot({
@@ -57,6 +54,55 @@ const shot = (name) =>
     quality: 82,
   });
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** A clip of the globe canvas, clear of the panels on every side. */
+const CANVAS_CLIP = { x: 340, y: 200, width: 560, height: 380 };
+
+/**
+ * How many amber pixels the clip contains. The drawn area's stroke and fill are
+ * the only amber in this scene, so the count going UP after a shape is finished
+ * is the shape actually painting — which is what CESIUM_3D_TILE-only
+ * classification failed to do on a keyless boot while still reporting a mark on
+ * the board. Decoding happens in the page because Node here has no image
+ * decoder.
+ */
+async function amberPixels() {
+  const shot64 = await page.screenshot({
+    clip: CANVAS_CLIP,
+    type: 'png',
+    encoding: 'base64',
+  });
+  return page.evaluate(async (base64) => {
+    const bitmap = await createImageBitmap(
+      await (await fetch(`data:image/png;base64,${base64}`)).blob(),
+    );
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext('2d');
+    context.drawImage(bitmap, 0, 0);
+    const { data } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+    let amber = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      // Warm and saturated: the amber mark (#ffb547) blended over imagery.
+      if (r > 150 && g > 90 && g < 220 && b < 130 && r - b > 70 && r - g > 20)
+        amber += 1;
+    }
+    return amber;
+  }, shot64);
+}
+
+/**
+ * Press Enter as the person drawing does — with the map focused, not a button.
+ * Enter on a focused control means "press this control", so the tool ignores it
+ * there; the harness has to move focus the way a user would before using the
+ * finish key.
+ */
+async function pressFinish() {
+  await page.evaluate(() => document.activeElement?.blur?.());
+  await page.keyboard.press('Enter');
+}
 
 /** One click on the globe canvas, the way a person makes one. */
 async function clickWorld(x, y, options = {}) {
@@ -174,6 +220,40 @@ try {
     }),
   );
 
+  // The viewer's OWN click actions, captured before the tool ever runs. Both
+  // must be absent while drawing and back — as the SAME functions — after.
+  await page.evaluate(() => {
+    const Cesium = window.__CESIUM__;
+    const stock = window.__godsEyeView.viewer.screenSpaceEventHandler;
+    window.__qaStock = {
+      click:
+        stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK) || null,
+      double:
+        stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK) ||
+        null,
+    };
+  });
+  const stockActions = () =>
+    page.evaluate(() => {
+      const Cesium = window.__CESIUM__;
+      const stock = window.__godsEyeView.viewer.screenSpaceEventHandler;
+      const live = {
+        click:
+          stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK) || null,
+        double:
+          stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK) ||
+          null,
+      };
+      return {
+        clickPresent: Boolean(live.click),
+        doublePresent: Boolean(live.double),
+        clickIsOriginal: live.click === window.__qaStock.click,
+        doubleIsOriginal: live.double === window.__qaStock.double,
+        hadClick: Boolean(window.__qaStock.click),
+        hadDouble: Boolean(window.__qaStock.double),
+      };
+    });
+
   // ── enable / disable cycles leave nothing behind ────────────────────────
   const before = await drawState();
   for (let cycle = 0; cycle < 3; cycle += 1) {
@@ -193,6 +273,26 @@ try {
       after.stockDoubleClick === before.stockDoubleClick,
     `listeners ${before.domListeners}→${after.domListeners}, previews ${after.previewDataSources}, ` +
       `handler ${after.sceneHandler}, owner ${after.pointerOwner}, stock dblclick ${after.stockDoubleClick}`,
+  );
+
+  // ── the viewer's own click actions are borrowed, then given back ────────
+  await page.click('#draw-toggle');
+  const duringDraw = await stockActions();
+  check(
+    "Cesium's own selecting click and tracking double-click are both borrowed while drawing",
+    duringDraw.clickPresent === false && duringDraw.doublePresent === false,
+    `click present ${duringDraw.clickPresent}, double present ${duringDraw.doublePresent} ` +
+      `(viewer had click ${duringDraw.hadClick}, double ${duringDraw.hadDouble})`,
+  );
+  await page.click('#draw-toggle');
+  const afterDraw = await stockActions();
+  check(
+    'and both are restored as the SAME functions, not replacements',
+    afterDraw.clickPresent === duringDraw.hadClick &&
+      afterDraw.doublePresent === duringDraw.hadDouble &&
+      afterDraw.clickIsOriginal &&
+      afterDraw.doubleIsOriginal,
+    JSON.stringify(afterDraw),
   );
 
   // ── a pin, finished with Enter ──────────────────────────────────────────
@@ -248,6 +348,7 @@ try {
   // ── an area, coloured and labelled, finished with a double-click ────────
   await page.click('.pp-mode-btn[data-shape="area"]');
   await page.select('#draw-color-select', 'amber');
+  const amberBefore = await amberPixels();
   await page.click('#draw-label-input');
   await page.keyboard.type('Civic Center block');
   await clickWorld(400, 280);
@@ -279,6 +380,13 @@ try {
     'the label and colour chosen in the panel are what is drawn',
     areaMark?.color === 'amber',
     JSON.stringify(areaMark),
+  );
+  await wait(1200);
+  const amberAfter = await amberPixels();
+  check(
+    'the finished area actually PAINTS — amber pixels appear on this surface',
+    amberAfter - amberBefore > 500,
+    `${amberBefore} → ${amberAfter} amber pixels (+${amberAfter - amberBefore})`,
   );
   await shot('01-area-with-label');
   await shot('03-pins-and-shapes');
@@ -314,12 +422,14 @@ try {
 
   // ── a click that would select something selects nothing while drawing ───
   const target = await findClickableTarget();
-  if (!target) {
-    note(
-      'layer click ownership',
-      'no selectable layer entity reached the screen; skipped',
-    );
-  } else {
+  check(
+    'a selectable layer entity is on screen to test click ownership against',
+    Boolean(target),
+    target
+      ? `${target.layer} at ${target.x},${target.y}`
+      : 'no CCTV camera or bundled site could be reached — the ownership case cannot be proved',
+  );
+  if (target) {
     await clickWorld(target.x, target.y, { settle: 900 });
     const selectedNormally = await page.evaluate(() =>
       Boolean(window.__godsEyeView.viewer.selectedEntity),
@@ -381,6 +491,19 @@ try {
       document.getElementById('draw-toggle')?.getBoundingClientRect().width > 0,
     { timeout: 10_000 },
   );
+  // The reload built a new page context: re-capture the viewer's own click
+  // actions so the identity comparisons below still mean something.
+  await page.evaluate(() => {
+    const Cesium = window.__CESIUM__;
+    const stock = window.__godsEyeView.viewer.screenSpaceEventHandler;
+    window.__qaStock = {
+      click:
+        stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK) || null,
+      double:
+        stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK) ||
+        null,
+    };
+  });
   await page.evaluate((view) => {
     const viewer = window.__godsEyeView.viewer;
     viewer.camera.cancelFlight?.();
@@ -399,9 +522,41 @@ try {
   await clickWorld(420, 280);
   await clickWorld(700, 300);
   await clickWorld(660, 520);
-  await page.keyboard.press('Enter');
+  await pressFinish();
   const drewAgain = await waitForMarks(1);
   check('a shape can be drawn again after a reload', drewAgain);
+
+  // Enter belongs to whatever the keyboard is on. With Clear focused it must
+  // PRESS CLEAR — the shape in progress goes, and so does the mark already on
+  // the board — and it must NOT quietly finish a second shape.
+  await clickWorld(430, 300);
+  await clickWorld(690, 320);
+  await clickWorld(670, 500);
+  const beforeButtonEnter = await drawState();
+  await page.focus('#draw-clear');
+  await page.keyboard.press('Enter');
+  await wait(600);
+  const afterButtonEnter = await drawState();
+  check(
+    'Enter on a keyboard-focused button activates the button, it does not finish the shape',
+    beforeButtonEnter.vertices === 3 &&
+      beforeButtonEnter.marks === 1 &&
+      afterButtonEnter.marks === 0 &&
+      afterButtonEnter.vertices === 0,
+    `before ${beforeButtonEnter.vertices} vertices / ${beforeButtonEnter.marks} marks, ` +
+      `after ${afterButtonEnter.vertices} / ${afterButtonEnter.marks} ` +
+      '(a finish would have made it 2 marks)',
+  );
+
+  // Put one back so the Clear BUTTON check below has something to remove.
+  await clickWorld(420, 280);
+  await clickWorld(700, 300);
+  await clickWorld(660, 520);
+  await pressFinish();
+  check(
+    'a shape can be drawn after the board was cleared from the keyboard',
+    await waitForMarks(1),
+  );
   await page.click('#draw-clear');
   await wait(400);
   const cleared = await drawState();
@@ -427,7 +582,7 @@ try {
     degenerateVertices === 3,
     `${degenerateVertices} vertices`,
   );
-  await page.keyboard.press('Enter');
+  await pressFinish();
   await wait(600);
   const degenerate = await drawState();
   check(
@@ -435,6 +590,47 @@ try {
     degenerate.marks === 0 && /in a line/.test(degenerate.hint),
     `${degenerate.marks} marks, hint "${degenerate.hint}"`,
   );
+
+  // ── a shape drawn across the antimeridian lands where it was drawn ──────
+  await page.evaluate(() => {
+    const viewer = window.__godsEyeView.viewer;
+    viewer.camera.cancelFlight?.();
+    viewer.camera.setView({
+      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+        longitude: (179.9995 * Math.PI) / 180,
+        latitude: 0,
+        height: 3000,
+      }),
+      orientation: { heading: 0, pitch: (-88 * Math.PI) / 180, roll: 0 },
+    });
+    viewer.scene.requestRender();
+  });
+  await wait(2500);
+  await page.evaluate(() => {
+    const tool = window.__gevDrawTool;
+    tool.cancel();
+    tool.setShape('area');
+    // A ~200 m square straddling 180.
+    tool.addVertex(179.999, -0.001);
+    tool.addVertex(-179.999, -0.001);
+    tool.addVertex(-179.999, 0.001);
+    tool.addVertex(179.999, 0.001);
+  });
+  await pressFinish();
+  const datelineLanded = await waitForMarks(1);
+  const datelineAnchor = await page.evaluate(() => {
+    const mark = window.__gevAnnotations.list()[0];
+    return mark ? { lon: mark.anchor?.lon, lat: mark.anchor?.lat } : null;
+  });
+  check(
+    'a shape drawn across the antimeridian anchors there, not on the Greenwich meridian',
+    datelineLanded &&
+      datelineAnchor &&
+      Math.abs(Math.abs(datelineAnchor.lon) - 180) < 0.1 &&
+      Math.abs(datelineAnchor.lat) < 0.1,
+    JSON.stringify(datelineAnchor),
+  );
+  await page.evaluate(() => window.__gevAnnotations.clear());
 
   await page.click('#draw-toggle');
   await wait(200);
@@ -447,6 +643,61 @@ try {
       finalState.previewDataSources === 1,
     JSON.stringify(finalState),
   );
+  // ── destroy(): the shell disposing the tool leaves nothing behind ───────
+  const beforeDestroy = await page.evaluate(
+    () => window.__godsEyeView.viewer.dataSources.length,
+  );
+  await page.click('#draw-toggle'); // destroy from an ACTIVE session: the harder case
+  await wait(200);
+  const destroyed = await page.evaluate(async () => {
+    const tool = window.__gevDrawTool;
+    const wasActive = tool.active;
+    await tool.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const Cesium = window.__CESIUM__;
+    const viewer = window.__godsEyeView.viewer;
+    const stock = viewer.screenSpaceEventHandler;
+    let previews = 0;
+    for (let i = 0; i < viewer.dataSources.length; i += 1)
+      if (viewer.dataSources.get(i)?.name === 'gev-draw-preview') previews += 1;
+    return {
+      wasActive,
+      diagnostics: tool.diagnostics(),
+      previews,
+      dataSources: viewer.dataSources.length,
+      handleGone: window.__gevDrawTool === undefined,
+      clickRestored:
+        stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK) ===
+        window.__qaStock.click,
+      doubleRestored:
+        stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK) ===
+        window.__qaStock.double,
+      drawingClass: document.body.classList.contains('gev-drawing'),
+    };
+  });
+  check(
+    'destroy() from an active session releases the pointer, handler and listeners',
+    destroyed.wasActive === true &&
+      destroyed.diagnostics.destroyed === true &&
+      destroyed.diagnostics.pointerOwner === null &&
+      destroyed.diagnostics.sceneHandler === false &&
+      destroyed.diagnostics.domListeners === 0 &&
+      destroyed.drawingClass === false,
+    JSON.stringify(destroyed.diagnostics),
+  );
+  check(
+    'destroy() detaches the preview data source and gives the window handle back',
+    destroyed.previews === 0 &&
+      destroyed.dataSources === beforeDestroy - 1 &&
+      destroyed.handleGone,
+    `previews ${destroyed.previews}, dataSources ${beforeDestroy} → ${destroyed.dataSources}, handle gone ${destroyed.handleGone}`,
+  );
+  check(
+    "destroy() returns Cesium's own click actions",
+    destroyed.clickRestored && destroyed.doubleRestored,
+    `click ${destroyed.clickRestored}, double ${destroyed.doubleRestored}`,
+  );
+
   check(
     'no uncaught page errors across the run',
     errors.length === 0,
