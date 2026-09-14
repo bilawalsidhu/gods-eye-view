@@ -58,8 +58,9 @@ become smaller modules with explicit lifecycle owners as their callers migrate.
 
 `gods-eye-view/build/vite` is a separate Node-only export. `build/vite.js`
 creates standard Cesium/Vite browser settings from explicit inputs. It imports
-only the declared `vite-plugin-cesium` build dependency, discovers no environment,
-and constructs no provider middleware. Call it from a Vite configuration:
+`build/cesium.js` and the declared `rollup-plugin-external-globals` build
+dependency, discovers no environment, and constructs no provider middleware.
+Call it from a Vite configuration:
 
 ```js
 import { createBrowserViteConfig } from 'gods-eye-view/build/vite';
@@ -71,7 +72,11 @@ export default createBrowserViteConfig({
 });
 ```
 
-Consumers supply compatible Vite and vite-plugin-cesium development dependencies.
+`build/cesium.js` owns the Cesium wiring: it defines `CESIUM_BASE_URL`, serves the
+unminified build from `node_modules` in development, keeps `cesium` out of the
+production bundle in favour of the prebuilt global, and copies the runtime asset
+directories into the output. Consumers supply compatible Vite and
+`rollup-plugin-external-globals` development dependencies.
 The package's `node` export condition has no browser fallback. The boundary gate
 builds this group for Node, with the declared build dependency external; its
 owned module list is checked just like browser groups. Browser groups cannot

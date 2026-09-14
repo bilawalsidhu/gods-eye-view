@@ -1,5 +1,19 @@
 # Changelog
 
+## Precipitation layer
+
+- Add an optional **Precipitation** layer: ECCC GDPS global modelled precipitation
+  with a NOAA/NWS MRMS observed-radar inlay over the lower 48, both keyless and
+  read directly from the browser.
+- Resolve the tier handover through Cesium's imagery rectangle and level bands
+  rather than a camera listener; a CONUS cutout keeps exactly one source painting
+  any pixel.
+- Own only appended imagery handles, leaving the map controller's base layer at
+  index 0 untouched across stack switches, and withdraw the overlay when a
+  photoreal stack hides the globe.
+- State the forecast lead, model run and valid step on the layer row so a model
+  field is never presented as an observation.
+
 - Split application scene, controls, catalog, tools and HTML into reusable components; configure application request services and sources without changing global fetch. Preserve standalone markup and voice behavior. Explicit annotation navigation may resolve a distant named target.
 
 ## Voice component boundaries

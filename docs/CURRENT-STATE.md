@@ -17,6 +17,27 @@ Google, OSRM and Nominatim adapters accept trusted construction-time configurati
 request parameters cannot choose arbitrary upstream URLs. See APPLICATION.md.
 
 
+The optional **Precipitation** layer is the first data layer to own Cesium imagery
+rather than entities. It draws a zoom-banded precedence stack: Environment and
+Climate Change Canada's GDPS global model covers the globe, and NOAA/NWS MRMS
+radar replaces it over the lower 48 past tile level 6. Cesium resolves the
+handover from each placement's rectangle and level band, so no camera listener
+runs. Three placements are used so exactly one source paints any pixel — the
+model minus a CONUS cutout keeps zoomed-in views elsewhere, because radar's
+transparent no-echo would otherwise let modelled rain show through and read as
+observed. `MapSourceController` still owns the base map at index 0; this layer
+only appends and only removes handles it added, so a base-map switch leaves the
+overlay intact. **GDPS is a model, not an observation**: it runs twice daily, so
+the field valid now is a forecast roughly +5 to +16 hours out. The row states
+this rather than implying a measurement — the count slot carries the lead
+(`+15H`) and the status line the run and valid step (`MODEL · 00Z RUN · VALID
+15:00Z`), with the observed radar step appended when the inlay is loaded. A
+photoreal map stack hides the globe and every imagery layer with it, so the row
+then reports `UNAVAILABLE · GLOBE HIDDEN IN 3D` instead of looking healthy while
+drawing nothing. Both services are keyless, CORS-open and read directly from the
+browser with no proxy. Layer state and the existing voice layer tools include
+`precipitation`.
+
 The optional **ALPR Cameras** layer shows community-mapped OpenStreetMap locations,
 not camera footage or plate records. City-scale queries use the existing Overpass
 provider, with capped results, retry, cached-data and incomplete-coverage notices.

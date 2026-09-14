@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { realpathSync } from 'node:fs';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -27,7 +28,12 @@ test('data providers have both hooks; credential editing stays development-only'
 });
 
 test('real dev and built-preview servers serve provider JSON and terminate unknown APIs', async (t) => {
-  const root = await mkdtemp(path.join(tmpdir(), 'gev-preview-'));
+  // Vite builds its serving allow list through the native realpath, which
+  // resolves Windows 8.3 short names and the macOS /var symlink. Take the same
+  // form here so the dev server does not refuse its own root as out of bounds.
+  const root = realpathSync.native(
+    await mkdtemp(path.join(tmpdir(), 'gev-preview-')),
+  );
   t.after(() => rm(root, { recursive: true, force: true }));
   await writeFile(
     path.join(root, 'index.html'),

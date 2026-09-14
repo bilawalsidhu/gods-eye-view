@@ -2,7 +2,7 @@
   "name": "gods-eye-view",
   "private": true,
   "version": "0.1.1",
-  "description": "A real-time intelligence console for planet Earth \u2014 photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
+  "description": "A real-time intelligence console for planet Earth — photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
   "type": "module",
   "license": "MIT",
   "author": "Bilawal Sidhu",
@@ -56,9 +56,9 @@
   "devDependencies": {
     "prettier": "3.9.6",
     "puppeteer": "^25.10.0",
+    "rollup-plugin-external-globals": "^0.13.0",
     "sharp": "^0.35.4",
     "vite": "^6.0.0",
-    "vite-plugin-cesium": "^1.2.23",
     "ws": "^8.21.0"
   },
   "exports": {
@@ -148,6 +148,7 @@
     "./aircraft": "./src/layers/aircraft/index.js",
     "./layers/vessels": "./src/layers/vessels/index.js",
     "./layers/earthquakes": "./src/layers/earthquakes/index.js",
+    "./layers/precipitation": "./src/layers/precipitation/index.js",
     "./layers/firms": "./src/layers/firms/index.js",
     "./layers/satellites": "./src/layers/satellites/index.js",
     "./layers/launches": "./src/layers/launches/index.js",
@@ -191,5 +192,10 @@
     "./build/html": {
       "node": "./build/application-html.js"
     }
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "fsevents@2.3.3": true,
+    "puppeteer@25.10.0": true
   }
 }

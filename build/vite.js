@@ -1,5 +1,5 @@
 import { applicationHtmlPlugin } from './application-html.js';
-import cesium from 'vite-plugin-cesium';
+import { cesiumPlugin } from './cesium.js';
 
 /** Build browser assets with explicit inputs; never load environment or providers. */
 export function createBrowserViteConfig({
@@ -11,7 +11,7 @@ export function createBrowserViteConfig({
   port = 4173,
 } = {}) {
   return {
-    plugins: [cesium(), applicationHtmlPlugin(), ...plugins],
+    plugins: [cesiumPlugin(), applicationHtmlPlugin(), ...plugins],
     ...(publicDir === undefined ? {} : { publicDir }),
     server: {
       host: host || 'localhost',

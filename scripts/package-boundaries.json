@@ -25,8 +25,12 @@
   "vite-build": {
     "runtime": "node",
     "exports": ["./build/vite", "./build/html"],
-    "modules": ["build/vite.js", "build/application-html.js"],
-    "external": ["vite-plugin-cesium"]
+    "modules": [
+      "build/vite.js",
+      "build/cesium.js",
+      "build/application-html.js"
+    ],
+    "external": ["rollup-plugin-external-globals"]
   },
   "live-providers": {
     "runtime": "node",
@@ -693,6 +697,17 @@
     ],
     "external": ["cesium"]
   },
+  "precipitation-layer": {
+    "exports": ["./layers/precipitation"],
+    "modules": [
+      "src/layers/precipitation/imagery.js",
+      "src/layers/precipitation/index.js",
+      "src/layers/precipitation/model.js",
+      "src/layers/precipitation/policy.js",
+      "src/layers/precipitation/source.js"
+    ],
+    "external": ["cesium"]
+  },
   "earthquakes": {
     "exports": ["./layers/earthquakes"],
     "modules": [
@@ -1134,6 +1149,7 @@
       "src/data/naturalEarthRegions.js",
       "src/data/neighborhoodPolygons.js",
       "src/data/pickRegistry.js",
+      "src/data/precipitation.js",
       "src/data/radio.js",
       "src/data/radioCountry.js",
       "src/data/regionalBrief.js",
@@ -1297,6 +1313,11 @@
       "src/layers/military/state.js",
       "src/layers/military/testing.js",
       "src/layers/military/tracking.js",
+      "src/layers/precipitation/imagery.js",
+      "src/layers/precipitation/index.js",
+      "src/layers/precipitation/model.js",
+      "src/layers/precipitation/policy.js",
+      "src/layers/precipitation/source.js",
       "src/layers/radio/catalogModel.js",
       "src/layers/radio/categories.js",
       "src/layers/radio/clustering.js",

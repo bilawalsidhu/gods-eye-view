@@ -67,6 +67,20 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'eccc-geomet',
+    html:
+      'Precipitation (global model): Environment and Climate Change Canada — ' +
+      'MSC GeoMet GDPS ' +
+      '(<a href="https://eccc-msc.github.io/open-data/msc-geomet/readme_en/" target="_blank" rel="noopener">eccc-msc.github.io</a>). ' +
+      'Contains information licensed under the Open Government Licence – Canada',
+  },
+  {
+    key: 'noaa-nowcoast',
+    html:
+      'Precipitation (US radar): NOAA/NWS MRMS base reflectivity via nowCOAST ' +
+      '(<a href="https://nowcoast.noaa.gov" target="_blank" rel="noopener">nowcoast.noaa.gov</a>)',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +
