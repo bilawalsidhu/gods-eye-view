@@ -231,7 +231,8 @@
       "server/providers/regional/query.js",
       "server/providers/regional/weather-effects.js",
       "server/providers/regional/weather.js",
-      "src/data/regionalModel.js"
+      "src/data/regionalModel.js",
+      "src/nominatimGeocode.js"
     ],
     "external": []
   },
