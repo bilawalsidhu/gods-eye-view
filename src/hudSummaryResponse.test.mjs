@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { Readable } from 'node:stream';
 import test from 'node:test';
 import {
   HUD_SUMMARY_UNCONFIGURED_CODE,
@@ -26,15 +27,23 @@ function installOpenAiRoutes() {
   return routes;
 }
 
-function invokeRoute(handler, { method = 'GET', url = '/', remoteAddress = '127.0.0.1' } = {}) {
+function invokeRoute(handler, {
+  method = 'GET',
+  url = '/',
+  remoteAddress = '127.0.0.1',
+  body = '',
+} = {}) {
   return new Promise((resolve, reject) => {
     const headers = new Map();
-    const req = {
-      method,
-      url,
-      headers: {},
-      socket: { remoteAddress },
-    };
+    const req = Object.assign(
+      Readable.from(body ? [Buffer.from(body)] : []),
+      {
+        method,
+        url,
+        headers: {},
+        socket: { remoteAddress },
+      },
+    );
     const res = {
       statusCode: 200,
       setHeader(name, value) {
@@ -98,8 +107,10 @@ test('does not hide real provider and HTTP failures', () => {
 
 test('the installed keyless HUD route stays successful after the voice quota is exhausted', async () => {
   const previousKey = process.env.OPENAI_API_KEY;
+  const previousHudKey = process.env.HUD_SUMMARY_API_KEY;
   const previousLimit = process.env.GEV_RATELIMIT_OPENAI_PER_MIN;
   process.env.OPENAI_API_KEY = '';
+  process.env.HUD_SUMMARY_API_KEY = '';
   process.env.GEV_RATELIMIT_OPENAI_PER_MIN = '1';
   try {
     const routes = installOpenAiRoutes();
@@ -124,7 +135,60 @@ test('the installed keyless HUD route stays successful after the voice quota is 
   } finally {
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = previousKey;
+    if (previousHudKey === undefined) delete process.env.HUD_SUMMARY_API_KEY;
+    else process.env.HUD_SUMMARY_API_KEY = previousHudKey;
     if (previousLimit === undefined) delete process.env.GEV_RATELIMIT_OPENAI_PER_MIN;
     else process.env.GEV_RATELIMIT_OPENAI_PER_MIN = previousLimit;
+  }
+});
+
+test('the HUD route uses an OpenAI-compatible chat completions host', async () => {
+  const previousOpenAiKey = process.env.OPENAI_API_KEY;
+  const previousHudKey = process.env.HUD_SUMMARY_API_KEY;
+  const previousBaseUrl = process.env.HUD_SUMMARY_BASE_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.OPENAI_API_KEY = '';
+  process.env.HUD_SUMMARY_API_KEY = 'k';
+  process.env.HUD_SUMMARY_BASE_URL = 'http://stub.local/v1';
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, 'http://stub.local/v1/chat/completions');
+    const body = JSON.parse(options.body);
+    assert.ok(Array.isArray(body.messages));
+    assert.equal('max_tokens' in body, false);
+    assert.equal('reasoning' in body, false);
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          choices: [
+            {
+              message: {
+                content: 'Tower Bridge flights and ships extra words',
+              },
+            },
+          ],
+        };
+      },
+    };
+  };
+
+  try {
+    const hud = installOpenAiRoutes().get('/api/openai/hud-summary');
+    const response = await invokeRoute(hud, {
+      method: 'POST',
+      remoteAddress: '127.0.0.2',
+      body: JSON.stringify({ place: 'Tower Bridge' }),
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.summary, 'Tower Bridge flights and ships');
+  } finally {
+    if (previousOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousOpenAiKey;
+    if (previousHudKey === undefined) delete process.env.HUD_SUMMARY_API_KEY;
+    else process.env.HUD_SUMMARY_API_KEY = previousHudKey;
+    if (previousBaseUrl === undefined) delete process.env.HUD_SUMMARY_BASE_URL;
+    else process.env.HUD_SUMMARY_BASE_URL = previousBaseUrl;
+    globalThis.fetch = previousFetch;
   }
 });
