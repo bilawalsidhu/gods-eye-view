@@ -14,6 +14,7 @@ import { createOverlayEntry } from '../overlays/overlayEntry.js';
 import { cachedGroundFloor, warmGroundFloor } from './groundFloor.js';
 import { normalizeRadioCountryInput } from './radioCountry.js';
 import { normalizeRadioFilter } from './layerState.js';
+import { isSafeExternalHttpUrl } from './externalUrlPolicy.js';
 import { horizonOccluder } from './iconOrientation.js';
 import {
   isOwnedByOtherLayer,
@@ -234,40 +235,10 @@ const _playbackControlListeners = new Set();
 const VOICE_RESTORE_DELAY_MS = 650;
 const VOICE_RESTORE_DURATION_MS = 1800;
 
-function isNonGlobalRadioIpv4(hostname) {
-  const pieces = hostname.split('.');
-  if (pieces.length !== 4 || pieces.some((piece) => !/^\d{1,3}$/.test(piece))) return false;
-  const values = pieces.map(Number);
-  if (values.some((value) => value > 255)) return true;
-  const [a, b, c] = values;
-  return a === 0 || a === 10 || a === 127 || a >= 224
-    || (a === 100 && b >= 64 && b <= 127)
-    || (a === 169 && b === 254)
-    || (a === 172 && b >= 16 && b <= 31)
-    || (a === 192 && b === 0)
-    || (a === 192 && b === 88 && c === 99)
-    || (a === 192 && b === 168)
-    || (a === 198 && (b === 18 || b === 19))
-    || (a === 198 && b === 51 && c === 100)
-    || (a === 203 && b === 0 && c === 113);
-}
-
 function isSafeRadioHttpsUrl(value) {
-  if (typeof value !== 'string' || !value) return false;
-  try {
-    const url = new URL(value);
-    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
-    if (url.protocol !== 'https:' || url.username || url.password || !hostname) return false;
-    return !(
-      hostname === 'localhost'
-      || hostname.endsWith('.localhost')
-      || hostname.endsWith('.local')
-      || isNonGlobalRadioIpv4(hostname)
-      || hostname.includes(':')
-    );
-  } catch {
-    return false;
-  }
+  // Shared SSRF policy (src/data/externalUrlPolicy.js) — radio streams are
+  // the https-only flavor; CCTV snapshots allow plaintext http.
+  return isSafeExternalHttpUrl(value, { httpsOnly: true });
 }
 
 function isValidRadioDirectoryStation(station) {

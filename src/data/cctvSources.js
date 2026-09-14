@@ -37,6 +37,7 @@
 import { directionToHeading } from './directionText.js';
 import { api } from '../config/apiEndpoints.js';
 import { resolveGoogleApiKey } from './googlePlacesPolicy.js';
+import { isSafeExternalHttpUrl } from './externalUrlPolicy.js';
 
 /** Path to the optional static CCTV source list (JSON array). */
 export const DEFAULT_CCTV_SOURCE_FILE = 'config/cctv_sources.austin.json';
@@ -721,7 +722,22 @@ async function loadTflSourcesFromOpenData(env = {}) {
  * @param {object} item - Raw source from file, env, or Austin Open Data.
  * @returns {object} Normalized source with all expected fields populated.
  */
-function normalizeSourceItem(item) {
+/**
+ * Load-time URL validation (PR #185, issue #29): a catalog entry's media URLs
+ * are fetched BY THE SERVER, so an entry must never aim that fetch at
+ * loopback, private/link-local ranges, or a credential-embedded URL. Unsafe
+ * values become '' — the camera still lists and renders its synthetic
+ * placeholder; it simply has no live frame. The live open-data packs
+ * (Austin/Caltrans/TfL) all build https URLs on fixed public origins and
+ * pass unchanged.
+ * @param {unknown} value Raw url/snapshotUrl field.
+ * @returns {string} The URL, or '' when it fails the external-URL policy.
+ */
+function safeMediaUrl(value) {
+  return isSafeExternalHttpUrl(value) ? value : '';
+}
+
+export function normalizeSourceItem(item) {
   return {
     id: String(item.id || '').trim(),
     name: String(item.name || item.id || '').trim(),
@@ -738,8 +754,8 @@ function normalizeSourceItem(item) {
     mountHeightM: toFiniteNumber(item.mountHeightM),
     groundElevationM: toFiniteNumber(item.groundElevationM),
     feedType: normalizeFeedType(item.feedType || item.type || ''),
-    url: typeof item.url === 'string' ? item.url : '',
-    snapshotUrl: typeof item.snapshotUrl === 'string' ? item.snapshotUrl : '',
+    url: safeMediaUrl(typeof item.url === 'string' ? item.url : ''),
+    snapshotUrl: safeMediaUrl(typeof item.snapshotUrl === 'string' ? item.snapshotUrl : ''),
     license: String(item.license || item.licenseNote || ''),
     sourceKind: String(item.sourceKind || item.kind || 'configured'),
     // Optional CAL badge input (cctv-v2 design §3b/§9.2, additive-only per the
@@ -940,6 +956,93 @@ export function buildSyntheticCctvSvg({ cameraId, label, city, status }) {
  * they pass through normally. */
 export const MEDIA_DECLARED_CAP_BYTES = 64 * 1024 * 1024;
 
+/** Hard ceiling for ONE buffered camera snapshot (issue #28). Real snapshots
+ *  are 100–500 KB; a hostile or misbehaving upstream that omits
+ *  content-length cannot stream gigabytes into isolate memory before the
+ *  content-type check ever sees a byte. */
+export const CCTV_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+
+/** How long the media proxy will WAIT FOR RESPONSE HEADERS from an upstream
+ *  stream before aborting (issue #25). Disarmed once headers arrive — a
+ *  healthy MJPEG/HLS stream is unbounded by design and must not be killed by
+ *  the timer, but a slow/dark upstream must not hold the request forever. */
+export const CCTV_STREAM_HEADER_TIMEOUT_MS = 15 * 1000;
+
+/**
+ * Read a response body as bytes, refusing bodies larger than `maxBytes` —
+ * the byte-level sibling of `readTextCapped` (functions/_upstream.js).
+ * Honors a declared content-length for a cheap early exit and otherwise
+ * enforces the cap while streaming, cancelling the body past the limit.
+ * Worker-safe (ReadableStream reader only — no Node APIs).
+ * @param {Response} response
+ * @param {number} maxBytes
+ * @returns {Promise<{ok:true,bytes:Uint8Array}|{ok:false}>}
+ */
+export async function readBytesCapped(response, maxBytes) {
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    try { await response.body?.cancel(); } catch { /* no-op */ }
+    return { ok: false };
+  }
+  const reader = response.body?.getReader?.();
+  if (!reader) {
+    const buffer = await response.arrayBuffer();
+    return buffer.byteLength > maxBytes ? { ok: false } : { ok: true, bytes: new Uint8Array(buffer) };
+  }
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      try { await reader.cancel(); } catch { /* no-op */ }
+      return { ok: false };
+    }
+    chunks.push(value);
+  }
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { ok: true, bytes: merged };
+}
+
+/**
+ * Fetch an upstream MEDIA stream URL with a bounded wait for response
+ * headers (issue #25 — the stream proxy previously fetched with no timeout
+ * at all, so a dark upstream held the client request indefinitely). The
+ * abort arms on fetch and MUST be disarmed by the caller once it decides to
+ * take the body: `disarm()` stops the timer so a healthy unbounded stream
+ * (MJPEG/HLS) is never killed mid-flight. A timeout resolves as
+ * `{ ok:false }` exactly like any other upstream miss.
+ * @param {string} url Validated upstream media URL.
+ * @param {object} [options]
+ * @param {Record<string,string>} [options.headers] Request headers (Range etc.).
+ * @param {number} [options.timeoutMs=CCTV_STREAM_HEADER_TIMEOUT_MS]
+ * @param {typeof fetch} [options.fetchImpl=fetch] Injectable for tests.
+ * @returns {Promise<{ok:true, upstream:Response, disarm:()=>void}|{ok:false}>}
+ */
+export async function fetchMediaHeadersBounded(url, {
+  headers = {},
+  timeoutMs = CCTV_STREAM_HEADER_TIMEOUT_MS,
+  fetchImpl = fetch,
+} = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort(new DOMException('CCTV upstream media headers timed out', 'TimeoutError'));
+  }, timeoutMs);
+  try {
+    const upstream = await fetchImpl(url, { headers, signal: controller.signal });
+    return { ok: true, upstream, disarm: () => clearTimeout(timer) };
+  } catch {
+    clearTimeout(timer);
+    return { ok: false };
+  }
+}
+
 /**
  * Build the passthrough status + headers for proxied CCTV media.
  *
@@ -999,7 +1102,9 @@ export async function fetchCctvImageFromUpstream(url, {
   fetchImpl = fetch,
   timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS,
 } = {}) {
-  if (!url || !/^https?:\/\//i.test(url)) return null;
+  // Last-line defense behind the load-time validation in normalizeSourceItem:
+  // a full SSRF gate, not just a scheme check (issue #29).
+  if (!isSafeExternalHttpUrl(url)) return null;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
     controller.abort(new DOMException('CCTV upstream frame fetch timed out', 'TimeoutError'));
@@ -1011,9 +1116,13 @@ export async function fetchCctvImageFromUpstream(url, {
     });
     const contentType = upstream.headers.get('content-type') || '';
     if (!upstream.ok || !contentType.startsWith('image/')) return null;
+    // Byte cap (issue #28): a lying upstream that omits content-length can
+    // no longer buffer unbounded data into the isolate.
+    const read = await readBytesCapped(upstream, CCTV_IMAGE_MAX_BYTES);
+    if (!read.ok) return null;
     return {
       ok: true,
-      body: new Uint8Array(await upstream.arrayBuffer()),
+      body: read.bytes,
       contentType,
     };
   } catch {
@@ -1067,9 +1176,14 @@ export async function streetViewFallback({ lat, lon, heading, fov, pitch, apiKey
     const svType = svResp.headers.get('content-type') || '';
     if (!svResp.ok || !svType.startsWith('image/')) return null;
 
+    // Same byte cap as the camera-image path — the caller is trusted
+    // (fixed Google origin) but the cap is free and symmetric.
+    const read = await readBytesCapped(svResp, CCTV_IMAGE_MAX_BYTES);
+    if (!read.ok) return null;
+
     return {
       ok: true,
-      body: new Uint8Array(await svResp.arrayBuffer()),
+      body: read.bytes,
       contentType: svType,
     };
   } catch {

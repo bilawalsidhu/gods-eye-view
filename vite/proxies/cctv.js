@@ -8,7 +8,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { DEFAULT_CCTV_SOURCE_FILE, buildMediaPassthrough, buildStreamPayload, buildSyntheticCctvSvg, createCctvHealthTracker, fetchCctvImageFromUpstream, getCctvSources, isVideoFeedType, normalizeFeedType, parseConfiguredSourcesFromEnv, streetViewFallback } from '../../src/data/cctvSources.js';
+import { DEFAULT_CCTV_SOURCE_FILE, buildMediaPassthrough, buildStreamPayload, buildSyntheticCctvSvg, createCctvHealthTracker, fetchCctvImageFromUpstream, fetchMediaHeadersBounded, getCctvSources, isVideoFeedType, normalizeFeedType, parseConfiguredSourcesFromEnv, streetViewFallback } from '../../src/data/cctvSources.js';
+import { safeRangeHeader } from '../../src/data/externalUrlPolicy.js';
 import { resolveServerGoogleApiKey } from '../../src/data/googlePlacesPolicy.js';
 import { Readable } from 'node:stream';
 
@@ -186,11 +187,17 @@ export function cctvProxy() {
 
             try {
               const upstreamHeaders = { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' };
-              const requestRange = req.headers?.range;
+              // Forward only a well-formed byte range; anything else is dropped
+              // and the upstream serves the full body (issue #27).
+              const requestRange = safeRangeHeader(req.headers?.range);
               if (requestRange) upstreamHeaders.Range = requestRange;
-              const upstream = await fetch(mediaUrl, {
-                headers: upstreamHeaders,
-              });
+              // Bounded wait for response headers (issue #25): a dark upstream
+              // cannot hold this request forever; disarmed below once we take
+              // the body so a healthy unbounded stream is never killed.
+              const media = await fetchMediaHeadersBounded(mediaUrl, { headers: upstreamHeaders });
+              if (!media.ok) throw new Error('Media upstream timed out');
+              const upstream = media.upstream;
+              media.disarm();
               const contentType = upstream.headers.get('content-type') || '';
               if (!upstream.ok) {
                 setHealth(cameraId, {

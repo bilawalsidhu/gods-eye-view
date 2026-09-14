@@ -572,9 +572,25 @@ acting — the audit described upstream's tree):
       sees the old-generation evidence it greps for. Storage failures are
       swallowed; both helpers have their own test files with an anchor
       pinning the ui.js wiring.
-- [ ] CCTV source-pack URL validation at load time (PR #185, issue #29) and
+- [x] CCTV source-pack URL validation at load time (PR #185, issue #29) and
       the wider CCTV proxy audit (issues #25–#28: bounded timeouts, byte
       caps, Range-header validation, body-size caps on the image path).
+      Landed as `src/data/externalUrlPolicy.js`, the shared SSRF validator
+      (isNonGlobalIpv4 with the full reserved-range list, localhost/.local/
+      credentials/IPv6-literal rejection, `httpsOnly` flavor for radio) with
+      `safeRangeHeader` for the media proxies. `normalizeSourceItem` now
+      sanitizes every catalog entry's `url`/`snapshotUrl` at LOAD time
+      (unsafe → '' → synthetic placeholder, camera still lists); the image
+      path byte-caps at 8 MB (`readBytesCapped`, cancels runaway bodies,
+      honors declared content-length for early exit) and the stream path
+      waits at most 15 s for response headers (`fetchMediaHeadersBounded`,
+      `disarm()`ed once the body is taken so healthy MJPEG/HLS streams are
+      never killed) in BOTH runtimes (vite proxy + Pages Function), which
+      also now validate the client Range header (single byte-range, 19
+      digits max) before forwarding. `fetchCctvImageFromUpstream` keeps a
+      last-line full-policy gate before any network activity. 20 new tests
+      (6 policy + 11 hardening + 3 anchors); radio.js deduped onto the same
+      validator.
 - [ ] `.overpass` mirror list diversity (PR #104): the four mirrors are
       effectively three distinct hosts, and regional-only mirrors poison the
       24 h cache with silently-empty results — only planet-wide instances
