@@ -1273,3 +1273,11 @@
 #global-context-panel #cockpit-entry kbd {
   padding: 2px 4px;
 }
+
+/* Qualified nearby counts must also fit beside the wider loading chip. */
+.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-top {
+  flex-wrap: wrap;
+}
+.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-right {
+  margin-left: auto;
+}

@@ -136,9 +136,7 @@ export class LayerPanel {
 
       const count = document.createElement('span');
       count.className = 'data-count';
-      count.textContent = layer.stats.count
-        ? this._formatCount(layer.stats.count)
-        : '—';
+      count.textContent = this._layerCountText(layer.stats);
 
       const toggle = document.createElement('button');
       toggle.type = 'button';
@@ -202,7 +200,9 @@ export class LayerPanel {
           const chip = this._rowControlsFor(layer.id)?.chips?.find(
             (entry) => entry.id === button.dataset.chipId,
           );
-          if (chip?.params)
+          if (!chip || chip.disabled || !this.isEnabled(layer.id)) return;
+          if (typeof chip.onClick === 'function') chip.onClick();
+          else if (chip.params)
             this.setLayerParams(layer.id, chip.params, { origin: 'user' });
         });
         row.appendChild(controls);
@@ -213,13 +213,12 @@ export class LayerPanel {
     }
   }
 
-  /**
-   * Read a layer's optional row-control descriptor, tolerating a throw so one
-   * misbehaving layer cannot blank the whole panel. Resolved from the registry
-   * rather than the `getAll()` projection, which deliberately omits `module`.
-   * @param {string} layerId Registered layer id.
-   * @returns {{ chips?: Array<object>, legend?: Array<object> }|null} Descriptor.
-   */
+  /** Qualify a loaded count when it does not mean items currently on screen. */
+  _layerCountText(stats) {
+    if (typeof stats.countLabel === 'string' && stats.countLabel.trim())
+      return stats.countLabel;
+    return stats.count ? this._formatCount(stats.count) : '—';
+  }
 
   /**
    * Render a layer's row chips and color legend, and keep the whole block
@@ -307,9 +306,7 @@ export class LayerPanel {
 
       const count = row.querySelector('.data-count');
       if (count) {
-        count.textContent = layer.stats.count
-          ? this._formatCount(layer.stats.count)
-          : '—';
+        count.textContent = this._layerCountText(layer.stats);
       }
 
       const meta = row.querySelector('.data-toggle-meta');

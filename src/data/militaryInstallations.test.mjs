@@ -1,3 +1,4 @@
+import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -782,7 +783,7 @@ test('zoom-out aborts an active installation request and returns non-loading gui
 import { installationRetryDelayMs } from './militaryInstallations.js';
 import fs from 'node:fs';
 
-const installationsSource = fs.readFileSync(
+const installationsSource = readLayerSource(
   new URL('./militaryInstallations.js', import.meta.url), 'utf8');
 
 test('the unavailable retry backs off 30s to a 240s ceiling and restarts clean', () => {
@@ -797,10 +798,10 @@ test('the unavailable retry backs off 30s to a 240s ceiling and restarts clean',
 
 test('the retry is wired to every lifecycle edge, not just declared', () => {
   assert.match(installationsSource,
-    /setInstallationStatus\('unavailable',[^]*?\);\n\s*scheduleUnavailableRetry\(\);/,
+    /setInstallationStatus\(\s*'unavailable',[^]*?\);\n\s*parts\.viewport\.scheduleUnavailableRetry\(\);/,
     'a failed load schedules the retry immediately after reporting unavailable');
   assert.match(installationsSource,
-    /clearUnavailableRetry\(\);\n\s*setInstallationStatus\(\n?\s*state\.records\.length/,
+    /clearUnavailableRetry\(\);\n\s*setInstallationStatus\(\n?\s*layerState\.records\.length/,
     'a successful load clears the pending retry and resets the backoff');
   assert.match(installationsSource,
     /clearUnavailableRetry\(\);\n\s*setInstallationStatus\('zoom-in'/,
@@ -811,6 +812,6 @@ test('the retry is wired to every lifecycle edge, not just declared', () => {
     /function scheduleLoad\(\) \{[^]*?clearUnavailableRetry\(\{ resetBackoff: false \}\)/,
     'a user-driven load supersedes the retry without resetting the backoff step');
   assert.match(installationsSource,
-    /state\.enabled && !state\.loading\) loadInstallations\(\)/,
+    /layerState\.enabled && !layerState\.loading\)\s*parts\.ingestion\.loadInstallations\(\)/,
     'the fired retry re-checks enablement and never races an in-flight load');
 });

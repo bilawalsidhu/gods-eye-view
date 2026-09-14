@@ -1,2 +1,2 @@
-/** Compatibility entry for the standalone application's UI composition. */
-export { StyleManager } from './standalone/ui.js';
+/** Compatibility entry for the application's UI composition. */
+export { StyleManager } from './ui/composition.js';

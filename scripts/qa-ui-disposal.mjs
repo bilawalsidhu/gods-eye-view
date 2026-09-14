@@ -32,6 +32,16 @@ try {
   const result = await page.evaluate(async () => {
     const ui = window.__godsEyeView.styleManager;
     const counts = {};
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: '`',
+        code: 'Backquote',
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    const fpsReadout = document.querySelector('.frame-rate-readout');
+    const fpsWasVisible = fpsReadout && !fpsReadout.hidden;
     const watchObserver = (name) => {
       const owner =
         name === '_draggableResizeObserver'
@@ -210,6 +220,8 @@ try {
           ui._lifetime.frames.size === 0 &&
           ui._lifetime.timers.size === 0 &&
           ui._lifetime.removers.size === 0,
+        frameRateReleased:
+          fpsWasVisible && !fpsReadout.isConnected && fpsReadout.hidden,
         stateStopped: stateNotifications === 0,
         idempotent: once === JSON.stringify(counts),
       };
@@ -218,6 +230,10 @@ try {
       window.removeEventListener = removeEventListener;
     }
   });
+  check(
+    'visible frame-rate monitor is removed on UI disposal',
+    result.frameRateReleased,
+  );
   check(
     'real UI has the expected live resources before disposal',
     result.connected,

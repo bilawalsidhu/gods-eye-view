@@ -199,9 +199,9 @@ export function normalizePhotonFeature(feature) {
  */
 export function photonSearchUrl(
   query,
-  { bias = null, limit = PHOTON_RESULT_LIMIT } = {},
+  { bias = null, limit = PHOTON_RESULT_LIMIT, endpoint = PHOTON_ENDPOINT } = {},
 ) {
-  const url = new URL(PHOTON_ENDPOINT);
+  const url = new URL(endpoint);
   url.searchParams.set('q', String(query ?? ''));
   url.searchParams.set('limit', String(limit));
 
@@ -296,13 +296,19 @@ function trimPhotonCache(cache) {
  */
 export async function geocodeKeylessWithOutcome(
   query,
-  { bias = null, fetchImpl = fetch, signal, cache = photonCache } = {},
+  {
+    bias = null,
+    fetchImpl = fetch,
+    signal,
+    cache = photonCache,
+    endpoint = PHOTON_ENDPOINT,
+  } = {},
 ) {
   signal?.throwIfAborted();
   const trimmed = String(query ?? '').trim();
   if (!trimmed) return { place: null, answered: true };
 
-  const memoKey = `${bias ?? ''}\n${trimmed}`;
+  const memoKey = `${endpoint}\n${bias ?? ''}\n${trimmed}`;
   // Only answered outcomes are memoised, so a hit is always an answer.
   const cached = cache.get(memoKey);
   if (cached && cached.expires > Date.now())
@@ -341,14 +347,16 @@ export async function geocodeKeylessWithOutcome(
   let feature = null;
   let everyAskAnswered = true;
   if (bias) {
-    const biased = await ask(photonSearchUrl(trimmed, { bias }));
+    const biased = await ask(photonSearchUrl(trimmed, { bias, endpoint }));
     if (biased === null) everyAskAnswered = false;
     else feature = selectPhotonFeature(biased, normalizeToponym(trimmed));
   }
 
   signal?.throwIfAborted();
   if (!feature) {
-    const anywhere = await ask(photonSearchUrl(trimmed, { bias: null }));
+    const anywhere = await ask(
+      photonSearchUrl(trimmed, { bias: null, endpoint }),
+    );
     if (anywhere === null) everyAskAnswered = false;
     else {
       // "Hoan Kiem Lake, Hanoi" names a place and then the region holding it, the
@@ -396,10 +404,16 @@ export async function geocodeKeyless(query, options) {
 /** Construct an independent Photon provider with a bounded query cache. */
 export function createPhotonGeocoder({
   fetchImpl = (...args) => fetch(...args),
+  endpoint = PHOTON_ENDPOINT,
 } = {}) {
   const cache = new Map();
   return {
     geocode: (query, options = {}) =>
-      geocodeKeylessWithOutcome(query, { ...options, fetchImpl, cache }),
+      geocodeKeylessWithOutcome(query, {
+        ...options,
+        fetchImpl,
+        cache,
+        endpoint,
+      }),
   };
 }

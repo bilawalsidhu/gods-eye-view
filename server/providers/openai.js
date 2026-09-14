@@ -12,6 +12,7 @@ import { createRealtimeTokenHandler } from './openai/realtime.js';
 function openAiRealtimeProxy({
   sourceRoot = defaultSourceRoot,
   annotationGuidance,
+  realtime = {},
 } = {}) {
   function install(middlewares) {
     middlewares.use('/api/openai/hud-summary', handleHudSummary);
@@ -23,7 +24,7 @@ function openAiRealtimeProxy({
 
     middlewares.use(
       '/api/realtime/token',
-      createRealtimeTokenHandler({ annotationGuidance }),
+      createRealtimeTokenHandler({ ...realtime, annotationGuidance }),
     );
   }
 

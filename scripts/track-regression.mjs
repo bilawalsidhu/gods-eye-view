@@ -85,6 +85,7 @@
  * Exits non-zero if ANY invariant fails. DOES NOT COMMIT anything.
  *
  * Flags:
+ *   --source-base <path>  Browser module prefix (default /src)
  *   --url <url>        App URL (default http://localhost:4173)
  *   --headful          Show the browser (debugging)
  *   --keep-open        Leave the browser open after the run (debugging)
@@ -105,6 +106,7 @@ const getOpt = (name, dflt) => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
 };
 
+const SOURCE_BASE = getOpt('--source-base', '/src').replace(/\/$/, '');
 const APP_URL = getOpt('--url', 'http://localhost:4173');
 const APP_ORIGIN = new URL(APP_URL).origin;
 const HEADFUL = getFlag('--headful');
@@ -251,6 +253,7 @@ async function main() {
 
   try {
     const page = await browser.newPage();
+  await page.evaluateOnNewDocument((base) => { window.__gevQaSourceBase = base; }, SOURCE_BASE);
     await page.setViewport({ width: 1280, height: 800 });
     await page.setRequestInterception(true);
     page.on('request', (request) => {
@@ -2657,7 +2660,7 @@ async function main() {
     const arrival = await evalPage(async () => {
       const v = window.__godsEyeView.viewer;
       const dm = window.__godsEyeView.dataManager;
-      const { screenProjectedRotation } = await import('/src/data/iconOrientation.js');
+      const { screenProjectedRotation } = await import(`${window.__gevQaSourceBase || '/src'}/data/iconOrientation.js`);
       // 3D models OFF for this phase: a model-handed-off billboard is hidden
       // and skips rotation updates entirely — the probes need live billboards
       // (this is also the app's default state the field report came from).
@@ -2939,7 +2942,7 @@ async function main() {
       // Read the thresholds from the app's own policy module so a later retune
       // of the swap distance moves these pins with it rather than stranding
       // them on stale numbers.
-      const reg = await import('/src/data/trackedModelRegime.js');
+      const reg = await import(`${window.__gevQaSourceBase || '/src'}/data/trackedModelRegime.js`);
       window.__dfRegime = {
         enter: reg.TRACKED_MODEL_ENTER_ALT_M,
         exit: reg.TRACKED_MODEL_EXIT_ALT_M,
@@ -2992,7 +2995,7 @@ async function main() {
       const seen = performance.getEntriesByType('resource')
         .map((e) => e.name)
         .filter((n) => /\/src\/data\/groundFloor\.js(\?|$)/.test(n));
-      window.__dfCandidates = [...new Set([...seen.reverse(), '/src/data/groundFloor.js'])];
+      window.__dfCandidates = [...new Set([...seen.reverse(), `${window.__gevQaSourceBase || '/src'}/data/groundFloor.js`])];
       return { candidates: window.__dfCandidates.length };
     });
     record('display-floor: groundFloor module URL candidates found', dfSetup.candidates > 0,
@@ -3289,9 +3292,11 @@ async function main() {
         const bbBefore = window.__dfFindBB('aaa097');
         if (!bbBefore) return { error: 'aaa097 billboard missing' };
         const d0 = window.__dfCarto(bbBefore.position);
-        // Plant a floor well ABOVE where it currently renders, across the block
-        // it can move within, so an UNFLOORED tracked entity is unmistakable.
-        const seeded = d0.h + 40;
+        // Plant above both the current billboard and this group's 400 m
+        // identity-probe floor. A poll can refresh the raw render altitude
+        // after d0 was read; a lower seed makes the negative model-ownership
+        // assertion impossible even when the clamp correctly stands aside.
+        const seeded = Math.max(d0.h, 400) + 40;
         for (let dy = -1; dy <= 1; dy++) {
           for (let dx = -1; dx <= 1; dx++) {
             gf.reportMeshFloorCell(cell(d0.lat) + dy * 0.001, cell(d0.lon) + dx * 0.001, seeded);
@@ -3821,7 +3826,7 @@ async function main() {
         const urls = [...new Set([
           ...performance.getEntriesByType('resource').map((e) => e.name)
             .filter((n) => /\/src\/data\/flights\.js(\?|$)/.test(n)).reverse(),
-          '/src/data/flights.js',
+          `${window.__gevQaSourceBase || '/src'}/data/flights.js`,
         ])];
         for (const url of urls) {
           let mod; try { mod = await import(/* @vite-ignore */ url); } catch { continue; }
