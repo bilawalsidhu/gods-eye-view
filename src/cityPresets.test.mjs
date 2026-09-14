@@ -25,7 +25,7 @@ const wrapLon = (lon) => ((((lon + 180) % 360) + 360) % 360) - 180;
  * A span that crosses the antimeridian has a west greater than its east
  * (179 → -179), and everything outside that pair is what falls between them.
  */
-function lonWithin(lon, west, east) {
+export function lonWithin(lon, west, east) {
   const value = wrapLon(lon);
   const from = wrapLon(west);
   const to = wrapLon(east);
@@ -55,6 +55,11 @@ test('every POI carries the keys the camera reads', () => {
           `${where(id, poi)} is missing ${key}`,
         );
       }
+      // A blank name reaches the pill as an unlabelled button.
+      assert.ok(
+        typeof poi.name === 'string' && poi.name.trim().length > 0,
+        `${id} has a place with no name`,
+      );
     }
   }
 });
@@ -149,5 +154,40 @@ test('every LOCATIONS row matches the destination it names', () => {
       lat: city.pois[0].lat,
       lon: city.pois[0].lon,
     });
+  }
+});
+
+test('containment follows a span across the antimeridian', () => {
+  // No current destination crosses 180°, so the wrapped case is exercised here
+  // rather than left to whoever adds the first one. southwest (-1, 179) to
+  // northeast (1, -179) is a real 2° box straddling the line.
+  const west = 179;
+  const east = -179;
+  assert.equal(lonWithin(179.5, west, east), true);
+  assert.equal(lonWithin(-179.5, west, east), true);
+  assert.equal(lonWithin(180, west, east), true);
+  assert.equal(lonWithin(0, west, east), false);
+  assert.equal(lonWithin(178.9, west, east), false);
+  assert.equal(lonWithin(-178.9, west, east), false);
+  // An ordinary span is unaffected by the wrapping.
+  assert.equal(lonWithin(-97.7, -97.95, -97.55), true);
+  assert.equal(lonWithin(-98.4, -97.95, -97.55), false);
+  // A whole POI checked against a synthetic destination, the way the table
+  // check reads it.
+  const destination = {
+    viewBounds: {
+      southwest: { lat: -1, lng: west },
+      northeast: { lat: 1, lng: east },
+    },
+    pois: [{ name: 'Dateline overlook', lat: 0, lon: 179.5 }],
+  };
+  const { southwest: sw, northeast: ne } = destination.viewBounds;
+  for (const poi of destination.pois) {
+    assert.ok(
+      poi.lat >= sw.lat &&
+        poi.lat <= ne.lat &&
+        lonWithin(poi.lon, sw.lng, ne.lng),
+      'a landmark inside a wrapped view must read as inside',
+    );
   }
 });
