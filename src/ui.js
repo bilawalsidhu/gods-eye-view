@@ -131,6 +131,8 @@ import {
   initLocationBar,
   updateLocationMiniStatus,
 } from './ui/locationBar.js';
+import { purgeStalePanelStorage } from './ui/panelStoragePurge.js';
+import { clampPanelToViewport } from './ui/panelViewportClamp.js';
 import {
   applyContactsDetection,
   shareCacheNeedsHeal,
@@ -2235,6 +2237,23 @@ export class StyleManager {
     this._initCommandDockPins();
     this._initCommandDockTrayMetrics();
     this._maybeNotifyLayoutReset();
+    this._purgeStalePanelStorage();
+  }
+
+  /**
+   * Removes localStorage keys from superseded panel-layout generations
+   * (older `vN.panelPos.*` / `vN.panelCollapsed.*` / `vN.layoutResetNotified`)
+   * that restore would ignore forever. Runs AFTER the reset-notified toast —
+   * that check greps the OLD `v6.panelPos` generation to decide whether to
+   * tell the user their layout was reset, so the purge must not delete the
+   * evidence first. See src/ui/panelStoragePurge.js for the family rules.
+   * @returns {void}
+   */
+  _purgeStalePanelStorage() {
+    purgeStalePanelStorage(localStorage, {
+      positionVersion: PANEL_POSITION_STORAGE_VERSION,
+      layoutVersion: PANEL_LAYOUT_STORAGE_VERSION,
+    });
   }
 
   /**
@@ -3826,12 +3845,10 @@ export class StyleManager {
    */
   _clampToViewport(left, top, panelEl) {
     const rect = panelEl.getBoundingClientRect();
-    const maxLeft = Math.max(6, window.innerWidth - rect.width - 6);
-    const maxTop = Math.max(6, window.innerHeight - rect.height - 6);
-    return {
-      left: Math.max(6, Math.min(maxLeft, left)),
-      top: Math.max(6, Math.min(maxTop, top)),
-    };
+    return clampPanelToViewport(
+      { left, top, width: rect.width, height: rect.height },
+      { width: window.innerWidth, height: window.innerHeight },
+    );
   }
 
   /**
@@ -3913,12 +3930,15 @@ export class StyleManager {
       this._promotePanelZ(panelEl);
 
       const onMove = (moveEvent) => {
-        const nextLeftRaw = moveEvent.clientX - offsetX;
-        const nextTopRaw = moveEvent.clientY - offsetY;
-        const maxLeft = Math.max(6, window.innerWidth - rect.width - 6);
-        const maxTop = Math.max(6, window.innerHeight - rect.height - 6);
-        const nextLeft = Math.max(6, Math.min(maxLeft, nextLeftRaw));
-        const nextTop = Math.max(6, Math.min(maxTop, nextTopRaw));
+        const { left: nextLeft, top: nextTop } = clampPanelToViewport(
+          {
+            left: moveEvent.clientX - offsetX,
+            top: moveEvent.clientY - offsetY,
+            width: rect.width,
+            height: rect.height,
+          },
+          { width: window.innerWidth, height: window.innerHeight },
+        );
         panelEl.style.left = `${nextLeft}px`;
         panelEl.style.top = `${nextTop}px`;
         if (panelId === 'pp-toggles') {

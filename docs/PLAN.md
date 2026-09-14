@@ -554,9 +554,24 @@ acting — the audit described upstream's tree):
       mechanism) so a mechanism swap shows in review. Complements the
       runtime axe pass, which can't see controls added later without a
       browser.
-- [ ] Panel viewport clamping + legacy localStorage key purge (PRs
+- [x] Panel viewport clamping + legacy localStorage key purge (PRs
       #215/#190; local tree is at layout `v6`/position `v8` and only
-      notifies about `v6`).
+      notifies about `v6`). DONE 2026-09-14. Clamping was already in place
+      (drag + restore, audit U2) but untested: the math now lives in the
+      pure `clampPanelToViewport` (`src/ui/panelViewportClamp.js`, inset
+      floor keeps oversized panels' handles reachable) and BOTH ui.js call
+      sites delegate to it — pinned by unit tests plus a source anchor
+      that fails if an inline duplicate of the math reappears. The purge
+      half was the real gap: superseded generations (`vN.panelPos.*`,
+      `vN.panelCollapsed.*`, `vN.layoutResetNotified` where vN is not the
+      live version) accumulated in localStorage forever. The one-time purge
+      (`src/ui/panelStoragePurge.js`) removes ONLY keys from those three
+      versioned families — every other `godsEyeView.*` key (calibrations,
+      scene projects, voice cost, tile caches) and every non-GEV key
+      survives — and runs AFTER the layout-reset toast so that check still
+      sees the old-generation evidence it greps for. Storage failures are
+      swallowed; both helpers have their own test files with an anchor
+      pinning the ui.js wiring.
 - [ ] CCTV source-pack URL validation at load time (PR #185, issue #29) and
       the wider CCTV proxy audit (issues #25–#28: bounded timeouts, byte
       caps, Range-header validation, body-size caps on the image path).
