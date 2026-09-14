@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, realpath, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { build, createServer, preview } from 'vite';
@@ -27,7 +27,11 @@ test('data providers have both hooks; credential editing stays development-only'
 });
 
 test('real dev and built-preview servers serve provider JSON and terminate unknown APIs', async (t) => {
-  const root = await mkdtemp(path.join(tmpdir(), 'gev-preview-'));
+  // Resolve symlinks (macOS tmpdir is /var -> /private/var) so Vite's root and
+  // the files written under it agree on one physical path.
+  const root = await realpath(
+    await mkdtemp(path.join(tmpdir(), 'gev-preview-')),
+  );
   t.after(() => rm(root, { recursive: true, force: true }));
   await writeFile(
     path.join(root, 'index.html'),

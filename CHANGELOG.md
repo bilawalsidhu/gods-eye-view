@@ -273,6 +273,11 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Development
 
+- The CCTV launcher and preview-server tests resolve their temporary fixture
+  root through `fs.realpath`, so they pass on macOS, where the system temp
+  directory is reached through a symlink and the paths the tests compare would
+  otherwise differ. Contributed by VassagoDevteam (#301).
+
 - Extract application lifecycle and viewer exports. Split standalone startup into
   scene setup, controls, layer registration, tools and loading UI. Startup failure
   and terminal shutdown release acquired resources and cancel delayed work.
