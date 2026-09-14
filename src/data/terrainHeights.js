@@ -1,3 +1,4 @@
+import { applicationServices } from '../services/application.js';
 // src/data/terrainHeights.js — batched, cached client terrain-height resolver
 // (docs/plans/2026-07-05-entity-height-datum-fix.md Task 3).
 //
@@ -101,11 +102,8 @@ export function cachedRealEllipsoidalGround(lat, lon) {
 async function fetchChunk(chunk) {
   // lon,lat order (matches the proxy's documented `points=lon,lat;…` contract
   // and Task 2's implementation).
-  const pointsParam = chunk.map(({ lat, lon }) => `${lon.toFixed(5)},${lat.toFixed(5)}`).join(';');
-  const url = `/api/terrain/heights?points=${encodeURIComponent(pointsParam)}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
-  if (!res.ok) throw new Error(`terrain heights proxy HTTP ${res.status}`);
-  const body = await res.json();
+  const results = await applicationServices.terrain.getHeights(chunk, { signal: AbortSignal.timeout(30000) });
+  const body = { results };
   if (!Array.isArray(body?.results)) throw new Error('malformed terrain heights response (no results array)');
   if (body.results.length !== chunk.length) {
     throw new Error(

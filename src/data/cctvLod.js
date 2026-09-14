@@ -31,6 +31,13 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
   'austin transportation & public works': 5 * 60 * 1000,
   'transport for london': 3 * 60 * 1000,
   caltrans: 3 * 60 * 1000,
+  'ontario 511': 3 * 60 * 1000,
+  // TxDOT publishes roughly once a minute; 3 min matches the other highway packs.
+  txdot: 3 * 60 * 1000,
+  // Digitraffic publishes a new weathercam frame on each station's
+  // collectionInterval, 600 s for every station sampled; polling faster only
+  // re-fetches the same JPEG.
+  fintraffic: 10 * 60 * 1000,
 });
 
 /**
@@ -42,7 +49,9 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
  * @returns {{cardLimit:number}}
  */
 export function cctvLodBudgets(cameraHeightM) {
-  const height = Number.isFinite(cameraHeightM) ? Math.max(0, cameraHeightM) : CITY_HEIGHT_M;
+  const height = Number.isFinite(cameraHeightM)
+    ? Math.max(0, cameraHeightM)
+    : CITY_HEIGHT_M;
   if (height <= STREET_HEIGHT_M) {
     return { cardLimit: CCTV_AMBIENT_CARD_MIN };
   }
@@ -68,7 +77,11 @@ export const CCTV_CARD_INCUMBENT_FACTOR = 0.8;
  * @param {number} [factor]
  * @returns {number}
  */
-export function incumbentRankKm(distanceKm, isIncumbent, factor = CCTV_CARD_INCUMBENT_FACTOR) {
+export function incumbentRankKm(
+  distanceKm,
+  isIncumbent,
+  factor = CCTV_CARD_INCUMBENT_FACTOR,
+) {
   const km = Number.isFinite(distanceKm) ? Math.max(0, distanceKm) : Infinity;
   return isIncumbent ? km * factor : km;
 }
@@ -81,8 +94,9 @@ export const CCTV_CARD_SPREAD_PERCENTILE = 0.9;
 
 /** True only when both viewport dimensions are finite positive pixels. */
 export function hasFiniteCctvViewport(viewW, viewH) {
-  return Number.isFinite(viewW) && viewW > 0
-    && Number.isFinite(viewH) && viewH > 0;
+  return (
+    Number.isFinite(viewW) && viewW > 0 && Number.isFinite(viewH) && viewH > 0
+  );
 }
 
 /**
@@ -117,7 +131,10 @@ export function cctvCandidateSpreadKm(
     .filter((distanceKm) => Number.isFinite(distanceKm) && distanceKm >= 0)
     .sort((a, b) => a - b);
   if (!finite.length) return 0;
-  const p = Math.min(1, Math.max(0, Number.isFinite(percentile) ? percentile : 0));
+  const p = Math.min(
+    1,
+    Math.max(0, Number.isFinite(percentile) ? percentile : 0),
+  );
   return finite[Math.round(p * (finite.length - 1))];
 }
 
@@ -176,32 +193,47 @@ export const CCTV_CARD_GRID_ROWS = 4;
  * @returns {string[]} Winner ids in priority order (cell winners, then
  *   global-rank fill).
  */
-export function distributeCctvCards(candidates, {
-  budget = CCTV_AMBIENT_CARD_MAX,
-  viewW = 0,
-  viewH = 0,
-  cols = CCTV_CARD_GRID_COLS,
-  rows = CCTV_CARD_GRID_ROWS,
-} = {}) {
+export function distributeCctvCards(
+  candidates,
+  {
+    budget = CCTV_AMBIENT_CARD_MAX,
+    viewW = 0,
+    viewH = 0,
+    cols = CCTV_CARD_GRID_COLS,
+    rows = CCTV_CARD_GRID_ROWS,
+  } = {},
+) {
   const cap = Number.isFinite(budget) ? Math.max(0, Math.floor(budget)) : 0;
-  const valid = (Array.isArray(candidates) ? candidates : [])
-    .filter((c) => c && typeof c.id === 'string' && c.id
-      && Number.isFinite(c.sx) && Number.isFinite(c.sy));
+  const valid = (Array.isArray(candidates) ? candidates : []).filter(
+    (c) =>
+      c &&
+      typeof c.id === 'string' &&
+      c.id &&
+      Number.isFinite(c.sx) &&
+      Number.isFinite(c.sy),
+  );
   if (!cap || !valid.length) return [];
   const validViewport = hasFiniteCctvViewport(viewW, viewH);
   const width = validViewport ? viewW : 1;
   const height = validViewport ? viewH : 1;
   const nCols = Math.max(1, Math.floor(cols));
   const nRows = Math.max(1, Math.floor(rows));
-  const byRank = (a, b) => (Number.isFinite(a.rankKm) ? a.rankKm : Infinity)
-    - (Number.isFinite(b.rankKm) ? b.rankKm : Infinity)
-    || a.id.localeCompare(b.id);
+  const byRank = (a, b) =>
+    (Number.isFinite(a.rankKm) ? a.rankKm : Infinity) -
+      (Number.isFinite(b.rankKm) ? b.rankKm : Infinity) ||
+    a.id.localeCompare(b.id);
 
   /** @type {Map<number, Array>} occupied cell -> its candidates */
   const cells = new Map();
   for (const candidate of valid) {
-    const col = Math.min(nCols - 1, Math.max(0, Math.floor((candidate.sx / width) * nCols)));
-    const row = Math.min(nRows - 1, Math.max(0, Math.floor((candidate.sy / height) * nRows)));
+    const col = Math.min(
+      nCols - 1,
+      Math.max(0, Math.floor((candidate.sx / width) * nCols)),
+    );
+    const row = Math.min(
+      nRows - 1,
+      Math.max(0, Math.floor((candidate.sy / height) * nRows)),
+    );
     const key = row * nCols + col;
     const bucket = cells.get(key);
     if (bucket) bucket.push(candidate);
@@ -249,29 +281,42 @@ export function distributeCctvCards(candidates, {
  * @param {number} [options.viewH] - Viewport height (CSS px).
  * @returns {{cardIds:string[],budgets:{cardLimit:number}}}
  */
-export function selectCctvLod(candidates, { cameraHeightM, incumbentIds, viewW, viewH } = {}) {
+export function selectCctvLod(
+  candidates,
+  { cameraHeightM, incumbentIds, viewW, viewH } = {},
+) {
   const budgets = cctvLodBudgets(cameraHeightM);
-  const incumbents = incumbentIds instanceof Set ? incumbentIds : new Set(incumbentIds || []);
+  const incumbents =
+    incumbentIds instanceof Set ? incumbentIds : new Set(incumbentIds || []);
   const screened = hasFiniteCctvViewport(viewW, viewH);
   if (!screened) {
     // Preserve the pre-refinement nearest-first path byte-for-behavior,
     // including its acceptance of any non-empty string ID. The stricter
     // valid-viewport rules below must not leak into this compatibility branch.
     const inView = (Array.isArray(candidates) ? candidates : [])
-      .filter((candidate) => candidate && typeof candidate.id === 'string' && candidate.id)
+      .filter(
+        (candidate) =>
+          candidate && typeof candidate.id === 'string' && candidate.id,
+      )
       .map((candidate) => ({
         id: candidate.id,
-        distanceKm: Number.isFinite(candidate.distanceKm) ? Math.max(0, candidate.distanceKm) : Infinity,
-        rankKm: incumbentRankKm(candidate.distanceKm, incumbents.has(candidate.id)),
+        distanceKm: Number.isFinite(candidate.distanceKm)
+          ? Math.max(0, candidate.distanceKm)
+          : Infinity,
+        rankKm: incumbentRankKm(
+          candidate.distanceKm,
+          incumbents.has(candidate.id),
+        ),
         inView: candidate.inView === true,
         isVideo: candidate.isVideo === true,
       }))
       .filter((candidate) => candidate.inView)
-      .sort((a, b) => (
-        a.rankKm - b.rankKm
-        || a.distanceKm - b.distanceKm
-        || a.id.localeCompare(b.id)
-      ));
+      .sort(
+        (a, b) =>
+          a.rankKm - b.rankKm ||
+          a.distanceKm - b.distanceKm ||
+          a.id.localeCompare(b.id),
+      );
     const cardIds = [];
     const seen = new Set();
     for (const candidate of inView) {
@@ -284,9 +329,15 @@ export function selectCctvLod(candidates, { cameraHeightM, incumbentIds, viewW, 
   }
   const eligibleById = new Map();
   for (const candidate of Array.isArray(candidates) ? candidates : []) {
-    if (!candidate || typeof candidate.id !== 'string' || !candidate.id.trim()
-      || candidate.inView !== true || candidate.isVideo === true
-      || !Number.isFinite(candidate.distanceKm)) continue;
+    if (
+      !candidate ||
+      typeof candidate.id !== 'string' ||
+      !candidate.id.trim() ||
+      candidate.inView !== true ||
+      candidate.isVideo === true ||
+      !Number.isFinite(candidate.distanceKm)
+    )
+      continue;
     const normalized = {
       id: candidate.id,
       distanceKm: Math.max(0, candidate.distanceKm),
@@ -295,7 +346,14 @@ export function selectCctvLod(candidates, { cameraHeightM, incumbentIds, viewW, 
       sy: Number.isFinite(candidate.sy) ? candidate.sy : NaN,
     };
     const current = eligibleById.get(normalized.id);
-    if (!current || compareCctvRepresentative(normalized, current, { screened, viewW, viewH }) < 0) {
+    if (
+      !current ||
+      compareCctvRepresentative(normalized, current, {
+        screened,
+        viewW,
+        viewH,
+      }) < 0
+    ) {
       eligibleById.set(normalized.id, normalized);
     }
   }
@@ -304,7 +362,9 @@ export function selectCctvLod(candidates, { cameraHeightM, incumbentIds, viewW, 
   // robust distance scale or consume a bounded ambient-card slot.
   const stills = [...eligibleById.values()];
 
-  const spreadKm = cctvCandidateSpreadKm(stills.map((candidate) => candidate.distanceKm));
+  const spreadKm = cctvCandidateSpreadKm(
+    stills.map((candidate) => candidate.distanceKm),
+  );
   for (const candidate of stills) {
     const blendedKm = blendCenterRankKm(
       candidate.distanceKm,
@@ -313,17 +373,22 @@ export function selectCctvLod(candidates, { cameraHeightM, incumbentIds, viewW, 
     );
     candidate.rankKm = incumbentRankKm(blendedKm, incumbents.has(candidate.id));
   }
-  stills.sort((a, b) => (
-    a.rankKm - b.rankKm
-    || a.distanceKm - b.distanceKm
-    || a.id.localeCompare(b.id)
-  ));
+  stills.sort(
+    (a, b) =>
+      a.rankKm - b.rankKm ||
+      a.distanceKm - b.distanceKm ||
+      a.id.localeCompare(b.id),
+  );
 
   let cardIds;
   // Item C: screen-distributed fill. Candidates lacking screen anchors are
   // dropped by the distribution pass; top up from the ranked pool
   // (defensive — cctv.js always projects anchors for in-view candidates).
-  cardIds = distributeCctvCards(stills, { budget: budgets.cardLimit, viewW, viewH });
+  cardIds = distributeCctvCards(stills, {
+    budget: budgets.cardLimit,
+    viewW,
+    viewH,
+  });
   if (cardIds.length < budgets.cardLimit) {
     const chosen = new Set(cardIds);
     for (const candidate of stills) {
@@ -336,10 +401,12 @@ export function selectCctvLod(candidates, { cameraHeightM, incumbentIds, viewW, 
 }
 
 function compareCctvRepresentative(a, b, { screened, viewW, viewH }) {
-  if (a.distanceKm !== b.distanceKm) return a.distanceKm < b.distanceKm ? -1 : 1;
+  if (a.distanceKm !== b.distanceKm)
+    return a.distanceKm < b.distanceKm ? -1 : 1;
   if (screened) {
-    const centerDelta = screenCenterFraction(a.sx, a.sy, viewW, viewH)
-      - screenCenterFraction(b.sx, b.sy, viewW, viewH);
+    const centerDelta =
+      screenCenterFraction(a.sx, a.sy, viewW, viewH) -
+      screenCenterFraction(b.sx, b.sy, viewW, viewH);
     if (centerDelta) return centerDelta;
   }
   const ax = Number.isFinite(a.sx) ? a.sx : Infinity;
@@ -414,7 +481,10 @@ export function applyEvictionGrace({
   // Under cap pressure the grace-period cards go first, oldest-in-grace
   // first (they have had the longest chance to return); ties break on more
   // misses, then id for determinism.
-  graced.sort((a, b) => a.since - b.since || b.misses - a.misses || a.id.localeCompare(b.id));
+  graced.sort(
+    (a, b) =>
+      a.since - b.since || b.misses - a.misses || a.id.localeCompare(b.id),
+  );
   const capacity = Math.max(0, cardLimit - keepIds.length);
   const overflow = Math.max(0, graced.length - capacity);
   for (let i = 0; i < graced.length; i++) {
@@ -423,7 +493,10 @@ export function applyEvictionGrace({
       continue;
     }
     keepIds.push(graced[i].id);
-    nextGrace.set(graced[i].id, { misses: graced[i].misses, since: graced[i].since });
+    nextGrace.set(graced[i].id, {
+      misses: graced[i].misses,
+      since: graced[i].since,
+    });
   }
 
   return { keepIds, evictIds, graceState: nextGrace };
@@ -442,6 +515,8 @@ export function staticFrameRefreshMs(camera) {
   if (Number.isFinite(explicit) && explicit > 0) {
     return Math.max(60_000, Math.min(20 * 60 * 1000, Math.round(explicit)));
   }
-  const provider = String(camera?.provider || '').trim().toLowerCase();
+  const provider = String(camera?.provider || '')
+    .trim()
+    .toLowerCase();
   return PROVIDER_STATIC_REFRESH_MS[provider] || DEFAULT_STATIC_REFRESH_MS;
 }
