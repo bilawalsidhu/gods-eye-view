@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { isPointerFree } from '../../data/inputOwnership.js';
 import {
   LAYER_ID,
   MAX_VIEWPORT_DEGREES,
@@ -376,6 +377,8 @@ export function createAlprPresentation({ state, services, source }) {
       viewer.scene.canvas,
     );
     state.clickHandler.setInputAction((click) => {
+      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
+      if (!isPointerFree()) return;
       if (!state.enabled) return;
       const picked = viewer.scene.pick(click.position);
       const id = typeof picked?.id?.id === 'string' ? picked.id.id : null;

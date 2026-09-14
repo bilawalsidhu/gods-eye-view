@@ -19,8 +19,8 @@ const ROOT = path.resolve(
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const tool = () => read('src/annotations/drawTool.js');
 
-test('the standalone composition wires the draw tool and owns its teardown', () => {
-  const tools = read('src/standalone/tools.js');
+test('the application composition wires the draw tool and owns its teardown', () => {
+  const tools = read('src/app/tools.js');
   const engineAt = tools.indexOf('const annotations = initAnnotations({');
   const drawAt = tools.indexOf(
     'const drawTool = initDrawTool({ viewer, annotations });',
@@ -62,7 +62,9 @@ test('the engine resolves manual geometry before any name resolution', () => {
 });
 
 test('the Draw control markup carries the ids the tool binds to', () => {
-  const html = read('index.html');
+  // The DISPLAY rail is a component template now, assembled into index.html at
+  // build time — the markup is not in index.html any more.
+  const html = read('src/ui/templates/display-controls.html');
   const ids = [
     'draw-toggle',
     'draw-mode-row',
@@ -189,16 +191,26 @@ test('the draw modules are registered for formatting and boundary checks', () =>
     );
   }
   const boundaries = JSON.parse(read('scripts/package-boundaries.json'));
-  const group = boundaries.annotations;
-  assert.ok(group, 'the annotation tree needs an ownership group of its own');
+  const owners = (file) =>
+    Object.entries(boundaries)
+      .filter(([, group]) => group.modules?.includes(file))
+      .map(([name]) => name);
   for (const file of [
     'src/annotations/drawMode.js',
     'src/annotations/drawTool.js',
     'src/data/inputOwnership.js',
   ]) {
     assert.ok(
-      group.modules.includes(file),
-      `${file} must be owned by a boundary group`,
+      owners(file).length > 0,
+      `${file} must be owned by at least one boundary group`,
+    );
+  }
+  // Every layer that consults the shared claim has to own the module it reads,
+  // or its bundle fails the boundary check.
+  for (const group of ['alpr-cameras', 'vessel-layer', 'satellites-layer']) {
+    assert.ok(
+      boundaries[group]?.modules.includes('src/data/inputOwnership.js'),
+      `${group} consults the pointer claim and must own the module`,
     );
   }
   const exports = JSON.parse(read('package.json')).exports;
