@@ -6,14 +6,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { makeFixtureRoot } from './tooling/fixtureRoot.mjs';
 
 const run = promisify(execFile);
 const bashTest = process.platform === 'win32' ? test.skip : test;
 
 async function launch(overrides = {}, dotenv = '', omitCctv = false) {
-  // Resolve symlinks (macOS tmpdir is /var -> /private/var) so the physical
-  // cwd reported by the launched process matches the fixture root.
-  const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'gev-cctv-launch-')));
+  // Physical path: the launched process reports its cwd resolved, and macOS
+  // reaches the temp directory through a symlink.
+  const root = await makeFixtureRoot('gev-cctv-launch-');
   try {
     await fs.mkdir(path.join(root, 'scripts'));
     await fs.mkdir(path.join(root, 'bin'));

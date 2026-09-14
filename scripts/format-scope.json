@@ -7,6 +7,8 @@
   "scripts/check-package-boundaries.mjs",
   "scripts/precompute-cctv-heights.mjs",
   "src/tooling/precomputeCctvHeights.test.mjs",
+  "src/tooling/fixtureRoot.mjs",
+  "src/tooling/fixtureRoot.test.mjs",
   "src/tooling/format.test.mjs",
   "src/tooling/packageBoundaries.test.mjs",
   "src/data/infrastructure.js",
