@@ -1450,7 +1450,15 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   user intent.
 >   Display orders 3D immediately above Celestial and Clean UI immediately
 >   below it. The top-center action group places Clear Layers to the left of
->   Share and Reset Globe to the right. Clear Layers turns off the currently
+>   Share, then Tilt Map and North Up, and Reset Globe to the right. Tilt Map
+>   swings the camera between a straight-down map and a 35-degree oblique around
+>   the point under the centre of the view, keeping that point and the distance
+>   to it; North Up rotates around the same point until north is at the top,
+>   keeping the pitch. Its needle shows the current bearing. Both decline
+>   without moving the camera when nothing is under the centre of the view (a
+>   camera facing the sky), and both are explicit camera actions, so either one
+>   releases a followed aircraft the way the other camera controls do. They
+>   follow Reset Globe out of Clean UI, recording, Scene playback and Cockpit. Clear Layers turns off the currently
 >   selected manager-owned data layers, including an active Context choice,
 >   while retaining visual, HUD, map, and panel settings. A disabled layer may
 >   still release camera work that it owns through its normal teardown.
@@ -1496,8 +1504,9 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   the Cockpit HUD at 145), scrolling internally when the layer list is longer than
 >   the corridor. Cesium's credit line is never passable and still bounds the
 >   corridor. Layer toggles stay live from there, and collapsing returns the
->   plain launcher. The map-only Clear, Share, and Reset Globe actions are hidden
->   for the duration of Cockpit, both as a group and as individual controls.
+>   plain launcher. The map-only Clear, Share, Tilt Map, North Up, and Reset
+>   Globe actions are hidden for the duration of Cockpit, both as a group and as
+>   individual controls.
 >   It uses the `radar` symbol; both tabs are reachable with Tab and Left/Right arrows switch between them. Its action row
 >   places the single Cockpit entry before Search Nearby Sites. Cockpit removes
 >   the duplicate floating map entry and topline exit; the bottom-center
@@ -1607,9 +1616,9 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   tray inside the screen.
 >   Adaptive remeasurement preserves the user's
 >   scroll position across Tactical, Minimal, and HUD Off layouts.
->   During an active Scene run, Clear Selected Layers and Reset Globe remain
->   hidden until playback stops or completes because the Scene transport owns
->   layer and camera sequencing for that interval.
+>   During an active Scene run, Clear Selected Layers, Tilt Map, North Up and
+>   Reset Globe remain hidden until playback stops or completes because the
+>   Scene transport owns layer and camera sequencing for that interval.
 >   The Cockpit Contact summary exposes Previous and Next contact navigation
 >   plus its collapse control; it does not offer a Focus action because the
 >   first-person Cockpit camera remains owned by the tracked aircraft.
