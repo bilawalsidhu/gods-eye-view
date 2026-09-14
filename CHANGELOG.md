@@ -268,9 +268,11 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   own module directories, which the 5.1 verifier cannot load, so the check failed
   and the credential was refused. The verify script now sets its module path from
   the running interpreter's own home, and the environment it is launched with
-  carries that one value and no differently cased alias of it. Covered by tests
-  over a stubbed process launcher; the behavior on a real Windows machine is what
-  the Windows onboarding CI job exercises. Contributed by michaelhan1208 (#161).
+  carries that one value and no differently cased alias of it. The tests that
+  cover it drive a stubbed process launcher, so what they check is the command
+  and environment the code builds; the Windows onboarding CI job now also runs
+  this file, where its one Windows-only case exercises the real hardener against
+  real native tools. Contributed by michaelhan1208 (#161).
 
 - Extract panel disclosure and hover/focus controls into a reusable module;
   cancel their listeners and pending work during replacement and teardown.
