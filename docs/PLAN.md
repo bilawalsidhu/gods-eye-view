@@ -449,10 +449,22 @@ acting — the audit described upstream's tree):
       route is in the apiEndpoints parity inventory (dev mount + Pages
       Function, enforced by test). A deployment wanting Google-grade geocoding
       (Places recovery, viewport quality) can still set GOOGLE_MAPS_API_KEY.
-- [ ] Allocation gates calibrated for every supported Node major (issue #39):
-      CI fails on an uncalibrated runtime (better than upstream's silent
-      skip), but budgets are Node-24-only while `package.json` advertises
-      Node 24 and 26.
+- [x] Allocation gates calibrated for every supported Node major (issue #39):
+      DONE 2026-09-13 — the full GC-bracketed battery was re-measured under
+      v26.8.2 and every budget held with NO per-major table needed: the focus
+      probe reports the identical medians (16 / 16 / 168 B against the
+      16 / 16 / 212 budgets), and all 13 world-overlay rows landed inside
+      their frame/candidate gates (most below their Node 24 numbers; the
+      tightest rows stable across repeat runs — Phase 5 aggregate 129,665
+      B/frame on 3/3 identical runs vs the 132,000 gate). Node 26 joined
+      `CALIBRATED_ALLOCATION_NODE_MAJORS` in the runner (probes now RUN on
+      both advertised majors instead of skipping), the CI test job became a
+      matrix over both majors still requiring
+      `GEV_REQUIRE_ALLOCATION_GATE=1`, and a runner unit test enforces that
+      `package.json` engines never advertises an uncalibrated major. A future
+      major (27+) must be measured before joining the set; until then it
+      skips locally and fails pinned batteries — the same deliberate
+      failure the issue asked for.
 - [x] Bundle budgets (issue #40): DONE 2026-09-13 in two moves — the precache
       diet (Batch 6 icon-subset entry: shell-only `globPatterns`, 19 MB →
       6.0 MB precache) decided what ships by default vs lazy-loads, and

@@ -10,10 +10,13 @@ import { isCalibratedAllocationRuntime } from '../../scripts/run-unit-tests.mjs'
  *   options literals. The latter preserves roughly 25% headroom over the
  *   locally measured steady-state median instead of pretending those caller
  *   allocations belong to the pure helper bound.
+ *
+ * Node 26 calibration (issue #39, 2026-09-13): v26.8.2 measures the identical
+ * medians (16 / 16 / 168) — no per-major budget needed.
  */
 test('converged focus treatment stays within the GC-bracketed allocation budget', (t) => {
   if (!isCalibratedAllocationRuntime()) {
-    return t.skip(`allocation budgets are calibrated for Node 24; running ${process.versions.node}`);
+    return t.skip(`allocation budgets are calibrated for Node 24 and 26; running ${process.versions.node}`);
   }
   const result = spawnSync(
     process.execPath,

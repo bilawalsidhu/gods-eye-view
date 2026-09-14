@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   ALLOCATION_TEST_FILES,
   allocationTestArgs,
-  assertNode24AllocationRuntime,
+  assertCalibratedAllocationRuntime,
   buildUnitTestPlan,
   isCalibratedAllocationRuntime,
 } from '../scripts/run-unit-tests.mjs';
@@ -38,19 +38,22 @@ test('unit runner serializes only GC-bracketed allocation microbenchmarks', () =
   );
 });
 
-test('allocation runtime calibration is explicit and pinned to Node 24', () => {
-  assert.equal(assertNode24AllocationRuntime('24.19.0'), '24.19.0');
+test('allocation runtime calibration is explicit and pinned to measured Node majors', () => {
+  // Every major package.json advertises must be IN the calibrated set; a new
+  // major requires a measured calibration pass first (issue #39).
+  assert.equal(assertCalibratedAllocationRuntime('24.19.0'), '24.19.0');
+  assert.equal(assertCalibratedAllocationRuntime('26.8.2'), '26.8.2');
   assert.throws(
-    () => assertNode24AllocationRuntime('22.23.1'),
-    /calibrated Node 24 runtime/,
+    () => assertCalibratedAllocationRuntime('22.23.1'),
+    /calibrated runtime \(Node 24 or 26\)/,
   );
   assert.throws(
-    () => assertNode24AllocationRuntime('26.0.0'),
-    /calibrated Node 24 runtime/,
+    () => assertCalibratedAllocationRuntime('27.0.0'),
+    /calibrated runtime \(Node 24 or 26\)/,
   );
   assert.equal(isCalibratedAllocationRuntime('24.19.0'), true);
   assert.equal(isCalibratedAllocationRuntime('22.23.1'), false);
-  assert.equal(isCalibratedAllocationRuntime('26.3.0'), false);
+  assert.equal(isCalibratedAllocationRuntime('26.3.0'), true, 'whole 26 major is calibrated');
 });
 
 test('npm test stays green on every supported engine, not only the calibrated one', () => {
@@ -74,6 +77,19 @@ test('npm test stays green on every supported engine, not only the calibrated on
   assert.ok(pkg.c8.exclude.includes('**/*.test.mjs'));
   const enginesNode = String(pkg.engines?.node || '');
   assert.ok(enginesNode, 'engines.node must be declared');
+  // Issue #39: every major the package advertises must be a calibrated
+  // allocation runtime — CI runs the suite on each of them with the gate
+  // required, so an advertised-but-uncalibrated major would fail there.
+  const runnerSource = readSource('../scripts/run-unit-tests.mjs', import.meta.url);
+  const calibrated = runnerSource.match(/CALIBRATED_ALLOCATION_NODE_MAJORS = Object\.freeze\(new Set\(\[([^\]]+)\]\)\)/);
+  assert.ok(calibrated, 'the calibrated major set must stay declared in the runner');
+  for (const major of calibrated[1].split(',').map((v) => Number.parseInt(v.trim(), 10))) {
+    assert.match(
+      enginesNode,
+      new RegExp(`>=${major}`),
+      `advertised engines must include the calibrated major ${major}`,
+    );
+  }
   // The runner throws for uncalibrated runtimes ONLY behind the explicit
   // opt-in env; by default it skips, so a supported non-24 engine cannot fail.
   const runner = readSource('../scripts/run-unit-tests.mjs', import.meta.url);

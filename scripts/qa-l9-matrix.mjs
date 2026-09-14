@@ -133,7 +133,7 @@ const env = {
   //           check that depends on it FAILS rather than skipping
   //   null    deliberately not probed (--cheap)
   keys: {},
-  node24: null,      // { bin, label } for the calibrated allocation runtime
+  calibratedNode: null, // { bin, label } for a calibrated allocation runtime (Node 24 or 26)
   reachable: false,  // got ANY HTTP response (even a 500) — vs connection refused
   shellStatus: null, // the app shell's HTTP status, for the ENV-vs-FAIL split
   browserVersion: null,
@@ -549,7 +549,7 @@ const check = (spec) => { CHECKS.push(spec); };
 
 // ─── A · REPO GATES ───────────────────────────────────────────────────────
 check({
-  id: 'A1', group: 'A', desc: 'Node runtime satisfies package.json engines (allocation budgets are pinned to Node 24)',
+  id: 'A1', group: 'A', desc: 'Node runtime satisfies package.json engines (allocation budgets are pinned to calibrated Node majors)',
   run: async () => {
     const pkg = JSON.parse(readFileSync(resolve(REPO_ROOT, 'package.json'), 'utf8'));
     const range = pkg.engines?.node || '(unset)';
@@ -560,10 +560,10 @@ check({
     if (satisfied) return pass(`node ${process.versions.node} satisfies "${range}"`);
     // An off-range runtime is an environment problem, not a product defect —
     // but it silently disables the allocation gate, so say so loudly. A3 then
-    // runs that gate under a discovered Node 24.
-    return env.node24
-      ? skip(`node ${process.versions.node} is OUTSIDE "${range}"; A3 runs the allocation gate under ${env.node24.label}, but prefer running the whole L9 pass on Node 24`, 'ENV')
-      : fail(`node ${process.versions.node} is OUTSIDE "${range}" and no Node 24 runtime was found — the allocation gate cannot run at all`);
+    // runs that gate under a discovered calibrated runtime.
+    return env.calibratedNode
+      ? skip(`node ${process.versions.node} is OUTSIDE "${range}"; A3 runs the allocation gate under ${env.calibratedNode.label}, but prefer running the whole L9 pass on a calibrated Node`, 'ENV')
+      : fail(`node ${process.versions.node} is OUTSIDE "${range}" and no calibrated runtime was found — the allocation gate cannot run at all`);
   },
 });
 
@@ -582,13 +582,14 @@ check({
 });
 
 check({
-  id: 'A3', group: 'A', desc: 'Allocation microbenchmarks actually EXECUTE (they silently skip off Node 24)',
+  id: 'A3', group: 'A', desc: 'Allocation microbenchmarks actually EXECUTE (they silently skip off the calibrated Node majors)',
   run: async () => {
     // npm test prints "[unit] SKIPPED n allocation microbenchmarks" and still
-    // exits 0 when the runtime is not Node 24. A green suite is therefore NOT
-    // proof the gate ran. Force it, under Node 24 when one is discoverable.
+    // exits 0 when the runtime is not a calibrated major (24 or 26). A green
+    // suite is therefore NOT proof the gate ran. Force it, under a calibrated
+    // runtime when one is discoverable.
     //
-    // ALWAYS invoke the Node 24 BINARY directly — never `npm test`. npm
+    // ALWAYS invoke the calibrated BINARY directly — never `npm test`. npm
     // re-resolves the interpreter from PATH and can land back on the system
     // Node even when THIS process is already 24: running the whole matrix under
     // `mise exec node@24.19.0 --`, the npm shell-out still re-execed system
@@ -600,10 +601,10 @@ check({
       const v = await sh(bin, ['--version'], { timeoutMs: 60000 });
       const version = (v.out || '').trim();
       if (!isCalibratedAllocationRuntime(version)) {
-        // run-unit-tests.mjs refuses to measure calibrated budgets off Node 24,
+        // run-unit-tests.mjs refuses to measure budgets off a calibrated major,
         // so a wrong binary means the gate never ran. That is this check failing
         // to establish its own claim — not evidence about the product.
-        return crash(`the runtime selected for the allocation gate (${label}) reports ${version || 'no parseable version'}, not Node 24 — the gate would refuse or silently skip, so this check verified nothing`);
+        return crash(`the runtime selected for the allocation gate (${label}) reports ${version || 'no parseable version'}, not a calibrated Node major (24 or 26) — the gate would refuse or silently skip, so this check verified nothing`);
       }
       const r = await sh(bin, [resolve(REPO_ROOT, 'scripts/run-unit-tests.mjs')], {
         timeoutMs: 600000, env: { GEV_REQUIRE_ALLOCATION_GATE: '1' },
@@ -613,10 +614,9 @@ check({
         : fail(`allocation gate failed under ${label} (${version}): ${tail(r.out) || tail(r.err)}`);
     };
 
-    const [maj] = process.versions.node.split('.').map(Number);
-    if (maj === 24) return runGate(process.execPath, 'this runtime');
-    if (env.node24) return runGate(env.node24.bin, env.node24.label);
-    return skip(`no Node 24 runtime found (running ${process.versions.node}); the gate SKIPS silently — install Node 24 and re-run`, 'OWNER-RUN');
+    if (isCalibratedAllocationRuntime()) return runGate(process.execPath, 'this runtime');
+    if (env.calibratedNode) return runGate(env.calibratedNode.bin, env.calibratedNode.label);
+    return skip(`no calibrated runtime found (running ${process.versions.node}); the gate SKIPS silently — install Node 24 or 26 and re-run`, 'OWNER-RUN');
   },
 });
 
@@ -2371,21 +2371,23 @@ async function preflight() {
     } catch { env.keys.OPENAI = 'error'; }
   }
 
-  // A Node 24 runtime for the allocation gate (mise/nvm), if one exists.
+  // A calibrated runtime for the allocation gate (mise/nvm), if one exists.
+  // CALIBRATED_ALLOCATION_NODE_MAJORS (run-unit-tests.mjs) is authoritative;
+  // the regexes below mirror its majors.
   const mise = await sh('mise', ['ls', 'node'], { timeoutMs: 20000 });
-  const m24 = /node\s+(24\.[0-9.]+)/.exec(mise.out || '');
-  if (m24) {
-    const where = await sh('mise', ['where', `node@${m24[1]}`], { timeoutMs: 20000 });
+  const mCal = /node\s+((?:24|26)\.[0-9.]+)/.exec(mise.out || '');
+  if (mCal) {
+    const where = await sh('mise', ['where', `node@${mCal[1]}`], { timeoutMs: 20000 });
     const bin = resolve((where.out || '').trim(), 'bin', 'node');
-    if (existsSync(bin)) env.node24 = { bin, label: `mise node@${m24[1]}` };
+    if (existsSync(bin)) env.calibratedNode = { bin, label: `mise node@${mCal[1]}` };
   }
-  if (!env.node24) {
+  if (!env.calibratedNode) {
     const nvmBin = resolve(process.env.HOME || '', '.nvm/versions/node');
     if (existsSync(nvmBin)) {
       const listed = await sh('ls', [nvmBin], { timeoutMs: 20000 });
-      const v24 = (listed.out || '').split('\n').map((s) => s.trim()).find((s) => /^v?24\./.test(s));
-      const bin = v24 ? resolve(nvmBin, v24, 'bin', 'node') : null;
-      if (bin && existsSync(bin)) env.node24 = { bin, label: `nvm ${v24}` };
+      const vCal = (listed.out || '').split('\n').map((s) => s.trim()).find((s) => /^v?(24|26)\./.test(s));
+      const bin = vCal ? resolve(nvmBin, vCal, 'bin', 'node') : null;
+      if (bin && existsSync(bin)) env.calibratedNode = { bin, label: `nvm ${vCal}` };
     }
   }
 }
@@ -2416,7 +2418,7 @@ async function main() {
   if (env.shellStatus >= 400) {
     console.log(C.r(`  shell  : HTTP ${env.shellStatus} — the target is RESPONDING but erroring. Running the matrix anyway; this is a product failure, not an environment one.`));
   }
-  console.log(`  node   : ${process.versions.node}${env.node24 ? C.d(` (Node 24 available: ${env.node24.label})`) : ''}`);
+  console.log(`  node   : ${process.versions.node}${env.calibratedNode ? C.d(` (calibrated Node available: ${env.calibratedNode.label})`) : ''}`);
   console.log(`  keys   : OpenSky ${keyLabel(env.keys.OPENSKY)} · FIRMS ${keyLabel(env.keys.FIRMS)} · TomTom ${keyLabel(env.keys.TOMTOM)} · AISStream ${keyLabel(env.keys.AIS)} · OpenAI ${keyLabel(env.keys.OPENAI)}`);
   console.log(C.d('  (key presence is read from each proxy\'s own status report; no key value is ever read or logged)\n'));
 

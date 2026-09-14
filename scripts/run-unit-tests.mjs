@@ -8,15 +8,34 @@ export const ALLOCATION_TEST_FILES = Object.freeze([
   'src/overlays/worldOverlayAllocation.test.mjs',
 ]);
 
-/** Whether this runtime matches the one the allocation budgets were calibrated on. */
-export function isCalibratedAllocationRuntime(version = process.versions.node) {
-  return Number.parseInt(String(version).split('.')[0], 10) === 24;
+/**
+ * Node majors on which the GC-bracketed allocation budgets are calibrated.
+ * 24 is the original calibration runtime; 26 was measured 2026-09-13
+ * (v26.8.2) — every world-overlay row and the focus probe landed within the
+ * existing budgets (see the probe docblocks), so no per-major budget table
+ * was needed. A new major (27+) must be measured before joining this set;
+ * elsewhere the probes SKIP (or FAIL under GEV_REQUIRE_ALLOCATION_GATE) per
+ * issue #39.
+ */
+export const CALIBRATED_ALLOCATION_NODE_MAJORS = Object.freeze(new Set([24, 26]));
+
+/** Allocation major for a version string (NaN when unparseable). */
+export function allocationMajor(version = process.versions.node) {
+  return Number.parseInt(String(version).split('.')[0], 10);
 }
 
-/** Require the runtime on which allocation budgets were calibrated. */
-export function assertNode24AllocationRuntime(version = process.versions.node) {
+/** Whether this runtime matches one the allocation budgets were calibrated on. */
+export function isCalibratedAllocationRuntime(version = process.versions.node) {
+  return CALIBRATED_ALLOCATION_NODE_MAJORS.has(allocationMajor(version));
+}
+
+/** Require a runtime on which allocation budgets are calibrated. */
+export function assertCalibratedAllocationRuntime(version = process.versions.node) {
   if (!isCalibratedAllocationRuntime(version)) {
-    throw new Error(`Allocation budgets require the calibrated Node 24 runtime; received ${version}`);
+    throw new Error(
+      `Allocation budgets require a calibrated runtime (Node `
+      + `${[...CALIBRATED_ALLOCATION_NODE_MAJORS].join(' or ')}); received ${version}`,
+    );
   }
   return version;
 }
@@ -99,19 +118,23 @@ export function runUnitTests({ coverage = false, parallelOnly = false } = {}) {
     return 0;
   }
 
-  // The GC-bracketed budgets are calibrated on Node 24 and are meaningless on
-  // other allocators. A contributor's suite must stay green on any supported
-  // engine (package.json permits >=24), so uncalibrated runtimes skip the
-  // probes with a warning. Set GEV_REQUIRE_ALLOCATION_GATE=1 (pinned CI /
-  // release batteries) to make an uncalibrated runtime a hard failure.
+  // The GC-bracketed budgets are allocator-sensitive: they are calibrated per
+  // supported Node major (24 originally, 26 measured 2026-09-13 — see
+  // CALIBRATED_ALLOCATION_NODE_MAJORS). A contributor's suite must stay green
+  // on any supported engine (package.json permits >=24), so uncalibrated
+  // runtimes skip the probes with a warning. Set GEV_REQUIRE_ALLOCATION_GATE=1
+  // (pinned CI / release batteries) to make an uncalibrated runtime a hard
+  // failure — CI runs the suite on every calibrated major for exactly this.
   if (!isCalibratedAllocationRuntime()) {
     if (process.env.GEV_REQUIRE_ALLOCATION_GATE === '1') {
-      assertNode24AllocationRuntime();
+      assertCalibratedAllocationRuntime();
     }
     console.warn(
       `[unit] SKIPPED ${ALLOCATION_TEST_FILES.length} allocation microbenchmarks: `
-      + `budgets are calibrated for Node 24, running ${process.versions.node}. `
-      + 'Run under Node 24 (or set GEV_REQUIRE_ALLOCATION_GATE=1 to fail instead).',
+      + `budgets are calibrated for Node `
+      + `${[...CALIBRATED_ALLOCATION_NODE_MAJORS].join(' and ')}, running `
+      + `${process.versions.node}. `
+      + 'Run under a calibrated Node (or set GEV_REQUIRE_ALLOCATION_GATE=1 to fail instead).',
     );
     return 0;
   }

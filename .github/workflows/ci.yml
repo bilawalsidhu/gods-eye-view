@@ -4,10 +4,10 @@
 #   - strict lint (eslint --max-warnings 0) — the policy lives in
 #     eslint.config.js; zero warnings tolerated, narrow justified inline
 #     disables only;
-#   - unit suite (scripts/run-unit-tests.mjs) under Node 24 — the runtime the
-#     allocation microbenchmarks were calibrated on, with
-#     GEV_REQUIRE_ALLOCATION_GATE=1 so an uncalibrated runtime FAILS here
-#     instead of silently skipping the budgets;
+#   - unit suite (scripts/run-unit-tests.mjs) under every calibrated Node
+#     major (24 and 26 — the runtimes the allocation microbenchmarks were
+#     measured on), with GEV_REQUIRE_ALLOCATION_GATE=1 so an uncalibrated
+#     runtime FAILS here instead of silently skipping the budgets;
 #   - a coverage job publishing the measured number (no threshold gate yet —
 #     see Phase 3 of docs/PLAN.md);
 #   - production build (vite build) — the artifact a Pages deploy ships —
@@ -49,11 +49,18 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every major in CALIBRATED_ALLOCATION_NODE_MAJORS
+        # (scripts/run-unit-tests.mjs) — keep the two in sync; the runner's
+        # own unit test enforces that package.json engines covers the set.
+        node-version: ['24', '26']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: ${{ matrix.node-version }}
           cache: npm
       - name: Install
         run: npm ci

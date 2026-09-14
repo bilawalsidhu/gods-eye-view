@@ -110,6 +110,18 @@ import { isCalibratedAllocationRuntime } from '../../scripts/run-unit-tests.mjs'
  * ~101,000 B/frame. Hoisting a signed Smi offset and applying it in the painter
  * fixed that regression. A separate saturated vertical-only queue revisit was
  * then profiled and fixed before this full table was re-derived.
+ *
+ * Node 26 calibration (issue #39, 2026-09-13): the whole table was re-measured
+ * under v26.8.2 — all 13 rows landed INSIDE the existing budgets, so no
+ * per-major budget table was needed. Medians sat within ±11% of the Node 24
+ * numbers (most rows below them: phase3-vessels 57,096 vs 67,252 B/frame;
+ * detection 491,474 vs 524,191). The two tightest rows held stable across
+ * repeat runs: the pre-missions Phase 5 aggregate 129,665 B/frame (219.4
+ * B/candidate) against the 132,000 / 225 gates on 3/3 identical runs, and
+ * submarine cables 16,066–18,178 B/frame against 19,000. The suite therefore
+ * runs these probes on Node 24 AND Node 26 (CALIBRATED_ALLOCATION_NODE_MAJORS
+ * in scripts/run-unit-tests.mjs); any new major must be measured before
+ * joining.
  */
 const WORKLOADS = [
   {
@@ -314,7 +326,7 @@ function runAllocationProbe(entryCount, profile = 'generic') {
 for (const workload of WORKLOADS) {
   test(`steady moving-source frames stay in budget ${workload.name}`, (t) => {
     if (!CALIBRATED_ALLOCATION_RUNTIME) {
-      return t.skip(`allocation budgets are calibrated for Node 24; running ${process.versions.node}`);
+      return t.skip(`allocation budgets are calibrated for Node 24 and 26; running ${process.versions.node}`);
     }
     const payload = runAllocationProbe(workload.entries, workload.profile);
 
