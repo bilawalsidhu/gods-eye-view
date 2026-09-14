@@ -33,7 +33,8 @@ async function handleHudSummary(req, res) {
     return;
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.HUD_SUMMARY_API_KEY || process.env.OPENAI_API_KEY;
+  const baseUrl = (process.env.HUD_SUMMARY_BASE_URL || '').replace(/\/+$/, '');
   const keyless = keylessHudSummaryResponse(apiKey);
   if (keyless) {
     res.statusCode = keyless.statusCode;
@@ -51,6 +52,48 @@ async function handleHudSummary(req, res) {
   try {
     const body = await readRequestBody(req, 64 * 1024);
     const context = JSON.parse(body || '{}');
+    if (baseUrl) {
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model:
+            process.env.OPENAI_HUD_SUMMARY_MODEL ||
+            OPENAI_HUD_SUMMARY_MODEL_DEFAULT,
+          messages: [
+            {
+              role: 'system',
+              content: [
+                "Write one concise intelligence-HUD summary for God's Eye View.",
+                'Use only the supplied place, street, nearby-place, and enabled-layer text labels.',
+                'Prefer the clearest named place and include a relevant enabled layer only when useful.',
+                'Do not infer from coordinates or invent a place.',
+                'Output exactly five words with no title, punctuation, markdown, or introductory phrase.',
+              ].join(' '),
+            },
+            { role: 'user', content: JSON.stringify(context) },
+          ],
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      const summary = toFiveWordHudSummary(data.choices?.[0]?.message?.content);
+      res.statusCode = response.ok && summary ? 200 : response.status || 502;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(
+        JSON.stringify({
+          summary: summary || null,
+          error: response.ok
+            ? null
+            : data.error?.message || 'HUD summary request failed',
+        }),
+      );
+      return;
+    }
+
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {

@@ -1,5 +1,12 @@
 # Changelog
 
+## HUD summary on OpenAI-compatible hosts
+
+- Route `/api/openai/hud-summary` to any OpenAI-compatible `chat/completions`
+  host through `HUD_SUMMARY_BASE_URL` (optional `HUD_SUMMARY_API_KEY`, which
+  falls back to `OPENAI_API_KEY`). Unset, the existing `api.openai.com`
+  Responses request is unchanged. The doctor reports the resolved HUD host.
+
 - Split application scene, controls, catalog, tools and HTML into reusable components; configure application request services and sources without changing global fetch. Preserve standalone markup and voice behavior. Explicit annotation navigation may resolve a distant named target.
 
 ## Voice component boundaries

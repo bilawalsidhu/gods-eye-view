@@ -127,8 +127,25 @@ export function resolveCredential(spec, {
   return { configured: false, source: null };
 }
 
-export function buildCapabilitySummary(credentials) {
+export function buildCapabilitySummary(credentials, {
+  environment = process.env,
+  rootDir = ROOT,
+} = {}) {
   const configured = (name) => credentials[name]?.configured === true;
+  const hudKey = environment.HUD_SUMMARY_API_KEY
+    || environment.OPENAI_API_KEY
+    || readDoctorDotenvValue('HUD_SUMMARY_API_KEY', rootDir)
+    || readDoctorDotenvValue('OPENAI_API_KEY', rootDir);
+  const hudBaseUrl = environment.HUD_SUMMARY_BASE_URL
+    || readDoctorDotenvValue('HUD_SUMMARY_BASE_URL', rootDir);
+  let hudHost = 'api.openai.com';
+  if (hudBaseUrl) {
+    try {
+      hudHost = new URL(hudBaseUrl).host || hudHost;
+    } catch {
+      hudHost = hudBaseUrl;
+    }
+  }
   const route = selectMapStartupRoute({
     googleApiKey: configured('GOOGLE_MAPS_API_KEY') ? 'configured' : '',
     cesiumToken: configured('CESIUM_ION_TOKEN') ? 'configured' : '',
@@ -143,6 +160,9 @@ export function buildCapabilitySummary(credentials) {
       ? 'OpenSky OAuth credentials present (runtime mode and validity not verified)'
       : 'OpenSky OAuth credentials not configured',
     voice: configured('OPENAI_API_KEY') ? 'available' : 'off until an OpenAI key is added',
+    hud: configured('OPENAI_API_KEY') || isConfiguredValue(hudKey)
+      ? `available via ${hudHost}`
+      : 'off until a HUD or OpenAI key is added',
     vessels: configured('AISSTREAM_API_KEY') ? 'live AISStream feed' : 'off until an AISStream key is added',
     fires: configured('FIRMS_MAP_KEY') ? 'live NASA FIRMS feed' : 'off until a FIRMS key is added',
     traffic: configured('TOMTOM_API_KEY') ? 'live TomTom flow' : 'built-in traffic simulation',
@@ -198,6 +218,7 @@ export function formatSetupReport(report, { readyMessage } = {}) {
     `Map:     ${report.capabilities.map}`,
     `Flights: ${report.capabilities.flights}`,
     `Voice:   ${report.capabilities.voice}`,
+    `HUD:     ${report.capabilities.hud}`,
     `Vessels: ${report.capabilities.vessels}`,
     `Fires:   ${report.capabilities.fires}`,
     `Traffic: ${report.capabilities.traffic}`,
