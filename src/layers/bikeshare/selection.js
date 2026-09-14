@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { isPointerFree } from '../../data/inputOwnership.js';
 import {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
   BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
@@ -153,6 +154,8 @@ export function createSelection({
       viewer.scene.canvas,
     );
     layerState._clickHandler.setInputAction((click) => {
+      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
+      if (!isPointerFree()) return;
       const picked = viewer.scene.pick(click.position);
 
       if (picked) {

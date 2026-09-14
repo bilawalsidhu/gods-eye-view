@@ -16,6 +16,8 @@
   "src/data/infrastructure.test.mjs",
   "src/data/localGeojsonCore.js",
   "src/data/localGeojsonLod.js",
+  "src/data/inputOwnership.js",
+  "src/data/inputOwnership.test.mjs",
   "docs/CODE-BOUNDARIES.md",
   "src/main.js",
   "docs/APPLICATION.md",

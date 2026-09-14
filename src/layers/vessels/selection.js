@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { isPointerFree } from '../../data/inputOwnership.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 
 export function createSelection({
@@ -33,6 +34,8 @@ export function createSelection({
   function bindVesselInteraction(viewer, handler, keyTarget) {
     state.clickHandler = handler;
     handler.setInputAction((click) => {
+      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
+      if (!isPointerFree()) return;
       if (!state.feed.enabled) return;
       const picked = viewer.scene.pick(click.position);
       const pickedId = resolvePickId(picked);
