@@ -9,13 +9,6 @@ export const LAYER_ID = 'precipitation';
 export const REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
- * Tile level where 1 km radar starts out-resolving a 15 km model field. Cesium
- * owns the handover through the inlay's minimumTerrainLevel, so this is a
- * threshold rather than a state machine: no camera listener runs.
- */
-export const INLAY_HANDOVER_LEVEL = 6;
-
-/**
  * Tile level past which the model stops being drawn at all.
  *
  * GDPS is a 15 km field, so level 8 (~0.6 km/px) already oversamples it ~25x and
@@ -26,6 +19,14 @@ export const INLAY_HANDOVER_LEVEL = 6;
  * it does not reach a 15 km cell would only wash flat colour over the view.
  */
 export const MODEL_DETAIL_CEILING = 8;
+
+/**
+ * Tile level where the radar inlay takes over, derived so the two bands cannot
+ * overlap: exactly one tier is drawn at any level. Cesium owns the handover
+ * through min/maximumTerrainLevel, so this stays a threshold rather than a
+ * state machine and no camera listener runs.
+ */
+export const INLAY_HANDOVER_LEVEL = MODEL_DETAIL_CEILING + 1;
 
 /** Radar is 1 km; level 11 (~76 m/px) is already far past its resolution. */
 export const RADAR_DETAIL_CEILING = 11;

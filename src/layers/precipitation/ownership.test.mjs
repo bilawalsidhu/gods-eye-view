@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createPrecipitationLayer } from './index.js';
 import { tierImageryOptions, tierLayerOptions } from './imagery.js';
-import { PRECIPITATION_TIERS } from './policy.js';
+import { INLAY_HANDOVER_LEVEL, PRECIPITATION_TIERS } from './policy.js';
 
 /** Every placement in the precedence table owns one imagery layer. */
 const OWNED = PRECIPITATION_TIERS.length;
@@ -213,7 +213,10 @@ test('every placement hands Cesium a numeric alpha', () => {
   }
   const inlay = PRECIPITATION_TIERS.find((tier) => tier.role === 'inlay');
   assert.ok(tierLayerOptions(inlay).rectangle instanceof Cesium.Rectangle);
-  assert.equal(tierLayerOptions(inlay).minimumTerrainLevel, 6);
+  assert.equal(
+    tierLayerOptions(inlay).minimumTerrainLevel,
+    INLAY_HANDOVER_LEVEL,
+  );
 });
 
 test('no tier asks a service for tiles it answers empty', () => {
@@ -234,4 +237,28 @@ test('no tier asks a service for tiles it answers empty', () => {
   // flat colour over the view, and radar owns those levels where it reaches.
   const primary = PRECIPITATION_TIERS.find((tier) => tier.role === 'primary');
   assert.equal(primary.maximumTerrainLevel, primary.maxTileLevel);
+});
+
+test('the level bands never overlap, so one tier is drawn at a time', () => {
+  // Both tiers visible at once showed a coarse 15 km wash sitting on top of
+  // 1 km radar. The bands are derived from one ceiling so they cannot drift
+  // back into overlapping.
+  const bandOf = (tier) => [
+    tier.minimumTerrainLevel ?? 0,
+    tier.maximumTerrainLevel ?? Number.MAX_SAFE_INTEGER,
+  ];
+  for (const a of PRECIPITATION_TIERS)
+    for (const b of PRECIPITATION_TIERS) {
+      if (a === b) continue;
+      const [aMin, aMax] = bandOf(a);
+      const [bMin, bMax] = bandOf(b);
+      assert.ok(
+        aMax < bMin || bMax < aMin,
+        `${a.id} and ${b.id} both draw between levels ${Math.max(aMin, bMin)} and ${Math.min(aMax, bMax)}`,
+      );
+    }
+  // And the inlay picks up exactly where the model stops — no dead level.
+  const primary = PRECIPITATION_TIERS.find((t) => t.role === 'primary');
+  const inlay = PRECIPITATION_TIERS.find((t) => t.role === 'inlay');
+  assert.equal(inlay.minimumTerrainLevel, primary.maximumTerrainLevel + 1);
 });
