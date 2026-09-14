@@ -280,6 +280,42 @@ Order of work, cheapest-first:
         measured ~0.5–0.7 µs/row a full 500-row fallback slice is
         0.27–0.35 ms ≈ 2% of a 16.7 ms frame, and the sync path for ≤ 1000
         rows costs ≤ ~0.7 ms — both far inside any interactivity budget.
+  - [x] Label solve cadence under dense mode (2026-09-14). Measured the real
+        `LabelArbiter` at DENSE-cohort scale (5 layers, competing placements
+        on a 1920×1080 grid; steady = repeated solve with incumbents, exactly
+        what the 125 ms cadence does on a parked scene): the whole-prefix
+        insertion sort in `sortCandidateRange` was quadratic per layer
+        bucket — steady solve 8.8–9.3 ms at 2000 candidates and 24.4–26.4 ms
+        at 3300 (same-window baseline medians). A `node --cpu-prof` trace
+        attributed ~63% of solve CPU to that sort plus its comparator
+        (`candidateCompare`: two Map lookups + a `localeCompare` per
+        comparison). Fix: `sortCandidateRange` now insertion-sorts fixed
+        32-element runs then bottom-up merges through a module-level scratch
+        array grown geometrically — O(k log k), allocation-free (the
+        allocation gate counts `Array#sort/filter/slice/push`, so the engine
+        sort's work buffer was not an option either; the merge reuses pooled
+        buffers instead), and stable, so ordering is bit-identical to the
+        insertion sort — verified by 480-solve selection-equality diffs
+        against the old comparator at three cohort sizes (0 mismatches).
+        Same-window steady medians (Node, 40 reps): 2000 candidates 8.8/9.3 →
+        1.5/1.7 ms (5.4–5.7×), 3300 candidates 24.4/26.4 → 2.8/2.9 ms
+        (8.6–9.0×) at capacity 40/90; cold first solve at 3300 halves
+        (20.2 → 8.3 ms). Production shape is kinder still: cohorts are
+        capped by `BoundedCohort(256)` per layer, so a 5-layer dense solve
+        ≈ 1280 candidates ≈ ~1.5 ms ≈ under one frame-equivalent of duty per
+        second at the 125 ms cadence. A second fix tried here — a
+        selection-order buffer in `SpatialCandidateQueue.next` replacing the
+        per-call argmax scan — was REVERTED: it kept selections bit-identical
+        and passed every unit test, but the GC-bracketed allocation probe
+        (`worldOverlayAllocation.worker.mjs`, phase5-military workload)
+        measured a deterministic +1,107 B/frame median over the calibrated
+        132,000 B/frame budget (baseline headroom: 291 B), reproducible in
+        both a fast-sort and a slow-sort variant, while an arbiter-only
+        heapUsed probe showed the queue path itself near-neutral — the
+        surviving bytes appear outside the arbiter's own instrumentation, so
+        the buffer does not ship; the drain's per-call argmax scan stays,
+        and at production cohort caps it costs ~1–3 ms per solve, inside
+        budget.
   - [x] Detection projection worker backpressure + dead consumption
         (2026-09-14). Found: `_drawOverlay` posted the whole cohort EVERY
         drawn frame, but the `requestId`-equality gate could never pass (the

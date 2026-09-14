@@ -649,20 +649,68 @@ function resetLayerBucket(bucket) {
   bucket.count = 0;
 }
 
+/** Ranges up to this size keep the in-place insertion sort. */
+const INSERTION_SORT_MAX = 32;
+
 /**
- * Stable in-place insertion sort over a pooled array prefix. Frame-to-frame the
- * cohort order barely changes, so this beats `Array#sort`, whose TimSort work
- * buffers are re-allocated on every solve.
+ * Shared merge scratch for the large-cohort sort path. Grown geometrically
+ * and reused across solves — a solve must not allocate (the allocation gate
+ * samples solve-time bytes and counts Array#sort/filter/slice/push calls),
+ * so the merge buffer outlives the call.
+ * @type {Array}
+ */
+const mergeScratch = [];
+
+/**
+ * Stable in-place sort over a pooled array prefix. Fixed-width runs are
+ * insertion-sorted (frame-to-frame a small cohort is nearly sorted, and the
+ * insertion pass allocates nothing); runs are then bottom-up merged through
+ * the shared scratch. This replaced a whole-prefix insertion sort whose
+ * quadratic pass dominated DENSE-mode solves — the cohort arrives in
+ * cohort order, not comparison order, so inversions are near-maximal every
+ * solve (measured: ~63% of solve CPU at 3300 candidates). Merge order takes
+ * the left run on ties, which reproduces the insertion sort's stable
+ * ordering bit-for-bit.
  */
 function sortCandidateRange(items, count, states, now) {
-  for (let i = 1; i < count; i++) {
-    const item = items[i];
-    let j = i - 1;
-    while (j >= 0 && candidateCompare(items[j], item, states, now) > 0) {
-      items[j + 1] = items[j];
-      j--;
+  const width = INSERTION_SORT_MAX;
+  for (let start = 0; start < count; start += width) {
+    const end = Math.min(start + width, count);
+    for (let i = start + 1; i < end; i++) {
+      const item = items[i];
+      let j = i - 1;
+      while (j >= start && candidateCompare(items[j], item, states, now) > 0) {
+        items[j + 1] = items[j];
+        j--;
+      }
+      items[j + 1] = item;
     }
-    items[j + 1] = item;
+  }
+  if (count <= width) return;
+
+  if (mergeScratch.length < count) mergeScratch.length = 2 * count;
+  let src = items;
+  let dst = mergeScratch;
+  for (let w = width; w < count; w *= 2) {
+    for (let lo = 0; lo < count; lo += 2 * w) {
+      const mid = Math.min(lo + w, count);
+      const hi = Math.min(lo + 2 * w, count);
+      let i = lo;
+      let j = mid;
+      let k = lo;
+      while (i < mid && j < hi) {
+        if (candidateCompare(src[j], src[i], states, now) >= 0) dst[k++] = src[i++];
+        else dst[k++] = src[j++];
+      }
+      while (i < mid) dst[k++] = src[i++];
+      while (j < hi) dst[k++] = src[j++];
+    }
+    const swap = src;
+    src = dst;
+    dst = swap;
+  }
+  if (src !== items) {
+    for (let i = 0; i < count; i++) items[i] = src[i];
   }
 }
 
