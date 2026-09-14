@@ -1,0 +1,98 @@
+# GitForge local CI pipeline (self-hosted GitForge at /nas/Temp/repos/GitForge).
+#
+# Mirrors .github/workflows/ci.yml — same gates, same order of importance:
+# strict lint + prod-deps audit, the unit suite under BOTH calibrated Node
+# majors with the allocation budgets enforced, the coverage report, and the
+# production build + bundle budgets (build:wasm → vite build → check:budgets).
+# Deployment stays manual (docs/RUNBOOK.md) in BOTH systems: a green run
+# never implies a shipped site.
+#
+# Documented differences from the GitHub workflow (same list of constraints
+# proven in dsc's .gitforce.yml):
+# - The matrix is two explicit jobs (test-node24 / test-node26) instead of a
+#   `strategy.matrix` — the GitForge pipeline schema has no matrix. Both run
+#   on the one gev-ci-node:1 image; the node-26 job prepends
+#   /opt/node26/bin to PATH inside the step, because job-level `env:` is
+#   parsed but never forwarded to the job containers (the runner builds its
+#   ExecutableJob with an empty env map) — a job-level PATH override is
+#   therefore impossible and every variable a step needs is either baked
+#   into the image or set inline on the command.
+# - GEV_REQUIRE_ALLOCATION_GATE=1 rides inline on the `npm test` command for
+#   the same reason (env: is dead); the GitHub workflow sets it via `env:`.
+# - `environment: {}` is required by the parser (PipelineDefinition has no
+#   serde default) even though it is never forwarded — same as dsc.
+# - The dist artifact upload is absent (no artifact service here); the
+#   production artifact a Pages deploy ships is built locally per the
+#   RUNBOOK pre-release checklist instead.
+# - Images are pre-built on the host from infrastructure/docker/ and must
+#   exist before the first run: the NAS daemon's vfs storage driver plus the
+#   runner's hard 60-second sandbox-acquisition cap make a pull-at-run-time
+#   a guaranteed failure. Rebuild gev-ci-node:1 when package-lock.json
+#   changes and gev-ci-rust:1 when rust/firms-renderer/Cargo.lock changes
+#   (instructions in the Dockerfile headers).
+name: gods-eye-view-ci
+version: "1.0"
+trigger_on:
+  - push
+environment: {}
+jobs:
+  - name: lint
+    image: gev-ci-node:1
+    steps:
+      - name: Install
+        run: npm ci
+      - name: Strict lint (zero warnings)
+        run: npm run lint
+      - name: Audit production dependencies
+        run: npm run check:audit
+    timeout: 15m
+
+  - name: test-node24
+    image: gev-ci-node:1
+    needs: [lint]
+    steps:
+      - name: Install
+        run: npm ci
+      - name: Unit suite on Node 24 (allocation budgets enforced)
+        run: GEV_REQUIRE_ALLOCATION_GATE=1 npm test
+    timeout: 30m
+
+  - name: test-node26
+    image: gev-ci-node:1
+    needs: [lint]
+    steps:
+      - name: Install
+        run: npm ci
+      - name: Unit suite on Node 26 (allocation budgets enforced)
+        run: export PATH=/opt/node26/bin:$PATH && node --version && GEV_REQUIRE_ALLOCATION_GATE=1 npm test
+    timeout: 30m
+
+  # Publishes the measured coverage number on every push (no threshold gate
+  # — the Phase 3 stance in docs/PLAN.md: the number follows the tests).
+  - name: coverage
+    image: gev-ci-node:1
+    needs: [lint]
+    steps:
+      - name: Install
+        run: npm ci
+      - name: Coverage report
+        run: npm run test:coverage
+    timeout: 30m
+
+  # The FIRMS WASM renderer is regenerated before vite copies public/ into
+  # dist so the shipped bundle keeps the WASM path (the app falls back to
+  # entity cells without it). check:budgets afterwards also verifies the
+  # built sw.js precache manifest still lists the offline shell.
+  - name: build
+    image: gev-ci-rust:1
+    needs: [lint]
+    steps:
+      - name: Install
+        run: npm ci
+      - name: Build FIRMS WASM renderer
+        run: npm run build:wasm
+      - name: Production build
+        run: npm run build
+      - name: Bundle budgets
+        run: npm run check:budgets
+    timeout: 40m

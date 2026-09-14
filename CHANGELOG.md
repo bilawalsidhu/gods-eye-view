@@ -3,6 +3,88 @@
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
+## [0.8.0] — 2026-09-14
+
+### Security
+
+- Same-site origin gates on every state-changing API route, default-on
+  rate limiting for the Pages Functions, and a pilot Content-Security-Policy
+  on the deployed surface.
+- Server-side redaction for the realtime debug-log endpoint (both the dev
+  middleware and the Pages Function) — client-supplied payloads can no
+  longer smuggle secrets into server logs.
+- The adsb.lol route now serves the same 12-second cache + stale contract
+  as dev; the radio proxy was unified on one shared broker with its SSRF
+  validator deduped so radio and CCTV cannot drift apart; Overpass and
+  military-installations share one policy module with a planet-wide mirror
+  list; CCTV sources validate URLs at load time and cap reads/bounded
+  streams; the last unvalidated request parameters in the Pages handlers
+  are clamped.
+
+### Fixed
+
+- Both Web Worker ports of the horizon-occlusion check used an
+  inverted occlusion predicate — vessels and detection objects could
+  disappear or persist at the wrong side of the horizon. Found by the
+  concurrency audit; unit-pinned against Cesium's own occluder.
+- The detection projection worker now applies backpressure and reuses the
+  last real answer instead of serving stale or dropped projections under
+  load.
+- Panel positions persisted at one window size can no longer restore
+  off-screen at another (both the restore path and the drag handler clamp
+  to the viewport), and superseded generations of panel storage keys are
+  purged at init.
+- The launch payload table no longer fabricates facts: explicit upstream
+  nulls render as "unavailable" markers instead of 0 KG / 0,0 / inherited
+  orbit names.
+- Dead JSON twin chunks are no longer shipped in the build.
+
+### Performance
+
+- The render-perf five landed with A/B captures: uncapped world-overlay
+  backing-store DPR, the compass-tape `innerHTML` rebuild, the 58
+  `backdrop-filter` rules, `msaaSamples`, and `preserveDrawingBuffer`.
+- Label solve under dense mode: the candidate sort's engine-sort path was
+  replaced with an insertion + pooled bottom-up merge — same-window
+  medians 5.4–9.0× faster at 2k–3.3k candidates, byte-identical to the
+  allocation baseline.
+- Material Symbols is subsetted via `icon_names`; duplicate
+  `fromDegrees` work dropped from AIS row normalization.
+- SGP4 batch propagation was profiled as the second WASM candidate and
+  measured NOT to qualify (steady state ~0.3 ms/frame; capture in
+  `docs/PERFORMANCE.md`), closing the WASM backlog.
+
+### Accessibility
+
+- Landmark pass closed the last axe violations; chip state changes are
+  announced, keyboard paths repaired, worst-case contrast fixed, and a
+  test pins accessible names for every form control. The scene director's
+  two blocking `window.prompt` calls became real `<dialog>` elements.
+
+### Added
+
+- Keyless geocoding: `/api/geocode` serves an OpenStreetMap Nominatim
+  path so search works without a Google key; an optional
+  server-restricted Google key remains available.
+- Progressive web app hardening: bundle-budgets gate on the build output
+  (dist growth is a reviewed decision; the offline shell can no longer be
+  silently dropped from the precache manifest).
+- Level-gated logger with a ring buffer for the noisy subsystems.
+
+### Internal
+
+- `src/ui.js` (10.4k lines) is split into focused modules under `src/ui/`;
+  the flights fork shares one tracking-pipeline factory; 13 overlay
+  factory clones collapsed into one `createOverlayEntry`; the 5.9k-line
+  `vite.config.js` became a slim assembly of per-endpoint proxy modules
+  with an enforced dev/prod route inventory.
+- Coverage 75.3% → 80.82% lines, including the worst large modules, the
+  four previously untested Pages handlers, the rate-limiter budget
+  boundaries, and first-run experience wiring. The suite (3,147 tests)
+  runs on both calibrated Node majors with allocation budgets enforced.
+- A local GitForge pipeline (`.gitforce.yml` + pre-warmed CI images)
+  mirrors the GitHub workflow gate-for-gate.
+
 ## [0.7.0] — 2026-09-10
 
 ### Added
