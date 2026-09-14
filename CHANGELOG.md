@@ -118,9 +118,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 ### Added
 
 - DISPLAY ▸ Draw: draw on the world by hand. Pick Area, Line or Pin, click the
-  vertices, double-click or press Enter to finish, label and colour it. Drawn
-  shapes go through the same annotation engine as spoken ones, so they render
-  with the whiteboard look, persist, export to GeoJSON and clear with the board.
+  vertices, double-click or press Enter to finish, label and colour it; Backspace
+  undoes a vertex, Esc cancels the shape and a second Esc leaves draw mode, and
+  Clear wipes the board. Drawn shapes go through the same annotation engine as
+  spoken ones, so they render with the whiteboard look, persist, de-dup and clear
+  together. While you are drawing, the draw tool owns the pointer and no layer
+  selects what you click through (#235 — thanks @cora-fresh-labs).
 
 ### Fixed
 
