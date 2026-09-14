@@ -1,7 +1,7 @@
 {
   "name": "gods-eye-view",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "A real-time intelligence console for planet Earth — photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
   "type": "module",
   "license": "MIT",
@@ -51,9 +51,16 @@
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs"
   },
   "c8": {
-    "reporter": ["text"],
-    "include": ["src/**/*.js", "functions/**/*.js"],
-    "exclude": ["**/*.test.mjs"]
+    "reporter": [
+      "text"
+    ],
+    "include": [
+      "src/**/*.js",
+      "functions/**/*.js"
+    ],
+    "exclude": [
+      "**/*.test.mjs"
+    ]
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",

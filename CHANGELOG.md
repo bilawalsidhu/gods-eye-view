@@ -3,6 +3,19 @@
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
+## [0.8.1] — 2026-09-14
+
+### Fixed
+
+- Production deploys to Cloudflare Pages failed outright since the radio
+  broker unification: `functions/api/radio/[[path]].js` instantiated its
+  catalog broker at module scope, and the broker stamps its catalog with
+  `crypto.randomUUID()` — a disallowed global-scope operation in workerd
+  ("Disallowed operation called within global scope"). Node tolerates the
+  pattern, so the dev/prod parity tests never saw it. The broker is now
+  created lazily on the first request (the per-isolate singleton is
+  preserved), and the deployed surface serves the radio layer again.
+
 ## [0.8.0] — 2026-09-14
 
 ### Security
