@@ -1,29 +1,19 @@
-// UNTRANSLATED UK STAGE-C SEED — Ukrainian (uk) catalog.
-//
-// Mirrors locales/en/setup.js key-for-key with ENGLISH values. Stage-C
-// translators: replace every value with Ukrainian (glossary in
-// docs/TRANSLATORS.md), plural entries { one, other } become uk's full
-// Intl.PluralRules set { one, few, many, other } (the parity gate allows
-// adding only categories valid for uk), then rewrite this header in the
-// locales/fr/*.js style and drop the UNTRANSLATED marker. Do NOT rename,
-// reorder, add, or drop keys; placeholder names stay identical. uk is a
-// shipped catalog, offered only when the configured locale pair includes it
-// (GEV_DEFAULT_LOCALE / GEV_SECONDARY_LOCALE).
+// Українська (uk) — нейтральний міжнародний каталог. Глосарій: docs/TRANSLATORS.md.
 export const NAMESPACE = 'setup';
 
 export default {
   // index.html #first-run-launcher header/title/choices
-  'firstRun.kicker': 'MISSION CONTROL · FIRST LAUNCH',
-  'firstRun.title': 'Choose your first view',
-  'firstRun.choice.contacts': 'LIVE CONTACTS',
-  'firstRun.suppress': "Don't show this again",
+  'firstRun.kicker': 'ЦЕНТР КЕРУВАННЯ · ПЕРШИЙ ЗАПУСК',
+  'firstRun.title': 'Оберіть свій перший вигляд',
+  'firstRun.choice.contacts': 'КОНТАКТИ В РЕАЛЬНОМУ ЧАСІ',
+  'firstRun.suppress': 'Більше не показувати',
   // index.html #key-setup-chip / #key-setup dialog
-  'keySetup.chip': 'POWER UP',
-  'keySetup.kicker': 'GROUND STATION · PROVIDER SETTINGS',
-  'keySetup.title': 'Power up the globe',
-  'keySetup.apply': 'SAVE KEYS',
+  'keySetup.chip': 'ЗАПУСК',
+  'keySetup.kicker': 'НАЗЕМНА СТАНЦІЯ · НАЛАШТУВАННЯ ПОСТАЧАЛЬНИКІВ',
+  'keySetup.title': 'Запустіть глобус',
+  'keySetup.apply': 'ЗБЕРЕГТИ КЛЮЧІ',
   // src/keySetup.js submitUpdates() status announcement
-  'keySetup.status.saving': 'Saving…',
+  'keySetup.status.saving': 'Збереження…',
 
   // ── Phase-2 static markup extraction (index.html), appended ──────────────
   // The shell worker owns ALL index.html static markup in phase 2
@@ -34,161 +24,161 @@ export default {
   // index.html #first-run-launcher
   // Owner-authored persuasive line, pinned verbatim by firstRunExperience.test.mjs
   // (unspaced em dash included) — keep the exact string when translating.
-  'firstRun.description': 'It feels like a forbidden cockpit—then you realize the sources are public and the data is real.',
-  'firstRun.choice.contactsSub': 'Aircraft, vessels and nearby intelligence',
-  'firstRun.choice.spaceMissions': 'SPACE MISSIONS',
-  'firstRun.choice.spaceMissionsSub': 'Launches, spacecraft and orbital context',
-  'firstRun.choice.explore': 'EXPLORE MANUALLY',
-  'firstRun.choice.exploreSub': 'Begin with a clean globe',
-  'firstRun.dismissHint': 'ESC to dismiss',
+  'firstRun.description': 'Немов заборонена кабіна — а потім ви усвідомлюєте: джерела публічні, а дані — справжні.',
+  'firstRun.choice.contactsSub': 'Літаки, судна та розвідка поблизу',
+  'firstRun.choice.spaceMissions': 'КОСМІЧНІ МІСІЇ',
+  'firstRun.choice.spaceMissionsSub': 'Запуски, космічні апарати та орбітальний контекст',
+  'firstRun.choice.explore': 'ДОСЛІДИТИ ВРУЧНУ',
+  'firstRun.choice.exploreSub': 'Почніть із чистого глобуса',
+  'firstRun.dismissHint': 'ESC — приховати',
   // Initial status tip; firstRunExperience.js swaps it for progress/errors.
-  'firstRun.note': 'Tip: the GEV MIC button in the dock lets you talk to the map.',
+  'firstRun.note': 'Порада: кнопка GEV MIC у доку дає змогу говорити з картою.',
   // NOT seeded: the environmental tile's <strong>/<small> are pinned verbatim
   // by firstRunExperience.test.mjs (and the title is painted from
   // ENVIRONMENTAL_LABEL_CHOICE at init) — the support worker wires them in
   // phase 3 together with the test update.
 
   // index.html #key-setup
-  'keySetup.closeAriaLabel': 'Close key setup',
-  'keySetup.description': 'The globe already flies keyless. Every key below switches on another real feed — paste one and it\'s saved into this app\'s local configuration, then the server restarts itself. Server-side keys stay on this machine; Google Maps and Cesium ion run in the browser and must be provider-restricted. Keys you configured elsewhere are shown but never touched.',
-  'keySetup.hint': 'ESC to close',
-  'keySetup.note': 'The Google Maps key buys the photorealistic planet — everything else stacks on top.',
+  'keySetup.closeAriaLabel': 'Закрити налаштування ключів',
+  'keySetup.description': 'Глобус уже літає без ключів. Кожен ключ нижче вмикає ще один справжній канал даних — вставте його, і він збережеться в локальну конфігурацію застосунку, після чого сервер перезапуститься самостійно. Серверні ключі залишаються на цій машині; Google Maps і Cesium ion працюють у браузері, тож їхні ключі треба обмежити на боці постачальника. Ключі, налаштовані деінде, показуються, але ніколи не змінюються.',
+  'keySetup.hint': 'ESC — закрити',
+  'keySetup.note': 'Ключ Google Maps відкриває фотореалістичну планету — усе інше нашаровується зверху.',
 
   // index.html scene director panel chrome (src/scenes/director.js surface)
-  'scenes.panelTitle': 'SCENES',
-  'scenes.collapseTitle': 'Collapse panel',
-  'scenes.recipeAriaLabel': 'Scene recipe',
-  'scenes.new': 'NEW',
-  'scenes.delete': 'DEL',
-  'scenes.capture': 'CAPTURE SHOT',
-  'scenes.updateShot': 'UPDATE SHOT',
-  'scenes.start': 'START',
-  'scenes.stop': 'STOP',
-  'scenes.next': 'NEXT',
-  'scenes.exportPresets': 'EXPORT PRESETS',
-  'scenes.import': 'IMPORT',
-  'scenes.runLog': 'RUN LOG',
-  'scenes.statusReady': 'Ready',
+  'scenes.panelTitle': 'СЦЕНИ',
+  'scenes.collapseTitle': 'Згорнути панель',
+  'scenes.recipeAriaLabel': 'Рецепт сцени',
+  'scenes.new': 'НОВА',
+  'scenes.delete': 'ВИДАЛ.',
+  'scenes.capture': 'ЗНЯТИ КАДР',
+  'scenes.updateShot': 'ОНОВИТИ КАДР',
+  'scenes.start': 'СТАРТ',
+  'scenes.stop': 'СТОП',
+  'scenes.next': 'ДАЛІ',
+  'scenes.exportPresets': 'ЕКСПОРТУВАТИ ПРЕСЕТИ',
+  'scenes.import': 'ІМПОРТУВАТИ',
+  'scenes.runLog': 'ЖУРНАЛ ЗАПУСКІВ',
+  'scenes.statusReady': 'Готово',
 
   // ── Phase-3 runtime extraction (support surfaces), appended ───────────────
 
   // src/firstRunExperience.js — mission busy lines and status/error copy.
   // {detail} is the failed layer-id list (machine values, kept raw).
-  'firstRun.busy.contacts': 'Starting live contacts…',
-  'firstRun.busy.spaceMissions': 'Opening space missions…',
-  'firstRun.busy.environmental': 'Scanning active events…',
-  'firstRun.busy.working': 'Working…',
-  'firstRun.status.failed': 'Could not open that mission{detail}. Retry or explore manually.',
-  'firstRun.status.storageBlocked': 'This browser is blocking storage, so that could not be saved.',
+  'firstRun.busy.contacts': 'Запуск контактів у реальному часі…',
+  'firstRun.busy.spaceMissions': 'Відкриття космічних місій…',
+  'firstRun.busy.environmental': 'Сканування активних подій…',
+  'firstRun.busy.working': 'Працюємо…',
+  'firstRun.status.failed': 'Не вдалося відкрити цю місію{detail}. Повторіть спробу або дослідіть вручну.',
+  'firstRun.status.storageBlocked': 'Цей браузер блокує сховище, тож зберегти не вдалося.',
   // The environmental tile is painted at init from ENVIRONMENTAL_LABEL_CHOICE;
   // the subcopy names BOTH feeds (pinned verbatim by firstRunExperience.test.mjs).
-  'firstRun.choice.environmentalSub': 'Live earthquakes and active fires, from USGS and NASA',
-  'firstRun.environmentalTitle.environmental': 'ENVIRONMENTAL',
-  'firstRun.environmentalTitle.earthWatch': 'EARTH WATCH',
-  'firstRun.environmentalTitle.activeEvents': 'ACTIVE EVENTS',
+  'firstRun.choice.environmentalSub': 'Землетруси в реальному часі й активні пожежі від USGS та NASA',
+  'firstRun.environmentalTitle.environmental': 'ДОВКІЛЛЯ',
+  'firstRun.environmentalTitle.earthWatch': 'НАГЛЯД ЗА ЗЕМЛЕЮ',
+  'firstRun.environmentalTitle.activeEvents': 'АКТИВНІ ПОДІЇ',
 
   // src/keySetup.js — chip counter, status line, and remove confirm.
-  'keySetup.chipWaiting': { one: 'POWER UP · {count} KEY WAITING', other: 'POWER UP · {count} KEYS WAITING' },
-  'keySetup.chipReady': 'POWERED UP',
-  'keySetup.status.saveFailed': 'Save failed ({status}).',
-  'keySetup.status.saveFailedDetail': 'Save failed: {detail}',
-  'keySetup.status.pasteFirst': 'Paste at least one key first.',
-  'keySetup.status.saved': 'Saved to {store}. Restarting — this page reloads itself.',
-  'keySetup.status.removed': 'Removed from {store}. Restarting — this page reloads itself.',
-  'keySetup.store.pinokio': 'your app configuration',
-  'keySetup.store.env': 'your local .env',
-  'keySetup.confirm.remove': 'Remove this key from your saved configuration?',
+  'keySetup.chipWaiting': { one: 'ЗАПУСК · {count} ключ у черзі', few: 'ЗАПУСК · {count} ключі в черзі', many: 'ЗАПУСК · {count} ключів у черзі', other: 'ЗАПУСК · {count} ключа в черзі' },
+  'keySetup.chipReady': 'ЗАПУЩЕНО',
+  'keySetup.status.saveFailed': 'Не вдалося зберегти ({status}).',
+  'keySetup.status.saveFailedDetail': 'Не вдалося зберегти: {detail}',
+  'keySetup.status.pasteFirst': 'Спочатку вставте принаймні один ключ.',
+  'keySetup.status.saved': 'Збережено до {store}. Перезапуск — сторінка перезавантажиться сама.',
+  'keySetup.status.removed': 'Видалено з {store}. Перезапуск — сторінка перезавантажиться сама.',
+  'keySetup.store.pinokio': 'вашої конфігурації застосунку',
+  'keySetup.store.env': 'вашого локального .env',
+  'keySetup.confirm.remove': 'Видалити цей ключ із вашої збереженої конфігурації?',
 
   // src/mapStackChips.js — unavailable-chip tooltip and aria templates.
-  'mapStack.fallbackName': 'This map stack',
-  'mapStack.unavailableReason': '{label} is unavailable',
-  'mapStack.unavailableAriaLabel': '{label} unavailable: {hint}',
+  'mapStack.fallbackName': 'Цей стек карт',
+  'mapStack.unavailableReason': '{label} — недоступно',
+  'mapStack.unavailableAriaLabel': '{label} — недоступно: {hint}',
 
   // src/scenes/director.js — built-in recipe DISPLAY names only. Recipe ids
   // and the URL 'scene' param stay English; stored/renamed project titles are
   // user data and render verbatim.
-  'scenes.recipe.flightsRadar': 'Global Flights Radar',
-  'scenes.recipe.orbitalWatch': 'Orbital Watch',
-  'scenes.recipe.thermalThreats': 'Thermal Threat Board',
-  'scenes.recipe.cityOverload': 'City Overload',
-  'scenes.recipe.omnisciencePullback': 'Omniscience Pullback',
+  'scenes.recipe.flightsRadar': 'Глобальний радар польотів',
+  'scenes.recipe.orbitalWatch': 'Орбітальний нагляд',
+  'scenes.recipe.thermalThreats': 'Панель теплових загроз',
+  'scenes.recipe.cityOverload': 'Міське перевантаження',
+  'scenes.recipe.omnisciencePullback': 'Всевидячий від\'їзд',
 
   // src/voice/gevRealtime.js — mic chrome and connection/execution STATUS
   // text. Status enum keys (idle/connecting/…) are machine values; tool
   // names/schemas and model-facing results stay English (keep-English
   // boundary). Tier badges STD/MINI and the MIC/ON-OFF mic label stay machine
   // identifiers this phase.
-  'voice.status.idle': 'OFF',
-  'voice.status.connecting': 'CONNECTING',
-  'voice.status.listening': 'LISTENING',
-  'voice.status.executing': 'EXECUTING',
-  'voice.status.error': 'ERROR',
-  'voice.status.sessionCostCap': 'Session ended — cost cap {cost}',
-  'voice.detail.standby': 'VOICE STANDBY',
-  'voice.detail.active': 'VOICE ACTIVE',
-  'voice.detail.unavailable': 'VOICE UNAVAILABLE',
-  'voice.detail.microphoneUnavailable': 'WebRTC microphone support unavailable',
-  'voice.detail.requestingMicrophone': 'Requesting microphone',
-  'voice.detail.holdSpaceTalk': 'Hold Space to talk',
-  'voice.detail.releaseSpaceSend': 'Release Space to send',
-  'voice.detail.askOrCommand': 'Ask or command',
-  'voice.detail.voiceOff': 'Voice off',
-  'voice.detail.runningCommand': 'Running command',
-  'voice.detail.radioDidNotStart': 'Radio did not start',
-  'voice.hint.default': 'Hold Space to speak · tap Space to activate focused controls',
-  'voice.error.sessionStart': 'Voice session could not be started.',
-  'voice.error.trayTitle': 'VOICE SYSTEM ERROR',
-  'voice.error.dismiss': 'DISMISS',
-  'voice.error.hint': 'Check microphone permission and network access, then try again.',
-  'voice.kicker.agent': 'AI AGENT',
-  'voice.kicker.control': 'VOICE CONTROL',
-  'voice.tier.appliesNextSession': '{tier} applies next session',
-  'voice.tier.buttonTitle': 'Voice model tier — applies next session',
-  'voice.cost.buttonTitle': 'Estimated session cost',
-  'voice.button.ariaLabel': 'Voice control — activate to toggle voice; hold Space to speak',
+  'voice.status.idle': 'ВИМКНЕНО',
+  'voice.status.connecting': 'З\'ЄДНАННЯ',
+  'voice.status.listening': 'СЛУХАЮ',
+  'voice.status.executing': 'ВИКОНАННЯ',
+  'voice.status.error': 'ПОМИЛКА',
+  'voice.status.sessionCostCap': 'Сесію завершено — ліміт витрат {cost}',
+  'voice.detail.standby': 'ГОЛОСОВЕ ОЧІКУВАННЯ',
+  'voice.detail.active': 'ГОЛОС АКТИВНИЙ',
+  'voice.detail.unavailable': 'ГОЛОС НЕДОСТУПНИЙ',
+  'voice.detail.microphoneUnavailable': 'Підтримка мікрофона WebRTC недоступна',
+  'voice.detail.requestingMicrophone': 'Запит доступу до мікрофона',
+  'voice.detail.holdSpaceTalk': 'Утримуйте Space, щоб говорити',
+  'voice.detail.releaseSpaceSend': 'Відпустіть Space, щоб надіслати',
+  'voice.detail.askOrCommand': 'Питання або команда',
+  'voice.detail.voiceOff': 'Голос вимкнено',
+  'voice.detail.runningCommand': 'Виконання команди',
+  'voice.detail.radioDidNotStart': 'Радіо не запустилося',
+  'voice.hint.default': 'Утримуйте Space, щоб говорити · тапніть Space, щоб активувати елемент у фокусі',
+  'voice.error.sessionStart': 'Не вдалося запустити голосову сесію.',
+  'voice.error.trayTitle': 'ПОМИЛКА ГОЛОСОВОЇ СИСТЕМИ',
+  'voice.error.dismiss': 'ЗАКРИТИ',
+  'voice.error.hint': 'Перевірте дозвіл на мікрофон і доступ до мережі, потім спробуйте ще раз.',
+  'voice.kicker.agent': 'АГЕНТ ШІ',
+  'voice.kicker.control': 'ГОЛОСОВЕ КЕРУВАННЯ',
+  'voice.tier.appliesNextSession': '{tier} набуде чинності з наступної сесії',
+  'voice.tier.buttonTitle': 'Рівень голосової моделі — набуде чинності з наступної сесії',
+  'voice.cost.buttonTitle': 'Орієнтовна вартість сесії',
+  'voice.button.ariaLabel': 'Голосове керування — активуйте, щоб увімкнути або вимкнути голос; утримуйте Space, щоб говорити',
 
   // ── Stage-4 repair pass: src/scenes/director.js status corpus, appended ───
   // Status/confirm lines and the default shot title. {scene}/{shot} carry
   // stored project titles (user data, rendered verbatim); {mode} is the raw
   // context-mode identifier (machine value, keep-English boundary).
-  'scenes.status.captureCameraNotReady': 'Cannot capture shot: camera not ready',
-  'scenes.status.shotTitleDefault': 'Shot {n}',
-  'scenes.status.captured': 'Captured: {scene} / {shot}',
-  'scenes.status.selectShotFirst': 'Select a shot first',
-  'scenes.status.updated': 'Updated: {scene} / {shot}',
-  'scenes.status.deleteShotConfirm': 'Delete shot "{shot}"?',
-  'scenes.status.loaded': 'Loaded: {scene} / {shot}',
-  'scenes.status.cameraUnavailable': 'Camera unavailable — exit cockpit first',
-  'scenes.status.noShotsToRun': 'No shots to run',
-  'scenes.status.runningShot': 'Running {index}/{total}: {scene} / {shot}',
-  'scenes.status.runComplete': 'Scene run complete',
-  'scenes.status.runError': 'Error: {message}',
-  'scenes.status.contextExitFailed': 'Could not exit {mode} — scene layers may be refused',
+  'scenes.status.captureCameraNotReady': 'Не вдалося зняти кадр: камера не готова',
+  'scenes.status.shotTitleDefault': 'Кадр {n}',
+  'scenes.status.captured': 'Знято: {scene} / {shot}',
+  'scenes.status.selectShotFirst': 'Спочатку оберіть кадр',
+  'scenes.status.updated': 'Оновлено: {scene} / {shot}',
+  'scenes.status.deleteShotConfirm': 'Видалити кадр «{shot}»?',
+  'scenes.status.loaded': 'Завантажено: {scene} / {shot}',
+  'scenes.status.cameraUnavailable': 'Камера недоступна — спершу вийдіть із кабіни',
+  'scenes.status.noShotsToRun': 'Немає кадрів для запуску',
+  'scenes.status.runningShot': 'Виконання {index}/{total}: {scene} / {shot}',
+  'scenes.status.runComplete': 'Запуск сцени завершено',
+  'scenes.status.runError': 'Помилка: {message}',
+  'scenes.status.contextExitFailed': 'Не вдалося вийти з {mode} — шари сцени може бути відхилено',
 
   // ── Stage-4 repair pass: keySetup dev-surface copy, appended ──────────────
   // src/keySetup.js buildRow() remove chrome (dev-server-only surface).
-  'keySetup.row.remove': 'REMOVE',
-  'keySetup.row.removeTitle': "Remove {title} from this app's saved keys",
+  'keySetup.row.remove': 'ВИДАЛИТИ',
+  'keySetup.row.removeTitle': 'Видалити {title} із збережених ключів застосунку',
   // src/keySetupCore.mjs keySetupRequirement(): availability sentence naming
   // the registry env vars (machine values stay raw).
-  'keySetup.requirement': 'Needs {envVars} — add it in Provider Settings',
+  'keySetup.requirement': 'Потрібно {envVars} — додайте у налаштуваннях постачальників',
   // src/keySetupCore.mjs KEY_SETUP_KEYS `unlocks` copy, keyed by registry id;
   // en values must stay byte-identical to the registry strings.
-  'keySetup.unlocks.google-maps': 'The photorealistic 3D planet + place search',
-  'keySetup.unlocks.google-maps-server': 'Places context + Street View fallback; optional separate key',
-  'keySetup.unlocks.openai': 'Voice control — talk to the planet',
-  'keySetup.unlocks.aisstream': 'Live ships, worldwide',
-  'keySetup.unlocks.firms': 'Live active-fire detections',
-  'keySetup.unlocks.tomtom': 'Real live traffic (keyless runs a simulation)',
-  'keySetup.unlocks.cesium-ion': 'Bing imagery map stacks + world terrain',
-  'keySetup.unlocks.opensky': 'More flight-polling credits (anonymous works without)',
-  'keySetup.unlocks.launch-library': 'Higher space-missions request allowance',
+  'keySetup.unlocks.google-maps': 'Фотореалістична 3D-планета + пошук місць',
+  'keySetup.unlocks.google-maps-server': 'Контекст Places + резервний Street View; окремий ключ за бажанням',
+  'keySetup.unlocks.openai': 'Голосове керування — говоріть із планетою',
+  'keySetup.unlocks.aisstream': 'Судна в реальному часі по всьому світу',
+  'keySetup.unlocks.firms': 'Виявлення активних пожеж у реальному часі',
+  'keySetup.unlocks.tomtom': 'Справжній трафік у реальному часі (без ключа — симуляція)',
+  'keySetup.unlocks.cesium-ion': 'Стеки карт Bing imagery + світовий рельєф',
+  'keySetup.unlocks.opensky': 'Більше кредитів опитування польотів (працює й анонімно)',
+  'keySetup.unlocks.launch-library': 'Більший ліміт запитів для космічних місій',
 
-  'scenes.status.actionFailed': 'Scene action failed',
+  'scenes.status.actionFailed': 'Не вдалося виконати дію сцени',
 
-  'scenes.status.projectExported': 'Project exported',
+  'scenes.status.projectExported': 'Проєкт експортовано',
 
-  'voice.tierNextSession': 'Next session: {pendingId} — this session stays on {modelId}',
-  'voice.tierSwitchHint': 'Voice model: {pendingId} — click to switch to {target}; applies next session',
-  'voice.costTooltip': 'Estimated session cost on {modelId} — {responses} response(s). Warns at {warn}, ends the session at {cap}.',
+  'voice.tierNextSession': 'Наступна сесія: {pendingId} — поточна залишається на {modelId}',
+  'voice.tierSwitchHint': 'Голосова модель: {pendingId} — натисніть, щоб перейти на {target}; набуде чинності з наступної сесії',
+  'voice.costTooltip': 'Орієнтовна вартість сесії на {modelId} — відповідей: {responses}. Попереджає при {warn}, завершує сесію при {cap}.',
 };
