@@ -238,6 +238,15 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   assert.match(html, /id="clear-selected-layers"[^>]*aria-label="Clear selected data layers"/);
   assert.match(html, /id="reset-globe-view"[^>]*aria-label="Reset to full globe view"/);
   assert.match(css, /#top-center-actions\s*\{[\s\S]*?left:\s*50%;[\s\S]*?display:\s*flex;[\s\S]*?transform:\s*translateX\(-50%\)/);
+  assert.match(
+    css,
+    /@media \(max-width: 720px\)\s*\{[\s\S]*?#top-center-actions\s*\{[\s\S]*?right:\s*16px;[\s\S]*?left:\s*auto;[\s\S]*?transform:\s*none;/,
+  );
+  assert.match(css, /@media \(max-width: 720px\)\s*\{[\s\S]*?#style-indicator\s*\{\s*display:\s*none;/);
+  assert.match(
+    css,
+    /@media \(max-width: 520px\)\s*\{[\s\S]*?#title-bar h1 > span:last-child,[\s\S]*?#title-bar \.subtitle\s*\{\s*display:\s*none;/,
+  );
   assert.match(css, /body\.ui-clean-view #top-center-actions/);
   assert.match(css, /body\.recording-mode #top-center-actions/);
   assert.match(
