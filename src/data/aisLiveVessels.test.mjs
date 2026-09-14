@@ -17,6 +17,7 @@ import {
   _bindVesselInteractionForTest,
   _setVesselStateForTest,
   _reconcileVesselsForTest,
+  _normalizeVesselForTest,
   _applyAisFeedSnapshotForTest,
   _loadLivePositionsForTest,
   _beginAisSessionForTest,
@@ -1641,4 +1642,100 @@ test('a vessel analyst record carries the MMSI the tracker keys on', () => {
   const nameless = mapAnalystRecord({ mmsi: '366999124', name: null, lat: 37.9, lon: -122.5 });
   assert.equal(nameless.id, '366999124');
   assert.equal(nameless.mmsi, '366999124');
+});
+
+// --- normalizeVessel (via the test seam) ------------------------------------
+// Row normalization is perf-sensitive: it runs for every row of a 12k-payload
+// refresh (every ~60 s) inside the idle-chunked reconcile phase. Pins:
+//   1. Behavior — field fallbacks, trim, numeric coercion, unusable rows.
+//   2. Geometry — the lifted position is a radial extension of the height-0
+//     surface point (the pre-2026-09 duplicate-fromDegrees elimination), so
+//     `position` must still agree with Cesium.Cartesian3.fromDegrees to well
+//     under a centimetre, and `surfacePosition` stays bit-exact.
+//   3. Surface normal — unchanged direction vs the Cesium reference.
+
+test('normalizeVessel rejects rows without finite coordinates', () => {
+  assert.equal(_normalizeVesselForTest({ lat: 'not-a-number', lon: 4 }), null);
+  assert.equal(_normalizeVesselForTest({ lat: 4, lon: undefined }), null);
+  assert.equal(_normalizeVesselForTest({}), null);
+  assert.equal(_normalizeVesselForTest(null), null);
+});
+
+test('normalizeVessel applies the field fallbacks and numeric coercion', () => {
+  const record = _normalizeVesselForTest({
+    mmsi: ' 366999123 ',
+    lat: 37.8,
+    lon: -122.4,
+    speed: '12.5',
+    course: 'bogus',
+    heading: 511,
+    last_position_epoch: '',
+  });
+  assert.equal(record.mmsi, '366999123', 'mmsi is trimmed');
+  assert.equal(record.name, ' 366999123 ',
+    'name falls back to the raw mmsi (only mmsi itself is trimmed)');
+  assert.equal(record.speed, 12.5, 'numeric strings coerce');
+  assert.equal(record.course, null, 'non-numeric course coerces to null');
+  assert.equal(record.heading, 511, 'sentinel headings pass through (display concern)');
+  assert.equal(record.lastPositionEpoch, null, 'empty epoch coerces to null');
+  assert.equal(record.missedRefreshes, 0);
+  assert.equal(record.billboard, null);
+});
+
+test('normalizeVessel falls back through the name chain to the VESSEL default', () => {
+  const record = _normalizeVesselForTest({ lat: 0, lon: 0 });
+  assert.equal(record.name, 'VESSEL');
+  const fromInput = _normalizeVesselForTest({ lat: 0, lon: 0, input_name: 'AIS NAME', mmsi: '1' });
+  assert.equal(fromInput.name, 'AIS NAME');
+});
+
+test('normalizeVessel: lifted position agrees with the Cesium reference in direction and radius', async () => {
+  // The radial-extension derivation (surface·(1 + h/|surface|)) reproduces
+  // fromDegrees(lon, lat, h) with a relative position error ≈ 4e-10 per
+  // metre of |h| — measured 7.8 mm at h = 3 and 7.5 cm at h = −29 (San
+  // Francisco, N = −32). Worst case (extreme undulation, |h| ≈ 100 m) is
+  // ≈ 26 cm at Earth radius: invisible at billboard scale and dwarfed by the
+  // ±106 m geoid undulation the datum itself absorbs.
+  // Warm the geoid grid so the reference height matches production's datum
+  // state (the module-level grid is shared per process — deriving N the same
+  // way keeps this order-independent).
+  await ensureGeoidReady();
+  for (const [lat, lon] of [[37.8, -122.4], [51.95, 4.14], [-54.5, 158.9], [0.001, 179.999]]) {
+    const record = _normalizeVesselForTest({ lat, lon, mmsi: '1' });
+    const heightM = vesselDatumHeightM(geoidHeight(lat, lon), 3);
+    const reference = Cesium.Cartesian3.fromDegrees(lon, lat, heightM);
+    const radiusDelta = Math.abs(
+      Cesium.Cartesian3.magnitude(record.position) - Cesium.Cartesian3.magnitude(reference),
+    );
+    assert.ok(
+      radiusDelta / Cesium.Cartesian3.magnitude(reference) < 1e-7,
+      `radius off by ${radiusDelta.toExponential(2)} m at (${lat}, ${lon})`,
+    );
+    // Direction is the load-bearing property (screen projection, occluder
+    // rays, alignedAxis rotation): agree to ~1e-6 rad.
+    const unitRecord = Cesium.Cartesian3.normalize(record.position, new Cesium.Cartesian3());
+    const unitReference = Cesium.Cartesian3.normalize(reference, new Cesium.Cartesian3());
+    const dot = Cesium.Cartesian3.dot(unitRecord, unitReference);
+    assert.ok(dot > 1 - 1e-12, `direction off (dot=${dot}) at (${lat}, ${lon})`);
+  }
+});
+
+test('normalizeVessel: surfacePosition is bit-exact against the height-0 reference', () => {
+  const record = _normalizeVesselForTest({ lat: 51.95, lon: 4.14, mmsi: '1' });
+  const reference = Cesium.Cartesian3.fromDegrees(4.14, 51.95, 0);
+  assert.equal(
+    Cesium.Cartesian3.equals(record.surfacePosition, reference),
+    true,
+    'the horizon-occluder surface point must not shift by a single bit',
+  );
+});
+
+test('normalizeVessel: surface normal direction matches the Cesium reference', () => {
+  const record = _normalizeVesselForTest({ lat: 1.26, lon: 103.84, mmsi: '1' });
+  const reference = Cesium.Cartesian3.fromDegrees(103.84, 1.26, 3);
+  const referenceNormal = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(reference, new Cesium.Cartesian3());
+  const dot = (record.normal.x * referenceNormal.x
+    + record.normal.y * referenceNormal.y
+    + record.normal.z * referenceNormal.z);
+  assert.ok(Math.abs(dot - 1) < 1e-9, `normal direction changed: dot=${dot}`);
 });

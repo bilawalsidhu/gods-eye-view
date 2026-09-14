@@ -254,6 +254,32 @@ Order of work, cheapest-first:
       uncapped world-overlay backing-store DPR. Each must land with a
       before/after capture from `scripts/profile-runtime.mjs` or a
       workstation trace.
+  - [x] AIS row normalization: duplicate `fromDegrees` eliminated; batch
+        sizing measured and confirmed already-correct (2026-09-14). Found:
+        `normalizeVessel` called `Cesium.Cartesian3.fromDegrees(lon, lat, h)`
+        AND `fromDegrees(lon, lat, 0)` for the same row — the lifted point is
+        a pure radial extension of the height-0 point
+        (`base · (1 + h/|base|)`), so half the per-row trig was duplicated
+        work. Component breakdown (Node, 12k synthetic AISStream-shaped rows;
+        the account holds no AISSTREAM_API_KEY, so live rows are unavailable):
+        the two calls cost 0.29 + 0.34 of the 1.10 µs/row pass. Fixed in
+        `src/data/aisLiveVessels.js`: compute the surface point first and
+        derive the lifted position via `multiplyByScalar`; also null-guarded
+        the row entry (the accept filter is null-safe, `normalizeVessel`
+        threw). A/B (interleaved in one process): Node 0.976 → 0.736 µs/row
+        (−24.6%, 2.9 ms saved per 12k-row refresh); headless Chrome with the
+        app's pre-bundled Cesium 0.667 → 0.533 µs/row (−20%, 1.6 ms/refresh).
+        Geometry pinned by new tests via a `_normalizeVesselForTest` seam:
+        `surfacePosition` bit-exact vs the height-0 reference; lifted
+        position agrees in direction (dot > 1 − 1e-12) and radius
+        (< 1e-7 relative) — relative error ≈ 4e-10 per metre of |h|
+        (7.8 mm at h = 3, ≤ ~26 cm at extreme undulation), invisible at
+        billboard scale. Batch-size verdict (no change): 12k rows > the 1000
+        sync threshold takes the idle path, where slices are deadline-driven
+        and `chunkSize` bounds only the `setTimeout` fallback; at the
+        measured ~0.5–0.7 µs/row a full 500-row fallback slice is
+        0.27–0.35 ms ≈ 2% of a 16.7 ms frame, and the sync path for ≤ 1000
+        rows costs ≤ ~0.7 ms — both far inside any interactivity budget.
   - [x] Detection projection worker backpressure + dead consumption
         (2026-09-14). Found: `_drawOverlay` posted the whole cohort EVERY
         drawn frame, but the `requestId`-equality gate could never pass (the
