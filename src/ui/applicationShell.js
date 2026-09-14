@@ -10,6 +10,7 @@ import { CctvControls } from './cctv.js';
 import { RadioControls } from './radio.js';
 import { LocationControls } from './location.js';
 import { bindClearLayersControl } from './layers.js';
+import { bindCameraOrientationControls } from './cameraOrientationControls.js';
 import { createMapSourceControls } from './mapSource.js';
 import {
   VisualEffects,
@@ -615,6 +616,7 @@ export class StyleManager {
     this._initGlobalContextPanel();
     this._initLocationBar();
     this._initShareButton();
+    this._initCameraOrientationControls();
     this._initClearSelectedLayersButton();
     this._initHUDToggle();
     this._initModels3dToggle();
@@ -4860,6 +4862,21 @@ export class StyleManager {
     );
   }
 
+  /** Wire Google Maps-style tilt and north-up camera actions. */
+  _initCameraOrientationControls() {
+    this._cameraOrientationControls?.destroy();
+    this._cameraOrientationControls = bindCameraOrientationControls({
+      viewer: this.viewer,
+      elements: {
+        tiltButton: this._tiltMapBtn,
+        northButton: this._northUpBtn,
+      },
+      runNavigation: (noun, navigate) =>
+        this._runExplicitNavigation(noun, navigate),
+      showToast: (message) => this._showToast(message),
+    });
+  }
+
   /**
    * Clear every selected data layer without resetting visual, map, HUD, or
    * camera state. A layer may still release camera work it owns as part of its
@@ -5301,6 +5318,7 @@ export class StyleManager {
     this._displayControls?.destroy();
     this._frameRateMonitor?.destroy();
     this._mapSourceControls?.destroy();
+    this._cameraOrientationControls?.destroy();
     this._clearLayersControl?.destroy();
     this._locationControls?.destroy();
     this._cctvControls?.destroy();

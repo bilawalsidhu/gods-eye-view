@@ -44,7 +44,7 @@ test('Cockpit has one reset action beside its bottom exit path', () => {
   );
   const topCenterActions = html.match(/<nav id="top-center-actions"[\s\S]*?<\/nav>/);
   assert.ok(topCenterActions, 'Top-center globe actions are missing');
-  assert.match(topCenterActions[0], /id="clear-selected-layers"[\s\S]*?id="share-btn"[\s\S]*?id="reset-globe-view"/);
+  assert.match(topCenterActions[0], /id="clear-selected-layers"[\s\S]*?id="share-btn"[\s\S]*?id="tilt-map-view"[\s\S]*?id="north-up-view"[\s\S]*?id="reset-globe-view"/);
   assert.equal((html.match(/id="clear-selected-layers"/g) || []).length, 1, 'Clear Layers must have one DOM owner');
   assert.equal((html.match(/id="reset-globe-view"/g) || []).length, 1, 'Reset Globe must have one DOM owner');
   assert.equal((html.match(/id="cockpit-reset-globe"/g) || []).length, 1, 'Cockpit Reset must have one DOM owner');
@@ -225,7 +225,7 @@ test('share startup isolates panel defaults from recipient-local collapse prefer
 });
 
 test('Cockpit owns a focused shared Display portal and compact Radio controls', () => {
-  const hiddenRule = css.match(/body\.cockpit-mode :is\(([^)]*)\)\s*\{\s*display:\s*none\s*!important;/);
+  const hiddenRule = css.match(/body\.cockpit-mode\s*:is\(([^)]*)\)\s*\{\s*display:\s*none\s*!important;/);
   assert.ok(hiddenRule, 'Cockpit hidden-chrome rule is missing');
   assert.match(css, /body\.cockpit-mode #right-context-rail\s*\{\s*display:\s*none\s*!important;/);
   assert.match(css, /body\.cockpit-mode #left-panel-stack > #scene-panel\s*\{\s*display:\s*none\s*!important;/);
@@ -242,7 +242,7 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   assert.match(css, /body\.recording-mode #top-center-actions/);
   assert.match(
     css,
-    /body\.scene-playback-mode :is\(#clear-selected-layers, #reset-globe-view\)\s*\{\s*display:\s*none !important;/,
+    /body\.scene-playback-mode\s*:is\([\s\S]*?#clear-selected-layers,[\s\S]*?#tilt-map-view,[\s\S]*?#north-up-view,[\s\S]*?#reset-globe-view[\s\S]*?\)\s*\{\s*display:\s*none !important;/,
   );
   assert.match(sceneDirector, /this\._running = true;\s*this\._setPlaybackActive\(true\);/);
   assert.match(sceneDirector, /styleManager\.setRecordingMode\(false\);\s*this\._setPlaybackActive\(false\);/);
@@ -464,11 +464,11 @@ test('real disclosure changes reconsider only their own temporary panel lane', (
 test('Cockpit hides the complete top-center globe action group', () => {
   assert.match(
     css,
-    /body\.cockpit-mode :is\([\s\S]*?#top-center-actions[\s\S]*?\)\s*\{\s*display: none !important;\s*\}/,
+    /body\.cockpit-mode\s*:is\([\s\S]*?#top-center-actions[\s\S]*?\)\s*\{\s*display: none !important;\s*\}/,
   );
   assert.match(
     css,
-    /body\.cockpit-mode :is\(#clear-selected-layers, #share-btn, #reset-globe-view\)\s*\{\s*display:\s*none !important;/,
+    /body\.cockpit-mode\s*:is\([\s\S]*?#clear-selected-layers,[\s\S]*?#share-btn,[\s\S]*?#tilt-map-view,[\s\S]*?#north-up-view,[\s\S]*?#reset-globe-view[\s\S]*?\)\s*\{\s*display:\s*none !important;/,
     'Cockpit must hide each map-only globe action even if its group layout is disturbed',
   );
 });
