@@ -247,13 +247,44 @@ Order of work, cheapest-first:
       real idle budget, chunk size is the browser's call, and a test pins
       that intent so it cannot drift silently.
 - [ ] Algorithmic wins first (these are known, measurable, and don't need
-      WASM): AIS row normalization batch sizes, detection projection worker
-      backpressure, label solve cadence under dense mode. Plus the render-perf
-      list from the community audit (Phase 7): `preserveDrawingBuffer`,
-      `msaaSamples`, the 58 `backdrop-filter` rules, the compass-tape
-      `innerHTML` rebuild, and the uncapped world-overlay backing-store DPR.
-      Each must land with a before/after capture from
-      `scripts/profile-runtime.mjs` or a workstation trace.
+      WASM): AIS row normalization batch sizes, label solve cadence under
+      dense mode. Plus the render-perf list from the community audit
+      (Phase 7): `preserveDrawingBuffer`, `msaaSamples`, the 58
+      `backdrop-filter` rules, the compass-tape `innerHTML` rebuild, and the
+      uncapped world-overlay backing-store DPR. Each must land with a
+      before/after capture from `scripts/profile-runtime.mjs` or a
+      workstation trace.
+  - [x] Detection projection worker backpressure + dead consumption
+        (2026-09-14). Found: `_drawOverlay` posted the whole cohort EVERY
+        drawn frame, but the `requestId`-equality gate could never pass (the
+        next frame increments the id before any cross-task answer arrives) —
+        every worker answer was discarded, the main-thread fallback paid the
+        full O(n) projection anyway, and the worker queue was unbounded.
+        Fixed in `src/data/detection.js` + `src/data/detectionDraw.js`:
+        (1) at most ONE unanswered request (`_projectionInFlight`) — queue
+        depth capped at 1, onerror clears the gate so a dead worker cannot
+        stall the pipeline; (2) answers are stored with the exact request and
+        consumed only while `projectionRequestMatches` holds — stable
+        per-object identity keys (cohort order may permute), type/skipLabel
+        unchanged, positions within a distance-relative tolerance
+        (max(50 mm, 5e-5 × stored distance) ⇒ ≤0.05 px worst-case reuse
+        error at any zoom; measured 0.2–8 m CCTV refresh wobble absorbed,
+        movers cross ≫ε per frame so no stale bracket), identical
+        camera/occluder/viewport/view-projection; (3) bracket sizes are
+        derived main-thread-side through a shared mode-aware helper
+        (`_bracketHalfSizes`) — the worker cannot see DENSE, and consuming
+        its non-DENSE sizes would have shrunk untracked brackets 16/10 →
+        11/7 in DENSE steady states. A/B capture (headless Chrome,
+        keyless CCTV+bikeshare cohort of 79 at 200 km, DENSE): BEFORE
+        2.17 posts/s ≈ 2.2 draws/s forever (1 post per drawn frame); AFTER
+        posts plateau at 0.0/s while `visibleCount` stays 79 at 2.2 draws/s
+        (steady state = zero posts, zero main-thread projection). Orbiting
+        camera: BEFORE posts = draws (unbounded queue), AFTER posts ≤ ½
+        draws (depth-1 gate). Unit tests: 31 across
+        `src/data/detectionDraw.test.mjs` (match contract incl. tolerance
+        collapse for near-camera objects) and
+        `src/workers/detectionProjection.worker.test.mjs` (worker protocol
+        on `objectsById`, dead-gate absence pinned).
 - [x] WASM: FIRMS heat renderer wired (2026-09-10). `rust/firms-renderer/`
       renders the cells-band aggregation (`global`/`regional` LODs) as ONE
       Gaussian-splat texture on a single ground rectangle via

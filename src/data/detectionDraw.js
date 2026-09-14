@@ -237,3 +237,102 @@ export function nearFarScale(distance, near, nearValue, far, farValue) {
   const t = (distance - near) / (far - near);
   return nearValue + t * (farValue - nearValue);
 }
+
+/** The row-major view-projection coefficients the projection worker consumes. */
+export const VIEW_PROJECTION_KEYS = [
+  'vp0', 'vp1', 'vp3', 'vp4', 'vp5', 'vp7', 'vp8', 'vp9', 'vp11', 'vp12', 'vp13', 'vp15',
+];
+
+/** Exact {x,y,z} triple equality. NaN never equals NaN, so a NaN position never matches. */
+function positionEquals(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.x === b.x && a.y === b.y && a.z === b.z;
+}
+
+/**
+ * Position tolerance for reusing a stored worker answer, as a distance-
+ * RELATIVE bound: an object may drift by at most PROJECTION_REUSE_RELATIVE ×
+ * its stored camera distance (floored at PROJECTION_REUSE_FLOOR_M). Because
+ * on-screen error of a position error δ at distance d is proportional to δ/d,
+ * this bounds the worst-case reused-bracket error to a constant ≈0.05 px at
+ * ANY zoom — invisible by construction.
+ *
+ * Why any tolerance at all: static feeds (CCTV especially) re-derive their
+ * positions with jitter between refreshes — measured 0.2–8 m on Caltrans
+ * cameras at orbital view — which would defeat bit-exact reuse forever. No
+ * real mover can falsely match: satellites cross ≈125 m per 60 fps frame
+ * (ε at 500 km ≈ 25 m), flights ≈4 m/frame near the camera where ε collapses
+ * to the 50 mm floor.
+ */
+export const PROJECTION_REUSE_FLOOR_M = 0.05;
+export const PROJECTION_REUSE_RELATIVE = 5e-5;
+
+/** Per-axis epsilon containment. */
+function positionWithin(a, b, eps) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return Math.abs(a.x - b.x) <= eps
+    && Math.abs(a.y - b.y) <= eps
+    && Math.abs(a.z - b.z) <= eps;
+}
+
+/**
+ * Whether a previously-posted projection request still describes the current
+ * frame: same cohort identity set (keyed by the caller's stable per-object
+ * identity — cohort ORDER may permute between frames), per-object
+ * type/skipLabel unchanged, positions within the distance-relative reuse
+ * tolerance, and identical camera + occluder positions, viewport size, and
+ * view-projection coefficients. When this holds, the worker's answer for that
+ * request is the answer the main thread would have recomputed to within
+ * ≈0.05 px, so it is consumed verbatim; any difference means the frame
+ * projects synchronously.
+ * @param {{objectsById:Map, viewProjection:object, cameraPosition:object,
+ *     camPos:object, occluderCameraPos:object, width:number, height:number}|null} request
+ *   The posted request an answered result was computed for.
+ * @param {Array<{type:string, skipLabel:boolean, position:object|null}>} objects
+ *   The current frame's detectable objects (positions read live).
+ * @param {object} camPos - Current camera position.
+ * @param {object} occluderCameraPos - Current occluder camera position.
+ * @param {number} width - Current viewport width in CSS pixels.
+ * @param {number} height - Current viewport height in CSS pixels.
+ * @param {object} viewProjection - Current view-projection coefficients (vp0…vp15).
+ * @param {(obj:object, index:number) => (number|string)} identityOf
+ *   Stable per-object identity (hash) shared between the stored request and
+ *   the current frame's objects.
+ * @param {Map|null} resultById
+ *   The answered rows keyed by the same identity (row.distance feeds the
+ *   per-object tolerance); null uses the floor tolerance everywhere.
+ * @returns {boolean} True when the stored answer is reusable this frame.
+ */
+export function projectionRequestMatches(
+  request,
+  objects,
+  camPos,
+  occluderCameraPos,
+  width,
+  height,
+  viewProjection,
+  identityOf,
+  resultById,
+) {
+  if (!request) return false;
+  const storedById = request.objectsById;
+  if (!storedById || storedById.size !== objects.length) return false;
+  for (let i = 0; i < objects.length; i++) {
+    const b = objects[i];
+    const id = identityOf(b, i);
+    const a = storedById.get(id);
+    if (!a) return false;
+    if (a.type !== b.type || a.skipLabel !== Boolean(b.skipLabel)) return false;
+    const row = resultById ? resultById.get(id) : null;
+    const eps = Math.max(PROJECTION_REUSE_FLOOR_M, (row?.distance || 0) * PROJECTION_REUSE_RELATIVE);
+    if (!positionWithin(a.position, b.position || null, eps)) return false;
+  }
+  return request.width === width
+    && request.height === height
+    && positionEquals(request.cameraPosition, camPos)
+    && positionEquals(request.camPos, camPos)
+    && positionEquals(request.occluderCameraPos, occluderCameraPos)
+    && VIEW_PROJECTION_KEYS.every((key) => request.viewProjection[key] === viewProjection[key]);
+}

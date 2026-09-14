@@ -11,9 +11,11 @@
 //     back visible:false with the zeroed shape the main thread reads.
 //   3. Reticle scaling — AIR brackets ride the near/far curve and clamps;
 //     non-AIR uses the fixed tracked/untracked sizes.
-//   4. Dispatch placement — detection.js posts to the worker BEFORE iterating
-//     and consumes results only when the requestId matches (first frame or
-//     unavailable worker falls back to main-thread projection).
+//   4. Dispatch placement — detection.js posts to the worker BEFORE iterating,
+//     caps the in-flight queue at depth 1, and consumes a stored answer only
+//     when its request still describes the current frame bit-for-bit (first
+//     frame, camera motion, cohort churn, and unanswered-request frames all
+//     fall back to main-thread projection).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -43,6 +45,13 @@ function geodeticToEcef(latDeg, lonDeg, heightM = 0) {
   };
 }
 
+
+// Requests now carry the cohort as an id-keyed Map (stable per-object hashes —
+// cohort order may permute between frames), not an index-ordered array.
+function cohort(objects) {
+  return new Map(objects.map((o) => [o.id, o]));
+}
+
 const WIDTH = 1000;
 const HEIGHT = 500;
 // Orthographic-style matrix: sx = (x·0.5 + 0.5)·W, sy = (0.5 − y·0.5)·H,
@@ -58,7 +67,7 @@ test('projection worker: row-major transform maps positions to exact pixels', ()
   posted.length = 0;
   const pos = geodeticToEcef(0, 0.5);
   send({
-    objects: [{ id: 0, type: 'Vessel', skipLabel: false, position: pos }],
+    objectsById: cohort([{ id: 0, type: 'Vessel', skipLabel: false, position: pos }]),
     viewProjection: ORTHO,
     cameraPosition: camPos,
     width: WIDTH,
@@ -89,7 +98,7 @@ test('projection worker: row-major transform maps positions to exact pixels', ()
 test('projection worker: horizon-occluded objects return the zeroed invisible shape', () => {
   posted.length = 0;
   send({
-    objects: [{ id: 'far', type: 'Vessel', skipLabel: false, position: geodeticToEcef(0, 179) }],
+    objectsById: cohort([{ id: 'far', type: 'Vessel', skipLabel: false, position: geodeticToEcef(0, 179) }]),
     viewProjection: ORTHO,
     cameraPosition: camPos,
     width: WIDTH,
@@ -111,7 +120,7 @@ test('projection worker: behind-the-clip objects (clipW ≤ 0) are rejected', ()
   // clipW = vp3·x + vp7·y + vp11·z + vp15 — zero coefficients make clipW 0
   // regardless of position: the "behind the camera" door with a trivial matrix.
   send({
-    objects: [{ id: 0, type: 'Vessel', skipLabel: false, position: geodeticToEcef(0, 0.5) }],
+    objectsById: cohort([{ id: 0, type: 'Vessel', skipLabel: false, position: geodeticToEcef(0, 0.5) }]),
     viewProjection: { ...ORTHO, vp15: 0 },
     cameraPosition: camPos,
     width: WIDTH,
@@ -140,10 +149,10 @@ test('projection worker: AIR reticle rides the near/far curve with clamps', () =
   };
   send({
     ...base,
-    objects: [
+    objectsById: cohort([
       { id: 'near-untracked', type: 'AIR', skipLabel: false, position: nearPos },
       { id: 'near-tracked', type: 'AIR', skipLabel: true, position: nearPos },
-    ],
+    ]),
     camPos: { x: nearPos.x - 100, y: nearPos.y, z: nearPos.z }, // 100 m → near plateau (×3)
     requestId: 4,
   });
@@ -156,7 +165,7 @@ test('projection worker: AIR reticle rides the near/far curve with clamps', () =
 
   send({
     ...base,
-    objects: [{ id: 'far-untracked', type: 'AIR', skipLabel: false, position: farPos }],
+    objectsById: cohort([{ id: 'far-untracked', type: 'AIR', skipLabel: false, position: farPos }]),
     camPos: { x: farPos.x - 9_000_000, y: farPos.y, z: farPos.z }, // 9,000 km → far plateau (×0.5)
     requestId: 5,
   });
@@ -170,10 +179,10 @@ test('projection worker: AIR reticle rides the near/far curve with clamps', () =
 test('projection worker: objects without a position are skipped, not crashed on', () => {
   posted.length = 0;
   send({
-    objects: [
+    objectsById: cohort([
       { id: 'a', type: 'Vessel', skipLabel: false, position: null },
       { id: 'b', type: 'Vessel', skipLabel: false, position: geodeticToEcef(0, 1) },
-    ],
+    ]),
     viewProjection: ORTHO,
     cameraPosition: camPos,
     width: WIDTH,
@@ -183,16 +192,30 @@ test('projection worker: objects without a position are skipped, not crashed on'
     requestId: 5,
   });
   assert.deepEqual(posted[0].results.map((r) => r.id), ['b'],
-    'a positionless object yields no row (main thread projects it synchronously instead)');
+    'a positionless object yields no row — the keyed answer makes the gap explicit');
 });
 
-test('detection.js dispatches to the worker before iterating and consumes latest-only', () => {
+test('detection.js consumes only exact-match answers and caps the worker queue at depth 1', () => {
   const src = readSource('../data/detection.js', import.meta.url);
   assert.match(src, /Dispatch projection work to the Web Worker before iterating objects/,
     'dispatch must precede the draw loop');
+  // The historical gate — `_workerProjectionResultId === requestId` — could
+  // never pass: the next frame incremented the id before any cross-task
+  // answer arrived, so every worker result was discarded and the synchronous
+  // fallback paid the full projection cost every frame. Pin its absence.
+  assert.doesNotMatch(src, /_workerProjectionResultId/,
+    'the requestId-equality consumption gate was dead logic and must stay gone');
   assert.match(src,
-    /const workerResult = _workerProjectionResultId === requestId \? _workerProjectionResult : null;/,
-    'results are consumed only when the requestId matches the current frame');
-  assert.match(src, /On the first frame \(no result yet\) or when worker is unavailable, fall back to main-thread/,
+    /projectionRequestMatches\(\s*_workerProjectionRequest,\s*objects/,
+    'stored answers are consumed only when their request still describes this frame');
+  assert.match(src, /worker && !workerResult && !_projectionInFlight/,
+    'no new request may be posted while one is unanswered — queue depth is capped at 1');
+  assert.match(src, /uses the synchronous main-thread projection below/,
     'the synchronous fallback path must stay documented and present');
+  // Sizes are re-derived main-thread-side from the worker's distance: the
+  // worker cannot see the DENSE profile, and consuming its non-DENSE sizes in
+  // a DENSE steady state would silently shrink untracked brackets (16/10
+  // instead of 11/7).
+  assert.match(src, /_bracketHalfSizes\(obj, r\.distance\)/,
+    'consumed rows must derive sizes through the shared, mode-aware helper');
 });

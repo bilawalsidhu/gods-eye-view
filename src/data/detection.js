@@ -10,6 +10,7 @@ import {
 import {
   acquireAlpha,
   appendCornerBracket,
+  projectionRequestMatches,
   resolveTier,
   measureTrackLabel,
   nearFarScale,
@@ -269,15 +270,43 @@ let _cockpitModeListener = null;
 // Detection Projection Web Worker — offloads O(n) screen projection off main thread
 // Handles: horizon occlusion, view-projection transform, camera distance.
 // Path2D bracket appending stays on main thread (Canvas2D is main-thread-only).
+//
+// Backpressure + reuse contract: at most ONE request is unanswered at a time
+// (_projectionInFlight). When its answer arrives it is stored alongside the
+// exact request that produced it (_workerProjectionRequest); a later frame
+// consumes those results ONLY when that request still describes the frame
+// bit-for-bit (projectionRequestMatches) — i.e. a steady scene whose brackets
+// are identical to what the main thread would recompute. Frames drawn while a
+// request is unanswered, or on any mismatch (camera motion, cohort churn),
+// project synchronously below instead, so the worker can never lag the render
+// loop into an unbounded message queue and no stale bracket is ever drawn.
+// (The previous requestId-equality gate could never pass — the next frame
+// incremented the id before any cross-task answer arrived — so every worker
+// result was discarded and the main thread paid for both paths every frame.)
 // ---------------------------------------------------------------------------
 /** @type {Worker|null} */
 let _projectionWorker = null;
-/** @type {Array|null} Cached projection+visibility results from the worker */
+/** @type {Array|null} Projection+visibility rows answering _workerProjectionRequest. */
 let _workerProjectionResult = null;
-/** @type {number} Request ID of the cached projection result */
-let _workerProjectionResultId = -1;
-/** @type {number} Monotonic request ID for matching worker responses to requests */
+/** @type {object|null} The posted request that _workerProjectionResult answers. */
+let _workerProjectionRequest = null;
+/** @type {object|null} The request currently awaiting its worker answer. */
+let _pendingProjectionRequest = null;
+/** @type {boolean} True while one request is unanswered — no new post until it lands. */
+let _projectionInFlight = false;
+/** @type {number} Monotonic message ID (worker echoes it; aids worker-side debugging). */
 let _projectionRequestId = 0;
+
+/**
+ * Stable per-object identity correlating worker requests with their answers.
+ * Index-aligned correlation is not enough: cohort order can permute between
+ * frames (BoundedCohort re-scores on every solve), and index alignment would
+ * silently draw bracket A on object B.
+ * @param {{_layerId?:string, sourceId?:string|number, id?:string|number}} obj
+ * @param {number} i - Fallback index for objects with no identity of their own.
+ * @returns {number} FNV-1a hash of layerId + sourceId.
+ */
+const _workerIdentityOf = (obj, i) => stableIdentityHash(obj._layerId || '', obj.sourceId ?? obj.id ?? i);
 
 /**
  * Returns the singleton detection projection worker, creating it on first call.
@@ -290,15 +319,28 @@ function getProjectionWorker() {
       { type: 'module' },
     );
     _projectionWorker.onmessage = (e) => {
-      const { results, requestId } = e.data;
-      if (requestId === _projectionRequestId) {
-        _workerProjectionResult = results;
-        _workerProjectionResultId = requestId;
-      }
+      // Only one request can be unanswered, so any arrival completes THE
+      // pending request; its stored inputs are what a later frame must match
+      // to reuse the results. The answer is keyed by the request's stable
+      // object identities so a reordered cohort cannot misalign brackets.
+      _projectionInFlight = false;
+      const results = e.data.results || [];
+      const byId = new Map();
+      for (let i = 0; i < results.length; i++) byId.set(results[i].id, results[i]);
+      _workerProjectionResult = byId;
+      _workerProjectionRequest = _pendingProjectionRequest;
+      _pendingProjectionRequest = null;
     };
     _projectionWorker.onerror = (err) => {
       logWarn('Detection', 'projection worker error:', err.message);
+      // Drop the worker AND the half-completed exchange so the next draw
+      // falls back to synchronous projection instead of waiting on an answer
+      // that can never arrive (and tripping the in-flight gate forever).
       _projectionWorker = null;
+      _projectionInFlight = false;
+      _pendingProjectionRequest = null;
+      _workerProjectionResult = null;
+      _workerProjectionRequest = null;
     };
   }
   return _projectionWorker;
@@ -311,10 +353,12 @@ function destroyProjectionWorker() {
   if (_projectionWorker) {
     _projectionWorker.terminate();
     _projectionWorker = null;
-    _workerProjectionResult = null;
-    _workerProjectionResultId = -1;
-    _projectionRequestId = 0;
   }
+  _workerProjectionResult = null;
+  _workerProjectionRequest = null;
+  _pendingProjectionRequest = null;
+  _projectionInFlight = false;
+  _projectionRequestId = 0;
 }
 
 /**
@@ -414,6 +458,41 @@ export function destroyDetection() {
  */
 function _clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * Reusable return cell for `_bracketHalfSizes`. The draw loop destructures
+ * the result immediately and never retains it, so one module-level cell keeps
+ * a per-object-per-frame allocation out of the hot path (the allocation gate
+ * counts every byte of the 5,000-observation Dense frame budget).
+ */
+const _halfSizes = { halfW: 0, halfH: 0 };
+
+/**
+ * Bracket half-sizes for one object at a camera distance — the single source
+ * shared by the worker-consumption path and the synchronous fallback, so the
+ * two can never disagree on sizes. (The worker computes sizes too, but it has
+ * no access to `_mode`: its non-AIR sizes are only ever the non-DENSE ones.
+ * Consumed rows therefore take their size from THIS helper, keyed on the
+ * worker's distance — a DENSE-mode steady state would otherwise quietly draw
+ * untracked brackets at the default 16/10 instead of 11/7.)
+ * Writes into the shared `_halfSizes` cell — consume before the next call.
+ * @param {{type:string, skipLabel:boolean}} obj - The detectable object.
+ * @param {number} distance - Camera-to-object distance, metres (AIR only; pass
+ *   0 for non-AIR, which sizes by mode alone).
+ * @returns {{halfW:number, halfH:number}} Bracket half-sizes in CSS pixels.
+ */
+function _bracketHalfSizes(obj, distance) {
+  const isTracked = obj.skipLabel;
+  if (obj.type === 'AIR') {
+    const bscale = nearFarScale(distance, BILL_NEAR, BILL_NEAR_SCALE, BILL_FAR, BILL_FAR_SCALE);
+    _halfSizes.halfW = _clamp((isTracked ? 14 : 9) * bscale, 7, 48);
+    _halfSizes.halfH = _clamp((isTracked ? 11 : 7) * bscale, 5, 38);
+  } else {
+    _halfSizes.halfW = _mode === MODE_DENSE ? (isTracked ? 28 : 11) : 16;
+    _halfSizes.halfH = _mode === MODE_DENSE ? (isTracked ? 22 : 7) : 10;
+  }
+  return _halfSizes;
 }
 
 function _modeForDensity(densityPct = _densityPct) {
@@ -1239,36 +1318,62 @@ function _drawOverlay(frame) {
   let placementBuildCount = 0;
   // Dispatch projection work to the Web Worker before iterating objects.
   // The worker handles: horizon occlusion, view-projection transform, distance.
-  // Results are cached by requestId and consumed in the loop below.
-  // On the first frame (no result yet) or when worker is unavailable, fall back to main-thread.
+  // A stored answer is consumed ONLY when its request still describes THIS
+  // frame (same camera/occluder, viewport, view-projection, and a cohort with
+  // the same stable identities and sub-metre-identical positions —
+  // projectionRequestMatches); anything else — first frame, camera motion,
+  // cohort churn, or an unanswered request — uses the synchronous main-thread projection below.
+  // Posts are gated on !_projectionInFlight, so the worker queue never
+  // exceeds depth 1.
   const occluderCameraPos = occluder._cameraPosition ?? camPos;
   const requestId = ++_projectionRequestId;
-  const workerResult = _workerProjectionResultId === requestId ? _workerProjectionResult : null;
-  if (objects.length > 0) {
-    const worker = getProjectionWorker();
-    if (worker) {
-      const projectedObjects = new Array(objects.length);
-      for (let i = 0; i < objects.length; i++) {
-        const obj = objects[i];
-        const pos = obj.position;
-        projectedObjects[i] = {
-          id: i,
-          type: obj.type,
-          skipLabel: Boolean(obj.skipLabel),
-          position: pos ? { x: pos.x, y: pos.y, z: pos.z } : null,
-        };
-      }
-      worker.postMessage({
-        objects: projectedObjects,
-        viewProjection: { vp0, vp1, vp3, vp4, vp5, vp7, vp8, vp9, vp11, vp12, vp13, vp15 },
-        cameraPosition: camPos,
-        width,
-        height,
-        camPos,
-        occluderCameraPos,
-        requestId,
+  const worker = objects.length > 0 ? getProjectionWorker() : null;
+  // The 12 row-major coefficients the worker consumes (its wire format is an
+  // object, not the raw column-major-ordered 4x4 `viewProjection` matrix).
+  // Built only when a worker exists — with no worker (Node tests, degraded
+  // browsers) the signature is dead weight per frame.
+  const vpSignature = worker
+    ? { vp0, vp1, vp3, vp4, vp5, vp7, vp8, vp9, vp11, vp12, vp13, vp15 }
+    : null;
+  const workerResult = worker
+    && projectionRequestMatches(
+      _workerProjectionRequest,
+      objects,
+      camPos,
+      occluderCameraPos,
+      width,
+      height,
+      vpSignature,
+      _workerIdentityOf,
+      _workerProjectionResult,
+    )
+    ? _workerProjectionResult
+    : null;
+  if (worker && !workerResult && !_projectionInFlight) {
+    const objectsById = new Map();
+    for (let i = 0; i < objects.length; i++) {
+      const obj = objects[i];
+      const pos = obj.position;
+      const id = _workerIdentityOf(obj, i);
+      objectsById.set(id, {
+        id,
+        type: obj.type,
+        skipLabel: Boolean(obj.skipLabel),
+        position: pos ? { x: pos.x, y: pos.y, z: pos.z } : null,
       });
     }
+    _projectionInFlight = true;
+    _pendingProjectionRequest = {
+      objectsById,
+      viewProjection: vpSignature,
+      cameraPosition: camPos,
+      width,
+      height,
+      camPos,
+      occluderCameraPos,
+      requestId,
+    };
+    worker.postMessage(_pendingProjectionRequest);
   }
 
   for (let i = 0; i < objects.length; i++) {
@@ -1278,12 +1383,12 @@ function _drawOverlay(frame) {
     // Use worker result if available (non-blocking), otherwise compute on main thread.
     let sx, sy, halfW, halfH;
     if (workerResult) {
-      const r = workerResult[i];
+      const r = workerResult.get(_workerIdentityOf(obj, i));
       if (!r || !r.visible) continue;
       sx = r.sx;
       sy = r.sy;
-      halfW = r.halfW;
-      halfH = r.halfH;
+      // Sizes are derived main-thread-side (mode-aware); see _bracketHalfSizes.
+      ({ halfW, halfH } = _bracketHalfSizes(obj, r.distance));
     } else {
       // Main-thread fallback: horizon occlusion + projection
       const pos = obj.position;
@@ -1297,15 +1402,11 @@ function _drawOverlay(frame) {
       sx = ((vp0 * px + vp4 * py + vp8 * pz + vp12) * invW * 0.5 + 0.5) * width;
       sy = (0.5 - (vp1 * px + vp5 * py + vp9 * pz + vp13) * invW * 0.5) * height;
 
-      const isTracked = obj.skipLabel;
       if (obj.type === 'AIR') {
         const dist = Math.sqrt((px - camPos.x) ** 2 + (py - camPos.y) ** 2 + (pz - camPos.z) ** 2);
-        const bscale = nearFarScale(dist, BILL_NEAR, BILL_NEAR_SCALE, BILL_FAR, BILL_FAR_SCALE);
-        halfW = _clamp((isTracked ? 14 : 9) * bscale, 7, 48);
-        halfH = _clamp((isTracked ? 11 : 7) * bscale, 5, 38);
+        ({ halfW, halfH } = _bracketHalfSizes(obj, dist));
       } else {
-        halfW = _mode === MODE_DENSE ? (isTracked ? 28 : 11) : 16;
-        halfH = _mode === MODE_DENSE ? (isTracked ? 22 : 7) : 10;
+        ({ halfW, halfH } = _bracketHalfSizes(obj, 0));
       }
     }
 

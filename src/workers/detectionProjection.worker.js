@@ -5,13 +5,19 @@
  * Handles: view-projection transform, horizon occlusion, distance computation.
  * Path2D bracket appending stays on main thread (Canvas2D is main-thread-only).
  *
+ * Main-thread contract (src/data/detection.js): at most one request is
+ * unanswered at a time, and an answer is reused only while the scene is
+ * bit-identical to the request (projectionRequestMatches). The halfW/halfH
+ * sizes computed here are ADVISORY — the consumer derives sizes through its
+ * own mode-aware helper because this worker cannot see the DENSE profile.
+ *
  * Input message: {
- *   objects: Array<{
- *     id: string|number,
- *     type: string,           // 'AIR' | 'Vessel' | etc.
+ *   objectsById: Map<id, {            // keyed by the caller's stable per-object
+ *     id: string|number,              // identity hash; echoed verbatim per row —
+ *                                     // cohort order may permute between frames
+ *     type: string,                   // 'AIR' | 'Vessel' | etc.
  *     skipLabel: boolean,
  *     position: {x, y, z},
- *     distanceScale?: number  // for AIR type scaling
  *   }>,
  *   viewProjection: {
  *     vp0, vp1, vp2, vp3, vp4, vp5, vp6, vp7, vp8, vp9, vp10, vp11, vp12, vp13, vp14, vp15
@@ -97,7 +103,7 @@ function ellipsoidalIsPointVisible(camX, camY, camZ, px, py, pz) {
 
 self.onmessage = (e) => {
   const {
-    objects,
+    objectsById,
     viewProjection,
     cameraPosition: _cameraPosition,
     width,
@@ -117,8 +123,7 @@ self.onmessage = (e) => {
 
   const results = [];
 
-  for (let i = 0; i < objects.length; i++) {
-    const obj = objects[i];
+  for (const obj of objectsById.values()) {
     const pos = obj.position;
     if (!pos) continue;
 
@@ -155,9 +160,9 @@ self.onmessage = (e) => {
       halfW = clamp((isTracked ? 14 : 9) * bscale, 7, 48);
       halfH = clamp((isTracked ? 11 : 7) * bscale, 5, 38);
     } else {
-      // MODE_DENSE detection.js: isTracked?28:11 / isTracked?22:7; default: 16/10
-      // Worker doesn't have access to _mode, so use default values (16/10)
-      // Detection 100% DENSE path is not the common case; the perf win is SPARSE/BALANCED
+      // Non-AIR sizes assume the non-DENSE profile — the worker cannot see
+      // _mode, and the consumer re-derives sizes through its own mode-aware
+      // helper anyway (these rows are advisory).
       halfW = isTracked ? 28 : 16;
       halfH = isTracked ? 22 : 10;
     }
