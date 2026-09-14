@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import directionsLayer, {
+import {
   DEFAULT_DIRECTIONS_MODE,
   DIRECTIONS_MODES,
   DIRECTIONS_POINTER_OWNER,
@@ -18,14 +18,13 @@ import directionsLayer, {
   stepIndexAtDistance,
   stepMarkerHeightM,
   stepMarkerIndices,
-  placeDirectionsEndpoint,
   pointerBlockedMessage,
   POINTER_TOOL_EXITS,
   STEP_ANCHOR_DEADLINE_MS,
   STEP_ANCHOR_RETRY_MS,
   STEP_ANCHOR_SLOW_RETRY_MS,
   STEP_ANCHOR_FAST_ATTEMPTS,
-  _setDirectionsOverlayHostForTest,
+  createApplicationDirectionsLayer,
 } from './directions.js';
 import { GROUND_FLOOR_LIFT_M } from './groundFloor.js';
 import {
@@ -44,6 +43,9 @@ function claimAs(owner) {
 }
 import { LAYER_STATE_REGISTRY } from './layerState.js';
 import { SPRITE_LAYER_ORDER } from './spriteOrder.js';
+
+/** The instance under test; each ownership fixture builds a fresh one. */
+let directionsLayer = createApplicationDirectionsLayer();
 
 const idle = {
   enabled: true,
@@ -447,12 +449,16 @@ test('a step selection can be requested and cleared through params', () => {
  * needed for the arming paths: they are pure state plus the pointer claim.
  */
 function ownershipFixture(t) {
-  const host = { setEntries() {}, setVisible() {}, clearSource() {} };
-  _setDirectionsOverlayHostForTest(host);
+  directionsLayer = createApplicationDirectionsLayer();
+  directionsLayer._setOverlayHostForTest({
+    setEntries() {},
+    setVisible() {},
+    clearSource() {},
+  });
   resetPointerOwnership();
   t.after(() => {
     directionsLayer.setParams({ clear: true });
-    _setDirectionsOverlayHostForTest(null);
+    directionsLayer._setOverlayHostForTest(null);
     resetPointerOwnership();
   });
 }
@@ -560,7 +566,7 @@ test('the pointer claim outlives the click that consumed it', async (t) => {
   assert.equal(pointerOwner(), DIRECTIONS_POINTER_OWNER);
 
   assert.equal(
-    placeDirectionsEndpoint('a', { lat: 37.7955, lon: -122.3937 }),
+    directionsLayer.placeEndpoint('a', { lat: 37.7955, lon: -122.3937 }),
     true,
   );
   // Still inside the dispatch: an ambient handler that runs after this one
@@ -591,9 +597,9 @@ test('the pointer claim outlives the click that consumed it', async (t) => {
 
   // A bad placement request changes nothing.
   directionsLayer.setParams({ arm: 'b' });
-  assert.equal(placeDirectionsEndpoint('c', { lat: 1, lon: 1 }), false);
+  assert.equal(directionsLayer.placeEndpoint('c', { lat: 1, lon: 1 }), false);
   assert.equal(
-    placeDirectionsEndpoint('b', { lat: Number.NaN, lon: 1 }),
+    directionsLayer.placeEndpoint('b', { lat: Number.NaN, lon: 1 }),
     false,
   );
   assert.equal(pointerOwner(), DIRECTIONS_POINTER_OWNER, 'still armed');
@@ -602,7 +608,7 @@ test('the pointer claim outlives the click that consumed it', async (t) => {
 test('a teardown during the pending release still frees the pointer at once', async (t) => {
   ownershipFixture(t);
   directionsLayer.setParams({ arm: 'a' });
-  placeDirectionsEndpoint('a', { lat: 37.7955, lon: -122.3937 });
+  directionsLayer.placeEndpoint('a', { lat: 37.7955, lon: -122.3937 });
   assert.equal(isPointerFree(), false);
   // Disabling mid-click must not wait for a timer that may never be reached.
   directionsLayer.disable(null);
@@ -699,7 +705,7 @@ test('re-arming reuses the lease this layer already holds', (t) => {
 test('a stale lease cannot free the claim a later arming holds', async (t) => {
   ownershipFixture(t);
   directionsLayer.setParams({ arm: 'a' });
-  placeDirectionsEndpoint('a', { lat: 37.7955, lon: -122.3937 });
+  directionsLayer.placeEndpoint('a', { lat: 37.7955, lon: -122.3937 });
   // The release for that click is pending. Arming again before it fires must
   // keep the pointer, not lose it to the timer a moment later.
   directionsLayer.setParams({ arm: 'b' });

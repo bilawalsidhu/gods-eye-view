@@ -106,8 +106,8 @@ const layerState = () =>
     const gev = window.__godsEyeView;
     const manager = gev.dataManager;
     const module = manager.layers.get('directions').module;
-    const row = manager._toggleContainer?.querySelector(
-      '[data-layer-id="directions"]',
+    const row = document.querySelector(
+      '#data-toggles [data-layer-id="directions"]',
     );
     const controls = module.getRowControls();
     const viewer = gev.viewer;
@@ -151,10 +151,9 @@ const layerState = () =>
 
 const clickChip = async (chipId) => {
   const clicked = await page.evaluate((id) => {
-    const row =
-      window.__godsEyeView.dataManager._toggleContainer?.querySelector(
-        '[data-layer-id="directions"]',
-      );
+    const row = document.querySelector(
+      '#data-toggles [data-layer-id="directions"]',
+    );
     const button = row?.querySelector(`button[data-chip-id="${id}"]`);
     if (!button || button.disabled) return false;
     button.click();
@@ -249,10 +248,9 @@ try {
   await sleep(700);
   check('the DATA LAYERS panel opens from its own header control', opened);
   const toggled = await page.evaluate(() => {
-    const row =
-      window.__godsEyeView.dataManager._toggleContainer?.querySelector(
-        '[data-layer-id="directions"]',
-      );
+    const row = document.querySelector(
+      '#data-toggles [data-layer-id="directions"]',
+    );
     const button = row?.querySelector('.data-toggle-btn');
     if (!button) return false;
     button.scrollIntoView({ block: 'center' });
@@ -398,10 +396,9 @@ try {
     driveSummary,
   );
   const focused = await page.evaluate(() => {
-    const row =
-      window.__godsEyeView.dataManager._toggleContainer?.querySelector(
-        '[data-layer-id="directions"]',
-      );
+    const row = document.querySelector(
+      '#data-toggles [data-layer-id="directions"]',
+    );
     const items = row.querySelectorAll('.data-row-list-item');
     items[2]?.focus();
     const active = document.activeElement === items[2];
@@ -778,8 +775,8 @@ try {
         shownDots = primitive.show ? primitive.length : 0;
       }
     }
-    const row = gev.dataManager._toggleContainer?.querySelector(
-      '[data-layer-id="directions"]',
+    const row = document.querySelector(
+      '#data-toggles [data-layer-id="directions"]',
     );
     return {
       entities: left.length,

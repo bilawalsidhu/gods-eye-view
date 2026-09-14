@@ -1,13 +1,12 @@
-import directionsLayer from '../../data/directions.js';
+import { createApplicationDirectionsLayer } from '../../data/directions.js';
 
 /**
- * Supply the Directions layer to the application catalog.
+ * Construct one Directions layer using the application scene owners.
  *
- * The layer keeps one set of scene state for the page, like the other
- * `src/data` layers, and `src/data/directions.js` is where it is bound to the
- * shared services. This is the catalog's handle on it.
- * @returns {object} The registered layer module.
+ * It takes no data source: a route is fetched from `/api/route` when the
+ * operator places both endpoints, so there is nothing to supply up front.
+ * @returns {object} A fresh layer instance for this catalog.
  */
 export function createApplicationDirections() {
-  return directionsLayer;
+  return createApplicationDirectionsLayer();
 }
