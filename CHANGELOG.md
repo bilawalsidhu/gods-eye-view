@@ -166,6 +166,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   the bundled place. Anything else, including anything malformed, goes to the
   existing geocoders unchanged. Degrees/minutes/seconds and grid references are
   not parsed and fall through the same way (#388 — thanks @KuraPiee).
+- A data-layer control a provider key is holding back now names that key. With
+  no FIRMS key the fire layer's control read KEY REQUIRED without saying which
+  key or where to put it; it now reads "Needs FIRMS_MAP_KEY — add it in Provider
+  Settings", on the control and in its accessible name. A layer that needs no
+  key, or already holds one, carries no such text, and an unrecognised key name
+  produces none rather than a guess (#296 — thanks @Matthew-Selvam).
 
 - Draped annotation geometry — area fills and outlines, routes and arrows —
   classifies onto terrain as well as 3D tiles. On a keyless boot, where Cesium's
