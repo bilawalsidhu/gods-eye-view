@@ -3671,6 +3671,142 @@ test('a genuinely different refused call still gets its own output', async () =>
   assert.deepEqual(outputs, ['call_one', 'call_two'], 'each distinct call is answered');
 });
 
+function connectToolTestChannel(controller) {
+  const sent = [];
+  controller.dc = {
+    readyState: 'open',
+    send(message) { sent.push(JSON.parse(message)); },
+    close() { this.readyState = 'closed'; },
+  };
+  controller.setStatus('listening', 'Ask or command');
+  return sent;
+}
+
+test('stopped sessions stay idle after pending tools resolve or reject', async (t) => {
+  for (const outcome of ['resolve', 'reject']) {
+    await t.test(outcome, async () => {
+      const pending = Promise.withResolvers();
+      let signal;
+      const { controller } = costControllerHarness({
+        runner: (_name, _args, options) => {
+          signal = options.signal;
+          return pending.promise;
+        },
+      });
+      const sent = connectToolTestChannel(controller);
+      const handling = controller.handleRealtimeEvent(fnCallEvent('get_entity_context', 'old-item', 'old-call'));
+      controller.stop();
+      assert.equal(signal.aborted, true);
+      if (outcome === 'reject') pending.reject(new DOMException('Stopped', 'AbortError'));
+      else pending.resolve({ ok: true, action: 'get_entity_context' });
+      await handling;
+
+      assert.equal(controller.status, 'idle');
+      assert.equal(controller.isActive(), false, 'the next activation must be able to start voice');
+      assert.equal(controller.dc, null);
+      assert.deepEqual(sent, []);
+      assert.equal(controller.activeToolAbortControllers.size, 0);
+    });
+  }
+});
+
+test('reconnected sessions never receive an old tool output or follow-up', async (t) => {
+  for (const outcome of ['resolve', 'reject']) {
+    await t.test(outcome, async () => {
+      const pending = Promise.withResolvers();
+      const { controller } = costControllerHarness({ runner: () => pending.promise });
+      connectToolTestChannel(controller);
+      const handling = controller.handleRealtimeEvent(fnCallEvent('get_entity_context', 'old-item', 'old-call'));
+      controller.stop();
+      const newSent = connectToolTestChannel(controller);
+      controller.setStatus('connecting', 'New session');
+      if (outcome === 'reject') pending.reject(new DOMException('Stopped', 'AbortError'));
+      else pending.resolve({ ok: true, action: 'get_entity_context' });
+      await handling;
+
+      assert.deepEqual(newSent, [], 'old call IDs do not exist in the new conversation');
+      assert.equal(controller.status, 'connecting');
+      assert.equal(controller.pendingResponseInstructions, null);
+      assert.equal(controller.responseCreatePending, false);
+    });
+  }
+});
+
+test('teardown during visual context does not revive voice or queue a stale follow-up', async (t) => {
+  for (const reconnect of [false, true]) {
+    await t.test(reconnect ? 'reconnected' : 'stopped', async () => {
+      const capture = Promise.withResolvers();
+      const captureStarted = Promise.withResolvers();
+      const { controller } = costControllerHarness({
+        runner: async () => ({ ok: true, action: 'get_entity_context' }),
+      });
+      const oldSent = connectToolTestChannel(controller);
+      controller.sendVisualContextIfUseful = () => {
+        captureStarted.resolve();
+        return capture.promise;
+      };
+      const handling = controller.handleRealtimeEvent(fnCallEvent('get_entity_context', 'old-item', 'old-call'));
+      await captureStarted.promise;
+      assert.equal(oldSent[0].item.call_id, 'old-call', 'the output preceded teardown');
+      controller.stop();
+      const newSent = reconnect ? connectToolTestChannel(controller) : [];
+      capture.resolve(false);
+      await handling;
+
+      assert.equal(controller.status, reconnect ? 'listening' : 'idle');
+      assert.deepEqual(newSent, []);
+      assert.equal(controller.pendingResponseInstructions, null);
+      assert.equal(controller.responseCreatePending, false);
+    });
+  }
+});
+
+test('a pending viewport capture cannot delete or replace the new session screenshot', async (t) => {
+  const originalWindow = globalThis.window;
+  const originalDocument = globalThis.document;
+  t.after(() => {
+    globalThis.window = originalWindow;
+    globalThis.document = originalDocument;
+  });
+  let presentFrame;
+  globalThis.window = {
+    __godsEyeView: {
+      viewer: {
+        scene: {
+          canvas: { width: 1, height: 1 },
+          postRender: { addEventListener(callback) { presentFrame = callback; return () => {}; } },
+          requestRender() {},
+        },
+      },
+    },
+  };
+  globalThis.document = {
+    hidden: false,
+    createElement: () => ({
+      getContext: () => ({
+        drawImage() {},
+        getImageData: () => ({ data: new Uint8ClampedArray([255, 255, 255, 255]) }),
+      }),
+      toDataURL: () => 'data:image/jpeg;base64,AAAA',
+    }),
+  };
+  const { controller } = costControllerHarness();
+  connectToolTestChannel(controller);
+  const pending = controller.sendVisualContextIfUseful({
+    action: 'get_entity_context',
+    scene: { basemap: { viewScale: 'local' } },
+  });
+  controller.stop();
+  const newSent = connectToolTestChannel(controller);
+  controller.lastViewportItemId = 'new-session-image';
+  presentFrame();
+
+  assert.equal(await pending, false);
+  assert.deepEqual(newSent, []);
+  assert.equal(controller.lastViewportItemId, 'new-session-image');
+  assert.equal(controller.pendingViewportDeletes.size, 0);
+});
+
 const testPlaceSearch = () => createStandalonePlaceSearch({ resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ });
 function createGevActionRunner(options) { return createActionRunner({ placeSearch: testPlaceSearch(), ...options }); }
 function controlRadio(viewer, manager, args, options) { return runControlRadio(viewer, manager, args, { placeSearch: testPlaceSearch(), ...options }); }

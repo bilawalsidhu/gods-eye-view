@@ -6,6 +6,8 @@
 
 ## Voice component boundaries
 
+- Ignore late tool results and viewport captures after Stop or reconnect, keeping
+  stopped controls idle and preventing old outputs from entering a new session.
 - Separate voice controls, Realtime connection requests and the action runner.
 - Allow compatible endpoints and server-selected models through construction options.
 - Cancel pending token/SDP requests on Stop or teardown and reject expired secrets.

@@ -1174,6 +1174,13 @@ export class GevRealtimeController {
       return;
     }
 
+    // stop() invalidates this session even when an action cannot abort its
+    // underlying work. Its eventual result must not revive the stopped UI or
+    // send an old call_id into a replacement conversation.
+    const toolSessionEpoch = this.startEpoch;
+    const toolSessionChannel = this.dc;
+    const isCurrentSession = () => this.startEpoch === toolSessionEpoch
+      && this.dc === toolSessionChannel;
     this.setStatus('executing', 'Running command');
     this.pruneProcessedCalls();
     let sentOutput = false;
@@ -1256,6 +1263,7 @@ export class GevRealtimeController {
               || radioHandoffEpochAtStart === this.radioHandoffEpoch)
           ),
         });
+        if (!isCurrentSession()) return;
         if (result?.ok && result.radioPlaybackRequested) {
           const sessionIsCurrent = (
             this.activeToolAbortControllers.has(toolController)
@@ -1310,6 +1318,7 @@ export class GevRealtimeController {
           }
         }
       } catch (error) {
+        if (!isCurrentSession()) return;
         const authoritativeRadioState = isRadioFeatureCall
           ? (this.radioLayer?.getUIState?.() || {})
           : null;
@@ -1384,6 +1393,7 @@ export class GevRealtimeController {
       } catch (error) {
         this.debugLog('viewport_context.failed', { error: error?.message || String(error) });
       }
+      if (!isCurrentSession()) return;
       // Keep the Radio handoff wording authoritative even when another tool
       // result follows Radio in the same multi-intent response.
       this.queueResponseCreate(responseInstructionForToolResult(
@@ -1411,8 +1421,10 @@ export class GevRealtimeController {
     const viewScale = result.scene?.basemap?.viewScale;
     if (!shouldSendViewportImage(viewScale)) return false;
     if (hasStructuredViewIdentity(result)) return false;
+    const captureSessionEpoch = this.startEpoch;
+    const captureChannel = this.dc;
     const imageUrl = await captureViewportImage();
-    if (!imageUrl) return false;
+    if (!imageUrl || this.startEpoch !== captureSessionEpoch || this.dc !== captureChannel) return false;
 
     // Keep at most one viewport screenshot in context. Images are the single
     // most expensive item (re-billed every turn they linger), so we proactively

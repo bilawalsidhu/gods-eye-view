@@ -8,6 +8,8 @@ Voice controls compose a supplied action runner and connection controller.
 Realtime token and SDP requests live in a configurable backend, with independent
 transports and cancellation through response parsing. Stop and application
 teardown abort pending connections; reconnect requests a new client secret.
+Late tool results and viewport captures stay scoped to their original session;
+Stop or reconnect prevents them from sending output or restoring listening state.
 Microphone, radio handoff, tool schemas and default model behavior are preserved.
 
 
