@@ -35,7 +35,6 @@ import {
   DRAW_SHAPES,
   MAX_VERTICES,
   addVertex,
-  canFinish,
   createDrawSession,
   drawHint,
   finishReason,
@@ -222,7 +221,10 @@ export function initDrawTool({ viewer, annotations }) {
   };
   const onKey = (event) => {
     if (!active || destroyed || typingElsewhere(event)) return;
-    if (event.key === 'Enter') { if (canFinish(session)) { event.preventDefault(); void finish(); } return; }
+    // Enter always goes to finish() once a shape has been started; finish()
+    // owns the decision and says WHY it refused. Swallowing the key here on a
+    // degenerate shape left the person pressing Enter at a silent panel.
+    if (event.key === 'Enter') { if (session?.vertices?.length) { event.preventDefault(); void finish(); } return; }
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -315,7 +317,7 @@ export function initDrawTool({ viewer, annotations }) {
   });
   listen(clearButton, 'click', clearAll);
   listen(labelInput, 'keydown', (event) => {
-    if (event.key === 'Enter' && canFinish(session)) { event.preventDefault(); void finish(); }
+    if (event.key === 'Enter' && session?.vertices?.length) { event.preventDefault(); void finish(); }
   });
   setHint(drawHint(null));
 
