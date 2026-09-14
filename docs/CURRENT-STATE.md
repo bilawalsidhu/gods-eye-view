@@ -23,8 +23,11 @@ Climate Change Canada's GDPS global model covers the globe, and NOAA/NWS MRMS
 radar replaces it over the lower 48 past tile level 6. Cesium resolves the
 handover from each placement's rectangle and level band, so no camera listener
 runs. The model is continuous at every zoom and the radar inlay lies on top of
-it, dissolving across the outer edge of its footprint through a per-tile alpha
-ramp rather than ending on a straight line. An earlier revision punched a
+it. The inlay's footprint ends on a straight boundary — Cesium exposes no
+per-pixel or per-tile alpha for imagery layers, and its type definition's
+function-valued `alpha` reaches the globe shader as a corrupt float uniform —
+so the continuous model underneath is what keeps that edge from reading as a
+hole. An earlier revision punched a
 matching cutout in the model so only one source could paint a pixel; that read
 as precipitation being sliced away where the cutout crossed populated coast and
 left holes wherever radar was silent, so the model now carries underneath.

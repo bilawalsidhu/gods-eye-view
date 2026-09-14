@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createPrecipitationLayer } from './index.js';
-import { edgeFadedAlpha, tierLayerOptions } from './imagery.js';
+import { tierLayerOptions } from './imagery.js';
 import { PRECIPITATION_TIERS } from './policy.js';
 
 /** Every placement in the precedence table owns one imagery layer. */
@@ -192,34 +192,26 @@ test('the layer refuses to construct without a frame source', () => {
   assert.equal(PRECIPITATION_TIERS.length >= 1, true);
 });
 
-test('a bounded tier dissolves across its edge instead of ending on a line', () => {
-  const inlay = PRECIPITATION_TIERS.find((tier) => tier.role === 'inlay');
-  const scheme = new Cesium.WebMercatorTilingScheme();
-  const fade = edgeFadedAlpha(inlay, scheme);
-  const alphaAt = (lon, lat, level = 7) => {
-    const xy = scheme.positionToTileXY(
-      Cesium.Cartographic.fromDegrees(lon, lat),
-      level,
+test('every placement hands Cesium a numeric alpha', () => {
+  // Regression: Cesium's types advertise `alpha` as number|function, but the
+  // globe shader assigns it straight into a float uniform. A function reached
+  // the uniform as NaN and rendered the entire globe black at every zoom where
+  // the bounded inlay was live.
+  for (const tier of PRECIPITATION_TIERS) {
+    const options = tierLayerOptions(tier);
+    assert.equal(
+      typeof options.alpha,
+      'number',
+      `${tier.id} must pass a numeric alpha`,
     );
-    return xy ? fade(null, null, xy.x, xy.y, level) : 0;
-  };
-
-  // Kansas: deep inside the footprint, so the inlay paints at full strength.
-  assert.equal(alphaAt(-98, 39), inlay.alpha);
-  // Just inside the southern edge (24°N) — the edge that runs below Miami.
-  const nearEdge = alphaAt(-80.2, 24.6);
-  assert.ok(
-    nearEdge > 0 && nearEdge < inlay.alpha,
-    `expected a partial ramp, got ${nearEdge}`,
-  );
-  // Outside the footprint the inlay contributes nothing and the model carries.
-  assert.equal(alphaAt(-80.2, 20), 0);
-
-  // The unbounded model tier keeps a plain numeric alpha.
-  const primary = PRECIPITATION_TIERS.find((tier) => tier.role === 'primary');
-  assert.equal(typeof tierLayerOptions(primary).alpha, 'number');
-  assert.equal(typeof tierLayerOptions(inlay).alpha, 'function');
-  // No placement punches a hole in another: the model is continuous.
-  for (const tier of PRECIPITATION_TIERS)
-    assert.equal(tierLayerOptions(tier).cutoutRectangle, undefined);
+    assert.ok(
+      options.alpha > 0 && options.alpha <= 1,
+      `${tier.id} alpha range`,
+    );
+    // No placement punches a hole in another: the model is continuous.
+    assert.equal(options.cutoutRectangle, undefined);
+  }
+  const inlay = PRECIPITATION_TIERS.find((tier) => tier.role === 'inlay');
+  assert.ok(tierLayerOptions(inlay).rectangle instanceof Cesium.Rectangle);
+  assert.equal(tierLayerOptions(inlay).minimumTerrainLevel, 6);
 });

@@ -55,7 +55,6 @@ export const PRECIPITATION_TIERS = Object.freeze([
     // terrain, not a replacement for it.
     alpha: 0.5,
     rectangleDegrees: null,
-    edgeFadeDegrees: 0,
     minimumTerrainLevel: undefined,
     maximumTerrainLevel: undefined,
   }),
@@ -71,10 +70,10 @@ export const PRECIPITATION_TIERS = Object.freeze([
     forecast: false,
     alpha: 0.72,
     rectangleDegrees: CONUS_DEGREES,
-    // Dissolve into the model over the outer edge of the footprint instead of
-    // ending on a straight line. Cesium evaluates layer alpha per tile, so the
-    // ramp is tile-quantised — fine at the zooms where the inlay is visible.
-    edgeFadeDegrees: 2.5,
+    // The footprint ends on a straight boundary. Cesium exposes no per-pixel or
+    // per-tile alpha for imagery layers, so there is nothing to feather with;
+    // the continuous model underneath is what keeps the edge from reading as a
+    // hole. See the ownership test pinning alpha to a number.
     minimumTerrainLevel: INLAY_HANDOVER_LEVEL,
     maximumTerrainLevel: undefined,
   }),
