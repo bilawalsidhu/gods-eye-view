@@ -1,6 +1,7 @@
+import { readSource } from '../testSupport/readSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import {
   bindTrackingClickGesture,
   domEventPressClock,
@@ -111,8 +112,8 @@ test('slow clean sprite clicks select, while long presses and orbit nudges canno
 
 test('civilian and military click handlers apply duration only at the deselect branch', () => {
   const sources = [
-    readFileSync(new URL('./flights.js', import.meta.url), 'utf8'),
-    readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8'),
+    readSource('./flights.js', import.meta.url),
+    readSource('./militaryFlights.js', import.meta.url),
   ];
   for (const source of sources) {
     assert.match(source, /isTrackingSelectionGesture\(gesture\)[\s\S]+scene\.pick/);
@@ -444,9 +445,9 @@ test('DOM press clock falls back to wall-clock time when no stamps are available
 
 test('production gesture bindings measure press duration from DOM event stamps', () => {
   const sources = {
-    'cctv.js': readFileSync(new URL('./cctv.js', import.meta.url), 'utf8'),
-    'flights.js': readFileSync(new URL('./flights.js', import.meta.url), 'utf8'),
-    'militaryFlights.js': readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8'),
+    'cctv.js': readSource('./cctv.js', import.meta.url),
+    'flights.js': readSource('./flights.js', import.meta.url),
+    'militaryFlights.js': readSource('./militaryFlights.js', import.meta.url),
   };
   for (const [name, source] of Object.entries(sources)) {
     assert.match(source, /domEventPressClock\(/, `${name} must create a DOM press clock`);

@@ -1,11 +1,12 @@
+import { readSource } from '../testSupport/readSource.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { getTrafficTimingDiagnostics } from './traffic.js';
 
-const SOURCE = readFileSync(new URL('./traffic.js', import.meta.url), 'utf8');
+const SOURCE = readSource('./traffic.js', import.meta.url);
 
 function functionBody(name) {
   const declaration = `function ${name}(`;

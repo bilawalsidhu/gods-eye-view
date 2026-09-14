@@ -1,5 +1,6 @@
+import { readSource } from './testSupport/readSource.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import test from 'node:test';
 import {
   shouldExpandGlobalContextPanel,
@@ -33,8 +34,8 @@ test('other HUD layouts keep collapsed lane launchers visible', () => {
 
 test('desktop Display participates in Tactical exclusivity without changing mobile Display behavior', () => {
   // Batch 5 seam 4: the adaptive layout pass lives in src/ui/panelAdaptiveLayout.js.
-  const panelAdaptiveUi = readFileSync(new URL('./ui/panelAdaptiveLayout.js', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const panelAdaptiveUi = readSource('./ui/panelAdaptiveLayout.js', import.meta.url);
+  const css = readSource('../style.css', import.meta.url);
   assert.match(panelAdaptiveUi, /const isMobile = window\.matchMedia\('\(max-width: 720px\)'\)\.matches/);
   assert.match(
     panelAdaptiveUi,
@@ -51,7 +52,7 @@ test('desktop Display participates in Tactical exclusivity without changing mobi
 
 test('both lanes restate Tactical exclusivity in the same pass that auto-collapses', () => {
   // Batch 5 seam 4: the adaptive layout pass lives in src/ui/panelAdaptiveLayout.js.
-  const panelAdaptiveUi = readFileSync(new URL('./ui/panelAdaptiveLayout.js', import.meta.url), 'utf8');
+  const panelAdaptiveUi = readSource('./ui/panelAdaptiveLayout.js', import.meta.url);
   // Each lane engine's auto-collapse early return must commit the exclusive
   // class and aria-hidden itself: deferring to the rescheduled frame leaves
   // the freshly collapsed launcher visible and screen-reader reachable until

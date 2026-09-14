@@ -1,3 +1,4 @@
+import { readSource } from './testSupport/readSource.js';
 // Contacts-scoped detection (field test 2026-08-18: "when you click on
 // Contacts, detections should just turn on, and they should stay on in Cockpit
 // or in third-person tracking inside Contacts").
@@ -9,7 +10,6 @@
 // assertions here and driven for real in scripts/qa-cockpit-utility.mjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import {
   applyContactsDetection,
   contactsDetectionEnterPlan,
@@ -26,7 +26,7 @@ import {
 } from './data/detection.js';
 import { canonicalizeDensity } from './data/detectionPolicy.js';
 
-const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+const uiSource = readSource('./ui.js', import.meta.url);
 
 /**
  * The tactical preset ui.js hands Contacts. Read out of the source so this test

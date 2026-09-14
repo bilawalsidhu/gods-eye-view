@@ -1,6 +1,6 @@
+import { readSource } from '../testSupport/readSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import {
   AIRCRAFT_BRACKET_ALPHA_FLOOR,
   AIRCRAFT_BRACKET_FLOOR_ANCHOR,
@@ -18,7 +18,7 @@ import {
 } from './detectionPolicy.js';
 import { KEYHOLE_OUTSIDE_OPACITY_DEFAULT } from '../celestialRing.js';
 
-const indexHtml = fs.readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+const indexHtml = readSource('../../index.html', import.meta.url);
 
 test('side aircraft brackets stay readable without changing zero-opacity intent', () => {
   assert.equal(detectionBracketAlpha('AIR', 0), 0);

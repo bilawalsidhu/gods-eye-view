@@ -1,3 +1,4 @@
+import { readSource } from './testSupport/readSource.js';
 // Camera-framing mode contract for fly_to_location (field test 8 + rootcause doc §3):
 // parks/lakes/campuses and streets are NOT precise POIs — flying to "Zilker Park" at
 // building range (250 m) lands on a random rooftop. Pure mapping tests, no network.
@@ -5,7 +6,6 @@
 // Run with: npm test   (node --test)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import * as Cesium from 'cesium';
 import {
   CANCELLED_SEARCH,
@@ -520,7 +520,7 @@ test('a globe flight without callbacks still flies (both hooks are optional)', (
 });
 
 test('geocoded Location branches forward the resolved-navigation ownership hook', () => {
-  const source = fs.readFileSync(new URL('./locations.js', import.meta.url), 'utf8');
+  const source = readSource('./locations.js', import.meta.url);
   const searchStart = source.indexOf('export async function searchAndFlyTo');
   const searchEnd = source.indexOf('function placesViewportToBounds', searchStart);
   const search = source.slice(searchStart, searchEnd);

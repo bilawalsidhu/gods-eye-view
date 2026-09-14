@@ -1,9 +1,10 @@
+import { readSource } from '../testSupport/readSource.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import test from 'node:test';
 
-const voiceConfig = readFileSync(new URL('./realtimeSession.js', import.meta.url), 'utf8');
-const realtime = readFileSync(new URL('./gevRealtime.js', import.meta.url), 'utf8');
+const voiceConfig = readSource('./realtimeSession.js', import.meta.url);
+const realtime = readSource('./gevRealtime.js', import.meta.url);
 
 test('aircraft identity narration acknowledges missing enrichment', () => {
   const start = voiceConfig.indexOf("'For \"what is this aircraft?\" answers");

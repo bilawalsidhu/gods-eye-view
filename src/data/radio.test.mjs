@@ -1,5 +1,6 @@
+import { readSource } from '../testSupport/readSource.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import test from 'node:test';
 import {
   buildRadioTunerBand,
@@ -1806,7 +1807,7 @@ test('cluster dirty toggles republish overlay entries only after the rebuild fra
   // rendered frame. A publish scheduled in the same tick snapshots that empty
   // set and blanks every cluster callout until an unrelated re-publish, so
   // each toggle site must defer its publish to the postRender follow-up.
-  const source = readFileSync(new URL('./radio.js', import.meta.url), 'utf8');
+  const source = readSource('./radio.js', import.meta.url);
   const toggle = '_dataSource.clustering.clusterPoints = clusterPoints;';
   const immediate = 'scheduleRadioOverlayPublish();';
   const deferred = 'scheduleRadioOverlayPublishAfterClusterRebuild();';

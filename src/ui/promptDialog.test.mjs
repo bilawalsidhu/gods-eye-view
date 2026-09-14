@@ -1,6 +1,7 @@
+import { readSource } from '../testSupport/readSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import { confirmDialog, promptDialog } from './promptDialog.js';
 
 /** Minimal element stub: records children and exposes the surface the
@@ -136,7 +137,7 @@ test('confirmDialog resolves true only for the confirm button', async () => {
 });
 
 test('the scene director no longer uses blocking dialogs', () => {
-  const source = readFileSync(new URL('../scenes/director.js', import.meta.url), 'utf8');
+  const source = readSource('../scenes/director.js', import.meta.url);
   assert.doesNotMatch(source, /window\.(prompt|confirm)\(/,
     'blocking dialogs freeze the render loop and bypass focus management');
   assert.match(source, /import \{ confirmDialog, promptDialog \} from '\.\.\/ui\/promptDialog\.js';/);
@@ -145,7 +146,7 @@ test('the scene director no longer uses blocking dialogs', () => {
 });
 
 test('the dialog styles keep a visible keyboard focus ring and labelled surface', () => {
-  const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
+  const css = readSource('../../style.css', import.meta.url);
   assert.match(css, /\.gev-prompt-dialog :focus-visible[\s\S]*?outline: 2px solid var\(--accent\)/);
   assert.match(css, /\.gev-confirm-dialog :focus-visible[\s\S]*?outline: 2px solid var\(--accent\)/);
   assert.match(css, /\.gev-dialog-input \{[\s\S]*?background: var\(--bg-dark\)/,

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readSource } from '../../src/testSupport/readSource.js';
 import {
   BUNDLE_BUDGETS,
   DEFAULT_CHUNK_BUDGET,
@@ -19,7 +19,7 @@ import {
  * failure modes, and the wiring that makes CI actually run the gate.
  */
 
-const readRepoFile = (relative) => readFileSync(new URL(relative, import.meta.url), 'utf8');
+const readRepoFile = (relative) => readSource(relative, import.meta.url);
 
 test('budget table is well-formed and the index chunk sits at the workbox cap', () => {
   assert.ok(BUNDLE_BUDGETS.length >= 5, 'the measured chunks each have a row');

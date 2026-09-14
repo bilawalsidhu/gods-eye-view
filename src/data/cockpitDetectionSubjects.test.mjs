@@ -1,3 +1,4 @@
+import { readSource } from '../testSupport/readSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -23,13 +24,13 @@ const COCKPIT_SOURCE = readFileSync(
 const FLIGHTS_SOURCE = [
   // flights' shared pipeline (flightsTracking.js) owns _applyCockpitState; read
   // the layer and the factory together so layer-owned pins keep working too.
-  readFileSync(new URL('./flights.js', import.meta.url), 'utf8'),
-  readFileSync(new URL('./flightsTracking.js', import.meta.url), 'utf8'),
+  readSource('./flights.js', import.meta.url),
+  readSource('./flightsTracking.js', import.meta.url),
 ].join('\n');
 const MILITARY_SOURCE = [
   // military's cockpit consumer lives in the shared factory too.
-  readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8'),
-  readFileSync(new URL('./flightsTracking.js', import.meta.url), 'utf8'),
+  readSource('./militaryFlights.js', import.meta.url),
+  readSource('./flightsTracking.js', import.meta.url),
 ].join('\n');
 
 const LAYERS = [

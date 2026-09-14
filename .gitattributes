@@ -1,0 +1,23 @@
+# Normalize line endings repo-wide: every text file checks out with LF on
+# every platform, so the ~86 source-pin tests that regex source text behave
+# identically on Linux, macOS, and Windows (issue #88). Binary assets are
+# marked explicitly so git never attempts newline conversion on them.
+* text=auto eol=lf
+
+# Explicit binaries (never normalize, never diff).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.svg text eol=lf
+*.woff binary
+*.woff2 binary
+*.wasm binary
+*.glb binary
+*.gltf binary
+*.mp3 binary
+*.mp4 binary
+*.gz binary
+*.zip binary

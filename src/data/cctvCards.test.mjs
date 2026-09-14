@@ -1,3 +1,4 @@
+import { readSource } from '../testSupport/readSource.js';
 // src/data/cctvCards.test.mjs
 // Pure-helper tests for the ambient CCTV thumbnail-card overlay: greedy
 // declutter, the no-flicker frame-persistence rule, retry pacing, and the
@@ -6,7 +7,7 @@
 // keyhole edge fade is covered by the celestialRing suite.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import {
   CCTV_CARD_FADE_END_M,
   CCTV_CARD_FADE_START_M,
@@ -117,7 +118,7 @@ test('active CCTV thumbnail is protected while ambient and pinned policies stay 
 });
 
 test('CCTV card module cannot resurrect a canvas, projection, listener, or private hit store', () => {
-  const source = readFileSync(new URL('./cctvCards.js', import.meta.url), 'utf8');
+  const source = readSource('./cctvCards.js', import.meta.url);
   const forbidden = [
     /createElement\(\s*['"]canvas['"]\s*\)/,
     /postRender\.addEventListener/,

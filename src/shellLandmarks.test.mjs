@@ -1,6 +1,7 @@
+import { readSource } from './testSupport/readSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 
 /**
  * Shell landmark pass (docs/PLAN.md Phase 4, axe `region`): every persistent
@@ -10,7 +11,7 @@ import { readFileSync } from 'node:fs';
  * landmarks from regressing and keep the banner unique.
  */
 
-const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const html = readSource('../index.html', import.meta.url);
 
 const openTag = (id) => {
   const start = html.indexOf(`id="${id}"`);

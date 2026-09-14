@@ -1,6 +1,6 @@
+import { readSource } from './testSupport/readSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import crypto from 'node:crypto';
 import {
   ENVIRONMENTAL_LABEL_CHOICE,
@@ -155,7 +155,7 @@ test('a THROWING storage getter still fails open — Safari private mode', () =>
 });
 
 test('no storage is touched from a default parameter position', () => {
-  const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
+  const module = readSource('./firstRunExperience.js', import.meta.url);
   // Comments stripped first: the block explaining this very defect quotes the
   // bad pattern, and matching prose instead of code would make the pin a liar.
   const code = module.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -181,8 +181,8 @@ test('no storage is touched from a default parameter position', () => {
 // ── ESC arbitration: one surface, one key, never an invisible handler ────────
 
 test('the JS and CSS lists of screen-claiming surfaces stay in step', () => {
-  const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
-  const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const module = readSource('./firstRunExperience.js', import.meta.url);
+  const css = readSource('../style.css', import.meta.url);
 
   assert.deepEqual(
     [...EXCLUSIVE_SURFACE_CLASSES].sort(),
@@ -215,7 +215,7 @@ test('exclusiveSurfaceActive reads the live body classes', () => {
 });
 
 test('the key handler refuses to act for a card that is not really on screen', () => {
-  const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
+  const module = readSource('./firstRunExperience.js', import.meta.url);
   // Real visibility, not just the class: the class survives while CSS hides the
   // card, which is precisely how a Scene left an invisible ESC handler armed.
   assert.match(module, /const isTopmost = \(\) => root\.isConnected/);
@@ -229,8 +229,8 @@ test('the key handler refuses to act for a card that is not really on screen', (
 });
 
 test('an overlay with NO class to watch still disarms the launcher', () => {
-  const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
-  const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const module = readSource('./firstRunExperience.js', import.meta.url);
+  const css = readSource('../style.css', import.meta.url);
 
   // The repro, pinned as the stacking it actually is: the attribution lightbox
   // is full-screen ABOVE the card and announces itself with nothing. The card
@@ -262,8 +262,8 @@ test('an overlay with NO class to watch still disarms the launcher', () => {
 test('one ESC does one thing — the radio disclosure stops the launcher outright', () => {
   // Batch 5 seam 2: the Radio disclosure's ESC handler lives in
   // src/ui/radioPanel.js (StyleManager keeps thin delegates).
-  const radioPanelUi = fs.readFileSync(new URL('./ui/radioPanel.js', import.meta.url), 'utf8');
-  const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
+  const radioPanelUi = readSource('./ui/radioPanel.js', import.meta.url);
+  const module = readSource('./firstRunExperience.js', import.meta.url);
 
   // stopPropagation() does NOT stop later listeners on the SAME document, so the
   // disclosure's earlier capture handler closed the disclosure and the launcher
@@ -287,7 +287,7 @@ test('one ESC does one thing — the radio disclosure stops the launcher outrigh
 });
 
 test('a refused write takes the tick back instead of promising "never again"', () => {
-  const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
+  const module = readSource('./firstRunExperience.js', import.meta.url);
 
   // The write stays best-effort; the OUTCOME is now reported, because a box left
   // ticked after a refused write tells the visitor the launcher is gone for good
@@ -319,8 +319,8 @@ test('a refused write takes the tick back instead of promising "never again"', (
 });
 
 test('a surface class that never clears is an ACCEPTED no-show, not a timer', () => {
-  const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
-  const state = fs.readFileSync(new URL('../docs/CURRENT-STATE.md', import.meta.url), 'utf8');
+  const module = readSource('./firstRunExperience.js', import.meta.url);
+  const state = readSource('../docs/CURRENT-STATE.md', import.meta.url);
 
   // A "reveal anyway after N seconds" would trade a benign no-show for the card
   // punching through a recording in progress — recordings run long, and none of
@@ -342,8 +342,8 @@ test('a surface class that never clears is an ACCEPTED no-show, not a timer', ()
 });
 
 test('the scroll fade only appears when the list really overflows', () => {
-  const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
-  const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const module = readSource('./firstRunExperience.js', import.meta.url);
+  const css = readSource('../style.css', import.meta.url);
   // A fade on a card where all five tiles fit promises a sixth mission that does
   // not exist, which is worse than no affordance at all.
   assert.match(module, /const overflows = choiceList\.scrollHeight > choiceList\.clientHeight \+ 1;/);
@@ -358,7 +358,7 @@ test('the scroll fade only appears when the list really overflows', () => {
 });
 
 test('the launcher yields on engage and waits when a surface is already up', () => {
-  const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
+  const module = readSource('./firstRunExperience.js', import.meta.url);
   // Both directions from one observer: yield if it is up and something takes
   // the screen; wait to reveal if something already has it.
   assert.match(
@@ -441,7 +441,7 @@ test('the tile is the FULLY CONFIGURED experience: quakes and fires together', (
   // that row into LOAD FAILED — a defect in the shared state machine, ledgered
   // post-launch, and the note must stay where the next editor will read it
   // rather than being re-discovered as a launcher bug.
-  const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
+  const module = readSource('./firstRunExperience.js', import.meta.url);
   const table = module.slice(module.indexOf('  environmental: Object.freeze({'), module.indexOf('  explore:'));
   assert.match(table, /KEY REQUIRED/);
   assert.match(table, /src\/loadingFeedback\.js/);
@@ -457,7 +457,7 @@ test('every visitor gets the same tile — there is no degraded keyless variant'
   assert.equal(outcome.ok, true);
   assert.deepEqual(outcome.failedLayerIds, []);
   assert.deepEqual(spy.calls.layerIds, ['earthquakes', 'local-firms']);
-  const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
+  const module = readSource('./firstRunExperience.js', import.meta.url);
   assert.doesNotMatch(
     module.slice(module.indexOf('export async function runFirstRunChoice')),
     /FIRMS_MAP_KEY|hasKey|keyless\s*\?/,
@@ -502,7 +502,7 @@ test('the fires/quakes tile name is switchable from one constant', () => {
 // ── Defaults interplay: what a mission is allowed to persist ─────────────────
 
 test('no mission writes a preference the visitor did not choose by picking it', () => {
-  const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
+  const module = readSource('./firstRunExperience.js', import.meta.url);
   const code = module.slice(module.indexOf('export function shouldShowFirstRun'));
 
   // Layer enables ARE durable in this app and a mission tile IS that choice, so
@@ -536,7 +536,7 @@ test('no mission writes a preference the visitor did not choose by picking it', 
 });
 
 test('the decision table is written down where the next editor will read it', () => {
-  const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
+  const module = readSource('./firstRunExperience.js', import.meta.url);
   assert.match(module, /MISSION → APP STATE, AND WHAT IT IS ALLOWED TO PERSIST/);
   for (const row of ['TOUCHED, DURABLE', 'TOUCHED, SESSION', 'NOT TOUCHED']) {
     assert.ok(module.includes(row), `decision table is missing its "${row}" rows`);
@@ -547,9 +547,9 @@ test('the decision table is written down where the next editor will read it', ()
 // ── Markup, startup ordering, accessibility ─────────────────────────────────
 
 test('markup, startup ordering and accessibility remain pinned', () => {
-  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const main = fs.readFileSync(new URL('./main.js', import.meta.url), 'utf8');
-  const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const html = readSource('../index.html', import.meta.url);
+  const main = readSource('./main.js', import.meta.url);
+  const css = readSource('../style.css', import.meta.url);
 
   assert.match(html, /id="first-run-launcher" role="dialog"[^>]*aria-labelledby="first-run-title"[^>]*hidden/);
   assert.equal((html.match(/data-first-run-choice=/g) || []).length, 4);
@@ -611,7 +611,7 @@ test('markup, startup ordering and accessibility remain pinned', () => {
 });
 
 test('the launcher keeps focus, restores it, and never disables the focused button', () => {
-  const module = fs.readFileSync(new URL('./firstRunExperience.js', import.meta.url), 'utf8');
+  const module = readSource('./firstRunExperience.js', import.meta.url);
   // aria-disabled, never the `disabled` property: disabling a focused button
   // drops the keyboard to <body> and strands the visitor outside the launcher.
   assert.match(module, /button\.setAttribute\('aria-disabled', String\(next\)\)/);
@@ -625,7 +625,7 @@ test('the launcher keeps focus, restores it, and never disables the focused butt
 });
 
 test('the DISPLAY rail starts collapsed on a first run, and a stored choice wins', () => {
-  const ui = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const ui = readSource('./ui.js', import.meta.url);
   // The rail opened by default to advertise HUD / DETECT / 3D. Those default ON
   // now, so it was opening to offer controls for things already happening —
   // while competing with the mission card for the one first impression there is.
@@ -649,7 +649,7 @@ test('the DISPLAY rail starts collapsed on a first run, and a stored choice wins
 // ── Voice: instruction-only, tool schema byte-unchanged ─────────────────────
 
 test('the voice TOOL SCHEMA is byte-identical to the shared session module — the mission mapping is instructions only', () => {
-  const src = fs.readFileSync(new URL('./voice/realtimeSession.js', import.meta.url), 'utf8');
+  const src = readSource('./voice/realtimeSession.js', import.meta.url);
   const start = src.indexOf('const GEV_REALTIME_TOOLS = [');
   assert.ok(start > 0, 'GEV_REALTIME_TOOLS must still be a single literal array');
   const end = src.indexOf('\n];\n', start);
@@ -683,7 +683,7 @@ test('the voice TOOL SCHEMA is byte-identical to the shared session module — t
 });
 
 test('every layer a mission drives is already in the shipped set_layer_visibility enum', () => {
-  const src = fs.readFileSync(new URL('./voice/realtimeSession.js', import.meta.url), 'utf8');
+  const src = readSource('./voice/realtimeSession.js', import.meta.url);
   const tool = src.slice(src.indexOf("name: 'set_layer_visibility'"), src.indexOf("name: 'show_data_layers_menu'"));
   const missionLayerIds = Object.values(FIRST_RUN_MISSIONS).flatMap((mission) => mission.layerIds || []);
   assert.ok(missionLayerIds.length > 0);

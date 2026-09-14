@@ -1,6 +1,7 @@
+import { readSource } from './testSupport/readSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import {
   aggregateLayerLoading,
   canPresentDeferredStatusNotice,
@@ -53,7 +54,7 @@ test('deferred terminal notices lose ownership to newer acquisition epochs and d
 });
 
 test('share-follow failures use the universal top-center status instead of the bottom toast', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const ui = readSource('./ui.js', import.meta.url);
   const start = ui.indexOf('  _handleShareTrackingRestoreStatus(result) {');
   const end = ui.indexOf('\n  _initGlobalContextPanel() {', start);
   const handler = ui.slice(start, end);
@@ -159,8 +160,8 @@ test('replacement, repetition, and hidden-tab elapsed time use the newest fixed 
 });
 
 test('universal notice lifecycle clears on dispose and uses the one top-center live region', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const ui = readSource('./ui.js', import.meta.url);
+  const html = readSource('../index.html', import.meta.url);
   const disposeStart = ui.indexOf('  async dispose() {');
   const disposeEnd = ui.indexOf('\n  }\n', disposeStart);
   const dispose = ui.slice(disposeStart, disposeEnd);
@@ -199,7 +200,7 @@ test('reveals sustained loading and then a bounded completion state', () => {
 });
 
 test('terminal loading feedback centers its label without an empty detail slot', () => {
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readSource('../style.css', import.meta.url);
   assert.match(
     css,
     /#global-loading-status:is\(\[data-state='complete'\], \[data-state='cancelled'\], \[data-state='error'\]\)\s*\{[\s\S]*?justify-content:\s*center;[\s\S]*?text-align:\s*center;/,
@@ -520,8 +521,8 @@ test('the settled traffic chip shows exactly one percentage — the coverage it 
 });
 
 test('the chip renderer clears the progress slot instead of stranding the last value', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const ui = readSource('./ui.js', import.meta.url);
+  const css = readSource('../style.css', import.meta.url);
   const start = ui.indexOf('  _updateTrafficSyncChip(');
   assert.ok(start > 0, '_updateTrafficSyncChip is missing');
   const body = ui.slice(start, ui.indexOf('\n  }', start));
@@ -609,7 +610,7 @@ test('aggregates Mapped Installations refresh beside CCTV without changing eithe
 // stack layout contract — the ticker's lifecycle is pinned against ui.js
 // source. (perf rebase 2026-08-17)
 test('the loading ticker never runs hidden and stops after loading and notices settle', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const ui = readSource('./ui.js', import.meta.url);
   // Scope every assertion to _armLoadingFeedbackTicker's own body. The
   // neighbouring _startTrafficChipTicker is a deliberately PERMANENT 500ms
   // safety-net poll, so its `if (document.hidden) return;` is correct there

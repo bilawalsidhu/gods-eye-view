@@ -1,6 +1,7 @@
+import { readSource } from '../testSupport/readSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import * as Cesium from 'cesium';
 import { MAP_STACKS } from '../mapStackController.js';
 import {
@@ -469,7 +470,7 @@ test('the depth decision is the dated Option-2 host migration, superseding Optio
 });
 
 test('cables create no native labels and no per-frame geometry callbacks', () => {
-  const source = readFileSync(new URL('./telegeographySubmarineCables.js', import.meta.url), 'utf8');
+  const source = readSource('./telegeographySubmarineCables.js', import.meta.url);
   assert.doesNotMatch(source, /new Cesium\.LabelGraphics/, 'reverting to native labels must fail this pin');
   assert.doesNotMatch(source, /new Cesium\.CallbackProperty/, 'reverting to per-frame stem callbacks must fail this pin');
   assert.match(source, /setOverlayEntries/, 'labels must flow through the shared world-overlay host');

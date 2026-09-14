@@ -1,6 +1,7 @@
+import { readSource } from '../testSupport/readSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import {
   accentForSeverity,
   FIRMS_AMBIENT_COHORT_LIMIT,
@@ -29,7 +30,7 @@ test('FIRMS host registration constants pin the shipped source budget', () => {
 });
 
 test('FIRMS helper module cannot resurrect a dedicated canvas renderer', () => {
-  const source = readFileSync(new URL('./firmsLabels.js', import.meta.url), 'utf8');
+  const source = readSource('./firmsLabels.js', import.meta.url);
   assert.doesNotMatch(source, /createElement\(['"]canvas['"]\)/);
   assert.doesNotMatch(source, /postRender/);
   assert.doesNotMatch(source, /worldToWindowCoordinates/);

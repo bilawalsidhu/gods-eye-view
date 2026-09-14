@@ -1,6 +1,7 @@
+import { readSource } from './testSupport/readSource.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import {
   runCctvLayerEnableFocus,
   runCctvLayerEnableTransition,
@@ -75,7 +76,7 @@ test('CCTV enable retains a pre-await tracking snapshot when tracking clears dur
 
   // Batch 5 seam 3: the CCTV panel methods live in src/ui/cctvPanel.js;
   // StyleManager keeps thin delegates.
-  const cctvPanelSource = readFileSync(new URL('./ui/cctvPanel.js', import.meta.url), 'utf8');
+  const cctvPanelSource = readSource('./ui/cctvPanel.js', import.meta.url);
   assert.match(cctvPanelSource, /await runCctvLayerEnableTransition\(\{/);
 });
 

@@ -1,3 +1,4 @@
+import { readSource } from './testSupport/readSource.js';
 // src/reasonableDefaults.test.mjs
 //
 // What the console looks like the FIRST time it opens — before any share link,
@@ -27,7 +28,6 @@
 //     quietly take a separate landed behaviour with it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 
 import { KEYHOLE_OUTER_RADIUS, KEYHOLE_OUTSIDE_OPACITY_DEFAULT, KEYHOLE_LABEL_FEATHER_RATIO } from './celestialRing.js';
 import { AIRCRAFT_BRACKET_FLOOR_ANCHOR } from './data/detectionPolicy.js';
@@ -39,9 +39,9 @@ import {
 } from './scopeMask.js';
 import { ShareLinkManager } from './sharelink.js';
 
-const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-const indexHtml = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const shareSource = fs.readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8');
+const uiSource = readSource('./ui.js', import.meta.url);
+const indexHtml = readSource('../index.html', import.meta.url);
+const shareSource = readSource('./sharelink.js', import.meta.url);
 
 /** Slice ui.js between two literal anchors, so a pin reads one method, not the file. */
 function uiBlock(start, end) {
@@ -177,7 +177,7 @@ test('first run opens in CRT, at every surface that decides it', () => {
 // visibility was retired with it (src/creditAttribution.test.mjs, git history).
 
 test('the attribution strip stays removed, at every surface that rendered it', () => {
-  const mainSource = fs.readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+  const mainSource = readSource('./main.js', import.meta.url);
   const containerStart = mainSource.indexOf('// Detached credit container');
   const creditContainer = mainSource.slice(
     containerStart,
@@ -189,7 +189,7 @@ test('the attribution strip stays removed, at every surface that rendered it', (
   assert.match(creditContainer, /operator removed the visible/,
     'main.js: the removal carries its ToS caveat so the choice stays discoverable');
 
-  const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readSource('../style.css', import.meta.url);
   assert.doesNotMatch(css, /#cesium-credits \{/,
     'style.css: no positioning rule may bring the detached strip back');
 });

@@ -1,3 +1,4 @@
+import { readSource } from './testSupport/readSource.js';
 // MAP STACK chip row — the dropdown's replacement control surface.
 //
 // The product issue was two clicks (open panel → open dropdown) to change
@@ -8,7 +9,7 @@
 // npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import {
   MAP_STACK_CHIP_CLASS,
   PRESENTED_MAP_STACK_IDS,
@@ -232,7 +233,7 @@ test('models carry the stack\'s own reason and never invent an active chip', () 
 });
 
 test('the controller is the single source of the unavailability reason', () => {
-  const controller = readFileSync(new URL('./mapStackController.js', import.meta.url), 'utf8');
+  const controller = readSource('./mapStackController.js', import.meta.url);
 
   assert.doesNotMatch(
     controller,
@@ -260,7 +261,7 @@ test('a missing row or document is inert rather than throwing during boot', () =
 });
 
 test('the active cyan survives hover', () => {
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readSource('../style.css', import.meta.url);
   const hover = css.indexOf('.map-stack-chip:hover');
   const active = css.indexOf('.map-stack-chip.active {');
   const unavailable = css.indexOf('.map-stack-chip.unavailable');
@@ -280,7 +281,7 @@ test('the keyboard focus ring survives on the ACTIVE chip', () => {
   // `outline: none` — so a focus state built only from those properties is
   // INVISIBLE on the active chip. The ring must live on a property no other
   // chip-state rule sets.
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readSource('../style.css', import.meta.url);
   const stripComments = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '');
   const chipRules = [...css.matchAll(/([^{}]*\.map-stack-chip[^{}]*)\{([^{}]*)\}/g)]
     .map(([, selector, body], order) => ({
@@ -326,8 +327,8 @@ test('the keyboard focus ring survives on the ACTIVE chip', () => {
 });
 
 test('the Visual Presets tray owns Map Source and the retired left panel is absent', () => {
-  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const html = readSource('../index.html', import.meta.url);
+  const ui = readSource('./ui.js', import.meta.url);
 
   assert.doesNotMatch(html, /map-stack-select/, 'the SOURCE dropdown is replaced by the chip row');
   assert.match(

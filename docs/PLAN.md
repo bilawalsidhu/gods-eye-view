@@ -437,11 +437,14 @@ acting — the audit described upstream's tree):
       that the built sw.js manifest still lists every shell file — workbox
       silently drops over-cap files, which breaks the offline shell without
       any other signal.
-- [ ] Test-suite portability: `.gitattributes` (`* text=auto eol=lf`) +
-      newline-agnostic source anchors (issue #88; several tests regex
-      `src/ui.js`), and note the formatter constraint (PR #227): ~86 tests
-      assert source text, so a repo-wide format pass requires re-pinning
-      them first.
+- [x] Test-suite portability: DONE 2026-09-13. `.gitattributes` now enforces
+      `* text=auto eol=lf` with explicit binary marks (verified: zero CRLF
+      files tracked, so no renormalization diff), and the 34 test files that
+      read source text went through `src/testSupport/readSource.js`
+      (`readSource(spec, import.meta.url)` — folds CRLF/CR to LF; pinned by
+      its own test), so the ~86 source anchors hold even outside a git
+      checkout. Formatter constraint unchanged (PR #227): a repo-wide format
+      pass still requires re-pinning the anchors first.
 - [x] `track-regression.mjs` harness integrity (2026-09-10 sweep, verified
       100/100 in a software-GL environment): the military synthetic-fleet
       shim pointed at `/api/adsblol/mil` (the registry endpoint) while the

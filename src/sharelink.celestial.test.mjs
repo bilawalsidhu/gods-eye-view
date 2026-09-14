@@ -1,10 +1,10 @@
+import { readSource } from './testSupport/readSource.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import { ShareLinkManager, decodeShareCreatedAtMs } from './sharelink.js';
 import { createDefaultLayerState } from './data/layerState.js';
 
-const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+const uiSource = readSource('./ui.js', import.meta.url);
 
 function sourceBlock(start, end) {
   const startIndex = uiSource.indexOf(start);

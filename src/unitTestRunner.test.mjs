@@ -1,6 +1,7 @@
+import { readSource } from './testSupport/readSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import {
   ALLOCATION_TEST_FILES,
   allocationTestArgs,
@@ -55,7 +56,7 @@ test('allocation runtime calibration is explicit and pinned to Node 24', () => {
 test('npm test stays green on every supported engine, not only the calibrated one', () => {
   // package.json wiring: `npm test` must invoke this runner, and the engines
   // range it advertises must not be narrower than what the runner tolerates.
-  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const pkg = JSON.parse(readSource('../package.json', import.meta.url));
   assert.equal(pkg.scripts.test, 'node scripts/run-unit-tests.mjs');
   // Coverage is measured by c8 (raw V8 coverage from every child process):
   // Node's built-in reporter under-reports large heavily-tested files — it
@@ -75,7 +76,7 @@ test('npm test stays green on every supported engine, not only the calibrated on
   assert.ok(enginesNode, 'engines.node must be declared');
   // The runner throws for uncalibrated runtimes ONLY behind the explicit
   // opt-in env; by default it skips, so a supported non-24 engine cannot fail.
-  const runner = readFileSync(new URL('../scripts/run-unit-tests.mjs', import.meta.url), 'utf8');
+  const runner = readSource('../scripts/run-unit-tests.mjs', import.meta.url);
   assert.match(runner, /GEV_REQUIRE_ALLOCATION_GATE/);
   assert.match(runner, /SKIPPED .*allocation microbenchmarks/);
   assert.match(runner, /parallelOnly/);

@@ -1,5 +1,6 @@
+import { readSource } from './testSupport/readSource.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import test from 'node:test';
 import {
   allocatePanelStackHeights,
@@ -132,10 +133,10 @@ test('minimum panel corridor expands upward without crossing the lower obstacle 
 });
 
 test('desktop panel lanes use per-panel allocations and presentation-only auto-collapse', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const ui = readSource('./ui.js', import.meta.url);
   // Batch 5 seam 4: the adaptive layout pass lives in src/ui/panelAdaptiveLayout.js.
-  const panelAdaptiveUi = readFileSync(new URL('./ui/panelAdaptiveLayout.js', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const panelAdaptiveUi = readSource('./ui/panelAdaptiveLayout.js', import.meta.url);
+  const css = readSource('../style.css', import.meta.url);
   assert.doesNotMatch(ui, /_enforce(?:Left|Right)PanelAccordion/);
   assert.match(panelAdaptiveUi, /classList\.add\('collapsed', 'layout-auto-collapsed'\)/);
   assert.match(panelAdaptiveUi, /classList\.remove\('collapsed', 'layout-auto-collapsed'\)/);
@@ -192,8 +193,8 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
 });
 
 test('share-panel state excludes responsive collapse and preserves recipient preferences', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-  const sharelink = readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8');
+  const ui = readSource('./ui.js', import.meta.url);
+  const sharelink = readSource('./sharelink.js', import.meta.url);
 
   assert.match(
     ui,
@@ -215,10 +216,10 @@ test('share-panel state excludes responsive collapse and preserves recipient pre
 });
 
 test('parameterized Display presets keep one stable scroll owner', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const ui = readSource('./ui.js', import.meta.url);
   // Batch 5 seam 4: the adaptive layout pass lives in src/ui/panelAdaptiveLayout.js.
-  const panelAdaptiveUi = readFileSync(new URL('./ui/panelAdaptiveLayout.js', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const panelAdaptiveUi = readSource('./ui/panelAdaptiveLayout.js', import.meta.url);
+  const css = readSource('../style.css', import.meta.url);
 
   assert.match(css, /#pp-toggles:not\(\.collapsed\) > #param-slider-panel\.active\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?max-height:\s*none;[\s\S]*?overflow-y:\s*visible;/);
   assert.match(panelAdaptiveUi, /const displayScrollTop = mgr\._displayPortalScrollRestoreOwner === 'standard'[\s\S]*?mgr\._standardDisplayScrollTop[\s\S]*?mgr\._ppToggles\?\.scrollTop \|\| 0/);
@@ -239,7 +240,7 @@ test('parameterized Display presets keep one stable scroll owner', () => {
 });
 
 test('expanded Display uses its container shell instead of a nested header card', () => {
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readSource('../style.css', import.meta.url);
 
   assert.match(
     css,
@@ -253,7 +254,7 @@ test('expanded Display uses its container shell instead of a nested header card'
 });
 
 test('expanded left panels integrate their headers with the container shell', () => {
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readSource('../style.css', import.meta.url);
 
   assert.match(
     css,
@@ -266,8 +267,8 @@ test('expanded left panels integrate their headers with the container shell', ()
 });
 
 test('Map Source uses four compact tiles in the bottom Visual Presets tray', () => {
-  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const html = readSource('../index.html', import.meta.url);
+  const css = readSource('../style.css', import.meta.url);
 
   assert.doesNotMatch(html, /id="stack-panel"/);
   assert.match(html, /id="control-panel"[\s\S]*?class="map-source-section"[\s\S]*?id="map-stack-chips"/);
@@ -279,8 +280,8 @@ test('Map Source uses four compact tiles in the bottom Visual Presets tray', () 
 });
 
 test('expanded right panels highlight the title divider without changing collapsed launchers', () => {
-  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const html = readSource('../index.html', import.meta.url);
+  const css = readSource('../style.css', import.meta.url);
 
   assert.match(
     html,

@@ -1,10 +1,11 @@
+import { readSource } from './testSupport/readSource.js';
 // The HUD summary's locality tag. The 2026-08-20 QA hunt caught the HUD calling
 // out landmarks on other continents — NEAR SACRE-COEUR (PARIS) 2470KM while
 // parked over Moscow — because the NEAR bound was 2,500 km. These pin the metro
 // bound, both sides of it, and the SECTOR fallback that already worked.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import { composeLocalityTag, NEAR_POI_MAX_KM } from './hudLocality.js';
 
 const ALCATRAZ = { poi: 'Alcatraz Island', city: 'San Francisco' };
@@ -62,7 +63,7 @@ test('southern and western hemispheres carry the right suffixes', () => {
 // (hud.js itself cannot be imported here: it pulls in the `mgrs` CommonJS package,
 // which Vite resolves but plain Node cannot import by named export.)
 test('hud.js actually composes its summary through this helper', () => {
-  const source = readFileSync(new URL('./hud.js', import.meta.url), 'utf8');
+  const source = readSource('./hud.js', import.meta.url);
   // Boolean probes, not assert.match on the whole file — a failure here should
   // name the missing wiring, not print all of hud.js.
   const has = (pattern) => pattern.test(source);

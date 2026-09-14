@@ -1,3 +1,4 @@
+import { readSource } from './testSupport/readSource.js';
 // The HUD's ALT readout datum. Field report (2026-08-22, cockpit parked at
 // SFO): the bottom-right OSD read "ALT: -15M" — and JFK, earlier, "ALT: -18M".
 // Cesium reports the camera's height against the WGS84 ELLIPSOID, and San
@@ -18,7 +19,7 @@
 // import → install DOM, in that order.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import { registerHooks } from 'node:module';
 import { ensureGeoidReady } from './data/geoid.js';
 
@@ -42,7 +43,7 @@ registerHooks({
 
 const { IntelHUD } = await import('./hud.js');
 
-const source = readFileSync(new URL('./hud.js', import.meta.url), 'utf8');
+const source = readSource('./hud.js', import.meta.url);
 // Boolean probes, not assert.match on the whole file — a failure here should
 // name the missing wiring, not print all of hud.js.
 const has = (pattern) => pattern.test(source);

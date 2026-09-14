@@ -1,3 +1,4 @@
+import { readSource } from '../testSupport/readSource.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -1261,11 +1262,11 @@ test('hasContact declines while a layer is disabled, whatever its maps still hol
   for (const [name, source, guard] of [
     // flights' tracking state lives on the shared pipeline instance (flightsTracking.js),
     // so its guard reads through the `p.` prefix.
-    ['flights', fs.readFileSync(new URL('./flights.js', import.meta.url), 'utf8'),
+    ['flights', readSource('./flights.js', import.meta.url),
       /hasContact\(icao24\) \{\s*\n\s*if \(!p\._billboardCollection \|\| !p\._billboardCollection\.show \|\| p\._billboards\.size === 0\) return null;/],
-    ['militaryFlights', fs.readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8'),
+    ['militaryFlights', readSource('./militaryFlights.js', import.meta.url),
       /hasContact\(icao24\) \{\s*\n\s*if \(!p\._billboardCollection \|\| !p\._billboardCollection\.show \|\| p\._billboards\.size === 0\) return null;/],
-    ['aisLiveVessels', fs.readFileSync(new URL('./aisLiveVessels.js', import.meta.url), 'utf8'),
+    ['aisLiveVessels', readSource('./aisLiveVessels.js', import.meta.url),
       /hasContact\(mmsi\) \{\s*\n\s*if \(!state\.enabled \|\| !state\.vesselMap \|\| state\.vesselMap\.size === 0\) return null;/],
   ]) {
     assert.match(source, guard, `${name}.hasContact must decline while the layer is disabled`);
@@ -1436,9 +1437,9 @@ test('a deliberate source clear still fully clears the subject', () => {
 test('production eviction sites actually tag their clears', () => {
   // The event contract above is worthless if the real cull paths never set the
   // origin, so pin the three production call sites.
-  const flightsSource = fs.readFileSync(new URL('./flights.js', import.meta.url), 'utf8');
-  const militarySource = fs.readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8');
-  const vesselsSource = fs.readFileSync(new URL('./aisLiveVessels.js', import.meta.url), 'utf8');
+  const flightsSource = readSource('./flights.js', import.meta.url);
+  const militarySource = readSource('./militaryFlights.js', import.meta.url);
+  const vesselsSource = readSource('./aisLiveVessels.js', import.meta.url);
 
   // Both layers' tracking state lives on shared pipeline instances (flightsTracking.js),
   // so their cull sites read _trackedIcao through the `p.` prefix — while each
@@ -1468,7 +1469,7 @@ test('production eviction sites actually tag their clears', () => {
   // The tag alone is not enough — see the behavioral test in
   // firmsInteraction.test.mjs. The clear must also run BEFORE renderCurrentLod,
   // whose registration sweep deletes the record the clear needs to see.
-  const firmsSource = fs.readFileSync(new URL('./firmsHeatmap.js', import.meta.url), 'utf8');
+  const firmsSource = readSource('./firmsHeatmap.js', import.meta.url);
   const evictedClear = firmsSource.indexOf('clearSelectedEntityContextForLayer(id, { evicted: true });');
   const lodRebuild = firmsSource.indexOf('renderCurrentLod(true);\n      if (reselected) selectFire(reselected);');
   assert.ok(evictedClear > 0, 'FIRMS must mark a refresh-vanished selection as an eviction');

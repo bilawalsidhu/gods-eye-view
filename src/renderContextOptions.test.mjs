@@ -1,6 +1,7 @@
+import { readSource } from './testSupport/readSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import { resolveRenderContextOptions, DEFAULT_MSAA_SAMPLES } from './renderContextOptions.js';
 
 /**
@@ -54,7 +55,7 @@ test('?preserveBuffer=1 is the only spelling that restores preservation', () => 
 });
 
 test('main.js spreads the resolved options instead of hand-rolling attributes', () => {
-  const source = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+  const source = readSource('./main.js', import.meta.url);
   assert.match(source, /import \{ resolveRenderContextOptions \} from '\.\/renderContextOptions\.js';/);
   assert.match(source, /\.\.\.resolveRenderContextOptions\(\),/);
   assert.doesNotMatch(source, /msaaSamples: 4|preserveDrawingBuffer: true/,
@@ -62,7 +63,7 @@ test('main.js spreads the resolved options instead of hand-rolling attributes', 
 });
 
 test('the persistent boot surfaces stay de-blurred (render-perf five, item 3)', () => {
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readSource('../style.css', import.meta.url);
   // These rules once carried backdrop-filter over the always-visible dock
   // and rails — 6.1 MiB of compositor blur reads per rendered frame at
   // boot. The policy comment on #gev-voice-control explains why they must

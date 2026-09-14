@@ -1,18 +1,19 @@
+import { readSource } from './testSupport/readSource.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+
 import test from 'node:test';
 
-const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+const html = readSource('../index.html', import.meta.url);
+const ui = readSource('./ui.js', import.meta.url);
 // Batch 5 seam 2: the Radio panel methods live in src/ui/radioPanel.js;
 // StyleManager keeps thin delegates, so their text contracts read that module.
-const radioPanelUi = readFileSync(new URL('./ui/radioPanel.js', import.meta.url), 'utf8');
-const radio = readFileSync(new URL('./data/radio.js', import.meta.url), 'utf8');
-const rocketLaunches = readFileSync(new URL('./data/rocketLaunches.js', import.meta.url), 'utf8');
-const realtime = readFileSync(new URL('./voice/gevRealtime.js', import.meta.url), 'utf8');
-const voice = readFileSync(new URL('./voice/realtimeSession.js', import.meta.url), 'utf8');
-const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const radioPanelUi = readSource('./ui/radioPanel.js', import.meta.url);
+const radio = readSource('./data/radio.js', import.meta.url);
+const rocketLaunches = readSource('./data/rocketLaunches.js', import.meta.url);
+const realtime = readSource('./voice/gevRealtime.js', import.meta.url);
+const voice = readSource('./voice/realtimeSession.js', import.meta.url);
+const css = readSource('../style.css', import.meta.url);
 
 /** Parse the Realtime tool array out of the Vite config as real data. */
 function realtimeTools() {
