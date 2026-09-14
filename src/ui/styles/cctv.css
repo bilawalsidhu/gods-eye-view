@@ -78,6 +78,17 @@ html[lang='es'] .cctv-controls {
   flex-wrap: wrap;
 }
 
+/* Same surface, same remedy, Ukrainian: the focus/coverage/auto-hop row is
+   the binding one. At the .scene-btn metrics (9px JetBrains Mono with a 0.6em
+   advance + 1.2px tracking, 18px padding) the 360px panel leaves ~330px of
+   row budget: uk OFF states need ~333px, ON states ~347px — both clip the
+   nowrap row, so uk gets the same wrap remedy as es. ru fits both states
+   (~327px/~314px) and stays unwrapped; revisit if the ru coverage/auto-hop
+   strings ever grow. */
+html[lang='uk'] .cctv-controls {
+  flex-wrap: wrap;
+}
+
 .cctv-calibration-block {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 9px;
