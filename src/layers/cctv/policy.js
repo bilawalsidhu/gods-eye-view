@@ -98,6 +98,17 @@ export const PROJECTION_VERT_ASPECT =
 // the monitor plane in the 3D tiles. Exported for the unit suite.
 
 export const FRUSTUM_GROUND_CLEARANCE_M = 2;
+/**
+ * Most the footprint clearance may lift a monitor plane beyond what the
+ * ground at its own mount requires (metres). A plane whose far edge crosses
+ * a tall building would otherwise float hundreds of metres up to "clear" it;
+ * past this the plane accepts the intersection instead of leaving the scene.
+ */
+export const PLANE_FOOTPRINT_LIFT_CAP_M = 60;
+/** Client range floor the pose model and catalog agree on (metres). */
+export const CALIBRATION_RANGE_FLOOR_M = 120;
+/** The floor saved v2 calibrations were authored against before 2026-09-13. */
+export const LEGACY_CALIBRATION_RANGE_FLOOR_M = 220;
 
 /** Public result codes for explicit CCTV camera flights. */
 

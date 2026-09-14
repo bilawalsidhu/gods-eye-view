@@ -27,6 +27,7 @@ const layer = createCctvLayer({
   },
 });
 export const calibrationPatchMovesAnchor = layer.calibrationPatchMovesAnchor;
+export const migrateRangeScaleForFloor = layer.migrateRangeScaleForFloor;
 export const _pushAmbientCardEntriesForTest =
   layer._pushAmbientCardEntriesForTest;
 export const _setCctvOverlayHostForTest = layer._setCctvOverlayHostForTest;

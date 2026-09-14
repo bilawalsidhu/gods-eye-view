@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_CCTV_SOURCE_FILE, CCTV_SOURCE_CACHE_MS } from './constants.js';
 import { allocateSourceCap, resolveCatalogCap } from './cap.js';
+import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { normalizeSourceItem } from './normalize.js';
 import {
   loadAustinSourcesFromOpenData,
@@ -213,7 +214,13 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     ];
     const maxCount = resolveCatalogCap(process.env.CCTV_MAX_SOURCES);
     const allocation = allocateSourceCap(packs, maxCount);
-    const capped = allocation.sources;
+    // Shipped ground heights (config/cctv_ground_heights.json, produced by
+    // scripts/precompute-cctv-heights.mjs) ride along on the served source so
+    // the client can place a camera and its monitor plane with zero sampling.
+    const capped = joinGroundHeights(
+      allocation.sources,
+      loadGroundHeights(sourceRoot),
+    );
     const trimmed = allocation.packs.filter((pack) => pack.kept < pack.offered);
     if (trimmed.length) {
       const detail = trimmed

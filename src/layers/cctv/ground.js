@@ -1,3 +1,12 @@
+import {
+  SUPPORT_KEYS,
+  planeSupportPoints,
+  poseHash,
+} from '../../data/cctvFootprint.js';
+
+/** Cooldown before a provisional (geoid-fallback / partial) footprint is retried. */
+const FOOTPRINT_RETRY_MS = 60_000;
+
 export function createGround({ state: layerState, services, parts, source }) {
   const { resolveGroundFloorCells } = services.ground;
   const { resolveEllipsoidalGround } = services.terrain;
@@ -248,8 +257,13 @@ export function createGround({ state: layerState, services, parts, source }) {
       }
       const ground = groundAltFor(record, regime);
       // Skip the entity rewrite when the applied ground already matches (e.g.
-      // entering google-3d before any sample: prior → prior is a no-op).
+      // entering google-3d before any sample: prior → prior is a no-op) —
+      // unless the record has a footprint source, whose eligibility depends
+      // on the regime (shipped mesh samples apply in google-3d only).
+      const hasFootprintSource =
+        !!record.camera?.groundHeights || !!record.footprintGround;
       if (
+        !hasFootprintSource &&
         record.frustumGeometry &&
         Math.abs(record.frustumGeometry.groundAltM - ground) < 0.001
       ) {
@@ -266,11 +280,77 @@ export function createGround({ state: layerState, services, parts, source }) {
       // under the ≤1-per-(camera, session) ceiling.
       layerState._tilesReadyReenqueued = false;
     }
+    // The active camera may have just lost its shipped footprint (globe
+    // regime) — resolve its DEM footprint for the new surface.
+    const active = layerState._recordById.get(layerState._activeCameraId);
+    if (active) void resolveFootprintGround(active);
     parts.presentation.notifyListeners();
   }
+  /**
+   * Resolves the ground under the monitor plane's nine support points for the
+   * record's CURRENT pose from the Re:Earth DEM (network-cached proxy, never a
+   * scene query), then re-applies the geometry so the rigid lift accounts for
+   * terrain rising under the plane's far edge. This is the fallback for
+   * cameras without a shipped precompute for this pose (a new pack, or a
+   * camera the user has edited), and it runs only on demand: activation and
+   * calibration commit. A late result for a stale pose or a torn-down record
+   * is dropped. Never rejects.
+   * @param {Object} record - Camera record.
+   * @returns {Promise<void>}
+   */
+  async function resolveFootprintGround(record) {
+    if (!record?.camera) return;
+    const pose = parts.geometry.footprintPose(record);
+    const hash = poseHash(pose);
+    const existing = record.footprintGround;
+    if (existing?.poseHash === hash) {
+      // Complete real-DEM results are final; a geoid-fallback (proxy outage)
+      // or partial result is retried after a cooldown.
+      if (!existing.provisional || Date.now() < existing.retryAt) return;
+    }
+    if (parts.geometry.hasShippedFootprint(record)) return;
+    const revision = (record.footprintRevision || 0) + 1;
+    record.footprintRevision = revision;
+    const { supports } = planeSupportPoints(pose);
+    const coords = SUPPORT_KEYS.map((key) => ({
+      lat: supports[key].lat,
+      lon: supports[key].lon,
+    }));
+    let results = null;
+    try {
+      results = await resolveEllipsoidalGround(coords);
+    } catch {
+      results = null;
+    }
+    if (!Array.isArray(results)) return;
+    if (record.footprintRevision !== revision) return;
+    if (layerState._recordById.get(record.camera.id) !== record) return;
+    if (poseHash(parts.geometry.footprintPose(record)) !== hash) return;
+    const under = {};
+    let real = 0;
+    results.forEach((result, index) => {
+      if (Number.isFinite(result?.ellipsoid)) {
+        under[SUPPORT_KEYS[index]] = result.ellipsoid;
+        if (result.source === 'reearth') real += 1;
+      }
+    });
+    const provisional = real < SUPPORT_KEYS.length;
+    record.footprintGround = {
+      poseHash: hash,
+      supports: under,
+      source: provisional ? 'dem-provisional' : 'dem',
+      provisional,
+      retryAt: provisional ? Date.now() + FOOTPRINT_RETRY_MS : 0,
+    };
+    parts.geometry.applyFrustumGeometry(record, groundAltFor(record));
+    parts.rendering.refreshCoverageStyles();
+    parts.presentation.notifyListeners();
+  }
+
   return {
     surfaceRegimeKey,
     currentSurfaceRegime,
+    resolveFootprintGround,
     groundPriorAltFor,
     isGroundResolved,
     groundAltFor,

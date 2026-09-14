@@ -136,9 +136,12 @@ export function createCatalog({ state: layerState, services, parts, source }) {
         20,
         125,
       );
+      // Same floor as the pose model (model.js): the packs' 145/210 m ranges
+      // are intentional, and inflating them to 220 m pushed the monitor
+      // plane's far edge into higher ground (owner field test 2026-09-13).
       const rangeM = parts.model.clamp(
         parts.model.safeNumber(source.rangeM, seed?.rangeM ?? 700),
-        220,
+        120,
         2200,
       );
       const mountHeightM = parts.model.clamp(
@@ -195,6 +198,11 @@ export function createCatalog({ state: layerState, services, parts, source }) {
         license: String(source.license || source.licenseNote || ''),
         credit: String(source.credit || ''),
         code: String(source.code || ''),
+        // Shipped precompute (see server/providers/cctv/groundHeights.js).
+        groundHeights:
+          source.groundHeights && typeof source.groundHeights === 'object'
+            ? source.groundHeights
+            : null,
         poseSource,
       };
       parts.model.ensureCameraPose(camera);

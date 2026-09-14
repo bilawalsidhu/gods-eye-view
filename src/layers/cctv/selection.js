@@ -135,6 +135,10 @@ export function createSelection({
     // until update()'s one-shot tiles-ready completion pass re-grounds it.
     parts.ground.rearmGroundResolution(record);
     parts.geometry.updateRecordGeometry(record);
+    // Ground under the plane's footprint (DEM, cached proxy) for cameras
+    // without a shipped precompute for this pose — only the camera the user
+    // is looking at ever asks.
+    void parts.ground.resolveFootprintGround(record);
     record.activationDone = true;
     parts.rendering.refreshCoverageStyles();
     // The newly active camera leaves the ambient ring (its monitor plane takes

@@ -142,6 +142,7 @@
     "modules": [
       "server/providers/cctv.js",
       "server/providers/cctv/cap.js",
+      "server/providers/cctv/groundHeights.js",
       "server/providers/cctv/catalog.js",
       "server/providers/cctv/constants.js",
       "server/providers/cctv/media.js",
@@ -150,7 +151,8 @@
       "src/data/directionText.js",
       "server/providers/common/geo.js",
       "server/providers/places/google-key.js",
-      "scripts/google-server-key.mjs"
+      "scripts/google-server-key.mjs",
+      "src/data/cctvFootprint.js"
     ],
     "external": []
   },
@@ -891,7 +893,8 @@
       "src/layers/cctv/source.js",
       "src/layers/cctv/state.js",
       "src/layers/cctv/testing.js",
-      "src/overlays/worldOverlayTokens.js"
+      "src/overlays/worldOverlayTokens.js",
+      "src/data/cctvFootprint.js"
     ],
     "external": ["cesium"]
   }

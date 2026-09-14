@@ -2,6 +2,8 @@ import { createCalibrationGizmo } from '../../data/cctvGizmo.js';
 import {
   DEFAULT_CAMERA_CALIBRATION,
   CCTV_CALIBRATION_STORAGE_KEY_V2,
+  CALIBRATION_RANGE_FLOOR_M,
+  LEGACY_CALIBRATION_RANGE_FLOOR_M,
 } from './policy.js';
 
 export function createCalibration({
@@ -76,6 +78,35 @@ export function createCalibration({
   }
 
   /**
+   * Re-expresses a saved `rangeScale` after the catalog's range floor moved.
+   * Entries were authored as a multiplier on the OLD client base range
+   * (`max(220, packRange)`); the base is now `max(120, packRange)`, so a camera
+   * whose pack range sits below 220 m would silently shrink. Scaling by the
+   * ratio of the two bases keeps the user's effective range; the 3× ceiling
+   * still applies (an extreme entry loses a little rather than exploding).
+   * @param {Object} values - Normalized 7-field calibration.
+   * @param {number} packRangeM - The camera's served (pack) range.
+   * @returns {Object} A new values object.
+   */
+  function migrateRangeScaleForFloor(values, packRangeM) {
+    const oldBase = parts.model.clamp(
+      parts.model.safeNumber(packRangeM, 700),
+      LEGACY_CALIBRATION_RANGE_FLOOR_M,
+      2200,
+    );
+    const newBase = parts.model.clamp(
+      parts.model.safeNumber(packRangeM, 700),
+      CALIBRATION_RANGE_FLOOR_M,
+      2200,
+    );
+    if (oldBase === newBase) return values;
+    return normalizeCalibration({
+      ...values,
+      rangeScale: values.rangeScale * (oldBase / newBase),
+    });
+  }
+
+  /**
    * Returns true if the given calibration is effectively the default (all offsets near zero).
    * @param {Object} calibration
    * @returns {boolean}
@@ -120,6 +151,9 @@ export function createCalibration({
           values: normalizeCalibration(entry.values),
           source: 'manual',
           savedAt: parts.model.safeNumber(entry.savedAt, 0),
+          // Range floor the entry's rangeScale was authored against; absent
+          // on entries saved before the floor dropped from 220 m to 120 m.
+          rangeFloorM: parts.model.safeNumber(entry.rangeFloorM, NaN),
         });
       }
       return map;
@@ -147,6 +181,12 @@ export function createCalibration({
           values: normalizeCalibration(entry.values),
           source: 'manual',
           savedAt: parts.model.safeNumber(entry.savedAt, Date.now()),
+          // Only entries that were migrated or saved against the current
+          // floor carry the marker; an entry for a camera absent from this
+          // catalog keeps its eligibility to migrate when it returns.
+          ...(Number.isFinite(entry.rangeFloorM)
+            ? { rangeFloorM: entry.rangeFloorM }
+            : {}),
         };
       }
       storage.setItem(CCTV_CALIBRATION_STORAGE_KEY_V2, JSON.stringify(payload));
@@ -243,6 +283,8 @@ export function createCalibration({
         parts.ground.groundAltFor(record),
       );
     }
+    // The edited pose has a new footprint; resolve the ground under it once.
+    void parts.ground.resolveFootprintGround(record);
     parts.frames.refreshProjectionImage(record, true);
     return true;
   }
@@ -298,6 +340,7 @@ export function createCalibration({
     calibrationPatchMovesAnchor,
     normalizeCalibration,
     isDefaultCalibration,
+    migrateRangeScaleForFloor,
     readCalibrationStoreV2,
     writeCalibrationStoreV2,
     loadCalibrationStore,
