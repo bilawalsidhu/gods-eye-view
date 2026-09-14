@@ -34,7 +34,23 @@ import {
   FlowMaterialProperty,
   ensureFlowFabricRegistered,
 } from '../annotations/worldAnnotationRenderer.js';
-import { flyRoute, initCameraVerbs } from '../cameraVerbs.js';
+import {
+  flyRoute,
+  getActiveCameraMotion,
+  initCameraVerbs,
+  interruptCameraMotionIfActive,
+} from '../cameraVerbs.js';
+import {
+  GROUND_FLOOR_LIFT_M,
+  cachedGroundFloor,
+  warmGroundFloor,
+} from './groundFloor.js';
+import {
+  claimPointer,
+  isPointerFree,
+  isPointerOwnedBy,
+  releasePointer,
+} from './inputOwnership.js';
 import { formatRouteDistance, formatRouteDuration } from './routeSteps.js';
 
 export const DIRECTIONS_STEP_OVERLAY_SOURCE_ID = 'directions-step';
@@ -62,6 +78,16 @@ const STEP_PIXEL_SIZE = 8;
 const STEP_SELECTED_PIXEL_SIZE = 13;
 /** Route request timeout (ms) — the proxy itself gives OSRM 12 s. */
 const ROUTE_TIMEOUT_MS = 15_000;
+
+/** Pointer-ownership id while a globe click is placing an endpoint. */
+export const DIRECTIONS_POINTER_OWNER = 'directions';
+
+/** Re-read the shared ground floor this many times while cells warm. */
+export const STEP_ANCHOR_MAX_ATTEMPTS = 12;
+/** Gap between those re-reads (ms). */
+export const STEP_ANCHOR_RETRY_MS = 400;
+/** How often the row repaints the highlighted step while FLY is running (ms). */
+export const FLIGHT_PROGRESS_MS = 250;
 
 const DEFAULT_OVERLAY_HOST = Object.freeze({
   setEntries: setOverlayEntries,
@@ -97,6 +123,21 @@ let _clickHandler = null;
 let _renderHeld = false;
 let _rowControlsListener = null;
 let _dataManager = null;
+/** Set when arming failed because another tool holds the pointer. */
+let _pointerBlocked = false;
+/** Id of the route flight THIS layer started, while it is still running. */
+let _flightId = 0;
+let _flightTimer = null;
+/** Step the camera is on during FLY, or null. */
+let _flightStep = null;
+let _anchorTimer = null;
+let _anchorAttempts = 0;
+/**
+ * Camera seams handed over by the UI shell: the one navigation-authority
+ * facade every camera owner goes through, plus the shared ground-floor
+ * read/warm the route dolly uses so it does not fly a mountain at sea level.
+ */
+let _cameraServices = null;
 
 // ---------------------------------------------------------------------------
 // Pure helpers (exported for tests)
@@ -120,6 +161,10 @@ export function normalizeDirectionsParams(params = {}) {
   if (params.swap === true) out.swap = true;
   if (params.fly === true) out.fly = true;
   if (params.clear === true) out.clear = true;
+  if (params.step !== undefined) {
+    out.step =
+      Number.isInteger(params.step) && params.step >= 0 ? params.step : null;
+  }
   return out;
 }
 
@@ -129,7 +174,7 @@ export function normalizeDirectionsParams(params = {}) {
  * @returns {{chips: object[], legend: object[]}}
  */
 export function directionsRowControls(state) {
-  const { mode, armed, a, b, status, route } = state;
+  const { mode, armed, a, b, status, route, selectedStep, flightStep } = state;
   const routing = status === 'routing';
   const chips = Object.entries(DIRECTIONS_MODES).map(([id, spec]) => ({
     id: `mode-${id}`,
@@ -141,18 +186,24 @@ export function directionsRowControls(state) {
   }));
   chips.push({
     id: 'set-a',
-    label: armed === 'a' ? 'CLICK MAP' : (a ? 'A ✓' : 'SET A'),
+    label: armed === 'a' ? 'CLICK MAP' : a ? 'A ✓' : 'SET A',
     active: armed === 'a',
     state: armed === 'a' ? 'active' : 'idle',
-    title: armed === 'a' ? 'Click a spot on the globe to place A (click again to cancel)' : 'Then click the globe to place the start',
+    title:
+      armed === 'a'
+        ? 'Click a spot on the globe to place A (click again to cancel)'
+        : 'Then click the globe to place the start',
     params: { arm: armed === 'a' ? null : 'a' },
   });
   chips.push({
     id: 'set-b',
-    label: armed === 'b' ? 'CLICK MAP' : (b ? 'B ✓' : 'SET B'),
+    label: armed === 'b' ? 'CLICK MAP' : b ? 'B ✓' : 'SET B',
     active: armed === 'b',
     state: armed === 'b' ? 'active' : 'idle',
-    title: armed === 'b' ? 'Click a spot on the globe to place B (click again to cancel)' : 'Then click the globe to place the destination',
+    title:
+      armed === 'b'
+        ? 'Click a spot on the globe to place B (click again to cancel)'
+        : 'Then click the globe to place the destination',
     params: { arm: armed === 'b' ? null : 'b' },
   });
   chips.push({
@@ -163,12 +214,14 @@ export function directionsRowControls(state) {
     title: 'Swap A and B',
     params: { swap: true },
   });
+  const flying = Number.isInteger(flightStep);
   chips.push({
     id: 'fly',
-    label: routing ? 'FLY ···' : 'FLY',
+    label: routing ? 'FLY ···' : flying ? 'FLYING' : 'FLY',
     disabled: !route || routing,
-    busy: routing,
-    state: routing ? 'loading' : 'idle',
+    busy: routing || flying,
+    active: flying,
+    state: routing || flying ? 'loading' : 'idle',
     title: route ? 'Fly the camera along the route' : 'Place A and B first',
     params: { fly: true },
   });
@@ -180,7 +233,93 @@ export function directionsRowControls(state) {
     title: 'Remove the route and both markers',
     params: { clear: true },
   });
-  return { chips, legend: [] };
+  return {
+    chips,
+    legend: [],
+    list: directionsStepList({
+      route,
+      selectedStep: selectedStep ?? null,
+      flightStep: flightStep ?? null,
+    }),
+  };
+}
+
+/**
+ * Which maneuvers get a dot on the globe: every one except departure and
+ * arrival, which the A and B markers already stand for.
+ * @param {object[]} steps
+ * @returns {number[]} Step indices.
+ */
+export function stepMarkerIndices(steps) {
+  const list = Array.isArray(steps) ? steps : [];
+  const out = [];
+  for (let index = 1; index < list.length - 1; index += 1) out.push(index);
+  return out;
+}
+
+/**
+ * Render height for a maneuver dot.
+ *
+ * A dot fixed at a couple of metres ellipsoidal is at sea level, which in
+ * Denver (ground ~1.6 km) puts it a kilometre and a half under the city: on an
+ * oblique view it sits visibly off its own junction. So the dot reads the same
+ * shared ground floor every other anchored point in the app reads
+ * (`cachedGroundFloor` — the rendered mesh cell on the photoreal stack, the
+ * Re:Earth DEM cell on the keyless terrain stacks) and lifts clear of it.
+ * Until that cell is warm there is no honest height, and the caller keeps the
+ * dot hidden rather than drawing it somewhere wrong.
+ * @param {number|null} floorM Ellipsoidal ground for the cell, or null.
+ * @returns {number|null} Ellipsoidal render height, or null while unknown.
+ */
+export function stepMarkerHeightM(floorM) {
+  return Number.isFinite(floorM) ? floorM + GROUND_FLOOR_LIFT_M : null;
+}
+
+/**
+ * The ordered turn-by-turn list for the layer row. Pure.
+ * @param {{route: object|null, selectedStep: number|null, flightStep: number|null}} state
+ * @returns {{ariaLabel: string, items: object[]}|null}
+ */
+export function directionsStepList({
+  route,
+  selectedStep = null,
+  flightStep = null,
+}) {
+  const steps = route?.steps;
+  if (!Array.isArray(steps) || !steps.length) return null;
+  const active = Number.isInteger(flightStep) ? flightStep : selectedStep;
+  return {
+    ariaLabel: 'Turn-by-turn directions',
+    items: steps.map((step, index) => ({
+      id: `step-${index}`,
+      ordinal: index + 1,
+      lead: formatRouteDistance(step.distanceM) || '—',
+      text: step.instruction,
+      active: index === active,
+      current: Number.isInteger(flightStep) && index === flightStep,
+      params: { step: index },
+    })),
+  };
+}
+
+/**
+ * Which maneuver the camera is on, given how far along the route it has flown.
+ * Steps carry the length of the leg that FOLLOWS them, so the step in force is
+ * the last one whose cumulative start is at or behind the camera. Pure.
+ * @param {object[]} steps
+ * @param {number} traveledM Metres flown from the start of the route.
+ * @returns {number|null}
+ */
+export function stepIndexAtDistance(steps, traveledM) {
+  if (!Array.isArray(steps) || !steps.length) return null;
+  if (!Number.isFinite(traveledM) || traveledM < 0) return 0;
+  let start = 0;
+  for (let index = 0; index < steps.length; index += 1) {
+    const end = start + Math.max(0, Number(steps[index]?.distanceM) || 0);
+    if (traveledM < end) return index;
+    start = end;
+  }
+  return steps.length - 1;
 }
 
 /**
@@ -189,13 +328,45 @@ export function directionsRowControls(state) {
  * @returns {object}
  */
 export function directionsStats(state) {
-  const { mode, a, b, status, error, route, lastUpdate, armed } = state;
+  const {
+    mode,
+    a,
+    b,
+    status,
+    error,
+    route,
+    lastUpdate,
+    armed,
+    pointerBlocked,
+  } = state;
   const source = 'OSM routing';
+  if (pointerBlocked) {
+    return {
+      count: route?.steps.length || 0,
+      lastUpdate,
+      error: 'Another map tool is using clicks — close it, then SET A again',
+      status: 'empty',
+      source,
+    };
+  }
   if (status === 'routing') {
-    return { count: 0, lastUpdate, error: null, loading: true, loadingLabel: 'Routing…', source };
+    return {
+      count: 0,
+      lastUpdate,
+      error: null,
+      loading: true,
+      loadingLabel: 'Routing…',
+      source,
+    };
   }
   if (status === 'error') {
-    return { count: 0, lastUpdate, error: error || 'No route found', status: 'empty', source };
+    return {
+      count: 0,
+      lastUpdate,
+      error: error || 'No route found',
+      status: 'empty',
+      source,
+    };
   }
   // The manager prints `loadingLabel` as the row's detail line whenever it is
   // set (not only while loading), so the route summary and the placement
@@ -217,7 +388,15 @@ export function directionsStats(state) {
   else if (a && !b) coverage = 'SET B, then click the globe';
   else if (!a && b) coverage = 'SET A, then click the globe';
   else coverage = 'SET A, then click the globe';
-  return { count: 0, lastUpdate, error: null, status: 'idle', source, coverage, loadingLabel: coverage };
+  return {
+    count: 0,
+    lastUpdate,
+    error: null,
+    status: 'idle',
+    source,
+    coverage,
+    loadingLabel: coverage,
+  };
 }
 
 /**
@@ -232,7 +411,9 @@ export function directionsStepCopy(steps, index) {
   const leg = [];
   if (step.distanceM > 0) leg.push(formatRouteDistance(step.distanceM));
   if (step.durationS > 0) leg.push(formatRouteDuration(step.durationS));
-  details.push(`Step ${index + 1} of ${steps.length}${leg.length ? ` · then ${leg.join(' · ')}` : ''}`);
+  details.push(
+    `Step ${index + 1} of ${steps.length}${leg.length ? ` · then ${leg.join(' · ')}` : ''}`,
+  );
   const next = steps[index + 1];
   if (next) details.push(`Then: ${next.instruction}`);
   return { title: step.instruction, details };
@@ -289,13 +470,31 @@ export function directionsRequestUrl(mode, a, b) {
  * @returns {{distanceM:number, durationS:number, geometry:number[][], steps:object[], mode:string}|null}
  */
 export function normalizeRoutePayload(payload, mode) {
-  if (!payload || payload.ok !== true || !Array.isArray(payload.geometry) || payload.geometry.length < 2) return null;
+  if (
+    !payload ||
+    payload.ok !== true ||
+    !Array.isArray(payload.geometry) ||
+    payload.geometry.length < 2
+  )
+    return null;
   const geometry = payload.geometry
     .map((pair) => [Number(pair?.[0]), Number(pair?.[1])])
-    .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180);
+    .filter(
+      ([lon, lat]) =>
+        Number.isFinite(lon) &&
+        Number.isFinite(lat) &&
+        Math.abs(lat) <= 90 &&
+        Math.abs(lon) <= 180,
+    );
   if (geometry.length < 2) return null;
   const steps = (Array.isArray(payload.steps) ? payload.steps : [])
-    .filter((step) => step && typeof step.instruction === 'string' && Number.isFinite(step.lat) && Number.isFinite(step.lon))
+    .filter(
+      (step) =>
+        step &&
+        typeof step.instruction === 'string' &&
+        Number.isFinite(step.lat) &&
+        Number.isFinite(step.lon),
+    )
     .map((step, index) => ({ ...step, index }));
   return {
     distanceM: Math.max(0, Number(payload.distanceM) || 0),
@@ -311,11 +510,28 @@ export function normalizeRoutePayload(payload, mode) {
 // ---------------------------------------------------------------------------
 
 function state() {
-  return { enabled: _enabled, mode: _mode, armed: _armed, a: _a, b: _b, status: _status, error: _error, route: _route, lastUpdate: _lastUpdate };
+  return {
+    enabled: _enabled,
+    mode: _mode,
+    armed: _armed,
+    a: _a,
+    b: _b,
+    status: _status,
+    error: _error,
+    route: _route,
+    lastUpdate: _lastUpdate,
+    selectedStep: _selectedStep,
+    flightStep: _flightStep,
+    pointerBlocked: _pointerBlocked,
+  };
 }
 
 function notifyRow() {
-  try { _rowControlsListener?.(); } catch { /* listener is best-effort */ }
+  try {
+    _rowControlsListener?.();
+  } catch {
+    /* listener is best-effort */
+  }
   _dataManager?.refreshLayerStats?.();
 }
 
@@ -333,16 +549,36 @@ function syncRenderHold() {
 function pickGround(screenPosition) {
   const scene = _viewer?.scene;
   let cartesian = null;
-  if (scene?.pickPositionSupported && typeof scene.pickPosition === 'function') {
-    try { cartesian = scene.pickPosition(screenPosition); } catch { cartesian = null; }
+  if (
+    scene?.pickPositionSupported &&
+    typeof scene.pickPosition === 'function'
+  ) {
+    try {
+      cartesian = scene.pickPosition(screenPosition);
+    } catch {
+      cartesian = null;
+    }
   }
-  if (!isPickedWorldPosition(cartesian) && typeof _viewer?.camera?.pickEllipsoid === 'function') {
-    try { cartesian = _viewer.camera.pickEllipsoid(screenPosition, Cesium.Ellipsoid.WGS84); } catch { cartesian = null; }
+  if (
+    !isPickedWorldPosition(cartesian) &&
+    typeof _viewer?.camera?.pickEllipsoid === 'function'
+  ) {
+    try {
+      cartesian = _viewer.camera.pickEllipsoid(
+        screenPosition,
+        Cesium.Ellipsoid.WGS84,
+      );
+    } catch {
+      cartesian = null;
+    }
   }
   if (!isPickedWorldPosition(cartesian)) return null;
   const carto = Cesium.Cartographic.fromCartesian(cartesian);
   if (!carto) return null;
-  return { lat: Cesium.Math.toDegrees(carto.latitude), lon: Cesium.Math.toDegrees(carto.longitude) };
+  return {
+    lat: Cesium.Math.toDegrees(carto.latitude),
+    lon: Cesium.Math.toDegrees(carto.longitude),
+  };
 }
 
 function markerEntity(letter, point, color) {
@@ -372,7 +608,8 @@ function markerEntity(letter, point, color) {
 }
 
 function removeEntity(entity) {
-  if (entity && _viewer && !_viewer.isDestroyed?.()) _viewer.entities.remove(entity);
+  if (entity && _viewer && !_viewer.isDestroyed?.())
+    _viewer.entities.remove(entity);
 }
 
 function placeMarker(letter, point) {
@@ -388,10 +625,58 @@ function placeMarker(letter, point) {
 
 function clearRouteGraphics() {
   _clearStepSelection();
+  stopStepAnchoring();
   removeEntity(_routeEntity);
   _routeEntity = null;
   _stepPoints?.removeAll();
   syncRenderHold();
+}
+
+function stopStepAnchoring() {
+  if (_anchorTimer) clearTimeout(_anchorTimer);
+  _anchorTimer = null;
+  _anchorAttempts = 0;
+}
+
+/**
+ * Put every maneuver dot on the ground at its junction, and re-read the shared
+ * floor while its cells are still warming. A dot whose cell has not answered
+ * yet stays hidden: an unplaced dot is better than one drawn a kilometre below
+ * the city it belongs to.
+ */
+function anchorStepPoints() {
+  _anchorTimer = null;
+  if (!_stepPoints || !_route || !_enabled) return;
+  const steps = _route.steps;
+  const pending = [];
+  let unresolved = 0;
+  for (const index of stepMarkerIndices(steps)) {
+    const step = steps[index];
+    const point = findStepPoint(index);
+    if (!point) continue;
+    const height = stepMarkerHeightM(cachedGroundFloor(step.lat, step.lon));
+    if (height === null) {
+      unresolved += 1;
+      point.show = false;
+      pending.push({ lat: step.lat, lon: step.lon });
+      continue;
+    }
+    point.position = Cesium.Cartesian3.fromDegrees(step.lon, step.lat, height);
+    point.show = true;
+  }
+  if (_selectedStep !== null) {
+    const selected = findStepPoint(_selectedStep);
+    if (selected) refreshStepCard(_selectedStep, selected);
+  }
+  governorRequestRender('directions-anchor');
+  if (!unresolved) {
+    _anchorAttempts = 0;
+    return;
+  }
+  warmGroundFloor(pending);
+  _anchorAttempts += 1;
+  if (_anchorAttempts >= STEP_ANCHOR_MAX_ATTEMPTS) return;
+  _anchorTimer = setTimeout(anchorStepPoints, STEP_ANCHOR_RETRY_MS);
 }
 
 function drawRoute(route) {
@@ -411,19 +696,29 @@ function drawRoute(route) {
       classificationType: Cesium.ClassificationType.BOTH,
     },
   });
-  // One dot per decision; A and B already mark departure and arrival.
-  route.steps.forEach((step, index) => {
-    if (index === 0 || index === route.steps.length - 1) return;
+  // One dot per decision; A and B already mark departure and arrival. The dots
+  // start hidden and appear as anchorStepPoints resolves each ground cell.
+  const cells = [];
+  for (const index of stepMarkerIndices(route.steps)) {
+    const step = route.steps[index];
+    cells.push({ lat: step.lat, lon: step.lon });
     _stepPoints.add({
       id: `directions:step:${index}`,
-      position: Cesium.Cartesian3.fromDegrees(step.lon, step.lat, 2),
+      position: Cesium.Cartesian3.fromDegrees(step.lon, step.lat, 0),
       color: STEP_COLOR,
       pixelSize: STEP_PIXEL_SIZE,
       outlineColor: STEP_OUTLINE,
       outlineWidth: 2,
+      show: false,
+      // The shared ground floor is a coarse cell, and on the photoreal stack
+      // the rendered mesh can stand above it. Keeping the dot always visible
+      // is the same choice every other anchored sprite in the app makes.
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
     });
-  });
+  }
+  warmGroundFloor(cells);
+  _anchorAttempts = 0;
+  anchorStepPoints();
   syncRenderHold();
   restoreSpriteOrder(_viewer);
   governorRequestRender('directions-route');
@@ -446,7 +741,8 @@ async function requestRoute() {
       signal: controller.signal,
       headers: { Accept: 'application/json' },
     });
-    if (response.status === 429) throw new Error('Routing is rate limited — try again in a moment');
+    if (response.status === 429)
+      throw new Error('Routing is rate limited — try again in a moment');
     const payload = await response.json();
     if (seq !== _routeSeq || !_enabled) return;
     const route = normalizeRoutePayload(payload, mode);
@@ -454,7 +750,12 @@ async function requestRoute() {
       _route = null;
       clearRouteGraphics();
       _status = 'error';
-      _error = payload?.error === 'no route found' ? 'No route found between A and B' : (payload?.error ? `Routing failed: ${payload.error}` : 'No route found between A and B');
+      _error =
+        payload?.error === 'no route found'
+          ? 'No route found between A and B'
+          : payload?.error
+            ? `Routing failed: ${payload.error}`
+            : 'No route found between A and B';
       return;
     }
     _route = route;
@@ -466,7 +767,10 @@ async function requestRoute() {
     _route = null;
     clearRouteGraphics();
     _status = 'error';
-    _error = error?.name === 'AbortError' ? 'Routing timed out' : (error?.message || 'Routing unavailable');
+    _error =
+      error?.name === 'AbortError'
+        ? 'Routing timed out'
+        : error?.message || 'Routing unavailable';
   } finally {
     clearTimeout(timer);
     if (_routeAbort === controller) _routeAbort = null;
@@ -475,11 +779,44 @@ async function requestRoute() {
   }
 }
 
+/** Stop arming, and give the pointer back if this layer holds it. */
+function disarm() {
+  _armed = null;
+  _pointerBlocked = false;
+  releasePointer(DIRECTIONS_POINTER_OWNER);
+}
+
+/**
+ * Arm (or cancel) a globe click for one endpoint.
+ *
+ * Placement is a TOOL: it takes the pointer so no ambient layer also selects
+ * whatever happened to be under the click. If another tool already holds it,
+ * this refuses — nothing is armed and the row says why.
+ * @param {null|'a'|'b'} which
+ * @returns {boolean} Whether the layer is armed after this call.
+ */
+function setArmed(which) {
+  if (!which) {
+    disarm();
+    return false;
+  }
+  if (!claimPointer(DIRECTIONS_POINTER_OWNER)) {
+    _armed = null;
+    _pointerBlocked = true;
+    return false;
+  }
+  _pointerBlocked = false;
+  _armed = which;
+  _clearStepSelection();
+  return true;
+}
+
 function clearAll() {
   _routeAbort?.abort();
   _routeAbort = null;
   _routeSeq += 1;
-  _armed = null;
+  cancelOwnedFlight('directions-clear');
+  disarm();
   _a = null;
   _b = null;
   _route = null;
@@ -493,16 +830,86 @@ function clearAll() {
   governorRequestRender('directions-clear');
 }
 
+/**
+ * Stop the route flight THIS layer started — and only that one. The camera is
+ * shared: by the time CLEAR is pressed the user may have grabbed it, voice may
+ * have flown somewhere, or a tracked aircraft may own it. Cancelling by id
+ * leaves every one of those alone.
+ * @param {string} reason
+ * @returns {boolean} Whether a flight of ours was stopped.
+ */
+function cancelOwnedFlight(reason) {
+  stopFlightProgress();
+  if (!_flightId) return false;
+  const { wasActive } = interruptCameraMotionIfActive(_flightId, reason);
+  _flightId = 0;
+  _flightStep = null;
+  return wasActive;
+}
+
+function stopFlightProgress() {
+  if (_flightTimer) clearInterval(_flightTimer);
+  _flightTimer = null;
+}
+
+/** Follow the owned flight so the list can highlight the step being flown. */
+function trackFlightProgress() {
+  stopFlightProgress();
+  if (!_flightId) return;
+  _flightTimer = setInterval(() => {
+    const motion = getActiveCameraMotion();
+    if (!motion || motion.motionId !== _flightId) {
+      // The flight finished, or something else took the camera. Either way it
+      // is no longer ours to stop.
+      _flightId = 0;
+      _flightStep = null;
+      stopFlightProgress();
+      notifyRow();
+      return;
+    }
+    const next = stepIndexAtDistance(_route?.steps, motion.traveledM);
+    if (next !== _flightStep) {
+      _flightStep = next;
+      notifyRow();
+    }
+  }, FLIGHT_PROGRESS_MS);
+}
+
 function flyCurrentRoute() {
   if (!_route || !_viewer) return false;
+  cancelOwnedFlight('directions-refly');
   initCameraVerbs(_viewer);
-  const result = flyRoute([{
-    type: 'route',
-    label: 'Directions',
-    path: _route.geometry.map(([lon, lat]) => ({ lon, lat, height: 0 })),
-  }], { speed: 'normal' });
-  if (result?.ok !== true) console.warn('[Data:Directions] fly refused:', result?.error || result);
-  return result?.ok === true;
+  const services = _cameraServices;
+  const result = flyRoute(
+    [
+      {
+        type: 'route',
+        label: 'Directions',
+        path: _route.geometry.map(([lon, lat]) => ({ lon, lat, height: 0 })),
+      },
+    ],
+    { speed: 'normal' },
+    // The dolly reads the shared ground floor (and warms the corridor ahead of
+    // itself) exactly as the voice route flight does; without it a mountain
+    // corridor is flown at sea level.
+    typeof services?.floorFn === 'function' ? services.floorFn : null,
+    // One camera owner: the UI shell's immediate-navigation facade stamps the
+    // navigation generation and releases whatever held the camera before the
+    // flight starts. Without the shell (tests, a bare viewer) the flight still
+    // runs, it just has nothing to take the camera from.
+    typeof services?.runNavigation === 'function'
+      ? services.runNavigation
+      : null,
+    typeof services?.warmFn === 'function' ? services.warmFn : null,
+  );
+  if (result?.ok !== true) {
+    console.warn('[Data:Directions] fly refused:', result?.error || result);
+    return false;
+  }
+  _flightId = result.motionId || 0;
+  _flightStep = 0;
+  trackFlightProgress();
+  return true;
 }
 
 // --- Step selection ---
@@ -526,6 +933,21 @@ function findStepPoint(index) {
   return null;
 }
 
+function refreshStepCard(index, point) {
+  const entry = createDirectionsStepOverlayEntry(
+    index,
+    Cesium.Cartesian3.clone(point.position),
+    directionsStepCopy(_route.steps, index),
+  );
+  if (entry) {
+    _overlayHost.setEntries(
+      DIRECTIONS_STEP_OVERLAY_SOURCE_ID,
+      [entry],
+      DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS,
+    );
+  }
+}
+
 function _selectStep(index) {
   _clearStepSelection();
   if (!_route || !Number.isInteger(index) || !_route.steps[index]) return;
@@ -533,8 +955,7 @@ function _selectStep(index) {
   if (!point) return;
   _selectedStep = index;
   point.pixelSize = STEP_SELECTED_PIXEL_SIZE;
-  const entry = createDirectionsStepOverlayEntry(index, Cesium.Cartesian3.clone(point.position), directionsStepCopy(_route.steps, index));
-  if (entry) _overlayHost.setEntries(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, [entry], DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS);
+  refreshStepCard(index, point);
   governorRequestRender('directions-select');
 }
 
@@ -551,7 +972,7 @@ function stepIndexFromPick(picked) {
 function _onKeyDown(event) {
   if (event.key !== 'Escape') return;
   if (_armed) {
-    _armed = null;
+    disarm();
     notifyRow();
   } else if (_selectedStep !== null) {
     _clearStepSelection();
@@ -563,20 +984,29 @@ function _installClickHandler(viewer) {
   _clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
   _clickHandler.setInputAction((click) => {
     if (!_enabled) return;
-    if (_armed) {
+    // Placement acts only while this layer actually HOLDS the pointer, and the
+    // maneuver-dot selection below is an ambient handler like any other: it
+    // yields the moment a tool (this one included) owns the click.
+    if (_armed && isPointerOwnedBy(DIRECTIONS_POINTER_OWNER)) {
       const point = pickGround(click.position);
       if (!point) return;
       const which = _armed;
-      _armed = null;
-      if (which === 'a') _a = point; else _b = point;
+      disarm();
+      if (which === 'a') _a = point;
+      else _b = point;
       placeMarker(which, point);
       if (_a && _b) void requestRoute();
       else notifyRow();
       governorRequestRender('directions-place');
       return;
     }
+    if (!isPointerFree()) return;
     let picked = null;
-    try { picked = viewer.scene.pick(click.position); } catch { picked = null; }
+    try {
+      picked = viewer.scene.pick(click.position);
+    } catch {
+      picked = null;
+    }
     const index = stepIndexFromPick(picked);
     if (index !== null) {
       _selectStep(index);
@@ -584,7 +1014,8 @@ function _installClickHandler(viewer) {
     }
     if (_selectedStep !== null) _clearStepSelection();
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-  document.addEventListener('keydown', _onKeyDown);
+  if (typeof document !== 'undefined')
+    document.addEventListener('keydown', _onKeyDown);
 }
 
 function _removeClickHandler() {
@@ -592,7 +1023,9 @@ function _removeClickHandler() {
     _clickHandler.destroy();
     _clickHandler = null;
   }
-  document.removeEventListener('keydown', _onKeyDown);
+  // Teardown can outlive the document (page unload, and every headless test).
+  if (typeof document !== 'undefined')
+    document.removeEventListener('keydown', _onKeyDown);
 }
 
 // ---------------------------------------------------------------------------
@@ -612,18 +1045,21 @@ const directionsLayer = {
    */
   init(viewer) {
     _viewer = viewer;
-    _stepPoints = new Cesium.PointPrimitiveCollection({ blendOption: Cesium.BlendOption.TRANSLUCENT });
+    _stepPoints = new Cesium.PointPrimitiveCollection({
+      blendOption: Cesium.BlendOption.TRANSLUCENT,
+    });
     viewer.scene.primitives.add(_stepPoints);
     registerSpriteCollection('directions', _stepPoints);
     _stepPoints.show = false;
     _enabled = false;
     _mode = DEFAULT_DIRECTIONS_MODE;
-    _armed = null;
+    disarm();
     _a = null;
     _b = null;
     _route = null;
     _status = 'idle';
     _error = null;
+    _flightStep = null;
     _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, false);
     restoreSpriteOrder(viewer);
     console.log('[Data:Directions] Initialized');
@@ -635,10 +1071,15 @@ const directionsLayer = {
    */
   enable(viewer) {
     _enabled = true;
+    _pointerBlocked = false;
     _stepPoints.show = true;
     _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, true);
     _installClickHandler(viewer);
-    registerPickOwner('directions', (pickedId) => typeof pickedId === 'string' && pickedId.startsWith('directions:'));
+    registerPickOwner(
+      'directions',
+      (pickedId) =>
+        typeof pickedId === 'string' && pickedId.startsWith('directions:'),
+    );
     syncRenderHold();
     restoreSpriteOrder(viewer);
   },
@@ -676,15 +1117,16 @@ const directionsLayer = {
       _mode = patch.mode;
       if (_a && _b && _enabled) void requestRoute();
     }
-    if (patch.arm !== undefined) {
-      _armed = patch.arm;
-      if (_armed) _clearStepSelection();
-    }
+    if (patch.arm !== undefined) setArmed(patch.arm);
     if (patch.swap && _a && _b) {
       [_a, _b] = [_b, _a];
       placeMarker('a', _a);
       placeMarker('b', _b);
       if (_enabled) void requestRoute();
+    }
+    if (patch.step !== undefined) {
+      if (patch.step === null) _clearStepSelection();
+      else _selectStep(patch.step);
     }
     if (patch.fly) flyCurrentRoute();
     notifyRow();
@@ -722,11 +1164,31 @@ const directionsLayer = {
   },
 
   /**
+   * Receive the UI shell's camera seams. FLY goes through `runNavigation` —
+   * the same immediate-navigation facade voice destinations use — so the route
+   * dolly is one more caller of the single camera owner rather than a second
+   * one. `floorFn`/`warmFn` are the shared ground floor the dolly flies over.
+   * @param {{runNavigation?: Function, floorFn?: Function, warmFn?: Function}|null} services
+   */
+  attachCameraServices(services) {
+    _cameraServices = services || null;
+  },
+
+  /**
    * Tear down entirely.
    * @param {Cesium.Viewer} viewer
    */
   destroy(viewer) {
     if (_enabled) this.disable(viewer);
+    // disable() has already run these, but destroy() must also be safe on a
+    // layer that was never enabled: a claim or a flight left behind would
+    // outlive the whole application.
+    cancelOwnedFlight('directions-destroy');
+    stopStepAnchoring();
+    disarm();
+    _cameraServices = null;
+    _dataManager = null;
+    _rowControlsListener = null;
     if (_stepPoints) {
       viewer.scene.primitives.remove(_stepPoints);
       _stepPoints = null;

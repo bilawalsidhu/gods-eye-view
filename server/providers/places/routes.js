@@ -7,8 +7,25 @@ import {
   projectRouteResult,
 } from '../../../src/data/placeProviderPayloads.js';
 
-/** OSM routing (FOSSGIS OSRM) cache: profile|coords -> { payload, cachedAt }. */
+/**
+ * OSM routing (FOSSGIS OSRM) cache: profile|coords ->
+ * { payload, hasSteps, cachedAt }. `hasSteps` records whether the upstream
+ * call behind this entry asked for maneuvers, because an entry without them
+ * cannot answer a request that wants them.
+ */
 const ROUTE_CACHE_MS = 600000;
+
+/**
+ * Upstream calls currently in flight, keyed by endpoint + route + step shape.
+ * Two identical requests that arrive before the first one answers (three rapid
+ * reroutes of the same A→B, a second browser tab) await the SAME upstream
+ * fetch. The FOSSGIS servers ask for no heavy use; the cheapest way to honour
+ * that is not to make the call twice. Module-level, because what it is
+ * deduplicating is this process's outbound traffic — the endpoint is part of
+ * the key, so two installations pointed at different services never share one.
+ * @type {Map<string, Promise<{payload: object|null, error: string|null}>>}
+ */
+const _routeInflight = new Map();
 
 /** Hard cap on the OSRM route response we will buffer. */
 const ROUTE_MAX_RESPONSE_BYTES = 8 * 1024 * 1024; // 8 MB
@@ -24,6 +41,84 @@ const _routeRateLimiter = makeRateLimiter({
   globalMax: 200,
 });
 
+/** Test seam: forget the outbound state this module keeps between requests. */
+export function _resetRouteUpstreamForTest() {
+  _routeInflight.clear();
+}
+
+/** Test seam: how many upstream calls are coalescing right now. */
+export function _routeInflightCountForTest() {
+  return _routeInflight.size;
+}
+
+/** Release a response body we are not going to read. */
+async function cancelBody(response) {
+  try {
+    await response.body?.cancel();
+  } catch {
+    /* already closed */
+  }
+}
+
+/**
+ * Fetch one route from the routing service and project it.
+ * @param {object} request
+ * @param {string} request.profile foot | car | bike
+ * @param {string} request.osrmProfile Upstream profile name.
+ * @param {string} request.base Endpoint base for this profile.
+ * @param {string} request.coords `lon,lat;lon,lat[;...]`
+ * @param {boolean} request.withSteps Ask upstream for maneuvers.
+ * @param {Function} request.fetchImpl Injected request function.
+ * @returns {Promise<{payload: object|null, error: string|null}>}
+ */
+async function fetchRoute({
+  profile,
+  osrmProfile,
+  base,
+  coords,
+  withSteps,
+  fetchImpl,
+}) {
+  // `steps` is opt-in per request. Asking for maneuvers on every call made the
+  // response several times larger for the callers that never read them (the
+  // voice route annotation, fly_route), on someone else's bandwidth.
+  const upstream =
+    `${base.replace(/\/$/, '')}/route/v1/${osrmProfile}/${coords}` +
+    `?overview=full&geometries=geojson&alternatives=false&steps=${withSteps ? 'true' : 'false'}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  let osrm;
+  try {
+    const upstreamRes = await fetchImpl(upstream, {
+      signal: controller.signal,
+      redirect: 'error',
+      headers: { 'User-Agent': 'gods-eye-view/dev (local)' },
+    });
+    if (!upstreamRes.ok) {
+      await cancelBody(upstreamRes);
+      return { payload: null, error: 'no route found' };
+    }
+    const ctype = upstreamRes.headers.get('content-type') || '';
+    if (!ctype.includes('json')) {
+      await cancelBody(upstreamRes);
+      return { payload: null, error: 'no route found' };
+    }
+    const text = await readResponseTextCapped(
+      upstreamRes,
+      ROUTE_MAX_RESPONSE_BYTES,
+    );
+    osrm = JSON.parse(text);
+  } finally {
+    clearTimeout(timer);
+  }
+  const route = osrm?.routes?.[0];
+  if (osrm?.code !== 'Ok' || !route?.geometry?.coordinates?.length)
+    return { payload: null, error: 'no route found' };
+  const payload = projectRouteResult(route, profile);
+  if (withSteps) payload.steps = normalizeOsrmSteps(route);
+  return { payload, error: null };
+}
+
 export function installRouteMiddleware(
   middlewares,
   { endpoints = {}, fetchImpl = (...args) => fetch(...args) } = {},
@@ -32,10 +127,9 @@ export function installRouteMiddleware(
 
   // Real OSM routing via the public FOSSGIS OSRM servers (foot/car/bike).
   // GET /api/route?profile=foot|car|bike&coords=lon,lat;lon,lat[;...][&steps=1]
-  // `steps=1` adds turn-by-turn maneuvers (src/data/routeSteps.js). The
-  // upstream is always asked for steps so one cached response serves both
-  // shapes; the annotation engine (no steps) and the Directions layer
-  // (steps) therefore share one upstream call per route.
+  // `steps=1` adds turn-by-turn maneuvers (src/data/routeSteps.js) and is the
+  // only shape that asks the upstream for them. A response WITHOUT steps is
+  // byte for byte what this endpoint has always returned.
   middlewares.use('/api/route', async (req, res) => {
     const fail = (msg) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -97,48 +191,54 @@ export function installRouteMiddleware(
       if (totalKm > ROUTE_MAX_TOTAL_KM) return fail('route too long');
       const coords = clean.join(';');
       const cacheKey = `${profile}|${coords}`;
+      const base =
+        endpoints[profile] ||
+        `https://routing.openstreetmap.de/routed-${profile}`;
       const now = Date.now();
       const wantSteps = url.searchParams.get('steps') === '1';
+      // A caller that did not ask for maneuvers never sees them, even when the
+      // cached entry carries them for someone else.
       const shapePayload = (payload) =>
         wantSteps ? payload : { ...payload, steps: undefined };
       const cached = _routeCache.get(cacheKey);
-      if (cached && now - cached.cachedAt <= ROUTE_CACHE_MS) {
+      if (
+        cached &&
+        now - cached.cachedAt <= ROUTE_CACHE_MS &&
+        (!wantSteps || cached.hasSteps)
+      ) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(shapePayload(cached.payload)));
         return;
       }
-      const base =
-        endpoints[profile] ||
-        `https://routing.openstreetmap.de/routed-${profile}`;
-      const upstream = `${base.replace(/\/$/, '')}/route/v1/${osrmProfile}/${coords}?overview=full&geometries=geojson&alternatives=false&steps=true`;
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 12000);
-      let osrm;
-      try {
-        const upstreamRes = await fetchImpl(upstream, {
-          signal: controller.signal,
-          redirect: 'error',
-          headers: { 'User-Agent': 'gods-eye-view/dev (local)' },
+      const inflightKey = `${base}|${cacheKey}|${wantSteps ? 's' : 'n'}`;
+      // A stepless request can also ride a stepful call already in flight —
+      // it just drops the maneuvers on the way out.
+      let pending =
+        _routeInflight.get(inflightKey) ||
+        (wantSteps ? null : _routeInflight.get(`${base}|${cacheKey}|s`));
+      if (!pending) {
+        pending = fetchRoute({
+          profile,
+          osrmProfile,
+          base,
+          coords,
+          withSteps: wantSteps,
+          fetchImpl,
         });
-        if (!upstreamRes.ok) return fail('no route found');
-        const ctype = upstreamRes.headers.get('content-type') || '';
-        if (!ctype.includes('json')) return fail('no route found');
-        const text = await readResponseTextCapped(
-          upstreamRes,
-          ROUTE_MAX_RESPONSE_BYTES,
-        );
-        osrm = JSON.parse(text);
-      } finally {
-        clearTimeout(timer);
+        _routeInflight.set(inflightKey, pending);
+        const settle = () => {
+          if (_routeInflight.get(inflightKey) === pending)
+            _routeInflight.delete(inflightKey);
+        };
+        pending.then(settle, settle);
       }
-      const route = osrm?.routes?.[0];
-      if (osrm?.code !== 'Ok' || !route?.geometry?.coordinates?.length)
-        return fail('no route found');
-      const payload = {
-        ...projectRouteResult(route, profile),
-        steps: normalizeOsrmSteps(route),
-      };
-      _routeCache.set(cacheKey, { payload, cachedAt: now });
+      const { payload, error } = await pending;
+      if (error || !payload) return fail(error || 'no route found');
+      _routeCache.set(cacheKey, {
+        payload,
+        hasSteps: Array.isArray(payload.steps),
+        cachedAt: Date.now(),
+      });
       if (_routeCache.size > 200)
         _routeCache.delete(_routeCache.keys().next().value);
       res.writeHead(200, { 'Content-Type': 'application/json' });
