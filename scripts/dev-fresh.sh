@@ -306,8 +306,10 @@ case "${HOST}" in
 esac
 echo "Google Maps key source: ${GOOGLE_MAPS_API_KEY_SOURCE}"
 echo "Tip: after server starts, hard refresh browser (Cmd+Shift+R)."
-echo "If panels are still missing, run this once in browser console:"
-echo "localStorage.removeItem('godsEyeView.v8.panelPos.cctv-panel'); location.reload();"
+echo "If a panel is still missing, clear its collapsed state in browser console:"
+echo "localStorage.removeItem('godsEyeView.v6.panelCollapsed.cctv-panel'); location.reload();"
+echo "If the DISPLAY rail is off-screen, it is the one panel with a stored position:"
+echo "localStorage.removeItem('godsEyeView.v8.panelPos.pp-toggles'); location.reload();"
 echo "OpenSky auth mode: ${OPENSKY_AUTH_MODE}"
 if [[ -n "${OPENSKY_CREDENTIALS_FILE}" ]]; then
   if [[ -f "${OPENSKY_CREDENTIALS_FILE}" ]]; then

@@ -30,25 +30,28 @@ Next iteration candidates:
 
 ---
 
-### CCTV panel can appear "missing" after layout refactors
+### CCTV panel can appear "missing"
 Status: Open (workaround available)
 
 Context:
-- Panel positions are persisted in local storage and can restore off-screen after UI changes.
+- The right rail lays its panels out itself and does not read a stored position,
+  so a CCTV panel that looks missing is collapsed or its layer is off rather than
+  parked off-screen. Only the DISPLAY rail (`pp-toggles`) can be dragged, and it
+  is the only panel whose position is stored.
 
 Workaround:
-- In browser console:
-  - `localStorage.removeItem('godsEyeView.v8.panelPos.cctv-panel');`
+- Check that the CCTV layer is enabled in the Layers panel, then expand the panel
+  from its header control; it also expands on its own when a camera activates.
+- If it still does not appear, clear its stored collapsed state and reload. In the
+  browser console:
   - `localStorage.removeItem('godsEyeView.v6.panelCollapsed.cctv-panel');`
   - `location.reload();`
-
-Deleting the key resets that panel to its default placement; it does not restore
-a saved position. The map-mode right rail ignores position keys from earlier
-versions, so a panel placed before the current version is already laid out from
-scratch.
+- A DISPLAY rail dragged off-screen is the case a position key does fix:
+  - `localStorage.removeItem('godsEyeView.v8.panelPos.pp-toggles');`
+  - `location.reload();`
 
 Related keys (current versions):
-- Panel positions: `godsEyeView.v8.panelPos.<panel-id>`
+- Panel positions: `godsEyeView.v8.panelPos.<panel-id>` (written only for `pp-toggles`)
 - Panel collapsed state: `godsEyeView.v6.panelCollapsed.<panel-id>`
 - CCTV calibration: `godsEyeView.cctv.calibration.v2`
 

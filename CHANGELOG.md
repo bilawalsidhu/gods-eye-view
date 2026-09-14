@@ -274,11 +274,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   this file, where its one Windows-only case exercises the real hardener against
   real native tools. Contributed by michaelhan1208 (#161).
 - The panel-recovery instructions in `docs/KNOWN-ISSUES.md`, `docs/CURRENT-STATE.md`
-  and `scripts/dev-fresh.sh` name the storage key the application actually writes,
-  so clearing a stuck panel works as written. KNOWN-ISSUES also says that deleting
-  the key resets the panel to its default placement rather than recovering a saved
-  one. A check keeps the documented key in step with the code. Contributed by
-  vegettto (#408).
+  and `scripts/dev-fresh.sh` describe what the interface does. A stored position
+  is written only for the draggable DISPLAY rail, so a CCTV panel that looks
+  missing is collapsed or its layer is off, and the collapsed-state key is what
+  clears it; the position key is the fix for a DISPLAY rail dragged off-screen.
+  Every documented key is now the key the code writes, and a check keeps the two
+  in step. Contributed by vegettto (#408).
 
 - Extract panel disclosure and hover/focus controls into a reusable module;
   cancel their listeners and pending work during replacement and teardown.
