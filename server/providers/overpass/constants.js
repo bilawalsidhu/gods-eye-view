@@ -3,6 +3,20 @@ import path from 'node:path';
 // ---------------------------------------------------------------------------
 // Overpass API proxy constants and cache state
 // ---------------------------------------------------------------------------
+/**
+ * User-Agent sent to every Overpass mirror.
+ *
+ * The OSM API usage policy asks for a "Valid User-Agent identifying application
+ * and version"; a generic proxy label is not one. The canonical Overpass
+ * instance answers 406 Not Acceptable to the unidentified string this proxy
+ * used to send and serves the same query normally with this one, so every
+ * Overpass-backed layer depended on the mirrors below it. Keep this honest and
+ * stable: if it is ever refused again, the answer is less query volume, not a
+ * new name.
+ */
+const OVERPASS_USER_AGENT =
+  'gods-eye-view/0.1 (+https://github.com/bilawalsidhu/gods-eye-view)';
+
 /** Ordered list of Overpass API mirrors; tried sequentially on failure/rate-limit. */
 const OVERPASS_UPSTREAMS = [
   'https://overpass-api.de/api/interpreter',
@@ -130,5 +144,6 @@ export {
   OVERPASS_SIMPLIFY_TOLERANCE_DEG,
   OVERPASS_MAX_RESPONSE_BYTES,
   OVERPASS_UPSTREAMS,
+  OVERPASS_USER_AGENT,
   OVERPASS_TIMEOUT_MS,
 };

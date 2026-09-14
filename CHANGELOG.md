@@ -137,6 +137,13 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   proxy as `/api/gbfs?url=`, but the proxy reads its upstream target from the
   path, so every request answered 400 and the layer reported a fetch error for
   every city (#441 — thanks @MiguelGFerreira).
+- Overpass requests now carry a User-Agent that names the application, its
+  version and the project address, which is what the OpenStreetMap API usage
+  policy asks for; the previous string identified neither. A mirror may refuse
+  a client it cannot identify, and a refused mirror is one the fan-out has to
+  skip, so this affects every Overpass-backed layer: Mapped Installations,
+  traffic roads and annotation geometry. Mirror rotation, cooldown and cache
+  admission are unchanged (#420 — thanks @GladiatorrX9).
 
 - Draped annotation geometry — area fills and outlines, routes and arrows —
   classifies onto terrain as well as 3D tiles. On a keyless boot, where Cesium's

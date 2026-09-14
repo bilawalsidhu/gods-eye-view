@@ -97,6 +97,33 @@ test('a refusal moves to the next mirror instead of ending the fan-out', async (
   assert.deepEqual(tried, ENDPOINTS.slice(0, 2), 'the healthy mirror must be reached, and no further');
 });
 
+test('every mirror is asked with a User-Agent that identifies the application', async () => {
+  // The OSM API usage policy asks for a "Valid User-Agent identifying
+  // application and version". The canonical Overpass instance refuses an
+  // unidentified client outright, so a generic string is not a cosmetic
+  // choice — it costs the mirror at the top of the list.
+  const seen = [];
+  const fetchImpl = async (url, options) => {
+    seen.push(options?.headers?.['User-Agent']);
+    return { status: 200, headers: { get: () => 'application/json' } };
+  };
+  await fetchOverpassPayload('data=x', 1e6, {
+    endpoints: ENDPOINTS,
+    fetchImpl,
+    readBody: async () => DATA.body,
+    simplify: (body) => body,
+  });
+
+  assert.equal(seen.length, 1);
+  const agent = String(seen[0] || '');
+  assert.match(agent, /^gods-eye-view\/\d/, 'names the application and its version');
+  assert.ok(
+    !/proxy\/1\.0$/.test(agent),
+    'not the unidentified label the canonical mirror answers 406 to',
+  );
+  assert.match(agent, /github\.com\/bilawalsidhu\/gods-eye-view/, 'carries a route back to the project');
+});
+
 test('the first mirror to answer wins, and the rest are left alone', async () => {
   const { payload, tried } = await run({
     [ENDPOINTS[0]]: DATA, [ENDPOINTS[1]]: DATA, [ENDPOINTS[2]]: DATA,
