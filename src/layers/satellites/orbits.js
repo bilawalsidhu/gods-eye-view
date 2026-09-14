@@ -140,19 +140,22 @@ export function createOrbits({ state: layerState, services, parts, source }) {
    * @param {number} options.latDeg Observer latitude
    * @param {number} options.lonDeg Observer longitude
    * @param {number} [options.minElevDeg=10] Elevation that defines rise and set, in degrees
-   * @returns {{status:'no-tle'}|{status:'none'}|{status:'ok', pass:{riseMs:number,setMs:number,maxElevDeg:number,maxElevMs:number,riseAzDeg:number}}}
+   * @param {boolean} [options.requireVisible=false] Require a naked-eye-visible pass
+   * @returns {{status:'no-tle'}|{status:'none'}|{status:'ok', pass:{riseMs:number,setMs:number,maxElevDeg:number,maxElevMs:number,riseAzDeg:number,visible?:boolean,sunlit?:boolean,observerDark?:boolean}}}
    */
 
   function getNextIssPass({
     latDeg,
     lonDeg,
     minElevDeg = 10,
+    requireVisible = false,
     fromMs = Date.now(),
   }) {
     return getNextSatellitePass(ISS_NORAD, {
       latDeg,
       lonDeg,
       minElevDeg,
+      requireVisible,
       fromMs,
     });
   }
@@ -164,13 +167,20 @@ export function createOrbits({ state: layerState, services, parts, source }) {
    * @param {number} options.latDeg Observer latitude
    * @param {number} options.lonDeg Observer longitude
    * @param {number} [options.minElevDeg=10] Elevation that defines rise and set, in degrees
+   * @param {boolean} [options.requireVisible=false] Require a naked-eye-visible pass
    * @param {number} [options.fromMs=Date.now()] Search start time in UTC milliseconds
    * @returns {{status:'no-tle'}|{status:'none'}|{status:'ok', pass:Object}}
    */
 
   function getNextSatellitePass(
     noradId,
-    { latDeg, lonDeg, minElevDeg = 10, fromMs = Date.now() },
+    {
+      latDeg,
+      lonDeg,
+      minElevDeg = 10,
+      requireVisible = false,
+      fromMs = Date.now(),
+    },
   ) {
     const id = Number(noradId);
     if (!Number.isFinite(id)) return { status: 'no-tle' };
@@ -182,6 +192,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
       lonDeg,
       fromMs,
       minElevDeg,
+      requireVisible,
     });
     return pass ? { status: 'ok', pass } : { status: 'none' };
   }

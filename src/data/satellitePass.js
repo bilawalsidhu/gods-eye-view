@@ -1,14 +1,17 @@
 // src/data/satellitePass.js
 /**
- * Satellite pass prediction.
- * Look angles come from SGP4; rise/set are bisected to sub-second precision
- * and the peak is refined with a parabola. Scan pattern from skylight (MIT)
- * shared/src/celestial.ts nextISSPass.
+ * Satellite pass prediction with naked-eye visibility.
+ * Look angles come from SGP4; rise/set are bisected to sub-second precision,
+ * the peak is refined with a parabola, and visibility uses the USNO
+ * low-precision Sun position with a cylindrical Earth shadow. Scan pattern from
+ * skylight (MIT) shared/src/celestial.ts nextISSPass.
  */
 import { propagate, gstime, eciToEcf, ecfToLookAngles } from 'satellite.js';
 
 const R2D = 180 / Math.PI;
 const D2R = Math.PI / 180;
+const EARTH_RADIUS_KM = 6371.0;
+const AU_KM = 149597870.7;
 
 /**
  * Observer look angles at an instant, or null when propagation fails.
@@ -16,7 +19,7 @@ const D2R = Math.PI / 180;
  * @param {number} dateMs UTC epoch timestamp in milliseconds
  * @param {number} latDeg Observer latitude in degrees [-90, 90]
  * @param {number} lonDeg Observer longitude in degrees [-180, 180]
- * @returns {{ elevDeg: number, azDeg: number } | null}
+ * @returns {{ elevDeg: number, azDeg: number, satECI: {x:number, y:number, z:number} } | null}
  */
 export function lookAnglesAt(satrec, dateMs, latDeg, lonDeg) {
   const date = new Date(dateMs);
@@ -31,7 +34,90 @@ export function lookAnglesAt(satrec, dateMs, latDeg, lonDeg) {
   return {
     elevDeg: look.elevation * R2D,
     azDeg: (((look.azimuth * R2D) % 360) + 360) % 360,
+    satECI: pos,
   };
+}
+
+/**
+ * Compute Sun position in geocentric ECI coordinates using USNO low-precision solar coordinates.
+ * Accurate to within ~1 arcminute (~0.017°) within centuries of J2000.0.
+ * @param {number} dateMs UTC epoch timestamp in milliseconds
+ * @returns {{ x: number, y: number, z: number, raDeg: number, decDeg: number }}
+ */
+export function solarPositionECI(dateMs) {
+  const JD = dateMs / 86400000 + 2440587.5;
+  const D = JD - 2451545.0; // days since J2000.0
+  const g = ((((357.529 + 0.98560028 * D) % 360) + 360) % 360) * D2R;
+  const q = (((280.459 + 0.98564736 * D) % 360) + 360) % 360;
+  const L =
+    ((((q + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) % 360) + 360) % 360) *
+    D2R;
+  const e = (23.439 - 0.00000036 * D) * D2R;
+  const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L));
+  const dec = Math.asin(Math.sin(e) * Math.sin(L));
+  return {
+    x: AU_KM * Math.cos(dec) * Math.cos(ra),
+    y: AU_KM * Math.cos(dec) * Math.sin(ra),
+    z: AU_KM * Math.sin(dec),
+    raDeg: (((ra * R2D) % 360) + 360) % 360,
+    decDeg: dec * R2D,
+  };
+}
+
+/**
+ * Check whether a satellite in ECI is illuminated by the Sun (outside Earth shadow).
+ * Uses a cylindrical Earth shadow model with mean radius 6,371 km.
+ * @param {{ x: number, y: number, z: number }} satECI Satellite position in km
+ * @param {number} dateMs UTC epoch timestamp in milliseconds
+ * @returns {boolean} True if sunlit, false if in eclipse (Earth shadow)
+ */
+export function isSatelliteSunlit(satECI, dateMs) {
+  if (!satECI || typeof satECI === 'boolean') return false;
+  const sun = solarPositionECI(dateMs);
+  const sunLen = Math.hypot(sun.x, sun.y, sun.z);
+  const sx = sun.x / sunLen;
+  const sy = sun.y / sunLen;
+  const sz = sun.z / sunLen;
+  const proj = satECI.x * sx + satECI.y * sy + satECI.z * sz;
+  if (proj > 0) return true; // Sunward side of Earth
+  const dx = satECI.x - proj * sx;
+  const dy = satECI.y - proj * sy;
+  const dz = satECI.z - proj * sz;
+  return Math.hypot(dx, dy, dz) > EARTH_RADIUS_KM;
+}
+
+/**
+ * Compute the observer local solar elevation angle in degrees.
+ * @param {number} latDeg Observer latitude in degrees
+ * @param {number} lonDeg Observer longitude in degrees
+ * @param {number} dateMs UTC epoch timestamp in milliseconds
+ * @returns {number} Solar elevation in degrees [-90, 90]
+ */
+export function observerSolarElevation(latDeg, lonDeg, dateMs) {
+  const sun = solarPositionECI(dateMs);
+  const gmst = gstime(new Date(dateMs));
+  const gmstDeg = (((gmst * R2D) % 360) + 360) % 360;
+  const localHourAngleDeg =
+    (((gmstDeg + lonDeg - sun.raDeg) % 360) + 360) % 360;
+  const H = localHourAngleDeg * D2R;
+  const phi = latDeg * D2R;
+  const dec = sun.decDeg * D2R;
+  const sinElev =
+    Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H);
+  return Math.asin(Math.max(-1, Math.min(1, sinElev))) * R2D;
+}
+
+/**
+ * Check whether the observer sky is dark (civil, nautical, or astronomical twilight / night).
+ * Default threshold is -6° (civil twilight).
+ * @param {number} latDeg Observer latitude
+ * @param {number} lonDeg Observer longitude
+ * @param {number} dateMs UTC timestamp
+ * @param {number} [maxSunElevDeg=-6] Sun elevation ceiling (default -6° for civil twilight)
+ * @returns {boolean} True if sun is at or below the threshold
+ */
+export function isObserverDark(latDeg, lonDeg, dateMs, maxSunElevDeg = -6) {
+  return observerSolarElevation(latDeg, lonDeg, dateMs) <= maxSunElevDeg;
 }
 
 /**
@@ -75,7 +161,7 @@ function _bisectBoundary(
 /**
  * Find the next pass of a satellite over an observer location.
  * Uses 20s coarse scanning, bisection for sub-second rise/set times,
- * and parabolic interpolation for the peak.
+ * parabolic interpolation for the peak, and optional naked-eye visibility filtering.
  *
  * @param {Object} options
  * @param {Object} options.satrec SGP4 satellite record
@@ -86,13 +172,19 @@ function _bisectBoundary(
  * @param {number} [options.horizonHours=24] Maximum search horizon in hours (default 24h)
  * @param {number} [options.coarseStepSec=20] Coarse scan step in seconds (default 20s)
  * @param {number} [options.fineStepSec=5] Fine transit step in seconds (default 5s)
+ * @param {boolean} [options.requireVisible=false] Skip passes that are not naked-eye visible
+ * @param {number} [options.maxSunElevDeg=-6] Ceiling for observer darkness (default -6° for civil twilight)
  * @returns {{
  *   riseMs: number,
  *   setMs: number,
  *   maxElevDeg: number,
  *   maxElevMs: number,
- *   riseAzDeg: number
- * } | null}
+ *   riseAzDeg: number,
+ *   visible: boolean,
+ *   sunlit: boolean,
+ *   observerDark: boolean
+ * } | null} `visible` is true when any sampled part of the pass is sunlit under a
+ *   dark sky; `sunlit` and `observerDark` describe the peak only.
  */
 export function findNextSatellitePass({
   satrec,
@@ -103,6 +195,8 @@ export function findNextSatellitePass({
   horizonHours = 24,
   coarseStepSec = 20,
   fineStepSec = 5,
+  requireVisible = false,
+  maxSunElevDeg = -6,
 }) {
   const horizonMs = fromMs + horizonHours * 3600_000;
   const coarseMs = coarseStepSec * 1000;
@@ -156,15 +250,39 @@ export function findNextSatellitePass({
     let maxElevMs = riseMs;
     let tStepPrev = riseMs;
     let setMs = null;
+    let hasVisibleSegment = false;
     let elevPrevSample = null;
     let peakLeftElev = null;
     let peakRightElev = null;
     let peakStepMs = fineMs;
 
+    // Visibility at an instant inside [riseMs, setMs], so no elevation gate
+    const checkVisibility = (tMs) => {
+      if (hasVisibleSegment) return;
+      const look = lookAnglesAt(satrec, tMs, latDeg, lonDeg);
+      if (!look) return;
+      const sunlit = isSatelliteSunlit(look.satECI, tMs);
+      const dark = isObserverDark(latDeg, lonDeg, tMs, maxSunElevDeg);
+      if (sunlit && dark) {
+        hasVisibleSegment = true;
+      }
+    };
+
+    // Check visibility at rise
+    checkVisibility(riseMs);
+
     // Transit forward in fine steps
     while (tCurr <= horizonMs) {
       const look = lookAnglesAt(satrec, tCurr, latDeg, lonDeg);
       const elev = look ? look.elevDeg : -90;
+
+      if (look) {
+        const sunlit = isSatelliteSunlit(look.satECI, tCurr);
+        const dark = isObserverDark(latDeg, lonDeg, tCurr, maxSunElevDeg);
+        if (sunlit && dark && elev >= minElevDeg) {
+          hasVisibleSegment = true;
+        }
+      }
 
       if (elev < minElevDeg && tCurr > riseMs) {
         if (peakRightElev == null && tCurr > maxElevMs) {
@@ -223,6 +341,28 @@ export function findNextSatellitePass({
       }
     }
 
+    // Sun and sky state at the peak
+    const peakLook = lookAnglesAt(satrec, refinedPeakMs, latDeg, lonDeg);
+    const peakSunlit = peakLook
+      ? isSatelliteSunlit(peakLook.satECI, refinedPeakMs)
+      : false;
+    const peakDark = isObserverDark(
+      latDeg,
+      lonDeg,
+      refinedPeakMs,
+      maxSunElevDeg,
+    );
+
+    // Check visibility at the refined peak and at set
+    checkVisibility(refinedPeakMs);
+    checkVisibility(setMs);
+
+    // Skip passes with no visible part when requireVisible is set
+    if (requireVisible && !hasVisibleSegment) {
+      searchCursor = Math.max(setMs + 1000, searchCursor + coarseMs);
+      continue;
+    }
+
     const riseLook = lookAnglesAt(satrec, riseMs, latDeg, lonDeg);
     return {
       riseMs,
@@ -230,6 +370,9 @@ export function findNextSatellitePass({
       maxElevDeg: refinedPeakElevDeg,
       maxElevMs: refinedPeakMs,
       riseAzDeg: riseLook ? riseLook.azDeg : 0,
+      visible: hasVisibleSegment,
+      sunlit: peakSunlit,
+      observerDark: peakDark,
     };
   }
 

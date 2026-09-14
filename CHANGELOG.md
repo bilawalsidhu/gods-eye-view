@@ -1,6 +1,7 @@
 # Changelog
 
 - Bisect satellite pass rise/set to ~0.2 s, fit peak elevation with a parabola, and add `getNextSatellitePass(noradId, options)` for any loaded catalog satellite.
+- Mark satellite passes visible from Earth-shadow and civil-twilight checks; `next_iss_pass` prefers the next visible pass and falls back with `visible: false`.
 
 - Add an optional Nominatim geocoding adapter with configurable search/reverse endpoints, cancellation, bounded responses and retryable upstream errors. Extract portable response-reading and Overpass lexical helpers while retaining existing server exports.
 

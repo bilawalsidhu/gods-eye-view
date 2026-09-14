@@ -17,8 +17,9 @@ export { lookAnglesAt };
  * @param {number} [options.minElevDeg=10] Elevation that defines rise and set, in degrees
  * @param {number} [options.horizonHours=24] Maximum search window in hours
  * @param {number} [options.coarseStepSec=30] Coarse search step in seconds
- * @param {number} [options.fineStepSec=5] Fine transit step in seconds for peak tracking
- * @returns {{ riseMs: number, setMs: number, maxElevDeg: number, maxElevMs: number, riseAzDeg: number } | null}
+ * @param {number} [options.fineStepSec=5] Fine transit step in seconds for peak tracking and visibility
+ * @param {boolean} [options.requireVisible=false] Require a naked-eye-visible pass
+ * @returns {{ riseMs: number, setMs: number, maxElevDeg: number, maxElevMs: number, riseAzDeg: number, visible: boolean, sunlit: boolean, observerDark: boolean } | null}
  */
 export function findNextIssPass({
   satrec,
@@ -29,6 +30,7 @@ export function findNextIssPass({
   horizonHours = 24,
   coarseStepSec = 30,
   fineStepSec = 5,
+  requireVisible = false,
 }) {
   return findNextSatellitePass({
     satrec,
@@ -39,5 +41,6 @@ export function findNextIssPass({
     horizonHours,
     coarseStepSec,
     fineStepSec,
+    requireVisible,
   });
 }
