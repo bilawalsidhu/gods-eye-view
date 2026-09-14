@@ -125,6 +125,20 @@ export function resolveGoogleApiKey(value) {
   return trimmed;
 }
 
+/**
+ * Server-side key resolution (issue #33): prefer GOOGLE_MAPS_SERVER_API_KEY —
+ * a key restricted to the server-facing Google APIs and never shipped to the
+ * browser — and fall back to GOOGLE_MAPS_API_KEY so a single-key setup keeps
+ * working. Accepts either env style: `process.env` in the vite dev
+ * middlewares, the request `env` binding in the Pages Functions.
+ * @param {?object} env Environment record with the key variables.
+ * @returns {?string} The usable key, or null when effectively unset.
+ */
+export function resolveServerGoogleApiKey(env) {
+  return resolveGoogleApiKey(env?.GOOGLE_MAPS_SERVER_API_KEY)
+    ?? resolveGoogleApiKey(env?.GOOGLE_MAPS_API_KEY);
+}
+
 /** Request body for `places:searchText` (view-biased). */
 export function buildTextSearchRequestBody({ textQuery, latitude, longitude, radiusM }) {
   return {

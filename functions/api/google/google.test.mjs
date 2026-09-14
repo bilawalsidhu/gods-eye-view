@@ -244,3 +244,36 @@ test('the scaffolded .env placeholder key is treated as absent, not forwarded', 
     stub.restore();
   }
 });
+
+test('GOOGLE_MAPS_SERVER_API_KEY takes precedence over the client-exposed key', async () => {
+  // Issue #33: the server-proxied Google calls should be able to use a
+  // server-restricted key that is never shipped to the browser.
+  const stub = stubFetch(() => Response.json({ places: [placeRow(0)] }));
+  try {
+    const res = await onRequest(ctx(siteFetch('/nearby-places', 'lat=29.4&lon=-98.5'), {
+      GOOGLE_MAPS_SERVER_API_KEY: 'server-key',
+      GOOGLE_MAPS_API_KEY: 'browser-key',
+    }));
+    assert.equal(res.status, 200);
+    assert.equal(stub.calls.length, 1);
+    const sentHeaders = new Headers(stub.calls[0].init.headers);
+    assert.equal(sentHeaders.get('X-Goog-Api-Key'), 'server-key', 'the server-restricted key goes upstream');
+    assert.match(stub.calls[0].url, /https:\/\/places\.googleapis\.com/);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('without a server key the client-exposed key still answers (single-key setups)', async () => {
+  const stub = stubFetch(() => Response.json({ places: [placeRow(0)] }));
+  try {
+    const res = await onRequest(ctx(siteFetch('/nearby-places', 'lat=29.4&lon=-98.5'), {
+      GOOGLE_MAPS_API_KEY: 'browser-key',
+    }));
+    assert.equal(res.status, 200);
+    const sentHeaders = new Headers(stub.calls[0].init.headers);
+    assert.equal(sentHeaders.get('X-Goog-Api-Key'), 'browser-key');
+  } finally {
+    stub.restore();
+  }
+});

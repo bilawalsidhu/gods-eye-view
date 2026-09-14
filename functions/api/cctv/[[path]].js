@@ -62,6 +62,7 @@ import {
   parseConfiguredSourcesFromEnv,
   streetViewFallback,
 } from '../../../src/data/cctvSources.js';
+import { resolveServerGoogleApiKey } from '../../../src/data/googlePlacesPolicy.js';
 import { jsonResponse } from '../../_lib.js';
 
 /** Created once per isolate so health entries survive across requests. */
@@ -258,7 +259,7 @@ export async function onRequest(context) {
       heading,
       fov,
       pitch,
-      apiKey: env.GOOGLE_MAPS_API_KEY,
+      apiKey: resolveServerGoogleApiKey(env),
     });
     if (sv?.ok) {
       cctvHealth.setHealth(cameraId, {

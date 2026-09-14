@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_CCTV_SOURCE_FILE, buildMediaPassthrough, buildStreamPayload, buildSyntheticCctvSvg, createCctvHealthTracker, fetchCctvImageFromUpstream, getCctvSources, isVideoFeedType, normalizeFeedType, parseConfiguredSourcesFromEnv, streetViewFallback } from '../../src/data/cctvSources.js';
+import { resolveServerGoogleApiKey } from '../../src/data/googlePlacesPolicy.js';
 import { Readable } from 'node:stream';
 
 import { fileURLToPath } from 'node:url';
@@ -281,7 +282,7 @@ export function cctvProxy() {
             heading,
             fov,
             pitch,
-            apiKey: process.env.GOOGLE_MAPS_API_KEY,
+            apiKey: resolveServerGoogleApiKey(process.env),
           });
           if (sv?.ok) {
             setHealth(cameraId, {

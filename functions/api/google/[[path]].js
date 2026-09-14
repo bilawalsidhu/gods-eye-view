@@ -52,7 +52,7 @@ import {
   normalizeNearbyPlaces,
   normalizeTextPlaces,
   parseCoordinateParam,
-  resolveGoogleApiKey,
+  resolveServerGoogleApiKey,
 } from '../../../src/data/googlePlacesPolicy.js';
 import {
   PAGES_RATELIMIT_GOOGLE_PER_MIN,
@@ -93,7 +93,7 @@ export async function onRequest({ request, env }) {
     return placesError(429, 'Rate limit exceeded', { 'Retry-After': '5' });
   }
 
-  const apiKey = resolveGoogleApiKey(env?.GOOGLE_MAPS_API_KEY);
+  const apiKey = resolveServerGoogleApiKey(env);
   if (!apiKey) {
     return placesError(503, 'GOOGLE_MAPS_API_KEY is not set');
   }

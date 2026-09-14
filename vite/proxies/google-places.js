@@ -6,7 +6,7 @@
  * plugin list from these modules.
  */
 
-import { GOOGLE_NEARBY_FIELD_MASK, GOOGLE_TEXT_FIELD_MASK, buildNearbyRequestBody, buildTextSearchRequestBody, normalizeNearbyPlaces, normalizeTextPlaces, parseCoordinateParam, resolveGoogleApiKey } from '../../src/data/googlePlacesPolicy.js';
+import { GOOGLE_NEARBY_FIELD_MASK, GOOGLE_TEXT_FIELD_MASK, buildNearbyRequestBody, buildTextSearchRequestBody, normalizeNearbyPlaces, normalizeTextPlaces, parseCoordinateParam, resolveServerGoogleApiKey } from '../../src/data/googlePlacesPolicy.js';
 import { clientKey, makeOptInRateLimiter, sameSiteViolation, sendSameSiteRejection } from './_shared.js';
 
 export let _googleRateLimiter;
@@ -52,9 +52,11 @@ export function googlePlacesContextProxy() {
         return;
       }
 
-      // resolveGoogleApiKey treats the scaffolded .env placeholder as unset —
-      // forwarding it to Google just 400s "API key not valid" on every call.
-      const apiKey = resolveGoogleApiKey(process.env.GOOGLE_MAPS_API_KEY);
+      // resolveServerGoogleApiKey prefers the restricted server key
+      // (GOOGLE_MAPS_SERVER_API_KEY) and treats the scaffolded .env
+      // placeholder as unset — forwarding that to Google just 400s "API key
+      // not valid" on every call.
+      const apiKey = resolveServerGoogleApiKey(process.env);
       if (!apiKey) {
         res.statusCode = 503;
         res.setHeader('Content-Type', 'application/json');
@@ -133,7 +135,7 @@ export function googlePlacesContextProxy() {
       }
 
       // Placeholder-aware, matching nearby-places above.
-      const apiKey = resolveGoogleApiKey(process.env.GOOGLE_MAPS_API_KEY);
+      const apiKey = resolveServerGoogleApiKey(process.env);
       if (!apiKey) {
         res.statusCode = 503;
         res.setHeader('Content-Type', 'application/json');

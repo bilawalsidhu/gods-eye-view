@@ -415,9 +415,14 @@ acting — the audit described upstream's tree):
       replaced, firms/ais-live/token/debug-log hardened; remaining
       functions need the body-cap/bbox-clamp treatment (see backlog item
       on Overpass/military-installations).
-- [ ] Split server-side Google key from the browser key (PR #110, issue #33):
-      optional `GOOGLE_MAPS_SERVER_API_KEY` read as
-      `SERVER_KEY || BROWSER_KEY` so a single-key setup keeps working.
+- [x] Split server-side Google key from the browser key (PR #110, issue #33):
+      DONE 2026-09-13 — `resolveServerGoogleApiKey(env)` in the shared policy
+      module reads `GOOGLE_MAPS_SERVER_API_KEY || GOOGLE_MAPS_API_KEY` (with
+      the same placeholder/unset discipline as the browser key) and all four
+      server-side read sites now use it: the Places dev middleware and its
+      Pages twin, plus the Street View fallback in both CCTV runtimes.
+      Documented in `.env.example`; the client-exposed key can now be
+      restricted to Map Tiles only.
 - [ ] Keyless geocoding fallback (PR #166, issues #211/#213) or, minimally,
       docs naming every API to enable (Map Tiles, Places, Geocoding) —
       location search currently throws on keyless installs.
