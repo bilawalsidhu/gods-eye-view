@@ -72,7 +72,7 @@ test('documented panel storage keys are the keys the code writes', async () => {
   }
 });
 
-test('the documented reset restores the panel default, and the documented value opens it', async () => {
+test('the documented outcomes hold: default, stored open, stored shut, and a shared view', async () => {
   // The instructions promise two different outcomes; both are exercised here
   // against the code that decides them.
   const { PanelPositionControls } =
@@ -127,6 +127,17 @@ test('the documented reset restores the panel default, and the documented value 
     store.set('godsEyeView.v6.panelCollapsed.cctv-panel', '1');
     controls._restorePanelCollapsedState('cctv-panel');
     assert.equal(classes.has('collapsed'), true);
+
+    // A view opened from a share link is laid out from the link: the shell
+    // restores with allowStored false, and the stored value is not consulted.
+    // This is why the console workaround is documented for ordinary loads only.
+    store.set('godsEyeView.v6.panelCollapsed.cctv-panel', '0');
+    controls._restorePanelCollapsedState('cctv-panel', { allowStored: false });
+    assert.equal(
+      classes.has('collapsed'),
+      true,
+      'a shared view must ignore the stored open state',
+    );
   } finally {
     globalThis.document = saved.document;
     globalThis.localStorage = saved.localStorage;
