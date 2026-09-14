@@ -209,3 +209,51 @@ test('hostOf extracts host including a non-default port', () => {
   assert.equal(hostOf('http://localhost:4173/api'), 'localhost:4173');
   assert.equal(hostOf('not a url'), '');
 });
+
+test('default-on limiter: the global backstop refuses distinct IPs at 20× the per-IP cap', () => {
+  // A distributed drive-by (many IPs, one deployment) is what the backstop
+  // exists for: default 2/min/IP → globalMax 4. Fake the clock so the
+  // windows cannot slide mid-assertion.
+  let now = 0;
+  const realNow = Date.now;
+  Date.now = () => now;
+  try {
+    const limiter = createDefaultOnRateLimiter(2)(undefined);
+    // 20 distinct IPs × their 2 per-IP hits = 40 admissions; the backstop
+    // (globalMax = 20× the per-IP cap) fills exactly there.
+    let admitted = 0;
+    for (let i = 1; i <= 20; i += 1) {
+      const ip = `10.9.0.${i}`;
+      admitted += allowRequest(limiter, ipReq(ip)) ? 1 : 0;
+      admitted += allowRequest(limiter, ipReq(ip)) ? 1 : 0;
+    }
+    assert.equal(admitted, 40, 'each IP spends its own per-IP quota until the global cap');
+    assert.equal(allowRequest(limiter, ipReq('10.9.0.21')), false,
+      'a fresh IP is refused once the deployment-wide backstop is full');
+    assert.equal(allowRequest(limiter, ipReq('10.9.0.22')), false);
+
+    now = 61_000;
+    assert.equal(allowRequest(limiter, ipReq('10.9.0.23')), true, 'the window slides and the backstop resets');
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test('route wiring: cost-bearing Functions ride the shared per-route constants', async () => {
+  const { readSource } = await import('../src/testSupport/readSource.js');
+  const openAiRoutes = [
+    './api/realtime/token.js',
+    './api/realtime/debug-log.js',
+    './api/openai/hud-summary.js',
+  ];
+  for (const route of openAiRoutes) {
+    const source = readSource(route, import.meta.url);
+    assert.match(source, /createDefaultOnRateLimiter\(PAGES_RATELIMIT_OPENAI_PER_MIN\)/,
+      `${route} must default-throttle on the shared OpenAI constant`);
+    assert.match(source, /sameSiteViolation\(/,
+      `${route} must keep the same-site gate in front of the limiter`);
+  }
+  const google = readSource('./api/google/[[path]].js', import.meta.url);
+  assert.match(google, /createDefaultOnRateLimiter\(PAGES_RATELIMIT_GOOGLE_PER_MIN\)/,
+    'google-places must default-throttle on the shared Google constant');
+});

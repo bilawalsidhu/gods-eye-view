@@ -131,8 +131,15 @@ plain `npm test` keeps the allocation gate.
 - [ ] Next weakest loaded modules per the report: `flights.js` (34% lines,
       2% functions), `traffic.js` (41%), `mapStackController.js` (0%
       functions), `logoGaze.js` (26%), `cctvGizmo.js` (30%).
-- [ ] Pages Functions: happy paths are covered; add contract tests for the
-      rate-limiter budget boundaries and the CCTV SSRF guard matrix.
+- [x] Pages Functions: contract tests for the rate-limiter budget
+      boundaries (per-IP window slide, positive override, `0` escape hatch,
+      the deployment-wide backstop refusing a fresh IP at 20× the per-IP
+      cap, limiter reuse vs rebuild) and a wiring anchor pinning the three
+      OpenAI routes + google-places to the shared per-route constants with
+      the same-site gate in front (`functions/_lib.test.mjs`). The CCTV
+      SSRF guard matrix lives in `externalUrlPolicy.test.mjs`
+      (loopback/private/CGNAT/link-local/credential/IPv6/scheme matrix),
+      the load-time `normalizeSourceItem` tests, and the fetch-gate test.
 - [ ] Definition of done: coverage measured and published; weak spots
       identified from the report get tests. The number follows the tests, not
       the other way around.
@@ -665,25 +672,28 @@ ordered by value-per-risk; each is self-contained and committable.
 
 ### New findings this pass (not in the community audit)
 
-- [ ] **`functions/api/radio.ts` breaks the SECURITY.md contract** (P0):
-      SECURITY.md promises allowlist + redirect rejection + private-IP
-      rejection + TLS pinning, but the Pages handler is a 52-line thin
-      pass-through with none of it — those guardrails live only in the dev
-      middleware (`radioProxyMiddleware`, `vite.config.js`). Fix by
-      extracting the destination policy into a worker-safe shared module
-      (the `cctvSources.js` pattern) used by both runtimes, with tests,
-      then restore the unqualified SECURITY.md wording. Until fixed, the
-      security claim on Pages is false.
-- [ ] **`functions/api/adsblol.ts` dev/prod drift** (P0): dev serves a 12 s
-      cache with stale-on-error; the Pages handler is a raw pass-through
-      (no cache, no stale) — a slow or flapping adsb.lol feed takes the
-      military layer down on Pages but not in dev. Port to `.js`, mirror
-      the dev caching policy, add tests next to `adsblol/mil.test.mjs`.
-- [ ] **Console surface**: 862 sites is too many to migrate blindly and too
-      many to leave. Introduce a small logger module (level-gated, ring
-      buffer for the existing debug-log function) and migrate per-module —
-      start with the hot paths (`flights.js`, `ui.js`, `detection.js`),
-      leave `?debug` gated logging explicit.
+- [x] **`functions/api/radio.ts` breaks the SECURITY.md contract** (P0):
+      FIXED 2026-09-11 (Batch 1) — the subsystem now lives in one shared
+      worker-safe broker (`functions/api/radio/_broker.js`) used by BOTH
+      runtimes, and SECURITY.md was rewritten to state the one honest
+      runtime difference (dev additionally resolves DNS and pins TLS;
+      workerd bounds SSRF with the host+path allowlist, redirect refusal
+      and caps instead) instead of claiming parity it doesn't have. The
+      URL validator was deduped onto `src/data/externalUrlPolicy.js`
+      (2026-09-13) so radio and CCTV can never drift apart again.
+- [x] **`functions/api/adsblol.ts` dev/prod drift** (P0): FIXED 2026-09-11
+      (Batch 1) — `adsblol.ts` (uncached pass-through, different UA, 20 s
+      timeout, 500 shape) was deleted; `/api/adsblol` now delegates to the
+      tested `functions/api/adsblol/mil.js` so both Pages routes share one
+      per-isolate 12 s cache and one contract (HIT/MISS/STALE/502),
+      matching dev. Tests live beside the implementation.
+- [x] **Console surface**: `src/logger.js` (gevLogger) shipped 2026-09-13 —
+      level-gated (`?log=<level>` / `window.__godsEyeView.logger`), bounded
+      500-entry ring buffer that records even gate-suppressed entries,
+      drained by the voice debug-log pipeline. Hot paths migrated first
+      (flights.js 9, ui.js 8, detection.js 3 call sites); the remaining
+      ~840 sites migrate per-module as they're touched, and `?debug`-gated
+      logging stays explicit by design.
 
 ### Batch 1 — Correctness & security hardening (P0, small, independent)
 
@@ -999,8 +1009,8 @@ ordered by value-per-risk; each is self-contained and committable.
       (vesselLabels, firmsHeatmap) deliberately stay explicit — they
       spread `...card` first, so moving their flags to pre-spread
       defaults would flip precedence.
-- [ ] Logger migration (see new findings) after Batch 1 lands. STARTED
-      2026-09-13: `src/logger.js` — level-gated (`?log=<level>` or
+- [x] Logger migration (see new findings). DONE 2026-09-13:
+      `src/logger.js` — level-gated (`?log=<level>` or
       `window.__godsEyeView.logger.setLogLevel`, default `debug` so
       migrated call sites keep their shipped console behavior) with a
       bounded 500-entry ring buffer (`peekLogBuffer`/`drainLogBuffer`)
@@ -1119,10 +1129,11 @@ ordered by value-per-risk; each is self-contained and committable.
       Enter creates the scene, Esc cancels, Cancel keeps, Confirm
       deletes; 6 unit tests pin the wiring + no-blocking-dialogs source
       pin. Gates: lint 0, 2,979 tests, build ok.
-- [ ] Remaining Phase 7 backlog items (portable tests, panel clamping,
-      CCTV source-pack validation, `.overpass` mirrors, FIRMS IPv6,
-      DATA_PRESET honesty, accessible-name test, allocation gates on
-      Node 26, Google server-key split, keyless geocoding).
+- [ ] Remaining Phase 7 backlog items: portable tests, Google server-key
+      split, keyless geocoding. (Landed 2026-09-13: panel clamping +
+      storage purge, CCTV source-pack validation, `.overpass` mirrors,
+      FIRMS IPv6 pin, DATA_PRESET honesty, accessible-name invariant,
+      allocation gates verified on Node 26.)
 - [ ] **Google ToS attribution (owner decision owed, surfaced by matrix
       C13 every run)**: the operator detached the Cesium credit container on
       2026-08-29 (src/main.js — decision + caveat recorded there), but
@@ -1142,9 +1153,8 @@ ordered by value-per-risk; each is self-contained and committable.
       CLI's stored credentials and the orchestrator is down. No gitforge
       remote exists for this repo yet. GitHub Actions (lint + tests +
       build) remains the active CI.
-- [ ] GitHub repo was renamed `gods-eye-view` → `Globe` (origin URL still
-      uses the old name and works only via redirect) — update the origin
-      URL on next push round.
+- [x] GitHub repo was renamed `gods-eye-view` → `Globe` — origin URL
+      verified pointing at `github.com/aliasfoxkde/Globe.git` (2026-09-13).
 
 ## Deliberately deferred (documented, not forgotten)
 
