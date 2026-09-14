@@ -2260,11 +2260,12 @@ This is the current runtime/source-of-truth snapshot for the project.
 > attribution 18/18). New modules: `src/data/{motionModel,aircraftMeta,aircraftClass,aircraftIcons,issPass,routePlausible,dataCredits}.js`.
 > The live runtime now declares 28 voice tools; the 17→20 count above is retained only as milestone history.
 
-### Internationalization / EN+ES localization (September 2026)
+### Internationalization / catalog locales (September 2026)
 
-The application-owned UI renders in English and Spanish. English is the
-default, the source catalog, and the fallback; a key missing in Spanish
-renders its English value. The subsystem lives in `src/i18n/`:
+The application-owned UI renders in the configured locale pair drawn from
+five shipped catalogs — **en, es, fr, ru, uk**. English is the
+default, the source catalog, and the fallback; a key missing in another
+locale renders its English value. The subsystem lives in `src/i18n/`:
 
 - **File map.** `src/i18n/locale.js` owns locale resolution, guarded storage
   (`gev:locale:v1`), the one-shot `?lang=` override, and `<html lang>`/`<html
@@ -2272,12 +2273,15 @@ renders its English value. The subsystem lives in `src/i18n/`:
   (interpolation + `Intl.PluralRules` plural selection), `formatNumber` /
   `formatDate`, `applyDocumentTranslations()`, and
   `persistLocaleAndReload()`. Catalogs are four flat message maps per locale —
-  `src/i18n/locales/{en,es,fr}/{shell,cockpit,layers,setup}.js` — mirrored
-  key-for-key (898 keys per locale at the time of writing; fr holds English
-  seed values pending stage-B translation).
+  `src/i18n/locales/{en,es,fr,ru,uk}/{shell,cockpit,layers,setup}.js` — mirrored
+  key-for-key (916 keys per locale; es/fr/ru/uk are fully translated). Plural
+  entries are a superset of the en `{ one, other }` shape: a locale may add
+  only cardinal categories `Intl.PluralRules` reports valid for it (ru/uk
+  ship one/few/many/other), and an entry lacking the selected category
+  degrades to `other` at runtime.
 - **Selector.** The command dock carries a compact locale switch: a static
   `.dock-locale-switch` group container in `index.html` whose buttons
-  (`.dock-locale-btn`) are rendered at runtime by `ui.js`
+  (`.dock-locale-btn`) are rendered at runtime by `src/ui/applicationShell.js`
   `_initLocaleSelector()` — one per locale in the configured pair. A click
   persists the choice and reloads the page with the hash preserved, so no
   live re-apply of already-rendered dynamic panels is needed.
@@ -2294,17 +2298,19 @@ renders its English value. The subsystem lives in `src/i18n/`:
   `es-MX`/`es_419` → `es`) → the CONFIGURED default locale. Unsupported
   values defer to the next
   step rather than forcing English.
-- **Gates** (all under `node --test src/i18n/`, 31 tests):
-  `catalog.test.mjs` enforces en/es key, placeholder-name, and
+- **Gates** (all under `node --test src/i18n/`, 43 tests):
+  `catalog.test.mjs` enforces per-locale key, placeholder-name, and
   plural-shape parity with the strict exact-parity flip ON
-  (`REQUIRE_FULL_ES_PARITY`; `GEV_I18N_REQUIRE_FULL_ES_PARITY=0` opts out
-  for staged work — flipped by commit `c91a923`);
+  (`REQUIRE_FULL_PARITY`; `GEV_I18N_REQUIRE_FULL_LOCALE_PARITY=0` opts out
+  for staged work — the es flip was recorded in commit `c91a923`);
   `markupCoverage.test.mjs` requires every `data-i18n*` attribute in
-  `index.html` to resolve in both catalogs and rejects unknown attribute
+  `index.html` to resolve in every shipped catalog and rejects unknown attribute
   spellings; `i18n.test.mjs` pins precedence, guards, fallback,
-  interpolation, plurals, and DOM application; `repairPass.test.mjs`
-  anchors the reviewed translations — en byte-identity for extracted
-  literals and the eleven corrected es strings.
+  interpolation, plurals (real ru/uk four-category agreement plus the
+  synthetic missing-category degradation), and DOM application;
+  `repairPass.test.mjs` anchors the reviewed translations — en byte-identity
+  for extracted literals, the eleven corrected es strings, and the
+  locale-scoped CCTV wrap rules (es, uk).
 - **Accepted deferrals (do not "fix" silently):**
   - The military-awareness subject header literal `FLIGHT / VESSEL WINDOW`
     (`src/data/militaryAwareness.js`) stays English; the literal is

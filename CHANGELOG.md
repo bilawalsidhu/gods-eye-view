@@ -90,6 +90,7 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 ## [Unreleased]
 ### Added
 - French (`fr`) interface locale — 898 catalog keys, neutral international French, same strict parity gates as `es`.
+- Russian (`ru`) and Ukrainian (`uk`) interface locales — 916 catalog keys each, fully translated through the same strict parity gates, with genuine `one/few/many/other` plural agreement selected per locale via `Intl.PluralRules` (the parity gate accepts plural supersets of the en `{ one, other }` shape using only Intl-valid categories).
 - Configurable locale pair via `.env`: `GEV_DEFAULT_LOCALE` / `GEV_SECONDARY_LOCALE` (defaults `en`/`es`; `en` always ships as fallback; invalid pairs fall back to `en`+`es`). Dock selector renders the configured pair dynamically. Browser-language detection keeps priority over the configured default.
 
 - The application-owned interface now ships in English and Spanish. A four-file

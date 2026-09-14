@@ -1,4 +1,4 @@
-# Translator's guide (English / Spanish / French)
+# Translator's guide (English / Spanish / French / Russian / Ukrainian)
 
 This is the working guide for translating God's Eye View. The authoritative
 contract — file ownership, namespace registration, and the keep-English
@@ -7,11 +7,10 @@ this file is the practical summary a translator needs.
 
 ## Which locales ship, and which pair is offered
 
-Five catalogs ship: **en** (source of truth and unconditional fallback),
-**es** and **fr** (fully translated), and **ru**/**uk** (untranslated
-en-value seeds, marked `UNTRANSLATED RU STAGE-B SEED` /
-`UNTRANSLATED UK STAGE-C SEED`, pending their translation stages; each
-mirrors en key-for-key). Which pair the app actually *offers* is
+Five catalogs ship: **en** (source of truth and unconditional fallback)
+plus **es**, **fr**, **ru**, and **uk** — all four fully translated,
+key-for-key with en (916 keys each; ru/uk completed their stages in
+2026-09). Which pair the app actually *offers* is
 configuration, not code: `GEV_DEFAULT_LOCALE` (default `en`) and
 `GEV_SECONDARY_LOCALE` (default `es`) in `.env`, injected into the browser via
 vite defines. Invalid or degenerate values fall back to the built-in en+es
@@ -29,8 +28,8 @@ src/i18n/
   locales/en/{shell,cockpit,layers,setup}.js
   locales/es/{shell,cockpit,layers,setup}.js
   locales/fr/{shell,cockpit,layers,setup}.js   (fully translated)
-  locales/ru/{shell,cockpit,layers,setup}.js   (untranslated stage-B seed)
-  locales/uk/{shell,cockpit,layers,setup}.js   (untranslated stage-C seed)
+  locales/ru/{shell,cockpit,layers,setup}.js   (fully translated)
+  locales/uk/{shell,cockpit,layers,setup}.js   (fully translated)
 ```
 
 | Namespace | Surface |
@@ -95,11 +94,14 @@ locale).
   translations.
 - Instrument codes stay identical across languages (see the aviation terms
   below); units (KTS, FT, km, km²) are never translated.
-- Spanish runs ~25% longer than English. Prefer concise glossary-approved
+- Spanish runs ~25% longer than English, and Russian/Ukrainian compound
+  that on multi-word tactical labels. Prefer concise glossary-approved
   copy over CSS surgery; fixed-width `nowrap` panels must be checked at
-  narrow viewports. The one sanctioned es-scoped CSS rule so far is
-  `html[lang='es'] .cctv-controls { flex-wrap: wrap; }` (`style.css`) — add
-  others only when Spanish demonstrably clips and no shorter copy works.
+  narrow viewports. The sanctioned locale-scoped CSS rules so far are
+  `html[lang='es'] .cctv-controls { flex-wrap: wrap; }` and the measured
+  `html[lang='uk'] .cctv-controls { flex-wrap: wrap; }`
+  (`src/ui/styles/cctv.css`) — add others only when a locale demonstrably
+  clips and no shorter copy works.
 - Spanish review conventions that produced fixes in the past: `o → u`
   before i- words ("BUQUE U INSTALACIÓN"), adjective agreement with the
   fallback noun ("entidad … COMPARTIDA"), consistent word order
@@ -172,7 +174,7 @@ The full, binding list is "Keep-English boundary" in
 ## Running the i18n test gates
 
 ```sh
-node --test src/i18n/            # 41 tests: core + pair config, catalog parity, markup coverage, repair-pass anchors
+node --test src/i18n/            # 43 tests: core + pair config, catalog parity, markup coverage, repair-pass anchors
 npm test                         # full suite (see below for the known environmental caveat)
 ```
 
@@ -181,8 +183,8 @@ npm test                         # full suite (see below for the known environme
 - `src/i18n/catalog.test.mjs` — key + placeholder + plural-shape parity for
   every shipped locale against en, strict `REQUIRE_FULL_PARITY` gate.
 - `src/i18n/markupCoverage.test.mjs` — every `data-i18n*` attribute in
-  `index.html` must resolve in both catalogs; unknown attribute spellings
-  fail loudly.
+  `index.html` must resolve in every shipped catalog; unknown attribute
+  spellings fail loudly.
 - `src/i18n/repairPass.test.mjs` — byte-identity anchors for English
   literals and the reviewed Spanish fixes.
 
