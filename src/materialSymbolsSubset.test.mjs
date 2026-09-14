@@ -15,7 +15,13 @@ const SPAN_TEXT =
 const TEXT_ASSIGNMENT = /(?:textContent|innerText)\s*=\s*([^;]{0,400})/gs;
 const STRING_LITERAL = /['"`]([a-z0-9_]{2,})['"`]/g;
 
-/** Files that SHIP markup. Tests assert on markup, they do not render it. */
+/**
+ * Files that SHIP markup. Tests assert on markup, they do not render it.
+ *
+ * The panel markup lives in `src/ui/templates/*.html`, so HTML under `src` is
+ * read as well: a glyph named only in a template is still a glyph the font has
+ * to carry.
+ */
 function sourceFiles(directory = SRC_ROOT) {
   const files = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -23,7 +29,7 @@ function sourceFiles(directory = SRC_ROOT) {
     if (entry.isDirectory()) files.push(...sourceFiles(absolute));
     else if (
       entry.isFile() &&
-      /\.(js|mjs)$/.test(entry.name) &&
+      /\.(js|mjs|html)$/.test(entry.name) &&
       !entry.name.endsWith('.test.mjs')
     ) {
       files.push(absolute);
