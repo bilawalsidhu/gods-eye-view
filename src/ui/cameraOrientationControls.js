@@ -121,20 +121,20 @@ export function setCameraTargetFrame(viewer, frame) {
 }
 
 /**
- * Whether the map currently reads as tilted, from the camera alone.
+ * Whether the map reads as tilted, from the orbit frame.
  *
- * `readCameraTargetFrame` answers the same question more precisely, but it
- * costs a depth-buffer read of the viewport center — measured at 4 ms median
- * and up to 12 ms on this machine — and the camera-changed event fires once
- * per frame while the map is being dragged. The camera's own pitch matches the
- * picked frame's to within 0.02 degrees at every altitude where a tilt control
- * is useful (measured to 20 km); it diverges only at globe distances, where
- * the viewport center is most of a hemisphere away. The button state and the
- * toggle read the same predicate, so what the button shows is always what the
- * next click will do.
+ * This is the quantity the toggle commands, so it is the only one the button
+ * may show. The camera's OWN pitch is a different angle: at a few kilometres
+ * the two agree to 0.02 degrees, but from the full-globe view they are tens of
+ * degrees apart, because the point under the middle of the screen is most of a
+ * hemisphere away. Reading the camera's pitch there made the toggle choose
+ * oblique twice in a row — commanded oblique, camera pitch came back near -77,
+ * still "not tilted", tilt again.
+ *
+ * @param {{pitch: number}|null} frame From {@link readCameraTargetFrame}.
  */
-export function isTiltedView(camera) {
-  const pitch = Number(camera?.pitch);
+export function frameIsTilted(frame) {
+  const pitch = Number(frame?.pitch);
   return Number.isFinite(pitch) ? pitch > OBLIQUE_THRESHOLD : false;
 }
 
@@ -142,7 +142,7 @@ export function isTiltedView(camera) {
 export function toggleCameraTilt(viewer) {
   const frame = readCameraTargetFrame(viewer);
   if (!frame) return false;
-  const tilted = isTiltedView(viewer?.camera);
+  const tilted = frameIsTilted(frame);
   const pitch = tilted ? STRAIGHT_DOWN_PITCH : OBLIQUE_PITCH;
   return setCameraTargetFrame(viewer, { ...frame, pitch })
     ? { tilted: !tilted, pitch }
@@ -166,25 +166,37 @@ export function bindCameraOrientationControls({
   elements,
   runNavigation,
   showToast,
-  requestFrame = (callback) =>
-    globalThis.requestAnimationFrame
-      ? globalThis.requestAnimationFrame(callback)
-      : setTimeout(callback, 16),
 }) {
   const tiltButton = elements?.tiltButton;
   const northButton = elements?.northButton;
   const removers = [];
   let destroyed = false;
-  let scheduled = false;
   let applied = null;
+  // The tilt state is the one thing here that costs a depth read of the middle
+  // of the screen: 4 ms median and up to 12 ms, measured on this machine. It is
+  // therefore held between refreshes rather than recomputed per frame.
+  let tilted = false;
 
-  /** Write the two controls' state, but only what actually changed. */
-  const sync = () => {
+  /** Recompute the tilt state exactly, paying for one pick. */
+  const refreshTilt = () => {
     if (destroyed) return;
-    const camera = viewer?.camera;
+    tilted = frameIsTilted(readCameraTargetFrame(viewer));
+    sync();
+  };
+
+  /**
+   * Write the two controls' state, but only what actually changed.
+   *
+   * The compass needle reads the camera's own bearing, which costs nothing, so
+   * this can run on every rendered frame: measured at 1.4 ms across 120 frames
+   * of a continuously dragged map (0.012 ms per frame, 0.1 ms worst case),
+   * against the 4 ms per frame the depth read it replaced would have cost.
+   */
+  function sync() {
+    if (destroyed) return;
     const next = {
-      tilted: isTiltedView(camera),
-      heading: Math.round(headingDegrees(camera)) % 360,
+      tilted,
+      heading: Math.round(headingDegrees(viewer?.camera)) % 360,
     };
     if (
       applied &&
@@ -209,18 +221,7 @@ export function bindCameraOrientationControls({
       );
     }
     applied = next;
-  };
-
-  // camera.changed fires once per rendered frame while the map is dragged, so
-  // coalesce a burst into one write per frame.
-  const scheduleSync = () => {
-    if (destroyed || scheduled) return;
-    scheduled = true;
-    requestFrame(() => {
-      scheduled = false;
-      sync();
-    });
-  };
+  }
 
   const listen = (element, handler) => {
     if (!element) return;
@@ -229,8 +230,12 @@ export function bindCameraOrientationControls({
   };
   listen(tiltButton, () => {
     const result = runNavigation('camera', () => toggleCameraTilt(viewer));
-    if (result)
+    if (result) {
       showToast?.(result.tilted ? 'Tilted view' : 'Straight-down view');
+      // The action reports the state it just commanded, so the button can
+      // follow it without a second pick.
+      tilted = result.tilted;
+    }
     sync();
   });
   listen(northButton, () => {
@@ -238,14 +243,23 @@ export function bindCameraOrientationControls({
     if (result) showToast?.('North up');
     sync();
   });
-  const removeCameraChanged =
-    viewer?.camera?.changed?.addEventListener?.(scheduleSync);
-  if (typeof removeCameraChanged === 'function')
-    removers.push(removeCameraChanged);
-  sync();
+
+  const subscribe = (event, handler) => {
+    const remove = event?.addEventListener?.(handler);
+    if (typeof remove === 'function') removers.push(remove);
+  };
+  // The needle follows every frame the scene draws. `camera.changed` is NOT
+  // enough: it only fires past `camera.percentageChanged`, so a rotation of a
+  // few degrees leaves the needle pointing at the old bearing.
+  subscribe(viewer?.scene?.preRender, sync);
+  // The exact tilt state is refreshed once per gesture, not once per frame —
+  // moveEnd fires when the camera stops, which is where the pick is affordable.
+  subscribe(viewer?.camera?.moveEnd, refreshTilt);
+  refreshTilt();
 
   return {
     sync,
+    refreshTilt,
     destroy() {
       if (destroyed) return;
       destroyed = true;

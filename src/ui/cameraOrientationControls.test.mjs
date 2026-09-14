@@ -99,8 +99,24 @@ function createRealViewer(target) {
   scene.pickPosition = () => null;
   scene.globe.pick = () => target;
   scene.requestRender = () => {};
+  // The binding drives the needle from the scene's per-frame signal, not from
+  // `camera.changed`, so the fixture has to carry one.
+  scene.preRender = new Cesium.Event();
   camera.getPickRay = () => ({});
   return { viewer: { camera, scene }, target };
+}
+
+/** Place a real camera in an orbit around `target` and release the frame. */
+function orbit(viewer, target, headingDeg, pitchRad, range) {
+  viewer.camera.lookAt(
+    target,
+    new Cesium.HeadingPitchRange(
+      Cesium.Math.toRadians(headingDeg),
+      pitchRad,
+      range,
+    ),
+  );
+  viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
 }
 
 const AUSTIN_GROUND = Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 0);
@@ -226,14 +242,102 @@ test('tilt moves a real camera between the two pitches and keeps target and rang
   assert.ok(Math.abs(down.range - 3000) < 1);
 });
 
-test('camera changes coalesce into one write per frame and go quiet when nothing moves', () => {
-  const { viewer } = createRealViewer(AUSTIN_GROUND);
-  viewer.camera.lookAt(
-    AUSTIN_GROUND,
-    new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-80), 5000),
-  );
-  viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+test('tilt alternates at globe range, not only at map range', () => {
+  // The canonical full-globe view. The camera's own pitch here is tens of
+  // degrees away from the orbit pitch, so a control reading the camera would
+  // command oblique twice in a row and the map would never come back level.
+  for (const range of [3_000, 250_000, 18_000_000]) {
+    const { viewer } = createRealViewer(AUSTIN_GROUND);
+    orbit(viewer, AUSTIN_GROUND, 0, STRAIGHT_DOWN_PITCH, range);
 
+    const first = toggleCameraTilt(viewer);
+    assert.deepEqual(
+      first,
+      { tilted: true, pitch: OBLIQUE_PITCH },
+      `first click at ${range} m must tilt`,
+    );
+    const second = toggleCameraTilt(viewer);
+    assert.deepEqual(
+      second,
+      { tilted: false, pitch: STRAIGHT_DOWN_PITCH },
+      `second click at ${range} m must level (camera pitch reads ${Cesium.Math.toDegrees(viewer.camera.pitch).toFixed(1)} deg)`,
+    );
+    const third = toggleCameraTilt(viewer);
+    assert.deepEqual(
+      third,
+      { tilted: true, pitch: OBLIQUE_PITCH },
+      `third click at ${range} m must tilt again`,
+    );
+  }
+});
+
+test('the button shows the state the next click will produce, at every range', () => {
+  for (const range of [3_000, 18_000_000]) {
+    const { viewer } = createRealViewer(AUSTIN_GROUND);
+    orbit(viewer, AUSTIN_GROUND, 0, STRAIGHT_DOWN_PITCH, range);
+    const tiltButton = new FakeButton();
+    const controls = bindCameraOrientationControls({
+      viewer,
+      elements: { tiltButton, northButton: new FakeButton() },
+      runNavigation: (_noun, navigate) => navigate(),
+    });
+
+    assert.equal(
+      tiltButton.getAttribute('aria-pressed'),
+      'false',
+      `straight down at ${range} m must not read as tilted`,
+    );
+    tiltButton.click();
+    assert.equal(
+      tiltButton.getAttribute('aria-pressed'),
+      'true',
+      `after one click at ${range} m the button must read tilted`,
+    );
+    // And the exact refresh that runs when the camera settles must agree.
+    controls.refreshTilt();
+    assert.equal(
+      tiltButton.getAttribute('aria-pressed'),
+      'true',
+      `the settled state at ${range} m must agree with the commanded one`,
+    );
+    controls.destroy();
+  }
+});
+
+test('the needle follows a rotation too small for the camera-changed threshold', () => {
+  const { viewer } = createRealViewer(AUSTIN_GROUND);
+  orbit(viewer, AUSTIN_GROUND, 0, Cesium.Math.toRadians(-80), 5_000);
+  const northButton = new FakeButton();
+  const controls = bindCameraOrientationControls({
+    viewer,
+    elements: { tiltButton: new FakeButton(), northButton },
+    runNavigation: (_noun, navigate) => navigate(),
+  });
+  assert.equal(northButton.getAttribute('--camera-heading'), '0deg');
+
+  // Ten degrees is far below Cesium's default percentageChanged, so
+  // `camera.changed` may never fire for it; the per-frame signal must.
+  let changedFired = 0;
+  viewer.camera.changed.addEventListener(() => {
+    changedFired += 1;
+  });
+  orbit(viewer, AUSTIN_GROUND, 10, Cesium.Math.toRadians(-80), 5_000);
+  viewer.scene.preRender.raiseEvent();
+  assert.equal(
+    northButton.getAttribute('--camera-heading'),
+    '10deg',
+    `needle must follow a 10 degree rotation (camera.changed fired ${changedFired} time(s))`,
+  );
+
+  orbit(viewer, AUSTIN_GROUND, 13, Cesium.Math.toRadians(-80), 5_000);
+  viewer.scene.preRender.raiseEvent();
+  assert.equal(northButton.getAttribute('--camera-heading'), '13deg');
+  controls.destroy();
+});
+
+test('a settled camera writes nothing, and teardown releases every signal', () => {
+  const { viewer } = createRealViewer(AUSTIN_GROUND);
+  orbit(viewer, AUSTIN_GROUND, 0, Cesium.Math.toRadians(-80), 5_000);
   const tiltButton = new FakeButton();
   const northButton = new FakeButton();
   let writes = 0;
@@ -252,49 +356,36 @@ test('camera changes coalesce into one write per frame and go quiet when nothing
   count(tiltButton);
   count(northButton);
 
-  const frames = [];
+  const preRenderBefore = viewer.scene.preRender.numberOfListeners;
+  const moveEndBefore = viewer.camera.moveEnd.numberOfListeners;
   const controls = bindCameraOrientationControls({
     viewer,
     elements: { tiltButton, northButton },
     runNavigation: (_noun, navigate) => navigate(),
-    requestFrame: (callback) => frames.push(callback),
   });
-
-  // A burst of camera-changed events must schedule exactly one frame of work.
-  for (let i = 0; i < 40; i += 1) viewer.camera.changed.raiseEvent();
-  assert.equal(
-    frames.length,
-    1,
-    'a burst must coalesce into one scheduled write',
-  );
+  assert.equal(viewer.scene.preRender.numberOfListeners, preRenderBefore + 1);
+  assert.equal(viewer.camera.moveEnd.numberOfListeners, moveEndBefore + 1);
 
   writes = 0;
-  frames.splice(0).forEach((run) => run());
-  assert.equal(writes, 0, 'an unmoved camera writes nothing');
+  for (let i = 0; i < 60; i += 1) viewer.scene.preRender.raiseEvent();
+  assert.equal(writes, 0, '60 frames of a settled camera write nothing');
 
-  // A real rotation writes once, and repeating it writes nothing more.
-  viewer.camera.lookAt(
-    AUSTIN_GROUND,
-    new Cesium.HeadingPitchRange(
-      Cesium.Math.toRadians(90),
-      Cesium.Math.toRadians(-80),
-      5000,
-    ),
-  );
-  viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-  viewer.camera.changed.raiseEvent();
-  frames.splice(0).forEach((run) => run());
-  assert.ok(writes > 0, 'a rotated camera updates the compass');
-  assert.equal(northButton.getAttribute('--camera-heading'), '90deg');
-
+  orbit(viewer, AUSTIN_GROUND, 47, Cesium.Math.toRadians(-80), 5_000);
+  viewer.scene.preRender.raiseEvent();
+  assert.ok(writes > 0, 'a rotated camera updates the needle');
   writes = 0;
-  for (let i = 0; i < 10; i += 1) viewer.camera.changed.raiseEvent();
-  frames.splice(0).forEach((run) => run());
-  assert.equal(writes, 0, 'a settled camera stops writing');
+  for (let i = 0; i < 20; i += 1) viewer.scene.preRender.raiseEvent();
+  assert.equal(writes, 0, 'and then goes quiet again');
 
   controls.destroy();
-  viewer.camera.changed.raiseEvent();
-  assert.equal(frames.length, 0, 'a destroyed binding schedules nothing');
+  assert.equal(viewer.scene.preRender.numberOfListeners, preRenderBefore);
+  assert.equal(viewer.camera.moveEnd.numberOfListeners, moveEndBefore);
+  writes = 0;
+  orbit(viewer, AUSTIN_GROUND, 120, Cesium.Math.toRadians(-80), 5_000);
+  viewer.scene.preRender.raiseEvent();
+  viewer.camera.moveEnd.raiseEvent();
+  tiltButton.click();
+  assert.equal(writes, 0, 'a destroyed binding writes nothing');
 });
 
 test('a sky-facing camera yields no frame and both actions decline', () => {
@@ -385,7 +476,8 @@ test('bindings route both controls and release every listener on destroy', () =>
   northButton.click();
   assert.deepEqual(navigations, ['camera', 'camera']);
   assert.deepEqual(toasts, ['Tilted view', 'North up']);
-  assert.equal(tiltButton.getAttribute('aria-pressed'), 'false');
+  // The button shows the state the click just commanded, not a re-measurement.
+  assert.equal(tiltButton.getAttribute('aria-pressed'), 'true');
   assert.equal(northButton.getAttribute('--camera-heading'), '90deg');
 
   viewer.camera.heading = -1e-12;
@@ -395,6 +487,5 @@ test('bindings route both controls and release every listener on destroy', () =>
   controls.destroy();
   tiltButton.click();
   assert.deepEqual(navigations, ['camera', 'camera']);
-  assert.equal(viewer.camera.changed.numberOfListeners, 0);
   assert.equal(STRAIGHT_DOWN_PITCH, Cesium.Math.toRadians(-89));
 });
