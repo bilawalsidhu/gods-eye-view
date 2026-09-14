@@ -17,6 +17,8 @@
  * for), then the constellations users can actually name, then the grab-bag.
  */
 
+import { t } from '../i18n/index.js';
+
 /**
  * Class registry. `label` is the card/legend token, `color` the point color,
  * `blurb` the plain-language gloss for the legend tooltip.
@@ -70,6 +72,17 @@ export const SATELLITE_CLASSES = Object.freeze({
 
 /** Legend/report order for the classes above. */
 export const SATELLITE_CLASS_ORDER = Object.freeze(['station', 'nav', 'geo', 'visual', 'comms']);
+
+// Display keys for the class table above: `label`/`blurb` stay the English
+// source-of-truth tokens (tests read them), while the card and legend accessors
+// translate through these keys at the presentation boundary.
+const CLASS_DISPLAY_KEYS = Object.freeze({
+  station: Object.freeze({ label: 'layers.satellites.class.station', blurb: 'layers.satellites.class.stationBlurb' }),
+  nav: Object.freeze({ label: 'layers.satellites.class.nav', blurb: 'layers.satellites.class.navBlurb' }),
+  geo: Object.freeze({ label: 'layers.satellites.class.geo', blurb: 'layers.satellites.class.geoBlurb' }),
+  visual: Object.freeze({ label: 'layers.satellites.class.visual', blurb: 'layers.satellites.class.visualBlurb' }),
+  comms: Object.freeze({ label: 'layers.satellites.class.comms', blurb: 'layers.satellites.class.commsBlurb' }),
+});
 
 /**
  * CelesTrak group tag → { class, subtype }. Subtype names the specific
@@ -133,7 +146,7 @@ export function satelliteClassColor(group) {
  */
 export function satelliteClassLabel(group, { isIss = false } = {}) {
   const { klass, subtype } = satelliteClassOf(group, { isIss });
-  const base = SATELLITE_CLASSES[klass].label;
+  const base = t(CLASS_DISPLAY_KEYS[klass].label);
   return subtype ? `${base} · ${subtype}` : base;
 }
 
@@ -171,7 +184,8 @@ export function satelliteClassLegend(counts) {
     const count = counts?.[klass];
     if (!(count > 0)) continue;
     const spec = SATELLITE_CLASSES[klass];
-    result.push({ klass, label: spec.label, color: spec.color, blurb: spec.blurb, count });
+    const display = CLASS_DISPLAY_KEYS[klass];
+    result.push({ klass, label: t(display.label), color: spec.color, blurb: t(display.blurb), count });
   }
   return result;
 }

@@ -39,6 +39,7 @@ export function readShellElements(document = globalThis.document) {
     _scopeFeatherValue: document.getElementById('scope-feather-value'),
     _mapStackChips: document.getElementById('map-stack-chips'),
     _mapStackStatus: document.getElementById('map-stack-status'),
+    _mapSourceLabel: document.getElementById('map-source-label'),
     _cleanViewBtn: document.getElementById('clean-view-toggle'),
     _cleanViewExitBtn: document.getElementById('clean-view-exit'),
     _dataPanel: document.getElementById('data-panel'),
