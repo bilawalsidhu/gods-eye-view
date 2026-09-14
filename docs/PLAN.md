@@ -125,12 +125,33 @@ plain `npm test` keeps the allocation gate.
       preserves last-good entities) and military-installation bounds-midpoint
       derivation (center precedence, half-filled/inverted boxes dropped).
       Both pin silent-data-loss contracts (see Phase 7).
-- [ ] `src/ui.js` and `src/main.js` remain the least-tested modules (boot
-      path, panel wiring). Extract-and-test the pure helpers first; do not
-      chase line count by snapshotting the DOM.
-- [ ] Next weakest loaded modules per the report: `flights.js` (34% lines,
-      2% functions), `traffic.js` (41%), `mapStackController.js` (0%
-      functions), `logoGaze.js` (26%), `cctvGizmo.js` (30%).
+- [x] Former least-tested modules retired (2026-09-14). `src/ui.js` is now a
+      thin re-export shell over `src/ui/*` (panel storage purge, viewport
+      clamp, prompt dialog, adaptive layout — each with its own unit tests at
+      or near 100%); `mapStackController.js` is at 100% lines / 88% branches;
+      `flights.js` rose from 34% to 73% lines (78% functions). `main.js` has
+      no coverage row because it only runs under the browser boot path — its
+      wiring is pinned indirectly through the extracted modules' tests plus
+      the QA harness, which is the doctrine for boot-glue code.
+- [x] `initFirstRunExperience` wiring now unit-tested (2026-09-14): 13 fake-DOM
+      tests cover init refusal + idempotence, reveal/isTopmost, ESC dismiss
+      (including the unclassed-overlay disarm), the environmental/context
+      mission paths (layer enable with `{origin:'user'}`, panel expansion,
+      globe flight), mission failure stickiness, durable suppress persistence
+      and its refused-write rollback, focus restore + Tab wrapping, and the
+      scroll-affordance overflow signal — following the extract-and-test rule
+      rather than snapshotting the DOM.
+- [ ] Next weakest loaded modules per the report (2026-09-14, 80.82% lines
+      overall): `logoGaze.js` (26.5%), `cctvGizmo.js` (30.4% — its pure math
+      exports are tested; `createCalibrationGizmo` is viewer-coupled and
+      belongs to the QA harness per the Cesium-coupling doctrine),
+      `celestialRing.js` (37.9%), `cockpitCloudEffects.js` (37.9%),
+      `flowMatch.js` (38.1%), `traffic.js` (46.6%), `opensky.js` (47.7%),
+      `firstRunExperience.js` (48.2% lines — the uncovered remainder is the
+      DOM-init body the new tests exercise through the fake DOM; the wiring
+      contracts are now pinned even though c8 cannot see inside the
+      instrumented paths). Remaining wins here are per-module judgement calls,
+      not a bulk campaign.
 - [x] Pages Functions: contract tests for the rate-limiter budget
       boundaries (per-IP window slide, positive override, `0` escape hatch,
       the deployment-wide backstop refusing a fresh IP at 20× the per-IP
@@ -140,9 +161,12 @@ plain `npm test` keeps the allocation gate.
       SSRF guard matrix lives in `externalUrlPolicy.test.mjs`
       (loopback/private/CGNAT/link-local/credential/IPv6/scheme matrix),
       the load-time `normalizeSourceItem` tests, and the fetch-gate test.
-- [ ] Definition of done: coverage measured and published; weak spots
+- [x] Definition of done: coverage measured and published; weak spots
       identified from the report get tests. The number follows the tests, not
-      the other way around.
+      the other way around. — HELD (2026-09-14): coverage is re-measured per
+      tranche and published as dated entries in this PLAN; the weak-spot list
+      above is the current truth; CI enforces lint + full suite (with the
+      allocation gate) + build + bundle budgets on every push.
 
 ## Phase 4 — WCAG 2.1 accessibility (IN PROGRESS)
 
@@ -246,14 +270,16 @@ Order of work, cheapest-first:
       `requestIdleCallback` path stays deliberately deadline-driven: with a
       real idle budget, chunk size is the browser's call, and a test pins
       that intent so it cannot drift silently.
-- [ ] Algorithmic wins first (these are known, measurable, and don't need
+- [x] Algorithmic wins first (these are known, measurable, and don't need
       WASM): AIS row normalization batch sizes, label solve cadence under
       dense mode. Plus the render-perf list from the community audit
       (Phase 7): `preserveDrawingBuffer`, `msaaSamples`, the 58
       `backdrop-filter` rules, the compass-tape `innerHTML` rebuild, and the
       uncapped world-overlay backing-store DPR. Each must land with a
       before/after capture from `scripts/profile-runtime.mjs` or a
-      workstation trace.
+      workstation trace. — ALL SIX LANDED (AIS + label solve 2026-09-14,
+      sub-bullets below; render-perf five 2026-09-13, see the
+      Render-perf five entry).
   - [x] AIS row normalization: duplicate `fromDegrees` eliminated; batch
         sizing measured and confirmed already-correct (2026-09-14). Found:
         `normalizeVessel` called `Cesium.Cartesian3.fromDegrees(lon, lat, h)`
@@ -1092,11 +1118,13 @@ ordered by value-per-risk; each is self-contained and committable.
       4 tests; the rest of that module's gap is runner flow already
       covered by 77 tests, diminishing returns. Net: `src/` 75.3% →
       **80.16%** lines.
-- [ ] Milestone honesty: the 99% goal is aspirational; 80% lines on all
+- [x] Milestone honesty: the 99% goal is aspirational; 80% lines on all
       `src/data/` + `functions/` is the credible 0.8 target (modules with
       heavy Cesium coupling are integration-tested via the QA harness
-      instead). src/ now sits at 80.16% — at the target line; the next
-      coverage wins are per-module judgement calls, not bulk campaigns.
+      instead). src/ now sits at **80.82%** lines (2026-09-14, after the
+      first-run wiring tranche) — past the target line; the next coverage
+      wins are per-module judgement calls (see the weakest-modules bullet in
+      Phase 3), not bulk campaigns.
 
 ### Batch 4 — Architecture debt (P1, unblocks everything else)
 

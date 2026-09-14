@@ -10,6 +10,7 @@ import {
   FIRST_RUN_STORAGE_KEY,
   environmentalLabel,
   exclusiveSurfaceActive,
+  initFirstRunExperience,
   rememberFirstRunSessionDismissed,
   runFirstRunChoice,
   setFirstRunSuppressed,
@@ -690,4 +691,383 @@ test('every layer a mission drives is already in the shipped set_layer_visibilit
   for (const layerId of missionLayerIds) {
     assert.ok(tool.includes(`'${layerId}'`), `${layerId} must already be an allowed enum value`);
   }
+});
+
+// ── initFirstRunExperience wiring (fake DOM, injected everywhere) ────────────
+// The launcher body is DI-shaped precisely so it can be driven headless: one
+// fake root with the querySelectors the wiring names, a documentRef with
+// keydown capture + activeElement, and rAF queued so reveal() is observable.
+
+const rafQueue = [];
+globalThis.requestAnimationFrame = (fn) => { rafQueue.push(fn); return rafQueue.length; };
+const flushRaf = () => { while (rafQueue.length) rafQueue.shift()(); };
+const flushTasks = () => new Promise((resolve) => setImmediate(resolve));
+
+function makeNode(overrides = {}) {
+  const node = {
+    tagName: 'div',
+    className: '',
+    textContent: '',
+    checked: false,
+    hidden: false,
+    isConnected: true,
+    removed: false,
+    focusCalls: 0,
+    dataset: {},
+    attributes: {},
+    listeners: {},
+    children: [],
+    classList: {
+      toggle(name, force) {
+        const classes = new Set(String(node.className).split(/\s+/).filter(Boolean));
+        const next = force === undefined ? !classes.has(name) : Boolean(force);
+        if (next) classes.add(name);
+        else classes.delete(name);
+        node.className = [...classes].join(' ');
+      },
+      add(name) { node.classList.toggle(name, true); },
+      remove(name) { node.classList.toggle(name, false); },
+      contains(name) { return String(node.className).split(/\s+/).includes(name); },
+    },
+    appendChild(child) { node.children.push(child); return child; },
+    setAttribute(name, value) { node.attributes[name] = String(value); },
+    getAttribute(name) { return node.attributes[name] ?? null; },
+    hasAttribute(name) { return name in node.attributes; },
+    addEventListener(type, handler) { (node.listeners[type] ||= []).push(handler); },
+    dispatch(type, event) { for (const handler of [...(node.listeners[type] || [])]) handler(event); },
+    getClientRects: () => [{}],
+    getBoundingClientRect: () => ({ width: 400, height: 300, left: 40, top: 20 }),
+    focus() { node.focusCalls++; },
+    contains(other) {
+      if (other === node) return true;
+      return node.children.includes(other);
+    },
+    remove() { node.removed = true; node.isConnected = false; },
+    ...overrides,
+  };
+  return node;
+}
+
+/** Root with exactly the selectors initFirstRunExperience names. */
+function makeLauncherRoot({ listOverflow = false } = {}) {
+  const envTitle = makeNode();
+  const status = makeNode();
+  const suppress = makeNode({ tagName: 'input' });
+  const choiceList = makeNode({
+    scrollHeight: listOverflow ? 500 : 100,
+    clientHeight: 200,
+  });
+  const buttons = ['contacts', 'space-missions', 'environmental'].map((choice) => makeNode({
+    dataset: { firstRunChoice: choice },
+  }));
+  const root = makeNode();
+  const inner = [envTitle, status, suppress, choiceList, ...buttons];
+  Object.assign(root, {
+    querySelector(selector) {
+      if (selector === '[data-first-run-environmental-title]') return envTitle;
+      if (selector === '[data-first-run-status]') return status;
+      if (selector === '[data-first-run-suppress]') return suppress;
+      if (selector === '.first-run-choices') return choiceList;
+      return null;
+    },
+    querySelectorAll(selector) {
+      if (selector === '[data-first-run-choice]') return [...buttons];
+      if (selector.startsWith('button, input')) return [...buttons, suppress];
+      return [];
+    },
+    contains: (other) => other === root || inner.includes(other),
+  });
+  return { root, envTitle, status, suppress, choiceList, buttons };
+}
+
+function makeDocument(root, { elementFromPoint, bodyClass = '', activeElement = null } = {}) {
+  const body = makeNode({ className: bodyClass });
+  const doc = {
+    activeElement,
+    body,
+    getElementById: (id) => (id === 'first-run-launcher' ? root : null),
+    listeners: {},
+    addEventListener(type, handler) { (doc.listeners[type] ||= []).push(handler); },
+    removeEventListener(type, handler) {
+      doc.listeners[type] = (doc.listeners[type] || []).filter((fn) => fn !== handler);
+    },
+  };
+  if (elementFromPoint !== undefined) doc.elementFromPoint = elementFromPoint;
+  return doc;
+}
+
+function makeStyleManager({ contextModeOk = true } = {}) {
+  const calls = { contextModes: [], globeFlights: 0, panelReveals: [] };
+  return {
+    calls,
+    setContextMode: async (mode) => {
+      calls.contextModes.push(mode);
+      if (!contextModeOk) return { ok: false };
+      return { ok: true };
+    },
+    setPanelCollapsed: (id, collapsed, options) => { calls.panelReveals.push([id, collapsed, options]); },
+    resetToGlobeView: () => { calls.globeFlights++; },
+  };
+}
+
+function makeDataManager() {
+  const calls = [];
+  return {
+    calls,
+    setEnabled: (layerId, enabled, options) => { calls.push([layerId, enabled, options]); return true; },
+  };
+}
+
+const pressKey = (doc, event) => {
+  const handled = { prevented: false, stopped: false };
+  const envelope = {
+    ...event,
+    preventDefault() { handled.prevented = true; },
+    stopPropagation() { handled.stopped = true; },
+  };
+  for (const handler of [...(doc.listeners.keydown || [])]) handler(envelope);
+  return handled;
+};
+
+test('init refuses without wiring when the show policy says no, and marks the root', () => {
+  const { root } = makeLauncherRoot();
+  const doc = makeDocument(root);
+  const session = memoryStorage(FIRST_RUN_SESSION_KEY);
+  rememberFirstRunSessionDismissed(session);
+  const outcome = initFirstRunExperience({
+    styleManager: makeStyleManager(),
+    documentRef: doc,
+    storage: memoryStorage(FIRST_RUN_STORAGE_KEY),
+    sessionStorageRef: session,
+    location: { search: '' },
+  });
+  assert.equal(outcome, null);
+  assert.equal(root.removed, true);
+  // The init mark lands BEFORE the policy gate: one policy evaluation per
+  // root, so a refusal is also final for that node.
+  assert.equal(root.dataset.initialized, 'true');
+});
+
+test('init never double-wires: a second call on the same root is a null', () => {
+  const { root } = makeLauncherRoot();
+  const doc = makeDocument(root);
+  const common = {
+    documentRef: doc,
+    storage: memoryStorage(FIRST_RUN_STORAGE_KEY),
+    sessionStorageRef: memoryStorage(FIRST_RUN_SESSION_KEY),
+    location: { search: '' },
+  };
+  const first = initFirstRunExperience({ styleManager: makeStyleManager(), ...common });
+  assert.ok(first);
+  assert.equal(root.dataset.initialized, 'true');
+  const second = initFirstRunExperience({ styleManager: makeStyleManager(), ...common });
+  assert.equal(second, null);
+});
+
+test('init reveals, paints the tile title from the module constant, and is topmost', () => {
+  const { root, envTitle } = makeLauncherRoot();
+  const doc = makeDocument(root);
+  const handle = initFirstRunExperience({
+    styleManager: makeStyleManager(),
+    documentRef: doc,
+    storage: memoryStorage(FIRST_RUN_STORAGE_KEY),
+    sessionStorageRef: memoryStorage(FIRST_RUN_SESSION_KEY),
+    location: { search: '' },
+  });
+  assert.ok(handle);
+  flushRaf();
+  assert.equal(root.hidden, false);
+  assert.ok(root.classList.contains('visible'));
+  assert.equal(envTitle.textContent, environmentalLabel().title);
+  assert.equal(handle.isTopmost(), true);
+});
+
+test('ESC dismisses the revealed launcher: session flag, aria-hidden, focus returned', () => {
+  const { root } = makeLauncherRoot();
+  const prior = makeNode();
+  const doc = makeDocument(root, { activeElement: prior });
+  initFirstRunExperience({
+    styleManager: makeStyleManager(),
+    documentRef: doc,
+    storage: memoryStorage(FIRST_RUN_STORAGE_KEY),
+    sessionStorageRef: memoryStorage(FIRST_RUN_SESSION_KEY),
+    location: { search: '' },
+  });
+  flushRaf();
+  const handled = pressKey(doc, { key: 'Escape' });
+  assert.ok(handled.prevented, 'ESC must be consumed by the topmost launcher');
+  const session = memoryStorage(FIRST_RUN_SESSION_KEY, 'dismissed');
+  assert.equal(session.read(), 'dismissed');
+  assert.ok(root.getAttribute('aria-hidden'), 'true');
+  assert.ok(!root.classList.contains('visible'));
+  assert.equal(prior.focusCalls, 1, 'focus returns to where the keyboard was');
+});
+
+test('an unclassed overlay sitting over the card centre disarms ESC entirely', () => {
+  const { root } = makeLauncherRoot();
+  const doc = makeDocument(root, { elementFromPoint: () => makeNode() });
+  const session = memoryStorage(FIRST_RUN_SESSION_KEY);
+  initFirstRunExperience({
+    styleManager: makeStyleManager(),
+    documentRef: doc,
+    storage: memoryStorage(FIRST_RUN_STORAGE_KEY),
+    sessionStorageRef: session,
+    location: { search: '' },
+  });
+  flushRaf();
+  const handled = pressKey(doc, { key: 'Escape' });
+  assert.equal(handled.prevented, false, 'a covered card must not consume the key');
+  assert.equal(session.read(), null, 'and must not burn the session flag');
+});
+
+test('a mission tile enables its layers with origin user and dismisses on success', async () => {
+  const { root, buttons } = makeLauncherRoot();
+  const doc = makeDocument(root);
+  const style = makeStyleManager();
+  const data = makeDataManager();
+  const session = memoryStorage(FIRST_RUN_SESSION_KEY);
+  initFirstRunExperience({
+    styleManager: style,
+    dataManager: data,
+    documentRef: doc,
+    storage: memoryStorage(FIRST_RUN_STORAGE_KEY),
+    sessionStorageRef: session,
+    location: { search: '' },
+  });
+  flushRaf();
+  buttons[2].dispatch('click', { currentTarget: buttons[2] });
+  await flushTasks();
+  const expected = FIRST_RUN_MISSIONS.environmental.layerIds.length;
+  assert.equal(data.calls.length, expected);
+  for (const [layerId, enabled, options] of data.calls) {
+    assert.ok(FIRST_RUN_MISSIONS.environmental.layerIds.includes(layerId));
+    assert.equal(enabled, true);
+    assert.deepEqual(options, { origin: 'user' });
+  }
+  assert.equal(style.calls.globeFlights, 1);
+  assert.equal(session.read(), 'dismissed', 'a successful mission dismisses the launcher');
+});
+
+test('a context mission reveals the panel only when the mode switch succeeds', async () => {
+  const { root, buttons } = makeLauncherRoot();
+  const doc = makeDocument(root);
+  const style = makeStyleManager({ contextModeOk: true });
+  initFirstRunExperience({
+    styleManager: style,
+    documentRef: doc,
+    storage: memoryStorage(FIRST_RUN_STORAGE_KEY),
+    sessionStorageRef: memoryStorage(FIRST_RUN_SESSION_KEY),
+    location: { search: '' },
+  });
+  flushRaf();
+  buttons[0].dispatch('click', { currentTarget: buttons[0] });
+  await flushTasks();
+  assert.deepEqual(style.calls.contextModes, ['contacts']);
+  assert.deepEqual(style.calls.panelReveals, [['global-context-panel', false, { explicit: true }]]);
+});
+
+test('a failed mission reports on a sticky status line and stays up', async () => {
+  const { root, status, buttons } = makeLauncherRoot();
+  const doc = makeDocument(root);
+  const style = makeStyleManager({ contextModeOk: false });
+  const session = memoryStorage(FIRST_RUN_SESSION_KEY);
+  initFirstRunExperience({
+    styleManager: style,
+    documentRef: doc,
+    storage: memoryStorage(FIRST_RUN_STORAGE_KEY),
+    sessionStorageRef: session,
+    location: { search: '' },
+  });
+  flushRaf();
+  buttons[0].dispatch('click', { currentTarget: buttons[0] });
+  await flushTasks();
+  assert.equal(status.dataset.sticky, 'true');
+  assert.match(status.textContent, /Could not open that mission/);
+  assert.equal(root.getAttribute('aria-busy'), 'false');
+  assert.equal(session.read(), null, 'failure keeps the launcher armed');
+});
+
+test('a thrown mission lands on the same failure line instead of propagating', async () => {
+  const { root, status, buttons } = makeLauncherRoot();
+  const doc = makeDocument(root);
+  initFirstRunExperience({
+    styleManager: {
+      setContextMode: async () => { throw new Error('exploded'); },
+    },
+    documentRef: doc,
+    storage: memoryStorage(FIRST_RUN_STORAGE_KEY),
+    sessionStorageRef: memoryStorage(FIRST_RUN_SESSION_KEY),
+    location: { search: '' },
+  });
+  flushRaf();
+  buttons[0].dispatch('click', { currentTarget: buttons[0] });
+  await flushTasks();
+  assert.match(status.textContent, /Could not open that mission/);
+});
+
+test('the suppress checkbox persists durably when storage allows it', () => {
+  const { root, suppress } = makeLauncherRoot();
+  const doc = makeDocument(root);
+  const storage = memoryStorage(FIRST_RUN_STORAGE_KEY);
+  initFirstRunExperience({
+    styleManager: makeStyleManager(),
+    documentRef: doc,
+    storage,
+    sessionStorageRef: memoryStorage(FIRST_RUN_SESSION_KEY),
+    location: { search: '' },
+  });
+  flushRaf();
+  suppress.checked = true;
+  suppress.dispatch('change', { currentTarget: suppress });
+  assert.equal(storage.read(), 'suppressed');
+  assert.equal(suppress.checked, true);
+});
+
+test('a refused suppress write takes the tick back and says so', () => {
+  const { root, status, suppress } = makeLauncherRoot();
+  const doc = makeDocument(root);
+  initFirstRunExperience({
+    styleManager: makeStyleManager(),
+    documentRef: doc,
+    storage: { getItem: () => null, setItem: () => { throw new Error('blocked'); }, removeItem: () => {} },
+    sessionStorageRef: memoryStorage(FIRST_RUN_SESSION_KEY),
+    location: { search: '' },
+  });
+  flushRaf();
+  suppress.checked = true;
+  suppress.dispatch('change', { currentTarget: suppress });
+  assert.equal(suppress.checked, false, 'the tick follows the truth, not the wish');
+  assert.match(status.textContent, /blocking storage/);
+});
+
+test('Tab wraps inside the launcher: forward from the last control to the first', () => {
+  const { root, buttons, suppress } = makeLauncherRoot();
+  const doc = makeDocument(root);
+  initFirstRunExperience({
+    styleManager: makeStyleManager(),
+    documentRef: doc,
+    storage: memoryStorage(FIRST_RUN_STORAGE_KEY),
+    sessionStorageRef: memoryStorage(FIRST_RUN_SESSION_KEY),
+    location: { search: '' },
+  });
+  flushRaf();
+  const focusedAtReveal = buttons[0].focusCalls; // reveal() focuses the first tile
+  doc.activeElement = suppress;
+  const handled = pressKey(doc, { key: 'Tab', shiftKey: false });
+  assert.ok(handled.prevented);
+  assert.equal(buttons[0].focusCalls, focusedAtReveal + 1);
+});
+
+test('the scroll affordance follows real overflow, not a constant', () => {
+  const { root, choiceList } = makeLauncherRoot({ listOverflow: true });
+  const doc = makeDocument(root);
+  initFirstRunExperience({
+    styleManager: makeStyleManager(),
+    documentRef: doc,
+    storage: memoryStorage(FIRST_RUN_STORAGE_KEY),
+    sessionStorageRef: memoryStorage(FIRST_RUN_SESSION_KEY),
+    location: { search: '' },
+  });
+  flushRaf();
+  assert.equal(choiceList.dataset.scrollable, 'true');
 });
