@@ -20,16 +20,16 @@ request parameters cannot choose arbitrary upstream URLs. See APPLICATION.md.
 The optional **Precipitation** layer is the first data layer to own Cesium imagery
 rather than entities. It draws a zoom-banded precedence stack: Environment and
 Climate Change Canada's GDPS global model covers the globe, and NOAA/NWS MRMS
-radar replaces it over the lower 48 past tile level 8. Cesium resolves the
+radar replaces it over the lower 48 past tile level 3. Cesium resolves the
 handover from each placement's rectangle and level band, so no camera listener
 runs. The two level bands are derived from one ceiling and never overlap, so
 exactly one tier is drawn at any zoom — a coarse 15 km wash sitting on top of
-1 km radar was the alternative. The model draws to tile level 8 and stops:
-GDPS is a 15 km field, GeoMet answers a bbox under roughly 20 km with an empty
-tile, and leaving it uncapped mixed those empty children with stale coarse
-parents so the field read as squares punched out of it. Past that level the
-inlay is the only source, and where it does not reach a 15 km cell would only
-wash flat colour over a city view. The inlay's footprint ends on a straight
+1 km radar was the alternative. The model draws to tile level 3 and stops:
+GeoMet renders GDPS in roughly 42 km blocks on the ground whatever pixel size is
+requested, so below about 6,000 km of altitude — where level 4 first appears —
+the field reads as visible squares. Past that level the radar inlay is the only
+source, which means precipitation outside its footprint is shown at hemisphere
+scale only. The inlay's footprint ends on a straight
 boundary — Cesium exposes no
 per-pixel or per-tile alpha for imagery layers, and its type definition's
 function-valued `alpha` reaches the globe shader as a corrupt float uniform —

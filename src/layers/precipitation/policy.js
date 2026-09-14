@@ -9,16 +9,16 @@ export const LAYER_ID = 'precipitation';
 export const REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
- * Tile level past which the model stops being drawn at all.
+ * Tile level past which the model stops being drawn.
  *
- * GDPS is a 15 km field, so level 8 (~0.6 km/px) already oversamples it ~25x and
- * a deeper tile carries no more information. GeoMet also answers a bbox smaller
- * than ~20 km with a fully transparent 334-byte tile, so requesting past this
- * level produces a patchwork of stale coarse parents and empty children rather
- * than detail. Beyond here the radar inlay is the only useful source, and where
- * it does not reach a 15 km cell would only wash flat colour over the view.
+ * GeoMet renders GDPS in roughly 42 km blocks on the ground whatever pixel size
+ * is requested, so the field reads as visible squares once the camera drops
+ * below about 6,000 km — which is exactly where level 4 first appears. Past
+ * here the radar inlay carries the detail. Requesting deeper is pointless too:
+ * the model is never drawn there, and GeoMet answers a bbox under roughly 20 km
+ * with an empty tile.
  */
-export const MODEL_DETAIL_CEILING = 8;
+export const MODEL_DETAIL_CEILING = 3;
 
 /**
  * Tile level where the radar inlay takes over, derived so the two bands cannot
