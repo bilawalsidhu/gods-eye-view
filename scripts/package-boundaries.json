@@ -147,6 +147,7 @@
       "server/providers/cctv/normalize.js",
       "server/providers/cctv/sources.js",
       "src/data/directionText.js",
+      "src/data/calgaryCameras.js",
       "server/providers/common/geo.js",
       "server/providers/places/google-key.js",
       "scripts/google-server-key.mjs"

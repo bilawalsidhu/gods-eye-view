@@ -136,6 +136,12 @@ export const DATA_CREDITS = [
       'Contains OS data © Crown copyright and database rights.',
   },
   {
+    key: 'calgary-cctv',
+    html:
+      'Traffic cameras (Calgary): contains information licensed under the ' +
+      '<a href="https://data.calgary.ca" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },

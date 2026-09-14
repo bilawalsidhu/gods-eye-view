@@ -454,6 +454,8 @@
   "src/layers/cctv/presentation.js",
   "src/layers/cctv/ground.js",
   "src/layers/cctv/health.js",
+  "src/data/calgaryCameras.js",
+  "src/data/calgaryCameras.test.mjs",
   "src/data/cctv.js",
   "src/layers/cctv/source.test.mjs",
   "src/layers/radio/catalogModel.js",

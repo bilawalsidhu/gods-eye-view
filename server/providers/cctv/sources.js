@@ -10,6 +10,8 @@ import {
   TFL_IMAGE_ORIGIN,
   DEFAULT_TFL_MAX_SOURCES,
   LONDON_CENTER,
+  DEFAULT_CALGARY_ROWS_URL,
+  DEFAULT_CALGARY_MAX_SOURCES,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
 } from './constants.js';
 import {
@@ -24,6 +26,10 @@ import {
   prioritizeSources,
 } from './normalize.js';
 import { directionToHeading } from '../../../src/data/directionText.js';
+import {
+  CALGARY_DOWNTOWN,
+  toCalgaryCameraSources,
+} from '../../../src/data/calgaryCameras.js';
 /**
  * Fetch and parse Austin traffic camera records from the city Open Data portal.
  *
@@ -331,6 +337,62 @@ export async function loadTflSourcesFromOpenData() {
     return prioritized;
   } catch (error) {
     console.warn('[CCTV] TfL JamCam download error:', error?.message || error);
+    return [];
+  }
+}
+
+/**
+ * Fetch and parse City of Calgary traffic cameras from Open Calgary (Socrata
+ * dataset `k7p9-kppz`, ~214 cameras). Keyless.
+ *
+ * Parsing, URL pinning, and identity live in `src/data/calgaryCameras.js` so
+ * they stay unit-testable, the way `directionToHeading` is shared above. Note
+ * that this pack derives NO heading from the record: Calgary's `quadrant` field
+ * and the quadrant suffix on every camera name are the city's address grid, not
+ * a camera facing, so headings use the shared id-hash fallback at low
+ * confidence (see that module's header).
+ *
+ * @returns {Promise<Array<object>>} Prioritized camera sources, or [] on error.
+ */
+export async function loadCalgarySourcesFromOpenData() {
+  try {
+    const endpoint =
+      process.env.CCTV_CALGARY_ROWS_URL || DEFAULT_CALGARY_ROWS_URL;
+    const resp = await fetch(endpoint, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn('[CCTV] Calgary source download failed:', resp.status);
+      return [];
+    }
+    const rows = await resp.json();
+    const cameras = toCalgaryCameraSources(rows, {
+      fallbackHeading: fallbackHeadingFromId,
+    });
+
+    const maxRaw = Number(
+      process.env.CCTV_CALGARY_MAX_SOURCES || DEFAULT_CALGARY_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(400, Math.floor(maxRaw)))
+      : DEFAULT_CALGARY_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, [
+      CALGARY_DOWNTOWN,
+    ]);
+    if (prioritized.length !== cameras.length) {
+      console.log(
+        `[CCTV] Loaded Calgary camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
+      );
+    } else {
+      console.log('[CCTV] Loaded Calgary camera sources:', prioritized.length);
+    }
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Calgary source download error:',
+      error?.message || error,
+    );
     return [];
   }
 }

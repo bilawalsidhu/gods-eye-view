@@ -59,6 +59,20 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- **City of Calgary camera pack** for the CCTV Mesh (keyless). ~214 public
+  traffic cameras from Open Calgary, joining Austin, Caltrans and TfL. Frame
+  URLs are upgraded from the catalog's `http://` to HTTPS and pinned to the
+  city's own origin. Calgary publishes no camera facing — its `quadrant` field
+  and the quadrant suffix on every camera name are the city's address grid, not
+  a bearing — so headings use the shared id-hash fallback at low confidence and
+  are corrected with the calibration gizmo, as TfL cameras are.
+
+  The global CCTV source cap default rises from 900 to 1100 to fit four packs:
+  the cap keeps the first N after merging, so at 900 the last pack merged lost
+  more than half its cameras.
+
 - Separate radio directory loading, station selection, globe presentation and playback into composed components with an explicit metadata source.
 
 - Separate submarine cable sources and rendering components, and export bundled geography lookup modules.
