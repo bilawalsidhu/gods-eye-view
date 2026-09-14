@@ -3068,8 +3068,17 @@ silently demoting every later lookup for the session.
 
 Location search/fly-to, annotations and Radio location lookup receive one
 `placeSearch.geocode(query, { bias, signal })` service. `src/standalone` composes
-Google first when configured and Photon/OpenStreetMap as fallback, including
-Google transport failures or declined requests. The portable `./search` export
+two offline providers first — a strict decimal-degree coordinate reader and an
+exact-match reader over the bundled city and landmark names — then Google when
+configured and Photon/OpenStreetMap as fallback, including Google transport
+failures or declined requests. The offline pair answer with no request and no
+key, and decline everything they are not certain of: a coordinate must be a
+decimal-degree pair (either order when N/S/E/W fix the axes), and a bundled name
+must match exactly, so `12junk, 34oops` and `austin, tx` both reach the
+geocoders instead of being answered from the bundle. Degrees/minutes/seconds and
+grid references are not parsed. An answer either provider gives is exact, so
+nearby-landmark recovery stands aside for it — otherwise a typed coordinate
+could be replaced by whatever Places finds near the current view. The portable `./search` export
 provides the service and adapters; it reads no environment or application state.
 Existing browser/server key setup is unchanged.
 

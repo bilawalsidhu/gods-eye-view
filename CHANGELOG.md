@@ -171,6 +171,13 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   without moving the camera when nothing is under the centre of the view, and
   both follow Reset Globe out of Clean UI, recording, Scene playback and Cockpit
   (#442 — thanks @yashveeeeeeer).
+- The location search box answers two kinds of query without a network request
+  or an API key. A decimal-degree coordinate — `43.1731, -79.0384`, or either
+  order when N/S/E/W say which is which — flies straight there; a bundled city
+  or landmark name typed exactly (`paris`, `sf`, `Golden Gate Bridge`) flies to
+  the bundled place. Anything else, including anything malformed, goes to the
+  existing geocoders unchanged. Degrees/minutes/seconds and grid references are
+  not parsed and fall through the same way (#388 — thanks @KuraPiee).
 
 - Add Open Calgary traffic cameras as a keyless CCTV source pack (thanks
   @rileygramlich): the public City of Calgary catalog, frames pinned to the

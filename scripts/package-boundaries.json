@@ -276,7 +276,10 @@
       "src/keylessGeocoder.js",
       "src/search/geospatial.js",
       "src/search/http.js",
-      "src/search/defaults.js"
+      "src/search/defaults.js",
+      "src/search/coordinateGeocoder.js",
+      "src/search/coordinateParser.js",
+      "src/search/presetGeocoder.js"
     ],
     "external": []
   },
@@ -1587,7 +1590,10 @@
       "src/data/routeSteps.js",
       "src/layers/directions/index.js",
       "src/data/directions.js",
-      "src/app/layers/directions.js"
+      "src/app/layers/directions.js",
+      "src/search/coordinateGeocoder.js",
+      "src/search/coordinateParser.js",
+      "src/search/presetGeocoder.js"
     ],
     "external": [
       "@mapbox/vector-tile",
@@ -1932,7 +1938,10 @@
       "src/data/terrainHeights.js",
       "src/data/groundFloor.js",
       "src/data/directions.js",
-      "src/app/layers/directions.js"
+      "src/app/layers/directions.js",
+      "src/search/coordinateGeocoder.js",
+      "src/search/coordinateParser.js",
+      "src/search/presetGeocoder.js"
     ],
     "external": [
       "cesium",
@@ -1973,7 +1982,10 @@
       "src/services/groundSnap.js",
       "src/services/meshFloorSampler.js",
       "src/services/requests.js",
-      "src/services/terrainHeights.js"
+      "src/services/terrainHeights.js",
+      "src/search/coordinateGeocoder.js",
+      "src/search/coordinateParser.js",
+      "src/search/presetGeocoder.js"
     ],
     "external": [
       "cesium",
