@@ -34,25 +34,28 @@ Next iteration candidates:
 Status: Open (workaround available)
 
 Context:
-- The right rail lays its panels out itself and does not read a stored position,
-  so a CCTV panel that looks missing is collapsed or its layer is off rather than
-  parked off-screen. Only the DISPLAY rail (`pp-toggles`) can be dragged, and it
-  is the only panel whose position is stored.
+- The rails lay their panels out themselves. No panel is dragged into place at
+  startup and no stored position is read, so a panel that looks missing is
+  collapsed or its layer is off rather than parked off-screen. The CCTV panel
+  starts collapsed and stays that way until you open it or a camera activates.
 
 Workaround:
-- Check that the CCTV layer is enabled in the Layers panel, then expand the panel
-  from its header control; it also expands on its own when a camera activates.
-- If it still does not appear, clear its stored collapsed state and reload. In the
+- Check that the CCTV layer is enabled in the Layers panel, then open the panel
+  from its header control; it also opens on its own when a camera activates.
+- To force it open for the next load, store the expanded state and reload. In the
   browser console:
-  - `localStorage.removeItem('godsEyeView.v6.panelCollapsed.cctv-panel');`
+  - `localStorage.setItem('godsEyeView.v6.panelCollapsed.cctv-panel', '0');`
   - `location.reload();`
-- A DISPLAY rail dragged off-screen is the case a position key does fix:
-  - `localStorage.removeItem('godsEyeView.v8.panelPos.pp-toggles');`
+- Removing that key instead returns the panel to its default, which is collapsed:
+  - `localStorage.removeItem('godsEyeView.v6.panelCollapsed.cctv-panel');`
   - `location.reload();`
 
 Related keys (current versions):
-- Panel positions: `godsEyeView.v8.panelPos.<panel-id>` (written only for `pp-toggles`)
-- Panel collapsed state: `godsEyeView.v6.panelCollapsed.<panel-id>`
+- Panel collapsed state: `godsEyeView.v6.panelCollapsed.<panel-id>` — `'0'` open,
+  `'1'` closed, absent means the panel's own default.
+- Panel positions: `godsEyeView.v8.panelPos.<panel-id>` — the versioned name for a
+  stored position. The current layout writes none, so deleting one changes
+  nothing.
 - CCTV calibration: `godsEyeView.cctv.calibration.v2`
 
 ---
