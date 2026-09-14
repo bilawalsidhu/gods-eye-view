@@ -553,5 +553,7 @@
   "src/app/data.js",
   "src/app/tools.js",
   "src/app/startupChrome.js",
-  "src/app/errors.js"
+  "src/app/errors.js",
+  "scripts/project-root.mjs",
+  "src/toolProjectRoot.test.mjs"
 ]
