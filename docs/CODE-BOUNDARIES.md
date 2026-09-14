@@ -363,3 +363,25 @@ return an unsubscribe function. Initial state is emitted by default; pass
 immutable plain data. Reentrant publications retain delivery order; removing a
 listener or destroying its owner prevents further queued delivery. These APIs
 perform no network requests and discover no additional modules.
+
+## Maps
+
+`maps/controller` coordinates scene changes and lifetimes. `maps/imagery`,
+`maps/terrain` and `maps/3d` supply constructors; `maps/defaults` selects the
+standard sources and their setup/fallback policy. The standalone facade wires
+these to the application's render governor.
+
+A registry supplies `sources`, `defaultId`, `unknownId` and optional `recoveryId`.
+Each source has a user-facing `descriptor`, availability/reason, and either an
+`imagery({ signal })` factory or a supplied `tileset`/`createTileset({ signal })`.
+Imagery sources can share a terrain definition with a stable `id` and
+`create({ signal })` returning `{ provider }` or `{ terrain }`. Cache IDs must
+identify the same source for the lifetime of that registry. Sources may supply
+trusted credit markup and construction/tile-error fallback policy. Provider
+configuration stays in factories; descriptor values are the presentation API.
+
+Factories should honor cancellation where their SDK supports it. The controller
+also checks scene ownership after asynchronous work, so late results cannot
+replace a newer selection. Supplied tilesets are caller-owned; factory-created
+tilesets and provider caches are controller-owned. Construct a fresh controller
+for a new viewer or configuration lifetime.

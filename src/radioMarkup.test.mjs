@@ -11,7 +11,9 @@ import test from 'node:test';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const ui = readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
-const radio = readFileSync(new URL('./data/radio.js', import.meta.url), 'utf8');
+const radio = ['playback', 'interaction'].map(name =>
+  readFileSync(new URL(`./layers/radio/${name}.js`, import.meta.url), 'utf8')
+).join('\n').replace(/layerState\.|parts\.\w+\./g, '');
 const rocketLaunches = readLayerSource(new URL('./data/rocketLaunches.js', import.meta.url), 'utf8');
 const realtime = readFileSync(new URL('./voice/gevRealtime.js', import.meta.url), 'utf8');
 const voice = ['tools', 'instructions'].map(name => readFileSync(new URL(`../server/providers/openai/${name}.js`, import.meta.url), 'utf8')).join('\n');
@@ -341,13 +343,13 @@ test('Radio disclosure is explicit, starts closed while off, and preserves playb
 });
 
 test('successful explicit user playback hands the speaker from voice to Radio', () => {
-  const playStart = radio.indexOf('export async function playSelectedRadio');
-  const playMethod = radio.slice(playStart, radio.indexOf('\n/**', playStart + 10));
+  const playStart = radio.indexOf('async function playSelectedRadio');
+  const playMethod = radio.slice(playStart, radio.indexOf('function confirmRadioPlayback', playStart + 10)).replace(/\s+/g, ' ');
   const confirmedPlaying = playMethod.indexOf("_audioState = 'playing'");
   const takeoverSignal = playMethod.indexOf("if (origin === 'user') emitPlaybackControl('play', origin, ownedAttemptId)");
   assert.ok(confirmedPlaying >= 0 && takeoverSignal > confirmedPlaying);
-  assert.match(radio, /startPlayback: \(\) => playSelectedRadio\(\{ origin: 'voice', attemptId: options\.attemptId \}\)/);
-  assert.match(radio, /selectRadioStation\(stationId, \{ autoplay: true, origin: 'user' \}\)/);
+  assert.match(radio, /startPlayback: \(\) =>\s*playSelectedRadio\(\{\s*origin: 'voice',\s*attemptId: options\.attemptId,?\s*\}\)/);
+  assert.match(radio, /selectRadioStation\(stationId, \{\s*autoplay: true,\s*origin: 'user',?\s*\}\)/);
   assert.match(radioBindings, /togglePlayback\(\{ origin: 'user' \}\)/);
   assert.match(radioBindings, /cycleStation\(direction, \{[\s\S]*?origin: 'user'/);
   assert.match(radioBindings, /commitTuningStation\(station\.id, \{ origin: 'user' \}\)/);

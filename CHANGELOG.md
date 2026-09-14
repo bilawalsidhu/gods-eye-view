@@ -59,6 +59,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Separate map source factories from switching and resource ownership; retain current source IDs, attribution and fallbacks.
+
+- Separate radio directory loading, station selection, globe presentation and playback into composed components with an explicit metadata source.
+
+- Separate submarine cable sources and rendering components, and export bundled geography lookup modules.
+
 ### Fixed
 
 - Traffic now retries a failed destination after city navigation without a layer

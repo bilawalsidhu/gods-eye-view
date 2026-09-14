@@ -3318,3 +3318,47 @@ Cesium post-render events over one-second windows and does not request extra
 frames. Typing fields, modified keys and key repeats do not toggle it. The
 readout starts hidden each session and releases its timer and frame listener
 when hidden or when the application is disposed.
+
+
+## Radio components
+
+The radio entry composes one layer from directory ingestion, station queries,
+selection, globe rendering and playback modules. Its source supplies directory
+metadata and click reporting; scene, ground and overlay services are provided
+explicitly. Each constructed layer owns its catalog, audio and lifecycle state.
+Existing catalog validation, category filters, tuning and voice playback behavior
+remain unchanged. Audio connects directly to the broadcaster after an explicit
+play action; the source does not relay or record streams.
+
+## Bundled geography and submarine cable components
+
+Submarine cables use separate source, geometry, rendering, interaction and
+lifecycle modules. The layer factory accepts cable and landing-point GeoJSON
+collections from a source with `fetch(signal)` and a display label. The default
+source loads the same bundled TeleGeography files. Disabling still removes all
+three Cesium data sources; enabling rebuilds from the accepted parsed cache,
+and destroying clears it. Load ownership prevents cancelled work from adding
+entities after teardown.
+
+Natural Earth regions and neighborhood polygon lookup are package exports.
+Their existing lazy loaders, retry behavior, bundled datasets and attribution
+are unchanged. The cable dataset remains CC BY-NC-SA 3.0 and is not covered by
+the project's MIT license; see `DATA_SOURCES.md`.
+
+## Map source factories and coordination
+
+Map selection is composed from separate imagery, terrain and 3D factories.
+The default registry retains Google 3D, Bing Aerial/Labels, Esri Satellite and
+OSM, including their setup guidance and existing preset/share IDs. Esri still
+falls back to OSM on construction failure or two active tile failures, and
+credits follow the source actually displayed. Terrain remains lazy while the
+photoreal globe is hidden.
+
+Map credentials are passed to each source constructor rather than changing SDK-wide Google or ion defaults.
+
+The controller accepts other source registries without adding provider branches.
+Each instance caches source construction, ignores superseded scene changes and
+releases imagery layers/listeners on replacement. Destroy invalidates pending
+work and releases owned resources, including late factory results. Supplied 3D
+tilesets remain owned by the caller; tilesets created through the controller's
+factory are added to its viewer and removed on destruction.

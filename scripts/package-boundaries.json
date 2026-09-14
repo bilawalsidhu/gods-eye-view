@@ -897,5 +897,97 @@
       "src/data/cctvFootprint.js"
     ],
     "external": ["cesium"]
+  },
+  "radio-layer": {
+    "exports": ["./layers/radio"],
+    "modules": [
+      "src/data/iconOrientation.js",
+      "src/data/layerState.js",
+      "src/data/radioCountry.js",
+      "src/layers/radio/catalogModel.js",
+      "src/layers/radio/categories.js",
+      "src/layers/radio/clustering.js",
+      "src/layers/radio/controls.js",
+      "src/layers/radio/index.js",
+      "src/layers/radio/ingestion.js",
+      "src/layers/radio/interaction.js",
+      "src/layers/radio/labels.js",
+      "src/layers/radio/lifecycle.js",
+      "src/layers/radio/model.js",
+      "src/layers/radio/navigation.js",
+      "src/layers/radio/playback.js",
+      "src/layers/radio/policy.js",
+      "src/layers/radio/presentation.js",
+      "src/layers/radio/queries.js",
+      "src/layers/radio/rendering.js",
+      "src/layers/radio/selection.js",
+      "src/layers/radio/source.js",
+      "src/layers/radio/state.js",
+      "src/layers/radio/tuning.js",
+      "src/layers/radio/tuningNoise.js",
+      "src/layers/radio/volume.js",
+      "src/ui/radioTunerModel.js"
+    ],
+    "external": ["cesium"]
+  },
+  "submarine-cables": {
+    "exports": ["./layers/submarine-cables"],
+    "modules": [
+      "src/layers/submarineCables/geometry.js",
+      "src/layers/submarineCables/index.js",
+      "src/layers/submarineCables/ingestion.js",
+      "src/layers/submarineCables/interaction.js",
+      "src/layers/submarineCables/lifecycle.js",
+      "src/layers/submarineCables/overlay.js",
+      "src/layers/submarineCables/policy.js",
+      "src/layers/submarineCables/rendering.js",
+      "src/layers/submarineCables/state.js",
+      "src/layers/submarineCables/surface.js"
+    ],
+    "external": ["cesium"]
+  },
+  "bundled-cables": {
+    "exports": ["./sources/bundled-cables"],
+    "modules": [
+      "src/layers/submarineCables/bundledSource.js",
+      "src/data/local_data/telegeography_submarine_cables/cable-geo.json",
+      "src/data/local_data/telegeography_submarine_cables/landing-point-geo.json"
+    ],
+    "external": []
+  },
+  "geography": {
+    "exports": ["./geography/natural-earth", "./geography/neighborhoods"],
+    "modules": [
+      "src/data/naturalEarthRegions.js",
+      "src/data/neighborhoodPolygons.js",
+      "src/data/retryableLoad.js",
+      "src/data/local_data/neighborhoods/san-francisco.json",
+      "src/data/local_data/natural_earth/regions.json",
+      "src/data/local_data/natural_earth/marine.json"
+    ],
+    "external": []
+  },
+  "maps": {
+    "exports": [
+      "./maps/controller",
+      "./maps/catalog",
+      "./maps/imagery",
+      "./maps/terrain",
+      "./maps/3d",
+      "./maps/defaults"
+    ],
+    "modules": [
+      "src/maps/availability.js",
+      "src/maps/catalog.js",
+      "src/maps/controller.js",
+      "src/maps/credits.js",
+      "src/maps/defaultSources.js",
+      "src/maps/google3d.js",
+      "src/maps/imagery.js",
+      "src/maps/registry.js",
+      "src/maps/terrain.js",
+      "src/keySetupCore.mjs"
+    ],
+    "external": ["cesium"]
   }
 }
