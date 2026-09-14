@@ -25,16 +25,16 @@ level 3. Cesium resolves the
 handover from each placement's rectangle and level band, so no camera listener
 runs. The two level bands are derived from one ceiling and never overlap, so
 exactly one tier is drawn at any zoom — a coarse 15 km wash sitting on top of
-1 km radar was the alternative. The model draws to tile level 3 and stops:
-The model requests GeoMet's continuous `PRECIPPRTMMH-LINEAR` palette rather than
-the default: the default renders eight classes, so neighbouring 15 km cells of
-similar value merge into one flat plateau and the field reads as roughly 42 km
-squares, while the linear ramp gives 714 distinct colours over the same extent
-and keeps the native grid. The cells are still visible, so below about
-6,000 km of altitude — where level 4 first appears —
-the field reads as visible squares. Past that level the radar inlay is the only
-source, which means precipitation outside its footprint is shown at hemisphere
-scale only. The inlay's footprint ends on a straight
+1 km radar was the alternative. Three placements are used. The model draws globally to tile level 3; past that
+a second model placement continues everywhere except a cutout matching the radar
+footprint, and the radar fills that cutout. Exactly one source paints any point,
+and zooming in never leaves a region blank — outside the lower 48 the model
+simply keeps going. GeoMet renders GDPS in roughly 42 km blocks under its default
+palette, which is why the continuous ramp matters: it brings the cells back to
+near the native 15 km, coarse but usable at country zoom. The cutout's edge is a
+straight line, so the handover between model and radar is visible where it
+crosses the frame; both sides carry data, so it reads as a change of source
+rather than a hole. The inlay's footprint ends on a straight
 boundary — Cesium exposes no
 per-pixel or per-tile alpha for imagery layers, and its type definition's
 function-valued `alpha` reaches the globe shader as a corrupt float uniform —

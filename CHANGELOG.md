@@ -8,8 +8,9 @@
   with an Iowa Environmental Mesonet NEXRAD observed-radar inlay over the lower
   48, both keyless and read directly from the browser.
 - Resolve the tier handover through Cesium's imagery rectangle and level bands
-  rather than a camera listener; the model draws beneath the radar inlay and
-  stops at the tile level past which its 15 km grid carries no more detail.
+  rather than a camera listener; the radar replaces the model only inside its own
+  footprint, so zooming in outside the lower 48 keeps the model rather than
+  going blank.
 - Own only appended imagery handles, leaving the map controller's base layer at
   index 0 untouched across stack switches, and withdraw the overlay when a
   photoreal stack hides the globe.

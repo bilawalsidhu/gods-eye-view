@@ -42,6 +42,11 @@ export function tierLayerOptions(tier) {
   const options = { alpha: tier.alpha };
   if (tier.rectangleDegrees)
     options.rectangle = Cesium.Rectangle.fromDegrees(...tier.rectangleDegrees);
+  // Step aside exactly where a sharper tier takes over, and nowhere else.
+  if (tier.cutoutRectangleDegrees)
+    options.cutoutRectangle = Cesium.Rectangle.fromDegrees(
+      ...tier.cutoutRectangleDegrees,
+    );
   if (Number.isFinite(tier.minimumTerrainLevel))
     options.minimumTerrainLevel = tier.minimumTerrainLevel;
   if (Number.isFinite(tier.maximumTerrainLevel))

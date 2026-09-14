@@ -37,6 +37,13 @@ export const INLAY_HANDOVER_LEVEL = MODEL_DETAIL_CEILING + 1;
 /** Radar is 1 km; level 11 (~76 m/px) is already far past its resolution. */
 export const RADAR_DETAIL_CEILING = 11;
 
+/**
+ * Deepest level GeoMet still answers with data. Below roughly a 20 km bbox —
+ * level 10 and under — it returns a transparent tile, so the detail placement
+ * requests no deeper than this and Cesium magnifies past it.
+ */
+export const MODEL_REQUEST_CEILING = 8;
+
 /** The only hosts this layer ever contacts. */
 export const GEOMET_ORIGIN = 'https://geo.weather.gc.ca';
 export const IEM_ORIGIN = 'https://mesonet.agron.iastate.edu';
@@ -83,11 +90,34 @@ export const PRECIPITATION_TIERS = Object.freeze([
     // terrain, not a replacement for it.
     alpha: 0.42,
     rectangleDegrees: null,
-    // Stop requesting tiles GeoMet answers empty; Cesium upsamples instead.
+    cutoutRectangleDegrees: null,
     refreshMs: MODEL_REFRESH_MS,
     maxTileLevel: MODEL_DETAIL_CEILING,
     minimumTerrainLevel: undefined,
     maximumTerrainLevel: MODEL_DETAIL_CEILING,
+  }),
+  Object.freeze({
+    id: 'gdps-detail',
+    role: 'detail',
+    label: 'ECCC GDPS',
+    origin: GEOMET_ORIGIN,
+    service: `${GEOMET_ORIGIN}/geomet`,
+    wmsLayer: 'GDPS_15km_PrecipRate',
+    wmsStyle: 'PRECIPPRTMMH-LINEAR',
+    // Same service and layer as the wide placement, so one capabilities read
+    // covers both.
+    frameKey: `${GEOMET_ORIGIN}/geomet|GDPS_15km_PrecipRate`,
+    forecast: true,
+    alpha: 0.42,
+    rectangleDegrees: null,
+    // Yield only where radar actually replaces it. Everywhere else the model
+    // keeps drawing as the camera descends: a coarse field beats none, and the
+    // linear palette keeps its cells near the native 15 km rather than 42 km.
+    cutoutRectangleDegrees: CONUS_DEGREES,
+    refreshMs: MODEL_REFRESH_MS,
+    maxTileLevel: MODEL_REQUEST_CEILING,
+    minimumTerrainLevel: INLAY_HANDOVER_LEVEL,
+    maximumTerrainLevel: undefined,
   }),
   Object.freeze({
     id: 'nexrad-conus',
@@ -109,6 +139,7 @@ export const PRECIPITATION_TIERS = Object.freeze([
     forecast: false,
     alpha: 0.68,
     rectangleDegrees: CONUS_DEGREES,
+    cutoutRectangleDegrees: null,
     refreshMs: RADAR_REFRESH_MS,
     maxTileLevel: RADAR_DETAIL_CEILING,
     minimumTerrainLevel: INLAY_HANDOVER_LEVEL,

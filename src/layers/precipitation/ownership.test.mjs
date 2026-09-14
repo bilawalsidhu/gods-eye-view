@@ -220,8 +220,6 @@ test('every placement hands Cesium a numeric alpha', () => {
       options.alpha > 0 && options.alpha <= 1,
       `${tier.id} alpha range`,
     );
-    // No placement punches a hole in another: the model is continuous.
-    assert.equal(options.cutoutRectangle, undefined);
   }
   const inlay = PRECIPITATION_TIERS.find((tier) => tier.role === 'inlay');
   assert.ok(tierLayerOptions(inlay).rectangle instanceof Cesium.Rectangle);
@@ -251,28 +249,47 @@ test('no tier asks a service for tiles it answers empty', () => {
   assert.equal(primary.maximumTerrainLevel, primary.maxTileLevel);
 });
 
-test('the level bands never overlap, so one tier is drawn at a time', () => {
-  // Both tiers visible at once showed a coarse 15 km wash sitting on top of
-  // 1 km radar. The bands are derived from one ceiling so they cannot drift
-  // back into overlapping.
-  const bandOf = (tier) => [
-    tier.minimumTerrainLevel ?? 0,
-    tier.maximumTerrainLevel ?? Number.MAX_SAFE_INTEGER,
+test('at most one tier can paint any point at any zoom', () => {
+  // Two placements may share a level band only when they are spatially
+  // exclusive: the model's detail placement cuts out exactly the radar
+  // footprint, so the pair never double-paints while the model still covers
+  // everywhere radar does not reach.
+  const band = (t) => [
+    t.minimumTerrainLevel ?? 0,
+    t.maximumTerrainLevel ?? Number.MAX_SAFE_INTEGER,
   ];
+  const key = (r) => (r ? r.join(',') : null);
   for (const a of PRECIPITATION_TIERS)
     for (const b of PRECIPITATION_TIERS) {
       if (a === b) continue;
-      const [aMin, aMax] = bandOf(a);
-      const [bMin, bMax] = bandOf(b);
+      const [aMin, aMax] = band(a);
+      const [bMin, bMax] = band(b);
+      if (aMax < bMin || bMax < aMin) continue;
+      const exclusive =
+        (key(a.cutoutRectangleDegrees) &&
+          key(a.cutoutRectangleDegrees) === key(b.rectangleDegrees)) ||
+        (key(b.cutoutRectangleDegrees) &&
+          key(b.cutoutRectangleDegrees) === key(a.rectangleDegrees));
       assert.ok(
-        aMax < bMin || bMax < aMin,
-        `${a.id} and ${b.id} both draw between levels ${Math.max(aMin, bMin)} and ${Math.min(aMax, bMax)}`,
+        exclusive,
+        `${a.id} and ${b.id} share levels ${Math.max(aMin, bMin)}-${Math.min(aMax, bMax)} without a matching cutout`,
       );
     }
-  // And the inlay picks up exactly where the model stops — no dead level.
-  const primary = PRECIPITATION_TIERS.find((t) => t.role === 'primary');
+});
+
+test('zooming in never leaves a region with no precipitation at all', () => {
+  // The inlay covers only the lower 48. Everywhere else a model placement must
+  // keep drawing as the camera descends rather than the layer going blank.
+  const detail = PRECIPITATION_TIERS.find((t) => t.role === 'detail');
+  assert.ok(detail, 'a model placement must survive past the handover');
+  assert.equal(detail.rectangleDegrees, null, 'it must be global');
+  assert.equal(detail.maximumTerrainLevel, undefined, 'and unbounded in depth');
+  assert.equal(detail.minimumTerrainLevel, INLAY_HANDOVER_LEVEL);
+  // It must stay above the level where GeoMet answers with empty tiles.
+  assert.ok(detail.maxTileLevel <= 9, 'must not request empty tiles');
+  // Its cutout must match the inlay exactly, or the two would double-paint.
   const inlay = PRECIPITATION_TIERS.find((t) => t.role === 'inlay');
-  assert.equal(inlay.minimumTerrainLevel, primary.maximumTerrainLevel + 1);
+  assert.deepEqual(detail.cutoutRectangleDegrees, inlay.rectangleDegrees);
 });
 
 test('the model asks for the continuous palette, not the classed one', () => {
@@ -304,11 +321,13 @@ test('each tier refreshes on its own cadence, not the slowest one', async () => 
   };
   const { layer, viewer } = harness(source);
   await layer.update(viewer);
-  const first = calls.length;
+  // The two model placements share a frameKey, so one read serves both.
+  const distinctReads = new Set(PRECIPITATION_TIERS.map((t) => t.frameKey))
+    .size;
   assert.equal(
-    first,
-    PRECIPITATION_TIERS.length,
-    'the first tick polls everything',
+    calls.length,
+    distinctReads,
+    'the first tick polls every source',
   );
 
   // Immediately after, nothing is due — and that is a healthy tick, not a failure.
