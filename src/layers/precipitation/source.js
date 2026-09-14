@@ -23,7 +23,11 @@ export function createPrecipitationSource({
         throw new TypeError('A pinned HTTPS precipitation service is required');
       signal?.throwIfAborted();
       // Nothing to read: this service advertises no time and always serves now.
-      if (tier.dated === false) return liveFrame();
+      if (tier.frameMode === 'live') return liveFrame();
+      // Fail loudly rather than silently reading a tier that declares no mode:
+      // a typo here would otherwise present as a service that never has data.
+      if (tier.frameMode !== 'dimension')
+        throw new TypeError(`${tier.label} declares no frame mode`);
       const response = await fetchImpl(capabilitiesUrl(tier), {
         method: 'GET',
         headers: { Accept: 'text/xml' },

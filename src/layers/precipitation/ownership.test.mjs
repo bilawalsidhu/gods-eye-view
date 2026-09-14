@@ -6,11 +6,24 @@ import {
   createImageryStack,
   tierImageryOptions,
   tierLayerOptions,
+  tierRectangles,
 } from './imagery.js';
-import { INLAY_HANDOVER_LEVEL, PRECIPITATION_TIERS } from './policy.js';
+import {
+  FRAME_MODES,
+  INLAY_HANDOVER_LEVEL,
+  PRECIPITATION_TIERS,
+  TIER_KINDS,
+} from './policy.js';
 
-/** Every placement in the precedence table owns one imagery layer. */
-const OWNED = PRECIPITATION_TIERS.length;
+/**
+ * Imagery layers the table owns in total. A tier whose domain is not one box
+ * covers it with several rectangles and owns one layer per rectangle, so this
+ * is not the tier count.
+ */
+const OWNED = PRECIPITATION_TIERS.reduce(
+  (total, tier) => total + tierRectangles(tier).length,
+  0,
+);
 
 const FRAME = {
   key: '2026-09-14T15:00:00Z',
@@ -217,24 +230,24 @@ test('every placement hands Cesium a numeric alpha', () => {
   // globe shader assigns it straight into a float uniform. A function reached
   // the uniform as NaN and rendered the entire globe black at every zoom where
   // the bounded inlay was live.
-  for (const tier of PRECIPITATION_TIERS) {
-    const options = tierLayerOptions(tier);
-    assert.equal(
-      typeof options.alpha,
-      'number',
-      `${tier.id} must pass a numeric alpha`,
-    );
-    assert.ok(
-      options.alpha > 0 && options.alpha <= 1,
-      `${tier.id} alpha range`,
-    );
-  }
+  for (const tier of PRECIPITATION_TIERS)
+    for (const rectangle of tierRectangles(tier)) {
+      const options = tierLayerOptions(tier, rectangle);
+      assert.equal(
+        typeof options.alpha,
+        'number',
+        `${tier.id} must pass a numeric alpha`,
+      );
+      assert.ok(
+        options.alpha > 0 && options.alpha <= 1,
+        `${tier.id} alpha range`,
+      );
+    }
   const inlay = PRECIPITATION_TIERS.find((tier) => tier.role === 'inlay');
-  assert.ok(tierLayerOptions(inlay).rectangle instanceof Cesium.Rectangle);
-  assert.equal(
-    tierLayerOptions(inlay).minimumTerrainLevel,
-    INLAY_HANDOVER_LEVEL,
-  );
+  const [box] = tierRectangles(inlay);
+  const bounded = tierLayerOptions(inlay, box);
+  assert.ok(bounded.rectangle instanceof Cesium.Rectangle);
+  assert.equal(bounded.minimumTerrainLevel, INLAY_HANDOVER_LEVEL);
 });
 
 test('no tier asks a service for tiles it answers empty', () => {
@@ -266,6 +279,11 @@ test('at most one tier can paint any point at any zoom', () => {
     t.minimumTerrainLevel ?? 0,
     t.maximumTerrainLevel ?? Number.MAX_SAFE_INTEGER,
   ];
+  // A cutout can only cancel a cover that is one box; the day a tier needs
+  // several, this test is what forces the ladder's ordering invariant to
+  // replace it rather than the exclusivity claim quietly going stale.
+  const cover = (t) =>
+    t.rectanglesDegrees?.length === 1 ? t.rectanglesDegrees[0].join(',') : null;
   const key = (r) => (r ? r.join(',') : null);
   for (const a of PRECIPITATION_TIERS)
     for (const b of PRECIPITATION_TIERS) {
@@ -275,9 +293,9 @@ test('at most one tier can paint any point at any zoom', () => {
       if (aMax < bMin || bMax < aMin) continue;
       const exclusive =
         (key(a.cutoutRectangleDegrees) &&
-          key(a.cutoutRectangleDegrees) === key(b.rectangleDegrees)) ||
+          key(a.cutoutRectangleDegrees) === cover(b)) ||
         (key(b.cutoutRectangleDegrees) &&
-          key(b.cutoutRectangleDegrees) === key(a.rectangleDegrees));
+          key(b.cutoutRectangleDegrees) === cover(a));
       assert.ok(
         exclusive,
         `${a.id} and ${b.id} share levels ${Math.max(aMin, bMin)}-${Math.min(aMax, bMax)} without a matching cutout`,
@@ -290,14 +308,14 @@ test('zooming in never leaves a region with no precipitation at all', () => {
   // keep drawing as the camera descends rather than the layer going blank.
   const detail = PRECIPITATION_TIERS.find((t) => t.role === 'detail');
   assert.ok(detail, 'a model placement must survive past the handover');
-  assert.equal(detail.rectangleDegrees, null, 'it must be global');
+  assert.equal(detail.rectanglesDegrees, null, 'it must be global');
   assert.equal(detail.maximumTerrainLevel, undefined, 'and unbounded in depth');
   assert.equal(detail.minimumTerrainLevel, INLAY_HANDOVER_LEVEL);
   // It must stay above the level where GeoMet answers with empty tiles.
   assert.ok(detail.maxTileLevel <= 9, 'must not request empty tiles');
   // Its cutout must match the inlay exactly, or the two would double-paint.
   const inlay = PRECIPITATION_TIERS.find((t) => t.role === 'inlay');
-  assert.deepEqual(detail.cutoutRectangleDegrees, inlay.rectangleDegrees);
+  assert.deepEqual(detail.cutoutRectangleDegrees, tierRectangles(inlay)[0]);
 });
 
 test('the model asks for the continuous palette, not the classed one', () => {
@@ -329,9 +347,8 @@ test('each tier refreshes on its own cadence, not the slowest one', async () => 
   };
   const { layer, viewer } = harness(source);
   await layer.update(viewer);
-  // The two model placements share a frameKey, so one read serves both.
-  const distinctReads = new Set(PRECIPITATION_TIERS.map((t) => t.frameKey))
-    .size;
+  // The two model placements share a capsKey, so one read serves both.
+  const distinctReads = new Set(PRECIPITATION_TIERS.map((t) => t.capsKey)).size;
   assert.equal(
     calls.length,
     distinctReads,
@@ -407,4 +424,116 @@ test('a tier refreshing on its own cadence stays at its rung', () => {
   assertOrdered('after the coarse tier refreshed');
   assert.equal(layers[0], base, 'the base map still owns index 0');
   assert.equal(layers.length, PRECIPITATION_TIERS.length + 1, 'no duplicates');
+});
+
+test('every tier declares what the ladder dispatches on', () => {
+  // The table is the only place a source is described, so anything the runtime
+  // branches on has to be present here rather than inferred from a missing
+  // field. `wmsStyle` counts even when it is null: an explicit null records
+  // that the server default was chosen, which is the distinction that hid a
+  // collapsed palette behind a working-looking layer.
+  for (const tier of PRECIPITATION_TIERS) {
+    assert.ok(TIER_KINDS.includes(tier.kind), `${tier.id} kind`);
+    assert.ok(FRAME_MODES.includes(tier.frameMode), `${tier.id} frameMode`);
+    assert.ok(Number.isInteger(tier.rung) && tier.rung >= 1, `${tier.id} rung`);
+    assert.equal(typeof tier.capsKey, 'string', `${tier.id} capsKey`);
+    assert.ok(Number.isFinite(tier.refreshMs), `${tier.id} refreshMs`);
+    if (tier.kind !== 'wms') continue;
+    assert.equal(typeof tier.wmsLayer, 'string', `${tier.id} wmsLayer`);
+    assert.ok('wmsStyle' in tier, `${tier.id} must state a style, even null`);
+    assert.equal(
+      tier.service.startsWith(`${tier.origin}/`),
+      true,
+      `${tier.id} service must sit under its pinned origin`,
+    );
+  }
+});
+
+test('placements sharing a capabilities read must want the same frame', () => {
+  // One read serves every tier with the same capsKey, so two tiers may only
+  // share one if the document answers for both. Until the parse is scoped to a
+  // named layer, that means the same service and the same layer.
+  const byKey = new Map();
+  for (const tier of PRECIPITATION_TIERS) {
+    const want = `${tier.service}|${tier.wmsLayer}|${tier.frameMode}`;
+    const seen = byKey.get(tier.capsKey);
+    if (seen)
+      assert.equal(
+        seen.want,
+        want,
+        `${tier.id} shares a capsKey with ${seen.id} but reads a different frame`,
+      );
+    else byKey.set(tier.capsKey, { id: tier.id, want });
+  }
+});
+
+test('a tier covering several rectangles owns one layer per rectangle', () => {
+  // `ImageryLayer` accepts one rectangle, so a domain that is not a box is
+  // covered by several layers over a shared provider rather than approximated
+  // by the one box that fits. They must land as a contiguous run at the tier's
+  // rung, or a finer tier could end up sandwiched between two of them.
+  const base = { id: 'base-map' };
+  const layers = [base];
+  const viewer = {
+    imageryLayers: {
+      add(layer, index) {
+        if (Number.isInteger(index)) layers.splice(index, 0, layer);
+        else layers.push(layer);
+      },
+      remove(layer) {
+        const at = layers.indexOf(layer);
+        if (at >= 0) layers.splice(at, 1);
+      },
+      indexOf: (layer) => layers.indexOf(layer),
+      get length() {
+        return layers.length;
+      },
+    },
+  };
+  const [model] = PRECIPITATION_TIERS;
+  const cover = Object.freeze({
+    ...model,
+    id: 'cover-tier',
+    rectanglesDegrees: Object.freeze([
+      Object.freeze([-140, 20, -50, 70]),
+      Object.freeze([-12, 35, 40, 72]),
+    ]),
+  });
+  const finer = PRECIPITATION_TIERS.find((tier) => tier.rung > cover.rung);
+  assert.ok(finer, 'the fixture needs a tier above the cover');
+
+  const stack = createImageryStack();
+  const frame = { key: 'k', validTime: null, referenceTime: null };
+  stack.apply(viewer, finer, frame);
+  const placed = stack.apply(viewer, cover, frame);
+
+  assert.equal(placed.length, 2, 'one layer per rectangle');
+  assert.equal(
+    placed[0].imageryProvider,
+    placed[1].imageryProvider,
+    'the cover shares one provider, so it costs one capabilities read',
+  );
+  assert.notDeepEqual(placed[0].rectangle, placed[1].rectangle);
+  const at = placed.map((layer) => layers.indexOf(layer)).sort((a, b) => a - b);
+  assert.deepEqual(at, [1, 2], 'contiguous, and above the base map');
+  assert.equal(
+    stack.indexOf(viewer, 'cover-tier'),
+    1,
+    'the tier reports the lowest index of its run',
+  );
+  assert.ok(
+    Math.max(...at) < stack.indexOf(viewer, finer.id),
+    'the finer tier stays above the whole run, never inside it',
+  );
+  assert.equal(stack.size, 2, 'a cover tier still counts as one tier');
+
+  // Refreshing the cover replaces both layers and keeps the run together.
+  const again = stack.apply(viewer, cover, { ...frame, key: 'k2' });
+  assert.equal(layers.length, 4, 'no duplicates left behind');
+  for (const layer of placed)
+    assert.ok(!layers.includes(layer), 'superseded layers are removed');
+  assert.deepEqual(
+    again.map((layer) => layers.indexOf(layer)).sort((a, b) => a - b),
+    [1, 2],
+  );
 });

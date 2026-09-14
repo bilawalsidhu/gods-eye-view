@@ -65,7 +65,7 @@ export function createPrecipitationLayer({
       request.signal.aborted || _request !== request || !_enabled || _hidden;
     try {
       let refreshed = 0;
-      // Placements that read the same service and layer share one request.
+      // Placements resolving to the same capabilities read share one request.
       const fetched = new Map();
       const now = Date.now();
       for (const tier of tiers) {
@@ -74,12 +74,12 @@ export function createPrecipitationLayer({
         const cadence = tier.refreshMs ?? MODEL_REFRESH_MS;
         const due = now - (polledAt.get(tier.id) ?? -Infinity) >= cadence;
         if (!due && frames.has(tier.id)) continue;
-        let frame = fetched.get(tier.frameKey);
+        let frame = fetched.get(tier.capsKey);
         if (!frame) {
           frame = await source.getFrame(tier, { signal: request.signal });
           // A late body must never publish into a layer that moved on.
           if (settled()) return false;
-          fetched.set(tier.frameKey, frame);
+          fetched.set(tier.capsKey, frame);
         }
         polledAt.set(tier.id, now);
         if (frames.get(tier.id)?.key !== frame.key) {

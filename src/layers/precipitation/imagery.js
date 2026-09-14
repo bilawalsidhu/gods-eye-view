@@ -32,19 +32,36 @@ export function tierImageryOptions(tier, frame) {
   // Pin the step only when the service publishes one; an undated service is
   // asked for whatever is current.
   if (frame?.validTime) options.parameters.TIME = frame.validTime;
-  if (tier.attribution) options.credit = new Cesium.Credit(tier.attribution);
+  // No per-provider Cesium.Credit here on purpose. One would land in the
+  // display's *dynamic* frame credits, while the attribution gate reads
+  // `creditDisplay._staticCredits` — so a credit attached here would look like
+  // attribution while failing the check. Every source is credited through
+  // DATA_CREDITS instead.
   return options;
 }
 
-/** Layer options carrying this tier's place in the precedence stack. */
-export function tierLayerOptions(tier) {
+/**
+ * The rectangles this tier paints, as a cover. `[null]` means the whole globe.
+ *
+ * A domain that is not one box — a regional model reaching across North
+ * America, Europe and the Arctic, or a radar footprint that cannot share a
+ * rectangle with the mainland — is expressed as several rectangles rather than
+ * approximated by the one box `ImageryLayer` accepts.
+ */
+export function tierRectangles(tier) {
+  const cover = tier.rectanglesDegrees;
+  return cover?.length ? cover : [null];
+}
+
+/** Layer options for one rectangle of a tier's cover. */
+export function tierLayerOptions(tier, rectangleDegrees = null) {
   // Alpha must stay a plain number. Cesium's type definition still advertises a
   // per-tile function, but the globe shader assigns the value straight into a
   // float uniform (`uniforms.imageryTextureAlpha[i] = imageryLayer.alpha`), so a
   // function silently corrupts the uniform and renders the whole globe black.
   const options = { alpha: tier.alpha };
-  if (tier.rectangleDegrees)
-    options.rectangle = Cesium.Rectangle.fromDegrees(...tier.rectangleDegrees);
+  if (rectangleDegrees)
+    options.rectangle = Cesium.Rectangle.fromDegrees(...rectangleDegrees);
   // Step aside exactly where a sharper tier takes over, and nowhere else.
   if (tier.cutoutRectangleDegrees)
     options.cutoutRectangle = Cesium.Rectangle.fromDegrees(
@@ -72,7 +89,8 @@ export function createImageryStack() {
     const entry = owned.get(tierId);
     if (!entry) return false;
     owned.delete(tierId);
-    viewer?.imageryLayers?.remove(entry.layer, true);
+    for (const layer of entry.layers)
+      viewer?.imageryLayers?.remove(layer, true);
     return true;
   };
 
@@ -91,8 +109,10 @@ export function createImageryStack() {
     let index = layers.length;
     for (const entry of owned.values()) {
       if (entry.rung <= tier.rung) continue;
-      const at = layers.indexOf(entry.layer);
-      if (at >= 0 && at < index) index = at;
+      for (const layer of entry.layers) {
+        const at = layers.indexOf(layer);
+        if (at >= 0 && at < index) index = at;
+      }
     }
     return index;
   };
@@ -100,14 +120,25 @@ export function createImageryStack() {
   return {
     /** Swap one tier to a new frame, leaving the other tiers untouched. */
     apply(viewer, tier, frame) {
+      // One provider serves the whole cover. Verified against the installed
+      // Cesium: `ImageryLayer.destroy` is `destroyObject(this)` and never
+      // touches `_imageryProvider`, and `_imageryCache` is a per-instance
+      // field — so sharing costs no lifetime tangle and each rectangle still
+      // keeps its own tiles.
       const provider = new Cesium.WebMapServiceImageryProvider(
         tierImageryOptions(tier, frame),
       );
-      const next = new Cesium.ImageryLayer(provider, tierLayerOptions(tier));
+      const next = tierRectangles(tier).map(
+        (rectangle) =>
+          new Cesium.ImageryLayer(provider, tierLayerOptions(tier, rectangle)),
+      );
       // Add before removing so a live tier never blinks through the base map.
-      viewer.imageryLayers.add(next, insertIndexFor(viewer, tier));
+      const index = insertIndexFor(viewer, tier);
+      next.forEach((layer, offset) =>
+        viewer.imageryLayers.add(layer, index + offset),
+      );
       detach(viewer, tier.id);
-      owned.set(tier.id, { layer: next, rung: tier.rung });
+      owned.set(tier.id, { layers: next, rung: tier.rung });
       return next;
     },
     remove: detach,
@@ -121,11 +152,21 @@ export function createImageryStack() {
     ownedIds() {
       return [...owned.keys()];
     },
-    /** Live collection index of an owned tier, for ordering assertions. */
+    /**
+     * Lowest live collection index this tier occupies, for ordering assertions.
+     * A tier covering several rectangles owns a contiguous run from here.
+     */
     indexOf(viewer, tierId) {
       const entry = owned.get(tierId);
-      return entry ? viewer.imageryLayers.indexOf(entry.layer) : -1;
+      if (!entry) return -1;
+      let lowest = -1;
+      for (const layer of entry.layers) {
+        const at = viewer.imageryLayers.indexOf(layer);
+        if (at >= 0 && (lowest < 0 || at < lowest)) lowest = at;
+      }
+      return lowest;
     },
+    /** Tiers placed, not layers: a cover tier still counts once. */
     get size() {
       return owned.size;
     },
