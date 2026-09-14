@@ -358,19 +358,24 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 ### Added
 
 - **Directions layer** — keyless A→B directions without a geocoder or a
-  microphone. The row's chips arm a globe click for A and B (DRIVE / WALK /
-  BIKE, SWAP, FLY, CLEAR); the route comes from the existing `/api/route`
-  proxy (OSRM on the FOSSGIS servers), is draped on terrain and 3D tiles with
-  the same flowing dashes as voice routes, and drops one dot per maneuver —
-  click one for the instruction. FLY rides the shared route-flight cinematic.
-  A route that cannot be found says so; no straight line is ever drawn as a
-  route. Share links carry the layer as token `n`.
+  microphone (thanks @spcpza). The row's chips arm a globe click for A and B
+  (DRIVE / WALK / BIKE, SWAP, FLY, CLEAR); the route comes from the existing
+  `/api/route` proxy (OSRM on the FOSSGIS servers), is draped on terrain and
+  3D tiles with the same flowing dashes as voice routes, and drops one dot per
+  maneuver. Below the chips is a compact keyboard-reachable ordered list of the
+  turns — distance and instruction per step; click one to open that maneuver's
+  card. FLY rides the shared route-flight cinematic through the same camera
+  authority voice destinations use, and highlights the step it is on as it
+  goes. A route that cannot be found says so; no straight line is ever drawn as
+  a route. Share links carry the layer as token `n`.
 - `/api/route` now returns turn-by-turn steps when asked (`steps=1`), phrased
-  in plain English from OSRM's maneuver data (`src/data/routeSteps.js`). The
-  upstream is always asked for steps, so the annotation engine and the
-  Directions layer share one cached upstream call per route.
+  in plain English from OSRM's maneuver data (`src/data/routeSteps.js`). Steps
+  are opt-in per request, so callers that do not read them (voice route
+  annotations, `fly_route`) get exactly the response they got before; identical
+  requests in flight at the same time share one upstream call.
 - The Data attribution popover now credits OSRM / FOSSGIS routing (used by
-  voice routes since launch, previously uncredited).
+  voice routes since launch, previously uncredited), with the OpenStreetMap
+  credit and the "fix the map" link the service's usage policy asks for.
 
 ### Changed
 

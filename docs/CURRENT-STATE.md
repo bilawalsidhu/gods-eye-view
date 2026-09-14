@@ -2383,22 +2383,58 @@ cancels), placing clamped A/B markers; with both placed the layer requests
 `/api/route?…&steps=1`, drapes the geometry as a `ClassificationType.BOTH`
 ground polyline with the annotation renderer's flowing-dash material (so it
 reads on the keyless terrain globe and on 3D tiles alike), and drops one white
-point primitive per intermediate maneuver. Clicking a dot opens a protected
+point primitive per intermediate maneuver. Those dots are anchored on the
+shared ground floor (`cachedGroundFloor` — the rendered mesh cell on the
+photoreal stack, the Re:Earth DEM cell on the keyless terrain stacks) and stay
+hidden until their cell answers, so a route through Denver is not marked a
+kilometre and a half below the city. Clicking a dot opens a protected
 shared-host card with the instruction, the leg after it, and the next
-instruction; Escape or a click on empty globe clears it. SWAP reverses the
-endpoints and reroutes; changing the mode reroutes; CLEAR removes everything.
-FLY hands the geometry to `flyRoute` (the same cinematic as voice `fly_route`)
-after an idempotent `initCameraVerbs` so no voice session is required. The row
-meta reads `OSM routing · 21 km · 25 min · Drive`; while routing it shows
-`Routing…`, and a router miss reads `No route found between A and B` — the
-layer never substitutes a straight line. The layer holds continuous render
-only while a route is drawn (the dashes animate). Disable clears all state.
+instruction; Escape or a click on empty globe clears it. Below the chips the
+row lists the turns in order — distance and instruction per step, each one a
+button a keyboard can reach; clicking one opens that maneuver's card, and the
+step the camera is on is highlighted and scrolled into view during FLY. SWAP
+reverses the endpoints and reroutes; changing the mode reroutes; CLEAR removes
+everything. The row meta reads `OSM routing · 21 km · 25 min · Drive`; while
+routing it shows `Routing…`, and a router miss reads
+`No route found between A and B` — the layer never substitutes a straight line.
+The layer holds continuous render only while a route is drawn (the dashes
+animate). Disable clears all state.
 
-`/api/route` (`server/providers/places/routes.js`) always asks OSRM for steps
-and caches the full response, serving the step list only when `steps=1` is
-requested; `src/data/routeSteps.js` turns OSRM maneuver type / modifier / exit
-/ road name into one plain-English sentence per decision, folding
-`exit roundabout` steps into the roundabout they leave.
+**Keys needed: none.** Directions works on a keyless boot, and the layer is off
+until the operator turns it on.
+
+**Context behavior.** Directions is not a Context layer: neither Contacts nor
+Space Missions reads it, depends on it, or lists it as a companion. It is
+therefore one of the layers an exclusive Context mode switches off on entry
+(`_clearLayersOutsideContextMode`) and restores on exit, like every other
+non-participating layer — the route and both endpoints are cleared with it, and
+placing them again is the way back. Cockpit does not touch the layer either,
+but it does own the camera: pressing FLY inside Cockpit is refused with the
+shell's "Exit cockpit to fly to a route" toast, because FLY now goes through
+the same navigation authority as every other camera destination.
+
+**Clicks and the camera.** Arming SET A or SET B claims the shared pointer
+(`src/data/inputOwnership.js`) as owner `directions`, so no other layer selects
+whatever was under the placing click; the claim is released on placement,
+cancel, Escape, CLEAR, disable and destroy, and if another tool already holds
+it nothing is armed and the row says so. Maneuver-dot selection is an ordinary
+ambient handler and yields while any tool holds the pointer. FLY runs through
+the UI shell's immediate-navigation facade — the same camera authority
+validated voice destinations use — and is handed the shared ground-floor read
+and corridor warm, so the dolly does not fly a mountain corridor at sea level.
+CLEAR, disable and destroy stop the flight *this layer started* and only that
+one: `flyRoute` returns a motion id and `interruptCameraMotionIfActive` refuses
+to stop a motion someone else began.
+
+`/api/route` (`server/providers/places/routes.js`) asks OSRM for maneuvers only
+when the request does (`steps=1`), so a caller that does not read them — the
+voice route annotation, `fly_route` — gets the same small response it always
+did; a cached response that carries steps still serves those callers their own
+shape. Identical requests that are in flight at the same time share one
+upstream call. `src/data/routeSteps.js` turns OSRM maneuver type / modifier /
+exit / road name into one plain-English sentence per decision, folding
+`exit roundabout` steps into the roundabout they leave, and caps one route at
+200 maneuvers.
 
 `src/data/militaryAwareness.js` remains registered internally as the Contacts
 coordinator, but it is not a user-visible Data Layers entry. Its visible entry

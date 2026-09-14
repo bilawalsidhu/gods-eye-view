@@ -210,10 +210,10 @@ export class LayerPanel {
         // sequence (turn-by-turn directions). Its own delegated listener, its
         // own container — the chip row stays a chip row.
         const list = document.createElement('ol');
-        list.className = 'data-toggle-list';
+        list.className = 'data-row-list';
         list.hidden = true;
         this._bind(list, 'click', (event) => {
-          const button = event.target?.closest?.('.data-toggle-list-item');
+          const button = event.target?.closest?.('.data-row-list-item');
           if (!button || button.disabled) return;
           const item = this._rowControlsFor(layer.id)?.list?.items?.find(
             (entry) => entry.id === button.dataset.listItemId,
@@ -248,7 +248,7 @@ export class LayerPanel {
    * are replaced freely.
    * @param {HTMLElement|null} container The row's `.data-toggle-controls` node.
    * @param {object} layer Registered layer entry.
-   * @param {HTMLElement|null} [listContainer] The row's `.data-toggle-list` node.
+   * @param {HTMLElement|null} [listContainer] The row's `.data-row-list` node.
    */
   _syncRowControls(container, layer, listContainer = null) {
     if (!container) return;
@@ -312,7 +312,7 @@ export class LayerPanel {
    * keyed by id, for the same reason chips are: this runs on every refresh —
    * including the one a click on the list triggers — and replacing the node
    * would drop keyboard focus mid-interaction.
-   * @param {HTMLElement|null} container The row's `.data-toggle-list` node.
+   * @param {HTMLElement|null} container The row's `.data-row-list` node.
    * @param {{ariaLabel?: string, items?: Array<object>}|null} list Descriptor.
    */
   _syncRowList(container, list) {
@@ -336,24 +336,24 @@ export class LayerPanel {
         entry.dataset.listItemId = item.id;
         button = document.createElement('button');
         button.type = 'button';
-        button.className = 'data-toggle-list-item';
+        button.className = 'data-row-list-item';
         button.dataset.listItemId = item.id;
         const lead = document.createElement('span');
-        lead.className = 'data-toggle-list-lead';
+        lead.className = 'data-row-list-lead';
         const text = document.createElement('span');
-        text.className = 'data-toggle-list-text';
+        text.className = 'data-row-list-text';
         button.append(lead, text);
         entry.appendChild(button);
       } else {
-        button = entry.querySelector('.data-toggle-list-item');
+        button = entry.querySelector('.data-row-list-item');
       }
       // Keep DOM order in step with descriptor order without rebuilding.
       const anchor = previous ? previous.nextSibling : container.firstChild;
       if (entry !== anchor) container.insertBefore(entry, anchor);
       previous = entry;
       if (!button) continue;
-      const lead = button.querySelector('.data-toggle-list-lead');
-      const text = button.querySelector('.data-toggle-list-text');
+      const lead = button.querySelector('.data-row-list-lead');
+      const text = button.querySelector('.data-row-list-text');
       const leadText = String(item.lead ?? '');
       const bodyText = String(item.text ?? '');
       if (lead && lead.textContent !== leadText) lead.textContent = leadText;
@@ -411,7 +411,7 @@ export class LayerPanel {
       this._syncRowControls(
         row.querySelector('.data-toggle-controls'),
         layer,
-        row.querySelector('.data-toggle-list'),
+        row.querySelector('.data-row-list'),
       );
     }
   }

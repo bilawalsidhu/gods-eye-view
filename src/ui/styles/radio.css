@@ -804,7 +804,7 @@
 /* Optional per-layer ordered list: the turn-by-turn directions under the
    Directions row. Kept short and scrollable so a 40-step drive cannot push the
    rest of the rail off screen. */
-.data-toggle-list {
+.data-row-list {
   list-style: none;
   margin: 4px 0 0;
   padding: 0 0 0 26px;
@@ -813,11 +813,11 @@
   counter-reset: gev-step;
 }
 
-.data-toggle-list[hidden] {
+.data-row-list[hidden] {
   display: none;
 }
 
-.data-toggle-list-item {
+.data-row-list-item {
   counter-increment: gev-step;
   display: flex;
   align-items: baseline;
@@ -840,7 +840,7 @@
   outline: none;
 }
 
-.data-toggle-list-item::before {
+.data-row-list-item::before {
   content: counter(gev-step);
   min-width: 13px;
   text-align: right;
@@ -849,14 +849,14 @@
   flex: none;
 }
 
-.data-toggle-list-item:hover,
-.data-toggle-list-item:focus-visible {
+.data-row-list-item:hover,
+.data-row-list-item:focus-visible {
   border-color: var(--glass-border-hover);
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-secondary);
 }
 
-.data-toggle-list-item.active {
+.data-row-list-item.active {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-dim);
@@ -864,18 +864,18 @@
 
 /* The step the camera is on during FLY: the same accent, plus a rail on the
    leading edge so it reads as "here", not "chosen". */
-.data-toggle-list-item.current {
+.data-row-list-item.current {
   border-left-color: var(--accent);
   border-left-width: 2px;
 }
 
-.data-toggle-list-lead {
+.data-row-list-lead {
   min-width: 34px;
   flex: none;
   opacity: 0.85;
 }
 
-.data-toggle-list-text {
+.data-row-list-text {
   flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;

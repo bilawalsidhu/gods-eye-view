@@ -172,6 +172,7 @@
   "src/ui/layerPanel.js",
   "src/ui/clearLayersControl.js",
   "scripts/qa-layer-panel.mjs",
+  "scripts/qa-directions.mjs",
   "src/loadingFeedback.js",
   "src/data/installationFeedback.js",
   "src/ui/location.js",

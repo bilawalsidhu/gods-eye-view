@@ -125,6 +125,12 @@ let _rowControlsListener = null;
 let _dataManager = null;
 /** Set when arming failed because another tool holds the pointer. */
 let _pointerBlocked = false;
+/**
+ * What `claimPointer` handed back for the claim this layer currently holds, or
+ * null. Held rather than re-derived so the release names THIS claim: a claim
+ * that has already been superseded cannot free its successor's.
+ */
+let _pointerClaim = null;
 /** Id of the route flight THIS layer started, while it is still running. */
 let _flightId = 0;
 let _flightTimer = null;
@@ -767,10 +773,15 @@ async function requestRoute() {
     _route = null;
     clearRouteGraphics();
     _status = 'error';
+    // A fetch that never reaches the proxy rejects with the browser's own
+    // wording ("Failed to fetch"), which tells a reader nothing. Say what
+    // happened instead.
     _error =
       error?.name === 'AbortError'
         ? 'Routing timed out'
-        : error?.message || 'Routing unavailable';
+        : error?.name === 'TypeError'
+          ? 'Routing unavailable — no response from the routing service'
+          : error?.message || 'Routing unavailable';
   } finally {
     clearTimeout(timer);
     if (_routeAbort === controller) _routeAbort = null;
@@ -783,7 +794,8 @@ async function requestRoute() {
 function disarm() {
   _armed = null;
   _pointerBlocked = false;
-  releasePointer(DIRECTIONS_POINTER_OWNER);
+  if (_pointerClaim !== null) releasePointer(_pointerClaim);
+  _pointerClaim = null;
 }
 
 /**
@@ -800,11 +812,15 @@ function setArmed(which) {
     disarm();
     return false;
   }
-  if (!claimPointer(DIRECTIONS_POINTER_OWNER)) {
+  const claim = claimPointer(DIRECTIONS_POINTER_OWNER);
+  if (!claim) {
     _armed = null;
     _pointerBlocked = true;
     return false;
   }
+  // The arbiter answers either `true` or a lease for this claim; keep whichever
+  // it gave, and release with that, so the release names THIS claim.
+  _pointerClaim = claim === true ? DIRECTIONS_POINTER_OWNER : claim;
   _pointerBlocked = false;
   _armed = which;
   _clearStepSelection();
