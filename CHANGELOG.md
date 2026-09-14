@@ -224,10 +224,10 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 ### Fixed
 
 - `DATA_SOURCES.md` states what the project does with camera frame content:
-  frames are relayed from the provider's public feed, nothing detects, blurs,
-  redacts or classifies what is in them, the snapshot path holds a bounded frame
-  in memory only long enough to read it, and no frame is written to disk.
-  Contributed by Lob26 (#357).
+  frames are relayed from the provider's public feed, nothing in the camera
+  pipeline detects, blurs, redacts or classifies what is in them, and no frame is
+  written to disk. It also names the one feature that sends imagery anywhere —
+  the voice assistant's viewport screenshot. Contributed by Lob26 (#357).
 
 - Extract panel disclosure and hover/focus controls into a reusable module;
   cancel their listeners and pending work during replacement and teardown.
