@@ -614,5 +614,6 @@
   "src/layers/vessels/ingestion.test.mjs",
   "src/cityPresets.test.mjs",
   "server/providers/cctv/range.js",
-  "src/data/cctvMediaRange.test.mjs"
+  "src/data/cctvMediaRange.test.mjs",
+  "src/materialSymbolsSubset.test.mjs"
 ]
