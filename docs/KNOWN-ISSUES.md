@@ -31,25 +31,6 @@ Next iteration candidates:
 
 ---
 
-### CCTV panel can appear "missing" after layout refactors
-Status: Open (workaround available)
-
-Context:
-- Panel positions are persisted in local storage and can restore off-screen after UI changes.
-
-Workaround:
-- In browser console:
-  - `localStorage.removeItem('godsEyeView.v6.panelPos.cctv-panel');`
-  - `localStorage.removeItem('godsEyeView.v6.panelCollapsed.cctv-panel');`
-  - `location.reload();`
-
-Related keys (current versions):
-- Panel positions: `godsEyeView.v7.panelPos.<panel-id>` (re-versioned 2026-06-10)
-- Panel collapsed state: `godsEyeView.v6.panelCollapsed.<panel-id>`
-- CCTV calibration: `godsEyeView.cctv.calibration.v2`
-
----
-
 ### Height-datum residuals
 Status: Open (accepted 2026-07-08, documented)
 
@@ -65,6 +46,32 @@ Status: Open (accepted 2026-07-08, documented)
 ---
 
 ## Closed / Intentional (for clarity)
+
+### CCTV panel can appear "missing" after layout refactors
+Status: Closed as fixed on `main` (September 2026)
+
+Context:
+- Panel positions persisted in local storage could restore off-screen after
+  UI changes (audit U2: a panel restored at `x:-192` was unreachable until
+  the panel store was cleared).
+
+Fix:
+- `clampPanelToViewport` (`src/ui/panelViewportClamp.js`, PR #215) is applied
+  by BOTH callers that can place a panel — the localStorage position restore
+  and the drag handler — so a position saved at one window size can no longer
+  land off-screen at another. Pure math pinned by
+  `src/ui/panelViewportClamp.test.mjs`.
+- `purgeStalePanelStorage` (`src/ui/panelStoragePurge.js`, PR #190) removes
+  superseded generations of the versioned panel key families at panel init,
+  so stale-version keys stop accumulating (and old workarounds like deleting
+  `godsEyeView.v6.panelPos.*` by hand are obsolete).
+
+Validation:
+- `node --test src/ui/panelViewportClamp.test.mjs
+  src/ui/panelStoragePurge.test.mjs` plus the restore-path wiring in
+  `src/ui.js` (both call sites clamp).
+
+---
 
 ### CCTV layer dead on init; `/api/realtime/debug-log` and HUD summary 404/405 in production
 Status: Closed as fixed on `main` (August 2026)
