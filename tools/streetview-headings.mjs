@@ -24,11 +24,12 @@
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { projectRoot } from '../scripts/project-root.mjs';
 import { parseEnv } from 'node:util';
 import { resolveGoogleServerKey } from '../scripts/google-server-key.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const PROJECT_ROOT = resolve(__dirname, '..');
+const PROJECT_ROOT = projectRoot(import.meta.url);
 
 function parseArgs() {
   const args = process.argv.slice(2);

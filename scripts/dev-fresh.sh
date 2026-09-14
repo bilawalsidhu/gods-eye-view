@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "${GEV_PROJECT_ROOT:-$SOURCE_ROOT}" && pwd)"
 cd "$ROOT_DIR"
 
 PORT="${PORT:-4173}"
@@ -75,7 +76,7 @@ read_dotenv_value() {
     echo "warning: node not found; cannot parse dotenv files" >&2
     return
   fi
-  node scripts/read-dotenv-value.mjs "${variable_name}"
+  node "$SOURCE_ROOT/scripts/read-dotenv-value.mjs" "${variable_name}"
 }
 
 # Vite loads .env for browser build-time configuration, but this launcher needs
@@ -240,12 +241,12 @@ CESIUM_ION_TOKEN="${CESIUM_ION_TOKEN:-$(read_keychain_secret "cesium-ion" "token
 TOMTOM_API_KEY="${TOMTOM_API_KEY:-$(read_keychain_secret "tomtom-api" "api-key")}"
 FIRMS_MAP_KEY="${FIRMS_MAP_KEY:-$(read_keychain_secret "firms-map" "map-key")}"
 
-if [[ ! -f "src/data/cctv.js" ]]; then
+if [[ ! -f "$SOURCE_ROOT/src/data/cctv.js" ]]; then
   echo "error: expected CCTV layer file missing: src/data/cctv.js"
   exit 1
 fi
 
-if ! grep -q "dataManager.register(cctvLayer)" src/app/data.js; then
+if ! grep -q "dataManager.register(cctvLayer)" "$SOURCE_ROOT/src/app/data.js"; then
   echo "error: CCTV layer not wired in src/app/data.js"
   exit 1
 fi
