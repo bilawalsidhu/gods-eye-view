@@ -26,16 +26,43 @@ export function tierImageryOptions(tier, frame) {
   return options;
 }
 
+/**
+ * Ramp a bounded tier's alpha down across the outer edge of its footprint so it
+ * dissolves into the tier beneath instead of ending on a straight line.
+ *
+ * Cesium evaluates layer alpha once per tile, not per pixel, so the gradient is
+ * quantised to the tile grid. That is coarse when zoomed out and unnoticeable at
+ * the zooms where a bounded inlay is actually drawn.
+ */
+export function edgeFadedAlpha(tier, tilingScheme) {
+  const bounds = Cesium.Rectangle.fromDegrees(...tier.rectangleDegrees);
+  const margin = Cesium.Math.toRadians(tier.edgeFadeDegrees);
+  return (_frameState, _layer, x, y, level) => {
+    const tile = tilingScheme.tileXYToRectangle(x, y, level);
+    const longitude = (tile.west + tile.east) / 2;
+    const latitude = (tile.south + tile.north) / 2;
+    const inset = Math.min(
+      longitude - bounds.west,
+      bounds.east - longitude,
+      latitude - bounds.south,
+      bounds.north - latitude,
+    );
+    if (inset <= 0) return 0;
+    return tier.alpha * Math.min(1, inset / margin);
+  };
+}
+
 /** Layer options carrying this tier's place in the precedence stack. */
 export function tierLayerOptions(tier) {
   const options = { alpha: tier.alpha };
-  if (tier.rectangleDegrees)
+  if (tier.rectangleDegrees) {
     options.rectangle = Cesium.Rectangle.fromDegrees(...tier.rectangleDegrees);
-  // Yield this footprint to a sharper tier rather than painting beneath it.
-  if (tier.cutoutRectangleDegrees)
-    options.cutoutRectangle = Cesium.Rectangle.fromDegrees(
-      ...tier.cutoutRectangleDegrees,
-    );
+    if (tier.edgeFadeDegrees > 0)
+      options.alpha = edgeFadedAlpha(
+        tier,
+        new Cesium.WebMercatorTilingScheme(),
+      );
+  }
   if (Number.isFinite(tier.minimumTerrainLevel))
     options.minimumTerrainLevel = tier.minimumTerrainLevel;
   if (Number.isFinite(tier.maximumTerrainLevel))

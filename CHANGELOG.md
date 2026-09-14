@@ -6,8 +6,8 @@
   with a NOAA/NWS MRMS observed-radar inlay over the lower 48, both keyless and
   read directly from the browser.
 - Resolve the tier handover through Cesium's imagery rectangle and level bands
-  rather than a camera listener; a CONUS cutout keeps exactly one source painting
-  any pixel.
+  rather than a camera listener; the radar inlay dissolves across the edge of its
+  footprint through a per-tile alpha ramp, over a continuous model field.
 - Own only appended imagery handles, leaving the map controller's base layer at
   index 0 untouched across stack switches, and withdraw the overlay when a
   photoreal stack hides the globe.

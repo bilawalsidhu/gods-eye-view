@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as Cesium from 'cesium';
 import { createPrecipitationLayer } from './index.js';
+import { edgeFadedAlpha, tierLayerOptions } from './imagery.js';
 import { PRECIPITATION_TIERS } from './policy.js';
 
 /** Every placement in the precedence table owns one imagery layer. */
@@ -188,4 +190,36 @@ test('the layer refuses to construct without a frame source', () => {
     /requires a frame source/,
   );
   assert.equal(PRECIPITATION_TIERS.length >= 1, true);
+});
+
+test('a bounded tier dissolves across its edge instead of ending on a line', () => {
+  const inlay = PRECIPITATION_TIERS.find((tier) => tier.role === 'inlay');
+  const scheme = new Cesium.WebMercatorTilingScheme();
+  const fade = edgeFadedAlpha(inlay, scheme);
+  const alphaAt = (lon, lat, level = 7) => {
+    const xy = scheme.positionToTileXY(
+      Cesium.Cartographic.fromDegrees(lon, lat),
+      level,
+    );
+    return xy ? fade(null, null, xy.x, xy.y, level) : 0;
+  };
+
+  // Kansas: deep inside the footprint, so the inlay paints at full strength.
+  assert.equal(alphaAt(-98, 39), inlay.alpha);
+  // Just inside the southern edge (24°N) — the edge that runs below Miami.
+  const nearEdge = alphaAt(-80.2, 24.6);
+  assert.ok(
+    nearEdge > 0 && nearEdge < inlay.alpha,
+    `expected a partial ramp, got ${nearEdge}`,
+  );
+  // Outside the footprint the inlay contributes nothing and the model carries.
+  assert.equal(alphaAt(-80.2, 20), 0);
+
+  // The unbounded model tier keeps a plain numeric alpha.
+  const primary = PRECIPITATION_TIERS.find((tier) => tier.role === 'primary');
+  assert.equal(typeof tierLayerOptions(primary).alpha, 'number');
+  assert.equal(typeof tierLayerOptions(inlay).alpha, 'function');
+  // No placement punches a hole in another: the model is continuous.
+  for (const tier of PRECIPITATION_TIERS)
+    assert.equal(tierLayerOptions(tier).cutoutRectangle, undefined);
 });

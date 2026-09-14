@@ -22,10 +22,13 @@ rather than entities. It draws a zoom-banded precedence stack: Environment and
 Climate Change Canada's GDPS global model covers the globe, and NOAA/NWS MRMS
 radar replaces it over the lower 48 past tile level 6. Cesium resolves the
 handover from each placement's rectangle and level band, so no camera listener
-runs. Three placements are used so exactly one source paints any pixel — the
-model minus a CONUS cutout keeps zoomed-in views elsewhere, because radar's
-transparent no-echo would otherwise let modelled rain show through and read as
-observed. `MapSourceController` still owns the base map at index 0; this layer
+runs. The model is continuous at every zoom and the radar inlay lies on top of
+it, dissolving across the outer edge of its footprint through a per-tile alpha
+ramp rather than ending on a straight line. An earlier revision punched a
+matching cutout in the model so only one source could paint a pixel; that read
+as precipitation being sliced away where the cutout crossed populated coast and
+left holes wherever radar was silent, so the model now carries underneath.
+`MapSourceController` still owns the base map at index 0; this layer
 only appends and only removes handles it added, so a base-map switch leaves the
 overlay intact. **GDPS is a model, not an observation**: it runs twice daily, so
 the field valid now is a forecast roughly +5 to +16 hours out. The row states
