@@ -185,14 +185,39 @@ visual identities) and fixes AAA-level items where they are free.
       `<header>` became a div — its parents are not sectioning content, so
       it exposed a second banner landmark (axe
       landmark-no-duplicate-banner). Pinned by `src/shellLandmarks.test.mjs`.
-- [ ] Keyboard: verify focus order in the DISPLAY rail and layer rows; every
-      click-only custom control needs a key path.
-- [ ] ARIA states for the async chips (loading/failed) — `aria-busy` and
+- [x] Keyboard: verify focus order in the DISPLAY rail and layer rows; every
+      click-only custom control needs a key path. DONE 2026-09-13 — census
+      pinned in `src/inputAccessibleNames.test.mjs`: index.html has ZERO
+      click-only custom controls (any div/span/li/td/tr/section/aside carrying
+      onclick or a data-action/click/toggle attribute must expose role +
+      tabindex="0" or tabindex alone); every ARIA interactive role on a
+      non-semantic element must carry tabindex="0". manager.js layer rows and
+      chips are native `<button>`s with exactly two click listeners (row +
+      delegated container guarded by `closest?.('.data-toggle-chip')`) — the
+      native button IS the key path.
+- [x] ARIA states for the async chips (loading/failed) — `aria-busy` and
       live-region announcements where a chip changes state on its own.
-- [ ] Contrast: HUD text over arbitrary imagery is the hard case — verify
+      DONE 2026-09-13 — manager.js `_syncRowControls` folds the state INTO the
+      accessible name (`aria-label = "${label} — ${title}"` while
+      loading/error; removed otherwise) and self-driven transitions
+      (→loading, →error, recovery →active/idle) announce through one clipped
+      `.chip-status-live` span (role=status, aria-live=polite) re-parented per
+      panel; plain user toggles (active<->idle) stay silent — the
+      `aria-pressed` flip is the announcement. Pinned in
+      `src/data/manager.test.mjs` (105 tests).
+- [x] Contrast: HUD text over arbitrary imagery is the hard case — verify
       the existing text shadows/scrims against AA, and prefer scrim changes
       over color changes that would break the IR/NVG/FLIR visual identities.
-      Reduced-motion is already respected (7 CSS blocks + JS callers).
+      DONE 2026-09-13 — measured the full composite (imagery <- --glass-bg <-
+      text alpha), not the bare swatch. The old tokens FAILED worst-case AA:
+      --text-secondary 0.5 computed 2.96:1 and --text-dim 0.55 computed
+      3.24:1 over glass-over-white imagery (the old "5.3:1" comment was true
+      only on --bg-dark). Fixed scrim-first, hues untouched: --glass-bg
+      0.72 -> 0.82 and text alphas -> 0.7 give 9.69:1 / 5.67:1 worst case,
+      8.19:1 for --text-dim on --bg-dark; --accent #00d4ff pinned as identity.
+      Pinned in `src/uiContrast.test.mjs` (worst-case AA, scrim floor >= 0.8,
+      shadow/glow regression anchors). Reduced-motion was already respected
+      (7 CSS blocks + JS callers).
 
 ## Phase 5 — Performance profile & WASM (IN PROGRESS)
 

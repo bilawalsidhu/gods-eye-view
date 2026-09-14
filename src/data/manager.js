@@ -127,6 +127,11 @@ export class DataLayerManager {
     this._registrationDispositions = null;
     this._allowQaRegistration = allowQaRegistration === true;
     this._qaLayerIds = new Set();
+    // Async chip-state tracking (Phase 4): last rendered state per chip id
+    // (to detect SELF-driven transitions) and the shared polite live region
+    // they announce through.
+    this._chipStates = new Map();
+    this._chipLiveRegion = null;
   }
 
   register(layerModule) {
@@ -2168,6 +2173,26 @@ export class DataLayerManager {
       button.disabled = Boolean(chip.disabled);
       button.setAttribute('aria-pressed', chip.active ? 'true' : 'false');
       button.setAttribute('aria-busy', chip.busy ? 'true' : 'false');
+      // A chip's `title` is mouse-only and never announced: a loading/error
+      // chip carries the state IN its accessible name instead (Phase 4).
+      const chipName = (state === 'loading' || state === 'error') && chip.title
+        ? `${chip.label} — ${chip.title}`
+        : null;
+      if (chipName) button.setAttribute('aria-label', chipName);
+      else button.removeAttribute('aria-label');
+      // Announce only SELF-driven transitions — entering loading/error, or
+      // recovering out of them. A plain active<->idle flip is the user's own
+      // toggle (already announced by the button's pressed-state semantics).
+      const prevState = this._chipStates.get(chip.id);
+      this._chipStates.set(chip.id, state);
+      if (
+        prevState !== undefined && prevState !== state
+        && (state === 'loading' || state === 'error'
+          || ((prevState === 'loading' || prevState === 'error')
+            && (state === 'active' || state === 'idle')))
+      ) {
+        this._announceChipStateChange(container, layer, chip, state);
+      }
     }
     for (const node of stale.values()) node.remove();
 
@@ -2183,6 +2208,40 @@ export class DataLayerManager {
       entry.append(swatch, text);
       container.appendChild(entry);
     }
+  }
+
+  /**
+   * Announce an async chip state change through a polite live region
+   * (Phase 4: "chips change state on their own" — a background load
+   * settling or failing must reach a screen-reader user who clicked
+   * nothing). The region is one clipped, visually-hidden status node per
+   * manager, created on first use and appended to the row's controls block
+   * (it carries no chipId / legend class, so the render sweeps leave it
+   * alone).
+   * @param {HTMLElement} container The row's `.data-toggle-controls` node.
+   * @param {object} layer Registered layer entry.
+   * @param {object} chip The chip descriptor that changed state.
+   * @param {string} state The chip's new state.
+   */
+  _announceChipStateChange(container, layer, chip, state) {
+    if (!container || typeof container.appendChild !== 'function') return;
+    if (!this._chipLiveRegion) {
+      const region = document.createElement('span');
+      region.className = 'chip-status-live';
+      region.setAttribute('role', 'status');
+      region.setAttribute('aria-live', 'polite');
+      region.setAttribute('aria-atomic', 'true');
+      this._chipLiveRegion = region;
+    }
+    if (this._chipLiveRegion.parentNode !== container) {
+      container.appendChild(this._chipLiveRegion);
+    }
+    const subject = layer.name || chip.label;
+    let message;
+    if (state === 'loading') message = chip.title || `${chip.label} loading`;
+    else if (state === 'error') message = chip.title || `${chip.label} failed`;
+    else message = `${chip.label} ready`;
+    this._chipLiveRegion.textContent = `${subject}: ${message}`;
   }
 
   _refreshTogglePanel() {

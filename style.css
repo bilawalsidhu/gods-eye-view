@@ -5,15 +5,21 @@
 
 :root {
   --bg-dark: #0a0a0f;
-  --glass-bg: rgba(12, 12, 20, 0.72);
+  /* Panel scrim. 0.72 left panel-over-bright-imagery text at ~3:1 (WCAG fail);
+     0.82 lifts the worst case (white clouds/ice under a panel) so every text
+     token below clears AA on it. Verified in src/uiContrast.test.mjs. */
+  --glass-bg: rgba(12, 12, 20, 0.82);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-border-hover: rgba(255, 255, 255, 0.15);
   --accent: #00d4ff;
   --accent-dim: rgba(0, 212, 255, 0.15);
   --accent-glow: rgba(0, 212, 255, 0.4);
   --text-primary: #e8eaed;
-  --text-secondary: rgba(232, 234, 237, 0.5);
-  --text-dim: rgba(232, 234, 237, 0.55); /* 5.3:1 on --bg-dark — WCAG AA */
+  /* Text alphas are measured against the WORST panel backdrop (glass over
+     white imagery), not just --bg-dark — see src/uiContrast.test.mjs.
+     0.5/0.55 computed 2.96:1 / 3.24:1 there; 0.7 computes 5.67:1 (AA). */
+  --text-secondary: rgba(232, 234, 237, 0.7);
+  --text-dim: rgba(232, 234, 237, 0.7); /* 8.19:1 on --bg-dark, 5.67:1 worst case — WCAG AA */
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --panel-radius: 16px;
@@ -106,6 +112,20 @@ html, body {
 /* Canvas cards retain their spatial renderer; this parallel focusable list
    exposes only the currently painted actionable targets to assistive tech. */
 .world-overlay-accessibility {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Polite live region for async layer-row chip state changes (Phase 4).
+   Same clipped pattern as .world-overlay-accessibility. */
+.chip-status-live {
   position: fixed;
   width: 1px;
   height: 1px;

@@ -107,6 +107,7 @@ test('renders ordinary layer rows without recreating a panel-hidden coordinator'
       append(...kids) { for (const kid of kids) this.appendChild(kid); },
       addEventListener() {},
       setAttribute(name, value) { this.attributes[name] = String(value); },
+      removeAttribute(name) { delete this.attributes[name]; },
       querySelector(selector) {
         if (selector.startsWith('[data-layer-id="')) {
           const id = selector.slice(16, -2);
@@ -2758,6 +2759,7 @@ function makeControlElement() {
     focus() { if (globalThis.document) globalThis.document.activeElement = this; },
     addEventListener(name, handler) { this.listeners[name] = handler; },
     setAttribute(name, value) { this.attributes[name] = String(value); },
+    removeAttribute(name) { delete this.attributes[name]; },
     closest(selector) {
       const className = selector.slice(1);
       return String(this.className).split(/\s+/).includes(className) ? this : null;
@@ -3093,6 +3095,100 @@ test('a layer that surrenders its row controls hides the block entirely', async 
     mgr._refreshTogglePanel();
     assert.equal(controls.hidden, false, 'the row returns when the owner releases it');
     assert.equal(collectByClass(controls, 'data-toggle-chip').length, 1);
+  } finally {
+    await mgr.destroyAll();
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+});
+
+test('async chips carry state in the accessible name and announce self-driven changes', async () => {
+  const originalDocument = globalThis.document;
+  const makeElement = () => {
+    const element = {
+      children: [],
+      className: '',
+      dataset: {},
+      textContent: '',
+      disabled: false,
+      attributes: {},
+      parentNode: null,
+      classList: { toggle() {} },
+      appendChild(child) { child.parentNode = this; this.children.push(child); return child; },
+      append(...kids) { for (const kid of kids) this.appendChild(kid); },
+      addEventListener() {},
+      setAttribute(name, value) { this.attributes[name] = String(value); },
+      removeAttribute(name) { delete this.attributes[name]; },
+      querySelector(selector) {
+        const className = selector.startsWith('.') ? selector.slice(1) : '';
+        const visit = (node) => {
+          if (String(node.className).split(/\s+/).includes(className)) return node;
+          for (const child of node.children || []) {
+            const found = visit(child);
+            if (found) return found;
+          }
+          return null;
+        };
+        return visit(this);
+      },
+      set innerHTML(value) { if (value === '') this.children = []; },
+      get innerHTML() { return ''; },
+    };
+    return element;
+  };
+  globalThis.document = { createElement: makeElement };
+  const mgr = new DataLayerManager({});
+  const layer = makeSlowLayer('satellites', { updateInterval: -1 });
+  let chip = {
+    id: 'catalog', label: 'DENSE', active: false, busy: false,
+    state: 'idle', title: 'Add the full Starlink shell',
+  };
+  layer.module.getRowControls = () => ({ chips: [chip], legend: [] });
+  mgr.register(layer.module);
+  const container = makeElement();
+
+  try {
+    // Chip descriptors are only read for ENABLED layers, so turn the layer
+    // on before the panel builds (otherwise the row div exists but stays
+    // buttonless by design).
+    await mgr.setEnabled('satellites', true);
+    mgr.buildTogglePanel(container);
+    const controls = container.querySelector('.data-toggle-controls');
+    const chipButton = () => controls.querySelector('.data-toggle-chip');
+
+    // Idle: no state name, no live region yet.
+    assert.equal(chipButton().attributes['aria-label'], undefined);
+    assert.equal(mgr._chipLiveRegion, null);
+
+    // idle → loading (self-driven: the background load started).
+    chip = { ...chip, state: 'loading', busy: true, disabled: true, label: 'DENSE ···', title: 'Loading the Starlink shell…' };
+    mgr._refreshTogglePanel();
+    assert.equal(chipButton().attributes['aria-busy'], 'true');
+    assert.match(
+      chipButton().attributes['aria-label'],
+      /DENSE ··· — Loading the Starlink shell…/,
+      'the accessible name carries the state sentence',
+    );
+    assert.match(mgr._chipLiveRegion.textContent, /Loading the Starlink shell/);
+    assert.equal(mgr._chipLiveRegion.attributes['aria-live'], 'polite');
+
+    // loading → error (self-driven: the load failed).
+    chip = { ...chip, state: 'error', busy: false, disabled: false, label: 'DENSE ✕', title: 'Starlink 502 — click to retry' };
+    mgr._refreshTogglePanel();
+    assert.match(chipButton().attributes['aria-label'], /DENSE ✕ — Starlink 502/);
+    assert.match(mgr._chipLiveRegion.textContent, /Starlink 502 — click to retry/);
+
+    // error → active (self-driven recovery).
+    chip = { ...chip, state: 'active', busy: false, disabled: false, label: 'DENSE', title: 'Showing the full shell' };
+    mgr._refreshTogglePanel();
+    assert.equal(chipButton().attributes['aria-label'], undefined, 'recovered chips name themselves by their label again');
+    assert.match(mgr._chipLiveRegion.textContent, /DENSE ready/);
+
+    // active → idle (a USER toggle): already announced by pressed-state
+    // semantics, so the live region must stay quiet.
+    chip = { ...chip, state: 'idle', busy: false, disabled: false, label: 'DENSE', title: 'Add the full Starlink shell' };
+    mgr._refreshTogglePanel();
+    assert.match(mgr._chipLiveRegion.textContent, /DENSE ready/, 'no new announcement for a user-initiated flip');
   } finally {
     await mgr.destroyAll();
     if (originalDocument === undefined) delete globalThis.document;

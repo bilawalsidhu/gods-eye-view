@@ -135,3 +135,62 @@ test('census snapshot: every control and the naming mechanism it resolves by', (
     'radio-filter → aria-label "Filter stations by station tag"',
   ]);
 });
+
+test('keyboard key paths (Phase 4): no click-only custom controls in index.html', () => {
+  // The keyboard contract: anything clickable is a native <button>/<a>/
+  // <input> (key-activatable by construction), or an ARIA control carrying
+  // tabindex="0" so Tab reaches it and Enter/Space works via the role.
+  // A div/span with onclick or a click-bound data attribute and NO key path
+  // is a mouse-only control — this census keeps them from re-entering.
+  const offenders = [];
+  for (const tag of ['div', 'span', 'li', 'td', 'tr', 'section', 'aside']) {
+    for (const { tag: open } of extractOpenTags(html, tag)) {
+      const clickable = attr(open, 'onclick') !== null
+        || /\bdata-(?:action|click|toggle)[a-z-]*=/.test(open);
+      if (!clickable) continue;
+      const role = attr(open, 'role');
+      const tabindex = attr(open, 'tabindex');
+      const nativeKey = attr(open, 'tabindex') !== null && tabindex === '0';
+      const keyPath = (role && nativeKey) || tabindex === '0';
+      if (!keyPath) {
+        offenders.push(`${tag}: ${open.slice(0, 90)}`);
+      }
+    }
+  }
+  assert.deepEqual(offenders, [], 'click-only custom controls found');
+});
+
+test('keyboard key paths (Phase 4): ARIA buttons/tabs/switches are Tab-reachable', () => {
+  // Non-native elements GIVEN a button-like role must be focusable, else
+  // keyboard users can never activate them. (Native <button role="…"> is
+  // redundant but harmless and already focusable — it passes.)
+  const interactive = new Set(['button', 'switch', 'tab', 'checkbox', 'slider', 'option']);
+  const offenders = [];
+  for (const { tag: open } of [...extractOpenTags(html, 'div'), ...extractOpenTags(html, 'span'), ...extractOpenTags(html, 'nav')]) {
+    const role = attr(open, 'role');
+    if (!role || !interactive.has(role.toLowerCase())) continue;
+    if (attr(open, 'tabindex') !== null && attr(open, 'tabindex') !== '0') {
+      offenders.push(`${role}: ${open.slice(0, 90)}`);
+    }
+  }
+  assert.deepEqual(offenders, [], 'ARIA controls missing tabindex="0"');
+});
+
+test('keyboard key paths (Phase 4): dynamic layer rows and chips are native buttons', () => {
+  // The layers panel and its async chips are built at runtime (manager.js);
+  // pin that BOTH are real <button> elements, which carry the Enter/Space
+  // key path and native focus for free.
+  const source = readSource('./data/manager.js', import.meta.url);
+  const rowButton = source.indexOf("document.createElement('button')");
+  const chipButton = source.indexOf("document.createElement('button')", rowButton + 1);
+  assert.ok(rowButton > -1, 'the layer row toggle must be a native button');
+  assert.ok(chipButton > rowButton, 'the row chip must be a native button too');
+  // Exactly two click listeners may exist in the panel: the row button
+  // itself, and the DELEGATED container handler (a div that only routes
+  // clicks to real buttons via closest('.data-toggle-chip') — not a
+  // click-only control). Anything else needs a keyboard path.
+  const clickListeners = [...source.matchAll(/addEventListener\('click'/g)].map((m) => m.index);
+  assert.equal(clickListeners.length, 2, 'new panel controls must not add raw click listeners');
+  assert.ok(clickListeners[0] < chipButton, 'the first listener belongs to the row button');
+  assert.match(source, /closest\?\.\('\.data-toggle-chip'\)/, 'the delegated container handler routes to real buttons');
+});
