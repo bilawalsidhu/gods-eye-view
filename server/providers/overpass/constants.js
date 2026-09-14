@@ -7,12 +7,11 @@ import path from 'node:path';
  * User-Agent sent to every Overpass mirror.
  *
  * The OSM API usage policy asks for a "Valid User-Agent identifying application
- * and version"; a generic proxy label is not one. The canonical Overpass
- * instance answers 406 Not Acceptable to the unidentified string this proxy
- * used to send and serves the same query normally with this one, so every
- * Overpass-backed layer depended on the mirrors below it. Keep this honest and
- * stable: if it is ever refused again, the answer is less query volume, not a
- * new name.
+ * and version"; a generic proxy label is not one. A mirror is free to refuse a
+ * client it cannot identify, and `src/overpassProxy.test.mjs` pins what that
+ * costs: a refusal is never data, so the query falls through to whatever
+ * mirrors are left. Keep this honest and stable — if it is ever refused, the
+ * answer is less query volume, not a new name.
  */
 const OVERPASS_USER_AGENT =
   'gods-eye-view/0.1 (+https://github.com/bilawalsidhu/gods-eye-view)';
