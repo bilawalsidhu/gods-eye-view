@@ -214,7 +214,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     ];
     const maxCount = resolveCatalogCap(process.env.CCTV_MAX_SOURCES);
     const allocation = allocateSourceCap(packs, maxCount);
-    // Shipped ground heights (config/cctv_ground_heights.json, produced by
+    // Shipped ground heights (src/data/local_data/cctv_ground_heights/, produced by
     // scripts/precompute-cctv-heights.mjs) ride along on the served source so
     // the client can place a camera and its monitor plane with zero sampling.
     const capped = joinGroundHeights(

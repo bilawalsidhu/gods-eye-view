@@ -95,7 +95,7 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   rigidly by the largest clearance deficit over a 3×3 grid of support points
   against the ground under each (the ground at the mount where nothing finer is
   known), and the client honours pack ranges instead of inflating them to 220 m.
-  `config/cctv_ground_heights.json` ships Google 3D Tiles ground heights under
+  `src/data/local_data/cctv_ground_heights/` ships Google 3D Tiles ground heights under
   every camera's mount and plane footprint (3,445 of 3,446 cameras), produced by
   `scripts/precompute-cctv-heights.mjs`; cameras with shipped heights are placed
   with zero runtime sampling, and the rest resolve the ground under their plane

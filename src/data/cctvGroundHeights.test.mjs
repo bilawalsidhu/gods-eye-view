@@ -56,9 +56,21 @@ test('a shipped entry attaches only while the nominal pose still matches', () =>
 
 test('the sidecar loads from the source root and tolerates a missing or malformed file', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gev-heights-'));
-  fs.mkdirSync(path.join(dir, 'config'));
+  fs.mkdirSync(
+    path.join(dir, 'src', 'data', 'local_data', 'cctv_ground_heights'),
+    {
+      recursive: true,
+    },
+  );
   assert.deepEqual(loadGroundHeights(dir), {}, 'missing file');
-  const file = path.join(dir, 'config', 'cctv_ground_heights.json');
+  const file = path.join(
+    dir,
+    'src',
+    'data',
+    'local_data',
+    'cctv_ground_heights',
+    'cctv_ground_heights.json',
+  );
   fs.writeFileSync(file, '{not json');
   assert.deepEqual(loadGroundHeights(dir), {}, 'malformed file');
   fs.writeFileSync(

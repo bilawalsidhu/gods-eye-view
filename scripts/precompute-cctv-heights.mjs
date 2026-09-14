@@ -321,7 +321,8 @@ async function main() {
   );
   const output = path.resolve(
     ROOT,
-    process.env.OUT || 'config/cctv_ground_heights.json',
+    process.env.OUT ||
+      'src/data/local_data/cctv_ground_heights/cctv_ground_heights.json',
   );
   let sidecar = await loadSidecar(output);
   const response = await fetch(`${base}/api/cctv/sources`, {
