@@ -150,6 +150,8 @@
   "scripts/qa-visual-input.mjs",
   "src/ui/displayControls.js",
   "src/ui/displayControls.test.mjs",
+  "src/ui/cameraOrientationControls.js",
+  "src/ui/cameraOrientationControls.test.mjs",
   "src/ui/effects.js",
   "src/ui/visualEffects.js",
   "src/ui/visualPresets.js",
