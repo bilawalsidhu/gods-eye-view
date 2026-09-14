@@ -1576,7 +1576,10 @@
       "src/layers/vessels/snapshotRenderer.js",
       "src/data/inputOwnership.js",
       "src/annotations/drawMode.js",
-      "src/annotations/drawTool.js"
+      "src/annotations/drawTool.js",
+      "src/data/routeSteps.js",
+      "src/layers/directions/index.js",
+      "src/data/directions.js"
     ],
     "external": [
       "@mapbox/vector-tile",
