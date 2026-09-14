@@ -51,8 +51,9 @@ export function greatCircleM(a, b) {
   const toRad = (d) => (d * Math.PI) / 180;
   const dLat = toRad(b.lat - a.lat);
   const dLon = toRad(b.lon - a.lon);
-  const h = Math.sin(dLat / 2) ** 2
-    + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(Math.min(1, h)));
 }
 
@@ -63,8 +64,13 @@ export function greatCircleM(a, b) {
  * exactly one vertex: a later click moves it.
  * @returns {{added: boolean, reason?: 'invalid'|'duplicate'}}
  */
-export function addVertex(session, vertex, { minSeparationM = MIN_VERTEX_SEPARATION_M } = {}) {
-  if (!session || !isFiniteCoordinate(vertex)) return { added: false, reason: 'invalid' };
+export function addVertex(
+  session,
+  vertex,
+  { minSeparationM = MIN_VERTEX_SEPARATION_M } = {},
+) {
+  if (!session || !isFiniteCoordinate(vertex))
+    return { added: false, reason: 'invalid' };
   const v = {
     lon: vertex.lon,
     lat: vertex.lat,
@@ -74,9 +80,11 @@ export function addVertex(session, vertex, { minSeparationM = MIN_VERTEX_SEPARAT
     session.vertices = [v];
     return { added: true };
   }
-  if (session.vertices.length >= MAX_VERTICES) return { added: false, reason: 'full' };
+  if (session.vertices.length >= MAX_VERTICES)
+    return { added: false, reason: 'full' };
   const last = session.vertices[session.vertices.length - 1];
-  if (last && greatCircleM(last, v) < minSeparationM) return { added: false, reason: 'duplicate' };
+  if (last && greatCircleM(last, v) < minSeparationM)
+    return { added: false, reason: 'duplicate' };
   session.vertices.push(v);
   return { added: true };
 }
@@ -111,9 +119,14 @@ export function removeLastVertex(session) {
  */
 export function finishReason(session) {
   if (!session || !Array.isArray(session.vertices)) return 'invalid';
-  if (session.vertices.some((vertex) => !isFiniteCoordinate(vertex))) return 'invalid';
-  if (session.vertices.length < (MIN_VERTICES[session.shape] || 1)) return 'too-few';
-  if (session.shape === 'line' && pathLengthM(session.vertices) < MIN_PATH_LENGTH_M)
+  if (session.vertices.some((vertex) => !isFiniteCoordinate(vertex)))
+    return 'invalid';
+  if (session.vertices.length < (MIN_VERTICES[session.shape] || 1))
+    return 'too-few';
+  if (
+    session.shape === 'line' &&
+    pathLengthM(session.vertices) < MIN_PATH_LENGTH_M
+  )
     return 'degenerate';
   if (session.shape === 'area' && ringAreaM2(session.vertices) < MIN_AREA_M2)
     return 'degenerate';
@@ -128,31 +141,68 @@ export function canFinish(session) {
 /** Length of an open path in metres. */
 export function pathLengthM(vertices) {
   let m = 0;
-  for (let i = 1; i < (vertices?.length || 0); i += 1) m += greatCircleM(vertices[i - 1], vertices[i]);
+  for (let i = 1; i < (vertices?.length || 0); i += 1)
+    m += greatCircleM(vertices[i - 1], vertices[i]);
   return m;
+}
+
+/**
+ * The same vertices with longitudes made CONTINUOUS relative to the first one,
+ * so planar maths does not tear at the antimeridian. A small shape straddling
+ * 180° has longitudes like [179.999, -179.999]; subtracting those raw gives
+ * 359.998° of width instead of 0.002°, which is how a 25,000 m² rectangle
+ * measured 4,461 km² and reported its centre on the Greenwich meridian.
+ *
+ * Values may leave the [-180, 180] range on purpose — that is what "continuous"
+ * means. Re-wrap with `wrapLongitude` before handing one back as a coordinate.
+ * @param {Array<{lon:number, lat:number}>} vertices
+ */
+export function unwrapLongitudes(vertices) {
+  if (!vertices?.length) return [];
+  const reference = vertices[0].lon;
+  return vertices.map((vertex) => {
+    let lon = vertex.lon;
+    while (lon - reference > 180) lon -= 360;
+    while (lon - reference < -180) lon += 360;
+    return { ...vertex, lon };
+  });
+}
+
+/** A continuous longitude brought back into [-180, 180]. */
+export function wrapLongitude(lon) {
+  if (!Number.isFinite(lon)) return lon;
+  // A value already in range is returned UNCHANGED rather than pushed through
+  // the modulo, which is only exact in binary for some inputs: 0.0005 came back
+  // as 0.0004999999999881766. The seam is the only place the arithmetic is
+  // needed, so it is the only place that pays for it.
+  if (lon >= -180 && lon < 180) return lon;
+  const value = ((((lon + 180) % 360) + 360) % 360) - 180;
+  return Object.is(value, -0) ? 0 : value;
 }
 
 /** Planar shoelace area of a ring in square metres (local metre grid; fine at whiteboard scale). */
 export function ringAreaM2(vertices) {
   if (!vertices || vertices.length < 3) return 0;
-  const lat0 = vertices.reduce((s, v) => s + v.lat, 0) / vertices.length;
+  const ring = unwrapLongitudes(vertices);
+  const lat0 = ring.reduce((s, v) => s + v.lat, 0) / ring.length;
   const kx = 111320 * Math.cos((lat0 * Math.PI) / 180);
   const ky = 111320;
   let twice = 0;
-  for (let i = 0; i < vertices.length; i += 1) {
-    const a = vertices[i];
-    const b = vertices[(i + 1) % vertices.length];
-    twice += (a.lon * kx) * (b.lat * ky) - (b.lon * kx) * (a.lat * ky);
+  for (let i = 0; i < ring.length; i += 1) {
+    const a = ring[i];
+    const b = ring[(i + 1) % ring.length];
+    twice += a.lon * kx * (b.lat * ky) - b.lon * kx * (a.lat * ky);
   }
   return Math.abs(twice) / 2;
 }
 
-/** Vertex-average centroid of a ring, {lon, lat}. */
+/** Vertex-average centroid of a ring, {lon, lat}, safe across the antimeridian. */
 export function ringCentroid(vertices) {
   if (!vertices?.length) return null;
+  const ring = unwrapLongitudes(vertices);
   return {
-    lon: vertices.reduce((s, v) => s + v.lon, 0) / vertices.length,
-    lat: vertices.reduce((s, v) => s + v.lat, 0) / vertices.length,
+    lon: wrapLongitude(ring.reduce((s, v) => s + v.lon, 0) / ring.length),
+    lat: ring.reduce((s, v) => s + v.lat, 0) / ring.length,
   };
 }
 
@@ -161,7 +211,9 @@ export function formatMeasure(session) {
   if (!session) return '';
   if (session.shape === 'line') {
     const m = pathLengthM(session.vertices);
-    return m >= 1000 ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km` : `${Math.round(m)} m`;
+    return m >= 1000
+      ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km`
+      : `${Math.round(m)} m`;
   }
   if (session.shape === 'area') {
     const m2 = ringAreaM2(session.vertices);
@@ -190,20 +242,54 @@ export function finishSpec(session, { label = '', color = 'primary' } = {}) {
   const text = String(label || '').trim();
   const pts = session.vertices.map((v) => [v.lon, v.lat]);
   if (session.shape === 'area') {
-    return { type: 'area', manual: true, ring: pts, label: text || null, color };
+    // CLOSED explicitly. A polygon fill closes itself, but the outline beside it
+    // is a polyline, and an open ring draws every edge except the one back to
+    // the first vertex — the shape reads as a shape with one side missing.
+    return {
+      type: 'area',
+      manual: true,
+      ring: closeRing(pts),
+      label: text || null,
+      color,
+    };
   }
   if (session.shape === 'line') {
-    return { type: 'route', manual: true, path: pts, label: text || null, color };
+    return {
+      type: 'route',
+      manual: true,
+      path: pts,
+      label: text || null,
+      color,
+    };
   }
   const [lon, lat] = pts[0];
-  return { type: 'pin', manual: true, latitude: lat, longitude: lon, label: text || null, color };
+  return {
+    type: 'pin',
+    manual: true,
+    latitude: lat,
+    longitude: lon,
+    label: text || null,
+    color,
+  };
+}
+
+/** A ring whose last position repeats its first, so an outline has no gap. */
+export function closeRing(pairs) {
+  if (!Array.isArray(pairs) || pairs.length < 3) return pairs;
+  const [firstLon, firstLat] = pairs[0];
+  const [lastLon, lastLat] = pairs[pairs.length - 1];
+  if (firstLon === lastLon && firstLat === lastLat) return pairs;
+  return [...pairs, [firstLon, firstLat]];
 }
 
 /** One line of guidance for the person drawing, by state. */
 export function drawHint(session) {
   if (!session) return 'Pick a shape, then click the map.';
   const n = session.vertices.length;
-  if (session.shape === 'pin') return n ? 'Enter to place the pin, Esc to cancel.' : 'Click where the pin goes.';
+  if (session.shape === 'pin')
+    return n
+      ? 'Enter to place the pin, Esc to cancel.'
+      : 'Click where the pin goes.';
   const need = MIN_VERTICES[session.shape] - n;
   if (need > 0) return `Click ${need} more point${need === 1 ? '' : 's'}.`;
   if (finishReason(session) === 'degenerate') {
@@ -211,6 +297,7 @@ export function drawHint(session) {
       ? 'Those points are in a line — move one off it to enclose an area.'
       : 'That line has no length — click somewhere further away.';
   }
-  const full = n >= MAX_VERTICES ? ` · ${MAX_VERTICES}-point limit reached` : '';
+  const full =
+    n >= MAX_VERTICES ? ` · ${MAX_VERTICES}-point limit reached` : '';
   return `${formatMeasure(session)} · double-click or Enter to finish, Backspace undoes, Esc cancels.${full}`;
 }

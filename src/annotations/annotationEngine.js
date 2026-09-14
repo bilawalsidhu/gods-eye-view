@@ -2,6 +2,7 @@ import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
 import { isRateLimitedOutcome, resolveAnnotationTarget, sampleGroundHeight } from './annotationResolver.js';
+import { ringCentroid } from './drawMode.js';
 
 // Dev convenience: expose the app's Cesium instance for console/preview probing
 // (single shared module instance — avoids dual-Cesium state bugs when testing).
@@ -1140,8 +1141,15 @@ function resolveManualSpec(spec, type, viewer) {
   if (type === 'area') {
     const ring = manualPairs(spec.ring);
     if (ring.length < 3) throw new Error('a drawn area needs at least 3 points');
-    const lon = ring.reduce((a, p) => a + p[0], 0) / ring.length;
-    const lat = ring.reduce((a, p) => a + p[1], 0) / ring.length;
+    // Averaged through ringCentroid, which unwraps longitudes first: a ring
+    // straddling the antimeridian has coordinates like [179.999, -179.999], and
+    // a raw mean of those puts the anchor on the Greenwich meridian, half a
+    // world from the shape it belongs to. A repeated closing vertex is dropped
+    // so it does not weight its own corner twice.
+    const distinct = closedRingWithoutRepeat(ring);
+    const centre = ringCentroid(distinct.map(([lon, lat]) => ({ lon, lat })));
+    const lon = centre.lon;
+    const lat = centre.lat;
     return {
       lon, lat, height: sampleGroundHeight(viewer, lon, lat),
       ring, footprintKind: 'area', buildingHeight: null, synthesized: false, source: 'manual',
@@ -1150,6 +1158,14 @@ function resolveManualSpec(spec, type, viewer) {
   const lon = Number(spec.longitude);
   const lat = Number(spec.latitude);
   return { lon, lat, height: sampleGroundHeight(viewer, lon, lat), ring: null, source: 'manual' };
+}
+
+/** The ring's distinct positions: a closing vertex that repeats the first is dropped. */
+function closedRingWithoutRepeat(ring) {
+  if (ring.length < 2) return ring;
+  const [firstLon, firstLat] = ring[0];
+  const [lastLon, lastLat] = ring[ring.length - 1];
+  return firstLon === lastLon && firstLat === lastLat ? ring.slice(0, -1) : ring;
 }
 
 function normalizeMode(m) {
