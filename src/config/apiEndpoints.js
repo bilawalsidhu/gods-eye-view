@@ -40,6 +40,7 @@ const DEV_API_BASE = ''; // Relative URLs — Vite dev server proxy handles rout
  * @property {string} rocketLaunches — Launch Library 2
  * @property {string} militaryInstallations — Military installations
  * @property {string} regionalBrief  — Regional briefing
+ * @property {string} geocode        — Keyless Nominatim geocode
  */
 
 /**
@@ -88,6 +89,7 @@ const apiEndpoints = {
   rocketLaunches:   `${API_BASE}/api/launches`,
   militaryInstallations: `${API_BASE}/api/military-installations`,
   regionalBrief:    `${API_BASE}/api/regional-brief`,
+  geocode:          `${API_BASE}/api/geocode`,
 };
 
 /**
@@ -145,6 +147,8 @@ export const api = {
   route: (profile, coords) => `${API_BASE}/api/route?profile=${profile}&coords=${encodeURIComponent(coords)}`,
   /** Keyless terrain heights (`points=lon,lat;lon,lat;…`). */
   terrainHeights: (points) => `${API_BASE}/api/terrain/heights?points=${encodeURIComponent(points)}`,
+  /** Keyless Nominatim geocode (`query` carries q/viewbox/limit). */
+  geocode: (query) => `${API_BASE}/api/geocode?${query}`,
 
   // ── Places / context ──────────────────────────────────────────────────
   /** Cached place + weather + news brief (`query` carries lat/lon). */

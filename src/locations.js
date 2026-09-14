@@ -404,6 +404,92 @@ async function flyNaturalRegionFallback(viewer, query, options) {
 }
 
 /**
+ * Keyless geocoder tier for searchAndFlyTo (PLAN.md issues #211/#213): after
+ * the offline Natural Earth pack misses, resolve the name through the
+ * same-origin `/api/geocode` proxy (OpenStreetMap Nominatim — no key), which
+ * covers everything the pack doesn't (cities, addresses, POIs). The proxy is
+ * a convenience, not a dependency: a deployment without it (or an offline
+ * one) just keeps the pre-existing behavior of falling through to the
+ * keyless error.
+ *
+ * Framing mirrors the keyed geocode path: large bounding boxes become the
+ * capped oblique swath, framed boxes fly as an overview, and point results
+ * (Nominatim nodes carry no boundingbox) land at landmark range.
+ *
+ * Returns the searchAndFlyTo result shape, CANCELLED_SEARCH when a beforeFly
+ * veto fires, or null when the proxy is unreachable / finds nothing (caller
+ * then reports the miss exactly as before).
+ */
+async function flyKeylessGeocode(viewer, query, options) {
+  const params = [`q=${encodeURIComponent(query)}`, 'limit=8'];
+  const bias = viewportBias(viewer);
+  if (bias) params.push(`viewbox=${encodeURIComponent(bias)}`);
+
+  let payload;
+  try {
+    const response = await fetch(api.geocode(params.join('&')));
+    if (!response?.ok) return null;
+    payload = await response.json();
+  } catch {
+    return null;
+  }
+  const hit = Array.isArray(payload?.results) ? payload.results[0] : null;
+  if (!hit || !Number.isFinite(hit.lat) || !Number.isFinite(hit.lon)) return null;
+
+  const beforeFly = typeof options.beforeFly === 'function' ? options.beforeFly : null;
+  const mayFly = () => beforeFly === null || beforeFly() !== false;
+  const duration = finitePositive(options.duration) || 3.0;
+
+  const swath = hit.viewport ? regionFramingPlan(hit.viewport) : null;
+  if (swath?.mode === 'swath') {
+    if (!mayFly()) return CANCELLED_SEARCH;
+    flyToLandmark(viewer, swath.centerLat, swath.centerLng, {
+      range: swath.rangeM,
+      pitch: swath.pitchDeg,
+      heading: swath.headingDeg,
+      buildingHeight: 0,
+      duration,
+      onStart: options.onStart,
+      onComplete: options.onComplete,
+      onCancel: options.onCancel,
+    });
+    return { label: hit.label, navigationMode: 'natural-region-swath', rangeM: swath.rangeM };
+  }
+
+  if (hit.viewport) {
+    const flight = flyToViewportBounds(viewer, hit.viewport, {
+      duration,
+      navigationMode: 'city-overview',
+      beforeFly: mayFly,
+      onStart: options.onStart,
+      onComplete: options.onComplete,
+      onCancel: options.onCancel,
+    });
+    if (flight === CANCELLED_SEARCH) return CANCELLED_SEARCH;
+    if (flight) return { label: hit.label, navigationMode: 'city-overview', rangeM: null };
+  }
+
+  // Point result: landmark framing at the default precise-place range.
+  const range = finitePositive(options.range) || 250;
+  if (!mayFly()) return CANCELLED_SEARCH;
+  const flight = flyToLandmark(viewer, hit.lat, hit.lon, {
+    range,
+    pitch: buildingPitch(null),
+    heading: 30,
+    buildingHeight: 30,
+    duration,
+    onStart: options.onStart,
+    onComplete: options.onComplete,
+    onCancel: options.onCancel,
+  });
+  return {
+    label: hit.label,
+    navigationMode: 'precise-place',
+    rangeM: Math.round(flight.range),
+  };
+}
+
+/**
  * Geocode a place name using Google Geocoding API, then fly there at a scale
  * appropriate to the request. Countries and cities use their viewport by
  * default; precise landmarks/buildings use close landmark framing.
@@ -419,11 +505,18 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
     : undefined;
   const apiKey = window.__GOOGLE_MAPS_API_KEY__ || envKey;
   if (!apiKey) {
-    // Keyless deployment: resolve the bundled Natural Earth pack before giving
-    // up, so "fly to the Alps" works with zero keys and zero network.
+    // Keyless deployment: resolve the bundled Natural Earth pack first (zero
+    // network), then the keyless Nominatim geocoder via /api/geocode, which
+    // covers everything the pack doesn't. Only when both miss do we report
+    // the miss — the deployment can set GOOGLE_MAPS_API_KEY for Google-grade
+    // geocoding (Places recovery, viewport quality) or refine the query.
     const offline = await flyNaturalRegionFallback(viewer, query, options);
     if (offline) return offline;
-    throw new Error('No Google Maps API key available for geocoding');
+    const keyless = await flyKeylessGeocode(viewer, query, options);
+    if (keyless) return keyless;
+    throw new Error(
+      `No Google Maps API key available for geocoding, and no keyless match for "${query}"`,
+    );
   }
 
   const beforeFly = typeof options.beforeFly === 'function' ? options.beforeFly : null;

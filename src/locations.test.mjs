@@ -674,6 +674,135 @@ test('keyless search on a pack miss still throws the geocode error', async () =>
   assert.equal(viewer.flights.length, 0);
 });
 
+// ── Keyless Nominatim tier (PLAN.md issues #211/#213) ──────────────────────
+// After the offline pack misses, the keyless path resolves through the
+// same-origin /api/geocode proxy (OpenStreetMap Nominatim). The proxy is a
+// convenience tier: unreachable / failing / no-match all fall back to the
+// original keyless error instead of breaking the search contract.
+
+/** Like runKeylessSearch, but /api/geocode answers with `geocodeBody`. */
+async function runKeylessNetworkSearch(viewer, query, geocodeBody, options = {}) {
+  const hadWindow = Object.hasOwn(globalThis, 'window');
+  const priorWindow = globalThis.window;
+  const priorFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.window = { __GOOGLE_MAPS_API_KEY__: '' };
+  globalThis.fetch = async (input) => {
+    calls.push(String(input));
+    return {
+      ok: true,
+      json: async () => (typeof geocodeBody === 'function' ? geocodeBody(String(input)) : geocodeBody),
+    };
+  };
+  try {
+    return { result: await searchAndFlyTo(viewer, query, options), calls };
+  } finally {
+    globalThis.fetch = priorFetch;
+    if (hadWindow) globalThis.window = priorWindow;
+    else delete globalThis.window;
+  }
+}
+
+const KEYLESS_CITY_PAYLOAD = {
+  attribution: '© OpenStreetMap contributors',
+  results: [{
+    label: 'Zilker Metropolitan Park, Austin, TX, USA',
+    lat: 30.2669,
+    lon: -97.7713,
+    kind: 'leisure:park',
+    viewport: { southwest: { lat: 30.25, lng: -97.81 }, northeast: { lat: 30.29, lng: -97.76 } },
+  }],
+};
+
+test('keyless search resolves through the /api/geocode proxy when the pack misses', async () => {
+  const viewer = stubViewer();
+  const { result, calls } = await runKeylessNetworkSearch(viewer, 'zilker park', KEYLESS_CITY_PAYLOAD);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /\/api\/geocode\?q=zilker%20park&limit=8$/);
+  assert.equal(result.label, 'Zilker Metropolitan Park, Austin, TX, USA');
+  assert.equal(result.navigationMode, 'city-overview');
+  assert.equal(viewer.flights.length, 1);
+  assert.ok(viewer.flights[0].destination, 'expected a flyTo viewport-bounds flight');
+});
+
+test('keyless search bias: the viewport viewbox rides along when the camera can measure it', async () => {
+  const viewer = stubViewer();
+  viewer.camera.computeViewRectangle = () => Cesium.Rectangle.fromDegrees(-97.9, 30.2, -97.6, 30.4);
+  const { calls } = await runKeylessNetworkSearch(viewer, 'zilker park', KEYLESS_CITY_PAYLOAD);
+  assert.match(calls[0], /viewbox=/, 'the same bias format the keyed bounds path uses');
+});
+
+test('keyless point results (no boundingbox) land at landmark range', async () => {
+  const viewer = stubViewer();
+  const { result } = await runKeylessNetworkSearch(viewer, 'university tower', {
+    results: [{ label: 'UT Tower, Austin, TX, USA', lat: 30.2857, lon: -97.7394, kind: 'man_made:tower', viewport: null }],
+  });
+  assert.equal(result.navigationMode, 'precise-place');
+  assert.equal(result.rangeM, 250);
+  assert.equal(viewer.flights.length, 1);
+});
+
+test('keyless large-area results fly the capped swath, like the keyed area path', async () => {
+  const viewer = stubViewer();
+  const { result } = await runKeylessNetworkSearch(viewer, 'gobi desert', {
+    results: [{
+      label: 'Gobi Desert',
+      lat: 43.0,
+      lon: 105.0,
+      kind: 'natural:desert',
+      viewport: { southwest: { lat: 41.5, lng: 96.0 }, northeast: { lat: 45.5, lng: 114.0 } },
+    }],
+  });
+  assert.equal(result.navigationMode, 'natural-region-swath');
+  assert.equal(result.rangeM, 280000);
+  assert.equal(viewer.flights[0].offset.range, 280000);
+});
+
+test('keyless search honors a beforeFly veto from the Nominatim tier', async () => {
+  const viewer = stubViewer();
+  const { result } = await runKeylessNetworkSearch(viewer, 'zilker park', KEYLESS_CITY_PAYLOAD, {
+    beforeFly: () => false,
+  });
+  assert.equal(result, CANCELLED_SEARCH);
+  assert.equal(viewer.flights.length, 0);
+});
+
+test('keyless proxy failure, no-match, and unusable payloads keep the search contract', async () => {
+  const viewer = stubViewer();
+  const priorFetch = globalThis.fetch;
+  const hadWindow = Object.hasOwn(globalThis, 'window');
+  const priorWindow = globalThis.window;
+  globalThis.window = { __GOOGLE_MAPS_API_KEY__: '' };
+  try {
+    // Every failure shape — unreachable proxy, upstream error, empty result
+    // set, row without coordinates — must end in the same keyless error with
+    // no flight, exactly as before the Nominatim tier existed.
+    const scenarios = [
+      ['proxy unreachable', async () => { throw new Error('proxy down'); }],
+      ['upstream HTTP error', async () => ({ ok: false, status: 502, json: async () => ({ error: 'Geocoder unavailable' }) })],
+      ['legit no-match', async () => ({ ok: true, json: async () => ({ results: [] }) })],
+      ['unusable row', async () => ({ ok: true, json: async () => ({ results: [{ label: 'x' }] }) })],
+    ];
+    for (const [name, impl] of scenarios) {
+      globalThis.fetch = impl;
+      await assert.rejects(
+        () => searchAndFlyTo(viewer, 'zzz no such range'),
+        (err) => {
+          assert.match(err.message, /No Google Maps API key available for geocoding/);
+          assert.match(err.message, /zzz no such range/, 'the miss names the query');
+          return true;
+        },
+        name,
+      );
+      assert.equal(viewer.flights.length, 0, name);
+    }
+  } finally {
+    globalThis.fetch = priorFetch;
+    if (hadWindow) globalThis.window = priorWindow;
+    else delete globalThis.window;
+  }
+});
+
 test('keyless search honors a beforeFly veto from the Natural Earth fallback', async () => {
   const viewer = stubViewer();
   const { result } = await runKeylessSearch(viewer, 'the Alps', { beforeFly: () => false });

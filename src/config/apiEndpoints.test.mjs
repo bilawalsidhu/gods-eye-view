@@ -36,6 +36,7 @@ const BUILDER_CALLS = [
   ['overpass', () => api.overpass()],
   ['route', () => api.route('foot', '-0.12,51.5;-0.13,51.51')],
   ['terrainHeights', () => api.terrainHeights('-0.12,51.5;-0.13,51.51')],
+  ['geocode', () => api.geocode('q=the%20Alps&limit=8')],
   ['regionalBrief', () => api.regionalBrief('latitude=30.27&longitude=-97.74')],
   ['googleTextSearch', () => api.googleTextSearch('q=fort')],
   ['googleNearbyPlaces', () => api.googleNearbyPlaces('q=fort')],
@@ -136,6 +137,7 @@ test('every builder emits the exact byte-for-byte URL its call site used to comp
     overpass: '/api/overpass',
     route: '/api/route?profile=foot&coords=-0.12%2C51.5%3B-0.13%2C51.51',
     terrainHeights: '/api/terrain/heights?points=-0.12%2C51.5%3B-0.13%2C51.51',
+    geocode: '/api/geocode?q=the%20Alps&limit=8',
     regionalBrief: '/api/regional-brief?latitude=30.27&longitude=-97.74',
     googleTextSearch: '/api/google/text-search?q=fort',
     googleNearbyPlaces: '/api/google/nearby-places?q=fort',
@@ -173,6 +175,7 @@ test('base roots keep their exact production paths', () => {
   assert.equal(apiEndpoints.rocketLaunches, '/api/launches');
   assert.equal(apiEndpoints.militaryInstallations, '/api/military-installations');
   assert.equal(apiEndpoints.regionalBrief, '/api/regional-brief');
+  assert.equal(apiEndpoints.geocode, '/api/geocode');
   assert.equal(Object.getPrototypeOf(apiEndpoints), Object.prototype, 'no surprise prototype');
 });
 

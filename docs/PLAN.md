@@ -433,9 +433,22 @@ acting — the audit described upstream's tree):
       Pages twin, plus the Street View fallback in both CCTV runtimes.
       Documented in `.env.example`; the client-exposed key can now be
       restricted to Map Tiles only.
-- [ ] Keyless geocoding fallback (PR #166, issues #211/#213) or, minimally,
-      docs naming every API to enable (Map Tiles, Places, Geocoding) —
-      location search currently throws on keyless installs.
+- [x] Keyless geocoding fallback (PR #166, issues #211/#213): DONE 2026-09-13 —
+      location search no longer throws on keyless installs. Tier order in
+      `searchAndFlyTo`: bundled Natural Earth pack (offline, unchanged, still
+      zero-network for pack hits) → new same-origin `/api/geocode`
+      (OpenStreetMap Nominatim search, no key) → the keyless error now names
+      the query. One worker-safe core (`src/data/geocodePolicy.js`: query
+      validation, lat-first↔lon-first viewbox conversion matching the keyed
+      `bounds` bias, result normalization to the Google-bounds shape so areas
+      swath and points landmark-frame) is imported by BOTH runtimes —
+      `vite/proxies/geocode.js` and `functions/api/geocode.js` — with a 60 s
+      cache, single-flight, stale-on-error, OSM attribution in every payload,
+      and the policy-mandated identifying User-Agent; `NOMINATIM_BASE_URL`
+      substitutes a self-hosted instance (documented in `.env.example`). The
+      route is in the apiEndpoints parity inventory (dev mount + Pages
+      Function, enforced by test). A deployment wanting Google-grade geocoding
+      (Places recovery, viewport quality) can still set GOOGLE_MAPS_API_KEY.
 - [ ] Allocation gates calibrated for every supported Node major (issue #39):
       CI fails on an uncalibrated runtime (better than upstream's silent
       skip), but budgets are Node-24-only while `package.json` advertises
