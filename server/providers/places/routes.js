@@ -9,8 +9,6 @@ import {
 /** OSM routing (FOSSGIS OSRM) cache: profile|coords -> { payload, cachedAt }. */
 const ROUTE_CACHE_MS = 600000;
 
-const _routeCache = new Map();
-
 /** Hard cap on the OSRM route response we will buffer. */
 const ROUTE_MAX_RESPONSE_BYTES = 8 * 1024 * 1024; // 8 MB
 
@@ -25,7 +23,12 @@ const _routeRateLimiter = makeRateLimiter({
   globalMax: 200,
 });
 
-export function installRouteMiddleware(middlewares) {
+export function installRouteMiddleware(
+  middlewares,
+  { endpoints = {}, fetchImpl = (...args) => fetch(...args) } = {},
+) {
+  const _routeCache = new Map();
+
   // Real OSM routing via the public FOSSGIS OSRM servers (foot/car/bike).
   // GET /api/route?profile=foot|car|bike&coords=lon,lat;lon,lat[;...]
   middlewares.use('/api/route', async (req, res) => {
@@ -96,13 +99,17 @@ export function installRouteMiddleware(middlewares) {
         res.end(JSON.stringify(cached.payload));
         return;
       }
-      const upstream = `https://routing.openstreetmap.de/routed-${profile}/route/v1/${osrmProfile}/${coords}?overview=full&geometries=geojson&alternatives=false&steps=false`;
+      const base =
+        endpoints[profile] ||
+        `https://routing.openstreetmap.de/routed-${profile}`;
+      const upstream = `${base.replace(/\/$/, '')}/route/v1/${osrmProfile}/${coords}?overview=full&geometries=geojson&alternatives=false&steps=false`;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 12000);
       let osrm;
       try {
-        const upstreamRes = await fetch(upstream, {
+        const upstreamRes = await fetchImpl(upstream, {
           signal: controller.signal,
+          redirect: 'error',
           headers: { 'User-Agent': 'gods-eye-view/dev (local)' },
         });
         if (!upstreamRes.ok) return fail('no route found');

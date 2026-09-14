@@ -1,5 +1,81 @@
 # Changelog
 
+- Split application scene, controls, catalog, tools and HTML into reusable components; configure application request services and sources without changing global fetch. Preserve standalone markup and voice behavior. Explicit annotation navigation may resolve a distant named target.
+
+## Voice component boundaries
+
+- Separate voice controls, Realtime connection requests and the action runner.
+- Allow compatible endpoints and server-selected models through construction options.
+- Cancel pending token/SDP requests on Stop or teardown and reject expired secrets.
+
+
+## Configurable geospatial services
+
+- Compose geocoding, place context and routes through independent providers.
+- Allow compatible endpoint configuration without changing voice tools or annotation behavior.
+- Isolate configured source caches and reject results after cancellation.
+
+
+## ALPR camera locations
+
+- Label the loaded camera count as nearby, show a purple-dot legend, and add
+  SHOW NEAREST to frame and select a loaded camera when none are on screen,
+  using the available 3D-tile or globe terrain height.
+
+- Keep nearby camera markers and selection stable during rotation, use bounded
+  ground-centered coverage instead of the horizon rectangle, and reuse in-flight queries.
+
+- Add optional, source-labeled OpenStreetMap ALPR camera locations, bounded city queries,
+  cached-response and coverage notices, selection cards, share links, and voice toggles.
+- Separate the request adapter, camera model, presentation, and instance lifecycle.
+  Source cancellation also guards late response bodies and rejects invalid query bounds.
+
+## Release disabled infrastructure rendering
+
+- Remove built Data Center, Dam and Submarine Cable entities when their layers
+  are disabled, avoiding retained visualizer work and entity memory.
+- Keep parsed datasets cached for re-enable; rebuild entities without refetching.
+
+## Camera layer components
+
+- Separate camera source requests, placement, frames, projection, cards and calibration.
+- Own visibility listeners and pending initialization within each layer lifetime.
+- Preserve existing camera catalogs, URL families, geometry and playback behavior.
+
+## Traffic and bikeshare components
+
+- Separate traffic loading, animation, styling and lifecycle into factory-owned components.
+- Give each flow source its own bounded decode cache and cancellation checks.
+- Separate bikeshare registry, station requests, rendering, selection and proximity handling.
+
+## Installation and context components
+
+- Separate mapped-site requests, records, placement, selection and viewport lifecycle.
+- Separate proximity queries, subject tracking, navigation/history, panel and direction rendering.
+- Retain source and ground-floor ownership in standalone composition; reject malformed
+  installation snapshots and ignore failures from cancelled requests.
+
+## Satellite and mission layer components
+
+- Separate catalog loading, orbit calculations, display, tracking and interaction
+  into instance-owned satellite components.
+- Separate mission ingestion, paths, placement, cards, roster, replay and camera
+  operations, retaining existing layer controls and satellite coordination.
+- Cancel late mission source work and reject malformed launch snapshots.
+
+## Fire layer components
+
+- Split fire source loading, state, rendering, cards, selection and viewport work
+  into reusable components with application-owned scene services.
+- Cancel late refreshes, retain good data after malformed responses, and preserve
+  selection identity without repeating a user-selection notification on refresh.
+
+## Earthquake components
+
+- Separate earthquake snapshot loading, record validation, and display ownership.
+- Cancel pending earthquake refreshes on disable or destruction, retaining the
+  last good snapshot after malformed or failed refreshes.
+
 ## September 8, 2026
 
 Earthquake refreshes validate the complete feed and construct replacement entities before clearing the previous snapshot. Malformed rows and duplicate rendered IDs retain the last good entities, overlays, count and timestamp and report a malformed response; unknown magnitude is excluded from M2.5+ rendering.
@@ -12,6 +88,64 @@ This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
 ## [Unreleased]
+
+- Separate map source factories from switching and resource ownership; retain current source IDs, attribution and fallbacks.
+
+- Separate radio directory loading, station selection, globe presentation and playback into composed components with an explicit metadata source.
+
+- Separate submarine cable sources and rendering components, and export bundled geography lookup modules.
+
+### Fixed
+
+- Traffic now retries a failed destination after city navigation without a layer
+  toggle. Camera departure cancels pending work, arrival checks the final view,
+  and superseded requests cannot keep a newer view loading.
+
+### Added
+
+- Add Ontario 511 as a keyless CCTV source pack, including Kitchener-area
+  highway cameras, with server-registered still URLs and attribution.
+- CCTV Mesh adds Finland: Fintraffic road weather cameras, keyless, nationwide, 300 by default. Each camera view of a station is placed separately; ambient stills refresh on the source's 10-minute cadence (the active camera keeps the usual 10-second refresh).
+- Add DriveBC highway cameras for British Columbia to the CCTV layer: the 250
+  nearest Vancouver and Victoria by default, with Open Government Licence –
+  British Columbia attribution. `CCTV_DRIVEBC_MAX_SOURCES` sets the cap and
+  `CCTV_DRIVEBC_ENABLED=0` turns the pack off.
+- Add TxDOT highway cameras for Texas as a keyless CCTV pack: the Austin and
+  San Antonio districts by default (`CCTV_TXDOT_DISTRICTS` selects any of the
+  25), only cameras reporting Device Online, snapshots decoded from TxDOT's
+  JSON-wrapped JPEG for the official origin only.
+- Add Estonia CCTV source packs: Tallinn intersection stills (`ristmikud.tallinn.ee`,
+  curated catalog) and nationwide Transpordiamet / Tarktee road-weather cameras
+  (DATEX2 locations + rotating JPEG URLs), with Tallinn city POIs and attribution.
+- Add a Warendorf (Germany) source pack: the Stadt Warendorf Marktplatz webcam, with a
+  curated pose.
+- Add Live Traffic NSW (Transport for NSW, CC BY 4.0) as a keyless CCTV pack: 217
+  Sydney and regional cameras with compass headings and view descriptions.
+- CCTV monitor planes no longer clip into the terrain. The plane is lifted
+  rigidly by the largest clearance deficit over a 3×3 grid of support points
+  against the ground under each (the ground at the mount where nothing finer is
+  known), and the client honours pack ranges instead of inflating them to 220 m.
+  `src/data/local_data/cctv_ground_heights/` ships precomputed ground heights under
+  every camera's mount and plane footprint (3,445 of 3,446 cameras), aligned to work
+  with Google Photorealistic 3D Tiles; cameras with shipped heights are placed
+  with zero runtime sampling, and the rest resolve the ground under their plane
+  from the Re:Earth DEM on activation. The footprint lift is capped at 60 m
+  above the mount-based lift so a tower under a far edge cannot launch the plane.
+
+- Press backtick (`) to toggle a rendered-frame-rate readout beneath the logo.
+  Typing fields retain the key; monitoring stops when hidden.
+
+
+- Extract vessel feed, store, rendering, selection, trail and card components with explicit source and scene services.
+- Bound contact retention for incomplete vessel observations, preserve source freshness and refresh history references in place.
+- Cancel pending vessel history during selection and layer teardown.
+
+- Split military flights into instance-owned state, ingestion, motion, rendering, tracking and query components. Share the existing aircraft calculations and give military classification an explicit source and cleanup lifecycle. Preserve known military identities even when the source has no position for them.
+
+- Split civil flights into instance-owned state, ingestion, motion, rendering, tracking and query components. Cancel enrichment on teardown and resolve model assets through the application.
+
+- Separate aircraft/vessel transport and normalization from layer rendering, preserving observation timestamps, altitude datums and optional history.
+- Retain absent aircraft during partially admitted snapshots and bound source error messages.
 
 - Drive share updates, Location feedback and Scene controls through immutable state snapshots and disposable subscriptions.
 - Keep stale lookup/load completions from publishing accepted results and retain shot rows during playback progress updates.
@@ -53,6 +187,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 - Extract shared surface keyboard handling for the welcome launcher and Provider
   Settings, preserving Tab/Escape behavior and releasing the listener on teardown.
+
+### Added
 
 ### Security
 

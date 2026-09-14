@@ -1,3 +1,4 @@
+import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
 import { isRateLimitedOutcome, resolveAnnotationTarget } from './annotationResolver.js';
@@ -94,7 +95,7 @@ export function normalizeTargetKey(target) {
 }
 
 export function createAnnotationEngine({
-  placeSearch,
+  placeSearch = defaultGeospatial,
   viewer,
   renderer,
   outlineRetryDelaysMs = OUTLINE_RETRY_DELAYS_MS,
@@ -245,7 +246,7 @@ export function createAnnotationEngine({
     // allSettled gives per-item error isolation (one failed item never aborts the batch); the
     // mutation pass below then runs in ORDER, so de-dup, the synchronous live-cap check, and output
     // order are all preserved exactly as the old serial loop had them.
-    const settled = await Promise.allSettled(list.map((spec) => resolveSpec(spec, controller.signal)));
+    const settled = await Promise.allSettled(list.map((spec) => resolveSpec(spec, controller.signal, opts.flyTo === true)));
 
     try {
       for (let i = 0; i < list.length; i += 1) {
@@ -384,7 +385,7 @@ export function createAnnotationEngine({
     };
   }
 
-  async function resolveSpec(spec, signal) {
+  async function resolveSpec(spec, signal, allowDistant = false) {
     const type = normalizeType(spec?.type);
     if (type === 'route') {
       const points = Array.isArray(spec.points) ? spec.points : [];
@@ -394,13 +395,15 @@ export function createAnnotationEngine({
       for (const pt of points) {
         const name = pt.target ?? pt.name ?? null;
         const r = await resolveTarget({
-          placeSearch,          viewer,
+          placeSearch,
+          viewer,
           target: name,
           latitude: pt.latitude,
           longitude: pt.longitude,
           screenX: pt.screenX,
           screenY: pt.screenY,
           footprint: false,
+          allowDistant,
           signal,
         });
         if (r) resolvedPts.push(r);
@@ -418,7 +421,7 @@ export function createAnnotationEngine({
       }
       // Real street-following route (OSM/OSRM), mode-aware.
       const mode = normalizeMode(spec.mode);
-      const routed = await fetchRoute(resolvedPts.map((p) => [p.lon, p.lat]), mode, signal);
+      const routed = await fetchRoute(resolvedPts.map((p) => [p.lon, p.lat]), mode, signal, placeSearch);
       if (routed) {
         return {
           path: routed.geometry.map(([lon, lat]) => ({ lon, lat, height: 0 })),
@@ -437,23 +440,27 @@ export function createAnnotationEngine({
     }
     if (type === 'arrow') {
       const from = await resolveTarget({
-          placeSearch,        viewer,
+        placeSearch,
+        viewer,
         target: spec.target,
         latitude: spec.latitude,
         longitude: spec.longitude,
         screenX: spec.screenX,
         screenY: spec.screenY,
         footprint: false,
+        allowDistant,
         signal,
       });
       const to = await resolveTarget({
-          placeSearch,        viewer,
+        placeSearch,
+        viewer,
         target: spec.toTarget,
         latitude: spec.toLatitude,
         longitude: spec.toLongitude,
         screenX: spec.toScreenX,
         screenY: spec.toScreenY,
         footprint: false,
+        allowDistant,
         signal,
       });
       if (!from || !to) {
@@ -472,7 +479,8 @@ export function createAnnotationEngine({
     }
     const wantFootprint = type === 'area' ? spec.footprint !== false : Boolean(spec.footprint);
     return resolveTarget({
-          placeSearch,      viewer,
+      placeSearch,
+      viewer,
       target: spec.target,
       latitude: spec.latitude,
       longitude: spec.longitude,
@@ -489,6 +497,7 @@ export function createAnnotationEngine({
       // timeout — field test 7 logs); deferring them lets the mark appear and the tool
       // result return while the outline resolves, then upgrades the mark in place.
       deferFootprint: wantFootprint,
+      allowDistant,
       signal,
     });
   }
@@ -1101,25 +1110,10 @@ function normalizeMode(m) {
   return 'foot';
 }
 
-/** Fetch a real street-following route from the /api/route proxy (OSM/OSRM). */
-async function fetchRoute(coordPairs, mode, externalSignal) {
-  const controller = new AbortController();
-  const onAbort = () => controller.abort();
-  if (externalSignal) {
-    if (externalSignal.aborted) controller.abort();
-    else externalSignal.addEventListener('abort', onAbort, { once: true });
-  }
-  const timer = setTimeout(() => controller.abort(), 13000);
-  try {
-    const coords = coordPairs.map(([lon, lat]) => `${lon.toFixed(6)},${lat.toFixed(6)}`).join(';');
-    const res = await fetch(`/api/route?profile=${mode}&coords=${encodeURIComponent(coords)}`, { signal: controller.signal });
-    const data = await res.json();
-    if (data?.ok && Array.isArray(data.geometry) && data.geometry.length >= 2) return data;
-  } catch { /* routing unavailable / aborted → caller falls back to straight segments */ } finally {
-    clearTimeout(timer);
-    if (externalSignal) externalSignal.removeEventListener('abort', onAbort);
-  }
-  return null;
+/** Route failure remains an explicitly labelled direct line in the caller. */
+async function fetchRoute(coordPairs, mode, signal, service) {
+  try { return await service.route?.(coordPairs, mode, { signal }) || null; }
+  catch { return null; }
 }
 
 function greatCircleM(a, b) {

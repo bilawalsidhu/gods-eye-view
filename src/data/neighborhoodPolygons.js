@@ -14,7 +14,14 @@ import { createRetryableLoader } from './retryableLoad.js';
 
 // bbox = [west, south, east, north]; only load a city file when the point falls in its box.
 const CITY_FILES = [
-  { id: 'san-francisco', bbox: [-122.55, 37.70, -122.35, 37.84], loader: () => import('./local_data/neighborhoods/san-francisco.json', { with: { type: 'json' } }) },
+  {
+    id: 'san-francisco',
+    bbox: [-122.55, 37.7, -122.35, 37.84],
+    loader: () =>
+      import('./local_data/neighborhoods/san-francisco.json', {
+        with: { type: 'json' },
+      }),
+  },
 ];
 
 /**
@@ -27,7 +34,11 @@ const CITY_FILES = [
 const _cityLoaders = new Map();
 
 function normalize(s) {
-  return String(s || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
@@ -45,10 +56,12 @@ const NAME_ALIASES = new Map([
 function pointInRing(lon, lat, ring) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0]; const yi = ring[i][1];
-    const xj = ring[j][0]; const yj = ring[j][1];
-    const intersect = ((yi > lat) !== (yj > lat))
-      && (lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi);
+    const xi = ring[i][0];
+    const yi = ring[i][1];
+    const xj = ring[j][0];
+    const yj = ring[j][1];
+    const intersect =
+      yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
     if (intersect) inside = !inside;
   }
   return inside;
@@ -70,7 +83,10 @@ function containingOuterRing(feature, lon, lat) {
     if (!pointInRing(lon, lat, outer)) continue;
     let inHole = false;
     for (let h = 1; h < poly.length; h++) {
-      if (pointInRing(lon, lat, poly[h])) { inHole = true; break; }
+      if (pointInRing(lon, lat, poly[h])) {
+        inHole = true;
+        break;
+      }
     }
     if (!inHole) return outer;
   }
@@ -108,7 +124,10 @@ async function loadCity(city) {
   } catch (error) {
     // The caller falls back to the live resolver ladder, which looks exactly
     // like "no bundled coverage" — say so once, out loud, instead.
-    console.warn(`[neighborhoods] ${city.id} pack unavailable:`, error?.message || error);
+    console.warn(
+      `[neighborhoods] ${city.id} pack unavailable:`,
+      error?.message || error,
+    );
     return [];
   }
 }
@@ -122,7 +141,13 @@ async function loadCity(city) {
  *   neighborhood name, or null when the point isn't in a covered city / no match.
  */
 export async function lookupNeighborhoodRing(lat, lon, matchName) {
-  const city = CITY_FILES.find((c) => lon >= c.bbox[0] && lat >= c.bbox[1] && lon <= c.bbox[2] && lat <= c.bbox[3]);
+  const city = CITY_FILES.find(
+    (c) =>
+      lon >= c.bbox[0] &&
+      lat >= c.bbox[1] &&
+      lon <= c.bbox[2] &&
+      lat <= c.bbox[3],
+  );
   if (!city) return null;
   const feats = await loadCity(city);
   if (!feats.length) return null;
@@ -153,11 +178,18 @@ export async function lookupNeighborhoodRing(lat, lon, matchName) {
     const containRing = containingOuterRing(f, lon, lat);
     const ring = containRing || largestOuterRing(f.geometry);
     if (!ring) continue;
-    const cand = { ring, name: f.properties.name, contains: !!containRing, fwordCount: fWords.length };
+    const cand = {
+      ring,
+      name: f.properties.name,
+      contains: !!containRing,
+      fwordCount: fWords.length,
+    };
     // Prefer a feature that CONTAINS the point, then the most specific name (most words).
-    if (!best
-      || (cand.contains && !best.contains)
-      || (cand.contains === best.contains && cand.fwordCount > best.fwordCount)) {
+    if (
+      !best ||
+      (cand.contains && !best.contains) ||
+      (cand.contains === best.contains && cand.fwordCount > best.fwordCount)
+    ) {
       best = cand;
     }
   }

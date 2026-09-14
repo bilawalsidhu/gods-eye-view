@@ -25,6 +25,8 @@
  * Visual proof saved to qa-shots/ (gitignored).
  *
  * Run:  node scripts/qa-traffic.mjs --url http://localhost:4410
+ * Add --fixtures for synthetic roads and the recorded flow tile without a key;
+ * that mode does not qualify live source access or quota accounting.
  * Exits non-zero on any FAIL. Does not commit anything.
  */
 
@@ -44,6 +46,8 @@ const getOpt = (name, dflt) => {
 };
 const APP_URL = getOpt('--url', 'http://localhost:4410');
 const HEADFUL = argv.includes('--headful');
+const FIXTURES = argv.includes('--fixtures');
+const fixtureResponse = FIXTURES ? (await import('./traffic-fixtures.mjs')).trafficFixtureResponse : () => null;
 
 const CHROME_EXECUTABLE_CANDIDATES = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -112,7 +116,8 @@ async function main() {
     process.exit(2);
   }
 
-  const statusBefore = await fetch(`${APP_URL}/api/tomtom/status`).then((r) => r.json()).catch(() => null);
+  const statusBefore = FIXTURES ? {hasKey:true,dailyCount:0} : await fetch(`${APP_URL}/api/tomtom/status`).then((r) => r.json()).catch(() => null);
+  if (FIXTURES) console.log('Source mode: synthetic roads and recorded flow tiles; live quota is not qualified.');
   if (!statusBefore?.hasKey) {
     console.error('\x1b[31mServer has no TomTom key — run against the keyed dev server (:4410).\x1b[0m');
     process.exit(2);
@@ -133,6 +138,11 @@ async function main() {
   let exitCode = 0;
   try {
     const page = await browser.newPage();
+    const onFixture = (request) => {
+      const response = fixtureResponse(request);
+      if (response) void request.respond(response); else void request.continue();
+    };
+    if (FIXTURES) { await page.setRequestInterception(true); page.on('request', onFixture); }
     await page.setViewport({ width: 1440, height: 900 });
 
     // Track flow-tile requests + traffic console lines for (ii)/(iii)/(v).
@@ -152,7 +162,8 @@ async function main() {
       () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
       { timeout: 60000 },
     );
-    await sleep(1500);
+    await sleep(5000);
+    await page.keyboard.press('Escape');
 
     // ── (i) LIVE mode: San Antonio — fast Overpass extract, partial TomTom
     // coverage (sim dots exist for (iv)). Mumbai proved too Overpass-cold for
@@ -240,16 +251,17 @@ async function main() {
     // ── (iii) budget honesty ─────────────────────────────────────────────────
     console.log('\n(iii) Budget — dailyCount grew by ≤ requests this run...');
     {
-      const statusAfter = await fetch(`${APP_URL}/api/tomtom/status`).then((r) => r.json());
+      const statusAfter = FIXTURES ? statusBefore : await fetch(`${APP_URL}/api/tomtom/status`).then((r) => r.json());
       const grew = statusAfter.dailyCount - statusBefore.dailyCount;
       const ok = grew >= 0 && grew <= flowRequests.length;
-      record('BUDGET: /api/tomtom/status growth ≤ page tile requests', ok,
-        `before=${statusBefore.dailyCount} after=${statusAfter.dailyCount} pageRequests=${flowRequests.length}`);
+      record('BUDGET: /api/tomtom/status growth ≤ page tile requests', FIXTURES ? null : ok,
+        FIXTURES ? 'Synthetic source mode; live quota was not exercised' : `before=${statusBefore.dailyCount} after=${statusAfter.dailyCount} pageRequests=${flowRequests.length}`);
       if (!ok) exitCode = 1;
     }
 
     // ── (v) KEYLESS fallback (intercepted — server key untouched) ────────────
     console.log('\n(v) KEYLESS — intercepted status, expect pure simulation...');
+    if (FIXTURES) page.off('request', onFixture);
     await page.setRequestInterception(true);
     const keylessFlowReqs = [];
     page.on('request', (req) => {
@@ -263,6 +275,8 @@ async function main() {
         req.respond({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'no_key' }) });
         return;
       }
+      const response = fixtureResponse(req);
+      if (response) { void req.respond(response); return; }
       try { req.continue(); } catch { /* already handled */ }
     });
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -270,7 +284,8 @@ async function main() {
       () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
       { timeout: 60000 },
     );
-    await sleep(1500);
+    await sleep(5000);
+    await page.keyboard.press('Escape');
     let simStats = await settleTraffic(page, { lon: -98.4936, lat: 29.4241, height: 3000 }, { minCount: 100, timeoutS: 45 });
     if (!simStats || simStats.count === 0) {
       // Public Overpass can throttle bursts across harness runs — one retry.

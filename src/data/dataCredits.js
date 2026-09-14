@@ -7,7 +7,7 @@ import * as Cesium from 'cesium';
  * docs/pre-ship-audit-2026-07-01.md): every third-party data layer this app can
  * display carries its own license and required attribution — ODbL (OSM
  * datacenters/dams, adsb.lol, Overpass roads), CC BY-NC-SA (TeleGeography
- * cables), NASA FIRMS, CelesTrak, USGS, City of Austin, GBFS operators, OpenSky.
+ * cables), NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic (CC BY 4.0),
  * The MIT code license does NOT cover this data.
  *
  * These credits are registered ONCE at init as STATIC credits with
@@ -82,6 +82,14 @@ export const DATA_CREDITS = [
       '(ODbL 1.0)',
   },
   {
+    key: 'alpr-osm',
+    html:
+      'ALPR camera locations (automatic license plate readers): ' +
+      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
+      '(<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL 1.0</a>); ' +
+      'community mapping includes <a href="https://deflock.org" target="_blank" rel="noopener">DeFlock</a>',
+  },
+  {
     key: 'military-installations-osm',
     html:
       'Mapped installation context: ' +
@@ -123,6 +131,12 @@ export const DATA_CREDITS = [
       '<a href="https://data.austintexas.gov" target="_blank" rel="noopener">data.austintexas.gov</a>',
   },
   {
+    key: 'txdot-cctv',
+    html:
+      'CCTV cameras &amp; frames (Texas): ' +
+      '<a href="https://its.txdot.gov/" target="_blank" rel="noopener">Texas Department of Transportation</a> (courtesy)',
+  },
+  {
     key: 'caltrans-cctv',
     html:
       'CCTV cameras &amp; frames (California): Caltrans — ' +
@@ -134,6 +148,20 @@ export const DATA_CREDITS = [
       'CCTV cameras &amp; frames (London): ' +
       '<a href="https://tfl.gov.uk/info-for/open-data-users/" target="_blank" rel="noopener">Powered by TfL Open Data</a>. ' +
       'Contains OS data © Crown copyright and database rights.',
+  },
+  {
+    key: 'ontario-511-cctv',
+    html:
+      'CCTV cameras &amp; frames (Ontario): ' +
+      '<a href="https://511on.ca/" target="_blank" rel="noopener">Ontario 511</a> ' +
+      '(<a href="https://www.ontario.ca/page/open-government-licence-ontario" target="_blank" rel="noopener">Open Government Licence - Ontario</a>)',
+  },
+  {
+    key: 'fintraffic-cctv',
+    html:
+      'CCTV cameras &amp; frames (Finland): Fintraffic / ' +
+      '<a href="https://www.digitraffic.fi/en/" target="_blank" rel="noopener">digitraffic.fi</a>, ' +
+      'license CC BY 4.0',
   },
   {
     key: 'gbfs',
@@ -175,6 +203,40 @@ export const DATA_CREDITS = [
       'from NASA’s Fire Information for Resource Management System ' +
       '(<a href="https://earthdata.nasa.gov/firms" target="_blank" rel="noopener">earthdata.nasa.gov/firms</a>), ' +
       'part of NASA’s Earth Observing System Data and Information System (EOSDIS)',
+  },
+  {
+    key: 'drivebc-cctv',
+    html:
+      'CCTV cameras &amp; frames (British Columbia): ' +
+      '<a href="https://www.drivebc.ca/" target="_blank" rel="noopener">DriveBC</a>. ' +
+      'Contains information licensed under the ' +
+      '<a href="https://www2.gov.bc.ca/gov/content/data/open-data/open-government-licence-bc" target="_blank" rel="noopener">Open Government Licence – British Columbia</a>. ' +
+      'Some cameras are supplied by partners (TransLink, the City of Vancouver, the City of Surrey, Parks Canada and others); each names its provider in the CCTV panel.',
+  },
+  {
+    key: 'tallinn-cctv',
+    html:
+      'CCTV cameras &amp; frames (Tallinn): City of Tallinn — ' +
+      '<a href="https://ristmikud.tallinn.ee/" target="_blank" rel="noopener">ristmikud.tallinn.ee</a> (courtesy)',
+  },
+  {
+    key: 'tarktee-cctv',
+    html:
+      'CCTV cameras &amp; frames (Estonia road weather): Transpordiamet / Tarktee — ' +
+      '<a href="https://tarktee.transpordiamet.ee/" target="_blank" rel="noopener">tarktee.transpordiamet.ee</a> (courtesy)',
+  },
+  {
+    key: 'warendorf-cctv',
+    html:
+      'Webcam (Warendorf): <a href="https://www.warendorf.de/" target="_blank" rel="noopener">Stadt Warendorf</a> (courtesy); ' +
+      'camera poses derived from OpenStreetMap geometry, © OpenStreetMap contributors (ODbL)',
+  },
+  {
+    key: 'nsw-cctv',
+    html:
+      'CCTV cameras &amp; frames (New South Wales): ' +
+      '<a href="https://www.livetraffic.com/" target="_blank" rel="noopener">Live Traffic NSW</a> — Transport for NSW ' +
+      '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)',
   },
   {
     key: 'telegeography',
@@ -238,12 +300,12 @@ export function registerDynamicCredit(viewer, credit) {
  * present in the "Data attribution" popover.
  * @param {Cesium.Viewer} viewer — the initialized Cesium viewer
  */
-export function registerDataCredits(viewer) {
+export function registerDataCredits(viewer, credits = DATA_CREDITS) {
   const creditDisplay = viewer?.creditDisplay;
   if (!creditDisplay || typeof creditDisplay.addStaticCredit !== 'function') {
     return;
   }
-  for (const { html } of DATA_CREDITS) {
+  for (const { html } of credits) {
     // showOnScreen=false → lives in the expandable "Data attribution" popover,
     // not the on-globe credit line.
     creditDisplay.addStaticCredit(new Cesium.Credit(html, false));
