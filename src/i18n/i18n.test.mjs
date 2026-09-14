@@ -25,6 +25,7 @@ import {
   hasMessage,
   persistLocaleAndReload,
   resolveMessage,
+  selectPluralPattern,
   setLocale,
   t,
 } from './index.js';
@@ -271,19 +272,58 @@ test('persistLocaleAndReload stores the choice, keeps the hash exact, strips ?la
   assert.equal(assigned.length, 0, 'assign is not used when reload exists');
 });
 
-test('ru plural entries degrade gracefully: categories the entry lacks fall back to other', () => {
-  // ru selects few (2) and many (5) — categories the untranslated seed does
-  // not carry yet — so selectPluralPattern renders entry.other; 'one' (1 and
-  // 21) still matches the seed's one variant. Documented graceful degradation
-  // until stage-B supplies one/few/many/other for every plural key.
+test('ru plural entries select all four categories through the real ru catalog', () => {
+  // ru is fully translated since stage B: every plural entry carries
+  // one/few/many/other, so what ships is genuine Russian agreement — few
+  // (2–4, genitive singular), many (0, 5–20, 100, genitive plural), one again
+  // at 21, and other for fractional counts — pinned here through the real
+  // catalog values (locales/ru/layers.js).
   pinLocale('ru');
-  assert.equal(t('layers.clear.toast.cleared', { count: 1 }), 'Cleared 1 data layer');
-  assert.equal(t('layers.clear.toast.cleared', { count: 2 }), 'Cleared 2 data layers',
-    "ru 'few' is absent in the seed: the en 'other' pattern renders");
-  assert.equal(t('layers.clear.toast.cleared', { count: 5 }), 'Cleared 5 data layers',
-    "ru 'many' is absent in the seed: the en 'other' pattern renders");
-  assert.equal(t('layers.clear.toast.cleared', { count: 21 }), 'Cleared 21 data layer',
-    "ru selects 'one' for 21 and the seed's one variant renders");
+  assert.equal(t('layers.clear.toast.cleared', { count: 1 }), 'Очищен 1 слой данных');
+  assert.equal(t('layers.clear.toast.cleared', { count: 3 }), 'Очищено 3 слоя данных',
+    "ru 'few' for 2–4");
+  assert.equal(t('layers.clear.toast.cleared', { count: 5 }), 'Очищено 5 слоёв данных',
+    "ru 'many' for 5–20");
+  assert.equal(t('layers.clear.toast.cleared', { count: 1.5 }), 'Очищено 1.5 слоя данных',
+    "ru 'other' for fractional counts");
+  assert.equal(t('layers.clear.toast.cleared', { count: 21 }), 'Очищен 21 слой данных',
+    "21 ends in 1: ru selects 'one' again");
+  pinLocale('en');
+});
+
+test('uk plural entries select all four categories through the real uk catalog', () => {
+  pinLocale('uk');
+  assert.equal(t('layers.clear.toast.cleared', { count: 1 }), 'Очищено 1 шар даних');
+  assert.equal(t('layers.clear.toast.cleared', { count: 3 }), 'Очищено 3 шари даних',
+    "uk 'few' for 2–4");
+  assert.equal(t('layers.clear.toast.cleared', { count: 5 }), 'Очищено 5 шарів даних',
+    "uk 'many' for 5–20");
+  assert.equal(t('layers.clear.toast.cleared', { count: 1.5 }), 'Очищено 1.5 шара даних',
+    "uk 'other' for fractional counts");
+  assert.equal(t('layers.clear.toast.cleared', { count: 21 }), 'Очищено 21 шар даних',
+    "21 ends in 1: uk selects 'one' again");
+  pinLocale('en');
+});
+
+test('a plural entry lacking a category the active locale selects degrades to other (pure selection)', () => {
+  // Graceful degradation stays pinned after the ru/uk translation landed:
+  // full-parity catalogs can no longer carry a partial entry, so the
+  // runtime contract — entry[category] ?? entry.other in selectPluralPattern
+  // (src/i18n/index.js) — is exercised with a synthetic { one, other } twin
+  // under ru, which selects few/many for 2–4/5–20. This is the runtime half
+  // of the plural-superset gate in catalog.test.mjs.
+  const twin = Object.freeze({ one: 'ONE {count}', other: 'OTHER {count}' });
+  pinLocale('ru');
+  assert.equal(selectPluralPattern(twin, { count: 2 }, 'demo.key'), 'OTHER {count}',
+    "ru selects 'few' for 2 and the entry does not carry it: entry.other renders");
+  assert.equal(selectPluralPattern(twin, { count: 5 }, 'demo.key'), 'OTHER {count}',
+    "ru selects 'many' for 5 and the entry does not carry it: entry.other renders");
+  assert.equal(selectPluralPattern(twin, { count: 21 }, 'demo.key'), 'ONE {count}',
+    "21 selects 'one', which the entry carries directly");
+  assert.equal(selectPluralPattern(twin, { count: 1.5 }, 'demo.key'), 'OTHER {count}',
+    'fractional counts select other');
+  assert.equal(selectPluralPattern(twin, {}, 'demo.key'), 'OTHER {count}',
+    'a non-finite count degrades to entry.other ?? entry.one');
   pinLocale('en');
 });
 

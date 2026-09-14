@@ -160,8 +160,11 @@ function pluralRulesFor(locale) {
   return rules;
 }
 
-/** Select a { one, other } variant via Intl.PluralRules for the active locale. */
-function selectPluralPattern(entry, values, key) {
+/** Select a plural variant via Intl.PluralRules for the ACTIVE locale;
+ * an entry lacking the selected category degrades to entry.other. Exported
+ * for tests: full-parity catalogs can no longer stage a partial entry, so
+ * the fallback is pinned synthetically (i18n.test.mjs). */
+export function selectPluralPattern(entry, values, key) {
   const count = values?.count;
   if (typeof count !== 'number' || !Number.isFinite(count)) {
     warnMissingKey(key, 'plural entry requires a finite {count} value');
