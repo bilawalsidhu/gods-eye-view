@@ -302,7 +302,13 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   min-width: 214px;
   padding: 9px 14px;
   color: var(--text-primary);
-  background: var(--glass-bg);
+  /* De-blurred always-visible surface (render-perf five): a persistent
+     backdrop-filter makes the compositor read + blur the WebGL canvas
+     beneath it every rendered frame (~6.1 MiB/frame across the boot
+     viewport, measured). These panels raise their background alpha instead,
+     which also steadies text contrast over bright imagery (WCAG AAA).
+     Transient and on-demand chrome keeps its blur. */
+  background: rgba(12, 12, 20, 0.92);
   border: 1px solid var(--glass-border);
   border-radius: 999px;
   box-shadow:
@@ -310,8 +316,6 @@ body.cockpit-mode #cockpit-cloud-effects.active {
     0 0 0 1px rgba(255, 255, 255, 0.03) inset,
     0 1px 0 rgba(255, 255, 255, 0.06) inset,
     0 0 20px rgba(0, 212, 255, 0.08);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   font-family: var(--font-mono);
   pointer-events: auto;
 }
@@ -577,12 +581,11 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 
 .panel-inner {
   position: relative;
-  background: var(--glass-bg);
+  /* De-blurred persistent rail surface — see #gev-voice-control. */
+  background: rgba(12, 12, 20, 0.92);
   border: 1px solid var(--glass-border);
   border-radius: var(--panel-radius);
   padding: 16px 20px 18px;
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 255, 255, 0.03) inset,
@@ -1622,12 +1625,11 @@ body.ui-clean-view #scene-runtime.active {
   position: relative;
   display: flex;
   flex-direction: column;
-  background: var(--glass-bg);
+  /* De-blurred persistent dock surface — see #gev-voice-control. */
+  background: rgba(12, 12, 20, 0.92);
   border: 1px solid var(--glass-border);
   border-radius: 12px;
   padding: 8px 12px;
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
@@ -2781,11 +2783,13 @@ body.cockpit-mode:has(#left-panel-stack > .panel-collapsible:not(.collapsed)) .c
   color: rgba(244, 251, 255, 0.52);
   font-size: 12px;
   letter-spacing: 0.12em;
+  /* --tape-shift (set on the tape per update, in divisions −0.5..0.5)
+     slides the built-once tape smoothly between the 30-degree snaps. */
   transform:
-    translateX(calc(-50% + (var(--slot) * 86px)))
+    translateX(calc(-50% + ((var(--slot) + var(--tape-shift, 0)) * 86px)))
     translateY(calc(var(--depth) * 8px))
-    rotateZ(calc(var(--slot) * 3.6deg))
-    rotateY(calc(var(--slot) * -9deg));
+    rotateZ(calc((var(--slot) + var(--tape-shift, 0)) * 3.6deg))
+    rotateY(calc((var(--slot) + var(--tape-shift, 0)) * -9deg));
 }
 .cockpit-compass-tape span::before {
   content: '';
@@ -3992,9 +3996,9 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   .cockpit-context-footer { font-size: 5px; }
   .cockpit-compass-tape span {
     transform:
-      translateX(calc(-50% + (var(--slot) * 52px)))
+      translateX(calc(-50% + ((var(--slot) + var(--tape-shift, 0)) * 52px)))
       translateY(calc(var(--depth) * 7px))
-      rotateZ(calc(var(--slot) * 3deg));
+      rotateZ(calc((var(--slot) + var(--tape-shift, 0)) * 3deg));
   }
   .cockpit-pitch-rail { display: none; }
   .cockpit-altitude-rim { display: none; }
@@ -4419,12 +4423,11 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 
 .data-panel-inner {
   position: relative;
-  background: var(--glass-bg);
+  /* De-blurred persistent rail surface — see #gev-voice-control. */
+  background: rgba(12, 12, 20, 0.92);
   border: 1px solid var(--glass-border);
   border-radius: var(--panel-radius);
   padding: 14px 16px 12px;
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 255, 255, 0.03) inset,
@@ -7012,15 +7015,16 @@ body.scene-playback-mode :is(#clear-selected-layers, #reset-globe-view) {
   width: min(94vw, 1240px);
   padding: 6px;
   overflow: visible;
-  background: rgba(9, 18, 27, 0.84);
+  /* De-blurred persistent dock surface — see #gev-voice-control. The dock
+     alone spanned four nested blur surfaces (itself + three children),
+     re-blurring the globe four times per frame. */
+  background: rgba(9, 18, 27, 0.95);
   border: 1px solid rgba(123, 189, 211, 0.28);
   border-radius: 12px;
   box-shadow:
     0 12px 36px rgba(0, 0, 0, 0.58),
     0 0 0 1px rgba(255, 255, 255, 0.03) inset,
     0 0 28px rgba(0, 212, 255, 0.06);
-  backdrop-filter: blur(28px) saturate(1.35);
-  -webkit-backdrop-filter: blur(28px) saturate(1.35);
   transform: translateX(-50%);
   transition: opacity var(--transition-smooth), visibility var(--transition-smooth);
 }
@@ -8570,15 +8574,14 @@ body.recording-mode #command-dock {
 #command-dock > #location-bar,
 #command-dock > #control-panel {
   box-sizing: border-box;
-  background: var(--glass-bg);
+  /* De-blurred persistent dock surface — see #gev-voice-control. */
+  background: rgba(12, 12, 20, 0.92);
   border: 1px solid var(--glass-border);
   border-radius: var(--panel-radius);
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 255, 255, 0.03) inset,
     0 1px 0 rgba(255, 255, 255, 0.06) inset;
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   transition:
     border-color 160ms ease,
     background-color 160ms ease,
@@ -8586,7 +8589,7 @@ body.recording-mode #command-dock {
 }
 
 #command-dock > :is(#location-bar, #control-panel):hover {
-  background: var(--glass-bg);
+  background: rgba(12, 12, 20, 0.92);
   border-color: var(--glass-border-hover);
   color: var(--accent);
 
@@ -8855,8 +8858,8 @@ body.recording-mode #command-dock {
     0 1.4rem 4.5rem rgba(0, 0, 0, 0.72),
     0 0 2.5rem rgba(0, 212, 255, 0.09),
     inset 0 0 0 1px rgba(255, 255, 255, 0.025);
-  backdrop-filter: blur(28px) saturate(1.25);
-  -webkit-backdrop-filter: blur(28px) saturate(1.25);
+  /* De-blurred — the largest single blur surface at boot (~248k px²) and
+     already near-opaque, so the blur bought nothing. See #gev-voice-control. */
   opacity: 0;
   transform: translate(-50%, calc(-50% + 0.8rem)) scale(0.985);
   transition: opacity 220ms ease, transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);

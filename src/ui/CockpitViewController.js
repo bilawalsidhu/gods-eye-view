@@ -18,7 +18,7 @@ import {
   cockpitGroundSafeHeight,
   cockpitSurfaceWaitExpired,
   cockpitUiUpdateDue,
-  compassDivisions,
+  compassTapeLayout,
   formatAltitudeRulerTick,
   formatCockpitContextScope,
   formatCompassDivision,
@@ -241,7 +241,8 @@ export class CockpitViewController {
     this.surfaceWaitStartedMs = 0;
     this.surfaceAcquiring = false;
     this.surfaceFallback = false;
-    this.lastCompassSignature = '';
+    this._tapeCenter = null;
+    this._tapeSpans = null;
     this.entry = document.getElementById('cockpit-entry');
     this.tr3bToggle = document.getElementById('tr3b-toggle');
     this._tr3bSignature = null;
@@ -629,7 +630,7 @@ export class CockpitViewController {
     this.surfaceWaitStartedMs = performance.now();
     this.surfaceAcquiring = false;
     this.surfaceFallback = false;
-    this.lastCompassSignature = '';
+    this._tapeCenter = null;
     this.cockpitAnchorValid = false;
     this.lastCameraUpdateMs = 0;
     this.active = true;
@@ -689,7 +690,7 @@ export class CockpitViewController {
     this.lastHudUpdateMs = 0;
     this.lastContextUpdateMs = 0;
     this.contextNavigationDeadlineMs = 0;
-    this.lastCompassSignature = '';
+    this._tapeCenter = null;
     this.stopBriefRotation();
     this.regionalBriefAbort?.abort();
     this.regionalBriefAbort = null;
@@ -1007,19 +1008,7 @@ export class CockpitViewController {
       heading,
       { circularRange: 360, immediate: forceContext },
     );
-    if (this.compassTape) {
-      const divisions = compassDivisions(heading);
-      const signature = divisions.join(',');
-      if (signature !== this.lastCompassSignature) {
-        this.lastCompassSignature = signature;
-        this.compassTape.innerHTML = divisions
-          .map((division, index) => {
-            const slot = index - 3;
-            return `<span class="${slot === 0 ? 'active' : ''}" style="--slot:${slot};--depth:${Math.abs(slot)}">${formatCompassDivision(division)}</span>`;
-          })
-          .join('');
-      }
-    }
+    this._updateCompassTape(heading);
     if (this.clock) this.clock.textContent = `${new Date().toISOString().slice(11, 19)  }Z`;
     if (this.position) {
       const lat = Number.isFinite(info.latitude)
@@ -1043,6 +1032,38 @@ export class CockpitViewController {
       this.updateContext(info, heading);
     }
     if (this.hud) this.hud.dataset.layer = info.layerId || 'flights';
+  }
+
+  /**
+   * Compass tape, built once (render-perf five). The seven division spans
+   * are created on first use and live for the controller's lifetime; per
+   * update only the tape's `--tape-shift` custom property (the smooth
+   * sub-division slide) and — across a 30-degree boundary — the seven label
+   * text nodes change. The old path re-parsed innerHTML on every boundary
+   * crossing: 336 childList mutations over a 720-degree sweep, measured by
+   * scripts/profile-render-perf.mjs.
+   * @param {number} heading Slewed cockpit heading in degrees.
+   */
+  _updateCompassTape(heading) {
+    if (!this.compassTape) return;
+    if (!this._tapeSpans) {
+      this._tapeSpans = [-3, -2, -1, 0, 1, 2, 3].map((slot) => {
+        const span = document.createElement('span');
+        if (slot === 0) span.className = 'active';
+        span.style.setProperty('--slot', String(slot));
+        span.style.setProperty('--depth', String(Math.abs(slot)));
+        this.compassTape.appendChild(span);
+        return span;
+      });
+    }
+    const layout = compassTapeLayout(heading);
+    this.compassTape.style.setProperty('--tape-shift', layout.shift.toFixed(4));
+    if (layout.center !== this._tapeCenter) {
+      this._tapeCenter = layout.center;
+      layout.divisions.forEach((division, index) => {
+        this._tapeSpans[index].textContent = formatCompassDivision(division);
+      });
+    }
   }
 
   updateRoute(info) {

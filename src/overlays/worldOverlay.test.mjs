@@ -606,6 +606,42 @@ test('canvas backing store tracks CSS size and live DPR', () => {
   env.cleanup();
 });
 
+test('backing-store DPR caps at 1.5; ?overlayDpr restores the device grid', () => {
+  const savedLocation = globalThis.location;
+  try {
+    const env = installMockEnvironment({ width: 400, height: 300, dpr: 2 });
+    initWorldOverlay(env.viewer);
+    setOverlayEntries('dpr-cap', [selectedEntry('probe')]);
+    env.postRender.raise();
+    let canvas = env.document.getElementById('world-overlay-canvas');
+    assert.equal(canvas.width, 600, '400 CSS px × 1.5 cap');
+    assert.equal(canvas.height, 450, '300 CSS px × 1.5 cap');
+    env.cleanup();
+
+    globalThis.location = { search: '?overlayDpr=2' };
+    const fullEnv = installMockEnvironment({ width: 400, height: 300, dpr: 2 });
+    initWorldOverlay(fullEnv.viewer);
+    setOverlayEntries('dpr-full', [selectedEntry('probe')]);
+    fullEnv.postRender.raise();
+    canvas = fullEnv.document.getElementById('world-overlay-canvas');
+    assert.equal(canvas.width, 800, 'the override restores the full device grid');
+    assert.equal(canvas.height, 600);
+    fullEnv.cleanup();
+
+    globalThis.location = { search: '?overlayDpr=99' };
+    const clampedEnv = installMockEnvironment({ width: 400, height: 300, dpr: 2 });
+    initWorldOverlay(clampedEnv.viewer);
+    setOverlayEntries('dpr-clamp', [selectedEntry('probe')]);
+    clampedEnv.postRender.raise();
+    canvas = clampedEnv.document.getElementById('world-overlay-canvas');
+    assert.equal(canvas.width, 1200, 'the override clamps at 3');
+    clampedEnv.cleanup();
+  } finally {
+    if (savedLocation === undefined) delete globalThis.location;
+    else globalThis.location = savedLocation;
+  }
+});
+
 test('shared fade tuning reaches a host-painted card on the next rendered frame', () => {
   const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
   const paintedAlphas = [];
@@ -713,10 +749,12 @@ test('a host dormant since init holds no canvas backing store', () => {
   setOverlayEntries('lazy-canvas', [selectedEntry('first-paint')]);
   env.advanceTime(120);
   env.postRender.raise();
-  assert.equal(canvas.width, 3200);
-  assert.equal(canvas.height, 1800);
-  assert.equal(detectionSurface.width, 3200);
-  assert.equal(detectionSurface.height, 1800);
+  // Backing-store DPR is capped at 1.5 (render-perf five) — at device DPR 2
+  // this is 2400×1350 per canvas, not 3200×1800.
+  assert.equal(canvas.width, 2400);
+  assert.equal(canvas.height, 1350);
+  assert.equal(detectionSurface.width, 2400);
+  assert.equal(detectionSurface.height, 1350);
   assert.equal(getWorldOverlayDiagnostics().paintedCount, 1);
 
   // Emptying a source that already painted may keep the sized backing store;
@@ -1153,7 +1191,7 @@ test('custom detection lane receives the shared host frame and paints below ordi
   assert.equal(capturedFrame.ctx, env.detectionCtx);
   assert.equal(capturedFrame.width, 400);
   assert.equal(capturedFrame.height, 300);
-  assert.equal(capturedFrame.dpr, 2);
+  assert.equal(capturedFrame.dpr, 1.5, 'backing-store DPR is capped at 1.5');
   assert.equal(capturedFrame.viewProjectionMatrix[0], 1);
   assert.equal(capturedFrame.viewProjection.m0, 1);
   assert.equal(capturedFrame.cameraPosition, env.viewer.camera.positionWC);

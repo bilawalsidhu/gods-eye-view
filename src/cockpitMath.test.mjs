@@ -11,6 +11,7 @@ import {
   cockpitSurfaceWaitExpired,
   cockpitUiUpdateDue,
   compassDivisions,
+  compassTapeLayout,
   formatAltitudeRulerTick,
   formatCockpitContextScope,
   formatCompassDivision,
@@ -147,6 +148,32 @@ test('slewHeading follows the shortest arc across north', () => {
 
 test('compass divisions remain ordered across north', () => {
   assert.deepEqual(compassDivisions(359), [270, 300, 330, 0, 30, 60, 90]);
+});
+
+test('compass tape layout quantizes the center and reports the slide fraction', () => {
+  // Dead-on a division: no shift.
+  assert.deepEqual(compassTapeLayout(90), {
+    center: 90,
+    divisions: [0, 30, 60, 90, 120, 150, 180],
+    shift: 0,
+  });
+  // Halfway between divisions: the tape sits half a division off the snap.
+  assert.equal(compassTapeLayout(105).center, 120);
+  assert.equal(compassTapeLayout(105).shift, -0.5);
+  assert.equal(compassTapeLayout(75).center, 90);
+  assert.equal(compassTapeLayout(75).shift, -0.5);
+  // Fractional heading slides continuously between the snaps.
+  assert.equal(compassTapeLayout(93).center, 90);
+  assert.ok(Math.abs(compassTapeLayout(93).shift - 0.1) < 1e-9);
+});
+
+test('compass tape layout wraps the shift across north like the divisions', () => {
+  const layout = compassTapeLayout(359);
+  assert.equal(layout.center, 0);
+  assert.deepEqual(layout.divisions, [270, 300, 330, 0, 30, 60, 90]);
+  assert.ok(Math.abs(layout.shift + 1 / 30) < 1e-9);
+  assert.equal(compassTapeLayout(1).center, 0);
+  assert.ok(Math.abs(compassTapeLayout(1).shift - 1 / 30) < 1e-9);
 });
 
 test('compass labels use cardinals where exact and degrees elsewhere', () => {

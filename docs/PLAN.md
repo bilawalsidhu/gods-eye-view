@@ -166,7 +166,14 @@ visual identities) and fixes AAA-level items where they are free.
       `executablePath: /usr/bin/google-chrome` and `--no-sandbox` — the
       profiling harness runs it daily. The axe pass can run here too.)
 - [ ] Live axe pass over HUD, layer panel, first-run launcher, and voice
-      overlay; triage the report into fixes.
+      overlay; triage the report into fixes. First finding on record
+      (qa-a11y 2026-09-13, boot + panel-expanded): axe `region` — page
+      content outside landmarks (`.cesium-widget > canvas`, the app
+      `h1`/`.subtitle`, `#style-indicator`). Needs a real landmark pass
+      (`header`/`main`/`complementary` on the app shell) — a wrapper must
+      not introduce a transform/filter that would re-anchor the fixed
+      full-screen canvas. Fixed alongside: `#first-run-launcher`
+      aria-allowed-role (aside + role=dialog → div, 2026-09-13).
 - [ ] Keyboard: verify focus order in the DISPLAY rail and layer rows; every
       click-only custom control needs a key path.
 - [ ] ARIA states for the async chips (loading/failed) — `aria-busy` and
@@ -352,14 +359,43 @@ acting — the audit described upstream's tree):
       removal. Browser probe: `document.fonts` reports the subset loaded
       and sampled icons render ligature-narrow, not word-wide. Gates:
       lint 0, 2,981 tests, build ok.
-- [ ] Render-perf five (issue #8): gate `preserveDrawingBuffer` to capture
-      modes (`main.js`), drop `msaaSamples: 4` → 2 or adaptive, replace the
-      worst `backdrop-filter: blur()` panels (58 rules — compositor reads and
-      blurs the WebGL canvas beneath every frame), build the compass tape
-      once and slide it via `transform` (it currently rebuilds `innerHTML` on
-      division changes during camera motion), cap the world-overlay canvas
-      backing-store DPR (`worldOverlay.js`, ~19 MB at DPR 2). Each with a
-      before/after measurement.
+- [x] Render-perf five (issue #8) — DONE 2026-09-13, all five with
+      before/after captures from the new instrument
+      `scripts/profile-render-perf.mjs` (headless Chrome at
+      devicePixelRatio 2, SwiftShader A/B on one machine; DOM/byte counts
+      are portable, frame times are not):
+  1. `preserveDrawingBuffer`: now resolved by `src/renderContextOptions.js`
+     (unit-tested, imported by `main.js`) — default OFF, `?preserveBuffer=1`
+     restores. The one in-app pixel reader (voice-vision snapshot) captures
+     with the requestRender→postRender→drawImage same-task pattern, proven
+     FRAME-CAPTURED with the attribute off (lit fraction 0.968 vs 0.944
+     with it on).
+  2. `msaaSamples` 4 → 2 (`?msaa=N` override; verified `scene.msaaSamples`=2
+     live): multisample target ~19.8 → ~9.9 MiB at 1440×900 per frame.
+  3. Worst `backdrop-filter` surfaces de-blurred (persistent dock: command
+     dock + location/control/voice wings + `.location-inner`; both rails:
+     `.panel-inner`/`.data-panel-inner`; `#first-run-launcher`): boot
+     census 19 → 14 active surfaces, compositor blur reads 6.1 → 1.7
+     MiB/frame (−72%). Remaining blurs are transient trays, popovers, and
+     on-demand panels by design; de-blurred panels raise background alpha
+     (0.72 → 0.92) which also steadies AAA text contrast.
+  4. Compass tape built once (`_updateCompassTape` + `compassTapeLayout`
+     in cockpitMath): 720° sweep childList mutations 336 → 0; per update
+     one `--tape-shift` custom-property write (the tape now slides
+     smoothly between the 30° snaps instead of re-parsing 7 spans per
+     crossing); rendered labels verified identical at N/E/S/W sampling
+     points; qa-cockpit-utility READY.
+  5. World-overlay backing-store DPR capped at 1.5 (`?overlayDpr=N`
+     override): 2880×1800 → 2160×1350 per canvas, 39.6 → 22.2 MiB across
+     the shared+detection pair (−44%). qa-overlay-baseline
+     `--scene detection-50` [OK] under the cap (6,663 observations,
+     paint 14.5 ms).
+  Gates: lint 0, 2,990 tests, build ok. Residual a11y finding surfaced by
+  `qa-a11y` while verifying item 3 (pre-existing, not caused by this unit):
+  axe `region` — top-level content (Cesium canvas, h1/subtitle,
+  #style-indicator) sits outside landmarks; fixed this pass:
+  `#first-run-launcher` aria-allowed-role (aside+role=dialog → div).
+  Landmark structure is its own backlog item below.
 - [ ] Security gate for key-bearing endpoints (PR #242, issues #16–#18,
       #22–#24): REMAINING after the 2026-09-10 sweep — same-site request
       gate for `/api/openai/hud-summary` and `/api/google/nearby-places`
@@ -885,8 +921,9 @@ ordered by value-per-risk; each is self-contained and committable.
 
 ### Batch 6 — Perf, bundle, a11y remainder (P2/P3)
 
-- [ ] Render-perf five (Phase 7 backlog, unchanged) with before/after
-      measurements.
+- [ ] Render-perf five (Phase 7 backlog) with before/after measurements —
+      DONE, see the Batch 6 entry above (instrument:
+      `scripts/profile-render-perf.mjs`).
 - [ ] Icon font subsetting (PR #239) + precache diet: audit the 6.1 MB
       manifest — don't precache multi-MB datasets that can lazy-load on
       first layer enable.

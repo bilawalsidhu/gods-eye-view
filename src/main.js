@@ -14,6 +14,7 @@ import * as Cesium from 'cesium';
 import '../node_modules/cesium/Source/Widgets/CesiumWidget/CesiumWidget.css';
 import '../node_modules/cesium/Source/Widgets/Viewer/Viewer.css';
 import { StyleManager } from './ui.js';
+import { resolveRenderContextOptions } from './renderContextOptions.js';
 import { flyToAustin } from './camera.js';
 import { DataLayerManager } from './data/manager.js';
 import flightsLayer from './data/flights.js';
@@ -158,12 +159,9 @@ async function init() {
         el.id = 'cesium-credits';
         return el;
       })(),
-      msaaSamples: 4,
-      contextOptions: {
-        webgl: {
-          preserveDrawingBuffer: true,
-        },
-      },
+      // MSAA 2× + unpreserved drawing buffer — the policy (and its ?msaa= /
+      // ?preserveBuffer=1 escape hatches) lives in renderContextOptions.js.
+      ...resolveRenderContextOptions(),
     });
 
     // Cap the default render loop at 60 fps. Cesium's loop otherwise runs at

@@ -843,7 +843,7 @@
        until the visitor asks; shared links skip this surface entirely. It returns
        every session until "Don't show this again" is ticked — see
        src/firstRunExperience.js for the full show policy. -->
-  <aside id="first-run-launcher" role="dialog" aria-labelledby="first-run-title" aria-describedby="first-run-description" hidden>
+  <div id="first-run-launcher" role="dialog" aria-labelledby="first-run-title" aria-describedby="first-run-description" hidden>
     <div class="first-run-scanline" aria-hidden="true"></div>
     <header class="first-run-header">
       <span class="first-run-kicker">MISSION CONTROL · FIRST LAUNCH</span>
@@ -890,7 +890,7 @@
     <!-- Kept out of the footer row: it swaps to mission progress and errors, and
          a live region that also holds layout makes the row jump as it speaks. -->
     <p class="first-run-note" data-first-run-status role="status" aria-live="polite">Tip: the GEV MIC button in the dock lets you talk to the map.</p>
-  </aside>
+  </div>
 
   <!-- Intelligence HUD Overlay. Decorative telemetry (classification banner,
        250 ms camera readout, blinking rec dot) — hidden from assistive tech:

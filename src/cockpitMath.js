@@ -82,10 +82,28 @@ export function formatCockpitContextScope(subjectLabel, radiusM, installationCov
     : base;
 }
 
+/**
+ * Continuous compass-tape layout: the seven 30-degree divisions around the
+ * quantized center heading, plus the fractional shift (in divisions,
+ * −0.5..0.5) the tape slides by so it moves smoothly with the heading
+ * between the 30-degree snaps. The DOM tape is built once (render-perf five:
+ * the old path re-parsed innerHTML on every 30-degree crossing during camera
+ * motion); per update only the shared `--tape-shift` custom property and the
+ * division labels change.
+ */
+export function compassTapeLayout(heading) {
+  const normalized = normalizeHeading(heading);
+  const center = Math.round(normalized / 30) * 30;
+  return {
+    center: normalizeHeading(center),
+    divisions: [-90, -60, -30, 0, 30, 60, 90].map((offset) => normalizeHeading(center + offset)),
+    shift: (normalized - center) / 30,
+  };
+}
+
 /** Return seven 30-degree compass divisions centered on a heading. */
 export function compassDivisions(heading) {
-  const center = Math.round(normalizeHeading(heading) / 30) * 30;
-  return [-90, -60, -30, 0, 30, 60, 90].map((offset) => normalizeHeading(center + offset));
+  return compassTapeLayout(heading).divisions;
 }
 
 /** Format a compass division as a cardinal/intercardinal label or degrees. */

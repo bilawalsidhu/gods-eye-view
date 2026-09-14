@@ -1097,6 +1097,29 @@ function sizeCanvasSurface(canvas, ctx, width, height, dpr) {
 }
 
 /**
+ * Backing-store DPR ceiling for the two full-viewport overlay canvases
+ * (shared + detection). At DPR 2 each canvas is 2880×1800 on a 1440×900
+ * window — 39.6 MiB of RGBA across the pair, cleared and re-composited every
+ * rendered frame. Capping at 1.5 drops that to 22.2 MiB (−44%, measured by
+ * scripts/profile-render-perf.mjs) and shrinks every lane's fill/stroke/text
+ * raster area by the same factor; brackets, labels, and callouts are
+ * vector-drawn HUD chrome whose 1.5× raster stays crisp (they are not
+ * imagery). A lane that needs the full device grid (pixel-alignment
+ * debugging) restores it with ?overlayDpr=2.
+ */
+const OVERLAY_MAX_DPR = 1.5;
+
+function resolveOverlayDpr(deviceDpr) {
+  const override = Number(
+    new URLSearchParams(globalThis.location?.search ?? '').get('overlayDpr'),
+  );
+  if (Number.isFinite(override) && override >= 1) {
+    return Math.min(3, override);
+  }
+  return Math.max(1, Math.min(OVERLAY_MAX_DPR, deviceDpr));
+}
+
+/**
  * Size the backing store to the live CSS box and DPR. A dormant host never
  * calls this, so a zero-source overlay keeps a 0x0 canvas instead of a
  * full-viewport buffer; `drawWorldOverlay` sizes lazily on the first frame
@@ -1106,7 +1129,9 @@ function ensureCanvasSize() {
   if (!_canvas || !_viewer?.canvas) return false;
   const width = Math.max(0, Math.round(Number(_viewer.canvas.clientWidth) || 0));
   const height = Math.max(0, Math.round(Number(_viewer.canvas.clientHeight) || 0));
-  const dpr = Math.max(1, Number(globalThis.window?.devicePixelRatio) || 1);
+  const dpr = resolveOverlayDpr(
+    Math.max(1, Number(globalThis.window?.devicePixelRatio) || 1),
+  );
   const changed = _canvas.width !== Math.round(width * dpr)
     || _canvas.height !== Math.round(height * dpr)
     || _detectionSurface?.width !== Math.round(width * dpr)
@@ -2216,7 +2241,8 @@ export function initWorldOverlay(viewer) {
   installUiOccluderObservers();
   // The backing store and the occluder inventory are both deferred to the
   // first frame with real paint work: a dormant host must not hold a
-  // full-viewport canvas (~19 MB at DPR 2) or scan the UI for exclusions.
+  // full-viewport canvas (22.2 MiB for the pair at the 1.5 DPR cap, 39.6 MiB
+  // uncapped) or scan the UI for exclusions.
   _resizeDirty = true;
   _occludersDirty = true;
   _solveDirty = true;
