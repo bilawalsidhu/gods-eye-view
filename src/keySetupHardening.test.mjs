@@ -167,6 +167,91 @@ test('Windows hardening isolates the verify PowerShell from a pwsh7-polluted PSM
   assert.match(modulePath, /System32\\WindowsPowerShell\\v1\.0\\Modules/i);
 });
 
+test('the verify script takes its module path from the running interpreter', () => {
+  const calls = [];
+  const result = hardenCredentialFile('C:\\GEV\\ENVIRONMENT.tmp', {
+    platform: 'win32',
+    environment: { SYSTEMROOT: WINDOWS_ROOT },
+    fileSystem: windowsFileSystem(),
+    spawn(command, args, options) {
+      calls.push({ command, args, options });
+      if (command.endsWith('\\whoami.exe')) {
+        return { status: 0, signal: null, stdout: `"WORKSTATION\\alice","${USER_SID}"` };
+      }
+      return { status: 0, signal: null };
+    },
+  });
+  assert.equal(result, true);
+  const verify = calls.find(({ command }) => command.endsWith('powershell.exe'));
+  const script = verify.args.at(-1);
+  // $PSHOME is the interpreter's own physical directory, so this holds even
+  // where the executable was named through a bridge path.
+  assert.match(script, /\$env:PSModulePath = Join-Path \$PSHOME 'Modules'/);
+  // ...and it is the first thing the script does, before Get-Acl is resolved.
+  assert.ok(
+    script.indexOf('PSModulePath') < script.indexOf('Get-Acl'),
+    'the module path must be set before Get-Acl is invoked',
+  );
+});
+
+test('a 32-bit caller passes the physical module directory, not the Sysnative bridge', () => {
+  const calls = [];
+  const result = hardenCredentialFile('C:\\GEV\\ENVIRONMENT.tmp', {
+    platform: 'win32',
+    architecture: 'ia32',
+    environment: { SYSTEMROOT: WINDOWS_ROOT },
+    fileSystem: windowsFileSystem({ systemDirectory: 'Sysnative' }),
+    spawn(command, args, options) {
+      calls.push({ command, args, options });
+      if (command.endsWith('\\whoami.exe')) {
+        return { status: 0, signal: null, stdout: `"WORKSTATION\\alice","${USER_SID}"` };
+      }
+      return { status: 0, signal: null };
+    },
+  });
+  assert.equal(result, true);
+  const verify = calls.find(({ command }) => command.endsWith('powershell.exe'));
+  // The executable is still named through the bridge the 32-bit caller needs.
+  assert.match(verify.command, /\\Sysnative\\/);
+  // The module directory is not: Sysnative is not a directory the launched
+  // native process can read.
+  assert.doesNotMatch(verify.options.env.PSModulePath, /Sysnative/i);
+  assert.match(
+    verify.options.env.PSModulePath,
+    /^C:\\Windows\\System32\\WindowsPowerShell\\v1\.0\\Modules$/i,
+  );
+});
+
+test('differently cased PSModulePath aliases do not survive into the verify process', () => {
+  const calls = [];
+  const result = hardenCredentialFile('C:\\GEV\\ENVIRONMENT.tmp', {
+    platform: 'win32',
+    environment: {
+      SYSTEMROOT: WINDOWS_ROOT,
+      // Windows environment names are case-insensitive; a child can keep a
+      // differently cased alias alongside the value set for it.
+      PSMODULEPATH: 'C:\\Program Files\\PowerShell\\7\\Modules',
+      psmodulepath: 'C:\\Users\\alice\\Documents\\PowerShell\\Modules',
+      PsModulePath: 'C:\\attacker\\Modules',
+    },
+    fileSystem: windowsFileSystem(),
+    spawn(command, args, options) {
+      calls.push({ command, args, options });
+      if (command.endsWith('\\whoami.exe')) {
+        return { status: 0, signal: null, stdout: `"WORKSTATION\\alice","${USER_SID}"` };
+      }
+      return { status: 0, signal: null };
+    },
+  });
+  assert.equal(result, true);
+  const verify = calls.find(({ command }) => command.endsWith('powershell.exe'));
+  const aliases = Object.keys(verify.options.env).filter(
+    (name) => name.toLowerCase() === 'psmodulepath',
+  );
+  assert.deepEqual(aliases, ['PSModulePath'], 'exactly one spelling may reach the child');
+  assert.doesNotMatch(verify.options.env.PSModulePath, /PowerShell\\7|Documents|attacker/i);
+});
+
 test('Windows hardening bypasses PATH-shadowed native ACL tools', () => {
   const commands = [];
   const result = hardenCredentialFile('D:\\GEV\\ENVIRONMENT.tmp', {
