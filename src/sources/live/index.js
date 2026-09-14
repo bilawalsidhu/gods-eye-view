@@ -5,6 +5,7 @@ export {
   normalizeAircraftTrack,
   openSkySnapshot,
   readsbSnapshot,
+  readsbIdentities,
 } from './aircraft.js';
 export {
   normalizeVesselObservation,

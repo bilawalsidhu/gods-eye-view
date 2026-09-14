@@ -100,3 +100,99 @@ Later component extractions can replace a constructor's internals without
 changing the startup contract or moving standalone imports into the package.
 Run the unit suite, package boundary gate, build, tracking and first-run browser
 checks when changing this wiring.
+
+## Geospatial services
+
+`src/search` owns forward/reverse geocoding, place search and route provider
+interfaces. `createStandaloneApplication({ geospatial })` accepts `endpoints`
+and `providers`; the defaults preserve Google/Photon search, Google place context
+and the local OSRM route proxy. Location, annotations, HUD labels and voice use
+the composed service. Provider-specific credentials belong in the selected
+transport; server secrets never belong in browser configuration.
+
+For a compatible protocol, configure `geocode`, `photon`, `reverse`, `textSearch`,
+`nearby` or `route` endpoints. These are developer-selected configuration, not
+URLs accepted from page queries or model arguments. A different protocol supplies
+an adapter function instead. The exported `createDefaultPlaceSearch` constructor
+supports the same options for direct composition:
+
+```js
+const services = createDefaultPlaceSearch({
+  resolveApiKey,
+  signal,
+  endpoints: { photon: 'https://search.example/api/', route: '/api/routes' },
+  providers: {
+    route: routeProvider,
+    routeProfiles: ['foot', 'car'],
+  },
+});
+```
+
+Forward `providers.geocode` is the existing ordered geocoder array. Other
+operations are independent functions: `reverseGeocode(latitude, longitude,
+{ signal })`, `textSearch(query, point, { signal })`, `nearby(point, { signal })`
+and `route(coordinates, profile, { signal })`. Points use `latitude`, `longitude`
+and `radiusM`; route coordinates use `[longitude, latitude]` in WGS84. Routes
+return `{ geometry, distanceM, durationS }` with metres and seconds. Unavailable
+routes return null, retaining the explicitly labelled direct-line fallback.
+Place search returns normalized place arrays; reverse lookup returns address,
+locality, region, country and label fields used by scene context. Unsupported
+operations are reported in `capabilities`; adapters can provide attribution and
+supported route profiles. A provider's lifetime and caller cancellation both
+invalidate late response bodies.
+
+Node middleware is configured separately. `googlePlacesContextProxy` accepts
+`endpoints: { nearby, textSearch }`, `resolveApiKey` and `fetchImpl`.
+`overpassProxy({ routing: { endpoints: { foot, car, bike }, fetchImpl } })`
+selects compatible OSRM base URLs while preserving coordinate/span limits.
+`regionalBriefProxy({ placeProvider })` accepts the regional lookup function;
+`createRegionalPlaceProvider({ endpoint, requestJson })` supplies the existing
+serialized Nominatim implementation. Configuration is per instance, including
+routing and regional caches. Request parameters cannot override these endpoints.
+
+### Voice connections and controls
+
+Voice controls accept an action runner and a controller factory through
+`createVoiceCommands` (`./voice/commands`). The default Realtime controller owns
+microphone tracks, playback, push-to-talk, tool cancellation and radio handoff.
+Its backend supplies `requestToken({ tier, signal })` and
+`negotiate({ offerSdp, credential, signal })`. The Realtime-compatible adapter
+(`./voice/realtime-backend`) accepts separate token and connection transports
+and endpoints. Only the short-lived client secret reaches the SDP endpoint.
+Stopping or ending the application lifetime aborts connection requests and
+rejects delayed responses; a new start requests a fresh secret. Secret expiry
+limits connection creation and does not describe the connected session lifetime.
+
+`createStandaloneApplication({ voice })` passes these construction options to
+the controls. An incompatible protocol needs a separate controller adapter;
+changing an endpoint alone does not translate protocol messages. No alternate
+model is bundled by this extraction. The Node Realtime provider accepts
+`realtime: { endpoint, models: { standard, mini }, resolveApiKey, fetchImpl }`;
+existing environment variables remain the default configuration. Model choices
+come from server configuration. Keep secret keys in the server adapter.
+Tool schemas, model defaults and cost estimates are unchanged. Unknown model
+IDs retain the existing conservative estimate until their rates are registered.
+
+### Composing the existing application components
+
+`application/scene`, `application/controls`, `application/data` and
+`application/tools` expose the existing globe, controls, catalog and tools as
+separate constructors. Pass these to `createApplication`; use its `signal` and
+`defer` for ownership. The compatibility catalog is still page-scoped: construct
+one application per page. Controls, actions and renderers use the same layer
+instances. Configure sources with `application/sources` before registration or
+state restoration, and release them after the consumers stop.
+
+`application/services` accepts boundary, terrain, regional-context, weather and
+summary services. `application/requests` supplies the existing HTTP protocols
+with configurable endpoints and a scoped transport. Changing an endpoint works
+only for a compatible protocol; another protocol supplies a service adapter.
+Cancellation discards late response bodies, and replacing a source invalidates
+its pending results. Source disposal does not silently reinstate a default.
+
+`ui/composition` supplies the default engines to the shell. Applications can
+supply a HUD implementation or request policy through control services. The
+shared chrome owns the welcome/loading transition; standalone composition adds
+Provider Settings. `build/html` expands an allowlist of component markers from
+`src/ui/templates`; unknown names cannot read arbitrary filesystem paths. The
+standalone document expands to the same markup as before this extraction.

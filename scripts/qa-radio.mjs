@@ -2025,16 +2025,23 @@ async function main() {
       // owns the real tracked-aircraft camera session. Hold the frame update so
       // the intentionally synthetic Cockpit shell is not auto-exited mid-check.
       const realCockpitUpdate = manager.cockpitView.update;
+      const intelHud = document.getElementById('intel-hud');
+      const priorHudTransition = intelHud.style.getPropertyValue('transition');
+      const priorHudTransitionPriority = intelHud.style.getPropertyPriority('transition');
       const waitForLayout = async () => {
         await new Promise((resolve) => setTimeout(resolve, 320));
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       };
       const waitForHudSettle = async () => {
         await new Promise((resolve) => setTimeout(resolve, 560));
-        // The synthetic shell below stops the aircraft/context update loop.
-        // Restore its layout pass after the HUD fade before measuring geometry;
-        // qa-cockpit-utility exercises scheduling with the real controller.
-        manager.cockpitView.scheduleContextLayout();
+        // Let panel changes settle. qa-cockpit-utility covers scheduling with
+        // the real tracked-aircraft controller; this synthetic shell pauses it.
+        intelHud.getBoundingClientRect();
+        // This fixture pauses the controller update. Run its actual layout
+        // methods against the settled HUD, then measure both unchanged lanes.
+        manager.cockpitView.syncContextLayout();
+        manager.cockpitView.syncSignalLayout();
+        manager._syncLeftPanelAdaptiveLayout();
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       };
       const prior = {
@@ -2073,6 +2080,9 @@ async function main() {
       let result = {};
       try {
         manager.cockpitView.update = () => {};
+        // This block measures settled panel geometry, not fade timing. The
+        // synthetic paused controller cannot advance layout during a HUD fade.
+        intelHud.style.setProperty('transition', 'none', 'important');
         document.body.classList.add('cockpit-mode');
       manager.cockpitView.active = true;
       manager._setCockpitDisplayPortalActive(true);
@@ -2139,8 +2149,7 @@ async function main() {
           layoutMode: document.getElementById('left-panel-stack').dataset.layoutMode,
         });
       };
-      // The Intel HUD fades over 400ms and keeps its readout rects for the
-      // whole transition, so both lanes are measured only once it has settled.
+      // Both lanes are measured against the settled HUD variant.
       for (let index = 0; index < 5; index += 1) {
         recordLayoutStep();
         if (index < 4) {
@@ -2356,6 +2365,8 @@ async function main() {
         manager._setModels3dEnabled(prior.models3dEnabled);
         manager._setHudVariant(prior.hudVariant);
         manager.hud.setMode(prior.hudMode);
+        if (priorHudTransition) intelHud.style.setProperty('transition', priorHudTransition, priorHudTransitionPriority);
+        else intelHud.style.removeProperty('transition');
         manager._updateHudButtonState();
         manager.cockpitView.active = prior.cockpitActive;
         manager.cockpitView.update = realCockpitUpdate;
@@ -2403,6 +2414,8 @@ async function main() {
           && document.getElementById('context-radio-toggle-btn')?.getAttribute('aria-expanded') === String(prior.contextRadioExpanded)
           && hud.hidden === prior.hudHidden
           && signal.hidden === prior.signalHidden
+          && intelHud.style.getPropertyValue('transition') === priorHudTransition
+          && intelHud.style.getPropertyPriority('transition') === priorHudTransitionPriority
           && manager.hud.getMode() === prior.hudMode
           && manager.hud.getVariant() === prior.hudVariant
           && Object.entries(prior.panels).every(([id, state]) => {
@@ -3194,6 +3207,15 @@ async function main() {
         && tunerDirectRelease.spread < 0.5,
       JSON.stringify(tunerDirectRelease),
     );
+    // Earlier cases scroll and resize the directory. Bring the physical drag
+    // target back into its scroller before deriving viewport mouse coordinates.
+    await page.$eval('#radio-tuner-slider', (slider) => slider.scrollIntoView({ block: 'center', inline: 'nearest' }));
+    await page.waitForFunction(() => {
+      const slider = document.getElementById('radio-tuner-slider');
+      const rect = slider.getBoundingClientRect();
+      const x = rect.left + 7 + (rect.width - 14) * Number(slider.value) / Math.max(1, Number(slider.max));
+      return document.elementFromPoint(x, rect.top + rect.height / 2) === slider;
+    });
     const tunerCommitTarget = await page.evaluate(() => {
       const gev = window.__godsEyeView;
       const slider = document.getElementById('radio-tuner-slider');

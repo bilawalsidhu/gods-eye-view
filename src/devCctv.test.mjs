@@ -20,10 +20,10 @@ async function launch(overrides = {}, dotenv = '') {
     for (const name of ['dev-cctv.sh', 'dev-fresh.sh', 'read-dotenv-value.mjs']) {
       await fs.copyFile(new URL(`../scripts/${name}`, import.meta.url), path.join(root, 'scripts', name));
     }
-    await fs.mkdir(path.join(root, 'src', 'standalone'), { recursive: true });
-    await fs.copyFile(new URL('./standalone/data.js', import.meta.url), path.join(root, 'src', 'standalone', 'data.js'));
+    await fs.mkdir(path.join(root, 'src', 'app'), { recursive: true });
+    await fs.copyFile(new URL('./app/data.js', import.meta.url), path.join(root, 'src', 'app', 'data.js'));
     await fs.mkdir(path.join(root, 'node_modules'));
-    await fs.symlink(fileURLToPath(new URL('../node_modules/vite', import.meta.url)), path.join(root, 'node_modules', 'vite'), 'dir');
+    await fs.symlink(fileURLToPath(new URL('.', import.meta.resolve('vite/package.json'))), path.join(root, 'node_modules', 'vite'), 'dir');
     await fs.writeFile(path.join(root, '.env'), dotenv);
     // Stub only external programs; both production launchers and dotenv parsing run.
     for (const command of ['security', 'pkill', 'lsof']) {
