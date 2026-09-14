@@ -1152,12 +1152,26 @@ ordered by value-per-risk; each is self-contained and committable.
 
 ### Batch 6 — Perf, bundle, a11y remainder (P2/P3)
 
-- [ ] Render-perf five (Phase 7 backlog) with before/after measurements —
+- [x] Render-perf five (Phase 7 backlog) with before/after measurements —
       DONE, see the Batch 6 entry above (instrument:
       `scripts/profile-render-perf.mjs`).
-- [ ] Icon font subsetting (PR #239) + precache diet: audit the 6.1 MB
+- [x] Icon font subsetting (PR #239) + precache diet: audit the 6.1 MB
       manifest — don't precache multi-MB datasets that can lazy-load on
-      first layer enable.
+      first layer enable. DONE 2026-09-13 — audit verdicts: (1) NO icon
+      font exists in this tree (SVG icons only; PR #239 was written
+      against the upstream theme) — nothing to subset; (2) the precache
+      manifest is already dataset-free — globPatterns pin `index.html` +
+      `assets/index-*.js` + `assets/*.css`, enforced by
+      `src/config/bundleBudgets.js` rows (precache shell 6.15 MB / 6.35 MB
+      budget). The REAL dist-weight find was elsewhere: Vite statically
+      expands `new URL(\`…${x}.json\`, import.meta.url)` templates and
+      emits EVERY match as a hashed asset, so the Node-only import branches
+      in `naturalEarthRegions.js` and `neighborhoodPolygons.js` shipped
+      dead `.json` twins (regions 1.9 MB + marine 633 KB + san-francisco
+      217 KB) beside the JS-module twins the browser actually imports.
+      Fixed by building those Node-branch URLs via string concatenation
+      (invisible to Vite's static analysis): dist 30.3 MB -> 28 MB,
+      budgets still PASS.
 - [x] Bundle budgets in CI (issue #40) once the diet lands — DONE
       2026-09-13: `npm run check:budgets` after the production build in the
       CI build job; policy table `src/config/bundleBudgets.js` (7 unit tests:
@@ -1186,11 +1200,21 @@ ordered by value-per-risk; each is self-contained and committable.
       Enter creates the scene, Esc cancels, Cancel keeps, Confirm
       deletes; 6 unit tests pin the wiring + no-blocking-dialogs source
       pin. Gates: lint 0, 2,979 tests, build ok.
-- [ ] Remaining Phase 7 backlog items: portable tests, Google server-key
+- [x] Remaining Phase 7 backlog items: portable tests, Google server-key
       split, keyless geocoding. (Landed 2026-09-13: panel clamping +
       storage purge, CCTV source-pack validation, `.overpass` mirrors,
       FIRMS IPv6 pin, DATA_PRESET honesty, accessible-name invariant,
-      allocation gates verified on Node 26.)
+      allocation gates verified on Node 26.) DONE 2026-09-13 — server-key
+      split and keyless geocoding landed as their own entries above
+      (`resolveServerGoogleApiKey`, `/api/geocode`). Portable tests
+      PROVEN, not just claimed: `git archive HEAD` export (no `.git`),
+      `PUPPETEER_SKIP_DOWNLOAD=1 npm ci` (QA scripts use system Chrome via
+      executablePath, so the Chromium download is dev-only), then the full
+      suite with the allocation gate — 3,107 tests, 0 failures, exit 0.
+      The suite's git-independence is by construction: all source-pin
+      tests read through `src/testSupport/readSource.js`, which folds
+      CRLF/CR to LF so archives and editor save-hooks cannot flip
+      anchors.
 - [ ] **Google ToS attribution (owner decision owed, surfaced by matrix
       C13 every run)**: the operator detached the Cesium credit container on
       2026-08-29 (src/main.js — decision + caveat recorded there), but

@@ -122,7 +122,14 @@ async function loadPackFile(base) {
     // import needs one in Node, and keeping node:fs out of this module keeps
     // it out of the browser bundle's externalization warnings (upstream
     // issue #34 / PR #112).
-    const url = new URL(`./local_data/natural_earth/${base}.json`, import.meta.url);
+    // Concatenation, deliberately not a template literal: Vite statically
+    // expands `new URL(`…${x}.json`, import.meta.url)` and emits EVERY match
+    // as a hashed asset — ~2.6 MB of regions/marine JSON shipped beside the
+    // JS-module twins the browser actually loads. This branch never runs in
+    // a browser, so the URL only has to resolve under Node.
+    // eslint-disable-next-line prefer-template -- a template literal is statically expandable, and Vite would re-emit every matching JSON as a dead hashed asset in dist
+    const spec = './local_data/natural_earth/' + base + '.json';
+    const url = new URL(spec, import.meta.url);
     const mod = await import(/* @vite-ignore */ url.href, { with: { type: 'json' } });
     return mod.default || mod;
   }

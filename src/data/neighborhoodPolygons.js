@@ -100,7 +100,14 @@ function cityLoader(city) {
         // attribute in Node, so pass one explicitly instead of reading the
         // file via node:fs (which the browser build then externalizes and
         // warns about; upstream issue #34 / PR #112).
-        const url = new URL(`./local_data/neighborhoods/${city.id}.json`, import.meta.url);
+        // Concatenation, not a template literal: Vite expands dynamic
+        // `new URL(`…${x}.json`, …)` into glob-emitted hashed assets — the
+        // san-francisco JSON shipped twice (~220 KB dead) beside the JS
+        // module twin the browser imports. Node-only branch; the string
+        // only has to resolve at runtime under node:test.
+        // eslint-disable-next-line prefer-template -- a template literal is statically expandable, and Vite would re-emit every matching JSON as a dead hashed asset in dist
+        const spec = './local_data/neighborhoods/' + city.id + '.json';
+        const url = new URL(spec, import.meta.url);
         const mod = await import(/* @vite-ignore */ url.href, { with: { type: 'json' } });
         fc = mod.default || mod;
       } else {
