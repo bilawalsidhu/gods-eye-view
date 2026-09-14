@@ -85,6 +85,16 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   curated pose.
 - Add Live Traffic NSW (Transport for NSW, CC BY 4.0) as a keyless CCTV pack: 217
   Sydney and regional cameras with compass headings and view descriptions.
+- CCTV monitor planes no longer clip into the terrain. The plane is lifted
+  rigidly by the largest clearance deficit over a 3×3 grid of support points
+  against the ground under each (the ground at the mount where nothing finer is
+  known), and the client honours pack ranges instead of inflating them to 220 m.
+  `config/cctv_ground_heights.json` ships Google 3D Tiles ground heights under
+  every camera's mount and plane footprint (3,445 of 3,446 cameras), produced by
+  `scripts/precompute-cctv-heights.mjs`; cameras with shipped heights are placed
+  with zero runtime sampling, and the rest resolve the ground under their plane
+  from the Re:Earth DEM on activation. The footprint lift is capped at 60 m
+  above the mount-based lift so a tower under a far edge cannot launch the plane.
 
 - Press backtick (`) to toggle a rendered-frame-rate readout beneath the logo.
   Typing fields retain the key; monitoring stops when hidden.

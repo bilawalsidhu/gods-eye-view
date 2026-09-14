@@ -60,8 +60,9 @@
  * whole far cap RIGIDLY by the largest clearance deficit over a 3×3 grid of
  * support points against the ground under each (the mount's ground where no
  * footprint measurement exists), so the plane and the wireframe corners
- * always coincide and the bottom edge never sits below the ground it was
- * measured against. Austin's fabricated pose priors (pitch -18/-24°, FOV
+ * always coincide and the bottom edge clears the ground it was measured
+ * against (except where the footprint lift cap, PLANE_FOOTPRINT_LIFT_CAP_M,
+ * lets a plane accept a tall building under its far edge). Austin's fabricated pose priors (pitch -18/-24°, FOV
  * 44/56°, range 145/210 m, mount 8/10 m) therefore render as planes lifted
  * tens of metres above their mount. The "safe pose" search below predates
  * that change: it still guarantees a pose that clears the ground with margin
