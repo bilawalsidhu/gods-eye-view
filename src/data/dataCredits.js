@@ -69,8 +69,8 @@ export const DATA_CREDITS = [
   {
     key: 'eccc-geomet',
     html:
-      'Precipitation (global model): Environment and Climate Change Canada — ' +
-      'MSC GeoMet GDPS ' +
+      'Precipitation (models): Environment and Climate Change Canada — ' +
+      'MSC GeoMet GDPS and RDPS ' +
       '(<a href="https://eccc-msc.github.io/open-data/msc-geomet/readme_en/" target="_blank" rel="noopener">eccc-msc.github.io</a>). ' +
       'Contains information licensed under the Open Government Licence – Canada',
   },

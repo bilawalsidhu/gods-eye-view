@@ -163,7 +163,7 @@ export function createPrecipitationLayer({
     id: LAYER_ID,
     name: 'Precipitation',
     icon: '🌧',
-    source: 'ECCC GDPS · IEM NEXRAD',
+    source: 'ECCC GeoMet · IEM NEXRAD',
     // Poll at the shortest tier cadence; each tier then refreshes on its own.
     updateInterval: Math.min(
       ...tiers.map((tier) => tier.refreshMs ?? MODEL_REFRESH_MS),

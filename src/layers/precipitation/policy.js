@@ -76,16 +76,55 @@ export const IEM_ORIGIN = 'https://mesonet.agron.iastate.edu';
 const CONUS_DEGREES = Object.freeze([-125, 24, -66.5, 50]);
 
 /**
+ * Where RDPS actually has data.
+ *
+ * Its advertised bounding box is the whole northern hemisphere, which is the
+ * envelope of a rotated grid rather than its domain — believing it would put
+ * empty tiles over most of the planet. The real footprint was mapped by
+ * probing `RDPS_10km_AirTemp_2m`, a field that is never blank where the model
+ * runs: a cap centred on North America that reaches the equator over the
+ * Americas, crosses the Atlantic into northern Europe above about 42N, goes
+ * circumpolar above 75N, and comes back down the far side over the Bering
+ * Sea. Southern Europe and the Mediterranean are outside it; so are Africa,
+ * Asia south of the Arctic, and everything below the equator.
+ *
+ * Four rectangles, deliberately disjoint — two placements of one tier
+ * overlapping would composite their alpha twice and read as a bright patch.
+ */
+const RDPS_DEGREES = Object.freeze([
+  Object.freeze([-180, 5, -38, 75]), // the Americas
+  Object.freeze([-38, 42, 45, 75]), // North Atlantic into northern Europe
+  Object.freeze([-180, 75, 180, 90]), // the circumpolar cap
+  Object.freeze([118, 42, 180, 75]), // Bering Sea and the Russian far east
+]);
+
+/**
+ * Exactly the globe RDPS does not cover, so the two models tile the planet
+ * between them without ever painting the same point twice.
+ *
+ * Two semi-transparent models of the same phenomenon stacked on one another
+ * would composite to a stronger field inside the finer one's domain than
+ * outside it, drawing a seam along the domain edge that says nothing about the
+ * weather. Deriving the complement instead keeps the rule the layer already
+ * holds: one source paints any point.
+ */
+const GDPS_DETAIL_DEGREES = Object.freeze([
+  Object.freeze([-180, -90, 180, 5]), // everything below the RDPS cap
+  Object.freeze([-38, 5, 180, 42]), // Africa, southern Europe, Asia, Oceania
+  Object.freeze([45, 42, 118, 75]), // central Asia, between the two lobes
+]);
+
+/**
  * Precedence stack, painted in order — later entries sit above earlier ones.
  *
- * The model is continuous at every zoom and the radar inlay lies on top of it
- * inside its own footprint. An earlier revision punched a matching cutout in
- * the model so only one source could ever paint a pixel; in use that was the
- * worse trade, because the cutout's straight edges read as precipitation being
- * sliced away wherever they crossed populated coast (its 24°N edge runs just
- * south of Miami) and it left holes anywhere radar was silent. Letting the
- * model carry underneath costs a modelled field showing through a radar-clear
- * area — mild, and the row already says the base layer is a model.
+ * One source paints any point, at every zoom. Below the handover level the
+ * global model carries the whole planet on its own. Above it the three finer
+ * placements tile the globe between them: radar owns its footprint, the
+ * regional model owns its domain minus that footprint, and the global model
+ * takes exactly what is left. Each boundary is structural — a cutout where the
+ * finer footprint is one rectangle, a complementary cover where it is not —
+ * rather than left to a transparent pixel, because every one of these services
+ * draws "no data" and "no precipitation" identically.
  */
 export const PRECIPITATION_TIERS = Object.freeze([
   Object.freeze({
@@ -137,13 +176,50 @@ export const PRECIPITATION_TIERS = Object.freeze([
     // covers both.
     capsKey: `${GEOMET_ORIGIN}/geomet|GDPS_15km_PrecipRate`,
     forecast: true,
+    // The same alpha as every other model placement. These covers are
+    // exclusive, so a difference here could not read as a finer source — only
+    // as a brightness step along an invisible domain edge.
     alpha: 0.42,
-    rectanglesDegrees: null,
-    // Yield only where radar actually replaces it. Everywhere else the model
-    // keeps drawing as the camera descends: a coarse field beats none, and the
-    // linear palette keeps its cells near the native 15 km rather than 42 km.
+    // Everywhere the regional model does not reach. The model keeps drawing as
+    // the camera descends rather than leaving the view blank: a coarse field
+    // beats none, and the linear palette keeps its cells near the native 15 km
+    // rather than 42 km.
+    rectanglesDegrees: GDPS_DETAIL_DEGREES,
+    // None needed: the radar footprint sits inside the RDPS domain, which this
+    // cover already excludes.
+    cutoutRectangleDegrees: null,
+    refreshMs: MODEL_REFRESH_MS,
+    maxTileLevel: MODEL_REQUEST_CEILING,
+    minimumTerrainLevel: INLAY_HANDOVER_LEVEL,
+    maximumTerrainLevel: undefined,
+  }),
+  Object.freeze({
+    id: 'rdps-regional',
+    role: 'detail',
+    // Above the global model and below radar: 10 km where it reaches, and it
+    // reaches a great deal of ground radar never will — the Canadian north,
+    // the north Atlantic, Scandinavia, the Arctic.
+    rung: 2,
+    kind: 'wms',
+    label: 'ECCC RDPS',
+    origin: GEOMET_ORIGIN,
+    service: `${GEOMET_ORIGIN}/geomet`,
+    wmsLayer: 'RDPS_10km_PrecipRate',
+    // The same continuous ramp the global model uses; the classed default
+    // would collapse a 10 km field into the same flat plateaus.
+    wmsStyle: 'PRECIPPRTMMH-LINEAR',
+    frameMode: 'dimension',
+    capsKey: `${GEOMET_ORIGIN}/geomet|RDPS_10km_PrecipRate`,
+    forecast: true,
+    alpha: 0.42,
+    rectanglesDegrees: RDPS_DEGREES,
+    // Radar owns the lower 48, and it sits well inside the first rectangle of
+    // this cover. The other three do not reach it, so one cutout serves.
     cutoutRectangleDegrees: CONUS_DEGREES,
     refreshMs: MODEL_REFRESH_MS,
+    // Unlike the global model, RDPS answers with real data past level 12 — but
+    // a 10 km field has nothing left to say by then, so it stops where the
+    // global model does and Cesium magnifies from there.
     maxTileLevel: MODEL_REQUEST_CEILING,
     minimumTerrainLevel: INLAY_HANDOVER_LEVEL,
     maximumTerrainLevel: undefined,

@@ -281,52 +281,90 @@ test('no tier asks a service for tiles it answers empty', () => {
   assert.equal(primary.maximumTerrainLevel, primary.maxTileLevel);
 });
 
-test('at most one tier can paint any point at any zoom', () => {
-  // Two placements may share a level band only when they are spatially
-  // exclusive: the model's detail placement cuts out exactly the radar
-  // footprint, so the pair never double-paints while the model still covers
-  // everywhere radar does not reach.
-  const band = (t) => [
-    t.minimumTerrainLevel ?? 0,
-    t.maximumTerrainLevel ?? Number.MAX_SAFE_INTEGER,
-  ];
-  // A cutout can only cancel a cover that is one box; the day a tier needs
-  // several, this test is what forces the ladder's ordering invariant to
-  // replace it rather than the exclusivity claim quietly going stale.
-  const cover = (t) =>
-    t.rectanglesDegrees?.length === 1 ? t.rectanglesDegrees[0].join(',') : null;
-  const key = (r) => (r ? r.join(',') : null);
-  for (const a of PRECIPITATION_TIERS)
-    for (const b of PRECIPITATION_TIERS) {
-      if (a === b) continue;
-      const [aMin, aMax] = band(a);
-      const [bMin, bMax] = band(b);
-      if (aMax < bMin || bMax < aMin) continue;
-      const exclusive =
-        (key(a.cutoutRectangleDegrees) &&
-          key(a.cutoutRectangleDegrees) === cover(b)) ||
-        (key(b.cutoutRectangleDegrees) &&
-          key(b.cutoutRectangleDegrees) === cover(a));
-      assert.ok(
-        exclusive,
-        `${a.id} and ${b.id} share levels ${Math.max(aMin, bMin)}-${Math.min(aMax, bMax)} without a matching cutout`,
+/** Rectangles are [west, south, east, north], the shape the tier table uses. */
+const GLOBE = Object.freeze([-180, -90, 180, 90]);
+
+/** Every rectangle a tier paints into, before its cutout is taken out. */
+const cover = (tier) => tier.rectanglesDegrees ?? [GLOBE];
+
+/** Does this tier actually put colour on this point? */
+const paints = (tier, lon, lat) => {
+  const inside = (r) =>
+    lon >= r[0] && lon <= r[2] && lat >= r[1] && lat <= r[3];
+  if (!cover(tier).some(inside)) return false;
+  return !(tier.cutoutRectangleDegrees && inside(tier.cutoutRectangleDegrees));
+};
+
+test('exactly one placement paints any point, with nowhere left blank', () => {
+  // The ownership rule the layer has held since it shipped, now that the
+  // sources no longer line up as one cutout matching one rectangle. Two
+  // placements painting a point composite their alpha and read as heavier
+  // rain; none painting it reads as clear sky. Both are the map lying, so the
+  // test asserts the count is exactly one rather than at most one.
+  //
+  // Sampled at half-degree offsets so no probe lands on a shared edge, which
+  // is zero-area and belongs to both sides by inclusive comparison.
+  const deep = PRECIPITATION_TIERS.filter(
+    (tier) => (tier.minimumTerrainLevel ?? 0) >= INLAY_HANDOVER_LEVEL,
+  );
+  assert.ok(deep.length > 1, 'the descended view must have several placements');
+  for (let lat = -87.5; lat < 90; lat += 5)
+    for (let lon = -177.5; lon < 180; lon += 5) {
+      const painting = deep.filter((tier) => paints(tier, lon, lat));
+      assert.equal(
+        painting.length,
+        1,
+        `${lon},${lat} is painted by ${painting.length} placements: ${painting
+          .map((tier) => tier.id)
+          .join(', ')}`,
       );
     }
+
+  // Below the handover the global model is alone and covers everything.
+  const wide = PRECIPITATION_TIERS.filter(
+    (tier) => (tier.minimumTerrainLevel ?? 0) < INLAY_HANDOVER_LEVEL,
+  );
+  assert.deepEqual(
+    wide.map((tier) => tier.id),
+    ['gdps-global'],
+    'one placement carries the whole globe below the handover',
+  );
+  assert.equal(wide[0].rectanglesDegrees, null);
+  assert.equal(wide[0].cutoutRectangleDegrees, null);
 });
 
-test('zooming in never leaves a region with no precipitation at all', () => {
-  // The inlay covers only the lower 48. Everywhere else a model placement must
-  // keep drawing as the camera descends rather than the layer going blank.
-  const detail = PRECIPITATION_TIERS.find((t) => t.role === 'detail');
-  assert.ok(detail, 'a model placement must survive past the handover');
-  assert.equal(detail.rectanglesDegrees, null, 'it must be global');
-  assert.equal(detail.maximumTerrainLevel, undefined, 'and unbounded in depth');
-  assert.equal(detail.minimumTerrainLevel, INLAY_HANDOVER_LEVEL);
-  // It must stay above the level where GeoMet answers with empty tiles.
-  assert.ok(detail.maxTileLevel <= 9, 'must not request empty tiles');
-  // Its cutout must match the inlay exactly, or the two would double-paint.
-  const inlay = PRECIPITATION_TIERS.find((t) => t.role === 'inlay');
-  assert.deepEqual(detail.cutoutRectangleDegrees, tierRectangles(inlay)[0]);
+test('no tier overlaps itself, which would composite its own alpha twice', () => {
+  // A cover is several layers over one provider. Where two of them met, the
+  // globe shader would blend the tier with itself and the seam would read as
+  // heavier rain along an arbitrary line.
+  for (const tier of PRECIPITATION_TIERS) {
+    const boxes = cover(tier);
+    for (let i = 0; i < boxes.length; i += 1)
+      for (let j = i + 1; j < boxes.length; j += 1) {
+        const [a, b] = [boxes[i], boxes[j]];
+        const overlaps =
+          Math.max(a[0], b[0]) < Math.min(a[2], b[2]) &&
+          Math.max(a[1], b[1]) < Math.min(a[3], b[3]);
+        assert.ok(
+          !overlaps,
+          `${tier.id} rectangles ${i} and ${j} overlap: ${JSON.stringify([a, b])}`,
+        );
+      }
+  }
+});
+
+test('a placement past the handover never asks for tiles the service leaves empty', () => {
+  // The model keeps drawing as the camera descends rather than the layer
+  // going blank, but GeoMet answers a bbox under roughly 20 km with a
+  // transparent tile, so the request has to stop above that.
+  for (const tier of PRECIPITATION_TIERS) {
+    if ((tier.minimumTerrainLevel ?? 0) < INLAY_HANDOVER_LEVEL) continue;
+    assert.equal(tier.maximumTerrainLevel, undefined, `${tier.id} unbounded`);
+    assert.ok(
+      tier.maxTileLevel <= 11,
+      `${tier.id} must not request empty tiles`,
+    );
+  }
 });
 
 test('the model asks for the continuous palette, not the classed one', () => {
@@ -434,7 +472,7 @@ test('a tier refreshing on its own cadence stays at its rung', () => {
   stack.apply(viewer, byRung[0], { ...frame, key: 'k2' });
   assertOrdered('after the coarse tier refreshed');
   assert.equal(layers[0], base, 'the base map still owns index 0');
-  assert.equal(layers.length, PRECIPITATION_TIERS.length + 1, 'no duplicates');
+  assert.equal(layers.length, OWNED + 1, 'no duplicates');
 });
 
 test('every tier declares what the ladder dispatches on', () => {
@@ -502,21 +540,26 @@ test('a tier covering several rectangles owns one layer per rectangle', () => {
     },
   };
   const [model] = PRECIPITATION_TIERS;
-  const cover = Object.freeze({
+  const covered = Object.freeze({
     ...model,
     id: 'cover-tier',
+    rung: 1,
     rectanglesDegrees: Object.freeze([
       Object.freeze([-140, 20, -50, 70]),
       Object.freeze([-12, 35, 40, 72]),
     ]),
   });
-  const finer = PRECIPITATION_TIERS.find((tier) => tier.rung > cover.rung);
-  assert.ok(finer, 'the fixture needs a tier above the cover');
+  const finer = Object.freeze({
+    ...model,
+    id: 'finer-tier',
+    rung: 9,
+    rectanglesDegrees: null,
+  });
 
   const stack = createImageryStack();
   const frame = { key: 'k', validTime: null, referenceTime: null };
   stack.apply(viewer, finer, frame);
-  const placed = stack.apply(viewer, cover, frame);
+  const placed = stack.apply(viewer, covered, frame);
 
   assert.equal(placed.length, 2, 'one layer per rectangle');
   assert.equal(
@@ -539,7 +582,7 @@ test('a tier covering several rectangles owns one layer per rectangle', () => {
   assert.equal(stack.size, 2, 'a cover tier still counts as one tier');
 
   // Refreshing the cover replaces both layers and keeps the run together.
-  const again = stack.apply(viewer, cover, { ...frame, key: 'k2' });
+  const again = stack.apply(viewer, covered, { ...frame, key: 'k2' });
   assert.equal(layers.length, 4, 'no duplicates left behind');
   for (const layer of placed)
     assert.ok(!layers.includes(layer), 'superseded layers are removed');
@@ -567,8 +610,8 @@ test('the capabilities reads go out together, not one after another', () => {
   return layer.update(viewer).then(() => {
     assert.equal(
       inFlightAtFirstYield,
-      2,
-      'both reads must start before either resolves',
+      new Set(PRECIPITATION_TIERS.map((tier) => tier.capsKey)).size,
+      'every read must start before any of them resolves',
     );
   });
 });
@@ -589,7 +632,7 @@ test('one dead service does not stop the other tiers from drawing', async () => 
   const drawn = layers.slice(1);
   const surviving = PRECIPITATION_TIERS.filter(
     (tier) => tier.role !== 'inlay',
-  ).length;
+  ).reduce((total, tier) => total + tierRectangles(tier).length, 0);
   assert.equal(layers[0], base);
   assert.equal(drawn.length, surviving, 'every reachable tier still drew');
   // One source down among many is a gap in coverage, not a broken layer, so
