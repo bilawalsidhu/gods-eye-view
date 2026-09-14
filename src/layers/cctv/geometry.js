@@ -26,8 +26,9 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    * CURRENT pose, or null. Shipped precompute samples (`camera.groundHeights`)
    * were taken for the nominal pose; they apply only while the pose hash still
    * matches, so a calibrated (edited) camera falls back to the mount ground
-   * until its own footprint is resolved. Photoreal regime only: the samples
-   * are Google mesh heights and would be wrong against a globe DEM.
+   * until its own footprint is resolved. Photoreal regime only: the values
+   * are aligned to the Google 3D Tiles surface and would be wrong against a
+   * globe DEM.
    * @param {Object} record
    * @returns {Record<string, number>|null}
    */
@@ -72,7 +73,8 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   /**
    * True when the record carries shipped precompute samples for its CURRENT
-   * pose and the scene is rendering the photoreal mesh they were taken from.
+   * pose and the scene is rendering the Google 3D Tiles surface they are
+   * aligned to.
    * @param {Object} record
    * @returns {boolean}
    */

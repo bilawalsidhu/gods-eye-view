@@ -136,7 +136,7 @@ export function mergeSidecar(existing, updates, generatedAt) {
   const cameras = { ...existing?.cameras, ...updates };
   return {
     schemaVersion: 1,
-    provider: 'google-photorealistic-3d',
+    provider: 'google-3d-tiles',
     heightReference: 'WGS84-ellipsoid',
     generatedAt,
     cameras: Object.fromEntries(
@@ -283,7 +283,7 @@ async function loadSidecar(output) {
   }
   if (
     existing?.schemaVersion !== 1 ||
-    existing.provider !== 'google-photorealistic-3d' ||
+    existing.provider !== 'google-3d-tiles' ||
     existing.heightReference !== 'WGS84-ellipsoid' ||
     !existing.cameras ||
     typeof existing.cameras !== 'object' ||

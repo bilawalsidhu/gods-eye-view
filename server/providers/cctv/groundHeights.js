@@ -10,8 +10,8 @@ export const DEFAULT_GROUND_HEIGHTS_FILE =
 let _cache = null;
 
 /**
- * Load the precomputed ground-height sidecar (Google mesh heights under each
- * camera's mount and monitor-plane support points). Cached by file mtime so a
+ * Load the precomputed ground-height sidecar (heights under each camera's mount
+ * and monitor-plane support points, aligned to the Google 3D Tiles surface). Cached by file mtime so a
  * catalog refresh re-reads only when the file changed. Missing or malformed
  * files mean "no shipped heights", never an error.
  * @param {string} sourceRoot

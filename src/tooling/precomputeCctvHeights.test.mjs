@@ -206,7 +206,7 @@ test('sidecar merging sorts ids, preserves unselected entries and replaces stale
   assert.deepEqual(result.cameras.a, { status: 'miss' });
   assert.equal(old.cameras.a.mountGroundM, 20);
   assert.equal(result.schemaVersion, 1);
-  assert.equal(result.provider, 'google-photorealistic-3d');
+  assert.equal(result.provider, 'google-3d-tiles');
   assert.equal(result.heightReference, 'WGS84-ellipsoid');
   assert.equal(result.generatedAt, sampledAt);
   assert.deepEqual(mergeSidecar(null, {}, sampledAt).cameras, {});

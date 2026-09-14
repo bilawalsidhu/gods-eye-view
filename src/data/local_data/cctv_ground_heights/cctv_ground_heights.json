@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "provider": "google-photorealistic-3d",
+  "provider": "google-3d-tiles",
   "heightReference": "WGS84-ellipsoid",
   "generatedAt": "2026-09-14T01:42:02.486Z",
   "cameras": {
