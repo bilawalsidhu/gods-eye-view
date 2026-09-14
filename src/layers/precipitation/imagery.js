@@ -21,6 +21,9 @@ export function tierImageryOptions(tier, frame) {
       TIME: frame.validTime,
     },
     tilingScheme: new Cesium.WebMercatorTilingScheme(),
+    // Past this the service answers with empty tiles; let Cesium upsample the
+    // deepest real level instead of caching holes.
+    maximumLevel: tier.maxTileLevel,
   };
   if (tier.attribution) options.credit = new Cesium.Credit(tier.attribution);
   return options;

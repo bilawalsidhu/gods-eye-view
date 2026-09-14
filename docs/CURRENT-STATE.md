@@ -22,8 +22,13 @@ rather than entities. It draws a zoom-banded precedence stack: Environment and
 Climate Change Canada's GDPS global model covers the globe, and NOAA/NWS MRMS
 radar replaces it over the lower 48 past tile level 6. Cesium resolves the
 handover from each placement's rectangle and level band, so no camera listener
-runs. The model is continuous at every zoom and the radar inlay lies on top of
-it. The inlay's footprint ends on a straight boundary — Cesium exposes no
+runs. The model draws under the radar inlay up to tile level 8 and stops there:
+GDPS is a 15 km field, GeoMet answers a bbox under roughly 20 km with an empty
+tile, and leaving it uncapped mixed those empty children with stale coarse
+parents so the field read as squares punched out of it. Past that level the
+inlay is the only source, and where it does not reach a 15 km cell would only
+wash flat colour over a city view. The inlay's footprint ends on a straight
+boundary — Cesium exposes no
 per-pixel or per-tile alpha for imagery layers, and its type definition's
 function-valued `alpha` reaches the globe shader as a corrupt float uniform —
 so the continuous model underneath is what keeps that edge from reading as a

@@ -15,6 +15,21 @@ export const REFRESH_INTERVAL_MS = 60 * 60 * 1000;
  */
 export const INLAY_HANDOVER_LEVEL = 6;
 
+/**
+ * Tile level past which the model stops being drawn at all.
+ *
+ * GDPS is a 15 km field, so level 8 (~0.6 km/px) already oversamples it ~25x and
+ * a deeper tile carries no more information. GeoMet also answers a bbox smaller
+ * than ~20 km with a fully transparent 334-byte tile, so requesting past this
+ * level produces a patchwork of stale coarse parents and empty children rather
+ * than detail. Beyond here the radar inlay is the only useful source, and where
+ * it does not reach a 15 km cell would only wash flat colour over the view.
+ */
+export const MODEL_DETAIL_CEILING = 8;
+
+/** Radar is 1 km; level 11 (~76 m/px) is already far past its resolution. */
+export const RADAR_DETAIL_CEILING = 11;
+
 /** The only hosts this layer ever contacts. */
 export const GEOMET_ORIGIN = 'https://geo.weather.gc.ca';
 export const NOWCOAST_ORIGIN = 'https://nowcoast.noaa.gov';
@@ -53,10 +68,12 @@ export const PRECIPITATION_TIERS = Object.freeze([
     forecast: true,
     // Light enough to read the basemap underneath: this is context laid over
     // terrain, not a replacement for it.
-    alpha: 0.5,
+    alpha: 0.42,
     rectangleDegrees: null,
+    // Stop requesting tiles GeoMet answers empty; Cesium upsamples instead.
+    maxTileLevel: MODEL_DETAIL_CEILING,
     minimumTerrainLevel: undefined,
-    maximumTerrainLevel: undefined,
+    maximumTerrainLevel: MODEL_DETAIL_CEILING,
   }),
   Object.freeze({
     id: 'mrms-conus',
@@ -68,8 +85,9 @@ export const PRECIPITATION_TIERS = Object.freeze([
     wmsLayer: 'base_reflectivity_mosaic',
     frameKey: `${NOWCOAST_ORIGIN}/geoserver/observations/weather_radar/ows|base_reflectivity_mosaic`,
     forecast: false,
-    alpha: 0.72,
+    alpha: 0.68,
     rectangleDegrees: CONUS_DEGREES,
+    maxTileLevel: RADAR_DETAIL_CEILING,
     // The footprint ends on a straight boundary. Cesium exposes no per-pixel or
     // per-tile alpha for imagery layers, so there is nothing to feather with;
     // the continuous model underneath is what keeps the edge from reading as a

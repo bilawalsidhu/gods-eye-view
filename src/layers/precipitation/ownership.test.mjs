@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createPrecipitationLayer } from './index.js';
-import { tierLayerOptions } from './imagery.js';
+import { tierImageryOptions, tierLayerOptions } from './imagery.js';
 import { PRECIPITATION_TIERS } from './policy.js';
 
 /** Every placement in the precedence table owns one imagery layer. */
@@ -214,4 +214,24 @@ test('every placement hands Cesium a numeric alpha', () => {
   const inlay = PRECIPITATION_TIERS.find((tier) => tier.role === 'inlay');
   assert.ok(tierLayerOptions(inlay).rectangle instanceof Cesium.Rectangle);
   assert.equal(tierLayerOptions(inlay).minimumTerrainLevel, 6);
+});
+
+test('no tier asks a service for tiles it answers empty', () => {
+  // GeoMet returns a transparent 334-byte tile below roughly a 20 km bbox. Left
+  // uncapped, Cesium mixes those empty children with stale coarse parents and
+  // the field reads as squares punched out of it. Capping the provider makes it
+  // upsample the deepest real level instead.
+  const frame = { validTime: '2026-09-14T15:00:00Z', referenceTime: null };
+  for (const tier of PRECIPITATION_TIERS) {
+    assert.equal(
+      tierImageryOptions(tier, frame).maximumLevel,
+      tier.maxTileLevel,
+      `${tier.id} must cap its requested tile level`,
+    );
+    assert.ok(Number.isFinite(tier.maxTileLevel), `${tier.id} needs a ceiling`);
+  }
+  // The model also stops drawing there: a 15 km cell upsampled to city zoom is
+  // flat colour over the view, and radar owns those levels where it reaches.
+  const primary = PRECIPITATION_TIERS.find((tier) => tier.role === 'primary');
+  assert.equal(primary.maximumTerrainLevel, primary.maxTileLevel);
 });
