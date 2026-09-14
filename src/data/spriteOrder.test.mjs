@@ -1,3 +1,4 @@
+import { createRendering as createFirmsRendering } from '../layers/firms/rendering.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -113,8 +114,8 @@ test('flights, AIS, and FIRMS enable paths are wired through the shared sprite r
   assert.match(aisLiveVesselsLayer.enable.toString(), /restoreSpriteOrderOnEnable\('ais', activeViewer\)/);
   assert.match(firmsLayer.enable.toString(), /restoreSpriteOrderOnEnable\('firms', viewer\)/);
   assert.match(
-    createFirmsHeatmapLayer.toString(),
-    /registerSpriteCollection\('firms', _billboards\);\s*restoreSpriteOrder\(_viewer\);/,
+    createFirmsRendering.toString(),
+    /registerSpriteCollection\('firms', layerState\._billboards\);\s*restoreSpriteOrder\(layerState\._viewer\);/,
     'lazy FIRMS registration must restore order immediately',
   );
 });

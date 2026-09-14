@@ -1,3 +1,4 @@
+import { expandApplicationHtml } from '../build/application-html.js';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { _selectContextMode } from './ui/contextTransactions.js';
 import { _syncContextModeButtons } from './ui/contextPresentation.js';
@@ -11,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
 const ui = readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
 const css = readStylesheet(new URL('../style.css', import.meta.url));
 

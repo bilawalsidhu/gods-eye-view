@@ -714,6 +714,14 @@ try {
       if (controller.googleTileset) controller.googleTileset.show = false;
       controller.googleTileset = null;
       controller.cesiumToken = '';
+      // Availability is now composed in the source registry. Override only
+      // this fixture's choices, as the previous token-field seam did.
+      for (const source of controller._sources.values()) {
+        if (source.descriptor.requiresIon || source.descriptor.kind === 'photoreal') {
+          source.available = false;
+        }
+      }
+      controller._registry.state.hasCesiumIonToken = false;
       await styleManager._setMapStack('osm', { syncShare: false });
       styleManager._initMapStackControl();
     });

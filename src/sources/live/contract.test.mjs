@@ -271,3 +271,45 @@ test('out-of-range source epochs do not reach Date or globe time constructors', 
   assert.equal(snapshot.records[0].positionTimeMs, null);
   assert.equal(snapshot.records[0].contactTimeMs, null);
 });
+
+test('classification identities include positionless aircraft without admitting them to rendering', async () => {
+  const source = createAdsbLolSource({
+    fetchImpl: async () =>
+      response({
+        ac: [
+          { hex: ' ABC123 ' },
+          { hex: 'abc123' },
+          { hex: 'def456', lat: 30, lon: -97 },
+        ],
+      }),
+  });
+  assert.deepEqual(await source.getIdentities(), ['abc123', 'def456']);
+  const snapshot = await source.getSnapshot();
+  assert.deepEqual(
+    snapshot.records.map((record) => record.id),
+    ['def456'],
+  );
+  assert.equal(snapshot.complete, false);
+});
+
+test('identity lookup validates its response and honors body-parse cancellation', async () => {
+  const malformed = createAdsbLolSource({
+    fetchImpl: async () => response({ ac: [{}] }),
+  });
+  await assert.rejects(malformed.getIdentities(), /Malformed/);
+  const abort = new AbortController();
+  const source = createAdsbLolSource({
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      async json() {
+        abort.abort();
+        return { ac: [{ hex: 'abc123' }] };
+      },
+    }),
+  });
+  await assert.rejects(source.getIdentities({}, { signal: abort.signal }), {
+    name: 'AbortError',
+  });
+});
