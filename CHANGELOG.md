@@ -328,6 +328,9 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   whoever adds the next destination; it passes on the current entries and makes
   no claim about how well any destination is framed. Contributed by daikaginza
   (#168).
+- Drop `CCTV_AUTO_CALIBRATE` and `CCTV_DRAPE_MESH` from `.env.example`. Nothing
+  reads either name; the features they once switched no longer exist, so setting
+  them did nothing. Contributed by dajiaohuang (#283).
 
 - Extract application lifecycle and viewer exports. Split standalone startup into
   scene setup, controls, layer registration, tools and loading UI. Startup failure
