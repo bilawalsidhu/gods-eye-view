@@ -30,7 +30,20 @@ const PALETTE = {
   red: '#ff6b6b',
 };
 
-const CLASSIFY = Cesium.ClassificationType.CESIUM_3D_TILE;
+/**
+ * What a draped mark is allowed to paint onto.
+ *
+ * This was CESIUM_3D_TILE, which is right with Google's photoreal tiles under
+ * the camera and wrong everywhere else: on a keyless boot (Esri or OSM imagery
+ * on Cesium's own globe) there are no 3D tiles to classify against, so every
+ * area fill, area outline, route and arrow rendered to nothing. The labels
+ * showed and the geometry did not, which reads as a broken feature rather than
+ * an unsupported surface — and it hit spoken annotations exactly as hard as
+ * hand-drawn ones.
+ *
+ * BOTH paints onto terrain AND onto 3D tiles, so one value covers both worlds.
+ */
+const CLASSIFY = Cesium.ClassificationType.BOTH;
 const CLAMP = Cesium.HeightReference.CLAMP_TO_GROUND;
 
 export function createWorldAnnotationRenderer(viewer) {
