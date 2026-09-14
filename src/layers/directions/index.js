@@ -150,7 +150,7 @@ let _anchorStartedAt = 0;
  * facade every camera owner goes through, plus the shared ground-floor
  * read/warm the route dolly uses so it does not fly a mountain at sea level.
  */
-let _cameraServices = null;
+let _shellSeams = null;
 
 // ---------------------------------------------------------------------------
 // Pure helpers (exported for tests)
@@ -255,6 +255,39 @@ export function directionsRowControls(state) {
       flightStep: flightStep ?? null,
     }),
   };
+}
+
+/**
+ * Plain names for the tools that can be holding the pointer, and how to leave
+ * each one. A tool missing from here still gets a usable sentence from its id.
+ */
+export const POINTER_TOOL_EXITS = Object.freeze({
+  draw: Object.freeze({
+    name: 'Draw',
+    leave: 'press Escape twice to leave Draw',
+  }),
+});
+
+/**
+ * What to say when a globe click cannot be armed because something else owns
+ * the pointer.
+ *
+ * The claim failing used to be silent: the chip simply did not light and the
+ * operator was left to guess which of the open tools was eating the click
+ * (owner field test — he thought Directions was broken). So the message names
+ * the tool and says how to put it down. Pure.
+ * @param {string|null} owner Current pointer-owner id.
+ * @param {'a'|'b'} which Endpoint that was being armed.
+ * @returns {string|null} Toast text, or null when nothing holds the pointer.
+ */
+export function pointerBlockedMessage(owner, which) {
+  const id = typeof owner === 'string' ? owner.trim() : '';
+  if (!id || id === DIRECTIONS_POINTER_OWNER) return null;
+  const endpoint = which === 'b' ? 'B' : 'A';
+  const known = POINTER_TOOL_EXITS[id];
+  const name = known?.name || id;
+  const leave = known?.leave || `turn ${name} off`;
+  return `${name} is active — ${leave}, then set ${endpoint}`;
 }
 
 /**
@@ -937,6 +970,13 @@ function setArmed(which) {
     if (!lease) {
       _armed = null;
       _pointerBlocked = true;
+      // The row already says it, but the row is not where the operator is
+      // looking after pressing a chip — say it where the app says everything.
+      const message = pointerBlockedMessage(
+        services.input.pointerOwner(),
+        which,
+      );
+      if (message) _shellSeams?.showToast?.(message);
       return false;
     }
     _pointerClaim = lease;
@@ -1024,7 +1064,7 @@ function flyCurrentRoute() {
   if (!_route || !_viewer) return false;
   cancelOwnedFlight('directions-refly');
   services.camera.initCameraVerbs(_viewer);
-  const seams = _cameraServices;
+  const seams = _shellSeams;
   const result = services.camera.flyRoute(
     [
       {
@@ -1346,10 +1386,13 @@ const directionsLayer = {
    * the same immediate-navigation facade voice destinations use — so the route
    * dolly is one more caller of the single camera owner rather than a second
    * one. `floorFn`/`warmFn` are the shared ground floor the dolly flies over.
-   * @param {{runNavigation?: Function, floorFn?: Function, warmFn?: Function}|null} services
+   * `showToast` is the app's own toast, so a refusal is said where the rest of
+   * the UI says things.
+   * @param {{runNavigation?: Function, floorFn?: Function, warmFn?: Function,
+   *   showToast?: Function}|null} services
    */
-  attachCameraServices(services) {
-    _cameraServices = services || null;
+  attachShellServices(services) {
+    _shellSeams = services || null;
   },
 
   /**
@@ -1364,7 +1407,7 @@ const directionsLayer = {
     cancelOwnedFlight('directions-destroy');
     stopStepAnchoring();
     disarm();
-    _cameraServices = null;
+    _shellSeams = null;
     _dataManager = null;
     _rowControlsListener = null;
     if (_stepPoints) {

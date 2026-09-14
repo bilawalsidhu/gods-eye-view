@@ -664,6 +664,22 @@ try {
       /Another map tool/.test(blocked.stats.error || ''),
     blocked.stats.error,
   );
+  // The row is not where the operator is looking after pressing a chip, so the
+  // refusal also has to reach the app's toast (owner field test).
+  const toast = await page.evaluate(() => {
+    const node = document.getElementById('toast');
+    return {
+      text: node?.textContent || '',
+      visible: !!node?.classList.contains('visible'),
+    };
+  });
+  check(
+    'the refusal reaches the app toast, naming the tool and how to leave it',
+    /Draw is active/.test(toast.text) && /then set A/.test(toast.text),
+    JSON.stringify(toast.text),
+  );
+  check('and that toast is actually on screen', toast.visible);
+  await shot(`05-${LABEL}-pointer-blocked-toast.jpg`);
   const released = await page.evaluate(() =>
     window.__gevQa.releasePointer(window.__gevQaDrawLease),
   );

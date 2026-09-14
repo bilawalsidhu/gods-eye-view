@@ -19,6 +19,8 @@ import directionsLayer, {
   stepMarkerHeightM,
   stepMarkerIndices,
   placeDirectionsEndpoint,
+  pointerBlockedMessage,
+  POINTER_TOOL_EXITS,
   STEP_ANCHOR_DEADLINE_MS,
   STEP_ANCHOR_RETRY_MS,
   STEP_ANCHOR_SLOW_RETRY_MS,
@@ -707,4 +709,61 @@ test('a stale lease cannot free the claim a later arming holds', async (t) => {
     DIRECTIONS_POINTER_OWNER,
     'the pending release must not disarm the new arming',
   );
+});
+
+test('a refused arming names the tool holding the pointer and how to leave it', () => {
+  // Owner field test: he pressed SET A while Draw was open, nothing happened,
+  // and he concluded Directions was broken. Silence was the bug.
+  assert.equal(
+    pointerBlockedMessage('draw', 'a'),
+    'Draw is active — press Escape twice to leave Draw, then set A',
+  );
+  assert.equal(
+    pointerBlockedMessage('draw', 'b'),
+    'Draw is active — press Escape twice to leave Draw, then set B',
+  );
+  // A tool nobody has written an exit for still gets a usable sentence.
+  assert.equal(
+    pointerBlockedMessage('measure', 'a'),
+    'measure is active — turn measure off, then set A',
+  );
+  // Nothing to say when nothing is in the way, or when we are the holder.
+  assert.equal(pointerBlockedMessage(null, 'a'), null);
+  assert.equal(pointerBlockedMessage('', 'a'), null);
+  assert.equal(pointerBlockedMessage('   ', 'a'), null);
+  assert.equal(pointerBlockedMessage(DIRECTIONS_POINTER_OWNER, 'a'), null);
+  // Every exit the table knows names its tool and says how to leave it.
+  for (const [id, exit] of Object.entries(POINTER_TOOL_EXITS)) {
+    assert.match(
+      pointerBlockedMessage(id, 'a'),
+      new RegExp(`^${exit.name} is active — `),
+    );
+    assert.match(pointerBlockedMessage(id, 'a'), /, then set A$/);
+  }
+});
+
+test('the refusal reaches the app toast, and a successful arming says nothing', (t) => {
+  ownershipFixture(t);
+  const toasts = [];
+  directionsLayer.attachShellServices({
+    showToast: (text) => toasts.push(text),
+  });
+  t.after(() => directionsLayer.attachShellServices(null));
+
+  const releaseDraw = claimAs('draw');
+  directionsLayer.setParams({ arm: 'a' });
+  assert.deepEqual(toasts, [
+    'Draw is active — press Escape twice to leave Draw, then set A',
+  ]);
+  // The row status the operator can also read is still set.
+  assert.match(
+    directionsLayer.getStats().error,
+    /Another map tool is using clicks/,
+  );
+
+  // Once Draw lets go, arming works and says nothing at all.
+  releaseDraw();
+  directionsLayer.setParams({ arm: 'a' });
+  assert.equal(toasts.length, 1, 'a successful arming is silent');
+  assert.equal(pointerOwner(), DIRECTIONS_POINTER_OWNER);
 });

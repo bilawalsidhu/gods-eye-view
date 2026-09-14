@@ -265,7 +265,7 @@ export class StyleManager {
     // Bloom/sharpen state
     this._globeResetPromise = null;
     this._dataManager = null;
-    this._directionsCameraModule = null;
+    this._directionsShellModule = null;
 
     this._windowResizeHandler = null;
     this._cctvRequestFocusHandler = null;
@@ -933,26 +933,28 @@ export class StyleManager {
   /**
    * Hand the Directions layer the camera seams its FLY chip needs: the same
    * immediate-navigation facade voice route flights go through, so there is
-   * one camera owner rather than a second one inside a data layer, and the
-   * shared ground-floor read/warm the route dolly flies over.
+   * one camera owner rather than a second one inside a data layer, the shared
+   * ground-floor read/warm the route dolly flies over, and the app's own toast
+   * so the layer can speak where the rest of the UI speaks.
    * @returns {void}
    */
   _connectDirectionsCamera() {
     if (!this._dataManager) {
       // Detaching: the layer outlives this shell, so it must not keep calling
       // a facade whose viewer is going away.
-      this._directionsCameraModule?.attachCameraServices?.(null);
-      this._directionsCameraModule = null;
+      this._directionsShellModule?.attachShellServices?.(null);
+      this._directionsShellModule = null;
       return;
     }
     const directions = this._dataManager.layers?.get('directions')?.module;
-    if (typeof directions?.attachCameraServices !== 'function') return;
-    this._directionsCameraModule = directions;
-    directions.attachCameraServices({
+    if (typeof directions?.attachShellServices !== 'function') return;
+    this._directionsShellModule = directions;
+    directions.attachShellServices({
       runNavigation: (navigate) =>
         this.runImmediateNavigation('route', navigate),
       floorFn: (lat, lon) => this.services.cachedGroundFloor(lat, lon),
       warmFn: (cells) => this.services.warmGroundFloor(cells),
+      showToast: (message) => this._showToast(message),
     });
   }
 
@@ -3711,8 +3713,8 @@ export class StyleManager {
     this._contextControls.disconnect();
     this._dataManagerUnsubscribe?.();
     this._dataManagerUnsubscribe = null;
-    this._directionsCameraModule?.attachCameraServices?.(null);
-    this._directionsCameraModule = null;
+    this._directionsShellModule?.attachShellServices?.(null);
+    this._directionsShellModule = null;
 
     if (this._windowResizeHandler) {
       window.removeEventListener('resize', this._windowResizeHandler);
