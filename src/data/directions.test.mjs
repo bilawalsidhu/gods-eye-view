@@ -33,6 +33,13 @@ import {
   releasePointer,
   resetPointerOwnership,
 } from './inputOwnership.js';
+
+/** Take the pointer as some other tool, and hand back its release. */
+function claimAs(owner) {
+  const lease = claimPointer(owner);
+  assert.ok(lease, `${owner} should have taken the pointer`);
+  return () => releasePointer(lease);
+}
 import { LAYER_STATE_REGISTRY } from './layerState.js';
 import { SPRITE_LAYER_ORDER } from './spriteOrder.js';
 
@@ -495,7 +502,7 @@ test('placing an endpoint takes the pointer, and every exit path gives it back',
 test('arming is refused, and said so, while another tool holds the pointer', (t) => {
   ownershipFixture(t);
 
-  assert.equal(claimPointer('draw'), true);
+  const releaseDraw = claimAs('draw');
   assert.equal(
     directionsLayer.setParams({ arm: 'a' }),
     true,
@@ -519,7 +526,7 @@ test('arming is refused, and said so, while another tool holds the pointer', (t)
   );
 
   // Once the other tool lets go, arming works and the complaint clears.
-  assert.equal(releasePointer('draw'), true);
+  assert.equal(releaseDraw(), true);
   directionsLayer.setParams({ arm: 'a' });
   assert.equal(pointerOwner(), DIRECTIONS_POINTER_OWNER);
   assert.equal(directionsLayer.getStats().error, null);
@@ -532,12 +539,12 @@ test('a release names this layer, so it cannot free a successor tool claim', (t)
   assert.equal(pointerOwner(), DIRECTIONS_POINTER_OWNER);
   // A superseding teardown: the layer is disabled, then another tool claims.
   directionsLayer.disable(null);
-  assert.equal(claimPointer('draw'), true);
+  const releaseDraw = claimAs('draw');
   // A late second teardown of ours must not free the draw tool's claim.
   directionsLayer.disable(null);
   directionsLayer.setParams({ clear: true });
   assert.equal(pointerOwner(), 'draw');
-  releasePointer('draw');
+  releaseDraw();
 });
 
 test('the pointer claim outlives the click that consumed it', async (t) => {
@@ -599,10 +606,10 @@ test('a teardown during the pending release still frees the pointer at once', as
   directionsLayer.disable(null);
   assert.equal(isPointerFree(), true);
   // And the pending timer cannot then release someone else's later claim.
-  claimPointer('draw');
+  const releaseDraw = claimAs('draw');
   await new Promise((resolve) => setTimeout(resolve, 5));
   assert.equal(pointerOwner(), 'draw');
-  releasePointer('draw');
+  releaseDraw();
 });
 
 test('a cold ground cell is re-read for as long as the terrain proxy can take', () => {
@@ -662,5 +669,42 @@ test('a route cut off at the step cap says so instead of ending at a random turn
       'car',
     ).stepsTruncated,
     true,
+  );
+});
+
+test('re-arming reuses the lease this layer already holds', (t) => {
+  ownershipFixture(t);
+  // A claim never stacks, not even under the same name — two live instances of
+  // one tool are two owners. So arming B after arming A must not ask for a
+  // second claim it cannot get.
+  assert.equal(directionsLayer.setParams({ arm: 'a' }), true);
+  assert.equal(pointerOwner(), DIRECTIONS_POINTER_OWNER);
+  assert.equal(directionsLayer.setParams({ arm: 'b' }), true);
+  assert.equal(
+    pointerOwner(),
+    DIRECTIONS_POINTER_OWNER,
+    'the layer still holds the pointer after re-arming',
+  );
+  const chips = directionsLayer.getRowControls().chips;
+  assert.equal(chips.find((chip) => chip.id === 'set-b').active, true);
+  assert.equal(
+    directionsLayer.getStats().error,
+    null,
+    'and nothing is refused',
+  );
+});
+
+test('a stale lease cannot free the claim a later arming holds', async (t) => {
+  ownershipFixture(t);
+  directionsLayer.setParams({ arm: 'a' });
+  placeDirectionsEndpoint('a', { lat: 37.7955, lon: -122.3937 });
+  // The release for that click is pending. Arming again before it fires must
+  // keep the pointer, not lose it to the timer a moment later.
+  directionsLayer.setParams({ arm: 'b' });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(
+    pointerOwner(),
+    DIRECTIONS_POINTER_OWNER,
+    'the pending release must not disarm the new arming',
   );
 });

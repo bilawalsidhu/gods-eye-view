@@ -647,7 +647,10 @@ try {
   );
 
   // ── 8. A tool holding the pointer blocks placement, and says so. ─────────
-  await page.evaluate(() => window.__gevQa.claimPointer('draw'));
+  await page.evaluate(() => {
+    // A claim answers with a lease; the release takes that lease back.
+    window.__gevQaDrawLease = window.__gevQa.claimPointer('draw');
+  });
   await clickChip('set-a');
   const blocked = await layerState();
   check(
@@ -661,7 +664,10 @@ try {
       /Another map tool/.test(blocked.stats.error || ''),
     blocked.stats.error,
   );
-  await page.evaluate(() => window.__gevQa.releasePointer('draw'));
+  const released = await page.evaluate(() =>
+    window.__gevQa.releasePointer(window.__gevQaDrawLease),
+  );
+  check('and it gets the pointer back when it lets go', released);
 
   // ── 9. Denver: maneuver dots sit on the ground, not at sea level. ────────
   if (!SKIP.has('denver')) {

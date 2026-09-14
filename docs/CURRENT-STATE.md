@@ -2415,7 +2415,10 @@ shell's "Exit cockpit to fly to a route" toast, because FLY now goes through
 the same navigation authority as every other camera destination.
 
 **Clicks and the camera.** Arming SET A or SET B claims the shared pointer
-(`src/data/inputOwnership.js`) as owner `directions`. The claim is held until
+(`src/data/inputOwnership.js`) as owner `directions` and keeps the lease it is
+given; re-arming for the other endpoint reuses that lease rather than asking
+for a second claim, and every release names the lease, so a superseded instance
+can never free the claim its replacement holds. The claim is held until
 the click that uses it has finished being dispatched — every layer binds its
 own handler to the same canvas and they all run inside one browser event, so a
 claim dropped the instant the endpoint is placed would hand the rest of that

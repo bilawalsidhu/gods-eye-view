@@ -929,15 +929,24 @@ function setArmed(which) {
     disarm();
     return false;
   }
-  const claim = services.input.claimPointer(DIRECTIONS_POINTER_OWNER);
-  if (!claim) {
-    _armed = null;
-    _pointerBlocked = true;
-    return false;
+  // A claim does not stack, not even under the same name — two live instances
+  // of one tool are two owners. So re-arming for the other endpoint reuses the
+  // lease already held instead of asking for a second one.
+  if (!services.input.isLeaseCurrent(_pointerClaim)) {
+    const lease = services.input.claimPointer(DIRECTIONS_POINTER_OWNER);
+    if (!lease) {
+      _armed = null;
+      _pointerBlocked = true;
+      return false;
+    }
+    _pointerClaim = lease;
   }
-  // The arbiter answers either `true` or a lease for this claim; keep whichever
-  // it gave, and release with that, so the release names THIS claim.
-  _pointerClaim = claim === true ? DIRECTIONS_POINTER_OWNER : claim;
+  // A pending release from the previous placement would otherwise hand the
+  // pointer back while this new arming still needs it.
+  if (_releaseTimer) {
+    clearTimeout(_releaseTimer);
+    _releaseTimer = null;
+  }
   _pointerBlocked = false;
   _armed = which;
   _clearStepSelection();
@@ -1161,7 +1170,9 @@ function _installClickHandler(viewer) {
     // Placement acts only while this layer actually HOLDS the pointer, and the
     // maneuver-dot selection below is an ambient handler like any other: it
     // yields the moment a tool (this one included) owns the click.
-    if (_armed && services.input.isPointerOwnedBy(DIRECTIONS_POINTER_OWNER)) {
+    // The lease, not the owner name: a superseded instance of this layer must
+    // not act on a click its replacement owns.
+    if (_armed && services.input.isLeaseCurrent(_pointerClaim)) {
       const point = pickGround(click.position);
       if (!point) return;
       placeDirectionsEndpoint(_armed, point);
