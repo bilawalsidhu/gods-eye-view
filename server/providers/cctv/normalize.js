@@ -316,27 +316,14 @@ export function isLikelyAustinCoordinate(lat, lon) {
  * @param {number} lon
  * @returns {boolean}
  */
-/**
- * Packs whose ids carry no meaning to a viewer; their unselected label uses
- * the feed's name instead. Austin, Caltrans and TfL keep their short ids.
- */
-export const SEMANTIC_CODE_KINDS = new Set([
-  'ontario-511-open-data',
-  'fintraffic-open-data',
-  'drivebc-open-data',
-  'tallinn-ristmikud',
-  'tarktee-datex',
-  'municipal-webcam',
-]);
-
 /** Longest unselected camera label the HUD shows before it gets noisy. */
 export const CAMERA_CODE_MAX_CHARS = 28;
 
 /**
- * Short display code for the unselected camera label ("CAM-<code>"). Packs
- * whose ids are readable (Austin "354", TfL "00001.06502") keep the id; a pack
- * whose id is opaque (a uuid, a base64 device key) passes the semantic name
- * the feed already carries, trimmed to CAMERA_CODE_MAX_CHARS.
+ * Short display code for the unselected camera label ("CAM-<code>"): the
+ * feed's own name for the camera ("5TH ST / CONGRESS AVE", "TRAFALGAR
+ * SQUARE"), trimmed to CAMERA_CODE_MAX_CHARS. A pack may pass an explicit
+ * `code` (TxDOT's device key, NSW's title); the id is the last resort.
  *
  * @param {string} text
  * @returns {string}
@@ -531,14 +518,9 @@ export function normalizeSourceItem(item) {
     // (DriveBC: TransLink, city cameras). Shown beside the provider.
     credit: String(item.credit || '').trim(),
     // Unselected-label code: the pack's explicit short name, else the feed's
-    // semantic name for packs whose ids are opaque, else the id.
+    // name, else the id.
     code: cameraDisplayCode(
-      item.code ||
-        (SEMANTIC_CODE_KINDS.has(String(item.sourceKind || ''))
-          ? String(item.name || '').toUpperCase()
-          : '') ||
-        item.id ||
-        '',
+      item.code || String(item.name || '').toUpperCase() || item.id || '',
     ),
     sourceKind: String(item.sourceKind || item.kind || 'configured'),
     // Optional CAL badge input (cctv-v2 design §3b/§9.2, additive-only per the

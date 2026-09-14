@@ -18,7 +18,7 @@ test('cameraDisplayCode trims long names with an ellipsis and collapses whitespa
   assert.equal(cameraDisplayCode(''), '');
 });
 
-test('opaque-id packs label by name, readable-id packs keep their id, explicit codes win', () => {
+test('every pack labels by its feed name; explicit codes win; the id is the last resort', () => {
   const base = { lat: 1, lon: 1, url: 'https://x.test/a.jpg' };
   assert.equal(
     normalizeSourceItem({
@@ -27,7 +27,7 @@ test('opaque-id packs label by name, readable-id packs keep their id, explicit c
       name: '5TH ST / CONGRESS AVE',
       sourceKind: 'austin-open-data',
     }).code,
-    '354',
+    '5TH ST / CONGRESS AVE',
   );
   assert.equal(
     normalizeSourceItem({
