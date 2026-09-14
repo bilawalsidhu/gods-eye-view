@@ -52,6 +52,17 @@ export function createPrecipitationLayer({
   // one of the two call paths.
   const clearImagery = (viewer) => {
     stack.clear(viewer || _viewer);
+  };
+
+  /**
+   * Drop what was read, not just what was drawn.
+   *
+   * Only teardown does this. A photoreal stack hides the globe and takes the
+   * imagery with it, but the frames stay valid for as long as their cadence
+   * says — so flipping to Google 3D and back redraws from what is already
+   * held instead of re-polling every service on each round trip.
+   */
+  const forget = () => {
     frames.clear();
     polledAt.clear();
   };
@@ -64,37 +75,72 @@ export function createPrecipitationLayer({
     const settled = () =>
       request.signal.aborted || _request !== request || !_enabled || _hidden;
     try {
-      let refreshed = 0;
-      // Placements resolving to the same capabilities read share one request.
-      const fetched = new Map();
       const now = Date.now();
+      // Radar turns over in minutes and the model in hours, so work out what
+      // is actually due. Anything whose frame is still held but whose imagery
+      // went away with the globe is simply redrawn — no request at all.
+      const due = [];
+      let redrawn = 0;
       for (const tier of tiers) {
-        // Radar turns over in minutes and the model in hours; a tier that is
-        // not due yet keeps the imagery it already has.
         const cadence = tier.refreshMs ?? MODEL_REFRESH_MS;
-        const due = now - (polledAt.get(tier.id) ?? -Infinity) >= cadence;
-        if (!due && frames.has(tier.id)) continue;
-        let frame = fetched.get(tier.capsKey);
-        if (!frame) {
-          frame = await source.getFrame(tier, { signal: request.signal });
-          // A late body must never publish into a layer that moved on.
-          if (settled()) return false;
-          fetched.set(tier.capsKey, frame);
+        const stale = now - (polledAt.get(tier.id) ?? -Infinity) >= cadence;
+        const held = frames.get(tier.id);
+        if (stale || !held) {
+          due.push(tier);
+          continue;
         }
+        if (stack.has(tier.id)) continue;
+        stack.apply(viewer, tier, held);
+        redrawn += 1;
+      }
+
+      // One request per capabilities read, all in flight at once. Sequential
+      // awaits meant a single dead service threw and every tier listed after
+      // it never drew; settling them independently keeps an outage local to
+      // the source that has it. Placements resolving to the same capsKey
+      // still share one read.
+      const reads = new Map();
+      for (const tier of due)
+        if (!reads.has(tier.capsKey)) reads.set(tier.capsKey, tier);
+      const keys = [...reads.keys()];
+      const settlements = await Promise.allSettled(
+        keys.map((key) =>
+          source.getFrame(reads.get(key), { signal: request.signal }),
+        ),
+      );
+      // A late body must never publish into a layer that moved on.
+      if (settled()) return false;
+
+      const read = new Map();
+      let failure = null;
+      settlements.forEach((settlement, index) => {
+        if (settlement.status === 'fulfilled')
+          read.set(keys[index], settlement.value);
+        else failure ??= settlement.reason;
+      });
+
+      let refreshed = 0;
+      for (const tier of due) {
+        const frame = read.get(tier.capsKey);
+        // This source is down. The tier keeps whatever it is already drawing
+        // and will be due again on the next tick.
+        if (!frame) continue;
         polledAt.set(tier.id, now);
-        if (frames.get(tier.id)?.key !== frame.key) {
+        if (!stack.has(tier.id) || frames.get(tier.id)?.key !== frame.key) {
           // Add before removing so a live tier never blinks through the base map.
           stack.apply(viewer, tier, frame);
           frames.set(tier.id, frame);
         }
         refreshed += 1;
       }
-      if (refreshed) {
-        _lastUpdate = Date.now();
-        _lastError = null;
-      }
+
+      if (refreshed || redrawn) _lastUpdate = Date.now();
+      // One source failing among many is a gap in coverage, not a broken
+      // layer, so it only reaches the row when nothing is drawn at all. What
+      // an outage does show is age: lastUpdate stops advancing.
+      _lastError = stack.size ? null : failure?.message || _lastError;
       // A tick with nothing due is a healthy tick, not a failed refresh.
-      return true;
+      return stack.size > 0 || due.length === 0;
     } catch (error) {
       if (settled()) return false;
       _lastError = error?.message || 'Precipitation source unavailable';
@@ -150,6 +196,7 @@ export function createPrecipitationLayer({
       _unsubscribe?.();
       _unsubscribe = null;
       clearImagery(viewer);
+      forget();
       _lastError = null;
     },
 
@@ -164,6 +211,7 @@ export function createPrecipitationLayer({
       _unsubscribe?.();
       _unsubscribe = null;
       clearImagery(viewer);
+      forget();
       _viewer = null;
       _hidden = false;
       _lastUpdate = null;

@@ -84,20 +84,31 @@ const readySource = () => ({ getFrame: async () => ({ ...FRAME }) });
 
 test('a late frame cannot publish imagery after disable or destroy', async () => {
   for (const teardown of ['disable', 'destroy']) {
-    let release;
-    let observed = null;
+    // Every capabilities read is in flight at once, so teardown has to abort
+    // all of them — not just whichever one happened to be awaited.
+    const releases = [];
+    const observed = [];
     const source = {
       getFrame: (_tier, { signal } = {}) =>
         new Promise((resolve) => {
-          observed = signal;
-          release = () => resolve({ ...FRAME });
+          observed.push(signal);
+          releases.push(() => resolve({ ...FRAME }));
         }),
     };
     const { layer, viewer, layers, base } = harness(source);
     const pending = layer.update(viewer);
     layer[teardown](viewer);
-    assert.equal(observed.aborted, true, `${teardown} must abort the request`);
-    release();
+    assert.ok(
+      observed.length > 1,
+      `${teardown} needs concurrent reads to test`,
+    );
+    for (const signal of observed)
+      assert.equal(
+        signal.aborted,
+        true,
+        `${teardown} must abort every request in flight`,
+      );
+    for (const release of releases) release();
     assert.equal(await pending, false, `${teardown} must not publish`);
     assert.deepEqual(layers, [base], `${teardown} left imagery behind`);
     assert.equal(layer.getStats().count, 0);
@@ -536,4 +547,90 @@ test('a tier covering several rectangles owns one layer per rectangle', () => {
     again.map((layer) => layers.indexOf(layer)).sort((a, b) => a - b),
     [1, 2],
   );
+});
+
+test('the capabilities reads go out together, not one after another', () => {
+  // Sequential awaits made every tier wait on the one listed before it. With
+  // ten sources that is ten round trips deep; worse, the slowest service sets
+  // how long the whole layer takes to appear.
+  let started = 0;
+  let inFlightAtFirstYield = null;
+  const source = {
+    getFrame: async () => {
+      started += 1;
+      await Promise.resolve();
+      inFlightAtFirstYield ??= started;
+      return { ...FRAME };
+    },
+  };
+  const { layer, viewer } = harness(source);
+  return layer.update(viewer).then(() => {
+    assert.equal(
+      inFlightAtFirstYield,
+      2,
+      'both reads must start before either resolves',
+    );
+  });
+});
+
+test('one dead service does not stop the other tiers from drawing', async () => {
+  // The failure this replaces: a sequential loop threw on the first bad
+  // service, and every tier listed after it never drew at all — so a single
+  // outage anywhere in the table could blank most of the map.
+  const source = {
+    getFrame: async (tier) => {
+      if (tier.role === 'inlay') throw new Error('IEM unreachable');
+      return { ...FRAME };
+    },
+  };
+  const { layer, viewer, layers, base } = harness(source);
+  assert.equal(await layer.update(viewer), true, 'a partial read is healthy');
+
+  const drawn = layers.slice(1);
+  const surviving = PRECIPITATION_TIERS.filter(
+    (tier) => tier.role !== 'inlay',
+  ).length;
+  assert.equal(layers[0], base);
+  assert.equal(drawn.length, surviving, 'every reachable tier still drew');
+  // One source down among many is a gap in coverage, not a broken layer, so
+  // it must not redden a row that is still showing valid data.
+  assert.equal(layer.getStats().error, null);
+  assert.equal(layer.getStats().countLabel, '+15H');
+});
+
+test('a photoreal round trip redraws from what is held, without re-polling', async () => {
+  // clearImagery used to drop the frames along with the layers, so every flip
+  // to Google 3D and back re-polled every service — for steps that had not
+  // moved and were still perfectly good.
+  const calls = [];
+  const source = {
+    getFrame: async (tier) => {
+      calls.push(tier.id);
+      return { ...FRAME };
+    },
+  };
+  const { layer, viewer, layers, base, emitMapStack } = harness(source);
+  await layer.update(viewer);
+  const polled = calls.length;
+  assert.ok(polled > 0);
+
+  viewer.scene.globe.show = false;
+  emitMapStack();
+  assert.deepEqual(layers, [base], 'the imagery still goes with the globe');
+
+  viewer.scene.globe.show = true;
+  emitMapStack();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(layers.length, OWNED + 1, 'every placement comes back');
+  assert.deepEqual(
+    calls.length,
+    polled,
+    'coming back from photoreal must cost no requests',
+  );
+
+  // Teardown still forgets: re-enabling after a disable is a fresh read.
+  layer.disable(viewer);
+  layer.enable(viewer);
+  await layer.update(viewer);
+  assert.ok(calls.length > polled, 'disable must not leave frames behind');
 });
