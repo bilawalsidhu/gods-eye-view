@@ -1,6 +1,13 @@
 /** Pure frame parsing and row copy for the precipitation tiers. */
 
-const DIMENSION_PATTERN = /<Dimension\s+name="([a-z_]+)"([^>]*)>/gi;
+/**
+ * One XML tag. Attribute values are matched as quoted runs so a `>` inside one
+ * cannot end the tag early, and the `?` and `!` forms — the declaration,
+ * comments, CDATA — never match at all.
+ */
+const TAG_PATTERN =
+  /<(\/?)([A-Za-z_][\w.:-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/?)>/g;
+const NAME_ATTRIBUTE = /\bname="([^"]*)"/i;
 const DEFAULT_ATTRIBUTE = /\bdefault="([^"]+)"/i;
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -23,21 +30,88 @@ export function capabilitiesUrl(tier) {
 }
 
 /**
- * Read the server's own default time steps.
+ * The default time steps one named layer advertises, inherited steps included.
+ *
+ * Scanning the whole document for the first `<Dimension name="time">` only
+ * works while every service honours `&LAYERS=` and answers with a single
+ * layer. Not all of them do, and a document carrying several would silently
+ * pin some other layer's step into the tile requests — the wrong data,
+ * arriving with no error. So the parse is scoped to the `<Layer>` whose
+ * `<Name>` is the one being drawn.
+ *
+ * Two details of WMS shape the walk. `<Layer>` nests, and a child inherits its
+ * ancestors' dimensions, so the enclosing scopes are merged outermost first
+ * and a nearer declaration wins. And `<Dimension>` comes *after* `<Name>`
+ * within a layer, so a match is resolved as that layer closes rather than at
+ * the point its name is recognised.
+ */
+function layerDimensions(text, wmsLayer) {
+  // One Map of dimensions per open <Layer>, outermost first.
+  const enclosing = [];
+  // The element stack, so a <Style><Name> is never read as a layer's name.
+  const elements = [];
+  let nameStart = -1;
+  let targetDepth = -1;
+
+  TAG_PATTERN.lastIndex = 0;
+  for (let tag; (tag = TAG_PATTERN.exec(text)) !== null;) {
+    const [, closing, raw, attributes, selfClosing] = tag;
+    // Drop any namespace prefix: `wms:Layer` and `Layer` are the same element.
+    const element = raw.toLowerCase().replace(/^[^:]*:/, '');
+    const parent = elements.at(-1);
+
+    if (closing) {
+      if (element === 'name' && nameStart >= 0) {
+        if (text.slice(nameStart, tag.index).trim() === wmsLayer)
+          targetDepth = enclosing.length;
+        nameStart = -1;
+      }
+      if (element === 'layer') {
+        if (enclosing.length === targetDepth) {
+          const resolved = new Map();
+          for (const scope of enclosing)
+            for (const [key, value] of scope) resolved.set(key, value);
+          return resolved;
+        }
+        enclosing.pop();
+      }
+      elements.pop();
+      continue;
+    }
+
+    if (element === 'layer') {
+      enclosing.push(new Map());
+      if (selfClosing) enclosing.pop();
+    } else if (element === 'dimension' && parent === 'layer') {
+      const key = NAME_ATTRIBUTE.exec(attributes)?.[1]?.toLowerCase();
+      const value = DEFAULT_ATTRIBUTE.exec(attributes)?.[1];
+      if (key && value) enclosing.at(-1)?.set(key, value);
+    } else if (element === 'name' && parent === 'layer' && !selfClosing) {
+      nameStart = TAG_PATTERN.lastIndex;
+    }
+    if (!selfClosing) elements.push(element);
+  }
+  return null;
+}
+
+/**
+ * Read the server's own default time steps for the layer being drawn.
  *
  * The frame is never composed client-side: GeoMet declares `nearestValue="0"`,
  * so a timestamp that drifts past an hour boundary fails outright instead of
  * snapping to the nearest step.
  */
-export function readFrame(xml) {
+export function readFrame(xml, wmsLayer) {
   const text = String(xml || '');
   if (isServiceException(text))
     throw new Error('Precipitation service returned an exception document');
-  const defaults = new Map();
-  for (const [, name, attributes] of text.matchAll(DIMENSION_PATTERN)) {
-    const value = DEFAULT_ATTRIBUTE.exec(attributes)?.[1];
-    if (value) defaults.set(name.toLowerCase(), value);
-  }
+  if (!wmsLayer)
+    throw new TypeError('Reading a frame requires the layer to read it from');
+  const defaults = layerDimensions(text, wmsLayer);
+  if (!defaults)
+    throw new Error(
+      `Precipitation layer ${wmsLayer} is not in the capabilities`,
+    );
   const validTime = defaults.get('time') || null;
   if (!validTime) throw new Error('Precipitation frame time is unavailable');
   if (Number.isNaN(Date.parse(validTime)))

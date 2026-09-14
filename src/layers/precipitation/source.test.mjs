@@ -77,8 +77,14 @@ test('a 200 carrying a service exception is a failure, not an empty frame', asyn
 
 test('malformed and incomplete capabilities reject instead of reading as empty', async () => {
   const cases = [
-    ['', /frame time is unavailable/],
-    ['<WMS_Capabilities></WMS_Capabilities>', /frame time is unavailable/],
+    // A document with no such layer is a different failure from a layer with
+    // no time, and saying which one it is decides where to look.
+    ['', /GDPS_15km_PrecipRate is not in the capabilities/],
+    [
+      '<WMS_Capabilities></WMS_Capabilities>',
+      /GDPS_15km_PrecipRate is not in the capabilities/,
+    ],
+    [capabilities(''), /frame time is unavailable/],
     [
       capabilities('<Dimension name="time" default="not-a-date"></Dimension>'),
       /frame time is malformed/,
@@ -137,6 +143,7 @@ test('an observation frame carries no run, so it claims no forecast lead', () =>
     capabilities(
       '<Dimension name="time" units="ISO8601" default="2026-09-14T13:52:01Z" nearestValue="1">x</Dimension>',
     ),
+    'GDPS_15km_PrecipRate',
   );
   assert.equal(frame.referenceTime, null);
   assert.equal(forecastLeadHours(frame), null);
@@ -158,4 +165,76 @@ test('an undated service is reported as live, never stamped with the epoch', () 
     'US RADAR LIVE',
   );
   assert.ok(frame.key.startsWith('live:'), 'a poll stamp still drives refresh');
+});
+
+test('the frame comes from the named layer, not the first one in the document', () => {
+  // GeoMet honours `&LAYERS=` and answers with one layer, so a document-wide
+  // scan worked. A service that ignores the filter would have handed the layer
+  // some neighbouring product's step with no error at all — the failure mode
+  // this scoping exists to remove.
+  const document = `<?xml version="1.0"?>
+<WMS_Capabilities><Capability><Layer>
+  <Layer queryable="1">
+    <Name>GDPS_15km_AirTemp</Name>
+    <!-- A style may be named after another layer; that is not a layer name,
+         and it sits ahead of the real one so a loose match would take it. -->
+    <Style><Name>GDPS_15km_PrecipRate</Name></Style>
+    <Dimension name="time" default="1999-01-01T00:00:00Z">x</Dimension>
+  </Layer>
+  <Layer queryable="1">
+    <Name>GDPS_15km_PrecipRate</Name>
+    <Dimension name="time" default="2026-09-14T15:00:00Z">x</Dimension>
+    <Dimension name="reference_time" default="2026-09-14T00:00:00Z">x</Dimension>
+  </Layer>
+</Layer></Capability></WMS_Capabilities>`;
+  const frame = readFrame(document, 'GDPS_15km_PrecipRate');
+  assert.equal(frame.validTime, '2026-09-14T15:00:00Z');
+  assert.equal(frame.referenceTime, '2026-09-14T00:00:00Z');
+  assert.equal(
+    readFrame(document, 'GDPS_15km_AirTemp').validTime,
+    '1999-01-01T00:00:00Z',
+  );
+});
+
+test('a nested layer inherits its parents time, and overrides it when it says so', () => {
+  // WMS layers nest and a child inherits its ancestors' dimensions, so the
+  // step a layer draws at is not always declared on the layer itself.
+  const document = (own) => `<?xml version="1.0"?>
+<WMS_Capabilities><Capability>
+  <Layer>
+    <Name>root</Name>
+    <Dimension name="time" default="2026-09-14T12:00:00Z">x</Dimension>
+    <Layer queryable="1">
+      <Name>msg_fes:h60b</Name>
+      ${own}
+    </Layer>
+  </Layer>
+</Capability></WMS_Capabilities>`;
+  assert.equal(
+    readFrame(document(''), 'msg_fes:h60b').validTime,
+    '2026-09-14T12:00:00Z',
+    'an inherited step must be found',
+  );
+  assert.equal(
+    readFrame(
+      document(
+        '<Dimension name="time" default="2026-09-14T15:15:00Z">x</Dimension>',
+      ),
+      'msg_fes:h60b',
+    ).validTime,
+    '2026-09-14T15:15:00Z',
+    'the nearest declaration wins over the inherited one',
+  );
+  // The parent still reads as itself.
+  assert.equal(
+    readFrame(document(''), 'root').validTime,
+    '2026-09-14T12:00:00Z',
+  );
+});
+
+test('reading a frame without naming the layer is refused, not guessed at', () => {
+  assert.throws(
+    () => readFrame(capabilities(TIME_DIMENSIONS)),
+    /requires the layer to read it from/,
+  );
 });

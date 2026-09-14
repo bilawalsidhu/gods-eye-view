@@ -40,7 +40,7 @@ export function createPrecipitationSource({
       signal?.throwIfAborted();
       if (isServiceException(body))
         throw new Error(`${tier.label} returned a service exception`);
-      return readFrame(body);
+      return readFrame(body, tier.wmsLayer);
     },
   };
 }
