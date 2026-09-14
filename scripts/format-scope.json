@@ -611,5 +611,6 @@
   "src/layers/vessels/recordPolicy.js",
   "src/layers/vessels/snapshotRenderer.js",
   "src/layers/vessels/records.test.mjs",
-  "src/layers/vessels/ingestion.test.mjs"
+  "src/layers/vessels/ingestion.test.mjs",
+  "src/cityPresets.test.mjs"
 ]
