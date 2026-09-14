@@ -46,8 +46,14 @@ export function readGit(args, { cwd = ROOT } = {}) {
  * Remove credentials from a remote URL before it is printed.
  *
  * A remote can carry a password or an access token in its userinfo
- * (`https://token@host/org/repo.git`). The point of printing the remote is to
- * show WHERE the update comes from, which the host and path already say.
+ * (`https://token@host/org/repo.git`) or in a query parameter
+ * (`?access_token=…`). The point of printing the remote is to show WHERE the
+ * update comes from, which the host and path already say — so the userinfo is
+ * replaced and the query string and fragment are dropped whole, rather than
+ * matched against a list of parameter names that would miss the next one.
+ *
+ * A secret spelled as an ordinary path segment is not detected; nothing here
+ * can tell one of those from a repository name.
  *
  * @param {string|null|undefined} url - Remote URL as git reports it.
  * @returns {string|null} Printable URL, or null when there is nothing to print.
@@ -62,9 +68,13 @@ export function redactRemoteUrl(url) {
     // has a userinfo field to hide.
     return url;
   }
-  if (!parsed.username && !parsed.password) return url;
+  const hadUserinfo = Boolean(parsed.username || parsed.password);
+  const hadQuery = Boolean(parsed.search || parsed.hash);
+  if (!hadUserinfo && !hadQuery) return url;
   parsed.password = '';
-  parsed.username = '***';
+  if (hadUserinfo) parsed.username = '***';
+  parsed.search = '';
+  parsed.hash = '';
   return parsed.toString();
 }
 
@@ -199,9 +209,31 @@ export function updateFromRemote(io = {}) {
   return plan;
 }
 
+/**
+ * What running this script does: disclose, apply, install.
+ *
+ * @param {object} [io] - The seam above, plus `install` and `fail`.
+ * @returns {{apply: string|null, fallback: boolean, stopped?: boolean}} The plan.
+ */
+export function runPinokioUpdate(io = {}) {
+  const {
+    install = installPinokioDependencies,
+    fail = (code) => process.exit(code),
+  } = io;
+  const plan = updateFromRemote(io);
+  if (plan.stopped) {
+    // Nothing could be shown, so nothing was applied. Reinstalling now would
+    // run install scripts under the banner of an update that did not happen,
+    // and report success for it.
+    fail(1);
+    return plan;
+  }
+  install();
+  return plan;
+}
+
 // Guarded like pinokio-start.mjs so the report above can be exercised without
 // pulling and reinstalling as an import side effect.
 if (isDirectInvocation(process.argv[1], MODULE_PATH)) {
-  updateFromRemote();
-  installPinokioDependencies();
+  runPinokioUpdate();
 }

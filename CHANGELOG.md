@@ -254,13 +254,15 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   imagery anywhere: the voice assistant's viewport screenshot. Contributed by
   Lob26 (#357).
 - Pinokio's Update shows what it is about to install before it installs it: the
-  tracking branch, the remote it fetched from (with any credentials in the URL
-  removed), the incoming commits and their diffstat. It fetches once and applies
-  exactly the revision it named, so a commit that lands mid-update cannot be
-  installed unannounced. A git read it cannot complete is reported as such
-  instead of as "already up to date", and if the revision to apply cannot be
-  resolved at all the update stops rather than falling back to a second fetch.
-  Contributed by Lob26 (#356).
+  tracking branch, the remote it fetched from, the incoming commits and their
+  diffstat. The remote is printed as host and path — a password or token in the
+  URL's user field is replaced and any query string dropped, though a secret
+  spelled as an ordinary path segment cannot be told from a repository name. It
+  fetches once and applies exactly the revision it named, so a commit that lands
+  mid-update cannot be installed unannounced. A git read it cannot complete is
+  reported as such instead of as "already up to date", and if the revision to
+  apply cannot be resolved at all the update stops without installing anything
+  and exits unsuccessfully. Contributed by Lob26 (#356).
 
 - Extract panel disclosure and hover/focus controls into a reusable module;
   cancel their listeners and pending work during replacement and teardown.

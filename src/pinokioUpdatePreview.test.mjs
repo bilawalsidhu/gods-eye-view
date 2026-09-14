@@ -9,6 +9,7 @@ import {
   readGit,
   redactRemoteUrl,
   reportIncomingChanges,
+  runPinokioUpdate,
   updateFromRemote,
 } from '../scripts/pinokio-update.mjs';
 
@@ -283,6 +284,67 @@ test('a remote that is behind this checkout is named, not announced as incoming'
   assert.ok(plan.apply, 'the fetched revision is still named');
 });
 
+test('a stop means nothing is installed, and the script fails', async (t) => {
+  const app = await fixture(t);
+  const before = git(app.clone, ['rev-parse', 'HEAD']);
+  await app.push('second commit', 'second\n');
+  const installs = [];
+  const failures = [];
+  const plan = runPinokioUpdate({
+    ...app.io,
+    read: (args) =>
+      args[0] === 'rev-parse' &&
+      args.length === 2 &&
+      args[1].startsWith('refs/')
+        ? null
+        : readGit(args, { cwd: app.clone }),
+    install: () => installs.push('install'),
+    fail: (code) => failures.push(code),
+  });
+  assert.equal(plan.stopped, true);
+  // Installing here would run install scripts and report success for an update
+  // that never happened.
+  assert.deepEqual(installs, []);
+  assert.deepEqual(failures, [1]);
+  assert.equal(git(app.clone, ['rev-parse', 'HEAD']), before);
+});
+
+test('an ordinary update installs once and does not fail', async (t) => {
+  const app = await fixture(t);
+  const disclosed = await app.push('second commit', 'second\n');
+  const installs = [];
+  const failures = [];
+  const plan = runPinokioUpdate({
+    ...app.io,
+    install: () => installs.push('install'),
+    fail: (code) => failures.push(code),
+  });
+  assert.equal(plan.apply, disclosed);
+  assert.equal(git(app.clone, ['rev-parse', 'HEAD']), disclosed);
+  assert.deepEqual(installs, ['install']);
+  assert.deepEqual(failures, []);
+});
+
+test('an up-to-date checkout still reinstalls', async (t) => {
+  const app = await fixture(t);
+  const installs = [];
+  const plan = runPinokioUpdate({
+    ...app.io,
+    install: () => installs.push('install'),
+    fail: () => assert.fail('an up-to-date checkout is not a failure'),
+  });
+  assert.deepEqual(plan, { apply: null, fallback: false });
+  assert.deepEqual(installs, ['install']);
+});
+
+test('the entrypoint is what the direct invocation runs', () => {
+  const guarded = source.slice(source.indexOf('if (isDirectInvocation('));
+  assert.match(guarded, /runPinokioUpdate\(\);/);
+  // The install must not sit beside it in the guard, where a stop could not
+  // prevent it.
+  assert.doesNotMatch(guarded, /installPinokioDependencies\(\)/);
+});
+
 test('a password in the remote URL is not printed', () => {
   assert.equal(
     redactRemoteUrl('https://someone:ghp_secret@github.com/org/repo.git'),
@@ -296,6 +358,22 @@ test('a bare token in the remote URL is not printed', () => {
   );
   assert.doesNotMatch(redacted, /ghp_secret/);
   assert.match(redacted, /github\.com\/org\/repo\.git/);
+});
+
+test('a credential in a query parameter is not printed', () => {
+  assert.equal(
+    redactRemoteUrl('https://host.example/org/repo.git?access_token=secret'),
+    'https://host.example/org/repo.git',
+  );
+  // The whole query goes, so a parameter name nobody thought of goes with it.
+  assert.equal(
+    redactRemoteUrl('https://host.example/org/repo.git?sneaky=secret&x=1#frag'),
+    'https://host.example/org/repo.git',
+  );
+  assert.equal(
+    redactRemoteUrl('https://user:pw@host.example/org/repo.git?token=secret'),
+    'https://***@host.example/org/repo.git',
+  );
 });
 
 test('an ordinary remote URL is printed unchanged', () => {
@@ -345,13 +423,13 @@ test('the update and reinstall stay behind the direct-invocation guard', () => {
     source,
     /if \(isDirectInvocation\(process\.argv\[1\], MODULE_PATH\)\) \{/,
   );
-  const guarded = source.slice(source.indexOf('if (isDirectInvocation('));
-  assert.match(guarded, /updateFromRemote\(\);/);
-  assert.match(guarded, /installPinokioDependencies\(\)/);
+  const entrypoint = source.slice(
+    source.indexOf('export function runPinokioUpdate'),
+  );
   // Order is the whole point of the fix: disclose and apply, then install.
   assert.ok(
-    guarded.indexOf('updateFromRemote()') <
-      guarded.indexOf('installPinokioDependencies()'),
+    entrypoint.indexOf('updateFromRemote(io)') <
+      entrypoint.indexOf('install()'),
     'the update must be disclosed and applied before dependencies are installed',
   );
 });
