@@ -38,6 +38,17 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
   // collectionInterval, 600 s for every station sampled; polling faster only
   // re-fetches the same JPEG.
   fintraffic: 10 * 60 * 1000,
+  // Perth & Kinross Council states a 15-minute image cadence.
+  'perth & kinross council': 15 * 60 * 1000,
+  // Mountain webcams: Cairngorm republishes about once a minute, the others
+  // every few minutes; 2–5 min keeps ambient cards fresh without hammering
+  // small operator hosts.
+  'cairngorm mountain': 2 * 60 * 1000,
+  'glencoe mountain resort': 5 * 60 * 1000,
+  'glenshee ski centre': 5 * 60 * 1000,
+  'deeside gliding club': 5 * 60 * 1000,
+  'about fort william': 5 * 60 * 1000,
+  winterhighland: 5 * 60 * 1000,
 });
 
 /**

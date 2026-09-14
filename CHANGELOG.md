@@ -1,5 +1,13 @@
 # Changelog
 
+## Scottish camera packs
+
+- Add two curated CCTV packs for Scotland: Perth & Kinross Council's 23 road
+  cameras (15-minute stills, directional headings from the frame captions) and
+  22 mountain and ski webcams (Cairngorm, Glencoe, Glenshee, Aboyne, Ben Nevis,
+  Leadhills), each proxied only from its registered operator host and switched
+  off with `CCTV_PKC_ENABLED=0` or `CCTV_SCOTLAND_WEBCAMS_ENABLED=0`.
+
 - Split application scene, controls, catalog, tools and HTML into reusable components; configure application request services and sources without changing global fetch. Preserve standalone markup and voice behavior. Explicit annotation navigation may resolve a distant named target.
 
 ## Voice component boundaries

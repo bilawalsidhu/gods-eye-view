@@ -201,6 +201,24 @@ export const WARENDORF_IMAGE_ORIGINS = Object.freeze([
   'http://webcam.warendorf.de/',
   'https://www.kreis-warendorf.de/',
 ]);
+/** Perth & Kinross Council (Scotland): 23 road cameras from a curated catalog file;
+ * the council publishes plain 15-minute stills but no machine-readable catalog. */
+export const DEFAULT_PKC_SOURCE_FILE = 'config/cctv_sources.pkc.json';
+export const PKC_IMAGE_ORIGINS = Object.freeze([
+  'https://localapps.pkc.gov.uk/RoadsCameraImages/images/',
+]);
+/** Scottish mountain and ski webcams: hand-curated stills from each operator's
+ * public host (Cairngorm Mountain, Glencoe via Winterhighland, Glenshee via
+ * webcam-hd, Deeside Gliding Club, About Fort William). */
+export const DEFAULT_SCOTLAND_WEBCAMS_SOURCE_FILE =
+  'config/cctv_sources.scotland_webcams.json';
+export const SCOTLAND_WEBCAM_IMAGE_ORIGINS = Object.freeze([
+  'https://www.cairngormmountain.co.uk/wp-content/uploads/webcams/',
+  'https://www.winterhighland.info/cams/',
+  'https://www.webcam-hd.com/images/ski-scotland_glenshee/',
+  'https://www.deesideglidingclub.co.uk/webcam/',
+  'https://ah.cdn.licr.co.uk/images/webcams/',
+]);
 /** Live Traffic NSW (Transport for NSW): keyless public camera catalog. */
 export const NSW_CAMERAS_URL =
   'https://data.livetraffic.com/cameras/traffic-cam.json';
