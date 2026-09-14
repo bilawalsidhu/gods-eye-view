@@ -440,6 +440,7 @@
   "src/data/flowTiles.js",
   "src/layers/traffic/source.test.mjs",
   "src/layers/bikeshare/source.test.mjs",
+  "src/layers/bikeshare/proxyRoute.test.mjs",
   "scripts/traffic-fixtures.mjs",
   "src/layers/traffic/navigation.test.mjs",
   "scripts/qa-traffic-navigation.mjs",
