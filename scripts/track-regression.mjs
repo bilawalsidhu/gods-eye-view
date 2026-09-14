@@ -3203,10 +3203,25 @@ async function main() {
           await fl.update(v);
           await window.__dfSettle(600);
         }
-        const bb1 = window.__dfFindBB('aaa097');
-        const d1 = bb1 ? window.__dfCarto(bb1.position) : null;
+        // The floor owner intentionally retains the previous cell near an
+        // edge. Sample inside a cell, beyond that hysteresis band, so the raw
+        // coordinate's floor is unambiguously the floor the sprite must use.
+        // Wait for geometry, not a passing height; a missing clamp still fails.
+        const interiorLimit = 0.0005 - gf.CELL_HYSTERESIS_DEG - 0.00002;
+        const sampleDeadline = Date.now() + 8000;
+        let d1 = null;
+        let sampleInterior = false;
+        do {
+          await window.__dfSettle(250);
+          const bb1 = window.__dfFindBB('aaa097');
+          d1 = bb1 ? window.__dfCarto(bb1.position) : null;
+          sampleInterior = !!d1
+            && Math.abs(d1.lat - cell(d1.lat)) < interiorLimit
+            && Math.abs(d1.lon - cell(d1.lon)) < interiorLimit;
+        } while (!sampleInterior && Date.now() < sampleDeadline);
         return {
           startCold,
+          sampleInterior,
           displayCell,
           fixCell,
           sameCellAsFix: displayCell.lat === fixCell.lat && displayCell.lon === fixCell.lon,
@@ -3249,6 +3264,10 @@ async function main() {
         dfCorridor.controlFloor == null,
         `control cell floor = ${dfCorridor.controlFloor}`);
 
+      record('display-floor/corridor: the height sample clears cell-boundary hysteresis',
+        dfCorridor.sampleInterior === true,
+        'the sampled coordinate lies inside one unambiguous floor cell');
+
       record('display-floor/corridor: the sprite rides the corridor-warmed floor',
         Number.isFinite(dfCorridor.spriteH) && Number.isFinite(dfCorridor.spriteFloor)
           && dfCorridor.spriteH >= dfCorridor.spriteFloor + DISPLAY_FLOOR_LIFT_M - 0.5,
@@ -3268,9 +3287,11 @@ async function main() {
         const bbBefore = window.__dfFindBB('aaa097');
         if (!bbBefore) return { error: 'aaa097 billboard missing' };
         const d0 = window.__dfCarto(bbBefore.position);
-        // Plant a floor well ABOVE where it currently renders, across the block
-        // it can move within, so an UNFLOORED tracked entity is unmistakable.
-        const seeded = d0.h + 40;
+        // Plant above both the current billboard and this group's 400 m
+        // identity-probe floor. A poll can refresh the raw render altitude
+        // after d0 was read; a lower seed makes the negative model-ownership
+        // assertion impossible even when the clamp correctly stands aside.
+        const seeded = Math.max(d0.h, 400) + 40;
         for (let dy = -1; dy <= 1; dy++) {
           for (let dx = -1; dx <= 1; dx++) {
             gf.reportMeshFloorCell(cell(d0.lat) + dy * 0.001, cell(d0.lon) + dx * 0.001, seeded);

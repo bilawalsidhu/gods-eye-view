@@ -25,15 +25,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const TESTS = 'src/firstRunExperience.test.mjs';
+const TESTS = ['src/firstRunExperience.test.mjs', 'src/standalone/startupChrome.test.mjs'];
 
 const FILES = {
+  keyboard: path.join(ROOT, 'src', 'ui', 'surfaceKeyboard.js'),
   module: path.join(ROOT, 'src', 'firstRunExperience.js'),
   html: path.join(ROOT, 'index.html'),
   css: path.join(ROOT, 'style.css'),
   voiceInstructions: path.join(ROOT, 'server/providers/openai/instructions.js'),
   voiceTools: path.join(ROOT, 'server/providers/openai/tools.js'),
-  main: path.join(ROOT, 'src', 'main.js'),
+  main: path.join(ROOT, 'src', 'standalone', 'startupChrome.js'),
   ui: path.join(ROOT, 'src', 'ui.js'),
   docs: path.join(ROOT, 'docs', 'CURRENT-STATE.md'),
 };
@@ -118,8 +119,8 @@ const MUTATIONS = [
   {
     defect: 'the key handler trusts the CLASS, so an invisible card eats ESC',
     file: 'module',
-    from: 'if (closing || !isTopmost()) return;',
-    to: 'if (closing) return;',
+    from: 'isActive: () => !closing && isTopmost(),',
+    to: 'isActive: () => !closing,',
   },
   {
     defect: 'the launcher stops yielding and fights Cockpit/Scenes for ESC',
@@ -165,8 +166,8 @@ const MUTATIONS = [
   },
   {
     defect: 'the launcher stops honouring a key another surface already claimed',
-    file: 'module',
-    from: '    if (event.defaultPrevented) return;',
+    file: 'keyboard',
+    from: ' || event.defaultPrevented',
     to: '    /* belt removed */',
   },
   {
@@ -174,8 +175,8 @@ const MUTATIONS = [
     // stopImmediatePropagation() a few lines below and prove nothing about this.
     defect: 'the radio disclosure returns to stopPropagation, so one ESC does two things',
     file: 'ui',
-    from: '      event.stopImmediatePropagation();\n      setRadioDisclosure(false, { returnFocus: true });',
-    to: '      event.stopPropagation();\n      setRadioDisclosure(false, { returnFocus: true });',
+    from: '      event.stopImmediatePropagation();\n      const escapedFromDisclosure = event.target === this._contextRadioToggleBtn',
+    to: '      event.stopPropagation();\n      const escapedFromDisclosure = event.target === this._contextRadioToggleBtn',
   },
   {
     defect: 'the "no timer" decision is deleted, so the next editor re-litigates it blind',
@@ -344,25 +345,25 @@ const MUTATIONS = [
   },
   {
     defect: 'Tab escapes into an app the visitor has not seen yet',
-    file: 'module',
+    file: 'keyboard',
     from: "if (event.key !== 'Tab') return;",
     to: 'return;',
   },
   {
     defect: 'ESC no longer dismisses the launcher',
-    file: 'module',
+    file: 'keyboard',
     from: "if (event.key === 'Escape') {",
     to: 'if (false) {',
   },
   {
     defect: 'focus is never returned to where the visitor left it',
-    file: 'module',
-    from: "if (typeof previouslyFocused?.focus === 'function' && previouslyFocused.isConnected) {",
+    file: 'keyboard',
+    from: "if (typeof target?.focus === 'function' && target.isConnected) {",
     to: 'if (false) {',
   },
   {
     defect: 'app hotkeys eat the launcher keys (bubble instead of capture)',
-    file: 'module',
+    file: 'keyboard',
     from: "documentRef.addEventListener('keydown', onKeyDown, true);",
     to: "documentRef.addEventListener('keydown', onKeyDown);",
   },
@@ -492,7 +493,7 @@ for (const { defect, file, from, to } of MUTATIONS) {
   let red = false;
   let by = '';
   try {
-    execFileSync('node', ['--test', TESTS], { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' });
+    execFileSync('node', ['--test', ...TESTS], { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' });
   } catch (error) {
     red = true;
     const failed = String(error.stdout || '').split('\n')

@@ -17,6 +17,8 @@ export function createStandaloneTools({
   controls,
   data,
   loadingScreen,
+  placeSearch,
+  voice = {},
   signal,
   defer,
 }) {
@@ -25,7 +27,7 @@ export function createStandaloneTools({
   const { dataManager } = data;
   const sceneDirector = new SceneDirector(viewer, styleManager, dataManager);
   defer(() => sceneDirector.destroy());
-  const annotations = initAnnotations({ viewer, tileset });
+  const annotations = initAnnotations({ viewer, tileset, placeSearch });
   defer(() => {
     if (window.__gevAnnotations === annotations) delete window.__gevAnnotations;
     annotations.destroy();
@@ -99,6 +101,9 @@ export function createStandaloneTools({
     if (window.__godsEyeView === debug) delete window.__godsEyeView;
   });
   const voiceCommands = initGevVoiceCommands({
+    ...voice,
+    signal,
+    placeSearch,
     viewer,
     styleManager,
     dataManager,

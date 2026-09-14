@@ -1,6 +1,13 @@
 import { Readable } from 'node:stream';
 import { hashSeed, escapeXml } from './normalize.js';
-import { CCTV_FRAME_FETCH_TIMEOUT_MS } from './constants.js';
+import {
+  CCTV_FRAME_FETCH_TIMEOUT_MS,
+  CCTV_FRAME_MAX_BODY_BYTES,
+  CCTV_MEDIA_FETCH_TIMEOUT_MS,
+  CCTV_MEDIA_MAX_BODY_BYTES,
+  NSW_IMAGE_ORIGIN,
+  NSW_IMAGE_USER_AGENT,
+} from './constants.js';
 /**
  * Generate a synthetic SVG billboard image for a CCTV camera placeholder.
  *
@@ -120,10 +127,9 @@ export async function proxyMediaResponse(
   // Cheap defense: reject an upstream that DECLARES an oversized fixed body.
   // Live MJPEG/HLS streams are unbounded by design and send no content-length,
   // so they pipe normally (piping streams to the client, never buffering).
-  const MEDIA_DECLARED_CAP_BYTES = 64 * 1024 * 1024;
   if (
     Number.isFinite(Number(contentLength)) &&
-    Number(contentLength) > MEDIA_DECLARED_CAP_BYTES
+    Number(contentLength) > CCTV_MEDIA_MAX_BODY_BYTES
   ) {
     res.writeHead(502, {
       'Content-Type': 'application/json',
@@ -153,6 +159,244 @@ export async function proxyMediaResponse(
   stream.pipe(res);
 }
 
+/** Read a snapshot incrementally, retaining at most maxBytes of owned chunks. */
+async function readCappedResponseBytes(upstream, maxBytes) {
+  const declared = Number(upstream.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    try {
+      await upstream.body?.cancel();
+    } catch {
+      /* no-op */
+    }
+    return null;
+  }
+  if (!upstream.body) return null;
+  const chunks = [];
+  let total = 0;
+  // Every retained chunk is an OWNED copy: a chunk can be a small view over a
+  // much larger backing ArrayBuffer, and keeping the view would retain that
+  // whole allocation while the byte accounting only counted the view.
+  const keep = (chunk) => {
+    total += chunk.byteLength;
+    if (total > maxBytes) return false;
+    chunks.push(Buffer.from(chunk));
+    return true;
+  };
+  if (typeof upstream.body[Symbol.asyncIterator] === 'function') {
+    for await (const chunk of upstream.body) {
+      if (!keep(chunk)) {
+        try {
+          await upstream.body.cancel();
+        } catch {
+          /* no-op */
+        }
+        return null;
+      }
+    }
+    return Buffer.concat(chunks, total);
+  }
+  // No async iterator: stream through a reader so the cap still applies while
+  // reading. A body that cannot be streamed at all is refused rather than
+  // buffered uncapped — the helper's whole contract is the cap.
+  const reader =
+    typeof upstream.body.getReader === 'function'
+      ? upstream.body.getReader()
+      : null;
+  if (!reader) return null;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!keep(value)) {
+        try {
+          await reader.cancel();
+        } catch {
+          /* already closed */
+        }
+        return null;
+      }
+    }
+    return Buffer.concat(chunks, total);
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/** Open registered media within a header deadline; leave timely live bodies running. */
+export async function fetchCctvMediaUpstream(
+  url,
+  {
+    headers = {},
+    fetchImpl = fetch,
+    timeoutMs = CCTV_MEDIA_FETCH_TIMEOUT_MS,
+  } = {},
+) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetchImpl(url, { headers, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Fetch and decode a TxDOT ITS / TransGuide snapshot.
+ *
+ * TxDOT returns JSON with a base64-encoded JPEG in `snippet`, rather than
+ * returning image/jpeg directly.
+ */
+export async function fetchTxdotSnapshot(
+  url,
+  {
+    fetchImpl = fetch,
+    timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS,
+    maxBytes = CCTV_FRAME_MAX_BODY_BYTES,
+  } = {},
+) {
+  if (!url) return null;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (
+    parsed.origin !== 'https://its.txdot.gov' ||
+    parsed.pathname !== '/its/DistrictIts/GetCctvSnapshotByIcdId'
+  ) {
+    return null;
+  }
+  // Base64 inflates by 4/3; the JSON envelope adds a few bytes of framing.
+  const maxEnvelopeBytes = Math.ceil((maxBytes * 4) / 3) + 4096;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    // The snapshot endpoint answers directly; a redirect is not followed, so
+    // the origin/path pin above holds for the request that is actually made.
+    const upstream = await fetchImpl(parsed.toString(), {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'gods-eye-view-cctv-proxy/1.0',
+      },
+      signal: controller.signal,
+      redirect: 'manual',
+    });
+    if (!upstream.ok) return null;
+    const envelope = await readCappedResponseBytes(upstream, maxEnvelopeBytes);
+    if (!envelope) return null;
+    let payload;
+    try {
+      payload = JSON.parse(envelope.toString('utf8'));
+    } catch {
+      return null;
+    }
+    let snippet =
+      typeof payload?.snippet === 'string' ? payload.snippet.trim() : '';
+    if (!snippet) return null;
+    snippet = snippet.replace(/^data:image\/jpeg;base64,/i, '');
+    // Canonical base64 only (4-char groups, padding only at the end):
+    // Buffer.from() silently skips junk, which would let a non-image body
+    // decode into "something".
+    if (
+      snippet.length > maxEnvelopeBytes ||
+      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+        snippet,
+      )
+    ) {
+      return null;
+    }
+    const body = Buffer.from(snippet, 'base64');
+    if (body.length < 4 || body.length > maxBytes) return null;
+    if (body[0] !== 0xff || body[1] !== 0xd8 || body[2] !== 0xff) return null;
+    return { ok: true, body, contentType: 'image/jpeg' };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+    controller.abort();
+  }
+}
+
+/** Redirect hops the frame path will follow, and only within the same host. */
+const MAX_SAME_HOST_REDIRECTS = 2;
+
+/**
+ * Fetch a registered frame URL following redirects ONLY within the original
+ * origin (scheme, host and port; at most MAX_SAME_HOST_REDIRECTS hops).
+ * Default redirect-following would let an upstream steer a host-pinned
+ * request, and its host-specific headers, to any origin, another port, or a
+ * plaintext downgrade.
+ *
+ * @param {string} url
+ * @param {object} init - fetch init (headers, signal).
+ * @param {typeof fetch} fetchImpl
+ * @returns {Promise<Response|null>} Final response, or null on an off-host or
+ *   over-long redirect chain.
+ */
+export async function fetchWithinHost(url, init, fetchImpl = fetch) {
+  let current;
+  try {
+    current = new URL(url);
+  } catch {
+    return null;
+  }
+  const origin = current.origin;
+  for (let hop = 0; hop <= MAX_SAME_HOST_REDIRECTS; hop++) {
+    const upstream = await fetchImpl(current.toString(), {
+      ...init,
+      redirect: 'manual',
+    });
+    // Anything that is not a 3xx (including a test double with no status) is
+    // the final answer.
+    const status = Number(upstream?.status);
+    if (!(status >= 300 && status < 400)) return upstream;
+    const location = upstream.headers.get('location');
+    try {
+      await upstream.body?.cancel();
+    } catch {
+      /* no-op */
+    }
+    if (!location || hop === MAX_SAME_HOST_REDIRECTS) return null;
+    let next;
+    try {
+      next = new URL(location, current);
+    } catch {
+      return null;
+    }
+    if (next.origin !== origin) return null;
+    current = next;
+  }
+  return null;
+}
+
+/**
+ * Image hosts that only serve frames to browser-identified clients, keyed by
+ * exact hostname. Every other upstream sees the proxy's own identifying
+ * User-Agent. Keyed on host, not on a URL substring, so a look-alike host or a
+ * path that merely mentions the host never inherits the header.
+ */
+const CCTV_IMAGE_USER_AGENT_BY_HOST = Object.freeze({
+  [new URL(NSW_IMAGE_ORIGIN).hostname]: NSW_IMAGE_USER_AGENT,
+});
+
+/**
+ * User-Agent for one upstream frame request.
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+export function cctvUpstreamUserAgent(url) {
+  try {
+    return (
+      CCTV_IMAGE_USER_AGENT_BY_HOST[new URL(url).hostname] ||
+      'gods-eye-view-cctv-proxy/1.0'
+    );
+  } catch {
+    return 'gods-eye-view-cctv-proxy/1.0';
+  }
+}
+
 /**
  * Fetch one upstream CCTV image within the frame-refresh budget.
  *
@@ -164,11 +408,16 @@ export async function proxyMediaResponse(
  * @param {object} [options]
  * @param {typeof fetch} [options.fetchImpl=fetch] - Fetch implementation.
  * @param {number} [options.timeoutMs=CCTV_FRAME_FETCH_TIMEOUT_MS] - Abort timeout.
+ * @param {number} [options.maxBytes=CCTV_FRAME_MAX_BODY_BYTES] - Snapshot byte cap.
  * @returns {Promise<{ok:true,body:Buffer,contentType:string}|null>}
  */
 export async function fetchCctvImageFromUpstream(
   url,
-  { fetchImpl = fetch, timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS } = {},
+  {
+    fetchImpl = fetch,
+    timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS,
+    maxBytes = CCTV_FRAME_MAX_BODY_BYTES,
+  } = {},
 ) {
   if (!url || !/^https?:\/\//i.test(url)) return null;
   const controller = new AbortController();
@@ -178,20 +427,27 @@ export async function fetchCctvImageFromUpstream(
     );
   }, timeoutMs);
   try {
-    const upstream = await fetchImpl(url, {
-      headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
-      signal: controller.signal,
-    });
+    const upstream = await fetchWithinHost(
+      url,
+      {
+        headers: { 'User-Agent': cctvUpstreamUserAgent(url) },
+        signal: controller.signal,
+      },
+      fetchImpl,
+    );
+    if (!upstream) return null;
     const contentType = upstream.headers.get('content-type') || '';
-    if (!upstream.ok || !contentType.startsWith('image/')) return null;
-    return {
-      ok: true,
-      body: Buffer.from(await upstream.arrayBuffer()),
-      contentType,
-    };
+    if (!upstream.ok || !contentType.startsWith('image/')) {
+      controller.abort();
+      return null;
+    }
+    const body = await readCappedResponseBytes(upstream, maxBytes);
+    if (!body) return null;
+    return { ok: true, body, contentType };
   } catch {
     return null;
   } finally {
     clearTimeout(timeoutId);
+    controller.abort();
   }
 }

@@ -159,11 +159,14 @@ export function clearSelectedEntityContextForLayer(layerId, { evicted = false } 
   }
 }
 
-/** Remove obsolete context records when a viewport-scoped layer refreshes. */
-export function removeEntityContextsForLayer(layerId) {
+/**
+ * Remove obsolete context records when a viewport-scoped layer refreshes.
+ * Optional retainIds keeps surviving records and their current selection intact.
+ */
+export function removeEntityContextsForLayer(layerId, { retainIds } = {}) {
   const store = getContextStore();
   for (const [id, record] of store.entities) {
-    if (record?.layerId === layerId) store.entities.delete(id);
+    if (record?.layerId === layerId && !retainIds?.has(id)) store.entities.delete(id);
   }
   if (store.selectedEntityId && !store.entities.has(store.selectedEntityId)) {
     store.selectedEntityId = null;

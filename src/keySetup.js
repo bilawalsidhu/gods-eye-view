@@ -1,3 +1,5 @@
+import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
+
 /**
  * The POWER UP surface — paste a key, get a power.
  *
@@ -184,7 +186,6 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
   const defaultStatusText = statusLine?.textContent || '';
   let busy = false;
   let open = false;
-  let previouslyFocused = null;
 
   const render = (nextStatus) => {
     if (disposed) return;
@@ -202,47 +203,18 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
     && root.classList.contains('visible')
     && root.getClientRects().length > 0;
 
-  const focusables = () => [
-    ...root.querySelectorAll('button, input, [href], [tabindex]:not([tabindex="-1"])'),
-  ].filter((node) => !node.hasAttribute('disabled') && node.getClientRects().length > 0);
-
-  const onKeyDown = (event) => {
-    if (!open || !visible()) return;
-    // Cooperative ESC contract (see firstRunExperience.js): whoever handles a
-    // key first marks it, and everyone else honours the mark.
-    if (event.defaultPrevented) return;
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      close();
-      return;
-    }
-    if (event.key !== 'Tab') return;
-    const order = focusables();
-    if (!order.length) return;
-    const first = order[0];
-    const last = order[order.length - 1];
-    const active = documentRef.activeElement;
-    if (!root.contains(active)) {
-      event.preventDefault();
-      (event.shiftKey ? last : first).focus();
-      return;
-    }
-    if (event.shiftKey && active === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
+  const keyboard = createSurfaceKeyboard({
+    root,
+    documentRef,
+    isActive: () => open && visible(),
+    onEscape: () => close(),
+  });
 
   const openDialog = () => {
     if (disposed || open) return;
     open = true;
-    previouslyFocused = documentRef.activeElement;
+    keyboard.activate();
     root.hidden = false;
-    documentRef.addEventListener('keydown', onKeyDown, true);
     globalThis.requestAnimationFrame?.(() => {
       if (!open) return;
       root.classList.add('visible');
@@ -253,15 +225,12 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
   const close = () => {
     if (!open) return;
     open = false;
-    documentRef.removeEventListener('keydown', onKeyDown, true);
     root.classList.remove('visible');
     const hide = () => { if (!open) root.hidden = true; };
     root.addEventListener('transitionend', hide, { once: true });
     globalThis.setTimeout?.(hide, 400);
     if (statusLine) statusLine.textContent = defaultStatusText;
-    if (typeof previouslyFocused?.focus === 'function' && previouslyFocused.isConnected) {
-      previouslyFocused.focus({ preventScroll: true });
-    }
+    keyboard.deactivate({ restoreFocus: true });
   };
 
   const say = (text) => { if (statusLine) statusLine.textContent = text; };
@@ -365,7 +334,7 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
 
   disposeControls = () => {
     open = false;
-    documentRef.removeEventListener('keydown', onKeyDown, true);
+    keyboard.destroy();
     chip.removeEventListener('click', openDialog);
     closeButton?.removeEventListener('click', close);
     applyButton?.removeEventListener('click', onApply);

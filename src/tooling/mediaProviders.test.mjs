@@ -7,9 +7,9 @@ import { cctvProxy } from '../../server/providers/cctv.js';
 import { radioBrowserProxy } from '../../server/providers/radio.js';
 import { localProviderPlugins } from '../../server/providers/local.js';
 
-function install(plugin) {
+function install(plugin, hook = 'configureServer') {
   let handler;
-  plugin.configureServer({
+  plugin[hook]({
     middlewares: {
       use(_route, fn) {
         handler = fn;
@@ -102,3 +102,50 @@ test('composition creates exactly one CCTV and radio provider without acquisitio
     assert.equal(plugins.filter((p) => p.name === factory().name).length, 1);
   }
 });
+
+for (const hook of ['configureServer', 'configurePreviewServer']) {
+  test(`CCTV ${hook} maps header timeouts and cancels upstream error bodies`, async (t) => {
+    isolate(t);
+    process.env.CCTV_SOURCES_JSON = JSON.stringify([
+      {
+        id: 'bounded',
+        name: 'Test',
+        lat: 30,
+        lon: -97,
+        feedType: 'video',
+        url: 'https://camera.example.org/live.mp4',
+      },
+    ]);
+    const request = install(
+      cctvProxy({ sourceRoot: fixture(t, 'unused') }),
+      hook,
+    );
+    // Resolve the catalog before substituting transport behavior.
+    await request('/sources');
+    t.mock.method(globalThis, 'fetch', async () => {
+      throw new DOMException('timeout', 'AbortError');
+    });
+    const timeout = await request('/media/bounded');
+    assert.equal(timeout.status, 504);
+    assert.deepEqual(JSON.parse(timeout.body), {
+      error: 'Upstream media timeout',
+    });
+    let cancelled = false;
+    t.mock.method(
+      globalThis,
+      'fetch',
+      async () =>
+        new Response(
+          new ReadableStream({
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { status: 503 },
+        ),
+    );
+    const error = await request('/media/bounded');
+    assert.equal(error.status, 503);
+    assert.equal(cancelled, true);
+  });
+}

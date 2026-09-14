@@ -13,6 +13,7 @@ import { sameSiteGated } from './common/same-site.js';
 function openAiRealtimeProxy({
   sourceRoot = defaultSourceRoot,
   annotationGuidance,
+  realtime = {},
 } = {}) {
   function install(middlewares) {
     // Cost-bearing and log endpoints refuse cross-site browser requests
@@ -26,7 +27,9 @@ function openAiRealtimeProxy({
 
     middlewares.use(
       '/api/realtime/token',
-      sameSiteGated(createRealtimeTokenHandler({ annotationGuidance })),
+      sameSiteGated(
+        createRealtimeTokenHandler({ ...realtime, annotationGuidance }),
+      ),
     );
   }
 

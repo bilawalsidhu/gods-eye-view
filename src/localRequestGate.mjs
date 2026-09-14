@@ -21,8 +21,10 @@
  */
 /**
  * Reverse-proxy / CDN forwarding headers. Their presence means the request did
- * not originate on this machine, whatever its socket says. Shared with the
- * credential-panel gate in keySetupCore.mjs so there is one definition.
+ * not originate on this machine, whatever its socket says. Kept as this
+ * module's own list (keySetupCore.mjs carries the same nine names for the
+ * credential panel) so the gate has no imports and can sit in any package
+ * boundary.
  */
 export const PROXY_SIGNALS = Object.freeze([
   'forwarded', 'via', 'x-forwarded-for', 'x-forwarded-host',

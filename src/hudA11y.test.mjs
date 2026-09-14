@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+const parameters = readFileSync(new URL('./ui/styleParameters.js', import.meta.url), 'utf8');
 
 // Focused markup guards; actual computed names are checked in Chromium.
 // Native labels and hidden inputs must not be treated as missing aria-labels.
@@ -25,6 +25,6 @@ test('the first-run checkbox keeps its native visible label', () => {
 });
 
 test('generated style sliders use the visible parameter label as their name', () => {
-  assert.match(ui, /label\.textContent\s*=\s*uMeta\.label;/);
-  assert.match(ui, /slider\.setAttribute\(['"]aria-label['"],\s*uMeta\.label\)/);
+  assert.match(parameters, /label\.textContent\s*=\s*metadata\.label;/);
+  assert.match(parameters, /slider\.setAttribute\(['"]aria-label['"],\s*metadata\.label\)/);
 });

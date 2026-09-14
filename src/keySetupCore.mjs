@@ -111,10 +111,6 @@ const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 /** Socket addresses that count as this machine. */
 const LOOPBACK_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
-import { PROXY_SIGNALS } from './localRequestGate.mjs';
-
-export { PROXY_SIGNALS };
-
 /** Parse an exact local request authority from a Host header. */
 function localAuthority(hostHeader, protocol) {
   const raw = String(hostHeader || '').trim().toLowerCase();
@@ -214,6 +210,7 @@ export function admitKeySetupRequest({
   // on this machine, whatever its socket says. Refuse them outright as defense
   // in depth — the shipped tunnel (Pinokio) is force-closed at boot, so these
   // only appear when someone has deliberately fronted the dev server.
+  const PROXY_SIGNALS = ['forwarded', 'via', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-port', 'x-forwarded-proto', 'x-real-ip', 'cf-connecting-ip', 'cf-ray'];
   if (PROXY_SIGNALS.some((name) => String(proxyHeaders[name] || '').trim() !== '')) {
     return { ok: false, status: 403, error: 'Provider Settings does not answer proxied requests' };
   }

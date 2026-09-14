@@ -79,7 +79,7 @@ test('resolveEllipsoidalGround: happy path maps results IN ORDER', async () => {
   assert.ok(capturedUrl.includes('points='));
 });
 
-test('resolveEllipsoidalGround: a 300-point input issues exactly 2 fetches (chunked at <=200/request) AND preserves order across the chunk boundary', async () => {
+test('resolveEllipsoidalGround: a 300-point input issues exactly 5 fetches (chunked at <=64/request) AND preserves order across the chunk boundary', async () => {
   // Each coord carries a DISTINGUISHABLE lat/lon derived from its index so
   // the oracle below can be an independent function of the point's INPUT
   // identity — not an echo of whatever the request happened to send. This is
@@ -119,11 +119,10 @@ test('resolveEllipsoidalGround: a 300-point input issues exactly 2 fetches (chun
     async () => {
       const out = await resolveEllipsoidalGround(coords);
       assert.equal(out.length, 300);
-      // Positional correctness at and across the chunk boundary (chunk 1 =
-      // [0,199], chunk 2 = [200,299]): each output must equal the oracle of
+      // Positional correctness across every chunk boundary: outputs equal the oracle of
       // its OWN input coord. The module rounds to 5dp before sending, so
       // compare against the oracle of the rounded coord to stay exact.
-      for (const k of [0, 1, 199, 200, 299]) {
+      for (let k = 0; k < coords.length; k += 1) {
         const lat = Number(coords[k].lat.toFixed(5));
         const lon = Number(coords[k].lon.toFixed(5));
         assert.equal(
@@ -135,9 +134,10 @@ test('resolveEllipsoidalGround: a 300-point input issues exactly 2 fetches (chun
       }
     }
   );
-  assert.equal(fetchCount, 2, `expected 2 fetches for 300 points at <=200/chunk, got ${fetchCount}`);
+  assert.equal(fetchCount, 5);
+  assert.deepEqual(chunkSizes, [64, 64, 64, 64, 44]);
   for (const size of chunkSizes) {
-    assert.ok(size <= 200, `chunk size ${size} exceeds the 200-point ceiling`);
+    assert.ok(size <= 64, `chunk size ${size} exceeds the 64-point ceiling`);
   }
   assert.equal(
     chunkSizes.reduce((a, b) => a + b, 0),
@@ -349,4 +349,16 @@ test('resolveEllipsoidalGround: an empty input array resolves to an empty array 
     }
   );
   assert.equal(fetchCount, 0);
+});
+
+test('resolveEllipsoidalGround: null and string heights cannot become real zeroes', async () => {
+  for (const [index, value] of [null, '', '0'].entries()) {
+    await withFakeFetch(
+      async () => ({ ok: true, json: async () => ({ results: [{ ellipsoid: value }] }) }),
+      async () => {
+        const out = await resolveEllipsoidalGround([{ lat: 11 + index, lon: 41 }]);
+        assert.equal(out[0].source, 'geoid-fallback');
+      }
+    );
+  }
 });

@@ -66,7 +66,8 @@ export class IntelHUD {
    * @param {Cesium.Viewer} viewer - The Cesium Viewer instance used for
    *   camera telemetry and coordinate derivation.
    */
-  constructor(viewer) {
+  constructor(viewer, { placeSearch } = {}) {
+    this.placeSearch = placeSearch;
     this.viewer = viewer;
     this._visible = false;
     this._autoMode = true; // auto show/hide based on style
@@ -700,7 +701,7 @@ export class IntelHUD {
   }
 
   async _summaryContext() {
-    const labels = await getBasemapLabelContext(this.viewer);
+    const labels = await getBasemapLabelContext(this.viewer, this.placeSearch);
     const enabledLayers = this._dataManager?.getAll?.()
       ?.filter((layer) => layer.enabled)
       .map((layer) => layer.name) || [];

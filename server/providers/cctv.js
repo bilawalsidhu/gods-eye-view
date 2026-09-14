@@ -8,8 +8,13 @@ import {
   buildSyntheticCctvSvg,
   proxyMediaResponse,
   fetchCctvImageFromUpstream,
+  fetchTxdotSnapshot,
+  fetchCctvMediaUpstream,
 } from './cctv/media.js';
-import { CCTV_FRAME_FETCH_TIMEOUT_MS } from './cctv/constants.js';
+import {
+  CCTV_FRAME_FETCH_TIMEOUT_MS,
+  CCTV_MAX_SOURCES_CEILING,
+} from './cctv/constants.js';
 import { googleServerApiKey } from './places/google-key.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
@@ -29,10 +34,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const getCctvSources = createCctvCatalog({ sourceRoot });
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
-  /** Cap on health map entries to prevent unbounded growth. Sized to cover the
-   * full served catalog (CCTV_MAX_SOURCES hard-bounds at 1200) so health/status
-   * observability isn't silently evicted for a default 800-camera catalog. */
-  const HEALTH_MAX_ENTRIES = 1200;
+  /** Cap on health map entries to prevent unbounded growth. Sized to the
+   * CCTV_MAX_SOURCES ceiling so health/status observability is never evicted
+   * for any catalog the proxy can actually serve. */
+  const HEALTH_MAX_ENTRIES = CCTV_MAX_SOURCES_CEILING;
 
   /** Update the health entry for a camera, evicting the oldest entry if at capacity. */
   const setHealth = (cameraId, patch) => {
@@ -150,6 +155,9 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 source.sourceKind || (source.url ? 'configured' : 'fallback'),
               poseSource: source.poseSource,
               license: source.license,
+              credit: source.credit || '',
+              code: source.code || '',
+              groundHeights: source.groundHeights || null,
             })),
           };
           res.writeHead(200, {
@@ -216,11 +224,16 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             };
             const requestRange = req.headers?.range;
             if (requestRange) upstreamHeaders.Range = requestRange;
-            const upstream = await fetch(mediaUrl, {
+            const upstream = await fetchCctvMediaUpstream(mediaUrl, {
               headers: upstreamHeaders,
             });
             const contentType = upstream.headers.get('content-type') || '';
             if (!upstream.ok) {
+              try {
+                await upstream.body?.cancel();
+              } catch {
+                /* already closed */
+              }
               setHealth(cameraId, {
                 status: 'degraded',
                 sourceKind: 'upstream',
@@ -270,17 +283,25 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             });
             return;
           } catch (error) {
+            const timedOut =
+              error?.name === 'AbortError' || error?.name === 'TimeoutError';
             setHealth(cameraId, {
               status: 'degraded',
               sourceKind: 'upstream',
               label: source?.provider || 'Configured source',
               message: error?.message || 'Media fetch failed',
             });
-            res.writeHead(502, {
+            res.writeHead(timedOut ? 504 : 502, {
               'Content-Type': 'application/json',
               'Cache-Control': 'no-store',
             });
-            res.end(JSON.stringify({ error: 'Media proxy failed' }));
+            res.end(
+              JSON.stringify({
+                error: timedOut
+                  ? 'Upstream media timeout'
+                  : 'Media proxy failed',
+              }),
+            );
             return;
           }
         }
@@ -314,7 +335,9 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             : '');
 
         const upstreamImage =
-          await fetchCctvImageFromUpstream(upstreamCandidate);
+          source?.sourceKind === 'txdot-its'
+            ? await fetchTxdotSnapshot(upstreamCandidate)
+            : await fetchCctvImageFromUpstream(upstreamCandidate);
         if (upstreamImage?.ok) {
           setHealth(cameraId, {
             status: 'ok',

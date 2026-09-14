@@ -1,3 +1,6 @@
+import { readLayerLifecycleSummary } from './layerSummary.js';
+export { readLayerLifecycleSummary } from './layerSummary.js';
+import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
 import { CITY_POIS, findPoiByName, flyToGlobeView, flyToLandmark, flyToPOI, flyToPresetLocation, GLOBE_VIEW, searchAndFlyTo } from '../locations.js';
 import {
@@ -17,6 +20,7 @@ import militaryAwarenessLayer, {
 import { initCameraVerbs, moveCamera, flyRoute, interruptCameraMotion, adjustOrbitRange } from '../cameraVerbs.js';
 import { cachedGroundFloor, warmGroundFloor } from '../data/groundFloor.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
+import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import { resolveRegionRingForQuery } from '../annotations/annotationResolver.js';
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
@@ -176,6 +180,12 @@ const LAYER_ALIASES = new Map([
   ['firms', 'local-firms'],
   ['fires', 'local-firms'],
   ['active fires', 'local-firms'],
+  ['alpr', 'alpr-cameras'],
+  ['alpr cameras', 'alpr-cameras'],
+  ['flock cameras', 'alpr-cameras'],
+  ['license plate readers', 'alpr-cameras'],
+  ['license plate cameras', 'alpr-cameras'],
+  ['plate readers', 'alpr-cameras'],
 ]);
 
 const CITY_ALIASES = new Map([
@@ -239,55 +249,26 @@ const FRAME_TARGETS = new Map([
   ['ships', 'ais-live-vessels'],
 ]);
 
-const reverseGeocodeCache = new Map();
-const reverseGeocodeInFlight = new Map();
-const nearbyPlacesCache = new Map();
-const nearbyPlacesInFlight = new Map();
+const serviceCaches = new WeakMap();
+function cachesFor(service) {
+  service.signal?.throwIfAborted();
+  let caches = serviceCaches.get(service);
+  if (!caches) {
+    caches = { reverseGeocodeCache: new Map(), reverseGeocodeInFlight: new Map(),
+      nearbyPlacesCache: new Map(), nearbyPlacesInFlight: new Map() };
+    serviceCaches.set(service, caches);
+    service.signal?.addEventListener('abort', () => {
+      for (const cache of Object.values(caches)) cache.clear();
+    }, { once: true });
+  }
+  return caches;
+}
 const VISIBLE_ENTITY_SHORTLIST = 64;
 const BASEMAP_CONTEXT_WAIT_MS = 1500;
 const viewTargetCache = new WeakMap();
 
-/**
- * Read one layer's authoritative visibility and lifecycle presentation state.
- * Falls back to stable enabled/disabled state for lightweight adapters that do
- * not expose the manager lifecycle API.
- * @param {object|null} dataManager Layer manager or lightweight adapter.
- * @param {string} layerId Registered layer identifier.
- * @param {object} [options] Fallback options.
- * @param {boolean} [options.fallbackEnabled=false] Observed state when no manager read is available.
- * @returns {{enabled:boolean,lifecycleState:string,lifecycleUncertain:boolean}} Lifecycle summary.
- */
-export function readLayerLifecycleSummary(dataManager, layerId, { fallbackEnabled = false } = {}) {
-  let lifecycle = null;
-  try {
-    lifecycle = dataManager?.getLayerLifecycleState?.(layerId) || null;
-  } catch {
-    lifecycle = null;
-  }
-  if (lifecycle) {
-    const enabled = Boolean(lifecycle.enabled);
-    return {
-      enabled,
-      lifecycleState: lifecycle.lifecycleState || (enabled ? 'enabled' : 'disabled'),
-      lifecycleUncertain: Boolean(lifecycle.uncertain ?? lifecycle.lifecycleUncertain),
-    };
-  }
-
-  let enabled = Boolean(fallbackEnabled);
-  try {
-    const managerEnabled = dataManager?.isEnabled?.(layerId);
-    if (typeof managerEnabled === 'boolean') enabled = managerEnabled;
-  } catch {
-    // Retain the caller's observed fallback when the lightweight adapter fails.
-  }
-  return {
-    enabled,
-    lifecycleState: enabled ? 'enabled' : 'disabled',
-    lifecycleUncertain: false,
-  };
-}
-
-export function createGevActionRunner({ viewer, styleManager, dataManager, sceneDirector = null, annotations = null }) {
+/** Create application actions over the supplied scene and services. */
+export function createGevActionRunner({ viewer, styleManager, dataManager, sceneDirector = null, annotations = null, placeSearch = unavailablePlaceSearch }) {
   installViewTargetPrewarm(viewer);
   initCameraVerbs(viewer, getViewTargetCartesian);
   return async function runGevAction(name, rawArgs = {}, runOptions = {}) {
@@ -510,7 +491,7 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
       };
 
       const nearest = await createAnalystEngine(analystProviders(viewer, dataManager, {
-        recordLimitByLayer: { [layerId]: Number.MAX_SAFE_INTEGER },
+        recordLimitByLayer: { [layerId]: Number.MAX_SAFE_INTEGER }, placeSearch,
       })).query({
         layers: [layerId],
         scope: { kind: 'view' },
@@ -769,6 +750,7 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
 
     if (name === 'fly_to_location') {
       return flyToRequestedLocation(viewer, args, {
+        placeSearch, signal: runOptions.signal,
         runImmediate: typeof styleManager?.runImmediateLocationNavigation === 'function'
           ? (navigate) => styleManager.runImmediateLocationNavigation(navigate)
           : null,
@@ -814,7 +796,7 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
     }
 
     if (name === 'analyst_query') {
-      return runAnalystQuery(viewer, dataManager, args);
+      return runAnalystQuery(viewer, dataManager, args, placeSearch);
     }
 
     if (name === 'move_camera') {
@@ -834,7 +816,7 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
     }
 
     if (name === 'get_entity_context') {
-      return getEntityContext(viewer, dataManager, styleManager, args);
+      return getEntityContext(viewer, dataManager, styleManager, args, placeSearch);
     }
 
     if (name === 'get_current_view_state') {
@@ -899,7 +881,7 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
     }
 
     if (name === 'control_radio') {
-      return controlRadio(viewer, dataManager, args, runOptions);
+      return controlRadio(viewer, dataManager, args, { ...runOptions, placeSearch });
     }
 
     if (name === 'track_entity') {
@@ -1264,30 +1246,12 @@ async function resolveRadioLocation(args = {}, coordinates = radioCoordinatePair
   const known = knownRadioLocation(query, args.locationId);
   if (known) return known;
   if (!query) return null;
-  const apiKey = window.__GOOGLE_MAPS_API_KEY__ || import.meta.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) throw new Error('No Google Maps API key available for Radio location search');
-  const controller = new AbortController();
-  const cancelFromTurn = () => controller.abort();
-  if (options.signal?.aborted) throw radioAbortError();
-  options.signal?.addEventListener('abort', cancelFromTurn, { once: true });
-  const timer = setTimeout(() => controller.abort(), 6000);
-  try {
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
-    const response = await fetch(url, { signal: controller.signal });
-    const body = await response.json();
-    if (!radioActionIsCurrent(options)) throw radioAbortError();
-    const result = body.status === 'OK' ? body.results?.[0] : null;
-    if (!result?.geometry?.location) return null;
-    return {
-      lat: result.geometry.location.lat,
-      lon: result.geometry.location.lng,
-      label: result.formatted_address || query,
-      country: '',
-    };
-  } finally {
-    clearTimeout(timer);
-    options.signal?.removeEventListener('abort', cancelFromTurn);
-  }
+  const { placeSearch = unavailablePlaceSearch, signal } = options;
+  const { place } = await placeSearch.geocode(query, { signal });
+  if (!radioActionIsCurrent(options)) throw radioAbortError();
+  if (!place) return null;
+  // Localized provider country labels must not become station country filters.
+  return { lat: place.lat, lon: place.lng, label: place.label || query, country: '' };
 }
 
 /** Voice Radio controls over the Radio layer's public player surface. */
@@ -1895,7 +1859,7 @@ function collectTrackedEntities(dataManager) {
   return tracked;
 }
 
-export async function getBasemapLabelContext(viewer) {
+export async function getBasemapLabelContext(viewer, service = defaultGeospatial) {
   const samples = sampleViewportCartographics(viewer);
   const cameraHeightM = viewer.camera.positionCartographic.height;
   const target = getViewTargetCartographic(viewer);
@@ -1909,15 +1873,15 @@ export async function getBasemapLabelContext(viewer) {
 
   const latitude = Number(Cesium.Math.toDegrees(target.latitude).toFixed(6));
   const longitude = Number(Cesium.Math.toDegrees(target.longitude).toFixed(6));
-  const cachedViewportPlaces = viewportPlacesFromCache(samples, cameraHeightM);
+  const cachedViewportPlaces = viewportPlacesFromCache(samples, cameraHeightM, service);
   const viewportPromise = cachedViewportPlaces
     ? Promise.resolve(cachedViewportPlaces)
-    : reverseGeocodeViewportSamples(samples, cameraHeightM);
+    : reverseGeocodeViewportSamples(samples, cameraHeightM, service);
   const placePromise = shouldReverseGeocode(cameraHeightM)
-    ? reverseGeocode(latitude, longitude)
+    ? reverseGeocode(latitude, longitude, service)
     : Promise.resolve(null);
   const nearbyPromise = shouldFetchNearbyPlaces(cameraHeightM)
-    ? fetchNearbyPlaces(latitude, longitude, cameraHeightM)
+    ? fetchNearbyPlaces(latitude, longitude, cameraHeightM, service)
     : Promise.resolve([]);
   const [viewportPlaces, place, nearbyPlaces] = await Promise.all([
     resolveWithin(viewportPromise, BASEMAP_CONTEXT_WAIT_MS, cachedViewportPlaces),
@@ -2206,6 +2170,7 @@ function normalizeStyle(value) {
 }
 
 async function flyToRequestedLocation(viewer, args, {
+  placeSearch = unavailablePlaceSearch, signal,
   onStart = null,
   runImmediate = null,
   beginDeferred = null,
@@ -2321,6 +2286,7 @@ async function flyToRequestedLocation(viewer, args, {
     if (generation === false) return cancelled(query);
     const managedDeferred = typeof reassertDeferred === 'function';
     const destination = await searchAndFlyTo(viewer, query, {
+      placeSearch, signal,
       ...(rangeM ? { range: rangeM } : {}),
       forceClose: args.viewMode === 'close',
       // 'overview' frames the geocode viewport even for precise-place results —
@@ -2389,7 +2355,7 @@ function getCurrentViewState(viewer, styleManager, dataManager, sceneDirector = 
   };
 }
 
-async function getEntityContext(viewer, dataManager, styleManager, args = {}) {
+async function getEntityContext(viewer, dataManager, styleManager, args = {}, service = defaultGeospatial) {
   const startedAt = performance.now();
   const scope = String(args.scope || 'auto').toLowerCase();
   const layerId = normalizeLayerId(args.layerId || args.layer);
@@ -2397,7 +2363,7 @@ async function getEntityContext(viewer, dataManager, styleManager, args = {}) {
   const selected = selectedEntityContext(dataManager);
   const cameraHeightM = viewer.camera.positionCartographic.height;
   const viewTarget = getViewTargetCartographic(viewer);
-  const scenePromise = getSceneContext(viewer, styleManager, dataManager, viewTarget);
+  const scenePromise = getSceneContext(viewer, styleManager, dataManager, viewTarget, service);
   const selectedWillBeReturned = selected && (scope === 'selected' || scope === 'auto');
   const visible = (!selectedWillBeReturned && shouldScanVisibleEntities(cameraHeightM))
     ? visibleEntityContexts(viewer, dataManager, { layerId, limit, target: viewTarget })
@@ -2602,9 +2568,9 @@ function insertNearestRecord(records, candidate, limit) {
   records.pop();
 }
 
-async function getSceneContext(viewer, styleManager, dataManager, viewTarget = null) {
+async function getSceneContext(viewer, styleManager, dataManager, viewTarget = null, service = defaultGeospatial) {
   const cartographic = Cesium.Cartographic.fromCartesian(viewer.camera.positionWC);
-  const basemap = await getBasemapContext(viewer, viewTarget);
+  const basemap = await getBasemapContext(viewer, viewTarget, service);
   const enabledLayers = dataManager.getAll()
     .filter((layer) => layer.enabled)
     .map((layer) => ({
@@ -2625,16 +2591,17 @@ async function getSceneContext(viewer, styleManager, dataManager, viewTarget = n
   };
 }
 
-async function getBasemapContext(viewer, viewTarget = null) {
+async function getBasemapContext(viewer, viewTarget = null, service = defaultGeospatial) {
+  const { reverseGeocodeCache, nearbyPlacesCache } = cachesFor(service);
   const target = viewTarget;
   const samples = sampleViewportCartographics(viewer);
   const cameraCartographic = Cesium.Cartographic.fromCartesian(viewer.camera.positionWC);
   const cameraHeightM = cameraCartographic.height;
   const viewScale = classifyViewScale(cameraHeightM);
-  const cachedViewportPlaces = viewportPlacesFromCache(samples, cameraHeightM);
+  const cachedViewportPlaces = viewportPlacesFromCache(samples, cameraHeightM, service);
   const viewportPlacesPromise = cachedViewportPlaces
     ? Promise.resolve(cachedViewportPlaces)
-    : reverseGeocodeViewportSamples(samples, cameraHeightM);
+    : reverseGeocodeViewportSamples(samples, cameraHeightM, service);
   if (!target) {
     const viewportPlaces = await resolveWithin(
       viewportPlacesPromise,
@@ -2665,10 +2632,10 @@ async function getBasemapContext(viewer, viewTarget = null) {
     ? nearbyPlacesCache.get(nearbyCacheKey)
     : null;
   const placePromise = shouldReverseGeocode(cameraHeightM) && !cachedPlace
-    ? reverseGeocode(latitude, longitude)
+    ? reverseGeocode(latitude, longitude, service)
     : Promise.resolve(cachedPlace);
   const nearbyPlacesPromise = shouldFetchNearbyPlaces(cameraHeightM) && !cachedNearbyPlaces
-    ? fetchNearbyPlaces(latitude, longitude, cameraHeightM)
+    ? fetchNearbyPlaces(latitude, longitude, cameraHeightM, service)
     : Promise.resolve(cachedNearbyPlaces);
   const [viewportPlaces, resolvedPlace, resolvedNearbyPlaces] = await Promise.all([
     resolveWithin(viewportPlacesPromise, BASEMAP_CONTEXT_WAIT_MS, cachedViewportPlaces),
@@ -2937,44 +2904,20 @@ function inferCountry(latitude, longitude) {
   return region?.name || null;
 }
 
-async function reverseGeocode(latitude, longitude) {
-  const apiKey = window.__GOOGLE_MAPS_API_KEY__;
-  if (!apiKey || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+async function reverseGeocode(latitude, longitude, service) {
+  const { reverseGeocodeCache, reverseGeocodeInFlight } = cachesFor(service);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
   const key = reverseGeocodeKey(latitude, longitude);
   if (reverseGeocodeCache.has(key)) return reverseGeocodeCache.get(key);
   if (reverseGeocodeInFlight.has(key)) return reverseGeocodeInFlight.get(key);
 
   const request = (async () => {
     try {
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(`${latitude},${longitude}`)}&key=${apiKey}`;
-      const response = await fetchWithTimeout(url, {}, 5000);
-      const data = await response.json();
-      if (data.status !== 'OK' || !data.results?.length) {
-        reverseGeocodeCache.set(key, null);
-        return null;
+      const place = await service.reverseGeocode?.(latitude, longitude) || null;
+      if (place) {
+        reverseGeocodeCache.set(key, place);
+        if (reverseGeocodeCache.size > 256) reverseGeocodeCache.delete(reverseGeocodeCache.keys().next().value);
       }
-
-      const result = data.results[0];
-      const relevantResults = data.results.slice(0, 12);
-      const components = Array.isArray(result.address_components) ? result.address_components : [];
-      const component = (type) => components.find((item) => item.types?.includes(type))?.long_name || null;
-      const labels = uniqueStrings(relevantResults.map((item) => item.formatted_address)).slice(0, 12);
-      const streetLabels = uniqueStrings(relevantResults.flatMap((item) => {
-        const itemComponents = Array.isArray(item.address_components) ? item.address_components : [];
-        return itemComponents
-          .filter((entry) => entry.types?.includes('route'))
-          .map((entry) => entry.long_name);
-      })).slice(0, 12);
-      const place = {
-        formattedAddress: result.formatted_address || null,
-        locality: component('locality') || component('postal_town') || component('administrative_area_level_2'),
-        region: component('administrative_area_level_1'),
-        country: component('country'),
-        types: result.types || [],
-        labels,
-        streetLabels,
-      };
-      reverseGeocodeCache.set(key, place);
       return place;
     } catch {
       return null;
@@ -2986,14 +2929,14 @@ async function reverseGeocode(latitude, longitude) {
   return request;
 }
 
-async function reverseGeocodeViewportSamples(samples, cameraHeightM) {
+async function reverseGeocodeViewportSamples(samples, cameraHeightM, service) {
   if (!shouldReverseGeocodeViewport(cameraHeightM) || !samples.length) return null;
   // At building scale, center geocoding plus Nearby Places is more precise and
   // avoids three redundant Google requests.
   if (cameraHeightM <= 10000) return null;
   const prioritySamples = [samples[0], samples[1], samples[2]].filter(Boolean);
   const places = (await Promise.all(prioritySamples.map(async (sample) => {
-    const place = await reverseGeocode(sample.latitude, sample.longitude);
+    const place = await reverseGeocode(sample.latitude, sample.longitude, service);
     if (!place) return null;
     return {
       latitude: sample.latitude,
@@ -3010,7 +2953,8 @@ async function reverseGeocodeViewportSamples(samples, cameraHeightM) {
   return summarizeViewportPlaces(places);
 }
 
-function viewportPlacesFromCache(samples, cameraHeightM) {
+function viewportPlacesFromCache(samples, cameraHeightM, service) {
+  const { reverseGeocodeCache } = cachesFor(service);
   if (!shouldReverseGeocodeViewport(cameraHeightM) || cameraHeightM <= 10000 || !samples.length) return null;
   const places = [samples[0], samples[1], samples[2]].filter(Boolean).flatMap((sample) => {
     const place = reverseGeocodeCache.get(reverseGeocodeKey(sample.latitude, sample.longitude));
@@ -3042,7 +2986,8 @@ function summarizeViewportPlaces(places) {
   };
 }
 
-async function fetchNearbyPlaces(latitude, longitude, cameraHeightM) {
+async function fetchNearbyPlaces(latitude, longitude, cameraHeightM, service) {
+  const { nearbyPlacesCache, nearbyPlacesInFlight } = cachesFor(service);
   const radiusM = nearbyPlacesRadiusM(cameraHeightM);
   const cacheKey = nearbyPlacesCacheKey(latitude, longitude, cameraHeightM);
   if (nearbyPlacesCache.has(cacheKey)) return nearbyPlacesCache.get(cacheKey);
@@ -3050,17 +2995,10 @@ async function fetchNearbyPlaces(latitude, longitude, cameraHeightM) {
 
   const request = (async () => {
     try {
-      const params = new URLSearchParams({
-        lat: String(latitude),
-        lon: String(longitude),
-        radiusM: String(radiusM),
-      });
-      const response = await fetchWithTimeout(`/api/google/nearby-places?${params}`, {}, 5000);
-      const data = await response.json().catch(() => null);
-      const places = response.ok && Array.isArray(data?.places)
-      ? data.places.filter((place) => place?.name).slice(0, 12)
-        : [];
+      const places = (await service.nearby?.({ latitude, longitude, radiusM }) || [])
+        .filter(place => place?.name).slice(0, 12);
       nearbyPlacesCache.set(cacheKey, places);
+      if (nearbyPlacesCache.size > 256) nearbyPlacesCache.delete(nearbyPlacesCache.keys().next().value);
       return places;
     } catch {
       return [];
@@ -3095,16 +3033,6 @@ function sanitizeLabel(value) {
     out += (code < 0x20 || code === 0x7f) ? ' ' : ch; // drop control chars incl. newlines
   }
   return out.replace(/\s+/g, ' ').trim().slice(0, 120);
-}
-
-async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    window.clearTimeout(timeout);
-  }
 }
 
 function reverseGeocodeKey(latitude, longitude) {
@@ -3310,7 +3238,7 @@ function activeContactsWindow() {
   }
 }
 
-function analystProviders(viewer, dataManager, { recordLimitByLayer = null } = {}) {
+function analystProviders(viewer, dataManager, { recordLimitByLayer = null, placeSearch = unavailablePlaceSearch } = {}) {
   return {
     getRecords(layerKey) {
       const layer = dataManager.layers.get(layerKey);
@@ -3322,7 +3250,7 @@ function analystProviders(viewer, dataManager, { recordLimitByLayer = null } = {
         ? (mod.getAnalystRecords(requestedLimit) || [])
         : (mod.getAnalystRecords() || []);
     },
-    resolveRegionRing: (name) => resolveRegionRingForQuery(name),
+    resolveRegionRing: (name) => resolveRegionRingForQuery(name, undefined, placeSearch),
     /**
      * The active Contacts subject, when there is one — the centre the operator
      * is reasoning about while Contacts is up. Null whenever Contacts is off,
@@ -3356,8 +3284,8 @@ function analystProviders(viewer, dataManager, { recordLimitByLayer = null } = {
   };
 }
 
-async function runAnalystQuery(viewer, dataManager, args = {}) {
-  if (!_analystEngine) _analystEngine = createAnalystEngine(analystProviders(viewer, dataManager));
+async function runAnalystQuery(viewer, dataManager, args = {}, placeSearch = unavailablePlaceSearch) {
+  if (!_analystEngine) _analystEngine = createAnalystEngine(analystProviders(viewer, dataManager, { placeSearch }));
   const result = await _analystEngine.query({
     layers: Array.isArray(args.layers) ? args.layers : undefined,
     scope: args.scope,
