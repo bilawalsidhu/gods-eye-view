@@ -251,17 +251,32 @@ Order of work, cheapest-first:
 - [x] GitHub Actions (`.github/workflows/ci.yml`): lint (`--max-warnings 0`),
       test (Node 24, allocation gate on), coverage (publishes the measured
       number), and build (artifact upload). No deploy job by design — deploys
-      are explicit (see runbook).
-- [ ] Resolve the lockfile duplication: the tree carries both
-      `package-lock.json` and `pnpm-lock.yaml`/`pnpm-workspace.yaml`. npm is
-      the canonical path for CI, scripts, and docs; the pnpm files are stale
-      and should be removed unless a pnpm workflow is adopted deliberately.
-- [ ] Add an `npm audit` production gate (fail on high/critical in the
-      runtime dependency set; dev-only advisories waived with rationale in a
-      waiver file, not silently).
-- [ ] Add a build gate that fails on Node-core externalization warnings in
-      browser chunks (issue #34) — currently clean; keep it that way with a
-      check rather than vigilance.
+      are explicit (see runbook). Now also: the test job is a fail-fast=false
+      matrix over every calibrated allocation major (24 and 26), and the lint
+      job runs the production audit gate below.
+- [x] Resolve the lockfile duplication (2026-09-13): `pnpm-lock.yaml` and
+      `pnpm-workspace.yaml` removed after verifying they were stale — the
+      workspace file held only placeholder `allowBuilds` text, and no
+      package.json script, CI step, or doc references pnpm. npm is the
+      canonical path.
+- [x] Add an `npm audit` production gate (2026-09-13):
+      `npm run check:audit` (`scripts/check-prod-audit.mjs`) runs
+      `npm audit --omit=dev --json` and fails on high/critical findings in
+      the runtime set. Waivers live in the script's `WAIVERS` table and
+      require a module, matching severities, a ≥20-char rationale, and an
+      expiry (YYYY-MM-DD) — an expired waiver is treated as missing so the
+      finding resurfaces. Wired into the CI lint job. Clean today (6 runtime
+      rows, zero high/critical); decision logic pinned in
+      `src/buildGates.test.mjs`.
+- [x] Add a build gate that fails on Node-core externalization warnings in
+      browser chunks (issue #34; 2026-09-13): `npm run build` now runs
+      `scripts/build.mjs`, which wraps `npx vite build`, tees all output, and
+      fails (exit 1) on any
+      `Module "node:…" has been externalized for browser compatibility`
+      line, printing the offending specifiers. Verified in both directions —
+      real build prints `BUILD-GATE PASS`, and a stubbed npx emitting one
+      warning fails with `BUILD-GATE FAIL … node:fs`, exit 1. Wiring pinned
+      in `src/buildGates.test.mjs`.
 - [ ] GitForge pipeline mirroring ci.yml (lint/test/build) with the GitHub
       Actions run kept as the sync mirror — per the standing CI/CD routing
       directive.

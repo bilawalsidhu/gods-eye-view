@@ -4,6 +4,9 @@
 #   - strict lint (eslint --max-warnings 0) — the policy lives in
 #     eslint.config.js; zero warnings tolerated, narrow justified inline
 #     disables only;
+#   - the production-dependency audit gate (check:audit): fails on
+#     high/critical advisories in the runtime set; waivers need a rationale
+#     AND an expiry in scripts/check-prod-audit.mjs;
 #   - unit suite (scripts/run-unit-tests.mjs) under every calibrated Node
 #     major (24 and 26 — the runtimes the allocation microbenchmarks were
 #     measured on), with GEV_REQUIRE_ALLOCATION_GATE=1 so an uncalibrated
@@ -45,6 +48,8 @@ jobs:
         run: npm ci
       - name: Strict lint (zero warnings)
         run: npm run lint
+      - name: Audit production dependencies
+        run: npm run check:audit
 
   test:
     runs-on: ubuntu-latest
