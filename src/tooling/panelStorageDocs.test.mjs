@@ -77,7 +77,10 @@ test('the documented outcomes hold: default, stored open, stored shut, and a sha
   // against the code that decides them.
   const { PanelPositionControls } =
     await import('../ui/panelPositionControls.js');
-  const html = await readFile(path.join(root, 'index.html'), 'utf8');
+  const html = await readFile(
+    path.join(root, 'src/ui/templates/layer-panels.html'),
+    'utf8',
+  );
   assert.match(
     html,
     /<div id="cctv-panel" class="panel-collapsible collapsed"/,
