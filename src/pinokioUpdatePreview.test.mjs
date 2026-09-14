@@ -200,19 +200,60 @@ test('an unreadable commit range is reported as unreadable, not as up to date', 
   assert.equal(plan.apply, disclosed, 'the fetched revision is still applied');
 });
 
-test('an unresolvable upstream falls back to the plain pull without claiming to be current', async (t) => {
+test('an upstream that cannot be resolved after fetching stops the update', async (t) => {
   const app = await fixture(t);
+  const before = git(app.clone, ['rev-parse', 'HEAD']);
   await app.push('second commit', 'second\n');
-  const plan = reportIncomingChanges({
+  const plan = updateFromRemote({
     ...app.io,
+    // The target ref resolves to nothing after the fetch — a tracking ref
+    // pruned out from under the run.
     read: (args) =>
-      args[0] === 'rev-parse' && args.length === 2
+      args[0] === 'rev-parse' &&
+      args.length === 2 &&
+      args[1].startsWith('refs/')
         ? null
         : readGit(args, { cwd: app.clone }),
   });
-  assert.deepEqual(plan, { apply: null, fallback: true });
+  assert.deepEqual(plan, { apply: null, fallback: false, stopped: true });
   assert.doesNotMatch(app.text(), /Already up to date/);
-  assert.match(app.text(), /Could not resolve origin\/main/);
+  assert.match(app.text(), /Could not resolve origin\/main after fetching/);
+  assert.match(app.text(), /Stopping/);
+  // Nothing may be applied: a fallback pull here would fetch again and could
+  // install a revision this run never resolved.
+  assert.equal(git(app.clone, ['rev-parse', 'HEAD']), before);
+});
+
+test('a remote whose name contains a slash is read correctly', async (t) => {
+  const app = await fixture(t);
+  const disclosed = await app.push('second commit', 'second\n');
+  git(app.clone, ['remote', 'rename', 'origin', 'team/origin']);
+  git(app.clone, ['fetch', '--quiet', 'team/origin']);
+  git(app.clone, ['branch', '--set-upstream-to=team/origin/main', 'main']);
+  const plan = updateFromRemote({
+    ...app.io,
+    fetchRemote: (remote) => {
+      assert.equal(remote, 'team/origin');
+      git(app.clone, ['fetch', '--quiet', remote]);
+    },
+  });
+  assert.equal(plan.apply, disclosed);
+  assert.equal(git(app.clone, ['rev-parse', 'HEAD']), disclosed);
+  assert.match(app.text(), new RegExp(`Fetching from ${literal(app.origin)}`));
+});
+
+test('a diffstat that cannot be read is reported, and the commits still are', async (t) => {
+  const app = await fixture(t);
+  const disclosed = await app.push('second commit', 'second\n');
+  const plan = reportIncomingChanges({
+    ...app.io,
+    read: (args) =>
+      args[0] === 'diff' ? null : readGit(args, { cwd: app.clone }),
+  });
+  assert.equal(plan.apply, disclosed);
+  assert.match(app.text(), /1 incoming commit\(s\)/);
+  assert.match(app.text(), /Could not read the diffstat/);
+  assert.doesNotMatch(app.text(), /Files affected/);
 });
 
 test('diverged history is refused rather than applied', async (t) => {

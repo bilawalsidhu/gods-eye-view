@@ -257,8 +257,10 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   tracking branch, the remote it fetched from (with any credentials in the URL
   removed), the incoming commits and their diffstat. It fetches once and applies
   exactly the revision it named, so a commit that lands mid-update cannot be
-  installed unannounced, and a git read it cannot complete is reported as such
-  instead of as "already up to date". Contributed by Lob26 (#356).
+  installed unannounced. A git read it cannot complete is reported as such
+  instead of as "already up to date", and if the revision to apply cannot be
+  resolved at all the update stops rather than falling back to a second fetch.
+  Contributed by Lob26 (#356).
 
 - Extract panel disclosure and hover/focus controls into a reusable module;
   cancel their listeners and pending work during replacement and teardown.

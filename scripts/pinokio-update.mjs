@@ -79,9 +79,12 @@ export function redactRemoteUrl(url) {
  *   exits on failure, because a report built on a stale remote ref describes
  *   the wrong changes.
  * @param {(args: string[]) => (string|null)} [io.read] - git reader.
- * @returns {{apply: string|null, fallback: boolean}} `apply` is the exact
- *   revision that was disclosed and must now be applied. `fallback` asks the
- *   caller to run the plain pull so git itself reports whatever went wrong.
+ * @returns {{apply: string|null, fallback: boolean, stopped?: boolean}}
+ *   `apply` is the exact revision that was disclosed and must now be applied.
+ *   `fallback` asks the caller to run the plain pull so git itself reports
+ *   whatever went wrong, and is only ever set before anything has been fetched.
+ *   `stopped` means the update gave up: nothing can be shown, so nothing is
+ *   applied.
  */
 export function reportIncomingChanges(io = {}) {
   const {
@@ -98,27 +101,44 @@ export function reportIncomingChanges(io = {}) {
     '--symbolic-full-name',
     '@{u}',
   ]);
-  if (!upstream) {
+  // The full ref name is what later reads resolve, so a remote whose own name
+  // contains a slash (`team/origin`) cannot be mistaken for a path segment.
+  const upstreamRef = read(['rev-parse', '--symbolic-full-name', '@{u}']);
+  const branch = read(['rev-parse', '--abbrev-ref', 'HEAD']);
+  const remote =
+    branch && branch !== 'HEAD'
+      ? read(['config', '--get', `branch.${branch}.remote`])
+      : null;
+  if (!upstream || !upstreamRef || !remote) {
     warn('[update] No upstream branch is configured — cannot preview changes.');
     warn('[update] Continuing; `git pull --ff-only` will report the problem.');
     return { apply: null, fallback: true };
   }
 
-  const remote = upstream.split('/')[0];
-  const url = redactRemoteUrl(read(['remote', 'get-url', remote]));
   log(`[update] Tracking ${upstream}`);
-  log(`[update] Fetching from ${url || remote}`);
-  // Fetch once, here. Everything below describes and then applies the revision
-  // this fetch brought in; a second fetch inside `git pull` could apply
-  // something newer than what was printed.
-  fetchRemote(remote);
+  if (remote === '.') {
+    // The upstream is another branch in this same checkout; there is nothing
+    // to fetch and no remote URL to disclose.
+    log('[update] Upstream is a local branch — nothing to fetch.');
+  } else {
+    const url = redactRemoteUrl(read(['remote', 'get-url', remote]));
+    log(`[update] Fetching from ${url || remote}`);
+    // Fetch once, here. Everything below describes and then applies the
+    // revision this fetch brought in; a second fetch inside `git pull` could
+    // apply something newer than what was printed.
+    fetchRemote(remote);
+  }
 
-  const target = read(['rev-parse', upstream]);
+  const target = read(['rev-parse', upstreamRef]);
   const head = read(['rev-parse', 'HEAD']);
   if (!target || !head) {
-    warn(`[update] Could not resolve ${upstream} — no preview is available.`);
-    warn('[update] Continuing; `git pull --ff-only` will report the problem.');
-    return { apply: null, fallback: true };
+    // Stop. Falling through to `git pull` here would fetch a second time and
+    // could install a revision this run never resolved, let alone disclosed.
+    warn(`[update] Could not resolve ${upstream} after fetching.`);
+    warn(
+      '[update] Stopping: nothing is applied, because nothing can be shown.',
+    );
+    return { apply: null, fallback: false, stopped: true };
   }
   if (target === head) {
     log('[update] Already up to date — reinstalling dependencies only.');
@@ -152,7 +172,9 @@ export function reportIncomingChanges(io = {}) {
   }
 
   const stat = read(['diff', '--stat', `${head}..${target}`]);
-  if (stat) {
+  if (stat === null) {
+    warn(`[update] Could not read the diffstat for ${head}..${target}.`);
+  } else if (stat) {
     log('\n[update] Files affected:');
     for (const line of stat.split('\n')) log(`  ${line}`);
   }
