@@ -67,6 +67,7 @@ import {
   isLikelyBcCoordinate,
   isLikelyTexasCoordinate,
   isLikelyNswCoordinate,
+  cameraDisplayCode,
   rowArrayToObject,
   prioritizeSources,
 } from './normalize.js';
@@ -889,6 +890,7 @@ export function normalizeTxdotDistrictPayload(payload, district) {
         snapshotUrl: snapshot.toString(),
         sourceKind: 'txdot-its',
         license: 'Public TxDOT traffic camera data',
+        code: cameraDisplayCode(icdId.toUpperCase()),
       });
     }
   }
@@ -1345,6 +1347,7 @@ export function nswCameraToSource(feature) {
     snapshotUrl: url,
     sourceKind: 'nsw-livetraffic',
     license: 'Live Traffic NSW — Transport for NSW, CC BY 4.0',
+    code: cameraDisplayCode(String(props.title || '').toUpperCase() || rawId),
   };
 }
 

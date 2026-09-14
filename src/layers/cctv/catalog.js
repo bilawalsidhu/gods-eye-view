@@ -194,6 +194,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
         pitchDeg,
         license: String(source.license || source.licenseNote || ''),
         credit: String(source.credit || ''),
+        code: String(source.code || ''),
         poseSource,
       };
       parts.model.ensureCameraPose(camera);

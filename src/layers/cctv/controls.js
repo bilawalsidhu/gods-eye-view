@@ -217,7 +217,8 @@ export function createControls({ state: layerState, services, parts, source }) {
         objects.push({
           position: layerState._records[i].position,
           sourceId: camera.id,
-          id: `CAM-${camera.id}`,
+          // Short semantic code where the id is opaque (see cameraDisplayCode).
+          id: `CAM-${camera.code || camera.id}`,
           type: 'CAM',
         });
         if (objects.length >= maxCount) break;

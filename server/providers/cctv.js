@@ -156,6 +156,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               poseSource: source.poseSource,
               license: source.license,
               credit: source.credit || '',
+              code: source.code || '',
             })),
           };
           res.writeHead(200, {
