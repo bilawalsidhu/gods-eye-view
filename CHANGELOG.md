@@ -229,6 +229,10 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   part-way through the picture, the upstream request is cancelled rather than
   left running, and neither case marks the camera degraded. Ordinary seeking is
   unaffected. Contributed by Maher-Reven (#253).
+- CI pins `actions/checkout` and `actions/setup-node` to the commits their
+  `v4.4.0` tags name, so a repointed tag cannot change what runs in CI. The
+  version stays in a trailing comment, and moving to a later release is a
+  deliberate edit. Contributed by SurefireStudios (#309).
 
 - Validate configured Google Places coordinates and text queries before rate
   limiting or upstream requests; preserve the keyless capability response.
