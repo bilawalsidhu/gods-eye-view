@@ -12,6 +12,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { onRequest, resetMilitaryInstallationsStateForTest } from './military-installations.js';
+import { OVERPASS_UPSTREAMS } from '../../src/data/overpassPolicy.js';
 
 const url = 'https://example.com/api/military-installations';
 const ctx = (request) => ({ request });
@@ -222,7 +223,7 @@ test('a degraded upstream (429 on every mirror) answers 503, never a truncated l
   try {
     const res = await onRequest(ctx(request()));
     assert.equal(res.status, 503);
-    assert.equal(stub.calls.length, 4, 'all mirrors tried before giving up');
+    assert.equal(stub.calls.length, OVERPASS_UPSTREAMS.length, 'all mirrors tried before giving up');
   } finally {
     stub.restore();
   }

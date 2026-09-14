@@ -15,13 +15,25 @@
 
 import { readTextCapped } from '../../functions/_upstream.js';
 
-/** Ordered list of Overpass API mirrors; tried sequentially on failure/rate-limit. */
+/**
+ * Ordered list of Overpass API mirrors; tried sequentially on
+ * failure/rate-limit. Diversity rules (PR #104): every entry must be a
+ * PLANET-WIDE instance under a DISTINCT operator — a regional-only mirror
+ * (e.g. overpass.osm.ch) answers some queries with a 200-and-zero-elements
+ * that this layer's cache would then hold as a true empty result for the
+ * full TTL, and a second endpoint of an operator already in the list (e.g.
+ * lz4.overpass-api.de, the main instance's compressed alias) only repeats
+ * the first entry's outages. overpass.osm.jp would qualify on coverage but
+ * was serving an expired TLS certificate at audit time (2026-09-13), and a
+ * server-side fetch rejects on cert errors; maps.mail.ru is
+ * region-weighted with a redirecting endpoint. Verified planet-wide
+ * (Texas-query probes + OSM wiki instance list):
+ */
 export const OVERPASS_UPSTREAMS = Object.freeze([
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
-  'https://lz4.overpass-api.de/api/interpreter',
   // Community full-planet instance (privateforge nonprofit) — added 2026-07-30
-  // when all three mirrors above refused this IP (likely a dev-traffic rate
+  // when both mirrors above refused this IP (likely a dev-traffic rate
   // ban; refused connections fail in ms, so healthy mirrors above still win).
   // Verified: planet coverage (Texas query), CORS *, ~5-20 s cold latency.
   'https://overpass.private.coffee/api/interpreter',

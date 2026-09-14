@@ -10,6 +10,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { onRequest, resetOverpassStateForTest } from './overpass.js';
+import { OVERPASS_UPSTREAMS } from '../../src/data/overpassPolicy.js';
 
 const url = 'https://example.com/api/overpass';
 const ctx = (request) => ({ request });
@@ -166,7 +167,7 @@ test('rate-limited mirrors fall through and a total rate-limit is forwarded verb
   });
   try {
     const res = await onRequest(ctx(new Request(url, { method: 'POST', body: goodBody() })));
-    assert.equal(upstreamHits, 4, 'every mirror must be tried');
+    assert.equal(upstreamHits, OVERPASS_UPSTREAMS.length, 'every mirror must be tried');
     assert.equal(res.status, 429, 'the degraded status travels verbatim');
     assert.equal(res.headers.get('x-overpass-cache'), 'MISS');
   } finally {
@@ -211,7 +212,7 @@ test('runtime-error and 5xx mirrors are skipped in favor of healthy ones', async
     assert.equal(res.status, 200);
     assert.deepEqual(await res.json(), { elements: [{ type: 'way', id: 2 }] });
     assert.equal(res.headers.get('x-overpass-cache'), 'MISS');
-    assert.equal(res.headers.get('x-overpass-upstream'), 'https://lz4.overpass-api.de/api/interpreter');
+    assert.equal(res.headers.get('x-overpass-upstream'), 'https://overpass.private.coffee/api/interpreter');
     assert.equal(call, 3);
   } finally {
     stub.restore();
@@ -259,11 +260,12 @@ test('every mirror answering 406 degrades to 502 and caches nothing', async () =
   try {
     const cold = await onRequest(ctx(new Request(url, { method: 'POST', body: goodBody() })));
     assert.equal(cold.status, 502);
-    assert.equal(stub.calls.length, 4, 'all mirrors tried');
+    assert.equal(stub.calls.length, OVERPASS_UPSTREAMS.length, 'all mirrors tried');
 
     const again = await onRequest(ctx(new Request(url, { method: 'POST', body: goodBody() })));
     assert.equal(again.status, 502);
-    assert.equal(stub.calls.length, 8, 'the second request re-tries upstream — an error page must never be cached');
+    assert.equal(stub.calls.length, OVERPASS_UPSTREAMS.length * 2,
+      'the second request re-tries upstream — an error page must never be cached');
   } finally {
     stub.restore();
   }

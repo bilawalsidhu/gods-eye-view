@@ -591,13 +591,27 @@ acting — the audit described upstream's tree):
       last-line full-policy gate before any network activity. 20 new tests
       (6 policy + 11 hardening + 3 anchors); radio.js deduped onto the same
       validator.
-- [ ] `.overpass` mirror list diversity (PR #104): the four mirrors are
-      effectively three distinct hosts, and regional-only mirrors poison the
-      24 h cache with silently-empty results — only planet-wide instances
-      belong in the list.
-- [ ] FIRMS/Node IPv6 `autoSelectFamily` fix (issue #68/PR #126):
-      `net.setDefaultAutoSelectFamily(false)` at proxy init for hosts where
-      IPv6 is unreachable.
+- [x] `.overpass` mirror list diversity (PR #104): `lz4.overpass-api.de`
+      (the main instance's compressed alias — same operator, same outage
+      domain) dropped, leaving three DISTINCT planet-wide operators
+      (overpass-api.de, kumi.systems, private.coffee). Replacements probed
+      2026-09-13 and rejected on evidence: overpass.osm.jp was serving an
+      expired TLS certificate (server-side fetch rejects on cert errors),
+      maps.mail.ru is region-weighted with a redirecting endpoint,
+      overpass.osm.ch is regional-only — exactly the 200-and-zero-elements
+      cache-poisoning shape the bullet warns about. A guard test pins the
+      list to planet-wide operators by name, asserts distinct hosts, and
+      runs every entry through the external-URL policy; the Pages failover
+      tests now derive mirror counts from `OVERPASS_UPSTREAMS.length`
+      instead of hard-coded 4s.
+- [x] FIRMS/Node IPv6 `autoSelectFamily` fix (issue #68/PR #126):
+      the dev middleware pins `net.setDefaultAutoSelectFamily(false)` at
+      proxy init (logged once when active), so hosts with no IPv6 route
+      don't stall FIRMS fetches in family racing until the 60 s abort.
+      Dev-server-only by construction (workerd has no `node:net`);
+      `FIRMS_KEEP_AUTO_SELECT_FAMILY=1` opts out for IPv6-primary networks.
+      New `src/data/firmsProxy.test.mjs` pins plugin shape, the /api/firms
+      mount, default pin, and the opt-out.
 - [ ] DATA_PRESET honesty (PR #197 pattern): never fabricate a value to fill
       a slot ("CLASSIFIED" vs "PAYLOAD DATA UNAVAILABLE", preserve null mass
       as null). Port the normalization tests where the launch payload

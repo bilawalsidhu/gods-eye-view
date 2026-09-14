@@ -7,6 +7,7 @@
  */
 
 import path from 'node:path';
+import net from 'node:net';
 import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
 import { promises as fsp } from 'node:fs';
 
@@ -53,6 +54,30 @@ export function firmsProxy() {
   let statusInflight = null;
 
   const mapKey = () => String(process.env.FIRMS_MAP_KEY || '').trim();
+
+  /**
+   * issue #68 / PR #126: on hosts where IPv6 is advertised but unreachable
+   * (no route / blackholed), Node's default Happy-Eyeballs address-family
+   * racing was observed stalling the FIRMS fetches until the 60 s abort
+   * instead of failing over, starving the layer. Pinning the socket stack
+   * back to single-family connect at proxy init sidesteps the racing bug on
+   * those hosts. Opt out on IPv6-primary networks (where falling back is
+   * what makes egress work at all) with FIRMS_KEEP_AUTO_SELECT_FAMILY=1.
+   * Dev-server-only by construction: the Pages Function runtime (workerd)
+   * has no `node:net`, and its fetch is not Node's.
+   *
+   * @returns {boolean} true when the process default was changed.
+   */
+  function pinSocketFamilyToSingleConnect() {
+    if (String(process.env.FIRMS_KEEP_AUTO_SELECT_FAMILY || '') === '1') return false;
+    try {
+      if (typeof net.setDefaultAutoSelectFamily !== 'function') return false;
+      net.setDefaultAutoSelectFamily(false);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   async function readDiskOnce() {
     if (diskChecked) return;
@@ -192,6 +217,9 @@ export function firmsProxy() {
   return {
     name: 'firms-proxy',
     configureServer(server) {
+      if (pinSocketFamilyToSingleConnect()) {
+        console.log('[firms-proxy] net.setDefaultAutoSelectFamily(false) — IPv6-race workaround active (FIRMS_KEEP_AUTO_SELECT_FAMILY=1 to disable)');
+      }
       server.middlewares.use('/api/firms', async (req, res) => {
         const sendJson = (status, obj) => {
           if (res.headersSent) return;

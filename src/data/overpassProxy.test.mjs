@@ -201,3 +201,36 @@ function pointSegDistDeg(p, a, b) {
   const t = c1 / c2;
   return Math.hypot(wx - t * vx, wy - t * vy);
 }
+
+test('OVERPASS_UPSTREAMS: planet-wide instances only, one per operator (PR #104)', async () => {
+  const { OVERPASS_UPSTREAMS } = await import('./overpassPolicy.js');
+  assert.ok(OVERPASS_UPSTREAMS.length >= 3, 'a single-mirror list has no failover');
+
+  const hosts = OVERPASS_UPSTREAMS.map((upstream) => new URL(upstream).hostname);
+  assert.equal(
+    new Set(hosts).size,
+    hosts.length,
+    `duplicate host in the mirror list: ${hosts.join(', ')}`,
+  );
+  // lz4.overpass-api.de is the main instance's compressed alias — same
+  // operator, same outage domain, so it adds failover breadth in name only.
+  assert.equal(
+    OVERPASS_UPSTREAMS.some((upstream) => upstream.startsWith('https://lz4.overpass-api.de')),
+    false,
+    'the main operator must appear exactly once',
+  );
+
+  // Regional-only instances (overpass.osm.ch is the canonical trap) answer
+  // out-of-region queries with 200 + zero elements, which the 24 h cache then
+  // holds as a TRUE empty result. Planet-wide operators only — pinned by name
+  // so a regional mirror can't quietly re-enter.
+  for (const upstream of OVERPASS_UPSTREAMS) {
+    assert.match(upstream, /^https:\/\/(overpass-api\.de|overpass\.kumi\.systems|overpass\.private\.coffee)\/api\/interpreter$/);
+  }
+
+  // Same safety bar as every other server-side fetch target.
+  const { isSafeExternalHttpUrl } = await import('./externalUrlPolicy.js');
+  for (const upstream of OVERPASS_UPSTREAMS) {
+    assert.equal(isSafeExternalHttpUrl(upstream), true, upstream);
+  }
+});
