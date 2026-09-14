@@ -271,6 +271,22 @@ test('persistLocaleAndReload stores the choice, keeps the hash exact, strips ?la
   assert.equal(assigned.length, 0, 'assign is not used when reload exists');
 });
 
+test('ru plural entries degrade gracefully: categories the entry lacks fall back to other', () => {
+  // ru selects few (2) and many (5) — categories the untranslated seed does
+  // not carry yet — so selectPluralPattern renders entry.other; 'one' (1 and
+  // 21) still matches the seed's one variant. Documented graceful degradation
+  // until stage-B supplies one/few/many/other for every plural key.
+  pinLocale('ru');
+  assert.equal(t('layers.clear.toast.cleared', { count: 1 }), 'Cleared 1 data layer');
+  assert.equal(t('layers.clear.toast.cleared', { count: 2 }), 'Cleared 2 data layers',
+    "ru 'few' is absent in the seed: the en 'other' pattern renders");
+  assert.equal(t('layers.clear.toast.cleared', { count: 5 }), 'Cleared 5 data layers',
+    "ru 'many' is absent in the seed: the en 'other' pattern renders");
+  assert.equal(t('layers.clear.toast.cleared', { count: 21 }), 'Cleared 21 data layer',
+    "ru selects 'one' for 21 and the seed's one variant renders");
+  pinLocale('en');
+});
+
 class FakeElement {
   constructor(attributes) {
     this.attributes = new Map(Object.entries(attributes));

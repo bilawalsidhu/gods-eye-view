@@ -1,8 +1,10 @@
 // Catalog parity gates: every shipped non-English locale (es, fr, ru, uk, …)
 // is checked against en — it may never LEAD en (no extra keys), every shared
-// key must keep identical placeholder names and plural-variant shape, and the
-// strict gate demands exact key-set equality so a forgotten translation
-// cannot ship silently behind the English fallback.
+// key must keep identical placeholder names, and plural entries must carry
+// every en variant plus only categories Intl.PluralRules reports valid for
+// that locale (see assertVariantSuperset below); the strict gate demands
+// exact key-set equality so a forgotten translation cannot ship silently
+// behind the English fallback.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getCatalog, mergeNamespace } from './index.js';
@@ -37,11 +39,60 @@ function placeholdersOf(entry) {
   return names;
 }
 
-/** Shape of one entry: 'string' or the sorted plural-variant names. */
-function shapeOf(entry) {
-  if (typeof entry === 'string') return 'string';
-  assert.ok(entry && typeof entry === 'object', `entry must be a string or variant object`);
-  return Object.keys(entry).sort().join(',');
+/*
+ * PLURAL-SHAPE PARITY, GENERALIZED FOR MULTI-CATEGORY LOCALES
+ * ─────────────────────────────────────────────────────────────────────────────
+ * en plural entries carry { one, other } — the only cardinal categories
+ * Intl.PluralRules reports for English. Slavic locales such as ru/uk select
+ * one/few/many/other, so exact-shape equality with en would forbid their
+ * grammars. The rule is now, per locale and shared key:
+ *   (a) the entry must carry EVERY variant en has (they are mandatory — the
+ *       runtime reads entry.<category> ?? entry.other, so dropping an en
+ *       variant strands the fallback), and
+ *   (b) every variant added beyond en's must be a cardinal category
+ *       Intl.PluralRules reports VALID for that locale
+ *       (resolvedOptions().validCategories, spelled pluralCategories on
+ *       older runtimes; e.g. 'few'/'many' are valid for ru/uk but not en).
+ * en itself can never grow a variant (English's valid set is exactly
+ * one/other), and a typo'd variant like 'xother' fails loudly for any
+ * locale. The runtime degrades gracefully the other way: an entry lacking a
+ * category its locale would select renders entry.other (selectPluralPattern
+ * in src/i18n/index.js; pinned in i18n.test.mjs).
+ */
+
+/** Cardinal plural categories Intl may select for a locale. */
+function validPluralCategories(locale) {
+  const { validCategories, pluralCategories } = new Intl.PluralRules(locale).resolvedOptions();
+  // The property was renamed pluralCategories → validCategories in newer
+  // ECMAScript drafts; read whichever the running ICU exposes.
+  const categories = validCategories ?? pluralCategories;
+  assert.ok(Array.isArray(categories), `Intl.PluralRules(${locale}) exposes no category set`);
+  return new Set(categories);
+}
+
+/** Assert the plural-shape rule for one locale entry against its en twin. */
+function assertVariantSuperset(localeEntry, enEntry, locale, key) {
+  assert.equal(
+    typeof localeEntry,
+    typeof enEntry,
+    `variant-shape drift on ${locale}:${key}: string ↔ plural-object mismatch`,
+  );
+  if (typeof enEntry === 'string') return;
+  const enVariants = Object.keys(enEntry);
+  const variants = Object.keys(localeEntry);
+  const missing = enVariants.filter((variant) => !variants.includes(variant));
+  assert.deepEqual(
+    missing,
+    [],
+    `${locale}:${key} must keep every en variant (${enVariants.join(',')})`,
+  );
+  const valid = validPluralCategories(locale);
+  const invalid = variants.filter((variant) => !enVariants.includes(variant) && !valid.has(variant));
+  assert.deepEqual(
+    invalid,
+    [],
+    `${locale}:${key} adds categories Intl.PluralRules(${locale}) never selects: ${invalid.join(',')}`,
+  );
 }
 
 const enKeys = Object.keys(getCatalog('en')).sort();
@@ -70,7 +121,7 @@ test('no locale carries keys that en does not have', () => {
   }
 });
 
-test('placeholder names and plural-variant shapes match en for every shared key', () => {
+test('placeholder names match en; plural variants form an en-superset of Intl-valid categories', () => {
   const enCatalog = getCatalog('en');
   for (const [locale, keys] of localeKeys) {
     const catalog = getCatalog(locale);
@@ -80,13 +131,41 @@ test('placeholder names and plural-variant shapes match en for every shared key'
         [...placeholdersOf(enCatalog[key])].sort(),
         `placeholder drift on ${locale}:${key}: a renamed {name} would break interpolation at runtime`,
       );
-      assert.equal(
-        shapeOf(catalog[key]),
-        shapeOf(enCatalog[key]),
-        `variant-shape drift on ${locale}:${key}`,
-      );
+      assertVariantSuperset(catalog[key], enCatalog[key], locale, key);
     }
   }
+});
+
+test('plural-shape rule: ru accepts its full Intl category set and rejects categories it never selects', () => {
+  const enEntry = { one: 'Cleared {count} layer', other: 'Cleared {count} layers' };
+  // ru selects one/few/many/other, so the full four-variant translation of
+  // an en { one, other } twin is a legal superset (adds only valid ru
+  // categories) — exactly what stage-B translators must produce…
+  assert.doesNotThrow(() => assertVariantSuperset(
+    { one: '…', few: '…', many: '…', other: '…' },
+    enEntry,
+    'ru',
+    'layers.clear.toast.cleared',
+  ));
+  // …while a variant Intl never selects for ru (a typo like 'xother') fails.
+  assert.throws(
+    () => assertVariantSuperset({ one: '…', other: '…', xother: '…' }, enEntry, 'ru', 'demo.key'),
+    /xother/,
+  );
+  // Dropping a mandatory en variant fails even when all additions are valid.
+  assert.throws(
+    () => assertVariantSuperset({ few: '…', many: '…', other: '…' }, enEntry, 'ru', 'demo.key'),
+    /every en variant/,
+  );
+  // String ↔ plural-object drift still fails exactly as before.
+  assert.throws(
+    () => assertVariantSuperset('plain string', enEntry, 'ru', 'demo.key'),
+    /string ↔ plural-object/,
+  );
+  // The gate stays honest about what the runtime can select: validCategories
+  // is read from Intl, not hardcoded per locale.
+  assert.deepEqual([...validPluralCategories('en')].sort(), ['one', 'other']);
+  assert.deepEqual([...validPluralCategories('ru')].sort(), ['few', 'many', 'one', 'other']);
 });
 
 test('exact key parity for every shipped locale once translation is complete (parity flip)', () => {
