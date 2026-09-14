@@ -18,7 +18,7 @@ const FRAME = {
  * A viewer stub that records imagery ownership. `base` stands in for the map
  * controller's own layer at index 0, which this layer must never remove.
  */
-function harness(source, { globeVisible = true } = {}) {
+function harness(source, { globeVisible = true, tiers } = {}) {
   const base = { id: 'base-map' };
   const layers = [base];
   const removed = [];
@@ -41,6 +41,7 @@ function harness(source, { globeVisible = true } = {}) {
   };
   const layer = createPrecipitationLayer({
     source,
+    ...(tiers ? { tiers } : {}),
     services: {
       mapStack: {
         subscribe(handler) {
@@ -106,7 +107,14 @@ test('the base map is never removed, and refreshes swap without a gap', async ()
   const source = {
     getFrame: async () => ({ ...FRAME, key: validTime, validTime }),
   };
-  const { layer, viewer, layers, removed, base } = harness(source);
+  // refreshMs 0 so consecutive updates are always due; the cadence itself has
+  // its own test.
+  const eager = PRECIPITATION_TIERS.map((tier) =>
+    Object.freeze({ ...tier, refreshMs: 0 }),
+  );
+  const { layer, viewer, layers, removed, base } = harness(source, {
+    tiers: eager,
+  });
 
   await layer.update(viewer);
   const owned = layers.slice(1);
@@ -139,8 +147,9 @@ test('a hidden globe withdraws the imagery and says so on the row', async () => 
   await layer.update(viewer);
   assert.equal(layers.length, OWNED + 1);
   // 'idle' is a guidance status, so naming the frame never reddens the chip.
-  assert.equal(layer.getStats().status, 'idle');
   assert.equal(layer.getStats().countLabel, '+15H');
+  // The row stays as short as every other layer's: source plus the lead.
+  assert.equal(layer.getStats().statusMessage, undefined);
 
   // Photoreal hides the globe; every imagery layer goes with it.
   viewer.scene.globe.show = false;
@@ -162,7 +171,7 @@ test('a hidden globe withdraws the imagery and says so on the row', async () => 
     OWNED + 1,
     'returning to a globe stack restores every placement',
   );
-  assert.equal(layer.getStats().status, 'idle');
+  assert.equal(layer.getStats().countLabel, '+15H');
 });
 
 test('disable unsubscribes, and a rejected frame reports without drawing', async () => {
@@ -278,4 +287,40 @@ test('the model asks for the continuous palette, not the classed one', () => {
   // Anything without an explicit style takes the server default.
   const inlay = PRECIPITATION_TIERS.find((tier) => tier.role === 'inlay');
   assert.equal(tierImageryOptions(inlay, frame).parameters.styles, '');
+});
+
+test('each tier refreshes on its own cadence, not the slowest one', async () => {
+  const calls = [];
+  let stamp = 0;
+  const source = {
+    getFrame: async (tier) => {
+      calls.push(tier.id);
+      return {
+        key: `${tier.id}:${stamp}`,
+        validTime: null,
+        referenceTime: null,
+      };
+    },
+  };
+  const { layer, viewer } = harness(source);
+  await layer.update(viewer);
+  const first = calls.length;
+  assert.equal(
+    first,
+    PRECIPITATION_TIERS.length,
+    'the first tick polls everything',
+  );
+
+  // Immediately after, nothing is due — and that is a healthy tick, not a failure.
+  calls.length = 0;
+  assert.equal(await layer.update(viewer), true);
+  assert.deepEqual(calls, [], 'nothing is due yet');
+
+  // The layer polls at the shortest cadence so the fastest tier can keep up.
+  const cadences = PRECIPITATION_TIERS.map((t) => t.refreshMs);
+  assert.equal(layer.updateInterval, Math.min(...cadences));
+  assert.ok(
+    Math.max(...cadences) > Math.min(...cadences),
+    'radar and model must not share one cadence',
+  );
 });

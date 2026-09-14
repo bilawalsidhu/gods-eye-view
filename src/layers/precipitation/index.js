@@ -1,10 +1,6 @@
 import { createImageryStack } from './imagery.js';
-import { frameMessage, inlayMessage, leadLabel } from './model.js';
-import {
-  LAYER_ID,
-  PRECIPITATION_TIERS,
-  REFRESH_INTERVAL_MS,
-} from './policy.js';
+import { leadLabel } from './model.js';
+import { LAYER_ID, MODEL_REFRESH_MS, PRECIPITATION_TIERS } from './policy.js';
 
 export * from './model.js';
 export * from './policy.js';
@@ -43,6 +39,7 @@ export function createPrecipitationLayer({
 
   const stack = createImageryStack();
   const frames = new Map();
+  const polledAt = new Map();
   let _viewer = null;
   let _enabled = false;
   let _request = null;
@@ -56,6 +53,7 @@ export function createPrecipitationLayer({
   const clearImagery = (viewer) => {
     stack.clear(viewer || _viewer);
     frames.clear();
+    polledAt.clear();
   };
 
   const runUpdate = async (viewer) => {
@@ -66,10 +64,16 @@ export function createPrecipitationLayer({
     const settled = () =>
       request.signal.aborted || _request !== request || !_enabled || _hidden;
     try {
-      let applied = 0;
+      let refreshed = 0;
       // Placements that read the same service and layer share one request.
       const fetched = new Map();
+      const now = Date.now();
       for (const tier of tiers) {
+        // Radar turns over in minutes and the model in hours; a tier that is
+        // not due yet keeps the imagery it already has.
+        const cadence = tier.refreshMs ?? MODEL_REFRESH_MS;
+        const due = now - (polledAt.get(tier.id) ?? -Infinity) >= cadence;
+        if (!due && frames.has(tier.id)) continue;
         let frame = fetched.get(tier.frameKey);
         if (!frame) {
           frame = await source.getFrame(tier, { signal: request.signal });
@@ -77,16 +81,20 @@ export function createPrecipitationLayer({
           if (settled()) return false;
           fetched.set(tier.frameKey, frame);
         }
+        polledAt.set(tier.id, now);
         if (frames.get(tier.id)?.key !== frame.key) {
           // Add before removing so a live tier never blinks through the base map.
           stack.apply(viewer, tier, frame);
           frames.set(tier.id, frame);
         }
-        applied += 1;
+        refreshed += 1;
       }
-      _lastUpdate = Date.now();
-      _lastError = null;
-      return applied > 0;
+      if (refreshed) {
+        _lastUpdate = Date.now();
+        _lastError = null;
+      }
+      // A tick with nothing due is a healthy tick, not a failed refresh.
+      return true;
     } catch (error) {
       if (settled()) return false;
       _lastError = error?.message || 'Precipitation source unavailable';
@@ -110,7 +118,10 @@ export function createPrecipitationLayer({
     name: 'Precipitation',
     icon: '🌧',
     source: 'ECCC GDPS · IEM NEXRAD',
-    updateInterval: REFRESH_INTERVAL_MS,
+    // Poll at the shortest tier cadence; each tier then refreshes on its own.
+    updateInterval: Math.min(
+      ...tiers.map((tier) => tier.refreshMs ?? MODEL_REFRESH_MS),
+    ),
 
     init(viewer) {
       if (_viewer)
@@ -177,24 +188,14 @@ export function createPrecipitationLayer({
       const frame = primary ? frames.get(primary.id) : null;
       if (!frame)
         return { count: 0, lastUpdate: _lastUpdate, error: _lastError };
-      const inlay = tiers.find(
-        (entry) => entry.role === 'inlay' && frames.has(entry.id),
-      );
       return {
         count: 0,
-        // An imagery layer counts nothing; the forecast lead is the number that
-        // tells a reader how much to trust the field.
+        // An imagery layer counts nothing. The forecast lead goes in the count
+        // slot because it is the one number that says how much to trust the
+        // field, and it keeps the meta line as short as every other layer's.
         countLabel: leadLabel(frame),
         lastUpdate: _lastUpdate,
         error: _lastError,
-        // 'idle' is a guidance status, so naming the frame cannot redden the chip.
-        status: _lastError ? undefined : 'idle',
-        statusMessage: [
-          frameMessage(primary, frame),
-          inlay && inlayMessage(inlay, frames.get(inlay.id)),
-        ]
-          .filter(Boolean)
-          .join(' · '),
       };
     },
   };

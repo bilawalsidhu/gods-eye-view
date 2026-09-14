@@ -3,10 +3,16 @@ export const LAYER_ID = 'precipitation';
 
 /**
  * GeoMet steps hourly and reruns GDPS twice a day, so a shorter poll cannot
- * surface a newer frame — it would only re-download the visible globe against
- * origins that forbid caching. The radar inlay refreshes on the same tick.
+ * surface a newer model frame — it would only re-download the visible globe
+ * against an origin that forbids caching.
  */
-export const REFRESH_INTERVAL_MS = 60 * 60 * 1000;
+export const MODEL_REFRESH_MS = 60 * 60 * 1000;
+
+/**
+ * Radar turns over every few minutes, so it must not inherit the model's hourly
+ * tick: each tier carries its own cadence and the layer polls at the shortest.
+ */
+export const RADAR_REFRESH_MS = 5 * 60 * 1000;
 
 /**
  * Tile level past which the model stops being drawn.
@@ -78,6 +84,7 @@ export const PRECIPITATION_TIERS = Object.freeze([
     alpha: 0.42,
     rectangleDegrees: null,
     // Stop requesting tiles GeoMet answers empty; Cesium upsamples instead.
+    refreshMs: MODEL_REFRESH_MS,
     maxTileLevel: MODEL_DETAIL_CEILING,
     minimumTerrainLevel: undefined,
     maximumTerrainLevel: MODEL_DETAIL_CEILING,
@@ -102,6 +109,7 @@ export const PRECIPITATION_TIERS = Object.freeze([
     forecast: false,
     alpha: 0.68,
     rectangleDegrees: CONUS_DEGREES,
+    refreshMs: RADAR_REFRESH_MS,
     maxTileLevel: RADAR_DETAIL_CEILING,
     minimumTerrainLevel: INLAY_HANDOVER_LEVEL,
     maximumTerrainLevel: undefined,

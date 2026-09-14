@@ -46,11 +46,11 @@ left holes wherever radar was silent, so the model now carries underneath.
 `MapSourceController` still owns the base map at index 0; this layer
 only appends and only removes handles it added, so a base-map switch leaves the
 overlay intact. **GDPS is a model, not an observation**: it runs twice daily, so
-the field valid now is a forecast roughly +5 to +16 hours out. The row states
-this rather than implying a measurement — the count slot carries the lead
-(`+15H`) and the status line the run and valid step (`MODEL · 00Z RUN · VALID
-15:00Z`), with the radar noted as LIVE when the inlay is loaded, because that service
-publishes no time dimension to quote. A
+the field valid now is a forecast roughly +5 to +16 hours out. The count slot carries the
+forecast lead (`+6H`) so the row states the field's trustworthiness without 
+running longer than any other layer's; the run and valid step are not
+repeated there. The two tiers also refresh independently — the model hourly,
+the radar every five minutes — and the layer polls at the shorter of the two. A
 photoreal map stack hides the globe and every imagery layer with it, so the row
 then reports `UNAVAILABLE · GLOBE HIDDEN IN 3D` instead of looking healthy while
 drawing nothing. Both services are keyless, CORS-open and read directly from the
