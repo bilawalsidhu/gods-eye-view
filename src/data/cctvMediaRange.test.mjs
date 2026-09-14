@@ -180,7 +180,11 @@ function mount(t, respond) {
   const nativeFetch = globalThis.fetch;
   const requests = [];
   globalThis.fetch = async (url, init = {}) => {
-    requests.push({ url: String(url), headers: init.headers || {} });
+    requests.push({
+      url: String(url),
+      headers: init.headers || {},
+      signal: init.signal || null,
+    });
     return respond({ url: String(url), init });
   };
   t.after(() => {
@@ -442,6 +446,57 @@ test('a client that disconnects mid-stream stops the upstream read', async (t) =
   // The camera was serving fine; the client left. Nothing about that is a
   // camera fault other viewers should see.
   assert.equal(entry.status, 'ok');
+});
+
+test('a client that leaves before the headers arrive cancels the upstream request', async (t) => {
+  // The camera is slow, or dead: nothing comes back until the request is
+  // cancelled. Everything worth testing here happens before any header.
+  let aborted = false;
+  const app = mount(t, ({ init }) => {
+    return new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => {
+        aborted = true;
+        reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+      });
+    });
+  });
+
+  const server = http.createServer((req, res) => {
+    req.url = req.url.replace('/api/cctv', '') || '/';
+    Promise.resolve(app.handler(req, res)).catch(() => {});
+  });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+
+  const failures = [];
+  const onUncaught = (error) => failures.push(error);
+  process.on('uncaughtException', onUncaught);
+  t.after(() => process.off('uncaughtException', onUncaught));
+
+  const request = http.get({
+    host: '127.0.0.1',
+    port,
+    path: `/api/cctv/media/${CAMERA.id}`,
+    headers: { Range: 'bytes=0-1023' },
+  });
+  request.on('error', () => {});
+  // Let the route reach its upstream request, then walk away before it answers.
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.equal(app.requests.length, 1, 'the upstream request went out');
+  assert.equal(aborted, false, 'nothing was cancelled while the client waited');
+  request.destroy();
+  await new Promise((resolve) => setTimeout(resolve, 250));
+
+  assert.equal(aborted, true, 'the upstream request outlived the client');
+  assert.deepEqual(
+    failures.map((error) => error?.message),
+    [],
+    'a client leaving early must not fault the server',
+  );
+  // The camera did nothing wrong; the viewer left.
+  const entry = await app.health();
+  assert.notEqual(entry?.status, 'degraded');
 });
 
 test('a folded CR/LF range never reaches the upstream through a real client', async (t) => {

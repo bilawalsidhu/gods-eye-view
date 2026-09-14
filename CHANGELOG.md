@@ -224,10 +224,11 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   `multipart/byteranges` answer, whose parts nothing here reads. A value carrying
   CR or LF made the outbound request throw, and the route recorded the thrown
   message — which contains the caller's own string — as that camera's entry in
-  the health report. Media the browser has stopped reading is now released: when
-  the viewer disconnects, the upstream connection is closed rather than left
-  running against the camera host. Ordinary seeking is unaffected. Contributed by
-  Maher-Reven (#253).
+  the health report. A request the browser has stopped waiting for is now
+  released: whether the viewer leaves while the camera is still answering or
+  part-way through the picture, the upstream request is cancelled rather than
+  left running, and neither case marks the camera degraded. Ordinary seeking is
+  unaffected. Contributed by Maher-Reven (#253).
 
 - Validate configured Google Places coordinates and text queries before rate
   limiting or upstream requests; preserve the keyless capability response.

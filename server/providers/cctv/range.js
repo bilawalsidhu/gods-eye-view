@@ -20,7 +20,8 @@ const RANGE_MAX_DIGITS = 16;
  * Bounding the Range bounds what is ASKED FOR, not what arrives: an upstream
  * that ignores the Range and answers with a length-less chunked body still
  * streams without a ceiling. That is how live feeds are served and is not
- * changed here.
+ * changed here. What is bounded is the request's lifetime: it is cancelled when
+ * the viewer goes away, before the headers arrive as well as during the body.
  *
  * Anything that is not a single well-formed `bytes=` range is DROPPED and the
  * request proceeds with no Range, which is what RFC 7233 §3.1 prescribes for a
