@@ -37,7 +37,10 @@ export function lonWithin(lon, west, east) {
 test('the table is not empty, and every destination offers at least one place', () => {
   assert.ok(DESTINATIONS.length > 0);
   for (const [id, city] of DESTINATIONS) {
-    assert.ok(city.name, `${id} has no name`);
+    assert.ok(
+      typeof city.name === 'string' && city.name.trim().length > 0,
+      `${id} has no name`,
+    );
     assert.ok(
       Array.isArray(city.pois) && city.pois.length > 0,
       `${id} has no POIs`,
