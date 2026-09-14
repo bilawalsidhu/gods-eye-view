@@ -3,9 +3,11 @@
 // English is the default-without-configuration, the ALWAYS-shipped fallback
 // catalog, and the compatibility baseline (docs/TRANSLATORS.md). Neutral
 // international Spanish ('es') is the default secondary locale; French ('fr')
-// ships fully translated. Which pair the app actually offers is
-// configured at build/dev time through GEV_DEFAULT_LOCALE /
-// GEV_SECONDARY_LOCALE (vite.config.js client defines) and resolved here.
+// ships fully translated. Russian ('ru') and Ukrainian ('uk') ship as
+// untranslated en-value seeds pending stage-B/stage-C translation. Which pair
+// the app actually offers is configured at build/dev time through
+// GEV_DEFAULT_LOCALE / GEV_SECONDARY_LOCALE (vite.config.js client defines)
+// and resolved here.
 // This module owns ONLY locale resolution and document language metadata —
 // catalogs and translation helpers live in src/i18n/index.js.
 
@@ -18,7 +20,7 @@ export const LOCALE_STORAGE_KEY = 'gev:locale:v1';
  * only locales in the configured PAIR (see resolveLocalePair) are offered in
  * the UI and accepted during resolution.
  */
-export const CATALOG_LOCALES = Object.freeze(['en', 'es', 'fr']);
+export const CATALOG_LOCALES = Object.freeze(['en', 'es', 'fr', 'ru', 'uk']);
 
 /** Fallback catalog locale and no-config default: always English. */
 export const DEFAULT_LOCALE = 'en';
@@ -31,15 +33,17 @@ export const LOCALE_METADATA = Object.freeze({
   en: Object.freeze({ dir: 'ltr' }),
   es: Object.freeze({ dir: 'ltr' }),
   fr: Object.freeze({ dir: 'ltr' }),
+  ru: Object.freeze({ dir: 'ltr' }),
+  uk: Object.freeze({ dir: 'ltr' }),
 });
 
 /**
- * Map any candidate language tag to a shipped catalog locale. 'es'/'fr' and
- * every regional variant ('es-MX', 'fr_CA') resolve to the primary tag;
- * anything without a catalog (or not a string) resolves to null so the
- * caller's precedence chain can keep looking.
+ * Map any candidate language tag to a shipped catalog locale. 'es'/'fr'/'ru'/'uk'
+ * and every regional variant ('es-MX', 'fr_CA', 'ru-KZ', 'uk_UA') resolve to the
+ * primary tag; anything without a catalog (or not a string) resolves to null so
+ * the caller's precedence chain can keep looking.
  * @param {*} candidate Raw locale tag (?lang= value, stored value, navigator entry).
- * @returns {'en'|'es'|'fr'|null}
+ * @returns {'en'|'es'|'fr'|'ru'|'uk'|null}
  */
 export function normalizeLocale(candidate) {
   if (typeof candidate !== 'string') return null;

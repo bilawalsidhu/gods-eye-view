@@ -45,6 +45,14 @@ test('normalizeLocale folds regional variants and rejects unsupported tags', () 
   assert.equal(normalizeLocale('FR'), 'fr');
   assert.equal(normalizeLocale('fr-CA'), 'fr');
   assert.equal(normalizeLocale('fr_FR'), 'fr');
+  assert.equal(normalizeLocale('ru'), 'ru');
+  assert.equal(normalizeLocale('RU'), 'ru');
+  assert.equal(normalizeLocale('ru-RU'), 'ru');
+  assert.equal(normalizeLocale('ru_KZ'), 'ru');
+  assert.equal(normalizeLocale('uk'), 'uk');
+  assert.equal(normalizeLocale('UK'), 'uk', 'uppercase country spelling still folds to the language tag');
+  assert.equal(normalizeLocale('uk-UA'), 'uk');
+  assert.equal(normalizeLocale('uk_UA'), 'uk');
   assert.equal(normalizeLocale('de'), null, 'no shipped de catalog');
   assert.equal(normalizeLocale('english'), null);
   assert.equal(normalizeLocale(''), null);
@@ -121,6 +129,16 @@ test('applyDocumentLanguage reflects lang and dir from locale metadata', () => {
   assert.deepEqual({ lang: frDoc.documentElement.lang, dir: frDoc.documentElement.dir },
     { lang: 'fr', dir: LOCALE_METADATA.fr.dir });
   assert.equal(LOCALE_METADATA.fr.dir, 'ltr', 'French is LTR by metadata');
+  const ruDoc = makeDoc();
+  assert.equal(applyDocumentLanguage(ruDoc, 'ru-RU'), true);
+  assert.deepEqual({ lang: ruDoc.documentElement.lang, dir: ruDoc.documentElement.dir },
+    { lang: 'ru', dir: LOCALE_METADATA.ru.dir });
+  assert.equal(LOCALE_METADATA.ru.dir, 'ltr', 'Russian is LTR by metadata');
+  const ukDoc = makeDoc();
+  assert.equal(applyDocumentLanguage(ukDoc, 'uk_UA'), true);
+  assert.deepEqual({ lang: ukDoc.documentElement.lang, dir: ukDoc.documentElement.dir },
+    { lang: 'uk', dir: LOCALE_METADATA.uk.dir });
+  assert.equal(LOCALE_METADATA.uk.dir, 'ltr', 'Ukrainian is LTR by metadata');
   assert.equal(applyDocumentLanguage(null, 'es'), false);
   assert.equal(applyDocumentLanguage({ documentElement: null }, 'es'), false);
   // An unsupported locale still yields valid metadata, never an empty dir.
@@ -296,7 +314,7 @@ test('applyDocumentTranslations writes all four attributes and skips unknown key
 });
 
 test('getCatalog exposes the merged, dot-prefixed registry for every shipped locale', () => {
-  assert.deepEqual([...CATALOG_LOCALES], ['en', 'es', 'fr']);
+  assert.deepEqual([...CATALOG_LOCALES], ['en', 'es', 'fr', 'ru', 'uk']);
   for (const locale of CATALOG_LOCALES) {
     const catalog = getCatalog(locale);
     assert.ok(catalog, `catalog for ${locale}`);
@@ -305,9 +323,12 @@ test('getCatalog exposes the merged, dot-prefixed registry for every shipped loc
       assert.match(key, /^(shell|cockpit|layers|setup)\./, `${locale} key ${key}`);
     }
   }
-  // The fr catalog is registered (fully translated, mirroring en key-for-key) even
-  // though the default pair does not offer it; an unknown locale stays null.
-  assert.deepEqual(Object.keys(getCatalog('fr')).sort(), Object.keys(getCatalog('en')).sort());
+  // fr is fully translated; ru and uk are untranslated seeds — all three are
+  // registered and mirror en key-for-key even though the default pair offers
+  // only en+es; an unknown locale stays null.
+  for (const shipped of ['fr', 'ru', 'uk']) {
+    assert.deepEqual(Object.keys(getCatalog(shipped)).sort(), Object.keys(getCatalog('en')).sort());
+  }
   assert.equal(getCatalog('de'), null);
   assert.equal(getLocale(), 'en', 'state survived the whole file');
 });

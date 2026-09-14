@@ -44,6 +44,8 @@ export default {
   'locale.en.ariaLabel': 'Cambiar a inglés',
   'locale.es.ariaLabel': 'Cambiar a español',
   'locale.fr.ariaLabel': 'Cambiar a francés',
+  'locale.ru.ariaLabel': 'Cambiar a ruso',
+  'locale.uk.ariaLabel': 'Cambiar a ucraniano',
 
   'credits.closeAria': 'Cerrar la atribución de datos',
 };

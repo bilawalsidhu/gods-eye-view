@@ -7,9 +7,11 @@ this file is the practical summary a translator needs.
 
 ## Which locales ship, and which pair is offered
 
-Three catalogs ship: **en** (source of truth and unconditional fallback),
-**es** and **fr** (both fully translated; each mirrors
-en key-for-key with English values). Which pair the app actually *offers* is
+Five catalogs ship: **en** (source of truth and unconditional fallback),
+**es** and **fr** (fully translated), and **ru**/**uk** (untranslated
+en-value seeds, marked `UNTRANSLATED RU STAGE-B SEED` /
+`UNTRANSLATED UK STAGE-C SEED`, pending their translation stages; each
+mirrors en key-for-key). Which pair the app actually *offers* is
 configuration, not code: `GEV_DEFAULT_LOCALE` (default `en`) and
 `GEV_SECONDARY_LOCALE` (default `es`) in `.env`, injected into the browser via
 vite defines. Invalid or degenerate values fall back to the built-in en+es
@@ -27,6 +29,8 @@ src/i18n/
   locales/en/{shell,cockpit,layers,setup}.js
   locales/es/{shell,cockpit,layers,setup}.js
   locales/fr/{shell,cockpit,layers,setup}.js   (fully translated)
+  locales/ru/{shell,cockpit,layers,setup}.js   (untranslated stage-B seed)
+  locales/uk/{shell,cockpit,layers,setup}.js   (untranslated stage-C seed)
 ```
 
 | Namespace | Surface |
@@ -41,7 +45,7 @@ namespace-relative keys; `mergeNamespace()` prefixes them (`cockpit.…`) and
 `buildCatalog()` rejects duplicates. English is the default and the fallback
 locale: a key missing in another locale renders its English value
 (dev-server-only `console.warn`). At the time of writing the catalogs mirror
-each other — shell 35, cockpit 364, layers 384, setup 115 keys (898 per
+each other — shell 38, cockpit 369, layers 388, setup 121 keys (916 per
 locale).
 
 ## Key naming
@@ -57,23 +61,28 @@ locale).
 ## Append-only rules
 
 - New keys are **appended to the end** of your namespace file in **every**
-  shipped locale directory (`locales/en/`, `locales/es/`, `locales/fr/`) in the
+  shipped locale directory (`locales/en/`, `locales/es/`, `locales/fr/`,
+  `locales/ru/`, `locales/uk/`) in the
   same change. Never edit another namespace's files, and never touch the
   registration arrays in `src/i18n/index.js` without reading the ownership
   manifest first.
 - A fifth namespace is a last resort (prefer fitting one of the four); the
   registration recipe for one is in the ownership manifest.
-- Parity is enforced by tests, not goodwill: es may never carry a key en
-  lacks, and every shared key must keep identical placeholder names and
-  plural-variant shapes (`src/i18n/catalog.test.mjs`).
+- Parity is enforced by tests, not goodwill: no locale may carry a key en
+  lacks, and every shared key must keep identical placeholder names and a
+  plural-variant set that includes every en variant plus only categories
+  `Intl.PluralRules` reports for that locale (`src/i18n/catalog.test.mjs`).
 
 ## Placeholder, plural, and typography rules
 
 - Interpolation uses named `{camelCase}` placeholders: `'Flying to {place}…'`.
   The **same placeholder names must exist in every locale** — the parity gate
   fails on a renamed `{name}` because it would break interpolation at runtime.
-- Plurals are `{ one, other }` variant objects carrying a `{count}`
-  placeholder, selected per active locale through `Intl.PluralRules`:
+- Plurals are variant objects carrying a `{count}` placeholder, selected per
+  active locale through `Intl.PluralRules`. English entries use `{ one, other }`;
+  locales whose grammar needs more categories provide the categories
+  `Intl.PluralRules` reports for them — ru/uk need `{ one, few, many, other }`
+  (the parity gate allows adding only locale-valid categories):
   ```js
   'clear.toast.cleared': { one: 'Cleared {count} data layer', other: 'Cleared {count} data layers' },
   ```
@@ -163,7 +172,7 @@ The full, binding list is "Keep-English boundary" in
 ## Running the i18n test gates
 
 ```sh
-node --test src/i18n/            # 38 tests: core + pair config, catalog parity, markup coverage, repair-pass anchors
+node --test src/i18n/            # 41 tests: core + pair config, catalog parity, markup coverage, repair-pass anchors
 npm test                         # full suite (see below for the known environmental caveat)
 ```
 

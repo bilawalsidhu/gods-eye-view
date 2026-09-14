@@ -1,10 +1,14 @@
-// English catalog — shell namespace (phase-1 seed).
+// UNTRANSLATED UK STAGE-C SEED — Ukrainian (uk) catalog.
 //
-// Owns the global application chrome: title bar, loader status, top-center
-// actions, panel titles, and the shared global status surface. Keys are
-// namespace-relative; the registry in src/i18n/index.js prefixes them with
-// `shell.`. Values are plain strings or { one, other } plural variant objects
-// with named {placeholder} interpolation.
+// Mirrors locales/en/shell.js key-for-key with ENGLISH values. Stage-C
+// translators: replace every value with Ukrainian (glossary in
+// docs/TRANSLATORS.md), plural entries { one, other } become uk's full
+// Intl.PluralRules set { one, few, many, other } (the parity gate allows
+// adding only categories valid for uk), then rewrite this header in the
+// locales/fr/*.js style and drop the UNTRANSLATED marker. Do NOT rename,
+// reorder, add, or drop keys; placeholder names stay identical. uk is a
+// shipped catalog, offered only when the configured locale pair includes it
+// (GEV_DEFAULT_LOCALE / GEV_SECONDARY_LOCALE).
 export const NAMESPACE = 'shell';
 
 export default {

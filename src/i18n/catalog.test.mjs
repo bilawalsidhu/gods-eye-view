@@ -1,6 +1,6 @@
-// Catalog parity gates: every shipped non-English locale (es, fr, …) is
-// checked against en — it may never LEAD en (no extra keys), every shared key
-// must keep identical placeholder names and plural-variant shape, and the
+// Catalog parity gates: every shipped non-English locale (es, fr, ru, uk, …)
+// is checked against en — it may never LEAD en (no extra keys), every shared
+// key must keep identical placeholder names and plural-variant shape, and the
 // strict gate demands exact key-set equality so a forgotten translation
 // cannot ship silently behind the English fallback.
 import { test } from 'node:test';
@@ -53,7 +53,7 @@ const localeKeys = new Map(
 );
 
 test('every shipped locale ships a merged catalog', () => {
-  assert.deepEqual([...CATALOG_LOCALES].sort(), ['en', 'es', 'fr']);
+  assert.deepEqual([...CATALOG_LOCALES].sort(), ['en', 'es', 'fr', 'ru', 'uk']);
   for (const locale of CATALOG_LOCALES) {
     assert.ok(getCatalog(locale), `merged catalog for ${locale}`);
   }

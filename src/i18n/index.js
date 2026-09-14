@@ -1,8 +1,8 @@
 // God's Eye View i18n core (phase 1): catalog registry, translation, and
 // Intl-based formatting. English is the source/fallback catalog; a missing key
 // in another locale falls back to English with a development-only warning.
-// Every shipped catalog (es, fr) is built UNCONDITIONALLY — the build cost is
-// trivial and the registry stays declarative — but only locales in the
+// Every shipped catalog (es, fr, ru, uk) is built UNCONDITIONALLY — the build
+// cost is trivial and the registry stays declarative — but only locales in the
 // configured pair are offered/accepted (see locale.js resolveLocalePair).
 //
 // APPEND-ONLY NAMESPACE REGISTRATION
@@ -27,11 +27,21 @@ import * as frShell from './locales/fr/shell.js';
 import * as frCockpit from './locales/fr/cockpit.js';
 import * as frLayers from './locales/fr/layers.js';
 import * as frSetup from './locales/fr/setup.js';
+import * as ruShell from './locales/ru/shell.js';
+import * as ruCockpit from './locales/ru/cockpit.js';
+import * as ruLayers from './locales/ru/layers.js';
+import * as ruSetup from './locales/ru/setup.js';
+import * as ukShell from './locales/uk/shell.js';
+import * as ukCockpit from './locales/uk/cockpit.js';
+import * as ukLayers from './locales/uk/layers.js';
+import * as ukSetup from './locales/uk/setup.js';
 
 // Append new namespace modules here (one import + one entry per locale).
 const EN_NAMESPACES = [enShell, enCockpit, enLayers, enSetup];
 const ES_NAMESPACES = [esShell, esCockpit, esLayers, esSetup];
 const FR_NAMESPACES = [frShell, frCockpit, frLayers, frSetup];
+const RU_NAMESPACES = [ruShell, ruCockpit, ruLayers, ruSetup];
+const UK_NAMESPACES = [ukShell, ukCockpit, ukLayers, ukSetup];
 
 /**
  * Prefix one namespace module's flat, namespace-relative keys with its
@@ -72,6 +82,8 @@ const CATALOGS = Object.freeze({
   [DEFAULT_LOCALE]: buildCatalog(EN_NAMESPACES),
   es: buildCatalog(ES_NAMESPACES),
   fr: buildCatalog(FR_NAMESPACES),
+  ru: buildCatalog(RU_NAMESPACES),
+  uk: buildCatalog(UK_NAMESPACES),
 });
 
 /**
