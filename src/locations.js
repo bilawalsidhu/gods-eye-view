@@ -793,13 +793,19 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
   let types = result?.types || [];
   let viewport = result?.viewport || null;
 
-  // Nearby landmark recovery retains precedence over a fallback geocoder hit.
-  const recovered = await (options.recoverNearView || placesNearViewRecovery)(
-    viewer,
-    query,
-    result && !outcome.fallbackUsed ? { lat, lon: lng } : null,
-    signal,
-  );
+  // Nearby landmark recovery retains precedence over a fallback geocoder hit,
+  // but never over an exact answer. Recovery exists to rescue a name that a
+  // geocoder read too broadly; a typed coordinate or a bundled name has no
+  // ambiguity to rescue, and letting a nearby Places hit win would send an
+  // operator who typed "43.1731, -79.0384" to whatever is closest instead.
+  const recovered = result?.exact
+    ? null
+    : await (options.recoverNearView || placesNearViewRecovery)(
+        viewer,
+        query,
+        result && !outcome.fallbackUsed ? { lat, lon: lng } : null,
+        signal,
+      );
   signal?.throwIfAborted();
   if (recovered) {
     lat = recovered.lat;
