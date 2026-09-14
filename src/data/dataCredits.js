@@ -75,10 +75,11 @@ export const DATA_CREDITS = [
       'Contains information licensed under the Open Government Licence – Canada',
   },
   {
-    key: 'noaa-nowcoast',
+    key: 'iem-nexrad',
     html:
-      'Precipitation (US radar): NOAA/NWS MRMS base reflectivity via nowCOAST ' +
-      '(<a href="https://nowcoast.noaa.gov" target="_blank" rel="noopener">nowcoast.noaa.gov</a>)',
+      'Precipitation (US radar): Iowa Environmental Mesonet CONUS composite of ' +
+      'NWS WSR-88D level III base reflectivity ' +
+      '(<a href="https://mesonet.agron.iastate.edu" target="_blank" rel="noopener">mesonet.agron.iastate.edu</a>)',
   },
   {
     key: 'overpass',

@@ -33,7 +33,7 @@ export const RADAR_DETAIL_CEILING = 11;
 
 /** The only hosts this layer ever contacts. */
 export const GEOMET_ORIGIN = 'https://geo.weather.gc.ca';
-export const NOWCOAST_ORIGIN = 'https://nowcoast.noaa.gov';
+export const IEM_ORIGIN = 'https://mesonet.agron.iastate.edu';
 
 /**
  * The MRMS mosaic is densest over the lower 48; this box hugs that rather than
@@ -83,23 +83,26 @@ export const PRECIPITATION_TIERS = Object.freeze([
     maximumTerrainLevel: MODEL_DETAIL_CEILING,
   }),
   Object.freeze({
-    id: 'mrms-conus',
+    id: 'nexrad-conus',
     role: 'inlay',
-    label: 'NOAA MRMS',
+    label: 'IEM NEXRAD',
     inlayLabel: 'US RADAR',
-    origin: NOWCOAST_ORIGIN,
-    service: `${NOWCOAST_ORIGIN}/geoserver/observations/weather_radar/ows`,
-    wmsLayer: 'base_reflectivity_mosaic',
+    origin: IEM_ORIGIN,
+    service: `${IEM_ORIGIN}/cgi-bin/wms/nexrad/n0q.cgi`,
+    // IEM's CONUS composite of NWS WSR-88D level III base reflectivity. It
+    // applies far less quality-control masking than the MRMS mosaic, so it does
+    // not punch squares out of live cells — at the cost of carrying more ground
+    // clutter and anomalous propagation.
+    wmsLayer: 'nexrad-n0q-conus',
     wmsStyle: null,
-    frameKey: `${NOWCOAST_ORIGIN}/geoserver/observations/weather_radar/ows|base_reflectivity_mosaic`,
+    frameKey: `${IEM_ORIGIN}/cgi-bin/wms/nexrad/n0q.cgi|nexrad-n0q-conus`,
+    // No time dimension is advertised at all: the service always serves the
+    // current composite, and the row says LIVE rather than claiming a step.
+    dated: false,
     forecast: false,
     alpha: 0.68,
     rectangleDegrees: CONUS_DEGREES,
     maxTileLevel: RADAR_DETAIL_CEILING,
-    // The footprint ends on a straight boundary. Cesium exposes no per-pixel or
-    // per-tile alpha for imagery layers, so there is nothing to feather with;
-    // the continuous model underneath is what keeps the edge from reading as a
-    // hole. See the ownership test pinning alpha to a number.
     minimumTerrainLevel: INLAY_HANDOVER_LEVEL,
     maximumTerrainLevel: undefined,
   }),

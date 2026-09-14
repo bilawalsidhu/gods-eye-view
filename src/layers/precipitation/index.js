@@ -77,7 +77,7 @@ export function createPrecipitationLayer({
           if (settled()) return false;
           fetched.set(tier.frameKey, frame);
         }
-        if (frames.get(tier.id)?.validTime !== frame.validTime) {
+        if (frames.get(tier.id)?.key !== frame.key) {
           // Add before removing so a live tier never blinks through the base map.
           stack.apply(viewer, tier, frame);
           frames.set(tier.id, frame);
@@ -109,7 +109,7 @@ export function createPrecipitationLayer({
     id: LAYER_ID,
     name: 'Precipitation',
     icon: '🌧',
-    source: 'ECCC GDPS · NOAA MRMS',
+    source: 'ECCC GDPS · IEM NEXRAD',
     updateInterval: REFRESH_INTERVAL_MS,
 
     init(viewer) {

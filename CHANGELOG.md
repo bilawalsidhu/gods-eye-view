@@ -5,8 +5,8 @@
 - Render the model with GeoMet's continuous palette rather than its eight-class
   default, which merged neighbouring cells into flat plateaus.
 - Add an optional **Precipitation** layer: ECCC GDPS global modelled precipitation
-  with a NOAA/NWS MRMS observed-radar inlay over the lower 48, both keyless and
-  read directly from the browser.
+  with an Iowa Environmental Mesonet NEXRAD observed-radar inlay over the lower
+  48, both keyless and read directly from the browser.
 - Resolve the tier handover through Cesium's imagery rectangle and level bands
   rather than a camera listener; the model draws beneath the radar inlay and
   stops at the tile level past which its 15 km grid carries no more detail.

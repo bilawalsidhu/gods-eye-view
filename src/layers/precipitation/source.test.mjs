@@ -5,7 +5,9 @@ import { PRECIPITATION_TIERS } from './policy.js';
 import {
   forecastLeadHours,
   frameMessage,
+  inlayMessage,
   leadLabel,
+  liveFrame,
   readFrame,
 } from './model.js';
 
@@ -118,6 +120,7 @@ test('a model frame reports its run, its valid step and the resulting lead', asy
   });
   const frame = await source.getFrame(GLOBAL_TIER);
   assert.deepEqual(frame, {
+    key: '2026-09-14T15:00:00Z',
     validTime: '2026-09-14T15:00:00Z',
     referenceTime: '2026-09-14T00:00:00Z',
   });
@@ -142,4 +145,17 @@ test('an observation frame carries no run, so it claims no forecast lead', () =>
     frameMessage({ label: 'NOAA MRMS', forecast: false }, frame),
     'OBSERVED · VALID 13:52Z',
   );
+});
+
+test('an undated service is reported as live, never stamped with the epoch', () => {
+  // `new Date(null)` is 1970-01-01, so a missing valid time once rendered as
+  // "US RADAR 00:00Z" — a timestamp the service never published.
+  const frame = liveFrame(1_760_000_000_000);
+  assert.equal(frame.validTime, null);
+  assert.equal(leadLabel(frame), 'LIVE');
+  assert.equal(
+    inlayMessage({ inlayLabel: 'US RADAR' }, frame),
+    'US RADAR LIVE',
+  );
+  assert.ok(frame.key.startsWith('live:'), 'a poll stamp still drives refresh');
 });

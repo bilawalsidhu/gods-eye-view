@@ -9,6 +9,7 @@ import { INLAY_HANDOVER_LEVEL, PRECIPITATION_TIERS } from './policy.js';
 const OWNED = PRECIPITATION_TIERS.length;
 
 const FRAME = {
+  key: '2026-09-14T15:00:00Z',
   validTime: '2026-09-14T15:00:00Z',
   referenceTime: '2026-09-14T00:00:00Z',
 };
@@ -102,7 +103,9 @@ test('two displays own separate imagery and separate destruction', async () => {
 
 test('the base map is never removed, and refreshes swap without a gap', async () => {
   let validTime = FRAME.validTime;
-  const source = { getFrame: async () => ({ ...FRAME, validTime }) };
+  const source = {
+    getFrame: async () => ({ ...FRAME, key: validTime, validTime }),
+  };
   const { layer, viewer, layers, removed, base } = harness(source);
 
   await layer.update(viewer);

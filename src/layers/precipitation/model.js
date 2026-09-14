@@ -44,6 +44,7 @@ export function readFrame(xml) {
     throw new Error('Precipitation frame time is malformed');
   const referenceTime = defaults.get('reference_time') || null;
   return {
+    key: validTime,
     validTime,
     // Observation services publish no run; only a model has one.
     referenceTime:
@@ -51,6 +52,17 @@ export function readFrame(xml) {
         ? referenceTime
         : null,
   };
+}
+
+/**
+ * A frame for a service that publishes no time dimension at all.
+ *
+ * IEM serves whatever is current and advertises no `time`, so there is nothing
+ * to read or pin. The poll stamp is the change key so a refresh still rebuilds
+ * the layer, but no valid time is claimed on the row.
+ */
+export function liveFrame(now = Date.now()) {
+  return { key: `live:${now}`, validTime: null, referenceTime: null };
 }
 
 /** Hours between the model run and the step being drawn, or null for an observation. */
@@ -62,6 +74,8 @@ export function forecastLeadHours(frame) {
 }
 
 function hourStamp(iso) {
+  // `new Date(null)` is the epoch, not an invalid date — guard before parsing.
+  if (!iso) return null;
   const parsed = new Date(iso);
   if (Number.isNaN(parsed.getTime())) return null;
   const hours = String(parsed.getUTCHours()).padStart(2, '0');
@@ -74,6 +88,7 @@ function hourStamp(iso) {
  * nothing and the lead is what tells a reader how much to trust the field.
  */
 export function leadLabel(frame) {
+  if (!frame?.validTime) return 'LIVE';
   const lead = forecastLeadHours(frame);
   if (lead === null) return 'LIVE';
   return `+${lead}H`;
@@ -85,6 +100,7 @@ export function leadLabel(frame) {
  */
 export function frameMessage(tier, frame) {
   if (!frame) return null;
+  if (!frame.validTime) return tier?.forecast ? 'MODEL' : 'OBSERVED · LIVE';
   const parts = [tier?.forecast ? 'MODEL' : 'OBSERVED'];
   if (frame.referenceTime) {
     const run = hourStamp(frame.referenceTime);
@@ -97,7 +113,9 @@ export function frameMessage(tier, frame) {
 
 /** Compact note that a sharper source is covering part of the view. */
 export function inlayMessage(tier, frame) {
-  const valid = frame ? hourStamp(frame.validTime) : null;
-  if (!valid) return null;
-  return `${tier?.inlayLabel || tier?.label} ${valid}`;
+  if (!frame) return null;
+  const label = tier?.inlayLabel || tier?.label;
+  const valid = hourStamp(frame.validTime);
+  // An undated service states that it is live rather than inventing a stamp.
+  return valid ? `${label} ${valid}` : `${label} LIVE`;
 }

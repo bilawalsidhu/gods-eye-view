@@ -20,13 +20,15 @@ export function tierImageryOptions(tier, frame) {
       transparent: true,
       // Empty string is the server's default style.
       styles: tier.wmsStyle || '',
-      TIME: frame.validTime,
     },
     tilingScheme: new Cesium.WebMercatorTilingScheme(),
     // Past this the service answers with empty tiles; let Cesium upsample the
     // deepest real level instead of caching holes.
     maximumLevel: tier.maxTileLevel,
   };
+  // Pin the step only when the service publishes one; an undated service is
+  // asked for whatever is current.
+  if (frame?.validTime) options.parameters.TIME = frame.validTime;
   if (tier.attribution) options.credit = new Cesium.Credit(tier.attribution);
   return options;
 }

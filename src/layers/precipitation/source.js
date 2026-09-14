@@ -1,4 +1,9 @@
-import { capabilitiesUrl, isServiceException, readFrame } from './model.js';
+import {
+  capabilitiesUrl,
+  isServiceException,
+  liveFrame,
+  readFrame,
+} from './model.js';
 
 /**
  * Read each tier's current frame straight from its public WMS.
@@ -17,6 +22,8 @@ export function createPrecipitationSource({
       if (service.protocol !== 'https:' || service.origin !== tier.origin)
         throw new TypeError('A pinned HTTPS precipitation service is required');
       signal?.throwIfAborted();
+      // Nothing to read: this service advertises no time and always serves now.
+      if (tier.dated === false) return liveFrame();
       const response = await fetchImpl(capabilitiesUrl(tier), {
         method: 'GET',
         headers: { Accept: 'text/xml' },
