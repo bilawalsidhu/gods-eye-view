@@ -194,7 +194,7 @@ export const TARKTEE_ANCHORS = [
   { lat: 58.3859, lon: 24.4971 }, // Pärnu
   { lat: 59.3797, lon: 28.1791 }, // Narva
 ];
-/** Warendorf (Germany): three municipal webcams from a curated catalog file. */
+/** Warendorf (Germany): the Marktplatz municipal webcam from a curated catalog file. */
 export const DEFAULT_WARENDORF_SOURCE_FILE =
   'config/cctv_sources.warendorf.json';
 export const WARENDORF_IMAGE_ORIGINS = Object.freeze([

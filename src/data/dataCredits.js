@@ -220,8 +220,7 @@ export const DATA_CREDITS = [
   {
     key: 'warendorf-cctv',
     html:
-      'Webcams (Warendorf): <a href="https://www.warendorf.de/" target="_blank" rel="noopener">Stadt Warendorf</a> and ' +
-      '<a href="https://www.kreis-warendorf.de/" target="_blank" rel="noopener">Kreis Warendorf</a> (courtesy); ' +
+      'Webcam (Warendorf): <a href="https://www.warendorf.de/" target="_blank" rel="noopener">Stadt Warendorf</a> (courtesy); ' +
       'camera poses derived from OpenStreetMap geometry, © OpenStreetMap contributors (ODbL)',
   },
   {

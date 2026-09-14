@@ -81,8 +81,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Add Estonia CCTV source packs: Tallinn intersection stills (`ristmikud.tallinn.ee`,
   curated catalog) and nationwide Transpordiamet / Tarktee road-weather cameras
   (DATEX2 locations + rotating JPEG URLs), with Tallinn city POIs and attribution.
-- Add a Warendorf (Germany) source pack: the Stadt Warendorf Marktplatz webcam and
-  the two Kreis Warendorf registration-office webcams, with curated poses.
+- Add a Warendorf (Germany) source pack: the Stadt Warendorf Marktplatz webcam, with a
+  curated pose.
 - Add Live Traffic NSW (Transport for NSW, CC BY 4.0) as a keyless CCTV pack: 217
   Sydney and regional cameras with compass headings and view descriptions.
 

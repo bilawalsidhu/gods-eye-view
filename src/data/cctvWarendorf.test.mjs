@@ -5,16 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { loadWarendorfSourcesFromCatalog } from '../../server/providers/cctv/sources.js';
 
-test('Warendorf catalog registers the three municipal webcams on official hosts only', (t) => {
+test('Warendorf catalog registers the Marktplatz webcam on official hosts only', (t) => {
   t.mock.method(console, 'log', () => {});
   const cameras = loadWarendorfSourcesFromCatalog();
   assert.deepEqual(
     cameras.map((camera) => camera.id),
-    [
-      'warendorf-marktplatz-rathaus',
-      'warendorf-kreishaus-zulassung',
-      'beckum-zulassungsstelle',
-    ],
+    ['warendorf-marktplatz-rathaus'],
   );
   for (const camera of cameras) {
     assert.ok(
