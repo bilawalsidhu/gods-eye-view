@@ -85,6 +85,10 @@ html[lang='es'] .cctv-controls {
    nowrap row, so uk gets the same wrap remedy as es. ru fits both states
    (~327px/~314px) and stays unwrapped; revisit if the ru coverage/auto-hop
    strings ever grow. */
+html[lang='fr'] .cctv-controls {
+  flex-wrap: wrap;
+}
+
 html[lang='uk'] .cctv-controls {
   flex-wrap: wrap;
 }
