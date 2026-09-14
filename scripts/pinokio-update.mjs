@@ -5,9 +5,9 @@
  * Update is a fixed menu item aimed at people who only want to run the app, and
  * it executes install scripts from whatever the configured remote serves. It
  * cannot ask for confirmation — Pinokio drives it non-interactively — so the
- * safety it can offer is disclosure: fetch first, print the remote it fetched
- * from plus the incoming commits and their diffstat, and only then pull and
- * reinstall. Someone who sees an unfamiliar remote or an unexpected set of
+ * safety it can offer is disclosure: fetch once, print the remote it fetched
+ * from plus the incoming commits and their diffstat, and then apply that exact
+ * revision. Someone who sees an unfamiliar remote or an unexpected set of
  * commits can close the window before any install script runs.
  *
  * @module scripts/pinokio-update
@@ -16,70 +16,170 @@ import { realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { installPinokioDependencies, isDirectInvocation, runChecked } from './pinokio-install.mjs';
+import {
+  installPinokioDependencies,
+  isDirectInvocation,
+  runChecked,
+} from './pinokio-install.mjs';
 
 const MODULE_PATH = fileURLToPath(import.meta.url);
 const ROOT = realpathSync(path.resolve(path.dirname(MODULE_PATH), '..'));
 
 /**
- * Read a git value from the repository root.
+ * Read a git value.
  *
  * @param {string[]} args - git arguments.
- * @returns {string|null} Trimmed stdout, or null when git failed (no upstream,
- *   detached HEAD, not a checkout) — every caller treats null as "unknown"
- *   rather than fatal, so a missing upstream degrades the report instead of
- *   blocking the update.
+ * @param {object} [options]
+ * @param {string} [options.cwd] - Repository to read.
+ * @returns {string|null} Trimmed stdout, `''` when git succeeded with no
+ *   output, or null when git failed (no upstream, detached HEAD, not a
+ *   checkout). Callers must keep those two apart: an empty range and an
+ *   unreadable one mean very different things to someone about to install.
  */
-export function readGit(args) {
-  const result = spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
+export function readGit(args, { cwd = ROOT } = {}) {
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
   if (result.error || result.status !== 0) return null;
   return result.stdout.trim();
 }
 
 /**
+ * Remove credentials from a remote URL before it is printed.
+ *
+ * A remote can carry a password or an access token in its userinfo
+ * (`https://token@host/org/repo.git`). The point of printing the remote is to
+ * show WHERE the update comes from, which the host and path already say.
+ *
+ * @param {string|null|undefined} url - Remote URL as git reports it.
+ * @returns {string|null} Printable URL, or null when there is nothing to print.
+ */
+export function redactRemoteUrl(url) {
+  if (typeof url !== 'string' || url.length === 0) return null;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    // Not a URL: scp-style `git@host:org/repo.git`, or a local path. Neither
+    // has a userinfo field to hide.
+    return url;
+  }
+  if (!parsed.username && !parsed.password) return url;
+  parsed.password = '';
+  parsed.username = '***';
+  return parsed.toString();
+}
+
+/**
  * Print the remote, the commits about to be applied, and their diffstat.
  *
- * @returns {boolean} True when there is something to pull.
+ * @param {object} [io] - Injection seam for tests.
+ * @param {string} [io.cwd] - Repository to inspect.
+ * @param {(line: string) => void} [io.log] - Normal output.
+ * @param {(line: string) => void} [io.warn] - Degraded-path output.
+ * @param {(remote: string) => void} [io.fetchRemote] - Fetch step; throws or
+ *   exits on failure, because a report built on a stale remote ref describes
+ *   the wrong changes.
+ * @param {(args: string[]) => (string|null)} [io.read] - git reader.
+ * @returns {{apply: string|null, fallback: boolean}} `apply` is the exact
+ *   revision that was disclosed and must now be applied. `fallback` asks the
+ *   caller to run the plain pull so git itself reports whatever went wrong.
  */
-export function reportIncomingChanges() {
-  const upstream = readGit(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
+export function reportIncomingChanges(io = {}) {
+  const {
+    cwd = ROOT,
+    log = (line) => console.log(line),
+    warn = (line) => console.warn(line),
+    fetchRemote = (remote) => runChecked('git', ['fetch', '--quiet', remote]),
+    read = (args) => readGit(args, { cwd }),
+  } = io;
+
+  const upstream = read([
+    'rev-parse',
+    '--abbrev-ref',
+    '--symbolic-full-name',
+    '@{u}',
+  ]);
   if (!upstream) {
-    console.warn('[update] No upstream branch is configured — cannot preview changes.');
-    console.warn('[update] Continuing; `git pull --ff-only` will report the problem.');
-    return true;
+    warn('[update] No upstream branch is configured — cannot preview changes.');
+    warn('[update] Continuing; `git pull --ff-only` will report the problem.');
+    return { apply: null, fallback: true };
   }
 
   const remote = upstream.split('/')[0];
-  const url = readGit(['remote', 'get-url', remote]);
-  console.log(`[update] Tracking ${upstream}`);
-  console.log(`[update] Fetching from ${url || remote}`);
-  // Fetch before diffing, and fail loudly: a report built on a stale remote ref
-  // would describe the wrong changes.
-  runChecked('git', ['fetch', '--quiet', remote]);
+  const url = redactRemoteUrl(read(['remote', 'get-url', remote]));
+  log(`[update] Tracking ${upstream}`);
+  log(`[update] Fetching from ${url || remote}`);
+  // Fetch once, here. Everything below describes and then applies the revision
+  // this fetch brought in; a second fetch inside `git pull` could apply
+  // something newer than what was printed.
+  fetchRemote(remote);
 
-  const commits = readGit(['log', '--oneline', '--no-decorate', `HEAD..${upstream}`]);
-  if (!commits) {
-    console.log('[update] Already up to date — reinstalling dependencies only.');
-    return false;
+  const target = read(['rev-parse', upstream]);
+  const head = read(['rev-parse', 'HEAD']);
+  if (!target || !head) {
+    warn(`[update] Could not resolve ${upstream} — no preview is available.`);
+    warn('[update] Continuing; `git pull --ff-only` will report the problem.');
+    return { apply: null, fallback: true };
+  }
+  if (target === head) {
+    log('[update] Already up to date — reinstalling dependencies only.');
+    return { apply: null, fallback: false };
   }
 
-  const lines = commits.split('\n');
-  console.log(`\n[update] ${lines.length} incoming commit(s):`);
-  for (const line of lines) console.log(`  ${line}`);
+  const commits = read([
+    'log',
+    '--oneline',
+    '--no-decorate',
+    `${head}..${target}`,
+  ]);
+  if (commits === null) {
+    // A read that failed is not an empty range. Saying "up to date" here would
+    // tell someone nothing is arriving while a revision is about to be applied.
+    warn(`[update] Could not list the commits in ${head}..${target}.`);
+    warn(
+      `[update] Applying ${target} anyway; it is the revision that was fetched.`,
+    );
+    return { apply: target, fallback: false };
+  }
 
-  const stat = readGit(['diff', '--stat', `HEAD..${upstream}`]);
+  const lines = commits.length > 0 ? commits.split('\n') : [];
+  if (lines.length > 0) {
+    log(`\n[update] ${lines.length} incoming commit(s):`);
+    for (const line of lines) log(`  ${line}`);
+  } else {
+    log(
+      `\n[update] ${upstream} is at ${target}, which is not ahead of this checkout.`,
+    );
+  }
+
+  const stat = read(['diff', '--stat', `${head}..${target}`]);
   if (stat) {
-    console.log('\n[update] Files affected:');
-    for (const line of stat.split('\n')) console.log(`  ${line}`);
+    log('\n[update] Files affected:');
+    for (const line of stat.split('\n')) log(`  ${line}`);
   }
-  console.log('\n[update] Applying the changes above, then reinstalling dependencies.\n');
-  return true;
+  log(`\n[update] Applying ${target}, then reinstalling dependencies.\n`);
+  return { apply: target, fallback: false };
+}
+
+/**
+ * Disclose, then apply exactly what was disclosed.
+ *
+ * @param {object} [io] - Same seam as {@link reportIncomingChanges}, plus
+ *   `apply`, which runs one git command and must fail loudly.
+ * @returns {{apply: string|null, fallback: boolean}} What the report decided.
+ */
+export function updateFromRemote(io = {}) {
+  const { apply = (args) => runChecked('git', args) } = io;
+  const plan = reportIncomingChanges(io);
+  // `merge --ff-only <revision>` applies the object the report named. A second
+  // `pull` would fetch again and could land a different one.
+  if (plan.apply) apply(['merge', '--ff-only', plan.apply]);
+  else if (plan.fallback) apply(['pull', '--ff-only']);
+  return plan;
 }
 
 // Guarded like pinokio-start.mjs so the report above can be exercised without
 // pulling and reinstalling as an import side effect.
 if (isDirectInvocation(process.argv[1], MODULE_PATH)) {
-  reportIncomingChanges();
-  runChecked('git', ['pull', '--ff-only']);
+  updateFromRemote();
   installPinokioDependencies();
 }

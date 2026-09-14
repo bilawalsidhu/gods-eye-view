@@ -615,5 +615,7 @@
   "src/cityPresets.test.mjs",
   "server/providers/cctv/range.js",
   "src/data/cctvMediaRange.test.mjs",
-  "src/materialSymbolsSubset.test.mjs"
+  "src/materialSymbolsSubset.test.mjs",
+  "scripts/pinokio-update.mjs",
+  "src/pinokioUpdatePreview.test.mjs"
 ]
