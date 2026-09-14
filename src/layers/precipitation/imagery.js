@@ -22,6 +22,9 @@ export function tierImageryOptions(tier, frame) {
       styles: tier.wmsStyle || '',
     },
     tilingScheme: new Cesium.WebMercatorTilingScheme(),
+    // Nothing in this layer answers a click, and ten WMS layers would otherwise
+    // be ten GetFeatureInfo requests per pick.
+    enablePickFeatures: false,
     // Past this the service answers with empty tiles; let Cesium upsample the
     // deepest real level instead of caching holes.
     maximumLevel: tier.maxTileLevel,
@@ -66,11 +69,32 @@ export function createImageryStack() {
   const owned = new Map();
 
   const detach = (viewer, tierId) => {
-    const layer = owned.get(tierId);
-    if (!layer) return false;
+    const entry = owned.get(tierId);
+    if (!entry) return false;
     owned.delete(tierId);
-    viewer?.imageryLayers?.remove(layer, true);
+    viewer?.imageryLayers?.remove(entry.layer, true);
     return true;
+  };
+
+  /**
+   * Where this tier belongs in the collection right now.
+   *
+   * Tiers refresh on their own cadences, so a slow tier re-applying must not
+   * land on top of a faster one that happens to have refreshed more recently:
+   * Cesium's `add` puts a layer above everything when no index is given. Sit
+   * directly beneath the lowest-placed owned tier that outranks this one, and
+   * read the live collection rather than a remembered index so the position
+   * survives the map controller swapping the base map underneath us.
+   */
+  const insertIndexFor = (viewer, tier) => {
+    const layers = viewer.imageryLayers;
+    let index = layers.length;
+    for (const entry of owned.values()) {
+      if (entry.rung <= tier.rung) continue;
+      const at = layers.indexOf(entry.layer);
+      if (at >= 0 && at < index) index = at;
+    }
+    return index;
   };
 
   return {
@@ -80,10 +104,10 @@ export function createImageryStack() {
         tierImageryOptions(tier, frame),
       );
       const next = new Cesium.ImageryLayer(provider, tierLayerOptions(tier));
-      // Append: index 0 belongs to the base map.
-      viewer.imageryLayers.add(next);
+      // Add before removing so a live tier never blinks through the base map.
+      viewer.imageryLayers.add(next, insertIndexFor(viewer, tier));
       detach(viewer, tier.id);
-      owned.set(tier.id, next);
+      owned.set(tier.id, { layer: next, rung: tier.rung });
       return next;
     },
     remove: detach,
@@ -96,6 +120,11 @@ export function createImageryStack() {
     },
     ownedIds() {
       return [...owned.keys()];
+    },
+    /** Live collection index of an owned tier, for ordering assertions. */
+    indexOf(viewer, tierId) {
+      const entry = owned.get(tierId);
+      return entry ? viewer.imageryLayers.indexOf(entry.layer) : -1;
     },
     get size() {
       return owned.size;

@@ -178,6 +178,7 @@ const CREDIT_EXPECTATIONS = {
   'local-firms': /FIRMS/i,
   'telegeography-submarine-cables': /TeleGeography/i,
   'local-neighborhoods': /DataSF|San Francisco/i,
+  precipitation: /Environment and Climate Change Canada|GeoMet/i,
   'weather-effects': /Open-Meteo/i,
 };
 

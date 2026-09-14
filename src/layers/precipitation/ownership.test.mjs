@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createPrecipitationLayer } from './index.js';
-import { tierImageryOptions, tierLayerOptions } from './imagery.js';
+import {
+  createImageryStack,
+  tierImageryOptions,
+  tierLayerOptions,
+} from './imagery.js';
 import { INLAY_HANDOVER_LEVEL, PRECIPITATION_TIERS } from './policy.js';
 
 /** Every placement in the precedence table owns one imagery layer. */
@@ -26,8 +30,12 @@ function harness(source, { globeVisible = true, tiers } = {}) {
   const viewer = {
     scene: { globe: { show: globeVisible } },
     imageryLayers: {
-      add(layer) {
-        layers.push(layer);
+      add(layer, index) {
+        if (Number.isInteger(index)) layers.splice(index, 0, layer);
+        else layers.push(layer);
+      },
+      indexOf(layer) {
+        return layers.indexOf(layer);
       },
       remove(layer) {
         const index = layers.indexOf(layer);
@@ -342,4 +350,61 @@ test('each tier refreshes on its own cadence, not the slowest one', async () => 
     Math.max(...cadences) > Math.min(...cadences),
     'radar and model must not share one cadence',
   );
+});
+
+test('a tier refreshing on its own cadence stays at its rung', () => {
+  // Cesium's `add` puts a layer on top when no index is given, so a slow tier
+  // re-applying would land above a faster one that refreshed more recently —
+  // painting a coarse forecast over live observation until the next fast tick.
+  const base = { id: 'base-map' };
+  const layers = [base];
+  const viewer = {
+    imageryLayers: {
+      add(layer, index) {
+        if (Number.isInteger(index)) layers.splice(index, 0, layer);
+        else layers.push(layer);
+      },
+      remove(layer) {
+        const at = layers.indexOf(layer);
+        if (at >= 0) layers.splice(at, 1);
+      },
+      indexOf: (layer) => layers.indexOf(layer),
+      get length() {
+        return layers.length;
+      },
+    },
+  };
+  const stack = createImageryStack();
+  const frame = { key: 'k', validTime: null, referenceTime: null };
+  const byRung = [...PRECIPITATION_TIERS].sort((a, b) => a.rung - b.rung);
+
+  // Tiers sharing a rung may sit either way round; what must hold is that rungs
+  // never decrease as you go up the collection.
+  const assertOrdered = (when) => {
+    const placed = PRECIPITATION_TIERS.map((tier) => ({
+      id: tier.id,
+      rung: tier.rung,
+      at: stack.indexOf(viewer, tier.id),
+    }))
+      .filter((entry) => entry.at >= 0)
+      .sort((a, b) => a.at - b.at);
+    for (const entry of placed)
+      assert.ok(entry.at > 0, `${when}: ${entry.id} must never take index 0`);
+    const rungs = placed.map((entry) => entry.rung);
+    assert.deepEqual(
+      rungs,
+      [...rungs].sort((a, b) => a - b),
+      `${when}: rungs must not decrease upward — got ${JSON.stringify(placed)}`,
+    );
+  };
+
+  // Apply finest-first, the order a naive append would get wrong.
+  for (const tier of [...byRung].reverse()) stack.apply(viewer, tier, frame);
+  assertOrdered('initial');
+
+  // Now re-apply only the coarsest tier, as an hourly model refresh would.
+  stack.apply(viewer, byRung[0], { ...frame, key: 'k2' });
+  assertOrdered('after the coarse tier refreshed');
+  assert.equal(layers[0], base, 'the base map still owns index 0');
+  assert.equal(layers.length, PRECIPITATION_TIERS.length + 1, 'no duplicates');
 });

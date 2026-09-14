@@ -72,6 +72,9 @@ export const PRECIPITATION_TIERS = Object.freeze([
   Object.freeze({
     id: 'gdps-global',
     role: 'primary',
+    // Paint order. Coarser sources sit beneath finer ones; a tier re-applying
+    // on its own cadence is reinserted at its rung, never on top of the stack.
+    rung: 1,
     label: 'ECCC GDPS',
     origin: GEOMET_ORIGIN,
     service: `${GEOMET_ORIGIN}/geomet`,
@@ -99,6 +102,7 @@ export const PRECIPITATION_TIERS = Object.freeze([
   Object.freeze({
     id: 'gdps-detail',
     role: 'detail',
+    rung: 1,
     label: 'ECCC GDPS',
     origin: GEOMET_ORIGIN,
     service: `${GEOMET_ORIGIN}/geomet`,
@@ -122,6 +126,7 @@ export const PRECIPITATION_TIERS = Object.freeze([
   Object.freeze({
     id: 'nexrad-conus',
     role: 'inlay',
+    rung: 4,
     label: 'IEM NEXRAD',
     inlayLabel: 'US RADAR',
     origin: IEM_ORIGIN,
