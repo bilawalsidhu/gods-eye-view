@@ -2541,7 +2541,8 @@ answered yet opens nothing rather than a card hanging at sea level. The cells
 are re-read for up to 90 seconds, which outlasts a cold terrain round trip;
 reroute, CLEAR and disable cancel that.
 Transit is off by default, and share links use token `j`. The movement panel order
-is Street Traffic, CCTV, Radio, Transit, Bikeshare, Directions. The layer polls
+places Transit directly after Street Traffic and before Bike Share. Cameras and
+utilities retain their own groups. The layer polls
 registered feeds near the camera every 15 seconds, below a 3,000 km altitude
 gate. Seven keyless regions are available: Boston, Austin, Minneapolis–St Paul,
 Helsinki, the Netherlands, Norway and South East Queensland. Mode silhouettes

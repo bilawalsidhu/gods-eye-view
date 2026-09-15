@@ -21,6 +21,7 @@ const PANEL_GROUPS = [
       'military',
       'ais-live-vessels',
       'traffic',
+      'transit',
       'bikeshare',
     ],
   },

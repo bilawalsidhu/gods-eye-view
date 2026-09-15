@@ -181,6 +181,7 @@
   "src/ui/layers.js",
   "src/ui/layerPanel.js",
   "src/ui/layerKeyRequirement.test.mjs",
+  "src/ui/layerPanel.test.mjs",
   "src/ui/clearLayersControl.js",
   "scripts/qa-layer-panel.mjs",
   "scripts/qa-directions.mjs",
