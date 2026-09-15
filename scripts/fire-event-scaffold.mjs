@@ -59,7 +59,8 @@ async function getJson(url) {
   const res = await fetch(url, { signal: AbortSignal.timeout(60_000) });
   if (!res.ok) throw new Error(`NIFC HTTP ${res.status}`);
   const body = await res.json();
-  if (body.error) throw new Error(`NIFC: ${body.error.message || 'query error'}`);
+  if (body.error)
+    throw new Error(`NIFC: ${body.error.message || 'query error'}`);
   return body;
 }
 
@@ -84,7 +85,9 @@ if (!candidate) {
   console.error(`--pick ${args.pick} is out of range`);
   process.exit(1);
 }
-console.error(`Using [${pick}] ${candidate.name} (OBJECTID ${candidate.objectId})`);
+console.error(
+  `Using [${pick}] ${candidate.name} (OBJECTID ${candidate.objectId})`,
+);
 
 let bbox;
 if (args.bbox) {
@@ -96,7 +99,8 @@ if (args.bbox) {
 const window = deriveWindow(candidate, { start: args.start, end: args.end });
 const references = args.ref.map((pair) => {
   const at = pair.indexOf('=');
-  if (at < 1) throw new Error(`--ref expects "Label=https://url", got "${pair}"`);
+  if (at < 1)
+    throw new Error(`--ref expects "Label=https://url", got "${pair}"`);
   return { label: pair.slice(0, at).trim(), url: pair.slice(at + 1).trim() };
 });
 const { entry, warnings } = buildEventEntry({
@@ -115,13 +119,25 @@ console.log(JSON.stringify(entry, null, 2));
 for (const warning of warnings) console.error(`warning: ${warning}`);
 
 if (args.write) {
-  const configPath = path.join(projectRoot(import.meta.url), 'config', 'fire_events.json');
+  const configPath = path.join(
+    projectRoot(import.meta.url),
+    'config',
+    'fire_events.json',
+  );
   const config = JSON.parse(await fsp.readFile(configPath, 'utf8'));
   if (config.events.some((e) => e.id === entry.id)) {
-    console.error(`config already has an event with id "${entry.id}" — pass --id to rename`);
+    console.error(
+      `config already has an event with id "${entry.id}" — pass --id to rename`,
+    );
     process.exit(1);
   }
   config.events.push(entry);
-  await fsp.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
-  console.error(`Appended ${entry.id} to config/fire_events.json — the dev server restarts and picks it up.`);
+  await fsp.writeFile(
+    configPath,
+    `${JSON.stringify(config, null, 2)}\n`,
+    'utf8',
+  );
+  console.error(
+    `Appended ${entry.id} to config/fire_events.json — the dev server restarts and picks it up.`,
+  );
 }
