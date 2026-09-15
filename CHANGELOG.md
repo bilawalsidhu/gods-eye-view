@@ -290,6 +290,7 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   Subways are projected to street level and their cards explain that choice.
   Visible animation, detection membership, history storage and proxy requests
   are bounded. Share links carry Transit as token `j`.
+  Restore slim sensor sprites, drape visible trails on Google 3D tiles, and place Transit directly above Bikeshare.
 
 - Add Ontario 511 as a keyless CCTV source pack, including Kitchener-area
   highway cameras, with server-registered still URLs and attribution.
