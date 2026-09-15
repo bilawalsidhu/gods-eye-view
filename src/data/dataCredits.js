@@ -225,6 +225,13 @@ export const DATA_CREDITS = [
       'part of NASA’s Earth Observing System Data and Information System (EOSDIS)',
   },
   {
+    key: 'fire-history',
+    html:
+      'Historic fires: NASA FIRMS standard-processing archive (VIIRS, MODIS) — ' +
+      'registered events fetched at runtime; see ' +
+      '<a href="https://earthdata.nasa.gov/firms" target="_blank" rel="noopener">earthdata.nasa.gov/firms</a>',
+  },
+  {
     key: 'drivebc-cctv',
     html:
       'CCTV cameras &amp; frames (British Columbia): ' +

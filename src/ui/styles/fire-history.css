@@ -1,0 +1,294 @@
+/* ── Historic Fires section inside Context (layer-owned, mounted at runtime) ── */
+#fire-history-panel {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid rgba(255, 159, 67, 0.22);
+  border-radius: 8px;
+  background: rgba(20, 10, 4, 0.42);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+#global-context-panel.collapsed #fire-history-panel {
+  display: none !important;
+}
+/* Shares the Context panel's scroller with the mode views and Radio: keep the
+   natural height so flexbox cannot compress this section and let its contents
+   paint through the next one (see .context-mode-view in layers.css). */
+#right-context-rail #global-context-panel:not(.collapsed) #fire-history-panel {
+  flex: 0 0 auto;
+}
+#fire-history-panel .panel-header {
+  margin-bottom: 0;
+}
+.fire-history-state {
+  color: var(--text-dim);
+  font: 8px/1 var(--font-mono);
+  letter-spacing: 0.12em;
+}
+.fire-history-state.active {
+  color: #ffc078;
+}
+.fire-history-disclose {
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(255, 159, 67, 0.3);
+  border-radius: 5px;
+  color: rgba(255, 210, 160, 0.8);
+  background: rgba(255, 159, 67, 0.06);
+  font: 12px/1 var(--font-mono);
+  cursor: pointer;
+}
+.fire-history-disclose:hover,
+.fire-history-disclose:focus-visible {
+  border-color: #ffb45f;
+  color: #fff;
+  outline: none;
+}
+.fire-history-body {
+  display: grid;
+  gap: 9px;
+  padding-top: 9px;
+}
+.fire-history-roster {
+  display: grid;
+  gap: 5px;
+}
+.fire-history-roster-empty,
+.fire-history-chart-empty,
+.fire-history-ref-empty {
+  color: rgba(190, 230, 230, 0.48);
+  font: 8px/1.4 var(--font-mono);
+  letter-spacing: 0.1em;
+}
+.fire-history-roster-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) 12px;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 7px;
+  border: 1px solid rgba(255, 159, 67, 0.16);
+  border-radius: 4px;
+  color: #ffe9d2;
+  background: rgba(255, 159, 67, 0.045);
+  font-family: var(--font-mono);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+.fire-history-roster-item:hover,
+.fire-history-roster-item:focus-visible {
+  border-color: rgba(255, 180, 95, 0.7);
+  outline: none;
+  background: rgba(255, 159, 67, 0.11);
+  transform: translateX(2px);
+}
+.fire-history-roster-item.active {
+  border-color: #ffb45f;
+  background: rgba(255, 159, 67, 0.16);
+  box-shadow: 0 0 12px rgba(255, 159, 67, 0.16);
+}
+.fire-history-roster-marker {
+  width: 6px;
+  height: 6px;
+  justify-self: center;
+  border-radius: 50%;
+  background: #ff8a1f;
+  box-shadow: 0 0 7px rgba(255, 138, 31, 0.7);
+}
+.fire-history-roster-item.active .fire-history-roster-marker {
+  background: #ffe45c;
+  box-shadow: 0 0 9px rgba(255, 228, 92, 0.85);
+}
+.fire-history-roster-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.fire-history-roster-copy strong,
+.fire-history-roster-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fire-history-roster-copy strong {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+}
+.fire-history-roster-copy small {
+  color: rgba(230, 205, 180, 0.55);
+  font-size: 7px;
+  letter-spacing: 0.035em;
+}
+.fire-history-roster-chevron {
+  color: rgba(255, 180, 95, 0.55);
+  font-size: 12px;
+}
+.fire-history-detail {
+  display: grid;
+  gap: 6px;
+  padding: 8px 0 2px;
+  border-top: 1px solid rgba(255, 159, 67, 0.18);
+  color: #ffc078;
+  font: 10px var(--font-mono);
+  letter-spacing: 0.08em;
+}
+.fire-history-detail strong {
+  font-size: 13px;
+  color: #fff1e0;
+}
+.fire-history-detail span {
+  color: rgba(230, 205, 180, 0.7);
+}
+.fire-history-detail b {
+  color: #ffe9d2;
+  font-weight: 400;
+}
+.fire-history-summary {
+  margin: 2px 0 0;
+  color: rgba(230, 215, 195, 0.82);
+  font: 9px/1.5 var(--font-mono);
+  letter-spacing: 0.02em;
+}
+.fire-history-section {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 159, 67, 0.18);
+}
+.fire-history-section h4 {
+  margin: 0 0 6px;
+  color: #ffb45f;
+  font: 9px var(--font-mono);
+  letter-spacing: 0.17em;
+}
+.fire-history-chart {
+  width: 100%;
+  height: 56px;
+}
+.fire-history-chart svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.fire-history-chart-base {
+  stroke: rgba(255, 159, 67, 0.35);
+  stroke-width: 1;
+}
+.fire-history-chart-cursor {
+  stroke: #e8feff;
+  stroke-width: 1.2;
+  stroke-dasharray: 3 2;
+  filter: drop-shadow(0 0 3px rgba(232, 254, 255, 0.8));
+}
+.fire-history-chart-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+  color: rgba(230, 205, 180, 0.55);
+  font: 7px var(--font-mono);
+  letter-spacing: 0.08em;
+}
+.fire-history-clock {
+  min-height: 12px;
+  margin-bottom: 6px;
+  color: #ffe9d2;
+  font: 8px/1.4 var(--font-mono);
+  letter-spacing: 0.1em;
+}
+.fire-history-seek {
+  width: 100%;
+  margin: 0 0 8px;
+}
+.fire-history-speed-header {
+  display: flex;
+  justify-content: space-between;
+  color: rgba(230, 205, 180, 0.7);
+  font: 7px/1 var(--font-mono);
+  letter-spacing: 0.12em;
+}
+.fire-history-speed input {
+  width: 100%;
+}
+.fire-history-speed-scale {
+  display: flex;
+  justify-content: space-between;
+  color: rgba(230, 205, 180, 0.45);
+  font: 7px var(--font-mono);
+}
+.fire-history-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.fire-history-actions button {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 6px;
+  border: 1px solid rgba(255, 159, 67, 0.62);
+  border-radius: 5px;
+  color: #ffc078;
+  background: linear-gradient(90deg, rgba(255, 159, 67, 0.08), rgba(232, 50, 26, 0.08));
+  font: 8px var(--font-mono);
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.fire-history-actions .fire-history-focus {
+  border-color: rgba(34, 230, 230, 0.58);
+  color: #22e6e6;
+  background: rgba(34, 230, 230, 0.07);
+}
+.fire-history-actions button[aria-pressed='true'] {
+  color: #fff;
+  border-color: #ffb45f;
+  box-shadow: 0 0 14px rgba(255, 159, 67, 0.22);
+}
+.fire-history-actions button:hover:not(:disabled),
+.fire-history-actions button:focus-visible:not(:disabled) {
+  border-color: #ffb45f;
+  color: #fff;
+  outline: none;
+  box-shadow: 0 0 14px rgba(255, 159, 67, 0.14);
+}
+.fire-history-actions button:disabled,
+.fire-history-seek:disabled,
+.fire-history-speed input:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.fire-history-refs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+.fire-history-refs a {
+  color: #6be8ff;
+  font: 8px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-decoration: none;
+}
+.fire-history-refs a:hover,
+.fire-history-refs a:focus-visible {
+  text-decoration: underline;
+}
+.fire-history-attribution {
+  display: block;
+  margin-top: 6px;
+  color: rgba(230, 205, 180, 0.5);
+  font: 7px/1.4 var(--font-mono);
+  letter-spacing: 0.04em;
+}
