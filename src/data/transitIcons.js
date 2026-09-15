@@ -198,7 +198,7 @@ export function transitIcon(kind, px = FLEET_RASTER_PX, options = {}) {
     const halo =
       frame.units > 0
         ? profile === 'mono'
-          ? `<path d="${silhouette}" fill="none" stroke="#000000" stroke-opacity="1" stroke-width="${frame.units.toFixed(2)}" stroke-linejoin="round"/>`
+          ? `<path d="${silhouette}" fill="none" stroke="#05080C" stroke-opacity="1" stroke-width="${frame.units.toFixed(2)}" stroke-linejoin="round"/>`
           : body.replace(
               /<path d="([^"]+)"\s+fill="white" [^/]*\/>/,
               (_m, d) =>

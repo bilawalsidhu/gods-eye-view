@@ -2603,13 +2603,14 @@ visual inspection.
 
 **Appearance.** Normal fleet frames are 20 px, growing to 30 px on selection;
 CRT, NVG, thermal and noir frames are 26/39 px. Source rasters are 48/96 px before padding.
-External halos are 1/1.5 px in normal and 1.25/1.25 px in CRT and sensors, calculated from the
+External halos are 1/1.5 px in normal, 1.25/1.25 px in CRT and 2/2 px in sensors, calculated from the
 final unpadded display size. Six modes, two sizes and three profiles cap the
 raster cache at 36 variants. Normal mode colours are bus `#5EF08A`, tram
 `#FFC24A`, subway `#FF4538`, rail `#D9A6FF`, ferry `#5FD6FF`, and unknown
 `#D8DDE5`. Selection keeps the mode colour. Sensors reuse each normal silhouette's exact
-outer path, filled opaque white without interior panel lines, with a thin opaque
-black halo. There is no envelope body. Black-hot reverses the contrast and
+outer path, filled opaque white without interior panel lines, with an opaque
+`#05080C` halo. Only the external padding grows; the unpadded silhouette remains
+at CRT size. There is no envelope body. Black-hot reverses the contrast and
 Ironbow maps the white input to its hottest palette entry through the thermal
 effect; sprite code never applies a red tint. Creation, mode changes, selection, deselection, map presets and
 Cockpit vision use the same sprite styling function.

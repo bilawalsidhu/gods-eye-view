@@ -50,7 +50,7 @@ test('mono: every mode is a white core, larger, with a dark halo in screen pixel
         presetSpriteScale(style, selected),
         presetSpriteScale('retro', selected),
       );
-      assert.equal(presetSpriteOutlinePx(style, selected), 1.25);
+      assert.equal(presetSpriteOutlinePx(style, selected), 2);
     }
   }
 });
@@ -71,7 +71,7 @@ test('crt: saturated per-mode colours, distinct, upsized, thinner halo', () => {
   assert.ok(presetSpriteScale('retro') > 1.2);
   assert.ok(
     presetSpriteOutlinePx('retro') > 0 &&
-      presetSpriteOutlinePx('retro') === presetSpriteOutlinePx('thermal'),
+      presetSpriteOutlinePx('retro') < presetSpriteOutlinePx('thermal'),
   );
 });
 
