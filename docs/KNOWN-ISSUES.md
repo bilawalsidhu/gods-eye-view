@@ -31,6 +31,60 @@ Next iteration candidates:
 
 ---
 
+### CelesTrak TLE proxy 502s from Cloudflare egress
+Status: Open (environmental, verified 2026-09-14)
+
+`/api/celestrak/*` on the deployed Pages surface answers 502
+("celestrak fetch failed and no cache available") persistently, while the
+dev middleware — running the identical shared fetch code — answers 200 from
+a residential IP. CelesTrak rate-limits/blocks datacenter address space;
+Cloudflare Workers egress shares its IP pool across the whole fleet, so the
+upstream rejects it. The ~20 s latency before the 502 is the handler's
+upstream timeout expiring.
+
+Impact: on a cold browser (empty TLE cache) the satellites layer cannot
+fetch a catalog in production. Repeat visitors are served from the browser
+TLE cache (6 h) and the handler's stale path.
+
+Not a code defect — the same module works wherever the upstream accepts the
+caller. Mitigation candidates (each a real trade-off, none taken yet):
+an alternate TLE mirror upstream, a warm-cache tier that survives isolate
+recycling (e.g. KV), or user-facing messaging while the catalog is
+unavailable.
+
+---
+
+### Launch Library 2 throttles anonymous Cloudflare egress
+Status: Open (owner action available, verified 2026-09-14)
+
+`/api/launches` forwards LL2's 429 by contract (the client reads the
+status). Anonymous LL2 rate limits are per-IP; the shared Cloudflare egress
+pool exhausts them, so production can 429 while dev works. The handler
+already supports `LL2_API_TOKEN` (sent as `Authorization: Token …`) —
+setting it as a Pages secret raises the limit. No token exists on the
+build/deploy machine; provisioning one is an owner step
+(`npx wrangler pages secret put LL2_API_TOKEN --project-name globe`).
+
+---
+
+### Server-side key material absent on the deploy machine
+Status: Open (owner action, verified 2026-09-14)
+
+The Cloudflare Pages project runs fully keyless server-side (no secrets
+configured). Consequences observed on the deployed surface: HUD AI summary
+returns 503 (`OPENAI_API_KEY is not set`), realtime voice token minting is
+degraded, and Google nearby-places returns 503. The keyless routes (radio,
+CCTV, geocode, OpenZenith, terrain heights, debug-log) carry the core
+experience and all verify 200/204. Note this machine's `.env` itself holds
+only the scaffolded Google sentinel and empty OpenAI/OpenSky/AISStream
+values — the real credentials live in the owner's Keychain via
+`scripts/dev-fresh.sh`, so the secrets must be provisioned from wherever
+they exist, not from here. Photoreal tiles are NOT affected: the real
+`CESIUM_ION_TOKEN` baked at build time authorizes Google 3D Tiles through
+Cesium ion.
+
+---
+
 ### Height-datum residuals
 Status: Open (accepted 2026-07-08, documented)
 

@@ -475,11 +475,30 @@ Order of work, cheapest-first:
       in `src/buildGates.test.mjs`.
 - [ ] GitForge pipeline mirroring ci.yml (lint/test/build) with the GitHub
       Actions run kept as the sync mirror — per the standing CI/CD routing
-      directive.
-- [ ] GitHub release with changelog; then `wrangler pages deploy dist` to
+      directive. **Built and rehearsed 2026-09-14** (`.gitforce.yml` with
+      five jobs mirroring ci.yml gate-for-gate, plus two pre-warmed CI
+      images under `infrastructure/docker/`; lint, build, and the
+      allocation-gated test suite each passed a container rehearsal that
+      executes jobs exactly as the runner will). What remains is the first
+      real pipeline run through the gateway, which needs the interactive
+      `gitforge auth --login` (see the Process-debt bullet below).
+- [x] GitHub release with changelog; then `wrangler pages deploy dist` to
       production and verify the Functions surface on the deployed URL
       (elevation, reverse-geocode, cctv, celestrak, debug-log) plus the
-      globe itself rendering.
+      globe itself rendering. **Done 2026-09-14** — v0.8.0 cut per the new
+      RUNBOOK checklist (changelog written from the commit ledger, version
+      bumped, tag pushed, release published); the first production deploy
+      since v0.7.0 surfaced a latent deploy-blocking workerd violation
+      (module-scope `crypto.randomUUID()` in the radio Pages handler) which
+      shipped as the v0.8.1 patch. Post-deploy verification ran the full
+      checklist against `globe-52p.pages.dev` — radio/cctv/geocode/terrain/
+      debug-log all pass, photoreal globe verified rendering headless; the
+      two environmental upstreams (CelesTrak, LL2) are logged in
+      KNOWN-ISSUES, and the results table lives in the RUNBOOK. Note: the
+      repo's immutable-releases setting permanently reserves a published
+      tag's name (v0.8.0's could not be re-pointed at the fix — hence the
+      patch release); the RUNBOOK now pins the order **deploy → verify →
+      then tag/publish**.
 
 ## Phase 7 — Community audit integration (IN PROGRESS)
 
@@ -1365,10 +1384,17 @@ ordered by value-per-risk; each is self-contained and committable.
       in docs/RUNBOOK.md ("Deploying to production"), so tags and package
       version never diverge again.
 - [ ] GitForge pipeline (task #7 of the session plan) remains BLOCKED on
-      the interactive `gitforge auth --login`; the gateway rejects the
-      CLI's stored credentials and the orchestrator is down. No gitforge
-      remote exists for this repo yet. GitHub Actions (lint + tests +
-      build) remains the active CI.
+      one interactive step: `gitforge auth --login mkinney`. Both stored
+      gateway JWTs are expired (developer/expired 2026-09-13, admin
+      2026-09-11), and login is deliberately the user's credential path —
+      no token may be scripted or stored by the agent. Services themselves
+      are healthy (gateway, orchestrator, Git HTTP all verified up
+      2026-09-14); the pipeline definition and pre-warmed images are
+      committed and rehearsed. Remaining once authed: `gitforge repo
+      create`, add the clean `http://localhost:42782/mkinney/<repo>.git`
+      remote, push main + tag, `gitforge pipeline create .gitforce.yml`,
+      watch the first run green. GitHub Actions (lint + tests + build)
+      remains the active CI until then.
 - [x] GitHub repo was renamed `gods-eye-view` → `Globe` — origin URL
       verified pointing at `github.com/aliasfoxkde/Globe.git` (2026-09-13).
 

@@ -96,6 +96,46 @@ npx wrangler pages dev dist --port 8788 --compatibility-date=2026-01-01
    `ReferenceError` from `init()` is the historical failure mode).
 4. **HUD AI summary** — no `HTTP 405` errors in console.
 
+### 2026-09-14 verification run (v0.8.1 deploy, production alias)
+
+Ran against `https://globe-52p.pages.dev` after the radio lazy-broker fix
+(`b880f87`) shipped. Results:
+
+| Check | Result |
+| --- | --- |
+| `/` (app shell) | 200 |
+| `/api/radio/stations` | **200 with live catalog** — the route the module-scope `randomUUID` defect had blocked deploy-wide |
+| `/api/cctv/sources` | 200 (Austin cameras) |
+| `/api/openzenith/reverse-geocode` | 200 (`place.display_name`) |
+| `/api/terrain/heights` | 200 (first hit 502'd — cold isolate; upstream was briefly unreachable; resolved on retry) |
+| `POST /api/realtime/debug-log` | 204 |
+| `/api/celestrak/starlink` | **502 persistent** — CelesTrak blocks/ignores Cloudflare egress IPs (dev middleware answers 200 with the identical shared code; the variable is the datacenter IP, not the code). See KNOWN-ISSUES. |
+| `/api/launches` | **429 passthrough** — Launch Library 2 anonymous throttle on shared Cloudflare egress; the handler forwards it by contract. Fix is `LL2_API_TOKEN` as a Pages secret (owner-side; no token on this machine). |
+| Photoreal globe | **Renders** — verified headless: 685 `tile.googleapis.com` tile requests all 200, tileset traversal active, forced-render screenshot shows full photoreal Austin. |
+
+Two harness findings worth keeping:
+
+- **Headless screenshots need a forced render.** The render governor's
+  `requestRenderMode` presents frames on demand; a headless session has no
+  input events, so `page.screenshot()` can capture a stale frame from before
+  tiles arrived (looks like a blank globe). Force it before capturing:
+  `scene.requestRenderMode = false; setTimeout(() => { scene.requestRenderMode = true; }, 2000);`
+  Real users are unaffected — the boot fly-in renders continuously and any
+  input triggers frames.
+- **The `GOOGLE_MAPS_API_KEY` sentinel path is real and correct.** This
+  machine's `.env` carries the scaffolded placeholder
+  (`your_google_maps_api_key_here`, exactly 29 chars), and main.js correctly
+  treats it as absent. The photoreal tiles still work because the real
+  `CESIUM_ION_TOKEN` authorizes Cesium ion asset 2275209 (Google 3D Tiles via
+  ion) — the Google key itself only gates geocoder/Places features. A
+  keyless-build deploy is therefore not automatically a blank globe.
+
+Order matters: **deploy, verify, THEN tag and publish the release.** v0.8.1's
+release was published before the render verification ran; the verification
+happened to clear it, but the repo's immutable-releases setting makes a
+published tag un-repointable — a verification failure after publishing would
+have forced a v0.8.2.
+
 ## Credentials & environment
 
 All keys are optional except `GOOGLE_MAPS_API_KEY`. See `.env.example` for the
