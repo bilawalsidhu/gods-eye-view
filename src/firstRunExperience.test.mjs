@@ -691,11 +691,11 @@ test('the voice TOOL SCHEMA matches the pinned release — the mission mapping i
 });
 
 test('every layer a mission drives is already in the shipped set_layer_visibility enum', () => {
-  const src = fs.readFileSync(new URL('../server/providers/openai/tools.js', import.meta.url), 'utf8');
-  const tool = src.slice(src.indexOf("name: 'set_layer_visibility'"), src.indexOf("name: 'show_data_layers_menu'"));
+  const tool = GEV_REALTIME_TOOLS.find(tool => tool.name === 'set_layer_visibility');
+  const allowedLayers = tool.parameters.properties.layerId.enum;
   const missionLayerIds = Object.values(FIRST_RUN_MISSIONS).flatMap((mission) => mission.layerIds || []);
   assert.ok(missionLayerIds.length > 0);
   for (const layerId of missionLayerIds) {
-    assert.ok(tool.includes(`'${layerId}'`), `${layerId} must already be an allowed enum value`);
+    assert.ok(allowedLayers.includes(layerId), `${layerId} must already be an allowed enum value`);
   }
 });

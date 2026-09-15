@@ -9,7 +9,7 @@ export function createBikeshareSource({
         throw new TypeError('A public HTTPS GBFS URL is required');
       signal?.throwIfAborted();
       const response = await fetchImpl(
-        '/api/gbfs?url=' + encodeURIComponent(url.href),
+        '/api/gbfs/' + encodeURIComponent(url.href),
         { method: 'GET', headers: { Accept: 'application/json' }, signal },
       );
       if (!response.ok) throw new Error('GBFS HTTP ' + response.status);

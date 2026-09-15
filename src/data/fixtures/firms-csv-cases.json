@@ -1,0 +1,44 @@
+[
+  {
+    "name": "categorical confidence and unpadded midnight time",
+    "csv": "latitude,longitude,acq_date,acq_time,confidence,frp\n30,-97,2026-07-16,45,n,12\n",
+    "now": "2026-07-16T12:00:00Z",
+    "parsedCount": 1,
+    "recentTimes": ["45"]
+  },
+  {
+    "name": "truncated rows are omitted",
+    "csv": "latitude,longitude,acq_date,acq_time,confidence,frp\n30,-97,2026-07-16,1200\n",
+    "now": "2026-07-16T12:00:00Z",
+    "parsedCount": 0,
+    "recentTimes": []
+  },
+  {
+    "name": "invalid acquisition hour does not roll into tomorrow",
+    "csv": "latitude,longitude,acq_date,acq_time,confidence,frp\n30,-97,2026-07-15,2400,n,12\n",
+    "now": "2026-07-16T12:00:00Z",
+    "parsedCount": 1,
+    "recentTimes": []
+  },
+  {
+    "name": "inclusive trailing day and two-hour forward slack",
+    "csv": "latitude,longitude,acq_date,acq_time,confidence,frp\n30,-97,2026-07-15,1200,n,12\n30,-97,2026-07-15,1159,n,12\n30,-97,2026-07-16,1400,h,12\n30,-97,2026-07-16,1401,l,12\n",
+    "now": "2026-07-16T12:00:00Z",
+    "parsedCount": 4,
+    "recentTimes": ["1200", "1400"]
+  },
+  {
+    "name": "upstream error is different from an empty catalog",
+    "csv": "Invalid MAP_KEY",
+    "now": "2026-07-16T12:00:00Z",
+    "parsedCount": null,
+    "recentTimes": []
+  },
+  {
+    "name": "header-only catalog is successful and empty",
+    "csv": "latitude,longitude,acq_date,acq_time,confidence,frp\n",
+    "now": "2026-07-16T12:00:00Z",
+    "parsedCount": 0,
+    "recentTimes": []
+  }
+]

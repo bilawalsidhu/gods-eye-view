@@ -1,56 +1,50 @@
+export {
+  readResponseTextCapped,
+  readResponseJsonCapped,
+} from '../../../src/sources/httpBody.js';
+
 /**
- * Read a fetch() Response body as text with a hard byte cap. Rejects early on an
- * oversized Content-Length, then streams with a running cap so a chunked or
- * length-omitted response cannot blow past the limit. Throws { code:'RESPONSE_TOO_LARGE' }.
+ * Read a fetch() Response body as bytes with the same hard cap as
+ * readResponseTextCapped — for protobuf upstreams (GTFS-Realtime).
+ * Throws { code:'RESPONSE_TOO_LARGE' }.
  */
-export async function readResponseTextCapped(response, maxBytes, signal) {
-  const tooLarge = () =>
-    Object.assign(new Error('Upstream response too large'), {
-      code: 'RESPONSE_TOO_LARGE',
-    });
+export async function readResponseBytesCapped(response, maxBytes) {
+  const tooLarge = () => {
+    const err = new Error('Upstream response too large');
+    err.code = 'RESPONSE_TOO_LARGE';
+    return err;
+  };
   const declared = Number(response.headers.get('content-length'));
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    void response.body?.cancel().catch(() => {});
-    throw tooLarge();
-  }
-  signal?.throwIfAborted();
+  if (Number.isFinite(declared) && declared > maxBytes) throw tooLarge();
   const reader = response.body?.getReader?.();
   if (!reader) {
-    const text = await response.text();
-    signal?.throwIfAborted();
-    if (Buffer.byteLength(text) > maxBytes) throw tooLarge();
-    return text;
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > maxBytes) throw tooLarge();
+    return bytes;
   }
-  const cancel = () => {
-    void reader.cancel().catch(() => {});
-  };
-  signal?.addEventListener('abort', cancel, { once: true });
-  const decoder = new TextDecoder();
-  let out = '';
+  const chunks = [];
   let total = 0;
-  try {
-    for (;;) {
-      signal?.throwIfAborted();
-      const { done, value } = await reader.read();
-      signal?.throwIfAborted();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) throw tooLarge();
-      out += decoder.decode(value, { stream: true });
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      try {
+        await reader.cancel();
+      } catch {
+        /* no-op */
+      }
+      throw tooLarge();
     }
-    return out + decoder.decode();
-  } catch (error) {
-    cancel();
-    throw error;
-  } finally {
-    signal?.removeEventListener('abort', cancel);
-    reader.releaseLock();
+    chunks.push(value);
   }
-}
-
-/** Parse a fetch() JSON response only after enforcing a hard byte cap. */
-export async function readResponseJsonCapped(response, maxBytes) {
-  return JSON.parse(await readResponseTextCapped(response, maxBytes));
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
 }
 
 /**

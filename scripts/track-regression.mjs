@@ -2986,17 +2986,12 @@ async function main() {
         }
         return window.__dfCountModels(icao);
       };
-      // Vite serves an edited source file as `…/groundFloor.js?t=<hmr stamp>`;
-      // importing the PLAIN path then hands back a second, unrelated module
-      // instance whose cells the app never reads. Offer the URL the app itself
-      // loaded first, then the plain path (clean, never-hot-reloaded server).
-      const seen = performance.getEntriesByType('resource')
-        .map((e) => e.name)
-        .filter((n) => /\/src\/data\/groundFloor\.js(\?|$)/.test(n));
-      window.__dfCandidates = [...new Set([...seen.reverse(), `${window.__gevQaSourceBase || '/src'}/data/groundFloor.js`])];
+      // Read the application's surface owner, then prove it is the one
+      // used by the actual poll/render path with the unchanged floor seed.
+      window.__dfCandidates = window.__godsEyeView.surfaceServices?.groundFloor ? ['application surface'] : [];
       return { candidates: window.__dfCandidates.length };
     });
-    record('display-floor: groundFloor module URL candidates found', dfSetup.candidates > 0,
+    record('display-floor: ground-floor service owner found', dfSetup.candidates > 0,
       JSON.stringify(dfSetup));
 
     // Identity probe. Seed a contact's FIX cell BEFORE its first fix arrives,
@@ -3012,8 +3007,7 @@ async function main() {
       const tried = [];
       for (let i = 0; i < window.__dfCandidates.length; i++) {
         const url = window.__dfCandidates[i];
-        let gf;
-        try { gf = await import(/* @vite-ignore */ url); } catch { tried.push({ url, h: null }); continue; }
+        const gf = window.__godsEyeView.surfaceServices.groundFloor;
         if (typeof gf.reportMeshFloorCell !== 'function') { tried.push({ url, h: null }); continue; }
         gf.setMeshFloorPreferred(true);
         gf._clearMeshFloorCellsForTest();
@@ -3813,27 +3807,11 @@ async function main() {
         const Cesium = await import('/node_modules/cesium/Build/Cesium/index.js');
         const v = window.__godsEyeView.viewer;
         const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
-        // `.module` is the layer OBJECT (the default export), not the module
-        // namespace, so the handoff seam is not on it. Reach the namespace the
-        // same way this group reaches groundFloor's: offer the URL the app
-        // itself loaded (Vite serves an edited file as `…?t=<hmr stamp>`, and
-        // the plain path would hand back a second, unrelated instance whose
-        // module state the app never touches), then prove identity by requiring
-        // its default export to BE the live layer object.
-        let ns = null;
-        const urls = [...new Set([
-          ...performance.getEntriesByType('resource').map((e) => e.name)
-            .filter((n) => /\/src\/data\/flights\.js(\?|$)/.test(n)).reverse(),
-          `${window.__gevQaSourceBase || '/src'}/data/flights.js`,
-        ])];
-        for (const url of urls) {
-          let mod; try { mod = await import(/* @vite-ignore */ url); } catch { continue; }
-          if (mod?.default === fl && typeof mod._driveFleetModelHandoffForTest === 'function') {
-            ns = mod;
-            break;
-          }
-        }
-        if (!ns) return { skipped: `the app's own flights module was not reachable (tried ${urls.length})` };
+        // Test the registered instance directly, including catalogs constructed
+        // with their own sources. Never import a second compatibility instance.
+        const ns = fl.testing;
+        if (typeof ns?._driveFleetModelHandoffForTest !== 'function')
+          return { error: "the registered flights instance has no handoff test seam" };
         // Use a scenario-owned contact so its groundSnap entry is provably cold;
         // earlier display-floor cases intentionally exercise aaa097's cache.
         const holdIcao = 'aaa098';

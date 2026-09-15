@@ -1,3 +1,5 @@
+import { createVesselFeed } from './ingestion.js';
+import { VesselRecords } from './records.js';
 import * as Cesium from 'cesium';
 import { DEFAULT_AIS_RUNTIME } from './policy.js';
 
@@ -45,37 +47,11 @@ export function createVesselState({ source, services }) {
   vesselState.shipIconCache = new Map();
 
   vesselState.state = {
+    feed: createVesselFeed(),
+    records: new VesselRecords({ now: () => vesselState._aisRuntime.now() }),
     viewer: null,
-    enabled: false,
-    loading: false,
-    loaded: false,
-    stale: false,
-    error: null,
-    loadingLabel: '',
-    lastUpdate: null,
-    count: 0,
-    newestPositionAt: null,
-    transportStatus: null,
-    /** Server epoch-ms of the next reconnect attempt while the feed is degraded. */
-    nextAttemptAt: null,
-    lastMessageAt: null,
-    rawRowCount: 0,
-    acceptedRowCount: 0,
-    /** Monotonic enable/reset owner for requests and first-connect timers. */
-    sessionId: 0,
-    /** @type {'idle'|'loading'|'ready'|'unavailable'} */
-    firstConnectPhase: 'idle',
-    firstConnectStartedAt: null,
-    firstConnectDeadline: null,
-    firstConnectTimer: null,
-    abort: null,
+
     billboardCollection: null,
-    /** @type {Array<Object>} Flat render list: keyed records + unkeyed records */
-    vesselRecords: [],
-    /** @type {Map<string, Object>} MMSI -> vessel record (identity across refreshes) */
-    vesselMap: new Map(),
-    /** @type {Array<Object>} Records with no MMSI — rebuilt fresh each refresh */
-    unkeyedRecords: [],
     clickHandler: null,
     /** Exact EventTarget currently holding the Escape listener. */
     keyTarget: null,

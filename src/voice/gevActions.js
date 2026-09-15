@@ -8,20 +8,15 @@ import {
   getSelectedEntityContext,
   isContextRecordActive,
 } from '../data/contextStore.js';
-import { getNextIssPass } from '../data/satellites.js';
-import { CCTV_FOCUS_RESULT } from '../data/cctv.js';
+import { CCTV_FOCUS_RESULT } from '../layers/cctv/index.js';
 import { contextModeWord } from '../contextModePolicy.js';
 import { createAnalystEngine } from '../data/analystEngine.js';
-import { layerFeedState } from '../data/manager.js';
-import militaryAwarenessLayer, {
-  collectAircraftProximityWindow,
-  contactsWindowFromSnapshot,
-} from '../data/militaryAwareness.js';
+import { layerFeedState } from '../data/feedState.js';
 import { initCameraVerbs, moveCamera, flyRoute, interruptCameraMotion, adjustOrbitRange } from '../cameraVerbs.js';
-import { cachedGroundFloor, warmGroundFloor } from '../data/groundFloor.js';
+import * as defaultFloorServices from '../data/groundFloor.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
-import { resolveRegionRingForQuery } from '../annotations/annotationResolver.js';
+import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
 
@@ -268,7 +263,11 @@ const BASEMAP_CONTEXT_WAIT_MS = 1500;
 const viewTargetCache = new WeakMap();
 
 /** Create application actions over the supplied scene and services. */
-export function createGevActionRunner({ viewer, styleManager, dataManager, sceneDirector = null, annotations = null, placeSearch = unavailablePlaceSearch }) {
+export function createGevActionRunner({ viewer, styleManager, dataManager, sceneDirector = null, annotations = null, placeSearch = unavailablePlaceSearch, floorServices = defaultFloorServices, annotationResolver = defaultAnnotationResolver, searchNavigation = searchAndFlyTo }) {
+  // Voice enable times and analyst follow-up memory belong to this runner.
+  const _layerEnabledAt = new Map();
+  let analystEngine;
+  const resolveRegionRing = (name) => annotationResolver.resolveRegionRingForQuery(name, undefined, placeSearch);
   installViewTargetPrewarm(viewer);
   initCameraVerbs(viewer, getViewTargetCartesian);
   return async function runGevAction(name, rawArgs = {}, runOptions = {}) {
@@ -491,7 +490,7 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
       };
 
       const nearest = await createAnalystEngine(analystProviders(viewer, dataManager, {
-        recordLimitByLayer: { [layerId]: Number.MAX_SAFE_INTEGER }, placeSearch,
+        recordLimitByLayer: { [layerId]: Number.MAX_SAFE_INTEGER }, placeSearch, resolveRegionRing,
       })).query({
         layers: [layerId],
         scope: { kind: 'view' },
@@ -612,7 +611,7 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
         };
       }
       const contactsWindow = ['contacts', 'flights'].includes(mode)
-        ? activeContactsWindow()
+        ? activeContactsWindow(dataManager)
         : null;
       return {
         ...withContextModeVocabulary(result),
@@ -750,7 +749,7 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
 
     if (name === 'fly_to_location') {
       return flyToRequestedLocation(viewer, args, {
-        placeSearch, signal: runOptions.signal,
+        placeSearch, searchNavigation, signal: runOptions.signal,
         runImmediate: typeof styleManager?.runImmediateLocationNavigation === 'function'
           ? (navigate) => styleManager.runImmediateLocationNavigation(navigate)
           : null,
@@ -792,11 +791,12 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
     }
 
     if (name === 'next_iss_pass') {
-      return nextIssPass(viewer, args);
+      return nextIssPass(viewer, dataManager, args);
     }
 
     if (name === 'analyst_query') {
-      return runAnalystQuery(viewer, dataManager, args, placeSearch);
+      analystEngine ||= createAnalystEngine(analystProviders(viewer, dataManager, { placeSearch, resolveRegionRing }));
+      return runAnalystQuery(analystEngine, dataManager, args, _layerEnabledAt);
     }
 
     if (name === 'move_camera') {
@@ -809,9 +809,9 @@ export function createGevActionRunner({ viewer, styleManager, dataManager, scene
       return flyRoute(
         annotations?.list?.() || [],
         args,
-        (lat, lon) => cachedGroundFloor(lat, lon),
+        (lat, lon) => floorServices.cachedGroundFloor(lat, lon),
         (navigate) => runManagedVoiceNavigation(styleManager, 'route', 'fly_route', navigate),
-        (cells) => warmGroundFloor(cells),
+        (cells) => floorServices.warmGroundFloor(cells),
       );
     }
 
@@ -2007,7 +2007,7 @@ function compassDir(azDeg) {
   return COMPASS_16[Math.round(((((azDeg % 360) + 360) % 360)) / 22.5) % 16];
 }
 
-function nextIssPass(viewer, args) {
+function nextIssPass(viewer, dataManager, args) {
   let latDeg = Number.isFinite(args.latitude) ? args.latitude : null;
   let lonDeg = Number.isFinite(args.longitude) ? args.longitude : null;
   if (latDeg == null || lonDeg == null) {
@@ -2017,7 +2017,7 @@ function nextIssPass(viewer, args) {
     lonDeg = Cesium.Math.toDegrees(carto.longitude);
   }
   const minElevDeg = Number.isFinite(args.minElevationDeg) ? args.minElevationDeg : 10;
-  const result = getNextIssPass({ latDeg, lonDeg, minElevDeg });
+  const result = dataManager?.layers?.get('satellites')?.module?.getNextIssPass?.({ latDeg, lonDeg, minElevDeg }) ?? { status: 'no-tle' };
   if (result.status === 'no-tle') {
     return {
       ok: false,
@@ -2171,7 +2171,7 @@ function normalizeStyle(value) {
 }
 
 async function flyToRequestedLocation(viewer, args, {
-  placeSearch = unavailablePlaceSearch, signal,
+  placeSearch = unavailablePlaceSearch, searchNavigation = searchAndFlyTo, signal,
   onStart = null,
   runImmediate = null,
   beginDeferred = null,
@@ -2286,7 +2286,7 @@ async function flyToRequestedLocation(viewer, args, {
     const generation = typeof beginDeferred === 'function' ? beginDeferred() : null;
     if (generation === false) return cancelled(query);
     const managedDeferred = typeof reassertDeferred === 'function';
-    const destination = await searchAndFlyTo(viewer, query, {
+    const destination = await searchNavigation(viewer, query, {
       placeSearch, signal,
       ...(rangeM ? { range: rangeM } : {}),
       forceClose: args.viewMode === 'close',
@@ -2337,7 +2337,7 @@ function getCurrentViewState(viewer, styleManager, dataManager, sceneDirector = 
         ...withContextModeVocabulary(styleManager.getContextModeState()),
         // The numbers on the operator's Contacts panel, so a window/count
         // question can be answered from what they are looking at.
-        ...(activeContactsWindow() ? { contactsWindow: activeContactsWindow() } : {}),
+        ...(activeContactsWindow(dataManager) ? { contactsWindow: activeContactsWindow(dataManager) } : {}),
       }
       : null,
     cockpit: typeof styleManager.getCockpitState === 'function'
@@ -2408,19 +2408,19 @@ async function getEntityContext(viewer, dataManager, styleManager, args = {}, se
  * @param {object} result The general engine's result, reused for scope text.
  * @returns {object|null} A unified-count payload, or null.
  */
-function aircraftProximityWindowForQuery(args, result) {
+function aircraftProximityWindowForQuery(dataManager, args, result) {
   const scope = args?.scope;
   if (String(scope?.kind || '').toLowerCase() !== 'radius') return null;
   const layers = Array.isArray(args.layers) ? args.layers : [];
   if (!layers.some((layer) => layer === 'flights' || layer === 'military')) return null;
-  const snapshot = militaryAwarenessLayer.getContextSnapshot?.();
+  const snapshot = dataManager?.layers?.get('military-awareness')?.module?.getContextSnapshot?.();
   const subject = snapshot?.subject;
   if (!subject?.position) return null;
   // An explicit centre only qualifies when it IS the subject; otherwise the
   // operator asked about somewhere else and must get that answer.
   if (scope.center && !centerMatchesSubject(scope.center, subject.position)) return null;
   const radiusM = Number.isFinite(scope.km) ? scope.km * 1000 : (snapshot.radiusM || 250_000);
-  const window = collectAircraftProximityWindow(subject.position, { radiusM, subject });
+  const window = dataManager.layers.get('military-awareness').module.collectAircraftProximityWindow(subject.position, { radiusM, subject });
   if (!window) return null;
   const label = subject.label || subject.id || 'the selected contact';
   const radiusKm = Math.round(radiusM / 1000);
@@ -2459,7 +2459,7 @@ function aircraftProximityWindowForQuery(args, result) {
       military: window.military.length,
       aircraft: window.aircraft,
     },
-    ...(activeContactsWindow() ? { contactsWindow: activeContactsWindow() } : {}),
+    ...(activeContactsWindow(dataManager) ? { contactsWindow: activeContactsWindow(dataManager) } : {}),
   };
 }
 
@@ -3223,9 +3223,6 @@ function clampNumber(value, min, max, fallback) {
  * the voice payload. One engine per runner keeps follow-up memory
  * ("which of those is closest?") scoped to the session.
  */
-/** layerId → epoch ms of last voice-driven enable (analyst warm-up honesty). */
-const _layerEnabledAt = new Map();
-let _analystEngine = null;
 /** Layers whose loaded set follows the camera, so a loaded count is not a world count. */
 const VIEWPORT_LOADED_LAYERS = new Set(['flights']);
 
@@ -3235,15 +3232,16 @@ const VIEWPORT_LOADED_LAYERS = new Set(['flights']);
  * diverge no matter which surface asks.
  * @returns {object|null} Panel-equivalent window counts.
  */
-function activeContactsWindow() {
+function activeContactsWindow(dataManager) {
   try {
-    return contactsWindowFromSnapshot(militaryAwarenessLayer.getContextSnapshot?.());
+    const layer = dataManager?.layers?.get('military-awareness')?.module;
+    return layer?.contactsWindowFromSnapshot?.(layer.getContextSnapshot?.()) ?? null;
   } catch {
     return null;
   }
 }
 
-function analystProviders(viewer, dataManager, { recordLimitByLayer = null, placeSearch = unavailablePlaceSearch } = {}) {
+function analystProviders(viewer, dataManager, { recordLimitByLayer = null, placeSearch = unavailablePlaceSearch, resolveRegionRing = (name) => defaultAnnotationResolver.resolveRegionRingForQuery(name, undefined, placeSearch) } = {}) {
   return {
     getRecords(layerKey) {
       const layer = dataManager.layers.get(layerKey);
@@ -3255,7 +3253,7 @@ function analystProviders(viewer, dataManager, { recordLimitByLayer = null, plac
         ? (mod.getAnalystRecords(requestedLimit) || [])
         : (mod.getAnalystRecords() || []);
     },
-    resolveRegionRing: (name) => resolveRegionRingForQuery(name, undefined, placeSearch),
+    resolveRegionRing,
     /**
      * The active Contacts subject, when there is one — the centre the operator
      * is reasoning about while Contacts is up. Null whenever Contacts is off,
@@ -3263,7 +3261,7 @@ function analystProviders(viewer, dataManager, { recordLimitByLayer = null, plac
      * @returns {{lat: number, lon: number, label: string|null}|null} Subject centre.
      */
     getContextSubject() {
-      const snapshot = militaryAwarenessLayer.getContextSnapshot?.();
+      const snapshot = dataManager?.layers?.get('military-awareness')?.module?.getContextSnapshot?.();
       const subject = snapshot?.subject;
       if (!subject?.position) return null;
       const carto = Cesium.Cartographic.fromCartesian(subject.position);
@@ -3289,9 +3287,8 @@ function analystProviders(viewer, dataManager, { recordLimitByLayer = null, plac
   };
 }
 
-async function runAnalystQuery(viewer, dataManager, args = {}, placeSearch = unavailablePlaceSearch) {
-  if (!_analystEngine) _analystEngine = createAnalystEngine(analystProviders(viewer, dataManager, { placeSearch }));
-  const result = await _analystEngine.query({
+async function runAnalystQuery(analystEngine, dataManager, args = {}, _layerEnabledAt) {
+  const result = await analystEngine.query({
     layers: Array.isArray(args.layers) ? args.layers : undefined,
     scope: args.scope,
     filters: Array.isArray(args.filters) ? args.filters : [],
@@ -3343,10 +3340,10 @@ async function runAnalystQuery(viewer, dataManager, args = {}, placeSearch = una
   // differ. The generic record/scope engine still owns explicit regions and
   // arbitrary points — only "how many aircraft around <this contact>" is
   // unified, because that is the question the panel is already answering.
-  const entityWindow = aircraftProximityWindowForQuery(args, result);
+  const entityWindow = aircraftProximityWindowForQuery(dataManager, args, result);
   if (entityWindow) return entityWindow;
 
-  const contactsWindow = activeContactsWindow();
+  const contactsWindow = activeContactsWindow(dataManager);
   const aircraftQueried = (result.coverage?.layersQueried || [])
     .some((l) => l.layerKey === 'flights' || l.layerKey === 'military');
   // Both numbers, and which one answers the question. The window counts have

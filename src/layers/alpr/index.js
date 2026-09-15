@@ -69,7 +69,8 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     lastQueryBox: null,
   };
   const {
-    markerColor,
+    initOverlay,
+    destroyOverlay,
     viewportBox,
     clearRendered,
     hideOnMapCredit,
@@ -250,6 +251,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
         viewer.camera.moveEnd.addEventListener(scheduleLoad);
       state.postRenderRemove =
         viewer.scene.postRender?.addEventListener(updateSelectedAnchor);
+      initOverlay();
       installInteraction(viewer);
     },
     enable() {
@@ -281,6 +283,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     },
     destroy(viewer = state.viewer) {
       this.disable();
+      destroyOverlay();
       state.moveEndRemove?.();
       state.moveEndRemove = null;
       state.postRenderRemove?.();
@@ -320,11 +323,11 @@ export function createAlprCamerasLayer({ source, services } = {}) {
         ],
         legend: [
           {
-            label: 'Purple dots',
+            label: 'Camera badges',
             color: ALPR_COLOR,
             count,
             blurb:
-              'Nearby mapped cameras may be outside the screen. Dots stay 8 pixels wide as you zoom; click one for details.',
+              'Cyan cameras turn coral when selected. Wedges illustrate mapped direction, not measured coverage. Nearby cameras may be outside the screen.',
           },
         ],
       };

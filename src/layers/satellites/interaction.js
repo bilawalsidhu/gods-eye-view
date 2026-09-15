@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { isPointerFree } from '../../data/inputOwnership.js';
 
 export function createInteraction({
   state: layerState,
@@ -46,6 +47,8 @@ export function createInteraction({
       viewer.scene.canvas,
     );
     layerState._clickHandler.setInputAction((click) => {
+      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
+      if (!isPointerFree()) return;
       if (!layerState._enabled) return;
       const picked = viewer.scene.pick(click.position);
 

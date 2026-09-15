@@ -1,4 +1,7 @@
+import { layerFeedState } from '../data/feedState.js';
+export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
+import { keySetupRequirement } from '../keySetupCore.mjs';
 const FEED_STATE_LABELS = Object.freeze({
   nominal: 'ON',
   loading: 'LOADING',
@@ -8,57 +11,78 @@ const FEED_STATE_LABELS = Object.freeze({
   unavailable: 'UNAVAILABLE',
 });
 
+// Presentation order is independent of catalog registration and startup order.
+const PANEL_GROUPS = [
+  {
+    label: 'Movement',
+    ids: [
+      'satellites',
+      'flights',
+      'military',
+      'ais-live-vessels',
+      'traffic',
+      'bikeshare',
+    ],
+  },
+  {
+    label: 'Cameras',
+    ids: ['cctv', 'alpr-cameras'],
+  },
+  {
+    label: 'Infrastructure',
+    ids: [
+      'military-installations',
+      'local-datacenters',
+      'telegeography-submarine-cables',
+      'local-dams',
+    ],
+  },
+  {
+    label: 'Events',
+    ids: ['rocket-launches', 'earthquakes', 'local-firms'],
+  },
+  {
+    label: 'Utilities',
+    ids: ['directions', 'radio'],
+  },
+];
+const PANEL_ORDER = PANEL_GROUPS.flatMap(({ label, ids }) =>
+  ids.map((id) => ({ id, label })),
+);
+const PANEL_POSITIONS = new Map(
+  PANEL_ORDER.map(({ id }, index) => [id, index]),
+);
+const PANEL_LABELS = {
+  'ais-live-vessels': 'Live Vessels',
+  bikeshare: 'Bike Share',
+  cctv: 'Cameras',
+  'alpr-cameras': 'Mapped ALPR Cameras',
+  'local-datacenters': 'Data Centers',
+  'local-firms': 'Active Fires',
+};
+
+function panelLabel(layer) {
+  return PANEL_LABELS[layer.id] || layer.name;
+}
+
 /**
- * Normalize heterogeneous layer stats into one honest control-chip state.
- * @param {object|null} stats Layer getStats() result.
- * @returns {'nominal'|'loading'|'degraded'|'stale'|'fallback'|'unavailable'} Feed state.
+ * Guidance for a control a missing provider key is holding back.
+ *
+ * The key registry already owns what each key is called and which environment
+ * variables enable it, so a layer only declares WHICH key it needs
+ * (`requiresKeyId`) and reports `stats.keyRequired` while that key is absent.
+ * Naming the variable turns an unexplained dead control into a next step.
+ *
+ * An unnamed or unknown key returns '' rather than guessing: guidance naming
+ * the wrong variable sends the operator to the wrong provider.
+ *
+ * @param {object} [layer] Row from the layer manager's getAll().
+ * @returns {string} Guidance text, or '' when no key guidance applies.
  */
-export function layerFeedState(stats = {}) {
-  const state = stats || {};
-  const status =
-    typeof state.status === 'string' ? state.status.toLowerCase() : '';
-  const source = `${state.source || ''} ${state.coverage || ''}`;
-  const hasExplicitFallback = typeof state.fallback === 'boolean';
-  const hasPriorData = Number(state.count) > 0 || Boolean(state.lastUpdate);
-  const presentedError =
-    state.error || state.lastError || state.managerRefreshError;
-  if (['unavailable', 'offline', 'down', 'error'].includes(status))
-    return 'unavailable';
-  if (
-    (presentedError ||
-      state.unavailable === true ||
-      state.available === false) &&
-    !hasPriorData &&
-    !GUIDANCE_STATUSES.includes(status)
-  ) {
-    return 'unavailable';
-  }
-  if (state.loading) return 'loading';
-  // Guidance states ask the user to act (zoom in, run a search) — normal
-  // operation, not feed faults. One honesty carve-out: layers keep their
-  // rendered records through the guidance state, so a genuinely stale cache
-  // still reads STALE; a guidance prompt alone never reads DEGRADED.
-  if (GUIDANCE_STATUSES.includes(status)) {
-    return state.stale ? 'stale' : 'nominal';
-  }
-  if (
-    state.fallback === true ||
-    status === 'fallback' ||
-    state.mode === 'sim' ||
-    /\bfallback\b/i.test(source) ||
-    (!hasExplicitFallback && /\badsb\.lol\b/i.test(source))
-  ) {
-    return 'fallback';
-  }
-  if (state.stale || status === 'stale') return 'stale';
-  if (
-    state.degraded ||
-    presentedError ||
-    state.unavailable === true ||
-    state.available === false
-  )
-    return 'degraded';
-  return 'nominal';
+export function layerKeyRequirementTooltip(layer = {}) {
+  if (layer?.stats?.keyRequired !== true) return '';
+  const requiresKeyId = String(layer.requiresKeyId || '').trim();
+  return requiresKeyId ? keySetupRequirement(requiresKeyId) : '';
 }
 
 /** Layer row presentation over supplied state and actions; no layer imports. */
@@ -111,8 +135,25 @@ export class LayerPanel {
     this._toggleContainer.innerHTML = '';
 
     const generation = this._generation;
-    for (const layer of this.getAll()) {
+    const layers = this.getAll()
+      .slice()
+      .sort(
+        (a, b) =>
+          (PANEL_POSITIONS.get(a.id) ?? PANEL_ORDER.length) -
+          (PANEL_POSITIONS.get(b.id) ?? PANEL_ORDER.length),
+      );
+    let previousGroup = '';
+    for (const layer of layers) {
       if (!layer.showInTogglePanel) continue;
+      const group =
+        PANEL_ORDER[PANEL_POSITIONS.get(layer.id)]?.label ?? 'Other layers';
+      if (group && group !== previousGroup) {
+        const heading = document.createElement('h3');
+        heading.className = 'data-layer-group-heading';
+        heading.textContent = group;
+        this._toggleContainer.appendChild(heading);
+      }
+      previousGroup = group;
       const row = document.createElement('div');
       row.className = 'data-toggle-row';
       row.dataset.layerId = layer.id;
@@ -127,7 +168,7 @@ export class LayerPanel {
       icon.textContent = layer.icon;
       const name = document.createElement('span');
       name.className = 'data-name';
-      name.textContent = layer.name;
+      name.textContent = panelLabel(layer);
       left.appendChild(icon);
       left.appendChild(name);
 
@@ -206,7 +247,23 @@ export class LayerPanel {
             this.setLayerParams(layer.id, chip.params, { origin: 'user' });
         });
         row.appendChild(controls);
-        this._syncRowControls(controls, layer);
+        // An ordered list below the chips, for a layer whose row carries a
+        // sequence (turn-by-turn directions). Its own delegated listener, its
+        // own container — the chip row stays a chip row.
+        const list = document.createElement('ol');
+        list.className = 'data-row-list';
+        list.hidden = true;
+        this._bind(list, 'click', (event) => {
+          const button = event.target?.closest?.('.data-row-list-item');
+          if (!button || button.disabled) return;
+          const item = this._rowControlsFor(layer.id)?.list?.items?.find(
+            (entry) => entry.id === button.dataset.listItemId,
+          );
+          if (item?.params)
+            this.setLayerParams(layer.id, item.params, { origin: 'user' });
+        });
+        row.appendChild(list);
+        this._syncRowControls(controls, layer, list);
       }
 
       this._toggleContainer.appendChild(row);
@@ -232,12 +289,14 @@ export class LayerPanel {
    * are replaced freely.
    * @param {HTMLElement|null} container The row's `.data-toggle-controls` node.
    * @param {object} layer Registered layer entry.
+   * @param {HTMLElement|null} [listContainer] The row's `.data-row-list` node.
    */
-  _syncRowControls(container, layer) {
+  _syncRowControls(container, layer, listContainer = null) {
     if (!container) return;
     const controls = layer.enabled ? this._rowControlsFor(layer.id) : null;
     const chips = controls?.chips || [];
     const legend = controls?.legend || [];
+    this._syncRowList(listContainer, controls?.list || null);
     container.hidden = chips.length === 0 && legend.length === 0;
 
     for (const node of [...container.children]) {
@@ -285,6 +344,84 @@ export class LayerPanel {
     }
   }
 
+  /**
+   * Render a row's ordered list (turn-by-turn directions).
+   *
+   * Each entry is a real `<button>` inside a real `<li>`, so Tab reaches it and
+   * Enter activates it with no key handling of our own, and the `<ol>` carries
+   * the ordering a screen reader announces. Items are reconciled in place,
+   * keyed by id, for the same reason chips are: this runs on every refresh —
+   * including the one a click on the list triggers — and replacing the node
+   * would drop keyboard focus mid-interaction.
+   * @param {HTMLElement|null} container The row's `.data-row-list` node.
+   * @param {{ariaLabel?: string, items?: Array<object>}|null} list Descriptor.
+   */
+  _syncRowList(container, list) {
+    if (!container) return;
+    const items = list?.items || [];
+    container.hidden = items.length === 0;
+    if (list?.ariaLabel) container.setAttribute('aria-label', list.ariaLabel);
+
+    const stale = new Map();
+    for (const node of [...container.children]) {
+      if (node.dataset?.listItemId) stale.set(node.dataset.listItemId, node);
+    }
+    let previous = null;
+    let activeButton = null;
+    for (const item of items) {
+      let entry = stale.get(item.id);
+      stale.delete(item.id);
+      let button;
+      if (!entry) {
+        entry = document.createElement('li');
+        entry.dataset.listItemId = item.id;
+        button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'data-row-list-item';
+        button.dataset.listItemId = item.id;
+        const lead = document.createElement('span');
+        lead.className = 'data-row-list-lead';
+        const text = document.createElement('span');
+        text.className = 'data-row-list-text';
+        button.append(lead, text);
+        entry.appendChild(button);
+      } else {
+        button = entry.querySelector('.data-row-list-item');
+      }
+      // Keep DOM order in step with descriptor order without rebuilding.
+      const anchor = previous ? previous.nextSibling : container.firstChild;
+      if (entry !== anchor) container.insertBefore(entry, anchor);
+      previous = entry;
+      if (!button) continue;
+      const lead = button.querySelector('.data-row-list-lead');
+      const text = button.querySelector('.data-row-list-text');
+      const leadText = String(item.lead ?? '');
+      const bodyText = String(item.text ?? '');
+      if (lead && lead.textContent !== leadText) lead.textContent = leadText;
+      if (text && text.textContent !== bodyText) text.textContent = bodyText;
+      button.disabled = Boolean(item.disabled);
+      button.classList.toggle('note', Boolean(item.disabled));
+      button.classList.toggle('active', Boolean(item.active));
+      button.classList.toggle('current', Boolean(item.current));
+      button.setAttribute('aria-current', item.current ? 'step' : 'false');
+      button.setAttribute('aria-pressed', item.active ? 'true' : 'false');
+      button.title = bodyText;
+      if (item.current) activeButton = button;
+    }
+    for (const node of stale.values()) node.remove();
+    // Follow the flight, but never steal a scroll the reader is making
+    // themselves: only when the step actually changed.
+    if (
+      activeButton &&
+      container.dataset.currentId !== activeButton.dataset.listItemId
+    ) {
+      container.dataset.currentId = activeButton.dataset.listItemId;
+      activeButton.scrollIntoView?.({ block: 'nearest' });
+    } else if (!activeButton) {
+      delete container.dataset.currentId;
+    }
+  }
+
   _refreshTogglePanel() {
     if (this._destroyed || !this._toggleContainer) return;
     // Skip DOM churn while hidden; visibilitychange (main.js) triggers one
@@ -314,7 +451,11 @@ export class LayerPanel {
         meta.textContent = this._buildMetaText(layer);
       }
 
-      this._syncRowControls(row.querySelector('.data-toggle-controls'), layer);
+      this._syncRowControls(
+        row.querySelector('.data-toggle-controls'),
+        layer,
+        row.querySelector('.data-row-list'),
+      );
     }
   }
 
@@ -411,7 +552,17 @@ export class LayerPanel {
         : layer.enabled
           ? FEED_STATE_LABELS[feedState]
           : 'OFF';
-    button.setAttribute('aria-label', `${layer.name}: ${button.textContent}`);
+    const keyGuidance = layerKeyRequirementTooltip(layer);
+    // Name the missing key on the control itself: a row reading KEY REQUIRED
+    // without saying WHICH key leaves a dead control and no next step. Empty
+    // when the layer needs no key, or already has one.
+    button.title = keyGuidance;
+    button.setAttribute(
+      'aria-label',
+      keyGuidance
+        ? `${panelLabel(layer)}: ${button.textContent}. ${keyGuidance}`
+        : `${panelLabel(layer)}: ${button.textContent}`,
+    );
   }
 
   _formatCount(n) {

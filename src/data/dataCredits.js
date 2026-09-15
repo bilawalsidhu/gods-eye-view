@@ -99,7 +99,7 @@ export const DATA_CREDITS = [
   {
     key: 'cockpit-place-osm',
     html:
-      'Cockpit place context: ' +
+      'Cockpit place context and last-resort place search: ' +
       '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
       'via Nominatim (ODbL 1.0)',
   },
@@ -164,8 +164,29 @@ export const DATA_CREDITS = [
       'license CC BY 4.0',
   },
   {
+    key: 'calgary-cctv',
+    html:
+      'Traffic cameras (Calgary): contains information licensed under the ' +
+      '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
+  },
+  {
+    key: 'osrm-routing',
+    // The service asks for its attribution to carry a "fix the map" link, so
+    // a reader who spots a wrong turn can go and correct the data it came from.
+    html:
+      'Routing (voice routes and Directions): OSRM on the FOSSGIS servers — ' +
+      '<a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener">routing.openstreetmap.de</a> · ' +
+      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> (ODbL) · ' +
+      '<a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">fix the map</a>',
+  },
+  {
+    key: 'gtfs-rt',
+    html:
+      'Transit vehicles: operator GTFS-Realtime feeds (each operator is credited below when its vehicles are shown)',
   },
   {
     key: 'radio-browser',
@@ -270,6 +291,26 @@ export const NATURAL_EARTH_CREDIT = {
     'Physical region boundaries from ' +
     '<a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> (public domain)',
 };
+
+/**
+ * Per-feed transit credit, registered the first time that feed's vehicles
+ * render (see `src/data/transitFeeds.js` for the license of each).
+ * @param {{ id: string, attribution: string, license: string, licenseUrl: string }} feed
+ * @returns {{ key: string, html: string }}
+ */
+export function transitFeedCredit(feed) {
+  const escape = (text) => String(text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+  return {
+    key: `transit-${feed.id}`,
+    html:
+      `Transit (${escape(feed.attribution)}): ` +
+      `<a href="${escape(feed.licenseUrl)}" target="_blank" rel="noopener">${escape(feed.license)}</a>`,
+  };
+}
 
 /** @type {Set<string>} Keys of dynamic credits already registered this session. */
 const _dynamicCreditKeys = new Set();

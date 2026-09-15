@@ -1,3 +1,4 @@
+import { readShellSource } from '../testSupport/readShellSource.mjs';
 import { expandApplicationHtml } from '../../build/application-html.js';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
@@ -157,8 +158,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 17);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 17);
+  assert.equal(REGISTERED_LAYER_IDS.length, 19);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 19);
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.throws(
     () => validateLayerStateRegistry([...LAYER_STATE_REGISTRY, LAYER_STATE_REGISTRY[0]]),
@@ -373,7 +374,7 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
     assert.match(source, /^\s*(?:let |flightState\.)_models3dMode = 'proximity';/m,
       `${name}: and starts in proximity, matching the codec default`);
   }
-  const ui = await readFile(new URL('../ui/applicationShell.js', import.meta.url), 'utf8');
+  const ui = await readShellSource();
   assert.match(ui, /^\s*this\.(?:flightState\.)?_models3dEnabled = true;$/m,
     'ui.js: the DISPLAY rail believes 3D is on before any layer-state sync arrives');
   assert.match(ui, /this\.(?:flightState\.)?_models3dMode = 'proximity';/,
