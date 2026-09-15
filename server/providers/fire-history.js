@@ -3,6 +3,10 @@ import { promises as fsp } from 'node:fs';
 
 import { parseFirmsCsv } from '../../src/data/firmsCsv.js';
 import {
+  readResponseJsonCapped,
+  readResponseTextCapped,
+} from './common/http.js';
+import {
   FIRE_PERIMETER_SERVICES,
   filterRecordsToEvent,
   firmsAreaSegment,
@@ -44,6 +48,10 @@ export function fireHistoryProxy({
   fetchImpl = (...args) => globalThis.fetch(...args),
 } = {}) {
   const UPSTREAM_TIMEOUT_MS = 60_000;
+  /** One ≤5-day VIIRS window over an event box is well under 1 MB; the cap
+   * only guards against a runaway or hostile body (SECURITY.md). */
+  const WINDOW_MAX_BYTES = 16 * 1024 * 1024;
+  const PERIMETER_MAX_BYTES = 4 * 1024 * 1024;
 
   /** @type {?{events: object[], byId: Map<string, object>}} */
   let catalog = null;
@@ -114,11 +122,12 @@ export function fireHistoryProxy({
     const url =
       `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${encodeURIComponent(key)}` +
       `/${source}/${firmsAreaSegment(event.bbox)}/${window.days}/${window.date}`;
-    const res = await fetchImpl(url, {
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-    });
+    const signal = AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
+    const res = await fetchImpl(url, { signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const records = parseFirmsCsv(await res.text());
+    const records = parseFirmsCsv(
+      await readResponseTextCapped(res, WINDOW_MAX_BYTES, signal),
+    );
     if (records === null) throw new Error('non-CSV upstream response');
     return filterRecordsToEvent(records, event);
   }
@@ -243,12 +252,11 @@ export function fireHistoryProxy({
         event.id,
         (async () => {
           const url = perimeterQueryUrl(event.perimeter);
-          const res = await fetchImpl(url, {
-            signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-          });
+          const signal = AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
+          const res = await fetchImpl(url, { signal });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const picked = selectPerimeterFeature(
-            await res.json(),
+            await readResponseJsonCapped(res, PERIMETER_MAX_BYTES, signal),
             event.perimeter.service,
           );
           if (!picked) throw new Error('no polygon matched');
