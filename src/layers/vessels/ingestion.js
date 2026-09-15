@@ -1,4 +1,4 @@
-import { AIS_FIRST_CONNECT_LABEL } from './policy.js';
+import { t } from '../../i18n/index.js';
 
 export function createIngestion({
   vesselState,
@@ -13,7 +13,9 @@ export function createIngestion({
   async function loadLivePositions(viewer) {
     if (!viewer || state.loading) return;
     state.loading = true;
-    state.loadingLabel = state.loaded ? 'refreshing...' : 'loading...';
+    state.loadingLabel = state.loaded
+      ? t('layers.meta.refreshing')
+      : t('layers.meta.loading');
     const requestController = new AbortController();
     const requestSessionId = state.sessionId;
     state.abort = requestController;
@@ -70,7 +72,9 @@ export function createIngestion({
       ) {
         state.loading = false;
         state.loadingLabel =
-          state.firstConnectPhase === 'loading' ? AIS_FIRST_CONNECT_LABEL : '';
+          state.firstConnectPhase === 'loading'
+            ? t('layers.vessel.awaitingFirstPosition')
+            : '';
         state.abort = null;
       }
     }
@@ -115,7 +119,7 @@ export function createIngestion({
         components.lifecycle.isGraceEligibleTransport(snapshot.transportStatus)
       ) {
         state.error = null;
-        state.loadingLabel = AIS_FIRST_CONNECT_LABEL;
+        state.loadingLabel = t('layers.vessel.awaitingFirstPosition');
         return { reconciled: false, ...snapshot };
       }
       if (state.firstConnectPhase === 'loading') {

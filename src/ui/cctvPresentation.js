@@ -1,11 +1,13 @@
+import { t } from '../i18n/index.js';
+
 export function _calBadgeLabel(badge) {
   switch (badge) {
     case 'calibrated':
-      return 'CALIBRATED';
+      return t('cockpit.cctv.calBadgeCalibrated');
     case 'curated':
-      return 'CURATED';
+      return t('cockpit.cctv.calBadgeCurated');
     case 'raw-prior':
-      return 'RAW PRIOR';
+      return t('cockpit.cctv.calBadgeRawPrior');
     default:
       return '--';
   }
@@ -50,7 +52,9 @@ export function _renderCctvState(state) {
 
   if (this._cctvEnableBtn) {
     this._cctvEnableBtn.classList.toggle('active', enabled);
-    this._cctvEnableBtn.textContent = enabled ? 'CCTV ON' : 'CCTV OFF';
+    this._cctvEnableBtn.textContent = enabled
+      ? t('layers.cctv.toggleOn')
+      : t('layers.cctv.toggleOff');
   }
 
   if (this._cctvSelect) {
@@ -98,17 +102,19 @@ export function _renderCctvState(state) {
     this._cctvCoverageBtn.classList.toggle('active', mode !== 'off');
     this._cctvCoverageBtn.textContent =
       mode === 'viewshed'
-        ? 'VIEWSHED ON'
+        ? t('cockpit.cctv.coverageViewshedOn')
         : mode === 'on'
-          ? 'COVERAGE ON'
-          : 'COVERAGE OFF';
+          ? t('layers.cctv.coverageOn')
+          : t('layers.cctv.coverageOff');
     this._cctvCoverageBtn.disabled = !enabled;
   }
 
   if (this._cctvAutoHopBtn) {
     const autoHop = !!state?.autoHop;
     this._cctvAutoHopBtn.classList.toggle('active', autoHop);
-    this._cctvAutoHopBtn.textContent = autoHop ? 'AUTO HOP ON' : 'AUTO HOP OFF';
+    this._cctvAutoHopBtn.textContent = autoHop
+      ? t('layers.cctv.autoHopOn')
+      : t('layers.cctv.autoHopOff');
     this._cctvAutoHopBtn.disabled = !enabled;
   }
 
@@ -116,8 +122,8 @@ export function _renderCctvState(state) {
     const showProjection = state?.showProjection !== false;
     this._cctvProjectionBtn.classList.toggle('active', showProjection);
     this._cctvProjectionBtn.textContent = showProjection
-      ? 'PROJECTION ON'
-      : 'PROJECTION OFF';
+      ? t('layers.cctv.projectionOn')
+      : t('layers.cctv.projectionOff');
     this._cctvProjectionBtn.disabled = !enabled;
   }
 
@@ -132,8 +138,10 @@ export function _renderCctvState(state) {
     const badge = activeCamera?.calBadge || null;
     const dirty = !!activeCamera?.calDirty;
     this._cctvQualityChip.textContent = dirty
-      ? 'CAL · EDITED (UNSAVED)'
-      : `CAL · ${this._calBadgeLabel(badge)}`;
+      ? t('cockpit.cctv.calChipEdited')
+      : t('cockpit.cctv.calChipTemplate', {
+          badge: this._calBadgeLabel(badge),
+        });
     this._cctvQualityChip.dataset.calBadge = dirty ? 'edited' : badge || '';
   }
 
@@ -153,14 +161,26 @@ export function _renderCctvState(state) {
       const calBadge = activeCamera.calBadge
         ? this._calBadgeLabel(activeCamera.calBadge)
         : '';
-      const projLabel = state?.showProjection !== false ? 'MONITOR' : 'OFF';
-      this._cctvMeta.textContent = `${activeCamera.city} · HDG ${Math.round(activeCamera.headingDeg)}° · FOV ${Math.round(activeCamera.fovDeg)}° · RANGE ${Math.round(activeCamera.rangeM)}m · ${projLabel}${calBadge ? ` · ${calBadge}` : ''} · ${provider}${credit}${statusMsg}`;
+      const projLabel =
+        state?.showProjection !== false
+          ? t('cockpit.cctv.metaProjectionMonitor')
+          : t('cockpit.cctv.metaProjectionOff');
+      this._cctvMeta.textContent = t('cockpit.cctv.metaTemplate', {
+        city: activeCamera.city,
+        heading: `${Math.round(activeCamera.headingDeg)}°`,
+        fov: `${Math.round(activeCamera.fovDeg)}°`,
+        range: Math.round(activeCamera.rangeM),
+        projection: projLabel,
+        calBadge: calBadge ? ` · ${calBadge}` : '',
+        provider,
+        status: `${credit}${statusMsg}`,
+      });
     } else if (cameras.length > 0) {
       this._cctvMeta.textContent = enabled
-        ? `${cameras.length} cameras loaded · click a camera to activate`
-        : `${cameras.length} cameras loaded · enable CCTV to activate`;
+        ? t('cockpit.cctv.metaCamerasClick', { count: cameras.length })
+        : t('cockpit.cctv.metaCamerasEnable', { count: cameras.length });
     } else {
-      this._cctvMeta.textContent = 'Enable CCTV to load camera intersections';
+      this._cctvMeta.textContent = t('layers.cctv.metaIdle');
     }
   }
 
@@ -186,15 +206,13 @@ export function _renderCctvState(state) {
   }
 
   this._syncCctvSourceBadge(activeCamera, enabled);
-  this._typeCctvSummary(
-    state?.summary ||
-      'Enable CCTV to start camera-linked intelligence summaries.',
-  );
+  this._typeCctvSummary(state?.summary || t('layers.cctv.summaryIdle'));
 }
 
 export function _typeCctvSummary(text) {
   if (this.destroyed || !this._cctvSummary) return;
-  const nextText = String(text || '').trim() || 'No summary available.';
+  const nextText =
+    String(text || '').trim() || t('cockpit.cctv.summaryNoneAvailable');
   if (nextText === this._lastCctvSummaryText) return;
   this._lastCctvSummaryText = nextText;
 
@@ -226,7 +244,10 @@ export function _updateCctvSyncChip(loading, enabled) {
     clearTimeout(this._cctvChipHideTimer);
     this._cctvChipHideTimer = null;
     this._cctvChipWasBusy = true;
-    this.actions.setSplitFlapText(this._cctvSyncLabel, 'loading frames');
+    this.actions.setSplitFlapText(
+      this._cctvSyncLabel,
+      t('cockpit.cctv.syncLoadingFrames'),
+    );
     // The counter is left plain on purpose: it ticks every few frames
     // during a grid load, and flapping it would read as a slot machine.
     this._cctvSyncProgress.textContent = `${loaded}/${total}`;
@@ -237,7 +258,10 @@ export function _updateCctvSyncChip(loading, enabled) {
   if (this._cctvChipWasBusy && enabled && total > 0) {
     // Load just completed — flash the final count, then auto-hide.
     this._cctvChipWasBusy = false;
-    this.actions.setSplitFlapText(this._cctvSyncLabel, 'camera grid ready');
+    this.actions.setSplitFlapText(
+      this._cctvSyncLabel,
+      t('cockpit.cctv.syncGridReady'),
+    );
     this._cctvSyncProgress.textContent = `${total}/${total}`;
     this._cctvSyncChip.classList.add('visible');
     clearTimeout(this._cctvChipHideTimer);

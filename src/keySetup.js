@@ -16,10 +16,20 @@ import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
  * the chip and the dialog are removed outright.
  */
 
-/** Chip label — pure, exported for tests. */
+import { t, hasMessage } from './i18n/index.js';
+
+/**
+ * Chip label — pure, exported for tests. The exact English values are pinned
+ * by keySetup.test.mjs; t() resolves them from the catalog, so the default
+ * locale renders byte-identical text and 'es' localizes at the same site.
+ * @param {{total?: number, setCount?: number}|null} status
+ * @returns {string}
+ */
 export function keySetupChipLabel(status) {
   const missing = Math.max(0, (status?.total || 0) - (status?.setCount || 0));
-  return missing > 0 ? `POWER UP · ${missing} ${missing === 1 ? 'KEY' : 'KEYS'} WAITING` : 'POWERED UP';
+  return missing > 0
+    ? t('setup.keySetup.chipWaiting', { count: missing })
+    : t('setup.keySetup.chipReady');
 }
 
 /**
@@ -106,7 +116,10 @@ function buildRow(documentRef, key) {
 
   const unlocks = documentRef.createElement('p');
   unlocks.className = 'key-setup-unlocks';
-  unlocks.textContent = key.unlocks;
+  // The registry `unlocks` text localizes per registry id; an id missing from
+  // the catalog falls back to the server-provided English copy.
+  const unlocksKey = `setup.keySetup.unlocks.${key.id}`;
+  unlocks.textContent = hasMessage(unlocksKey) ? t(unlocksKey) : key.unlocks;
 
   row.append(head, unlocks);
   if (!external) {
@@ -131,8 +144,8 @@ function buildRow(documentRef, key) {
       remove.type = 'button';
       remove.className = 'key-setup-remove';
       remove.dataset.keySetupRemove = JSON.stringify(key.envVars);
-      remove.textContent = 'REMOVE';
-      remove.title = `Remove ${key.title} from this app's saved keys`;
+      remove.textContent = t('setup.keySetup.row.remove');
+      remove.title = t('setup.keySetup.row.removeTitle', { title: key.title });
       fields.append(remove);
     }
     row.append(fields);
@@ -236,15 +249,17 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
   const say = (text) => { if (statusLine) statusLine.textContent = text; };
 
   const storeLabel = () => (status?.store === 'pinokio-environment'
-    ? 'your app configuration'
-    : 'your local .env');
+    ? t('setup.keySetup.store.pinokio')
+    : t('setup.keySetup.store.env'));
 
-  const submitUpdates = async (updates, doneVerb) => {
+  // doneMessageKey names the whole saved/removed sentence; the storage
+  // destination is interpolated so the {store} phrase stays one spelling.
+  const submitUpdates = async (updates, doneMessageKey) => {
     if (disposed || busy) return;
     const googleWasUnset = !status?.keys?.find((key) => key.id === 'google-maps')?.set;
     busy = true;
     applyButton?.setAttribute('aria-disabled', 'true');
-    say('Saving…');
+    say(t('setup.keySetup.status.saving'));
     try {
       const response = await doFetch('/api/setup/keys', {
         method: 'POST',
@@ -255,7 +270,8 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
       const payload = await response.json().catch(() => ({}));
       if (disposed) return;
       if (!response.ok || !payload.ok) {
-        say(payload.error || `Save failed (${response.status}).`);
+        // payload.error is a server-authored message (API value) — shown as-is.
+        say(payload.error || t('setup.keySetup.status.saveFailed', { status: response.status }));
         return;
       }
       for (const input of root.querySelectorAll('input[data-env-var]')) input.value = '';
@@ -274,9 +290,9 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
         // the restart's reload lands, so strip again at the door.
         globalThis.addEventListener?.('pagehide', strip, { once: true, signal: lifetime.signal });
       }
-      say(`${doneVerb} ${storeLabel()}. Restarting — this page reloads itself.`);
+      say(t(doneMessageKey, { store: storeLabel() }));
     } catch (error) {
-      say(`Save failed: ${error?.message || error}`);
+      say(t('setup.keySetup.status.saveFailedDetail', { detail: error?.message || error }));
     } finally {
       busy = false;
       applyButton?.setAttribute('aria-disabled', 'false');
@@ -290,10 +306,10 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
       inputs.map((input) => ({ envVar: input.dataset.envVar, value: input.value })),
     );
     if (!Object.keys(updates).length) {
-      say('Paste at least one key first.');
+      say(t('setup.keySetup.status.pasteFirst'));
       return;
     }
-    await submitUpdates(updates, 'Saved to');
+    await submitUpdates(updates, 'setup.keySetup.status.saved');
   };
 
   chip.addEventListener('click', openDialog);
@@ -314,11 +330,11 @@ export async function initKeySetup({ documentRef = globalThis.document, fetchImp
     // stop it — a clickjack target. A confirm turns a single aligned click into
     // a deliberate two-step the lure cannot pre-satisfy.
     const ok = typeof globalThis.confirm !== 'function'
-      || globalThis.confirm('Remove this key from your saved configuration?');
+      || globalThis.confirm(t('setup.keySetup.confirm.remove'));
     if (!ok) return;
     void submitUpdates(
       Object.fromEntries(envVars.map((name) => [name, null])),
-      'Removed from',
+      'setup.keySetup.status.removed',
     );
   });
 

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import {
   ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
   ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
@@ -115,8 +116,10 @@ export function createOverlays({ state: layerState, services, parts, source }) {
     const details = selected
       ? [
           siteName
-            ? `LAUNCH SITE · ${shortMissionLabel(siteName, 20).toUpperCase()}`
-            : 'LAUNCH SITE',
+            ? t('layers.missions.launchSiteValue', {
+                site: shortMissionLabel(siteName, 20).toUpperCase(),
+              })
+            : t('layers.missions.launchSite'),
         ]
       : [];
     return {
@@ -562,27 +565,38 @@ export function createOverlays({ state: layerState, services, parts, source }) {
     const mission = shortMissionLabel(launch.name, 22).toUpperCase();
     const siteName = compactLaunchSiteName(launch.launchSite);
     const siteCallout = siteName
-      ? `LAUNCH SITE · ${shortMissionLabel(siteName, 20).toUpperCase()}`
-      : 'LAUNCH SITE';
+      ? t('layers.missions.launchSiteValue', {
+          site: shortMissionLabel(siteName, 20).toUpperCase(),
+        })
+      : t('layers.missions.launchSite');
     let title = mission;
     let detail = siteCallout;
     if (mode === 'countdown') {
-      title = `T−${String(state.countdownSeconds).padStart(2, '0')} · ${mission}`;
-      detail = `LAUNCH STANDBY\n${siteCallout}`;
+      title = t('layers.missions.replay.countdown', {
+        time: String(state.countdownSeconds).padStart(2, '0'),
+        mission,
+      });
+      detail = `${t('layers.missions.replay.standbyDetail')}\n${siteCallout}`;
     } else if (mode === 'ascent') {
       title =
         state.elapsedSinceStart < 1
-          ? `LIFTOFF · ${mission}`
-          : `${launch.trajectory.length > 1 ? 'ASCENT REPLAY' : 'ASCENT ESTIMATE'} · ${mission}`;
+          ? t('layers.missions.replay.liftoff', { mission })
+          : t(
+              launch.trajectory.length > 1
+                ? 'layers.missions.replay.ascentReplay'
+                : 'layers.missions.replay.ascentEstimate',
+              { mission },
+            );
       detail = parts.policyHelpers.formatMissionEventTime(state.eventTime);
     } else if (mode === 'recovery') {
-      title = `STAGE RE-ENTRY / RECOVERY · ${mission}`;
+      title = t('layers.missions.replay.recovery', { mission });
       detail = parts.policyHelpers.formatMissionEventTime(state.eventTime);
     } else if (mode === 'orbit') {
-      title = `ORBIT REPLAY · ${mission}`;
+      title = t('layers.missions.replay.orbit', { mission });
       detail = parts.policyHelpers.formatMissionEventTime(state.eventTime);
     }
-    if (layerState._replayPaused) title = `PAUSED · ${title}`;
+    if (layerState._replayPaused)
+      title = t('layers.missions.replay.pausedPrefix', { title });
     const nextText = `${title}\n${detail}`;
     if (nextText !== layerState._replayVehicleOverlayText) {
       layerState._replayVehicleOverlayText = nextText;

@@ -4,6 +4,7 @@ import { createHoverDisclosure, collapsePanelOnEscape } from './ui/panelDisclosu
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { t } from './i18n/index.js';
 
 // Exercise the installed event routes and central close method, without WebGL.
 const source = readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
@@ -106,9 +107,9 @@ function harness({ hidden = false, selected = true, noChips = false } = {}) {
   window.clearTimeout = (id) => timers.delete(id);
   window.performance = { now: () => now };
   document.defaultView = window;
-  const methods = new Function('createHoverDisclosure', 'collapsePanelOnEscape', 'document', 'window', 'clearTimeout', 'performance', 'requestAnimationFrame',
+  const methods = new Function('createHoverDisclosure', 'collapsePanelOnEscape', 'document', 'window', 'clearTimeout', 'performance', 'requestAnimationFrame', 't',
     `return ({${StyleManager.prototype._initAutoHoverPanel.toString()},\n${StyleManager.prototype._collapsePanelOnEscape.toString()},\n${StyleManager.prototype.setPanelCollapsed.toString()},\n${StyleManager.prototype._syncPanelCollapseButton.toString()}});`)(
-    createHoverDisclosure, collapsePanelOnEscape, document, window, (id) => timers.delete(id), { now: () => now }, () => {},
+    createHoverDisclosure, collapsePanelOnEscape, document, window, (id) => timers.delete(id), { now: () => now }, () => {}, t,
   );
   const saves = [];
   const claims = [];

@@ -11,6 +11,7 @@
 // or superseded switch still leaves the truly-active stack lit.
 
 import { keySetupRequirement } from './keySetupCore.mjs';
+import { t } from './i18n/index.js';
 
 export const MAP_STACK_CHIP_CLASS = 'map-stack-chip';
 export const PRESENTED_MAP_STACK_IDS = Object.freeze([
@@ -37,9 +38,13 @@ export function mapStackChipModel(stack, activeId) {
   const available = stack?.available !== false;
   const label = String(stack?.label ?? stack?.id ?? '');
   const requiresIon = stack?.requiresIon === true;
+  // Stack labels are provider/dataset names (keep-English); the availability
+  // sentence around them is copy and localizes here at the model boundary.
   const fallbackReason = requiresIon
     ? keySetupRequirement('cesium-ion')
-    : `${label || 'This map stack'} is unavailable`;
+    : t('setup.mapStack.unavailableReason', {
+        label: label || t('setup.mapStack.fallbackName'),
+      });
   const unavailableHint = available
     ? ''
     : String(stack?.unavailableReason || fallbackReason);
@@ -119,7 +124,10 @@ export function renderMapStackChips(
     if (!model.available) {
       chip.setAttribute(
         'aria-label',
-        `${model.label} unavailable: ${model.unavailableHint}`,
+        t('setup.mapStack.unavailableAriaLabel', {
+          label: model.label,
+          hint: model.unavailableHint,
+        }),
       );
     }
 

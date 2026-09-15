@@ -2,6 +2,7 @@ import {
   accentForVesselType,
   normalizeVesselType,
 } from '../../data/vesselLabels.js';
+import { t } from '../../i18n/index.js';
 
 export function createCards({
   vesselState,
@@ -20,9 +21,13 @@ export function createCards({
     const stale = (record.missedRefreshes || 0) > 0;
     el.classList.add('active');
     el.textContent = [
-      `AIS: ${trimHudValue(record.name, 32)}`,
-      `${trimHudValue(record.type || 'VESSEL', 24)}  SPD: ${formatSpeed(record.speed)}  HDG: ${formatHeading(record.heading ?? record.course)}`,
-      `MMSI: ${record.mmsi || '--'}  ${formatPositionTime(record)}${stale ? '  · STALE' : ''}`,
+      t('layers.vessel.hudName', { name: trimHudValue(record.name, 32) }),
+      t('layers.vessel.hudTypeLine', {
+        type: trimHudValue(record.type || t('layers.vessel.fallback'), 24),
+        speed: formatSpeed(record.speed),
+        heading: formatHeading(record.heading ?? record.course),
+      }),
+      `MMSI: ${record.mmsi || '--'}  ${formatPositionTime(record)}${stale ? `  · ${t('layers.status.stale')}` : ''}`,
     ].join('\n');
   }
 
@@ -30,7 +35,7 @@ export function createCards({
     const el = document.getElementById('hud-ais-vessel');
     if (!el) return;
     el.classList.remove('active');
-    el.textContent = 'AIS: --';
+    el.textContent = t('layers.vessel.hudIdle');
   }
 
   function trimHudValue(value, maxLength) {
@@ -83,7 +88,7 @@ export function createCards({
     const direction = record.heading ?? record.course;
     const details = [
       [
-        vesselTypeShort(record) || 'VESSEL',
+        vesselTypeShort(record) || t('layers.vessel.fallback'),
         formatSpeed(record.speed),
         Number.isFinite(direction) ? `${Math.round(direction)}°` : '--°',
       ].join(' · '),
@@ -92,7 +97,7 @@ export function createCards({
     if (destination) details.push(`→ ${trimHudValue(destination, 24)}`);
     const stale = (record.missedRefreshes || 0) > 0;
     details.push(
-      `MMSI ${record.mmsi || '--'} · ${formatPositionTime(record)}${stale ? ' · STALE' : ''}`,
+      `MMSI ${record.mmsi || '--'} · ${formatPositionTime(record)}${stale ? ` · ${t('layers.status.stale')}` : ''}`,
     );
     return {
       id: vesselOverlayEntryId(record),
@@ -147,7 +152,7 @@ export function createCards({
   function displayVesselName(record) {
     const name = String(record.name || '').trim();
     if (name && name !== 'VESSEL' && name !== record.mmsi) return name;
-    return record.mmsi ? `MMSI ${record.mmsi}` : 'VESSEL';
+    return record.mmsi ? `MMSI ${record.mmsi}` : t('layers.vessel.fallback');
   }
 
   function formatSpeed(speed) {
@@ -159,10 +164,10 @@ export function createCards({
   }
 
   function formatPositionTime(record) {
-    if (!record.lastPositionUtc) return 'POS: LIVE';
+    if (!record.lastPositionUtc) return t('layers.vessel.posLive');
     const date = new Date(record.lastPositionUtc);
-    if (Number.isNaN(date.getTime())) return 'POS: LIVE';
-    return `POS: ${date.toISOString().slice(11, 19)}Z`;
+    if (Number.isNaN(date.getTime())) return t('layers.vessel.posLive');
+    return t('layers.vessel.posAt', { time: date.toISOString().slice(11, 19) });
   }
   return {
     updateSelectedVesselHud,

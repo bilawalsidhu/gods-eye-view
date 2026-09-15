@@ -35,6 +35,8 @@ import {
   clampBloomIntensity,
   decodeBloomIntensity,
 } from '../bloom.js';
+import { getLocale, persistLocaleAndReload, t } from '../i18n/index.js';
+import { availableLocales } from '../i18n/locale.js';
 
 import {
   aircraftTrackingTarget,
@@ -1549,6 +1551,18 @@ export class StyleManager {
    */
   _initMapStackControl() {
     if (!this.mapStackController) return;
+
+    // Key-only i18n sites (mapStackChips.test.mjs pins the static markup
+    // verbatim, so no data-i18n* attribute can be added): localize at this
+    // runtime write instead. The locale resolves before UI init and never
+    // changes without a reload, so an init-time write is sufficient.
+    if (this._mapSourceLabel)
+      this._mapSourceLabel.textContent = t('cockpit.presets.mapSourceLabel');
+    this._mapStackChips.setAttribute(
+      'aria-label',
+      t('cockpit.presets.mapSourceChipsAriaLabel'),
+    );
+
     this._mapSourceControls?.destroy();
     this._mapSourceControls = createMapSourceControls({
       container: this._mapStackChips,
@@ -2032,7 +2046,112 @@ export class StyleManager {
     });
     this._initCommandDockPins();
     this._initCommandDockTrayMetrics();
+    this._initLocaleSelector();
+    this._applyRuntimeStaticHeaderText();
     this._maybeNotifyLayoutReset();
+  }
+
+  /**
+   * Renders the command-dock locale switch (runtime-built since the
+   * configurable-pair stage): one button per locale availableLocales()
+   * yields — the configured GEV_DEFAULT_LOCALE / GEV_SECONDARY_LOCALE pair,
+   * already deduped against the always-shipped English fallback. Labels are
+   * uppercase locale codes (EN/ES/FR); aria-labels come from
+   * shell.locale.<code>.ariaLabel in the active catalog. Pressed state is
+   * synced from the resolved locale at boot; a click persists the choice and
+   * reloads the page, so no live re-apply of document translations is needed
+   * here (persistLocaleAndReload strips ?lang and keeps the hash).
+   * @returns {void}
+   */
+  _initLocaleSelector() {
+    const container = document.querySelector(
+      '#control-panel .dock-locale-switch',
+    );
+    if (!container) return;
+    const active = getLocale();
+    for (const locale of availableLocales()) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'dock-locale-btn';
+      button.dataset.locale = locale;
+      button.textContent = locale.toUpperCase();
+      button.setAttribute('aria-label', t(`shell.locale.${locale}.ariaLabel`));
+      const isActive = locale === active;
+      button.classList.toggle('active', isActive);
+      button.setAttribute('aria-pressed', String(isActive));
+      button.addEventListener('click', () => {
+        persistLocaleAndReload(button.dataset.locale);
+      });
+      container.appendChild(button);
+    }
+  }
+
+  /**
+   * Rewrites a header's trailing text node in place, preserving the leading
+   * dock-label-icon span that a textContent write would destroy (the phase-2
+   * "key-only" headers: .panel-title / .pp-header-label share their element
+   * with the icon, so no data-i18n attribute could target them — see
+   * docs/TRANSLATORS.md, runtime-only static sites).
+   * @param {Element|null} element
+   * @param {string} text
+   * @returns {void}
+   */
+  _setHeaderText(element, text) {
+    if (!element) return;
+    const textNode = Array.from(element.childNodes)
+      .reverse()
+      .find(
+        (node) => node.nodeType === Node.TEXT_NODE && node.nodeValue?.trim(),
+      );
+    if (textNode) textNode.nodeValue = text;
+    else element.textContent = text;
+  }
+
+  /**
+   * Localizes the key-only dock/panel headers at boot: VISUAL PRESETS,
+   * LOCATION, and the DISPLAY rail label. English output is byte-identical to
+   * the static markup these replace.
+   * @returns {void}
+   */
+  _applyRuntimeStaticHeaderText() {
+    this._setHeaderText(
+      document.querySelector('#control-panel .panel-title'),
+      t('cockpit.presets.title'),
+    );
+    this._setHeaderText(
+      document.querySelector('#location-bar .location-toolbar-label'),
+      t('cockpit.location.toolbarLabel'),
+    );
+    this._setHeaderText(
+      document.querySelector('#pp-toggles .pp-header-label'),
+      t('cockpit.display.title'),
+    );
+    // The cockpit context kicker ('CONTACT') is visible on the map itself, and
+    // the briefing kicker shares its element with the live-dot <i>; both are
+    // phase-2 key-only sites (see docs/TRANSLATORS.md). The briefing
+    // text node keeps renderBriefPage's leading-space convention.
+    this._setHeaderText(
+      document.querySelector('.cockpit-context-kicker'),
+      t('cockpit.context.kicker'),
+    );
+    // The phase-2 key-only standby description: one span holds BOTH mode
+    // descriptions split by a literal <br>, so no attribute write was possible
+    // without destroying the markup (docs/TRANSLATORS.md). Split into
+    // two keys and write them at boot, preserving the <br>.
+    const standbyDescription = document.querySelector(
+      '#context-mode-standby span',
+    );
+    if (standbyDescription) {
+      standbyDescription.replaceChildren(
+        document.createTextNode(t('cockpit.context.standbyContactsDesc')),
+        document.createElement('br'),
+        document.createTextNode(t('cockpit.context.standbyMissionsDesc')),
+      );
+    }
+    const briefKicker = document.querySelector('#cockpit-brief-kicker');
+    if (briefKicker) {
+      this._setHeaderText(briefKicker, ` ${t('cockpit.brief.kicker')}`);
+    }
   }
 
   /**
@@ -2360,9 +2479,13 @@ export class StyleManager {
     if (result.classification === 'pending') {
       this._shareTrackingNoticeGeneration += 1;
       this._shareTrackingAcquiringKey = trackingKey;
-      this._showGlobalStatusNotice('ACQUIRING', {
+      this._showGlobalStatusNotice(t('cockpit.status.acquiring'), {
         state: 'acquiring',
-        detail: `SHARED ${String(result.label || 'SUBJECT').toUpperCase()}`,
+        detail: t('cockpit.status.sharedSubjectDetail', {
+          subject: String(
+            result.label || t('cockpit.status.subjectFallback'),
+          ).toUpperCase(),
+        }),
         persistent: true,
       });
       return;
@@ -2386,13 +2509,13 @@ export class StyleManager {
     const noticeGeneration = ownsAcquiringNotice
       ? this._shareTrackingNoticeGeneration
       : ++this._shareTrackingNoticeGeneration;
-    const subject = result.label || 'entity';
+    const subject = result.label || t('cockpit.status.subjectFallback');
     const message =
       result.classification === 'expired'
-        ? `Shared ${subject} follow expired`
+        ? t('cockpit.status.sharedFollowExpired', { subject })
         : result.classification === 'source-unavailable'
-          ? `Shared ${subject} could not be restored — feed unavailable`
-          : `Shared ${subject} is unavailable`;
+          ? t('cockpit.status.sharedRestoreFailed', { subject })
+          : t('cockpit.status.sharedUnavailable', { subject });
     const showAfterStartupCover = () => {
       this._lifetime.frame(() => {
         if (
@@ -2657,7 +2780,7 @@ export class StyleManager {
     const { cctvLayer } = this.services;
     if (this._disposed) return false;
     if (!this._dataManager || !this._dataManager.layers?.has('cctv')) {
-      this._showToast('CCTV layer unavailable');
+      this._showToast(t('cockpit.cctv.toastLayerUnavailable'));
       return false;
     }
     const enabled = this._dataManager.isEnabled('cctv');
@@ -2805,14 +2928,28 @@ export class StyleManager {
         const panelName =
           panelEl
             .querySelector('.panel-title, .pp-header-label')
-            ?.textContent?.trim() || 'panel';
-        const action = collapsed ? 'Expand' : 'Collapse';
-        btn.title = `${action} ${panelName}`;
-        btn.setAttribute('aria-label', `${action} ${panelName}`);
+            ?.textContent?.trim() || t('cockpit.panel.fallbackName');
+        const titleKey = collapsed
+          ? 'cockpit.panel.expandTitle'
+          : 'cockpit.panel.collapseTitle';
+        btn.title = t(titleKey, { name: panelName });
+        btn.setAttribute('aria-label', t(titleKey, { name: panelName }));
         if (panelEl.id === 'radio-panel') {
-          const action = collapsed ? 'Expand' : 'Collapse';
-          btn.title = `${action} Radio`;
-          btn.setAttribute('aria-label', `${action} Radio section`);
+          // Expand state reuses the layers.* keys seeded on the static button;
+          // the collapse state is runtime-only, so it owns cockpit.* keys.
+          btn.title = t(
+            collapsed
+              ? 'layers.radio.expandTitle'
+              : 'cockpit.panel.radioCollapseTitle',
+          );
+          btn.setAttribute(
+            'aria-label',
+            t(
+              collapsed
+                ? 'layers.radio.expandAriaLabel'
+                : 'cockpit.panel.radioCollapseAria',
+            ),
+          );
         }
       });
     const dockToggle = panelEl.querySelector(
@@ -2822,11 +2959,13 @@ export class StyleManager {
       const panelName =
         panelEl
           .querySelector('.panel-title, .location-toolbar-label')
-          ?.textContent?.trim() || 'panel';
-      const action = collapsed ? 'Expand' : 'Collapse';
+          ?.textContent?.trim() || t('cockpit.panel.fallbackName');
+      const titleKey = collapsed
+        ? 'cockpit.panel.expandTitle'
+        : 'cockpit.panel.collapseTitle';
       dockToggle.setAttribute('aria-expanded', String(!collapsed));
-      dockToggle.setAttribute('aria-label', `${action} ${panelName}`);
-      dockToggle.title = `${action} ${panelName}`;
+      dockToggle.setAttribute('aria-label', t(titleKey, { name: panelName }));
+      dockToggle.title = t(titleKey, { name: panelName });
     }
     if (panelEl.id === 'radio-panel' && this._contextRadioDetailsBtn) {
       this._contextRadioDetailsBtn.setAttribute(
@@ -3531,8 +3670,8 @@ export class StyleManager {
       this._celestialBtn.disabled = !styleSupported;
       this._celestialBtn.setAttribute('aria-disabled', String(!styleSupported));
       this._celestialBtn.title = styleSupported
-        ? 'Celestial ring — reveal the full globe'
-        : 'Celestial ring — available in Normal style';
+        ? t('cockpit.display.celestialToggleTitle')
+        : t('cockpit.display.celestialUnavailableTitle');
     }
     let cameraFocused = false;
     if (nextEnabled && focus) {
@@ -4539,8 +4678,10 @@ export class StyleManager {
       this._currentPoi = null;
       this._collapsePOIRow();
       this._updateLocationMiniStatus();
-    } else if (change.type === 'missing') this._showToast('Location not found');
-    else if (change.type === 'failed') this._showToast('Search failed');
+    } else if (change.type === 'missing')
+      this._showToast(t('cockpit.location.toastNotFound'));
+    else if (change.type === 'failed')
+      this._showToast(t('cockpit.location.toastSearchFailed'));
     else if (change.type === 'settled')
       this._settleLocationSearchUi(change.generation);
     else if (
@@ -4827,7 +4968,7 @@ export class StyleManager {
    */
   _toggleOrbit() {
     if (!this._currentTarget) {
-      this._showToast('Fly to a POI first');
+      this._showToast(t('cockpit.location.toastFlyToPoiFirst'));
       return;
     }
 
@@ -4952,11 +5093,11 @@ export class StyleManager {
       };
       this._resetGlobeBtn?.setAttribute(
         'aria-label',
-        'Reset to full globe view',
+        t('cockpit.hud.resetGlobeAria'),
       );
       this._cockpitResetGlobeBtn?.setAttribute(
         'aria-label',
-        'Reset cockpit to full globe view',
+        t('cockpit.hud.resetGlobeCockpitAria'),
       );
       this._globeResetPromise = null;
       resolveReset(result);
@@ -4970,11 +5111,11 @@ export class StyleManager {
     }, 4200);
     this._resetGlobeBtn?.setAttribute(
       'aria-label',
-      'Resetting to full globe view',
+      t('cockpit.hud.resettingGlobeAria'),
     );
     this._cockpitResetGlobeBtn?.setAttribute(
       'aria-label',
-      'Resetting cockpit to full globe view',
+      t('cockpit.hud.resettingGlobeCockpitAria'),
     );
     const target = flyToGlobeView(this.viewer, {
       onComplete: () => finish(false),
@@ -4993,7 +5134,11 @@ export class StyleManager {
   _initShareButton() {
     this._lifetime.listen(this._shareBtn, 'click', async () => {
       const success = await this.shareLinkManager.copyLink();
-      this._showToast(success ? 'Link copied!' : 'Copy failed');
+      this._showToast(
+        success
+          ? t('cockpit.share.toastCopied')
+          : t('cockpit.share.toastCopyFailed'),
+      );
     });
   }
 
@@ -5175,21 +5320,31 @@ export class StyleManager {
     btn.setAttribute(
       'aria-label',
       enabled
-        ? `Detection overlay: ${String(modeLabel).toLowerCase()}`
-        : 'Detection overlay: off',
+        ? t('cockpit.display.detectionAriaTemplate', {
+            mode: String(modeLabel).toLowerCase(),
+          })
+        : t('cockpit.display.detectionAriaOff'),
     );
     btn.classList.remove('active', 'god', 'panoptic');
     if (modeLabel === 'SPARSE') {
-      btn.querySelector('.pp-label').textContent = 'SPARSE';
+      btn.querySelector('.pp-label').textContent = t(
+        'cockpit.display.detectionLabelSparse',
+      );
       btn.classList.add('active');
     } else if (modeLabel === 'BALANCED') {
-      btn.querySelector('.pp-label').textContent = 'BALANCED';
+      btn.querySelector('.pp-label').textContent = t(
+        'cockpit.display.detectionLabelBalanced',
+      );
       btn.classList.add('active');
     } else if (modeLabel === 'DENSE') {
-      btn.querySelector('.pp-label').textContent = 'DENSE';
+      btn.querySelector('.pp-label').textContent = t(
+        'cockpit.display.detectionLabelDense',
+      );
       btn.classList.add('active', 'panoptic');
     } else {
-      btn.querySelector('.pp-label').textContent = 'DETECT';
+      btn.querySelector('.pp-label').textContent = t(
+        'cockpit.display.detectionLabel',
+      );
     }
 
     if (this._detectionSliderRow) {

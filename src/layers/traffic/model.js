@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import {
   flowDensityMult,
   flowBucket,
@@ -313,8 +314,8 @@ export function createModel({ state: layerState, services, parts, source }) {
         mode,
         error: null,
         loadingLabel: fetching
-          ? 'syncing LIVE traffic flow'
-          : `LIVE · TomTom flow · ${coveragePct}% cov`,
+          ? t('layers.traffic.loadingSyncing')
+          : t('layers.traffic.liveCoverage', { percent: coveragePct }),
       };
     }
     // Keyless simulation — one terse line that names the mode and the remedy
@@ -324,8 +325,8 @@ export function createModel({ state: layerState, services, parts, source }) {
       mode,
       error: null,
       loadingLabel: statusUnavailable
-        ? 'SIMULATED — traffic service unreachable'
-        : 'SIMULATED — add TomTom key for live',
+        ? t('layers.traffic.simUnavailable')
+        : t('layers.traffic.simKeyless'),
     };
   }
 

@@ -1,11 +1,11 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import {
   AIS_DEGRADED_STATUSES,
   AIS_HEALTHY_STATUSES,
   AIS_STATUS_REASON,
   REFRESH_MS,
   FOCUS_EVIDENCE_DEV,
-  AIS_FIRST_CONNECT_LABEL,
 } from './policy.js';
 
 export function createQueries({
@@ -82,8 +82,8 @@ export function createQueries({
     if (acceptedRowCount > 0) return null; // accepted rows may be stale while reconnecting, but remain usable
     if (AIS_HEALTHY_STATUSES.has(status)) {
       return payload?.lastMessageAt
-        ? 'awaiting usable AIS positions…'
-        : 'awaiting first AIS message…';
+        ? t('layers.vessel.awaitingPositions')
+        : t('layers.vessel.awaitingFirstMessage');
     }
     if (!status) return null;
     const detail =
@@ -132,7 +132,7 @@ export function createQueries({
       acceptedRowCount,
       error:
         deriveAisFeedError(payload, acceptedRowCount) ||
-        (acceptedRowCount === 0 ? 'awaiting usable AIS positions…' : null),
+        (acceptedRowCount === 0 ? t('layers.vessel.awaitingPositions') : null),
     };
   }
 
@@ -494,7 +494,7 @@ export function createQueries({
         lastUpdate: state.lastUpdate,
         loading: state.loading || waitingForFirstPosition,
         loadingLabel: waitingForFirstPosition
-          ? AIS_FIRST_CONNECT_LABEL
+          ? t('layers.vessel.awaitingFirstPosition')
           : state.loadingLabel,
         error: state.error,
         stale: state.stale,

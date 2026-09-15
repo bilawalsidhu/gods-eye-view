@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { installationFeedback } from '../../data/installationFeedback.js';
+import { t } from '../../i18n/index.js';
 import { LAYER_ID, DISTANCE_PREFILTER_MARGIN_M } from './policy.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
@@ -116,7 +117,7 @@ export function createControls({ state: layerState, services, parts, source }) {
           retrying: layerState.loading && Boolean(layerState.failureReason),
         }),
         loadingLabel: layerState.loading
-          ? 'loading mapped installation context'
+          ? t('layers.installations.loading')
           : '',
       };
     },

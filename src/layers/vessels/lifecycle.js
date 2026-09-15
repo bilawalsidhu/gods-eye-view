@@ -1,9 +1,6 @@
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
-import {
-  AIS_FIRST_CONNECT_GRACE_MS,
-  AIS_FIRST_CONNECT_LABEL,
-  AIS_HEALTHY_STATUSES,
-} from './policy.js';
+import { t } from '../../i18n/index.js';
+import { AIS_FIRST_CONNECT_GRACE_MS, AIS_HEALTHY_STATUSES } from './policy.js';
 
 export function createLifecycle({
   vesselState,
@@ -41,7 +38,7 @@ export function createLifecycle({
     state.firstConnectStartedAt = startedAt;
     state.firstConnectDeadline = startedAt + AIS_FIRST_CONNECT_GRACE_MS;
     state.error = null;
-    state.loadingLabel = AIS_FIRST_CONNECT_LABEL;
+    state.loadingLabel = t('layers.vessel.awaitingFirstPosition');
     scheduleFirstConnectExpiry(sessionId, AIS_FIRST_CONNECT_GRACE_MS);
   }
 
@@ -63,8 +60,8 @@ export function createLifecycle({
       state.firstConnectPhase = 'unavailable';
       state.loadingLabel = '';
       state.error = state.lastMessageAt
-        ? 'awaiting usable AIS positions…'
-        : 'awaiting first AIS message…';
+        ? t('layers.vessel.awaitingPositions')
+        : t('layers.vessel.awaitingFirstMessage');
       state.stale = state.count > 0;
     }, delayMs);
   }

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
 import { trackedModelZoomActive } from '../../data/trackedModelRegime.js';
 import {
@@ -755,7 +756,7 @@ export function createTracking({
     const spd = info.velocity ? `${Math.round(info.velocity * 1.944)} kts` : '';
     const stale =
       flightState._missingPolls.get(icao24) || flightState._backoff
-        ? 'STALE'
+        ? t('layers.status.stale')
         : '';
     const lines = [[cs, fl, spd, stale].filter(Boolean).join(' · ')];
     // Converted contacts report their class as TR-3B and nothing else — the
