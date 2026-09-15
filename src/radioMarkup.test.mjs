@@ -334,7 +334,7 @@ test('Radio disclosure is explicit, starts closed while off, and preserves playb
   assert.doesNotMatch(renderMethod, /_radioMiniExpanded\s*=\s*false.*audioState === 'playing'/s);
   assert.match(ui, /contextRadioDetailsBtn/);
   const syncStart = ui.indexOf('\n  _syncPanelCollapseButton(panelEl)');
-  const syncMethod = ui.slice(syncStart, ui.indexOf('\n  /**', syncStart + 10));
+  const syncMethod = ui.slice(syncStart, ui.indexOf('\n  }', syncStart + 10));
   assert.doesNotMatch(syncMethod, /contextRadioDetailsBtn[\s\S]*?(?:aria-label|textContent|\.title)/);
 });
 

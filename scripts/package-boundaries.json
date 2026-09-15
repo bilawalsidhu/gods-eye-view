@@ -504,6 +504,8 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/locationNavigation.js",
+      "src/ui/cockpitCoordinator.js",
       "src/ui/cameraOrientationControls.js",
       "src/ui/applicationShortcuts.js",
       "src/ui/cctv.js",
@@ -574,7 +576,11 @@
       "src/ui/visualPresets.js",
       "src/ui/visualSettings.js",
       "src/worldFocus.js",
-      "src/data/feedState.js"
+      "src/data/feedState.js",
+      "src/ui/aircraftDisplay.js",
+      "src/ui/layerBindings.js",
+      "src/ui/displayBindings.js",
+      "src/ui/shellFacade.js"
     ],
     "external": ["cesium"]
   },
@@ -1556,6 +1562,8 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/locationNavigation.js",
+      "src/ui/cockpitCoordinator.js",
       "src/ui/cameraOrientationControls.js",
       "src/ui/applicationShortcuts.js",
       "src/ui/cctv.js",
@@ -1700,7 +1708,11 @@
       "src/sources/overpassFeaturesRecords.js",
       "src/sources/overpassFeatures.js",
       "src/sources/featureSource.js",
-      "src/sources/overpassRoads.js"
+      "src/sources/overpassRoads.js",
+      "src/ui/aircraftDisplay.js",
+      "src/ui/layerBindings.js",
+      "src/ui/displayBindings.js",
+      "src/ui/shellFacade.js"
     ],
     "external": [
       "@mapbox/vector-tile",

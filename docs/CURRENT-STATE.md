@@ -1,5 +1,13 @@
 # God's Eye View Current State
 
+The application shell composes focused state owners for navigation, destination
+lookup/orbit, Cockpit, visual settings, panel layout, aircraft display and layer
+bindings. Keyboard/display subscriptions have a separate lifetime; existing
+layer, scene and voice methods remain available through a delegation facade.
+Disposal settles pending globe resets and removes camera-entry listeners before
+asynchronous restoration; replacing a manager detaches its old Directions
+services. See [UI ownership](UI-OWNERSHIP.md).
+
 Director's ordered shot runner is exported independently of rendering, UI,
 storage and scene content. The existing scene controller supplies an adapter for
 visual/layer state, camera travel, media holds and release. Playback cancellation,
