@@ -1,5 +1,5 @@
 {
-  "$comment": "Registered historic wildfire events replayed from the NASA FIRMS standard-processing archive. The /api/fire-history proxy only fetches events listed here — never client-supplied dates or boxes. bbox is [west, south, east, north] in degrees; dates are inclusive UTC days. `perimeter` (optional) names a whitelisted NIFC ArcGIS service and structured filters; the proxy builds the query itself and keeps the largest matching polygon as the event's final perimeter.",
+  "$comment": "Registered historic wildfire events replayed from the NASA FIRMS standard-processing archive. The /api/fire-history proxy only fetches events listed here — never client-supplied dates or boxes. bbox is [west, south, east, north] in degrees; dates are inclusive UTC days. `perimeter` (optional) names a whitelisted NIFC ArcGIS service and structured filters; the proxy builds the query itself and keeps the largest matching polygon as the event's final perimeter. Scaffold a new entry with `node scripts/fire-event-scaffold.mjs --name <incident> --year <YYYY>`.",
   "events": [
     {
       "id": "camp-fire-2018",

@@ -871,6 +871,16 @@ fetching, trailing-24-hour filtering and partial-success caching are unchanged.
   box), ▶ REPLAY SPREAD / ❚❚ PAUSE, ↺ ALL, and the event's https references.
   The panel re-renders on the same beat as the layer row; sliders keep the
   user's value while focused. All event and feed text is HTML-escaped.
+- Adding an event: `node scripts/fire-event-scaffold.mjs --name Dixie --year 2021
+  --state US-CA` searches NIFC (WFIGS for 2020+, the perimeter history view
+  before; override with `--service`), prints a candidate table, picks the
+  largest by acreage (`--pick N` otherwise), reads that record's extent for a
+  padded bbox (`--bbox` overrides), derives the inclusive window from the
+  discovery and containment/out dates (`--start`/`--end` override; anything
+  estimated is warned), chooses the archive sources that existed that year, and
+  prints an entry that already passes `normalizeFireEvent`. `--write` appends
+  it to `config/fire_events.json` (duplicate ids refuse). Region, summary and
+  `--ref "Label=https://…"` references are the operator's to fill in.
 - Official perimeter: when the event registers a `perimeter` (whitelisted NIFC
   service + structured filters, validated like the rest of the event), the
   layer requests `/api/fire-history/<id>/perimeter` after the detections load
