@@ -4,7 +4,8 @@ import { promises as fsp } from 'node:fs';
 import { xweatherProxy } from 'gods-eye-view/server/providers/xweather';
 import {
   DEFAULT_REFRESH_MS,
-  MAX_TILE_ZOOM,
+  SAMPLED_MAX_TILE_ZOOM,
+  SYMBOL_MAX_TILE_ZOOM,
 } from 'gods-eye-view/sources/xweather';
 
 /** A layer the catalogue allows; the proxy refuses anything outside it. */
@@ -130,17 +131,33 @@ test('coordinates are validated before the key is ever read', async (t) => {
   const request = install(xweatherProxy());
   // A bad coordinate is a client error, not a missing-key error — checking it
   // first also means a malformed request can never become a billable fetch.
-  for (const url of [tileUrl(12, 1, 1), tileUrl(4, 99, 1)]) {
+  for (const url of [tileUrl(20, 1, 1), tileUrl(4, 99, 1)]) {
     const res = await request(url);
     assert.equal(res.status, 400, url);
     assert.equal(json(res).error, 'invalid_tile');
   }
-  // Pin the ceiling itself. One level past it is where the service stops
-  // having anything new to say and starts charging for blur, so the boundary
-  // is a cost decision, not an arbitrary bound. A valid coordinate falls
-  // through to the key check (503 here) rather than being rejected.
-  assert.equal((await request(tileUrl(MAX_TILE_ZOOM, 1, 1))).status, 503);
-  assert.equal((await request(tileUrl(MAX_TILE_ZOOM + 1, 1, 1))).status, 400);
+  // Pin both ceilings. Each is where its kind of layer stops having anything
+  // new to say and starts charging for it, so they are cost decisions rather
+  // than arbitrary bounds — and they differ, so the check has to be made
+  // against the layer asked for and not against the deepest layer offered.
+  // A valid coordinate falls through to the key check (503) rather than 400.
+  const SYMBOLIC = 'lightning-flash';
+  assert.ok(SAMPLED_MAX_TILE_ZOOM < SYMBOL_MAX_TILE_ZOOM);
+  const at = async (z, layer) =>
+    (await request(tileUrl(z, 1, 1, layer))).status;
+
+  assert.equal(await at(SAMPLED_MAX_TILE_ZOOM, LAYER), 503);
+  assert.equal(
+    await at(SAMPLED_MAX_TILE_ZOOM + 1, LAYER),
+    400,
+    'a sampled raster past its resolution must not become a billable fetch',
+  );
+  assert.equal(await at(SYMBOL_MAX_TILE_ZOOM, SYMBOLIC), 503);
+  assert.equal(
+    await at(SYMBOL_MAX_TILE_ZOOM + 1, SYMBOLIC),
+    400,
+    'symbols are redrawn at every level, but not without end',
+  );
   assert.equal((await request('/nope')).status, 404);
 });
 

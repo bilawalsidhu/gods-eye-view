@@ -7,7 +7,10 @@ import {
   isValidTileCoord as isValidXweatherTile,
   resolveRefreshMs,
 } from '../../src/data/xweatherTiles.js';
-import { isAllowedLayer } from '../../src/data/xweatherCatalogue.js';
+import {
+  isAllowedLayer,
+  layerMaxZoom,
+} from '../../src/data/xweatherCatalogue.js';
 import { providerCacheDir } from './common/cache-dir.js';
 import {
   utcMonthKey as xweatherUtcMonthKey,
@@ -372,7 +375,9 @@ export function xweatherProxy() {
           sendJson(400, { error: 'unknown_layer' });
           return;
         }
-        if (!isValidXweatherTile(z, x, y)) {
+        // Each layer is held to its own ceiling, so a level 12 radar tile is
+        // refused rather than billed for a blurrier copy of level 9.
+        if (!isValidXweatherTile(z, x, y, layerMaxZoom(layer))) {
           sendJson(400, { error: 'invalid_tile' });
           return;
         }

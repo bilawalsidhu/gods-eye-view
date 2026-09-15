@@ -29,6 +29,11 @@
  * @module data/xweatherCatalogue
  */
 
+import {
+  SAMPLED_MAX_TILE_ZOOM,
+  SYMBOL_MAX_TILE_ZOOM,
+} from './xweatherTiles.js';
+
 /**
  * Continuous fields paint every pixel of every tile — measured at 24-160 KB
  * against an overlay's 116 bytes. Stacking two of them shows only the top one,
@@ -43,6 +48,16 @@ export const OVERLAY = 'overlay';
 const FIELD_RUNG = 1;
 const RADAR_RUNG = 4;
 const OVERLAY_RUNG = 6;
+
+/**
+ * How deep each layer is worth asking for.
+ *
+ * Radar and the continuous fields are sampled rasters and run out of real
+ * resolution; the symbol layers are redrawn at every level and do not. See
+ * the two constants for the measurements behind each.
+ */
+const SAMPLED = SAMPLED_MAX_TILE_ZOOM;
+const SYMBOLS = SYMBOL_MAX_TILE_ZOOM;
 
 /** Fields are laid over terrain, so they yield enough of it to stay legible. */
 const FIELD_ALPHA = 0.55;
@@ -93,6 +108,7 @@ export const XWEATHER_LAYERS = Object.freeze(
     {
       code: 'l',
       layer: 'lightning-flash',
+      maxZoom: SYMBOLS,
       group: OVERLAY,
       label: 'Lightning',
       detail: 'Cloud-to-ground and intracloud flashes',
@@ -101,6 +117,7 @@ export const XWEATHER_LAYERS = Object.freeze(
     {
       code: 'a',
       layer: 'alerts',
+      maxZoom: SYMBOLS,
       group: OVERLAY,
       label: 'Warnings',
       detail: 'Active alerts: US, Canada, Europe, Australia, Japan, Korea',
@@ -109,6 +126,7 @@ export const XWEATHER_LAYERS = Object.freeze(
     {
       code: 'd',
       layer: 'wind-dir',
+      maxZoom: SYMBOLS,
       group: OVERLAY,
       label: 'Wind arrows',
       detail: 'Surface wind direction',
@@ -117,6 +135,7 @@ export const XWEATHER_LAYERS = Object.freeze(
     {
       code: 'i',
       layer: 'fpressure-msl-isobars',
+      maxZoom: SYMBOLS,
       group: OVERLAY,
       label: 'Isobars',
       detail: 'Forecast sea-level pressure',
@@ -127,6 +146,7 @@ export const XWEATHER_LAYERS = Object.freeze(
     {
       code: 'c',
       layer: 'tropical-cyclones',
+      maxZoom: SYMBOLS,
       group: OVERLAY,
       label: 'Cyclones',
       detail: 'Active storms with a five-day forecast',
@@ -135,6 +155,7 @@ export const XWEATHER_LAYERS = Object.freeze(
     {
       code: 'k',
       layer: 'tropical-cyclones-track-lines',
+      maxZoom: SYMBOLS,
       group: OVERLAY,
       label: 'Cyclone tracks',
       detail: 'Where each storm has already been',
@@ -143,6 +164,7 @@ export const XWEATHER_LAYERS = Object.freeze(
     {
       code: 'p',
       layer: 'tropical-cyclones-position-icons',
+      maxZoom: SYMBOLS,
       group: OVERLAY,
       label: 'Cyclone positions',
       detail: 'Current centre and intensity',
@@ -151,6 +173,7 @@ export const XWEATHER_LAYERS = Object.freeze(
     {
       code: 'e',
       layer: 'tropical-cyclones-forecast-error-cones',
+      maxZoom: SYMBOLS,
       group: OVERLAY,
       label: 'Cyclone cone',
       detail: 'Forecast track uncertainty',
@@ -162,6 +185,7 @@ export const XWEATHER_LAYERS = Object.freeze(
     {
       code: 'n',
       layer: 'surface-analysis',
+      maxZoom: SYMBOLS,
       group: OVERLAY,
       label: 'Fronts',
       detail: 'Frontal and pressure analysis',
@@ -171,6 +195,7 @@ export const XWEATHER_LAYERS = Object.freeze(
     {
       code: 's',
       layer: 'stormcells',
+      maxZoom: SYMBOLS,
       group: OVERLAY,
       label: 'Storm cells',
       detail: 'Cell tracks with rotation and hail signatures',
@@ -180,6 +205,7 @@ export const XWEATHER_LAYERS = Object.freeze(
     {
       code: 'o',
       layer: 'stormreports',
+      maxZoom: SYMBOLS,
       group: OVERLAY,
       label: 'Storm reports',
       detail: 'Tornado, hail, wind and flood reports, last 24 hours',
@@ -189,6 +215,7 @@ export const XWEATHER_LAYERS = Object.freeze(
     {
       code: 'v',
       layer: 'convective',
+      maxZoom: SYMBOLS,
       group: OVERLAY,
       label: 'Severe outlook',
       detail: 'SPC convective outlook',
@@ -198,6 +225,7 @@ export const XWEATHER_LAYERS = Object.freeze(
     {
       code: 'g',
       layer: 'drought-monitor',
+      maxZoom: SYMBOLS,
       group: OVERLAY,
       label: 'Drought',
       detail: 'Drought severity',
@@ -207,6 +235,7 @@ export const XWEATHER_LAYERS = Object.freeze(
     {
       code: 'b',
       layer: 'river-observations',
+      maxZoom: SYMBOLS,
       group: OVERLAY,
       label: 'River gauges',
       detail: 'NOAA flood and low-flow thresholds',
@@ -347,6 +376,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       defaultOn: false,
       forecast: false,
       coverage: null,
+      maxZoom: SAMPLED,
       ...entry,
     }),
   ),
@@ -375,6 +405,20 @@ export function isAllowedLayer(layer) {
 /** The catalogue entry for a vendor layer name, or null. */
 export function layerByName(layer) {
   return BY_LAYER.get(String(layer ?? '')) || null;
+}
+
+/**
+ * The deepest tile this layer is worth asking for.
+ *
+ * Falls back to the sampled ceiling for an unknown name so a bad request can
+ * never widen what may be fetched; the allowlist has already refused it by the
+ * time this is reached.
+ *
+ * @param {string} layer - Vendor layer name.
+ * @returns {number} Zoom ceiling for that layer.
+ */
+export function layerMaxZoom(layer) {
+  return layerByName(layer)?.maxZoom ?? SAMPLED_MAX_TILE_ZOOM;
 }
 
 /** The catalogue entry for a share-link code, or null. */

@@ -1,6 +1,5 @@
 import {
   DEFAULT_REFRESH_MS,
-  MAX_TILE_ZOOM,
   MIN_REFRESH_MS,
 } from '../../data/xweatherTiles.js';
 import {
@@ -91,7 +90,7 @@ export const WEATHER_LAYER_SPECS = Object.freeze(
       forecast: entry.forecast,
       alpha: entry.alpha,
       refreshMs: DEFAULT_REFRESH_MS,
-      maxTileLevel: MAX_TILE_ZOOM,
+      maxTileLevel: entry.maxZoom,
     }),
   ),
 );

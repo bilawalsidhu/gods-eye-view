@@ -17,7 +17,7 @@
 export const MIN_TILE_ZOOM = 0;
 
 /**
- * @const {number} Deepest tile this app requests.
+ * @const {number} Deepest tile worth asking for from a sampled raster.
  *
  * Measured against the live service rather than guessed from the nominal
  * resolution. Over Tokyo, with convection in range of a dense radar network,
@@ -26,11 +26,37 @@ export const MIN_TILE_ZOOM = 0;
  * upsampling a coarser source. Level 9 is ~305 m/px, comfortably past a ~1 km
  * composite, so it is the last level carrying real information.
  *
- * Stopping here is also the cheapest lever available: each further level is an
- * entirely new tile set to pay for, and they would only ever be blurrier
- * copies of this one. Cesium magnifies past it, which costs nothing.
+ * Past it Cesium magnifies for free, and every further level would be an
+ * entirely new set of billable tiles holding blurrier copies of this one.
  */
-export const MAX_TILE_ZOOM = 9;
+export const SAMPLED_MAX_TILE_ZOOM = 9;
+
+/**
+ * @const {number} Deepest tile worth asking for from a symbol layer.
+ *
+ * Lightning strikes, warning polygons, storm cells, cyclone tracks and wind
+ * arrows are drawn by the service at each level, at a constant size on screen
+ * — they are cartography, not a sampled field, so they do not run out of
+ * resolution the way radar does. Compared at the same ground, a level 12 tile
+ * holds the same strikes as its level 9 ancestor, spread out and individually
+ * legible rather than piled into a few pixels.
+ *
+ * That is why they cannot simply be magnified: blowing a level 9 tile up to
+ * fill a level 12 view scales the symbols with it, and a 10-pixel strike
+ * becomes an 80-pixel blob. Level 12 is roughly a city block, past which the
+ * symbols are separated by more than their own width and magnifying is honest
+ * again.
+ */
+export const SYMBOL_MAX_TILE_ZOOM = 12;
+
+/**
+ * @const {number} Deepest tile any layer may request.
+ *
+ * The coordinate check in front of the key uses this; the proxy then holds
+ * each layer to its own ceiling, so a level 12 radar tile is refused rather
+ * than billed for a blurrier copy of level 9.
+ */
+export const MAX_TILE_ZOOM = SYMBOL_MAX_TILE_ZOOM;
 
 /**
  * @const {number} Default refresh cadence: once a day.
@@ -70,15 +96,16 @@ export const DEFAULT_DISK_CACHE_BYTES = 64 * 1024 * 1024;
  * Checked before the key is read, so a malformed request is a 400 rather than
  * a billable upstream fetch.
  *
- * @param {number} z - Zoom level; integer within [MIN_TILE_ZOOM, MAX_TILE_ZOOM].
+ * @param {number} z - Zoom level; integer within [MIN_TILE_ZOOM, maxZoom].
  * @param {number} x - Tile column; integer within [0, 2^z - 1].
  * @param {number} y - Tile row; integer within [0, 2^z - 1].
+ * @param {number} [maxZoom=MAX_TILE_ZOOM] This layer's own ceiling.
  * @returns {boolean} True when the coordinate is a fetchable tile.
  */
-export function isValidTileCoord(z, x, y) {
+export function isValidTileCoord(z, x, y, maxZoom = MAX_TILE_ZOOM) {
   if (!Number.isInteger(z) || !Number.isInteger(x) || !Number.isInteger(y))
     return false;
-  if (z < MIN_TILE_ZOOM || z > MAX_TILE_ZOOM) return false;
+  if (z < MIN_TILE_ZOOM || z > Math.min(maxZoom, MAX_TILE_ZOOM)) return false;
   const n = 2 ** z;
   return x >= 0 && x < n && y >= 0 && y < n;
 }

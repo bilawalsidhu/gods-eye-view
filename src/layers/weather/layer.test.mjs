@@ -15,6 +15,11 @@ import {
 } from './policy.js';
 import { noKeyError } from './model.js';
 import {
+  MAX_TILE_ZOOM,
+  SAMPLED_MAX_TILE_ZOOM,
+  SYMBOL_MAX_TILE_ZOOM,
+} from '../../data/xweatherTiles.js';
+import {
   decodeLayerStateParams,
   encodeLayerStateParams,
 } from '../../data/layerState.js';
@@ -335,6 +340,32 @@ test('the layers that work anywhere are offered first', () => {
         `${groupSpecs[limited].label}, which does not`,
     );
   }
+});
+
+test('a layer stops at the depth its own data supports', () => {
+  // One ceiling for everything was wrong in both directions: radar was being
+  // magnified honestly, but so were the symbol layers, and magnifying a symbol
+  // scales it — a 10-pixel lightning strike at level 9 becomes an 80-pixel
+  // blob filling a level 12 view.
+  for (const spec of WEATHER_LAYER_SPECS) {
+    assert.ok(
+      Number.isInteger(spec.maxTileLevel),
+      `${spec.id} needs a tile ceiling`,
+    );
+    assert.ok(spec.maxTileLevel <= MAX_TILE_ZOOM, `${spec.id} past the cap`);
+  }
+  const ceiling = (id) =>
+    WEATHER_LAYER_SPECS.find((spec) => spec.id === id)?.maxTileLevel;
+
+  // Radar is a sampled raster like the fields, despite stacking like an
+  // overlay — so the split cannot be read off the group.
+  assert.equal(ceiling('radar-global'), SAMPLED_MAX_TILE_ZOOM);
+  for (const spec of WEATHER_LAYER_SPECS.filter((s) => s.group === FIELD))
+    assert.equal(spec.maxTileLevel, SAMPLED_MAX_TILE_ZOOM, spec.id);
+
+  assert.equal(ceiling('lightning-flash'), SYMBOL_MAX_TILE_ZOOM);
+  assert.equal(ceiling('alerts'), SYMBOL_MAX_TILE_ZOOM);
+  assert.equal(ceiling('stormcells'), SYMBOL_MAX_TILE_ZOOM);
 });
 
 test('the tile template is same-origin and carries no credential', () => {
