@@ -705,7 +705,92 @@ export async function runTrailVisibility({
     check(name, false, JSON.stringify(setup), { unexercised: true });
     return;
   }
-  await wait(20000);
+  const cost = await page.evaluate(async (key) => {
+    const app = window.__godsEyeView,
+      scene = app.viewer.scene;
+    const layer = app.dataManager.layers.get('transit').module;
+    const parts = layer._transitPartsForTest(),
+      entry = layer._transitStateForTest()._vehicles.get(key);
+    const gl = scene.context._gl,
+      originals = new Map(),
+      wrapped = new Map();
+    let owner = null,
+      headBytes = 0,
+      bodyBytes = 0,
+      headUploadMax = 0,
+      bodyUploadMax = 0,
+      frames = 0;
+    const headCpu = [];
+    const wrap = (primitive, kind) => {
+      if (!primitive || wrapped.has(primitive)) return;
+      const update = primitive.update;
+      wrapped.set(primitive, update);
+      primitive.update = function (frameState) {
+        const before = performance.now();
+        owner = kind;
+        try {
+          return update.call(this, frameState);
+        } finally {
+          owner = null;
+          if (kind === 'head') headCpu.push(performance.now() - before);
+        }
+      };
+    };
+    for (const name of ['bufferData', 'bufferSubData']) {
+      const original = gl[name];
+      originals.set(name, original);
+      gl[name] = function (...args) {
+        if (owner) {
+          const value = args[name === 'bufferData' ? 1 : 2],
+            offset = args[3] || 0,
+            length = args[4];
+          const bytes =
+            typeof value === 'number'
+              ? value
+              : value
+                ? length !== undefined
+                  ? length * (value.BYTES_PER_ELEMENT || 1)
+                  : value.byteLength - offset * (value.BYTES_PER_ELEMENT || 1)
+                : 0;
+          if (owner === 'head') headBytes += bytes;
+          else bodyBytes += bytes;
+        }
+        return original.apply(this, args);
+      };
+    }
+    const pre = scene.preRender.addEventListener(() => {
+      headBytes = bodyBytes = 0;
+      const trail = parts.trails.diagnostics();
+      wrap(trail?.body, 'body');
+      wrap(trail?.headPrimitive || trail?.head?._polylineCollection, 'head');
+    });
+    const post = scene.postRender.addEventListener(() => {
+      frames++;
+      headUploadMax = Math.max(headUploadMax, headBytes);
+      bodyUploadMax = Math.max(bodyUploadMax, bodyBytes);
+    });
+    try {
+      // Include a full history upload, even if the first selection already rendered.
+      entry.pathRevision = -1;
+      parts.trails.prepareEntry(entry);
+      scene.requestRender();
+      await new Promise((resolve) => setTimeout(resolve, 20000));
+      headCpu.sort((a, b) => a - b);
+      return {
+        frames,
+        headUploadMax,
+        bodyUploadMax,
+        headCpuP95Ms: headCpu[Math.floor(headCpu.length * 0.95)] ?? null,
+        headCpuMaxMs: headCpu.at(-1) ?? null,
+      };
+    } finally {
+      pre();
+      post();
+      for (const [name, original] of originals) gl[name] = original;
+      for (const [primitive, update] of wrapped)
+        if (!primitive.isDestroyed()) primitive.update = update;
+    }
+  }, setup.key);
   const result = await page.evaluate(async (setup) => {
     const app = window.__godsEyeView,
       scene = app.viewer.scene;
@@ -847,6 +932,7 @@ export async function runTrailVisibility({
     };
   }, setup);
   const pixels = reduceTrailPixels(result.on, result.off);
+  result.cost = cost;
   result.altitude = altitude;
   result.pitch = pitch;
   result.present = pixels.present;
@@ -876,6 +962,15 @@ export async function runTrailVisibility({
       result.movedMetres >= 5 &&
       result.present >= 6,
     JSON.stringify(result),
+  );
+  check(
+    'selected trail stays within 2 MiB rebuild and 2 KiB/frame head uploads',
+    cost.frames > 30 &&
+      cost.bodyUploadMax > 0 &&
+      cost.bodyUploadMax <= 2 * 1024 * 1024 &&
+      cost.headUploadMax > 0 &&
+      cost.headUploadMax <= 2048,
+    JSON.stringify({ altitude, ...cost }),
   );
   await page.evaluate(() =>
     window.__godsEyeView.dataManager.layers

@@ -2706,7 +2706,9 @@ distance of at least 40, so a faint depth-fail wash cannot satisfy visibility. A
 against the base and patched keyed builds; partial runs remain diagnostic.
 Node geometry checks measure 1,352 bytes per head subdivision, zero ordinary-frame
 head geometry uploads, and a conservative 1,809,648-byte body estimate including
-64 bytes per instance, below 2 MiB. Browser frame cost remains an integrator check.
+64 bytes per instance, below 2 MiB. The same 20-second browser interval scopes
+WebGL uploads to the trail body/head, forces one body rebuild, reports head CPU
+p95/max, and gates body uploads at 2 MiB and head uploads at 2 KiB/frame.
 
 Required empty or unexercised checks fail acceptance. The passing final line is
 `HARNESS: PASS (0 unexercised)`. A `QA_SECTIONS` subset is diagnostic only and
