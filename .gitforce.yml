@@ -30,6 +30,16 @@
 #   a guaranteed failure. Rebuild gev-ci-node:1 when package-lock.json
 #   changes and gev-ci-rust:1 when rust/firms-renderer/Cargo.lock changes
 #   (instructions in the Dockerfile headers).
+# - The job graph is a LINEAR CHAIN (lint → test-node24 → test-node26 →
+#   coverage → build), not the GitHub workflow's fan-out, because all jobs
+#   of one run share the SAME workspace directory on this runner (GitHub
+#   gives each job a fresh VM). Jobs with `needs: [lint]` alone dispatch
+#   concurrently and their `npm ci` steps delete each other's node_modules
+#   mid-flight — measured 2026-09-15 as `Cannot find package
+#   'mersenne-twister'` from @cesium/engine with 410/580 packages on disk.
+#   dsc's fan-out .gitforce.yml hits the same wall (all runs red). The
+#   cost is wall-time serialization; the npm cache keeps each `npm ci`
+#   ~12 s, so the chain is acceptable.
 name: gods-eye-view-ci
 version: "1.0"
 trigger_on:
@@ -59,7 +69,7 @@ jobs:
 
   - name: test-node26
     image: gev-ci-node:1
-    needs: [lint]
+    needs: [test-node24]
     steps:
       - name: Install
         run: npm ci
@@ -71,7 +81,7 @@ jobs:
   # — the Phase 3 stance in docs/PLAN.md: the number follows the tests).
   - name: coverage
     image: gev-ci-node:1
-    needs: [lint]
+    needs: [test-node26]
     steps:
       - name: Install
         run: npm ci
@@ -85,7 +95,7 @@ jobs:
   # built sw.js precache manifest still lists the offline shell.
   - name: build
     image: gev-ci-rust:1
-    needs: [lint]
+    needs: [coverage]
     steps:
       - name: Install
         run: npm ci
