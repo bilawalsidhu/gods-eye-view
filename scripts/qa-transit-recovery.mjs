@@ -38,8 +38,10 @@ try {
     { timeout: 60000 },
   );
   await page.waitForFunction(
-    () =>
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
+    () => {
+      const cover = document.getElementById('loading-screen');
+      return !cover || cover.classList.contains('hidden');
+    },
     { timeout: 60000 },
   );
   await page.evaluate(() => {
