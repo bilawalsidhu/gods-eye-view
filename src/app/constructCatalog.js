@@ -20,6 +20,7 @@ import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
+import weatherRadarLayer from '../data/weatherRadar.js';
 
 const SOURCE_METHODS = Object.freeze({
   flights: ['getSnapshot'],
@@ -131,6 +132,7 @@ export function createApplicationCatalog({
           source: 'NASA FIRMS · LIVE',
           feed: sources.firms,
         }),
+        weatherRadarLayer,
       ],
       metadata,
     );
