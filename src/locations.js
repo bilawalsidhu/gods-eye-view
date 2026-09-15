@@ -514,6 +514,102 @@ export const CITY_POIS = {
       },
     ],
   },
+  mumbai: {
+    name: 'Mumbai',
+    groundElevation: 14,
+    viewBounds: { southwest: { lat: 18.88, lng: 72.76 }, northeast: { lat: 19.28, lng: 73.05 } },
+    pois: [
+      { name: 'Gateway of India', lat: 18.9220, lon: 72.8347, alt: 700, pitch: -25, heading: 135, buildingHeight: 35 },
+      { name: 'Chhatrapati Shivaji Maharaj Terminus', lat: 18.9402, lon: 72.8356, alt: 700, pitch: -25, heading: 45, buildingHeight: 35 },
+      { name: 'Marine Drive', lat: 18.9432, lon: 72.8236, alt: 1400, pitch: -35, heading: 180, buildingHeight: 10 },
+      { name: 'Bandra Worli Sea Link', lat: 19.0330, lon: 72.8164, alt: 1200, pitch: -25, heading: 90, buildingHeight: 20 },
+      { name: 'Sanjay Gandhi National Park', lat: 19.2147, lon: 72.9106, alt: 1800, pitch: -40, heading: 0, buildingHeight: 10 },
+    ],
+  },
+  delhi: {
+    name: 'Delhi',
+    groundElevation: 215,
+    viewBounds: { southwest: { lat: 28.40, lng: 76.84 }, northeast: { lat: 28.88, lng: 77.35 } },
+    pois: [
+      { name: 'India Gate', lat: 28.6129, lon: 77.2295, alt: 750, pitch: -25, heading: 0, buildingHeight: 30 },
+      { name: 'Red Fort', lat: 28.6562, lon: 77.2410, alt: 700, pitch: -28, heading: 90, buildingHeight: 25 },
+      { name: 'Qutub Minar', lat: 28.5245, lon: 77.1855, alt: 650, pitch: -25, heading: 180, buildingHeight: 40 },
+      { name: 'Lotus Temple', lat: 28.5535, lon: 77.2588, alt: 600, pitch: -30, heading: 315, buildingHeight: 20 },
+      { name: 'Akshardham Temple', lat: 28.6127, lon: 77.2773, alt: 900, pitch: -30, heading: 270, buildingHeight: 30 },
+    ],
+  },
+  bengaluru: {
+    name: 'Bengaluru',
+    groundElevation: 920,
+    viewBounds: { southwest: { lat: 12.80, lng: 77.38 }, northeast: { lat: 13.15, lng: 77.80 } },
+    pois: [
+      { name: 'Vidhana Soudha', lat: 12.9796, lon: 77.5906, alt: 650, pitch: -25, heading: 90, buildingHeight: 30 },
+      { name: 'Bengaluru Palace', lat: 12.9987, lon: 77.5920, alt: 650, pitch: -25, heading: 180, buildingHeight: 25 },
+      { name: 'Lalbagh Botanical Garden', lat: 12.9507, lon: 77.5848, alt: 1300, pitch: -35, heading: 0, buildingHeight: 10 },
+      { name: 'Cubbon Park', lat: 12.9763, lon: 77.5929, alt: 900, pitch: -35, heading: 270, buildingHeight: 10 },
+      { name: 'Kempegowda International Airport', lat: 13.1986, lon: 77.7066, alt: 1800, pitch: -35, heading: 45, buildingHeight: 10 },
+    ],
+  },
+  hyderabad: {
+    name: 'Hyderabad',
+    groundElevation: 500,
+    viewBounds: { southwest: { lat: 17.25, lng: 78.20 }, northeast: { lat: 17.60, lng: 78.70 } },
+    pois: [
+      { name: 'Charminar', lat: 17.3616, lon: 78.4747, alt: 550, pitch: -25, heading: 45, buildingHeight: 25 },
+      { name: 'Golconda Fort', lat: 17.3833, lon: 78.4011, alt: 1000, pitch: -30, heading: 270, buildingHeight: 30 },
+      { name: 'Hussain Sagar', lat: 17.4239, lon: 78.4738, alt: 1500, pitch: -35, heading: 180, buildingHeight: 10 },
+      { name: 'Birla Mandir', lat: 17.4062, lon: 78.4691, alt: 700, pitch: -25, heading: 90, buildingHeight: 20 },
+      { name: 'Rajiv Gandhi International Airport', lat: 17.2403, lon: 78.4294, alt: 1800, pitch: -35, heading: 0, buildingHeight: 10 },
+    ],
+  },
+  chennai: {
+    name: 'Chennai',
+    groundElevation: 7,
+    viewBounds: { southwest: { lat: 12.80, lng: 80.05 }, northeast: { lat: 13.25, lng: 80.35 } },
+    pois: [
+      { name: 'Marina Beach', lat: 13.0499, lon: 80.2824, alt: 1500, pitch: -35, heading: 180, buildingHeight: 5 },
+      { name: 'Kapaleeshwarar Temple', lat: 13.0339, lon: 80.2697, alt: 600, pitch: -25, heading: 90, buildingHeight: 25 },
+      { name: 'Fort St George', lat: 13.0797, lon: 80.2870, alt: 700, pitch: -28, heading: 0, buildingHeight: 20 },
+      { name: 'Chennai Central', lat: 13.0827, lon: 80.2757, alt: 650, pitch: -25, heading: 270, buildingHeight: 25 },
+      { name: 'Mahabalipuram Shore Temple', lat: 12.6169, lon: 80.1927, alt: 900, pitch: -30, heading: 135, buildingHeight: 15 },
+    ],
+  },
+  kolkata: {
+    name: 'Kolkata',
+    groundElevation: 9,
+    viewBounds: { southwest: { lat: 22.40, lng: 88.20 }, northeast: { lat: 22.80, lng: 88.55 } },
+    pois: [
+      { name: 'Howrah Bridge', lat: 22.5958, lon: 88.3476, alt: 900, pitch: -25, heading: 90, buildingHeight: 15 },
+      { name: 'Victoria Memorial', lat: 22.5448, lon: 88.3426, alt: 650, pitch: -25, heading: 180, buildingHeight: 25 },
+      { name: 'Eden Gardens', lat: 22.5646, lon: 88.3433, alt: 800, pitch: -30, heading: 270, buildingHeight: 10 },
+      { name: 'Dakshineswar Kali Temple', lat: 22.6550, lon: 88.3577, alt: 800, pitch: -30, heading: 0, buildingHeight: 20 },
+      { name: 'Salt Lake City', lat: 22.5867, lon: 88.4170, alt: 1600, pitch: -35, heading: 45, buildingHeight: 10 },
+    ],
+  },
+  pune: {
+    name: 'Pune',
+    groundElevation: 560,
+    viewBounds: { southwest: { lat: 18.35, lng: 73.65 }, northeast: { lat: 18.70, lng: 74.05 } },
+    pois: [
+      { name: 'Shaniwar Wada', lat: 18.5196, lon: 73.8553, alt: 550, pitch: -25, heading: 90, buildingHeight: 15 },
+      { name: 'Aga Khan Palace', lat: 18.5520, lon: 73.9015, alt: 700, pitch: -25, heading: 180, buildingHeight: 20 },
+      { name: 'Sinhagad Fort', lat: 18.3663, lon: 73.7559, alt: 1300, pitch: -35, heading: 270, buildingHeight: 25 },
+      { name: 'Dagdusheth Halwai Temple', lat: 18.5164, lon: 73.8567, alt: 500, pitch: -25, heading: 0, buildingHeight: 15 },
+      { name: 'Pune Airport', lat: 18.5820, lon: 73.9197, alt: 1300, pitch: -35, heading: 45, buildingHeight: 10 },
+    ],
+  },
+  ahmedabad: {
+    name: 'Ahmedabad',
+    groundElevation: 50,
+    viewBounds: { southwest: { lat: 22.85, lng: 72.35 }, northeast: { lat: 23.20, lng: 72.80 } },
+    pois: [
+      { name: 'Sabarmati Ashram', lat: 23.0607, lon: 72.5801, alt: 650, pitch: -25, heading: 0, buildingHeight: 15 },
+      { name: 'Adalaj Stepwell', lat: 23.1667, lon: 72.5813, alt: 750, pitch: -30, heading: 90, buildingHeight: 15 },
+      { name: 'Kankaria Lake', lat: 22.9957, lon: 72.5995, alt: 1300, pitch: -35, heading: 180, buildingHeight: 5 },
+      { name: 'Sidi Saiyyed Mosque', lat: 23.0258, lon: 72.5873, alt: 500, pitch: -25, heading: 270, buildingHeight: 15 },
+      { name: 'Sardar Vallabhbhai Patel International Airport', lat: 23.0772, lon: 72.6347, alt: 1500, pitch: -35, heading: 45, buildingHeight: 10 },
+    ],
+  },
 };
 
 /**
