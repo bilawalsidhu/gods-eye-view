@@ -162,6 +162,9 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(new Set(REGISTERED_LAYER_IDS).size, 19);
   assert.equal(REGISTERED_LAYER_IDS.length, 17);
   assert.equal(new Set(REGISTERED_LAYER_IDS).size, 17);
+  assert.equal(REGISTERED_LAYER_IDS.length, 21);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 21);
+  assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.throws(
     () => validateLayerStateRegistry([...LAYER_STATE_REGISTRY, LAYER_STATE_REGISTRY[0]]),
@@ -228,8 +231,14 @@ test('v2 codec distinguishes absent from empty and keeps canonical deterministic
 });
 
 test('unknown enabled-layer tokens reject the payload instead of becoming an empty set', () => {
-  assert.equal(decodeLayerStateParams(new URLSearchParams('v=2&l=z')), null);
-  assert.equal(decodeLayerStateParams(new URLSearchParams('v=2&l=c.z')), null);
+  assert.equal(decodeLayerStateParams(new URLSearchParams('v=2&l=unknown')), null);
+  assert.equal(decodeLayerStateParams(new URLSearchParams('v=2&l=c.unknown')), null);
+});
+
+test('Nepal event and locator have distinct enabled-only share tokens', () => {
+  const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=h.z'));
+  assert.deepEqual(decoded.enabledLayerIds, ['bhote-koshi-2026', 'bhote-koshi-locator']);
+  assert.ok(encode(decoded).includes('l=h.z'));
 });
 
 test('unknown and forbidden option fields are ignored while missing options use codec defaults', () => {

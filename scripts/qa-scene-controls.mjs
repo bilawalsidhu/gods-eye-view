@@ -85,6 +85,9 @@ try {
   );
   promptValue = '<b>QA shot</b>';
   await page.click('.scene-shot-label', { count: 2 });
+  await page.waitForSelector('.scene-shot-rename', { visible: true });
+  await page.type('.scene-shot-rename', promptValue);
+  await page.keyboard.press('Enter');
   await page.waitForFunction(
     () =>
       document.querySelector('.scene-shot-label')?.textContent ===

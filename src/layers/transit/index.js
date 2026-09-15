@@ -1,3 +1,4 @@
+import { createTransitSource } from './source.js';
 import { createTrails } from './trails.js';
 import { createState } from './state.js';
 import { createHeight } from './height.js';
@@ -23,15 +24,26 @@ import { TRANSIT_POLL_MS } from './policy.js';
  * @param {{services: object}} options
  * @returns {object} The data-layer module the manager registers.
  */
-export function createTransitLayer({ services }) {
+export function createTransitLayer({
+  services,
+  source = createTransitSource(),
+}) {
   if (!services?.overlays || !services?.render || !services?.sprites) {
     throw new TypeError(
       'A transit layer needs overlay, render and sprite services',
     );
   }
+  if (
+    typeof source?.requestSnapshot !== 'function' ||
+    typeof source?.getHistory !== 'function'
+  ) {
+    throw new TypeError(
+      'A transit source needs snapshot and history operations',
+    );
+  }
   const state = createState({ services });
   const parts = {};
-  const context = { state, services, parts };
+  const context = { state, services, parts, source };
   parts.trails = createTrails(context);
   parts.height = createHeight(context);
   parts.selection = createSelection(context);

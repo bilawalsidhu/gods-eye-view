@@ -184,6 +184,7 @@
   "src/ui/layers.js",
   "src/ui/layerPanel.js",
   "src/ui/layerKeyRequirement.test.mjs",
+  "src/ui/layerPanel.test.mjs",
   "src/ui/clearLayersControl.js",
   "scripts/qa-layer-panel.mjs",
   "scripts/qa-directions.mjs",
@@ -704,6 +705,7 @@
   "src/layers/transit/viewport.js",
   "src/layers/transit/lifecycle.test.mjs",
   "scripts/qa-transit.mjs",
+  "scripts/qa-transit-heading.mjs",
   "src/tooling/transitProvider.test.mjs",
   "src/app/layers/transit.js",
   "src/data/transitIcons.js",
@@ -725,5 +727,9 @@
   "scripts/qa-transit-scenes.mjs",
   "scripts/qa-transit-controls.mjs",
   "src/tooling/transitQa.test.mjs",
-  "scripts/qa-transit-browser.mjs"
+  "scripts/qa-transit-browser.mjs",
+  "scripts/qa-transit-recovery.mjs",
+  "scripts/format-runtime.json",
+  "src/tooling/transitService.test.mjs",
+  "src/sources/overpassFeatures.test.mjs"
 ]

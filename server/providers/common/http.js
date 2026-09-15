@@ -1,68 +1,9 @@
 export {
   readResponseTextCapped,
   readResponseJsonCapped,
+  readResponseBytesCapped,
+  coalesceProxyRequest,
 } from '../../../src/sources/httpBody.js';
-
-/**
- * Read a fetch() Response body as bytes with the same hard cap as
- * readResponseTextCapped — for protobuf upstreams (GTFS-Realtime).
- * Throws { code:'RESPONSE_TOO_LARGE' }.
- */
-export async function readResponseBytesCapped(response, maxBytes) {
-  const tooLarge = () => {
-    const err = new Error('Upstream response too large');
-    err.code = 'RESPONSE_TOO_LARGE';
-    return err;
-  };
-  const declared = Number(response.headers.get('content-length'));
-  if (Number.isFinite(declared) && declared > maxBytes) throw tooLarge();
-  const reader = response.body?.getReader?.();
-  if (!reader) {
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > maxBytes) throw tooLarge();
-    return bytes;
-  }
-  const chunks = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > maxBytes) {
-      try {
-        await reader.cancel();
-      } catch {
-        /* no-op */
-      }
-      throw tooLarge();
-    }
-    chunks.push(value);
-  }
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return out;
-}
-
-/**
- * Return the existing promise for a cache key, or create one and remove it
- * only when that exact promise settles.
- */
-export function coalesceProxyRequest(inFlight, key, create) {
-  const existing = inFlight.get(key);
-  if (existing) return { promise: existing, shared: true };
-  let promise;
-  promise = Promise.resolve()
-    .then(create)
-    .finally(() => {
-      if (inFlight.get(key) === promise) inFlight.delete(key);
-    });
-  inFlight.set(key, promise);
-  return { promise, shared: false };
-}
 
 /**
  * Read a fetch Response body as text while enforcing a hard byte cap during

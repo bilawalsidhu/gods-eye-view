@@ -150,6 +150,7 @@ function groundStub(floorAt) {
 function harness(
   t,
   {
+    source,
     altitude = 4_000,
     floorAt = () => 12,
     at = BOSTON,
@@ -263,6 +264,7 @@ function harness(
   /** Every call the floor cycle makes to the rendered-mesh sampler. */
   const meshCalls = [];
   const layer = createTransitLayer({
+    source,
     services: {
       ground,
       mesh: {
@@ -2176,7 +2178,7 @@ test('under FLIR and NVG every sprite is white-hot with a dark halo, and selecti
     assert.notEqual(entry.marker.image, plainImage, 'a haloed raster');
     assert.match(
       Buffer.from(entry.marker.image.split(',')[1], 'base64').toString(),
-      /#000000/,
+      /#05080C/,
       'with the dark ring',
     );
     assert.ok(entry.marker.width > plainWidth * 1.2, 'and larger');
@@ -2545,7 +2547,7 @@ test('selected trail and marker share revised start floors, with unknown history
   assert.ok(
     Cesium.Cartographic.fromCartesian(entry.marker.position).height > 30,
   );
-  assert.ok(entry.trailVertices <= 2048);
+  assert.ok(entry.trailVertices <= 640);
   parts.selection.clearSelection();
   assert.equal(parts.trails.diagnostics(), null);
 });
@@ -2657,7 +2659,7 @@ test('a long selected history shortens its oldest geometry before sacrificing th
   parts.rendering.sampleIdle(entry);
   parts.selection.selectVehicle(entry.key);
   assert.equal(entry.trailTruncated, true);
-  assert.ok(entry.trailVertices <= 2048);
+  assert.ok(entry.trailVertices <= 640);
   assert.ok(
     entry.displayPaths.has(entry.sample.fromSeq),
     'active path is prepared first',
@@ -2667,6 +2669,63 @@ test('a long selected history shortens its oldest geometry before sacrificing th
       (segment, i, list) => i === 0 || list[i - 1].fromT <= segment.fromT,
     ),
   );
+});
+
+test('sparse rail reports preserve a bounded marker corridor with and without selection', async (t) => {
+  const app = harness(t);
+  const parts = app.layer._transitPartsForTest();
+  const { seek } = await import('../../data/contactPlayback.js');
+  let latitude = 42.36 - 16000 / 111320;
+  let timestamp = reported();
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [vehicle('sparse', latitude, -71.06, timestamp, { routeId: 'CR-1' })],
+      { fetchedAt: Date.now() },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.settle();
+  app.advance(180000);
+  latitude = 42.36;
+  timestamp += 180;
+  await app.layer.update();
+  app.settle();
+  const entry = app.vehicles()[0];
+  assert.equal(entry.mode, 'rail');
+  assert.equal(entry.track.count, 2, 'both 88.9 m/s reports pass admission');
+  assert.equal(entry.fixes[1].t - entry.fixes[0].t, 180000);
+  for (let i = 0; i < 1500; i++)
+    app.ground._warm.set(app.ground._key(42.2 + i * 0.0002, -71.06), 12);
+  seek(entry.track, entry.fixes[0].t + 90000, {
+    wallNowMs: Date.now(),
+    monoNowMs: performance.now(),
+  });
+  parts.rendering.sampleIdle(entry);
+  for (const selected of [false, true, false]) {
+    if (selected) parts.selection.selectVehicle(entry.key);
+    else parts.selection.clearSelection();
+    parts.trails.prepareEntry(entry);
+    const path = entry.displayPaths.get(entry.sample.fromSeq);
+    assert.ok(path, 'active corridor survives the body cap');
+    assert.ok(path.positions.length <= 640);
+    const position = parts.trails.samplePosition(
+      entry,
+      entry.sample,
+      new Cesium.Cartesian3(),
+      true,
+    );
+    assert.ok(
+      position && [position.x, position.y, position.z].every(Number.isFinite),
+    );
+    parts.rendering.placeSample(entry, true);
+    assert.equal(entry.marker.show, true);
+    assert.ok(Cesium.Cartesian3.equals(entry.marker.position, position));
+    assert.ok(entry.trailVertices <= 640);
+  }
 });
 
 test('missing rectangle still rejects the far side, and frustum rejection wins', async (t) => {
@@ -2781,13 +2840,13 @@ test('every styling path retains the mode palette and exact unpadded size', asyn
   parts.rendering.paintMode(entry, 'subway');
   check('#FF4538', 30);
   app.style('thermal');
-  check('#FFFFFF', 36);
+  check('#FFFFFF', 39);
   parts.selection.clearSelection();
-  check('#FFFFFF', 30);
+  check('#FFFFFF', 26);
   app.vision('nvg', true);
-  check('#FFFFFF', 30);
+  check('#FFFFFF', 26);
   parts.selection.selectVehicle(entry.key);
-  check('#FFFFFF', 36);
+  check('#FFFFFF', 39);
   app.vision('normal', false);
   check('#FF4538', 30);
   parts.selection.clearSelection();
@@ -3638,4 +3697,289 @@ test('moving and stationary transit stay adjacent above CCTV and Bikeshare durin
     );
     assert.equal(entry.marker.id, entry.key);
   }
+});
+
+test('transit polls the supplied source and cancels it when disabled', async (t) => {
+  const calls = [];
+  const source = {
+    async requestSnapshot(feedId, { signal }) {
+      calls.push({ feedId, signal });
+      return Response.json(
+        snapshot(
+          feedId,
+          'MBTA',
+          [vehicle('injected', 42.36, -71.06, reported())],
+          { fetchedAt: Date.now() },
+        ),
+      );
+    },
+    async getHistory() {
+      throw new Error('No selected vehicle');
+    },
+  };
+  const app = harness(t, { source });
+  globalThis.fetch = () => {
+    throw new Error('Unexpected global fetch');
+  };
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  assert.ok(calls.some(({ feedId }) => feedId === 'mbta'));
+  assert.ok(app.vehicles().some((entry) => entry.record.id === 'injected'));
+  const before = calls.length;
+  app.layer.disable(app.viewer);
+  await app.layer.update();
+  assert.equal(calls.length, before);
+});
+
+test('selected trail QA fixture survives repeated live CapMetro snapshots', async (t) => {
+  const { TRAIL_VISIBILITY_FEED } =
+    await import('../../../scripts/qa-transit-scenes.mjs');
+  const { getRegisteredTransitFeed } =
+    await import('../../data/transitFeeds.js');
+  const app = harness(t, { at: { lat: 30.267, lon: -97.7431 } });
+  app.layer.enable(app.viewer);
+  const { ingestion, selection } = app.layer._transitPartsForTest();
+  const now = Date.now();
+  ingestion.applySnapshot(
+    TRAIL_VISIBILITY_FEED,
+    {
+      fetchedAt: now,
+      vehicles: [vehicle('trail-visible', 30.267, -97.7431, now / 1000)],
+    },
+    { stale: false },
+  );
+  const key = `${TRAIL_VISIBILITY_FEED.id}:trail-visible`;
+  selection.selectVehicle(key);
+  assert.equal(app.state()._selectedKey, key);
+  for (let poll = 0; poll <= MISSED_POLLS_TO_DROP; poll++) {
+    ingestion.applySnapshot(
+      getRegisteredTransitFeed('capmetro-austin'),
+      {
+        fetchedAt: now + poll,
+        vehicles: [vehicle('live-bus', 30.268, -97.7431, now / 1000)],
+      },
+      { stale: false },
+    );
+  }
+  assert.ok(
+    app.state()._vehicles.has(key),
+    'live polls must not evict the selected fixture',
+  );
+  assert.equal(app.state()._selectedKey, key);
+  assert.ok(
+    app.state()._vehicles.has('capmetro-austin:live-bus'),
+    'live ingestion still runs',
+  );
+});
+
+for (const jump of ['setView', 'flyTo']) {
+  test(`${jump} recovers a cold hidden vehicle within one visibility interval`, async (t) => {
+    const app = harness(t, { floorAt: () => undefined });
+    let floor;
+    app.viewer.scene.globe.show = true;
+    app.viewer.scene.globe.getHeight = () => floor;
+    app.serve('mbta', () => ({
+      status: 200,
+      body: snapshot('mbta', 'MBTA', [
+        vehicle('cold', 42.36, -71.06, reported()),
+      ]),
+    }));
+    app.layer.enable(app.viewer);
+    await app.layer.update();
+    const entry = app.vehicles()[0];
+    assert.equal(entry.marker.show, false);
+    assert.equal(entry.heightPending, true);
+    // Surface tiles are now loaded at the camera destination. No poll, floor
+    // timer or preRender is allowed to bootstrap the visibility recovery.
+    clearTimeout(app.state()._floorTimer);
+    app.state()._floorTimer = null;
+    app.viewer.camera[jump] = () => {
+      floor = 12;
+      app.viewer.camera.changed.raiseEvent();
+    };
+    app.viewer.camera[jump]();
+    app.advance(250);
+    assert.equal(entry.marker.show, true);
+    assert.equal(entry.heightPending, false);
+    assert.equal(entry.surfaceReady, true);
+    assert.equal(entry.visibility.heightPending, false);
+    assert.equal(entry.visibility.surfaceReady, true);
+  });
+}
+
+test('selected history is prepared while its head is hidden and remains shown outside the head frustum', async (t) => {
+  const app = harness(t);
+  app.layer.enable(app.viewer);
+  app.layer._loadTransitFleetForTest(1, BOSTON);
+  const entry = app.vehicles()[0],
+    parts = app.layer._transitPartsForTest();
+  entry.marker.show = false;
+  app.state()._visible.delete(entry);
+  app.state()._moving.delete(entry);
+  parts.selection.selectVehicle(entry.key);
+  const trail = parts.trails.diagnostics();
+  assert.ok(trail.segments > 0);
+  assert.ok(trail.body);
+  assert.equal(trail.body.show, true);
+  parts.trails.update();
+  assert.equal(trail.body.show, true);
+  app.state()._vehicles.delete(entry.key);
+  parts.trails.update();
+  assert.equal(trail.body.show, false);
+  app.state()._vehicles.set(entry.key, entry);
+});
+
+test('selected draped history prepares geometry before surface heights resolve', async (t) => {
+  const app = harness(t, { floorAt: () => undefined });
+  app.layer.enable(app.viewer);
+  app.layer._loadTransitFleetForTest(1, BOSTON);
+  const entry = app.vehicles()[0],
+    parts = app.layer._transitPartsForTest();
+  delete entry.qaFloorM;
+  entry.marker.show = false;
+  entry.heightPending = true;
+  // Exercise the real GroundPolylinePrimitive branch, without a WebGL context.
+  const width = Cesium.ContextLimits._maximumAliasedLineWidth;
+  Cesium.ContextLimits._maximumAliasedLineWidth = 1;
+  t.after(() => {
+    Cesium.ContextLimits._maximumAliasedLineWidth = width;
+  });
+  app.viewer.scene.frameState = { context: { depthTexture: true } };
+  app.viewer.scene.groundPrimitives = app.viewer.scene.primitives;
+  parts.selection.selectVehicle(entry.key);
+  const trail = parts.trails.diagnostics();
+  assert.equal(trail.ground, true);
+  assert.ok(trail.body instanceof Cesium.GroundPolylinePrimitive);
+  assert.ok(trail.segments > 0);
+  assert.equal(trail.body.show, true);
+  assert.equal(
+    entry.displayPaths.size,
+    0,
+    'unresolved marker corridors remain unavailable',
+  );
+});
+
+// A camera pose can change without a viewport-membership revision (notably
+// a top-down orbit). Exercise the actual frame pass with an otherwise idle fleet.
+test('parked transit reprojects held and reported courses at the bounded camera cadence', async (t) => {
+  const { createRendering } = await import('./rendering.js');
+  t.mock.timers.enable({ apis: ['Date'], now: 1000 });
+  const position = Cesium.Cartesian3.fromDegrees(0, 0, 20);
+  const cameraPosition = Cesium.Cartesian3.fromDegrees(0, 0, 1000);
+  const scene = {
+    frameState: { mode: Cesium.SceneMode.SCENE3D },
+    canvas: { clientWidth: 1280, clientHeight: 800 },
+    camera: {
+      positionWC: cameraPosition,
+      heading: 0,
+      pitch: -Math.PI / 2,
+      roll: 0,
+      frustum: new Cesium.PerspectiveFrustum({
+        fov: Math.PI / 3,
+        aspectRatio: 1.6,
+        near: 1,
+        far: 1e7,
+      }),
+    },
+  };
+  const pose = (heading) => {
+    const camera = scene.camera;
+    camera.heading = heading;
+    camera.rightWC = new Cesium.Cartesian3(
+      0,
+      Math.cos(heading),
+      -Math.sin(heading),
+    );
+    camera.upWC = new Cesium.Cartesian3(
+      0,
+      Math.sin(heading),
+      Math.cos(heading),
+    );
+    camera.viewMatrix = Cesium.Matrix4.computeView(
+      cameraPosition,
+      new Cesium.Cartesian3(-1, 0, 0),
+      camera.upWC,
+      camera.rightWC,
+      new Cesium.Matrix4(),
+    );
+  };
+  pose(0);
+  const make = (key, courseDeg, bearing) => ({
+    key,
+    courseDeg,
+    record: { bearing },
+    sample: { segmentCourseDeg: NaN },
+    marker: { position, rotation: 0.7, show: true },
+  });
+  const held = make('held', 90, 270);
+  const reportedOnly = make('reported', null, 90);
+  const unknown = make('unknown', null, null);
+  const hidden = make('hidden', 90, 90);
+  const state = {
+    _viewer: { scene },
+    _enabled: true,
+    _vehicles: new Map(
+      [held, reportedOnly, unknown, hidden].map((e) => [e.key, e]),
+    ),
+    _visible: new Set([held, reportedOnly, unknown]),
+    _moving: new Set(),
+    _heightDirty: new Set(),
+    _rotationAt: 0,
+    _rotationRevision: -1,
+    _cameraRevision: 0,
+    _rotationDirty: false,
+  };
+  const noop = () => {};
+  const rendering = createRendering({
+    state,
+    services: {
+      render: {
+        governorRequestRender: noop,
+        holdContinuousRender: noop,
+        releaseContinuousRender: noop,
+      },
+    },
+    parts: { height: { nearGround: () => false }, trails: { update: noop } },
+  });
+  rendering.onPreRender();
+  const before = [held.marker.rotation, reportedOnly.marker.rotation];
+  pose(Math.PI / 2);
+  t.mock.timers.tick(100);
+  rendering.onPreRender();
+  assert.equal(
+    held.marker.rotation,
+    before[0],
+    'no rotation pass before 200 ms',
+  );
+  t.mock.timers.tick(100);
+  rendering.onPreRender();
+  for (const [i, entry] of [held, reportedOnly].entries()) {
+    const delta = Math.atan2(
+      Math.sin(entry.marker.rotation - before[i]),
+      Math.cos(entry.marker.rotation - before[i]),
+    );
+    assert.ok(
+      Math.abs(delta - Math.PI / 2) < 0.01,
+      `${entry.key}: rotation delta ${delta}`,
+    );
+    assert.equal(entry.courseDeg, 90);
+  }
+  assert.equal(
+    unknown.marker.rotation,
+    0,
+    'no course means screen-up, never a stale angle',
+  );
+  assert.equal(
+    hidden.marker.rotation,
+    0.7,
+    'hidden vehicles are not projected',
+  );
+  state._selectedKey = unknown.key;
+  unknown.marker.rotation = 0.7;
+  rendering.onPreRender();
+  assert.equal(
+    unknown.marker.rotation,
+    0,
+    'selected unknown course also stays screen-up',
+  );
 });

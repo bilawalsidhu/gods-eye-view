@@ -19,7 +19,8 @@ export function greatCircleKm(lat1, lon1, lat2, lon2) {
   const p2 = lat2 * D2R;
   const dp = (lat2 - lat1) * D2R;
   const dl = (lon2 - lon1) * D2R;
-  const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  const a =
+    Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
   return R_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
@@ -28,7 +29,8 @@ function bearingRad(lat1, lon1, lat2, lon2) {
   const p2 = lat2 * D2R;
   const dl = (lon2 - lon1) * D2R;
   const y = Math.sin(dl) * Math.cos(p2);
-  const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+  const x =
+    Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
   return Math.atan2(y, x);
 }
 
@@ -42,8 +44,8 @@ export function crossTrackKm(lat, lon, lat1, lon1, lat2, lon2) {
 
 const NEAR_ENDPOINT_KM = 130;
 const CROSS_TRACK_KM = 200;
-const LOW_ALT_M = 3700;        // ~12 000 ft
-const VERT_TREND_MPS = 2;      // ~400 fpm
+const LOW_ALT_M = 3700; // ~12 000 ft
+const VERT_TREND_MPS = 2; // ~400 fpm
 const LOCAL_AIRPORT_KM = 150;
 
 /**
@@ -55,16 +57,35 @@ const LOCAL_AIRPORT_KM = 150;
  * @param {{lat:number|null, lon:number|null}|null} [p.destination]
  * @returns {boolean} false ONLY when the route is confidently wrong.
  */
-export function routePlausible({ latDeg, lonDeg, altitudeM = null, verticalRateMps = null, origin = null, destination = null }) {
+export function routePlausible({
+  latDeg,
+  lonDeg,
+  altitudeM = null,
+  verticalRateMps = null,
+  origin = null,
+  destination = null,
+}) {
   const haveO = Number.isFinite(origin?.lat) && Number.isFinite(origin?.lon);
-  const haveD = Number.isFinite(destination?.lat) && Number.isFinite(destination?.lon);
+  const haveD =
+    Number.isFinite(destination?.lat) && Number.isFinite(destination?.lon);
   if (!haveO && !haveD) return true; // no coordinates — cannot judge, do not hide
 
   // (a) Geographic consistency: near an endpoint, or roughly on the path.
-  const near = (pt) => greatCircleKm(latDeg, lonDeg, pt.lat, pt.lon) < NEAR_ENDPOINT_KM;
+  const near = (pt) =>
+    greatCircleKm(latDeg, lonDeg, pt.lat, pt.lon) < NEAR_ENDPOINT_KM;
   let geomOk = (haveO && near(origin)) || (haveD && near(destination));
   if (!geomOk && haveO && haveD) {
-    geomOk = Math.abs(crossTrackKm(latDeg, lonDeg, origin.lat, origin.lon, destination.lat, destination.lon)) < CROSS_TRACK_KM;
+    geomOk =
+      Math.abs(
+        crossTrackKm(
+          latDeg,
+          lonDeg,
+          origin.lat,
+          origin.lon,
+          destination.lat,
+          destination.lon,
+        ),
+      ) < CROSS_TRACK_KM;
   } else if (!geomOk) {
     geomOk = true; // only one endpoint known and not near — cannot judge, allow
   }
@@ -72,13 +93,24 @@ export function routePlausible({ latDeg, lonDeg, altitudeM = null, verticalRateM
 
   // (b) Vertical-trend consistency for low traffic (observer-free adaptation).
   if (
-    Number.isFinite(altitudeM) && altitudeM < LOW_ALT_M &&
-    Number.isFinite(verticalRateMps) && Math.abs(verticalRateMps) > VERT_TREND_MPS
+    Number.isFinite(altitudeM) &&
+    altitudeM < LOW_ALT_M &&
+    Number.isFinite(verticalRateMps) &&
+    Math.abs(verticalRateMps) > VERT_TREND_MPS
   ) {
     if (verticalRateMps > 0) {
-      if (haveO && greatCircleKm(latDeg, lonDeg, origin.lat, origin.lon) > LOCAL_AIRPORT_KM) return false; // departing — origin should be local
+      if (
+        haveO &&
+        greatCircleKm(latDeg, lonDeg, origin.lat, origin.lon) > LOCAL_AIRPORT_KM
+      )
+        return false; // departing — origin should be local
     } else {
-      if (haveD && greatCircleKm(latDeg, lonDeg, destination.lat, destination.lon) > LOCAL_AIRPORT_KM) return false; // arriving — destination should be local
+      if (
+        haveD &&
+        greatCircleKm(latDeg, lonDeg, destination.lat, destination.lon) >
+          LOCAL_AIRPORT_KM
+      )
+        return false; // arriving — destination should be local
     }
   }
   return true;

@@ -46,7 +46,7 @@ export const ORDER_REJECTS_BEFORE_RESET = 3;
  * @param {object} context
  * @returns {object}
  */
-export function createIngestion({ state, services, parts }) {
+export function createIngestion({ state, services, parts, source }) {
   const { governorRequestRender } = services.render;
   const { registerDynamicCredit, transitFeedCredit } = services.credits;
 
@@ -436,13 +436,9 @@ export function createIngestion({ state, services, parts }) {
     status.loading = status.count === 0;
     const promise = (async () => {
       try {
-        const response = await fetch(
-          `/api/transit/vehicles/${encodeURIComponent(feed.id)}`,
-          {
-            signal: controller.signal,
-            headers: { Accept: 'application/json' },
-          },
-        );
+        const response = await source.requestSnapshot(feed.id, {
+          signal: controller.signal,
+        });
         if (!response.ok) {
           // The proxy says when it will next try the operator; carrying that
           // through means the row can offer a time instead of just a shrug.

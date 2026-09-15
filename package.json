@@ -142,6 +142,7 @@
     "./ui/scenes": "./src/ui/scenes.js",
     "./ui/shell": "./src/ui/applicationShell.js",
     "./ui/styles": "./src/ui/styles.js",
+    "./director": "./src/director/playback.js",
     "./scenes": "./src/scenes/director.js",
     "./sources/live": "./src/sources/live/index.js",
     "./layers/flights": "./src/layers/flights/index.js",
@@ -237,6 +238,9 @@
     },
     "./sources/transit": "./src/data/transitProxy.js",
     "./layers/transit": "./src/layers/transit/index.js",
-    "./layers/transit/standalone": "./src/data/transit.js"
+    "./layers/transit/standalone": "./src/data/transit.js",
+    "./layers/transit/source": "./src/layers/transit/source.js",
+    "./sources/transit-service": "./src/sources/transitService.js",
+    "./sources/map-features": "./src/sources/overpassFeatures.js"
   }
 }

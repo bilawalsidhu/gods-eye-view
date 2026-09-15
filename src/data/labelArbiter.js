@@ -16,11 +16,15 @@ function clampInt(value, min, max) {
 }
 
 function demandEntries(demandByLayer) {
-  const entries = demandByLayer instanceof Map
-    ? Array.from(demandByLayer.entries())
-    : Object.entries(demandByLayer || {});
+  const entries =
+    demandByLayer instanceof Map
+      ? Array.from(demandByLayer.entries())
+      : Object.entries(demandByLayer || {});
   return entries
-    .map(([layerId, demand]) => [String(layerId), Math.max(0, Math.floor(Number(demand) || 0))])
+    .map(([layerId, demand]) => [
+      String(layerId),
+      Math.max(0, Math.floor(Number(demand) || 0)),
+    ])
     .filter(([, demand]) => demand > 0)
     .sort(([a], [b]) => a.localeCompare(b));
 }
@@ -104,7 +108,9 @@ function allocateLayerQuotasInto(
   weighted.length = idCount;
   priorityOrder.length = idCount;
   remainders.length = idCount;
-  priorityOrder.sort((a, b) => b.weight - a.weight || a.layerId.localeCompare(b.layerId));
+  priorityOrder.sort(
+    (a, b) => b.weight - a.weight || a.layerId.localeCompare(b.layerId),
+  );
 
   let remaining = capacity;
   if (capacity >= idCount) {
@@ -115,7 +121,7 @@ function allocateLayerQuotasInto(
     let apportioned = 0;
     for (let i = 0; i < idCount; i++) {
       const entry = weighted[i];
-      const exact = remaining * entry.weight / totalWeight;
+      const exact = (remaining * entry.weight) / totalWeight;
       const room = entry.count - (quotas.get(entry.layerId) || 0);
       const whole = Math.min(room, Math.floor(exact));
       quotas.set(entry.layerId, (quotas.get(entry.layerId) || 0) + whole);
@@ -123,9 +129,12 @@ function allocateLayerQuotasInto(
       entry.fraction = exact - Math.floor(exact);
     }
     remaining -= apportioned;
-    remainders.sort((a, b) => b.fraction - a.fraction
-      || b.weight - a.weight
-      || a.layerId.localeCompare(b.layerId));
+    remainders.sort(
+      (a, b) =>
+        b.fraction - a.fraction ||
+        b.weight - a.weight ||
+        a.layerId.localeCompare(b.layerId),
+    );
     for (let i = 0; i < idCount && remaining > 0; i++) {
       const entry = remainders[i];
       const current = quotas.get(entry.layerId) || 0;
@@ -156,7 +165,12 @@ function allocateLayerQuotasInto(
  * Allocate a collective capacity across non-empty layers. Both strategies are
  * work-conserving and deterministic; unused entitlement is always borrowed.
  */
-export function allocateLayerQuotas(demandByLayer, capacity, strategy = ALLOCATION_ELASTIC, layerWeights = {}) {
+export function allocateLayerQuotas(
+  demandByLayer,
+  capacity,
+  strategy = ALLOCATION_ELASTIC,
+  layerWeights = {},
+) {
   const entries = demandEntries(demandByLayer);
   const totalDemand = entries.reduce((sum, [, demand]) => sum + demand, 0);
   const cap = clampInt(capacity, 0, totalDemand);
@@ -198,15 +212,24 @@ export function allocateLayerQuotas(demandByLayer, capacity, strategy = ALLOCATI
   if (remaining > 0 && totalWeight > 0) {
     let apportioned = 0;
     for (const entry of weighted) {
-      const exact = remaining * entry.weight / totalWeight;
+      const exact = (remaining * entry.weight) / totalWeight;
       const room = entry.count - (quotas.get(entry.layerId) || 0);
       const whole = Math.min(room, Math.floor(exact));
       quotas.set(entry.layerId, (quotas.get(entry.layerId) || 0) + whole);
       apportioned += whole;
-      remainders.push({ layerId: entry.layerId, fraction: exact - Math.floor(exact), weight: entry.weight });
+      remainders.push({
+        layerId: entry.layerId,
+        fraction: exact - Math.floor(exact),
+        weight: entry.weight,
+      });
     }
     remaining -= apportioned;
-    remainders.sort((a, b) => b.fraction - a.fraction || b.weight - a.weight || a.layerId.localeCompare(b.layerId));
+    remainders.sort(
+      (a, b) =>
+        b.fraction - a.fraction ||
+        b.weight - a.weight ||
+        a.layerId.localeCompare(b.layerId),
+    );
     for (const entry of remainders) {
       if (remaining <= 0) break;
       const current = quotas.get(entry.layerId) || 0;
@@ -220,20 +243,24 @@ export function allocateLayerQuotas(demandByLayer, capacity, strategy = ALLOCATI
 }
 
 function rectIsFinite(rect) {
-  return rect
-    && Number.isFinite(rect.x)
-    && Number.isFinite(rect.y)
-    && Number.isFinite(rect.w)
-    && Number.isFinite(rect.h)
-    && rect.w > 0
-    && rect.h > 0;
+  return (
+    rect &&
+    Number.isFinite(rect.x) &&
+    Number.isFinite(rect.y) &&
+    Number.isFinite(rect.w) &&
+    Number.isFinite(rect.h) &&
+    rect.w > 0 &&
+    rect.h > 0
+  );
 }
 
 function overlaps(a, b, padding = 4) {
-  return a.x < b.x + b.w + padding
-    && a.x + a.w + padding > b.x
-    && a.y < b.y + b.h + padding
-    && a.y + a.h + padding > b.y;
+  return (
+    a.x < b.x + b.w + padding &&
+    a.x + a.w + padding > b.x &&
+    a.y < b.y + b.h + padding &&
+    a.y + a.h + padding > b.y
+  );
 }
 
 const CELL_ORIGIN = 8192;
@@ -271,8 +298,10 @@ class SpatialHash {
    * never hide a real collision.
    */
   _cellKey(x, y) {
-    const cx = Math.max(-CELL_ORIGIN, Math.min(CELL_ORIGIN - 1, x)) + CELL_ORIGIN;
-    const cy = Math.max(-CELL_ORIGIN, Math.min(CELL_ORIGIN - 1, y)) + CELL_ORIGIN;
+    const cx =
+      Math.max(-CELL_ORIGIN, Math.min(CELL_ORIGIN - 1, x)) + CELL_ORIGIN;
+    const cy =
+      Math.max(-CELL_ORIGIN, Math.min(CELL_ORIGIN - 1, y)) + CELL_ORIGIN;
     // Both coordinates occupy 14 bits. Bit-packing forces the lookup key to a
     // Smi; arithmetic multiplication materializes a boxed double at each
     // spatial-hash get/add on this hot solve path.
@@ -325,8 +354,14 @@ function candidateCompare(a, b, states, now) {
   // A stateless candidate is never lifetime-pinned: its source shipped as a
   // per-frame rebuild, so it must be free to lose its slot the moment something
   // better wants it. Plain incumbency ordering below still applies.
-  const aPinned = !!aState?.selected && a.stateless !== true && now - aState.selectedAt < MIN_LIFETIME_MS;
-  const bPinned = !!bState?.selected && b.stateless !== true && now - bState.selectedAt < MIN_LIFETIME_MS;
+  const aPinned =
+    !!aState?.selected &&
+    a.stateless !== true &&
+    now - aState.selectedAt < MIN_LIFETIME_MS;
+  const bPinned =
+    !!bState?.selected &&
+    b.stateless !== true &&
+    now - bState.selectedAt < MIN_LIFETIME_MS;
   if (aPinned !== bPinned) return aPinned ? -1 : 1;
   const aIncumbent = !!aState?.selected;
   const bIncumbent = !!bState?.selected;
@@ -346,12 +381,20 @@ function candidateCompare(a, b, states, now) {
 function cacheCandidateAnchorScalars(candidate) {
   let anchorX = Number.NaN;
   let anchorY = Number.NaN;
-  if (Number.isFinite(candidate?.screenX) && Number.isFinite(candidate?.screenY)) {
+  if (
+    Number.isFinite(candidate?.screenX) &&
+    Number.isFinite(candidate?.screenY)
+  ) {
     anchorX = candidate.screenX;
     anchorY = candidate.screenY;
   } else {
-    const placement = Array.isArray(candidate?.placements) ? candidate.placements[0] : null;
-    if (Number.isFinite(placement?.leadFromX) && Number.isFinite(placement?.leadFromY)) {
+    const placement = Array.isArray(candidate?.placements)
+      ? candidate.placements[0]
+      : null;
+    if (
+      Number.isFinite(placement?.leadFromX) &&
+      Number.isFinite(placement?.leadFromY)
+    ) {
       anchorX = placement.leadFromX;
       anchorY = placement.leadFromY;
     } else if (rectIsFinite(placement?.rect)) {
@@ -401,7 +444,16 @@ class SpatialCandidateQueue {
    * stay unboxed. Few-placement candidates already blocked by the
    * monotonically growing collision field are dismissed before anchor scans.
    */
-  reset(candidates, count, anchors, anchorCount, attemptStamps, stamp, spatial, states) {
+  reset(
+    candidates,
+    count,
+    anchors,
+    anchorCount,
+    attemptStamps,
+    stamp,
+    spatial,
+    states,
+  ) {
     this.candidates = candidates;
     this.count = count;
     this.anchorCount = anchorCount;
@@ -529,10 +581,13 @@ class SpatialCandidateQueue {
           const rectY = placementYs[rectIndex];
           const rectW = placementWs[rectIndex];
           const rectH = placementHs[rectIndex];
-          if (rectX < anchorRectX + anchorRectW + 4
-            && rectX + rectW + 4 > anchorRectX
-            && rectY < anchorRectY + anchorRectH + 4
-            && rectY + rectH + 4 > anchorRectY) freeMask &= ~bit;
+          if (
+            rectX < anchorRectX + anchorRectW + 4 &&
+            rectX + rectW + 4 > anchorRectX &&
+            rectY < anchorRectY + anchorRectH + 4 &&
+            rectY + rectH + 4 > anchorRectY
+          )
+            freeMask &= ~bit;
         }
         placementMasks[i] = freeMask;
         if (freeMask === 0 && this._dismissBlockedKey(i)) continue;
@@ -558,7 +613,8 @@ class SpatialCandidateQueue {
         bestIndex = i;
         continue;
       }
-      const priorityDelta = (Number(candidate.priority) || 0) - (Number(best.priority) || 0);
+      const priorityDelta =
+        (Number(candidate.priority) || 0) - (Number(best.priority) || 0);
       if (priorityDelta !== 0) {
         if (priorityDelta > 0) {
           best = candidate;
@@ -621,7 +677,8 @@ function firstFreePlacement(candidate, stickyCorner, spatial) {
   if (stickyCorner) {
     for (let i = 0; i < placements.length; i++) {
       const placement = placements[i];
-      if (placement?.corner !== stickyCorner || !rectIsFinite(placement.rect)) continue;
+      if (placement?.corner !== stickyCorner || !rectIsFinite(placement.rect))
+        continue;
       if (!spatial.collides(placement.rect)) return placement;
     }
   }
@@ -790,7 +847,13 @@ export class LabelArbiter {
     let candidateCount = 0;
     for (let i = 0; i < source.length; i++) {
       const candidate = source[i];
-      if (!candidate || !candidate.key || !candidate.layerId || !(candidate.keyholeAlpha > 0)) continue;
+      if (
+        !candidate ||
+        !candidate.key ||
+        !candidate.layerId ||
+        !(candidate.keyholeAlpha > 0)
+      )
+        continue;
       cacheCandidateAnchorScalars(candidate);
       candidateList[candidateCount++] = candidate;
       let bucket = byLayer.get(candidate.layerId);
@@ -815,13 +878,15 @@ export class LabelArbiter {
       });
     } else if (options.demandByLayer != null) {
       const supplied = demandEntries(options.demandByLayer);
-      for (let i = 0; i < supplied.length; i++) demand.set(supplied[i][0], supplied[i][1]);
+      for (let i = 0; i < supplied.length; i++)
+        demand.set(supplied[i][0], supplied[i][1]);
     }
     // A supplied demand map describes the full lightweight field while the
     // candidate list may be only a bounded materialized cohort. Keep defensive
     // support for candidate layers omitted by an incomplete caller map.
     byLayer.forEach((bucket, layerId) => {
-      if (bucket.count > 0 && !demand.has(layerId)) demand.set(layerId, bucket.count);
+      if (bucket.count > 0 && !demand.has(layerId))
+        demand.set(layerId, bucket.count);
     });
 
     const activeLayers = this._activeLayersScratch;
@@ -857,14 +922,20 @@ export class LabelArbiter {
 
     let sameActiveLayers = activeCount === this.lastActiveLayers.length;
     for (let i = 0; sameActiveLayers && i < activeCount; i++) {
-      if (activeLayers[i] !== this.lastActiveLayers[i]) sameActiveLayers = false;
+      if (activeLayers[i] !== this.lastActiveLayers[i])
+        sameActiveLayers = false;
     }
-    const preserveIncumbents = options.preserveIncumbents !== false && sameActiveLayers;
+    const preserveIncumbents =
+      options.preserveIncumbents !== false && sameActiveLayers;
     let spatialQueueBuildCount = 0;
     let spatialQueueNextCount = 0;
 
     const attempt = (candidate, allowOverlapFallback = false) => {
-      if (selectedCount >= capacity || attemptStamps.get(candidate.key) === stamp) return false;
+      if (
+        selectedCount >= capacity ||
+        attemptStamps.get(candidate.key) === stamp
+      )
+        return false;
       attemptStamps.set(candidate.key, stamp);
       const previous = this.states.get(candidate.key);
       const stateless = candidate.stateless === true;
@@ -872,10 +943,12 @@ export class LabelArbiter {
       // very next solve, as their stateless originals did) and carry no sticky
       // corner, so above/below is re-decided from geometry every solve instead
       // of being pinned by whichever side happened to be free once.
-      if (!stateless && !previous?.selected && previous?.cooldownUntil > now) return false;
+      if (!stateless && !previous?.selected && previous?.cooldownUntil > now)
+        return false;
       const sticky = stateless ? undefined : previous?.corner;
       let placement = firstFreePlacement(candidate, sticky, spatial);
-      if (!placement && allowOverlapFallback) placement = firstOrderedPlacement(candidate, sticky);
+      if (!placement && allowOverlapFallback)
+        placement = firstOrderedPlacement(candidate, sticky);
       if (!placement) return false;
       spatial.add(placement.rect);
       selectStamps.set(candidate.key, stamp);
@@ -953,7 +1026,8 @@ export class LabelArbiter {
     }
     let retainedIncumbents = 0;
     for (let i = 0; i < selectedCount; i++) {
-      if (this.selectedKeys.has(selectedCandidates[i].key)) retainedIncumbents++;
+      if (this.selectedKeys.has(selectedCandidates[i].key))
+        retainedIncumbents++;
     }
 
     const exitingStates = this._refreshStateList();
@@ -964,7 +1038,9 @@ export class LabelArbiter {
         state.exitStartedAt = now;
         // Stateless entries may be re-selected immediately; the cooldown exists
         // to damp thrash for sources that shipped with hysteresis.
-        state.cooldownUntil = state.stateless ? 0 : now + FADE_OUT_MS + COOLDOWN_MS;
+        state.cooldownUntil = state.stateless
+          ? 0
+          : now + FADE_OUT_MS + COOLDOWN_MS;
       }
     }
 
@@ -1002,7 +1078,8 @@ export class LabelArbiter {
         this._stateListDirty = true;
       }
       if (labelsByLayer) {
-        labelsByLayer[candidate.layerId] = (labelsByLayer[candidate.layerId] || 0) + 1;
+        labelsByLayer[candidate.layerId] =
+          (labelsByLayer[candidate.layerId] || 0) + 1;
       }
     }
 
@@ -1013,7 +1090,10 @@ export class LabelArbiter {
     const livingStates = this._refreshStateList();
     for (let i = 0; i < livingStates.length; i++) {
       const state = livingStates[i];
-      if (!state.selected && now - (state.exitStartedAt || now) > FADE_OUT_MS + COOLDOWN_MS) {
+      if (
+        !state.selected &&
+        now - (state.exitStartedAt || now) > FADE_OUT_MS + COOLDOWN_MS
+      ) {
         this.states.delete(state.key);
         this._stateListDirty = true;
       }
@@ -1026,25 +1106,28 @@ export class LabelArbiter {
     });
     for (let i = 0; i < droppedCount; i++) this.selectedKeys.delete(dropped[i]);
     dropped.length = droppedCount;
-    for (let i = 0; i < selectedCount; i++) this.selectedKeys.add(selectedCandidates[i].key);
+    for (let i = 0; i < selectedCount; i++)
+      this.selectedKeys.add(selectedCandidates[i].key);
 
     const previousActiveLayers = this.lastActiveLayers;
     this.lastActiveLayers = activeLayers;
     this._activeLayersScratch = previousActiveLayers;
     this.solveRevision++;
-    this.lastDiagnostics = collectDiagnostics ? {
-      strategy,
-      capacity,
-      selectedCount,
-      quotas: Object.fromEntries(quotas),
-      demand: Object.fromEntries(demand),
-      labelsByLayer,
-      solveRevision: this.solveRevision,
-      spatialQueueBuildCount,
-      spatialQueueNextCount,
-      eligibleIncumbents,
-      retainedIncumbents,
-    } : null;
+    this.lastDiagnostics = collectDiagnostics
+      ? {
+          strategy,
+          capacity,
+          selectedCount,
+          quotas: Object.fromEntries(quotas),
+          demand: Object.fromEntries(demand),
+          labelsByLayer,
+          solveRevision: this.solveRevision,
+          spatialQueueBuildCount,
+          spatialQueueNextCount,
+          eligibleIncumbents,
+          retainedIncumbents,
+        }
+      : null;
     selectedCandidates.length = selectedCount;
     selectedPlacements.length = selectedCount;
     pruneStampMap(attemptStamps, candidateCount);
@@ -1057,9 +1140,15 @@ export class LabelArbiter {
    * A caller-owned output array enables allocation-free per-frame rendering.
    */
   renderEntries(currentCandidates, now = Date.now(), out = []) {
-    const current = currentCandidates instanceof Map
-      ? currentCandidates
-      : new Map((currentCandidates || []).map((candidate) => [candidate.key, candidate]));
+    const current =
+      currentCandidates instanceof Map
+        ? currentCandidates
+        : new Map(
+            (currentCandidates || []).map((candidate) => [
+              candidate.key,
+              candidate,
+            ]),
+          );
     const states = this._refreshStateList();
     let outIndex = 0;
     for (let i = 0; i < states.length; i++) {
@@ -1070,14 +1159,23 @@ export class LabelArbiter {
         // fully painted this solve or gone. No enter ramp, no exit tail.
         temporalAlpha = state.selected ? 1 : 0;
       } else if (state.selected) {
-        temporalAlpha = Math.min(1, Math.max(0, (now - state.enterStartedAt) / FADE_IN_MS));
+        temporalAlpha = Math.min(
+          1,
+          Math.max(0, (now - state.enterStartedAt) / FADE_IN_MS),
+        );
       } else {
-        temporalAlpha = 1 - Math.min(1, Math.max(0, (now - state.exitStartedAt) / FADE_OUT_MS));
+        temporalAlpha =
+          1 -
+          Math.min(1, Math.max(0, (now - state.exitStartedAt) / FADE_OUT_MS));
       }
       if (temporalAlpha <= 0) continue;
       const candidate = current.get(state.key) || state.lastCandidate;
       if (!candidate) continue;
-      const placement = renderPlacement(candidate, state.stateless ? undefined : state.corner, state.lastPlacement);
+      const placement = renderPlacement(
+        candidate,
+        state.stateless ? undefined : state.corner,
+        state.lastPlacement,
+      );
       if (!placement) continue;
       const entry = out[outIndex] || (out[outIndex] = {});
       entry.candidate = candidate;
@@ -1100,11 +1198,16 @@ export class LabelArbiter {
     for (const state of this.states.values()) {
       if (!state.selected) {
         if (!includeFading) continue;
-        if (!Number.isFinite(state.exitStartedAt) || now - state.exitStartedAt >= FADE_OUT_MS) continue;
+        if (
+          !Number.isFinite(state.exitStartedAt) ||
+          now - state.exitStartedAt >= FADE_OUT_MS
+        )
+          continue;
       }
       const candidate = state.lastCandidate;
       if (!candidate?.layerId || candidate.sourceId == null) continue;
-      if (!grouped.has(candidate.layerId)) grouped.set(candidate.layerId, new Set());
+      if (!grouped.has(candidate.layerId))
+        grouped.set(candidate.layerId, new Set());
       grouped.get(candidate.layerId).add(candidate.sourceId);
     }
     return grouped;
