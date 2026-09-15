@@ -2568,7 +2568,7 @@ shorten that history. Only the selected vehicle has a trail: completed segments
 are batched primitives, and a small moving head ends at the marker. Trail
 geometry is bounded to 640 prepared vertices, prioritizing the active corridor
 and shortening the oldest geometry first. Supported scenes use ground polylines
-classified against Google 3D tiles (terrain and tiles when the globe is visible),
+classified against both terrain and 3D tiles, including after map-stack changes,
 with per-segment age colours. History changes rebuild the body. The head is one
 short draped corridor, clipped to displayed time by a material uniform; only
 subdivision crossings rebuild it. Ordinary frames upload no head geometry.

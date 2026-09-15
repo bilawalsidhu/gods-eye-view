@@ -193,7 +193,7 @@ test('supported scenes drape body and clipped head on 3D tiles and retain head g
   assert.ok(first.body instanceof Cesium.GroundPolylinePrimitive);
   assert.equal(
     first.body.classificationType,
-    Cesium.ClassificationType.CESIUM_3D_TILE,
+    Cesium.ClassificationType.BOTH,
   );
   assert.ok(scene.groundPrimitives.contains(first.body));
   for (const instance of first.body.geometryInstances)
@@ -209,6 +209,20 @@ test('supported scenes drape body and clipped head on 3D tiles and retain head g
   assert.ok(result.headPrimitive instanceof Cesium.GroundPolylinePrimitive);
   assert.equal(result.head.material.uniforms.fraction, 0.6);
   assert.match(result.head.material.shaderSource, /discard/);
+  for (const stack of ['Google', 'OSM', 'Bing', 'Google']) {
+    scene.globe.show = stack !== 'Google';
+    renderer.setDisplaySample(
+      { displayT: 12000, fromSeq: 0, toSeq: 1, fraction: 0.6 },
+      positions[1],
+    );
+    const retained = renderer.diagnostics();
+    assert.equal(retained.body, result.body, `${stack}: retained history`);
+    assert.equal(retained.headPrimitive, result.headPrimitive);
+    for (const primitive of [retained.body, retained.headPrimitive]) {
+      assert.equal(primitive.classificationType, Cesium.ClassificationType.BOTH, stack);
+      assert.equal(primitive.show, true, stack);
+    }
+  }
   renderer.setVisible(false);
   assert.equal(result.body.show, false);
   assert.equal(result.headPrimitive.show, false);

@@ -54,7 +54,6 @@ export function createContactTrailRenderer(scene) {
   const backing = { positions: [], show: false, width: 5 };
   let headPrimitive = null,
     headRebuilds = 0;
-  const classificationType = Cesium.ClassificationType.CESIUM_3D_TILE;
   function geometry(positions, width, material = false) {
     return ground
       ? new Cesium.GroundPolylineGeometry({ positions, width, granularity: 0 })
@@ -72,10 +71,7 @@ export function createContactTrailRenderer(scene) {
       ? new Cesium.GroundPolylinePrimitive({
           geometryInstances: instances,
           appearance,
-          classificationType:
-            scene.globe?.show === false
-              ? classificationType
-              : Cesium.ClassificationType.BOTH,
+          classificationType: Cesium.ClassificationType.BOTH,
           allowPicking: false,
           asynchronous: true,
           show: visible,
