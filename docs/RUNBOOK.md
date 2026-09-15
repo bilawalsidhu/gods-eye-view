@@ -136,6 +136,16 @@ happened to clear it, but the repo's immutable-releases setting makes a
 published tag un-repointable — a verification failure after publishing would
 have forced a v0.8.2.
 
+### 2026-09-15 bundle refresh (no release)
+
+Re-deployed from `main` at 654ada6 so the deployed artifact matches the
+branch head exactly (the four commits since v0.8.1 were docs, CI config,
+and dev-only dependency bumps — no shipped-code changes, hence no version
+bump or tag). Verified: production alias serves the new bundle
+(`assets/index-C0r3aEys.js` matches the local build), shell/radio/cctv/
+reverse-geocode 200, debug-log 204; celestrak 502 and launches 429 persist
+as documented above. First GitForge-CI-green commit to ship.
+
 ## Credentials & environment
 
 All keys are optional except `GOOGLE_MAPS_API_KEY`. See `.env.example` for the
