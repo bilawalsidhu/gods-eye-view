@@ -12,7 +12,11 @@ import {
   selectStyle,
   detectOn,
 } from './qa-transit-controls.mjs';
-import { runFleetBudgets, runBostonMatrix } from './qa-transit-scenes.mjs';
+import {
+  runFleetBudgets,
+  runBostonMatrix,
+  runBostonLive,
+} from './qa-transit-scenes.mjs';
 /**
  * Browser proof for the Transit layer against a running app.
  *
@@ -1772,6 +1776,7 @@ try {
   };
   if (runs('budgets')) await runFleetBudgets(sceneQA);
   if (runs('matrix')) await runBostonMatrix(sceneQA);
+  if (runs('boston-live')) await runBostonLive(sceneQA);
 
   // Turning it off must stop the traffic and leave nothing behind.
   console.log('\n== disable ==');

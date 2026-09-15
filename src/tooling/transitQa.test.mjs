@@ -428,6 +428,20 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
     'a clear centre cannot qualify a partially obscured core',
   );
   delete scene.pick;
+  const module = window.__godsEyeView.dataManager.layers.get('transit').module;
+  const getState = module._transitStateForTest;
+  module._transitStateForTest = () => {
+    const state = getState();
+    state._stylePreset = 'noir';
+    state._vehicles.get('bus').marker.position.x = 0.65;
+    return state;
+  };
+  assert.equal(
+    (await sampleTransitPixels(page, {})).length,
+    0,
+    'the intentional noir edge vignette is outside unobscured-core acceptance',
+  );
+  module._transitStateForTest = getState;
   // The fixture returns fresh wrapper objects, so exercise raster and DOM
   // eligibility independently of framebuffer brightness.
   raster.fill(0);

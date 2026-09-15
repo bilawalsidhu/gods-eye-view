@@ -301,6 +301,19 @@ export async function sampleTransitPixels(page, palette) {
               ) > 0.6
             )
               reason = 'outside unmasked sensor lens';
+            if (style === 'noir') {
+              // Noir deliberately darkens the frame edges. Judge the core in
+              // its unmasked field, independently of the measured brightness.
+              const u = x / width,
+                v = y / height;
+              const transmission = Math.pow(
+                16 * u * (1 - u) * v * (1 - v),
+                0.3 + 0.4 * (uniforms.vignetteAmt ?? 0.5) * intensity,
+              );
+              if (1 - intensity + transmission * intensity < 0.9)
+                reason = 'outside unmasked noir field';
+            }
+
             if (
               [
                 [x, y],

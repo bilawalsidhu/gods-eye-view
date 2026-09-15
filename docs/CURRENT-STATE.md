@@ -2567,7 +2567,9 @@ with the centre minus sampled background reported without gating. Each preset ne
 six verified, unobscured sprites; insufficient coverage is UNEXERCISED.
 The sampler excludes overlapping footprints, including otherwise ineligible
 sprites, and verifies pick ownership across all nine sampled core pixels.
-Selected-trail diagnostics report every condition even when selection fails.
+Noir samples also exclude its deliberately vignetted outer field, using shader
+settings and screen position rather than observed brightness. Selected-trail
+diagnostics report every condition even when selection fails.
 
 Transit brackets use the normal-composite overlay surface: a 1.25 px mode-colour
 stroke over 3.25 px dark backing. Other contact themes retain their existing
@@ -2631,7 +2633,9 @@ profiles, the Boston Red/741/742/Green-E matrix on measured bright and dark
 backgrounds across normal, NVG, white-hot, black-hot and Ironbow, selected and
 restored screenshots, reload recovery, and disable checks. Matrix routes are
 scripted fixtures; the separate live-feed/reload checks use actual observations.
-Live visual cities are chosen for local daytime operation. Motion checks use
+The separate Boston live pass uses actual MBTA observations at 120–600 m and
+20–45 degree oblique views, with live selection and sensor readback.
+Live visual cities are otherwise chosen for local daytime operation. Motion checks use
 injected playback independently of live fleet activity. Thermal checks verify
 style activation before reading generated controls; DETECT checks set density
 and exercise the real OFF/restore button. Cesium render errors fail selection

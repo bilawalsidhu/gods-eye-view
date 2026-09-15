@@ -440,3 +440,144 @@ export async function runBostonMatrix({
     JSON.stringify(evidence, null, 2),
   );
 }
+
+/** Real MBTA observations at oblique street views, separate from matrix fixtures. */
+export async function runBostonLive({
+  page,
+  check,
+  wait,
+  shots,
+  tag,
+  detectOn,
+  selectStyle,
+  sampleRendered,
+}) {
+  console.log('\n== Boston live oblique streets ==');
+  await page.evaluate(async () => {
+    const app = window.__godsEyeView;
+    await app.dataManager.setEnabled('transit', false, { source: 'qa' });
+    const camera = app.viewer.camera,
+      C = camera.positionCartographic.constructor;
+    camera.setView({
+      destination: C.toCartesian(C.fromDegrees(-71.0605, 42.3554, 600)),
+      orientation: { heading: 0, pitch: -Math.PI / 4, roll: 0 },
+    });
+    await app.dataManager.setEnabled('transit', true, { source: 'qa' });
+    const layer = app.dataManager.layers.get('transit').module;
+    layer._setTransitFixtureFloorsForTest([], 0);
+    await layer.update();
+  });
+  await wait(20000);
+  await detectOn(page);
+  const evidence = [];
+  for (const view of [
+    {
+      name: 'white-hot',
+      style: 'thermal',
+      altitude: 120,
+      heading: 0,
+      pitch: -20,
+      params: { 'WHOT/BHOT': 0, Ironbow: 0 },
+    },
+    {
+      name: 'nvg',
+      style: 'surveillance',
+      altitude: 600,
+      heading: 30,
+      pitch: -45,
+      params: {},
+    },
+    {
+      name: 'noir',
+      style: 'noir',
+      altitude: 400,
+      heading: 60,
+      pitch: -35,
+      params: {},
+    },
+  ]) {
+    await page.evaluate((view) => {
+      const app = window.__godsEyeView,
+        camera = app.viewer.camera,
+        C = camera.positionCartographic.constructor;
+      app.dataManager.layers
+        .get('transit')
+        .module._transitPartsForTest()
+        .selection.clearSelection();
+      camera.setView({
+        destination: C.toCartesian(
+          C.fromDegrees(-71.0605, 42.3554, view.altitude),
+        ),
+        orientation: {
+          heading: (view.heading * Math.PI) / 180,
+          pitch: (view.pitch * Math.PI) / 180,
+          roll: 0,
+        },
+      });
+    }, view);
+    await selectStyle(page, view.style, view.params);
+    await wait(8000);
+    const fleet = await page.evaluate(() => {
+      const state = window.__godsEyeView.dataManager.layers
+        .get('transit')
+        .module._transitStateForTest();
+      const entries = [...state._vehicles.values()];
+      return {
+        total: entries.length,
+        visible: entries.filter((e) => e.marker?.show).length,
+        fixtures: entries.filter((e) => e.qaFixture).length,
+        routes: [
+          ...new Set(
+            entries.filter((e) => e.marker?.show).map((e) => e.record.routeId),
+          ),
+        ],
+      };
+    });
+    check(
+      `Boston live/${view.name}: observed vehicles in the oblique street view`,
+      fleet.total > 0 && fleet.visible > 0 && fleet.fixtures === 0,
+      JSON.stringify({ view, fleet }),
+      { unexercised: fleet.visible === 0 },
+    );
+    const pixels = await sampleRendered(page);
+    const contrast = reduceSensorContrast(pixels, 'white', view.style);
+    check(
+      `Boston live/${view.name}: unobscured sensor contrast`,
+      contrast.pass,
+      JSON.stringify(contrast),
+      { unexercised: contrast.unexercised },
+    );
+    const target = pixels[0];
+    let selection = null;
+    if (target) {
+      await page.mouse.click(target.x, target.y);
+      await wait(250);
+      selection = await page.evaluate((key) => {
+        const state = window.__godsEyeView.dataManager.layers
+          .get('transit')
+          .module._transitStateForTest();
+        return {
+          expected: key,
+          actual: state._selectedKey,
+          pick: state._lastPickForTest ?? null,
+        };
+      }, target.key);
+    }
+    check(
+      `Boston live/${view.name}: real mouse selects an observed vehicle`,
+      selection?.actual === target?.key && !!target,
+      JSON.stringify(selection),
+      { unexercised: !target },
+    );
+    await page.screenshot({
+      path: `${shots}/${tag}-boston-live-${view.name}.jpg`,
+      type: 'jpeg',
+      quality: 90,
+    });
+    evidence.push({ view, fleet, pixels, contrast, selection });
+  }
+  await writeFile(
+    `${shots}/${tag}-boston-live.json`,
+    JSON.stringify(evidence, null, 2),
+  );
+}
