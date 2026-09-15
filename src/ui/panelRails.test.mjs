@@ -59,7 +59,12 @@ function element(
     getBoundingClientRect() {
       return this.rect;
     },
-    matches: (selector) => selector === '[data-panel-id]',
+    hidden: false,
+    // Enough selector support for the two forms the rails actually use.
+    matches(selector) {
+      if (selector === '[data-panel-id]') return true;
+      return selector === '[data-panel-id]:not([hidden])' && !this.hidden;
+    },
     contains(target) {
       return (
         target === this || this.children.some((child) => child.contains(target))
@@ -148,6 +153,45 @@ test('left layout records collapsed heights and aligns the right rail without ch
   assert.equal(f.aligned(), 1);
   assert.equal(f.retries(), 0);
   assert.equal(f.stack.dataset.layoutMode, 'normal');
+});
+
+test('a hidden right panel takes no share of the rail', () => {
+  // A panel its owner has put away is not on screen. Counting it would let an
+  // invisible panel crowd out a visible one: two expanded panels do not fit,
+  // so the rail collapses the one the user did not just open.
+  const crowded = fixture('right');
+  crowded.expand(crowded.first, 900);
+  crowded.expand(crowded.second, 900);
+  crowded.options.preferredPanelId = 'second';
+  crowded.run();
+  assert.equal(
+    crowded.first.classList.contains('layout-auto-collapsed'),
+    true,
+    'the fixture must actually be over-subscribed',
+  );
+
+  const f = fixture('right');
+  f.expand(f.first, 900);
+  f.expand(f.second, 900);
+  f.second.hidden = true;
+  f.options.preferredPanelId = 'second';
+  f.run();
+
+  assert.equal(
+    f.first.classList.contains('layout-auto-collapsed'),
+    false,
+    'a hidden panel must not crowd out a visible one',
+  );
+  assert.notEqual(
+    f.first.style.getPropertyValue('--right-panel-allocated-height'),
+    '',
+    'the visible panel keeps its allocation',
+  );
+  assert.equal(
+    f.second.style.getPropertyValue('--right-panel-allocated-height'),
+    '',
+    'a hidden panel must not be allocated height',
+  );
 });
 
 test('left corridor respects a lower obstacle but ignores an obstacle hidden by its parent', () => {

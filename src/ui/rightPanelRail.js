@@ -41,8 +41,11 @@ export function layoutRightPanelRail({
 }) {
   if (!stack) return;
 
+  // A hidden panel is not part of the stack for layout purposes: counting it
+  // would reserve a share of the rail's height for something nobody can see,
+  // and shrink every panel that is actually on screen.
   const panels = [...stack.children].filter((panel) =>
-    panel.matches('[data-panel-id]'),
+    panel.matches('[data-panel-id]:not([hidden])'),
   );
   if (!hud.visible || hud.variant !== 'tactical') {
     for (const panel of panels.filter((item) =>

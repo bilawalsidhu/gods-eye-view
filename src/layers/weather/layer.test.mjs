@@ -323,6 +323,23 @@ test('every spec declares what the layer dispatches on', () => {
   }
 });
 
+test('the layers that work anywhere are offered first', () => {
+  // The panel renders each group in catalogue order, and a reader scanning it
+  // should not have to step over five layers that draw nothing where they are
+  // looking before reaching one that does.
+  for (const group of [OVERLAY, FIELD]) {
+    const groupSpecs = WEATHER_LAYER_SPECS.filter((s) => s.group === group);
+    const limited = groupSpecs.findIndex((s) => s.coverage);
+    if (limited === -1) continue;
+    const global = groupSpecs.findLastIndex((s) => !s.coverage);
+    assert.ok(
+      global < limited,
+      `${groupSpecs[global].label} has global coverage and must sort before ` +
+        `${groupSpecs[limited].label}, which does not`,
+    );
+  }
+});
+
 test('the tile template is same-origin and carries no credential', () => {
   // The credentials live in the upstream URL path, so the one thing the client
   // must be unable to do is build that URL. All it ever sees is a relative

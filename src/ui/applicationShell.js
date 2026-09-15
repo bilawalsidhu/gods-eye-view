@@ -2322,8 +2322,12 @@ export class StyleManager {
       this._dataManagerUnsubscribe = this._dataManager.subscribe((change) => {
         this._feedback._loadingFeedbackEvent = change;
         this._updateGlobalLoadingFeedback(performance.now());
+        if (change?.type === 'visibility' && change.layerId === 'weather') {
+          this._syncWeatherPanelPresence();
+        }
       });
     }
+    this._syncWeatherPanelPresence();
     this._updateGlobalLoadingFeedback(performance.now());
     this._syncContextModeButtons();
     this._cctvControls.connect();
@@ -2967,6 +2971,29 @@ export class StyleManager {
     );
     await this._dataManager?.refreshLayer?.('weather');
     await this._syncWeatherPanel();
+  }
+
+  /**
+   * Show the Weather panel only while the Weather layer is switched on.
+   *
+   * The panel is the layer's control surface and has no meaning without it:
+   * with the layer off every control is inert, and the refresh button would
+   * spend quota drawing nothing. The layer row in the left rail is the one
+   * switch, so the panel follows it rather than standing beside it.
+   *
+   * Collapse before hiding. A panel put away while expanded would come back
+   * expanded into a rail that has since allocated its height elsewhere.
+   */
+  _syncWeatherPanelPresence() {
+    const panel = this._weatherPanel;
+    if (!panel) return;
+    const enabled = this._dataManager?.isEnabled?.('weather') === true;
+    if (panel.hidden === !enabled) return;
+    if (!enabled && !panel.classList.contains('collapsed')) {
+      this.setPanelCollapsed('weather-panel', true, { persist: false });
+    }
+    panel.hidden = !enabled;
+    this._scheduleRightPanelLayout({ reconsiderAutoCollapse: true });
   }
 
   /**

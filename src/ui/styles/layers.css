@@ -224,7 +224,10 @@
 #right-context-rail.layout-exclusive > [data-panel-id].collapsed {
   display: none;
 }
-#right-context-rail.layout-focus > [data-panel-id].collapsed {
+/* `:not([hidden])` is load-bearing: this rule is more specific than the user
+   agent's `[hidden] { display: none }`, so without it a panel hidden by its
+   owner would reappear the moment the rail entered focus layout. */
+#right-context-rail.layout-focus > [data-panel-id].collapsed:not([hidden]) {
   display: block;
   flex: 0 0 auto;
 }

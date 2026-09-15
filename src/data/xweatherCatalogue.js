@@ -122,15 +122,6 @@ export const XWEATHER_LAYERS = Object.freeze(
       detail: 'Forecast sea-level pressure',
       cadence: '1-6 hr',
     },
-    {
-      code: 'n',
-      layer: 'surface-analysis',
-      group: OVERLAY,
-      label: 'Fronts',
-      detail: 'Frontal and pressure analysis',
-      cadence: '12 hr',
-      coverage: NORTH_AMERICA,
-    },
 
     // ── tropical cyclones: four composable pieces of one storm ───────────
     {
@@ -166,7 +157,17 @@ export const XWEATHER_LAYERS = Object.freeze(
       cadence: '1-6 hr',
     },
 
-    // ── United States only ───────────────────────────────────────────────
+    // ── not global: the chip says so, and these sort last so the layers
+    //    that work anywhere are the ones reached first ──────────────────
+    {
+      code: 'n',
+      layer: 'surface-analysis',
+      group: OVERLAY,
+      label: 'Fronts',
+      detail: 'Frontal and pressure analysis',
+      cadence: '12 hr',
+      coverage: NORTH_AMERICA,
+    },
     {
       code: 's',
       layer: 'stormcells',
