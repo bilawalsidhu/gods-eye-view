@@ -2,9 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  fetchAllTectonicPlateGeoJson,
   normalizeBoundaryType,
   normalizeTectonicPlateSnapshot,
 } from './tectonicPlates.js';
+
 
 test('normalizes known tectonic boundary labels', () => {
   assert.equal(normalizeBoundaryType('Convergent Boundary'), 'convergent');
@@ -120,4 +122,46 @@ test('rejects duplicate ids', () => {
   });
 
   assert.equal(result, null);
+});
+test('fetches tectonic boundaries across multiple pages', async () => {
+  const calls = [];
+
+  const fakeFetch = async (url) => {
+    calls.push(String(url));
+
+    const offset = Number(new URL(url).searchParams.get('resultOffset'));
+
+    const count = offset === 0 ? 1000 : 175;
+
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          type: 'FeatureCollection',
+          features: Array.from({ length: count }, (_, index) => ({
+            type: 'Feature',
+            id: offset + index + 1,
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [10, 20],
+                [11, 21],
+              ],
+            },
+            properties: {
+              OBJECTID: offset + index + 1,
+              NAME: 'A:B',
+              LABEL: 'Transform Boundary',
+            },
+          })),
+        };
+      },
+    };
+  };
+
+  const result = await fetchAllTectonicPlateGeoJson(fakeFetch);
+
+  assert.equal(calls.length, 2);
+  assert.equal(result.features.length, 1175);
 });

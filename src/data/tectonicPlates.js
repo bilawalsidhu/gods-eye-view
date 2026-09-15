@@ -51,52 +51,61 @@ export function normalizeTectonicPlateSnapshot(geojson) {
       return null;
     }
 
-const geometryType = feature?.geometry?.type;
+    const geometryType = feature?.geometry?.type;
 
-if (geometryType !== 'LineString' && geometryType !== 'MultiLineString') {
-  return null;
-}
-  }
-const rawPaths = geometryType === 'LineString'
-  ? [feature.geometry.coordinates]
-  : feature.geometry.coordinates;
-
-if (!Array.isArray(rawPaths) || rawPaths.length === 0) {
-  return null;
-}
-
-const normalizedPaths = [];
-
-for (const path of rawPaths) {
-  if (!Array.isArray(path) || path.length < 2) {
-    return null;
-  }
-
-  const normalizedCoordinates = [];
-
-  for (const coordinate of path) {
-    if (!Array.isArray(coordinate) || coordinate.length < 2) {
+    if (geometryType !== 'LineString' && geometryType !== 'MultiLineString') {
       return null;
     }
 
-    const [lon, lat] = coordinate;
+    const rawPaths = geometryType === 'LineString'
+      ? [feature.geometry.coordinates]
+      : feature.geometry.coordinates;
 
-    if (
-      !Number.isFinite(lon)
-      || !Number.isFinite(lat)
-      || Math.abs(lon) > 180
-      || Math.abs(lat) > 90
-    ) {
+    if (!Array.isArray(rawPaths) || rawPaths.length === 0) {
       return null;
     }
 
-    normalizedCoordinates.push([lon, lat]);
-  }
+    const normalizedPaths = [];
 
-  normalizedPaths.push(normalizedCoordinates);
+    for (const path of rawPaths) {
+      if (!Array.isArray(path) || path.length < 2) {
+        return null;
+      }
+
+      const normalizedCoordinates = [];
+
+      for (const coordinate of path) {
+        if (!Array.isArray(coordinate) || coordinate.length < 2) {
+          return null;
+        }
+
+       const [lon, lat] = coordinate;
+
+      const COORD_EPSILON = 1e-6;
+
+        if (
+          !Number.isFinite(lon)
+  ||      !Number.isFinite(lat)
+  ||      Math.abs(lon) > 180 + COORD_EPSILON
+  ||      Math.abs(lat) > 90 + COORD_EPSILON
+) {
+  return null;
 }
 
-    const rawId = feature.id ?? feature.properties?.OBJECTID ?? `feature-${index + 1}`;
+    const normalizedLon = Math.max(-180, Math.min(180, lon));
+    const normalizedLat = Math.max(-90, Math.min(90, lat));
+
+      normalizedCoordinates.push([normalizedLon, normalizedLat]);
+      }
+
+      normalizedPaths.push(normalizedCoordinates);
+    }
+
+    const rawId =
+      feature.id
+      ?? feature.properties?.OBJECTID
+      ?? `feature-${index + 1}`;
+
     const id = String(rawId);
 
     if (ids.has(id)) {
@@ -108,25 +117,79 @@ for (const path of rawPaths) {
     const rawName = feature.properties?.NAME;
     const rawLabel = feature.properties?.LABEL;
 
-  for (const [pathIndex, coordinates] of normalizedPaths.entries()) {
-  const rowId = normalizedPaths.length === 1
-    ? id
-    : `${id}:${pathIndex + 1}`;
+    for (const [pathIndex, coordinates] of normalizedPaths.entries()) {
+      const rowId = normalizedPaths.length === 1
+        ? id
+        : `${id}:${pathIndex + 1}`;
 
-  rows.push({
-    id: rowId,
-    name: typeof rawName === 'string' && rawName.trim()
-      ? rawName.trim()
-      : null,
-    boundaryType: normalizeBoundaryType(rawLabel),
-    sourceLabel: typeof rawLabel === 'string' && rawLabel.trim()
-      ? rawLabel.trim()
-      : null,
-    coordinates,
-  });
-}
+      rows.push({
+        id: rowId,
+        name: typeof rawName === 'string' && rawName.trim()
+          ? rawName.trim()
+          : null,
+        boundaryType: normalizeBoundaryType(rawLabel),
+        sourceLabel: typeof rawLabel === 'string' && rawLabel.trim()
+          ? rawLabel.trim()
+          : null,
+        coordinates,
+      });
+    }
+  }
 
   return rows;
+}
+const USGS_PLATES_QUERY_URL =
+  'https://earthquake.usgs.gov/arcgis/rest/services/eq/map_plateboundaries/MapServer/1/query';
+
+const PAGE_SIZE = 1000;
+
+/**
+ * Fetch all tectonic plate boundary features from USGS with pagination.
+ *
+ * @param {typeof fetch} fetchImpl
+ * @returns {Promise<object>}
+ */
+export async function fetchAllTectonicPlateGeoJson(fetchImpl = fetch) {
+  const features = [];
+  let offset = 0;
+
+  while (true) {
+    const params = new URLSearchParams({
+      where: '1=1',
+      outFields: '*',
+      returnGeometry: 'true',
+      outSR: '4326',
+      orderByFields: 'OBJECTID ASC',
+      resultOffset: String(offset),
+      resultRecordCount: String(PAGE_SIZE),
+      f: 'geojson',
+    });
+
+    const response = await fetchImpl(`${USGS_PLATES_QUERY_URL}?${params}`);
+
+    if (!response.ok) {
+      throw new Error(`USGS HTTP ${response.status}`);
+    }
+
+    const page = await response.json();
+
+    if (!Array.isArray(page?.features)) {
+      throw new Error('Malformed USGS tectonic-plates response');
+    }
+
+    features.push(...page.features);
+
+    if (page.features.length < PAGE_SIZE) {
+      break;
+    }
+
+    offset += PAGE_SIZE;
+  }
+
+  return {
+    type: 'FeatureCollection',
+    features,
+  };
 }
 export function createTectonicPlatesLayer() {
   let _dataSource = null;
