@@ -36,6 +36,7 @@ import { transitModeTier } from '../src/data/transitPresetStyle.js';
 
 import {
   reduceAnchor,
+  reduceTrailHead,
   reduceScenario,
   reduceSensorContrast,
   reduceScriptedMotion,
@@ -1568,7 +1569,19 @@ try {
           const app = window.__godsEyeView;
           const layer = app.dataManager.layers.get('transit').module;
           const state = layer._transitStateForTest();
-          if (state._selectedKey !== key) return { selected: false };
+          if (state._selectedKey !== key)
+            return {
+              selected: false,
+              selection: {
+                expected: key,
+                actual: state._selectedKey,
+                handler: !!state._clickHandler,
+                lastPick: state._lastPickForTest ?? null,
+                pointerOwner: (
+                  await import('/src/data/inputOwnership.js')
+                ).pointerOwner(),
+              },
+            };
           const scene = app.viewer.scene;
           const canvas = scene.canvas;
           const mul = (m, v) => [
@@ -1666,16 +1679,8 @@ try {
     }
     check(
       'selected trail head stays within 1 CSS px of the marker, without entity additions or body rebuilds between revisions',
-      anchor?.selected &&
-        anchor.headSamples > 30 &&
-        anchor.headErrorPx <= 1 &&
-        anchor.bodyMutation === 0 &&
-        anchor.entityCount === target.entityCount,
-      JSON.stringify({
-        headSamples: anchor?.headSamples,
-        errorPx: anchor?.headErrorPx,
-        bodyMutation: anchor?.bodyMutation,
-      }),
+      reduceTrailHead(anchor, target).pass,
+      JSON.stringify(reduceTrailHead(anchor, target)),
     );
     if (anchor?.selected) {
       await writeFile(

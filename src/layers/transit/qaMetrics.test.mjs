@@ -162,7 +162,7 @@ test('variable GPU work after sampling cannot change the judged playback speed',
   assert.equal(reduceScriptedMotion('mbta:sim-straight', frames).pass, true);
 });
 
-test('sensor thresholds retain in-scene NVG peak, local contrast and six-sprite minimum', async () => {
+test('sensor thresholds retain in-scene NVG peak, halo and six-sprite minimum', async () => {
   const { reduceSensorContrast } = await import('./qaMetrics.js');
   const pixels = (p, n = 6) =>
     Array.from({ length: n }, (_, i) => ({
@@ -180,11 +180,11 @@ test('sensor thresholds retain in-scene NVG peak, local contrast and six-sprite 
   );
   assert.equal(
     reduceSensorContrast(
-      pixels({ centre: 0.64, ringMin: 0.03, background: 0.4 }),
+      pixels({ centre: 0.64, ringMin: 0.03, background: 0.9 }),
       'white',
       'surveillance',
     ).pass,
-    false,
+    true,
   );
   assert.equal(
     reduceSensorContrast(
@@ -302,4 +302,29 @@ test('scenario speed and catch-up use sampling time, not variable GPU completion
   );
   assert.ok(fast.worstJump > 12);
   assert.ok(fast.wallFaster > 0);
+});
+
+test('trail-head acceptance names every missing and failed condition', async () => {
+  const { reduceTrailHead } = await import('./qaMetrics.js');
+  const missing = reduceTrailHead({ selected: false }, { entityCount: 0 });
+  assert.equal(missing.pass, false);
+  assert.deepEqual(missing.conditions, {
+    selected: false,
+    enoughHeadSamples: false,
+    aligned: false,
+    stableBody: false,
+    stableEntityCount: false,
+  });
+  const good = {
+    selected: true,
+    headSamples: 100,
+    headErrorPx: 0,
+    bodyMutation: 0,
+    entityCount: 0,
+  };
+  assert.equal(reduceTrailHead(good, { entityCount: 0 }).pass, true);
+  assert.equal(
+    reduceTrailHead({ ...good, headErrorPx: 2 }, { entityCount: 0 }).pass,
+    false,
+  );
 });

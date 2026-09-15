@@ -2555,7 +2555,7 @@ raster cache at 36 variants. Normal mode colours are bus `#5EF08A`, tram
 `#FFC24A`, subway `#FF4538`, rail `#D9A6FF`, ferry `#5FD6FF`, and unknown
 `#D8DDE5`. Selection keeps the mode colour. Sensor bodies use solid rounded envelopes with at least 60% opaque white coverage
 of the padded display footprint, without interior panel lines. Sensor input is opaque white with a
-`#05080C` halo at 0.95 opacity; black-hot reverses the contrast through the
+fully opaque black halo; black-hot reverses the contrast through the
 thermal effect. Creation, mode changes, selection, deselection, map presets and
 Cockpit vision use the same sprite styling function.
 
@@ -2563,8 +2563,11 @@ Sensor signatures remain in-scene. The thresholds in `qaMetrics.js` require
 white-hot, Ironbow and noir centres ≥0.85 luma and halo minima ≤0.25;
 black-hot uses centre ≤0.15 and halo maximum ≥0.75. Surveillance uses ≥90%
 of its phosphor peak white (0.65992 from RGB 0.16/1/0.22), halo minimum ≤0.25
-and centre minus sampled local background ≥0.25. Each preset needs at least
+with the centre minus sampled background reported without gating. Each preset needs at least
 six verified, unobscured sprites; insufficient coverage is UNEXERCISED.
+The sampler excludes overlapping footprints, including otherwise ineligible
+sprites, and verifies pick ownership across all nine sampled core pixels.
+Selected-trail diagnostics report every condition even when selection fails.
 
 Transit brackets use the normal-composite overlay surface: a 1.25 px mode-colour
 stroke over 3.25 px dark backing. Other contact themes retain their existing

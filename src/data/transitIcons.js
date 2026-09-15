@@ -201,7 +201,7 @@ export function transitIcon(kind, px = FLEET_RASTER_PX, options = {}) {
         ? body.replace(
             /<path d="([^"]+)"\s+fill="white" [^/]*\/>/,
             (_m, d) =>
-              `<path d="${d}" fill="none" stroke="#05080C" stroke-opacity="0.95" stroke-width="${frame.units.toFixed(2)}" stroke-linejoin="round"/>`,
+              `<path d="${d}" fill="none" stroke="${profile === 'mono' ? '#000000' : '#05080C'}" stroke-opacity="${profile === 'mono' ? 1 : 0.95}" stroke-width="${frame.units.toFixed(2)}" stroke-linejoin="round"/>`,
           )
         : '';
     const svg =

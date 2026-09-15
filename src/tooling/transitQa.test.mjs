@@ -415,6 +415,19 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
   );
   assert.ok(Math.abs(pixels[0].centre - 1) < 1e-6);
   assert.equal(listener, null);
+  scene.pick = () => ({ id: 'overlapping-label' });
+  assert.equal(
+    (await sampleTransitPixels(page, {})).length,
+    0,
+    'a foreign pick across the sampled core disqualifies an obscured sprite',
+  );
+  scene.pick = ({ x }) => ({ id: x < 200 ? 'overlapping-sprite' : 'bus' });
+  assert.equal(
+    (await sampleTransitPixels(page, {})).length,
+    0,
+    'a clear centre cannot qualify a partially obscured core',
+  );
+  delete scene.pick;
   // The fixture returns fresh wrapper objects, so exercise raster and DOM
   // eligibility independently of framebuffer brightness.
   raster.fill(0);
@@ -560,4 +573,45 @@ test('allocation accounting includes Cesium render aliases and excludes QA helpe
     sharedOverlayBytes: 100,
     qaBytes: 500,
   });
+});
+
+test('public transit documentation uses courtesy attribution and the approved ground sentence', () => {
+  const data = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  const rows = data
+    .split('\n')
+    .filter((line) =>
+      /^\| \*\*(MBTA|CapMetro|Metro Transit|OVapi|Entur|TransLink|HSL)/.test(
+        line,
+      ),
+    );
+  assert.equal(rows.length, 7);
+  for (const row of rows) {
+    assert.doesNotMatch(
+      row,
+      /licen[cs]e|unlicensed|unstated|grants|permits|public.domain|CC BY|NLOD|terms|trademarks/i,
+    );
+    assert.match(row, /open realtime vehicle data/);
+    assert.match(row, /published for developer use and not against their use/);
+  }
+  const readme = readFileSync(
+    new URL('../../README.md', import.meta.url),
+    'utf8',
+  );
+  assert.ok(
+    readme.includes(
+      'Fifteen layers and map sources. **Thirteen have a keyless path.**',
+    ),
+  );
+  assert.ok(
+    readme.includes(
+      '**Sits on the real ground.** Entity heights are aligned to work with Google 3D tiles, so aircraft park on aprons and cameras stand on street corners instead of floating.',
+    ),
+  );
+  assert.doesNotMatch(
+    readme,
+    /geoid-aware|sampled against the _rendered_ terrain mesh/,
+  );
 });

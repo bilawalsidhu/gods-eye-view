@@ -32,10 +32,10 @@ test('a haloed glyph draws the dark ring under the shipped white body', () => {
   assert.notEqual(plain, haloed);
   assert.match(
     haloed,
-    /stroke="#05080C" stroke-opacity="0.95" stroke-width="13\.71"/,
+    /stroke="#000000" stroke-opacity="1" stroke-width="13\.71"/,
   );
   assert.ok(
-    haloed.indexOf('#05080C') < haloed.indexOf('fill="white"'),
+    haloed.indexOf('#000000') < haloed.indexOf('fill="white"'),
     'ring first, body on top',
   );
   assert.match(haloed, /viewBox="-\d+ -\d+ \d+ \d+"/, 'padded frame');
@@ -72,7 +72,7 @@ test('all 36 variants retain the specified final halo at both display sizes', as
           (selected ? 30 : 20) * presetSpriteScale(style, selected);
         const svg = decode(transitIcon(kind, selected ? 96 : 48, { style }));
         const units = Number(
-          svg.match(/stroke-opacity="0.9[5]?" stroke-width="([\d.]+)"/)[1],
+          svg.match(/stroke-opacity="(?:0.95|1)" stroke-width="([\d.]+)"/)[1],
         );
         assert.ok(
           Math.abs(

@@ -2176,7 +2176,7 @@ test('under FLIR and NVG every sprite is white-hot with a dark halo, and selecti
     assert.notEqual(entry.marker.image, plainImage, 'a haloed raster');
     assert.match(
       Buffer.from(entry.marker.image.split(',')[1], 'base64').toString(),
-      /#05080C/,
+      /#000000/,
       'with the dark ring',
     );
     assert.ok(entry.marker.width > plainWidth * 1.2, 'and larger');

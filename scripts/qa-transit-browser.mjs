@@ -173,6 +173,7 @@ export async function sampleTransitPixels(page, palette) {
           const width = canvas.clientWidth;
           const height = canvas.clientHeight;
           const sprites = [];
+          const footprints = [];
           const intersects = (a, b) =>
             a.x < b.x + b.w &&
             a.x + a.w > b.x &&
@@ -267,6 +268,7 @@ export async function sampleTransitPixels(page, palette) {
             const w = rect.width * c + rect.height * sn,
               h = rect.height * c + rect.width * sn;
             const footprint = { x: x - w / 2, y: y - h / 2, w, h };
+            footprints.push({ key: entry.key, ...footprint });
             let reason = null;
             if (
               rect.x < 0 ||
@@ -327,6 +329,7 @@ export async function sampleTransitPixels(page, palette) {
               screenX: screen.x,
               screenY: screen.y,
               rect,
+              footprint,
               bracketX: entry.detectContact?._candidateScreenX ?? screen.x,
               bracketY: entry.detectContact?._candidateScreenY ?? screen.y,
               raster,
@@ -342,8 +345,8 @@ export async function sampleTransitPixels(page, palette) {
           const isolated = sprites.filter(
             (a) =>
               !a.selected &&
-              sprites.every(
-                (b) => b === a || Math.hypot(a.x - b.x, a.y - b.y) > 44,
+              footprints.every(
+                (b) => b.key === a.key || !intersects(a.footprint, b),
               ),
           );
           const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
@@ -382,6 +385,57 @@ export async function sampleTransitPixels(page, palette) {
                 });
                 continue;
               }
+            }
+            // Picking is independent of rendered brightness: an overlapping
+            // label or sprite must not masquerade as a dim sensor signature.
+            // Check the whole sampled core, not just its centre pick.
+            let coreOwned = true;
+            if (scene.pick) {
+              const framebuffer = gl.getParameter?.(gl.FRAMEBUFFER_BINDING);
+              for (let dx = -1; dx <= 1; dx++)
+                for (let dy = -1; dy <= 1; dy++) {
+                  let u = (s.x + dx) / width,
+                    v = 1 - (s.y + dy) / height;
+                  if (style === 'surveillance') {
+                    const x = u * 2 - 1,
+                      y = v * 2 - 1,
+                      r2 = x * x + y * y;
+                    const d =
+                      1 + r2 * intensity * 0.25 + r2 * r2 * intensity * 0.075;
+                    u = (x * d + 1) / 2;
+                    v = (y * d + 1) / 2;
+                  }
+                  if (sensor) {
+                    const grid = 1 + (pixelation - 1) * intensity;
+                    u +=
+                      ((Math.floor((u * canvas.width) / grid) * grid) /
+                        canvas.width -
+                        u) *
+                      intensity;
+                    v +=
+                      ((Math.floor((v * canvas.height) / grid) * grid) /
+                        canvas.height -
+                        v) *
+                      intensity;
+                  }
+                  const picked = scene.pick(
+                    { x: u * width, y: (1 - v) * height },
+                    1,
+                    1,
+                  );
+                  if (picked?.id !== s.key && picked?.primitive?.id !== s.key)
+                    coreOwned = false;
+                }
+              if (gl.bindFramebuffer)
+                gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+            }
+            if (!coreOwned) {
+              skipped.push({
+                key: s.key,
+                reason:
+                  'sampled core is partially obscured or outside the sprite',
+              });
+              continue;
             }
             let centre = 0;
             for (let dx = -1; dx <= 1; dx += 1)

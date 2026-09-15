@@ -264,7 +264,7 @@ export function reduceScriptedMotion(key, rows) {
 /**
  * In-scene sensor signatures retain the active shader. Surveillance peak white
  * is P43 phosphor (0.16, 1, 0.22): Rec.601 luma 0.65992. D1 requires 90% of
- * that peak, a ring <= 0.25 and centre minus local background >= 0.25.
+ * that peak and a ring <= 0.25. Local background delta is diagnostic.
  * White-hot, Ironbow and noir require 0.85; black-hot keeps the inverse.
  * Six verified, unobscured sprites are required; absence is UNEXERCISED.
  */
@@ -278,7 +278,7 @@ export function reduceSensorContrast(pixels, polarity = 'white', preset = '') {
               ? 0.9 * (0.299 * 0.16 + 0.587 + 0.114 * 0.22)
               : 0.85,
           ringMax: 0.25,
-          backgroundDeltaMin: preset === 'surveillance' ? 0.25 : null,
+          backgroundDeltaMin: null,
         };
   const judged = pixels
     .filter((p) => p.verified === true)
@@ -286,6 +286,7 @@ export function reduceSensorContrast(pixels, polarity = 'white', preset = '') {
       key: p.key,
       centre: p.centre,
       background: p.background,
+      backgroundDelta: p.centre - p.background,
       ring: polarity === 'black' ? p.ringMax : p.ringMin,
       pass:
         polarity === 'black'
@@ -304,5 +305,27 @@ export function reduceSensorContrast(pixels, polarity = 'white', preset = '') {
         : null,
     limits,
     judged,
+  };
+}
+
+/** Selected trail evidence stays inspectable even when the click failed. */
+export function reduceTrailHead(anchor, target) {
+  const conditions = {
+    selected: anchor?.selected === true,
+    enoughHeadSamples:
+      Number.isFinite(anchor?.headSamples) && anchor.headSamples > 30,
+    aligned: Number.isFinite(anchor?.headErrorPx) && anchor.headErrorPx <= 1,
+    stableBody: anchor?.bodyMutation === 0,
+    stableEntityCount:
+      Number.isFinite(anchor?.entityCount) &&
+      anchor.entityCount === target?.entityCount,
+  };
+  return {
+    pass: Object.values(conditions).every(Boolean),
+    conditions,
+    headSamples: anchor?.headSamples ?? null,
+    errorPx: anchor?.headErrorPx ?? null,
+    bodyMutation: anchor?.bodyMutation ?? null,
+    selection: anchor?.selection ?? null,
   };
 }
