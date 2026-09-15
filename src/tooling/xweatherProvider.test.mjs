@@ -261,6 +261,48 @@ test('keyed: miss, hit, budget accounting, and the monthly rollover', async (t) 
   assert.equal(calls, 2);
 });
 
+test('every tile goes to one upstream host, so the connection is reused', async (t) => {
+  // The vendor offers maps1..maps4 so a browser can exceed its per-host
+  // connection limit. This is a single server-side client: spreading requests
+  // across four names costs a DNS lookup and a TLS handshake per tile instead
+  // of reusing one warm connection, and both land on libuv's thread pool —
+  // which this process shares with the dev server's file watching. Measured at
+  // roughly ten times the upstream latency when it was spread.
+  isolate(t, KEYED);
+  const hosts = new Set();
+  t.mock.method(globalThis, 'fetch', async (raw) => {
+    hosts.add(new URL(String(raw)).host);
+    return pngResponse();
+  });
+  const request = install(xweatherProxy());
+  for (const y of [1, 2, 3, 4, 5, 6]) await request(tileUrl(4, 8, y));
+  assert.equal(hosts.size, 1, `spread across ${[...hosts].join(', ')}`);
+});
+
+test('a tile is served without waiting for it to reach disk', async (t) => {
+  // The disk copy only has to survive a restart, and a thread-pool write was
+  // measured adding half a second to a response that already had the bytes.
+  isolate(t, KEYED);
+  let releaseWrite;
+  const written = new Promise((resolve) => {
+    releaseWrite = resolve;
+  });
+  t.mock.method(fsp, 'writeFile', async (file) => {
+    // Let the budget file through; only the tile write is held open.
+    if (String(file).endsWith('.png')) await written;
+  });
+  t.mock.method(globalThis, 'fetch', async () => pngResponse());
+  const request = install(xweatherProxy());
+  const res = await request(tileUrl(4, 8, 5));
+  assert.equal(
+    res.status,
+    200,
+    'the tile is served while the write is pending',
+  );
+  assert.equal(res.headers['x-xweather-cache'], 'MISS');
+  releaseWrite();
+});
+
 test('an upstream error body is never cached as a tile', async (t) => {
   isolate(t, KEYED);
   // Xweather reports quota and auth failures as a 200 carrying JSON. Caching

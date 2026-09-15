@@ -50,6 +50,7 @@ import {
  * @returns {import('vite').Plugin}
  */
 export function xweatherProxy() {
+  const UPSTREAM_ORIGIN = 'https://maps.api.xweather.com';
   const CACHE_DIR = path.join(process.cwd(), '.gev-cache', 'xweather');
   const BUDGET_PATH = path.join(CACHE_DIR, 'budget.json');
   const MEM_MAX_ENTRIES = 512;
@@ -66,6 +67,20 @@ export function xweatherProxy() {
   let budget = null;
   let budgetLoaded = false;
   let writesSincePrune = 0;
+  /** @type {Promise<void>|null} the cache directory is created once, not per write. */
+  let cacheDirReady = null;
+  /** @type {NodeJS.Timeout|null} pending debounced write of the counter. */
+  let budgetFlush = null;
+
+  /**
+   * Filesystem calls run on libuv's thread pool, which this process shares
+   * with the dev server's file watching — so every avoidable one is latency
+   * on a tile request.
+   */
+  function ensureCacheDir() {
+    cacheDirReady ??= fsp.mkdir(CACHE_DIR, { recursive: true }).catch(() => {});
+    return cacheDirReady;
+  }
 
   const credentials = () => ({
     id: process.env.XWEATHER_CLIENT_ID || '',
@@ -137,16 +152,29 @@ export function xweatherProxy() {
     }
   }
 
-  async function persistBudget() {
-    try {
-      await fsp.mkdir(CACHE_DIR, { recursive: true });
-      await fsp.writeFile(BUDGET_PATH, JSON.stringify(budget), 'utf8');
-    } catch (err) {
-      console.warn(
-        '[xweather-proxy] budget write failed:',
-        redact(err?.message || err),
-      );
-    }
+  /**
+   * Persist the counter at most once a second.
+   *
+   * It was written on every upstream fetch, which put two thread-pool
+   * operations in front of each tile to record a number that only has to
+   * survive a restart. Losing a second of counting to a crash is cheaper than
+   * paying for that on every tile.
+   */
+  function persistBudget() {
+    if (budgetFlush) return;
+    budgetFlush = setTimeout(async () => {
+      budgetFlush = null;
+      try {
+        await ensureCacheDir();
+        await fsp.writeFile(BUDGET_PATH, JSON.stringify(budget), 'utf8');
+      } catch (err) {
+        console.warn(
+          '[xweather-proxy] budget write failed:',
+          redact(err?.message || err),
+        );
+      }
+    }, 1000);
+    budgetFlush.unref?.();
   }
 
   /** Roll the counter to this month (UTC) and return it. */
@@ -237,7 +265,7 @@ export function xweatherProxy() {
 
   async function writeDiskTile(key, buf) {
     try {
-      await fsp.mkdir(CACHE_DIR, { recursive: true });
+      await ensureCacheDir();
       await fsp.writeFile(tilePath(key), buf);
       writesSincePrune += 1;
       if (writesSincePrune >= PRUNE_EVERY_WRITES) {
@@ -263,10 +291,12 @@ export function xweatherProxy() {
 
   async function fetchUpstream(layer, z, x, y) {
     const { id, secret } = credentials();
-    // The vendor spreads load across maps1..maps4; pick one per request.
-    const host = `maps${1 + Math.floor(Math.random() * 4)}.api.xweather.com`;
+    // One host, deliberately. The vendor offers maps1..maps4 so a *browser*
+    // can exceed its per-host connection limit; this is a single server-side
+    // client, where spreading requests across four names costs a DNS lookup
+    // and a TLS handshake per tile instead of reusing one warm connection.
     const url =
-      `https://${host}/${encodeURIComponent(id)}_${encodeURIComponent(secret)}` +
+      `${UPSTREAM_ORIGIN}/${encodeURIComponent(id)}_${encodeURIComponent(secret)}` +
       `/${encodeURIComponent(layer)}/${z}/${x}/${y}/current.png`;
     recordUpstreamFetch(); // attempts count — upstream bills the request either way
     const res = await fetch(url, {
@@ -379,10 +409,14 @@ export function xweatherProxy() {
           inflight.set(
             key,
             fetchUpstream(layer, z, x, y)
-              .then(async (buf) => {
+              .then((buf) => {
                 const fresh = { at: Date.now(), buf };
                 memSet(key, fresh);
-                await writeDiskTile(key, buf);
+                // Write through in the background. The tile is already in
+                // memory and the disk copy only has to survive a restart, so
+                // making the response wait on a thread-pool write — shared
+                // with the dev server's file watching — buys nothing.
+                void writeDiskTile(key, buf);
                 return fresh;
               })
               .catch((err) => {
