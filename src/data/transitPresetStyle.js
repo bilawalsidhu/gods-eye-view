@@ -52,8 +52,8 @@ const PROFILE_BY_STYLE = Object.freeze({
 const SPRITE_STYLE = Object.freeze({
   mono: Object.freeze({
     rgba: Object.freeze([255, 255, 255, 1]),
-    scale: 1.4,
-    outlinePx: 2.5,
+    scale: 1.5,
+    outlinePx: 3,
   }),
   crt: Object.freeze({
     scale: 1.3,
@@ -112,7 +112,7 @@ export function presetSpriteRgba(styleName, mode) {
  */
 export function presetSpriteScale(styleName, selected = false) {
   if (transitStyleProfile(styleName) === 'mono')
-    return selected ? 36 / 30 : 28 / 20;
+    return selected ? 36 / 30 : 30 / 20;
   return SPRITE_STYLE[transitStyleProfile(styleName)]?.scale ?? 1;
 }
 

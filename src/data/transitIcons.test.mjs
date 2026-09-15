@@ -32,7 +32,7 @@ test('a haloed glyph draws the dark ring under the shipped white body', () => {
   assert.notEqual(plain, haloed);
   assert.match(
     haloed,
-    /stroke="#000000" stroke-opacity="1" stroke-width="17\.14"/,
+    /stroke="#000000" stroke-opacity="1" stroke-width="19\.20"/,
   );
   assert.ok(
     haloed.indexOf('#000000') < haloed.indexOf('fill="white"'),
@@ -105,12 +105,12 @@ test('sensor bodies cover sixty percent of the padded display with opaque white'
     for (const kind of TRANSIT_ICON_KINDS) {
       const display =
         (selected ? 30 : 20) * presetSpriteScale('thermal', selected);
-      assert.equal(display, selected ? 36 : 28);
-      assert.equal(presetSpriteOutlinePx('thermal', selected), 2.5);
+      assert.equal(display, selected ? 36 : 30);
+      assert.equal(presetSpriteOutlinePx('thermal', selected), 3);
       const svg = decode(
         transitIcon(kind, selected ? 96 : 48, { style: 'thermal' }),
       );
-      const frame = haloFrame(2.5, display);
+      const frame = haloFrame(3, display);
       const width = Math.round(display * frame.ratio);
       const { data, info } = await sharp(Buffer.from(svg))
         .resize(width, width)

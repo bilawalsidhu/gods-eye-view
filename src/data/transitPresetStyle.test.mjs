@@ -45,7 +45,7 @@ test('mono: every mode is a white core, larger, with a dark halo in screen pixel
         `${style} ${mode}`,
       );
     }
-    assert.ok(presetSpriteScale(style) === 1.4, `${style} is drawn larger`);
+    assert.ok(presetSpriteScale(style) === 1.5, `${style} is drawn larger`);
     // At least a whole screen pixel and a half of ring around a five-pixel
     // body: thinner than that vanishes through blur and pixelation.
     assert.ok(

@@ -1,6 +1,6 @@
 # Changelog
 
-- Widen opaque sensor halos to 2.5 display pixels while retaining at least 60% opaque core coverage, adding contrast margin on bright roofs.
+- Widen opaque sensor halos to 3 display pixels with a 30 px fleet core while retaining at least 60% opaque core coverage, adding contrast margin through thermal blur and bloom on bright roofs.
 
 - Exclude Noir's intentionally vignetted outer field from transit core measurements and add separate Boston live oblique selection/readability coverage.
 

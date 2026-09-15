@@ -2783,9 +2783,9 @@ test('every styling path retains the mode palette and exact unpadded size', asyn
   app.style('thermal');
   check('#FFFFFF', 36);
   parts.selection.clearSelection();
-  check('#FFFFFF', 28);
+  check('#FFFFFF', 30);
   app.vision('nvg', true);
-  check('#FFFFFF', 28);
+  check('#FFFFFF', 30);
   parts.selection.selectVehicle(entry.key);
   check('#FFFFFF', 36);
   app.vision('normal', false);
