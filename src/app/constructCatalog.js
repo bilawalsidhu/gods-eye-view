@@ -20,6 +20,7 @@ import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
+import { createWindLayer } from '../layers/wind/index.js';
 
 const SOURCE_METHODS = Object.freeze({
   flights: ['getSnapshot'],
@@ -103,6 +104,11 @@ export function createApplicationCatalog({
       [
         flights,
         military,
+        createWindLayer({
+          feed: sources.wind || {
+            getSnapshot: async () => ({ unavailable: true }),
+          },
+        }),
         createApplicationEarthquakes({ source: sources.earthquakes }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         satellites,

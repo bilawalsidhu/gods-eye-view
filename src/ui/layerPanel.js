@@ -297,11 +297,14 @@ export class LayerPanel {
     const chips = controls?.chips || [];
     const legend = controls?.legend || [];
     this._syncRowList(listContainer, controls?.list || null);
-    container.hidden = chips.length === 0 && legend.length === 0;
+    container.hidden =
+      chips.length === 0 && legend.length === 0 && !controls?.info;
 
     for (const node of [...container.children]) {
+      const classNames = String(node.className).split(/\s+/);
       if (
-        String(node.className).split(/\s+/).includes('data-toggle-legend-item')
+        classNames.includes('data-toggle-legend-item') ||
+        classNames.includes('data-toggle-controls-info')
       )
         node.remove();
     }
@@ -338,9 +341,22 @@ export class LayerPanel {
       swatch.className = 'data-toggle-legend-swatch';
       swatch.style.background = item.color;
       const text = document.createElement('span');
-      text.textContent = `${item.label} ${this._formatCount(item.count)}`;
+      // Numeric colour legends (e.g. wind speed) carry only a label; only
+      // tallied legends carry a count.
+      text.textContent =
+        item.count === undefined || item.count === null
+          ? String(item.label)
+          : `${item.label} ${this._formatCount(item.count)}`;
       entry.append(swatch, text);
       container.appendChild(entry);
+    }
+
+    if (controls?.info) {
+      const info = document.createElement('div');
+      info.className = 'data-toggle-controls-info';
+      info.textContent = String(controls.info);
+      if (controls.infoTitle) info.title = controls.infoTitle;
+      container.appendChild(info);
     }
   }
 

@@ -888,3 +888,18 @@
   opacity: 0.75;
   font-style: italic;
 }
+
+.data-toggle-controls-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-basis: 100%;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.6px;
+  color: var(--text-secondary);
+  padding-top: 3px;
+  margin-top: 2px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  user-select: none;
+}

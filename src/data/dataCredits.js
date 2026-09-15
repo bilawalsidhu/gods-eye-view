@@ -202,6 +202,20 @@ export const DATA_CREDITS = [
       '<a href="https://terrain.reearth.land" target="_blank" rel="noopener">Re:Earth Terrain</a> / ' +
       'Mapterhorn (CC BY 4.0) / EGM2008 (NGA)',
   },
+  {
+    key: 'wind-gfs',
+    html:
+      'Wind: NOAA Global Forecast System (GFS) 10 m wind via ' +
+      '<a href="https://registry.opendata.aws/noaa-gfs-bdp-pds/" target="_blank" rel="noopener">NOAA Open Data on AWS</a> ' +
+      '(U.S. public domain; forecast, not observations)',
+  },
+  {
+    key: 'ecmwf-ifs',
+    html:
+      'Contains modified Copernicus/ECMWF IFS forecast data, licensed under CC BY 4.0. ' +
+      'Source: https://data.ecmwf.int/forecasts/ ' +
+      '(<a href="https://www.ecmwf.int/en/forecasts/datasets/open-data" target="_blank" rel="noopener">ECMWF Open Data</a>)',
+  },
   // ── Bundled snapshots ───────────────────────────────────────────
   {
     key: 'datacenters',
