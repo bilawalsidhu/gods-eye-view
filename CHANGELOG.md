@@ -3,6 +3,8 @@
 - Separate application-shell responsibilities and state ownership while preserving
   the layer, scene and voice API. Revoke pending globe-reset callbacks on disposal
   and detach old Directions services when replacing a data manager.
+- Prepare selected draped transit history before floor resolution and retain its visible tail when the marker leaves the view.
+
 - Recover transit markers on camera arrival within the visibility refresh interval, including a newly loaded surface.
 
 - Extract a portable Director shot runner and connect existing scene playback to

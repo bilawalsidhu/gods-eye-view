@@ -3804,3 +3804,47 @@ for (const jump of ['setView', 'flyTo']) {
     assert.equal(entry.visibility.surfaceReady, true);
   });
 }
+
+test('selected history is prepared while its head is hidden and remains shown outside the head frustum', async (t) => {
+  const app = harness(t);
+  app.layer.enable(app.viewer);
+  app.layer._loadTransitFleetForTest(1, BOSTON);
+  const entry = app.vehicles()[0], parts = app.layer._transitPartsForTest();
+  entry.marker.show = false;
+  app.state()._visible.delete(entry);
+  app.state()._moving.delete(entry);
+  parts.selection.selectVehicle(entry.key);
+  const trail = parts.trails.diagnostics();
+  assert.ok(trail.segments > 0);
+  assert.ok(trail.body);
+  assert.equal(trail.body.show, true);
+  parts.trails.update();
+  assert.equal(trail.body.show, true);
+  app.state()._vehicles.delete(entry.key);
+  parts.trails.update();
+  assert.equal(trail.body.show, false);
+  app.state()._vehicles.set(entry.key, entry);
+});
+
+test('selected draped history prepares geometry before surface heights resolve', async (t) => {
+  const app = harness(t, { floorAt: () => undefined });
+  app.layer.enable(app.viewer);
+  app.layer._loadTransitFleetForTest(1, BOSTON);
+  const entry = app.vehicles()[0], parts = app.layer._transitPartsForTest();
+  delete entry.qaFloorM;
+  entry.marker.show = false;
+  entry.heightPending = true;
+  // Exercise the real GroundPolylinePrimitive branch, without a WebGL context.
+  const width = Cesium.ContextLimits._maximumAliasedLineWidth;
+  Cesium.ContextLimits._maximumAliasedLineWidth = 1;
+  t.after(() => { Cesium.ContextLimits._maximumAliasedLineWidth = width; });
+  app.viewer.scene.frameState = { context: { depthTexture: true } };
+  app.viewer.scene.groundPrimitives = app.viewer.scene.primitives;
+  parts.selection.selectVehicle(entry.key);
+  const trail = parts.trails.diagnostics();
+  assert.equal(trail.ground, true);
+  assert.ok(trail.body instanceof Cesium.GroundPolylinePrimitive);
+  assert.ok(trail.segments > 0);
+  assert.equal(trail.body.show, true);
+  assert.equal(entry.displayPaths.size, 0, 'unresolved marker corridors remain unavailable');
+});

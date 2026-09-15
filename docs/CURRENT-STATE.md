@@ -2595,7 +2595,10 @@ ingestion, eviction uses receipt-ordered queues, and capacity loss is disclosed
 when history is recreated.
 
 **Surface and route limitations.** Heights are aligned to work with Google 3D
-tiles. Unknown historical surfaces leave gaps in a trail. Sparse reports can
+tiles. Draped history is prepared on selection even while marker floors are unresolved;
+Cesium resolves its surface. Without ground-polyline support, unknown historical
+surfaces leave gaps. A selected body follows layer enablement and vehicle existence,
+so an off-screen head does not hide an on-screen tail. Sparse reports can
 cut across corners; these paths are not surveyed route geometry. Subway markers
 are projected to street level because the feed does not provide depth, and the
 selected card explains that choice. Actual street-level views still require

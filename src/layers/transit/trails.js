@@ -65,6 +65,7 @@ export function createTrails({ state, services, parts, source }) {
       entry.trailSegments = [];
       entry.trailVertices = 0;
     }
+    const draped = entry === selected && ensureRenderer()?.diagnostics().ground;
     const paths = new Map(),
       all = [],
       a = {},
@@ -150,7 +151,11 @@ export function createTrails({ state, services, parts, source }) {
         heights.push(h);
         if (h === null) {
           valid = false;
-          positions.push(null);
+          // Ground polylines consume longitude/latitude and drape themselves.
+          // Unknown floors still disqualify the marker corridor.
+          positions.push(draped
+            ? Cesium.Cartesian3.fromDegrees(point.lon, point.lat)
+            : null);
         } else
           positions.push(
             Cesium.Cartesian3.fromDegrees(point.lon, point.lat, h),
@@ -158,8 +163,8 @@ export function createTrails({ state, services, parts, source }) {
       }
       signature += `${a.seq}/${b.seq}:${heights.join(',')};`;
       if (retainBody) vertices += n + 1;
-      if (!valid) continue;
-      paths.set(a.seq, { positions, toSeq: b.seq });
+      if (valid) paths.set(a.seq, { positions, toSeq: b.seq });
+      if (!valid && !draped) continue;
       if (entry === selected && retainBody && fixDistanceM(a, b) > 0) {
         for (let k = 0; k < n; k++)
           all.push({
@@ -230,7 +235,7 @@ export function createTrails({ state, services, parts, source }) {
   }
   function update() {
     if (!selected || !renderer) return;
-    renderer.setVisible(state._enabled && selected.marker?.show !== false);
+    renderer.setVisible(state._enabled && state._vehicles.get(selected.key) === selected);
     renderer.setDisplaySample(selected.sample, selected.marker?.position);
   }
   function select(entry) {
