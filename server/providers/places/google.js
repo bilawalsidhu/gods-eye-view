@@ -3,6 +3,7 @@ import {
   keylessGooglePlacesResponse,
 } from './google-key.js';
 import { makeOptInRateLimiter, clientKey } from '../common/rate-limit.js';
+import { admitSameSite } from '../common/same-site.js';
 import {
   projectNearbyPlaces,
   projectTextSearchPlaces,
@@ -56,6 +57,7 @@ export function googlePlacesContextProxy({
         res.end(JSON.stringify({ error: 'Method not allowed', places: [] }));
         return;
       }
+      if (admitSameSite(req, res)) return;
 
       // Keyless place context has no provider cost, so it resolves before the
       // paid-endpoint limiter can consume or exhaust quota (mirrors the HUD
