@@ -405,7 +405,12 @@ export async function sampleTransitPixels(page, palette) {
               widestBand = -1;
             const cosCore = Math.cos(s.rotation),
               sinCore = Math.sin(s.rotation);
-            for (const offset of [0, -0.1, 0.1, -0.2, 0.2]) {
+            // A tram's parallel sides have equally wide bands. Prefer its upper
+            // body band over the geometric centre when those widths tie.
+            const offsets = s.mode === 'tram'
+              ? [-0.2, 0.2, -0.1, 0.1, 0]
+              : [0, -0.1, 0.1, -0.2, 0.2];
+            for (const offset of offsets) {
               const candidates = [];
               let solid = true,
                 bandWidth = Infinity;
@@ -434,13 +439,11 @@ export async function sampleTransitPixels(page, palette) {
                   white(middle) ? right - left + 1 : 0,
                 );
               }
-              const step =
-                (bandWidth * s.rect.width) / s.raster.width <= 6 ? 0.5 : 1;
               for (let dx = -1; dx <= 1; dx++)
                 for (let dy = -1; dy <= 1; dy++) {
-                  const localY = dy * step + offset * s.rect.height;
+                  const localY = dy + offset * s.rect.height;
                   const rx = Math.floor(
-                    ((dx * step) / s.rect.width + 0.5) * s.raster.width,
+                    (dx / s.rect.width + 0.5) * s.raster.width,
                   );
                   const ry = Math.floor(
                     (localY / s.rect.height + 0.5) * s.raster.height,
@@ -450,8 +453,8 @@ export async function sampleTransitPixels(page, palette) {
                     solid = false;
                   candidates.push(
                     screenPoint(
-                      s.screenX + dx * step * cosCore + localY * sinCore,
-                      s.screenY - dx * step * sinCore + localY * cosCore,
+                      s.screenX + dx * cosCore + localY * sinCore,
+                      s.screenY - dx * sinCore + localY * cosCore,
                     ),
                   );
                 }

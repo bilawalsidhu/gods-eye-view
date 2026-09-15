@@ -2628,8 +2628,9 @@ with the centre minus sampled background reported without gating. Each preset ne
 six verified, unobscured sprites; insufficient coverage is UNEXERCISED.
 The sampler excludes overlapping footprints, including otherwise ineligible
 sprites, and chooses nine source-raster points in the widest solid white band, avoiding
-window/panel gaps. Narrow silhouettes use a half-pixel sampling step to stay inside
-the antialiased edges. The sampler then verifies pick ownership at all nine points.
+window/panel gaps. Equal-width tram bands prefer the upper solid body over the
+geometric centre; the nine-point spacing and all thresholds remain unchanged.
+The sampler then verifies pick ownership at all nine points.
 Noir samples also exclude its deliberately vignetted outer field, using shader
 settings and screen position rather than observed brightness. Selected-trail
 diagnostics report every condition even when selection fails.

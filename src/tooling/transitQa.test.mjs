@@ -462,6 +462,15 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
     'centre samples use the widest solid band',
   );
   raster.fill(255);
+  sampledLayer._transitStateForTest = () => {
+    const state = originalState();
+    state._vehicles.get('bus').mode = 'tram';
+    return state;
+  };
+  const tramStart = readRows.length;
+  assert.equal((await sampleTransitPixels(page, {})).length, 1);
+  assert.ok(readRows[tramStart] > 204, 'equal-width tram bands prefer the upper solid body');
+  sampledLayer._transitStateForTest = originalState;
   scene.pick = () => ({ id: 'overlapping-label' });
   assert.equal(
     (await sampleTransitPixels(page, {})).length,
