@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fsp } from 'node:fs';
 import { xweatherProxy } from 'gods-eye-view/server/providers/xweather';
-import { MAX_TILE_ZOOM } from 'gods-eye-view/sources/xweather';
+import {
+  DEFAULT_REFRESH_MS,
+  MAX_TILE_ZOOM,
+} from 'gods-eye-view/sources/xweather';
 
 /**
  * Mount the plugin and drive its single route directly — the harness shape
@@ -141,7 +144,11 @@ test('coordinates are validated before the key is ever read', async (t) => {
 });
 
 test('keyed: miss, hit, budget accounting, and the daily rollover', async (t) => {
-  isolate(t, { ...KEYED, XWEATHER_DAILY_TILE_BUDGET: '1' });
+  isolate(t, {
+    ...KEYED,
+    XWEATHER_DAILY_TILE_BUDGET: '1',
+    XWEATHER_TILE_TTL_MS: String(60 * 60 * 1000),
+  });
   let now = Date.UTC(2026, 8, 15, 12, 0, 0);
   t.mock.method(Date, 'now', () => now);
   let calls = 0;
@@ -251,7 +258,7 @@ test('the refresh cadence is configurable and floored', async (t) => {
 
   // A stray zero must not turn into a hot loop against a billable upstream.
   process.env.XWEATHER_REFRESH_MS = '0';
-  assert.equal(json(await request('/status')).refreshMs, 60 * 60 * 1000);
+  assert.equal(json(await request('/status')).refreshMs, DEFAULT_REFRESH_MS);
   process.env.XWEATHER_REFRESH_MS = '1';
   assert.equal(json(await request('/status')).refreshMs, 60 * 1000);
 });

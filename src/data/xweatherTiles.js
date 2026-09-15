@@ -33,14 +33,16 @@ export const MIN_TILE_ZOOM = 0;
 export const MAX_TILE_ZOOM = 9;
 
 /**
- * @const {number} Default refresh cadence, deliberately conservative.
+ * @const {number} Default refresh cadence: once a day.
  *
- * Xweather updates radar-global every two minutes, so this is far slower than
- * the data — an hourly tick can show a sweep up to an hour old. It starts here
- * because every tile is billable and the real call volume has to be measured
- * before choosing; `XWEATHER_REFRESH_MS` overrides it.
+ * Upstream updates every two minutes, so this is three orders of magnitude
+ * slower than the data, and deliberately. The monthly quota is the binding
+ * constraint here, not freshness: a daily refresh of every enabled layer for a
+ * whole month is the ceiling the layer set is chosen to fit inside. Anything
+ * more frequent is a decision to spend, so it is made explicitly — by asking
+ * for a refresh, or by setting `XWEATHER_REFRESH_MS` shorter on purpose.
  */
-export const DEFAULT_REFRESH_MS = 60 * 60 * 1000;
+export const DEFAULT_REFRESH_MS = 24 * 60 * 60 * 1000;
 
 /** @const {number} Floor on the configured cadence, so a stray 0 cannot hammer upstream. */
 export const MIN_REFRESH_MS = 60 * 1000;
