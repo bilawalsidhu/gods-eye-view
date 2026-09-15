@@ -1488,9 +1488,34 @@ GitForge pipeline green.
     is off), not a stretching defect; enabled-state paints size to the CSS
     box at the capped DPR. No fix needed; the 9.1 entry above stands
     corrected here.
-- [ ] **Batch A (hardening)**: add `Strict-Transport-Security` to
-  `public/_headers`; evaluate the CSP Report-Only → enforce flip using
-  the e2e run's console report counts as the quiet-cycle evidence.
+- [x] **Batch A (hardening)** — landed 2026-09-15:
+  - **CSP enforced** (`Content-Security-Policy-Report-Only` →
+    `Content-Security-Policy`), with stronger evidence than the planned
+    quiet-report cycle: a local enforcement pilot loaded the app with the
+    exact policy applied as ENFORCING (header-injected on the document via
+    request interception) and drove boot + all 17 data layers + all 5
+    styles + all 4 basemap stacks. Pass 1 surfaced 7 connect-src violations
+    — USGS earthquake feed (a direct browser fetch, the one unproxied live
+    layer), Cesium's Bing imagery path (`*.virtualearth.net`), and OSM
+    basemap tiles (Cesium loads imagery via `fetch`, so tile hosts bind to
+    connect-src as well as img-src). Pass 2 caught Bing's `http://` tile
+    URLs — closed with `upgrade-insecure-requests` rather than permitting
+    cleartext. Pass 3: zero violations, zero console CSP messages. Policy
+    now carries three new origins + the upgrade directive, each documented
+    in `_headers` with a maintenance contract for future origins.
+  - **HSTS added**: `Strict-Transport-Security: max-age=31536000;
+    includeSubDomains` (no `preload` — an irreversible registry commitment
+    left for an explicit operator decision; reasoning in the file).
+  - **Function responses get real security headers**: discovered via
+    `wrangler pages dev` that Cloudflare applies `_headers` to STATIC assets
+    only — every Pages Function response carried nothing but what it set
+    itself, so the `/api/*` rule's `X-Content-Type-Options: nosniff` was
+    aspiration. New `functions/_middleware.js` stamps
+    `API_SECURITY_HEADERS` (single-sourced from `functions/_lib.js`) onto
+    every function response, including binary passthroughs; the shared
+    `jsonResponse`/`rateLimitedResponse` helpers carry the same constant.
+    Verified on the dist artifact: shell has HSTS + enforced CSP; API
+    responses now answer with nosniff.
 - [ ] **Batches B/C/D (coverage waves)**: worst-module-first real tests
   (wave 1 pure logic: logoGaze, flowMatch, celestialRing, splitFlap;
   wave 2 proxies/functions: opensky, tomtomTiles, bikeshare,

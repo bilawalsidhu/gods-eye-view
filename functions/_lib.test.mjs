@@ -7,6 +7,7 @@ import {
   createDefaultOnRateLimiter,
   hostOf,
   jsonResponse,
+  API_SECURITY_HEADERS,
   makeOptInRateLimiter,
   makeRateLimiter,
   methodNotAllowed,
@@ -37,6 +38,13 @@ test('jsonResponse serializes with the documented content type and status', asyn
   const bare = jsonResponse({ a: 1 });
   assert.equal(bare.status, 200);
   assert.equal(bare.headers.get('Cache-Control'), null);
+});
+
+test('API responses carry the security headers (Pages _headers never reaches functions)', async () => {
+  assert.deepEqual(API_SECURITY_HEADERS, { 'X-Content-Type-Options': 'nosniff' });
+  const res = jsonResponse({ ok: true });
+  assert.equal(res.headers.get('X-Content-Type-Options'), 'nosniff');
+  assert.equal(rateLimitedResponse().headers.get('X-Content-Type-Options'), 'nosniff');
 });
 
 test('methodNotAllowed matches the dev middleware error shape', async () => {

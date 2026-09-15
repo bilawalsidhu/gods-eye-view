@@ -41,12 +41,30 @@
 
 # Global security headers
 #
-# Content-Security-Policy-Report-Only — the measurement phase before
-# enforcement. Report-Only means the browser blocks nothing; every violation
-# prints to the site console, so a production pilot surfaces any origin the
-# policy misses while the app keeps working. No report-uri yet: violations are
-# console-only until a collector endpoint exists. To enforce, copy the policy
-# to `Content-Security-Policy` once reports are quiet.
+# Content-Security-Policy — ENFORCED since 2026-09-15 (Phase 9 Batch A).
+# Evidence for the flip: the enforcement pilot
+# (local harness, headless Chrome) loaded the app with this exact policy
+# applied as ENFORCING and exercised the full surface — boot + all 17 data
+# layers + all 5 styles + all 4 basemap stacks — with ZERO violations and
+# zero console CSP messages. The pilot run before the fix surfaced 7
+# connect-src gaps (USGS feed, Cesium's Bing imagery path, OSM tiles via
+# fetch), each closed in the policy above rather than by relaxing to
+# Report-Only.
+#
+# Maintenance contract: when adding a new remote origin to the app (a direct
+# fetch, imagery host, or stream host), add it here in the SAME change as the
+# code, and verify locally with the pilot pattern — serve the app with the
+# enforcing header, drive the affected layer, confirm zero
+# securitypolicyviolation events. If a future policy change is risky,
+# temporarily deploy the new policy as an ADDITIONAL Report-Only line alongside
+# the enforced one and watch console output; never silently weaken the
+# enforced policy.
+#
+# Strict-Transport-Security — 1 year, includeSubDomains. Pages serves every
+# route over HTTPS, and the app's direct connects are all https, so this only
+# formalizes reality. `preload` deliberately omitted: submitting the domain to
+# the HSTS preload list is an effectively irreversible commitment that needs
+# an explicit operator decision, not a default.
 #
 # Directive notes (why each origin/scope is listed):
 # - default-src 'self'         — fallback; everything else degrades to same-origin.
@@ -70,7 +88,22 @@
 #                                or Pages Functions — 'self'); the direct
 #                                exceptions are the Google 3D tile pipeline,
 #                                Cesium ion, the OpenAI Realtime SDP exchange,
-#                                and the re:Earth terrain mesh.
+#                                the re:Earth terrain mesh, the USGS earthquake
+#                                feed (earthquakes.js fetches
+#                                earthquake.usgs.gov directly — the one live
+#                                layer with no proxy), Cesium's Bing imagery
+#                                path for the bing-aerial/bing-labels basemap
+#                                stacks (metadata + tiles from
+#                                *.virtualearth.net), and OSM basemap tiles —
+#                                Cesium loads imagery with fetch()
+#                                (preferImageBitmap), so tile hosts bind to
+#                                connect-src AS WELL AS img-src. All three
+#                                additions surfaced by the 2026-09-15
+#                                CSP-enforcement pilot (7 connect-src
+#                                violations, zero elsewhere), which loaded the
+#                                app with this policy ENFORCED and enabled all
+#                                17 layers, cycled all styles, and swept all
+#                                four basemap stacks.
 # - media-src https:           — radio streams play from arbitrary station
 #                                hosts (radio-browser data); CCTV video frames
 #                                are same-origin via /api/cctv/media.
@@ -79,6 +112,13 @@
 # - object-src 'none', base-uri 'self', form-action 'none',
 #   frame-ancestors 'none'     — hard restrictions with no legitimate use
 #                                (frame-ancestors mirrors X-Frame-Options: DENY).
+# - upgrade-insecure-requests   — Cesium's Bing imagery path requests tiles
+#                                over http:// (the metadata response carries
+#                                uriScheme=http); this rewrites those to
+#                                https:// at fetch time instead of widening
+#                                the policy to cleartext. virtualearth.net
+#                                serves https fine — pilot pass 3 confirmed
+#                                zero violations with the upgrade in place.
 /*
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
@@ -87,4 +127,5 @@
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: credentialless
   Cross-Origin-Resource-Policy: same-site
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com https://tile.openstreetmap.org https://*.ion.cesium.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.googleapis.com https://api.cesium.com https://*.ion.cesium.com https://api.openai.com https://terrain.reearth.land; media-src 'self' https:; worker-src 'self' blob:; child-src blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com https://tile.openstreetmap.org https://*.ion.cesium.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.googleapis.com https://api.cesium.com https://*.ion.cesium.com https://api.openai.com https://terrain.reearth.land https://earthquake.usgs.gov https://*.virtualearth.net https://tile.openstreetmap.org; media-src 'self' https:; worker-src 'self' blob:; child-src blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests

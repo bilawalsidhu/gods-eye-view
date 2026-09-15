@@ -20,9 +20,21 @@
  * @module functions/_lib
  */
 
-/** JSON response with the same headers the dev middlewares set. */
+/**
+ * Security headers every API response carries. Cloudflare Pages applies
+ * `public/_headers` to STATIC assets only — Pages Function responses set
+ * their own headers — so the nosniff the `/api/*` rule documents has to be
+ * set here to be real in production (verified via `wrangler pages dev`:
+ * function responses carried only what the function itself set). Stamped
+ * on every response by `functions/_middleware.js` and by the shared
+ * helpers below for anything that bypasses the middleware in tests.
+ */
+export const API_SECURITY_HEADERS = { 'X-Content-Type-Options': 'nosniff' };
+
+/** JSON response with the same headers the dev middlewares set, plus the
+ *  API security headers above. */
 export function jsonResponse(data, { status = 200, cacheControl = null } = {}) {
-  const headers = { 'Content-Type': 'application/json; charset=utf-8' };
+  const headers = { 'Content-Type': 'application/json; charset=utf-8', ...API_SECURITY_HEADERS };
   if (cacheControl) headers['Cache-Control'] = cacheControl;
   return new Response(JSON.stringify(data), { status, headers });
 }
@@ -243,6 +255,7 @@ export function rateLimitedResponse() {
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Retry-After': '5',
+      ...API_SECURITY_HEADERS,
     },
   });
 }
