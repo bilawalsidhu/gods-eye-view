@@ -8,6 +8,7 @@ import {
   PROVIDER_CACHE_DIR_NAME,
   providerCacheDir,
 } from '../../server/providers/common/cache-dir.js';
+import { RUNTIME_LOG_DIR_NAME } from '../../server/providers/openai/debug-log.js';
 
 /** Every provider module on disk, for source-level invariants. */
 function listProviderSources() {
@@ -106,10 +107,15 @@ test('the provider disk cache is kept out of the dev server watcher', () => {
   // Dev only: preview and build have no watcher to exclude anything from.
   assert.equal(plugin.apply, 'serve');
   const ignored = plugin.config().server.watch.ignored;
-  assert.ok(
-    ignored.some((glob) => glob.includes(PROVIDER_CACHE_DIR_NAME)),
-    `watcher must ignore ${PROVIDER_CACHE_DIR_NAME}, got ${ignored.join()}`,
-  );
+  // Every directory the server writes to while it runs, not just the caches:
+  // the voice debug log is appended to from the same process and starves the
+  // same requests it records.
+  for (const dir of [PROVIDER_CACHE_DIR_NAME, RUNTIME_LOG_DIR_NAME]) {
+    assert.ok(
+      ignored.some((glob) => glob.includes(dir)),
+      `watcher must ignore ${dir}, got ${ignored.join()}`,
+    );
+  }
 });
 
 test('every provider disk cache lives under the directory that is ignored', () => {

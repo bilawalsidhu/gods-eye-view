@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fsp } from 'node:fs';
+import path from 'node:path';
 import { xweatherProxy } from 'gods-eye-view/server/providers/xweather';
 import {
   DEFAULT_REFRESH_MS,
@@ -79,6 +80,80 @@ const KEYED = {
   XWEATHER_CLIENT_ID: 'fixture-id',
   XWEATHER_CLIENT_SECRET: 'fixture-secret',
 };
+
+// These two run before anything else in this file on purpose: the budget
+// flush is debounced, so a proxy built by an earlier test can still write
+// into the shared file a second later, and both tests below assert on that
+// file's exact contents.
+test('two servers sharing a checkout add up instead of overwriting', async (t) => {
+  // The account has one hard allowance, so the counter on disk has to be the
+  // account's total rather than a copy of whichever process wrote last. The
+  // flush reads it, adds only what this process has counted since its own
+  // last flush, and adopts the result.
+  isolate(t, KEYED);
+  let now = Date.UTC(2026, 8, 15, 12, 0, 0);
+  t.mock.method(Date, 'now', () => now);
+  t.mock.method(globalThis, 'fetch', async () => pngResponse());
+
+  // One file, both servers.
+  let file = null;
+  t.mock.method(fsp, 'readFile', async (target) => {
+    if (String(target).endsWith('budget.json') && file !== null) return file;
+    throw Error('no disk cache');
+  });
+  t.mock.method(fsp, 'writeFile', async (target, body) => {
+    if (String(target).endsWith('budget.json')) file = body;
+  });
+
+  const a = install(xweatherProxy());
+  const b = install(xweatherProxy());
+  // Distinct tiles, so neither is answered from the other's memory cache.
+  await a(tileUrl(4, 1, 1));
+  await a(tileUrl(4, 2, 1));
+  await b(tileUrl(4, 3, 1));
+
+  // Each server reports its own fetches before either has flushed.
+  assert.equal(json(await a('/status')).monthCount, 2);
+  assert.equal(json(await b('/status')).monthCount, 1);
+
+  // The debounce is one second; let both flushes land.
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  assert.equal(JSON.parse(file).count, 3, `shared total, file was ${file}`);
+
+  // And both now report the account's total, not their own share.
+  assert.equal(json(await a('/status')).monthCount, 3);
+  assert.equal(json(await b('/status')).monthCount, 3);
+});
+
+test('a failed budget write keeps the count for the next flush', async (t) => {
+  // Dropping it would spend against the allowance without recording it, which
+  // is the one direction the governor must never be wrong in.
+  const logs = [];
+  isolate(t, KEYED, logs);
+  t.mock.method(globalThis, 'fetch', async () => pngResponse());
+  let writable = false;
+  let file = null;
+  t.mock.method(fsp, 'readFile', async (target) => {
+    if (String(target).endsWith('budget.json') && file !== null) return file;
+    throw Error('no disk cache');
+  });
+  t.mock.method(fsp, 'writeFile', async (target, body) => {
+    if (!String(target).endsWith('budget.json')) return;
+    if (!writable) throw Error('disk full');
+    file = body;
+  });
+
+  const request = install(xweatherProxy());
+  await request(tileUrl(4, 4, 1));
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  assert.equal(file, null, 'the write failed');
+  assert.match(logs.join(' '), /budget write failed/);
+
+  writable = true;
+  await request(tileUrl(4, 5, 1));
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  assert.equal(JSON.parse(file).count, 2, 'both fetches survived');
+});
 
 test('construction acquires nothing', (t) => {
   t.mock.method(globalThis, 'fetch', () => {
@@ -324,6 +399,55 @@ test('pressing refresh gets new pixels, not the same ones again', async (t) => {
   // Garbage in the stamp is ignored rather than treated as "always refetch".
   assert.equal(await cache(`${tileUrl(4, 8, 5)}?t=nonsense`), 'HIT');
   assert.equal(calls, 2);
+});
+
+test('a full cache evicts the oldest tiles and leaves room before the next sweep', async (t) => {
+  // Paid tiles accumulate across every zoom the camera visits, so the cache
+  // has a ceiling. Trimming only back to that ceiling would put the next few
+  // writes over it again and re-read every file's size and age to find out —
+  // a sweep every fifty tiles, on the thread pool the fetches need.
+  isolate(t, { ...KEYED, XWEATHER_DISK_CACHE_BYTES: '1000' });
+  t.mock.method(globalThis, 'fetch', async () => pngResponse());
+
+  // 20 tiles of 100 bytes against a 1,000-byte ceiling: twice over.
+  const files = new Map();
+  for (let i = 0; i < 20; i += 1) {
+    files.set(`radar-global-4-${i}-0.png`, { size: 100, mtimeMs: 1000 + i });
+  }
+  t.mock.method(fsp, 'readdir', async () => [...files.keys()]);
+  t.mock.method(fsp, 'stat', async (target) => {
+    const entry = files.get(path.basename(String(target)));
+    if (!entry) throw Error('no such file');
+    return entry;
+  });
+  const unlinked = [];
+  t.mock.method(fsp, 'unlink', async (target) => {
+    const name = path.basename(String(target));
+    unlinked.push(name);
+    files.delete(name);
+  });
+
+  const request = install(xweatherProxy());
+  // The sweep runs every fiftieth write, in the background behind the response.
+  // Zoom 6, so all fifty x values are inside 2^6 and every one is a write.
+  for (let i = 0; i < 50; i += 1) await request(tileUrl(6, i, 0));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  assert.ok(unlinked.length > 0, 'an over-full cache must evict something');
+  const remaining = [...files.values()].reduce((n, e) => n + e.size, 0);
+  assert.ok(remaining <= 900, `must trim below the ceiling, left ${remaining}`);
+  assert.ok(remaining > 0, 'eviction must stop, not empty the cache');
+
+  // Oldest first: mtime is also how a tile's age is read, so the tile dropped
+  // is always the least recently refreshed.
+  assert.deepEqual(
+    unlinked,
+    unlinked
+      .slice()
+      .sort((a, b) => Number(a.split('-')[3]) - Number(b.split('-')[3])),
+    `evicted out of order: ${unlinked.join(', ')}`,
+  );
+  assert.equal(unlinked[0], 'radar-global-4-0-0.png', 'the oldest goes first');
 });
 
 test('every tile goes to one upstream host, so the connection is reused', async (t) => {

@@ -5,8 +5,17 @@ import fs from 'node:fs';
 
 const REALTIME_DEBUG_LOG_MAX_BYTES = 8 * 1024 * 1024;
 
+/**
+ * Directory the voice debug log is appended to, relative to the source root.
+ *
+ * Exported because the dev server has to keep its file watcher out of it:
+ * this log is appended to while the app runs, and a watcher reacting to each
+ * append competes for the thread pool with the requests being logged.
+ */
+export const RUNTIME_LOG_DIR_NAME = '.gev-logs';
+
 function createDebugLogHandler({ sourceRoot = defaultSourceRoot } = {}) {
-  const REALTIME_DEBUG_LOG_DIR = path.join(sourceRoot, '.gev-logs');
+  const REALTIME_DEBUG_LOG_DIR = path.join(sourceRoot, RUNTIME_LOG_DIR_NAME);
   const REALTIME_DEBUG_LOG_FILE = path.join(
     REALTIME_DEBUG_LOG_DIR,
     'realtime-conversations.jsonl',

@@ -71,12 +71,16 @@ const FIELD_ALPHA = 0.55;
  * panel marks it: `tag` goes on the chip where it is read at a glance, `note`
  * goes in the hover text where there is room to be exact.
  *
- * These are measured, not taken from the vendor's description. `null` means
- * global.
+ * Each one matches the coverage the vendor publishes for that layer, checked
+ * against tiles fetched at the edges. `null` means global.
  */
 const UNITED_STATES = Object.freeze({
   tag: 'US',
   note: 'United States only',
+});
+const CONTINENTAL_US = Object.freeze({
+  tag: 'US',
+  note: 'Continental United States only — not Alaska, Hawaii or the territories',
 });
 const NORTH_AMERICA = Object.freeze({
   tag: 'N.AM',
@@ -220,7 +224,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       label: 'Severe outlook',
       detail: 'SPC convective outlook',
       cadence: 'as issued',
-      coverage: UNITED_STATES,
+      coverage: CONTINENTAL_US,
     },
     {
       code: 'g',

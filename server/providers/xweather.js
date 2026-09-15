@@ -67,6 +67,8 @@ export function xweatherProxy() {
   const UPSTREAM_TIMEOUT_MS = 15000;
   /** Sweep the disk cache every N writes rather than on each one. */
   const PRUNE_EVERY_WRITES = 50;
+  /** Sweeps trim to this share of the ceiling, so the next one is far off. */
+  const PRUNE_TARGET_FRACTION = 0.9;
 
   /** @type {Map<string, {at:number, buf:Buffer}>} tile key `z/x/y` -> cached tile (kept past TTL for serve-stale). */
   const mem = new Map();
@@ -79,6 +81,14 @@ export function xweatherProxy() {
   let writesSincePrune = 0;
   /** @type {Promise<void>|null} the cache directory is created once, not per write. */
   let cacheDirReady = null;
+  /**
+   * Fetches counted since the last flush, and the UTC month they belong to.
+   * The month rides along because a delta that outlived a rollover belongs to
+   * a period that has already been paid for, and must not be added to this
+   * one's total.
+   * @type {{month: string|null, count: number}}
+   */
+  let pending = { month: null, count: 0 };
   /** @type {NodeJS.Timeout|null} pending debounced write of the counter. */
   let budgetFlush = null;
 
@@ -162,22 +172,49 @@ export function xweatherProxy() {
     }
   }
 
+  /** Read the shared total, or a fresh one for this month. */
+  async function readSharedBudget(month) {
+    try {
+      return normalizeXweatherBudget(
+        JSON.parse(await fsp.readFile(BUDGET_PATH, 'utf8')),
+        month,
+      );
+    } catch {
+      return normalizeXweatherBudget(null, month);
+    }
+  }
+
   /**
-   * Persist the counter at most once a second.
+   * Fold this process's new fetches into the shared total, at most once a
+   * second.
    *
-   * The count in memory is the one that governs; the file only has to survive
-   * a restart. Writing it per fetch would put two thread-pool operations in
-   * front of every tile, and losing a second of counting to a crash is much
-   * cheaper than that.
+   * The file is the account's total, not this process's copy of it: the flush
+   * reads it, adds only what has been counted since the last flush, and
+   * adopts the result. Two servers sharing a checkout therefore sum, where
+   * writing the in-memory figure wholesale would have each overwrite the
+   * other and under-report against a hard monthly allowance.
+   *
+   * Once a second rather than per fetch, because a read-modify-write on the
+   * thread pool in front of every tile is exactly the latency this proxy is
+   * careful to avoid. A crash costs at most a second of counting; a failed
+   * write costs nothing, since the delta is kept for the next attempt.
    */
   function persistBudget() {
     if (budgetFlush) return;
     budgetFlush = setTimeout(async () => {
       budgetFlush = null;
+      const month = xweatherUtcMonthKey();
+      const delta = pendingFor(month);
+      pending = { month, count: 0 };
+      if (!delta) return;
       try {
         await ensureCacheDir();
-        await fsp.writeFile(BUDGET_PATH, JSON.stringify(budget), 'utf8');
+        const shared = await readSharedBudget(month);
+        shared.count += delta;
+        budget = shared;
+        await fsp.writeFile(BUDGET_PATH, JSON.stringify(shared), 'utf8');
       } catch (err) {
+        pending.count += delta;
         console.warn(
           '[xweather-proxy] budget write failed:',
           redact(err?.message || err),
@@ -195,9 +232,15 @@ export function xweatherProxy() {
 
   /** Count one upstream fetch attempt against this month's budget. */
   function recordUpstreamFetch() {
-    currentBudget().count += 1;
+    const month = currentBudget().date;
+    if (pending.month !== month) pending = { month, count: 0 };
+    budget.count += 1;
+    pending.count += 1;
     void persistBudget();
   }
+
+  /** This process's unflushed contribution to the month asked about. */
+  const pendingFor = (month) => (pending.month === month ? pending.count : 0);
 
   /**
    * Cache file for one tile of one layer.
@@ -228,28 +271,37 @@ export function xweatherProxy() {
    * traffic cache this one cannot grow forever. Eviction is by mtime, which is
    * also how age is read, so the tile evicted is always the least recently
    * refreshed.
+   *
+   * A sweep reads every file's size and age, so it is deliberately rare:
+   * trimming only back to the ceiling would put the next fifty writes over it
+   * again and sweep again, which at a full cache is a sweep every fifty tiles.
+   * Trimming to a low-water mark buys roughly a tenth of the cache's worth of
+   * writes before the next one. The stats within a sweep run together, since
+   * the point of the sweep is to finish and release the thread pool.
    */
   async function pruneDisk() {
     const limit = diskCacheLimitBytes();
+    const floor = Math.floor(limit * PRUNE_TARGET_FRACTION);
     try {
       const names = (await fsp.readdir(CACHE_DIR)).filter((name) =>
         name.endsWith('.png'),
       );
-      const entries = [];
-      let total = 0;
-      for (const name of names) {
-        try {
-          const stat = await fsp.stat(path.join(CACHE_DIR, name));
-          entries.push({ name, at: stat.mtimeMs, size: stat.size });
-          total += stat.size;
-        } catch {
-          /* raced with another sweep */
-        }
-      }
+      const stats = await Promise.all(
+        names.map(async (name) => {
+          try {
+            const stat = await fsp.stat(path.join(CACHE_DIR, name));
+            return { name, at: stat.mtimeMs, size: stat.size };
+          } catch {
+            return null; // raced with another sweep
+          }
+        }),
+      );
+      const entries = stats.filter(Boolean);
+      let total = entries.reduce((sum, entry) => sum + entry.size, 0);
       if (total <= limit) return;
       entries.sort((a, b) => a.at - b.at);
       for (const entry of entries) {
-        if (total <= limit) break;
+        if (total <= floor) break;
         try {
           await fsp.unlink(path.join(CACHE_DIR, entry.name));
           total -= entry.size;
@@ -352,12 +404,19 @@ export function xweatherProxy() {
         const [urlPath, rawQuery = ''] = String(req.url || '').split('?');
 
         if (urlPath === '/status') {
-          const b = currentBudget();
+          // Read through to the shared file rather than reporting this
+          // process's share of it. The panel shows this number against a hard
+          // allowance, and status is asked for once a refresh, not once a
+          // tile, so the read costs nothing worth saving. The local count is
+          // the floor, in case the file cannot be read at all.
+          const month = xweatherUtcMonthKey();
+          const shared = await readSharedBudget(month);
+          const local = currentBudget();
           sendJson(200, {
             hasKey: hasCredentials(),
-            monthCount: b.count,
+            monthCount: Math.max(shared.count + pendingFor(month), local.count),
             budget: monthlyBudgetLimit(),
-            month: b.date,
+            month: local.date,
             refreshMs: refreshMs(),
           });
           return;
