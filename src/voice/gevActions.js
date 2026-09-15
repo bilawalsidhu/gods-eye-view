@@ -2017,7 +2017,14 @@ function nextIssPass(viewer, dataManager, args) {
     lonDeg = Cesium.Math.toDegrees(carto.longitude);
   }
   const minElevDeg = Number.isFinite(args.minElevationDeg) ? args.minElevationDeg : 10;
-  const result = dataManager?.layers?.get('satellites')?.module?.getNextIssPass?.({ latDeg, lonDeg, minElevDeg }) ?? { status: 'no-tle' };
+  const satellites = dataManager?.layers?.get('satellites')?.module;
+  const nextPass = (query) => satellites?.getNextIssPass?.(query) ?? { status: 'no-tle' };
+  // Prefer a naked-eye-visible pass (the tool contract); otherwise report the
+  // next pass with visible: false.
+  let result = nextPass({ latDeg, lonDeg, minElevDeg, requireVisible: true });
+  if (result.status === 'none') {
+    result = nextPass({ latDeg, lonDeg, minElevDeg });
+  }
   if (result.status === 'no-tle') {
     return {
       ok: false,
@@ -2042,6 +2049,7 @@ function nextIssPass(viewer, dataManager, args) {
     durationMin: Math.max(1, Math.round((pass.setMs - pass.riseMs) / 60000)),
     peakElevationDeg: Math.round(pass.maxElevDeg),
     riseDirection: compassDir(pass.riseAzDeg),
+    visible: Boolean(pass.visible),
   };
 }
 

@@ -3179,6 +3179,9 @@ test('ISS voice lookup uses the registered satellite instance', async () => {
     } } }]]),
   } });
   const result = await runner('next_iss_pass', { latitude: 30, longitude: -97, minElevationDeg: 15 });
-  assert.deepEqual(calls, [{ latDeg: 30, lonDeg: -97, minElevDeg: 15 }]);
+  assert.deepEqual(calls, [
+    { latDeg: 30, lonDeg: -97, minElevDeg: 15, requireVisible: true },
+    { latDeg: 30, lonDeg: -97, minElevDeg: 15 },
+  ]);
   assert.match(result.error, /No ISS pass above 15/);
 });

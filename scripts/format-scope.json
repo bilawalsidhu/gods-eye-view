@@ -382,6 +382,8 @@
   "src/layers/launches/model.js",
   "src/layers/launches/selection.js",
   "src/layers/launches/camera.js",
+  "src/data/satellitePass.js",
+  "src/data/satellitePass.test.mjs",
   "src/data/satellites.js",
   "src/data/rocketLaunches.js",
   "src/layers/satellites/source.test.mjs",
