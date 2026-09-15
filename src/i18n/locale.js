@@ -1,14 +1,14 @@
 // Locale identity for God's Eye View (i18n phase 1).
 //
 // English is the default-without-configuration, the ALWAYS-shipped fallback
-// catalog, and the compatibility baseline (docs/TRANSLATORS.md). It is the
-// only locale with a shipped catalog in this foundation change: additional
-// locales land as stacked follow-up PRs, one per locale, each following the
-// recipe in docs/TRANSLATORS.md. Which pair the app actually offers is
+// catalog, and the compatibility baseline (docs/TRANSLATORS.md). Neutral
+// international Spanish ('es') is the first follow-up locale and the default
+// secondary; further locales land as stacked PRs, one per locale, following
+// the recipe in docs/TRANSLATORS.md. Which pair the app actually offers is
 // configured at build/dev time through GEV_DEFAULT_LOCALE /
 // GEV_SECONDARY_LOCALE (vite.config.js client defines) and resolved here —
-// pair members are validated against the shipped catalogs, so while only
-// English ships the pair degenerates to en-only (a single EN button).
+// pair members are validated against the shipped catalogs, so a configured
+// secondary without a catalog degenerates the pair to en-only.
 // This module owns ONLY locale resolution and document language metadata —
 // catalogs and translation helpers live in src/i18n/index.js.
 
@@ -22,7 +22,7 @@ export const LOCALE_STORAGE_KEY = 'gev:locale:v1';
  * the UI and accepted during resolution. A locale PR appends its code here
  * alongside its catalogs (docs/TRANSLATORS.md) — nothing else flips shipping.
  */
-export const CATALOG_LOCALES = Object.freeze(['en']);
+export const CATALOG_LOCALES = Object.freeze(['en', 'es']);
 
 /**
  * Locale codes normalizeLocale folds regional variants for. Kept ahead of
@@ -38,11 +38,9 @@ export const DEFAULT_LOCALE = 'en';
 
 /**
  * Built-in pair used when no env/config shapes one, or a configured one is
- * unusable. English-only while English is the only shipped catalog: the
- * selector degenerates to a single EN button until a secondary locale PR
- * restores the built-in pair.
+ * unusable: English plus the first follow-up locale, Spanish.
  */
-const FALLBACK_PAIR = Object.freeze({ defaultLocale: 'en', secondaryLocale: 'en' });
+const FALLBACK_PAIR = Object.freeze({ defaultLocale: 'en', secondaryLocale: 'es' });
 
 /** Document metadata per normalizable locale code. All of them are LTR. */
 export const LOCALE_METADATA = Object.freeze({
@@ -99,7 +97,7 @@ function warnInvalidPair(rawDefault, rawSecondary) {
   if (import.meta.env?.DEV !== true) return;
   console.warn(
     `[i18n] unusable locale pair ${JSON.stringify(String(rawDefault))}/`
-    + `${JSON.stringify(String(rawSecondary))} — offering English only`,
+    + `${JSON.stringify(String(rawSecondary))} — falling back to en+es`,
   );
 }
 
@@ -112,10 +110,9 @@ function warnInvalidPair(rawDefault, rawSecondary) {
  * SHIPPING IS CATALOG-DRIVEN: both members must name a locale in
  * CATALOG_LOCALES. An unknown code, an unshipped code (a locale PR not yet
  * merged), or a degenerate pair (the same locale twice) returns the built-in
- * pair instead, and a dev-only console.warn explains why — except when the
- * raw values already ARE the built-in pair, which is the normal unconfigured
- * state and must stay silent. While English is the only shipped catalog the
- * built-in pair is en-only, so the selector renders a single EN button.
+ * en+es pair instead, and a dev-only console.warn explains why — except when
+ * the raw values already ARE the built-in pair, which is the normal
+ * unconfigured state and must stay silent.
  *
  * availableLocales is the deduped [default, secondary, 'en'] triple — English
  * is always shippable because its catalog is the unconditional fallback.
@@ -238,9 +235,9 @@ export function writeStoredLocale(locale, storage) {
  *
  * Every step only accepts locales in the configured pair (which always
  * includes English); each step that yields nothing (absent or out-of-pair)
- * defers to the next. Without env configuration the built-in pair is en-only
- * (English is the only shipped catalog), so every step resolves English —
- * byte-identical to the pre-configuration resolution chain.
+ * defers to the next. Without env configuration the pair is the built-in
+ * en+es and the configured default is English, byte-identical to the
+ * pre-configuration resolution chain.
  * @param {object} [input]
  * @param {{search?: string, href?: string}|null} [input.location] Location to read ?lang= from.
  * @param {object|null} [input.storage] Injected localStorage-like store; `undefined` uses the global.

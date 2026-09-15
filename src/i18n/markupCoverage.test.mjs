@@ -107,10 +107,9 @@ test('every offered locale has a shell.locale.<code>.ariaLabel in every catalog;
     assert.equal(catalog['shell.locale.spanish.ariaLabel'], undefined,
       'the replaced phase-2 spanish.ariaLabel key stays deleted');
   }
-  // Default configuration pins the pair the shipped build offers: en-only
-  // while English is the only shipped catalog (the selector renders a single
-  // EN button; each secondary-locale PR widens this pin).
-  assert.deepEqual([...availableLocales()], ['en']);
+  // Default configuration pins the pair the shipped build offers (en+es;
+  // each further locale PR widens this pin).
+  assert.deepEqual([...availableLocales()], ['en', 'es']);
 });
 
 test('ui.js _initLocaleSelector renders the configured pair (runtime contract)', () => {

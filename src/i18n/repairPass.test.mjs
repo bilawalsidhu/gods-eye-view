@@ -6,8 +6,8 @@
 // The eleven es one-string fixes are pinned so a future edit cannot silently
 // reintroduce a reviewed defect. Cross-module anchors (keySetupCore registry)
 // catch catalog/registry drift in either direction. Further locales pin
-// their anchors in their own PRs; the English layout contract (no
-// locale-scoped CCTV wrap rule ahead of its locale) stays here.
+// their anchors in their own PRs; the es-scoped CCTV wrap rule is pinned
+// here (base rule unwrapped, English pixels identical).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -88,13 +88,13 @@ test('the eleven reviewed es one-string fixes stay fixed', () => {
   assert.equal(es['setup.scenes.recipe.omnisciencePullback'], 'Alejamiento omnisciente');
 });
 
-test('the English CCTV control rows stay unwrapped until a locale demonstrably clips', () => {
-  // The es wrap rule lands with the Spanish presentation commit; until then
-  // the base rule must stay unwrapped so English pixels are unchanged, and no
-  // html[lang] override may ship ahead of its locale's measured need.
+test('the es CCTV clip fix is scoped to html[lang="es"] and leaves the base rule unwrapped', () => {
   const css = readFileSync(new URL('../../src/ui/styles/cctv.css', import.meta.url), 'utf8');
   const baseStart = css.indexOf('.cctv-controls {');
   const baseBody = css.slice(baseStart, css.indexOf('}', baseStart));
   assert.ok(!baseBody.includes('flex-wrap'), 'base .cctv-controls must stay unwrapped (EN pixel-identical)');
-  assert.ok(!/html\[lang=/i.test(css), 'no locale-scoped CCTV rule may ship before its locale does');
+  const scoped = css.indexOf("html[lang='es'] .cctv-controls {");
+  assert.ok(scoped > baseStart, 'es-scoped wrap rule present');
+  const scopedBody = css.slice(scoped, css.indexOf('}', scoped));
+  assert.ok(scopedBody.includes('flex-wrap: wrap'));
 });
