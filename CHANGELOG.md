@@ -3,30 +3,11 @@
 - Separate application-shell responsibilities and state ownership while preserving
   the layer, scene and voice API. Revoke pending globe-reset callbacks on disposal
   and detach old Directions services when replacing a data manager.
-- Sample transit sensor centres inside the widest solid silhouette band, preserving all contrast thresholds.
-
-- Write Cesium transit trail attribute copies back correctly so completed history actually draws; add a two-second camera-arrival pixel regression.
-
-- Prepare selected draped transit history before floor resolution and retain its visible tail when the marker leaves the view.
-
-- Recover transit markers on camera arrival within the visibility refresh interval, including a newly loaded surface.
+- Transit: keep the normal vehicle silhouettes under NVG, thermal and noir (opaque white, CRT sizing, a 2 px dark halo) instead of solid bodies; drape the selected vehicle's trail onto Google 3D tiles and terrain so retained history is actually visible, with the head clipped to the sprite and markers recovering as soon as the camera arrives; place Transit in the Movement panel between Street Traffic and Bike Share.
 
 - Extract a portable Director shot runner and connect existing scene playback to
   it. Preserve authored content, project files, camera/layer behavior and source
   attribution; document the planned timeline, scene-file and data-pack boundaries.
-- Read fractional transit sample coordinates from the correct framebuffer row.
-
-- Strengthen sensor halos to 2 px for bright roofs while retaining normal silhouettes and CRT body sizing.
-
-- Isolate the selected-trail pixel fixture from live CapMetro fleet replacement.
-
-- Place Transit in the Movement panel between Street Traffic and Bike Share.
-
-- Require stable repeated off/on transit trail captures outside the sprite footprint, reject changing backgrounds, and measure upload budgets after final Cesium geometry batching.
-
-- Preserve transit markers between sparse rail reports by bounding corridor subdivisions independently of retained trail geometry.
-
-- Keep selected transit trail bodies and heads classified on terrain and 3D tiles across map-source changes.
 
 - Separate map-feature acquisition from annotation/search selection. Move road and mapped-installation decoding into source adapters while preserving geometry policy, cancellation, retry outcomes and compatibility exports.
 
@@ -106,13 +87,11 @@
 - Allow compatible endpoints and server-selected models through construction options.
 - Cancel pending token/SDP requests on Stop or teardown and reject expired secrets.
 
-
 ## Configurable geospatial services
 
 - Compose geocoding, place context and routes through independent providers.
 - Allow compatible endpoint configuration without changing voice tools or annotation behavior.
 - Isolate configured source caches and reject results after cancellation.
-
 
 ## ALPR camera locations
 
@@ -310,7 +289,6 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   Subways are projected to street level and their cards explain that choice.
   Visible animation, detection membership, history storage and proxy requests
   are bounded. Share links carry Transit as token `j`.
-  Restore slim sensor sprites, drape visible trails on Google 3D tiles, and place Transit directly above Bikeshare.
 
 - Add Ontario 511 as a keyless CCTV source pack, including Kitchener-area
   highway cameras, with server-registered still URLs and attribution.
@@ -343,7 +321,6 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 - Press backtick (`) to toggle a rendered-frame-rate readout beneath the logo.
   Typing fields retain the key; monitoring stops when hidden.
-
 
 - Extract vessel feed, store, rendering, selection, trail and card components with explicit source and scene services.
 - Bound contact retention for incomplete vessel observations, preserve source freshness and refresh history references in place.
@@ -428,9 +405,7 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Bound CCTV media response headers to 15 seconds and cancel error bodies.
   Cap buffered snapshot downloads at 16 MiB while streaming.
 
-
 - Cancel the active location lookup when its controls are disposed.
-
 
 ### Fixed
 
@@ -482,7 +457,6 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - GBFS rejects upstream redirects, caps streamed responses at 5 MiB, and keeps
   its deadline active through body reads. Rejected downloads are cancelled.
 
-
 - Split Overpass/installation search, regional briefing/weather, local voice
   handlers and standalone key setup into focused modules. Preserve routes,
   source behavior, tool schemas and credential restrictions.
@@ -511,7 +485,6 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Split aircraft and vessel server providers into focused modules for source
   fetching, AIS records/tracks and shared request helpers; preserve existing
   routes, local setup, fallback behavior and rendering.
-
 
 ### Added
 
@@ -555,7 +528,6 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   and local provider middleware. Preserve provider behavior and root named exports.
 - Rename standalone browser startup to `src/standalone/` and add a Node-only
   `gods-eye-view/build/vite` export with checked package ownership.
-
 
 ### Development
 
@@ -614,7 +586,6 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   explicitly selects its measured 2D billboard mode and keeps its mesh and terrain assertions; software runs are not real-GPU evidence.
   First-run QA now checks the existing attribution Escape-close/focus-return
   behavior while preserving the launcher-underneath regression checks.
-
 
 - Datacenter and dam factories are available through scoped package exports with
   explicit context, overlay and render callbacks. The standalone app uses the
@@ -778,6 +749,7 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 ## [0.1.0] — 2026-08-31 — One-click install, keyless boot, Provider Settings
 
 ### Added
+
 - **One-click install** via Pinokio. Keyless boot lands on a live Esri World
   Imagery satellite globe with keyless terrain; OSM takes over automatically if
   Esri is unreachable, and the globe continues without terrain if its source is
@@ -793,6 +765,7 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   test suite out of the box (#81 — thanks @ethanstoner).
 
 ### Changed
+
 - README rewritten keyless-first around the provider ladder: zero keys → free
   Cesium ion (eligible personal, non-commercial use) → billing-enabled Google
   Maps.
@@ -802,6 +775,7 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   and say so plainly when enrichment is unavailable instead of guessing.
 
 ### Security
+
 - Provider Settings answers only local, unproxied requests and disables itself
   entirely whenever the server is shared. Public datacenter and dam datasets
   omit contact-oriented fields (see the dataset READMEs).
