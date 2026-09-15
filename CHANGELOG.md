@@ -215,6 +215,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Added
 
+- Add a keyless **Wind** layer from NOAA GFS 10 m wind. The `/api/wind` proxy
+  byte-range fetches only the UGRD/VGRD GRIB2 messages from the public AWS bucket,
+  decodes them with ecCodes (WASM), and serves a compact Float32 U/V grid; the
+  client renders nullschool-style animated particles in a canvas overlay that
+  follows the Cesium camera and skips globe-occluded points. Forecast, not
+  observations. Requires Node ≥24 for the WASM decoder.
 - Two map-orientation controls sit beside Share in the top-center globe
   actions. Tilt Map swings between a straight-down map and a 35-degree oblique
   around the point under the centre of the view, keeping that point and the

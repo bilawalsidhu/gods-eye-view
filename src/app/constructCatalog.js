@@ -18,6 +18,7 @@ import { createApplicationAwareness } from './layers/militaryAwareness.js';
 import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationCables } from './layers/submarineCables.js';
+import { createWindLayer } from '../data/wind.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 
@@ -131,6 +132,9 @@ export function createApplicationCatalog({
           source: 'NASA FIRMS · LIVE',
           feed: sources.firms,
         }),
+        // A fresh instance per catalog: the catalog contract requires distinct
+        // layer objects across constructions, which a module singleton breaks.
+        createWindLayer(),
       ],
       metadata,
     );
