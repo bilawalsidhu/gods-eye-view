@@ -131,6 +131,15 @@
     "modules": ["server/providers/firms.js", "src/data/firmsCsv.js"],
     "external": []
   },
+  "goes-fires-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/goes-fires"],
+    "modules": [
+      "server/providers/goes-fires.js",
+      "server/providers/goes/fireGrid.js"
+    ],
+    "external": ["h5wasm", "h5wasm/node"]
+  },
   "gbfs-provider": {
     "runtime": "node",
     "exports": ["./server/providers/gbfs"],
