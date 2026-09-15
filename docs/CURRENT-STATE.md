@@ -17,45 +17,7 @@ Google, OSRM and Nominatim adapters accept trusted construction-time configurati
 request parameters cannot choose arbitrary upstream URLs. See APPLICATION.md.
 
 
-The optional **Precipitation** layer is the first data layer to own Cesium imagery
-rather than entities. It draws a zoom-banded precedence stack: Environment and
-Climate Change Canada's GDPS global model covers the globe, and an Iowa
-Environmental Mesonet NEXRAD composite replaces it over the lower 48 past tile
-level 3. Cesium resolves the
-handover from each placement's rectangle and level band, so no camera listener
-runs. The two level bands are derived from one ceiling and never overlap, so
-exactly one tier is drawn at any zoom — a coarse 15 km wash sitting on top of
-1 km radar was the alternative. Three placements are used. The model draws globally to tile level 3; past that
-a second model placement continues everywhere except a cutout matching the radar
-footprint, and the radar fills that cutout. Exactly one source paints any point,
-and zooming in never leaves a region blank — outside the lower 48 the model
-simply keeps going. GeoMet renders GDPS in roughly 42 km blocks under its default
-palette, which is why the continuous ramp matters: it brings the cells back to
-near the native 15 km, coarse but usable at country zoom. The cutout's edge is a
-straight line, so the handover between model and radar is visible where it
-crosses the frame; both sides carry data, so it reads as a change of source
-rather than a hole. The inlay's footprint ends on a straight
-boundary — Cesium exposes no
-per-pixel or per-tile alpha for imagery layers, and its type definition's
-function-valued `alpha` reaches the globe shader as a corrupt float uniform —
-so the continuous model underneath is what keeps that edge from reading as a
-hole. An earlier revision punched a
-matching cutout in the model so only one source could paint a pixel; that read
-as precipitation being sliced away where the cutout crossed populated coast and
-left holes wherever radar was silent, so the model now carries underneath.
-`MapSourceController` still owns the base map at index 0; this layer
-only appends and only removes handles it added, so a base-map switch leaves the
-overlay intact. **GDPS is a model, not an observation**: it runs twice daily, so
-the field valid now is a forecast roughly +5 to +16 hours out. The count slot carries the
-forecast lead (`+6H`) so the row states the field's trustworthiness without 
-running longer than any other layer's; the run and valid step are not
-repeated there. The two tiers also refresh independently — the model hourly,
-the radar every five minutes — and the layer polls at the shorter of the two. A
-photoreal map stack hides the globe and every imagery layer with it, so the row
-then reports `UNAVAILABLE · GLOBE HIDDEN IN 3D` instead of looking healthy while
-drawing nothing. Both services are keyless, CORS-open and read directly from the
-browser with no proxy. Layer state and the existing voice layer tools include
-`precipitation`.
+The optional **Precipitation** layer is the only data layer that owns Cesium imagery rather than entities, and the only one with no keyless path. It draws a single observed source at every zoom: Vaisala Xweather `radar-global`, ground radar with satellite-derived fill where no radar reaches, through a `UrlTemplateImageryProvider` pointed at the app's own `/api/xweather` proxy. The credentials never reach the browser — the vendor puts both halves in the upstream URL path — so the server fetches, caches and meters every tile, and `GET /api/xweather/status` reports `{hasKey, dailyCount, budget, refreshMs}`. It replaced a four-placement blend of two ECCC forecast models and an IEM radar inlay, tiled by hand-derived rectangle covers so exactly one of them painted any point; all of that machinery went with the models, because none of it fixed the actual defect — a twice-daily global model is a +3h to +15h forecast, and a forecast half a day old does not agree with live radar. `MapSourceController` still owns the base map at index 0; this layer only appends and only removes handles it added. The count slot reads `LIVE` because an observation has no forecast lead to report. A photoreal map stack hides the globe and every imagery layer with it, so the row then reports `UNAVAILABLE - GLOBE HIDDEN IN 3D`, and coming back redraws from the held frame without re-polling — which on a metered source also means without re-billing. Requests stop at tile level 9, where the service runs out of real detail and starts charging for upsampled blur. Layer state and the existing voice layer tools include `precipitation`.
 
 The optional **ALPR Cameras** layer shows community-mapped OpenStreetMap locations,
 not camera footage or plate records. City-scale queries use the existing Overpass

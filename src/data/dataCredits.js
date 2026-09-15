@@ -67,19 +67,10 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
-    key: 'eccc-geomet',
+    key: 'xweather',
     html:
-      'Precipitation (models): Environment and Climate Change Canada — ' +
-      'MSC GeoMet GDPS and RDPS ' +
-      '(<a href="https://eccc-msc.github.io/open-data/msc-geomet/readme_en/" target="_blank" rel="noopener">eccc-msc.github.io</a>). ' +
-      'Contains information licensed under the Open Government Licence – Canada',
-  },
-  {
-    key: 'iem-nexrad',
-    html:
-      'Precipitation (US radar): Iowa Environmental Mesonet composite of ' +
-      'NWS WSR-88D level III base reflectivity ' +
-      '(<a href="https://mesonet.agron.iastate.edu" target="_blank" rel="noopener">mesonet.agron.iastate.edu</a>)',
+      'Precipitation (global observed radar): ' +
+      '<a href="https://www.xweather.com/" target="_blank" rel="noopener">Powered by Vaisala Xweather</a>',
   },
   {
     key: 'overpass',

@@ -2,6 +2,20 @@
 
 ## Precipitation layer
 
+- Replace every free precipitation source with Vaisala Xweather `radar-global`,
+  a single observed global radar mosaic, because the models it blended were +3h
+  to +15h forecasts that disagreed with live radar about where the rain was.
+- Proxy the tiles through the app's own server: the vendor authenticates by
+  putting the client id and secret in the tile URL path, so the browser must
+  never build that URL, and every server log line is scrubbed of the credential.
+- Meter and bound the metered source — a daily budget governor that serves stale
+  rather than going dark, a bounded oldest-first disk cache, and a server-set
+  refresh cadence chosen from measured call volume.
+- Stop requesting tiles past level 9, measured as the level where the service
+  stops resolving detail and begins charging for upsampled blur.
+- Report `UNAVAILABLE - ADD XWEATHER KEY` without a key rather than an empty
+  globe, which would read as no rain anywhere. This layer has no keyless mode.
+
 - Render the model with GeoMet's continuous palette rather than its eight-class
   default, which merged neighbouring cells into flat plateaus.
 - Add an optional **Precipitation** layer: ECCC GDPS global modelled precipitation

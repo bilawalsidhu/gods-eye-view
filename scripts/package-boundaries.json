@@ -724,6 +724,7 @@
   "precipitation-layer": {
     "exports": ["./layers/precipitation"],
     "modules": [
+      "src/data/xweatherTiles.js",
       "src/layers/precipitation/imagery.js",
       "src/layers/precipitation/index.js",
       "src/layers/precipitation/model.js",
@@ -1203,6 +1204,7 @@
       "src/data/trafficQueue.js",
       "src/data/trailRenderer.js",
       "src/data/vesselLabels.js",
+      "src/data/xweatherTiles.js",
       "src/firstRunExperience.js",
       "src/hud.js",
       "src/hudLocality.js",

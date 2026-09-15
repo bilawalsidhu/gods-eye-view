@@ -1,6 +1,12 @@
 import { createImageryStack } from './imagery.js';
-import { leadLabel } from './model.js';
-import { LAYER_ID, MODEL_REFRESH_MS, PRECIPITATION_TIERS } from './policy.js';
+import { isNoKeyError } from './model.js';
+import {
+  FALLBACK_REFRESH_MS,
+  LAYER_ID,
+  LAYER_TICK_MS,
+  OBSERVED_LABEL,
+  PRECIPITATION_TIERS,
+} from './policy.js';
 
 export * from './model.js';
 export * from './policy.js';
@@ -47,6 +53,10 @@ export function createPrecipitationLayer({
   let _hidden = false;
   let _lastUpdate = null;
   let _lastError = null;
+  // Distinct from _lastError on purpose: "the server has no credential" is a
+  // standing state an operator can fix, while "the probe failed" may be a
+  // passing fault. They read identically from outside and must not be merged.
+  let _noKey = false;
 
   // Shared by disable and destroy: an arrow-bound `this` would be undefined in
   // one of the two call paths.
@@ -76,13 +86,18 @@ export function createPrecipitationLayer({
       request.signal.aborted || _request !== request || !_enabled || _hidden;
     try {
       const now = Date.now();
-      // Radar turns over in minutes and the model in hours, so work out what
-      // is actually due. Anything whose frame is still held but whose imagery
-      // went away with the globe is simply redrawn — no request at all.
+      // Work out what is actually due. Anything whose frame is still held but
+      // whose imagery went away with the globe is simply redrawn — no request,
+      // and so nothing billed.
       const due = [];
       let redrawn = 0;
       for (const tier of tiers) {
-        const cadence = tier.refreshMs ?? MODEL_REFRESH_MS;
+        // The server owns the cadence — it is tuned against a billable quota —
+        // so once a frame has been read, its value wins over the table's.
+        const cadence =
+          frames.get(tier.id)?.refreshMs ??
+          tier.refreshMs ??
+          FALLBACK_REFRESH_MS;
         const stale = now - (polledAt.get(tier.id) ?? -Infinity) >= cadence;
         const held = frames.get(tier.id);
         if (stale || !held) {
@@ -94,11 +109,8 @@ export function createPrecipitationLayer({
         redrawn += 1;
       }
 
-      // One request per capabilities read, all in flight at once. Sequential
-      // awaits meant a single dead service threw and every tier listed after
-      // it never drew; settling them independently keeps an outage local to
-      // the source that has it. Placements resolving to the same capsKey
-      // still share one read.
+      // One request per distinct read, all in flight at once, settling
+      // independently so one dead source cannot stop the others drawing.
       const reads = new Map();
       for (const tier of due)
         if (!reads.has(tier.capsKey)) reads.set(tier.capsKey, tier);
@@ -135,9 +147,13 @@ export function createPrecipitationLayer({
       }
 
       if (refreshed || redrawn) _lastUpdate = Date.now();
-      // One source failing among many is a gap in coverage, not a broken
-      // layer, so it only reaches the row when nothing is drawn at all. What
-      // an outage does show is age: lastUpdate stops advancing.
+      // A missing key is latched separately, and only cleared by a read that
+      // succeeds — otherwise the row would flicker between "add a key" and a
+      // generic error as ticks failed for different reasons.
+      if (refreshed) _noKey = false;
+      else if (failure && isNoKeyError(failure)) _noKey = true;
+      // An outage only reaches the row when nothing is drawn at all; what it
+      // always shows is age, since lastUpdate stops advancing.
       _lastError = stack.size ? null : failure?.message || _lastError;
       // A tick with nothing due is a healthy tick, not a failed refresh.
       return stack.size > 0 || due.length === 0;
@@ -163,11 +179,11 @@ export function createPrecipitationLayer({
     id: LAYER_ID,
     name: 'Precipitation',
     icon: '🌧',
-    source: 'ECCC GeoMet · IEM NEXRAD',
-    // Poll at the shortest tier cadence; each tier then refreshes on its own.
-    updateInterval: Math.min(
-      ...tiers.map((tier) => tier.refreshMs ?? MODEL_REFRESH_MS),
-    ),
+    source: 'Vaisala Xweather',
+    // Tick at the floor, not the refresh cadence: the cadence is a server
+    // setting that can change without a rebuild, and the gating above decides
+    // whether a tick does any work. A tick with nothing due is a comparison.
+    updateInterval: LAYER_TICK_MS,
 
     init(viewer) {
       if (_viewer)
@@ -177,6 +193,7 @@ export function createPrecipitationLayer({
       _hidden = false;
       _lastUpdate = null;
       _lastError = null;
+      _noKey = false;
       console.log('[Data:Precipitation] Initialized');
     },
 
@@ -198,6 +215,7 @@ export function createPrecipitationLayer({
       clearImagery(viewer);
       forget();
       _lastError = null;
+      _noKey = false;
     },
 
     async update(viewer) {
@@ -216,6 +234,7 @@ export function createPrecipitationLayer({
       _hidden = false;
       _lastUpdate = null;
       _lastError = null;
+      _noKey = false;
     },
 
     getStats() {
@@ -226,6 +245,16 @@ export function createPrecipitationLayer({
           lastUpdate: _lastUpdate,
           status: 'unavailable',
           error: 'GLOBE HIDDEN IN 3D',
+        };
+      // There is no keyless mode. Without a credential the layer cannot draw
+      // at all, so it says so plainly rather than sitting on an empty globe
+      // looking healthy — 'unavailable' is what turns the row red.
+      if (_noKey)
+        return {
+          count: 0,
+          lastUpdate: _lastUpdate,
+          status: 'unavailable',
+          error: 'ADD XWEATHER KEY',
         };
       const primary =
         tiers.find(
@@ -238,10 +267,10 @@ export function createPrecipitationLayer({
         return { count: 0, lastUpdate: _lastUpdate, error: _lastError };
       return {
         count: 0,
-        // An imagery layer counts nothing. The forecast lead goes in the count
-        // slot because it is the one number that says how much to trust the
-        // field, and it keeps the meta line as short as every other layer's.
-        countLabel: leadLabel(frame),
+        // An imagery layer counts nothing, and an observation has no forecast
+        // lead to report, so the slot says what kind of field this is. It also
+        // keeps the meta line as short as every other layer's.
+        countLabel: OBSERVED_LABEL,
         lastUpdate: _lastUpdate,
         error: _lastError,
       };

@@ -178,7 +178,7 @@ const CREDIT_EXPECTATIONS = {
   'local-firms': /FIRMS/i,
   'telegeography-submarine-cables': /TeleGeography/i,
   'local-neighborhoods': /DataSF|San Francisco/i,
-  precipitation: /Environment and Climate Change Canada|GeoMet/i,
+  precipitation: /Xweather|Vaisala/i,
   'weather-effects': /Open-Meteo/i,
 };
 
@@ -884,6 +884,40 @@ check({
 });
 
 check({
+  id: 'B10b', group: 'B', desc: 'Xweather radar serves tiles and accounts for them', needsKey: 'XWEATHER',
+  run: async () => {
+    const r = await jget('/api/xweather/status');
+    if (!r.ok) return fail(`HTTP ${r.status}`);
+    if (!r.json?.hasKey) return fail('status says hasKey=false on a server that reported an Xweather key');
+    const before = r.json.dailyCount;
+    const tile = await jget('/api/xweather/radar/2/1/1.png');
+    if (tile.status !== 200) return fail(`tile HTTP ${tile.status} ${tile.text.slice(0, 60)}`);
+    const after = (await jget('/api/xweather/status')).json?.dailyCount;
+    // A cache HIT legitimately leaves the counter alone; what must never
+    // happen is billing without serving, or serving without ever counting.
+    return Number.isFinite(after) && after >= before
+      ? pass(`tile 200, used ${after}/${r.json.budget} today, refresh ${r.json.refreshMs}ms`)
+      : fail(`dailyCount went backwards: ${before} -> ${after}`);
+  },
+});
+
+check({
+  id: 'B11b', group: 'B', desc: 'Xweather without a key says so and draws nothing (200 hasKey:false)',
+  run: async () => {
+    const guard = keyGuard('XWEATHER', env.keys.XWEATHER);
+    if (guard) return guard;
+    if (env.keys.XWEATHER === true) return skip('server HAS an Xweather key', 'N/A');
+    const r = await jget('/api/xweather/status');
+    const tile = await jget('/api/xweather/radar/2/1/1.png');
+    // Unlike traffic there is no keyless fallback here, so the honest answer
+    // is a refusal the layer can name, not a quiet empty overlay.
+    return r.ok && r.json?.hasKey === false && tile.status === 503 && tile.json?.error === 'no_key'
+      ? pass('status 200 hasKey:false; radar tile 503 no_key')
+      : fail(`status=${r.status} hasKey=${r.json?.hasKey}; tile=${tile.status} ${tile.text.slice(0, 60)}`);
+  },
+});
+
+check({
   id: 'B11', group: 'B', desc: 'TomTom without a key identifies SIMULATION honestly (200 hasKey:false)',
   run: async () => {
     const guard = keyGuard('TOMTOM', env.keys.TOMTOM);
@@ -1023,7 +1057,7 @@ check({
 check({
   id: 'B21', group: 'B', desc: 'No proxy echoes credential material back to the client (P1-5 acceptance #4)',
   run: async () => {
-    const paths = ['/api/cctv/sources', '/api/tomtom/status', '/api/firms/status', '/api/celestrak/stations', '/api/ais-live'];
+    const paths = ['/api/cctv/sources', '/api/tomtom/status', '/api/xweather/status', '/api/firms/status', '/api/celestrak/stations', '/api/ais-live'];
     const leaked = [];
     const unscannable = [];
     for (const p of paths) {
@@ -2071,6 +2105,7 @@ async function preflight() {
   };
   env.keys.FIRMS = await statusKey('/api/firms/status');
   env.keys.TOMTOM = await statusKey('/api/tomtom/status');
+  env.keys.XWEATHER = await statusKey('/api/xweather/status');
   try {
     const ais = await jget('/api/ais-live');
     if (ais.status === 503 && ais.json?.status === 'missing-key') env.keys.AIS = false;
