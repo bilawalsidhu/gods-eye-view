@@ -98,11 +98,14 @@ test('body clips future subdivisions, head ends at exact marker, and frames reta
   // Simulate Cesium's completed upload; exercise public attribute writes.
   body._ready = true;
   body.getGeometryInstanceAttributes = (id) => {
-    const stored = attributes.get(id), accessor = {};
+    const stored = attributes.get(id),
+      accessor = {};
     for (const name of ['show', 'color', 'depthFailColor'])
       Object.defineProperty(accessor, name, {
         get: () => stored[name].slice(),
-        set: (value) => { stored[name] = value.slice(); },
+        set: (value) => {
+          stored[name] = value.slice();
+        },
       });
     return accessor;
   };

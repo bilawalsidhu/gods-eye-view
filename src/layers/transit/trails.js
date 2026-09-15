@@ -153,9 +153,9 @@ export function createTrails({ state, services, parts, source }) {
           valid = false;
           // Ground polylines consume longitude/latitude and drape themselves.
           // Unknown floors still disqualify the marker corridor.
-          positions.push(draped
-            ? Cesium.Cartesian3.fromDegrees(point.lon, point.lat)
-            : null);
+          positions.push(
+            draped ? Cesium.Cartesian3.fromDegrees(point.lon, point.lat) : null,
+          );
         } else
           positions.push(
             Cesium.Cartesian3.fromDegrees(point.lon, point.lat, h),
@@ -235,7 +235,9 @@ export function createTrails({ state, services, parts, source }) {
   }
   function update() {
     if (!selected || !renderer) return;
-    renderer.setVisible(state._enabled && state._vehicles.get(selected.key) === selected);
+    renderer.setVisible(
+      state._enabled && state._vehicles.get(selected.key) === selected,
+    );
     renderer.setDisplaySample(selected.sample, selected.marker?.position);
   }
   function select(entry) {

@@ -3780,7 +3780,9 @@ for (const jump of ['setView', 'flyTo']) {
     app.viewer.scene.globe.getHeight = () => floor;
     app.serve('mbta', () => ({
       status: 200,
-      body: snapshot('mbta', 'MBTA', [vehicle('cold', 42.36, -71.06, reported())]),
+      body: snapshot('mbta', 'MBTA', [
+        vehicle('cold', 42.36, -71.06, reported()),
+      ]),
     }));
     app.layer.enable(app.viewer);
     await app.layer.update();
@@ -3809,7 +3811,8 @@ test('selected history is prepared while its head is hidden and remains shown ou
   const app = harness(t);
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(1, BOSTON);
-  const entry = app.vehicles()[0], parts = app.layer._transitPartsForTest();
+  const entry = app.vehicles()[0],
+    parts = app.layer._transitPartsForTest();
   entry.marker.show = false;
   app.state()._visible.delete(entry);
   app.state()._moving.delete(entry);
@@ -3830,14 +3833,17 @@ test('selected draped history prepares geometry before surface heights resolve',
   const app = harness(t, { floorAt: () => undefined });
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(1, BOSTON);
-  const entry = app.vehicles()[0], parts = app.layer._transitPartsForTest();
+  const entry = app.vehicles()[0],
+    parts = app.layer._transitPartsForTest();
   delete entry.qaFloorM;
   entry.marker.show = false;
   entry.heightPending = true;
   // Exercise the real GroundPolylinePrimitive branch, without a WebGL context.
   const width = Cesium.ContextLimits._maximumAliasedLineWidth;
   Cesium.ContextLimits._maximumAliasedLineWidth = 1;
-  t.after(() => { Cesium.ContextLimits._maximumAliasedLineWidth = width; });
+  t.after(() => {
+    Cesium.ContextLimits._maximumAliasedLineWidth = width;
+  });
   app.viewer.scene.frameState = { context: { depthTexture: true } };
   app.viewer.scene.groundPrimitives = app.viewer.scene.primitives;
   parts.selection.selectVehicle(entry.key);
@@ -3846,5 +3852,9 @@ test('selected draped history prepares geometry before surface heights resolve',
   assert.ok(trail.body instanceof Cesium.GroundPolylinePrimitive);
   assert.ok(trail.segments > 0);
   assert.equal(trail.body.show, true);
-  assert.equal(entry.displayPaths.size, 0, 'unresolved marker corridors remain unavailable');
+  assert.equal(
+    entry.displayPaths.size,
+    0,
+    'unresolved marker corridors remain unavailable',
+  );
 });

@@ -457,7 +457,10 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
     }
   const readStart = readRows.length;
   assert.equal((await sampleTransitPixels(page, {})).length, 1);
-  assert.ok(readRows[readStart] > 204, 'centre samples use the widest solid band');
+  assert.ok(
+    readRows[readStart] > 204,
+    'centre samples use the widest solid band',
+  );
   raster.fill(255);
   scene.pick = () => ({ id: 'overlapping-label' });
   assert.equal(

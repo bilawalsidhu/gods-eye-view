@@ -207,7 +207,10 @@ export function createContactTrailRenderer(scene) {
           );
           if (!attributes) continue;
           const rgba = attributes.color;
-          Cesium.ColorGeometryInstanceAttribute.toValue(tint(alpha, !lane), rgba);
+          Cesium.ColorGeometryInstanceAttribute.toValue(
+            tint(alpha, !lane),
+            rgba,
+          );
           attributes.color = rgba;
           if (!ground) {
             const depthRgba = attributes.depthFailColor;
