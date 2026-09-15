@@ -27,7 +27,13 @@ export function createApplicationTools({
   const { viewer, tileset, mapStackController, operations } = scene;
   const { styleManager, weatherEffects, cockpitCloudEffects } = controls;
   const { dataManager } = data;
-  const sceneDirector = new SceneDirector(viewer, styleManager, dataManager);
+  const sceneDirector = new SceneDirector(viewer, styleManager, dataManager, {
+    isMapStackAvailable: (id) =>
+      mapStackController?.isStackAvailable(id) === true,
+  });
+  dataManager.layers
+    .get('bhote-koshi-2026')
+    ?.module.attachSceneController(sceneDirector);
   defer(() => sceneDirector.destroy());
   onSceneDirector?.(sceneDirector);
   const annotations = initAnnotations({

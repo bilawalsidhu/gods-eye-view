@@ -1,6 +1,7 @@
 import {
   OVERPASS_MAX_RESPONSE_BYTES,
   OVERPASS_UPSTREAMS,
+  OVERPASS_USER_AGENT,
   OVERPASS_TIMEOUT_MS,
 } from './constants.js';
 import { readResponseTextCapped } from '../common/http.js';
@@ -91,7 +92,7 @@ async function fetchOverpassPayload(
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'gods-eye-view-overpass-proxy/1.0',
+          'User-Agent': OVERPASS_USER_AGENT,
         },
         body,
         signal: controller.signal,
@@ -125,12 +126,11 @@ async function fetchOverpassPayload(
       }
       // Anything but 2xx is this mirror declining, not an answer. Only 5xx used
       // to rotate, so a 4xx ended the fan-out and was returned — and cached —
-      // as data: overpass-api.de and its lz4 alias answer 406 to this proxy's
-      // User-Agent while kumi.systems and private.coffee answer 200 to the very
-      // same request, so every Overpass-backed layer failed on an Apache error
-      // page with two healthy mirrors untried. The first refusal is kept so a
-      // genuinely bad query still reports what upstream said, but only after
-      // every mirror has had the chance to answer it.
+      // as data: a mirror refusing this client answers 406 while the others
+      // answer 200 to the very same request, so every Overpass-backed layer
+      // failed on an error page with healthy mirrors untried. The first
+      // refusal is kept so a genuinely bad query still reports what upstream
+      // said, but only after every mirror has had the chance to answer it.
       if (status < 200 || status >= 300) {
         if (!lastRefusalPayload) lastRefusalPayload = payload;
         lastError = new Error(

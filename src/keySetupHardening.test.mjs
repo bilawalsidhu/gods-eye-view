@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { hardenCredentialFile } from './keySetupHardening.mjs';
+import { hardenCredentialFile } from '../server/standalone/key-setup-hardening.mjs';
 
 const FILE = path.join(os.tmpdir(), 'provider-settings-test');
 const USER_SID = 'S-1-5-21-1111111111-2222222222-3333333333-1001';

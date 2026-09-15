@@ -1,6 +1,6 @@
 import { defaultSurface } from './surfaceServices.js';
 import { createApplicationCctv } from '../app/layers/cctv.js';
-import { createSourceSlot } from '../app/sourceSlot.js';
+import { createSourceSlot } from '../sources/sourceSlot.js';
 import { createCctvSource } from '../layers/cctv/source.js';
 
 const sourceSlot = createSourceSlot(

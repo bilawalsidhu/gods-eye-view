@@ -1,4 +1,4 @@
-import { normalizeEarthquakeSnapshot } from './model.js';
+import { normalizeEarthquakeSnapshot } from './records.js';
 const API_URL =
   'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
 /** Request and validate a complete USGS snapshot before it can replace displayed events. */

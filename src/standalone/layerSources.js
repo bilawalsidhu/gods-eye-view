@@ -5,28 +5,21 @@ import {
 } from '../sources/live/standalone.js';
 import { createCctvSource } from '../layers/cctv/source.js';
 import { createRadioSource } from '../layers/radio/source.js';
+import { createTransitSource } from '../layers/transit/source.js';
 import { createTrafficSource } from '../layers/traffic/source.js';
 import { createBikeshareSource } from '../layers/bikeshare/source.js';
-import { createInstallationSource } from '../layers/installations/index.js';
-import { createSatelliteSource } from '../layers/satellites/index.js';
-import { createLaunchSource } from '../layers/launches/index.js';
-import { createOverpassAlprSource } from '../layers/alpr/index.js';
-import { createFirmsSource } from '../layers/firms/index.js';
-import { createUsgsEarthquakeSource } from '../layers/earthquakes/source.js';
-import { createBundledCableSource } from '../layers/submarineCables/bundledSource.js';
-
-/** Existing reference feeds, usable independently of live source selection. */
-export function createStandaloneReferenceSources() {
-  return {
-    earthquakes: createUsgsEarthquakeSource(),
-    cables: createBundledCableSource(),
-  };
-}
+import { createInstallationSource } from '../layers/installations/source.js';
+import { createSatelliteSource } from '../layers/satellites/source.js';
+import { createLaunchSource } from '../layers/launches/source.js';
+import { createOverpassAlprSource } from '../layers/alpr/source.js';
+import { createFirmsSource } from '../layers/firms/source.js';
+import { createReferenceSources } from '../sources/reference.js';
+export { createReferenceSources as createStandaloneReferenceSources } from '../sources/reference.js';
 
 /** Select standalone providers without starting their acquisition. */
 export function createStandaloneLayerSources() {
   return {
-    ...createStandaloneReferenceSources(),
+    ...createReferenceSources(),
     flights: createOpenSkySource(),
     military: createAdsbLolSource(),
     vessels: createAisStreamSource({
@@ -35,6 +28,7 @@ export function createStandaloneLayerSources() {
     cctv: createCctvSource(),
     radio: createRadioSource(),
     traffic: createTrafficSource(),
+    transit: createTransitSource(),
     bikeshare: createBikeshareSource(),
     installations: createInstallationSource(),
     satellites: createSatelliteSource(),

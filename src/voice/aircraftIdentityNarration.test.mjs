@@ -30,7 +30,7 @@ test('aircraft identity narration acknowledges missing enrichment', () => {
   assert.match(followup, /explicitly cover operator, aircraft type, and route before finishing/);
   assert.match(followup, /selectedProperties\.operator/);
   assert.match(followup, /selectedProperties\.type/);
-  assert.match(followup, /selectedProperties\.route \|\| selectedProperties\.routeOrigin \|\| selectedProperties\.routeDestination/);
+  assert.match(followup, /selectedProperties\.route \|\|\s*selectedProperties\.routeOrigin \|\|\s*selectedProperties\.routeDestination/);
   assert.match(followup, /Operator details are unavailable/);
   assert.match(followup, /Aircraft type is unavailable/);
   assert.match(followup, /Route details are unavailable/);

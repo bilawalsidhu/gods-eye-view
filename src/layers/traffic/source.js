@@ -1,3 +1,5 @@
+import { normalizeOverpassRoads } from '../../sources/overpassRoads.js';
+export { normalizeOverpassRoads } from '../../sources/overpassRoads.js';
 import { createFlowTileSource } from './flowSource.js';
 function buildOverpassQuery(
   south,
@@ -58,7 +60,9 @@ export function createTrafficSource({
         async json() {
           const body = await response.json();
           signal?.throwIfAborted();
-          return body;
+          if (!Array.isArray(body?.elements))
+            throw new Error('Malformed road snapshot');
+          return { roads: normalizeOverpassRoads(body) };
         },
       };
     },
