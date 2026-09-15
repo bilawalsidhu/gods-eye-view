@@ -13,3 +13,9 @@ export {
   parseCoordinateQuery,
   formatCoordinateLabel,
 } from './coordinateParser.js';
+export {
+  createNominatimProvider,
+  createNominatimClient,
+  normalizeNominatimResult,
+  normalizeNominatimReverse,
+} from './nominatim.js';

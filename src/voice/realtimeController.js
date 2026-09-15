@@ -1,3 +1,4 @@
+import { realtimeSessionEvent } from './realtimeEvents.js';
 import { readLayerLifecycleSummary } from './layerSummary.js';
 import { createRealtimeBackend } from './realtimeBackend.js';
 import {
@@ -195,7 +196,9 @@ const SUPERSEDED_RESPONSE_MEMORY = 8;
 
 export class GevRealtimeController {
   constructor({ runner, ui, radioLayer = null, dataManager = null,
-    backend = createRealtimeBackend(), signal, debugSink = postDebugLog }) {
+    backend = createRealtimeBackend(), signal, debugSink = postDebugLog, actionExecutor, onSessionEvent }) {
+    this.actionExecutor = actionExecutor;
+    this.onSessionEvent = onSessionEvent;
     this.backend = backend;
     this.lifetimeSignal = signal;
     this.connectionAbort = null;
@@ -926,6 +929,7 @@ export class GevRealtimeController {
       this.setStatus('idle', 'Voice off');
     }
     this.setRadioVoiceDucking(false);
+    if (removeUi) this.emitSessionEvent({ type: 'disposed' });
   }
 
   /**
@@ -1039,6 +1043,8 @@ export class GevRealtimeController {
     } catch {
       return;
     }
+    const sessionEvent = realtimeSessionEvent(payload);
+    if (sessionEvent) this.emitSessionEvent(sessionEvent);
     this.debugLog('server.event', {
       type: payload.type,
       eventId: payload.event_id || null,
@@ -1245,7 +1251,7 @@ export class GevRealtimeController {
             authorityDomain: radioAuthorityDomain,
           });
         }
-        result = await this.runner(call.name, parsedArguments, {
+        result = await (this.actionExecutor || this.runner)(call.name, parsedArguments, {
           signal: toolController.signal,
           isCurrent: () => (
             this.activeToolAbortControllers.has(toolController)
@@ -1467,8 +1473,13 @@ export class GevRealtimeController {
     return sent;
   }
 
+  emitSessionEvent(event) {
+    try { this.onSessionEvent?.(event); } catch { /* Observers cannot interrupt voice. */ }
+  }
+
   setStatus(status, detail) {
     this.status = status;
+    this.emitSessionEvent({ type: 'state', state: status, detail });
     this.ui.root.dataset.status = status;
     if (status === 'error') this.ui.root.classList.remove('error-dismissed');
     this.updateVoiceButtonLabel();

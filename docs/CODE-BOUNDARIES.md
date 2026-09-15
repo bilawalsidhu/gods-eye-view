@@ -16,43 +16,80 @@ excluded. The formatter validates every entry before writing any file.
 
 ## Current component ownership
 
-| Surface                                | Owns                                                                   | Receives from its caller                            |
-| -------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------- |
-| `gods-eye-view/infrastructure`         | Datacenter/dam definitions and fresh layer construction                | Context, overlay and render operations              |
-| `gods-eye-view/infrastructure/geojson` | Data loading, Cesium entities, selection handling and resource cleanup | A viewer and those same operations                  |
-| `gods-eye-view/infrastructure/lod`     | Pure visibility budgets and selection policy                           | Position/visibility records and camera measurements |
-| `src/data/localGeojson.js`             | Standalone compatibility wiring                                        | The application's existing shared services          |
-| `src/main.js` and `src/standalone/`    | Standalone browser startup                                             | Local configuration                                 |
+Package imports use `gods-eye-view`; `package.json` is the authoritative
+export inventory. Use declared exports rather than reaching into internal files.
 
-The application and infrastructure exports are browser source modules. Use their documented
-exports instead of importing standalone startup or reaching into internal files.
-The application owns the viewer, context store, overlay host and render scheduler;
-layers use the supplied callbacks. See [the infrastructure contract](INFRASTRUCTURE-LAYERS.md).
+| Owner                  | Responsibility and lifetime                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------- |
+| `src/app/`             | Construct supplied components, share scene/request services, cancel startup and dispose the application |
+| `src/standalone/`      | Select the default catalog, local sources and setup controls                                            |
+| `src/ui/`              | Navigation generations, restoration, visual state, panel snapshots and their subscriptions              |
+| `src/data/`            | Lifecycle, context and feed state; legacy default-layer facades                                         |
+| `src/layers/<family>/` | Source acquisition, records and Cesium resources with explicit controller/renderer owners               |
+| `src/sources/`         | Portable protocols and source contracts; request state belongs to each factory instance                 |
+| `src/services/`        | Supplied application operations; scene construction owns caches and cancellation                        |
+| `src/voice/`           | Portable action schemas/session, common controls, action execution and separate protocol adapters       |
+| `server/providers/`    | Node route factories, process-scoped provider caches and shutdown cleanup                               |
+| `server/standalone/`   | Environment, local settings writes and server composition                                               |
 
-`npm run check:boundaries` builds every declared package export, with app Vite
-configuration disabled. `scripts/package-boundaries.json` lists each export's
-component, owned modules and external runtime dependencies. A new export must be
-classified. Imports outside the declared modules fail, including unused and
-literal dynamic imports. Cesium stays external so the consuming application
-supplies the same compatible instance as its viewer. Existing consumer tests
-also check import-time inactivity and asset URLs under a non-root base.
+See [application construction](APPLICATION.md) and the
+[infrastructure contract](INFRASTRUCTURE-LAYERS.md) for construction interfaces.
 
-These checks cover the declared exports, not every import in the application.
-They check build-time imports, not arbitrary runtime-generated module URLs.
-Keep runtime module discovery out of these exports. When extracting another
-component, add its ownership and consumer tests together. Node services must use
-separate entry points and their own checks when they become reusable; importing
-them into a browser component is not supported.
+## Import direction gates
 
-`gods-eye-view/application` owns construction order, startup state, cancellation
-and disposal of caller-supplied components. Its only owned module is
-`src/app/application.js`. `gods-eye-view/application/viewer` separately owns the
-standard Cesium viewer configuration in `src/app/viewer.js`; Cesium stays external.
-Neither export imports standalone UI, layers, tools or configuration. See
-[application construction](APPLICATION.md) for the contracts and current limits.
+`npm run check:boundaries` runs two complementary checks:
 
-UI panels and individual source adapters remain future extractions. They should
-become smaller modules with explicit lifecycle owners as their callers migrate.
+1. `scripts/check-import-directions.mjs` parses every runtime JS/MJS/CJS file in
+   `src/` and `server/`, including files unused by the current bundle. Static,
+   literal dynamic and re-export edges are checked; computed module imports and
+   CommonJS `require` are rejected. Browser graphs cannot reach Node, server or
+   test modules through helpers. Reusable modules cannot select standalone setup,
+   and provider modules cannot import application/rendering modules.
+2. `scripts/check-package-boundaries.mjs` builds every declared export without
+   app Vite configuration or environment files. `scripts/package-boundaries.json`
+   assigns each export exactly once and lists its owned modules and external
+   dependencies. Unused imports still count. Node exports have only a `node`
+   condition; browser groups cannot use build-only dependency exceptions.
+
+Portable source graphs cannot reach application/rendering, Node, Cesium or
+browser globals. This includes `sources/*`, dedicated `layers/*/source` exports,
+flight/military/vessel record and ingestion exports, action schemas, the session
+interface, lifecycle and feed state. The browser-global rule reserves platform
+names such as `document` and `window` in these modules; it is an architectural
+check, not a JavaScript sandbox. Common voice controls cannot depend on a
+Realtime protocol implementation. Negative fixtures cover indirect helpers,
+self-package imports, symlinks and unreachable files.
+
+Source factories have dedicated exports for ALPR, bikeshare, CCTV, earthquakes,
+FIRMS, installations, launches, radio, satellites and traffic. They preserve the
+same factory implementations without loading layer rendering. ALPR/earthquake
+record normalization and CCTV source endpoint policy have plain owners separate
+from geometry/cards. Source exports do not start acquisition at import time.
+
+Other layer `ingestion.js` files may still coordinate Cesium resources; the
+portable contract applies to the explicitly reviewed graphs above. Their layer
+controller remains the owner of rendering/cleanup until a focused extraction
+moves it. Do not label all ingestion modules platform-independent by filename.
+
+## Compatibility entries and owners
+
+| Retained entry                                      | Owner and current reason                                                                                           |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `src/ui.js`                                         | UI facade; direct callers retain standalone StyleManager defaults. Normal assembly uses `src/ui/composition.js`    |
+| `src/data/manager.js`                               | Lifecycle/panel compatibility and existing tests; normal assembly constructs lifecycle and presentation separately |
+| `src/data/<layer>.js`                               | Legacy default instances; new assembly calls layer factories with supplied sources                                 |
+| `src/data/localGeojson.js`                          | Infrastructure compatibility factories; catalog imports services from `src/app/localGeojsonServices.js` directly   |
+| `src/app/sourceSlot.js`                             | Re-export for direct callers/tests; portable slot ownership is `src/sources/sourceSlot.js`                         |
+| `src/app/sources.js`, `src/services/application.js` | Existing default/override API; current application construction supplies its own instances                         |
+| `server/providers/local.js`                         | Existing Node composition barrel and provider helper re-exports                                                    |
+
+The two exact standalone-import exceptions are `src/ui.js` to
+`src/standalone/catalog.js` and `server/providers/local.js` to
+`server/standalone/key-setup.js`. They do not authorize new compatibility
+back-edges. Voice actions use plain `src/data/feedState.js`, not the manager
+facade. Settings filesystem hardening belongs in
+`server/standalone/key-setup-hardening.mjs`; its settings policy is unchanged.
+Test modules and the Node-only allocation benchmark are outside browser runtime.
 
 ## Build and standalone server configuration
 
@@ -503,3 +540,61 @@ retention. `layers/vessels/ingestion` owns source requests and feed state throug
 explicit operations. Both exports exclude Cesium, DOM and application assembly.
 The snapshot renderer applies record changes; rendering owns a weak map of
 geometry and billboard resources used by cards, picking and trails.
+
+`gods-eye-view/sources/reference` constructs fresh earthquake and bundled cable
+source instances independently of standalone setup. Individual sources remain
+available through `layers/earthquakes/source` and `layers/submarine-cables/source`.
+The latter retains the bundled dataset’s attribution and licensing requirements.
+
+## Geocoding and feature-query providers
+
+`createDefaultPlaceSearch` accepts an explicit Nominatim selection:
+
+```js
+const places = createDefaultPlaceSearch({
+  geocoding: {
+    provider: 'nominatim',
+    searchEndpoint: '/places/search',
+    reverseEndpoint: '/places/reverse',
+  },
+  fetchImpl,
+  signal,
+});
+```
+
+The endpoints must return Nominatim JSONv2. They are supplied by application
+composition; no instance is selected automatically and this does not install
+those routes. For a remote instance, configure its full URLs and transport
+requirements. The caller owns request scheduling, identifying headers and any
+instance-specific usage policy. The existing public fallback retains its shared
+queue, pacing and cache. `endpoints.nominatim` still names the legacy
+Google-shaped `/api/geocode` fallback; it is not a raw Nominatim endpoint.
+
+Coordinates and supplied presets remain offline. Explicit Nominatim selection
+replaces the network forward-geocoder chain; it does not silently fall back to
+another instance. Reverse geocoding is available only when a reverse endpoint
+is configured. Other operations (Places text/nearby search and routing) retain
+their independent providers. For custom compositions, `createNominatimProvider`
+from `./search/nominatim` can be passed to `createPlaceSearch` and
+`createGeospatialServices`; it exposes no route or nearby-search capability.
+An empty search array is a definitive miss. HTTP failures, malformed results
+and oversized responses remain retryable. Attribution identifies OpenStreetMap /
+Nominatim.
+
+Overpass currently supplies traffic road geometry, ALPR camera records, military
+installation footprints, and annotation geometry (administrative boundaries,
+neighborhoods, streets, building/grounds outlines and monument candidates).
+Nominatim forward/reverse lookup does not replace those queries. Layer source
+interfaces select traffic, camera and installation ingestion separately;
+annotation `boundaries.query` still uses Overpass QL and OSM-shaped elements.
+Replacing that service with a different query language requires operation-level
+feature/geometry adapters, not just changing its URL. Rendering and geometry
+selection remain consumers of those results.
+
+`./sources/nominatim` exports the lower-level JSONv2 client and normalizers for
+server adapters without importing search composition.
+
+`./sources/http-body` exports bounded text/JSON readers using web primitives;
+`./sources/overpass` exports the quoted-string/comment lexer. The lexer alone is
+not a query validator: spatial bounds, timeouts and other policy remain in the
+server sanitizer. Existing server imports keep their compatibility exports.

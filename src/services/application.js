@@ -1,4 +1,4 @@
-import { createSourceSlot } from '../app/sourceSlot.js';
+import { createSourceSlot } from '../sources/sourceSlot.js';
 import { createApplicationRequestServices } from './requests.js';
 
 // Compatibility owners are page-scoped, like the viewer and its layer registry.

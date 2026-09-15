@@ -1,5 +1,5 @@
 import { createApplicationSatellites } from '../app/layers/satellites.js';
-import { createSourceSlot } from '../app/sourceSlot.js';
+import { createSourceSlot } from '../sources/sourceSlot.js';
 import { createSatelliteSource } from '../layers/satellites/index.js';
 
 const sourceSlot = createSourceSlot(

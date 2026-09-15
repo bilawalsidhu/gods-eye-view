@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import {
   commandCompletedSuccessfully,
   parseWindowsUserSid,
-} from './keySetupCore.mjs';
+} from '../../src/keySetupCore.mjs';
 
 /** PowerShell verification for the exact owner-only Windows credential DACL. */
 const WINDOWS_ACL_VERIFY_SCRIPT = [
