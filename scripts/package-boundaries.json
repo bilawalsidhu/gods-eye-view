@@ -2102,5 +2102,14 @@
     "exports": ["./layers/directions"],
     "modules": ["src/layers/directions/index.js", "src/data/routeSteps.js"],
     "external": ["cesium"]
+  },
+  "aqhi": {
+    "exports": ["./layers/aqhi"],
+    "modules": [
+      "src/layers/aqhi/index.js",
+      "src/layers/aqhi/model.js",
+      "src/layers/aqhi/source.js"
+    ],
+    "external": ["cesium"]
   }
 }

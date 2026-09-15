@@ -27,6 +27,12 @@ import {
 } from '../data/trackedReadout.js';
 import { CCTV_AMBIENT_CARD_MAX } from '../data/cctvLod.js';
 import {
+  AQHI_OVERLAY_COHORT_LIMIT,
+  AQHI_OVERLAY_COLLISION_CAPACITY,
+  AQHI_OVERLAY_SOURCE_ID,
+  createAqhiOverlayEntry,
+} from '../layers/aqhi/model.js';
+import {
   CCTV_OVERLAY_SOURCE_ID,
   createCctvThumbnailOverlayEntry,
   createFrameSlot,
@@ -927,6 +933,60 @@ function buildSubmarineCablesWorkload(count) {
   );
 }
 
+/**
+ * The AQHI station cohort at full size.
+ *
+ * Measured standalone (the submarine-cable precedent) rather than stacked on
+ * the Phase-5 host: AQHI stations are sparse and continental, so the question a
+ * budget has to answer is what its own cohort costs, not what it adds to a
+ * worldwide worst case. The entry shape is the same static `ambient-label` the
+ * earthquake layer publishes — no per-frame position callback — so the
+ * per-candidate ceiling is the meaningful gate.
+ */
+function buildAqhiWorkload(count) {
+  if (count !== AQHI_OVERLAY_COHORT_LIMIT) {
+    throw new Error(`aqhi requires ${AQHI_OVERLAY_COHORT_LIMIT} entries`);
+  }
+  const workload = { entries: [], positions: [], drifts: [], registrations: [] };
+  const columns = Math.max(1, Math.ceil(Math.sqrt((count * 16) / 9)));
+  const rows = Math.max(1, Math.ceil(count / columns));
+  const spanX = columns > 1 ? 1.68 / (columns - 1) : 0;
+  const spanY = rows > 1 ? 1.56 / (rows - 1) : 0;
+  const stations = [];
+  for (let index = 0; index < count; index++) {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const baseX = -0.84 + column * spanX;
+    const baseY = -0.78 + row * spanY;
+    const position = new Cesium.Cartesian3(baseX, baseY, 0);
+    workload.positions.push(position);
+    workload.drifts.push({
+      baseX,
+      baseY,
+      phase: index * 0.27,
+      rate: 0.32 + (index % 6) * 0.04,
+    });
+    const entry = createAqhiOverlayEntry({
+      id: `aqhi-${index}`,
+      position,
+      title: `Station ${index} ${1 + (index % 10)}`,
+      accent: '#4cc9f0',
+      aqhi: 1 + (index % 10),
+    });
+    entry.horizonCull = false;
+    stations.push(entry);
+  }
+  workload.registrations.push({
+    sourceId: AQHI_OVERLAY_SOURCE_ID,
+    entries: stations,
+    options: {
+      cohortLimit: AQHI_OVERLAY_COHORT_LIMIT,
+      collisionCapacity: AQHI_OVERLAY_COLLISION_CAPACITY,
+    },
+  });
+  return workload;
+}
+
 function buildPhase6DetectionWorkload(count) {
   const random = makeRandom(0xd37ec710);
   const positions = [];
@@ -1026,7 +1086,9 @@ function main() {
                             ? buildPhase5RocketMissionWorkload(ENTRY_COUNT)
                             : PROFILE === 'all-live-radio'
                               ? buildAllLiveRadioWorkload(ENTRY_COUNT)
-                              : PROFILE === 'submarine-cables'
+                              : PROFILE === 'aqhi'
+                                ? buildAqhiWorkload(ENTRY_COUNT)
+                                : PROFILE === 'submarine-cables'
                                 ? buildSubmarineCablesWorkload(ENTRY_COUNT)
         : buildWorkload(ENTRY_COUNT);
   const { entries, positions, drifts } = workload;

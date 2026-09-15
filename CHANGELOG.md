@@ -107,6 +107,16 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- **Air Quality Health Index layer** (keyless). Live AQHI across Canada from the
+  ECCC MSC GeoMet OGC API — roughly 134 stations in all five ECCC administrative
+  zones — coloured on the published 1–10+ health-risk bands. AQHI is reported as
+  an integer from 1 with an open-ended "10+", so readings are rounded to that
+  published form rather than shown at the decimal precision the API returns.
+  Readings older than six hours are dropped instead of being presented as
+  current.
+
 - Give application request services, terrain/floor caches and annotation lookup state explicit owners and cancellation; share them across controls, layers and voice.
 
 - Construct application layers from explicit sources, with standalone provider selection and catalog-owned aircraft classification; controls and voice queries use those instances.

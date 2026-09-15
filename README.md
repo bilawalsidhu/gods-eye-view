@@ -282,6 +282,7 @@ Fourteen layers and map sources. **Twelve have a keyless path.** Some offer addi
 | 🚲 **Bikeshare** | Live station availability | GBFS | 🟢 |
 | 🧭 **Directions** | Click A and B on the globe for a street-following drive, walk or cycle route draped on the terrain with turn-by-turn steps — then FLY the camera along it. No key, no geocoder, no mic | OSRM on FOSSGIS servers (OpenStreetMap) | 🟢 |
 | 🔥 **Active Fires** | Live NASA FIRMS detections, trailing 24h | NASA FIRMS | 🟡 |
+| ◍ **Air Quality (AQHI)** | Live Air Quality Health Index across Canada on the published 1–10+ scale, coloured by ECCC's health-risk bands — the downwind half of a fire season | ECCC MSC GeoMet | 🟢 |
 | 🚀 **Space Missions** | Rolling 30-day launches with payload, stage, and recovery detail | Launch Library 2 | 🟢 (🟡 optional token raises the allowance) |
 | 🎖️ **Mapped Installations** | Viewport-bounded military-site context from community mapping — incomplete by nature, and labeled that way | OpenStreetMap | 🟢 |
 
