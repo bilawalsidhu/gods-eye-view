@@ -410,7 +410,8 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
     },
   };
   const page = { evaluate: async (fn, ...args) => fn(...args) };
-  const sampledLayer = window.__godsEyeView.dataManager.layers.get('transit').module;
+  const sampledLayer =
+    window.__godsEyeView.dataManager.layers.get('transit').module;
   const originalState = sampledLayer._transitStateForTest;
   sampledLayer._transitStateForTest = () => {
     const state = originalState();
@@ -419,8 +420,11 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
   };
   const pixels = await sampleTransitPixels(page, {});
   sampledLayer._transitStateForTest = originalState;
-  assert.deepEqual(readRows.slice(0, 9), [201, 200, 199, 201, 200, 199, 201, 200, 199],
-    'fractional CSS coordinates must invert the floored framebuffer row');
+  assert.deepEqual(
+    readRows.slice(0, 9),
+    [201, 200, 199, 201, 200, 199, 201, 200, 199],
+    'fractional CSS coordinates must invert the floored framebuffer row',
+  );
   assert.ok(
     reads >= 13,
     'centre, rings and background come from WebGL readPixels',
