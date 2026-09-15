@@ -383,6 +383,7 @@
   > .global-context-panel-inner
   > .context-mode-standby,
 #radio-panel.collapsed .radio-panel-inner > :not(.panel-header),
+#weather-panel.collapsed .weather-panel-inner > :not(.panel-header),
 #cctv-panel.collapsed .cctv-controls,
 #cctv-panel.collapsed .cctv-calibration-block,
 #cctv-panel.collapsed .cctv-frame-wrap,

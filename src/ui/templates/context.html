@@ -14,8 +14,10 @@
         </p>
 
         <div class="weather-refresh-row">
-          <button id="weather-refresh-btn" class="scene-btn" type="button" title="Fetch the selected layers now">REFRESH</button>
-          <button id="weather-auto-btn" class="pp-toggle-btn weather-auto-btn" type="button" aria-pressed="false" title="Refresh on a timer instead of on demand">
+          <button id="weather-refresh-btn" class="pp-toggle-btn" type="button" title="Fetch the selected layers now">
+            <span class="pp-label">REFRESH</span>
+          </button>
+          <button id="weather-auto-btn" class="pp-toggle-btn" type="button" aria-pressed="false" title="Refresh on a timer instead of on demand">
             <span class="pp-label">AUTO</span>
           </button>
           <select id="weather-interval" class="pp-select" aria-label="Auto-refresh interval" disabled></select>

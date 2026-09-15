@@ -177,6 +177,7 @@
 }
 #right-context-rail > #pp-toggles.collapsed .pp-header-row,
 #right-context-rail #cctv-panel.collapsed .cctv-panel-inner,
+#right-context-rail #weather-panel.collapsed .weather-panel-inner,
 #right-context-rail
   #global-context-panel.collapsed
   .global-context-panel-inner {
@@ -1288,20 +1289,22 @@
 
 /* ── Weather panel ──────────────────────────────────────────────────────
    Chrome, chips and labels are the rail's existing components: the card is
-   the same glass treatment CCTV and Context use, the layer buttons are
-   .data-toggle-chip, and the group captions are .pp-slider-mini-label.
-   Only the panel's own layout lives here.
+   the same glass treatment Context uses, the layer buttons are
+   .data-toggle-chip, the group captions are .pp-slider-mini-label, and the
+   refresh controls are .pp-toggle-btn and .pp-select. What this block adds is
+   only the panel's own layout, and the rail geometry every sibling declares —
+   collapsed tab metrics, the allocated-height fill, and the scrolling body.
 
-   Sizing stays on the panel's own id and never on #right-context-rail,
-   whose box the credit keep-out test models and which fails closed on
-   geometry it does not recognise. */
+   Sizing stays on the panel's own id and never on #right-context-rail, whose
+   box the credit keep-out test models and which fails closed on geometry it
+   does not recognise. */
 #right-context-rail #weather-panel {
   width: 100%;
 }
 #right-context-rail #weather-panel.collapsed {
   width: var(--right-context-collapsed-width);
   /* Keep the collapsed tab on the rail edge rather than stranded at the
-     expanded-width origin, as the sibling panels do. */
+     rail's expanded-width origin, as the sibling panels do. */
   margin-left: auto;
 }
 .weather-panel-inner {
@@ -1320,21 +1323,33 @@
   backdrop-filter: blur(24px) saturate(1.4);
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
 }
-#right-context-rail #weather-panel.collapsed .weather-panel-inner {
-  height: 50px;
-  min-height: 50px;
-  box-sizing: border-box;
-}
-#right-context-rail
-  #weather-panel.collapsed
-  .weather-panel-inner
-  > :not(.panel-header) {
-  display: none;
+#right-context-rail .weather-panel-inner {
+  max-height: 100%;
 }
 #right-context-rail #weather-panel:not(.collapsed) .weather-panel-inner {
   max-height: 100%;
   overflow-y: auto;
-  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+}
+/* The collapsed tab has to be the same height as its neighbours, or the
+   collapse arrows sit at different heights down the rail. */
+#right-context-rail #weather-panel.collapsed .weather-panel-inner {
+  min-height: 42px;
+  box-sizing: border-box;
+  justify-content: center;
+  overflow: visible;
+  padding: 8px 10px 8px 14px;
+}
+#right-context-rail #weather-panel.collapsed .panel-header {
+  margin: 0;
+}
+/* When the rail allocates this panel a height, the card fills it rather than
+   leaving the glass short of the box the layout reserved. */
+#right-context-rail.layout-focus
+  > #weather-panel:not(.collapsed)
+  .weather-panel-inner {
+  height: 100%;
+  box-sizing: border-box;
 }
 .weather-unavailable {
   margin: 0;
@@ -1344,15 +1359,18 @@
   line-height: 1.5;
   color: #ffb45c;
 }
+/* Both buttons and the interval are the rail's own controls, so the row only
+   has to place them. */
 .weather-refresh-row {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 6px;
   flex-wrap: wrap;
 }
 .weather-refresh-row .pp-select {
   flex: 1 1 96px;
   min-width: 0;
+  height: auto;
 }
 .weather-budget {
   margin: 0;
