@@ -1579,7 +1579,8 @@
       "src/annotations/drawTool.js",
       "src/data/routeSteps.js",
       "src/layers/directions/index.js",
-      "src/data/directions.js"
+      "src/data/directions.js",
+      "src/app/layers/directions.js"
     ],
     "external": [
       "@mapbox/vector-tile",
@@ -1912,7 +1913,17 @@
       "src/layers/vessels/records.js",
       "src/layers/vessels/recordPolicy.js",
       "src/layers/vessels/snapshotRenderer.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/annotations/worldAnnotationRenderer.js",
+      "src/cameraVerbs.js",
+      "src/services/groundFloor.js",
+      "src/data/routeSteps.js",
+      "src/layers/directions/index.js",
+      "src/services/terrainHeights.js",
+      "src/data/terrainHeights.js",
+      "src/data/groundFloor.js",
+      "src/data/directions.js",
+      "src/app/layers/directions.js"
     ],
     "external": [
       "cesium",
