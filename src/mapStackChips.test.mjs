@@ -1,3 +1,4 @@
+import { readShellSource } from './testSupport/readShellSource.mjs';
 import { expandApplicationHtml } from '../build/application-html.js';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 // MAP STACK chip row — the dropdown's replacement control surface.
@@ -485,10 +486,7 @@ test('the Visual Presets tray owns Map Source and the retired left panel is abse
   const html = expandApplicationHtml(
     readFileSync(new URL('../index.html', import.meta.url), 'utf8'),
   );
-  const ui = readFileSync(
-    new URL('./ui/applicationShell.js', import.meta.url),
-    'utf8',
-  );
+  const ui = readShellSource();
 
   assert.doesNotMatch(
     html,

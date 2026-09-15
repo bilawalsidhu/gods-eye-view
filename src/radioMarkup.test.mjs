@@ -1,3 +1,6 @@
+import { readRealtimeSource } from './testSupport/readRealtimeSource.mjs';
+import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
+import { readShellSource } from './testSupport/readShellSource.mjs';
 import { expandApplicationHtml } from '../build/application-html.js';
 import { readLayerSource } from './testSupport/readLayerSource.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
@@ -11,24 +14,16 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
-const ui = readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
+const ui = readShellSource();
 const radio = ['playback', 'interaction'].map(name =>
   readFileSync(new URL(`./layers/radio/${name}.js`, import.meta.url), 'utf8')
 ).join('\n').replace(/layerState\.|parts\.\w+\./g, '');
 const rocketLaunches = readLayerSource(new URL('./data/rocketLaunches.js', import.meta.url), 'utf8');
-const realtime = readFileSync(new URL('./voice/realtimeController.js', import.meta.url), 'utf8');
-const voice = ['tools', 'instructions'].map(name => readFileSync(new URL(`../server/providers/openai/${name}.js`, import.meta.url), 'utf8')).join('\n');
+const realtime = readRealtimeSource();
+const voice = readFileSync(new URL('./voice/actionSchemas.js', import.meta.url), 'utf8') + '\n' + ['toolDescriptions', 'instructions'].map(name => readFileSync(new URL(`../server/providers/openai/${name}.js`, import.meta.url), 'utf8')).join('\n');
 const css = readStylesheet(new URL('../style.css', import.meta.url));
 
-/** Parse the Realtime tool array out of the Vite config as real data. */
-function realtimeTools() {
-  const start = voice.indexOf('const GEV_REALTIME_TOOLS = [');
-  const end = voice.indexOf('\n];', start);
-  assert.ok(start >= 0 && end > start, 'Realtime tool schema block is missing');
-  const literal = voice.slice(start + 'const GEV_REALTIME_TOOLS = '.length, end + 2);
-  // The block is pure data; evaluating it beats regexing nested schemas.
-  return new Function(`return ${literal};`)();
-}
+function realtimeTools() { return GEV_REALTIME_TOOLS; }
 
 test('Realtime schema exposes the authoritative 28-tool inventory', () => {
   const tools = realtimeTools();
@@ -195,7 +190,7 @@ test('no unchanged Realtime tool definition drifts silently', () => {
   // The layer enums in set_layer_visibility and show_data_layers_menu carry
   // every registered layer id, so adding or renaming a layer moves this digest
   // and busts the session cache. Re-derive it and name the tools that moved.
-  assert.equal(digest, 'a3fdf50b8c8d2b56', 'an unchanged Realtime tool definition drifted');
+  assert.equal(digest, 'ec5c1e956f2eb43f', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {
@@ -342,7 +337,7 @@ test('Radio disclosure is explicit, starts closed while off, and preserves playb
   assert.doesNotMatch(renderMethod, /_radioMiniExpanded\s*=\s*false.*audioState === 'playing'/s);
   assert.match(ui, /contextRadioDetailsBtn/);
   const syncStart = ui.indexOf('\n  _syncPanelCollapseButton(panelEl)');
-  const syncMethod = ui.slice(syncStart, ui.indexOf('\n  /**', syncStart + 10));
+  const syncMethod = ui.slice(syncStart, ui.indexOf('\n  }', syncStart + 10));
   assert.doesNotMatch(syncMethod, /contextRadioDetailsBtn[\s\S]*?(?:aria-label|textContent|\.title)/);
 });
 
@@ -357,5 +352,5 @@ test('successful explicit user playback hands the speaker from voice to Radio', 
   assert.match(radioBindings, /togglePlayback\(\{ origin: 'user' \}\)/);
   assert.match(radioBindings, /cycleStation\(direction, \{[\s\S]*?origin: 'user'/);
   assert.match(radioBindings, /commitTuningStation\(station\.id, \{ origin: 'user' \}\)/);
-  assert.match(realtime, /event\.origin === 'user' && event\.action === 'play' && this\.isActive\(\)[\s\S]*?this\.stop\(\{ preserveRadioPlayback: true \}\)/);
+  assert.match(realtime, /event\.origin === 'user' &&\s*event\.action === 'play' &&\s*this\.isActive\(\)[\s\S]*?this\.stop\(\{ preserveRadioPlayback: true \}\)/);
 });

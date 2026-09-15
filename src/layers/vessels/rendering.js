@@ -11,6 +11,7 @@ import {
   screenProjectedRotation,
 } from '../../data/iconOrientation.js';
 import {
+  VESSEL_LIFT_M,
   DEFAULT_RENDER_ROWS,
   DEFAULT_ACTIVE_LABELS,
   VISIBILITY_UPDATE_MS,
@@ -27,6 +28,44 @@ export function createRendering({
   options,
 }) {
   const { state } = vesselState;
+  let visualRecords = new WeakMap();
+
+  // The fallback preserves helper calls with externally supplied render records.
+  function getVisual(record) {
+    return visualRecords.get(record) || record;
+  }
+
+  function prepareRecordVisual(record) {
+    let visual = visualRecords.get(record);
+    if (!visual) {
+      visual = { billboard: record.billboard || null };
+      visualRecords.set(record, visual);
+    }
+    const heightM = components.queries.vesselDatumHeightM(
+      components.tracking.currentGeoidN(record.lat, record.lon),
+      VESSEL_LIFT_M,
+    );
+    visual.position = Cesium.Cartesian3.fromDegrees(
+      record.lon,
+      record.lat,
+      heightM,
+    );
+    visual.surfacePosition = Cesium.Cartesian3.fromDegrees(
+      record.lon,
+      record.lat,
+      0,
+    );
+    visual.normal = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
+      visual.position,
+      new Cesium.Cartesian3(),
+    );
+    return visual;
+  }
+
+  function resetRecordVisuals() {
+    visualRecords = new WeakMap();
+  }
+
   const { registerSpriteCollection } = services.sprites;
   const {
     forgetSpriteFocus,
@@ -58,7 +97,7 @@ export function createRendering({
     state.billboardCollection = new Cesium.BillboardCollection({
       blendOption: Cesium.BlendOption.TRANSLUCENT,
     });
-    state.billboardCollection.show = state.enabled;
+    state.billboardCollection.show = state.feed.enabled;
     viewer.scene.primitives.add(state.billboardCollection);
     registerSpriteCollection('ais', state.billboardCollection);
   }
@@ -73,9 +112,10 @@ export function createRendering({
 
   function addRecordPrimitives(record, occluder) {
     const visible =
-      state.enabled && isVisible(record.surfacePosition, occluder);
-    record.billboard = state.billboardCollection.add({
-      position: record.position,
+      state.feed.enabled &&
+      isVisible(getVisual(record).surfacePosition, occluder);
+    getVisual(record).billboard = state.billboardCollection.add({
+      position: getVisual(record).position,
       show: visible,
       image: shipIcon(record, false),
       scale: shipScale(record),
@@ -100,11 +140,11 @@ export function createRendering({
 
   function removeRecordPrimitives(record) {
     if (!record) return;
-    if (record.billboard && state.billboardCollection) {
-      forgetSpriteFocus(record.billboard);
-      state.billboardCollection.remove(record.billboard);
+    if (getVisual(record).billboard && state.billboardCollection) {
+      forgetSpriteFocus(getVisual(record).billboard);
+      state.billboardCollection.remove(getVisual(record).billboard);
     }
-    record.billboard = null;
+    getVisual(record).billboard = null;
   }
 
   function shipScale(record) {
@@ -163,7 +203,7 @@ export function createRendering({
   }
 
   function updateVisibility(force = false) {
-    if (!state.enabled) return;
+    if (!state.feed.enabled) return;
     const now = focusNowMs(performance.now());
     const focusTarget = getFocusTarget();
     const regularPass =
@@ -174,7 +214,7 @@ export function createRendering({
     if (!regularPass && !focusPass) return;
     if (regularPass) state.lastVisibilityUpdate = now;
     if (focusPass) state.lastFocusUpdate = now;
-    if (!state.vesselRecords.length) {
+    if (!state.records.all.length) {
       // No records — flush any lingering card entries (vanished-feed case).
       if (regularPass) updateClusteredLabels([]);
       if (focusPass) state.activeFocusCount = 0;
@@ -191,22 +231,23 @@ export function createRendering({
       if (doRotations) vesselState._lastCamPoseSig = poseSig;
       const occluder = makeOccluder();
       const labelCandidates = [];
-      for (const record of state.vesselRecords) {
-        const visible = isVisible(record.surfacePosition, occluder);
-        if (record.billboard) {
-          record.billboard.show = visible;
+      for (const record of state.records.all) {
+        const visual = getVisual(record);
+        const visible = isVisible(visual.surfacePosition, occluder);
+        if (visual.billboard) {
+          visual.billboard.show = visible;
           if (visible && doRotations && scene) {
             const rot = screenProjectedRotation(
               scene,
-              record.position,
+              visual.position,
               vesselCourseDeg(record),
-              record.billboard.rotation,
+              visual.billboard.rotation,
             );
             if (
               rot !== null &&
-              Math.abs(rot - record.billboard.rotation) > 0.002
+              Math.abs(rot - visual.billboard.rotation) > 0.002
             ) {
-              record.billboard.rotation = rot;
+              visual.billboard.rotation = rot;
             }
           }
         }
@@ -216,7 +257,7 @@ export function createRendering({
     }
     if (focusPass && scene && camera) {
       const result = applyVesselFocusDeemphasis({
-        records: state.vesselRecords,
+        records: state.records.all,
         target: focusTarget,
         previousActiveCount: state.activeFocusCount,
         nowMs: now,
@@ -256,8 +297,9 @@ export function createRendering({
     let transitioning = false;
     let activeCount = 0;
     for (const record of records || []) {
-      const bb = record?.billboard;
-      const position = bb?.position || record?.position;
+      const visual = getVisual(record);
+      const bb = visual?.billboard;
+      const position = bb?.position || visual?.position;
       if (!bb || !position) continue;
       const focus = advanceSpriteFocus(bb, {
         // Hidden/far-side sprites still finish any pending release so the active
@@ -329,10 +371,11 @@ export function createRendering({
 
     const cells = new Map();
     for (const record of records) {
+      const visual = getVisual(record);
       if (record === selected) continue;
       const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
         scene,
-        record.position,
+        visual.position,
       );
       if (!screen) continue;
       const key = `${Math.floor(screen.x / LABEL_GRID_PX)}:${Math.floor(screen.y / LABEL_GRID_PX)}`;
@@ -354,7 +397,7 @@ export function createRendering({
     if (selected) {
       const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
         scene,
-        selected.billboard?.position || selected.position,
+        getVisual(selected).billboard?.position || getVisual(selected).position,
       );
       if (screen) accepted.push({ x: screen.x, y: screen.y });
     }
@@ -407,7 +450,7 @@ export function createRendering({
           ...card,
           accessibilityLabel: `Focus vessel ${card.title}, MMSI ${mmsi}`,
           activate: () => {
-            const record = state.vesselMap.get(mmsi);
+            const record = state.records.byMmsi.get(mmsi);
             if (!record) return false;
             components.selection.selectAndFocusVessel(record);
             return true;
@@ -450,6 +493,9 @@ export function createRendering({
     vesselState._vesselOverlayHost.setVisible(VESSEL_OVERLAY_SOURCE_ID, show);
   }
   return {
+    getVisual,
+    prepareRecordVisual,
+    resetRecordVisuals,
     renderRowLimit,
     labelRowLimit,
     ensureCollections,

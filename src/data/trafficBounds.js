@@ -33,8 +33,8 @@ export function greatCircleKm(lat1, lon1, lat2, lon2) {
   const p2 = toRad(lat2);
   const dp = toRad(lat2 - lat1);
   const dl = toRad(lon2 - lon1);
-  const a = Math.sin(dp / 2) ** 2
-    + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  const a =
+    Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
@@ -49,7 +49,8 @@ function initialBearingRad(lat1, lon1, lat2, lon2) {
   const p2 = toRad(lat2);
   const dl = toRad(lon2 - lon1);
   const y = Math.sin(dl) * Math.cos(p2);
-  const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+  const x =
+    Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
   return Math.atan2(y, x);
 }
 
@@ -68,12 +69,15 @@ function destinationPoint(lat, lon, bearingRad, distKm) {
   const p1 = toRad(lat);
   const l1 = toRad(lon);
   const p2 = Math.asin(
-    Math.sin(p1) * Math.cos(delta) + Math.cos(p1) * Math.sin(delta) * Math.cos(bearingRad)
+    Math.sin(p1) * Math.cos(delta) +
+      Math.cos(p1) * Math.sin(delta) * Math.cos(bearingRad),
   );
-  const l2 = l1 + Math.atan2(
-    Math.sin(bearingRad) * Math.sin(delta) * Math.cos(p1),
-    Math.cos(delta) - Math.sin(p1) * Math.sin(p2)
-  );
+  const l2 =
+    l1 +
+    Math.atan2(
+      Math.sin(bearingRad) * Math.sin(delta) * Math.cos(p1),
+      Math.cos(delta) - Math.sin(p1) * Math.sin(p2),
+    );
   // Normalize longitude to [-180, 180)
   const lonDeg = ((toDeg(l2) + 540) % 360) - 180;
   return { lat: toDeg(p2), lon: lonDeg };
@@ -100,7 +104,13 @@ function destinationPoint(lat, lon, bearingRad, distKm) {
  * @returns {{lat:number, lon:number, source:'hit'|'nadir'|'pulled'}}
  *   The fetch center and which rule produced it.
  */
-export function deriveFetchCenter({ nadirLat, nadirLon, hitLat, hitLon, maxPullKm = 12 }) {
+export function deriveFetchCenter({
+  nadirLat,
+  nadirLon,
+  hitLat,
+  hitLon,
+  maxPullKm = 12,
+}) {
   if (!Number.isFinite(hitLat) || !Number.isFinite(hitLon)) {
     return { lat: nadirLat, lon: nadirLon, source: 'nadir' };
   }

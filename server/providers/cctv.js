@@ -10,11 +10,13 @@ import {
   fetchCctvImageFromUpstream,
   fetchTxdotSnapshot,
   fetchCctvMediaUpstream,
+  watchDownstreamClose,
 } from './cctv/media.js';
 import {
   CCTV_FRAME_FETCH_TIMEOUT_MS,
   CCTV_MAX_SOURCES_CEILING,
 } from './cctv/constants.js';
+import { sanitizeCctvRangeHeader } from './cctv/range.js';
 import { googleServerApiKey } from './places/google-key.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
@@ -218,15 +220,31 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             return;
           }
 
+          // Bound before the request goes out: most of the wait is before any
+          // header arrives, and a viewer who leaves during it must take the
+          // upstream request with them.
+          const downstream = watchDownstreamClose(res);
           try {
             const upstreamHeaders = {
               'User-Agent': 'gods-eye-view-cctv-proxy/1.0',
             };
-            const requestRange = req.headers?.range;
+            // Never forward the client's own string: a Range this proxy does
+            // not accept is dropped and the request proceeds without one.
+            const requestRange = sanitizeCctvRangeHeader(req.headers?.range);
             if (requestRange) upstreamHeaders.Range = requestRange;
             const upstream = await fetchCctvMediaUpstream(mediaUrl, {
               headers: upstreamHeaders,
+              signal: downstream.signal,
             });
+            if (downstream.closed) {
+              // The headers arrived for a viewer who is no longer there.
+              try {
+                await upstream.body?.cancel();
+              } catch {
+                /* already closed */
+              }
+              return;
+            }
             const contentType = upstream.headers.get('content-type') || '';
             if (!upstream.ok) {
               try {
@@ -283,6 +301,11 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             });
             return;
           } catch (error) {
+            if (downstream.closed) {
+              // The viewer left mid-request. That is not a camera fault and
+              // there is nobody to answer.
+              return;
+            }
             const timedOut =
               error?.name === 'AbortError' || error?.name === 'TimeoutError';
             setHealth(cameraId, {

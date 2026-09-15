@@ -1,3 +1,4 @@
+import { approxDistanceKm as _approxDistanceKm } from './recordPolicy.js';
 import { displayedKinematics } from '../../data/motionModel.js';
 import * as Cesium from 'cesium';
 import { isExplicitLayerStateOrigin } from '../../data/layerState.js';
@@ -43,13 +44,6 @@ export function createQueries({
    * @returns {number} Approximate great-circle distance in km.
    */
 
-  function _approxDistanceKm(lat1, lon1, lat2, lon2) {
-    const dLat = (lat2 - lat1) * 111.32;
-    const dLon =
-      (lon2 - lon1) * 111.32 * Math.cos((((lat1 + lat2) / 2) * Math.PI) / 180);
-    return Math.hypot(dLat, dLon);
-  }
-
   /**
    * True when the aircraft's latest metadata reads "on or about the runway"
    * (low + slow) — see the landed fast-cull rationale above. Both gates must
@@ -59,7 +53,7 @@ export function createQueries({
    */
 
   function _likelyLanded(icao24) {
-    const info = flightState._flightData.get(icao24);
+    const info = flightState.records.data.get(icao24);
     if (!info) return false;
     // Round 7 (owner: "fewer planes than OpenSky's own map" + "parked planes
     // never heal"): the fast cull only applies to contacts that were AIRBORNE
@@ -136,7 +130,7 @@ export function createQueries({
     // user-visible surface renders `position` as the plane's on-screen location —
     // every visual consumer reads the floored per-frame cache instead (see
     // `_trackedDisplayPosition`). If that ever changes, floor this path too.
-    const info = flightState._flightData.get(icao24);
+    const info = flightState.records.data.get(icao24);
     const bb = flightState._billboards.get(icao24);
     const basePos =
       parts.motion._deadReckon(icao24) || (bb ? bb.position : null);
@@ -170,7 +164,8 @@ export function createQueries({
       velocityMps: displayed.speedMps,
       track: displayed.trackDeg,
       stale: Boolean(
-        flightState._missingPolls.get(icao24) || flightState._backoff,
+        flightState.records.missingPolls.get(icao24) ||
+        flightState.feed._backoff,
       ),
       airline: info?.airline ?? null,
       // CLASS label follows the TR-3B conversion so every downstream card
@@ -271,7 +266,7 @@ export function createQueries({
 
     icon: '✈️',
 
-    source: flightState._lastSource,
+    source: flightState.feed._lastSource,
 
     // Browser-harness seam: isolates synthetic display-floor scenarios without
     // changing any production lifecycle or cache policy.
@@ -429,7 +424,7 @@ export function createQueries({
         const model = flightState._models.get(icao24);
         const modelOwnsVisual = parts.rendering._modelOwnsVisual(icao24);
         if (!isTracked && !bb.show && !modelOwnsVisual) continue;
-        const info = flightState._flightData.get(icao24);
+        const info = flightState.records.data.get(icao24);
         let object = flightState._detectionObjects.get(icao24);
         if (!object) {
           object = {
@@ -496,7 +491,7 @@ export function createQueries({
      *   Best match with a cloned, dead-reckoned position, or null if none.
      */
     findByQuery(query) {
-      if (!flightState._flightData || flightState._flightData.size === 0)
+      if (!flightState.records.data || flightState.records.data.size === 0)
         return null;
       const q = String(query || '')
         .trim()
@@ -513,7 +508,7 @@ export function createQueries({
       // strictly tiered so a registration can never out-rank a real callsign on
       // feed order alone.
       let best = null;
-      for (const [icao24, info] of flightState._flightData) {
+      for (const [icao24, info] of flightState.records.data) {
         const candidate = {
           tier: rankContactMatch({
             query: q,
@@ -580,7 +575,7 @@ export function createQueries({
         const distance = Cesium.Cartesian3.distance(center, pos);
         if (distance > maxRange) continue;
 
-        const info = flightState._flightData.get(icao24);
+        const info = flightState.records.data.get(icao24);
         const callsign = info?.callsign?.trim() || null;
         nearby.push({
           // Label. Callers that need identity read `icao24` (Context cohorts do).
@@ -664,7 +659,7 @@ export function createQueries({
           flightState._scratchCarto,
         );
         if (!carto) continue;
-        const info = flightState._flightData.get(icao24);
+        const info = flightState.records.data.get(icao24);
         result.push({
           id: icao24, // identity (trackById resolves this)
           label: _contactLabel(icao24, info),
@@ -703,14 +698,14 @@ export function createQueries({
       if (
         !flightState._billboardCollection ||
         !flightState._billboardCollection.show ||
-        flightState._flightData.size === 0
+        flightState.records.data.size === 0
       )
         return [];
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
         : 2000;
       const result = [];
-      for (const [icao24, info] of flightState._flightData) {
+      for (const [icao24, info] of flightState.records.data) {
         const routeOk =
           !!info?.route && parts.tracking._routeIsPlausible(icao24, info.route);
         result.push(
@@ -754,7 +749,7 @@ export function createQueries({
         };
       const id = _normalizeTrackedIcao(icao24);
       if (!id) return { status: 'missing', reason: 'invalid-target' };
-      const outcome = flightState._lastTrackingRefreshOutcome;
+      const outcome = flightState.feed._lastTrackingRefreshOutcome;
       if (outcome.status !== 'accepted') {
         return {
           status: 'source-unavailable',
@@ -925,18 +920,21 @@ export function createQueries({
      * @returns {{count: number, lastUpdate: number|null, stale: boolean, error: string|null, status: number|null, retryInSec: number}}
      */
     getStats() {
-      const retryInSec = flightState._retryAt
-        ? Math.max(0, Math.ceil((flightState._retryAt - Date.now()) / 1000))
+      const retryInSec = flightState.feed._retryAt
+        ? Math.max(
+            0,
+            Math.ceil((flightState.feed._retryAt - Date.now()) / 1000),
+          )
         : 0;
       return {
-        count: flightState._count,
-        lastUpdate: flightState._lastUpdate,
-        stale: flightState._backoff,
-        error: flightState._lastError,
-        status: flightState._lastStatus,
+        count: flightState.feed._count,
+        lastUpdate: flightState.feed._lastUpdate,
+        stale: flightState.feed._backoff,
+        error: flightState.feed._lastError,
+        status: flightState.feed._lastStatus,
         retryInSec,
-        source: flightState._lastSource,
-        coverage: flightState._lastCoverage,
+        source: flightState.feed._lastSource,
+        coverage: flightState.feed._lastCoverage,
       };
     },
   };

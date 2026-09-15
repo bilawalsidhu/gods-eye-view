@@ -1,3 +1,11 @@
+export {
+  GROUND_FLOOR_CLAMP_RADIUS_KM,
+  GROUND_FLOOR_WARM_MAX_ALT_M,
+  POSITION_HISTORY_LIMIT,
+  LANDED_MISSING_POLL_LIMIT,
+  MISSING_POLL_LIMIT,
+  ERROR_BACKOFF_INTERVAL,
+} from './recordPolicy.js';
 import * as Cesium from 'cesium';
 
 export const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
@@ -101,14 +109,6 @@ export const MODEL_BELLY_OFFSET_NATIVE = 6.719;
 
 export const CYAN_TRANSPARENT = Cesium.Color.CYAN.withAlpha(0);
 
-/** @constant {number} ERROR_BACKOFF_INTERVAL - Cooldown (ms) after transient errors */
-
-export const ERROR_BACKOFF_INTERVAL = 20000;
-// transient error retry
-/** @constant {number} POSITION_HISTORY_LIMIT - Max position samples kept per aircraft for dead reckoning */
-
-export const POSITION_HISTORY_LIMIT = 5;
-
 export const COCKPIT_CONTACT_SIZE_PX = 6;
 
 export const COCKPIT_CIVILIAN_COLOR =
@@ -151,8 +151,6 @@ export const RENDER_DELAY_SEC = 30;
 
 /** @constant {number} Polls an aircraft may miss before removal (transient OpenSky dropouts). */
 
-export const MISSING_POLL_LIMIT = 3;
-
 // --- Landed-plane fast cull (owner field report 2026-07-02: "phantom" planes
 // lingered ~2 min at airports after touchdown). OpenSky's on_ground flag LAGS
 // the actual landing, so a landed plane's last airborne-classified fixes show
@@ -174,8 +172,6 @@ export const LANDED_SPEED_MAX_MPS = 23;
 
 /** @constant {number} Missed-poll allowance for likely-landed planes (1 = removed on the first missed poll). */
 
-export const LANDED_MISSING_POLL_LIMIT = 1;
-
 // Field-test rounds 1+3 (2026-07-06): below-ground floor clamp scope. Only
 // contacts rendering below the alt ceiling are ever clamped/warmed (terrain
 // tops out well under it outside the extreme Himalaya; cruise traffic can't
@@ -184,11 +180,7 @@ export const LANDED_MISSING_POLL_LIMIT = 1;
 // need unbounded terrain resolution (the tracked contact clamps regardless).
 /** @constant {number} Max render altitude (m, ellipsoidal) eligible for the ground-floor clamp. */
 
-export const GROUND_FLOOR_WARM_MAX_ALT_M = 4500;
-
 /** @constant {number} Max viewer distance (km) for the fleet ground-floor clamp. */
-
-export const GROUND_FLOOR_CLAMP_RADIUS_KM = 150;
 
 // ---------------------------------------------------------------------------
 // Icon orientation (2026-06-10 playtest fix): rotation is computed by

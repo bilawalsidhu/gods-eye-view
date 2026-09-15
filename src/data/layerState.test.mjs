@@ -1,3 +1,4 @@
+import { readShellSource } from '../testSupport/readShellSource.mjs';
 import { expandApplicationHtml } from '../../build/application-html.js';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
@@ -157,8 +158,10 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 18);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 18);
+  assert.equal(REGISTERED_LAYER_IDS.length, 22);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 22);
+  assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
+  assert.ok(REGISTERED_LAYER_IDS.includes('weather'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.throws(
     () => validateLayerStateRegistry([...LAYER_STATE_REGISTRY, LAYER_STATE_REGISTRY[0]]),
@@ -225,8 +228,14 @@ test('v2 codec distinguishes absent from empty and keeps canonical deterministic
 });
 
 test('unknown enabled-layer tokens reject the payload instead of becoming an empty set', () => {
-  assert.equal(decodeLayerStateParams(new URLSearchParams('v=2&l=z')), null);
-  assert.equal(decodeLayerStateParams(new URLSearchParams('v=2&l=c.z')), null);
+  assert.equal(decodeLayerStateParams(new URLSearchParams('v=2&l=unknown')), null);
+  assert.equal(decodeLayerStateParams(new URLSearchParams('v=2&l=c.unknown')), null);
+});
+
+test('Nepal event and locator have distinct enabled-only share tokens', () => {
+  const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=h.z'));
+  assert.deepEqual(decoded.enabledLayerIds, ['bhote-koshi-2026', 'bhote-koshi-locator']);
+  assert.ok(encode(decoded).includes('l=h.z'));
 });
 
 test('unknown and forbidden option fields are ignored while missing options use codec defaults', () => {
@@ -373,7 +382,7 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
     assert.match(source, /^\s*(?:let |flightState\.)_models3dMode = 'proximity';/m,
       `${name}: and starts in proximity, matching the codec default`);
   }
-  const ui = await readFile(new URL('../ui/applicationShell.js', import.meta.url), 'utf8');
+  const ui = await readShellSource();
   assert.match(ui, /^\s*this\.(?:flightState\.)?_models3dEnabled = true;$/m,
     'ui.js: the DISPLAY rail believes 3D is on before any layer-state sync arrives');
   assert.match(ui, /this\.(?:flightState\.)?_models3dMode = 'proximity';/,

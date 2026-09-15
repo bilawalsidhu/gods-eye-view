@@ -26,6 +26,8 @@ export function unwatchedProviderCachePlugin() {
   return {
     name: 'gev-unwatched-provider-cache',
     apply: 'serve',
-    config: () => ({ server: { watch: { ignored: [...RUNTIME_WRITE_GLOBS] } } }),
+    config: () => ({
+      server: { watch: { ignored: [...RUNTIME_WRITE_GLOBS] } },
+    }),
   };
 }

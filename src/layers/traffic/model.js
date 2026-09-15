@@ -13,52 +13,17 @@ import {
 } from './policy.js';
 
 export function createModel({ state: layerState, services, parts, source }) {
-  // ─── Overpass API ──────────────────────────────────────────
-
-  /**
-   * Build an Overpass QL query string to fetch road ways within a bounding box.
-   *
-   * The query uses a highway tag regex filter. When `majorOnly` is true, only
-   * motorway/trunk/primary/secondary are included; otherwise all drivable road
-   * classes are fetched. The `out geom qt;` suffix returns inline geometry
-   * (lat/lon per node) sorted by quadtile for faster server response.
-   *
-   * @param {number} south - Southern latitude bound (degrees).
-   * @param {number} west  - Western longitude bound (degrees).
-   * @param {number} north - Northern latitude bound (degrees).
-   * @param {number} east  - Eastern longitude bound (degrees).
-   * @param {Object}  [opts]
-   * @param {boolean} [opts.majorOnly=false] - Restrict to major highway classes only.
-   * @param {number}  [opts.timeoutSec=25]   - Overpass server-side timeout.
-   * @returns {string} Overpass QL query body.
-   */
-
-  /**
-   * Parse an Overpass `out geom;` JSON response into internal road objects.
-   *
-   * Each OSM `way` element carries an inline `geometry` array of `{lat, lon}`
-   * objects, so no separate node look-up or osmtogeojson conversion is needed.
-   *
-   * Processing per way:
-   *  1. Extract [lon, lat] coordinate pairs.
-   *  2. Sub-sample long polylines to at most MAX_WAYPOINTS_PER_ROAD vertices.
-   *  3. Sample terrain height once at the first vertex (avoids per-vertex cost).
-   *  4. Convert to Cartesian3 waypoints and pre-compute inter-vertex distances.
-   *
-   * @param {Object} overpassData - Raw JSON response from the Overpass API.
-   * @param {Array}  overpassData.elements - Array of OSM elements.
-   * @returns {Array<{coords:number[][], type:string, waypoints:Cesium.Cartesian3[], segmentDist:number[]}>}
-   *   Parsed road objects ready for dot spawning.
-   */
-
-  function parseRoads(overpassData) {
-    if (!overpassData || !overpassData.elements) return [];
+  /** Build scene waypoints from source records; thinning and terrain remain rendering policy. */
+  function parseRoads(roadData) {
+    if (!roadData || !roadData.roads) {
+      return [];
+    }
 
     const roads = [];
-    for (const el of overpassData.elements) {
-      if (el.type !== 'way' || !el.geometry || el.geometry.length < 2) continue;
+    for (const road of roadData.roads) {
+      if (!road.coordinates || road.coordinates.length < 2) continue;
 
-      const rawCoords = el.geometry.map((g) => [g.lon, g.lat]);
+      const rawCoords = road.coordinates;
 
       // Sub-sample long polylines: keep every Nth vertex to stay within budget
       const simplifyStep =
@@ -79,21 +44,8 @@ export function createModel({ state: layerState, services, parts, source }) {
 
       if (coords.length < 2) continue;
 
-      const type = el.tags?.highway || 'unclassified';
-      // One-way capture (field-test round 1: "a car would never go in
-      // reverse"): dots on one-way roads all travel the legal direction.
-      // OSM: oneway=yes/1/true → digitization order; '-1' → reversed;
-      // roundabouts are one-way by definition. 0 = two-way (alternate).
-      const onewayTag = el.tags?.oneway;
-      const oneway =
-        onewayTag === 'yes' ||
-        onewayTag === '1' ||
-        onewayTag === 'true' ||
-        el.tags?.junction === 'roundabout'
-          ? 1
-          : onewayTag === '-1'
-            ? -1
-            : 0;
+      const type = road.type;
+      const oneway = road.oneway;
 
       // Sample terrain height once at the road start to avoid per-vertex cost
       let baseHeight = 0;

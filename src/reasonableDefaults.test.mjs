@@ -1,3 +1,4 @@
+import { readShellSource } from './testSupport/readShellSource.mjs';
 import { expandApplicationHtml } from '../build/application-html.js';
 // src/reasonableDefaults.test.mjs
 //
@@ -43,7 +44,7 @@ import {
 import { ShareLinkManager } from './sharelink.js';
 
 // Follow the UI wiring and its extracted preset definitions.
-const uiSource = fs.readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8')
+const uiSource = readShellSource()
   + '\n' + fs.readFileSync(new URL('./ui/visualPresets.js', import.meta.url), 'utf8');
 const indexHtml = expandApplicationHtml(fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
 const shareSource = fs.readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8');
@@ -252,8 +253,9 @@ test('detection-on-by-default is a default, not an operator override', () => {
   const displayActions = uiSource.slice(uiSource.indexOf('this._displayControls ='));
   const detectionButton = displayActions.slice(displayActions.indexOf('cycleDetection:'), displayActions.indexOf('toggleModels:'));
   assert.match(detectionButton, /cycleDetectionMode\(\)/, 'the button still invokes the detection action');
-  assert.match(detectionButton, /this\._detectionUserOverridden = true;/,
+  assert.match(detectionButton, /this\.claimDetection\(\);/,
     'and the detection control still claims the override when the operator uses it');
+  assert.match(uiSource, /claimDetection: \(\) => \{\s*this\._visualSettings\._detectionUserOverridden = true;/);
 
   // Style-switch semantics are unchanged: Normal is still not a preset owner,
   // so switching TO Normal does not re-apply or clear anything.

@@ -1,5 +1,5 @@
-import { createSourceSlot } from '../app/sourceSlot.js';
-import { createWeatherLayer } from '../layers/weather/index.js';
+import { createApplicationWeather } from '../app/layers/weather.js';
+import { createSourceSlot } from '../sources/sourceSlot.js';
 import { createWeatherSource } from '../layers/weather/source.js';
 
 const sourceSlot = createSourceSlot(
@@ -9,5 +9,5 @@ const sourceSlot = createSourceSlot(
 );
 /** Wire the standalone frame source and application layer owner. */
 export const configureWeatherSource = sourceSlot.configure;
-const layer = createWeatherLayer({ source: sourceSlot.source });
+const layer = createApplicationWeather({ source: sourceSlot.source });
 export default layer;
