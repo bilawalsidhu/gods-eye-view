@@ -1,4 +1,4 @@
-import path from 'node:path';
+import { providerCacheDir } from '../common/cache-dir.js';
 
 // ---------------------------------------------------------------------------
 // Military-installation context proxy
@@ -33,9 +33,7 @@ const MILITARY_INSTALLATION_ELEMENT_CAP = 700;
 const MILITARY_INSTALLATION_DISK_TTL_MS = 30 * 86_400_000;
 
 /** Disk-cache directory for mapped installation payloads. */
-const MILITARY_INSTALLATION_DISK_DIR = path.join(
-  process.cwd(),
-  '.gev-cache',
+const MILITARY_INSTALLATION_DISK_DIR = providerCacheDir(
   'military-installations',
 );
 

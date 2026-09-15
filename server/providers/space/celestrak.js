@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
 import { celestrakTleUrl } from '../../../src/data/spaceProviderRequests.js';
+import { providerCacheDir } from '../common/cache-dir.js';
 
 /**
  * Vite plugin: CelesTrak TLE proxy.
@@ -22,7 +23,7 @@ import { celestrakTleUrl } from '../../../src/data/spaceProviderRequests.js';
  */
 export function celestrakProxy() {
   const TLE_TTL_MS = 6 * 3600_000;
-  const CACHE_DIR = path.join(process.cwd(), '.gev-cache');
+  const CACHE_DIR = providerCacheDir();
   const mem = new Map(); // group -> { at: epochMs, body: string }
   const inflight = new Map(); // group -> Promise<{at, body}|null>
 

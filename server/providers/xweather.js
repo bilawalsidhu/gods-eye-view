@@ -8,6 +8,7 @@ import {
   resolveRefreshMs,
 } from '../../src/data/xweatherTiles.js';
 import { isAllowedLayer } from '../../src/data/xweatherCatalogue.js';
+import { providerCacheDir } from './common/cache-dir.js';
 import {
   utcMonthKey as xweatherUtcMonthKey,
   normalizeBudget as normalizeXweatherBudget,
@@ -51,7 +52,7 @@ import {
  */
 export function xweatherProxy() {
   const UPSTREAM_ORIGIN = 'https://maps.api.xweather.com';
-  const CACHE_DIR = path.join(process.cwd(), '.gev-cache', 'xweather');
+  const CACHE_DIR = providerCacheDir('xweather');
   const BUDGET_PATH = path.join(CACHE_DIR, 'budget.json');
   const MEM_MAX_ENTRIES = 512;
   const UPSTREAM_TIMEOUT_MS = 15000;

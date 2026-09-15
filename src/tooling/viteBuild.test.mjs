@@ -1,9 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createBrowserViteConfig } from '../../build/vite.js';
 import standaloneConfig, * as compatibility from '../../vite.config.js';
 import * as providers from '../../server/providers/local.js';
+import {
+  PROVIDER_CACHE_DIR_NAME,
+  providerCacheDir,
+} from '../../server/providers/common/cache-dir.js';
+
+/** Every provider module on disk, for source-level invariants. */
+function listProviderSources() {
+  const root = new URL('../../server/providers/', import.meta.url);
+  const out = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const child = new URL(
+        `${entry.name}${entry.isDirectory() ? '/' : ''}`,
+        dir,
+      );
+      if (entry.isDirectory()) walk(child);
+      else if (entry.name.endsWith('.js')) out.push(child);
+    }
+  };
+  walk(root);
+  return out;
+}
 
 test('explicit build inputs preserve browser-only defines, plugin order and loopback protections', () => {
   const plugin = { name: 'fixture-provider' };
@@ -63,11 +85,51 @@ test('root config retains existing named exports and standalone provider order',
     assert.equal(compatibility[name], value, name);
   const config = standaloneConfig({ mode: 'test' });
   assert.deepEqual(
-    config.plugins.slice(2, -1).map((plugin) => plugin.name),
+    config.plugins.slice(2, -2).map((plugin) => plugin.name),
     providers.localProviderPlugins().map((plugin) => plugin.name),
   );
-  assert.equal(config.plugins.at(-2).name, 'gev-key-setup');
-  assert.equal(config.plugins.at(-1).name, 'api-not-found');
+  assert.equal(config.plugins.at(-3).name, 'gev-key-setup');
+  assert.equal(config.plugins.at(-2).name, 'api-not-found');
+  // Config-only, so it sits outside the provider slice rather than in it.
+  assert.equal(config.plugins.at(-1).name, 'gev-unwatched-provider-cache');
+});
+
+test('the provider disk cache is kept out of the dev server watcher', () => {
+  // The tile proxies write a file per tile, so a busy layer is hundreds of
+  // writes into this directory. Measured on this checkout, letting the watcher
+  // see them took a cold Xweather tile from ~150 ms to 3-9 s: the watcher's
+  // own stat calls take the libuv threads that `getaddrinfo` needs, so each
+  // fetch waits on a DNS lookup that cannot get one.
+  const config = standaloneConfig({ mode: 'test' });
+  const plugin = config.plugins.at(-1);
+  assert.equal(plugin.name, 'gev-unwatched-provider-cache');
+  // Dev only: preview and build have no watcher to exclude anything from.
+  assert.equal(plugin.apply, 'serve');
+  const ignored = plugin.config().server.watch.ignored;
+  assert.ok(
+    ignored.some((glob) => glob.includes(PROVIDER_CACHE_DIR_NAME)),
+    `watcher must ignore ${PROVIDER_CACHE_DIR_NAME}, got ${ignored.join()}`,
+  );
+});
+
+test('every provider disk cache lives under the directory that is ignored', () => {
+  // The exclusion is one glob over one directory, so a provider that builds
+  // its own path out of the working directory opts itself back into being
+  // watched — and the symptom shows up as slow fetches somewhere else.
+  const offenders = [];
+  for (const file of listProviderSources()) {
+    if (file.pathname.endsWith('/common/cache-dir.js')) continue; // the helper
+    const text = readFileSync(file, 'utf8');
+    if (/path\.join\(\s*process\.cwd\(\)/.test(text)) {
+      offenders.push(file.pathname.split('/server/providers/')[1]);
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    'these build a cache path directly; use providerCacheDir() instead',
+  );
+  assert.ok(providerCacheDir('x').includes(PROVIDER_CACHE_DIR_NAME));
 });
 
 test('build export resolves in Node and has no browser fallback', async () => {

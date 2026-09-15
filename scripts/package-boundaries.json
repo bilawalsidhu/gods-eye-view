@@ -39,6 +39,7 @@
       "server/providers/live.js",
       "server/providers/common/http.js",
       "server/providers/common/query.js",
+      "server/providers/common/cache-dir.js",
       "server/providers/aircraft/opensky.js",
       "server/providers/aircraft/adsb-lol.js",
       "server/providers/aircraft/enrichment.js",
@@ -85,6 +86,7 @@
       "server/providers/space/celestrak.js",
       "server/providers/space/launch-library.js",
       "server/providers/common/http.js",
+      "server/providers/common/cache-dir.js",
       "src/data/spaceProviderRequests.js"
     ],
     "external": []
@@ -99,7 +101,8 @@
     "exports": ["./server/providers/terrain"],
     "modules": [
       "server/providers/terrain.js",
-      "src/data/terrainHeightsProxy.js"
+      "src/data/terrainHeightsProxy.js",
+      "server/providers/common/cache-dir.js"
     ],
     "external": []
   },
@@ -114,7 +117,8 @@
     "modules": [
       "server/providers/traffic.js",
       "src/data/tileBudget.js",
-      "src/data/tomtomTiles.js"
+      "src/data/tomtomTiles.js",
+      "server/providers/common/cache-dir.js"
     ],
     "external": []
   },
@@ -125,7 +129,8 @@
       "server/providers/xweather.js",
       "src/data/tileBudget.js",
       "src/data/xweatherCatalogue.js",
-      "src/data/xweatherTiles.js"
+      "src/data/xweatherTiles.js",
+      "server/providers/common/cache-dir.js"
     ],
     "external": []
   },
@@ -147,7 +152,11 @@
   "firms-provider": {
     "runtime": "node",
     "exports": ["./server/providers/firms"],
-    "modules": ["server/providers/firms.js", "src/data/firmsCsv.js"],
+    "modules": [
+      "server/providers/firms.js",
+      "src/data/firmsCsv.js",
+      "server/providers/common/cache-dir.js"
+    ],
     "external": []
   },
   "gbfs-provider": {
@@ -207,6 +216,7 @@
       "server/providers/common/http.js",
       "server/providers/common/rate-limit.js",
       "server/providers/common/request.js",
+      "server/providers/common/cache-dir.js",
       "server/providers/overpass.js",
       "server/providers/overpass/cache.js",
       "server/providers/overpass/constants.js",
@@ -225,6 +235,7 @@
       "server/providers/common/http.js",
       "server/providers/common/query.js",
       "server/providers/common/rate-limit.js",
+      "server/providers/common/cache-dir.js",
       "server/providers/military-installations.js",
       "server/providers/military-installations/cache.js",
       "server/providers/military-installations/constants.js",
