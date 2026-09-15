@@ -47,6 +47,7 @@ import {
   releaseContinuousRender,
 } from './renderGovernor.js';
 import { setLogLevel, getLogLevel, peekLogBuffer, drainLogBuffer } from './logger.js';
+import { applyTilesetCachePolicy } from './tilesetCachePolicy.js';
 import { installScopeMask } from './scopeMask.js';
 import { initFirstRunExperience } from './firstRunExperience.js';
 
@@ -171,6 +172,10 @@ async function init() {
     // designed against wall-clock time, not frame count. Measured on the
     // 2026-08-05 perf investigation as a strict halving of idle burn on
     // 120 Hz hardware; a no-op on 60 Hz displays. (perf item 2)
+    // From installRenderGovernor() onward the GOVERNOR owns this knob: it
+    // drops to 30 fps while the style loop is the only continuous-render
+    // holder and the camera is still (Phase 9 Batch P), restoring 60 on any
+    // other hold or camera motion.
     viewer.targetFrameRate = 60;
 
     // Register per-layer data attribution into the "Data attribution" popover.
@@ -201,6 +206,12 @@ async function init() {
         onlyUsingWithGoogleGeocoder: true,
       });
       viewer.scene.primitives.add(tileset);
+      // Photoreal tile-cache budget (Phase 9 Batch P): Google's helper asks
+      // for 1536 MB cache + 1024 MB overflow (2.5 GB ceiling). Measured boot
+      // residency is ~220 MB; 384/128 keeps a downtown fly-through resident
+      // while bounding the worst-case VRAM spike. ?tileCacheMB= restores a
+      // custom budget. Policy + rationale: tilesetCachePolicy.js.
+      applyTilesetCachePolicy(tileset);
       // NOTE: Cesium World Terrain intentionally disabled — conflicts with Google 3D Tiles at high zoom.
       // Google Photorealistic 3D Tiles provide their own terrain/elevation.
       viewer.scene.globe.show = false;

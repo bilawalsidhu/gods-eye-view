@@ -156,6 +156,10 @@ import {
 } from './navigationPolicy.js';
 import { holdContinuousRender, releaseContinuousRender, governorRequestRender } from './renderGovernor.js';
 import {
+  resolveStyleAnimFrameIntervalMs,
+  styleAnimShouldAdvance,
+} from './ui/styleAnimationCadence.js';
+import {
   setScopeMaskEnabled,
   isScopeMaskEnabled,
   setScopeMaskFeather,
@@ -5533,8 +5537,19 @@ export class StyleManager {
    */
   _startAnimationLoop() {
     if (this._animFrameId) return; // already running
+    // 30 Hz uniform advance (Phase 9 Batch P, ?styleAnimFps= escape). The
+    // shaders are wall-clock-timed below, so animation SPEED is unchanged —
+    // only the sample rate drops. Pairs with the governor's low-demand
+    // 30 fps scene rate while this loop is the sole continuous-render holder.
+    const minFrameIntervalMs = resolveStyleAnimFrameIntervalMs();
+    this._styleAnimLastAdvanceMs = Number.NEGATIVE_INFINITY;
     const update = () => {
       const now = performance.now();
+      if (!styleAnimShouldAdvance(this._styleAnimLastAdvanceMs, now, minFrameIntervalMs)) {
+        this._animFrameId = requestAnimationFrame(update);
+        return;
+      }
+      this._styleAnimLastAdvanceMs = now;
       const elapsedSec = (Date.now() - this.startTime) / 1000.0;
 
       // Update transitions — interpolate each active crossfade

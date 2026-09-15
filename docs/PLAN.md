@@ -1455,13 +1455,39 @@ GitForge pipeline green.
 
 ### 9.2 Batches
 
-- [ ] **Batch P (perf, operator-flagged)**: cap the photoreal tileset
-  cache (`cacheBytes` 384 MB / overflow 128 MB, `?tileCacheMB=` escape
-  hatch) — before/after via `totalMemoryUsageInBytes` on a scripted
-  fly-through; cap the style-anim loop to 30 fps (wall-clock `time`
-  uniform so visual cadence is unchanged) + unit-test the frame gate;
-  cap overlay-canvas backing DPR at 1.5; fix the scope-mask canvas
-  sizing to its CSS box.
+- [x] **Batch P (perf, operator-flagged)** — landed 2026-09-15, live-verified
+  headless (478 tile requests, 0 failures, `tilesLoaded: true`, 220 MB
+  resident, all four policy asserts green; full suite 3,161 tests pass,
+  lint clean):
+  - **Tile-cache cap**: `cacheBytes` 1536→384 MB, overflow 1024→128 MB
+    (`src/tilesetCachePolicy.js`, applied post-construction in main.js;
+    escape hatches `?tileCacheMB=` / `?tileCacheOverflowMB=`, hard cap
+    4096). Boot residency is unchanged at ~220 MB — the ceiling binds only
+    worst-case dense-city traversal, exactly where the 2.5 GB stock budget
+    let VRAM spike.
+  - **Low-demand 30 fps**: the render governor now drops
+    `viewer.targetFrameRate` to 30 while `style-anim` is the SOLE
+    continuous-render holder and the camera is settled (camera
+    `moveStart`/`moveEnd` watched; any second hold, motion, or full idle
+    restores 60 immediately; `resolveGovernorTargetFrameRate` pure decision
+    table unit-pinned). Verified live: idle boot reports
+    `targetFrameRate: 30, holds: ["style-anim"]` — halves the idle GPU
+    frame cost of the retro/CRT default boot, which previously held 60 fps
+    forever.
+  - **Style-loop cadence**: the style-anim loop advances uniforms at 30 Hz
+    (`src/ui/styleAnimationCadence.js`, `?styleAnimFps=` escape) — the
+    `time` uniform is wall-clock, so animation speed is visually unchanged;
+    only sample count drops.
+  - **Scope-mask DPR cap 2.0→1.5** (`scopeMaskDevicePixelRatio`), aligning
+    with the world-overlay policy — ~24 MiB less backing per fullscreen
+    paint on 2× panels. (Overlay-canvas 1.5 cap itself was already landed
+    in df43386, 2026-09-13 — the 9.1 finding double-counted it.)
+  - Correction to the 9.1 note: `scope-mask` at 300×150 backing for an
+    800×600 CSS box is the DISABLED-state artifact (the disabled path clears
+    and returns without resizing, by design — zero canvas cost when scope
+    is off), not a stretching defect; enabled-state paints size to the CSS
+    box at the capped DPR. No fix needed; the 9.1 entry above stands
+    corrected here.
 - [ ] **Batch A (hardening)**: add `Strict-Transport-Security` to
   `public/_headers`; evaluate the CSP Report-Only → enforce flip using
   the e2e run's console report counts as the quiet-cycle evidence.

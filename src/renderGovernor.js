@@ -36,6 +36,23 @@
  *  within a short window (e.g. a rapid enable/disable cycle). */
 const CONTINUOUS_COOLDOWN_MS = 100;
 
+/** App baseline render-loop rate (set at boot in main.js; the governor owns
+ *  the knob from install onward). */
+export const BASE_TARGET_FRAME_RATE = 60;
+
+/**
+ * Scene frame rate while the ONLY continuous-render holder is the style
+ * animation loop and the camera is still (Phase 9 Batch P). The style
+ * shaders are wall-clock-timed, so 30 fps is visually identical for them
+ * and halves the idle GPU cost of a retro/CRT-styled boot (the default
+ * style keeps such a hold alive forever). Any second hold, any camera
+ * motion, or full idle restores the baseline immediately.
+ */
+export const STYLE_ANIM_LOW_DEMAND_FPS = 30;
+
+/** Owner id of the style loop's continuous-render hold (src/ui.js). */
+export const STYLE_ANIM_OWNER_ID = 'style-anim';
+
 let _viewer = null;
 let _installed = false;
 const _holds = new Set();
@@ -43,16 +60,57 @@ const _holds = new Set();
 /** Timer handle for the continuous→idle transition delay. */
 let _idleTransitionTimer = null;
 
+/**
+ * Camera-motion flag backing the low-demand policy. Starts TRUE at install
+ * on purpose: boot flies the camera (flyToAustin / share-link restore) and
+ * `camera.moveStart` may already have fired before we subscribe — assuming
+ * "moving" until the first observed `moveEnd` keeps the boot flight at the
+ * baseline rate instead of dropping it to 30 fps mid-animation.
+ */
+let _cameraActive = true;
+let _cameraMoveStartRemover = null;
+let _cameraMoveEndRemover = null;
+
 /** Debug trail of the most recent one-shot render requests (idle mode only). */
 const _recentRequests = [];
 const RECENT_REQUEST_CAP = 16;
+
+/**
+ * Pure frame-rate decision for the current governor state.
+ * @param {object} [options]
+ * @param {string[]} [options.holds] Active hold owner ids.
+ * @param {boolean} [options.cameraActive] Whether camera motion is underway.
+ * @param {number} [options.baseFps] Baseline loop rate.
+ * @param {number} [options.lowDemandFps] Rate when style-anim is the only
+ *   holder and the camera is still.
+ * @returns {number} targetFrameRate the viewer should run at.
+ */
+export function resolveGovernorTargetFrameRate({
+  holds = [],
+  cameraActive = false,
+  baseFps = BASE_TARGET_FRAME_RATE,
+  lowDemandFps = STYLE_ANIM_LOW_DEMAND_FPS,
+} = {}) {
+  if (cameraActive) return baseFps;
+  return holds.length === 1 && holds[0] === STYLE_ANIM_OWNER_ID ? lowDemandFps : baseFps;
+}
+
+function applyFrameRatePolicy() {
+  if (!_installed || !_viewer) return;
+  const next = resolveGovernorTargetFrameRate({ holds: [..._holds], cameraActive: _cameraActive });
+  if (_viewer.targetFrameRate !== next) _viewer.targetFrameRate = next;
+}
 
 function applyMode(_forceImmediate = false) {
   if (!_installed || !_viewer?.scene) return;
   const continuous = _holds.size > 0;
   const scene = _viewer.scene;
-  if (scene.requestRenderMode === !continuous) return;
+  if (scene.requestRenderMode === !continuous) {
+    applyFrameRatePolicy(); // mode steady, but the hold set may have changed shape
+    return;
+  }
   scene.requestRenderMode = !continuous;
+  applyFrameRatePolicy();
   if (!continuous) {
     // Entering idle: render one settling frame so anything the last
     // continuous frame mutated is on screen before the loop stops.
@@ -94,6 +152,25 @@ export function installRenderGovernor(viewer) {
   // idle means idle. All re-renders are camera/tiles (Cesium-native) or
   // explicit requests.
   viewer.scene.maximumRenderTimeChange = Infinity;
+  // Camera-motion watch for the low-demand frame-rate policy. Cesium Event
+  // listeners return a remover; guard for stubbed viewers in tests.
+  const camera = viewer.scene.camera;
+  if (camera?.moveStart?.addEventListener) {
+    _cameraMoveStartRemover = camera.moveStart.addEventListener(() => {
+      if (!_cameraActive) {
+        _cameraActive = true;
+        applyFrameRatePolicy();
+      }
+    });
+  }
+  if (camera?.moveEnd?.addEventListener) {
+    _cameraMoveEndRemover = camera.moveEnd.addEventListener(() => {
+      if (_cameraActive) {
+        _cameraActive = false;
+        applyFrameRatePolicy();
+      }
+    });
+  }
   applyMode();
 }
 
@@ -131,6 +208,11 @@ export function releaseContinuousRender(ownerId, immediate = false) {
     } else {
       scheduleIdleTransition();
     }
+  } else {
+    // Remaining holders may change the frame-rate policy's shape even though
+    // the mode itself stays continuous (e.g. flights releases while the
+    // style-anim low-demand hold remains).
+    applyMode();
   }
 }
 
@@ -154,7 +236,8 @@ export function governorRequestRender(reason = 'unspecified') {
 
 /**
  * @returns {{installed: boolean, mode: 'continuous'|'idle', holds: string[],
- *   recentRequests: Array<{reason: string, at: number}>}}
+ *   recentRequests: Array<{reason: string, at: number}>, targetFrameRate: number|null,
+ *   cameraActive: boolean}}
  */
 export function getRenderGovernorDiagnostics() {
   return {
@@ -162,6 +245,8 @@ export function getRenderGovernorDiagnostics() {
     mode: _holds.size > 0 ? 'continuous' : 'idle',
     holds: [..._holds].sort(),
     recentRequests: [..._recentRequests],
+    targetFrameRate: _installed ? _viewer?.targetFrameRate ?? null : null,
+    cameraActive: _cameraActive,
   };
 }
 
@@ -171,6 +256,11 @@ export function _resetRenderGovernorForTest() {
     clearTimeout(_idleTransitionTimer);
     _idleTransitionTimer = null;
   }
+  _cameraMoveStartRemover?.();
+  _cameraMoveEndRemover?.();
+  _cameraMoveStartRemover = null;
+  _cameraMoveEndRemover = null;
+  _cameraActive = true; // matches the install-time conservative default
   _viewer = null;
   _installed = false;
   _holds.clear();

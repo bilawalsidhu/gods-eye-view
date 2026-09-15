@@ -255,9 +255,18 @@ export function getScopeTerminusRepaintCount() {
   return _terminusRepaints;
 }
 
+/**
+ * Backing-store scale cap, aligned with the world-overlay policy
+ * (OVERLAY_MAX_DPR = 1.5, df43386; Phase 9 Batch P extended it here). The
+ * mask is one radial gradient — a full-screen 2x backing store cost ~56 MiB
+ * for an edge no eye can resolve past 1.5x. Dated policy change: the 2x cap
+ * (2026-08-08) predates the overlay cap's measured A/B (39.6 → 22.2 MiB).
+ */
+const SCOPE_MASK_MAX_DPR = 1.5;
+
 /** Backing-store scale actually used by the last draw(). */
 export function scopeMaskDevicePixelRatio(ratio = (typeof window !== 'undefined' ? window.devicePixelRatio : 1)) {
-  return Math.min(2, Number(ratio) || 1);
+  return Math.min(SCOPE_MASK_MAX_DPR, Number(ratio) || 1);
 }
 
 /**

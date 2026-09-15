@@ -90,10 +90,11 @@ test('an omitted feather argument uses the module default, whatever it is', () =
   // with the rest of the first-run batch in reasonableDefaults.test.mjs.
 });
 
-test('backing-store scale is clamped to 2x and survives junk input', () => {
+test('backing-store scale is clamped to 1.5x (overlay-policy alignment, Phase 9) and survives junk input', () => {
   assert.equal(scopeMaskDevicePixelRatio(1), 1);
-  assert.equal(scopeMaskDevicePixelRatio(2), 2);
-  assert.equal(scopeMaskDevicePixelRatio(3), 2); // clamp — a 3x panel still draws at 2x
+  assert.equal(scopeMaskDevicePixelRatio(1.5), 1.5);
+  assert.equal(scopeMaskDevicePixelRatio(2), 1.5); // clamp — a 2x panel draws at 1.5x (radial gradient; ~24 MiB saved at 1440p)
+  assert.equal(scopeMaskDevicePixelRatio(3), 1.5); // clamp — a 3x panel still draws at 1.5x
   assert.equal(scopeMaskDevicePixelRatio(0), 1);
   assert.equal(scopeMaskDevicePixelRatio(Number.NaN), 1);
 });
@@ -174,10 +175,11 @@ test('a DPR change with no resize still repaints the backing store', () => {
     assert.equal(dom.canvas.height, 800);
 
     // Window dragged to a 2x monitor. The content box never changed, so the
-    // ResizeObserver stays silent — only the DPR watch can catch this.
+    // ResizeObserver stays silent — only the DPR watch can catch this. The
+    // backing store follows at the 1.5x policy cap (scopeMaskDevicePixelRatio).
     dom.setDpr(2);
-    assert.equal(dom.canvas.width, 2000, 'backing store must follow the new DPR');
-    assert.equal(dom.canvas.height, 1600);
+    assert.equal(dom.canvas.width, 1500, 'backing store must follow the new DPR (capped at 1.5x)');
+    assert.equal(dom.canvas.height, 1200);
 
     // And back again — the listener must be re-armed after each change.
     dom.setDpr(1);
@@ -454,7 +456,7 @@ test('a DPR change that also crosses a terminus step paints once, not twice', ()
     dom.setDpr(2);
 
     assert.equal(dom.ops.resizes - before.resizes, 1, 'both changes must share ONE paint');
-    assert.equal(dom.canvas.width, 2000, 'and it must be at the new backing-store scale');
+    assert.equal(dom.canvas.width, 1500, 'and it must be at the new backing-store scale (1.5x cap)');
     assert.equal(getScopeTerminusAlpha(), 0.97, 'with the stepped terminus already folded in');
     assert.equal(getScopeTerminusRepaintCount(), repaintsBefore + 1, 'counted as one repaint');
   } finally {
