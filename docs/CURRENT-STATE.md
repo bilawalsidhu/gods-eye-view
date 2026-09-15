@@ -2627,8 +2627,9 @@ of its phosphor peak white (0.65992 from RGB 0.16/1/0.22), halo minimum ≤0.25
 with the centre minus sampled background reported without gating. Each preset needs at least
 six verified, unobscured sprites; insufficient coverage is UNEXERCISED.
 The sampler excludes overlapping footprints, including otherwise ineligible
-sprites, and chooses nine source-raster points inside a solid white body patch, avoiding
-window/panel gaps, then verifies pick ownership at all nine points.
+sprites, and chooses nine source-raster points in the widest solid white band, avoiding
+window/panel gaps. Narrow silhouettes use a half-pixel sampling step to stay inside
+the antialiased edges, then verifies pick ownership at all nine points.
 Noir samples also exclude its deliberately vignetted outer field, using shader
 settings and screen position rather than observed brightness. Selected-trail
 diagnostics report every condition even when selection fails.

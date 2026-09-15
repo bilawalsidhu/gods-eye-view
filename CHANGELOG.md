@@ -3,6 +3,8 @@
 - Separate application-shell responsibilities and state ownership while preserving
   the layer, scene and voice API. Revoke pending globe-reset callbacks on disposal
   and detach old Directions services when replacing a data manager.
+- Sample transit sensor centres inside the widest solid silhouette band, preserving all contrast thresholds.
+
 - Write Cesium transit trail attribute copies back correctly so completed history actually draws; add a two-second camera-arrival pixel regression.
 
 - Prepare selected draped transit history before floor resolution and retain its visible tail when the marker leaves the view.

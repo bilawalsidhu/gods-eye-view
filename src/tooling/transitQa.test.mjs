@@ -446,6 +446,18 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
     1,
     'a body patch away from the central panel remains eligible',
   );
+  // A narrow centre can be opaque yet put the framebuffer sample on its
+  // antialiased side. Prefer the wider solid band above it, before reading luma.
+  raster.fill(0);
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      const wide = y >= 3 && y <= 5;
+      if ((wide && x >= 3 && x <= 12) || (x >= 7 && x <= 9))
+        raster.fill(255, (y * 16 + x) * 4, (y * 16 + x + 1) * 4);
+    }
+  const readStart = readRows.length;
+  assert.equal((await sampleTransitPixels(page, {})).length, 1);
+  assert.ok(readRows[readStart] > 204, 'centre samples use the widest solid band');
   raster.fill(255);
   scene.pick = () => ({ id: 'overlapping-label' });
   assert.equal(

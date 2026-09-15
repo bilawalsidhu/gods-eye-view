@@ -401,17 +401,31 @@ export async function sampleTransitPixels(page, palette) {
             }
             // Pick nine points from a solid patch of the source silhouette,
             // before examining framebuffer brightness. Avoid panels/window gaps.
-            let corePoints = null;
+            let corePoints = null, widestBand = -1;
             const cosCore = Math.cos(s.rotation),
               sinCore = Math.sin(s.rotation);
             for (const offset of [0, -0.1, 0.1, -0.2, 0.2]) {
               const candidates = [];
-              let solid = true;
+              let solid = true, bandWidth = Infinity;
+              // Rank source geometry, never the observed framebuffer brightness.
+              // A thin tram needs the widest opaque white band, with room for
+              // the pixel filter on each side of the sampled patch.
+              for (let dy = -1; dy <= 1; dy++) {
+                const ry = Math.floor(((dy + offset * s.rect.height) / s.rect.height + 0.5) * s.raster.height);
+                const middle = Math.floor(s.raster.width / 2);
+                const white = (x) => x >= 0 && x < s.raster.width &&
+                  [0, 1, 2, 3].every((c) => s.raster.data[(ry * s.raster.width + x) * 4 + c] >= 240);
+                let left = middle, right = middle;
+                while (white(left - 1)) left--;
+                while (white(right + 1)) right++;
+                bandWidth = Math.min(bandWidth, white(middle) ? right - left + 1 : 0);
+              }
+              const step = bandWidth * s.rect.width / s.raster.width <= 6 ? 0.5 : 1;
               for (let dx = -1; dx <= 1; dx++)
                 for (let dy = -1; dy <= 1; dy++) {
-                  const localY = dy + offset * s.rect.height;
+                  const localY = dy * step + offset * s.rect.height;
                   const rx = Math.floor(
-                    (dx / s.rect.width + 0.5) * s.raster.width,
+                    (dx * step / s.rect.width + 0.5) * s.raster.width,
                   );
                   const ry = Math.floor(
                     (localY / s.rect.height + 0.5) * s.raster.height,
@@ -421,14 +435,14 @@ export async function sampleTransitPixels(page, palette) {
                     solid = false;
                   candidates.push(
                     screenPoint(
-                      s.screenX + dx * cosCore + localY * sinCore,
-                      s.screenY - dx * sinCore + localY * cosCore,
+                      s.screenX + dx * step * cosCore + localY * sinCore,
+                      s.screenY - dx * step * sinCore + localY * cosCore,
                     ),
                   );
                 }
-              if (solid) {
+              if (solid && bandWidth > widestBand) {
                 corePoints = candidates;
-                break;
+                widestBand = bandWidth;
               }
             }
             if (!corePoints) {
