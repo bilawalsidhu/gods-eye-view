@@ -202,6 +202,13 @@ export const DATA_CREDITS = [
       '<a href="https://terrain.reearth.land" target="_blank" rel="noopener">Re:Earth Terrain</a> / ' +
       'Mapterhorn (CC BY 4.0) / EGM2008 (NGA)',
   },
+  {
+    key: 'goes',
+    html:
+      'Cloud imagery: NOAA GOES-R Series ABI (GOES-19 East / GOES-18 West) via ' +
+      '<a href="https://www.star.nesdis.noaa.gov/GOES/" target="_blank" rel="noopener">NOAA/NESDIS STAR</a> ' +
+      '(U.S. public domain; not an endorsement)',
+  },
   // ── Bundled snapshots ───────────────────────────────────────────
   {
     key: 'datacenters',

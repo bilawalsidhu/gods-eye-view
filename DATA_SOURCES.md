@@ -15,6 +15,7 @@ How to read this:
 
 | Source                                                                | Used for                                                                                                                            | License / terms                                                                                                                                                                                                                                                                                                                                       | Attribution                                                                                                                                 |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **NOAA GOES-R (ABI)** | Cloud imagery: full-disk GeoColor for GOES-19 (East) and GOES-18 (West) | U.S. public domain (NOAA); keyless via the NOAA/NESDIS STAR CDN | "NOAA/NESDIS GOES-R Series ABI" (courtesy; not an endorsement) |
 | **OpenStreetMap ALPR camera locations** (including DeFlock community mapping) | Optional mapped automatic license-plate-reader camera layer | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/); commercial use permitted with applicable attribution and database share-alike obligations | [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright); [DeFlock](https://deflock.org) community mapping |
 | **Google Map Tiles API** (Photorealistic 3D Tiles) + Places/Geocoding | The 3D globe, voice scene context, and on-demand nearby installation search                                                         | Google Maps Platform ToS (proprietary, your own key + billing)                                                                                                                                                                                                                                                                                        | "Google" / "Google Maps" logo — **shown in-app**, required                                                                                  |
 | **OpenSky Network**                                                   | Primary worldwide live-flight snapshot                                                                                              | Non-commercial research/education license                                                                                                                                                                                                                                                                                                             | Schäfer et al., _"Bringing Up OpenSky"_, IPSN 2014 + opensky-network.org                                                                    |
@@ -148,6 +149,22 @@ Suomi-NPP) clamped to the trailing 24 h, cached 30 min to respect the shared MAP
 transaction quota. Requires a free `FIRMS_MAP_KEY`
 (https://firms.modaps.eosdis.nasa.gov/api/map_key/); the layer is empty without it.
 The former bundled 2026-05-25 snapshot was removed 2026-07-16.
+
+### NOAA GOES-R cloud imagery
+
+The optional **Cloud Cover** layer renders keyless, near-real-time full-disk
+imagery from NOAA's GOES-R series: **GOES-19** (East) and **GOES-18** (West). The
+`/api/goes` server-side proxy fetches the pre-rendered GeoColor JPEG from the
+NOAA/NESDIS STAR CDN (`cdn.star.nesdis.noaa.gov`), reprojects it from the
+geostationary ABI fixed grid into a geographic PNG with an out-of-disk alpha mask
+(1024 px tall), caches it for 5 minutes, and serves it to Cesium as a
+`SingleTileImageryProvider`. **Coverage is the Americas and adjacent oceans only —
+this is not a global mosaic**; other geostationary systems (Meteosat, Himawari,
+FengYun) would be required for worldwide coverage. The layer needs a globe imagery
+stack (Satellite/OSM): Google Photorealistic 3D hides the globe, and the layer
+reports that requirement instead of drawing. NOAA GOES data is U.S. public domain;
+the credit above is a courtesy and does not imply endorsement. GeoColor is a
+rendered satellite scene (clouds, land, snow, night lights), not a cloud-only mask.
 
 ### Natural Earth physical regions (`natural_earth/`)
 

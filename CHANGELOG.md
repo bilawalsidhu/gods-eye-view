@@ -249,6 +249,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   Visible animation, detection membership, history storage and proxy requests
   are bounded. Share links carry Transit as token `j`.
 
+- Add a keyless **Cloud Cover** layer from NOAA GOES-R (GOES-19 East, GOES-18
+  West) full-disk GeoColor imagery. The `/api/goes` proxy reprojects the
+  geostationary ABI fixed grid into a geographic PNG with an out-of-disk alpha
+  mask (1024 px) and caches it for 5 minutes. Coverage is the Americas and
+  adjacent oceans only, and the layer requires a globe imagery stack
+  (Satellite/OSM), not Google Photorealistic 3D.
 - Add Ontario 511 as a keyless CCTV source pack, including Kitchener-area
   highway cameras, with server-registered still URLs and attribution.
 - CCTV Mesh adds Finland: Fintraffic road weather cameras, keyless, nationwide, 300 by default. Each camera view of a station is placed separately; ambient stills refresh on the source's 10-minute cadence (the active camera keeps the usual 10-second refresh).
