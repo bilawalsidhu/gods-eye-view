@@ -329,3 +329,26 @@ export function reduceTrailHead(anchor, target) {
     selection: anchor?.selection ?? null,
   };
 }
+
+/** Paired trail pixels must change: a dark roof/road alone cannot pass. */
+export function reduceTrailPixels(on, off) {
+  const hits = Array.from({ length: 8 }, (_, i) => {
+    const a = on?.[i],
+      b = off?.[i];
+    if (!a || !b || a.length !== b.length || a.length % 4) return false;
+    let matches = 0;
+    for (let k = 0; k < a.length; k += 4) {
+      const delta = Math.hypot(
+        a[k] - b[k],
+        a[k + 1] - b[k + 1],
+        a[k + 2] - b[k + 2],
+      );
+      const green = a[k + 1] > a[k] + 25 && a[k + 1] > a[k + 2] + 18;
+      const dark = a[k] + a[k + 1] + a[k + 2] < b[k] + b[k + 1] + b[k + 2] - 45;
+      if (delta >= 25 && (green || dark)) matches++;
+    }
+    return matches >= 2;
+  });
+  const present = hits.filter(Boolean).length;
+  return { hits, present, total: 8, pass: present >= 6 };
+}

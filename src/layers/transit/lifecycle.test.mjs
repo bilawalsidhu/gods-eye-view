@@ -2547,7 +2547,7 @@ test('selected trail and marker share revised start floors, with unknown history
   assert.ok(
     Cesium.Cartographic.fromCartesian(entry.marker.position).height > 30,
   );
-  assert.ok(entry.trailVertices <= 2048);
+  assert.ok(entry.trailVertices <= 640);
   parts.selection.clearSelection();
   assert.equal(parts.trails.diagnostics(), null);
 });
@@ -2659,7 +2659,7 @@ test('a long selected history shortens its oldest geometry before sacrificing th
   parts.rendering.sampleIdle(entry);
   parts.selection.selectVehicle(entry.key);
   assert.equal(entry.trailTruncated, true);
-  assert.ok(entry.trailVertices <= 2048);
+  assert.ok(entry.trailVertices <= 640);
   assert.ok(
     entry.displayPaths.has(entry.sample.fromSeq),
     'active path is prepared first',

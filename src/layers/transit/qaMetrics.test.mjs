@@ -328,3 +328,23 @@ test('trail-head acceptance names every missing and failed condition', async () 
     false,
   );
 });
+
+test('trail pixel acceptance needs six changed samples; static dark roads, empty reads and five hits fail', async () => {
+  const { reduceTrailPixels } = await import('./qaMetrics.js');
+  const patch = (rgb) => [...rgb, 255, ...rgb, 255];
+  const off = Array.from({ length: 8 }, () => patch([150, 150, 150]));
+  const on = off.map((p, i) => (i < 6 ? patch([94, 240, 138]) : p));
+  assert.equal(reduceTrailPixels(on, off).pass, true);
+  assert.equal(
+    reduceTrailPixels(
+      on.map((p, i) => (i === 5 ? off[i] : p)),
+      off,
+    ).pass,
+    false,
+  );
+  const dark = off.map(() => patch([5, 8, 12]));
+  assert.equal(reduceTrailPixels(dark, off).present, 8);
+  assert.equal(reduceTrailPixels(dark, dark).present, 0);
+  assert.equal(reduceTrailPixels(on, on).present, 0);
+  assert.equal(reduceTrailPixels([], []).pass, false);
+});

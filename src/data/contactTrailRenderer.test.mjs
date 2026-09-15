@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { readFileSync } from 'node:fs';
+import { TRAIL_VERTEX_LIMIT } from '../layers/transit/trails.js';
 import {
   createContactTrailRenderer,
   trailAlpha,
 } from './contactTrailRenderer.js';
 
-function fixture(t) {
+function fixture(t, ground = false) {
   for (const key of [
     'HTMLCanvasElement',
     'HTMLImageElement',
@@ -20,9 +22,21 @@ function fixture(t) {
       else globalThis[key] = prior;
     });
   }
+  const width = Cesium.ContextLimits._maximumAliasedLineWidth;
+  Cesium.ContextLimits._maximumAliasedLineWidth = 1;
+  t.after(() => {
+    Cesium.ContextLimits._maximumAliasedLineWidth = width;
+  });
   const primitives = new Cesium.PrimitiveCollection();
   t.after(() => primitives.destroy());
-  return { primitives };
+  const groundPrimitives = new Cesium.PrimitiveCollection();
+  t.after(() => groundPrimitives.destroy());
+  return {
+    primitives,
+    groundPrimitives,
+    frameState: { context: { depthTexture: ground } },
+    globe: { show: false },
+  };
 }
 test('body clips future subdivisions, head ends at exact marker, and frames retain geometry', (t) => {
   const scene = fixture(t),
@@ -62,7 +76,9 @@ test('body clips future subdivisions, head ends at exact marker, and frames reta
   for (const instance of body.geometryInstances) {
     assert.deepEqual(
       instance.attributes.depthFailColor.value,
-      instance.attributes.color.value,
+      Cesium.ColorGeometryInstanceAttribute.toValue(
+        Cesium.Color.fromCssColorString('#5EF08A').withAlpha(0.55),
+      ),
     );
   }
   body._batchTableAttributeIndices = { color: 0, depthFailColor: 1 };
@@ -95,10 +111,19 @@ test('body clips future subdivisions, head ends at exact marker, and frames reta
     [1, 1, 0, 0],
   );
   for (const a of attributes.values())
-    assert.deepEqual(a.depthFailColor, a.color);
+    assert.deepEqual(
+      a.depthFailColor,
+      Cesium.ColorGeometryInstanceAttribute.toValue(
+        Cesium.Color.fromCssColorString('#5EF08A').withAlpha(0.55),
+      ),
+    );
   const result = renderer.diagnostics();
   assert.equal(result.body, body);
   assert.equal(result.rebuilds, 1);
+  assert.equal(result.headRebuilds, 1, '120 frames retain head geometry');
+  assert.equal(result.head.material.uniforms.fraction, 0.5);
+  assert.equal(result.head.width, 3);
+  assert.equal(result.backing.width, 5);
   assert.ok(Cesium.Cartesian3.equals(result.head.positions.at(-1), marker));
   assert.equal(result.head.positions.length, 2);
   renderer.setDisplaySample(
@@ -120,24 +145,76 @@ test('trail age curve uses the specified four alpha anchors', () => {
   assert.ok(Math.abs(trailAlpha(60000) - 0.625) < 1e-10);
 });
 
-test('the maximum prepared body stays below the 2 MiB geometry budget', () => {
-  const geometry = Cesium.PolylineGeometry.createGeometry(
-    new Cesium.PolylineGeometry({
-      positions: [
-        Cesium.Cartesian3.fromDegrees(-71, 42, 11.5),
-        Cesium.Cartesian3.fromDegrees(-71, 42.0002, 11.5),
-      ],
-      width: 2,
-      arcType: Cesium.ArcType.NONE,
-      vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
-    }),
+test('ground body and clipped head stay inside rebuild and frame geometry budgets', async () => {
+  Cesium.ApproximateTerrainHeights._terrainHeights = JSON.parse(
+    readFileSync(
+      new URL(
+        '../../node_modules/@cesium/engine/Source/Assets/approximateTerrainHeights.json',
+        import.meta.url,
+      ),
+    ),
+  );
+  const positions = [
+    Cesium.Cartesian3.fromDegrees(-97.7431, 30.267),
+    Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672),
+  ];
+  const start = performance.now();
+  const geometry = await Cesium.GroundPolylineGeometry.createGeometry(
+    new Cesium.GroundPolylineGeometry({ positions, width: 5, granularity: 0 }),
   );
   const bytes =
     Object.values(geometry.attributes).reduce(
-      (total, attribute) => total + (attribute?.values?.byteLength || 0),
+      (n, a) => n + (a?.values?.byteLength || 0),
       0,
     ) + geometry.indices.byteLength;
-  assert.ok(bytes * 2 * 2047 < 2 * 1024 * 1024);
+  const bodyBytes = (bytes + 64) * 2 * (TRAIL_VERTEX_LIMIT - 1);
+  assert.ok(bodyBytes + bytes < 2 * 1024 * 1024);
+  assert.ok(
+    bytes < 2048,
+    'even a subdivision crossing uploads less than 2 KiB of head geometry',
+  );
+  console.log(
+    `trail geometry: ${bytes} bytes/head crossing, 0 bytes/ordinary head frame, ${bodyBytes} bytes/body including 64 bytes/instance reserve; geometry CPU ${(performance.now() - start).toFixed(3)} ms`,
+  );
+});
+
+test('supported scenes drape body and clipped head on 3D tiles and retain head geometry', (t) => {
+  const scene = fixture(t, true),
+    renderer = createContactTrailRenderer(scene);
+  const positions = [
+    Cesium.Cartesian3.fromDegrees(-97.7431, 30.267),
+    Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672),
+  ];
+  renderer.replaceHistory({
+    revision: 1,
+    segments: [{ fromSeq: 0, toSeq: 1, fromT: 0, toT: 20000, positions }],
+  });
+  const first = renderer.diagnostics();
+  assert.ok(first.body instanceof Cesium.GroundPolylinePrimitive);
+  assert.equal(
+    first.body.classificationType,
+    Cesium.ClassificationType.CESIUM_3D_TILE,
+  );
+  assert.ok(scene.groundPrimitives.contains(first.body));
+  for (const instance of first.body.geometryInstances)
+    assert.ok(instance.geometry instanceof Cesium.GroundPolylineGeometry);
+  for (let i = 1; i <= 120; i++)
+    renderer.setDisplaySample(
+      { displayT: i * 100, fromSeq: 0, toSeq: 1, fraction: i / 200 },
+      positions[1],
+    );
+  const result = renderer.diagnostics();
+  assert.equal(result.body, first.body);
+  assert.equal(result.headRebuilds, 1);
+  assert.ok(result.headPrimitive instanceof Cesium.GroundPolylinePrimitive);
+  assert.equal(result.head.material.uniforms.fraction, 0.6);
+  assert.match(result.head.material.shaderSource, /discard/);
+  renderer.setVisible(false);
+  assert.equal(result.body.show, false);
+  assert.equal(result.headPrimitive.show, false);
+  renderer.destroy();
+  assert.equal(scene.groundPrimitives.length, 0);
+  assert.equal(scene.primitives.length, 0);
 });
 
 test('subdivision crossings only write the changed show range and age colors once per second', (t) => {
@@ -206,5 +283,10 @@ test('subdivision crossings only write the changed show range and age colors onc
   display(1200);
   assert.deepEqual(counts, { show: 0, color: 200, depthFailColor: 200 });
   for (const a of attributes.values())
-    assert.deepEqual(a.color, a.depthFailColor);
+    assert.deepEqual(
+      a.depthFailColor,
+      Cesium.ColorGeometryInstanceAttribute.toValue(
+        Cesium.Color.fromCssColorString('#FF4538').withAlpha(0.55),
+      ),
+    );
 });

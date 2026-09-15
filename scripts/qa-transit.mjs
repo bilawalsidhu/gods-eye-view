@@ -16,6 +16,7 @@ import {
   runFleetBudgets,
   runBostonMatrix,
   runBostonLive,
+  runTrailVisibility,
 } from './qa-transit-scenes.mjs';
 /**
  * Browser proof for the Transit layer against a running app.
@@ -1774,6 +1775,13 @@ try {
     selectStyle,
     sampleRendered,
   };
+  if (runs('trail-visible'))
+    for (const [altitude, pitch] of [
+      [300, 55],
+      [600, 45],
+      [900, 45],
+    ])
+      await runTrailVisibility({ ...sceneQA, altitude, pitch });
   if (runs('budgets')) await runFleetBudgets(sceneQA);
   if (runs('matrix')) await runBostonMatrix(sceneQA);
   if (runs('boston-live')) await runBostonLive(sceneQA);

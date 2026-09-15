@@ -2565,10 +2565,15 @@ clipped to the displayed time. The browser retains up to 15 minutes and 128
 fixes per vehicle, under a global 32 MiB history budget. Capacity pressure may
 shorten that history. Only the selected vehicle has a trail: completed segments
 are batched primitives, and a small moving head ends at the marker. Trail
-geometry is bounded to 2,048 prepared vertices; history changes rebuild the
-body, while ordinary playback updates the head and segment visibility.
-Both normal and depth-fail instance colours follow the age ramp once per display
-second or style change. Subdivision crossings update only changed visibility
+geometry is bounded to 640 prepared vertices, prioritizing the active corridor
+and shortening the oldest geometry first. Supported scenes use ground polylines
+classified against Google 3D tiles (terrain and tiles when the globe is visible),
+with per-segment age colours. History changes rebuild the body. The head is one
+short draped corridor, clipped to displayed time by a material uniform; only
+subdivision crossings rebuild it. Ordinary frames upload no head geometry.
+Without ground-polyline support, ordinary primitives retain a mode-coloured
+0.55-alpha depth-fail path, including the head, without dimming it to near-black.
+Normal instance colours follow the age ramp once per display second or style change. Subdivision crossings update only changed visibility
 attributes. Deselecting releases selection geometry; marker paths retain only
 active and future corridors.
 
@@ -2620,7 +2625,7 @@ diagnostics report every condition even when selection fails.
 
 Transit brackets use the normal-composite overlay surface: a 1.25 px mode-colour
 stroke over 3.25 px dark backing. Other contact themes retain their existing
-behavior. The selected trail uses a 2 px core over 4 px backing, mode-coloured
+behavior. The selected trail uses a 3 px core over 5 px backing, mode-coloured
 in normal and white input in sensors. Alpha falls linearly from 0.80 at the head
 to 0.45 at two minutes, 0.20 at ten minutes and 0.08 at fifteen minutes.
 
@@ -2687,6 +2692,19 @@ injected playback independently of live fleet activity. Thermal checks verify
 style activation before reading generated controls; DETECT checks set density
 and exercise the real OFF/restore button. Cesium render errors fail selection
 acceptance.
+The `trail-visible` section requires a visible Google 3D tileset. It selects a
+scripted straight CapMetro bus with nine retained fixes, runs for 20 seconds at each
+300/600/900 m view (55/45/45 degrees), then compares trail-on/off framebuffer patches at eight
+projected surface points. `Google 3D selected trail visible at 6 of 8 projected samples`
+prints the selected key, fix count, elapsed display time, path length, hit count,
+per-point coordinates/hits and renderer strategy. At least six points need a
+changed green core or dark backing; an unchanged dark road fails. Artifacts are
+`<tag>-<altitude>m-trail-visible.jpg` and matching JSON. Run the same harness
+against the base and patched keyed builds; partial runs remain diagnostic.
+Node geometry checks measure 1,352 bytes per head subdivision, zero ordinary-frame
+head geometry uploads, and a conservative 1,809,648-byte body estimate including
+64 bytes per instance, below 2 MiB. Browser frame cost remains an integrator check.
+
 Required empty or unexercised checks fail acceptance. The passing final line is
 `HARNESS: PASS (0 unexercised)`. A `QA_SECTIONS` subset is diagnostic only and
 cannot claim full acceptance.

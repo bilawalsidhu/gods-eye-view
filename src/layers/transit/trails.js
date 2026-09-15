@@ -18,7 +18,9 @@ const MODE_COLOR = {
   ferry: '#5FD6FF',
   unknown: '#D8DDE5',
 };
-export const TRAIL_VERTEX_LIMIT = 2048;
+// Two ground lanes use up to 2,704 bytes per edge before instance attributes.
+// Reserve head geometry and batch attributes inside the 2 MiB rebuild budget.
+export const TRAIL_VERTEX_LIMIT = 640;
 const STEP_M = 25;
 
 /** Shared prepared paths. Floors are aligned to work with Google 3D tiles. */
