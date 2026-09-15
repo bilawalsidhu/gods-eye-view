@@ -42,6 +42,7 @@ const SHARE_PANEL_STATE_REGISTRY = Object.freeze([
   { id: 'global-context-panel', token: 'g', pinnable: false },
   { id: 'pp-toggles', token: 'p', pinnable: false },
   { id: 'param-slider-panel', token: 'm', pinnable: false },
+  { id: 'weather-panel', token: 'w', pinnable: false },
 ]);
 
 const SHARE_PANEL_STATE_BY_TOKEN = Object.freeze(new Map(

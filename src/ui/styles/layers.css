@@ -145,10 +145,13 @@
 }
 #right-context-rail > #pp-toggles,
 #right-context-rail > #cctv-panel,
+#right-context-rail > #weather-panel,
 #right-context-rail > #global-context-panel {
   position: relative;
   inset: auto;
   flex: 0 0 auto;
+  /* The rail itself is pointer-events: none so the globe stays draggable
+     between panels; each panel opts back in here. */
   pointer-events: auto;
 }
 #right-context-rail #global-context-panel {
@@ -229,6 +232,7 @@
 }
 #right-context-rail.layout-focus > #pp-toggles:not(.collapsed),
 #right-context-rail.layout-focus > #cctv-panel:not(.collapsed),
+#right-context-rail.layout-focus > #weather-panel:not(.collapsed),
 #right-context-rail.layout-focus > #global-context-panel:not(.collapsed) {
   flex: 0 1 var(--right-panel-allocated-height);
   height: var(--right-panel-allocated-height);
@@ -1280,4 +1284,108 @@
 }
 .data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-right {
   margin-left: auto;
+}
+
+/* ── Weather panel ──────────────────────────────────────────────────────
+   Sizing lives on the panel's own id, never on #right-context-rail: the
+   rail's box is modelled by the credit keep-out test, which fails closed on
+   any geometry it does not recognise. */
+#weather-panel {
+  width: var(--display-panel-expanded-width, 272px);
+}
+#weather-panel.collapsed {
+  width: var(--right-context-collapsed-width, 176px);
+}
+.weather-panel-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px 12px;
+}
+#weather-panel.collapsed .weather-panel-inner > :not(.panel-header) {
+  display: none;
+}
+.weather-unavailable {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--warning, #f0b429);
+}
+.weather-refresh-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.weather-refresh-row .pp-select {
+  flex: 1 1 96px;
+  min-width: 0;
+}
+.weather-auto-btn {
+  flex: 0 0 auto;
+}
+.weather-budget {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.68;
+}
+.weather-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.weather-group-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.weather-group-note {
+  letter-spacing: 0.04em;
+  text-transform: none;
+  opacity: 0.6;
+}
+.weather-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.weather-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.weather-option:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.weather-option.active {
+  background: rgba(64, 196, 255, 0.18);
+  border-color: rgba(64, 196, 255, 0.7);
+}
+.weather-option-tag {
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  opacity: 0.85;
+}
+.weather-option-tag-forecast {
+  background: rgba(240, 180, 41, 0.22);
 }

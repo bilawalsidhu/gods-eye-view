@@ -43,6 +43,7 @@ const PANEL_ALIASES = new Map([
   ['internet radio', 'radio-panel'],
   ['radio stations', 'radio-panel'],
   ['context', 'global-context-panel'],
+  ['weather panel', 'weather-panel'],
   ['context panel', 'global-context-panel'],
   ['global context', 'global-context-panel'],
   ['right context', 'global-context-panel'],

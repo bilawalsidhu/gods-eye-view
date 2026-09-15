@@ -19,6 +19,7 @@ import {
   MILITARY_DETECTION_PRESET,
 } from './effects.js';
 import { bindDisplayControls } from './displayControls.js';
+import { bindWeatherControls } from './weatherControls.js';
 import {
   bindApplicationShortcuts,
   createStyleParameters,
@@ -99,6 +100,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'global-context-panel' },
   { id: 'pp-toggles' },
   { id: 'param-slider-panel' },
+  { id: 'weather-panel' },
 ]);
 /** Standard map-view panels cleared out of the way on a fresh Cockpit entry. */
 const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
@@ -108,6 +110,7 @@ const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'pp-toggles',
   'global-context-panel',
   'radio-panel',
+  'weather-panel',
 ]);
 const DETECTION_ALLOCATION_STORAGE_KEY = 'gev:detection-allocation:v1';
 /** Display labels shown in the mini-status readout for each active style. */
@@ -1426,6 +1429,26 @@ export class StyleManager {
         toggleCctv: () => this._toggleCctvEnabled(),
       },
     });
+
+    this._weatherControls?.destroy();
+    this._weatherControls = bindWeatherControls({
+      elements: {
+        overlays: this._weatherOverlays,
+        fields: this._weatherFields,
+        refresh: this._weatherRefreshBtn,
+        auto: this._weatherAutoBtn,
+        interval: this._weatherInterval,
+        budget: this._weatherBudget,
+        unavailable: this._weatherUnavailable,
+      },
+      actions: {
+        setLayers: (layers) => this._setWeatherParams({ layers }),
+        setAuto: (auto) => this._setWeatherParams({ auto }),
+        setInterval: (every) => this._setWeatherParams({ every }),
+        refreshNow: () => this._refreshWeather(),
+      },
+    });
+    this._syncWeatherPanel();
 
     this._displayControls?.destroy();
     this._displayControls = bindDisplayControls({
@@ -2789,6 +2812,7 @@ export class StyleManager {
       'pp-toggles',
       'cctv-panel',
       'global-context-panel',
+      'weather-panel',
     ].includes(panelEl?.id);
     const collapsed = panelEl.classList.contains('collapsed');
     panelEl
@@ -2909,6 +2933,63 @@ export class StyleManager {
     return this._panelPosition._makePanelDraggable(panelId, panelEl, handleEl);
   }
 
+  /**
+   * Apply a Weather panel change and repaint the panel from what stuck.
+   *
+   * `origin: 'user'` is what makes the change durable — the layer-state codec
+   * only persists params from an explicit origin, so a programmatic sync can
+   * never overwrite what someone chose.
+   */
+  async _setWeatherParams(params) {
+    this._dataManager?.setLayerParams('weather', params, { origin: 'user' });
+    // Draw a newly chosen layer now rather than at the next tick, which is up
+    // to a minute away. Only a layer with no frame in hand fetches, so this
+    // costs exactly the tiles that were just asked for and leaves the rest of
+    // the selection untouched.
+    if (typeof params.layers === 'string') {
+      await this._dataManager?.refreshLayer?.('weather');
+    }
+    await this._syncWeatherPanel();
+  }
+
+  /**
+   * Fetch the selected layers now.
+   *
+   * Two steps because they do different things: the flag opens the refresh
+   * gate for one pass, and `refreshLayer` drives an update immediately rather
+   * than waiting up to a minute for the next tick.
+   */
+  async _refreshWeather() {
+    this._dataManager?.setLayerParams(
+      'weather',
+      { refreshNow: true },
+      { origin: 'user' },
+    );
+    await this._dataManager?.refreshLayer?.('weather');
+    await this._syncWeatherPanel();
+  }
+
+  /**
+   * Repaint the panel from layer state and the proxy's own accounting.
+   *
+   * The spend is read here rather than polled: a readout that fetched on a
+   * timer would itself be traffic, on a panel whose whole purpose is to keep
+   * traffic deliberate.
+   */
+  async _syncWeatherPanel() {
+    if (!this._weatherControls) return;
+    const params = this._dataManager?.getLayerParams?.('weather') || {};
+    let status = null;
+    try {
+      const response = await fetch('/api/xweather/status');
+      if (response.ok) status = await response.json();
+    } catch {
+      // The panel still works without the readout; the layer row is where an
+      // unreachable service is reported.
+    }
+    this._weatherControls.sync(params, status);
+  }
+
   _buildSharePanelState() {
     const specs = [];
     for (const spec of SHARE_PANEL_STATE_SPECS) {
@@ -3023,6 +3104,12 @@ export class StyleManager {
         this._scheduleRightPanelLayout({ reconsiderAutoCollapse: true });
       }
       return;
+    }
+    // Opening the Weather panel is when its readout is worth having: the spend
+    // is read here rather than on a timer, since a polling readout would
+    // itself be traffic on a panel built to keep traffic deliberate.
+    if (!nextCollapsed && panelId === 'weather-panel') {
+      void this._syncWeatherPanel();
     }
     panelEl.classList.remove('layout-auto-collapsed');
     if (
@@ -5299,6 +5386,7 @@ export class StyleManager {
     this._panelLayout.destroy();
     this._applicationShortcuts?.destroy();
     this._displayControls?.destroy();
+    this._weatherControls?.destroy();
     this._frameRateMonitor?.destroy();
     this._mapSourceControls?.destroy();
     this._clearLayersControl?.destroy();
