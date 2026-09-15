@@ -391,6 +391,20 @@ owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
+## Lithuania CCTV source pack
+
+The CCTV catalog includes Via Lietuva / Eismoinfo road cameras by default.
+Two keyless public endpoints provide current snapshot URLs and WGS84 camera
+locations; records are joined by ID, with invalid coordinates and off-origin
+image URLs rejected. Catalog requests refuse redirects, have a 15-second
+deadline and a 4 MiB response cap, and use the existing shared 15-minute cache
+and fair catalog allocation. An unavailable source contributes an empty pack.
+Frames use the registered-image proxy and retain Via Lietuva attribution.
+The images are periodically updated road-condition photographs, not continuous
+video; camera poses use the existing low-confidence heading prior.
+`CCTV_LITHUANIA_ENABLED=0` disables the pack, and
+`CCTV_LITHUANIA_MAX_SOURCES` sets its cap (default 400, bounded to 1–1000).
+
 ## DriveBC CCTV source pack
 
 The CCTV catalog adds DriveBC highway cameras for British Columbia alongside the

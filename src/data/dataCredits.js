@@ -164,6 +164,12 @@ export const DATA_CREDITS = [
       'license CC BY 4.0',
   },
   {
+    key: 'lithuania-cctv',
+    html:
+      'Road-camera stills (Lithuania): ' +
+      '<a href="https://eismoinfo.lt/" target="_blank" rel="noopener">Via Lietuva / Eismoinfo</a>; periodically updated images',
+  },
+  {
     key: 'calgary-cctv',
     html:
       'Traffic cameras (Calgary): contains information licensed under the ' +

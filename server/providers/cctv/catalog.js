@@ -4,6 +4,7 @@ import { DEFAULT_CCTV_SOURCE_FILE, CCTV_SOURCE_CACHE_MS } from './constants.js';
 import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { normalizeSourceItem } from './normalize.js';
+import { loadLithuaniaSources } from './lithuania.js';
 import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
@@ -30,6 +31,11 @@ const envEnabled = (name) => String(process.env[name] || '1').trim() !== '0';
  * kill switch.
  */
 const LIVE_PACKS = [
+  {
+    name: 'lithuania',
+    enabled: () => envEnabled('CCTV_LITHUANIA_ENABLED'),
+    load: loadLithuaniaSources,
+  },
   { name: 'austin', enabled: () => true, load: loadAustinSourcesFromOpenData },
   {
     name: 'caltrans',

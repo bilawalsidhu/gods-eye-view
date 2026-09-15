@@ -85,6 +85,8 @@
   "server/providers/cctv/cap.js",
   "server/providers/cctv/groundHeights.js",
   "server/providers/cctv/catalog.js",
+  "server/providers/cctv/lithuania.js",
+  "src/data/cctvLithuania.test.mjs",
   "server/providers/cctv/constants.js",
   "server/providers/cctv/media.js",
   "server/providers/cctv/normalize.js",
