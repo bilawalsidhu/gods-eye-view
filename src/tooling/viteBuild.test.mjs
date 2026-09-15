@@ -96,10 +96,10 @@ test('root config retains existing named exports and standalone provider order',
 
 test('the provider disk cache is kept out of the dev server watcher', () => {
   // The tile proxies write a file per tile, so a busy layer is hundreds of
-  // writes into this directory. Measured on this checkout, letting the watcher
-  // see them took a cold Xweather tile from ~150 ms to 3-9 s: the watcher's
-  // own stat calls take the libuv threads that `getaddrinfo` needs, so each
-  // fetch waits on a DNS lookup that cannot get one.
+  // writes into this directory. Letting the watcher see them costs a cold
+  // Xweather tile 3-9 s instead of ~150 ms: the watcher's stat calls take the
+  // libuv threads `getaddrinfo` needs, so each fetch waits on a DNS lookup
+  // that cannot get one.
   const config = standaloneConfig({ mode: 'test' });
   const plugin = config.plugins.at(-1);
   assert.equal(plugin.name, 'gev-unwatched-provider-cache');

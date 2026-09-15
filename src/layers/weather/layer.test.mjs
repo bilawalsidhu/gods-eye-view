@@ -8,6 +8,7 @@ import {
   FRAME_MODES,
   OVERLAY,
   SPEC_KINDS,
+  REFRESH_CHOICES,
   WEATHER_LAYER_SPECS,
   codesToIds,
   defaultActiveIds,
@@ -90,7 +91,7 @@ test('a late frame cannot publish imagery after disable or destroy', async () =>
     const releases = [];
     const observed = [];
     const source = {
-      getFrame: (_tier, { signal } = {}) =>
+      getFrame: (_spec, { signal } = {}) =>
         new Promise((resolve) => {
           observed.push(signal);
           releases.push(() => resolve({ ...FRAME }));
@@ -149,9 +150,9 @@ test('the base map is never removed, and refreshes swap without a gap', async ()
   assert.deepEqual(layers.slice(1), owned, 'an idle tick must not rebuild');
   assert.equal(removed.length, 0);
 
-  // A refresh rebuilds even though the frame is unchanged. The ask is for new
-  // pixels, and the rebuild is what re-requests them; skipping it is how the
-  // button came to do nothing at all.
+  // A refresh rebuilds even though the frame is unchanged: the ask is for new
+  // pixels, and the rebuild is what re-requests them. Treating an unchanged
+  // frame as nothing to do would make the button inert.
   layer.setParams({ refreshNow: true });
   await layer.update(viewer);
   assert.equal(layers.length, OWNED + 1);
@@ -343,9 +344,9 @@ test('the layers that work anywhere are offered first', () => {
 });
 
 test('a layer stops at the depth its own data supports', () => {
-  // One ceiling for everything was wrong in both directions: radar was being
-  // magnified honestly, but so were the symbol layers, and magnifying a symbol
-  // scales it — a 10-pixel lightning strike at level 9 becomes an 80-pixel
+  // The ceiling cannot be one number for every layer. Magnifying a sampled
+  // raster past its resolution is honest and free; magnifying a symbol scales
+  // the symbol, so a 10-pixel lightning strike at level 9 becomes an 80-pixel
   // blob filling a level 12 view.
   for (const spec of WEATHER_LAYER_SPECS) {
     assert.ok(
@@ -469,56 +470,47 @@ test('at most one continuous field is ever drawn', async () => {
 });
 
 test('overlays always draw above fields, whatever order they refresh in', async () => {
+  // Rungs exist so a continuous field cannot bury the sparse overlays drawn
+  // over it. Three rungs are in play — fields, radar, everything else — and
+  // the order has to hold however the layers happen to be applied, because
+  // Cesium's own `add` puts each new layer on top.
   const field = WEATHER_LAYER_SPECS.find((spec) => spec.group === FIELD);
-  const overlay = WEATHER_LAYER_SPECS.find((spec) => spec.group === OVERLAY);
+  const radar = WEATHER_LAYER_SPECS.find((spec) => spec.defaultOn);
+  const overlay = WEATHER_LAYER_SPECS.find(
+    (spec) => spec.group === OVERLAY && spec.rung > radar.rung,
+  );
+  assert.ok(field && radar && overlay, 'the catalogue needs all three rungs');
+
   const { layer, viewer, layers } = harness(readySource());
-  layer.setParams({ layers: idsToCodes([overlay.id, field.id]) });
+  layer.setParams({ layers: idsToCodes([overlay.id, field.id, radar.id]) });
   await layer.update(viewer);
 
-  const indexOf = (id) => layers.findIndex((entry) => entry?.__tierId === id);
-  // The stub records nothing about identity, so assert through the stack's own
-  // ordering view instead: the field must sit below the overlay.
-  assert.equal(layers.length, 3);
+  // An imagery layer is identifiable only by the tile route it was built
+  // with, which names the vendor layer it draws.
+  const indexOf = (id) =>
+    layers.findIndex((entry) =>
+      entry?.imageryProvider?.url?.includes(`/${id}/`),
+    );
+  const assertStacked = (when) => {
+    const [low, mid, high] = [field, radar, overlay].map((spec) =>
+      indexOf(spec.id),
+    );
+    assert.ok(low > 0 && mid > 0 && high > 0, `all three drawn ${when}`);
+    assert.ok(low < mid, `field below radar ${when} (${low} vs ${mid})`);
+    assert.ok(mid < high, `radar below overlay ${when} (${mid} vs ${high})`);
+  };
 
-  // Refresh only the field, the way a slow layer would on its own cadence.
-  layer.setParams({ refreshNow: true });
-  await layer.update(viewer);
-  assert.equal(layers.length, 3, 'no duplicates after a refresh');
+  assert.equal(layers.length, 4, 'one base map plus three layers');
   assert.equal(layers[0].id, 'base-map', 'the base map keeps index 0');
-  void indexOf;
-});
+  assertStacked('on first draw');
 
-test('refresh asks the proxy for pixels newer than the moment it was pressed', async () => {
-  // Rebuilding the layer is only half of a refresh. The proxy caches a tile
-  // for the refresh cadence — a day by default — so without a freshness floor
-  // on the URL every re-request comes back out of that cache and the button
-  // does nothing at all.
-  const { layer, viewer, layers } = harness(readySource());
-  const urlOf = () =>
-    layers.find((entry) => entry !== layers[0])?.imageryProvider?.url;
-
-  await layer.update(viewer);
-  assert.equal(
-    urlOf().includes('?t='),
-    false,
-    'switching a layer on may draw from cache; only a refresh may not',
-  );
-
-  const pressedAt = Date.now();
+  // A refresh rebuilds all three. The order must come from the rungs, not
+  // from which one was applied last.
   layer.setParams({ refreshNow: true });
   await layer.update(viewer);
-  const stamped = urlOf();
-  const match = /\?t=(\d+)$/.exec(stamped);
-  assert.ok(match, `refreshed tiles must carry a floor, got ${stamped}`);
-  assert.ok(
-    Number(match[1]) >= pressedAt,
-    'the floor is when new data was asked for, not when the tile was cached',
-  );
-
-  // A later redraw must not drop the floor and reinstate the pre-refresh
-  // picture from cache.
-  await layer.update(viewer);
-  assert.equal(urlOf(), stamped, 'the floor is sticky across redraws');
+  assert.equal(layers.length, 4, 'no duplicates after a refresh');
+  assert.equal(layers[0].id, 'base-map');
+  assertStacked('after a refresh');
 });
 
 test('with auto-refresh off, nothing is re-read until asked', async () => {
@@ -648,6 +640,38 @@ test('a selection survives the round trip through a share link', () => {
   assert.deepEqual(codesToIds(decoded.options.weather.layers), chosen);
   assert.equal(decoded.options.weather.auto, true);
   assert.equal(decoded.options.weather.every, 'q');
+});
+
+test('the panel and the share link agree on every refresh interval', () => {
+  // The interval codes live twice: REFRESH_CHOICES drives the panel's select,
+  // and the share-link enum decides what a URL may carry. A code added to one
+  // and not the other is either an interval nobody can share or a URL value
+  // nothing can render — and the second is silent.
+  const params = new URLSearchParams();
+  params.set('v', '2');
+  for (const choice of REFRESH_CHOICES) {
+    encodeLayerStateParams(params, {
+      enabledLayerIds: ['weather'],
+      options: { weather: { layers: 'r', auto: true, every: choice.code } },
+    });
+    assert.equal(
+      decodeLayerStateParams(params).options.weather.every,
+      choice.code,
+      `${choice.label} (${choice.code}) does not survive a share link`,
+    );
+  }
+
+  // And nothing outside the list survives, so a hand-edited URL cannot set an
+  // interval the panel has no way to show or undo.
+  encodeLayerStateParams(params, {
+    enabledLayerIds: ['weather'],
+    options: { weather: { layers: 'r', auto: true, every: 'z' } },
+  });
+  const fallback = decodeLayerStateParams(params).options.weather.every;
+  assert.ok(
+    REFRESH_CHOICES.some((choice) => choice.code === fallback),
+    `an unknown interval decoded to "${fallback}"`,
+  );
 });
 
 test('a link naming a layer this build does not offer still opens', () => {

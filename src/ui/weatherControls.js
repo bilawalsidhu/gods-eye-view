@@ -37,7 +37,7 @@ export function bindWeatherControls({ elements, actions }) {
 
   const describe = (spec) => {
     const parts = [spec.detail];
-    if (spec.cadence) parts.push(`Updates every ${spec.cadence.toLowerCase()}`);
+    if (spec.cadence) parts.push(`Updates ${spec.cadence}`);
     if (spec.coverage) parts.push(spec.coverage.note);
     if (spec.forecast) parts.push('Forecast, not an observation');
     return parts.join(' · ');

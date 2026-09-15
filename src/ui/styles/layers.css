@@ -1360,7 +1360,10 @@
   font-size: 9px;
   letter-spacing: 0.6px;
   line-height: 1.5;
-  color: #ffb45c;
+  /* The app's attention-not-error amber, as used by the global status line
+     for cancelled and retrying work. A missing key is the same kind of
+     message: nothing is broken, something is waiting on you. */
+  color: #ffd488;
 }
 /* Both buttons and the interval are the rail's own controls, so the row only
    has to place them. */

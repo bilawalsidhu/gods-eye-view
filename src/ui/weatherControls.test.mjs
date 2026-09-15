@@ -175,6 +175,41 @@ test('a layer that does not cover the whole globe says so', () => {
   }
 });
 
+test('every row explains itself in a sentence a person would write', () => {
+  // The hover text is assembled from catalogue fields rather than written per
+  // layer, so the fields have to be phrases that compose. A cadence is
+  // whatever follows "Updates": an interval brings its own "every", a named
+  // rhythm stands alone, and neither is capitalised mid-sentence.
+  const CADENCE = /^(every \d+(-\d+)? (min|hr)|as issued|hourly|daily|weekly)$/;
+  const h = harness();
+  try {
+    const rows = [
+      ...h.elements.overlays.children,
+      ...h.elements.fields.children,
+    ];
+    assert.equal(rows.length, WEATHER_LAYER_SPECS.length);
+
+    for (const spec of WEATHER_LAYER_SPECS) {
+      assert.match(
+        spec.cadence,
+        CADENCE,
+        `${spec.label} would read "Updates ${spec.cadence}"`,
+      );
+      const button = rows.find((b) => b.dataset.layerCode === spec.code);
+      // Rendered verbatim: anything the panel splices in around the phrase is
+      // a second grammar to keep in step with the first.
+      assert.ok(
+        button.title.includes(`Updates ${spec.cadence}`),
+        `${spec.label} hover text: "${button.title}"`,
+      );
+      assert.ok(button.title.startsWith(spec.detail), spec.label);
+      assert.doesNotMatch(button.title, /\s{2,}|·\s*·|·\s*$/, spec.label);
+    }
+  } finally {
+    h.restore();
+  }
+});
+
 test('the default selection is painted before any params arrive', () => {
   // The panel can be built before the layer is registered; showing everything
   // off would misreport what the globe is actually drawing.

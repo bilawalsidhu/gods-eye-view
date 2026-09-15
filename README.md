@@ -378,7 +378,7 @@ and configuration details.
 
 ### Choose the capabilities you want
 
-Seven keys. Five have a free tier, and the 🔴 ones are metered:
+Seven keys. Five have a free tier; the 🔴 ones are metered past it:
 
 | | Key | Why | Get it |
 |---|-----|-----|--------|

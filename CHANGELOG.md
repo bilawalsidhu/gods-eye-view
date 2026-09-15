@@ -16,8 +16,11 @@
   it immediately and fetches only that layer.
 - Carry the selection in share links as one packed field, so a shared view
   reopens showing what its author saw.
-- Draw one continuous field at a time and keep sparse overlays above it, label
-  layers that only cover the United States, and label forecasts as forecasts.
+- Draw one continuous field at a time and keep sparse overlays above it, mark
+  the layers that stop at a border with the coverage they have, and label
+  forecasts as forecasts.
+- Fetch each layer only as deep as it resolves: sampled rasters stop where the
+  service starts upsampling, symbol layers follow the camera further.
 - Report `UNAVAILABLE · ADD XWEATHER KEY` without a key rather than an empty
   globe. This layer has no keyless mode.
 

@@ -21,17 +21,18 @@ import {
 /**
  * Vaisala Xweather raster-tile proxy with a monthly budget governor.
  *
- * Upstream: https://maps{1-4}.api.xweather.com/{id}_{secret}/{layer}/{z}/{x}/{y}/current.png
+ * Upstream: https://maps.api.xweather.com/{id}_{secret}/{layer}/{z}/{x}/{y}/current.png
  * — 256x256 PNG in Spherical Mercator. The layer arrives from the browser and
  * is therefore checked against the catalogue allowlist before anything else:
  * forwarded on trust, this would be an open proxy to every Xweather product on
  * the account, including the ones billing at ten times the rate.
  *
  * This proxy is not optional the way the others are. Xweather puts BOTH the
- * client id and the client secret in the URL path, so the browser can never
- * hold them: it fetches same-origin `/api/xweather/radar/{z}/{x}/{y}.png` and
- * the credentials stay here. Every other source this layer has used was
- * keyless and CORS-open and was read directly from the page.
+ * client id and the client secret in the URL path, so the browser can never be
+ * allowed to build that URL: it fetches same-origin
+ * `/api/xweather/tile/{layer}/{z}/{x}/{y}.png` and the credentials stay here.
+ * A keyless or CORS-open source needs no such thing and is read straight from
+ * the page; this one cannot be.
  *
  * Cache: memory + disk (.gev-cache/xweather/), TTL defaults to the refresh
  * cadence, single-flight per tile, serve-stale-on-failure — the tomtomProxy
@@ -45,6 +46,11 @@ import {
  * cap, so the proxy stops where free ends rather than at an invented margin.
  * Over the cap it serves stale tiles when available, else 429 {error:'budget'}.
  * `monthCount` on /status is what the Weather panel displays.
+ *
+ * A tile request may carry `?t=<epoch ms>`, the freshness floor: the moment
+ * the client last asked for new data. A cached tile older than that is
+ * refetched, which is what makes the panel's Refresh do anything at all — the
+ * TTL alone is far longer than the weather stays still.
  *
  * GET /api/xweather/status → {hasKey, monthCount, budget, month, refreshMs}.
  * Keyless mode: status reports hasKey:false and the tile endpoint 503s
@@ -159,10 +165,10 @@ export function xweatherProxy() {
   /**
    * Persist the counter at most once a second.
    *
-   * It was written on every upstream fetch, which put two thread-pool
-   * operations in front of each tile to record a number that only has to
-   * survive a restart. Losing a second of counting to a crash is cheaper than
-   * paying for that on every tile.
+   * The count in memory is the one that governs; the file only has to survive
+   * a restart. Writing it per fetch would put two thread-pool operations in
+   * front of every tile, and losing a second of counting to a crash is much
+   * cheaper than that.
    */
   function persistBudget() {
     if (budgetFlush) return;
@@ -187,7 +193,7 @@ export function xweatherProxy() {
     return budget;
   }
 
-  /** Count one upstream fetch attempt against today's budget (async persist). */
+  /** Count one upstream fetch attempt against this month's budget. */
   function recordUpstreamFetch() {
     currentBudget().count += 1;
     void persistBudget();
@@ -388,11 +394,11 @@ export function xweatherProxy() {
 
         const key = `${layer}/${z}/${x}/${y}`;
         const now = Date.now();
-        // `t` is the freshness floor: the moment the client last asked for new
-        // data. Without it the TTL alone decides, and a TTL set to the refresh
-        // cadence — a whole day by default — outlives the weather by hours, so
-        // pressing Refresh re-requested every tile and got the same bytes
-        // back. Bounded to now, so a client clock running fast cannot force a
+        // The freshness floor: the moment the client last asked for new data.
+        // The TTL alone cannot decide this — it defaults to the refresh
+        // cadence, a whole day, while radar and lightning move in minutes, so
+        // a tile can be well inside its TTL and still show weather that has
+        // gone. Bounded to now, so a client clock running fast cannot force a
         // refetch of something already current.
         const notBefore = Math.min(
           Number.parseInt(new URLSearchParams(rawQuery).get('t') || '', 10) ||

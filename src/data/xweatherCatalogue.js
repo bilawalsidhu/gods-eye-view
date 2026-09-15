@@ -4,7 +4,7 @@
  * One source of truth for three consumers that must never disagree: the
  * `/api/xweather` proxy derives its allowlist from here (a layer name arriving
  * from the browser is checked against it, never proxied on trust), the
- * weather layer builds its tier table from it, and the Weather panel
+ * weather layer builds its spec table from it, and the Weather panel
  * takes its labels and grouping from it.
  *
  * Zero dependencies and Cesium-free so the server, the layer and node:test can
@@ -101,7 +101,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       rung: RADAR_RUNG,
       label: 'Radar',
       detail: 'Global radar, satellite-filled where no radar reaches',
-      cadence: '2 min',
+      cadence: 'every 2 min',
       alpha: 0.68,
       defaultOn: true,
     },
@@ -112,7 +112,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: OVERLAY,
       label: 'Lightning',
       detail: 'Cloud-to-ground and intracloud flashes',
-      cadence: '5 min',
+      cadence: 'every 5 min',
     },
     {
       code: 'a',
@@ -121,7 +121,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: OVERLAY,
       label: 'Warnings',
       detail: 'Active alerts: US, Canada, Europe, Australia, Japan, Korea',
-      cadence: '2 min',
+      cadence: 'every 2 min',
     },
     {
       code: 'd',
@@ -130,7 +130,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: OVERLAY,
       label: 'Wind arrows',
       detail: 'Surface wind direction',
-      cadence: '30 min',
+      cadence: 'every 30 min',
     },
     {
       code: 'i',
@@ -139,7 +139,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: OVERLAY,
       label: 'Isobars',
       detail: 'Forecast sea-level pressure',
-      cadence: '1-6 hr',
+      cadence: 'every 1-6 hr',
     },
 
     // ── tropical cyclones: four composable pieces of one storm ───────────
@@ -150,7 +150,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: OVERLAY,
       label: 'Cyclones',
       detail: 'Active storms with a five-day forecast',
-      cadence: '1-6 hr',
+      cadence: 'every 1-6 hr',
     },
     {
       code: 'k',
@@ -159,7 +159,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: OVERLAY,
       label: 'Cyclone tracks',
       detail: 'Where each storm has already been',
-      cadence: '1-6 hr',
+      cadence: 'every 1-6 hr',
     },
     {
       code: 'p',
@@ -168,7 +168,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: OVERLAY,
       label: 'Cyclone positions',
       detail: 'Current centre and intensity',
-      cadence: '1-6 hr',
+      cadence: 'every 1-6 hr',
     },
     {
       code: 'e',
@@ -177,7 +177,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: OVERLAY,
       label: 'Cyclone cone',
       detail: 'Forecast track uncertainty',
-      cadence: '1-6 hr',
+      cadence: 'every 1-6 hr',
     },
 
     // ── not global: the chip says so, and these sort last so the layers
@@ -189,7 +189,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: OVERLAY,
       label: 'Fronts',
       detail: 'Frontal and pressure analysis',
-      cadence: '12 hr',
+      cadence: 'every 12 hr',
       coverage: NORTH_AMERICA,
     },
     {
@@ -199,7 +199,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: OVERLAY,
       label: 'Storm cells',
       detail: 'Cell tracks with rotation and hail signatures',
-      cadence: '3 min',
+      cadence: 'every 3 min',
       coverage: UNITED_STATES,
     },
     {
@@ -209,7 +209,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: OVERLAY,
       label: 'Storm reports',
       detail: 'Tornado, hail, wind and flood reports, last 24 hours',
-      cadence: '15 min',
+      cadence: 'every 15 min',
       coverage: UNITED_STATES,
     },
     {
@@ -219,7 +219,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: OVERLAY,
       label: 'Severe outlook',
       detail: 'SPC convective outlook',
-      cadence: 'As issued',
+      cadence: 'as issued',
       coverage: UNITED_STATES,
     },
     {
@@ -229,7 +229,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: OVERLAY,
       label: 'Drought',
       detail: 'Drought severity',
-      cadence: 'Weekly',
+      cadence: 'weekly',
       coverage: UNITED_STATES,
     },
     {
@@ -239,7 +239,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: OVERLAY,
       label: 'River gauges',
       detail: 'NOAA flood and low-flow thresholds',
-      cadence: 'Hourly',
+      cadence: 'hourly',
       coverage: UNITED_STATES,
     },
 
@@ -250,7 +250,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: FIELD,
       label: 'Temperature',
       detail: 'Surface air temperature',
-      cadence: '1 hr',
+      cadence: 'every 1 hr',
     },
     {
       code: 'f',
@@ -258,7 +258,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: FIELD,
       label: 'Feels like',
       detail: 'Apparent temperature',
-      cadence: '1 hr',
+      cadence: 'every 1 hr',
     },
     {
       code: 'w',
@@ -266,7 +266,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: FIELD,
       label: 'Dew point',
       detail: 'Moisture in the surface air',
-      cadence: '1 hr',
+      cadence: 'every 1 hr',
     },
     {
       code: 'h',
@@ -274,7 +274,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: FIELD,
       label: 'Humidity',
       detail: 'Relative humidity',
-      cadence: '1 hr',
+      cadence: 'every 1 hr',
     },
     {
       code: 'x',
@@ -283,7 +283,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       label: 'Heat index',
       // Empty below about 27C, so it reads as the summer hemisphere only.
       detail: 'Apparent heat where it is hot',
-      cadence: '1 hr',
+      cadence: 'every 1 hr',
     },
     {
       code: 'z',
@@ -293,7 +293,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       // The winter-hemisphere counterpart to heat index; between them the
       // globe is never blank, which is why both are offered.
       detail: 'Apparent cold where it is cold',
-      cadence: '1 hr',
+      cadence: 'every 1 hr',
     },
     {
       code: 'u',
@@ -301,7 +301,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: FIELD,
       label: 'Wind speed',
       detail: 'Surface wind speed',
-      cadence: '1 hr',
+      cadence: 'every 1 hr',
     },
     {
       code: 'j',
@@ -309,7 +309,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: FIELD,
       label: 'Wind gusts',
       detail: 'Surface gusts',
-      cadence: '1 hr',
+      cadence: 'every 1 hr',
     },
     {
       code: 'q',
@@ -317,7 +317,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: FIELD,
       label: 'Air quality',
       detail: 'AQI banded good to hazardous',
-      cadence: '12 hr',
+      cadence: 'every 12 hr',
     },
     {
       code: 'm',
@@ -325,7 +325,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: FIELD,
       label: 'Sea surface temp',
       detail: 'Ocean surface temperature',
-      cadence: 'Daily',
+      cadence: 'daily',
     },
     {
       code: 'y',
@@ -333,7 +333,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: FIELD,
       label: 'Wave height',
       detail: 'Primary wave height',
-      cadence: '6 hr',
+      cadence: 'every 6 hr',
     },
     {
       code: '2',
@@ -341,7 +341,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: FIELD,
       label: 'Ocean currents',
       detail: 'Surface current speed',
-      cadence: '6 hr',
+      cadence: 'every 6 hr',
     },
     {
       code: '3',
@@ -349,7 +349,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: FIELD,
       label: 'Snow depth',
       detail: 'Estimated depth on the ground',
-      cadence: 'Daily',
+      cadence: 'daily',
     },
     {
       code: '4',
@@ -357,7 +357,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: FIELD,
       label: 'Precip forecast',
       detail: 'Forecast accumulation',
-      cadence: '1-6 hr',
+      cadence: 'every 1-6 hr',
       forecast: true,
     },
     {
@@ -366,7 +366,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       group: FIELD,
       label: 'Jet stream',
       detail: 'Forecast winds at 250 mb',
-      cadence: '1-6 hr',
+      cadence: 'every 1-6 hr',
       forecast: true,
     },
   ].map((entry) =>
@@ -403,7 +403,7 @@ export function isAllowedLayer(layer) {
 }
 
 /** The catalogue entry for a vendor layer name, or null. */
-export function layerByName(layer) {
+function layerByName(layer) {
   return BY_LAYER.get(String(layer ?? '')) || null;
 }
 

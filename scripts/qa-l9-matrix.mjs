@@ -883,21 +883,43 @@ check({
   },
 });
 
+// The layer arrives in the path, so these exercise the route the browser
+// actually calls rather than a shorter one that would 400 before reaching
+// anything worth checking.
+const XWEATHER_TILE = '/api/xweather/tile/radar-global/2/1/1.png';
+
 check({
-  id: 'B10b', group: 'B', desc: 'Xweather radar serves tiles and accounts for them', needsKey: 'XWEATHER',
+  id: 'B10b', group: 'B', desc: 'Xweather serves tiles and accounts for them', needsKey: 'XWEATHER',
   run: async () => {
     const r = await jget('/api/xweather/status');
     if (!r.ok) return fail(`HTTP ${r.status}`);
     if (!r.json?.hasKey) return fail('status says hasKey=false on a server that reported an Xweather key');
-    const before = r.json.dailyCount;
-    const tile = await jget('/api/xweather/radar/2/1/1.png');
+    const before = r.json.monthCount;
+    const tile = await jget(XWEATHER_TILE);
     if (tile.status !== 200) return fail(`tile HTTP ${tile.status} ${tile.text.slice(0, 60)}`);
-    const after = (await jget('/api/xweather/status')).json?.dailyCount;
+    const after = (await jget('/api/xweather/status')).json?.monthCount;
     // A cache HIT legitimately leaves the counter alone; what must never
     // happen is billing without serving, or serving without ever counting.
     return Number.isFinite(after) && after >= before
-      ? pass(`tile 200, used ${after}/${r.json.budget} today, refresh ${r.json.refreshMs}ms`)
-      : fail(`dailyCount went backwards: ${before} -> ${after}`);
+      ? pass(`tile 200, used ${after}/${r.json.budget} this month, refresh ${r.json.refreshMs}ms`)
+      : fail(`monthCount went backwards or is absent: ${before} -> ${after}`);
+  },
+});
+
+check({
+  id: 'B10c', group: 'B', desc: 'Xweather refuses a layer outside the catalogue before spending', needsKey: 'XWEATHER',
+  run: async () => {
+    // The browser supplies the layer name. Forwarded on trust this would reach
+    // every product on the account, including the ones billing at ten times
+    // the base rate, so the refusal is a cost and security boundary both.
+    const before = (await jget('/api/xweather/status')).json?.monthCount;
+    const denied = await jget('/api/xweather/tile/lightning-strikes/2/1/1.png');
+    const after = (await jget('/api/xweather/status')).json?.monthCount;
+    if (denied.status !== 400 || denied.json?.error !== 'unknown_layer')
+      return fail(`expected 400 unknown_layer, got ${denied.status} ${denied.text.slice(0, 60)}`);
+    return after === before
+      ? pass('400 unknown_layer, counter unmoved')
+      : fail(`a refused layer still billed: ${before} -> ${after}`);
   },
 });
 
@@ -908,11 +930,11 @@ check({
     if (guard) return guard;
     if (env.keys.XWEATHER === true) return skip('server HAS an Xweather key', 'N/A');
     const r = await jget('/api/xweather/status');
-    const tile = await jget('/api/xweather/radar/2/1/1.png');
+    const tile = await jget(XWEATHER_TILE);
     // Unlike traffic there is no keyless fallback here, so the honest answer
     // is a refusal the layer can name, not a quiet empty overlay.
     return r.ok && r.json?.hasKey === false && tile.status === 503 && tile.json?.error === 'no_key'
-      ? pass('status 200 hasKey:false; radar tile 503 no_key')
+      ? pass('status 200 hasKey:false; tile 503 no_key')
       : fail(`status=${r.status} hasKey=${r.json?.hasKey}; tile=${tile.status} ${tile.text.slice(0, 60)}`);
   },
 });
@@ -2181,7 +2203,7 @@ async function main() {
     console.log(C.r(`  shell  : HTTP ${env.shellStatus} — the target is RESPONDING but erroring. Running the matrix anyway; this is a product failure, not an environment one.`));
   }
   console.log(`  node   : ${process.versions.node}${env.node24 ? C.d(` (Node 24 available: ${env.node24.label})`) : ''}`);
-  console.log(`  keys   : OpenSky ${keyLabel(env.keys.OPENSKY)} · FIRMS ${keyLabel(env.keys.FIRMS)} · TomTom ${keyLabel(env.keys.TOMTOM)} · AISStream ${keyLabel(env.keys.AIS)} · OpenAI ${keyLabel(env.keys.OPENAI)}`);
+  console.log(`  keys   : OpenSky ${keyLabel(env.keys.OPENSKY)} · FIRMS ${keyLabel(env.keys.FIRMS)} · TomTom ${keyLabel(env.keys.TOMTOM)} · AISStream ${keyLabel(env.keys.AIS)} · Xweather ${keyLabel(env.keys.XWEATHER)} · OpenAI ${keyLabel(env.keys.OPENAI)}`);
   console.log(C.d('  (key presence is read from each proxy\'s own status report; no key value is ever read or logged)\n'));
 
   const record = (c, rawRes, ms) => {

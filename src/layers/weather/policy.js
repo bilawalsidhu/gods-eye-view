@@ -95,13 +95,6 @@ export const WEATHER_LAYER_SPECS = Object.freeze(
   ),
 );
 
-/** Tier lookup by the id the imagery stack keys on. */
-const TIERS_BY_ID = new Map(WEATHER_LAYER_SPECS.map((spec) => [spec.id, spec]));
-
-export function layerSpecById(id) {
-  return TIERS_BY_ID.get(String(id ?? '')) || null;
-}
-
 /**
  * Selection codec.
  *

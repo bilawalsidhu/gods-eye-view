@@ -73,7 +73,7 @@ export function createImageryStack() {
   /**
    * Where this spec belongs in the collection right now.
    *
-   * Tiers refresh independently, so a slow one re-applying must not land on top
+   * Layers refresh independently, so a slow one re-applying must not land on top
    * of a faster one that happened to refresh more recently: Cesium's `add` puts
    * a layer above everything when no index is given. Sit directly beneath the
    * lowest-placed owned spec that outranks this one, and read the live

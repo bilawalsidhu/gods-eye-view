@@ -48,10 +48,10 @@ const RADIO_CODE_FILTERS = Object.freeze(
 /**
  * The Weather layer's selection, as one packed field.
  *
- * Twenty-nine separate boolean options would cost roughly a third of the 512
- * characters the whole `lo` field gets and twenty-nine of the thirty-six
- * single-character tokens available to one owner. One string of per-layer
- * codes costs a handful of characters and no tokens beyond its own.
+ * A boolean option per layer would cost roughly a third of the 512 characters
+ * the whole `lo` field gets, and thirty of the thirty-six single-character
+ * tokens available to one owner. One string of per-layer codes costs a handful
+ * of characters and no tokens beyond its own.
  *
  * The value stays a **string** rather than an array on purpose: the options bag
  * is shallow-cloned, so a mutable array would be shared by reference across
@@ -63,7 +63,7 @@ const RADIO_CODE_FILTERS = Object.freeze(
  */
 const WEATHER_CODE = /^[a-z0-9]$/;
 
-export function normalizeWeatherLayers(value) {
+function normalizeWeatherLayers(value) {
   if (typeof value !== 'string') return null;
   if (value.length > 32) return null;
   const seen = [];
@@ -226,8 +226,10 @@ const OPTION_GROUPS = Object.freeze({
     // Auto-refresh is off unless someone turns it on: with a monthly quota and
     // a cost that scales with enabled layers, spending on a timer is a choice.
     booleanOption('auto', 'a', false),
-    // The interval it uses once on. Codes match REFRESH_CHOICES in the layer's
-    // policy; 'd' is a day.
+    // The interval it uses once on. The stored value is the code itself, so
+    // the panel, the layer's REFRESH_CHOICES and the URL share one vocabulary
+    // and the code map below is the identity this helper requires. 'd' is a
+    // day; a test pins this list against the policy.
     enumOption('every', 'e', 'd', ['q', 'h', 's', 'd'], {
       q: 'q',
       h: 'h',
@@ -345,8 +347,8 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'satellites', token: 's', disposition: 'enabled+options', optionOwner: 'satellites' }),
   Object.freeze({ id: 'telegeography-submarine-cables', token: 'u', disposition: 'enabled-only' }),
   Object.freeze({ id: 'traffic', token: 't', disposition: 'enabled-only' }),
-  // Token 'n', not 'w': a share link carries the token and nothing else, so a
-  // published token is frozen for the life of the layer.
+  // 'n', because 'w' belongs to local-firms. A share link carries the token
+  // and nothing else, so both are frozen for the life of their layer.
   Object.freeze({
     id: 'weather',
     token: 'n',

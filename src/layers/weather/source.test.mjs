@@ -4,7 +4,7 @@ import { createWeatherSource } from './source.js';
 import { isNoKeyError, liveFrame, NO_KEY } from './model.js';
 import { WEATHER_LAYER_SPECS, STATUS_URL } from './policy.js';
 
-const [TIER] = WEATHER_LAYER_SPECS;
+const [SPEC] = WEATHER_LAYER_SPECS;
 const ok = (body) =>
   new Response(JSON.stringify(body), {
     status: 200,
@@ -23,7 +23,7 @@ test('construction is inert, and the only address is this app itself', async () 
       return Promise.resolve(ok({ hasKey: true, refreshMs: 900000 }));
     },
   });
-  await source.getFrame(TIER);
+  await source.getFrame(SPEC);
   assert.deepEqual(calls, [STATUS_URL]);
   // No scheme and no host: the browser is structurally unable to reach the
   // vendor, which is the point — the credential sits in the upstream URL path.
@@ -34,7 +34,7 @@ test('the server owns the refresh cadence', async () => {
   const source = createWeatherSource({
     fetchImpl: async () => ok({ hasKey: true, refreshMs: 300000 }),
   });
-  const frame = await source.getFrame(TIER);
+  const frame = await source.getFrame(SPEC);
   assert.equal(frame.refreshMs, 300000);
   // An absent or nonsensical cadence must not become a zero-delay poll loop
   // against a source that bills per tile.
@@ -42,7 +42,7 @@ test('the server owns the refresh cadence', async () => {
     const loose = createWeatherSource({
       fetchImpl: async () => ok({ hasKey: true, refreshMs }),
     });
-    assert.equal((await loose.getFrame(TIER)).refreshMs, null);
+    assert.equal((await loose.getFrame(SPEC)).refreshMs, null);
   }
 });
 
@@ -50,7 +50,7 @@ test('no key is a distinct, nameable failure', async () => {
   const source = createWeatherSource({
     fetchImpl: async () => ok({ hasKey: false, refreshMs: 3600000 }),
   });
-  await assert.rejects(source.getFrame(TIER), (error) => {
+  await assert.rejects(source.getFrame(SPEC), (error) => {
     assert.equal(error.code, NO_KEY);
     assert.ok(isNoKeyError(error));
     assert.match(error.message, /ADD XWEATHER KEY/);
@@ -65,7 +65,7 @@ test('a malformed or failing status is unhealthy, never a missing key', async ()
     const source = createWeatherSource({
       fetchImpl: async () => ok(body),
     });
-    await assert.rejects(source.getFrame(TIER), (error) => {
+    await assert.rejects(source.getFrame(SPEC), (error) => {
       assert.match(error.message, /Malformed weather status/);
       assert.ok(!isNoKeyError(error));
       return true;
@@ -74,7 +74,7 @@ test('a malformed or failing status is unhealthy, never a missing key', async ()
   const failing = createWeatherSource({
     fetchImpl: async () => new Response('nope', { status: 503 }),
   });
-  await assert.rejects(failing.getFrame(TIER), (error) => {
+  await assert.rejects(failing.getFrame(SPEC), (error) => {
     assert.match(error.message, /HTTP 503/);
     assert.ok(!isNoKeyError(error));
     return true;
@@ -94,7 +94,7 @@ test('cancellation is honored after the body resolves', async () => {
     }),
   });
   await assert.rejects(
-    source.getFrame(TIER, { signal: controller.signal }),
+    source.getFrame(SPEC, { signal: controller.signal }),
     (error) => error?.name === 'AbortError',
   );
 });
