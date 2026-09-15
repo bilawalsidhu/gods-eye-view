@@ -1399,6 +1399,111 @@ ordered by value-per-risk; each is self-contained and committable.
 - [x] GitHub repo was renamed `gods-eye-view` → `Globe` — origin URL
       verified pointing at `github.com/aliasfoxkde/Globe.git` (2026-09-13).
 
+## Phase 9 — Quality campaign 2026-09-15 (OPEN)
+
+Re-audit driven campaign: pattern scan, coverage re-baseline, sibling
+best-practices review, GPU/VRAM audit (operator-reported high 3D/GPU/
+dedicated-VRAM usage), AAA accessibility, docs coverage, e2e validation —
+all measured on 2026-09-15, executed in batches below. Baseline: coverage
+81.17% (statements), aegis scan 755 actionable-category findings triaged
+(all verified-safe or vendored/test noise; two real hardening items),
+GitForge pipeline green.
+
+### 9.1 Findings ledger (measured 2026-09-15)
+
+- **GPU/VRAM audit** (headless probe, `perf-baseline.mjs` method):
+  - Photoreal tileset runs at Cesium defaults: `cacheBytes` **1536 MB** +
+    `maximumCacheOverflowBytes` **1024 MB** (220 MB used at boot view; grows
+    unbounded toward 2.5 GB as the operator navigates — the reported
+    "Dedicated GPU memory" climb).
+  - Boot style is retro/CRT (operator ruling 2026-08-29) whose shader has a
+    `time` uniform — `style-anim` holds **continuous render from boot
+    forever** (verified: `getRenderGovernorDiagnostics().holds` shows
+    `["style-anim"]` across a 15 s idle watch with zero layers enabled).
+    The governor is working as designed; the cost is the aesthetic's.
+  - Overlay canvases (`world-overlay-canvas`, `world-overlay-detection-
+    surface`) size their backing store with the display DPR uncapped —
+    ~56 MB each at 2560×1440 @ DPR 2. `scope-mask` canvas is undersized vs
+    its CSS box (300×150 backing for 800×600 CSS — stretched/blurry).
+  - `useBrowserRecommendedResolution: true` + `resolutionScale: 1` with no
+    policy: HiDPI displays render at DPR × CSS pixels.
+- **Pattern scan (aegis, production profile)**: all 755
+  secrets/web-security/security-hardening findings verified — innerHTML
+  sites escape via `escapeMissionText`/`escapeHtml` + `textContent` fills;
+  bearer-token hits are comments describing token handling; dev-*.sh
+  "credentials" are Keychain service/account names read at runtime; CORS
+  `*` on keyless read-only GET endpoints is the intended contract; the rest
+  is vendored `public/cesium/**`, docs prose, and test localhost mocks.
+  Real items: **HSTS header missing** in `public/_headers`; CSP is
+  Report-Only pending a quiet-report cycle (documented in the file).
+- **Sibling best-practices review** (dsc, GitForge, backend-fixed): adopt
+  (1) a formatter gate (`prettier --check`, dsc `lint:prettier`),
+  (2) measurable JSDoc coverage tooling (dsc `docs:coverage` typedoc
+  validation pattern), (3) `docs/adr/` decision records (dsc), (4) one e2e
+  orchestrator script for the 40 `qa-*.mjs` suites (dsc `test:e2e`
+  pattern), (5) a ratcheting coverage threshold. gods-eye-view leads
+  siblings on QA breadth (40 harnesses), RUNBOOK/KNOWN-ISSUES discipline,
+  and CI verify depth — nothing to adopt there.
+- **Coverage 81.17%**: worst modules — logoGaze 26.5, cctvGizmo 30.4,
+  cockpitCloudEffects 37.9, celestialRing 37.9, flowMatch 38.1, traffic
+  46.6, opensky 47.7, bikeshare 57.8, splitFlap 59.7, gevActions 60.3,
+  cctv 62.4, annotationEngine 62.5, annotationResolver 64.2, gevRealtime
+  65.0, cctvSources 66.0, hud 66.2, director 68.5, tomtomTiles 69.7.
+- **Structural hotspots** (from size + coverage shape): `src/ui.js`
+  (~6,400 lines post-split), `src/voice/gevActions.js` (3,300+),
+  `src/scenes/director.js` (1,400+).
+
+### 9.2 Batches
+
+- [ ] **Batch P (perf, operator-flagged)**: cap the photoreal tileset
+  cache (`cacheBytes` 384 MB / overflow 128 MB, `?tileCacheMB=` escape
+  hatch) — before/after via `totalMemoryUsageInBytes` on a scripted
+  fly-through; cap the style-anim loop to 30 fps (wall-clock `time`
+  uniform so visual cadence is unchanged) + unit-test the frame gate;
+  cap overlay-canvas backing DPR at 1.5; fix the scope-mask canvas
+  sizing to its CSS box.
+- [ ] **Batch A (hardening)**: add `Strict-Transport-Security` to
+  `public/_headers`; evaluate the CSP Report-Only → enforce flip using
+  the e2e run's console report counts as the quiet-cycle evidence.
+- [ ] **Batches B/C/D (coverage waves)**: worst-module-first real tests
+  (wave 1 pure logic: logoGaze, flowMatch, celestialRing, splitFlap;
+  wave 2 proxies/functions: opensky, tomtomTiles, bikeshare,
+  cctvSources; wave 3 browser-coupled with existing mock seams:
+  cctvGizmo, hud, gevActions, gevRealtime, annotationEngine,
+  director). Each wave: gates green + push; coverage number recorded
+  per wave. 99% statements is the goal line; ratchet via a threshold
+  in `test:coverage` once above 90%.
+- [ ] **Batch E (lint)**: add `eslint-plugin-jsdoc` require rules
+  (doubles as the docs-coverage metric), evaluate `eslint-plugin-unicorn`
+  / type-aware `eslint-config`-equivalents compatible with plain-JS +
+  Vite; zero warnings retained.
+- [ ] **Batch F (AAA)**: run `scripts/qa-a11y.mjs`; fix every
+  serious/critical + all AAA-tagged findings (contrast 7:1 on text,
+  focus appearance, target size minimum); re-run to zero.
+- [ ] **Batch G (smells)**: carve pure modules out of `src/ui.js`'s
+  largest remaining seams (style animation loop, chip tickers) with
+  tests; no behavior change.
+- [ ] **Batch H (docs)**: JSDoc gap list from the Batch E tooling; fill
+  top gaps; refresh stale "Updated:" headers; README accuracy sweep.
+- [ ] **Batch I (cleanup)**: verify-and-remove unreferenced files,
+  tidy configs; nothing deleted without a reference check.
+- [ ] **Validation**: e2e orchestrator over all 40 suites (fix reds as
+  found), full local gates, GitForge green on the release commit.
+- [ ] **Release & deploy**: version bump + changelog + tag; deploy →
+  verify → publish (RUNBOOK pinned order); GitHub release.
+
+### 9.3 Deliberately not adopted (reasons)
+
+- `resolutionScale` idle-downscale policy: idle mode already stops the
+  loop (requestRenderMode), so idle framebuffer size is paid once per
+  on-demand frame, not per vsync — complexity not justified by the
+  measured win.
+- Replacing `page.evaluate` string forms in legacy QA scripts with
+  function form: dev-only harness code, no shipped-surface risk; revisit
+  opportunistically.
+- Vendored `public/cesium/**` findings: upstream code; fixing forks the
+  vendor. The bundled build is replaced wholesale on Cesium upgrades.
+
 ## Deliberately deferred (documented, not forgotten)
 
 These are known gaps with reasons, not oversights:
