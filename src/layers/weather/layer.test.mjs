@@ -7,11 +7,17 @@ import {
   FIELD,
   FRAME_MODES,
   OVERLAY,
-  WEATHER_LAYER_SPECS,
   SPEC_KINDS,
+  WEATHER_LAYER_SPECS,
+  codesToIds,
   defaultActiveIds,
+  idsToCodes,
 } from './policy.js';
 import { noKeyError } from './model.js';
+import {
+  decodeLayerStateParams,
+  encodeLayerStateParams,
+} from '../../data/layerState.js';
 
 /**
  * Imagery layers drawn out of the box. The table holds every offered layer,
@@ -368,14 +374,14 @@ test('only the active set is polled or drawn', async () => {
     (spec) => spec.group === OVERLAY,
   ).slice(0, 3);
   calls.length = 0;
-  layer.setParams({ layers: overlays.map((spec) => spec.id) });
+  layer.setParams({ layers: idsToCodes(overlays.map((spec) => spec.id)) });
   await layer.update(viewer);
   assert.equal(layers.length, overlays.length + 1);
   assert.equal(calls.length, 1, 'still one read for the newly due specs');
 
   // Switching everything off withdraws the imagery and stops all polling.
   calls.length = 0;
-  layer.setParams({ layers: [] });
+  layer.setParams({ layers: '' });
   await layer.update(viewer);
   assert.deepEqual(layers, [base], 'nothing selected draws nothing');
   assert.deepEqual(calls, [], 'and reads nothing');
@@ -396,10 +402,10 @@ test('at most one continuous field is ever drawn', async () => {
   assert.ok(fields.length > 2, 'the fixture needs several fields');
   const { layer, viewer, layers } = harness(readySource());
 
-  layer.setParams({ layers: fields.slice(0, 3).map((spec) => spec.id) });
-  assert.deepEqual(
+  layer.setParams({ layers: idsToCodes(fields.slice(0, 3).map((s) => s.id)) });
+  assert.equal(
     layer.getParams().layers,
-    [fields[2].id],
+    fields[2].code,
     'the last field asked for wins, the rest are dropped',
   );
   await layer.update(viewer);
@@ -410,7 +416,7 @@ test('overlays always draw above fields, whatever order they refresh in', async 
   const field = WEATHER_LAYER_SPECS.find((spec) => spec.group === FIELD);
   const overlay = WEATHER_LAYER_SPECS.find((spec) => spec.group === OVERLAY);
   const { layer, viewer, layers } = harness(readySource());
-  layer.setParams({ layers: [overlay.id, field.id] });
+  layer.setParams({ layers: idsToCodes([overlay.id, field.id]) });
   await layer.update(viewer);
 
   const indexOf = (id) => layers.findIndex((entry) => entry?.__tierId === id);
@@ -526,4 +532,42 @@ test('every offered layer is one the budget can afford', () => {
   for (const code of codes)
     assert.match(code, /^[a-z0-9]$/, `${code} must be one url-safe character`);
   assert.ok(ALL_ON.length > 20, 'the panel is meant to offer a real choice');
+});
+
+test('a selection survives the round trip through a share link', () => {
+  // The panel, the layer and the URL all speak the same packed code string, so
+  // there is no third representation to fall out of step.
+  const overlays = WEATHER_LAYER_SPECS.filter(
+    (spec) => spec.group === OVERLAY,
+  ).slice(0, 4);
+  const field = WEATHER_LAYER_SPECS.find((spec) => spec.group === FIELD);
+  const chosen = [...overlays.map((spec) => spec.id), field.id];
+
+  const params = new URLSearchParams();
+  params.set('v', '2');
+  encodeLayerStateParams(params, {
+    enabledLayerIds: ['weather'],
+    options: {
+      weather: { layers: idsToCodes(chosen), auto: true, every: 'q' },
+    },
+  });
+  // Compact by construction: the whole selection is one field, not one token
+  // per layer, and the shared options budget is 512 characters for every layer.
+  assert.ok(params.get('lo').length < 40, params.get('lo'));
+
+  const decoded = decodeLayerStateParams(params);
+  assert.deepEqual(codesToIds(decoded.options.weather.layers), chosen);
+  assert.equal(decoded.options.weather.auto, true);
+  assert.equal(decoded.options.weather.every, 'q');
+});
+
+test('a link naming a layer this build does not offer still opens', () => {
+  // Dropping the unknown layer beats refusing the whole link: the rest of the
+  // view the sender meant to share is still worth restoring.
+  const known = WEATHER_LAYER_SPECS[0];
+  assert.deepEqual(codesToIds(`${known.code}ZZ!`), [known.id]);
+  assert.deepEqual(codesToIds(''), []);
+  assert.deepEqual(codesToIds(undefined), []);
+  // And a duplicated code is not a duplicated layer.
+  assert.deepEqual(codesToIds(`${known.code}${known.code}`), [known.id]);
 });

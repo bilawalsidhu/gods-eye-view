@@ -9,7 +9,9 @@ import {
   LAYER_TICK_MS,
   WEATHER_LAYER_SPECS,
   REFRESH_CHOICES,
+  codesToIds,
   defaultActiveIds,
+  idsToCodes,
 } from './policy.js';
 
 export * from './model.js';
@@ -294,15 +296,13 @@ export function createWeatherLayer({
      * trip through the layer-state registry.
      */
     setParams(params = {}) {
-      if (Array.isArray(params.layers) || typeof params.layers === 'string') {
-        const requested = Array.isArray(params.layers)
-          ? params.layers
-          : String(params.layers).split(/[\s,]+/);
-        const resolved = requested
-          .map((id) => specs.find((spec) => spec.id === id)?.id)
-          .filter(Boolean);
-        // At most one continuous field: they are opaque edge to edge, so a
-        // second would simply hide the first while billing for both.
+      if (typeof params.layers === 'string') {
+        const resolved = codesToIds(params.layers).filter((id) =>
+          specs.some((spec) => spec.id === id),
+        );
+        // At most one continuous field. They are opaque edge to edge, so a
+        // second would hide the first while billing for both; the layer
+        // enforces it so a hand-written link cannot smuggle two in.
         const fields = resolved.filter(
           (id) => specs.find((spec) => spec.id === id)?.group === FIELD,
         );
@@ -322,7 +322,7 @@ export function createWeatherLayer({
 
     getParams() {
       return {
-        layers: [...(_active || [])],
+        layers: idsToCodes([..._active]),
         auto: _auto,
         every: _everyCode,
       };

@@ -104,11 +104,41 @@ export function layerSpecById(id) {
   return TIERS_BY_ID.get(String(id ?? '')) || null;
 }
 
+/**
+ * Selection codec.
+ *
+ * The selection travels as a string of one-character codes because that is how
+ * it is persisted — one packed field in the share link rather than a token per
+ * layer. Keeping the same representation here means the panel, the layer and
+ * the URL all speak it, with no third form to keep in step.
+ */
+export function codesToIds(codes) {
+  const out = [];
+  for (const code of String(codes ?? '')) {
+    const entry = layerByCode(code);
+    // An unknown code is dropped rather than rejected: a link from a build
+    // that offers a layer this one does not should lose that layer, not fail.
+    if (entry && !out.includes(entry.layer)) out.push(entry.layer);
+  }
+  return out;
+}
+
+export function idsToCodes(ids) {
+  const byId = new Map(WEATHER_LAYER_SPECS.map((spec) => [spec.id, spec.code]));
+  return [...new Set(ids ?? [])]
+    .map((id) => byId.get(id))
+    .filter(Boolean)
+    .join('');
+}
+
 /** The specs drawn before anyone opens the panel. */
 export function defaultActiveIds() {
-  return defaultLayerCodes()
-    .map((code) => layerByCode(code)?.layer)
-    .filter(Boolean);
+  return codesToIds(defaultLayerCodes().join(''));
+}
+
+/** The same, as the packed string the share link and panel exchange. */
+export function defaultActiveCodes() {
+  return defaultLayerCodes().join('');
 }
 
 export { FIELD, OVERLAY };
