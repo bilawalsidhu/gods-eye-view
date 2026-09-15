@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   planSplitFlap,
+  setSplitFlapText,
   visibleGlyphs,
   FLAP_CHAR_MS,
   FLAP_STAGGER_MS,
@@ -336,4 +337,292 @@ test('visibleGlyphs is defensive about junk input', () => {
   // Negative and non-finite elapsed times read as "nothing has turned yet".
   assert.equal(visibleGlyphs(plan, -500), 'AB');
   assert.equal(visibleGlyphs(plan, NaN), 'AB');
+});
+
+// ── DOM runtime: setSplitFlapText against a minimal fake DOM ───────────────
+
+/** Long-lived characterData node — the "truth" of invariant 1. */
+class FakeTextNode {
+  constructor(data) {
+    this.nodeType = 3;
+    this.data = data;
+    this.parentNode = null;
+  }
+}
+
+class FakeClassList {
+  constructor() { this.set = new Set(); }
+  add(...names) { for (const name of names) this.set.add(name); }
+  remove(...names) { for (const name of names) this.set.delete(name); }
+  contains(name) { return this.set.has(name); }
+}
+
+class FakeStyle {
+  setProperty(name, value) { this[name] = value; }
+  removeProperty(name) { const value = this[name]; delete this[name]; return value === undefined ? null : value; }
+}
+
+/**
+ * The slice of HTMLElement the runtime touches: a stable child list with
+ * sibling/first-child getters, classList/style/dataset, textContent derived
+ * from real child nodes, and a width oracle driven by a queue of reads so a
+ * test can script grow/shrink measurements per call.
+ */
+class FakeElement {
+  constructor(tag = 'span') {
+    this.nodeType = 1;
+    this.tagName = tag;
+    this.ownerDocument = null;
+    this.parentNode = null;
+    this.children = [];
+    this.classList = new FakeClassList();
+    this.style = new FakeStyle();
+    this.dataset = {};
+    this.attributes = new Map();
+    this.listeners = new Map();
+    this.isConnected = true;
+    this.widthReads = [];
+    this.clientRects = null;
+  }
+
+  // The runtime sets className directly; route it through classList so the
+  // two views (CSS class string / contains()) can never disagree.
+  get className() { return [...this.classList.set].join(' '); }
+  set className(value) { this.classList.set = new Set(String(value).split(/\s+/).filter(Boolean)); }
+
+  get firstChild() { return this.children[0] ?? null; }
+  get firstElementChild() { return this.children.find((c) => c.nodeType === 1) ?? null; }
+  get nextElementSibling() {
+    if (!this.parentNode) return null;
+    const siblings = this.parentNode.children;
+    return siblings.slice(siblings.indexOf(this) + 1).find((c) => c.nodeType === 1) ?? null;
+  }
+  get parentElement() { return this.parentNode?.nodeType === 1 ? this.parentNode : null; }
+  get textContent() {
+    return this.children.map((c) => (c.nodeType === 3 ? c.data : c.textContent)).join('');
+  }
+
+  append(node) { node.parentNode = this; this.children.push(node); }
+  replaceChildren(...nodes) {
+    for (const node of this.children) node.parentNode = null;
+    this.children = nodes;
+    for (const node of nodes) node.parentNode = this;
+  }
+  setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  getAttribute(name) { return this.attributes.get(name) ?? null; }
+  removeAttribute(name) { this.attributes.delete(name); }
+  addEventListener(type, fn) {
+    const list = this.listeners.get(type) ?? [];
+    list.push(fn);
+    this.listeners.set(type, list);
+  }
+  removeEventListener(type, fn) {
+    this.listeners.set(type, (this.listeners.get(type) ?? []).filter((f) => f !== fn));
+  }
+  /** Invoke registered listeners directly — the fake has no event loop. */
+  emit(type, event) { for (const fn of this.listeners.get(type) ?? []) fn(event); }
+  getBoundingClientRect() {
+    return { width: this.widthReads.length > 0 ? this.widthReads.shift() : 0, height: 20 };
+  }
+  getClientRects() { return this.clientRects; }
+}
+
+function makeDoc() {
+  return {
+    createElement: (tag) => new FakeElement(tag),
+    createTextNode: (data) => new FakeTextNode(data),
+  };
+}
+
+/** A chip label element attached to a fake document, ready for the runtime. */
+function makeChip() {
+  const element = new FakeElement('span');
+  element.ownerDocument = makeDoc();
+  return element;
+}
+
+test('setSplitFlapText with no element is a safe false', () => {
+  assert.equal(setSplitFlapText(null, 'X'), false);
+});
+
+test('the first write upgrades the label to its permanent shell, in place', () => {
+  const element = makeChip();
+  assert.equal(setSplitFlapText(element, 'LOADING', { immediate: true }), false);
+
+  const text = element.firstElementChild;
+  assert.ok(text.classList.contains('gev-flap-text'), 'text span class');
+  assert.equal(text.firstChild.nodeType, 3, 'one long-lived Text node');
+  assert.equal(text.firstChild.data, 'LOADING');
+  const cells = text.nextElementSibling;
+  assert.ok(cells.classList.contains('gev-flap-cells'), 'cells sibling class');
+  assert.equal(cells.getAttribute('aria-hidden'), 'true', 'cells are decorative');
+  assert.ok(element.classList.contains('gev-flap-host'));
+  assert.equal(element.textContent, 'LOADING');
+
+  // The repeating tickers must be a no-op on an unchanged label — and must
+  // not rebuild the shell (same Text node object stays).
+  assert.equal(setSplitFlapText(element, 'LOADING', { immediate: true }), false);
+  assert.equal(element.firstElementChild.firstChild, text.firstChild);
+});
+
+test('a hidden element still gets the true text but never flaps', () => {
+  const element = makeChip();
+  setSplitFlapText(element, 'OLD', { immediate: true });
+  element.checkVisibility = () => false;
+  assert.equal(setSplitFlapText(element, 'NEW'), false, 'invisible: no flap');
+  assert.equal(element.textContent, 'NEW', 'text is the truth regardless');
+  assert.equal(element.firstElementChild.nextElementSibling.children.length, 0);
+});
+
+test('prefers-reduced-motion collapses the animation, not the write', () => {
+  const savedWindow = globalThis.window;
+  globalThis.window = { matchMedia: () => ({ matches: true }) };
+  try {
+    const element = makeChip();
+    assert.equal(setSplitFlapText(element, 'A', { immediate: true }), false);
+    assert.equal(setSplitFlapText(element, 'B'), false, 'reduced motion: no flap');
+    assert.equal(element.textContent, 'B');
+  } finally {
+    globalThis.window = savedWindow;
+  }
+});
+
+test('the checkVisibility fallback walks ancestors by hand', () => {
+  // No checkVisibility and no client rects: off-screen, never animate.
+  const detached = makeChip();
+  detached.clientRects = [];
+  setSplitFlapText(detached, 'OLD', { immediate: true });
+  assert.equal(setSplitFlapText(detached, 'NEW'), false);
+
+  // Client rects exist but an ancestor is visibility:hidden (clean-UI mode).
+  const hidden = makeChip();
+  hidden.clientRects = [{}];
+  setSplitFlapText(hidden, 'OLD', { immediate: true });
+  hidden.ownerDocument = {
+    defaultView: { getComputedStyle: () => ({ visibility: 'hidden', display: 'block', opacity: '1' }) },
+  };
+  assert.equal(setSplitFlapText(hidden, 'NEW'), false, 'ancestor-hidden: no flap');
+
+  // All ancestors visible: the fallback approves the animation.
+  const visible = makeChip();
+  visible.clientRects = [{}];
+  setSplitFlapText(visible, 'AB', { immediate: true });
+  const docs = visible.ownerDocument;
+  visible.ownerDocument = {
+    createElement: (tag) => docs.createElement(tag),
+    createTextNode: (data) => docs.createTextNode(data),
+    defaultView: { getComputedStyle: () => ({ visibility: 'visible', display: 'block', opacity: '1' }) },
+  };
+  assert.equal(setSplitFlapText(visible, 'CD'), true, 'fallback-visible: flap runs');
+  const cellNodes = visible.firstElementChild.nextElementSibling.children;
+  assert.equal(cellNodes.length, 2);
+  assert.equal(cellNodes[0].dataset.flapPrev, 'A');
+  assert.equal(cellNodes[1].dataset.flapNext, 'D');
+});
+
+test('a visible flap builds honest cells, eases width, and settles on one timer', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const element = makeChip();
+  element.checkVisibility = () => true;
+  setSplitFlapText(element, 'LOAD', { immediate: true });
+  // Width reads, in call order: before-change 40, cascade reserve 60, then
+  // settle's cascade/natural reads at 60 (already eased to natural by then).
+  element.widthReads = [40, 60, 60, 60];
+
+  assert.equal(setSplitFlapText(element, 'LOADX'), true);
+  assert.equal(element.firstElementChild.firstChild.data, 'LOADX', 'one characterData write');
+
+  const cellNodes = element.firstElementChild.nextElementSibling.children;
+  assert.equal(cellNodes.length, 5, 'one column per character of the longer string');
+  assert.ok(!cellNodes[0].classList.contains('is-flapping'), 'held columns do not animate');
+  assert.equal(cellNodes[0].dataset.flapNext, 'L');
+  assert.ok(cellNodes[4].classList.contains('is-flapping'));
+  assert.equal(cellNodes[4].dataset.flapPrev, ' ', 'a new column flaps in from a blank');
+  assert.equal(cellNodes[4].dataset.flapNext, 'X');
+  assert.equal(cellNodes[4].style['--gev-flap-delay'], '0ms');
+  assert.ok(element.classList.contains('gev-flap-active'), 'chip marked active during the cascade');
+  assert.equal(element.style['--gev-flap-dur'], `${FLAP_CHAR_MS}ms`);
+
+  // The grow ease reserved the new column: pinned at the target width under
+  // the sizing class.
+  assert.ok(element.classList.contains('gev-flap-sizing'));
+  assert.equal(element.style.width, '60px');
+  assert.equal(element.style['--gev-flap-total'], `${FLAP_CHAR_MS}ms`);
+
+  // An unrelated transitionend must NOT tear the ease down…
+  element.emit('transitionend', { target: {}, propertyName: 'width' });
+  assert.equal(element.style.width, '60px', 'foreign event ignored');
+  // …but the real one ends it: listeners gone, sizing cleared, no timer added.
+  element.emit('transitionend', { target: element, propertyName: 'width' });
+  assert.ok(!element.classList.contains('gev-flap-sizing'), 'ease finished cleanly');
+  assert.equal(element.style.width, undefined);
+
+  // The one settle timer lands, strips the cells, and rests the chip.
+  t.mock.timers.tick(FLAP_CHAR_MS + 60);
+  assert.equal(element.firstElementChild.nextElementSibling.children.length, 0, 'cells stripped');
+  assert.ok(!element.classList.contains('gev-flap-active'), 'resting state restored');
+  assert.equal(element.style['--gev-flap-dur'], undefined);
+  assert.equal(element.textContent, 'LOADX', 'settled text survives the strip');
+});
+
+test('an interrupt mid-cascade flaps away the glyphs actually on screen', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const element = makeChip();
+  element.checkVisibility = () => true;
+
+  assert.equal(setSplitFlapText(element, 'AAAAA'), true);
+  // Interrupt before ANY column has turned (no timer ticks). The first
+  // cascade grew from an empty chip, so what is actually on screen is the
+  // reserved blanks — not the pending A's — and that is what the interrupt
+  // must flap away (invariant 3).
+  assert.equal(setSplitFlapText(element, 'BBBBB'), true);
+  assert.equal(element.textContent, 'BBBBB');
+  const cellNodes = element.firstElementChild.nextElementSibling.children;
+  assert.equal(cellNodes[0].dataset.flapPrev, ' ', 'outgoing glyph is what was shown: a blank');
+  assert.equal(cellNodes[0].dataset.flapNext, 'B');
+
+  // The superseded cascade's settle timer was cancelled; only the new one
+  // fires, and it settles on the interrupting text.
+  t.mock.timers.tick(4 * FLAP_STAGGER_MS + FLAP_CHAR_MS + 60);
+  assert.equal(element.firstElementChild.nextElementSibling.children.length, 0);
+  assert.equal(element.textContent, 'BBBBB');
+});
+
+test('a shrinking board takes up its width slack only after the flaps land', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const element = makeChip();
+  element.checkVisibility = () => true;
+  setSplitFlapText(element, 'ABCD', { immediate: true });
+  // Reads: before 60 (natural width now), cascade 60 (no grow ease), then at
+  // settle the board is measured wide (100, columns held) and settles to 60.
+  element.widthReads = [60, 60, 100, 60];
+
+  assert.equal(setSplitFlapText(element, 'AB'), true);
+  assert.ok(!element.classList.contains('gev-flap-sizing'), 'shrink holds width during the cascade');
+  assert.equal(element.style.width, undefined);
+
+  t.mock.timers.tick(FLAP_STAGGER_MS + FLAP_CHAR_MS + 60);
+  assert.ok(element.classList.contains('gev-flap-sizing'), 'slack ease starts after landing');
+  assert.equal(element.style.width, '60px');
+
+  element.emit('transitionend', { target: element, propertyName: 'width' });
+  assert.ok(!element.classList.contains('gev-flap-sizing'), 'and ends cleanly');
+  assert.equal(element.textContent, 'AB');
+});
+
+test('a clobbered label is rebuilt from its current text, not the old one', () => {
+  const element = makeChip();
+  setSplitFlapText(element, 'FIRST', { immediate: true });
+
+  // Something outside this module replaced the shell with junk.
+  const junk = element.ownerDocument.createElement('div');
+  junk.append(element.ownerDocument.createTextNode('JUNK'));
+  element.replaceChildren(junk);
+  assert.equal(element.textContent, 'JUNK');
+
+  setSplitFlapText(element, 'SECOND', { immediate: true });
+  assert.equal(element.textContent, 'SECOND', 'carried text replaced by the write');
+  assert.ok(element.firstElementChild.classList.contains('gev-flap-text'), 'shell rebuilt');
+  assert.equal(element.firstElementChild.firstChild.data, 'SECOND');
+  assert.ok(element.firstElementChild.nextElementSibling.classList.contains('gev-flap-cells'));
 });
