@@ -254,7 +254,7 @@ test('both flight layers keep a converted contact 2D and visible (render invaria
     const callSites = code.match(/aircraftIcon\(\s*[^;]*?\)/g) || [];
     assert.equal(callSites.length >= 4, true, `${name}: expected the known aircraftIcon call sites`);
     for (const call of callSites) {
-      assert.match(call, /aircraftIcon\(\s*\s*(?:parts\.rendering\.)?_iconKind\(\s*/,
+      assert.match(call, /aircraftIcon\(\s*\s*(?:(?:parts\.)?rendering\.)?_iconKind\(\s*/,
         `${name}: ${call.replace(/\s+/g, ' ')} must resolve its sprite kind through _iconKind`);
     }
 

@@ -1946,7 +1946,14 @@ body.cockpit-mode
   ) {
   display: none !important;
 }
-body.cockpit-mode :is(#clear-selected-layers, #share-btn, #reset-globe-view) {
+body.cockpit-mode
+  :is(
+    #clear-selected-layers,
+    #share-btn,
+    #tilt-map-view,
+    #north-up-view,
+    #reset-globe-view
+  ) {
   display: none !important;
 }
 body.cockpit-mode #left-panel-stack {

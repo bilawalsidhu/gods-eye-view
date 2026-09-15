@@ -1,8 +1,6 @@
-import { createSourceSlot } from '../app/sourceSlot.js';
+import { createApplicationTraffic } from '../app/layers/traffic.js';
+import { createSourceSlot } from '../sources/sourceSlot.js';
 import { createTrafficSource } from '../layers/traffic/source.js';
-import { createTrafficLayer } from '../layers/traffic/index.js';
-import * as credits from './dataCredits.js';
-import * as render from '../renderGovernor.js';
 
 const sourceSlot = createSourceSlot(
   createTrafficSource(),
@@ -14,9 +12,8 @@ const sourceSlot = createSourceSlot(
   },
 );
 export const configureTrafficSource = sourceSlot.configure;
-const layer = createTrafficLayer({
+const layer = createApplicationTraffic({
   source: sourceSlot.source,
-  services: { credits, render },
 });
 export const getTrafficTimingDiagnostics = layer.getTrafficTimingDiagnostics;
 export const deriveTrafficFlowError = layer.deriveTrafficFlowError;

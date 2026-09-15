@@ -33,8 +33,9 @@ export const QUERY_LIMIT = 1500;
  * stayed false and `count` still reported them — a lie about coverage. */
 export const MAX_RENDERED = 1500;
 
-/** Meters — length of the facing-direction indicator line, when a camera reports one. */
-export const DIRECTION_CONE_M = 25;
+/** Meters — illustrative facing wedge depth, when a camera reports a bearing. */
+export const DIRECTION_CONE_M = 90;
+export const DIRECTION_CONE_HALF_ANGLE_DEG = 20;
 
 export const EARTH_MEAN_RADIUS_M = 6371008.8;
 
@@ -47,8 +48,12 @@ export const QUERY_SNAP_DEGREES = 0.05;
  * for this long before asking Overpass again. */
 export const QUERY_REUSE_MS = 10 * 60 * 1000;
 
-/** One vendor-neutral color, distinct from CCTV's cyan markers. */
-export const ALPR_COLOR = '#c084fc';
+/** Vendor-neutral camera badge palette, with coral selection. */
+export const ALPR_COLOR = '#52d4ff';
+export const ALPR_SELECTED_COLOR = '#ff6474';
+export const MARKER_ICON_SIZE = 38;
+export const SELECTED_MARKER_ICON_SIZE = 60;
+export const MAX_CANVAS_FRUSTUMS = 64;
 
 /** OSM attribution may collapse after five seconds; full credit stays in Data attribution. */
 export const CREDIT_DISPLAY_MS = 5000;

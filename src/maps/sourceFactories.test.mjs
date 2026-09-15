@@ -2,7 +2,67 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createIonImagery } from './imagery.js';
-import { createWorldTerrain } from './terrain.js';
+import { createWorldTerrain, createKeylessTerrain } from './terrain.js';
+import { createDefaultMapSources } from './defaultSources.js';
+
+test('Esri uses Re:Earth without keys and preserves ion terrain when configured', async () => {
+  const originalTerrain = Cesium.CesiumTerrainProvider.fromUrl;
+  const originalResource = Cesium.IonResource.fromAssetId;
+  const calls = [];
+  try {
+    Cesium.CesiumTerrainProvider.fromUrl = async (resource) => {
+      calls.push(resource);
+      return { resource };
+    };
+    Cesium.IonResource.fromAssetId = async () =>
+      assert.fail('keyless mode must not acquire ion terrain');
+    const keyless = createDefaultMapSources();
+    const esri = keyless.sources.find(
+      ({ descriptor }) => descriptor.id === 'esri-imagery',
+    );
+    assert.equal(esri.available, true);
+    assert.equal(esri.terrain.id, 'keyless');
+    assert.equal(esri.terrain.create, createKeylessTerrain);
+    await esri.terrain.create();
+    assert.deepEqual(calls, [
+      'https://terrain.reearth.land/cesium-mesh/ellipsoid',
+    ]);
+    assert.equal(
+      keyless.sources.find(({ descriptor }) => descriptor.id === 'photoreal')
+        .available,
+      false,
+    );
+    for (const credentials of [
+      { googleApiKey: 'test-key' },
+      { cesiumToken: 'test-token' },
+    ]) {
+      const keyed = createDefaultMapSources({
+        ...credentials,
+        googleTileset: { show: true },
+      });
+      assert.equal(
+        keyed.sources.find(({ descriptor }) => descriptor.id === 'photoreal')
+          .available,
+        true,
+      );
+      assert.equal(
+        keyed.sources.find(({ descriptor }) => descriptor.id === 'esri-imagery')
+          .terrain.id,
+        credentials.cesiumToken ? 'world' : 'keyless',
+      );
+      const failedTileset = createDefaultMapSources(credentials);
+      assert.equal(
+        failedTileset.sources.find(
+          ({ descriptor }) => descriptor.id === 'photoreal',
+        ).available,
+        false,
+      );
+    }
+  } finally {
+    Cesium.CesiumTerrainProvider.fromUrl = originalTerrain;
+    Cesium.IonResource.fromAssetId = originalResource;
+  }
+});
 
 test('imagery and terrain pass their own ion token without relying on SDK defaults', async () => {
   const originalImagery = Cesium.IonImageryProvider.fromAssetId;

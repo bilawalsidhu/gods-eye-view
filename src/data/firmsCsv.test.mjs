@@ -9,7 +9,7 @@ import {
   filterTrailing24h,
   isLikelyCsv,
   parseFirmsCsv,
-} from './firmsCsv.js';
+} from 'gods-eye-view/sources/firms-csv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = fs.readFileSync(
@@ -144,3 +144,21 @@ test('filterTrailing24h on the fixture keeps everything for a same-night now', (
   const kept = filterTrailing24h(records, Date.UTC(2026, 6, 17, 2, 0));
   assert.equal(kept.length, records.length);
 });
+
+const contractCases = JSON.parse(
+  fs.readFileSync(
+    path.join(__dirname, 'fixtures', 'firms-csv-cases.json'),
+    'utf8',
+  ),
+);
+for (const fixture of contractCases) {
+  test(`portable FIRMS CSV contract: ${fixture.name}`, () => {
+    const records = parseFirmsCsv(fixture.csv);
+    assert.equal(records === null ? null : records.length, fixture.parsedCount);
+    const recent = filterTrailing24h(records, Date.parse(fixture.now));
+    assert.deepEqual(
+      recent.map((record) => record.acqTime),
+      fixture.recentTimes,
+    );
+  });
+}

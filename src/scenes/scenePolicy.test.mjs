@@ -41,6 +41,7 @@ function sweepLayerParamKeys() {
 
 /** The layer registry as main.js builds it (src/main.js dataManager.register calls). */
 const REGISTERED = new Set([
+  'bhote-koshi-2026', 'bhote-koshi-locator',
   'flights', 'military', 'earthquakes', 'satellites', 'rocket-launches', 'traffic',
   'cctv', 'radio', 'bikeshare', 'ais-live-vessels', 'military-installations',
   'military-awareness', 'local-datacenters', 'local-dams',

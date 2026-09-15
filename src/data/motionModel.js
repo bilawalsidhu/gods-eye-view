@@ -29,10 +29,14 @@ export function norm360(deg) {
 export function liftRepeatedGroundFix(newest, candidatePosition, onGround) {
   if (!onGround || !newest?.position || !candidatePosition) return false;
   const stored = Cesium.Cartographic.fromCartesian(
-    newest.position, Cesium.Ellipsoid.WGS84, _mmCarto,
+    newest.position,
+    Cesium.Ellipsoid.WGS84,
+    _mmCarto,
   );
   const candidate = Cesium.Cartographic.fromCartesian(
-    candidatePosition, Cesium.Ellipsoid.WGS84, _mmCandidateCarto,
+    candidatePosition,
+    Cesium.Ellipsoid.WGS84,
+    _mmCandidateCarto,
   );
   if (!stored || !candidate || candidate.height <= stored.height) return false;
   Cesium.Cartesian3.fromRadians(
@@ -62,7 +66,11 @@ export function courseBetweenCartesians(from, to, minChordM = 25) {
   const dy = to.y - from.y;
   const dz = to.z - from.z;
   if (dx * dx + dy * dy + dz * dz < minChordM * minChordM) return null;
-  const carto = Cesium.Cartographic.fromCartesian(from, Cesium.Ellipsoid.WGS84, _mmCarto);
+  const carto = Cesium.Cartographic.fromCartesian(
+    from,
+    Cesium.Ellipsoid.WGS84,
+    _mmCarto,
+  );
   if (!carto) return null;
   const sLat = Math.sin(carto.latitude);
   const cLat = Math.cos(carto.latitude);
@@ -110,7 +118,10 @@ export function speedRamp(speedMps) {
   if (!Number.isFinite(speedMps)) return 1;
   if (speedMps <= COURSE_TRACK_ONLY_MPS) return 0;
   if (speedMps >= COURSE_CHORD_ONLY_MPS) return 1;
-  return (speedMps - COURSE_TRACK_ONLY_MPS) / (COURSE_CHORD_ONLY_MPS - COURSE_TRACK_ONLY_MPS);
+  return (
+    (speedMps - COURSE_TRACK_ONLY_MPS) /
+    (COURSE_CHORD_ONLY_MPS - COURSE_TRACK_ONLY_MPS)
+  );
 }
 
 /** Shortest-arc angle lerp: from → to by t (t=0 → from, t=1 → to). Also the
@@ -141,10 +152,16 @@ export function displayedKinematics({
   reportedTrackDeg,
 } = {}) {
   return {
-    speedMps: Number.isFinite(derivedSpeedMps) ? Math.max(0, derivedSpeedMps)
-      : (Number.isFinite(reportedSpeedMps) ? Math.max(0, reportedSpeedMps) : null),
-    trackDeg: Number.isFinite(derivedTrackDeg) ? derivedTrackDeg
-      : (Number.isFinite(reportedTrackDeg) ? reportedTrackDeg : null),
+    speedMps: Number.isFinite(derivedSpeedMps)
+      ? Math.max(0, derivedSpeedMps)
+      : Number.isFinite(reportedSpeedMps)
+        ? Math.max(0, reportedSpeedMps)
+        : null,
+    trackDeg: Number.isFinite(derivedTrackDeg)
+      ? derivedTrackDeg
+      : Number.isFinite(reportedTrackDeg)
+        ? reportedTrackDeg
+        : null,
   };
 }
 
@@ -167,10 +184,17 @@ export function staleCoastLimitSeconds({
   maximumSec = 300,
 } = {}) {
   const floor = Math.max(0, Number.isFinite(minimumSec) ? minimumSec : 60);
-  const ceiling = Math.max(floor, Number.isFinite(maximumSec) ? maximumSec : 300);
-  if (!Number.isFinite(fixEpochMs) || !Number.isFinite(lastContactEpochMs)) return floor;
+  const ceiling = Math.max(
+    floor,
+    Number.isFinite(maximumSec) ? maximumSec : 300,
+  );
+  if (!Number.isFinite(fixEpochMs) || !Number.isFinite(lastContactEpochMs))
+    return floor;
   const contactLeadSec = Math.max(0, (lastContactEpochMs - fixEpochMs) / 1000);
-  const grace = Math.max(0, Number.isFinite(contactGraceSec) ? contactGraceSec : 60);
+  const grace = Math.max(
+    0,
+    Number.isFinite(contactGraceSec) ? contactGraceSec : 60,
+  );
   return Math.min(ceiling, Math.max(floor, contactLeadSec + grace));
 }
 
@@ -197,18 +221,31 @@ export function limitCourseStep(prevDeg, targetDeg, maxDegPerSec, dtSec) {
  * is GPS-vector noise, not a turn (samples without a speed keep the legacy
  * behavior: no way to tell, so they still count).
  */
-export function estimateTurnRateDps(samples, noiseFloorDps = 0.4, maxDps = 4, minSpeedMps = 0) {
+export function estimateTurnRateDps(
+  samples,
+  noiseFloorDps = 0.4,
+  maxDps = 4,
+  minSpeedMps = 0,
+) {
   if (!samples || samples.length < 2) return 0;
   let sum = 0;
   let n = 0;
   for (let i = 1; i < samples.length; i++) {
     const dt = samples[i].tSec - samples[i - 1].tSec;
     if (dt < 2 || dt > 120) continue;
-    if (!Number.isFinite(samples[i].trackDeg) || !Number.isFinite(samples[i - 1].trackDeg)) continue;
+    if (
+      !Number.isFinite(samples[i].trackDeg) ||
+      !Number.isFinite(samples[i - 1].trackDeg)
+    )
+      continue;
     if (minSpeedMps > 0) {
       const v0 = samples[i - 1].speedMps;
       const v1 = samples[i].speedMps;
-      if ((Number.isFinite(v0) && v0 < minSpeedMps) || (Number.isFinite(v1) && v1 < minSpeedMps)) continue;
+      if (
+        (Number.isFinite(v0) && v0 < minSpeedMps) ||
+        (Number.isFinite(v1) && v1 < minSpeedMps)
+      )
+        continue;
     }
     sum += norm180(samples[i].trackDeg - samples[i - 1].trackDeg) / dt;
     n += 1;
@@ -274,13 +311,31 @@ const _scratchProjectArc = { east: 0, north: 0, endCourseDeg: 0 };
  * @param {number} dtSec - Seconds ahead; 0 or negative returns the start.
  * @returns {{lat: number, lon: number}} Projected coordinate, degrees.
  */
-export function projectGroundArcLatLon(lat, lon, courseDeg, speedMps, turnRateDps, dtSec) {
+export function projectGroundArcLatLon(
+  lat,
+  lon,
+  courseDeg,
+  speedMps,
+  turnRateDps,
+  dtSec,
+) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return { lat, lon };
-  if (!Number.isFinite(courseDeg) || !Number.isFinite(speedMps) || !Number.isFinite(dtSec)
-    || speedMps <= 0 || dtSec <= 0) {
+  if (
+    !Number.isFinite(courseDeg) ||
+    !Number.isFinite(speedMps) ||
+    !Number.isFinite(dtSec) ||
+    speedMps <= 0 ||
+    dtSec <= 0
+  ) {
     return { lat, lon };
   }
-  const off = arcOffsetEnu(speedMps, courseDeg, turnRateDps || 0, dtSec, _scratchProjectArc);
+  const off = arcOffsetEnu(
+    speedMps,
+    courseDeg,
+    turnRateDps || 0,
+    dtSec,
+    _scratchProjectArc,
+  );
   // Guard the pole: cos(lat) → 0 would send the longitude to infinity.
   const cosLat = Math.max(Math.cos(lat * DEG), 1e-6);
   return {
@@ -320,8 +375,15 @@ export function projectGroundArcLatLon(lat, lon, courseDeg, speedMps, turnRateDp
  * @returns {Array<{lat: number, lon: number}>} Polyline, display position first.
  */
 export function corridorPathLatLon({
-  extrapolating, displayLat, displayLon, courseDeg, speedMps, turnRateDps = 0,
-  fixLat, fixLon, lookaheadSec,
+  extrapolating,
+  displayLat,
+  displayLon,
+  courseDeg,
+  speedMps,
+  turnRateDps = 0,
+  fixLat,
+  fixLon,
+  lookaheadSec,
 }) {
   if (!Number.isFinite(displayLat) || !Number.isFinite(displayLon)) return [];
   const start = { lat: displayLat, lon: displayLon };
@@ -338,9 +400,16 @@ export function corridorPathLatLon({
   const n = Math.max(1, Math.ceil(arcLengthM / CORRIDOR_SAMPLE_SPACING_M));
   const out = [start];
   for (let i = 1; i <= n; i++) {
-    out.push(projectGroundArcLatLon(
-      displayLat, displayLon, courseDeg, speed, turnRateDps, cappedSec * (i / n),
-    ));
+    out.push(
+      projectGroundArcLatLon(
+        displayLat,
+        displayLon,
+        courseDeg,
+        speed,
+        turnRateDps,
+        cappedSec * (i / n),
+      ),
+    );
   }
   return out;
 }
@@ -385,13 +454,17 @@ const _forwardFixOffset = new Cesium.Cartesian3();
  *   velocity: number, track: number}|null} Forward synthetic fix, or null.
  */
 export function synthesizeForwardKinematicsFix(newest, next = {}) {
-  if (!newest?.position || !newest?.time || !Number.isFinite(next.epochMs)) return null;
+  if (!newest?.position || !newest?.time || !Number.isFinite(next.epochMs))
+    return null;
   const startEpochMs = Number.isFinite(newest.epochMs)
     ? newest.epochMs
     : Cesium.JulianDate.toDate(newest.time).getTime();
-  if (!Number.isFinite(startEpochMs) || next.epochMs <= startEpochMs) return null;
+  if (!Number.isFinite(startEpochMs) || next.epochMs <= startEpochMs)
+    return null;
 
-  const previousVelocity = Number.isFinite(newest.velocity) ? Math.max(0, newest.velocity) : 0;
+  const previousVelocity = Number.isFinite(newest.velocity)
+    ? Math.max(0, newest.velocity)
+    : 0;
   const previousTrack = Number.isFinite(newest.track) ? newest.track : 0;
   const dtSec = (next.epochMs - startEpochMs) / 1000;
   arcOffsetEnu(
@@ -421,7 +494,9 @@ export function synthesizeForwardKinematicsFix(newest, next = {}) {
     time: Cesium.JulianDate.fromDate(new Date(next.epochMs)),
     epochMs: next.epochMs,
     position,
-    velocity: Number.isFinite(next.velocity) ? Math.max(0, next.velocity) : previousVelocity,
+    velocity: Number.isFinite(next.velocity)
+      ? Math.max(0, next.velocity)
+      : previousVelocity,
     track: Number.isFinite(next.track) ? next.track : previousTrack,
   };
 }

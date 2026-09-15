@@ -8,6 +8,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { projectRoot } from '../scripts/project-root.mjs';
 import { inspectSetup } from '../scripts/setup-doctor.mjs';
+import { makeFixtureRoot } from './tooling/fixtureRoot.mjs';
 const run = promisify(execFile);
 const sourceRoot = fileURLToPath(new URL('../', import.meta.url));
 
@@ -60,7 +61,9 @@ const bashTest = process.platform === 'win32' ? test.skip : test;
 bashTest(
   'launcher reads the selected project keys and starts its command while source checks use the installation',
   async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'gev other project-'));
+    // Physical path: the launched process reports its cwd resolved, and macOS
+    // reaches the temp directory through a symlink.
+    const root = await makeFixtureRoot('gev other project-');
     try {
       const bin = path.join(root, 'bin');
       await mkdir(bin);

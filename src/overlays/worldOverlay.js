@@ -45,7 +45,14 @@ const DEFAULT_COLLISION_CAPACITY = 96;
 // active/protected entries bypass it.
 export const AMBIENT_CARD_COLLISION_CAPACITY = 1150;
 const DEFAULT_MOVING_SOLVE_MS = 125;
-const VALID_VARIANTS = new Set(['label', 'track', 'card', 'thumbnail', 'selected', 'tracked']);
+const VALID_VARIANTS = new Set([
+  'label',
+  'track',
+  'card',
+  'thumbnail',
+  'selected',
+  'tracked',
+]);
 
 /** Stable logical bottom-to-top paint order across the host-owned surfaces. */
 export const WORLD_OVERLAY_PAINT_LANES = Object.freeze([
@@ -58,7 +65,9 @@ export const WORLD_OVERLAY_PAINT_LANES = Object.freeze([
   'tracked',
 ]);
 
-const PAINT_LANE_INDEX = new Map(WORLD_OVERLAY_PAINT_LANES.map((lane, index) => [lane, index]));
+const PAINT_LANE_INDEX = new Map(
+  WORLD_OVERLAY_PAINT_LANES.map((lane, index) => [lane, index]),
+);
 
 /**
  * Unified UI exclusion inventory. Selectors may match multiple elements; the
@@ -103,6 +112,7 @@ export const WORLD_OVERLAY_OCCLUDER_SELECTORS = Object.freeze([
   '#space-mission-panel',
   '#space-mission-panel-host',
   '#military-awareness-panel',
+  '#bhote-koshi-event-panel',
   // Cockpit: solid backdrop-filled windows only (both bounded to
   // `min(340px, 28vw)` wide and `min(42vh, 410px)` tall, both `hidden` until
   // toggled). Every other cockpit selector was removed — see the block comment.
@@ -273,7 +283,9 @@ function nowMs() {
 }
 
 function clamp01(value, fallback = 1) {
-  return Number.isFinite(Number(value)) ? Math.max(0, Math.min(1, Number(value))) : fallback;
+  return Number.isFinite(Number(value))
+    ? Math.max(0, Math.min(1, Number(value)))
+    : fallback;
 }
 
 function assertSourceId(sourceId) {
@@ -292,7 +304,9 @@ function compareStableKeys(a, b) {
 }
 
 function compareProtectedEntries(a, b) {
-  return b.priority - a.priority || compareStableKeys(a._overlayKey, b._overlayKey);
+  return (
+    b.priority - a.priority || compareStableKeys(a._overlayKey, b._overlayKey)
+  );
 }
 
 function compareProtectedCandidates(a, b) {
@@ -300,7 +314,9 @@ function compareProtectedCandidates(a, b) {
 }
 
 function comparePaintItems(a, b) {
-  return a.lane - b.lane || a.zIndex - b.zIndex || compareStableKeys(a.key, b.key);
+  return (
+    a.lane - b.lane || a.zIndex - b.zIndex || compareStableKeys(a.key, b.key)
+  );
 }
 
 /**
@@ -346,9 +362,12 @@ function defaultCollisionGroup(variant) {
 
 /** Resolve an entry to one of the seven binding paint lanes. */
 export function paintLaneForOverlayEntry(entry = {}) {
-  if (PAINT_LANE_INDEX.has(entry.paintLane)) return PAINT_LANE_INDEX.get(entry.paintLane);
-  if (entry.tracked || entry.variant === 'tracked') return PAINT_LANE_INDEX.get('tracked');
-  if (entry.selected || entry.variant === 'selected') return PAINT_LANE_INDEX.get('selected');
+  if (PAINT_LANE_INDEX.has(entry.paintLane))
+    return PAINT_LANE_INDEX.get(entry.paintLane);
+  if (entry.tracked || entry.variant === 'tracked')
+    return PAINT_LANE_INDEX.get('tracked');
+  if (entry.selected || entry.variant === 'selected')
+    return PAINT_LANE_INDEX.get('selected');
   if (entry.variant === 'thumbnail') return PAINT_LANE_INDEX.get('thumbnail');
   if (entry.variant === 'card') return PAINT_LANE_INDEX.get('ambient-card');
   if (entry.variant === 'track') return PAINT_LANE_INDEX.get('ambient-track');
@@ -392,20 +411,28 @@ function snapshotCullPosition(entry) {
   }
   if (!candidate || typeof candidate !== 'object') return null;
   const { x, y, z } = candidate;
-  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z))
+    return null;
   return new Cesium.Cartesian3(x, y, z);
 }
 
 export function normalizeOverlayEntry(sourceId, entry) {
   const source = assertSourceId(sourceId);
-  if (!entry || typeof entry !== 'object') throw new TypeError('WorldOverlay entry must be an object');
+  if (!entry || typeof entry !== 'object')
+    throw new TypeError('WorldOverlay entry must be an object');
   const id = typeof entry.id === 'string' ? entry.id.trim() : '';
-  if (!id) throw new TypeError('WorldOverlay entry.id must be a non-empty string');
-  const validPosition = typeof entry.position === 'function'
-    || (entry.position && Number.isFinite(entry.position.x)
-      && Number.isFinite(entry.position.y) && Number.isFinite(entry.position.z));
+  if (!id)
+    throw new TypeError('WorldOverlay entry.id must be a non-empty string');
+  const validPosition =
+    typeof entry.position === 'function' ||
+    (entry.position &&
+      Number.isFinite(entry.position.x) &&
+      Number.isFinite(entry.position.y) &&
+      Number.isFinite(entry.position.z));
   if (!validPosition) {
-    throw new TypeError(`WorldOverlay entry ${source}:${id} requires a Cartesian position or getter`);
+    throw new TypeError(
+      `WorldOverlay entry ${source}:${id} requires a Cartesian position or getter`,
+    );
   }
   const variant = String(entry.variant || 'label');
   if (!VALID_VARIANTS.has(variant)) {
@@ -418,16 +445,22 @@ export function normalizeOverlayEntry(sourceId, entry) {
     cullPosition: snapshotCullPosition(entry),
     variant,
     title: String(entry.title ?? ''),
-    details: Array.isArray(entry.details) ? entry.details.map((line) => String(line)) : [],
+    details: Array.isArray(entry.details)
+      ? entry.details.map((line) => String(line))
+      : [],
     accent: entry.accent || WORLD_OVERLAY_STYLE.accent,
     paintLane: entry.paintLane,
-    priority: Number.isFinite(Number(entry.priority)) ? Number(entry.priority) : 0,
+    priority: Number.isFinite(Number(entry.priority))
+      ? Number(entry.priority)
+      : 0,
     selected: entry.selected === true,
     pinned: entry.pinned === true,
     protected: entry.protected === true,
     tracked: entry.tracked === true || variant === 'tracked',
     active: entry.active === true,
-    collisionGroup: String(entry.collisionGroup || defaultCollisionGroup(variant)),
+    collisionGroup: String(
+      entry.collisionGroup || defaultCollisionGroup(variant),
+    ),
     // Explicit field pick rather than `{ ...entry, variant }`: the lane
     // resolver reads only these four, and a full spread re-invokes every
     // accessor the source put on its entry (a throwing one would abort
@@ -435,37 +468,79 @@ export function normalizeOverlayEntry(sourceId, entry) {
     zIndex: Number.isFinite(Number(entry.zIndex))
       ? Number(entry.zIndex)
       : paintLaneForOverlayEntry({
-        paintLane: entry.paintLane,
-        tracked: entry.tracked,
-        selected: entry.selected,
-        variant,
-      }) * 10,
+          paintLane: entry.paintLane,
+          tracked: entry.tracked,
+          selected: entry.selected,
+          variant,
+        }) * 10,
     interactive: entry.interactive === true,
     accessibilityLabel: String(entry.accessibilityLabel || '').trim(),
     activate: typeof entry.activate === 'function' ? entry.activate : null,
-    minDistance: Number.isFinite(Number(entry.minDistance)) ? Math.max(0, Number(entry.minDistance)) : 0,
-    maxDistance: Number.isFinite(Number(entry.maxDistance)) ? Math.max(0, Number(entry.maxDistance)) : Number.POSITIVE_INFINITY,
-    distanceFadeStartRatio: Number.isFinite(Number(entry.distanceFadeStartRatio))
+    minDistance: Number.isFinite(Number(entry.minDistance))
+      ? Math.max(0, Number(entry.minDistance))
+      : 0,
+    maxDistance: Number.isFinite(Number(entry.maxDistance))
+      ? Math.max(0, Number(entry.maxDistance))
+      : Number.POSITIVE_INFINITY,
+    distanceFadeStartRatio: Number.isFinite(
+      Number(entry.distanceFadeStartRatio),
+    )
       ? Math.max(0, Math.min(1, Number(entry.distanceFadeStartRatio)))
       : 0.7,
     distanceScale: normalizeDistanceScale(entry.distanceScale),
     altitudeScale: normalizeAltitudeScale(entry.altitudeScale),
-    minAltitude: Number.isFinite(Number(entry.minAltitude)) ? Number(entry.minAltitude) : Number.NEGATIVE_INFINITY,
+    minAltitude: Number.isFinite(Number(entry.minAltitude))
+      ? Number(entry.minAltitude)
+      : Number.NEGATIVE_INFINITY,
     altitudeFadeStart: Number.isFinite(Number(entry.altitudeFadeStart))
       ? Number(entry.altitudeFadeStart)
       : Number.POSITIVE_INFINITY,
     altitudeFadeEnd: Number.isFinite(Number(entry.altitudeFadeEnd))
       ? Number(entry.altitudeFadeEnd)
       : Number.POSITIVE_INFINITY,
-    edgeFade: entry.edgeFade === false || entry.edgeFade === 'none' ? 'none' : 'keyhole',
+    edgeFade:
+      entry.edgeFade === false || entry.edgeFade === 'none'
+        ? 'none'
+        : 'keyhole',
     horizonCull: entry.horizonCull !== false,
     terrainOcclusion: entry.terrainOcclusion === true,
-    sourceAlpha: clamp01(entry.sourceAlpha ?? entry.alpha, 1),
+    sourceAlpha:
+      typeof (entry.sourceAlpha ?? entry.alpha) === 'function'
+        ? (entry.sourceAlpha ?? entry.alpha)
+        : clamp01(entry.sourceAlpha ?? entry.alpha, 1),
+    presentationScale:
+      typeof entry.presentationScale === 'function'
+        ? entry.presentationScale
+        : Math.max(0, Number(entry.presentationScale) || 1),
+    leaderProgress:
+      typeof entry.leaderProgress === 'function'
+        ? entry.leaderProgress
+        : clamp01(entry.leaderProgress, 1),
+    contentAlpha:
+      typeof entry.contentAlpha === 'function'
+        ? entry.contentAlpha
+        : clamp01(entry.contentAlpha, 1),
+    anchorDot: entry.anchorDot === true,
+    leaderStyle: entry.leaderStyle === 'elbow' ? 'elbow' : 'straight',
     temporalAlpha: clamp01(entry.temporalAlpha, 1),
-    gapPx: Number.isFinite(Number(entry.gapPx)) ? Math.max(0, Number(entry.gapPx)) : 12,
+    gapPx: Number.isFinite(Number(entry.gapPx))
+      ? Math.max(0, Number(entry.gapPx))
+      : 12,
     leaderOffsetPx: Number.isFinite(Number(entry.leaderOffsetPx))
       ? Math.max(0, Number(entry.leaderOffsetPx))
       : 0,
+    leaderStyle: entry.leaderStyle === 'elbow' ? 'elbow' : 'straight',
+    leaderAnimationMs: Number.isFinite(Number(entry.leaderAnimationMs))
+      ? Math.max(0, Number(entry.leaderAnimationMs))
+      : 0,
+    leaderAnimationStartedAt: Number.isFinite(
+      Number(entry.leaderAnimationStartedAt),
+    )
+      ? Number(entry.leaderAnimationStartedAt)
+      : 0,
+    leaderDrawRatio: Number.isFinite(Number(entry.leaderDrawRatio))
+      ? Math.max(0.1, Math.min(0.9, Number(entry.leaderDrawRatio)))
+      : 0.68,
     anchorRadiusPx: Number.isFinite(Number(entry.anchorRadiusPx))
       ? Math.max(0, Number(entry.anchorRadiusPx))
       : 0,
@@ -525,29 +600,37 @@ export function normalizeOverlayEntry(sourceId, entry) {
     _overlayTrackDisplayTitle: null,
     _overlayTrackDisplayDetail: null,
     _overlayTrackDisplayText: '',
-    _overlayThumbnailTitle: variant === 'thumbnail'
-      ? String(entry.title ?? '').toUpperCase().slice(
-        0,
-        Math.max(0, Math.floor(Number(entry.thumbnailTitleChars) || 0)) || undefined,
-      )
-      : '',
+    _overlayThumbnailTitle:
+      variant === 'thumbnail'
+        ? String(entry.title ?? '')
+            .toUpperCase()
+            .slice(
+              0,
+              Math.max(0, Math.floor(Number(entry.thumbnailTitleChars) || 0)) ||
+                undefined,
+            )
+        : '',
   };
   normalized._overlayKey = entryKey(source, id);
   normalized._cohortPriority = normalized.priority;
   normalized._cohortBand = 0;
   normalized._cohortHash = stableIdentityHash(source, id);
   normalized._cohortSourceId = id;
-  normalized._overlayImageSlot = normalized.requireImage && normalized.image
-    && Object.prototype.hasOwnProperty.call(normalized.image, 'frame')
-    ? normalized.image
-    : null;
+  normalized._overlayImageSlot =
+    normalized.requireImage &&
+    normalized.image &&
+    Object.prototype.hasOwnProperty.call(normalized.image, 'frame')
+      ? normalized.image
+      : null;
   normalized._overlayLayout = {};
   return normalized;
 }
 
 function normalizeDistanceScale(curve) {
   if (!curve || typeof curve !== 'object') return null;
-  const values = [curve.near, curve.nearValue, curve.far, curve.farValue].map(Number);
+  const values = [curve.near, curve.nearValue, curve.far, curve.farValue].map(
+    Number,
+  );
   if (!values.every(Number.isFinite)) return null;
   const near = Math.max(0, values[0]);
   const nearValue = Math.max(0, values[1]);
@@ -558,7 +641,13 @@ function normalizeDistanceScale(curve) {
 
 function normalizeAltitudeScale(curve) {
   if (!curve || typeof curve !== 'object') return null;
-  const values = [curve.fullEnd, curve.midEnd, curve.end, curve.midValue, curve.endValue].map(Number);
+  const values = [
+    curve.fullEnd,
+    curve.midEnd,
+    curve.end,
+    curve.midValue,
+    curve.endValue,
+  ].map(Number);
   if (!values.every(Number.isFinite)) return null;
   const fullEnd = Math.max(0, values[0]);
   const midEnd = Math.max(fullEnd, values[1]);
@@ -574,30 +663,55 @@ function normalizeAltitudeScale(curve) {
 }
 
 function normalizeSourceOptions(options = {}, previous = {}) {
-  const requestedCapacity = Number(options.collisionCapacity ?? previous.collisionCapacity);
+  const requestedCapacity = Number(
+    options.collisionCapacity ?? previous.collisionCapacity,
+  );
   return {
-    visible: options.visible !== undefined ? options.visible !== false : previous.visible !== false,
-    hideInCockpit: options.hideInCockpit !== undefined
-      ? options.hideInCockpit === true
-      : previous.hideInCockpit === true,
+    visible:
+      options.visible !== undefined
+        ? options.visible !== false
+        : previous.visible !== false,
+    hideInCockpit:
+      options.hideInCockpit !== undefined
+        ? options.hideInCockpit === true
+        : previous.hideInCockpit === true,
     alpha: clamp01(options.alpha, previous.alpha ?? 1),
-    cohortLimit: Math.max(1, Math.min(
-      MAX_SOURCE_COHORT_LIMIT,
-      Math.floor(Number(options.cohortLimit ?? previous.cohortLimit) || DEFAULT_COHORT_LIMIT),
-    )),
+    cohortLimit: Math.max(
+      1,
+      Math.min(
+        MAX_SOURCE_COHORT_LIMIT,
+        Math.floor(
+          Number(options.cohortLimit ?? previous.cohortLimit) ||
+            DEFAULT_COHORT_LIMIT,
+        ),
+      ),
+    ),
     collisionCapacity: Number.isFinite(requestedCapacity)
       ? Math.max(0, Math.floor(requestedCapacity))
       : DEFAULT_COLLISION_CAPACITY,
-    moving: options.moving !== undefined ? options.moving === true : previous.moving === true,
-    solveIntervalMs: Math.max(0, Number(
-      options.solveIntervalMs ?? previous.solveIntervalMs ?? DEFAULT_MOVING_SOLVE_MS,
-    ) || 0),
+    moving:
+      options.moving !== undefined
+        ? options.moving === true
+        : previous.moving === true,
+    solveIntervalMs: Math.max(
+      0,
+      Number(
+        options.solveIntervalMs ??
+          previous.solveIntervalMs ??
+          DEFAULT_MOVING_SOLVE_MS,
+      ) || 0,
+    ),
   };
 }
 
 function isProtected(entry) {
-  return entry.selected || entry.pinned || entry.protected || entry.tracked
-    || paintLaneForOverlayEntry(entry) >= PAINT_LANE_INDEX.get('selected');
+  return (
+    entry.selected ||
+    entry.pinned ||
+    entry.protected ||
+    entry.tracked ||
+    paintLaneForOverlayEntry(entry) >= PAINT_LANE_INDEX.get('selected')
+  );
 }
 
 /**
@@ -608,8 +722,18 @@ function isProtected(entry) {
  * @param {Set<string>} [incumbentKeys]
  * @returns {Array<WorldOverlayEntry>}
  */
-export function selectBoundedOverlayCohort(entries, limit = DEFAULT_COHORT_LIMIT, incumbentKeys = new Set()) {
-  const cap = Math.max(1, Math.min(MAX_SOURCE_COHORT_LIMIT, Math.floor(Number(limit) || DEFAULT_COHORT_LIMIT)));
+export function selectBoundedOverlayCohort(
+  entries,
+  limit = DEFAULT_COHORT_LIMIT,
+  incumbentKeys = new Set(),
+) {
+  const cap = Math.max(
+    1,
+    Math.min(
+      MAX_SOURCE_COHORT_LIMIT,
+      Math.floor(Number(limit) || DEFAULT_COHORT_LIMIT),
+    ),
+  );
   const protectedEntries = [];
   const bounded = new BoundedCohort(cap, MAX_SOURCE_COHORT_LIMIT);
   for (const entry of Array.isArray(entries) ? entries : []) {
@@ -618,14 +742,19 @@ export function selectBoundedOverlayCohort(entries, limit = DEFAULT_COHORT_LIMIT
       protectedEntries.push(entry);
       continue;
     }
-    bounded.consider(entry, incumbentKeys.has(entry._overlayKey) || incumbentKeys.has(entry.id));
+    bounded.consider(
+      entry,
+      incumbentKeys.has(entry._overlayKey) || incumbentKeys.has(entry.id),
+    );
   }
   protectedEntries.sort(compareProtectedEntries);
   return protectedEntries.concat(bounded.values(cap));
 }
 
 function sourceActive(source) {
-  return source.options.visible && !(_cockpitActive && source.options.hideInCockpit);
+  return (
+    source.options.visible && !(_cockpitActive && source.options.hideInCockpit)
+  );
 }
 
 function getOrCreateDomain(domainId) {
@@ -742,7 +871,9 @@ export function registerWorldOverlayPaintLane(laneId, painter, options = {}) {
     throw new TypeError(`Unsupported WorldOverlay paint lane: ${laneId}`);
   }
   if (typeof painter !== 'function') {
-    throw new TypeError('WorldOverlay custom paint lane requires a painter callback');
+    throw new TypeError(
+      'WorldOverlay custom paint lane requires a painter callback',
+    );
   }
   const id = assertSourceId(options.id || laneId);
   const previous = _customPaintLanes.get(id);
@@ -755,10 +886,12 @@ export function registerWorldOverlayPaintLane(laneId, painter, options = {}) {
     lane: PAINT_LANE_INDEX.get(laneId),
     painter,
     active: options.active === true,
-    target: options.target === PAINT_TARGET_DETECTION
-      ? PAINT_TARGET_DETECTION
-      : PAINT_TARGET_SHARED,
-    shouldPaint: typeof options.shouldPaint === 'function' ? options.shouldPaint : null,
+    target:
+      options.target === PAINT_TARGET_DETECTION
+        ? PAINT_TARGET_DETECTION
+        : PAINT_TARGET_SHARED,
+    shouldPaint:
+      typeof options.shouldPaint === 'function' ? options.shouldPaint : null,
   };
   _customPaintLanes.set(id, record);
   _customPaintLaneList.push(record);
@@ -774,7 +907,9 @@ export function registerWorldOverlayPaintLane(laneId, painter, options = {}) {
   };
   return {
     get surface() {
-      return record.target === PAINT_TARGET_DETECTION ? _detectionSurface : _canvas;
+      return record.target === PAINT_TARGET_DETECTION
+        ? _detectionSurface
+        : _canvas;
     },
     setActive(active) {
       if (_destroyed || _customPaintLanes.get(id) !== record) return;
@@ -799,9 +934,12 @@ export function registerWorldOverlayPaintLane(laneId, painter, options = {}) {
  */
 export function setOverlayEntries(sourceId, entries, options = {}) {
   if (_destroyed) return;
-  if (!Array.isArray(entries)) throw new TypeError('WorldOverlay entries must be an array');
+  if (!Array.isArray(entries))
+    throw new TypeError('WorldOverlay entries must be an array');
   const source = getOrCreateSource(sourceId, options);
-  const normalized = entries.map((entry) => normalizeOverlayEntry(source.id, entry));
+  const normalized = entries.map((entry) =>
+    normalizeOverlayEntry(source.id, entry),
+  );
   const next = new Map();
   for (const entry of normalized) next.set(entry.id, entry);
   for (const entry of source.entries.values()) {
@@ -857,7 +995,8 @@ export function clearOverlaySource(sourceId) {
   if (_destroyed) return false;
   const source = _sources.get(assertSourceId(sourceId));
   if (!source) return false;
-  for (const entry of source.entries.values()) _records.delete(entry._overlayKey);
+  for (const entry of source.entries.values())
+    _records.delete(entry._overlayKey);
   source.entries.clear();
   source.cohortDomainIds.length = 0;
   source.cohortLists.length = 0;
@@ -921,10 +1060,21 @@ export function hitTestWorldOverlay(x, y, options = {}) {
   for (let i = _hitRectCount - 1; i >= 0; i--) {
     const hit = _hitRects[i];
     if (options.sourceId && hit.sourceId !== options.sourceId) continue;
-    if (options.collisionGroup && hit.entry.collisionGroup !== options.collisionGroup) continue;
-    if (typeof options.filter === 'function' && !options.filter(hit.entry)) continue;
-    if (x < hit.x || x > hit.x + hit.w || y < hit.y || y > hit.y + hit.h) continue;
-    return { sourceId: hit.sourceId, entryId: hit.entryId, entry: hit.entry, rect: hit };
+    if (
+      options.collisionGroup &&
+      hit.entry.collisionGroup !== options.collisionGroup
+    )
+      continue;
+    if (typeof options.filter === 'function' && !options.filter(hit.entry))
+      continue;
+    if (x < hit.x || x > hit.x + hit.w || y < hit.y || y > hit.y + hit.h)
+      continue;
+    return {
+      sourceId: hit.sourceId,
+      entryId: hit.entryId,
+      entry: hit.entry,
+      rect: hit,
+    };
   }
   return null;
 }
@@ -950,31 +1100,58 @@ export function getWorldOverlayDiagnostics() {
  * (see normalizeOverlayEntry) so a sub-ellipsoid render anchor is not
  * false-hidden near the limb; everything else still uses the render position.
  */
-export function isOverlayPointVisible(entry, position, screen, viewport, occluder) {
-  if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y) || !Number.isFinite(position.z)) {
+export function isOverlayPointVisible(
+  entry,
+  position,
+  screen,
+  viewport,
+  occluder,
+) {
+  if (
+    !position ||
+    !Number.isFinite(position.x) ||
+    !Number.isFinite(position.y) ||
+    !Number.isFinite(position.z)
+  ) {
     return false;
   }
-  if (entry?.horizonCull !== false && occluder?.isPointVisible
-    && !occluder.isPointVisible(entry?.cullPosition || position)) {
+  if (
+    entry?.horizonCull !== false &&
+    occluder?.isPointVisible &&
+    !occluder.isPointVisible(entry?.cullPosition || position)
+  ) {
     return false;
   }
   const x = screen?.x;
   const y = screen?.y;
   if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
   const padding = Math.max(0, Number(entry?.viewportPadding) || 0);
-  return x >= -padding && x <= viewport.width + padding
-    && y >= -padding && y <= viewport.height + padding;
+  return (
+    x >= -padding &&
+    x <= viewport.width + padding &&
+    y >= -padding &&
+    y <= viewport.height + padding
+  );
 }
 
 /**
  * Return true when a rectangle intersects any cached UI exclusion box.
  * `count` lets pooled buffers expose a live prefix without truncating.
  */
-export function overlayRectIntersectsAny(rect, exclusions, count = exclusions.length) {
+export function overlayRectIntersectsAny(
+  rect,
+  exclusions,
+  count = exclusions.length,
+) {
   for (let i = 0; i < count; i++) {
     const other = exclusions[i];
-    if (rect.x < other.x + other.w && rect.x + rect.w > other.x
-      && rect.y < other.y + other.h && rect.y + rect.h > other.y) return true;
+    if (
+      rect.x < other.x + other.w &&
+      rect.x + rect.w > other.x &&
+      rect.y < other.y + other.h &&
+      rect.y + rect.h > other.y
+    )
+      return true;
   }
   return false;
 }
@@ -983,12 +1160,21 @@ export function overlayRectIntersectsAny(rect, exclusions, count = exclusions.le
  * Like `overlayRectIntersectsAny`, but only against exclusions that composite
  * BELOW the host — the ones a placement may never overlap at any cost.
  */
-export function overlayRectIntersectsAnyHard(rect, exclusions, count = exclusions.length) {
+export function overlayRectIntersectsAnyHard(
+  rect,
+  exclusions,
+  count = exclusions.length,
+) {
   for (let i = 0; i < count; i++) {
     const other = exclusions[i];
     if (!other.hard) continue;
-    if (rect.x < other.x + other.w && rect.x + rect.w > other.x
-      && rect.y < other.y + other.h && rect.y + rect.h > other.y) return true;
+    if (
+      rect.x < other.x + other.w &&
+      rect.x + rect.w > other.x &&
+      rect.y < other.y + other.h &&
+      rect.y + rect.h > other.y
+    )
+      return true;
   }
   return false;
 }
@@ -1003,8 +1189,12 @@ function leastOverlappingPlacement(placements, exclusions, count) {
     let overlapArea = 0;
     for (let j = 0; j < count; j++) {
       const other = exclusions[j];
-      const overlapW = Math.min(rect.x + rect.w, other.x + other.w) - Math.max(rect.x, other.x);
-      const overlapH = Math.min(rect.y + rect.h, other.y + other.h) - Math.max(rect.y, other.y);
+      const overlapW =
+        Math.min(rect.x + rect.w, other.x + other.w) -
+        Math.max(rect.x, other.x);
+      const overlapH =
+        Math.min(rect.y + rect.h, other.y + other.h) -
+        Math.max(rect.y, other.y);
       if (overlapW > 0 && overlapH > 0) overlapArea += overlapW * overlapH;
     }
     if (overlapArea < bestArea) {
@@ -1022,10 +1212,13 @@ function ensureOverlayDom() {
     _root.id = ROOT_ID;
     _root.setAttribute('aria-hidden', 'true');
     const parent = _viewer.container?.parentElement || document.body;
-    if (_viewer.container?.nextSibling) parent.insertBefore(_root, _viewer.container.nextSibling);
+    if (_viewer.container?.nextSibling)
+      parent.insertBefore(_root, _viewer.container.nextSibling);
     else parent.appendChild(_root);
   }
-  _canvas = _root.querySelector?.(`#${CANVAS_ID}`) || document.getElementById(CANVAS_ID);
+  _canvas =
+    _root.querySelector?.(`#${CANVAS_ID}`) ||
+    document.getElementById(CANVAS_ID);
   if (!_canvas) {
     _canvas = document.createElement('canvas');
     _canvas.id = CANVAS_ID;
@@ -1041,8 +1234,9 @@ function ensureOverlayDom() {
   // `'screen'`. Paint order is expressed purely by z-index: this surface is
   // z5, the shared card canvas inside the root is z6.
   const detectionParent = _viewer?.container || document.body;
-  _detectionSurface = detectionParent.querySelector?.(`#${DETECTION_SURFACE_ID}`)
-    || document.getElementById(DETECTION_SURFACE_ID);
+  _detectionSurface =
+    detectionParent.querySelector?.(`#${DETECTION_SURFACE_ID}`) ||
+    document.getElementById(DETECTION_SURFACE_ID);
   if (!_detectionSurface) {
     _detectionSurface = document.createElement('canvas');
     _detectionSurface.id = DETECTION_SURFACE_ID;
@@ -1078,14 +1272,18 @@ function ensureOverlayDom() {
     _accessibilityRoot.appendChild(_accessibilityStatus);
   }
   _ctx = _canvas.getContext('2d', { alpha: true, desynchronized: true });
-  _detectionCtx = _detectionSurface.getContext('2d', { alpha: true, desynchronized: true });
+  _detectionCtx = _detectionSurface.getContext('2d', {
+    alpha: true,
+    desynchronized: true,
+  });
 }
 
 function sizeCanvasSurface(canvas, ctx, width, height, dpr) {
   if (!canvas) return false;
   const backingWidth = Math.round(width * dpr);
   const backingHeight = Math.round(height * dpr);
-  const changed = canvas.width !== backingWidth || canvas.height !== backingHeight;
+  const changed =
+    canvas.width !== backingWidth || canvas.height !== backingHeight;
   if (changed) {
     canvas.width = backingWidth;
     canvas.height = backingHeight;
@@ -1104,14 +1302,23 @@ function sizeCanvasSurface(canvas, ctx, width, height, dpr) {
  */
 function ensureCanvasSize() {
   if (!_canvas || !_viewer?.canvas) return false;
-  const width = Math.max(0, Math.round(Number(_viewer.canvas.clientWidth) || 0));
-  const height = Math.max(0, Math.round(Number(_viewer.canvas.clientHeight) || 0));
+  const width = Math.max(
+    0,
+    Math.round(Number(_viewer.canvas.clientWidth) || 0),
+  );
+  const height = Math.max(
+    0,
+    Math.round(Number(_viewer.canvas.clientHeight) || 0),
+  );
   const dpr = Math.max(1, Number(globalThis.window?.devicePixelRatio) || 1);
-  const changed = _canvas.width !== Math.round(width * dpr)
-    || _canvas.height !== Math.round(height * dpr)
-    || _detectionSurface?.width !== Math.round(width * dpr)
-    || _detectionSurface?.height !== Math.round(height * dpr)
-    || _canvasWidth !== width || _canvasHeight !== height || _canvasDpr !== dpr;
+  const changed =
+    _canvas.width !== Math.round(width * dpr) ||
+    _canvas.height !== Math.round(height * dpr) ||
+    _detectionSurface?.width !== Math.round(width * dpr) ||
+    _detectionSurface?.height !== Math.round(height * dpr) ||
+    _canvasWidth !== width ||
+    _canvasHeight !== height ||
+    _canvasDpr !== dpr;
   _resizeDirty = false;
   if (!changed) return false;
   sizeCanvasSurface(_detectionSurface, _detectionCtx, width, height, dpr);
@@ -1140,21 +1347,27 @@ function ensureCanvasSize() {
 function elementIsVisible(element) {
   if (!element || element.hidden) return false;
   if (typeof element.checkVisibility === 'function') {
-    return element.checkVisibility({
-      contentVisibilityAuto: true,
-      // The spec renamed these; pass both spellings so the check keeps its
-      // opacity/visibility coverage on either engine vintage. Unknown keys are
-      // ignored, and every option defaults to false, so a missing alias would
-      // silently weaken the test rather than throw.
-      opacityProperty: true,
-      visibilityProperty: true,
-      checkOpacity: true,
-      checkVisibilityCSS: true,
-    }) !== false;
+    return (
+      element.checkVisibility({
+        contentVisibilityAuto: true,
+        // The spec renamed these; pass both spellings so the check keeps its
+        // opacity/visibility coverage on either engine vintage. Unknown keys are
+        // ignored, and every option defaults to false, so a missing alias would
+        // silently weaken the test rather than throw.
+        opacityProperty: true,
+        visibilityProperty: true,
+        checkOpacity: true,
+        checkVisibilityCSS: true,
+      }) !== false
+    );
   }
   const style = globalThis.window?.getComputedStyle?.(element);
   if (!style) return true;
-  return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) !== 0;
+  return (
+    style.display !== 'none' &&
+    style.visibility !== 'hidden' &&
+    Number(style.opacity) !== 0
+  );
 }
 
 /**
@@ -1218,10 +1431,13 @@ function refreshUiOccluders(timestamp, force = false) {
   const elapsed = timestamp - _occludersUpdatedAt;
   if (!force && elapsed < OCCLUDER_REFRESH_MS) {
     if (_occluderRefreshTimer == null && typeof setTimeout === 'function') {
-      _occluderRefreshTimer = setTimeout(() => {
-        _occluderRefreshTimer = null;
-        _viewer?.scene?.requestRender?.();
-      }, Math.max(0, OCCLUDER_REFRESH_MS - elapsed));
+      _occluderRefreshTimer = setTimeout(
+        () => {
+          _occluderRefreshTimer = null;
+          _viewer?.scene?.requestRender?.();
+        },
+        Math.max(0, OCCLUDER_REFRESH_MS - elapsed),
+      );
     }
     return false;
   }
@@ -1231,8 +1447,9 @@ function refreshUiOccluders(timestamp, force = false) {
   const canvasRect = _canvas.getBoundingClientRect?.() || { left: 0, top: 0 };
   const seen = new Set();
   for (const selector of WORLD_OVERLAY_OCCLUDER_SELECTORS) {
-    const matches = document.querySelectorAll?.(selector)
-      || [document.querySelector?.(selector)].filter(Boolean);
+    const matches =
+      document.querySelectorAll?.(selector) ||
+      [document.querySelector?.(selector)].filter(Boolean);
     for (const element of matches) {
       if (seen.has(element) || !elementIsVisible(element)) continue;
       seen.add(element);
@@ -1295,7 +1512,11 @@ function nodeIsOrContainsOccluderChrome(node) {
   if (!node || typeof node.matches !== 'function') return false; // text/comment nodes
   for (const selector of WORLD_OVERLAY_OCCLUDER_SELECTORS) {
     if (node.matches(selector)) return true;
-    if (typeof node.querySelector === 'function' && node.querySelector(selector)) return true;
+    if (
+      typeof node.querySelector === 'function' &&
+      node.querySelector(selector)
+    )
+      return true;
   }
   return false;
 }
@@ -1331,9 +1552,11 @@ function handleChromeMutations(records) {
   for (let i = 0; i < records.length; i++) {
     const record = records[i];
     if (!record) continue;
-    if (record.type !== 'childList'
-      || childListTouchesChrome(record.addedNodes)
-      || childListTouchesChrome(record.removedNodes)) {
+    if (
+      record.type !== 'childList' ||
+      childListTouchesChrome(record.addedNodes) ||
+      childListTouchesChrome(record.removedNodes)
+    ) {
       markOccludersDirty();
       return;
     }
@@ -1347,7 +1570,10 @@ function installUiOccluderObservers() {
     _mutationObserver = new MutationObserver(handleChromeMutations);
     // Body observation is childList discovery only, filtered in the callback;
     // attribute churn is observed per occluder element, without subtree.
-    _mutationObserver.observe(document.body, { subtree: true, childList: true });
+    _mutationObserver.observe(document.body, {
+      subtree: true,
+      childList: true,
+    });
   }
   if (typeof ResizeObserver === 'function') {
     _resizeObserver = new ResizeObserver(markLayoutDirty);
@@ -1412,10 +1638,30 @@ function activeFadeCount(timestamp) {
     for (let i = 0; i < stateCount; i++) {
       const state = arbiter.activeStateAt(i);
       if (state.selected) {
-        if (timestamp - state.enterStartedAt < LABEL_ARBITER_TIMING.fadeInMs) count++;
-      } else if (timestamp - state.exitStartedAt < LABEL_ARBITER_TIMING.fadeOutMs) {
+        if (timestamp - state.enterStartedAt < LABEL_ARBITER_TIMING.fadeInMs)
+          count++;
+      } else if (
+        timestamp - state.exitStartedAt <
+        LABEL_ARBITER_TIMING.fadeOutMs
+      ) {
         count++;
       }
+    }
+  }
+  return count;
+}
+
+function activeLeaderAnimationCount(timestamp) {
+  let count = 0;
+  for (let i = 0; i < _sourceList.length; i++) {
+    const source = _sourceList[i];
+    if (!sourceActive(source)) continue;
+    for (const entry of source.entries.values()) {
+      if (
+        entry.leaderAnimationMs > 0 &&
+        timestamp - entry.leaderAnimationStartedAt < entry.leaderAnimationMs
+      )
+        count++;
     }
   }
   return count;
@@ -1456,7 +1702,11 @@ function prepareProjectionMatrix() {
 function prepareCustomPaintFrame(timestamp, keyhole) {
   const viewProjection = prepareProjectionMatrix();
   const camera = _viewer.camera.positionWC;
-  if (camera.x !== _occluderCameraX || camera.y !== _occluderCameraY || camera.z !== _occluderCameraZ) {
+  if (
+    camera.x !== _occluderCameraX ||
+    camera.y !== _occluderCameraY ||
+    camera.z !== _occluderCameraZ
+  ) {
     _occluder.cameraPosition = camera;
     _occluderCameraX = camera.x;
     _occluderCameraY = camera.y;
@@ -1490,6 +1740,8 @@ function getProjectionRecord(entry) {
       candidate: null,
       distanceAlpha: 1,
       paintScale: 1,
+      leaderProgress: 1,
+      contentAlpha: 1,
       altitudeAlpha: 1,
       sourceAlpha: 1,
       protectedPlacement: null,
@@ -1552,15 +1804,62 @@ function resetFrameDomains() {
   }
 }
 
+// Evaluate optional scene presentation outside the shared projection hot path.
+// Passing records (rather than intermediate doubles) also avoids boxing the
+// ordinary moving-source workload at a non-inlined call boundary.
+function applyPresentation(entry, source, record) {
+  try {
+    const scale = Number(
+      typeof entry.presentationScale === 'function'
+        ? entry.presentationScale()
+        : entry.presentationScale,
+    );
+    record.paintScale *= Number.isFinite(scale) ? Math.max(0, scale) : 1;
+    const alpha = Number(
+      typeof entry.sourceAlpha === 'function'
+        ? entry.sourceAlpha()
+        : entry.sourceAlpha,
+    );
+    record.sourceAlpha =
+      source.options.alpha *
+      (Number.isFinite(alpha) ? Math.max(0, Math.min(1, alpha)) : 1);
+    const leader = Number(
+      typeof entry.leaderProgress === 'function'
+        ? entry.leaderProgress()
+        : entry.leaderProgress,
+    );
+    record.leaderProgress = Number.isFinite(leader)
+      ? Math.max(0, Math.min(1, leader))
+      : 1;
+    const content = Number(
+      typeof entry.contentAlpha === 'function'
+        ? entry.contentAlpha()
+        : entry.contentAlpha,
+    );
+    record.contentAlpha = Number.isFinite(content)
+      ? Math.max(0, Math.min(1, content))
+      : 1;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function snapshotAndProject(entry, source, viewProjection, keyhole) {
   const record = getProjectionRecord(entry);
   let position;
   try {
-    position = typeof entry.position === 'function' ? entry.position() : entry.position;
+    position =
+      typeof entry.position === 'function' ? entry.position() : entry.position;
   } catch {
     return null;
   }
-  if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y) || !Number.isFinite(position.z)) {
+  if (
+    !position ||
+    !Number.isFinite(position.x) ||
+    !Number.isFinite(position.y) ||
+    !Number.isFinite(position.z)
+  ) {
     return null;
   }
   record.position.x = position.x;
@@ -1568,25 +1867,51 @@ function snapshotAndProject(entry, source, viewProjection, keyhole) {
   record.position.z = position.z;
 
   const { x: px, y: py, z: pz } = record.position;
-  const clipW = viewProjection.m3 * px + viewProjection.m7 * py
-    + viewProjection.m11 * pz + viewProjection.m15;
+  const clipW =
+    viewProjection.m3 * px +
+    viewProjection.m7 * py +
+    viewProjection.m11 * pz +
+    viewProjection.m15;
   if (!(clipW > 0)) return null;
   const invW = 1 / clipW;
-  record.screen.x = ((viewProjection.m0 * px + viewProjection.m4 * py
-    + viewProjection.m8 * pz + viewProjection.m12) * invW * 0.5 + 0.5) * _canvasWidth;
-  record.screen.y = (0.5 - (viewProjection.m1 * px + viewProjection.m5 * py
-    + viewProjection.m9 * pz + viewProjection.m13) * invW * 0.5) * _canvasHeight;
-  if (entry.safeTopRatio > 0 && !(entry.pinned && entry.pinnedBypassesSafeTop)) {
-    const safeTop = Math.min(entry.safeTopMaxPx, _canvasHeight * entry.safeTopRatio);
+  record.screen.x =
+    ((viewProjection.m0 * px +
+      viewProjection.m4 * py +
+      viewProjection.m8 * pz +
+      viewProjection.m12) *
+      invW *
+      0.5 +
+      0.5) *
+    _canvasWidth;
+  record.screen.y =
+    (0.5 -
+      (viewProjection.m1 * px +
+        viewProjection.m5 * py +
+        viewProjection.m9 * pz +
+        viewProjection.m13) *
+        invW *
+        0.5) *
+    _canvasHeight;
+  if (
+    entry.safeTopRatio > 0 &&
+    !(entry.pinned && entry.pinnedBypassesSafeTop)
+  ) {
+    const safeTop = Math.min(
+      entry.safeTopMaxPx,
+      _canvasHeight * entry.safeTopRatio,
+    );
     if (record.screen.y < safeTop) return null;
   }
-  if (!isOverlayPointVisible(
-    entry,
-    record.position,
-    record.screen,
-    _viewport,
-    _occluder,
-  )) return null;
+  if (
+    !isOverlayPointVisible(
+      entry,
+      record.position,
+      record.screen,
+      _viewport,
+      _occluder,
+    )
+  )
+    return null;
 
   // Doubles crossing a non-inlined call boundary are boxed, so the two hot
   // scalar steps stay local: the range is computed inline, and the common
@@ -1596,12 +1921,19 @@ function snapshotAndProject(entry, source, viewProjection, keyhole) {
   const rangeX = cameraPosition.x - record.position.x;
   const rangeY = cameraPosition.y - record.position.y;
   const rangeZ = cameraPosition.z - record.position.z;
-  const distance = Math.sqrt(rangeX * rangeX + rangeY * rangeY + rangeZ * rangeZ);
-  record.distanceAlpha = entry.maxDistance === Number.POSITIVE_INFINITY
-    ? (distance >= entry.minDistance ? 1 : 0)
-    : distanceFade(distance, record.distanceOptions);
+  const distance = Math.sqrt(
+    rangeX * rangeX + rangeY * rangeY + rangeZ * rangeZ,
+  );
+  record.distanceAlpha =
+    entry.maxDistance === Number.POSITIVE_INFINITY
+      ? distance >= entry.minDistance
+        ? 1
+        : 0
+      : distanceFade(distance, record.distanceOptions);
   const cameraAltitude = _viewer.camera.positionCartographic?.height;
-  record.paintScale = entry.distanceScale ? distanceScale(distance, entry.distanceScale) : 1;
+  record.paintScale = entry.distanceScale
+    ? distanceScale(distance, entry.distanceScale)
+    : 1;
   // Keep the source-configurable piecewise curve local to the projection hot
   // path. Passing its five doubles through a non-inlined helper boxed them for
   // every thumbnail candidate and broke the shared 154 B/candidate gate.
@@ -1611,26 +1943,51 @@ function snapshotAndProject(entry, source, viewProjection, keyhole) {
     if (cameraAltitude > altitudeCurve.fullEnd) {
       if (cameraAltitude <= altitudeCurve.midEnd) {
         const span = Math.max(1, altitudeCurve.midEnd - altitudeCurve.fullEnd);
-        let progress = Math.max(0, Math.min(1, (cameraAltitude - altitudeCurve.fullEnd) / span));
-        if (altitudeCurve.smoothToMid) progress = progress * progress * (3 - 2 * progress);
+        let progress = Math.max(
+          0,
+          Math.min(1, (cameraAltitude - altitudeCurve.fullEnd) / span),
+        );
+        if (altitudeCurve.smoothToMid)
+          progress = progress * progress * (3 - 2 * progress);
         altitudeFactor = 1 + (altitudeCurve.midValue - 1) * progress;
       } else if (cameraAltitude >= altitudeCurve.end) {
         altitudeFactor = altitudeCurve.endValue;
       } else {
-        const progress = (cameraAltitude - altitudeCurve.midEnd)
-          / Math.max(1, altitudeCurve.end - altitudeCurve.midEnd);
-        altitudeFactor = altitudeCurve.midValue
-          + (altitudeCurve.endValue - altitudeCurve.midValue) * progress;
+        const progress =
+          (cameraAltitude - altitudeCurve.midEnd) /
+          Math.max(1, altitudeCurve.end - altitudeCurve.midEnd);
+        altitudeFactor =
+          altitudeCurve.midValue +
+          (altitudeCurve.endValue - altitudeCurve.midValue) * progress;
       }
     }
     record.paintScale *= altitudeFactor;
   }
-  record.altitudeAlpha = entry.altitudeFadeEnd === Number.POSITIVE_INFINITY
-    ? (Number.isFinite(cameraAltitude) && cameraAltitude < entry.minAltitude ? 0 : 1)
-    : altitudeFade(cameraAltitude, record.altitudeOptions);
-  record.sourceAlpha = source.options.alpha * entry.sourceAlpha;
-  if (record.distanceAlpha <= 0 || record.paintScale <= 0
-    || record.altitudeAlpha <= 0 || record.sourceAlpha <= 0) return null;
+  record.altitudeAlpha =
+    entry.altitudeFadeEnd === Number.POSITIVE_INFINITY
+      ? Number.isFinite(cameraAltitude) && cameraAltitude < entry.minAltitude
+        ? 0
+        : 1
+      : altitudeFade(cameraAltitude, record.altitudeOptions);
+  record.leaderProgress = 1;
+  record.contentAlpha = 1;
+  if (
+    entry.presentationScale !== 1 ||
+    entry.leaderProgress !== 1 ||
+    entry.contentAlpha !== 1 ||
+    typeof entry.sourceAlpha === 'function'
+  ) {
+    if (!applyPresentation(entry, source, record)) return null;
+  } else {
+    record.sourceAlpha = source.options.alpha * entry.sourceAlpha;
+  }
+  if (
+    record.distanceAlpha <= 0 ||
+    record.paintScale <= 0 ||
+    record.altitudeAlpha <= 0 ||
+    record.sourceAlpha <= 0
+  )
+    return null;
 
   measureOverlayEntry(_ctx, entry, record.layout);
   record.placementInput.anchorX = record.screen.x;
@@ -1644,10 +2001,9 @@ function snapshotAndProject(entry, source, viewProjection, keyhole) {
       ? distanceScale(distance, entry.anchorRadiusScale)
       : 1;
     const anchorRadius = entry.anchorRadiusPx * anchorScale;
-    record.placementInput.gap = anchorRadius + Math.max(
-      entry.minAnchorGapPx,
-      anchorRadius + entry.anchorGapPaddingPx,
-    );
+    record.placementInput.gap =
+      anchorRadius +
+      Math.max(entry.minAnchorGapPx, anchorRadius + entry.anchorGapPaddingPx);
     record.placementInput.leaderOffset = anchorRadius;
   } else {
     record.placementInput.gap = entry.gapPx;
@@ -1680,7 +2036,8 @@ function snapshotAndProject(entry, source, viewProjection, keyhole) {
     let hardClear = 0;
     for (let i = 0; i < record.placements.length; i++) {
       const placement = record.placements[i];
-      if (overlayRectIntersectsAnyHard(placement.rect, _uiOcclusionRects)) continue;
+      if (overlayRectIntersectsAnyHard(placement.rect, _uiOcclusionRects))
+        continue;
       record.placements[hardClear++] = placement;
     }
     record.placements.length = hardClear;
@@ -1707,17 +2064,19 @@ function snapshotAndProject(entry, source, viewProjection, keyhole) {
   // Shared keyhole alpha is radial and monotonic, so the closest surviving
   // placement is exactly the maximum-alpha placement. Evaluate the shared
   // helper once, then evaluate the final chosen rectangle again at paint.
-  record.candidate.keyholeAlpha = entry.edgeFade === 'keyhole'
-    ? (centerDistance <= keyhole.radius
-      ? 1
-      : keyholeLabelAlphaFromGeometry(closestCenterX, closestCenterY, keyhole))
-    : 1;
+  record.candidate.keyholeAlpha =
+    entry.edgeFade === 'keyhole'
+      ? centerDistance <= keyhole.radius
+        ? 1
+        : keyholeLabelAlphaFromGeometry(closestCenterX, closestCenterY, keyhole)
+      : 1;
   record.candidate.centerDistance = centerDistance;
   // Anchor separation is authored in unscaled CSS px; the shipped pass scaled it
   // with the card, so a zoomed-out (smaller) card needs proportionally less room.
-  record.candidate.minAnchorSeparationPx = entry.minAnchorSeparationPx > 0
-    ? entry.minAnchorSeparationPx * record.paintScale
-    : 0;
+  record.candidate.minAnchorSeparationPx =
+    entry.minAnchorSeparationPx > 0
+      ? entry.minAnchorSeparationPx * record.paintScale
+      : 0;
   record.candidate.screenX = record.screen.x;
   record.candidate.screenY = record.screen.y;
   return record;
@@ -1740,15 +2099,22 @@ function collectFrameCandidates(keyhole, viewProjection) {
       const domainId = source.cohortDomainIds[c];
       const cohort = source.cohortLists[c];
       const domain = getOrCreateDomain(domainId);
-      domain.capacity = domainId === 'ambient-card'
-        ? Math.min(
-          AMBIENT_CARD_COLLISION_CAPACITY,
-          domain.capacity + source.options.collisionCapacity,
-        )
-        : Math.max(domain.capacity, source.options.collisionCapacity);
+      domain.capacity =
+        domainId === 'ambient-card'
+          ? Math.min(
+              AMBIENT_CARD_COLLISION_CAPACITY,
+              domain.capacity + source.options.collisionCapacity,
+            )
+          : Math.max(domain.capacity, source.options.collisionCapacity);
       domain.moving ||= source.options.moving;
-      domain.solveIntervalMs = Math.min(domain.solveIntervalMs, source.options.solveIntervalMs);
-      domain.demandBySource.set(source.id, source.demandByDomain.get(domainId) || 0);
+      domain.solveIntervalMs = Math.min(
+        domain.solveIntervalMs,
+        source.options.solveIntervalMs,
+      );
+      domain.demandBySource.set(
+        source.id,
+        source.demandByDomain.get(domainId) || 0,
+      );
       candidateCount += cohort.length;
       for (let i = 0; i < cohort.length; i++) {
         const entry = cohort[i];
@@ -1757,9 +2123,19 @@ function collectFrameCandidates(keyhole, viewProjection) {
         // the shipped pinned-card exception remains immediate feedback.
         if (entry.requireImage && !entry.pinned) {
           const imageSlot = entry._overlayImageSlot;
-          if (imageSlot ? (!(imageSlot.stamp > 0) || !imageSlot.frame) : !entry.image) continue;
+          if (
+            imageSlot
+              ? !(imageSlot.stamp > 0) || !imageSlot.frame
+              : !entry.image
+          )
+            continue;
         }
-        const record = snapshotAndProject(entry, source, viewProjection, keyhole);
+        const record = snapshotAndProject(
+          entry,
+          source,
+          viewProjection,
+          keyhole,
+        );
         if (!record) continue;
         // Anchor separation runs HERE, not inside the arbiter. The shipped pass
         // filtered the candidate list and then drew it; rejecting inside the
@@ -1775,8 +2151,12 @@ function collectFrameCandidates(keyhole, viewProjection) {
             if (domain.sepSource[k] !== source.id) continue;
             const dx = record.candidate.screenX - domain.sepX[k];
             const dy = record.candidate.screenY - domain.sepY[k];
-            const required = separation > domain.sepR[k] ? separation : domain.sepR[k];
-            if (dx * dx + dy * dy < required * required) { clear = false; break; }
+            const required =
+              separation > domain.sepR[k] ? separation : domain.sepR[k];
+            if (dx * dx + dy * dy < required * required) {
+              clear = false;
+              break;
+            }
           }
           if (!clear) continue;
           const slot = domain.sepCount++;
@@ -1787,7 +2167,8 @@ function collectFrameCandidates(keyhole, viewProjection) {
         }
         projectedCount++;
         if (isProtected(record.entry)) {
-          domain.protectedCandidates[domain.protectedCount++] = record.candidate;
+          domain.protectedCandidates[domain.protectedCount++] =
+            record.candidate;
         } else {
           record.candidate.frameStamp = _frameStamp;
           domain.candidates[domain.candidateCount++] = record.candidate;
@@ -1799,17 +2180,24 @@ function collectFrameCandidates(keyhole, viewProjection) {
 
   for (let d = 0; d < _domainList.length; d++) {
     const domain = _domainList[d];
-    sortPooledRange(domain.protectedCandidates, domain.protectedCount, compareProtectedCandidates);
+    sortPooledRange(
+      domain.protectedCandidates,
+      domain.protectedCount,
+      compareProtectedCandidates,
+    );
     for (let p = 0; p < domain.protectedCount; p++) {
       const candidate = domain.protectedCandidates[p];
       let placement = null;
       for (let i = 0; i < candidate.placements.length; i++) {
         const candidatePlacement = candidate.placements[i];
-        if (overlayRectIntersectsAny(
-          candidatePlacement.rect,
-          domain.protectedRects,
-          domain.protectedRectCount,
-        )) continue;
+        if (
+          overlayRectIntersectsAny(
+            candidatePlacement.rect,
+            domain.protectedRects,
+            domain.protectedRectCount,
+          )
+        )
+          continue;
         placement = candidatePlacement;
         break;
       }
@@ -1819,18 +2207,22 @@ function collectFrameCandidates(keyhole, viewProjection) {
         domain.protectedRectCount,
       );
       candidate._record.protectedPlacement = placement;
-      if (placement) domain.protectedRects[domain.protectedRectCount++] = placement.rect;
+      if (placement)
+        domain.protectedRects[domain.protectedRectCount++] = placement.rect;
     }
     for (let a = 0; a < domain.candidateCount; a++) {
       const candidate = domain.candidates[a];
       let count = 0;
       for (let i = 0; i < candidate.placements.length; i++) {
         const placement = candidate.placements[i];
-        if (overlayRectIntersectsAny(
-          placement.rect,
-          domain.protectedRects,
-          domain.protectedRectCount,
-        )) continue;
+        if (
+          overlayRectIntersectsAny(
+            placement.rect,
+            domain.protectedRects,
+            domain.protectedRectCount,
+          )
+        )
+          continue;
         candidate.placements[count++] = placement;
       }
       candidate.placements.length = count;
@@ -1845,10 +2237,12 @@ function collectFrameCandidates(keyhole, viewProjection) {
     domain.candidates.length = count;
     domain.protectedCandidates.length = domain.protectedCount;
     domain.protectedRects.length = domain.protectedRectCount;
-    if (!Number.isFinite(domain.solveIntervalMs)) domain.solveIntervalMs = DEFAULT_MOVING_SOLVE_MS;
+    if (!Number.isFinite(domain.solveIntervalMs))
+      domain.solveIntervalMs = DEFAULT_MOVING_SOLVE_MS;
   }
   let candidateIndexSize = 0;
-  for (let d = 0; d < _domainList.length; d++) candidateIndexSize += _domainList[d].candidateMap.size;
+  for (let d = 0; d < _domainList.length; d++)
+    candidateIndexSize += _domainList[d].candidateMap.size;
   _diagnostics.candidateIndexSize = candidateIndexSize;
   _diagnostics.candidateCount = candidateCount;
   _diagnostics.projectedCount = projectedCount;
@@ -1856,7 +2250,8 @@ function collectFrameCandidates(keyhole, viewProjection) {
 
 function addPaintItem(record, placement, temporalAlpha, selected) {
   if (!record || !placement) return;
-  const item = _paintItemPool[_paintCount] || (_paintItemPool[_paintCount] = {});
+  const item =
+    _paintItemPool[_paintCount] || (_paintItemPool[_paintCount] = {});
   item.record = record;
   item.placement = placement;
   item.temporalAlpha = temporalAlpha;
@@ -1880,8 +2275,8 @@ function solveDomains(timestamp) {
   let solveRevision = 0;
   for (let d = 0; d < _domainList.length; d++) {
     const domain = _domainList[d];
-    const movingSolveDue = domain.moving
-      && timestamp - domain.lastSolveAt >= domain.solveIntervalMs;
+    const movingSolveDue =
+      domain.moving && timestamp - domain.lastSolveAt >= domain.solveIntervalMs;
     if (_solveDirty || movingSolveDue) {
       const started = nowMs();
       domain.arbiter.solve(domain.candidates, {
@@ -1897,7 +2292,12 @@ function solveDomains(timestamp) {
     }
     for (let p = 0; p < domain.protectedCount; p++) {
       const record = domain.protectedCandidates[p]._record;
-      addPaintItem(record, record.protectedPlacement, record.entry.temporalAlpha, true);
+      addPaintItem(
+        record,
+        record.protectedPlacement,
+        record.entry.temporalAlpha,
+        true,
+      );
       selectedCount++;
     }
     const rendered = domain.arbiter.renderEntries(
@@ -1910,7 +2310,8 @@ function solveDomains(timestamp) {
       const candidate = renderedEntry.candidate;
       const record = candidate?._record;
       if (!record || !sourceCanPaint(record.entry.source)) continue;
-      if (renderedEntry.selected && candidate.frameStamp !== _frameStamp) continue;
+      if (renderedEntry.selected && candidate.frameStamp !== _frameStamp)
+        continue;
       // No second UI veto here. The placement already went through the
       // exclusion preference at projection; re-testing it meant that a panel
       // expanding over a settled card evicted the card outright — it popped
@@ -1937,8 +2338,11 @@ function solveDomains(timestamp) {
 
 function publishPaintRect(item) {
   const { record, placement } = item;
-  const rect = _paintRectPool[_paintRectCount] || (_paintRectPool[_paintRectCount] = {});
+  const rect =
+    _paintRectPool[_paintRectCount] || (_paintRectPool[_paintRectCount] = {});
   _paintRectCount++;
+  rect.anchorX = placement.anchorX;
+  rect.anchorY = placement.anchorY;
   rect.x = placement.rect.x;
   rect.y = placement.rect.y;
   rect.w = placement.rect.w;
@@ -1960,7 +2364,8 @@ function syncAccessibleActions() {
   for (let i = _hitRectCount - 1; i >= 0; i--) {
     const rect = _hitRects[i];
     const entry = rect.entry;
-    if (!entry?.accessibilityLabel || typeof entry.activate !== 'function') continue;
+    if (!entry?.accessibilityLabel || typeof entry.activate !== 'function')
+      continue;
     if (_accessibleActivatorByKey.has(rect.key)) continue;
     _accessibleActivatorByKey.set(rect.key, entry.activate);
     items.push({
@@ -1970,14 +2375,18 @@ function syncAccessibleActions() {
     });
   }
   const signature = items
-    .map((item) => `${item.key}\u0000${item.label}\u0000${item.selected ? '1' : '0'}`)
+    .map(
+      (item) =>
+        `${item.key}\u0000${item.label}\u0000${item.selected ? '1' : '0'}`,
+    )
     .join('\u0001');
   if (signature === _accessibilitySignature) return;
   _accessibilitySignature = signature;
   if (typeof _accessibilityList.replaceChildren === 'function') {
     _accessibilityList.replaceChildren();
   } else {
-    while (_accessibilityList.firstChild) _accessibilityList.removeChild(_accessibilityList.firstChild);
+    while (_accessibilityList.firstChild)
+      _accessibilityList.removeChild(_accessibilityList.firstChild);
   }
   for (const item of items) {
     const button = document.createElement('button');
@@ -2010,7 +2419,8 @@ function paintCustomLane(lane) {
     if (!surface || !ctx) continue;
     _customPaintFrame.surface = surface;
     _customPaintFrame.ctx = ctx;
-    if (record.shouldPaint && record.shouldPaint(_customPaintFrame) === false) continue;
+    if (record.shouldPaint && record.shouldPaint(_customPaintFrame) === false)
+      continue;
     if (detectionTarget && !_detectionSurfacePrepared) {
       clearCanvas(false, true);
       _detectionSurfacePrepared = true;
@@ -2039,18 +2449,35 @@ function paintEntryItem(item, keyhole) {
   if (entry.edgeFade === 'keyhole') {
     const keyholeX = placement.centerX - keyhole.centerX;
     const keyholeY = placement.centerY - keyhole.centerY;
-    keyholeAlpha = keyholeX * keyholeX + keyholeY * keyholeY <= keyhole.radius * keyhole.radius
-      ? 1
-      : keyholeLabelAlphaFromGeometry(placement.centerX, placement.centerY, keyhole);
+    keyholeAlpha =
+      keyholeX * keyholeX + keyholeY * keyholeY <=
+      keyhole.radius * keyhole.radius
+        ? 1
+        : keyholeLabelAlphaFromGeometry(
+            placement.centerX,
+            placement.centerY,
+            keyhole,
+          );
   }
   // All five channels are normalized at their source. Keep the multiply on
   // the hot paint path so its intermediate doubles remain unboxed; the pure
   // `combinedOverlayAlpha` export still specifies/tests the same binding.
-  const finalAlpha = record.sourceAlpha * item.temporalAlpha
-    * record.distanceAlpha * record.altitudeAlpha * keyholeAlpha;
+  const finalAlpha =
+    record.sourceAlpha *
+    item.temporalAlpha *
+    record.distanceAlpha *
+    record.altitudeAlpha *
+    keyholeAlpha;
   if (finalAlpha <= 0.001) return;
   if (record.paintScale === 1) {
-    paintOverlayEntry(_ctx, entry, placement, finalAlpha);
+    paintOverlayEntry(
+      _ctx,
+      entry,
+      placement,
+      finalAlpha,
+      record.leaderProgress,
+      record.contentAlpha,
+    );
   } else {
     const scaled = localizeScaledPlacement(
       placement,
@@ -2060,7 +2487,14 @@ function paintEntryItem(item, keyhole) {
     _ctx.save();
     _ctx.translate(placement.rect.x, placement.rect.y);
     _ctx.scale(record.paintScale, record.paintScale);
-    paintOverlayEntry(_ctx, entry, scaled, finalAlpha);
+    paintOverlayEntry(
+      _ctx,
+      entry,
+      scaled,
+      finalAlpha,
+      record.leaderProgress,
+      record.contentAlpha,
+    );
     _ctx.restore();
   }
   publishPaintRect(item);
@@ -2075,8 +2509,11 @@ function paintFrame(keyhole) {
   const started = nowMs();
   clearCanvas(true, false);
   _detectionSurfacePrepared = false;
-  if (activeCustomPaintLaneCount(PAINT_TARGET_DETECTION) === 0
-    && _detectionSurfaceNeedsClear) clearCanvas(false, true);
+  if (
+    activeCustomPaintLaneCount(PAINT_TARGET_DETECTION) === 0 &&
+    _detectionSurfaceNeedsClear
+  )
+    clearCanvas(false, true);
   _paintRectCount = 0;
   _hitRectCount = 0;
   sortPooledRange(_paintQueue, _paintCount, comparePaintItems);
@@ -2101,8 +2538,8 @@ function paintFrame(keyhole) {
   _diagnostics.paintRectPoolSize = _paintRectPool.length;
   _diagnostics.paintMs = nowMs() - started;
   syncAccessibleActions();
-  _canvasNeedsClear = _paintRectCount > 0
-    || activeCustomPaintLaneCount(PAINT_TARGET_SHARED) > 0;
+  _canvasNeedsClear =
+    _paintRectCount > 0 || activeCustomPaintLaneCount(PAINT_TARGET_SHARED) > 0;
 }
 
 function localizeScaledPlacement(placement, scale, out) {
@@ -2158,13 +2595,20 @@ function drawWorldOverlay() {
   if (_resizeDirty) ensureCanvasSize();
   if (_canvasWidth <= 0 || _canvasHeight <= 0) return;
   _frameStamp++;
-  refreshUiOccluders(timestamp, _occludersUpdatedAt === Number.NEGATIVE_INFINITY);
+  refreshUiOccluders(
+    timestamp,
+    _occludersUpdatedAt === Number.NEGATIVE_INFINITY,
+  );
   resetFrameDiagnostics();
   const projectionStarted = nowMs();
   const fadeTuning = getKeyholeFadeTuning();
-  if (!_keyhole || _keyholeWidth !== _canvasWidth || _keyholeHeight !== _canvasHeight
-    || _keyholeFadeRatio !== fadeTuning.fadeRatio
-    || _keyholeOutsideOpacity !== fadeTuning.outsideOpacity) {
+  if (
+    !_keyhole ||
+    _keyholeWidth !== _canvasWidth ||
+    _keyholeHeight !== _canvasHeight ||
+    _keyholeFadeRatio !== fadeTuning.fadeRatio ||
+    _keyholeOutsideOpacity !== fadeTuning.outsideOpacity
+  ) {
     _keyhole = getKeyholeGeometry(_canvasWidth, _canvasHeight);
     _keyholeWidth = _canvasWidth;
     _keyholeHeight = _canvasHeight;
@@ -2177,8 +2621,9 @@ function drawWorldOverlay() {
   _diagnostics.projectionMs = nowMs() - projectionStarted;
   solveDomains(timestamp);
   paintFrame(keyhole);
-  const fadesRemaining = activeFadeCount(timestamp);
-  if (fadesRemaining > 0) _viewer.scene.requestRender?.();
+  const animationsRemaining =
+    activeFadeCount(timestamp) + activeLeaderAnimationCount(timestamp);
+  if (animationsRemaining > 0) _viewer.scene.requestRender?.();
 }
 
 function createDevFacade() {
@@ -2192,7 +2637,9 @@ function createDevFacade() {
  */
 export function initWorldOverlay(viewer) {
   if (!viewer?.scene?.postRender?.addEventListener) {
-    throw new TypeError('initWorldOverlay requires a Cesium viewer with scene.postRender');
+    throw new TypeError(
+      'initWorldOverlay requires a Cesium viewer with scene.postRender',
+    );
   }
   if (_viewer === viewer && _canvas && _removePostRender) return;
   if (_viewer) destroyWorldOverlay();
@@ -2209,9 +2656,12 @@ export function initWorldOverlay(viewer) {
     invalidateHost();
   };
   window.addEventListener('gev:cockpit-mode-changed', _cockpitModeHandler);
-  _removePostRender = viewer.scene.postRender.addEventListener(drawWorldOverlay);
+  _removePostRender =
+    viewer.scene.postRender.addEventListener(drawWorldOverlay);
   if (viewer.camera?.moveEnd?.addEventListener) {
-    _removeMoveEnd = viewer.camera.moveEnd.addEventListener(() => invalidateHost());
+    _removeMoveEnd = viewer.camera.moveEnd.addEventListener(() =>
+      invalidateHost(),
+    );
   }
   installUiOccluderObservers();
   // The backing store and the occluder inventory are both deferred to the
@@ -2258,7 +2708,10 @@ export function destroyWorldOverlay() {
   // container so its `screen` blend reaches the scene), so it has to be torn
   // down explicitly rather than by the root's removal.
   _detectionSurface?.remove?.();
-  if (typeof window !== 'undefined' && window.__gevWorldOverlay?.getDiagnostics === getWorldOverlayDiagnostics) {
+  if (
+    typeof window !== 'undefined' &&
+    window.__gevWorldOverlay?.getDiagnostics === getWorldOverlayDiagnostics
+  ) {
     delete window.__gevWorldOverlay;
   }
   _sources.clear();

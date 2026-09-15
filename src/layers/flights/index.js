@@ -1,3 +1,4 @@
+import { createFlightSnapshotRenderer } from './snapshotRenderer.js';
 import { createFlightState } from './state.js';
 import { createRendering } from './rendering.js';
 import { createMotion } from './motion.js';
@@ -24,11 +25,34 @@ export function createCivilFlightLayer({
   parts.tracking = createTracking(context);
   parts.controller = createController(context);
   parts.enrichment = createEnrichment(context);
-  parts.ingestion = createIngestion(context);
   parts.lifecycle = createLifecycle(context);
   parts.evidence = createEvidence(context);
   parts.testing = createTesting(context);
   parts.queries = createQueries(context);
+  const applySnapshot = createFlightSnapshotRenderer({
+    flightState,
+    records: flightState.records,
+    militaryRegistry: services.militaryRegistry,
+    groundFloor: services.groundFloor,
+    meshFloor: services.meshFloor,
+    rendering: parts.rendering,
+    tracking: parts.tracking,
+    motion: parts.motion,
+    enrichment: parts.enrichment,
+    queries: parts.queries,
+  });
+  parts.ingestion = createIngestion({
+    feed: flightState.feed,
+    getQuery: (viewer) =>
+      parts.controller._flightQuery(viewer || flightState._viewer),
+    applySnapshot,
+    setSourceLabel: (source) => {
+      layer.source = source;
+    },
+    applyPendingTrackingRestore: () =>
+      parts.tracking._applyPendingTrackingRestore(),
+  });
+
   Object.assign(
     layer,
     parts.queries.methods,

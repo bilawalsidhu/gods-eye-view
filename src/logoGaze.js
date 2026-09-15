@@ -13,9 +13,27 @@ const GAZE_EPSILON = 0.08;
  * @param {number} [maxOffset=MAX_GAZE_SVG_UNITS] - Maximum SVG-space translation.
  * @returns {{x:number, y:number}}
  */
-export function calculateLogoGaze(clientX, clientY, rect, maxOffset = MAX_GAZE_SVG_UNITS) {
-  const values = [clientX, clientY, rect?.left, rect?.top, rect?.width, rect?.height, maxOffset];
-  if (!values.every(Number.isFinite) || rect.width <= 0 || rect.height <= 0 || maxOffset < 0) {
+export function calculateLogoGaze(
+  clientX,
+  clientY,
+  rect,
+  maxOffset = MAX_GAZE_SVG_UNITS,
+) {
+  const values = [
+    clientX,
+    clientY,
+    rect?.left,
+    rect?.top,
+    rect?.width,
+    rect?.height,
+    maxOffset,
+  ];
+  if (
+    !values.every(Number.isFinite) ||
+    rect.width <= 0 ||
+    rect.height <= 0 ||
+    maxOffset < 0
+  ) {
     return { x: 0, y: 0 };
   }
 
@@ -25,7 +43,7 @@ export function calculateLogoGaze(clientX, clientY, rect, maxOffset = MAX_GAZE_S
   if (distance === 0) return { x: 0, y: 0 };
 
   const strength = Math.min(distance / FULL_GAZE_DISTANCE_PX, 1);
-  const scale = maxOffset * strength / distance;
+  const scale = (maxOffset * strength) / distance;
   return { x: dx * scale, y: dy * scale };
 }
 
@@ -43,7 +61,9 @@ export function initLogoGaze(root = document) {
   const logos = [...root.querySelectorAll('[data-logo-gaze]')];
   if (!logos.length) return () => {};
 
-  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const reducedMotion = window.matchMedia?.(
+    '(prefers-reduced-motion: reduce)',
+  ).matches;
   const states = logos.map((element) => ({
     element,
     parts: [],
@@ -68,7 +88,10 @@ export function initLogoGaze(root = document) {
       const deltaX = state.targetX - state.currentX;
       const deltaY = state.targetY - state.currentY;
 
-      if (Math.abs(deltaX) <= GAZE_EPSILON && Math.abs(deltaY) <= GAZE_EPSILON) {
+      if (
+        Math.abs(deltaX) <= GAZE_EPSILON &&
+        Math.abs(deltaY) <= GAZE_EPSILON
+      ) {
         state.currentX = state.targetX;
         state.currentY = state.targetY;
       } else {
@@ -94,7 +117,10 @@ export function initLogoGaze(root = document) {
       const markup = await response.text();
       if (disposed) return;
 
-      const svgDocument = new DOMParser().parseFromString(markup, 'image/svg+xml');
+      const svgDocument = new DOMParser().parseFromString(
+        markup,
+        'image/svg+xml',
+      );
       if (svgDocument.querySelector('parsererror')) return;
       const sourceSvg = svgDocument.documentElement;
 
@@ -122,7 +148,11 @@ export function initLogoGaze(root = document) {
   const onPointerMove = (event) => {
     if (reducedMotion || event.pointerType === 'touch') return;
     for (const state of states) {
-      const gaze = calculateLogoGaze(event.clientX, event.clientY, state.element.getBoundingClientRect());
+      const gaze = calculateLogoGaze(
+        event.clientX,
+        event.clientY,
+        state.element.getBoundingClientRect(),
+      );
       state.targetX = gaze.x;
       state.targetY = gaze.y;
     }

@@ -1,11 +1,17 @@
+import { FlightRecords } from './records.js';
+import { createFlightFeed } from './ingestion.js';
 import * as Cesium from 'cesium';
 import { ENRICH_AMBIENT_BUDGET_CEIL } from './policy.js';
 
 export function createFlightState({ source, services }) {
   const { createGroundSnap } = services.groundSnap;
   const flightState = { lifetime: new AbortController() };
-
-  flightState._source = source;
+  flightState.feed = createFlightFeed(source);
+  flightState.records = new FlightRecords({
+    ...services.geoid,
+    ...services.groundFloor,
+  });
+  flightState._cullPositions = new Map();
 
   /** Per-class model spec. Hangar-fleet classes (CLASS_MODEL_REAL) ship GLBs
    *  vertex-baked to real-world METERS in the airplane.glb axis convention, so
@@ -106,10 +112,6 @@ export function createFlightState({ source, services }) {
 
   flightState._detectionObjects = new Map();
 
-  /** @type {Map<string, {callsign:string, altitude:number, velocity:number, true_track:number}>} */
-
-  flightState._flightData = new Map();
-
   /** DEV-only explicit-position contacts used by qa-focus-evidence.mjs. */
 
   flightState._focusEvidenceIds = new Set();
@@ -117,48 +119,6 @@ export function createFlightState({ source, services }) {
   /** @type {Map<string, Array<{time:Cesium.JulianDate, position:Cesium.Cartesian3}>>} */
 
   flightState._positionHistory = new Map();
-
-  /** @type {boolean} True once ensureGeoidReady() has resolved (awaited once at enable()) */
-
-  flightState._geoidReady = false;
-
-  /** @type {Map<string, number>} icao24 -> geoid undulation N (m), cached (negligible drift per-aircraft). */
-
-  flightState._geoidNCache = new Map();
-
-  /** @type {number} Current number of visible aircraft */
-
-  flightState._count = 0;
-
-  /** @type {number|null} Epoch ms of last successful API update */
-
-  flightState._lastUpdate = null;
-
-  /** @type {boolean} True while in a backoff/cooldown window */
-
-  flightState._backoff = false;
-
-  /** @type {number} Epoch ms — earliest time the next fetch is allowed */
-
-  flightState._retryAt = 0;
-
-  /** @type {string|null} Human-readable error string shown in stats chip */
-
-  flightState._lastError = null;
-
-  flightState._activeUpdateControllers = new Set();
-
-  /** @type {number|null} HTTP status of the most recent API response */
-
-  flightState._lastStatus = null;
-
-  /** @type {string} Source used by the latest successful snapshot. */
-
-  flightState._lastSource = source?.label || 'Aircraft';
-
-  /** @type {string} Completeness boundary for the latest successful snapshot. */
-
-  flightState._lastCoverage = 'worldwide upstream snapshot';
 
   // ---------------------------------------------------------------------------
   // Click-to-track state
@@ -171,16 +131,6 @@ export function createFlightState({ source, services }) {
   flightState._pendingTrackingRestore = null;
 
   flightState._trackingIntentGeneration = 0;
-
-  flightState._trackingRefreshEpoch = 0;
-
-  flightState._lastTrackingRefreshOutcome = {
-    epoch: 0,
-    status: 'unavailable',
-    ids: new Set(),
-    source: flightState._lastSource,
-    coverage: null,
-  };
 
   /** @type {Cesium.Entity|null} Entity used for camera tracking */
 
@@ -249,10 +199,6 @@ export function createFlightState({ source, services }) {
   /** @type {number} Monotonic token — invalidates in-flight backfill responses */
 
   flightState._trailBackfillToken = 0;
-
-  /** @type {Map<string, number>} icao24 -> consecutive missed polls */
-
-  flightState._missingPolls = new Map();
 
   /** @type {number} Epoch ms of the last fleet dead-reckoning pass */
 
