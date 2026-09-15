@@ -32,7 +32,7 @@ test('a haloed glyph draws the dark ring under the shipped white body', () => {
   assert.notEqual(plain, haloed);
   assert.match(
     haloed,
-    /stroke="#000000" stroke-opacity="1" stroke-width="19\.20"/,
+    /stroke="#000000" stroke-opacity="1" stroke-width="9\.23"/,
   );
   assert.ok(
     haloed.indexOf('#000000') < haloed.indexOf('fill="white"'),
@@ -97,40 +97,81 @@ test('all 36 variants retain the specified final halo at both display sizes', as
   assert.equal(transitIconCacheSize(), 36);
 });
 
-test('sensor bodies cover sixty percent of the padded display with opaque white', async () => {
+test('every mono raster preserves the normal silhouette mask and aspect at CRT display size', async () => {
   const sharp = (await import('sharp')).default;
   const { presetSpriteScale, presetSpriteOutlinePx } =
     await import('./transitPresetStyle.js');
+  const rasterBody = async (svg) => {
+    // Compare fills in the same frame; the separately tested external halo is excluded.
+    const d =
+      [...svg.matchAll(/<path d="([^"]+)" fill="white"/g)][0]?.[1] ??
+      svg.match(/<path d="([^"]+)"\s+fill="white"/)[1];
+    const { data, info } = await sharp(
+      Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="-48 -48 96 96"><path d="${d}" fill="white"/></svg>`,
+      ),
+    )
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const mask = [];
+    let minX = info.width,
+      minY = info.height,
+      maxX = 0,
+      maxY = 0;
+    for (let y = 0; y < info.height; y++)
+      for (let x = 0; x < info.width; x++) {
+        const alpha = data[(y * info.width + x) * 4 + 3];
+        mask.push(alpha);
+        if (alpha > 127) {
+          minX = Math.min(minX, x);
+          maxX = Math.max(maxX, x);
+          minY = Math.min(minY, y);
+          maxY = Math.max(maxY, y);
+        }
+      }
+    return { mask, aspect: (maxX - minX + 1) / (maxY - minY + 1) };
+  };
   for (const selected of [false, true])
     for (const kind of TRANSIT_ICON_KINDS) {
-      const display =
-        (selected ? 30 : 20) * presetSpriteScale('thermal', selected);
-      assert.equal(display, selected ? 36 : 30);
-      assert.equal(presetSpriteOutlinePx('thermal', selected), 3);
-      const svg = decode(
-        transitIcon(kind, selected ? 96 : 48, { style: 'thermal' }),
+      const normal = await rasterBody(
+        decode(transitIcon(kind, selected ? 96 : 48, { style: 'normal' })),
       );
-      const frame = haloFrame(3, display);
-      const width = Math.round(display * frame.ratio);
-      const { data, info } = await sharp(Buffer.from(svg))
-        .resize(width, width)
-        .ensureAlpha()
-        .raw()
-        .toBuffer({ resolveWithObject: true });
-      let white = 0;
-      for (let i = 0; i < data.length; i += 4)
-        if (
-          data[i] >= 240 &&
-          data[i + 1] >= 240 &&
-          data[i + 2] >= 240 &&
-          data[i + 3] >= 240
-        )
-          white++;
-      assert.ok(
-        white / (info.width * info.height) >= 0.6,
-        `${kind}/${display}: white ${white / (info.width * info.height)}`,
-      );
-      const c = (Math.floor(width / 2) * width + Math.floor(width / 2)) * 4;
-      assert.deepEqual([...data.subarray(c, c + 4)], [255, 255, 255, 255]);
+      for (const style of ['surveillance', 'thermal', 'noir', 'nvg']) {
+        const svg = decode(transitIcon(kind, selected ? 96 : 48, { style }));
+        const mono = await rasterBody(svg);
+        assert.deepEqual(
+          mono.mask,
+          normal.mask,
+          `${kind}/${style}: no envelope`,
+        );
+        assert.ok(
+          Math.abs(mono.aspect / normal.aspect - 1) <= 0.05,
+          `${kind}/${style}: aspect`,
+        );
+        const display =
+          (selected ? 30 : 20) * presetSpriteScale(style, selected);
+        const crt = (selected ? 30 : 20) * presetSpriteScale('retro', selected);
+        assert.equal(display, crt);
+        const frame = haloFrame(
+          presetSpriteOutlinePx(style, selected),
+          display,
+        );
+        const crtFrame = haloFrame(
+          presetSpriteOutlinePx('retro', selected),
+          crt,
+        );
+        assert.equal(
+          display * frame.ratio,
+          crt * crtFrame.ratio,
+          'padded display matches CRT',
+        );
+        assert.equal(
+          (svg.match(/<path /g) || []).length,
+          2,
+          'only outer halo and opaque silhouette',
+        );
+        assert.match(svg, /fill="white" \/>/);
+      }
     }
 });

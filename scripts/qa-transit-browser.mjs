@@ -399,46 +399,84 @@ export async function sampleTransitPixels(page, palette) {
                 continue;
               }
             }
+            // Pick nine points from a solid patch of the source silhouette,
+            // before examining framebuffer brightness. Avoid panels/window gaps.
+            let corePoints = null;
+            const cosCore = Math.cos(s.rotation),
+              sinCore = Math.sin(s.rotation);
+            for (const offset of [0, -0.1, 0.1, -0.2, 0.2]) {
+              const candidates = [];
+              let solid = true;
+              for (let dx = -1; dx <= 1; dx++)
+                for (let dy = -1; dy <= 1; dy++) {
+                  const localY = dy + offset * s.rect.height;
+                  const rx = Math.floor(
+                    (dx / s.rect.width + 0.5) * s.raster.width,
+                  );
+                  const ry = Math.floor(
+                    (localY / s.rect.height + 0.5) * s.raster.height,
+                  );
+                  const i = (ry * s.raster.width + rx) * 4;
+                  if ([0, 1, 2, 3].some((c) => s.raster.data[i + c] < 240))
+                    solid = false;
+                  candidates.push(
+                    screenPoint(
+                      s.screenX + dx * cosCore + localY * sinCore,
+                      s.screenY - dx * sinCore + localY * cosCore,
+                    ),
+                  );
+                }
+              if (solid) {
+                corePoints = candidates;
+                break;
+              }
+            }
+            if (!corePoints) {
+              skipped.push({
+                key: s.key,
+                reason: 'no solid silhouette interior for nine samples',
+              });
+              continue;
+            }
             // Picking is independent of rendered brightness: an overlapping
             // label or sprite must not masquerade as a dim sensor signature.
             // Check the whole sampled core, not just its centre pick.
             let coreOwned = true;
             if (scene.pick) {
               const framebuffer = gl.getParameter?.(gl.FRAMEBUFFER_BINDING);
-              for (let dx = -1; dx <= 1; dx++)
-                for (let dy = -1; dy <= 1; dy++) {
-                  let u = (s.x + dx) / width,
-                    v = 1 - (s.y + dy) / height;
-                  if (style === 'surveillance') {
-                    const x = u * 2 - 1,
-                      y = v * 2 - 1,
-                      r2 = x * x + y * y;
-                    const d =
-                      1 + r2 * intensity * 0.25 + r2 * r2 * intensity * 0.075;
-                    u = (x * d + 1) / 2;
-                    v = (y * d + 1) / 2;
-                  }
-                  if (sensor) {
-                    const grid = 1 + (pixelation - 1) * intensity;
-                    u +=
-                      ((Math.floor((u * canvas.width) / grid) * grid) /
-                        canvas.width -
-                        u) *
-                      intensity;
-                    v +=
-                      ((Math.floor((v * canvas.height) / grid) * grid) /
-                        canvas.height -
-                        v) *
-                      intensity;
-                  }
-                  const picked = scene.pick(
-                    { x: u * width, y: (1 - v) * height },
-                    1,
-                    1,
-                  );
-                  if (picked?.id !== s.key && picked?.primitive?.id !== s.key)
-                    coreOwned = false;
+              for (const core of corePoints) {
+                let u = core.x / width,
+                  v = 1 - core.y / height;
+                if (style === 'surveillance') {
+                  const x = u * 2 - 1,
+                    y = v * 2 - 1,
+                    r2 = x * x + y * y;
+                  const d =
+                    1 + r2 * intensity * 0.25 + r2 * r2 * intensity * 0.075;
+                  u = (x * d + 1) / 2;
+                  v = (y * d + 1) / 2;
                 }
+                if (sensor) {
+                  const grid = 1 + (pixelation - 1) * intensity;
+                  u +=
+                    ((Math.floor((u * canvas.width) / grid) * grid) /
+                      canvas.width -
+                      u) *
+                    intensity;
+                  v +=
+                    ((Math.floor((v * canvas.height) / grid) * grid) /
+                      canvas.height -
+                      v) *
+                    intensity;
+                }
+                const picked = scene.pick(
+                  { x: u * width, y: (1 - v) * height },
+                  1,
+                  1,
+                );
+                if (picked?.id !== s.key && picked?.primitive?.id !== s.key)
+                  coreOwned = false;
+              }
               if (gl.bindFramebuffer)
                 gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
             }
@@ -451,9 +489,8 @@ export async function sampleTransitPixels(page, palette) {
               continue;
             }
             let centre = 0;
-            for (let dx = -1; dx <= 1; dx += 1)
-              for (let dy = -1; dy <= 1; dy += 1)
-                centre += readLuma(s.x + dx, s.y + dy) / 9;
+            for (const core of corePoints)
+              centre += readLuma(core.x, core.y) / corePoints.length;
             let ringMin = 1;
             let ringMax = 0;
             // Sample the actual rotated raster halo, not a fixed-radius circle

@@ -2783,13 +2783,13 @@ test('every styling path retains the mode palette and exact unpadded size', asyn
   parts.rendering.paintMode(entry, 'subway');
   check('#FF4538', 30);
   app.style('thermal');
-  check('#FFFFFF', 36);
+  check('#FFFFFF', 39);
   parts.selection.clearSelection();
-  check('#FFFFFF', 30);
+  check('#FFFFFF', 26);
   app.vision('nvg', true);
-  check('#FFFFFF', 30);
+  check('#FFFFFF', 26);
   parts.selection.selectVehicle(entry.key);
-  check('#FFFFFF', 36);
+  check('#FFFFFF', 39);
   app.vision('normal', false);
   check('#FF4538', 30);
   parts.selection.clearSelection();

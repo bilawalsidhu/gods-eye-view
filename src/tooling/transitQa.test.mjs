@@ -415,6 +415,22 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
   );
   assert.ok(Math.abs(pixels[0].centre - 1) < 1e-6);
   assert.equal(listener, null);
+  // An opaque window/panel is not a sensor core. Choose another solid patch,
+  // and reject a raster with no white interior even though alpha/picking pass.
+  for (let i = 0; i < raster.length; i += 4) raster.fill(0, i, i + 3);
+  assert.equal((await sampleTransitPixels(page, {})).length, 0);
+  raster.fill(255);
+  for (let y = 6; y <= 9; y++)
+    for (let x = 0; x < 16; x++) {
+      const i = (y * 16 + x) * 4;
+      raster.fill(0, i, i + 3);
+    }
+  assert.equal(
+    (await sampleTransitPixels(page, {})).length,
+    1,
+    'a body patch away from the central panel remains eligible',
+  );
+  raster.fill(255);
   scene.pick = () => ({ id: 'overlapping-label' });
   assert.equal(
     (await sampleTransitPixels(page, {})).length,

@@ -189,20 +189,21 @@ export function transitIcon(kind, px = FLEET_RASTER_PX, options = {}) {
   let uri = _iconCache.get(key);
   if (!uri) {
     const size = VIEW + 2 * frame.pad;
-    // Sensor signatures use a broad rounded envelope, without dark interior
-    // joints or a second outline eating into the hot core at display resolution.
-    const halfW = k === 'bus' || k === 'ferry' || k === 'unknown' ? 48 : 47;
-    const halfH = 48;
-    const radius = k === 'subway' ? 8 : k === 'rail' ? 12 : 14;
-    const capsule = `<path d="M${-halfW + radius},${-halfH} H${halfW - radius} Q${halfW},${-halfH} ${halfW},${-halfH + radius} V${halfH - radius} Q${halfW},${halfH} ${halfW - radius},${halfH} H${-halfW + radius} Q${-halfW},${halfH} ${-halfW},${halfH - radius} V${-halfH + radius} Q${-halfW},${-halfH} ${-halfW + radius},${-halfH} Z" fill="white" />`;
-    const body = profile === 'mono' ? capsule : BODIES[k];
+    // Reuse the exact outer path. Sensors fill its interior without panel ink.
+    const silhouette = BODIES[k].match(/<path d="([^"]+)"/)[1];
+    const body =
+      profile === 'mono'
+        ? `<path d="${silhouette}" fill="white" />`
+        : BODIES[k];
     const halo =
       frame.units > 0
-        ? body.replace(
-            /<path d="([^"]+)"\s+fill="white" [^/]*\/>/,
-            (_m, d) =>
-              `<path d="${d}" fill="none" stroke="${profile === 'mono' ? '#000000' : '#05080C'}" stroke-opacity="${profile === 'mono' ? 1 : 0.95}" stroke-width="${frame.units.toFixed(2)}" stroke-linejoin="round"/>`,
-          )
+        ? profile === 'mono'
+          ? `<path d="${silhouette}" fill="none" stroke="#000000" stroke-opacity="1" stroke-width="${frame.units.toFixed(2)}" stroke-linejoin="round"/>`
+          : body.replace(
+              /<path d="([^"]+)"\s+fill="white" [^/]*\/>/,
+              (_m, d) =>
+                `<path d="${d}" fill="none" stroke="#05080C" stroke-opacity="0.95" stroke-width="${frame.units.toFixed(2)}" stroke-linejoin="round"/>`,
+            )
         : '';
     const svg =
       `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(px * frame.ratio)}" height="${Math.round(px * frame.ratio)}" viewBox="${-frame.pad} ${-frame.pad} ${size} ${size}">` +

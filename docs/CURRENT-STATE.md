@@ -2593,15 +2593,16 @@ selected card explains that choice. Actual street-level views still require
 visual inspection.
 
 **Appearance.** Normal fleet frames are 20 px, growing to 30 px on selection;
-NVG, thermal and noir frames are 30/36 px. Source rasters are 48/96 px before padding.
-External halos are 1/1.5 px in normal and 3/3 px in sensors, calculated from the
+CRT, NVG, thermal and noir frames are 26/39 px. Source rasters are 48/96 px before padding.
+External halos are 1/1.5 px in normal and 1.25/1.25 px in CRT and sensors, calculated from the
 final unpadded display size. Six modes, two sizes and three profiles cap the
 raster cache at 36 variants. Normal mode colours are bus `#5EF08A`, tram
 `#FFC24A`, subway `#FF4538`, rail `#D9A6FF`, ferry `#5FD6FF`, and unknown
-`#D8DDE5`. Selection keeps the mode colour. Sensor bodies use solid rounded envelopes with at least 60% opaque white coverage
-of the padded display footprint, without interior panel lines. Sensor input is opaque white with a
-fully opaque black halo; black-hot reverses the contrast through the
-thermal effect. Creation, mode changes, selection, deselection, map presets and
+`#D8DDE5`. Selection keeps the mode colour. Sensors reuse each normal silhouette's exact
+outer path, filled opaque white without interior panel lines, with a thin opaque
+black halo. There is no envelope body. Black-hot reverses the contrast and
+Ironbow maps the white input to its hottest palette entry through the thermal
+effect; sprite code never applies a red tint. Creation, mode changes, selection, deselection, map presets and
 Cockpit vision use the same sprite styling function.
 
 Sensor signatures remain in-scene. The thresholds in `qaMetrics.js` require
@@ -2611,7 +2612,8 @@ of its phosphor peak white (0.65992 from RGB 0.16/1/0.22), halo minimum ≤0.25
 with the centre minus sampled background reported without gating. Each preset needs at least
 six verified, unobscured sprites; insufficient coverage is UNEXERCISED.
 The sampler excludes overlapping footprints, including otherwise ineligible
-sprites, and verifies pick ownership across all nine sampled core pixels.
+sprites, and chooses nine source-raster points inside a solid white body patch, avoiding
+window/panel gaps, then verifies pick ownership at all nine points.
 Noir samples also exclude its deliberately vignetted outer field, using shader
 settings and screen position rather than observed brightness. Selected-trail
 diagnostics report every condition even when selection fails.
