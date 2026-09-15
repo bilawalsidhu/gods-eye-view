@@ -1,4 +1,7 @@
+import { layerFeedState } from '../data/feedState.js';
+export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
+import { keySetupRequirement } from '../keySetupCore.mjs';
 const FEED_STATE_LABELS = Object.freeze({
   nominal: 'ON',
   loading: 'LOADING',
@@ -8,57 +11,78 @@ const FEED_STATE_LABELS = Object.freeze({
   unavailable: 'UNAVAILABLE',
 });
 
+// Presentation order is independent of catalog registration and startup order.
+const PANEL_GROUPS = [
+  {
+    label: 'Movement',
+    ids: [
+      'satellites',
+      'flights',
+      'military',
+      'ais-live-vessels',
+      'traffic',
+      'bikeshare',
+    ],
+  },
+  {
+    label: 'Cameras',
+    ids: ['cctv', 'alpr-cameras'],
+  },
+  {
+    label: 'Infrastructure',
+    ids: [
+      'military-installations',
+      'local-datacenters',
+      'telegeography-submarine-cables',
+      'local-dams',
+    ],
+  },
+  {
+    label: 'Events',
+    ids: ['rocket-launches', 'earthquakes', 'local-firms'],
+  },
+  {
+    label: 'Utilities',
+    ids: ['directions', 'radio'],
+  },
+];
+const PANEL_ORDER = PANEL_GROUPS.flatMap(({ label, ids }) =>
+  ids.map((id) => ({ id, label })),
+);
+const PANEL_POSITIONS = new Map(
+  PANEL_ORDER.map(({ id }, index) => [id, index]),
+);
+const PANEL_LABELS = {
+  'ais-live-vessels': 'Live Vessels',
+  bikeshare: 'Bike Share',
+  cctv: 'Cameras',
+  'alpr-cameras': 'Mapped ALPR Cameras',
+  'local-datacenters': 'Data Centers',
+  'local-firms': 'Active Fires',
+};
+
+function panelLabel(layer) {
+  return PANEL_LABELS[layer.id] || layer.name;
+}
+
 /**
- * Normalize heterogeneous layer stats into one honest control-chip state.
- * @param {object|null} stats Layer getStats() result.
- * @returns {'nominal'|'loading'|'degraded'|'stale'|'fallback'|'unavailable'} Feed state.
+ * Guidance for a control a missing provider key is holding back.
+ *
+ * The key registry already owns what each key is called and which environment
+ * variables enable it, so a layer only declares WHICH key it needs
+ * (`requiresKeyId`) and reports `stats.keyRequired` while that key is absent.
+ * Naming the variable turns an unexplained dead control into a next step.
+ *
+ * An unnamed or unknown key returns '' rather than guessing: guidance naming
+ * the wrong variable sends the operator to the wrong provider.
+ *
+ * @param {object} [layer] Row from the layer manager's getAll().
+ * @returns {string} Guidance text, or '' when no key guidance applies.
  */
-export function layerFeedState(stats = {}) {
-  const state = stats || {};
-  const status =
-    typeof state.status === 'string' ? state.status.toLowerCase() : '';
-  const source = `${state.source || ''} ${state.coverage || ''}`;
-  const hasExplicitFallback = typeof state.fallback === 'boolean';
-  const hasPriorData = Number(state.count) > 0 || Boolean(state.lastUpdate);
-  const presentedError =
-    state.error || state.lastError || state.managerRefreshError;
-  if (['unavailable', 'offline', 'down', 'error'].includes(status))
-    return 'unavailable';
-  if (
-    (presentedError ||
-      state.unavailable === true ||
-      state.available === false) &&
-    !hasPriorData &&
-    !GUIDANCE_STATUSES.includes(status)
-  ) {
-    return 'unavailable';
-  }
-  if (state.loading) return 'loading';
-  // Guidance states ask the user to act (zoom in, run a search) — normal
-  // operation, not feed faults. One honesty carve-out: layers keep their
-  // rendered records through the guidance state, so a genuinely stale cache
-  // still reads STALE; a guidance prompt alone never reads DEGRADED.
-  if (GUIDANCE_STATUSES.includes(status)) {
-    return state.stale ? 'stale' : 'nominal';
-  }
-  if (
-    state.fallback === true ||
-    status === 'fallback' ||
-    state.mode === 'sim' ||
-    /\bfallback\b/i.test(source) ||
-    (!hasExplicitFallback && /\badsb\.lol\b/i.test(source))
-  ) {
-    return 'fallback';
-  }
-  if (state.stale || status === 'stale') return 'stale';
-  if (
-    state.degraded ||
-    presentedError ||
-    state.unavailable === true ||
-    state.available === false
-  )
-    return 'degraded';
-  return 'nominal';
+export function layerKeyRequirementTooltip(layer = {}) {
+  if (layer?.stats?.keyRequired !== true) return '';
+  const requiresKeyId = String(layer.requiresKeyId || '').trim();
+  return requiresKeyId ? keySetupRequirement(requiresKeyId) : '';
 }
 
 /** Layer row presentation over supplied state and actions; no layer imports. */
@@ -111,8 +135,25 @@ export class LayerPanel {
     this._toggleContainer.innerHTML = '';
 
     const generation = this._generation;
-    for (const layer of this.getAll()) {
+    const layers = this.getAll()
+      .slice()
+      .sort(
+        (a, b) =>
+          (PANEL_POSITIONS.get(a.id) ?? PANEL_ORDER.length) -
+          (PANEL_POSITIONS.get(b.id) ?? PANEL_ORDER.length),
+      );
+    let previousGroup = '';
+    for (const layer of layers) {
       if (!layer.showInTogglePanel) continue;
+      const group =
+        PANEL_ORDER[PANEL_POSITIONS.get(layer.id)]?.label ?? 'Other layers';
+      if (group && group !== previousGroup) {
+        const heading = document.createElement('h3');
+        heading.className = 'data-layer-group-heading';
+        heading.textContent = group;
+        this._toggleContainer.appendChild(heading);
+      }
+      previousGroup = group;
       const row = document.createElement('div');
       row.className = 'data-toggle-row';
       row.dataset.layerId = layer.id;
@@ -127,7 +168,7 @@ export class LayerPanel {
       icon.textContent = layer.icon;
       const name = document.createElement('span');
       name.className = 'data-name';
-      name.textContent = layer.name;
+      name.textContent = panelLabel(layer);
       left.appendChild(icon);
       left.appendChild(name);
 
@@ -511,7 +552,17 @@ export class LayerPanel {
         : layer.enabled
           ? FEED_STATE_LABELS[feedState]
           : 'OFF';
-    button.setAttribute('aria-label', `${layer.name}: ${button.textContent}`);
+    const keyGuidance = layerKeyRequirementTooltip(layer);
+    // Name the missing key on the control itself: a row reading KEY REQUIRED
+    // without saying WHICH key leaves a dead control and no next step. Empty
+    // when the layer needs no key, or already has one.
+    button.title = keyGuidance;
+    button.setAttribute(
+      'aria-label',
+      keyGuidance
+        ? `${panelLabel(layer)}: ${button.textContent}. ${keyGuidance}`
+        : `${panelLabel(layer)}: ${button.textContent}`,
+    );
   }
 
   _formatCount(n) {

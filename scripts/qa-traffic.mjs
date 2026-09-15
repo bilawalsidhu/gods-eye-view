@@ -85,6 +85,7 @@ async function settleTraffic(page, view, { minCount = 1, timeoutS = 30 } = {}) {
     const dm = gev.dataManager;
     await dm.setEnabled('traffic', true);
     const mod = dm.layers.get('traffic').module;
+    const beforeUpdate = mod.getStats().lastUpdate;
     const ell = gev.viewer.scene.globe.ellipsoid;
     const d2r = Math.PI / 180;
     // The app's intro flyTo animation clobbers a setView issued mid-flight —
@@ -98,7 +99,9 @@ async function settleTraffic(page, view, { minCount = 1, timeoutS = 30 } = {}) {
     for (let i = 0; i < tS; i++) {
       await new Promise((r) => setTimeout(r, 1000));
       s = mod.getStats();
-      if (s.count >= minC && !s.loading) break;
+      // Retained roads from the previous city can satisfy count/loading before
+      // the move debounce starts its request. Require the destination render.
+      if (s.lastUpdate !== beforeUpdate && s.count >= minC && !s.loading) break;
     }
     return s;
   }, view, minCount, timeoutS);

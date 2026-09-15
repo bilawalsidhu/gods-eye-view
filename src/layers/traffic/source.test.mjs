@@ -127,3 +127,41 @@ test('road body parsing retains the source request cancellation signal', async (
   });
   await assert.rejects(response.json(), { name: 'AbortError' });
 });
+
+test('road sources decode direction and coordinates before scene construction', async () => {
+  const geometry = [
+    { lat: 30, lon: -97 },
+    { lat: 30.001, lon: -97.001 },
+  ];
+  const source = createTrafficSource({
+    fetchImpl: async () =>
+      Response.json({
+        elements: [
+          { type: 'node', id: 1 },
+          { type: 'way', geometry, tags: { highway: 'primary', oneway: '-1' } },
+          { type: 'way', geometry, tags: { junction: 'roundabout' } },
+          { type: 'way', geometry: [geometry[0]] },
+        ],
+      }),
+  });
+  assert.deepEqual(await (await source.requestRoads(bounds)).json(), {
+    roads: [
+      {
+        coordinates: [
+          [-97, 30],
+          [-97.001, 30.001],
+        ],
+        type: 'primary',
+        oneway: -1,
+      },
+      {
+        coordinates: [
+          [-97, 30],
+          [-97.001, 30.001],
+        ],
+        type: 'unclassified',
+        oneway: 1,
+      },
+    ],
+  });
+});

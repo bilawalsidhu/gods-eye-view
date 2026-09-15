@@ -18,6 +18,7 @@ export class NavigationController {
     getDataManager,
     stopOrbit,
     showToast,
+    cancelOrientation = () => {},
   }) {
     Object.assign(this, {
       viewer,
@@ -30,6 +31,7 @@ export class NavigationController {
       getDataManager,
       stopOrbit,
       showToast,
+      cancelOrientation,
     });
     this._navigationGeneration = 0;
     this._activeLocationSearchGeneration = null;
@@ -39,6 +41,7 @@ export class NavigationController {
     cancelPendingSelection = true,
     clearSearchedLocation = true,
   } = {}) {
+    this.cancelOrientation();
     const { flightsLayer, militaryFlightsLayer, satellitesLayer } =
       this.tracking;
     this._navigationGeneration += 1;
@@ -184,6 +187,27 @@ export class NavigationController {
       showToast: (text) => this.showToast(text),
       stamp: () => this._stampNavigation(),
       release: () => this._releaseFollowCamera(releaseOptions),
+      navigate,
+    });
+  }
+
+  /** Change the viewing angle without clearing selection or follow ownership. */
+  runOrientation(noun, navigate) {
+    return runExplicitNavigation({
+      disposed: this._disposed,
+      cockpitActive: this.isCockpitActive(),
+      noun,
+      showToast: (text) => this.showToast(text),
+      stamp: () =>
+        this._stampNavigation({
+          cancelPendingSelection: false,
+          clearSearchedLocation: false,
+        }),
+      release: () => {
+        this.interruptCameraMotion('camera-orientation');
+        this.stopOrbit();
+        this.viewer.camera.cancelFlight();
+      },
       navigate,
     });
   }

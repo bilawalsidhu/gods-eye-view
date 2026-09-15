@@ -53,6 +53,33 @@
   font-size: 18px;
 }
 
+#tilt-map-view[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 14px rgba(0, 212, 255, 0.18);
+}
+
+#north-up-view {
+  --camera-heading: 0deg;
+  position: relative;
+}
+
+.camera-compass-n {
+  position: absolute;
+  top: 2px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+#north-up-view .camera-compass-needle {
+  font-size: 17px;
+  transform: rotate(calc(-1 * var(--camera-heading)));
+  transition: transform var(--transition-fast);
+}
+
 #global-loading-status {
   position: fixed;
   top: 74px;

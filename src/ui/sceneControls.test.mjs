@@ -25,6 +25,11 @@ function fixture() {
     appendChild(element) {
       this.children.push(element);
     }
+    setAttribute(name, value) {
+      this[name] = value;
+    }
+    focus() {}
+    select() {}
     set textContent(value) {
       this._text = value;
       this.children = [];
@@ -164,6 +169,8 @@ test('Scene controls dispatch explicit actions and revoke replaced shot-row list
     f.elements.start.click();
     label.click();
     label.dispatchEvent(new Event('dblclick'));
+    label.children[0].value = 'Renamed';
+    label.children[0].dispatchEvent(new Event('blur'));
     load.click();
     assert.deepEqual(f.calls, [
       ['capture'],
@@ -343,10 +350,41 @@ test('the real director preserves a selected shot label for the following double
     label.click();
     assert.equal(f.elements.shots.children[0].children[0].children[0], label);
     label.dispatchEvent(new Event('dblclick'));
+    label.children[0].value = 'Renamed';
+    label.children[0].dispatchEvent(new Event('blur'));
     assert.equal(director._getSelectedScene().shots[0].title, 'Renamed');
   } finally {
     await director?.destroy();
     globalThis.localStorage = previousStorage;
+    f.restore();
+  }
+});
+
+test('inline shot names save on Enter, cancel on Escape, and reject blank names', () => {
+  const f = fixture();
+  const key = (name) => Object.assign(new Event('keydown'), { key: name });
+  try {
+    const label = f.elements.shots.children[0].children[0].children[0];
+    for (const [value, commitKey] of [
+      ['Cancelled', 'Escape'],
+      ['   ', 'Enter'],
+      [' New name ', 'Enter'],
+    ]) {
+      label.dispatchEvent(new Event('dblclick'));
+      const input = label.children[0];
+      input.value = value;
+      input.dispatchEvent(key(commitKey));
+      input.dispatchEvent(new Event('blur'));
+    }
+    assert.deepEqual(f.calls, [
+      ['renameShot', 'scene-a', 'shot-a', 'New name'],
+    ]);
+    assert.equal(
+      label.textContent,
+      '<Shot A>',
+      'the model owns the next render',
+    );
+  } finally {
     f.restore();
   }
 });

@@ -28,8 +28,10 @@ export function isTrackingClickGesture(gesture = {}) {
   const durationMs = Number.isFinite(gesture.durationMs)
     ? Math.max(0, gesture.durationMs)
     : Number.POSITIVE_INFINITY;
-  return isTrackingSelectionGesture(gesture)
-    && durationMs <= MAX_TRACKING_CLICK_DURATION_MS;
+  return (
+    isTrackingSelectionGesture(gesture) &&
+    durationMs <= MAX_TRACKING_CLICK_DURATION_MS
+  );
 }
 
 /**
@@ -53,7 +55,12 @@ export function bindTrackingClickGesture(handler, onClick, options = {}) {
   let completedGesture = null;
 
   const appendTravel = (position) => {
-    if (!pressActive || !Number.isFinite(position?.x) || !Number.isFinite(position?.y)) return;
+    if (
+      !pressActive ||
+      !Number.isFinite(position?.x) ||
+      !Number.isFinite(position?.y)
+    )
+      return;
     if (previousPosition) {
       travelPx += Math.hypot(
         position.x - previousPosition.x,
