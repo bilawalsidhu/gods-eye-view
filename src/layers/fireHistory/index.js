@@ -16,6 +16,7 @@ import {
   eventCenter,
   fireHistoryRowControls,
   mapAnalystRecord,
+  perimeterRings,
   progressRgb,
   selectEvent,
 } from './model.js';
@@ -54,6 +55,9 @@ const COOLED_RGB = Object.freeze([118, 48, 36]);
 const COOLED_ALPHA = 0.78;
 const ACTIVE_BRIGHTEN = 70;
 const ACTIVE_SIZE_BONUS = 3;
+/** Official perimeter outline: pale ember, readable over both scars and terrain. */
+const PERIMETER_COLOR = Object.freeze([255, 232, 200]);
+const PERIMETER_WIDTH_PX = 2.5;
 
 /**
  * Historic fires from the NASA FIRMS archive, one registered event at a
@@ -76,6 +80,11 @@ export function createFireHistoryLayer({ source, overlayHost } = {}) {
   let _viewer = null;
   /** @type {?Cesium.PointPrimitiveCollection} */
   let _points = null;
+  /** @type {?Cesium.CustomDataSource} perimeter outline entities */
+  let _perimeterSource = null;
+  /** @type {?object} loaded perimeter payload (no geometry kept) */
+  let _perimeter = null;
+  let _perimeterRequest = null;
   /** @type {Array<Cesium.PointPrimitive>} aligned with _fires */
   let _pointsByIndex = [];
   let _request = null;
@@ -110,10 +119,65 @@ export function createFireHistoryLayer({ source, overlayHost } = {}) {
     _panel?.render();
   };
 
+  function clearPerimeter() {
+    _perimeterRequest?.abort();
+    _perimeterRequest = null;
+    _perimeter = null;
+    _perimeterSource?.entities.removeAll();
+  }
+
   function clearScene() {
     _points?.removeAll();
     _pointsByIndex = [];
     overlayHost.clearSource(FIRE_HISTORY_OVERLAY_SOURCE_ID);
+    clearPerimeter();
+  }
+
+  /** Draw the official perimeter as ground-clamped outlines. */
+  function renderPerimeter(event, payload) {
+    if (!_perimeterSource) return;
+    _perimeterSource.entities.removeAll();
+    const [r, g, b] = PERIMETER_COLOR;
+    const color = Cesium.Color.fromBytes(r, g, b, 235);
+    perimeterRings(payload.geometry).forEach((ring, index) => {
+      _perimeterSource.entities.add({
+        id: `fire-history-perimeter:${event.id}:${index}`,
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArray(ring.flat()),
+          width: PERIMETER_WIDTH_PX,
+          material: color,
+          clampToGround: true,
+        },
+      });
+    });
+  }
+
+  /**
+   * Fetch the event's registered perimeter after its detections. Best
+   * effort: a missing or failed perimeter never degrades the detections,
+   * and a newer selection supersedes the request.
+   */
+  async function loadPerimeter(event) {
+    clearPerimeter();
+    const request = new AbortController();
+    _perimeterRequest = request;
+    try {
+      const payload = await source.getPerimeter(event.id, {
+        signal: request.signal,
+      });
+      if (request.signal.aborted || _perimeterRequest !== request) return;
+      if (!payload || _event?.id !== event.id) return;
+      const { geometry, ...meta } = payload;
+      _perimeter = meta;
+      renderPerimeter(event, payload);
+      governorRequestRender('fire-history-perimeter');
+      notifyRow();
+    } catch (error) {
+      if (request.signal.aborted) return;
+      console.warn('[Data:FireHistory] perimeter unavailable:', error?.message);
+    } finally {
+      if (_perimeterRequest === request) _perimeterRequest = null;
+    }
   }
 
   function renderFires(event, fires) {
@@ -365,6 +429,7 @@ export function createFireHistoryLayer({ source, overlayHost } = {}) {
           : createReplayState(_event, _replay?.speed ?? 1);
       renderFires(_event, _fires);
       applyReplayFrame();
+      if (typeof source.getPerimeter === 'function') void loadPerimeter(_event);
       if (flyTo) frameEvent(_event);
       _lastUpdate = Date.now();
       _lastError = null;
@@ -419,6 +484,9 @@ export function createFireHistoryLayer({ source, overlayHost } = {}) {
         new Cesium.PointPrimitiveCollection(),
       );
       _points.show = false;
+      _perimeterSource = new Cesium.CustomDataSource('fire-history-perimeter');
+      _perimeterSource.show = false;
+      viewer.dataSources.add(_perimeterSource);
       overlayHost.setVisible(FIRE_HISTORY_OVERLAY_SOURCE_ID, false);
       if (typeof document !== 'undefined') {
         _panel = createFireHistoryPanel({ layer });
@@ -430,6 +498,7 @@ export function createFireHistoryLayer({ source, overlayHost } = {}) {
     enable() {
       _enabled = true;
       if (_points) _points.show = true;
+      if (_perimeterSource) _perimeterSource.show = true;
       overlayHost.setVisible(FIRE_HISTORY_OVERLAY_SOURCE_ID, true);
       _panel?.setVisible(true);
       _panel?.render();
@@ -443,6 +512,7 @@ export function createFireHistoryLayer({ source, overlayHost } = {}) {
       if (_replay) _replay = resetReplay(_replay);
       stopReplayLoop();
       if (_points) _points.show = false;
+      if (_perimeterSource) _perimeterSource.show = false;
       overlayHost.setVisible(FIRE_HISTORY_OVERLAY_SOURCE_ID, false);
       _panel?.setVisible(false);
     },
@@ -461,9 +531,14 @@ export function createFireHistoryLayer({ source, overlayHost } = {}) {
       stopReplayLoop();
       overlayHost.clearSource(FIRE_HISTORY_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(FIRE_HISTORY_OVERLAY_SOURCE_ID, false);
+      clearPerimeter();
       if (_points) {
         viewer?.scene?.primitives?.remove(_points);
         _points = null;
+      }
+      if (_perimeterSource) {
+        viewer?.dataSources?.remove(_perimeterSource, true);
+        _perimeterSource = null;
       }
       _pointsByIndex = [];
       _panel?.unmount();
@@ -583,6 +658,7 @@ export function createFireHistoryLayer({ source, overlayHost } = {}) {
         event: _event,
         timeline: _timeline,
         count: _fires.length,
+        perimeter: _perimeter,
       };
     },
 

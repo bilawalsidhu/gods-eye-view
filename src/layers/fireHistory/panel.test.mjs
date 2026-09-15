@@ -55,6 +55,11 @@ test('timelineChartSvg draws one bar per day and a cursor only when engaged', ()
   assert.match(timelineChartSvg([], null), /NO DAILY DATA/);
 });
 
+test('referencesHtml appends the NIFC link only when a perimeter is loaded', () => {
+  assert.match(referencesHtml([], { label: 'WFIGS Interagency Perimeters' }), /NIFC Open Data/);
+  assert.doesNotMatch(referencesHtml([], null), /NIFC/);
+});
+
 test('referencesHtml keeps https links only', () => {
   const html = referencesHtml([
     { label: 'CAL FIRE', url: 'https://www.fire.ca.gov/x' },

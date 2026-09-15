@@ -3,9 +3,12 @@ import { promises as fsp } from 'node:fs';
 
 import { parseFirmsCsv } from '../../src/data/firmsCsv.js';
 import {
+  FIRE_PERIMETER_SERVICES,
   filterRecordsToEvent,
   firmsAreaSegment,
   normalizeFireEventCatalog,
+  perimeterQueryUrl,
+  selectPerimeterFeature,
   splitDateWindows,
 } from '../../src/data/fireHistoryEvents.js';
 
@@ -24,6 +27,9 @@ import {
  * Routes:
  *   GET /api/fire-history          → {hasKey, events:[{id,name,...}]}  (works keyless)
  *   GET /api/fire-history/<id>     → {event, fetchedAt, complete, windows, count, fires}
+ *   GET /api/fire-history/<id>/perimeter → {eventId, service, label, acres, hectares, dateCurrentMs, geometry}
+ *     (404 no_perimeter when the event registers none; key-independent; NIFC
+ *     Open Data, U.S. public domain; cached permanently once fetched)
  *
  * Keyless (no FIRMS_MAP_KEY): the detail route answers 503 {error:'no_key'}
  * unless a complete cache already exists. Never log upstream URLs — they
@@ -69,6 +75,12 @@ export function fireHistoryProxy({
   }
 
   const cachePath = (id) => path.join(cacheDir, `${id}.json`);
+  const perimeterCachePath = (id) =>
+    path.join(cacheDir, `${id}.perimeter.json`);
+  /** @type {Map<string, object>} */
+  const perimeterMem = new Map();
+  /** @type {Map<string, Promise<?object>>} */
+  const perimeterInflight = new Map();
 
   async function readDisk(id) {
     if (mem.has(id)) return mem.get(id);
@@ -205,6 +217,83 @@ export function fireHistoryProxy({
     return inflight.get(event.id);
   }
 
+  async function readPerimeterDisk(id) {
+    if (perimeterMem.has(id)) return perimeterMem.get(id);
+    try {
+      const parsed = JSON.parse(
+        await fsp.readFile(perimeterCachePath(id), 'utf8'),
+      );
+      if (parsed?.geometry?.type) {
+        perimeterMem.set(id, parsed);
+        return parsed;
+      }
+    } catch {
+      /* no disk cache yet */
+    }
+    return null;
+  }
+
+  /** Fetch, select and cache one event's final perimeter (key-independent). */
+  async function resolvePerimeter(event) {
+    if (!event.perimeter) return null;
+    const cached = await readPerimeterDisk(event.id);
+    if (cached) return cached;
+    if (!perimeterInflight.has(event.id)) {
+      perimeterInflight.set(
+        event.id,
+        (async () => {
+          const url = perimeterQueryUrl(event.perimeter);
+          const res = await fetchImpl(url, {
+            signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const picked = selectPerimeterFeature(
+            await res.json(),
+            event.perimeter.service,
+          );
+          if (!picked) throw new Error('no polygon matched');
+          const entry = {
+            eventId: event.id,
+            service: event.perimeter.service,
+            label: FIRE_PERIMETER_SERVICES[event.perimeter.service].label,
+            acres: picked.acres,
+            hectares:
+              picked.acres === null
+                ? null
+                : Math.round(picked.acres * 0.40468564),
+            dateCurrentMs: picked.dateCurrentMs,
+            fetchedAt: Date.now(),
+            geometry: picked.geometry,
+          };
+          perimeterMem.set(event.id, entry);
+          try {
+            await fsp.mkdir(cacheDir, { recursive: true });
+            await fsp.writeFile(
+              perimeterCachePath(event.id),
+              JSON.stringify(entry),
+              'utf8',
+            );
+          } catch (err) {
+            console.warn(
+              '[fire-history] perimeter cache write failed:',
+              err?.message || err,
+            );
+          }
+          return entry;
+        })()
+          .catch((err) => {
+            console.warn(
+              `[fire-history] ${event.id} perimeter failed:`,
+              err?.message || err,
+            );
+            return null;
+          })
+          .finally(() => perimeterInflight.delete(event.id)),
+      );
+    }
+    return perimeterInflight.get(event.id);
+  }
+
   const installMiddleware = (server) => {
     server.middlewares.use('/api/fire-history', async (req, res) => {
       const sendJson = (status, obj) => {
@@ -232,10 +321,20 @@ export function fireHistoryProxy({
           return;
         }
 
-        const id = subPath.replace(/^\/+/, '');
+        const [id, tail, ...rest] = subPath.replace(/^\/+/, '').split('/');
         const event = byId.get(id);
-        if (!event) {
+        if (!event || rest.length || (tail && tail !== 'perimeter')) {
           sendJson(404, { error: 'unknown event' });
+          return;
+        }
+        if (tail === 'perimeter') {
+          if (!event.perimeter) {
+            sendJson(404, { error: 'no_perimeter' });
+            return;
+          }
+          const perimeter = await resolvePerimeter(event);
+          if (perimeter) sendJson(200, perimeter);
+          else sendJson(502, { error: 'perimeter fetch failed' });
           return;
         }
         const entry = await resolveEvent(key, event);

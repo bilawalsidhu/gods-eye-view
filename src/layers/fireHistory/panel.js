@@ -5,7 +5,7 @@
  * the DOM. The layer owns the panel's lifetime and calls `render()` whenever
  * its state changes (the same beat that repaints the layer row).
  */
-import { progressCss } from './model.js';
+import { perimeterText, progressCss } from './model.js';
 import { REPLAY_SPEEDS, formatReplayClock, replayActive } from './replay.js';
 
 export const FIRE_HISTORY_PANEL_ID = 'fire-history-panel';
@@ -109,16 +109,24 @@ export function timelineChartSvg(timeline, cursorFraction = null) {
  * @param {Array<{label: string, url: string}>} references
  * @returns {string}
  */
-export function referencesHtml(references) {
+export function referencesHtml(references, perimeter = null) {
+  const nifc = perimeter
+    ? '<li><a href="https://data-nifc.opendata.arcgis.com/" target="_blank" rel="noopener noreferrer">NIFC Open Data — perimeter source ↗</a></li>'
+    : '';
   if (!references?.length)
-    return '<li class="fire-history-ref-empty">NO LINKED DOCUMENTS</li>';
-  return references
-    .filter((ref) => /^https:\/\//.test(String(ref?.url || '')))
-    .map(
-      (ref) =>
-        `<li><a href="${escapeText(ref.url)}" target="_blank" rel="noopener noreferrer">${escapeText(ref.label)} ↗</a></li>`,
-    )
-    .join('');
+    return (
+      nifc || '<li class="fire-history-ref-empty">NO LINKED DOCUMENTS</li>'
+    );
+  return (
+    nifc +
+    references
+      .filter((ref) => /^https:\/\//.test(String(ref?.url || '')))
+      .map(
+        (ref) =>
+          `<li><a href="${escapeText(ref.url)}" target="_blank" rel="noopener noreferrer">${escapeText(ref.label)} ↗</a></li>`,
+      )
+      .join('')
+  );
 }
 
 /**
@@ -171,6 +179,7 @@ const PANEL_HTML = `
       <span>WINDOW · <b data-role="window"></b></span>
       <span>BURNED AREA · <b data-role="burned"></b></span>
       <span>ARCHIVED DETECTIONS · <b data-role="count"></b></span>
+      <span>OFFICIAL PERIMETER · <b data-role="perimeter"></b></span>
       <p class="fire-history-summary" data-role="summary"></p>
     </div>
     <section class="fire-history-section">
@@ -196,7 +205,7 @@ const PANEL_HTML = `
     <section class="fire-history-section">
       <h4>SOURCES &amp; DOCUMENTS</h4>
       <ul class="fire-history-refs" data-role="refs"></ul>
-      <small class="fire-history-attribution">Detections: NASA FIRMS standard-processing archive (VIIRS, MODIS). Satellite passes, not an official perimeter.</small>
+      <small class="fire-history-attribution">Detections: NASA FIRMS standard-processing archive (VIIRS, MODIS) — satellite passes. Perimeter: NIFC Open Data (final mapped perimeter, U.S. public domain).</small>
     </section>
   </div>`;
 
@@ -243,6 +252,7 @@ export function createFireHistoryPanel({ layer, doc = globalThis.document }) {
         'window',
         'burned',
         'count',
+        'perimeter',
         'summary',
         'chart',
         'chart-start',
@@ -294,7 +304,7 @@ export function createFireHistoryPanel({ layer, doc = globalThis.document }) {
 
   function render() {
     if (!element || !refs) return;
-    const { events, selectedId, event, timeline, count } =
+    const { events, selectedId, event, timeline, count, perimeter } =
       layer.getEventState();
     const replay = layer.getReplayState();
     const stats = layer.getStats();
@@ -331,6 +341,11 @@ export function createFireHistoryPanel({ layer, doc = globalThis.document }) {
           : stats.loading
             ? 'LOADING'
             : '0';
+      refs.perimeter.textContent = perimeter
+        ? perimeterText(perimeter)
+        : event.perimeter
+          ? 'LOADING'
+          : perimeterText(null);
       refs.summary.textContent = event.summary || '';
       refs.summary.hidden = !event.summary;
     }
@@ -353,7 +368,7 @@ export function createFireHistoryPanel({ layer, doc = globalThis.document }) {
     refs.replay.textContent = playing ? '❚❚ PAUSE' : '▶ REPLAY SPREAD';
     refs.replay.setAttribute('aria-pressed', String(playing));
     refs.reset.disabled = !engaged;
-    refs.refs.innerHTML = referencesHtml(event?.references);
+    refs.refs.innerHTML = referencesHtml(event?.references, perimeter);
   }
 
   return {

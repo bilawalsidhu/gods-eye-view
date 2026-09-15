@@ -41,5 +41,20 @@ export function createFireHistorySource({
         throw new Error('Malformed fire history payload');
       return payload;
     },
+    /** The event's final perimeter, or null when none is registered. */
+    async getPerimeter(id, { signal } = {}) {
+      const safeId = encodeURIComponent(String(id || ''));
+      if (!safeId) throw new Error('A fire event id is required');
+      const { response, payload } = await readJson(
+        `${baseUrl}/${safeId}/perimeter`,
+        signal,
+      );
+      if (response.status === 404) return null;
+      if (!response.ok)
+        throw new Error(`Fire perimeter HTTP ${response.status}`);
+      if (!payload?.geometry?.type)
+        throw new Error('Malformed fire perimeter payload');
+      return payload;
+    },
   };
 }

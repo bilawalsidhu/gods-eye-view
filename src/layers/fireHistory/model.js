@@ -265,3 +265,58 @@ export function compactCount(value) {
   if (n < 1_000_000) return `${Math.round(n / 1000)}K`;
   return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
 }
+
+/**
+ * Flatten a GeoJSON Polygon/MultiPolygon into closed rings of [lon, lat],
+ * dropping rings that cannot form an outline.
+ * @param {?{type: string, coordinates: Array}} geometry
+ * @returns {Array<Array<[number, number]>>}
+ */
+export function perimeterRings(geometry) {
+  const polygons =
+    geometry?.type === 'Polygon'
+      ? [geometry.coordinates]
+      : geometry?.type === 'MultiPolygon'
+        ? geometry.coordinates
+        : [];
+  const rings = [];
+  for (const polygon of polygons || []) {
+    for (const ring of polygon || []) {
+      const points = (ring || [])
+        .filter(
+          (pt) =>
+            Array.isArray(pt) &&
+            Number.isFinite(pt[0]) &&
+            Number.isFinite(pt[1]) &&
+            Math.abs(pt[0]) <= 180 &&
+            Math.abs(pt[1]) <= 90,
+        )
+        .map(([lon, lat]) => [lon, lat]);
+      const [fx, fy] = points[0] || [];
+      const [lx, ly] = points[points.length - 1] || [];
+      const closed = points.length > 1 && fx === lx && fy === ly;
+      // Three distinct vertices minimum; a closed ring repeats its first.
+      if (points.length < (closed ? 4 : 3)) continue;
+      if (!closed) points.push([fx, fy]);
+      rings.push(points);
+    }
+  }
+  return rings;
+}
+
+/**
+ * Panel/legend copy for a loaded perimeter.
+ * @param {?{hectares: number|null, label: string, dateCurrentMs: number|null}} perimeter
+ * @returns {string}
+ */
+export function perimeterText(perimeter) {
+  if (!perimeter) return 'NO OFFICIAL PERIMETER REGISTERED';
+  const area =
+    Number.isFinite(perimeter.hectares) && perimeter.hectares > 0
+      ? `${Math.round(perimeter.hectares).toLocaleString('en-US')} HA`
+      : 'AREA UNAVAILABLE';
+  const dated = Number.isFinite(perimeter.dateCurrentMs)
+    ? ` · AS OF ${new Date(perimeter.dateCurrentMs).toISOString().slice(0, 10)}`
+    : '';
+  return `${area} · ${perimeter.label || 'NIFC'}${dated}`;
+}

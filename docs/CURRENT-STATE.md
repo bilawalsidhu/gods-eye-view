@@ -871,6 +871,18 @@ fetching, trailing-24-hour filtering and partial-success caching are unchanged.
   box), ▶ REPLAY SPREAD / ❚❚ PAUSE, ↺ ALL, and the event's https references.
   The panel re-renders on the same beat as the layer row; sliders keep the
   user's value while focused. All event and feed text is HTML-escaped.
+- Official perimeter: when the event registers a `perimeter` (whitelisted NIFC
+  service + structured filters, validated like the rest of the event), the
+  layer requests `/api/fire-history/<id>/perimeter` after the detections load
+  and draws the returned Polygon/MultiPolygon rings as ground-clamped polylines
+  (pale ember, 2.5 px) in a `CustomDataSource`. The request is best effort: a
+  404 (`no_perimeter`) or upstream failure leaves the detections untouched, and
+  a newer selection aborts it. The proxy keeps the largest polygon by acreage,
+  simplifies to ~50 m (`maxAllowableOffset=0.0005`, 5-decimal precision) and
+  caches permanently under `<id>.perimeter.json`; it needs no FIRMS key. The
+  panel card shows `OFFICIAL PERIMETER · <ha> HA · <service> · AS OF <date>`
+  (`LOADING` while pending, `NO OFFICIAL PERIMETER REGISTERED` otherwise) and
+  Sources gains an NIFC Open Data link while a perimeter is shown.
 - Selection is a layer param: `getParams()` → `{eventId}`, `setParams({eventId})`
   selects (a disabled layer just remembers the id until enable). Row chips carry
   `params: {eventId}`, the panel roster calls `selectEvent(id, {origin: 'user'})`,

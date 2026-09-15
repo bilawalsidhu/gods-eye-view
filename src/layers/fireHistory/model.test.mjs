@@ -171,3 +171,31 @@ test('compactCount folds thousands for the row readout', async () => {
   assert.equal(compactCount(15919), '16K');
   assert.equal(compactCount(2_500_000), '2.5M');
 });
+
+test('perimeterRings flattens polygons, closes rings and drops junk', async () => {
+  const { perimeterRings, perimeterText } = await import('./model.js');
+  const rings = perimeterRings({
+    type: 'MultiPolygon',
+    coordinates: [
+      [[[0, 0], [1, 0], [1, 1]], [[0.2, 0.2], [0.3, 0.2], [0.3, 0.3], [0.2, 0.2]]],
+      [[[5, 5], ['x', 5], [6, 6]]],
+      [[[7, 7], [200, 7], [8, 8], [7, 7]]],
+    ],
+  });
+  assert.equal(rings.length, 2);
+  assert.deepEqual(rings[0][rings[0].length - 1], [0, 0], 'open ring is closed');
+  assert.equal(rings[0].length, 4);
+  assert.equal(rings[1].length, 4);
+  assert.deepEqual(perimeterRings({ type: 'Point', coordinates: [0, 0] }), []);
+  assert.deepEqual(perimeterRings(null), []);
+  assert.equal(
+    perimeterText({ hectares: 62053, label: 'NIFC Interagency Fire Perimeter History', dateCurrentMs: null }),
+    '62,053 HA · NIFC Interagency Fire Perimeter History',
+  );
+  assert.equal(
+    perimeterText({ hectares: 859, label: 'WFIGS Interagency Perimeters', dateCurrentMs: 1694128641000 }),
+    '859 HA · WFIGS Interagency Perimeters · AS OF 2023-09-07',
+  );
+  assert.equal(perimeterText(null), 'NO OFFICIAL PERIMETER REGISTERED');
+  assert.match(perimeterText({ hectares: null, label: 'X', dateCurrentMs: null }), /^AREA UNAVAILABLE/);
+});
