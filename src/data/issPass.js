@@ -29,8 +29,14 @@ export function lookAnglesAt(satrec, dateMs, latDeg, lonDeg) {
 }
 
 export function findNextIssPass({
-  satrec, latDeg, lonDeg, fromMs,
-  minElevDeg = 10, horizonHours = 24, coarseStepSec = 30, fineStepSec = 5,
+  satrec,
+  latDeg,
+  lonDeg,
+  fromMs,
+  minElevDeg = 10,
+  horizonHours = 24,
+  coarseStepSec = 30,
+  fineStepSec = 5,
 }) {
   const elev = (t) => lookAnglesAt(satrec, t, latDeg, lonDeg)?.elevDeg ?? -90;
   const horizonMs = fromMs + horizonHours * 3600_000;
@@ -41,13 +47,17 @@ export function findNextIssPass({
   // pass, that's still "the next pass" for a voice answer — accept it.
   let hit = null;
   for (let t = fromMs; t <= horizonMs; t += coarse) {
-    if (elev(t) >= minElevDeg) { hit = t; break; }
+    if (elev(t) >= minElevDeg) {
+      hit = t;
+      break;
+    }
   }
   if (hit == null) return null;
 
   // Refine rise: walk back in fine steps to the first sample ≥ threshold.
   let riseMs = hit;
-  while (riseMs - fine > fromMs && elev(riseMs - fine) >= minElevDeg) riseMs -= fine;
+  while (riseMs - fine > fromMs && elev(riseMs - fine) >= minElevDeg)
+    riseMs -= fine;
 
   // Walk forward through the pass tracking the peak until we drop below.
   let maxElevDeg = -90;
@@ -56,11 +66,20 @@ export function findNextIssPass({
   while (t <= horizonMs) {
     const e = elev(t);
     if (e < minElevDeg && t > riseMs) break;
-    if (e > maxElevDeg) { maxElevDeg = e; maxElevMs = t; }
+    if (e > maxElevDeg) {
+      maxElevDeg = e;
+      maxElevMs = t;
+    }
     t += fine;
   }
   const setMs = t;
 
   const rise = lookAnglesAt(satrec, riseMs, latDeg, lonDeg);
-  return { riseMs, setMs, maxElevDeg, maxElevMs, riseAzDeg: rise ? rise.azDeg : 0 };
+  return {
+    riseMs,
+    setMs,
+    maxElevDeg,
+    maxElevMs,
+    riseAzDeg: rise ? rise.azDeg : 0,
+  };
 }

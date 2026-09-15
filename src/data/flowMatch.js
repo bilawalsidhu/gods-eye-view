@@ -45,7 +45,9 @@ export function median(values) {
   if (!Array.isArray(values) || values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = sorted.length >> 1;
-  return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  return sorted.length % 2 === 1
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
 /** Bearing (degrees, 0 = north, clockwise) of a projected dx/dy vector. */
@@ -98,13 +100,19 @@ export function matchFlowToRoads(roads, flowSegments) {
   const roadCount = Array.isArray(roads) ? roads.length : 0;
   const matches = new Array(roadCount).fill(null);
   const empty = { matches, matchedCount: 0, candidateCount: 0 };
-  if (roadCount === 0 || !Array.isArray(flowSegments) || flowSegments.length === 0) {
+  if (
+    roadCount === 0 ||
+    !Array.isArray(flowSegments) ||
+    flowSegments.length === 0
+  ) {
     return empty;
   }
 
   // Local equirectangular projection anchored at the first flow coordinate —
   // over a ≤0.05° fetch box the distortion is negligible.
-  const anchor = flowSegments.find((f) => Array.isArray(f?.coords) && f.coords.length >= 2);
+  const anchor = flowSegments.find(
+    (f) => Array.isArray(f?.coords) && f.coords.length >= 2,
+  );
   if (!anchor) return empty;
   const [refLon, refLat] = anchor.coords[0];
   const mPerDegLon = M_PER_DEG_LAT * Math.cos((refLat * Math.PI) / 180);
@@ -114,7 +122,8 @@ export function matchFlowToRoads(roads, flowSegments) {
   // ── 1. Spatial hash of flow segments (midpoint-keyed 100 m cells) ──
   /** @type {Map<string, Array<{ax:number,ay:number,bx:number,by:number,bearing:number,level:number,closure:boolean}>>} */
   const grid = new Map();
-  const cellOf = (x, y) => `${Math.floor(x / CELL_SIZE_M)},${Math.floor(y / CELL_SIZE_M)}`;
+  const cellOf = (x, y) =>
+    `${Math.floor(x / CELL_SIZE_M)},${Math.floor(y / CELL_SIZE_M)}`;
 
   for (const flow of flowSegments) {
     const coords = flow?.coords;
@@ -173,7 +182,8 @@ export function matchFlowToRoads(roads, flowSegments) {
     for (let i = 0; i < coords.length; i++) {
       xs[i] = projX(coords[i][0]);
       ys[i] = projY(coords[i][1]);
-      if (i > 0) cum[i] = cum[i - 1] + Math.hypot(xs[i] - xs[i - 1], ys[i] - ys[i - 1]);
+      if (i > 0)
+        cum[i] = cum[i - 1] + Math.hypot(xs[i] - xs[i - 1], ys[i] - ys[i - 1]);
     }
     const totalLen = cum[coords.length - 1];
     if (!(totalLen > 0)) continue;
@@ -188,10 +198,14 @@ export function matchFlowToRoads(roads, flowSegments) {
       // cross-street flow lines meet at intersections.
       const target = (totalLen * (s + 0.5)) / ROAD_SAMPLES;
       while (cursor < coords.length - 1 && cum[cursor] < target) cursor++;
-      const segT = (target - cum[cursor - 1]) / (cum[cursor] - cum[cursor - 1] || 1);
+      const segT =
+        (target - cum[cursor - 1]) / (cum[cursor] - cum[cursor - 1] || 1);
       const px = xs[cursor - 1] + (xs[cursor] - xs[cursor - 1]) * segT;
       const py = ys[cursor - 1] + (ys[cursor] - ys[cursor - 1]) * segT;
-      const sampleBearing = bearingDeg(xs[cursor] - xs[cursor - 1], ys[cursor] - ys[cursor - 1]);
+      const sampleBearing = bearingDeg(
+        xs[cursor] - xs[cursor - 1],
+        ys[cursor] - ys[cursor - 1],
+      );
 
       // 3×3 cell probe around the sample.
       const cx = Math.floor(px / CELL_SIZE_M);
@@ -206,7 +220,11 @@ export function matchFlowToRoads(roads, flowSegments) {
             const d2 = pointSegDist2(px, py, seg.ax, seg.ay, seg.bx, seg.by);
             if (d2 > radius2) continue;
             hadCandidate = true; // within radius, bearing not yet checked
-            if (bearingDiffDeg(seg.bearing, sampleBearing) >= BEARING_TOLERANCE_DEG) continue;
+            if (
+              bearingDiffDeg(seg.bearing, sampleBearing) >=
+              BEARING_TOLERANCE_DEG
+            )
+              continue;
             if (d2 <= bestDist2) {
               bestDist2 = d2;
               best = seg;
@@ -221,7 +239,9 @@ export function matchFlowToRoads(roads, flowSegments) {
     }
 
     if (hadCandidate) candidateCount++;
-    if (matchedLevels.length >= Math.max(MIN_MATCHED_SAMPLES, ROAD_SAMPLES / 2)) {
+    if (
+      matchedLevels.length >= Math.max(MIN_MATCHED_SAMPLES, ROAD_SAMPLES / 2)
+    ) {
       matches[r] = { level: median(matchedLevels), closure: matchedClosure };
       matchedCount++;
     }

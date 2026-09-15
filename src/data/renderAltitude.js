@@ -26,7 +26,13 @@
  *   none of the above are usable — the caller applies its OWN existing sticky/default
  *   fallback (this helper never invents one, so it can't drift from the caller's policy).
  */
-export function pickRenderAltitudeM({ geoAltM, baroAltM, onGround, surfaceM, geoidN }) {
+export function pickRenderAltitudeM({
+  geoAltM,
+  baroAltM,
+  onGround,
+  surfaceM,
+  geoidN,
+}) {
   if (onGround && Number.isFinite(surfaceM)) {
     return surfaceM;
   }
@@ -89,7 +95,12 @@ export function reuseGroundedSurfaceM(currentM, previousM) {
  * @param {number|null|undefined} params.geoidN - Geoid undulation N here.
  * @returns {number|null} The geoid guess, or null when it must not be used.
  */
-export function geoidSurfaceLastResortM({ geoAltM, baroAltM, priorRenderM, geoidN }) {
+export function geoidSurfaceLastResortM({
+  geoAltM,
+  baroAltM,
+  priorRenderM,
+  geoidN,
+}) {
   if (Number.isFinite(geoAltM) || Number.isFinite(baroAltM)) return null;
   if (Number.isFinite(priorRenderM)) return null;
   return Number.isFinite(geoidN) ? geoidN : null;

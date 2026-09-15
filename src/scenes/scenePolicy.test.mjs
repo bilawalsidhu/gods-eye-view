@@ -1,3 +1,4 @@
+import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
@@ -24,10 +25,10 @@ function sweepLayerParamKeys() {
   const dataDir = new URL('../data/', import.meta.url);
   for (const entry of fs.readdirSync(dataDir)) {
     if (!entry.endsWith('.js')) continue;
-    const source = fs.readFileSync(new URL(entry, dataDir), 'utf8');
+    const source = readLayerSource(new URL(entry, dataDir));
     // Every getParams() in this codebase is a plain object return; take the
     // body up to its closing brace and read the keys it publishes.
-    const body = source.match(/\n {2}getParams\(\)\s*\{[\s\S]*?\n {2}\},/);
+    const body = source.match(/\n\s+getParams\(\)\s*\{[\s\S]*?\n\s+\},/);
     if (!body) continue;
     // A key always follows `{` or `,` — which matches both the multi-line
     // returns and the single-line `return { passive: … }` form, while a
@@ -40,6 +41,7 @@ function sweepLayerParamKeys() {
 
 /** The layer registry as main.js builds it (src/main.js dataManager.register calls). */
 const REGISTERED = new Set([
+  'bhote-koshi-2026', 'bhote-koshi-locator',
   'flights', 'military', 'earthquakes', 'satellites', 'rocket-launches', 'traffic',
   'cctv', 'radio', 'bikeshare', 'ais-live-vessels', 'military-installations',
   'military-awareness', 'local-datacenters', 'local-dams',

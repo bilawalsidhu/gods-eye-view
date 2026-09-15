@@ -42,7 +42,11 @@ export function createHybridAnnotationRenderer(viewer) {
         entry.screenProxy = liveProxy(anno, { type: 'label', ring: null });
         screen.add(entry.screenProxy);
       }
-    } else if (anno.type === 'route' && Array.isArray(anno.path) && anno.path.length >= 2) {
+    } else if (
+      anno.type === 'route' &&
+      Array.isArray(anno.path) &&
+      anno.path.length >= 2
+    ) {
       // Drape the path on the tiles (world), caption it with a screen callout
       // at the path midpoint.
       entry.worldProxy = liveProxy(anno, { label: null });
@@ -86,7 +90,11 @@ export function createHybridAnnotationRenderer(viewer) {
     } else if (anno.label) {
       screen.add(screenProxy);
     }
-    entry.screenProxy = entry.screenProxy ? screenProxy : (anno.label ? screenProxy : null);
+    entry.screenProxy = entry.screenProxy
+      ? screenProxy
+      : anno.label
+        ? screenProxy
+        : null;
   }
 
   /**

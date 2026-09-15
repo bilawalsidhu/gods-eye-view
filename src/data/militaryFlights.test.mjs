@@ -219,6 +219,49 @@ test('military poll refreshes tracked callsign/altitude/kts and marks a missed p
   }
 });
 
+test('cached military snapshots retain their observation time and expose stale fallback', async (t) => {
+  let now = 1_800_000_000_000;
+  const receivedAt = now;
+  const history = [];
+  const viewer = { camera: { positionCartographic: null }, scene: {} };
+  _setTrackedMilitaryRefreshStateForTest({
+    icao24: 'ae01ce',
+    entity: { gevLabelModel: { title: 'RCH451', details: [] } },
+    billboard: { position: Cesium.Cartesian3.fromDegrees(-97, 31, 8000), show: false },
+    billboardCollection: { show: false, remove() {} },
+    viewer,
+    history,
+    meta: { rawLat: 31, rawLon: -97, onGround: false },
+  });
+  let cache = 'MISS';
+  t.mock.method(Date, 'now', () => now);
+  t.mock.method(globalThis, 'fetch', async () => Response.json({
+    ac: [{ hex: 'ae01ce', lon: -97, lat: 31, alt_baro: 28000,
+      track: 95, gs: 400, seen: 1, seen_pos: 2, flight: 'RCH451' }],
+  }, { headers: {
+    'X-ADS-B-Cache': cache,
+    ...(cache === 'MISS' ? {} : { 'X-ADS-B-Cache-Age-Ms': String(now - receivedAt) }),
+  } }));
+  await militaryFlightsLayer.update(viewer);
+  assert.equal(history.length, 1);
+  assert.equal(history[0].epochMs, receivedAt - 2000);
+  for (const [status, age] of [['HIT', 5000], ['STALE', 45000]]) {
+    cache = status;
+    now = receivedAt + age;
+    await militaryFlightsLayer.update(viewer);
+    assert.equal(history.length, 1, 'replayed positions cannot create a new fix');
+    assert.equal(militaryFlightsLayer.getStats().lastUpdate, receivedAt);
+    assert.equal(militaryFlightsLayer.getStats().stale, status === 'STALE');
+    assert.equal(militaryFlightsLayer.getStats().error, null);
+  }
+  cache = 'MISS';
+  now += 15000;
+  await militaryFlightsLayer.update(viewer);
+  assert.equal(history.length, 2, 'fresh data resumes position updates');
+  assert.equal(militaryFlightsLayer.getStats().lastUpdate, now);
+  assert.equal(militaryFlightsLayer.getStats().stale, false);
+});
+
 test('real military track path creates no native label and publishes every cached host line', () => {
   const icao24 = 'ae01ce';
   const position = Cesium.Cartesian3.fromDegrees(-97.03, 31.05, 8_534.4);
