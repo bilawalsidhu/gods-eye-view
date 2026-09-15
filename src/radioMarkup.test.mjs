@@ -1,3 +1,4 @@
+import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
 import { readShellSource } from './testSupport/readShellSource.mjs';
 import { expandApplicationHtml } from '../build/application-html.js';
 import { readLayerSource } from './testSupport/readLayerSource.mjs';
@@ -18,18 +19,10 @@ const radio = ['playback', 'interaction'].map(name =>
 ).join('\n').replace(/layerState\.|parts\.\w+\./g, '');
 const rocketLaunches = readLayerSource(new URL('./data/rocketLaunches.js', import.meta.url), 'utf8');
 const realtime = readFileSync(new URL('./voice/realtimeController.js', import.meta.url), 'utf8');
-const voice = ['tools', 'instructions'].map(name => readFileSync(new URL(`../server/providers/openai/${name}.js`, import.meta.url), 'utf8')).join('\n');
+const voice = readFileSync(new URL('./voice/actionSchemas.js', import.meta.url), 'utf8') + '\n' + ['toolDescriptions', 'instructions'].map(name => readFileSync(new URL(`../server/providers/openai/${name}.js`, import.meta.url), 'utf8')).join('\n');
 const css = readStylesheet(new URL('../style.css', import.meta.url));
 
-/** Parse the Realtime tool array out of the Vite config as real data. */
-function realtimeTools() {
-  const start = voice.indexOf('const GEV_REALTIME_TOOLS = [');
-  const end = voice.indexOf('\n];', start);
-  assert.ok(start >= 0 && end > start, 'Realtime tool schema block is missing');
-  const literal = voice.slice(start + 'const GEV_REALTIME_TOOLS = '.length, end + 2);
-  // The block is pure data; evaluating it beats regexing nested schemas.
-  return new Function(`return ${literal};`)();
-}
+function realtimeTools() { return GEV_REALTIME_TOOLS; }
 
 test('Realtime schema exposes the authoritative 28-tool inventory', () => {
   const tools = realtimeTools();

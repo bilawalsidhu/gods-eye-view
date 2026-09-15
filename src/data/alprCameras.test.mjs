@@ -462,29 +462,25 @@ test('all manufacturers share one ALPR title and color; only supplied metadata a
     assert.equal(alprCamerasLayer.name, 'ALPR Cameras');
     assert.deepEqual(
       entities.map((entity) => entity.gevLabelModel.title),
-      Array(3).fill('ALPR CAMERA'),
+      ['ALPR-0042', 'ALPR-0043', 'ALPR-0044'],
     );
     assert.equal(
-      new Set(
-        entities.map((entity) =>
-          entity.point.color.getValue().toCssColorString(),
-        ),
-      ).size,
+      new Set(entities.map((entity) => entity.billboard.image.getValue())).size,
       1,
     );
     assert.deepEqual(entities[0].gevLabelModel.details, [
-      'Manufacturer: Flock Safety',
-      'Operator: City Police',
-      'Type: fixed',
-      'Source: OpenStreetMap',
+      'OSM MAPPED',
+      'FLOCK SAFETY · CITY POLICE · FIXED',
+      'PUBLIC MAP DATA',
     ]);
     assert.deepEqual(entities[1].gevLabelModel.details, [
-      'Manufacturer: Motorola Solutions',
-      'Source: OpenStreetMap',
+      'OSM MAPPED',
+      'MOTOROLA SOLUTIONS',
+      'PUBLIC MAP DATA',
     ]);
     assert.deepEqual(
       entities[2].gevLabelModel.details,
-      ['Source: OpenStreetMap'],
+      ['OSM MAPPED', 'PUBLIC MAP DATA'],
       'unknown metadata is not guessed, but the source is always named',
     );
     for (const entity of entities) {
@@ -523,8 +519,8 @@ test('clicking the selected camera or empty map deselects, including after refre
       await alprCamerasLayer.update();
       assert.equal(getSelectedEntityContext(), null);
       assert.equal(
-        h.source.entities.getById('alpr:42').point.pixelSize.getValue(),
-        8,
+        h.source.entities.getById('alpr:42').billboard.width.getValue(),
+        38,
       );
     }
   } finally {
@@ -582,8 +578,8 @@ test('disable removes contexts and highlight; cache reuse after re-enable does n
     await alprCamerasLayer.update();
     assert.equal(getSelectedEntityContext(), null);
     assert.equal(
-      h.source.entities.getById('alpr:42').point.pixelSize.getValue(),
-      8,
+      h.source.entities.getById('alpr:42').billboard.width.getValue(),
+      38,
     );
   } finally {
     h.restore();
@@ -1100,7 +1096,7 @@ test('nearby count and discovery control frame a real loaded camera without fetc
     await alprCamerasLayer.update();
     assert.equal(alprCamerasLayer.getStats().countLabel, '1 nearby');
     const controls = alprCamerasLayer.getRowControls();
-    assert.equal(controls.legend[0].label, 'Purple dots');
+    assert.equal(controls.legend[0].label, 'Camera badges');
     assert.equal(controls.chips[0].onClick(), true);
     assert.equal(flights.length, 1);
     assert.equal(getSelectedEntityContext().id, 'alpr:42');

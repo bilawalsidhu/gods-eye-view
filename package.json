@@ -207,6 +207,10 @@
     "./layers/military/records": "./src/layers/military/records.js",
     "./layers/military/ingestion": "./src/layers/military/ingestion.js",
     "./layers/vessels/records": "./src/layers/vessels/records.js",
-    "./layers/vessels/ingestion": "./src/layers/vessels/ingestion.js"
+    "./layers/vessels/ingestion": "./src/layers/vessels/ingestion.js",
+    "./sources/radio-browser": "./src/sources/radioBrowser.js",
+    "./sources/cctv-types": "./src/sources/cctvTypes.js",
+    "./sources/regional": "./src/data/regionalModel.js",
+    "./voice/action-schemas": "./src/voice/actionSchemas.js"
   }
 }

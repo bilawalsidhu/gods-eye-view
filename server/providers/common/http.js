@@ -49,8 +49,8 @@ export async function readResponseTextCapped(response, maxBytes, signal) {
 }
 
 /** Parse a fetch() JSON response only after enforcing a hard byte cap. */
-export async function readResponseJsonCapped(response, maxBytes) {
-  return JSON.parse(await readResponseTextCapped(response, maxBytes));
+export async function readResponseJsonCapped(response, maxBytes, signal) {
+  return JSON.parse(await readResponseTextCapped(response, maxBytes, signal));
 }
 
 /**

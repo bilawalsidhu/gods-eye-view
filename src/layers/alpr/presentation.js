@@ -4,11 +4,22 @@ import {
   LAYER_ID,
   MAX_VIEWPORT_DEGREES,
   MAX_RENDERED,
-  DIRECTION_CONE_M,
   ALPR_COLOR,
+  ALPR_SELECTED_COLOR,
+  MARKER_ICON_SIZE,
+  SELECTED_MARKER_ICON_SIZE,
   CREDIT_DISPLAY_MS,
 } from './policy.js';
-import { boxContains, destinationPointDeg } from './model.js';
+import { boxContains } from './model.js';
+import { createAlprOverlay } from './overlay.js';
+import {
+  MARKER_IMAGE,
+  SELECTED_IMAGE,
+  alprDisplayId,
+  alprLabelDetails,
+  directionWedgePositions,
+  validAlprGroundHeight,
+} from './visuals.js';
 
 export function createAlprPresentation({ state, services, source }) {
   const { governorRequestRender } = services.render;
@@ -21,6 +32,31 @@ export function createAlprPresentation({ state, services, source }) {
   } = services.context;
 
   const { cachedGroundFloor } = services.groundFloor;
+  const overlay = createAlprOverlay({ state, services });
+  let visibleRecords = [];
+  let selectionStartedAt = 0;
+
+  function updateAppearance(entity, selected) {
+    const color = Cesium.Color.fromCssColorString(
+      selected ? ALPR_SELECTED_COLOR : ALPR_COLOR,
+    );
+    entity.billboard.image = selected ? SELECTED_IMAGE : MARKER_IMAGE;
+    entity.billboard.width = entity.billboard.height = selected
+      ? SELECTED_MARKER_ICON_SIZE
+      : MARKER_ICON_SIZE;
+    if (entity.polyline) {
+      entity.polyline.width = selected ? 3 : 1.75;
+      entity.polyline.material = color.withAlpha(selected ? 0.98 : 0.82);
+    }
+    if (entity.polygon)
+      entity.polygon.material = color.withAlpha(selected ? 0.8 : 0.2);
+    if (entity.gevLabelModel) {
+      entity.gevLabelModel.accent = color.toCssColorString();
+      entity.gevLabelModel.leaderAnimationStartedAt = selected
+        ? selectionStartedAt
+        : 0;
+    }
+  }
 
   function markerColor() {
     return Cesium.Color.fromCssColorString(ALPR_COLOR);
@@ -82,6 +118,8 @@ export function createAlprPresentation({ state, services, source }) {
   }
 
   function clearRendered() {
+    overlay.clear();
+    visibleRecords = [];
     if (state.dataSource?.entities) state.dataSource.entities.removeAll();
     removeEntityContextsForLayer(LAYER_ID);
   }
@@ -117,6 +155,7 @@ export function createAlprPresentation({ state, services, source }) {
           )
           .slice(0, MAX_RENDERED)
       : [];
+    visibleRecords = visible;
     // A refresh may retain its own selection, never reclaim one cleared or
     // replaced by an aircraft, another layer, or a voice action.
     if (
@@ -136,9 +175,7 @@ export function createAlprPresentation({ state, services, source }) {
     for (const record of visible) {
       const existing = state.dataSource.entities.getById(record.id);
       if (existing?.gevAlprRecord === record) {
-        existing.point.pixelSize = record.id === state.selectedId ? 12 : 8;
-        existing.point.color =
-          record.id === state.selectedId ? Cesium.Color.WHITE : markerColor();
+        updateAppearance(existing, record.id === state.selectedId);
         continue;
       }
       const color = markerColor();
@@ -150,30 +187,29 @@ export function createAlprPresentation({ state, services, source }) {
       const entityDef = {
         id: record.id,
         position,
-        point: {
-          pixelSize: selected ? 12 : 8,
-          color: selected ? Cesium.Color.WHITE : color,
-          outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
-          outlineWidth: 1,
+        billboard: {
+          image: selected ? SELECTED_IMAGE : MARKER_IMAGE,
+          width: selected ? SELECTED_MARKER_ICON_SIZE : MARKER_ICON_SIZE,
+          height: selected ? SELECTED_MARKER_ICON_SIZE : MARKER_ICON_SIZE,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(350, 1.15, 4_000_000, 0.48),
         },
       };
-      if (Number.isFinite(record.directionDeg)) {
-        const tip = destinationPointDeg(
-          record.latitude,
-          record.longitude,
-          record.directionDeg,
-          DIRECTION_CONE_M,
-        );
+      const wedge = directionWedgePositions(record);
+      if (wedge) {
         entityDef.polyline = {
-          positions: [
-            position,
-            Cesium.Cartesian3.fromDegrees(tip.longitude, tip.latitude),
-          ],
-          width: 2,
-          material: color.withAlpha(0.85),
+          positions: [wedge[1], position, wedge[2]],
+          width: selected ? 3 : 1.75,
+          material: color.withAlpha(0.82),
           clampToGround: true,
+        };
+        entityDef.polygon = {
+          hierarchy: wedge,
+          material: color.withAlpha(0.2),
+          height: 0,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          classificationType: Cesium.ClassificationType.BOTH,
         };
       }
       let entity = existing;
@@ -185,16 +221,21 @@ export function createAlprPresentation({ state, services, source }) {
         if (
           previous.latitude !== record.latitude ||
           previous.longitude !== record.longitude
-        )
+        ) {
           entity.position = position;
+          entity.gevAlprCanvasPosition = null;
+          entity.gevAlprDisplayPosition = null;
+        }
         if (
           previous.latitude !== record.latitude ||
           previous.longitude !== record.longitude ||
           previous.directionDeg !== record.directionDeg
-        )
+        ) {
           entity.polyline = entityDef.polyline;
-        entity.point.pixelSize = selected ? 12 : 8;
-        entity.point.color = selected ? Cesium.Color.WHITE : color;
+          entity.polygon = entityDef.polygon;
+          entity.gevAlprCanvasPosition = null;
+          entity.gevAlprWedge = null;
+        }
       }
       entity.gevAlprRecord = record;
       entity.gevTrackedId = record.id;
@@ -204,15 +245,19 @@ export function createAlprPresentation({ state, services, source }) {
       entity.gevAlprDisplayPosition ??= null;
       entity.gevDisplayPosition = () => entity.gevAlprDisplayPosition;
       entity.gevLabelModel = {
-        title: 'ALPR CAMERA',
-        details: [
-          record.manufacturer ? `Manufacturer: ${record.manufacturer}` : null,
-          record.operator ? `Operator: ${record.operator}` : null,
-          record.cameraType ? `Type: ${record.cameraType}` : null,
-          `Source: ${source.attribution?.name || source.label || 'Camera source'}`,
-        ].filter(Boolean),
+        title: alprDisplayId(record),
+        details: alprLabelDetails(record, source),
         accent: color.toCssColorString(),
+        cardStyle: 'tactical',
+        selected: true,
+        leaderStyle: 'elbow',
+        leaderAnimationMs: 440,
+        leaderAnimationStartedAt: selected ? selectionStartedAt : 0,
+        leaderDrawRatio: 0.68,
+        anchorRadiusPx: SELECTED_MARKER_ICON_SIZE / 2,
+        anchorRadiusScale: null,
       };
+      updateAppearance(entity, selected);
       registerEntityContext(entity, {
         id: record.id,
         layerId: LAYER_ID,
@@ -241,6 +286,8 @@ export function createAlprPresentation({ state, services, source }) {
       : null;
     if (!selectedEntity) state.selectedId = null;
     updateSelectedAnchor();
+    overlay.sync(visible);
+    if (selectedEntity) services.overlays?.refreshReadout?.(selectedEntity);
     // Start only when mapped data is actually displayed, not while an upstream
     // request or a zoom-in prompt could consume the five-second introduction.
     if (visible.length) presentOnMapCredit();
@@ -277,14 +324,14 @@ export function createAlprPresentation({ state, services, source }) {
         /* tiles may still be streaming */
       }
     }
-    if (!Number.isFinite(height) && state.viewer.scene.globe.show)
+    if (!validAlprGroundHeight(height) && state.viewer.scene.globe.show)
       height = state.viewer.scene.globe.getHeight?.(location);
-    if (!Number.isFinite(height) || height < -500 || height > 10000)
+    if (!validAlprGroundHeight(height))
       height = cachedGroundFloor(record.latitude, record.longitude);
     const center = Cesium.Cartesian3.fromDegrees(
       record.longitude,
       record.latitude,
-      Number.isFinite(height) ? height : 0,
+      validAlprGroundHeight(height) ? height : 0,
     );
     if (!selectRecord(nearest.id)) return false;
     camera.flyToBoundingSphere(new Cesium.BoundingSphere(center, 30), {
@@ -304,11 +351,12 @@ export function createAlprPresentation({ state, services, source }) {
     if (!entity || !state.recordById.has(id)) return false;
     clearSelection();
     state.selectedId = id;
-    entity.point.pixelSize = 12;
-    entity.point.color = Cesium.Color.WHITE;
+    selectionStartedAt = globalThis.performance?.now?.() ?? Date.now();
+    updateAppearance(entity, true);
     state.lastAnchorSampleAt = 0;
     selectEntityContext(entity);
     updateSelectedAnchor();
+    overlay.sync(visibleRecords);
     governorRequestRender('alpr-selection');
     return true;
   }
@@ -318,11 +366,10 @@ export function createAlprPresentation({ state, services, source }) {
       ? state.dataSource?.entities.getById(state.selectedId)
       : null;
     const record = state.recordById.get(state.selectedId);
-    if (entity && record) {
-      entity.point.pixelSize = 8;
-      entity.point.color = markerColor();
-    }
+    if (entity && record) updateAppearance(entity, false);
     state.selectedId = null;
+    selectionStartedAt = 0;
+    overlay.sync(visibleRecords);
     clearSelectedEntityContextForLayer(LAYER_ID);
     governorRequestRender('alpr-selection');
   }
@@ -336,6 +383,10 @@ export function createAlprPresentation({ state, services, source }) {
     }
     const entity = state.dataSource?.entities.getById(state.selectedId);
     const record = state.recordById.get(state.selectedId);
+    if (entity?.gevAlprCanvasPosition) {
+      entity.gevAlprDisplayPosition = entity.gevAlprCanvasPosition;
+      return;
+    }
     if (!entity || !record || Date.now() - state.lastAnchorSampleAt < 1000)
       return;
     state.lastAnchorSampleAt = Date.now();
@@ -352,11 +403,11 @@ export function createAlprPresentation({ state, services, source }) {
         /* tiles may still be streaming */
       }
     }
-    if (!Number.isFinite(height) && scene.globe.show)
+    if (!validAlprGroundHeight(height) && scene.globe.show)
       height = scene.globe.getHeight?.(location);
-    if (!Number.isFinite(height))
+    if (!validAlprGroundHeight(height))
       height = cachedGroundFloor(record.latitude, record.longitude);
-    if (!Number.isFinite(height)) return;
+    if (!validAlprGroundHeight(height)) return;
     const next = Cesium.Cartesian3.fromDegrees(
       record.longitude,
       record.latitude,
@@ -381,7 +432,9 @@ export function createAlprPresentation({ state, services, source }) {
       if (!isPointerFree()) return;
       if (!state.enabled) return;
       const picked = viewer.scene.pick(click.position);
-      const id = typeof picked?.id?.id === 'string' ? picked.id.id : null;
+      const id =
+        overlay.pick(click.position) ||
+        (typeof picked?.id?.id === 'string' ? picked.id.id : null);
       if (
         id &&
         state.recordById.has(id) &&
@@ -392,6 +445,8 @@ export function createAlprPresentation({ state, services, source }) {
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
   return {
+    initOverlay: () => overlay.init(),
+    destroyOverlay: () => overlay.destroy(),
     markerColor,
     viewportBox,
     clearRendered,

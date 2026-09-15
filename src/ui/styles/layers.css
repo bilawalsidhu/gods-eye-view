@@ -1274,10 +1274,17 @@
   padding: 2px 4px;
 }
 
-/* Qualified nearby counts must also fit beside the wider loading chip. */
-.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-top {
-  flex-wrap: wrap;
-}
-.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-right {
-  margin-left: auto;
+/* ALPR keeps its nearby count in the legend while a wider status chip is shown. */
+.data-toggle-row[data-layer-id='alpr-cameras']
+  .data-toggle-right:has(
+    .data-toggle-btn:is(
+      .feed-loading,
+      .feed-degraded,
+      .feed-stale,
+      .feed-fallback,
+      .feed-unavailable
+    )
+  )
+  .data-count {
+  display: none;
 }

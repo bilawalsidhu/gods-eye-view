@@ -163,7 +163,8 @@
       "server/providers/common/geo.js",
       "server/providers/places/google-key.js",
       "scripts/google-server-key.mjs",
-      "src/data/cctvFootprint.js"
+      "src/data/cctvFootprint.js",
+      "src/sources/cctvTypes.js"
     ],
     "external": []
   },
@@ -177,7 +178,8 @@
       "server/providers/radio/stations.js",
       "server/providers/radio/transport.js",
       "src/data/radioCountry.js",
-      "server/providers/common/http.js"
+      "server/providers/common/http.js",
+      "src/sources/radioBrowser.js"
     ],
     "external": []
   },
@@ -233,7 +235,8 @@
       "server/providers/regional/query.js",
       "server/providers/regional/weather-effects.js",
       "server/providers/regional/weather.js",
-      "src/data/regionalModel.js"
+      "src/data/regionalModel.js",
+      "src/nominatimGeocode.js"
     ],
     "external": []
   },
@@ -255,7 +258,9 @@
       "src/hudSummaryResponse.js",
       "src/voice/voiceCost.js",
       "server/providers/common/same-site.js",
-      "src/localRequestGate.mjs"
+      "src/localRequestGate.mjs",
+      "src/voice/actionSchemas.js",
+      "server/providers/openai/toolDescriptions.js"
     ],
     "external": []
   },
@@ -280,7 +285,10 @@
       "src/keylessGeocoder.js",
       "src/search/geospatial.js",
       "src/search/http.js",
-      "src/search/defaults.js"
+      "src/search/defaults.js",
+      "src/search/coordinateGeocoder.js",
+      "src/search/coordinateParser.js",
+      "src/search/presetGeocoder.js"
     ],
     "external": []
   },
@@ -353,7 +361,8 @@
       "src/ui/layerPanel.js",
       "src/ui/clearLayersControl.js",
       "src/loadingFeedback.js",
-      "src/data/installationFeedback.js"
+      "src/data/installationFeedback.js",
+      "src/keySetupCore.mjs"
     ],
     "external": []
   },
@@ -462,6 +471,7 @@
       "src/data/installationFeedback.js",
       "src/data/layerState.js",
       "src/data/militaryAwarenessEngine.js",
+      "src/data/scenePick.js",
       "src/keySetupCore.mjs",
       "src/loadingFeedback.js",
       "src/locationStatus.js",
@@ -477,6 +487,7 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/cameraOrientationControls.js",
       "src/ui/applicationShortcuts.js",
       "src/ui/cctv.js",
       "src/ui/cctvBindings.js",
@@ -944,6 +955,8 @@
       "src/layers/alpr/model.js",
       "src/layers/alpr/policy.js",
       "src/layers/alpr/presentation.js",
+      "src/layers/alpr/visuals.js",
+      "src/layers/alpr/overlay.js",
       "src/layers/alpr/source.js",
       "src/data/inputOwnership.js"
     ],
@@ -1237,6 +1250,8 @@
       "src/layers/alpr/model.js",
       "src/layers/alpr/policy.js",
       "src/layers/alpr/presentation.js",
+      "src/layers/alpr/visuals.js",
+      "src/layers/alpr/overlay.js",
       "src/layers/alpr/source.js",
       "src/layers/awareness/controls.js",
       "src/layers/awareness/dependencies.js",
@@ -1490,6 +1505,7 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/cameraOrientationControls.js",
       "src/ui/applicationShortcuts.js",
       "src/ui/cctv.js",
       "src/ui/cctvBindings.js",
@@ -1584,7 +1600,10 @@
       "src/data/routeSteps.js",
       "src/layers/directions/index.js",
       "src/data/directions.js",
-      "src/app/layers/directions.js"
+      "src/app/layers/directions.js",
+      "src/search/coordinateGeocoder.js",
+      "src/search/coordinateParser.js",
+      "src/search/presetGeocoder.js"
     ],
     "external": [
       "@mapbox/vector-tile",
@@ -1694,6 +1713,8 @@
       "src/layers/alpr/model.js",
       "src/layers/alpr/policy.js",
       "src/layers/alpr/presentation.js",
+      "src/layers/alpr/visuals.js",
+      "src/layers/alpr/overlay.js",
       "src/layers/alpr/source.js",
       "src/layers/awareness/controls.js",
       "src/layers/awareness/dependencies.js",
@@ -1927,7 +1948,10 @@
       "src/data/terrainHeights.js",
       "src/data/groundFloor.js",
       "src/data/directions.js",
-      "src/app/layers/directions.js"
+      "src/app/layers/directions.js",
+      "src/search/coordinateGeocoder.js",
+      "src/search/coordinateParser.js",
+      "src/search/presetGeocoder.js"
     ],
     "external": [
       "cesium",
@@ -1968,7 +1992,10 @@
       "src/services/groundSnap.js",
       "src/services/meshFloorSampler.js",
       "src/services/requests.js",
-      "src/services/terrainHeights.js"
+      "src/services/terrainHeights.js",
+      "src/search/coordinateGeocoder.js",
+      "src/search/coordinateParser.js",
+      "src/search/presetGeocoder.js"
     ],
     "external": [
       "cesium",
@@ -2100,5 +2127,25 @@
     "exports": ["./layers/directions"],
     "modules": ["src/layers/directions/index.js", "src/data/routeSteps.js"],
     "external": ["cesium"]
+  },
+  "radio-browser-source": {
+    "exports": ["./sources/radio-browser"],
+    "modules": ["src/sources/radioBrowser.js", "src/data/radioCountry.js"],
+    "external": []
+  },
+  "cctv-types-source": {
+    "exports": ["./sources/cctv-types"],
+    "modules": ["src/sources/cctvTypes.js"],
+    "external": []
+  },
+  "regional-source": {
+    "exports": ["./sources/regional"],
+    "modules": ["src/data/regionalModel.js"],
+    "external": []
+  },
+  "voice-action-schemas": {
+    "exports": ["./voice/action-schemas"],
+    "modules": ["src/voice/actionSchemas.js"],
+    "external": []
   }
 }
