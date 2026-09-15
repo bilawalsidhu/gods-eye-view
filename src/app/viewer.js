@@ -28,6 +28,14 @@ export function createApplicationViewer({ container, creditContainer }) {
     viewer.scene.skyAtmosphere.atmosphereLightIntensity = 18;
     viewer.scene.skyAtmosphere.saturationShift = -0.12;
     viewer.scene.skyAtmosphere.brightnessShift = -0.08;
+    // Prefer Cesium's built-in camera controller smoothing before custom handling
+    const controller = viewer.scene.screenSpaceCameraController;
+    if (controller) {
+      controller.inertiaSpin = 0.9;
+      controller.inertiaTranslate = 0.9;
+      controller.inertiaZoom = 0.85;
+      if (Number.isFinite(controller.zoomFactor)) controller.zoomFactor = 1.08;
+    }
     return viewer;
   } catch (error) {
     viewer.destroy();

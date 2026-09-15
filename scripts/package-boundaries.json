@@ -545,6 +545,8 @@
       "src/ui/location.js",
       "src/ui/locationControls.js",
       "src/ui/locationSearch.js",
+      "src/ui/selfLocate.js",
+      "src/ui/zoomSmoothing.js",
       "src/ui/mapSource.js",
       "src/ui/mapSourceControls.js",
       "src/ui/navigationController.js",

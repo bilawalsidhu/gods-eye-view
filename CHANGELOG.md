@@ -180,6 +180,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+- Add self-locate button using browser geolocation — purely client-side and ephemeral, never logged or transmitted, with non-blocking error feedback.
+- Smooth trackpad zoom by configuring Cesium ScreenSpaceCameraController inertia/zoomFactor and adding rAF-based easing with distinct sensitivity for trackpad, pinch (ctrlKey) and mouse wheel.
 - Give application request services, terrain/floor caches and annotation lookup state explicit owners and cancellation; share them across controls, layers and voice.
 
 - Construct application layers from explicit sources, with standalone provider selection and catalog-owned aircraft classification; controls and voice queries use those instances.
