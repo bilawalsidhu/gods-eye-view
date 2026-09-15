@@ -1100,6 +1100,10 @@ export function createGevActionRunner({
       return controlScene(sceneDirector, args);
     }
 
+    if (name === 'control_fire_history') {
+      return controlFireHistory(dataManager, args, runOptions);
+    }
+
     if (name === 'control_cctv') {
       return controlCctv(dataManager, args, styleManager);
     }
@@ -1277,6 +1281,255 @@ export function normalizeStackId(value) {
     .toLowerCase();
   if (!raw) return null;
   return STACK_ALIASES.get(raw) || null;
+}
+
+const FIRE_HISTORY_LAYER = 'fire-history';
+const FIRE_HISTORY_WAIT_MS = 8000;
+const FIRE_HISTORY_POLL_MS = 120;
+
+/**
+ * Poll a predicate for a bounded time (archive loads are local-proxy fast,
+ * but they are still async after the layer enables).
+ * @param {() => boolean} ready
+ * @param {{signal?: AbortSignal}} [options]
+ * @returns {Promise<boolean>}
+ */
+async function waitUntil(ready, { signal } = {}) {
+  const deadline = Date.now() + FIRE_HISTORY_WAIT_MS;
+  while (!ready()) {
+    if (signal?.aborted || Date.now() >= deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, FIRE_HISTORY_POLL_MS));
+  }
+  return true;
+}
+
+/**
+ * Match a spoken event query against registered events by id, name or year.
+ * @param {Array<object>} events
+ * @param {string} query
+ * @returns {?object}
+ */
+export function matchFireEvent(events, query) {
+  const text = String(query || '')
+    .trim()
+    .toLowerCase();
+  if (!text || !Array.isArray(events)) return null;
+  const words = text.split(/[^a-z0-9]+/).filter(Boolean);
+  const score = (event) => {
+    const id = String(event.id || '').toLowerCase();
+    const name = String(event.name || '').toLowerCase();
+    const year = String(event.startDate || '').slice(0, 4);
+    if (id === text || name === text) return 100;
+    let points = 0;
+    for (const word of words) {
+      if (word === year) points += 40;
+      else if (word === 'fire') points += 1;
+      else if (name.includes(word) || id.includes(word)) points += 20;
+    }
+    return points;
+  };
+  const ranked = events
+    .map((event) => [score(event), event])
+    .filter(([points]) => points > 1)
+    .sort((a, b) => b[0] - a[0]);
+  return ranked[0]?.[1] || null;
+}
+
+/** JSON-safe summary of the layer's event + clock for a tool result. */
+function fireHistoryStatus(module) {
+  const state = module.getEventState?.() || {};
+  const replay = module.getReplayState?.() || null;
+  const stats = module.getStats?.() || {};
+  return {
+    event: state.event
+      ? {
+          id: state.event.id,
+          name: state.event.name,
+          region: state.event.region || null,
+          startDate: state.event.startDate,
+          endDate: state.event.endDate,
+          burnedHa: state.event.burnedHa ?? null,
+        }
+      : null,
+    detections: state.count || 0,
+    keyRequired: Boolean(stats.keyRequired),
+    replay: replay
+      ? {
+          status: replay.status,
+          speed: replay.speed,
+          clockUtc: new Date(replay.cursorMs).toISOString().slice(0, 16) + 'Z',
+          shown: replay.shown,
+          burning: replay.active,
+        }
+      : null,
+    dailyPeak: (state.timeline || []).reduce(
+      (best, day) => (day.count > (best?.count || 0) ? day : best),
+      null,
+    ),
+  };
+}
+
+/**
+ * Voice control for the Historic Fires layer. Every action but `status`
+ * enables the layer first; select/replay wait (bounded) for the archive.
+ */
+export async function controlFireHistory(
+  dataManager,
+  args = {},
+  runOptions = {},
+) {
+  const action = String(args.action || '').toLowerCase();
+  const fail = (error, extra = {}) => ({
+    ok: false,
+    action: 'control_fire_history',
+    error,
+    ...extra,
+  });
+  const module = dataManager?.layers?.get?.(FIRE_HISTORY_LAYER)?.module;
+  if (!module) return fail('Historic Fires layer unavailable');
+  const events = () => module.getEventState?.().events || [];
+  const listEvents = () =>
+    events().map((event) => ({
+      id: event.id,
+      name: event.name,
+      year: String(event.startDate || '').slice(0, 4),
+      region: event.region || null,
+    }));
+
+  if (action === 'status') {
+    return {
+      ok: true,
+      action: 'control_fire_history',
+      enabled: Boolean(dataManager.isEnabled?.(FIRE_HISTORY_LAYER)),
+      events: listEvents(),
+      ...fireHistoryStatus(module),
+    };
+  }
+
+  if (!dataManager.isEnabled?.(FIRE_HISTORY_LAYER)) {
+    const enabled = await dataManager.setEnabled(FIRE_HISTORY_LAYER, true, {
+      origin: 'voice',
+    });
+    if (enabled === false)
+      return fail('Historic Fires layer could not be enabled');
+  }
+  const haveEvents = await waitUntil(() => events().length > 0, runOptions);
+  if (!haveEvents) {
+    const stats = module.getStats?.() || {};
+    return fail(
+      stats.keyRequired
+        ? 'Historic Fires need a FIRMS_MAP_KEY — none is configured'
+        : 'Historic fire events are still loading',
+    );
+  }
+
+  if (action === 'list') {
+    return {
+      ok: true,
+      action: 'control_fire_history',
+      events: listEvents(),
+      ...fireHistoryStatus(module),
+    };
+  }
+
+  if (action === 'select') {
+    const event = matchFireEvent(events(), args.eventQuery);
+    if (!event)
+      return fail(`No registered fire matched "${args.eventQuery || ''}"`, {
+        events: listEvents(),
+      });
+    module.selectEvent(event.id, { origin: 'voice' });
+    await waitUntil(
+      () =>
+        module.getEventState?.().event?.id === event.id &&
+        (module.getEventState?.().count > 0 || module.getStats?.().keyRequired),
+      runOptions,
+    );
+    return {
+      ok: true,
+      action: 'control_fire_history',
+      selected: event.id,
+      ...fireHistoryStatus(module),
+    };
+  }
+
+  const detectionsReady = () =>
+    module.getEventState?.().count > 0 && !module.getStats?.().loading;
+
+  if (action === 'replay') {
+    if (args.eventQuery) {
+      const event = matchFireEvent(events(), args.eventQuery);
+      if (!event)
+        return fail(`No registered fire matched "${args.eventQuery}"`, {
+          events: listEvents(),
+        });
+      module.selectEvent(event.id, { origin: 'voice' });
+    }
+    if (!(await waitUntil(detectionsReady, runOptions)))
+      return fail(
+        'Detections are not loaded yet — try again in a moment',
+        fireHistoryStatus(module),
+      );
+    if (Number.isFinite(args.speed)) module.setReplaySpeed(args.speed);
+    const replay = module.getReplayState?.();
+    if (replay?.status !== 'playing') module.toggleReplay();
+    return {
+      ok: true,
+      action: 'control_fire_history',
+      playing: true,
+      ...fireHistoryStatus(module),
+    };
+  }
+  if (action === 'pause') {
+    const replay = module.getReplayState?.();
+    if (replay?.status === 'playing') module.toggleReplay();
+    return {
+      ok: true,
+      action: 'control_fire_history',
+      playing: false,
+      ...fireHistoryStatus(module),
+    };
+  }
+  if (action === 'reset') {
+    module.resetReplay();
+    return {
+      ok: true,
+      action: 'control_fire_history',
+      ...fireHistoryStatus(module),
+    };
+  }
+  if (action === 'speed') {
+    if (![0.5, 1, 2, 4].includes(args.speed))
+      return fail('Speed must be 0.5, 1, 2 or 4');
+    module.setReplaySpeed(args.speed);
+    return {
+      ok: true,
+      action: 'control_fire_history',
+      ...fireHistoryStatus(module),
+    };
+  }
+  if (action === 'seek') {
+    if (!Number.isFinite(args.fraction))
+      return fail('Seek needs a fraction between 0 and 1');
+    if (!(await waitUntil(detectionsReady, runOptions)))
+      return fail('Detections are not loaded yet — try again in a moment');
+    module.seekReplay(Math.max(0, Math.min(1, args.fraction)));
+    return {
+      ok: true,
+      action: 'control_fire_history',
+      ...fireHistoryStatus(module),
+    };
+  }
+  if (action === 'focus') {
+    module.focusEvent();
+    return {
+      ok: true,
+      action: 'control_fire_history',
+      focused: true,
+      ...fireHistoryStatus(module),
+    };
+  }
+  return fail(`Unknown Historic Fires action "${args.action || ''}"`);
 }
 
 /**

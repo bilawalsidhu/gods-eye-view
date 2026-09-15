@@ -259,7 +259,7 @@ export function createFireHistoryPanel({ layer, doc = globalThis.document }) {
     );
     refs.roster.addEventListener('click', (event) => {
       const button = event.target?.closest?.('[data-event-id]');
-      if (button) layer.selectEvent(button.dataset.eventId);
+      if (button) layer.selectEvent(button.dataset.eventId, { origin: 'user' });
     });
     refs.disclose.addEventListener('click', () => {
       collapsed = !collapsed;

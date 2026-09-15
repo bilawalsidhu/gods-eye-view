@@ -94,6 +94,8 @@ export function createFireHistoryLayer({ source, overlayHost } = {}) {
   let _fires = [];
   let _timeline = [];
   let _rowControlsListener = null;
+  /** Manager handle so selections settle as layer params (share links). */
+  let _dataManager = null;
   /** @type {?import('./replay.js').ReplayState} */
   let _replay = null;
   let _replayFrame = null;
@@ -384,9 +386,14 @@ export function createFireHistoryLayer({ source, overlayHost } = {}) {
     }
   }
 
+  /**
+   * Apply a selection locally. Reloads only while enabled; a disabled layer
+   * (share-link restore before enable) just remembers the id.
+   */
   function selectEventId(id) {
-    if (!id || id === _selectedId || !_enabled) return;
+    if (!id || id === _selectedId) return;
     _selectedId = id;
+    if (!_enabled) return;
     _fires = [];
     _timeline = [];
     _replay = _replay ? { ...resetReplay(_replay), status: 'idle' } : null;
@@ -479,7 +486,6 @@ export function createFireHistoryLayer({ source, overlayHost } = {}) {
         selectedId: _selectedId,
         loading: _loading,
         fires: _fires,
-        onSelect: selectEventId,
       });
       return {
         chips: [
@@ -494,9 +500,48 @@ export function createFireHistoryLayer({ source, overlayHost } = {}) {
       _rowControlsListener = typeof listener === 'function' ? listener : null;
     },
 
-    /** Programmatic selection (voice tools, share links, context panel). */
-    selectEvent(id) {
-      selectEventId(String(id || ''));
+    /**
+     * Programmatic selection (voice tools, context panel). Routed through
+     * the manager when attached so the choice settles as a layer param and
+     * reaches share links; otherwise applied directly.
+     * @param {string} id
+     * @param {{origin?: string}} [options]
+     */
+    selectEvent(id, { origin = 'programmatic' } = {}) {
+      const eventId = String(id || '');
+      if (!eventId || eventId === _selectedId) return;
+      if (typeof _dataManager?.setLayerParams === 'function') {
+        void _dataManager.setLayerParams(
+          FIRE_HISTORY_LAYER_ID,
+          { eventId },
+          { origin },
+        );
+        return;
+      }
+      selectEventId(eventId);
+    },
+
+    /** Keep a manager handle so selections can settle as params. */
+    attachDataManager(dataManager) {
+      _dataManager = dataManager || null;
+    },
+
+    /** Share-link and manager params: the selected event id. */
+    getParams() {
+      return { eventId: _selectedId };
+    },
+
+    /**
+     * Accept `{eventId}` from the manager (user chip, voice, share restore).
+     * Unknown keys are ignored; an empty id is a no-op.
+     * @param {{eventId?: string}} params
+     * @returns {boolean}
+     */
+    setParams(params = {}) {
+      if (Object.hasOwn(params, 'eventId') && params.eventId) {
+        selectEventId(String(params.eventId));
+      }
+      return true;
     },
 
     /** Fly the camera back to the shown event's box. */

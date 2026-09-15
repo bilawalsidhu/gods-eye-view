@@ -82,6 +82,13 @@ function normalizeVolume(value) {
   return Math.round(Math.max(0, Math.min(1, numeric)) * 100) / 100;
 }
 
+/** Registered fire-event ids are kebab-case; anything else is absent. */
+const FIRE_EVENT_ID_GRAMMAR = /^[a-z][a-z0-9-]{1,63}$/;
+function normalizeFireEventId(value) {
+  const candidate = typeof value === 'string' ? value.trim() : '';
+  return FIRE_EVENT_ID_GRAMMAR.test(candidate) ? candidate : null;
+}
+
 function booleanOption(
   key,
   token,
@@ -249,6 +256,16 @@ const OPTION_GROUPS = Object.freeze({
     booleanOption('showProjection', 'p', true),
     booleanOption('autoHop', 'a', false),
   ]),
+  'fire-history': Object.freeze([
+    Object.freeze({
+      key: 'eventId',
+      token: 'e',
+      defaultValue: null,
+      normalize: normalizeFireEventId,
+      encode: (value) => value,
+      decode: (value) => normalizeFireEventId(value),
+    }),
+  ]),
   radio: Object.freeze([
     Object.freeze({
       key: 'filter',
@@ -334,7 +351,8 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({
     id: 'fire-history',
     token: 'y',
-    disposition: 'enabled-only',
+    disposition: 'enabled+options',
+    optionOwner: 'fire-history',
   }),
   Object.freeze({
     id: 'flights',

@@ -871,6 +871,21 @@ fetching, trailing-24-hour filtering and partial-success caching are unchanged.
   box), ▶ REPLAY SPREAD / ❚❚ PAUSE, ↺ ALL, and the event's https references.
   The panel re-renders on the same beat as the layer row; sliders keep the
   user's value while focused. All event and feed text is HTML-escaped.
+- Selection is a layer param: `getParams()` → `{eventId}`, `setParams({eventId})`
+  selects (a disabled layer just remembers the id until enable). Row chips carry
+  `params: {eventId}`, the panel roster calls `selectEvent(id, {origin: 'user'})`,
+  and voice uses origin `voice`; all three route through
+  `dataManager.setLayerParams` when the manager is attached, so the choice reaches
+  share links (`y` token, option owner `fire-history`, option `e` = event id,
+  kebab-case only; anything else decodes as absent).
+- Voice: `control_fire_history` with actions list, select, replay, pause, reset,
+  speed (0.5/1/2/4), seek (0–1), focus and status. Every action except status
+  enables the layer first (origin `voice`) and waits up to 8 s for the event
+  catalog; select and replay wait for detections the same way and fail plainly
+  ("still loading", "need a FIRMS_MAP_KEY") instead of pretending. `eventQuery`
+  matches id, name or year; a bare "fire" matches nothing. Results carry the
+  event, detection count, replay clock and the peak day so the confirmation is
+  spoken from evidence.
 - `getReplayState()` returns the clock plus `{shown, active, total}` at the
   cursor; `toggleReplay()`, `resetReplay()`, `setReplaySpeed(n)` and
   `seekReplay(fraction)` are the programmatic transport.

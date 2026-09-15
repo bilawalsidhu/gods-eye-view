@@ -169,16 +169,9 @@ export function eventCenter(bbox) {
  * @param {?string} input.selectedId - Currently shown event.
  * @param {boolean} input.loading - A load is in flight.
  * @param {Array<{progress: number}>} input.fires - Rendered detections.
- * @param {(id: string) => void} input.onSelect - Chip handler.
  * @returns {{chips: Array<object>, legend: Array<object>}}
  */
-export function fireHistoryRowControls({
-  events,
-  selectedId,
-  loading,
-  fires,
-  onSelect,
-}) {
+export function fireHistoryRowControls({ events, selectedId, loading, fires }) {
   const chips = (events || []).map((event) => ({
     id: event.id,
     label: `${event.name} · ${String(event.startDate).slice(0, 4)}`,
@@ -187,7 +180,8 @@ export function fireHistoryRowControls({
       : `${event.startDate} → ${event.endDate}`,
     active: event.id === selectedId,
     busy: Boolean(loading) && event.id === selectedId,
-    onClick: () => onSelect(event.id),
+    // Settles through the manager as a layer param, so share links carry it.
+    params: { eventId: event.id },
   }));
   const bands = [
     { label: 'Early', from: 0, to: 1 / 3, swatch: 0.1 },

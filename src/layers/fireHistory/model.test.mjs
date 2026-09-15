@@ -112,13 +112,11 @@ test('eventCenter is the box midpoint', () => {
 });
 
 test('fireHistoryRowControls builds one chip per event and a three-band legend', () => {
-  const selected = [];
   const controls = fireHistoryRowControls({
     events: [EVENT, { ...EVENT, id: 'other', name: 'Other', startDate: '2024-01-01', endDate: '2024-01-02', region: '' }],
     selectedId: 'other',
     loading: true,
     fires: [{ progress: 0.1 }, { progress: 0.5 }, { progress: 0.9 }, { progress: 1 }],
-    onSelect: (id) => selected.push(id),
   });
   assert.equal(controls.chips.length, 2);
   assert.equal(controls.chips[0].label, 'Camp Fire · 2018');
@@ -127,8 +125,8 @@ test('fireHistoryRowControls builds one chip per event and a three-band legend',
   assert.equal(controls.chips[1].busy, true);
   assert.match(controls.chips[0].title, /Butte County/);
   assert.doesNotMatch(controls.chips[1].title, /^ ·/);
-  controls.chips[0].onClick();
-  assert.deepEqual(selected, ['camp-fire-2018']);
+  assert.deepEqual(controls.chips[0].params, { eventId: 'camp-fire-2018' });
+  assert.equal(controls.chips[0].onClick, undefined);
   assert.deepEqual(
     controls.legend.map((item) => [item.label, item.count]),
     [
