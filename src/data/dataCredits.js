@@ -201,6 +201,13 @@ export const DATA_CREDITS = [
       '<a href="https://terrain.reearth.land" target="_blank" rel="noopener">Re:Earth Terrain</a> / ' +
       'Mapterhorn (CC BY 4.0) / EGM2008 (NGA)',
   },
+  {
+    key: 'rainviewer',
+    html:
+      'Weather radar: ' +
+      '<a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a> ' +
+      '(free for personal/educational use)',
+  },
   // ── Bundled snapshots ───────────────────────────────────────────
   {
     key: 'datacenters',
@@ -280,6 +287,15 @@ export const TOMTOM_CREDIT = {
   html:
     'Traffic flow data © ' +
     '<a href="https://www.tomtom.com" target="_blank" rel="noopener">TomTom</a>',
+};
+
+/** Dynamic credit for RainViewer weather radar tiles. */
+export const RAINVIEWER_CREDIT = {
+  key: 'rainviewer',
+  html:
+    'Weather radar: ' +
+    '<a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a> ' +
+    '(free for personal/educational use)',
 };
 
 /** Registered when the first Natural Earth region outline resolves (public
