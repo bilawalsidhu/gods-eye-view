@@ -1,5 +1,7 @@
 # Changelog
 
+- Add Lithuania's public Via Lietuva / Eismoinfo road cameras to CCTV, with published coordinates, on-demand snapshots, attribution and bounded catalog requests. No API key is required.
+
 - Keep parked transit vehicles aligned to their world course during camera orbits, fall back to reported bearing, and keep vehicles with no course consistently screen-up.
 
 - Separate Realtime connection, response/tool, Radio, input/audio, cost, viewport
