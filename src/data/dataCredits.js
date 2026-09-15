@@ -77,7 +77,7 @@ export const DATA_CREDITS = [
   {
     key: 'iem-nexrad',
     html:
-      'Precipitation (US radar): Iowa Environmental Mesonet CONUS composite of ' +
+      'Precipitation (US radar): Iowa Environmental Mesonet composite of ' +
       'NWS WSR-88D level III base reflectivity ' +
       '(<a href="https://mesonet.agron.iastate.edu" target="_blank" rel="noopener">mesonet.agron.iastate.edu</a>)',
   },

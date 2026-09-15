@@ -295,12 +295,21 @@ const paints = (tier, lon, lat) => {
   return !(tier.cutoutRectangleDegrees && inside(tier.cutoutRectangleDegrees));
 };
 
-test('exactly one placement paints any point, with nowhere left blank', () => {
-  // The ownership rule the layer has held since it shipped, now that the
-  // sources no longer line up as one cutout matching one rectangle. Two
-  // placements painting a point composite their alpha and read as heavier
-  // rain; none painting it reads as clear sky. Both are the map lying, so the
-  // test asserts the count is exactly one rather than at most one.
+test('the models partition the globe and observations lie one deep on top', () => {
+  // Two rules, deliberately different, and both are about the map not lying.
+  //
+  // Two models painting one point composite to a stronger field inside the
+  // finer one's domain than outside it, drawing a seam along an invisible
+  // boundary — so the models must tile the planet exactly, never overlapping
+  // and never leaving a hole.
+  //
+  // An observation may sit over a model, and where it is transparent the model
+  // shows through. That is a known cost, not an oversight: these services draw
+  // "no data" and "no precipitation" identically, so a radar's observed-dry
+  // reads as the model's predicted-wet. Cutting every observed footprint out
+  // of the models exactly would cost 29 imagery layers at this size and could
+  // not express a satellite disc at all. What must still hold is that no point
+  // carries two observations, and that nothing anywhere is left blank.
   //
   // Sampled at half-degree offsets so no probe lands on a shared edge, which
   // is zero-area and belongs to both sides by inclusive comparison.
@@ -311,13 +320,30 @@ test('exactly one placement paints any point, with nowhere left blank', () => {
   for (let lat = -87.5; lat < 90; lat += 5)
     for (let lon = -177.5; lon < 180; lon += 5) {
       const painting = deep.filter((tier) => paints(tier, lon, lat));
-      assert.equal(
-        painting.length,
-        1,
-        `${lon},${lat} is painted by ${painting.length} placements: ${painting
-          .map((tier) => tier.id)
-          .join(', ')}`,
+      const models = painting.filter((tier) => tier.forecast);
+      const observed = painting.filter((tier) => !tier.forecast);
+      const where = `${lon},${lat}`;
+      const names = (list) => list.map((tier) => tier.id).join(', ') || 'none';
+      assert.ok(
+        models.length <= 1,
+        `${where}: two models composite — ${names(models)}`,
       );
+      assert.ok(
+        observed.length <= 1,
+        `${where}: two observations composite — ${names(observed)}`,
+      );
+      assert.ok(
+        painting.length >= 1,
+        `${where}: nothing paints here, so the map reads as clear sky`,
+      );
+      // Where a model steps aside it must be for an observation that covers
+      // the same ground, never for nothing.
+      if (models.length === 0)
+        assert.equal(
+          observed.length,
+          1,
+          `${where}: the models yielded to ${names(observed)}`,
+        );
     }
 
   // Below the handover the global model is alone and covers everything.
@@ -331,6 +357,33 @@ test('exactly one placement paints any point, with nowhere left blank', () => {
   );
   assert.equal(wide[0].rectanglesDegrees, null);
   assert.equal(wide[0].cutoutRectangleDegrees, null);
+});
+
+test('the one cutout available is spent on the densest radar coverage', () => {
+  // Cesium allows a single cutoutRectangle per layer, so exact exclusivity is
+  // affordable for exactly one observed footprint. It goes to the lower 48:
+  // the densest network and the most-looked-at ground. Pin the pairing, since
+  // a cutout that stopped matching the footprint would leave either a seam of
+  // doubled field or a strip of nothing along its edge.
+  const radar = PRECIPITATION_TIERS.find((tier) => tier.role === 'inlay');
+  const regional = PRECIPITATION_TIERS.find(
+    (tier) => tier.id === 'rdps-regional',
+  );
+  assert.deepEqual(
+    regional.cutoutRectangleDegrees,
+    tierRectangles(radar)[0],
+    'the cutout must be exactly the radar footprint it stands aside for',
+  );
+  // And that footprint has to sit inside one rectangle of the cover it cuts,
+  // or the cutout would only clear part of it.
+  const host = tierRectangles(regional).find(
+    (box) =>
+      box[0] <= radar.rectanglesDegrees[0][0] &&
+      box[1] <= radar.rectanglesDegrees[0][1] &&
+      box[2] >= radar.rectanglesDegrees[0][2] &&
+      box[3] >= radar.rectanglesDegrees[0][3],
+  );
+  assert.ok(host, 'the cutout footprint must lie inside a single cover box');
 });
 
 test('no tier overlaps itself, which would composite its own alpha twice', () => {

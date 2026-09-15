@@ -76,6 +76,30 @@ export const IEM_ORIGIN = 'https://mesonet.agron.iastate.edu';
 const CONUS_DEGREES = Object.freeze([-125, 24, -66.5, 50]);
 
 /**
+ * The rest of the NEXRAD network, which `nexrad-n0q` carries and the CONUS-only
+ * layer did not: Alaska, Hawaii and Puerto Rico. None of them can share a
+ * rectangle with the lower 48 or with each other, which is what kept them out
+ * until a tier could hold a cover.
+ *
+ * Generous boxes on purpose. Radar range is a disc around each site and these
+ * are far sparser networks than the lower 48 — Alaska has eight radars for a
+ * region the size of western Europe — so most of each box is out of range. An
+ * out-of-range tile is transparent and the model underneath shows through,
+ * which is the same thing that happens on a clear day.
+ */
+const ALASKA_DEGREES = Object.freeze([-168, 51, -130, 72]);
+const HAWAII_DEGREES = Object.freeze([-161, 18, -154, 23]);
+const PUERTO_RICO_DEGREES = Object.freeze([-68, 16.5, -64, 19.5]);
+
+/** Everywhere the US radar composite reaches, coarsest region first. */
+const RADAR_DEGREES = Object.freeze([
+  CONUS_DEGREES,
+  ALASKA_DEGREES,
+  HAWAII_DEGREES,
+  PUERTO_RICO_DEGREES,
+]);
+
+/**
  * Where RDPS actually has data.
  *
  * Its advertised bounding box is the whole northern hemisphere, which is the
@@ -117,14 +141,23 @@ const GDPS_DETAIL_DEGREES = Object.freeze([
 /**
  * Precedence stack, painted in order — later entries sit above earlier ones.
  *
- * One source paints any point, at every zoom. Below the handover level the
- * global model carries the whole planet on its own. Above it the three finer
- * placements tile the globe between them: radar owns its footprint, the
- * regional model owns its domain minus that footprint, and the global model
- * takes exactly what is left. Each boundary is structural — a cutout where the
- * finer footprint is one rectangle, a complementary cover where it is not —
- * rather than left to a transparent pixel, because every one of these services
- * draws "no data" and "no precipitation" identically.
+ * Two rules, and they are not the same rule.
+ *
+ * The models partition the planet: exactly one of them paints any point, with
+ * the regional model taking its domain and the global model the complement.
+ * Two models of one phenomenon must never stack, because they would composite
+ * to a stronger field inside the finer domain than outside it and draw a seam
+ * that says nothing about the weather.
+ *
+ * Observations lie on top, at most one deep. Here a model does show through
+ * wherever the observation is transparent — and that is a real cost, because
+ * these services draw "no data" and "no precipitation" identically, so a
+ * radar's observed-dry becomes the model's predicted-wet. It is paid because
+ * the alternative does not scale: cutting every observed footprint out of the
+ * models exactly costs 29 imagery layers at this size and cannot express a
+ * satellite disc at all. Cesium allows one cutout per layer, so the one cutout
+ * available goes where it buys the most — the lower 48, by far the densest
+ * radar coverage and the most-looked-at ground on the map.
  */
 export const PRECIPITATION_TIERS = Object.freeze([
   Object.freeze({
@@ -225,7 +258,7 @@ export const PRECIPITATION_TIERS = Object.freeze([
     maximumTerrainLevel: undefined,
   }),
   Object.freeze({
-    id: 'nexrad-conus',
+    id: 'nexrad-us',
     role: 'inlay',
     rung: 4,
     kind: 'wms',
@@ -233,19 +266,25 @@ export const PRECIPITATION_TIERS = Object.freeze([
     inlayLabel: 'US RADAR',
     origin: IEM_ORIGIN,
     service: `${IEM_ORIGIN}/cgi-bin/wms/nexrad/n0q.cgi`,
-    // IEM's CONUS composite of NWS WSR-88D level III base reflectivity. It
-    // applies far less quality-control masking than the MRMS mosaic, so it does
-    // not punch squares out of live cells — at the cost of carrying more ground
+    // IEM's composite of NWS WSR-88D level III base reflectivity. It applies
+    // far less quality-control masking than the MRMS mosaic, so it does not
+    // punch squares out of live cells — at the cost of carrying more ground
     // clutter and anomalous propagation.
-    wmsLayer: 'nexrad-n0q-conus',
+    //
+    // `nexrad-n0q` rather than `nexrad-n0q-conus`: byte-for-byte the same
+    // composite over the lower 48, and it also answers over Alaska, Hawaii and
+    // Puerto Rico, which the CONUS layer returns empty for. Neither name is
+    // advertised in the service's capabilities — only the `-900913` and
+    // per-region variants are — so both were confirmed by fetching tiles.
+    wmsLayer: 'nexrad-n0q',
     wmsStyle: null,
     // No time dimension is advertised at all: the service always serves the
     // current composite, and the row says LIVE rather than claiming a step.
     frameMode: 'live',
-    capsKey: `${IEM_ORIGIN}/cgi-bin/wms/nexrad/n0q.cgi|nexrad-n0q-conus`,
+    capsKey: `${IEM_ORIGIN}/cgi-bin/wms/nexrad/n0q.cgi|nexrad-n0q`,
     forecast: false,
     alpha: 0.68,
-    rectanglesDegrees: Object.freeze([CONUS_DEGREES]),
+    rectanglesDegrees: RADAR_DEGREES,
     cutoutRectangleDegrees: null,
     refreshMs: RADAR_REFRESH_MS,
     maxTileLevel: RADAR_DETAIL_CEILING,
