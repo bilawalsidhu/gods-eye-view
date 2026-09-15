@@ -273,3 +273,30 @@ test('sampleAt writes the supplied output without replacing nested scratch', () 
     assert.equal(track.metrics, metrics);
   }
 });
+
+test('backfill pins the live bracket and quarantines outliers on either side', () => {
+  const track = createTrack({
+    policy: {
+      accept: (a, b) =>
+        Math.abs(b.lat - a.lat) * 111320 <= ((b.t - a.t) / 1000) * 36,
+    },
+  });
+  put(track, 10000, 0);
+  put(track, 25000, 100);
+  seek(track, 17500, clocks(40000));
+  const before = { ...sampleAt(track, 17500, {}) };
+  mergeHistory(track, [fix(0, -111320), fix(17500, 25), fix(40000, 111320)]);
+  const after = sampleAt(track, 17500, {});
+  assert.equal(track.count, 2);
+  assert.equal(after.fromT, before.fromT);
+  assert.equal(after.toT, before.toT);
+  assert.equal(after.lat, before.lat);
+  mergeHistory(track, [fix(40000, 111320), fix(55000, 111420)]);
+  assert.equal(
+    track.count,
+    4,
+    'two coherent replacement fixes can be retained',
+  );
+  assert.ok(readFix(track, 2).flags & FIX_FLAGS.BREAK);
+  assert.equal(sampleAt(track, 30000, {}).lat, fix(25000, 100).lat);
+});

@@ -243,13 +243,12 @@ export function createIngestion({ state, services, parts }) {
       };
       let entry = state._vehicles.get(key);
       if (entry) {
-        if (entry.mode !== mode) parts.rendering.paintMode(entry, mode);
-        entry.modeInferred = modeInferred;
         const heard = recordFix(entry, fix, {
           receivedAt: now,
           monoNowMs: monoNow,
           wallNowMs: now,
           replayed,
+          modeInferred,
           context: {
             trip: record.tripId || '',
             route: record.routeId || '',
@@ -262,6 +261,8 @@ export function createIngestion({ state, services, parts }) {
           if (heard.reason !== 'repeat') rejectedFixes += 1;
           continue;
         }
+        if (entry.mode !== mode) parts.rendering.paintMode(entry, mode);
+        entry.modeInferred = modeInferred;
         updatePlayback(entry, now, monoNow);
         parts.rendering.schedulePlayback(entry);
         // Ground follows the vehicle, every poll: a mesh floor landing over a
@@ -340,6 +341,7 @@ export function createIngestion({ state, services, parts }) {
           monoNowMs: monoNow,
           wallNowMs: now,
           replayed,
+          modeInferred,
           context: {
             trip: record.tripId || '',
             route: record.routeId || '',

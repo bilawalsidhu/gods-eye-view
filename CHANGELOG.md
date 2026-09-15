@@ -1,5 +1,7 @@
 # Changelog
 
+- Reject isolated transit history outliers without changing the active playback bracket; rejected live reports retain the last accepted route, mode and detection text.
+
 - Add an optional Nominatim geocoding adapter with configurable search/reverse endpoints, cancellation, bounded responses and retryable upstream errors. Extract portable response-reading and Overpass lexical helpers while retaining existing server exports.
 
 - Expose reference feed factories independently of standalone catalog construction; preserve source choices and asset attribution.

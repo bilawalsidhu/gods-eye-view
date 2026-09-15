@@ -147,10 +147,10 @@ export function initializePlayback(entry, budget, feedLag) {
       staleMs: MOTION_UNKNOWN_AFTER_MS,
       accept: (a, b) =>
         displacementPlausible(
-          entry.mode,
+          b.admissionMode ?? entry.mode,
           fixDistanceM(a, b),
           (b.t - a.t) / 1000,
-          entry.modeInferred,
+          b.admissionModeInferred ?? entry.modeInferred,
         ),
     },
   });
@@ -188,7 +188,16 @@ export function recordFix(entry, fix, observation = {}) {
     )
       epoch = Math.max(0, ...entry.track.epochs.keys()) + 1;
   }
-  const result = insertFix(entry.track, { ...fix, epoch }, observation);
+  const result = insertFix(
+    entry.track,
+    {
+      ...fix,
+      epoch,
+      admissionMode: context?.mode,
+      admissionModeInferred: observation.modeInferred,
+    },
+    observation,
+  );
   if (result.accepted) {
     const latest = readFix(
       entry.track,

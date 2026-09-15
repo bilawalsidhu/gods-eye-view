@@ -3409,3 +3409,95 @@ test('sensor clicks map displayed pixels into the pre-shader pick buffer', async
   assert.ok(Math.abs(actual.y - 201) < 1e-6);
   assert.equal(app.state()._selectedKey, entry.key);
 });
+
+test('rejected route metadata stays on the accepted bus', async (t) => {
+  const app = harness(t);
+  let routeId = '741',
+    latitude = 42.36;
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [vehicle('b', latitude, -71.06, reported(), { routeId })],
+      { fetchedAt: Date.now() },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.settle();
+  const entry = app.vehicles()[0];
+  const image = entry.marker.image;
+  app.advance(TRANSIT_POLL_MS);
+  routeId = 'Red';
+  latitude = 43.36;
+  await app.layer.update();
+  assert.equal(entry.mode, 'bus');
+  assert.equal(entry.record.routeId, '741');
+  assert.equal(entry.marker.image, image);
+  assert.equal(entry.currentEpoch, 1);
+  assert.equal(entry.track.count, 1);
+  assert.doesNotMatch(
+    app.layer
+      .getDetectableObjects()
+      .map((c) => c.metric)
+      .join(' '),
+    /METRO/,
+  );
+});
+
+test('reject then selected history backfill cannot resurrect a 111 km displacement', async (t) => {
+  const app = harness(t);
+  let latitude = 42.36;
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [vehicle('b', latitude, -71.06, reported())],
+      { fetchedAt: Date.now() },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.settle();
+  const entry = app.vehicles()[0];
+  app.advance(15000);
+  latitude += 0.001;
+  await app.layer.update();
+  app.settle();
+  const accepted = entry.fixes.map((f) => [f.t, f.lat, f.lon, 1, 1]);
+  app.advance(15000);
+  latitude = 43.36;
+  await app.layer.update();
+  assert.equal(entry.track.count, 2);
+  const pending = entry.track.pending;
+  const clock = entry.playT;
+  const priorFetch = globalThis.fetch;
+  globalThis.fetch = (url, options) =>
+    String(url).includes('/trail/')
+      ? Promise.resolve(
+          new Response(
+            JSON.stringify({
+              version: 1,
+              feedId: 'mbta',
+              vehicleId: 'b',
+              oldestT: accepted[0][0],
+              newestT: pending.t,
+              truncated: false,
+              epochs: [{ id: 1, trip: '', route: '1', mode: 'bus' }],
+              fixes: [...accepted, [pending.t, latitude, -71.06, 1, 1]],
+            }),
+          ),
+        )
+      : priorFetch(url, options);
+  const parts = app.layer._transitPartsForTest();
+  parts.selection.selectVehicle(entry.key);
+  for (let i = 0; i < 30; i++) await Promise.resolve();
+  assert.equal(entry.track.count, 2);
+  assert.equal(entry.playT, clock);
+  assert.equal(entry.track.pending, pending);
+  app.run(60000);
+  assert.ok(Math.abs(lat(entry) - 42.361) * 111320 < 1);
+  assert.equal(entry.track.resets, 0);
+});

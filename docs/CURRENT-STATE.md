@@ -2501,6 +2501,10 @@ gate. Seven keyless regions are available: Boston, Austin, Minneapolis–St Paul
 Helsinki, the Netherlands, Norway and South East Queensland. Mode silhouettes
 identify buses, trams, subways, trains, ferries and unclassified vehicles.
 
+Retained transit history uses the same outlier quarantine as live observations and
+preserves the active live bracket. Rejected reports do not publish route or mode
+changes to sprites, cards or detection text.
+
 **Timestamp playback.** Vehicles play between reports at 1× or hold while
 waiting for the next report. The display delay adapts within 25–120 seconds;
 late updates do not make a vehicle accelerate. A short reported crawl still

@@ -309,14 +309,68 @@ export function mergeHistory(track, fixes) {
     const fix = readFix(track, i);
     merged.set(fix.t, fix);
   }
-  const ordered = [...merged.values()].sort((a, b) => a.t - b.t);
+  const retained = Array.from({ length: track.count }, (_, i) =>
+    readFix(track, i),
+  );
   const active = Number.isFinite(track.displayT)
-    ? ordered.findLastIndex((f) => f.t <= track.displayT)
+    ? retained.findLastIndex((f) => f.t <= track.displayT)
     : -1;
-  const pinnedFrom = ordered[active],
-    pinnedTo = ordered[active + 1];
+  const pinnedFrom = retained[active],
+    pinnedTo = retained[active + 1];
+  const trusted = new Set(retained.map((f) => f.t));
+  const candidates = [...merged.values()]
+    .sort((a, b) => a.t - b.t)
+    .filter(
+      (f) =>
+        trusted.has(f.t) ||
+        !pinnedFrom ||
+        !pinnedTo ||
+        f.t < pinnedFrom.t ||
+        f.t > pinnedTo.t,
+    );
+  const ordered = [];
+  // Start from an admitted live position, including when walking backwards
+  // into retained history. A lone outlier is quarantined in either direction.
+  // Never borrow the live pending observation as a second vote for itself.
+  function admit(sequence, anchor, backwards = false) {
+    let last = anchor,
+      pending = null;
+    const plausible = (a, b) =>
+      !track.policy.accept ||
+      (backwards ? track.policy.accept(b, a) : track.policy.accept(a, b));
+    for (const fix of sequence) {
+      if (trusted.has(fix.t) || !last || plausible(last, fix)) {
+        ordered.push(fix);
+        last = fix;
+        pending = null;
+      } else if (pending && plausible(pending, fix)) {
+        // Two distinct coherent observations establish a replacement segment.
+        // Keep a visible gap between it and the authoritative live path.
+        if (backwards) last.flags |= FIX_FLAGS.BREAK;
+        else pending.flags |= FIX_FLAGS.BREAK;
+        ordered.push(pending, fix);
+        last = fix;
+        pending = null;
+      } else pending = fix;
+    }
+  }
+  const first = retained[0];
+  if (first) {
+    admit(
+      candidates.filter((f) => f.t < first.t).reverse(),
+      merged.get(first.t),
+      true,
+    );
+    admit(
+      candidates.filter((f) => f.t >= first.t),
+      null,
+    );
+  } else admit(candidates, null);
+  ordered.sort((a, b) => a.t - b.t);
   while (ordered.length > track.capacity) {
-    const i = ordered.findIndex((f) => f !== pinnedFrom && f !== pinnedTo);
+    const i = ordered.findIndex(
+      (f) => f.t !== pinnedFrom?.t && f.t !== pinnedTo?.t,
+    );
     if (i > 0 && i + 1 < ordered.length)
       ordered[i + 1].flags |= FIX_FLAGS.BREAK;
     ordered.splice(Math.max(0, i), 1);
