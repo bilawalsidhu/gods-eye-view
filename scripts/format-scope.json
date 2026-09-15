@@ -569,5 +569,6 @@
   "server/providers/xweather.js",
   "src/tooling/xweatherProvider.test.mjs",
   "src/data/xweatherCatalogue.js",
-  "src/ui/weatherControls.js"
+  "src/ui/weatherControls.js",
+  "src/ui/weatherControls.test.mjs"
 ]

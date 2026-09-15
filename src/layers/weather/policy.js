@@ -77,7 +77,7 @@ export const WEATHER_LAYER_SPECS = Object.freeze(
       id: entry.layer,
       code: entry.code,
       group: entry.group,
-      role: entry.defaultOn ? 'primary' : 'secondary',
+      defaultOn: entry.defaultOn,
       rung: entry.rung,
       kind: 'xyz',
       label: entry.label,
