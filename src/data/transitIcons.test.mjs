@@ -176,33 +176,65 @@ test('every mono raster preserves the normal silhouette mask and aspect at CRT d
     }
 });
 
-
 test('sensor raster halo stays dark across its screen-space band on a white roof', async () => {
   const sharp = (await import('sharp')).default;
-  const { presetSpriteScale, presetSpriteOutlinePx } = await import('./transitPresetStyle.js');
-  const { reduceSensorContrast } = await import('../layers/transit/qaMetrics.js');
-  const sides = { bus: 17, tram: 10, subway: 11.5, rail: 10.5, ferry: 12.5, unknown: 10 };
+  const { presetSpriteScale, presetSpriteOutlinePx } =
+    await import('./transitPresetStyle.js');
+  const { reduceSensorContrast } =
+    await import('../layers/transit/qaMetrics.js');
+  const sides = {
+    bus: 17,
+    tram: 10,
+    subway: 11.5,
+    rail: 10.5,
+    ferry: 12.5,
+    unknown: 10,
+  };
   for (const selected of [false, true]) {
     const pixels = [];
     for (const kind of TRANSIT_ICON_KINDS) {
-      const display = (selected ? 30 : 20) * presetSpriteScale('thermal', selected);
-      const frame = haloFrame(presetSpriteOutlinePx('thermal', selected), display);
+      const display =
+        (selected ? 30 : 20) * presetSpriteScale('thermal', selected);
+      const frame = haloFrame(
+        presetSpriteOutlinePx('thermal', selected),
+        display,
+      );
       const size = Math.round(display * frame.ratio * 8);
-      const svg = decode(transitIcon(kind, selected ? 96 : 48, { style: 'thermal' }));
-      const { data, info } = await sharp(Buffer.from(svg)).resize(size, size)
-        .flatten({ background: '#ffffff' }).raw().toBuffer({ resolveWithObject: true });
+      const svg = decode(
+        transitIcon(kind, selected ? 96 : 48, { style: 'thermal' }),
+      );
+      const { data, info } = await sharp(Buffer.from(svg))
+        .resize(size, size)
+        .flatten({ background: '#ffffff' })
+        .raw()
+        .toBuffer({ resolveWithObject: true });
       const sample = (offsetPx) => {
-        const x = Math.floor(size / 2 + offsetPx * size / (display * frame.ratio));
+        const x = Math.floor(
+          size / 2 + (offsetPx * size) / (display * frame.ratio),
+        );
         const i = (Math.floor(size / 2) * info.width + x) * info.channels;
-        return (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
+        return (
+          (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255
+        );
       };
       // The body stays at CRT size; the ring must cover this fixed external band.
-      const ringMin = sample(sides[kind] * display / 96 + 1.25);
-      pixels.push({ key: kind, verified: true, centre: sample(0), ringMin, ringMax: 1 - ringMin, background: 1 });
+      const ringMin = sample((sides[kind] * display) / 96 + 1.25);
+      pixels.push({
+        key: kind,
+        verified: true,
+        centre: sample(0),
+        ringMin,
+        ringMax: 1 - ringMin,
+        background: 1,
+      });
     }
     const white = reduceSensorContrast(pixels, 'white', 'thermal');
     assert.ok(white.pass, JSON.stringify({ selected, pixels, white }));
-    const black = reduceSensorContrast(pixels.map(p => ({ ...p, centre: 1 - p.centre })), 'black', 'thermal');
+    const black = reduceSensorContrast(
+      pixels.map((p) => ({ ...p, centre: 1 - p.centre })),
+      'black',
+      'thermal',
+    );
     assert.ok(black.pass, JSON.stringify({ selected, black }));
   }
 });
