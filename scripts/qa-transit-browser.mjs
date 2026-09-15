@@ -407,9 +407,10 @@ export async function sampleTransitPixels(page, palette) {
               sinCore = Math.sin(s.rotation);
             // A tram's parallel sides have equally wide bands. Prefer its upper
             // body band over the geometric centre when those widths tie.
-            const offsets = s.mode === 'tram'
-              ? [-0.2, 0.2, -0.1, 0.1, 0]
-              : [0, -0.1, 0.1, -0.2, 0.2];
+            const offsets =
+              s.mode === 'tram'
+                ? [-0.2, 0.2, -0.1, 0.1, 0]
+                : [0, -0.1, 0.1, -0.2, 0.2];
             for (const offset of offsets) {
               const candidates = [];
               let solid = true,

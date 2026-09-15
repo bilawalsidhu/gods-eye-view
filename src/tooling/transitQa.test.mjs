@@ -469,7 +469,10 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
   };
   const tramStart = readRows.length;
   assert.equal((await sampleTransitPixels(page, {})).length, 1);
-  assert.ok(readRows[tramStart] > 204, 'equal-width tram bands prefer the upper solid body');
+  assert.ok(
+    readRows[tramStart] > 204,
+    'equal-width tram bands prefer the upper solid body',
+  );
   sampledLayer._transitStateForTest = originalState;
   scene.pick = () => ({ id: 'overlapping-label' });
   assert.equal(
