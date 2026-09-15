@@ -359,14 +359,38 @@ test('a layer whose detectable set changed dirties the solve', async () => {
   assert.match(hook, /if \(_mode === MODE_OFF\) return;/,
     'and it stays inert while detection is off');
 
-  const manager = await readFile(new URL('./manager.js', import.meta.url), 'utf8');
-  assert.match(manager, /import \{ markDetectionSourcesChanged \} from '\.\/detection\.js';/);
-  // Both discrete events that can change the detectable set, next to the render
-  // request each already made.
-  assert.match(manager, /governorRequestRender\(`layer-tick:\$\{layerId\}`\);[\s\S]{0,700}?markDetectionSourcesChanged\(`layer-tick:\$\{layerId\}`\);/,
-    'a poll tick marks the solve dirty alongside its render request');
-  assert.match(manager, /governorRequestRender\('layer-visibility'\);[\s\S]{0,400}?markDetectionSourcesChanged\('layer-visibility'\);/,
-    'so does a layer appearing or disappearing');
+  const { LayerLifecycle } = await import('./lifecycle.js');
+  const { LayerPresentation } = await import('../app/layerPresentation.js');
+  const manager = new LayerLifecycle({});
+  const reactions = [];
+  const presentation = new LayerPresentation(manager, {
+    requestRender: (reason) => reactions.push(['render', reason]),
+    invalidateDetection: (reason) => reactions.push(['detection', reason]),
+  });
+  let result = true;
+  manager.register({ id: 'fixture', name: 'Fixture', updateInterval: 0,
+    init() {}, enable() {}, disable() {}, destroy() {},
+    update() { if (result instanceof Error) throw result; return result; },
+    getStats() { return { count: 1 }; },
+  });
+  await manager.setEnabled('fixture', true);
+  assert.deepEqual(reactions, [['render', 'layer-visibility'], ['detection', 'layer-visibility']]);
+  reactions.length = 0;
+  await manager.refreshLayer('fixture');
+  assert.deepEqual(reactions, [['render', 'layer-tick:fixture'], ['detection', 'layer-tick:fixture']]);
+  reactions.length = 0;
+  result = false;
+  await manager.refreshLayer('fixture');
+  assert.deepEqual(reactions, [['render', 'layer-tick:fixture'], ['detection', 'layer-tick:fixture']], 'partial/rejected updates still invalidate detection');
+  reactions.length = 0;
+  result = new Error('fixture update failure');
+  await manager.refreshLayer('fixture');
+  assert.deepEqual(reactions, [], 'throwing updates do not publish changed data');
+  result = true;
+  await manager.setEnabled('fixture', false);
+  assert.deepEqual(reactions, [['render', 'layer-visibility'], ['detection', 'layer-visibility']]);
+  presentation.destroy();
+  await manager.destroyAll();
 });
 
 test('the render-governor gate covers the parked case, with teeth on the painter', async () => {

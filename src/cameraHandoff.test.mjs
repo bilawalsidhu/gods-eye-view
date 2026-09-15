@@ -1,3 +1,5 @@
+import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
+import { readLayerSource } from './testSupport/readLayerSource.mjs';
 import { StyleManager } from './ui/applicationShell.js';
 import { enter as cockpitEnter, navigateContext } from './ui/cockpitTrackingController.js';
 import { CockpitViewController } from './ui/cockpitController.js';
@@ -8,17 +10,17 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'applicationShell.js'), 'utf8');
-const firms = fs.readFileSync(path.join(ROOT, 'src', 'data', 'firmsHeatmap.js'), 'utf8');
-const vessels = fs.readFileSync(path.join(ROOT, 'src', 'data', 'aisLiveVessels.js'), 'utf8');
+const ui = readShellSource();
+const firms = readLayerSource(path.join(ROOT, 'src', 'data', 'firmsHeatmap.js'));
+const vessels = readLayerSource(path.join(ROOT, 'src', 'data', 'aisLiveVessels.js'));
 const voice = fs.readFileSync(path.join(ROOT, 'src', 'voice', 'gevActions.js'), 'utf8');
 const cameraVerbs = fs.readFileSync(path.join(ROOT, 'src', 'cameraVerbs.js'), 'utf8');
 const cockpitTracking = fs.readFileSync(path.join(ROOT, 'src', 'cockpitTracking.js'), 'utf8');
 
 function body(source, pattern, label) {
   const name = pattern.source.match(/^(\w+)/)?.[1];
-  if (source === ui && typeof StyleManager.prototype[name] === 'function') {
-    const method = StyleManager.prototype[name].toString();
+  if (source === ui && typeof shellMethod(name) === 'function') {
+    const method = shellMethod(name).toString();
     return method.slice(method.indexOf(') {') + 3, -1);
   }
   const match = source.match(pattern);
@@ -173,7 +175,7 @@ test('accepted navigation releases through PR15-aware ownership before flight', 
     'explicit navigation',
   );
   ordered(run, [
-    'cockpitActive: !!this.cockpitView?.active',
+    'cockpitActive: this.isCockpitActive()',
     'stamp: () => this._stampNavigation()',
     'release: () => this._releaseFollowCamera(releaseOptions)',
     'navigate,',
@@ -240,7 +242,7 @@ test('validated voice camera destinations share the UI navigation authority faca
   // The corridor warm is injected the same way the floor READ is — the dolly
   // never reaches into the data layer itself, and the voice dispatch is the one
   // place that binds both.
-  assert.match(voice, /\(lat, lon\) => cachedGroundFloor\(lat, lon\),[\s\S]{0,200}?\(cells\) => warmGroundFloor\(cells\),/);
+  assert.match(voice, /\(lat, lon\) => floorServices\.cachedGroundFloor\(lat, lon\),[\s\S]{0,200}?\(cells\) => floorServices\.warmGroundFloor\(cells\),/);
 });
 
 test('deferred search releases only after its final authority check', () => {
@@ -265,7 +267,7 @@ test('deferred search releases only after its final authority check', () => {
 test('a direct globe gesture retires delayed camera and selection restore only', () => {
   assert.match(
     ui,
-    /this\._initialShareGestureHandler = \(\) => \{[\s\S]*?!this\._resolveInitialShareRestore[\s\S]*?stampInitialShareGesture\(\(options\) => this\._stampNavigation\(options\)\);/,
+    /this\._initialShareGestureHandler = \(\) => \{[\s\S]*?!this\._resolveInitialShareRestore[\s\S]*?stampInitialShareGesture\(\(options\) =>\s*this\.navigation\._stampNavigation\(options\),?\s*\);/,
   );
   assert.match(
     ui,
@@ -299,10 +301,11 @@ test('newer navigation, reset, Cockpit, and teardown share one generation', () =
   const dispose = body(ui, /async dispose\(\) \{([\s\S]*?)\n  \}/, 'dispose');
   ordered(dispose, [
     'this._disposed = true;',
-    'this._stampNavigation();',
+    'this._navigation.destroy();',
     'this._removeWorldRequestFocusListener?.();',
     'await this._contextControls.restoreForDisposal();',
   ], 'dispose invalidation');
+  assert.match(shellMethod('destroy').toString(), /this\._stampNavigation\(\)/);
 });
 
 test('teardown synchronously closes immediate camera entry points', () => {
@@ -381,7 +384,7 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
   }
   const vesselClick = body(
     vessels,
-    /handler\.setInputAction\(\(click\) => \{([\s\S]*?)\n  \}, Cesium\.ScreenSpaceEventType\.LEFT_CLICK\);/,
+    /handler\.setInputAction\(\s*\(click\) => \{([\s\S]*?)\n\s*\},\s*Cesium\.ScreenSpaceEventType\.LEFT_CLICK,?\s*\);/,
     'vessel click',
   );
   ordered(vesselClick, [
@@ -391,7 +394,7 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
   ], 'vessel sibling ownership');
   const vesselFocus = body(
     vessels,
-    /function selectAndFocusVessel\(record\) \{([\s\S]*?)\n\}/,
+    /function selectAndFocusVessel\(record\) \{([\s\S]*?)\n  \}/,
     'vessel focus helper',
   );
   assert.match(vesselFocus, /requestWorldFocus\(\{/);

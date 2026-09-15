@@ -392,7 +392,7 @@ const LAYERS = [
     name: 'military',
     source: 'src/data/militaryFlights.js',
     asset: (() => {
-      const src = fs.readFileSync(path.join(ROOT, 'src/data/militaryFlights.js'), 'utf8');
+      const src = readLayerSource(path.join(ROOT, 'src/data/militaryFlights.js'));
       const m = src.match(/\bconst JET_MODEL_URL = '([^']+)';/);
       assert.ok(m, 'militaryFlights.js: JET_MODEL_URL not found');
       return m[1];
@@ -492,7 +492,7 @@ for (const [klass, spec] of Object.entries(CLASS_MODEL_REAL)) {
 // PLANE_* constants — pin them to the measured meter-scale GLB + flights'
 // calibration so the copies cannot drift.
 test('military layer airplane.glb constants match the measured GLB and flights calibration', () => {
-  const src = fs.readFileSync(path.join(ROOT, 'src/data/militaryFlights.js'), 'utf8');
+  const src = readLayerSource(path.join(ROOT, 'src/data/militaryFlights.js'));
   const grab = (name) => {
     const m = src.match(new RegExp(`\\bconst ${name} = ([\\d.]+);`));
     assert.ok(m, `militaryFlights.js: ${name} not found`);

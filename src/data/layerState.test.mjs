@@ -1,3 +1,5 @@
+import { readShellSource } from '../testSupport/readShellSource.mjs';
+import { expandApplicationHtml } from '../../build/application-html.js';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -156,8 +158,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 16);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 16);
+  assert.equal(REGISTERED_LAYER_IDS.length, 18);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 18);
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.throws(
     () => validateLayerStateRegistry([...LAYER_STATE_REGISTRY, LAYER_STATE_REGISTRY[0]]),
@@ -372,12 +374,12 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
     assert.match(source, /^\s*(?:let |flightState\.)_models3dMode = 'proximity';/m,
       `${name}: and starts in proximity, matching the codec default`);
   }
-  const ui = await readFile(new URL('../ui/applicationShell.js', import.meta.url), 'utf8');
+  const ui = await readShellSource();
   assert.match(ui, /^\s*this\.(?:flightState\.)?_models3dEnabled = true;$/m,
     'ui.js: the DISPLAY rail believes 3D is on before any layer-state sync arrives');
   assert.match(ui, /this\.(?:flightState\.)?_models3dMode = 'proximity';/,
     'ui.js: and believes the mode is proximity');
-  const html = await readFile(new URL('../../index.html', import.meta.url), 'utf8');
+  const html = expandApplicationHtml(await readFile(new URL('../../index.html', import.meta.url), 'utf8'));
   assert.match(html, /class="pp-toggle-btn active" id="models3d-toggle" aria-pressed="true"/,
     'index.html: the 3D button paints lit on first paint, before ui.js runs — and says so');
   assert.match(ui, /this\._models3dBtn\?\.setAttribute\(\s*'aria-pressed',\s*String\(this\.(?:flightState\.)?_models3dEnabled\),?\s*\)/,

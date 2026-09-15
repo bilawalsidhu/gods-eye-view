@@ -37,29 +37,21 @@
 /* Local backend lifecycle on the provider button. Warming reads as busy, not
    broken; a backend that failed to start must not look identical to a ready
    one, which is the whole point of surfacing the state here. */
-.gev-voice-tier-btn[data-backend='starting'] {
+#gev-voice-provider[data-backend='starting'] {
   color: #9fb4c7;
   border-color: rgba(159, 180, 199, 0.5);
   background: rgba(159, 180, 199, 0.1);
 }
-.gev-voice-tier-btn[data-backend='ready'] {
+#gev-voice-provider[data-backend='ready'] {
   color: #7ce8a4;
   border-color: rgba(124, 232, 164, 0.55);
   background: rgba(124, 232, 164, 0.12);
 }
-.gev-voice-tier-btn[data-backend='stopped'],
-.gev-voice-tier-btn[data-backend='unavailable'] {
+#gev-voice-provider[data-backend='stopped'],
+#gev-voice-provider[data-backend='unavailable'] {
   color: #ff9b9b;
   border-color: rgba(255, 155, 155, 0.55);
   background: rgba(255, 155, 155, 0.12);
-}
-
-/* `hidden` has to beat this button's own `display: inline-flex` — the bare
-   attribute selector in the UA sheet loses to a class. Applies when the LOCAL
-   backend is selected and the OpenAI tier/cost controls no longer apply. */
-.gev-voice-tier-btn[hidden],
-.gev-voice-cost-value[hidden] {
-  display: none;
 }
 
 .gev-voice-tier-btn:hover {
@@ -103,5 +95,11 @@
 /* The dock collapses the kicker/readout when a tray is open — the cost
    cluster follows the same rule so the row never overflows. */
 #command-dock.tray-open .gev-voice-cost {
+  display: none;
+}
+
+/* Author-level display rules must yield when provider capabilities hide these. */
+.gev-voice-tier-btn[hidden],
+.gev-voice-cost-value[hidden] {
   display: none;
 }

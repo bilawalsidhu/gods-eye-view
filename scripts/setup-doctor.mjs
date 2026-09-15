@@ -4,10 +4,11 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { projectRoot } from './project-root.mjs';
 import { selectMapStartupRoute } from '../src/mapStartup.js';
 import { setupLocalVoice } from './setup-local-voice.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = projectRoot(import.meta.url);
 
 export const CREDENTIALS = Object.freeze([
   { name: 'GOOGLE_MAPS_API_KEY', label: 'Google Maps', keychain: [['google-maps-api', 'api-key'], ['google-maps-api', 'default'], ['google-maps-api', 'key']] },
@@ -174,7 +175,7 @@ export function inspectLocalVoice({
   }
 }
 
-export function inspectSetup({ includeKeychain = true, authoritativeEnvironment = false } = {}) {
+export function inspectSetup({ includeKeychain = true, authoritativeEnvironment = false, rootDir = ROOT } = {}) {
   const node = classifyNodeVersion();
   const npm = npmProcessSpec();
   const npmResult = spawnSync(npm.command, ['--version'], {
@@ -183,9 +184,9 @@ export function inspectSetup({ includeKeychain = true, authoritativeEnvironment 
   });
   const credentials = Object.fromEntries(CREDENTIALS.map((spec) => [
     spec.name,
-    resolveCredential(spec, { includeKeychain, authoritativeEnvironment }),
+    resolveCredential(spec, { includeKeychain, authoritativeEnvironment, rootDir }),
   ]));
-  const dependenciesInstalled = hasRequiredDependencies();
+  const dependenciesInstalled = hasRequiredDependencies(rootDir);
   return {
     ready: node.level !== 'error' && npmResult.status === 0 && dependenciesInstalled,
     node: { version: process.versions.node, ...node },

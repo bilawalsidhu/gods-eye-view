@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { isPointerFree } from './inputOwnership.js';
 
 export const MAX_TRACKING_CLICK_TRAVEL_PX = 6;
 export const MAX_TRACKING_CLICK_DURATION_MS = 400;
@@ -95,6 +96,9 @@ export function bindTrackingClickGesture(handler, onClick, options = {}) {
     if (pressActive) finishPress(click?.position);
     const gesture = completedGesture || { travelPx: 0, durationMs: 0 };
     completedGesture = null;
+    // A tool owns the pointer: a draw vertex placed over an aircraft is a
+    // vertex, not a track request (src/data/inputOwnership.js).
+    if (!isPointerFree()) return;
     onClick(click, gesture);
   }, eventTypes.LEFT_CLICK);
 }

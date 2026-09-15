@@ -1,3 +1,7 @@
+import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
+import { readShellSource } from './testSupport/readShellSource.mjs';
+import { expandApplicationHtml } from '../build/application-html.js';
+import { readLayerSource } from './testSupport/readLayerSource.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { readFileSync as readRadioSource } from 'node:fs';
 const radioBindings = readRadioSource(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
@@ -8,23 +12,17 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const ui = readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
-const radio = readFileSync(new URL('./data/radio.js', import.meta.url), 'utf8');
-const rocketLaunches = readFileSync(new URL('./data/rocketLaunches.js', import.meta.url), 'utf8');
-const realtime = readFileSync(new URL('./voice/gevRealtime.js', import.meta.url), 'utf8');
-const voice = ['tools', 'instructions'].map(name => readFileSync(new URL(`../server/providers/openai/${name}.js`, import.meta.url), 'utf8')).join('\n');
+const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+const ui = readShellSource();
+const radio = ['playback', 'interaction'].map(name =>
+  readFileSync(new URL(`./layers/radio/${name}.js`, import.meta.url), 'utf8')
+).join('\n').replace(/layerState\.|parts\.\w+\./g, '');
+const rocketLaunches = readLayerSource(new URL('./data/rocketLaunches.js', import.meta.url), 'utf8');
+const realtime = readFileSync(new URL('./voice/realtimeController.js', import.meta.url), 'utf8');
+const voice = readFileSync(new URL('./voice/actionSchemas.js', import.meta.url), 'utf8') + '\n' + ['toolDescriptions', 'instructions'].map(name => readFileSync(new URL(`../server/providers/openai/${name}.js`, import.meta.url), 'utf8')).join('\n');
 const css = readStylesheet(new URL('../style.css', import.meta.url));
 
-/** Parse the Realtime tool array out of the Vite config as real data. */
-function realtimeTools() {
-  const start = voice.indexOf('const GEV_REALTIME_TOOLS = [');
-  const end = voice.indexOf('\n];', start);
-  assert.ok(start >= 0 && end > start, 'Realtime tool schema block is missing');
-  const literal = voice.slice(start + 'const GEV_REALTIME_TOOLS = '.length, end + 2);
-  // The block is pure data; evaluating it beats regexing nested schemas.
-  return new Function(`return ${literal};`)();
-}
+function realtimeTools() { return GEV_REALTIME_TOOLS; }
 
 test('Realtime schema exposes the authoritative 28-tool inventory', () => {
   const tools = realtimeTools();
@@ -188,7 +186,8 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     .update(JSON.stringify(unchanged))
     .digest('hex')
     .slice(0, 16);
-  assert.equal(digest, '802ed694b8887b88', 'an unchanged Realtime tool definition drifted');
+  // ALPR intentionally extends the two layer enums; retain the complete pin.
+  assert.equal(digest, '6963175a0c9a76de', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {
@@ -340,13 +339,13 @@ test('Radio disclosure is explicit, starts closed while off, and preserves playb
 });
 
 test('successful explicit user playback hands the speaker from voice to Radio', () => {
-  const playStart = radio.indexOf('export async function playSelectedRadio');
-  const playMethod = radio.slice(playStart, radio.indexOf('\n/**', playStart + 10));
+  const playStart = radio.indexOf('async function playSelectedRadio');
+  const playMethod = radio.slice(playStart, radio.indexOf('function confirmRadioPlayback', playStart + 10)).replace(/\s+/g, ' ');
   const confirmedPlaying = playMethod.indexOf("_audioState = 'playing'");
   const takeoverSignal = playMethod.indexOf("if (origin === 'user') emitPlaybackControl('play', origin, ownedAttemptId)");
   assert.ok(confirmedPlaying >= 0 && takeoverSignal > confirmedPlaying);
-  assert.match(radio, /startPlayback: \(\) => playSelectedRadio\(\{ origin: 'voice', attemptId: options\.attemptId \}\)/);
-  assert.match(radio, /selectRadioStation\(stationId, \{ autoplay: true, origin: 'user' \}\)/);
+  assert.match(radio, /startPlayback: \(\) =>\s*playSelectedRadio\(\{\s*origin: 'voice',\s*attemptId: options\.attemptId,?\s*\}\)/);
+  assert.match(radio, /selectRadioStation\(stationId, \{\s*autoplay: true,\s*origin: 'user',?\s*\}\)/);
   assert.match(radioBindings, /togglePlayback\(\{ origin: 'user' \}\)/);
   assert.match(radioBindings, /cycleStation\(direction, \{[\s\S]*?origin: 'user'/);
   assert.match(radioBindings, /commitTuningStation\(station\.id, \{ origin: 'user' \}\)/);

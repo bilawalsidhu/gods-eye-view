@@ -165,3 +165,16 @@ export function normalizeAircraftTrack(
     ];
   });
 }
+
+/** Known source identities are useful for classification even without positions. */
+export function readsbIdentities(payload) {
+  const admitted = admitRecords(
+    payload?.ac,
+    (row) => {
+      const id = cleanText(row?.hex).toLowerCase();
+      return id ? { id } : null;
+    },
+    'aircraft identities',
+  );
+  return admitted.records.map((record) => record.id);
+}

@@ -85,6 +85,7 @@
  * Exits non-zero if ANY invariant fails. DOES NOT COMMIT anything.
  *
  * Flags:
+ *   --source-base <path>  Browser module prefix (default /src)
  *   --url <url>        App URL (default http://localhost:4173)
  *   --headful          Show the browser (debugging)
  *   --keep-open        Leave the browser open after the run (debugging)
@@ -105,6 +106,7 @@ const getOpt = (name, dflt) => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
 };
 
+const SOURCE_BASE = getOpt('--source-base', '/src').replace(/\/$/, '');
 const APP_URL = getOpt('--url', 'http://localhost:4173');
 const APP_ORIGIN = new URL(APP_URL).origin;
 const HEADFUL = getFlag('--headful');
@@ -249,6 +251,7 @@ async function main() {
 
   try {
     const page = await browser.newPage();
+  await page.evaluateOnNewDocument((base) => { window.__gevQaSourceBase = base; }, SOURCE_BASE);
     await page.setViewport({ width: 1280, height: 800 });
     await page.setRequestInterception(true);
     page.on('request', (request) => {
@@ -2655,7 +2658,7 @@ async function main() {
     const arrival = await evalPage(async () => {
       const v = window.__godsEyeView.viewer;
       const dm = window.__godsEyeView.dataManager;
-      const { screenProjectedRotation } = await import('/src/data/iconOrientation.js');
+      const { screenProjectedRotation } = await import(`${window.__gevQaSourceBase || '/src'}/data/iconOrientation.js`);
       // 3D models OFF for this phase: a model-handed-off billboard is hidden
       // and skips rotation updates entirely — the probes need live billboards
       // (this is also the app's default state the field report came from).
@@ -2937,7 +2940,7 @@ async function main() {
       // Read the thresholds from the app's own policy module so a later retune
       // of the swap distance moves these pins with it rather than stranding
       // them on stale numbers.
-      const reg = await import('/src/data/trackedModelRegime.js');
+      const reg = await import(`${window.__gevQaSourceBase || '/src'}/data/trackedModelRegime.js`);
       window.__dfRegime = {
         enter: reg.TRACKED_MODEL_ENTER_ALT_M,
         exit: reg.TRACKED_MODEL_EXIT_ALT_M,
@@ -2983,17 +2986,12 @@ async function main() {
         }
         return window.__dfCountModels(icao);
       };
-      // Vite serves an edited source file as `…/groundFloor.js?t=<hmr stamp>`;
-      // importing the PLAIN path then hands back a second, unrelated module
-      // instance whose cells the app never reads. Offer the URL the app itself
-      // loaded first, then the plain path (clean, never-hot-reloaded server).
-      const seen = performance.getEntriesByType('resource')
-        .map((e) => e.name)
-        .filter((n) => /\/src\/data\/groundFloor\.js(\?|$)/.test(n));
-      window.__dfCandidates = [...new Set([...seen.reverse(), '/src/data/groundFloor.js'])];
+      // Read the application's surface owner, then prove it is the one
+      // used by the actual poll/render path with the unchanged floor seed.
+      window.__dfCandidates = window.__godsEyeView.surfaceServices?.groundFloor ? ['application surface'] : [];
       return { candidates: window.__dfCandidates.length };
     });
-    record('display-floor: groundFloor module URL candidates found', dfSetup.candidates > 0,
+    record('display-floor: ground-floor service owner found', dfSetup.candidates > 0,
       JSON.stringify(dfSetup));
 
     // Identity probe. Seed a contact's FIX cell BEFORE its first fix arrives,
@@ -3009,8 +3007,7 @@ async function main() {
       const tried = [];
       for (let i = 0; i < window.__dfCandidates.length; i++) {
         const url = window.__dfCandidates[i];
-        let gf;
-        try { gf = await import(/* @vite-ignore */ url); } catch { tried.push({ url, h: null }); continue; }
+        const gf = window.__godsEyeView.surfaceServices.groundFloor;
         if (typeof gf.reportMeshFloorCell !== 'function') { tried.push({ url, h: null }); continue; }
         gf.setMeshFloorPreferred(true);
         gf._clearMeshFloorCellsForTest();
@@ -3287,9 +3284,11 @@ async function main() {
         const bbBefore = window.__dfFindBB('aaa097');
         if (!bbBefore) return { error: 'aaa097 billboard missing' };
         const d0 = window.__dfCarto(bbBefore.position);
-        // Plant a floor well ABOVE where it currently renders, across the block
-        // it can move within, so an UNFLOORED tracked entity is unmistakable.
-        const seeded = d0.h + 40;
+        // Plant above both the current billboard and this group's 400 m
+        // identity-probe floor. A poll can refresh the raw render altitude
+        // after d0 was read; a lower seed makes the negative model-ownership
+        // assertion impossible even when the clamp correctly stands aside.
+        const seeded = Math.max(d0.h, 400) + 40;
         for (let dy = -1; dy <= 1; dy++) {
           for (let dx = -1; dx <= 1; dx++) {
             gf.reportMeshFloorCell(cell(d0.lat) + dy * 0.001, cell(d0.lon) + dx * 0.001, seeded);
@@ -3808,27 +3807,11 @@ async function main() {
         const Cesium = await import('/node_modules/cesium/Build/Cesium/index.js');
         const v = window.__godsEyeView.viewer;
         const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
-        // `.module` is the layer OBJECT (the default export), not the module
-        // namespace, so the handoff seam is not on it. Reach the namespace the
-        // same way this group reaches groundFloor's: offer the URL the app
-        // itself loaded (Vite serves an edited file as `…?t=<hmr stamp>`, and
-        // the plain path would hand back a second, unrelated instance whose
-        // module state the app never touches), then prove identity by requiring
-        // its default export to BE the live layer object.
-        let ns = null;
-        const urls = [...new Set([
-          ...performance.getEntriesByType('resource').map((e) => e.name)
-            .filter((n) => /\/src\/data\/flights\.js(\?|$)/.test(n)).reverse(),
-          '/src/data/flights.js',
-        ])];
-        for (const url of urls) {
-          let mod; try { mod = await import(/* @vite-ignore */ url); } catch { continue; }
-          if (mod?.default === fl && typeof mod._driveFleetModelHandoffForTest === 'function') {
-            ns = mod;
-            break;
-          }
-        }
-        if (!ns) return { skipped: `the app's own flights module was not reachable (tried ${urls.length})` };
+        // Test the registered instance directly, including catalogs constructed
+        // with their own sources. Never import a second compatibility instance.
+        const ns = fl.testing;
+        if (typeof ns?._driveFleetModelHandoffForTest !== 'function')
+          return { error: "the registered flights instance has no handoff test seam" };
         // Use a scenario-owned contact so its groundSnap entry is provably cold;
         // earlier display-floor cases intentionally exercise aaa097's cache.
         const holdIcao = 'aaa098';

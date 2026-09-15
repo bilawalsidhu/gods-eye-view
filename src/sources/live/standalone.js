@@ -9,6 +9,7 @@ import {
   normalizeAircraftTrack,
   openSkySnapshot,
   readsbSnapshot,
+  readsbIdentities,
 } from './aircraft.js';
 import { normalizeVesselTrack, vesselSnapshot } from './vessels.js';
 
@@ -113,6 +114,16 @@ export function createAdsbLolSource({
 } = {}) {
   return {
     label: 'adsb.lol',
+    async getIdentities(_query = {}, { signal } = {}) {
+      const { response, payload } = await readResponse(
+        fetchImpl,
+        '/api/adsblol/mil',
+        { signal },
+        'adsb.lol',
+      );
+      if (!response.ok) throw httpError(response, 'adsb.lol');
+      return readsbIdentities(payload);
+    },
     async getSnapshot(_query = {}, { signal } = {}) {
       const { response, payload } = await readResponse(
         fetchImpl,

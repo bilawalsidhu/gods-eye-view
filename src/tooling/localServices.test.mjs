@@ -282,3 +282,31 @@ test('key setup writes only the supplied application root, retains request guard
   assert.equal(saved.body.includes('sk-fixture-only-not-a-real-key'), false);
   assert.equal(existsSync(path.join(untouched, '.env')), false);
 });
+
+test('Realtime service configuration selects compatible endpoint/model without forwarding request model IDs or keys', async () => {
+  const handler = install(
+    openAiRealtimeProxy({
+      realtime: {
+        endpoint: 'https://voice.example/client-secrets',
+        models: { standard: 'configured-model' },
+        resolveApiKey: () => 'server-fixture',
+        fetchImpl: async (url, options) => {
+          assert.equal(url, 'https://voice.example/client-secrets');
+          assert.equal(options.redirect, 'error');
+          assert.equal(options.headers.Authorization, 'Bearer server-fixture');
+          const payload = JSON.parse(options.body);
+          assert.equal(payload.session.model, 'configured-model');
+          assert.deepEqual(payload.session.tools, GEV_REALTIME_TOOLS);
+          return Response.json({ value: 'short-lived-fixture' });
+        },
+      },
+    }),
+  ).get('/api/realtime/token');
+  const response = await request(handler, {
+    url: '/?tier=arbitrary-model&model=other',
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers['x-gev-voice-model'], 'configured-model');
+  assert.equal(response.headers['cache-control'], 'no-store');
+  assert.doesNotMatch(response.body, /server-fixture|voice\.example/);
+});
