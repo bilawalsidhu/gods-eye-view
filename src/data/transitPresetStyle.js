@@ -53,7 +53,7 @@ const SPRITE_STYLE = Object.freeze({
   mono: Object.freeze({
     rgba: Object.freeze([255, 255, 255, 1]),
     scale: 1.4,
-    outlinePx: 2,
+    outlinePx: 2.5,
   }),
   crt: Object.freeze({
     scale: 1.3,

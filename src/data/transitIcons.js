@@ -191,8 +191,8 @@ export function transitIcon(kind, px = FLEET_RASTER_PX, options = {}) {
     const size = VIEW + 2 * frame.pad;
     // Sensor signatures use a broad rounded envelope, without dark interior
     // joints or a second outline eating into the hot core at display resolution.
-    const halfW = k === 'bus' || k === 'ferry' || k === 'unknown' ? 46 : 45;
-    const halfH = 46;
+    const halfW = k === 'bus' || k === 'ferry' || k === 'unknown' ? 48 : 47;
+    const halfH = 48;
     const radius = k === 'subway' ? 8 : k === 'rail' ? 12 : 14;
     const capsule = `<path d="M${-halfW + radius},${-halfH} H${halfW - radius} Q${halfW},${-halfH} ${halfW},${-halfH + radius} V${halfH - radius} Q${halfW},${halfH} ${halfW - radius},${halfH} H${-halfW + radius} Q${-halfW},${halfH} ${-halfW},${halfH - radius} V${-halfH + radius} Q${-halfW},${-halfH} ${-halfW + radius},${-halfH} Z" fill="white" />`;
     const body = profile === 'mono' ? capsule : BODIES[k];

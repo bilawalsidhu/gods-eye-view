@@ -1,5 +1,7 @@
 # Changelog
 
+- Widen opaque sensor halos to 2.5 display pixels while retaining at least 60% opaque core coverage, adding contrast margin on bright roofs.
+
 - Exclude Noir's intentionally vignetted outer field from transit core measurements and add separate Boston live oblique selection/readability coverage.
 
 - Judge NVG transit readability by phosphor peak and halo contrast, use opaque black sensor halos, reject overlapping pixel samples, and report each selected-trail acceptance condition. Simplify transit source credits and ground-placement wording.

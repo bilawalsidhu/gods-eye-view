@@ -2549,7 +2549,7 @@ visual inspection.
 
 **Appearance.** Normal fleet frames are 20 px, growing to 30 px on selection;
 NVG, thermal and noir frames are 28/36 px. Source rasters are 48/96 px before padding.
-External halos are 1/1.5 px in normal and 2/2 px in sensors, calculated from the
+External halos are 1/1.5 px in normal and 2.5/2.5 px in sensors, calculated from the
 final unpadded display size. Six modes, two sizes and three profiles cap the
 raster cache at 36 variants. Normal mode colours are bus `#5EF08A`, tram
 `#FFC24A`, subway `#FF4538`, rail `#D9A6FF`, ferry `#5FD6FF`, and unknown
