@@ -269,6 +269,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Added
 
+- Add MODIS NRT (Terra+Aqua, ~1 km) active fires to the FIRMS layer, sharing the
+  existing `FIRMS_MAP_KEY` and 30-minute cache.
 - Two map-orientation controls sit beside Share in the top-center globe
   actions. Tilt Map swings between a straight-down map and a 35-degree oblique
   around the point under the centre of the view, keeping that point and the
