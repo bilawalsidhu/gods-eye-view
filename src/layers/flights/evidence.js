@@ -50,10 +50,10 @@ export function createEvidence({
     for (const bb of flightState._billboards.values())
       flightState._billboardCollection.remove(bb);
     flightState._billboards.clear();
-    flightState._flightData.clear();
+    flightState.records.data.clear();
     flightState._positionHistory.clear();
     flightState._displayCourse.clear();
-    flightState._missingPolls.clear();
+    flightState.records.missingPolls.clear();
     flightState._focusEvidenceIds.clear();
 
     for (const record of Array.isArray(records) ? records : []) {
@@ -79,9 +79,9 @@ export function createEvidence({
         lastContactEpochMs: Date.now(),
         rawLat: record.latitude ?? null,
         rawLon: record.longitude ?? null,
-        cullPosition: null,
       };
-      flightState._flightData.set(id, meta);
+      flightState.records.data.set(id, meta);
+      flightState._cullPositions.delete(id);
       flightState._focusEvidenceIds.add(id);
       const bb = flightState._billboardCollection.add({
         position,
@@ -100,10 +100,10 @@ export function createEvidence({
       });
       flightState._billboards.set(id, bb);
     }
-    flightState._count = flightState._billboards.size;
+    flightState.feed._count = flightState._billboards.size;
     flightState._lastFleetTickMs = 0;
     flightState._viewer.scene.requestRender?.();
-    return { ok: true, count: flightState._count };
+    return { ok: true, count: flightState.feed._count };
   }
 
   /** Update explicit evidence positions without rebuilding billboards. */
@@ -120,7 +120,7 @@ export function createEvidence({
       const bb = flightState._billboards.get(id);
       if (!position || !bb) continue;
       bb.position = position;
-      const meta = flightState._flightData.get(id);
+      const meta = flightState.records.data.get(id);
       if (meta) {
         if (Number.isFinite(record.trackDeg)) meta.true_track = record.trackDeg;
         if (Number.isFinite(record.velocityMps))

@@ -6,9 +6,9 @@ export function createController({
   resolveAsset,
 }) {
   function _abortActiveUpdates() {
-    for (const controller of flightState._activeUpdateControllers)
+    for (const controller of flightState.feed._activeUpdateControllers)
       controller.abort();
-    flightState._activeUpdateControllers.clear();
+    flightState.feed._activeUpdateControllers.clear();
   }
   return { _abortActiveUpdates };
 }

@@ -805,9 +805,49 @@ export function advanceRouteFlight(state, dt) {
 
 let _viewer = null;
 let _getTarget = null;
-let _active = null; // { kind, motion, direction, speed, mode, ...state }
+let _active = null; // { kind, motion, direction, speed, mode, motionId, ...state }
 let _tickRemover = null;
 let _inputRemovers = [];
+/** Monotonic id for the motion currently running; 0 means "no motion". */
+let _motionSeq = 0;
+
+/**
+ * Install a motion and stamp it with a fresh id. The id is what lets a caller
+ * that started a flight stop THAT flight later without stopping whatever has
+ * replaced it in the meantime.
+ * @param {object|null} state Motion state, or null to clear.
+ * @returns {object|null} The installed state.
+ */
+function setActiveMotion(state) {
+  if (state) {
+    _motionSeq += 1;
+    state.motionId = _motionSeq;
+  }
+  _active = state;
+  return state;
+}
+
+/**
+ * @returns {number} Id of the running motion, or 0 when the camera is idle.
+ */
+export function activeCameraMotionId() {
+  return _active?.motionId || 0;
+}
+
+/**
+ * Stop a motion only while it is still the one running. A feature that owns a
+ * flight calls this on clear/teardown: if the user (or voice, or a tracked
+ * entity) has since taken the camera, the newer motion is left alone.
+ * @param {number} motionId Id returned when the motion started.
+ * @param {string} [reason] Diagnostic label.
+ * @returns {{wasActive: boolean, reason: string, leveled: boolean}}
+ */
+export function interruptCameraMotionIfActive(motionId, reason = 'owner-cancel') {
+  if (!motionId || _active?.motionId !== motionId) {
+    return { wasActive: false, reason, leveled: false };
+  }
+  return interruptCameraMotion(reason);
+}
 
 function clearLookAt() {
   try { _viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY); } catch { /* teardown race */ }
@@ -856,7 +896,10 @@ export function interruptCameraMotion(reason = 'interrupt') {
 /** Diagnostics / harness hook. */
 export function getActiveCameraMotion() {
   if (!_active) return null;
-  const info = { kind: _active.kind, mode: _active.mode, speed: _active.speed };
+  const info = {
+    kind: _active.kind, mode: _active.mode, speed: _active.speed,
+    motionId: _active.motionId || 0,
+  };
   if (_active.kind === 'route') {
     info.progress = _active.u;
     info.bankDeg = _active.bankDeg;
@@ -968,11 +1011,26 @@ function onTick() {
   }
 }
 
-/** Wire the module to the viewer once (idempotent). */
-export function initCameraVerbs(viewer, getViewTargetCartesian) {
-  if (_viewer === viewer) return;
+/**
+ * Wire the module to the viewer once (idempotent). The view-target getter is
+ * optional so a non-voice caller (the Directions FLY chip) can arm route
+ * flights before any voice session exists; a later call with a real getter
+ * installs it, and a call without one, FOR THE SAME VIEWER, never clears an
+ * installed getter.
+ *
+ * A getter closes over the viewer it was built for. When the viewer changes —
+ * a new application lifetime — the previous getter is dropped even if this
+ * call brings none, so a callback from the old viewer can never answer for the
+ * new one.
+ */
+export function initCameraVerbs(viewer, getViewTargetCartesian = null) {
+  const nextTarget = typeof getViewTargetCartesian === 'function' ? getViewTargetCartesian : null;
+  if (_viewer === viewer) {
+    if (nextTarget) _getTarget = nextTarget;
+    return;
+  }
+  _getTarget = nextTarget;
   _viewer = viewer;
-  _getTarget = getViewTargetCartesian;
   if (_tickRemover) _tickRemover();
   _tickRemover = viewer.clock.onTick.addEventListener(onTick);
   for (const rm of _inputRemovers) rm();
@@ -1045,7 +1103,7 @@ export function moveCamera(args = {}, runNavigation = null) {
         // A camera flight is in progress ("fly to X and orbit it") — ALWAYS arm
         // and capture at the destination; a target existing right now is
         // meaningless (the globe is always under the crosshair).
-        _active = { kind: 'orbit', direction: direction || 'right', speed, mode, pending: true };
+        setActiveMotion({ kind: 'orbit', direction: direction || 'right', speed, mode, pending: true });
         holdContinuousRender('camera-verb');
         return { ok: true, action: 'move_camera', motion, direction: direction || 'right', speed, mode, armed: 'waiting-for-arrival' };
       }
@@ -1053,7 +1111,7 @@ export function moveCamera(args = {}, runNavigation = null) {
       if (!target) {
         // Mid-flight chain ("fly to X and orbit it"): ARM the orbit — the tick
         // loop keeps trying for a ground target as the flight settles.
-        _active = { kind: 'orbit', direction: direction || 'right', speed, mode, pending: true };
+        setActiveMotion({ kind: 'orbit', direction: direction || 'right', speed, mode, pending: true });
         holdContinuousRender('camera-verb');
         return { ok: true, action: 'move_camera', motion, direction: direction || 'right', speed, mode, armed: 'waiting-for-arrival' };
       }
@@ -1068,7 +1126,7 @@ export function moveCamera(args = {}, runNavigation = null) {
       state.hpr = new Cesium.HeadingPitchRange(cam.heading, pitch, range);
       state.hprStartHeading = cam.heading;
     }
-    _active = state;
+    setActiveMotion(state);
     // Verb motion drives the camera per clock tick — hold until interrupted;
     // interruptCameraMotion is the single release path. (perf wave 2)
     holdContinuousRender('camera-verb');
@@ -1136,7 +1194,7 @@ export function flyRoute(annoList, args = {}, floorFn = null, runNavigation = nu
   }
   const start = () => {
     interruptCameraMotion('replaced');
-    _active = createRouteFlight({
+    setActiveMotion(createRouteFlight({
       pts,
       cumM,
       speed,
@@ -1145,12 +1203,15 @@ export function flyRoute(annoList, args = {}, floorFn = null, runNavigation = nu
       probeFn: (cells) => probeMeshFloorM(_viewer?.scene, cells),
       cameraHeightM: _viewer?.camera?.positionCartographic?.height,
       reducedMotion: prefersReducedMotion(),
-    });
+    }));
     holdContinuousRender('camera-verb');
     return {
       ok: true, action: 'fly_route', label: route.label || null, speed,
       distanceM: Math.round(_active.totalM), durationS: Math.round(_active.durationS),
       waypoints: pts.length,
+      // The caller keeps this so it can stop ITS flight later without stopping
+      // whatever has replaced it (see interruptCameraMotionIfActive).
+      motionId: _active.motionId,
     };
   };
   return typeof runNavigation === 'function' ? runNavigation(start) : start();

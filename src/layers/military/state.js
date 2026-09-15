@@ -1,10 +1,16 @@
+import { MilitaryFlightRecords } from './records.js';
+import { createMilitaryFeed } from './ingestion.js';
 import * as Cesium from 'cesium';
 
 export function createFlightState({ source, services }) {
   const { createGroundSnap } = services.groundSnap;
   const flightState = { lifetime: new AbortController() };
-
-  flightState._source = source;
+  flightState.feed = createMilitaryFeed(source);
+  flightState.records = new MilitaryFlightRecords({
+    ...services.geoid,
+    ...services.groundFloor,
+  });
+  flightState._cullPositions = new Map();
 
   /** Per-class model spec for THIS layer (2026-08-16, owner playtest ask:
    *  military contacts should read as their WEIGHT CLASS, always in this layer's
@@ -102,49 +108,9 @@ export function createFlightState({ source, services }) {
 
   flightState._detectionObjects = new Map();
 
-  /** @type {Map<string, Object>} ICAO hex -> flight metadata (callsign, type, registration, operator, altitudeFt, speedMps, track) */
-
-  flightState._flightData = new Map();
-
   /** @type {Map<string, Array<{time: Cesium.JulianDate, position: Cesium.Cartesian3}>>} ICAO hex -> recent position samples for dead reckoning */
 
   flightState._positionHistory = new Map();
-
-  /** @type {number} Current number of visible aircraft */
-
-  flightState._count = 0;
-
-  /** @type {number|null} Epoch ms of last successful API update */
-
-  flightState._lastUpdate = null;
-
-  /** @type {boolean} True when in error-backoff mode */
-
-  flightState._backoff = false;
-
-  /** @type {number} Epoch ms after which the next retry is allowed */
-
-  flightState._retryAt = 0;
-
-  /** @type {string|null} Human-readable description of the last error */
-
-  flightState._lastError = null;
-
-  flightState._activeUpdateControllers = new Set();
-
-  /** @type {number|null} HTTP status code from the last API response */
-
-  flightState._lastStatus = null;
-
-  flightState._lastSource = source?.label || 'Aircraft';
-
-  /** @type {boolean} True once ensureGeoidReady() has resolved (awaited once at enable()). Mirror of flights.js. */
-
-  flightState._geoidReady = false;
-
-  /** @type {Map<string, number>} icao24 -> geoid undulation N (m), cached (negligible drift per-aircraft). */
-
-  flightState._geoidNCache = new Map();
 
   // -- Click-to-track state --
   /** @type {string|null} ICAO hex of the currently tracked aircraft */
@@ -154,15 +120,6 @@ export function createFlightState({ source, services }) {
   flightState._pendingTrackingRestore = null;
 
   flightState._trackingIntentGeneration = 0;
-
-  flightState._trackingRefreshEpoch = 0;
-
-  flightState._lastTrackingRefreshOutcome = {
-    epoch: 0,
-    status: 'unavailable',
-    ids: new Set(),
-    source: flightState._lastSource,
-  };
 
   /** @type {Cesium.Entity|null} Entity created for the tracked aircraft (camera follows this) */
 
@@ -225,10 +182,6 @@ export function createFlightState({ source, services }) {
   /** @type {number} Monotonic token — invalidates in-flight backfill responses */
 
   flightState._trailBackfillToken = 0;
-
-  /** @type {Map<string, number>} icao24 -> consecutive missed polls */
-
-  flightState._missingPolls = new Map();
 
   /** @type {number} Epoch ms of the last fleet dead-reckoning pass */
 

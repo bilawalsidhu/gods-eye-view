@@ -890,7 +890,7 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
   let viewport = result?.viewport || null;
 
   // Nearby landmark recovery retains precedence over a fallback geocoder hit.
-  const recovered = await placesNearViewRecovery(
+  const recovered = await (options.recoverNearView || placesNearViewRecovery)(
     viewer,
     query,
     result && !outcome.fallbackUsed ? { lat, lon: lng } : null,
@@ -981,7 +981,7 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
 
   const shouldResolveBuilding = navigationMode === 'precise-place';
   const buildingBounds = shouldResolveBuilding
-    ? await resolveBuildingBounds(lat, lng, query)
+    ? await resolveBuildingBounds(lat, lng, query, options.boundaries)
     : null;
   const range = requestedRange || defaultRangeForNavigationMode(navigationMode);
   if (!mayFly()) return CANCELLED_SEARCH;
@@ -1426,7 +1426,7 @@ function buildingPitch(bounds) {
   return -32;
 }
 
-async function resolveBuildingBounds(lat, lon, query) {
+async function resolveBuildingBounds(lat, lon, query, boundaries = applicationServices.boundaries) {
   const overpassQuery = `
     [out:json][timeout:10];
     (
@@ -1442,7 +1442,7 @@ async function resolveBuildingBounds(lat, lon, query) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 6000);
   try {
-    const elements = await applicationServices.boundaries.query(overpassQuery, { signal: controller.signal });
+    const elements = await boundaries.query(overpassQuery, { signal: controller.signal });
     return selectBuildingBounds(Array.isArray(elements) ? elements : [], lat, lon, query);
   } catch {
     return null;

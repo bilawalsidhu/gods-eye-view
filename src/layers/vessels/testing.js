@@ -33,15 +33,15 @@ export function createTesting({
     components.lifecycle.resetState();
     const records = Array.isArray(options.records) ? options.records : [];
     state.viewer = options.viewer || null;
-    state.enabled = options.enabled !== false;
-    state.loaded = options.loaded === true;
-    state.loading = options.loading === true;
-    state.stale = options.stale === true;
-    state.error = options.error || null;
-    state.lastUpdate = options.lastUpdate ?? null;
-    state.vesselRecords = records;
-    state.count = records.length;
-    state.vesselMap = new Map(
+    state.feed.enabled = options.enabled !== false;
+    state.feed.loaded = options.loaded === true;
+    state.feed.loading = options.loading === true;
+    state.feed.stale = options.stale === true;
+    state.feed.error = options.error || null;
+    state.feed.lastUpdate = options.lastUpdate ?? null;
+    state.records.all = records;
+    state.feed.count = records.length;
+    state.records.byMmsi = new Map(
       records
         .filter((record) => record?.mmsi)
         .map((record) => [record.mmsi, record]),
@@ -53,17 +53,17 @@ export function createTesting({
     state.trailPositions = Array.isArray(options.trailPositions)
       ? [...options.trailPositions]
       : [];
-    state.transportStatus = options.transportStatus || null;
-    state.lastMessageAt = options.lastMessageAt ?? null;
-    state.rawRowCount = Number.isFinite(options.rawRowCount)
+    state.feed.transportStatus = options.transportStatus || null;
+    state.feed.lastMessageAt = options.lastMessageAt ?? null;
+    state.feed.rawRowCount = Number.isFinite(options.rawRowCount)
       ? options.rawRowCount
       : 0;
-    state.acceptedRowCount = Number.isFinite(options.acceptedRowCount)
+    state.feed.acceptedRowCount = Number.isFinite(options.acceptedRowCount)
       ? options.acceptedRowCount
       : records.length;
-    state.firstConnectPhase = options.firstConnectPhase || 'idle';
-    state.firstConnectStartedAt = options.firstConnectStartedAt ?? null;
-    state.firstConnectDeadline = options.firstConnectDeadline ?? null;
+    state.feed.firstConnectPhase = options.firstConnectPhase || 'idle';
+    state.feed.firstConnectStartedAt = options.firstConnectStartedAt ?? null;
+    state.feed.firstConnectDeadline = options.firstConnectDeadline ?? null;
     state.interactionHandlerFactory = options.interactionHandlerFactory || null;
     state.interactionKeyTarget = options.interactionKeyTarget || null;
   }
@@ -89,7 +89,7 @@ export function createTesting({
    */
 
   function _reconcileVesselsForTest(viewer, rows) {
-    components.store.reconcileVessels(viewer, rows);
+    components.snapshots.reconcileVessels(viewer, rows);
   }
 
   /** Apply one server snapshot through the production pre-reconcile health gate. */
@@ -128,25 +128,25 @@ export function createTesting({
   function _getVesselFeedStateForTest() {
     const stats = aisLiveVesselsLayer.getStats();
     return {
-      count: state.count,
-      loaded: state.loaded,
+      count: state.feed.count,
+      loaded: state.feed.loaded,
       loading: stats.loading,
       loadingLabel: stats.loadingLabel,
-      stale: state.stale,
-      error: state.error,
+      stale: state.feed.stale,
+      error: state.feed.error,
       status: stats.status,
-      lastUpdate: state.lastUpdate,
-      transportStatus: state.transportStatus,
-      lastMessageAt: state.lastMessageAt,
-      rawRowCount: state.rawRowCount,
-      acceptedRowCount: state.acceptedRowCount,
+      lastUpdate: state.feed.lastUpdate,
+      transportStatus: state.feed.transportStatus,
+      lastMessageAt: state.feed.lastMessageAt,
+      rawRowCount: state.feed.rawRowCount,
+      acceptedRowCount: state.feed.acceptedRowCount,
       selectedMmsi: state.selectedRecord?.mmsi || null,
       trailMmsi: state.trailMmsi,
       trailPositionCount: state.trailPositions.length,
-      sessionId: state.sessionId,
-      firstConnectPhase: state.firstConnectPhase,
-      firstConnectStartedAt: state.firstConnectStartedAt,
-      firstConnectDeadline: state.firstConnectDeadline,
+      sessionId: state.feed.sessionId,
+      firstConnectPhase: state.feed.firstConnectPhase,
+      firstConnectStartedAt: state.feed.firstConnectStartedAt,
+      firstConnectDeadline: state.feed.firstConnectDeadline,
     };
   }
 
@@ -160,7 +160,7 @@ export function createTesting({
     return {
       trailMmsi: state.trailMmsi,
       trailPositionCount: state.trailPositions.length,
-      vesselCount: state.vesselMap.size,
+      vesselCount: state.records.byMmsi.size,
     };
   }
   return {

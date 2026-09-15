@@ -30,21 +30,36 @@ Next iteration candidates:
 
 ---
 
-### CCTV panel can appear "missing" after layout refactors
+### CCTV panel can appear "missing"
 Status: Open (workaround available)
 
 Context:
-- Panel positions are persisted in local storage and can restore off-screen after UI changes.
+- The rails lay their panels out themselves. No panel is dragged into place at
+  startup and no stored position is read, so a panel that looks missing is
+  collapsed or its layer is off rather than parked off-screen. The CCTV panel
+  starts collapsed and stays that way until you open it or a camera activates.
 
 Workaround:
-- In browser console:
-  - `localStorage.removeItem('godsEyeView.v6.panelPos.cctv-panel');`
+- Check that the CCTV layer is enabled in the Layers panel, then open the panel
+  from its header control; it also opens on its own when a camera activates.
+- To force it open on an ordinary load, store the expanded state and reload. In
+  the browser console:
+  - `localStorage.setItem('godsEyeView.v6.panelCollapsed.cctv-panel', '0');`
+  - `location.reload();`
+- Removing that key instead returns the panel to its default, which is collapsed:
   - `localStorage.removeItem('godsEyeView.v6.panelCollapsed.cctv-panel');`
   - `location.reload();`
+- Neither console line changes anything when the page was opened from a share
+  link: a shared view is laid out from the link, not from what this browser has
+  stored, so open the panel from its header control instead.
 
 Related keys (current versions):
-- Panel positions: `godsEyeView.v7.panelPos.<panel-id>` (re-versioned 2026-06-10)
-- Panel collapsed state: `godsEyeView.v6.panelCollapsed.<panel-id>`
+- Panel collapsed state: `godsEyeView.v6.panelCollapsed.<panel-id>` — `'0'` open,
+  `'1'` closed, absent means the panel's own default. A view opened from a share
+  link ignores the stored value entirely.
+- Panel positions: `godsEyeView.v8.panelPos.<panel-id>` — the versioned name for a
+  stored position. The current layout writes none, so deleting one changes
+  nothing.
 - CCTV calibration: `godsEyeView.cctv.calibration.v2`
 
 ---

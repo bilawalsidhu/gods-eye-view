@@ -1,3 +1,4 @@
+import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
 import { StyleManager } from './ui/applicationShell.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,7 +7,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'applicationShell.js'), 'utf8');
+const ui = readShellSource();
 const director = fs.readFileSync(path.join(ROOT, 'src', 'scenes', 'director.js'), 'utf8');
 
 /** Source of the free-text LOCATION search handler (Enter on #location-search). */
@@ -69,13 +70,13 @@ test('any other camera destination clears the search label too', () => {
   // label outlives the place it named.
   const start = ui.indexOf('  _stampNavigation(');
   assert.ok(start > 0, '_stampNavigation is missing');
-  assert.match(StyleManager.prototype._stampNavigation.toString(), /if \(clearSearchedLocation\) this\.clearSearchedLocation\(\);/);
+  assert.match(shellMethod('_stampNavigation').toString(), /if \(clearSearchedLocation\) this\.clearLocation\(\);/);
 
   // The shared funnel is what the reset and voice seams actually reach.
   for (const seam of ['resetToGlobeView() {', 'beginLocationNavigation() {', '_runExplicitNavigation(']) {
     const at = ui.indexOf(seam);
     assert.ok(at > 0, `missing navigation seam "${seam}"`);
-    assert.match(StyleManager.prototype[seam.match(/^(\w+)/)[1]].toString(), /_stampNavigation\(/, `"${seam}" must stamp navigation`);
+    assert.match(shellMethod(seam.match(/^(\w+)/)[1]).toString(), /_stampNavigation\(/, `"${seam}" must stamp navigation`);
   }
 
   // Public seam, so a camera owner that flies on its own can invalidate it.
@@ -90,7 +91,7 @@ test('a deferred lookup that never flies leaves the readout standing', () => {
   const begin = ui.indexOf('  _beginDeferredNavigation(');
   assert.ok(begin > 0, '_beginDeferredNavigation is missing');
   assert.match(
-    StyleManager.prototype._beginDeferredNavigation.toString(),
+    shellMethod('_beginDeferredNavigation').toString(),
     /stamp: \(\) =>\s*this\._stampNavigation\(\{\s*cancelPendingSelection,\s*clearSearchedLocation: false,?\s*\}\)/,
   );
 
@@ -98,7 +99,7 @@ test('a deferred lookup that never flies leaves the readout standing', () => {
   assert.ok(reassert > 0, '_reassertNavigationHandoff is missing');
   assert.match(
     ui.slice(reassert, reassert + 900),
-    /release: \(\) => \{[\s\S]{0,320}?this\.clearSearchedLocation\(\);[\s\S]{0,200}?this\._releaseFollowCamera\(\)/,
+    /release: \(\) => \{[\s\S]{0,320}?this\.clearLocation\(\);[\s\S]{0,200}?this\._releaseFollowCamera\(\)/,
   );
 
   // …and the policy only reaches `release` after its authority checks pass.
