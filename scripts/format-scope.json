@@ -702,6 +702,7 @@
   "src/layers/transit/viewport.js",
   "src/layers/transit/lifecycle.test.mjs",
   "scripts/qa-transit.mjs",
+  "scripts/qa-transit-heading.mjs",
   "src/tooling/transitProvider.test.mjs",
   "src/app/layers/transit.js",
   "src/data/transitIcons.js",

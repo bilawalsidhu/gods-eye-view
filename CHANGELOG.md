@@ -1,5 +1,7 @@
 # Changelog
 
+- Keep parked transit vehicles aligned to their world course during camera orbits, fall back to reported bearing, and keep vehicles with no course consistently screen-up.
+
 - Separate application-shell responsibilities and state ownership while preserving
   the layer, scene and voice API. Revoke pending globe-reset callbacks on disposal
   and detach old Directions services when replacing a data manager.

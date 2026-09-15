@@ -3858,3 +3858,128 @@ test('selected draped history prepares geometry before surface heights resolve',
     'unresolved marker corridors remain unavailable',
   );
 });
+
+// A camera pose can change without a viewport-membership revision (notably
+// a top-down orbit). Exercise the actual frame pass with an otherwise idle fleet.
+test('parked transit reprojects held and reported courses at the bounded camera cadence', async (t) => {
+  const { createRendering } = await import('./rendering.js');
+  t.mock.timers.enable({ apis: ['Date'], now: 1000 });
+  const position = Cesium.Cartesian3.fromDegrees(0, 0, 20);
+  const cameraPosition = Cesium.Cartesian3.fromDegrees(0, 0, 1000);
+  const scene = {
+    frameState: { mode: Cesium.SceneMode.SCENE3D },
+    canvas: { clientWidth: 1280, clientHeight: 800 },
+    camera: {
+      positionWC: cameraPosition,
+      heading: 0,
+      pitch: -Math.PI / 2,
+      roll: 0,
+      frustum: new Cesium.PerspectiveFrustum({
+        fov: Math.PI / 3,
+        aspectRatio: 1.6,
+        near: 1,
+        far: 1e7,
+      }),
+    },
+  };
+  const pose = (heading) => {
+    const camera = scene.camera;
+    camera.heading = heading;
+    camera.rightWC = new Cesium.Cartesian3(
+      0,
+      Math.cos(heading),
+      -Math.sin(heading),
+    );
+    camera.upWC = new Cesium.Cartesian3(
+      0,
+      Math.sin(heading),
+      Math.cos(heading),
+    );
+    camera.viewMatrix = Cesium.Matrix4.computeView(
+      cameraPosition,
+      new Cesium.Cartesian3(-1, 0, 0),
+      camera.upWC,
+      camera.rightWC,
+      new Cesium.Matrix4(),
+    );
+  };
+  pose(0);
+  const make = (key, courseDeg, bearing) => ({
+    key,
+    courseDeg,
+    record: { bearing },
+    sample: { segmentCourseDeg: NaN },
+    marker: { position, rotation: 0.7, show: true },
+  });
+  const held = make('held', 90, 270);
+  const reportedOnly = make('reported', null, 90);
+  const unknown = make('unknown', null, null);
+  const hidden = make('hidden', 90, 90);
+  const state = {
+    _viewer: { scene },
+    _enabled: true,
+    _vehicles: new Map(
+      [held, reportedOnly, unknown, hidden].map((e) => [e.key, e]),
+    ),
+    _visible: new Set([held, reportedOnly, unknown]),
+    _moving: new Set(),
+    _heightDirty: new Set(),
+    _rotationAt: 0,
+    _rotationRevision: -1,
+    _cameraRevision: 0,
+    _rotationDirty: false,
+  };
+  const noop = () => {};
+  const rendering = createRendering({
+    state,
+    services: {
+      render: {
+        governorRequestRender: noop,
+        holdContinuousRender: noop,
+        releaseContinuousRender: noop,
+      },
+    },
+    parts: { height: { nearGround: () => false }, trails: { update: noop } },
+  });
+  rendering.onPreRender();
+  const before = [held.marker.rotation, reportedOnly.marker.rotation];
+  pose(Math.PI / 2);
+  t.mock.timers.tick(100);
+  rendering.onPreRender();
+  assert.equal(
+    held.marker.rotation,
+    before[0],
+    'no rotation pass before 200 ms',
+  );
+  t.mock.timers.tick(100);
+  rendering.onPreRender();
+  for (const [i, entry] of [held, reportedOnly].entries()) {
+    const delta = Math.atan2(
+      Math.sin(entry.marker.rotation - before[i]),
+      Math.cos(entry.marker.rotation - before[i]),
+    );
+    assert.ok(
+      Math.abs(delta - Math.PI / 2) < 0.01,
+      `${entry.key}: rotation delta ${delta}`,
+    );
+    assert.equal(entry.courseDeg, 90);
+  }
+  assert.equal(
+    unknown.marker.rotation,
+    0,
+    'no course means screen-up, never a stale angle',
+  );
+  assert.equal(
+    hidden.marker.rotation,
+    0.7,
+    'hidden vehicles are not projected',
+  );
+  state._selectedKey = unknown.key;
+  unknown.marker.rotation = 0.7;
+  rendering.onPreRender();
+  assert.equal(
+    unknown.marker.rotation,
+    0,
+    'selected unknown course also stays screen-up',
+  );
+});

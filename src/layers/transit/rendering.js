@@ -1,5 +1,8 @@
 import * as Cesium from 'cesium';
-import { perspectiveProjectedRotation } from '../../data/iconOrientation.js';
+import {
+  cameraPoseSignature,
+  perspectiveProjectedRotation,
+} from '../../data/iconOrientation.js';
 import {
   updatePlayback,
   applyDisplayCourse,
@@ -308,20 +311,27 @@ export function createRendering({ state, services, parts }) {
     const scene = state._viewer?.scene;
     if (!scene?.camera) return;
     if (now - state._rotationAt < ROTATION_REFRESH_MS) return;
-    if (
-      state._rotationRevision === state._cameraRevision &&
-      !state._rotationDirty &&
-      state._moving.size === 0
-    )
-      return;
     state._rotationAt = now;
-    const cameraChanged = state._rotationRevision !== state._cameraRevision;
+    const pose = cameraPoseSignature(scene.camera);
+    const cameraChanged =
+      state._rotationPose !== pose ||
+      state._rotationRevision !== state._cameraRevision;
+    if (!cameraChanged && !state._rotationDirty && state._moving.size === 0)
+      return;
+    state._rotationPose = pose;
     state._rotationRevision = state._cameraRevision;
     state._rotationDirty = false;
+    const monoNow = performance.now();
     for (const entry of state._visible) {
+      // Idle contacts still need a course when their first usable bearing arrives.
+      if (!state._moving.has(entry)) applyDisplayCourse(entry, monoNow);
       if (entry.key === state._selectedKey) continue;
       const course = entry.courseDeg;
-      if (course === null) continue;
+      if (!Number.isFinite(course)) {
+        entry.marker.rotation = 0;
+        entry.rotationCourse = null;
+        continue;
+      }
       const position = entry.marker.position;
       if (
         !cameraChanged &&
@@ -417,17 +427,15 @@ export function createRendering({ state, services, parts }) {
     parts.trails.update();
     refreshRotations(now);
     const selected = state._vehicles.get(state._selectedKey);
-    if (
-      selected &&
-      state._visible.has(selected) &&
-      selected.courseDeg !== null
-    ) {
-      selected.marker.rotation = perspectiveProjectedRotation(
-        state._viewer.scene,
-        selected.marker.position,
-        selected.courseDeg,
-        selected.marker.rotation,
-      );
+    if (selected && state._visible.has(selected)) {
+      selected.marker.rotation = Number.isFinite(selected.courseDeg)
+        ? perspectiveProjectedRotation(
+            state._viewer.scene,
+            selected.marker.position,
+            selected.courseDeg,
+            selected.marker.rotation,
+          )
+        : 0;
     }
     if (state._heightDirty.size) governorRequestRender('transit-height-batch');
     syncRenderHold();
