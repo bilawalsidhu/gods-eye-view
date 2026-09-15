@@ -1,5 +1,9 @@
 import * as Cesium from 'cesium';
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
+import {
+  claimCameraSensitivity,
+  releaseCameraSensitivity,
+} from '../../data/cameraSensitivity.js';
 
 export function createLifecycle({
   state: layerState,
@@ -93,18 +97,14 @@ export function createLifecycle({
           );
       }
 
-      // Subscribe to camera changes with a 5% movement threshold. Save the prior
-      // value so disable() can restore it — percentageChanged is a shared global
-      // on the camera and leaving it mutated affects every other camera.changed
-      // listener in the app.
+      // Share the 5% movement threshold with other camera-driven layers.
       viewer.camera.changed.addEventListener(parts.viewport.onCameraChanged);
       // Always inspect the final view, even when the last flight step is below
       // camera.changed's movement threshold.
       layerState._arrivalRemover = viewer.camera.moveEnd.addEventListener(
         parts.viewport.onCameraChanged,
       );
-      layerState._prevPercentageChanged = viewer.camera.percentageChanged;
-      viewer.camera.percentageChanged = 0.05;
+      claimCameraSensitivity(viewer.camera, 'traffic', 0.05);
 
       // Kick off initial viewport check
       parts.viewport.onCameraChanged();
@@ -169,12 +169,7 @@ export function createLifecycle({
       viewer.camera.changed.removeEventListener(parts.viewport.onCameraChanged);
       layerState._arrivalRemover?.();
       layerState._arrivalRemover = null;
-      // Restore the camera's global percentageChanged so other layers/listeners
-      // keep their expected sensitivity.
-      if (layerState._prevPercentageChanged != null) {
-        viewer.camera.percentageChanged = layerState._prevPercentageChanged;
-        layerState._prevPercentageChanged = null;
-      }
+      releaseCameraSensitivity(viewer.camera, 'traffic');
       if (layerState._pointCollection) layerState._pointCollection.show = false;
     },
 

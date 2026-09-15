@@ -2584,7 +2584,9 @@ newest bearings are explicitly labelled as reports. Rejected fixes cannot alter
 lag reservoirs or the target delay. Returning from a hidden tab explicitly
 synchronizes visible playback before its next frame.
 
-**Scene work.** Stationary and animated billboards use separate collections.
+**Scene work.** Stationary and animated billboards use separate, adjacent
+collections above CCTV and Bikeshare. Traffic, Bikeshare and Transit share camera
+sensitivity claims; the original sensitivity returns after the last release.
 Visibility checks combine the camera frustum and ellipsoid occlusion at no more
 than 4 Hz; missing map bounds do not admit the globe's far side. Frame work
 visits moving visible vehicles, up to 64 pending height changes, and the selected

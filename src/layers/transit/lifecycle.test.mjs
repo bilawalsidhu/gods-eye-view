@@ -3501,3 +3501,141 @@ test('reject then selected history backfill cannot resurrect a 111 km displaceme
   assert.ok(Math.abs(lat(entry) - 42.361) * 111320 < 1);
   assert.equal(entry.track.resets, 0);
 });
+
+test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in every enable/disable order', async (t) => {
+  const { createLifecycle: trafficLifecycle } =
+    await import('../traffic/lifecycle.js');
+  const { createLifecycle: bikeLifecycle } =
+    await import('../bikeshare/lifecycle.js');
+  const app = harness(t);
+  const noop = () => {};
+  const traffic = trafficLifecycle({
+    state: { _pointCollection: {}, _loadGeneration: 0 },
+    services: {
+      render: { holdContinuousRender: noop, releaseContinuousRender: noop },
+    },
+    source: {},
+    parts: {
+      flow: { ensureFlowStatus: noop },
+      animation: { animate: noop, clearDots: noop },
+      viewport: { onCameraChanged: noop },
+      ingestion: { cancelActiveFetch: noop },
+    },
+  }).methods;
+  const bike = bikeLifecycle({
+    state: {
+      _pointCollection: {},
+      _overlayHost: { setVisible: noop },
+      _cityRuntime: new Map(),
+    },
+    services: {
+      sprites: { restoreSpriteOrder: noop },
+      picking: { registerPickOwner: noop, unregisterPickOwner: noop },
+    },
+    source: {},
+    parts: {
+      selection: {
+        _installClickHandler: noop,
+        _clearSelection: noop,
+        _onKeyDown: noop,
+      },
+      viewport: {
+        onCameraChanged: noop,
+        runProximityCheck: noop,
+        deactivateAllCities: noop,
+      },
+      ingestion: { abortAllInFlight: noop },
+    },
+  }).methods;
+  app.viewer.camera.moveEnd = new Cesium.Event();
+  const layers = { traffic, bikeshare: bike, transit: app.layer };
+  const orders = [
+    ['traffic', 'bikeshare', 'transit'],
+    ['traffic', 'transit', 'bikeshare'],
+    ['bikeshare', 'traffic', 'transit'],
+    ['bikeshare', 'transit', 'traffic'],
+    ['transit', 'traffic', 'bikeshare'],
+    ['transit', 'bikeshare', 'traffic'],
+  ];
+  try {
+    for (const enable of orders)
+      for (const disable of orders) {
+        const active = new Set();
+        for (const id of enable) {
+          layers[id].enable(app.viewer);
+          active.add(id);
+          assert.equal(app.viewer.camera.percentageChanged, 0.05);
+          assert.deepEqual(
+            new Set(cameraSensitivityClaims(app.viewer.camera)),
+            active,
+          );
+        }
+        for (const id of disable) {
+          layers[id].disable(app.viewer);
+          active.delete(id);
+          assert.equal(
+            app.viewer.camera.percentageChanged,
+            active.size ? 0.05 : 0.5,
+            `${enable} / ${disable} after ${id}`,
+          );
+          assert.deepEqual(
+            new Set(cameraSensitivityClaims(app.viewer.camera)),
+            active,
+          );
+        }
+      }
+  } finally {
+    for (const layer of Object.values(layers)) layer.disable(app.viewer);
+  }
+});
+
+test('moving and stationary transit stay adjacent above CCTV and Bikeshare during migration', async (t) => {
+  const {
+    registerSpriteCollection,
+    unregisterSpriteCollection,
+    restoreSpriteOrder,
+  } = await import('../../data/spriteOrder.js');
+  const app = harness(t);
+  app.layer.enable(app.viewer);
+  app.layer._loadTransitFleetForTest(1, BOSTON, 70);
+  const cctv = {},
+    bike = {},
+    flights = {};
+  app.primitives.push(cctv, bike, flights);
+  app.viewer.scene.primitives.raiseToTop = (c) => {
+    app.primitives.splice(app.primitives.indexOf(c), 1);
+    app.primitives.push(c);
+  };
+  const collections = new Map([
+    ...app.sprites,
+    ['cctv', cctv],
+    ['bikeshare', bike],
+    ['flights', flights],
+  ]);
+  for (const [id, collection] of collections)
+    registerSpriteCollection(id, collection);
+  t.after(() => {
+    for (const [id, c] of collections) unregisterSpriteCollection(id, c);
+  });
+  const entry = app.vehicles()[0],
+    parts = app.layer._transitPartsForTest();
+  for (const moving of [true, false, true]) {
+    entry.sample.phase = moving ? 'playing' : 'held';
+    entry.sample.segmentSpeedMps = moving ? 1 : 0;
+    entry.sample.segmentCourseDeg = NaN;
+    parts.rendering.schedulePlayback(entry);
+    restoreSpriteOrder(app.viewer);
+    const active = app.primitives.indexOf(entry.markerCollection);
+    assert.ok(active > app.primitives.indexOf(cctv));
+    assert.ok(active > app.primitives.indexOf(bike));
+    assert.ok(active < app.primitives.indexOf(flights));
+    assert.equal(
+      Math.abs(
+        app.primitives.indexOf(app.state()._markers) -
+          app.primitives.indexOf(app.state()._animatedMarkers),
+      ),
+      1,
+    );
+    assert.equal(entry.marker.id, entry.key);
+  }
+});
