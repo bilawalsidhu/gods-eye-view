@@ -1,35 +1,25 @@
 # Changelog
 
-## Precipitation layer
+## Weather layer
 
-- Replace every free precipitation source with Vaisala Xweather `radar-global`,
-  a single observed global radar mosaic, because the models it blended were +3h
-  to +15h forecasts that disagreed with live radar about where the rain was.
-- Proxy the tiles through the app's own server: the vendor authenticates by
-  putting the client id and secret in the tile URL path, so the browser must
-  never build that URL, and every server log line is scrubbed of the credential.
-- Meter and bound the metered source — a daily budget governor that serves stale
-  rather than going dark, a bounded oldest-first disk cache, and a server-set
-  refresh cadence chosen from measured call volume.
-- Stop requesting tiles past level 9, measured as the level where the service
-  stops resolving detail and begins charging for upsampled blur.
-- Report `UNAVAILABLE - ADD XWEATHER KEY` without a key rather than an empty
-  globe, which would read as no rain anywhere. This layer has no keyless mode.
-
-- Render the model with GeoMet's continuous palette rather than its eight-class
-  default, which merged neighbouring cells into flat plateaus.
-- Add an optional **Precipitation** layer: ECCC GDPS global modelled precipitation
-  with an Iowa Environmental Mesonet NEXRAD observed-radar inlay over the lower
-  48, both keyless and read directly from the browser.
-- Resolve the tier handover through Cesium's imagery rectangle and level bands
-  rather than a camera listener; the radar replaces the model only inside its own
-  footprint, so zooming in outside the lower 48 keeps the model rather than
-  going blank.
-- Own only appended imagery handles, leaving the map controller's base layer at
-  index 0 untouched across stack switches, and withdraw the overlay when a
-  photoreal stack hides the globe.
-- State the forecast lead, model run and valid step on the layer row so a model
-  field is never presented as an observation.
+- Add an optional **Weather** layer drawing observed global radar, lightning,
+  severe-weather warnings, tropical cyclones, storm cells and a dozen analysis
+  fields from Vaisala Xweather, selected from a new right-rail WEATHER panel.
+- Proxy every tile through the app's own server. The vendor authenticates by
+  putting the client id and secret in the tile URL path, so the browser never
+  builds that URL, the layer name is checked against an allowlist before the
+  key is read, and every log line is scrubbed of the credential.
+- Meter the source against its monthly allowance: a budget governor that serves
+  stale tiles rather than going dark, a bounded oldest-first disk cache, and a
+  running total shown in the panel beside the controls that move it.
+- Refresh on demand by default, with an optional timer. Choosing a layer draws
+  it immediately and fetches only that layer.
+- Carry the selection in share links as one packed field, so a shared view
+  reopens showing what its author saw.
+- Draw one continuous field at a time and keep sparse overlays above it, label
+  layers that only cover the United States, and label forecasts as forecasts.
+- Report `UNAVAILABLE · ADD XWEATHER KEY` without a key rather than an empty
+  globe. This layer has no keyless mode.
 
 - Split application scene, controls, catalog, tools and HTML into reusable components; configure application request services and sources without changing global fetch. Preserve standalone markup and voice behavior. Explicit annotation navigation may resolve a distant named target.
 

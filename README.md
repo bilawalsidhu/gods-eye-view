@@ -280,7 +280,7 @@ Fourteen layers and map sources. **Eleven have a keyless path.** Some offer addi
 | 🚲 **Bikeshare** | Live station availability | GBFS | 🟢 |
 | 🔥 **Active Fires** | Live NASA FIRMS detections, trailing 24h | NASA FIRMS | 🟡 |
 | 🚀 **Space Missions** | Rolling 30-day launches with payload, stage, and recovery detail | Launch Library 2 | 🟢 (🟡 optional token raises the allowance) |
-| 🌧️ **Precipitation** | Observed global radar — ground radar worldwide, with satellite-derived radar filling the gaps between networks. An observation, not a forecast, and the only layer here that cannot run keyless | Vaisala Xweather | 🔴 metered (free tier, then per tile) |
+| 🌧️ **Weather** | Thirty selectable layers on one globe — observed radar, lightning, severe-weather warnings, cyclone tracks, storm cells, wind, temperature, air quality and sea state. A side panel picks what draws, refreshes on demand, and shows what it has spent. The only layer here that cannot run keyless | Vaisala Xweather | 🔴 metered (free tier, then per tile) |
 | 🎖️ **Mapped Installations** | Viewport-bounded military-site context from community mapping — incomplete by nature, and labeled that way | OpenStreetMap | 🟢 |
 
 **The basemap ladder — what each tier buys you:**
@@ -388,7 +388,7 @@ Seven keys. Five have a free tier, and the 🔴 ones are metered:
 | 🟡 | **AISStream** | 🚢 Live global ships | [aisstream.io](https://aisstream.io) — free signup |
 | 🟡 | **NASA FIRMS** | 🔥 Live active fires | [firms.modaps.eosdis.nasa.gov](https://firms.modaps.eosdis.nasa.gov/api/map_key/) — free |
 | 🟡 | **TomTom** | 🚦 Live flow speeds and congestion colors for the simulated traffic layer | [developer.tomtom.com](https://developer.tomtom.com) — free tier available |
-| 🔴 | **Vaisala Xweather** | 🌧️ The Precipitation layer, which does not run without it — observed global radar, unlike every other key here which only unlocks extra capability. Two halves, a client ID and a secret, both server-side only | [xweather.com/account](https://www.xweather.com/account) — 15,000 accesses/month free, then per tile |
+| 🔴 | **Vaisala Xweather** | 🌧️ The Weather layer, which does not run without it — every other key here only unlocks extra capability. Two halves, a client ID and a secret, both server-side only: the vendor puts them in the tile URL, so the browser never sees either | [xweather.com/account](https://www.xweather.com/account) — 15,000 accesses/month free, then per tile |
 
 ![Diving from city-scale live congestion straight into an intersection's public camera](docs/media/05-traffic-to-cctv.gif)
 
