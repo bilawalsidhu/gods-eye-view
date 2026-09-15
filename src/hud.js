@@ -66,7 +66,8 @@ export class IntelHUD {
    * @param {Cesium.Viewer} viewer - The Cesium Viewer instance used for
    *   camera telemetry and coordinate derivation.
    */
-  constructor(viewer, { placeSearch, summaryPolicy = {}, basemapContext = {} } = {}) {
+  constructor(viewer, { placeSearch, summaryPolicy = {}, basemapContext = {}, summaryService = applicationServices.summary } = {}) {
+    this.summaryService = summaryService;
     this.summaryPolicy = summaryPolicy;
     this.basemapContext = basemapContext;
     this.placeSearch = placeSearch;
@@ -664,7 +665,7 @@ export class IntelHUD {
     this._summaryRequest = controller;
     try {
       this.summaryPolicy.onRequest?.();
-      const response = await applicationServices.summary.summarize(context, { signal: controller.signal });
+      const response = await this.summaryService.summarize(context, { signal: controller.signal });
       const data = response.data;
       if (revision !== this._summaryRevision) return;
       if (isHudSummaryUnconfigured(response.status, data)) {

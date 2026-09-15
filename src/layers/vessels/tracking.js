@@ -57,20 +57,21 @@ export function createTracking({
    */
 
   function refloorVesselRecords() {
-    if (!state.vesselRecords.length) return;
-    for (const record of state.vesselRecords) {
+    if (!state.records.all.length) return;
+    for (const record of state.records.all) {
+      const visual = components.rendering.getVisual(record);
       if (!Number.isFinite(record.lat) || !Number.isFinite(record.lon))
         continue;
       const heightM = components.queries.vesselDatumHeightM(
         currentGeoidN(record.lat, record.lon),
         VESSEL_LIFT_M,
       );
-      record.position = Cesium.Cartesian3.fromDegrees(
+      visual.position = Cesium.Cartesian3.fromDegrees(
         record.lon,
         record.lat,
         heightM,
       );
-      if (record.billboard) record.billboard.position = record.position;
+      if (visual.billboard) visual.billboard.position = visual.position;
     }
   }
 

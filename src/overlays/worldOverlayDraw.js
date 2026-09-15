@@ -521,6 +521,74 @@ function tacticalAccentColors(entry) {
   return colors;
 }
 
+function animationLinearProgress(entry, timestamp) {
+  const duration = Math.max(0, Number(entry?.leaderAnimationMs) || 0);
+  if (!duration) return 1;
+  const startedAt = Number(entry?.leaderAnimationStartedAt);
+  if (!Number.isFinite(startedAt)) return 1;
+  return Math.max(0, Math.min(1, (timestamp - startedAt) / duration));
+}
+
+function leaderDrawRatio(entry) {
+  const ratio = Number(entry?.leaderDrawRatio);
+  return Number.isFinite(ratio) ? Math.max(0.1, Math.min(0.9, ratio)) : 0.68;
+}
+
+export function leaderRevealProgress(entry, timestamp = globalThis.performance?.now?.() ?? Date.now()) {
+  const linear = Math.min(1, animationLinearProgress(entry, timestamp) / leaderDrawRatio(entry));
+  return 1 - Math.pow(1 - linear, 3);
+}
+
+export function tacticalCardRevealAlpha(entry, timestamp = globalThis.performance?.now?.() ?? Date.now()) {
+  if (!(Math.max(0, Number(entry?.leaderAnimationMs) || 0) > 0)) return 1;
+  const start = leaderDrawRatio(entry);
+  const linear = Math.max(0, Math.min(1,
+    (animationLinearProgress(entry, timestamp) - start) / Math.max(0.1, 1 - start)));
+  return linear * linear * (3 - 2 * linear);
+}
+
+function drawTacticalLeader(ctx, entry, placement, accent, timestamp) {
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = (entry.leaderStyle === 'elbow' ? 1.5 : 1) / (placement.paintScale || 1);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  if (entry.leaderStyle !== 'elbow'
+    || (placement.corner !== 'above' && placement.corner !== 'below')) {
+    if (placement.leaderOffset === 0) {
+      ctx.moveTo(placement.leadFromX, placement.leadFromY);
+    } else if (placement.corner === 'above' || placement.corner === 'below') {
+      ctx.moveTo(placement.leadFromX, placement.leadFromY + placement.leaderOffset);
+    } else {
+      ctx.moveTo(placement.leadFromX + placement.leaderOffset, placement.leadFromY);
+    }
+    ctx.lineTo(placement.leadToX, placement.leadToY);
+    ctx.stroke();
+    return;
+  }
+
+  const { x, y, w, h } = placement.rect;
+  const cardX = x + Math.max(18, Math.min(w - 18, w * 0.22));
+  const cardY = placement.corner === 'above' ? y + h : y;
+  const anchorRadius = Math.abs(placement.leaderOffset);
+  const anchorX = placement.leadFromX - anchorRadius;
+  const anchorY = placement.leadFromY;
+  const horizontalLength = Math.abs(anchorX - cardX);
+  const verticalLength = Math.abs(anchorY - cardY);
+  let remaining = leaderRevealProgress(entry, timestamp) * (horizontalLength + verticalLength);
+  ctx.moveTo(anchorX, anchorY);
+  if (remaining <= horizontalLength) {
+    const direction = Math.sign(cardX - anchorX) || -1;
+    ctx.lineTo(anchorX + direction * remaining, anchorY);
+  } else {
+    ctx.lineTo(cardX, anchorY);
+    remaining -= horizontalLength;
+    const direction = Math.sign(cardY - anchorY) || -1;
+    ctx.lineTo(cardX, anchorY + direction * Math.min(verticalLength, remaining));
+  }
+  ctx.stroke();
+}
+
 /** Paint the legacy FIRMS/vessel tactical card inside the shared host. */
 export function paintTacticalCard(ctx, entry, placement, alpha = 1) {
   const selected = entry.selected || entry.variant === 'selected';
@@ -528,21 +596,15 @@ export function paintTacticalCard(ctx, entry, placement, alpha = 1) {
   const layout = entry._overlayLayout || {};
   const { x, y, w, h } = placement.rect;
   const accentColors = tacticalAccentColors(entry);
+  const animationTimestamp = globalThis.performance?.now?.() ?? Date.now();
   ctx.save();
   ctx.globalAlpha = alpha;
 
-  ctx.strokeStyle = accentColors.leader;
-  ctx.lineWidth = 1 / (placement.paintScale || 1);
-  ctx.beginPath();
-  if (placement.leaderOffset === 0) {
-    ctx.moveTo(placement.leadFromX, placement.leadFromY);
-  } else if (placement.corner === 'above' || placement.corner === 'below') {
-    ctx.moveTo(placement.leadFromX, placement.leadFromY + placement.leaderOffset);
-  } else {
-    ctx.moveTo(placement.leadFromX + placement.leaderOffset, placement.leadFromY);
-  }
-  ctx.lineTo(placement.leadToX, placement.leadToY);
-  ctx.stroke();
+  drawTacticalLeader(ctx, entry, placement, entry.leaderStyle === 'elbow'
+    ? colorWithAlpha(entry.accent, 0.95)
+    : accentColors.leader, animationTimestamp);
+
+  ctx.globalAlpha = alpha * tacticalCardRevealAlpha(entry, animationTimestamp);
 
   ctx.beginPath();
   roundedRectPath(ctx, x, y, w, h, 4);

@@ -144,9 +144,14 @@ reconstruction mechanics with injectable acquisition dependencies.
 `gods-eye-view/sources/traffic` exports tile math and budget calculations.
 `gods-eye-view/sources/gbfs` exports host/path acceptance and cache-header rules.
 These entries import no Node middleware, application configuration or rendering.
-Callers retain their request admission and transport policy. FIRMS CSV parsing
-remains an owned dependency of the FIRMS Node provider. The boundary gate
-checks each entry independently.
+Callers retain their request admission and transport policy.
+
+`gods-eye-view/sources/firms-csv` exports the existing CSV parser, header
+recognition, acquisition-time conversion and trailing-day filter independently
+of the Node middleware. It imports no Node, DOM, rendering or network code.
+The Node provider continues using the same implementation; contract fixtures
+cover malformed rows, acquisition times, empty feeds and the inclusive time
+window. The boundary gate checks each entry independently.
 
 Browser terrain sampling, traffic matching/drawing, fire overlays and bike-share
 layer lifecycle remain in their current modules. This extraction changes no
@@ -391,3 +396,110 @@ its engines. Its explicit module graph includes the smaller layer/UI groups;
 those independent groups retain their narrower gates. Source adapters and
 request services enter through construction, without replacing global fetch.
 The Node build group also owns the allowlisted static HTML template assembler.
+
+## Application catalog
+
+`gods-eye-view/application/catalog` captures caller-supplied layer instances and
+matching registration metadata. `application/data` registers that catalog, attaches
+coordinators after registration and seals it before controls start restoration.
+`application/controls` binds its layer services from the same catalog. The existing
+control surface and v2 sharing codec retain their established layer IDs; changing
+that schema requires a corresponding codec change.
+
+`standalone/catalog` selects the existing page-scoped default instances and metadata.
+Reusable data setup imports no standalone layer defaults. The current compatibility
+source setters remain available while callers migrate to instance construction.
+
+### Layer construction
+
+`application/layers` constructs the current catalog from explicit source objects
+and an application AbortSignal. Small `src/app/layers` modules wire existing scene
+services into each family factory. Standalone provider selection lives in
+`src/standalone/layerSources.js`. The construction export has its own checked
+dependency graph, excluding standalone setup and compatibility layer instances.
+
+Both aircraft layers share the catalog's classification registry; launches use
+its satellites and Contacts uses its aircraft, vessels and installations. Data
+registration, controls and voice actions read those same instances. Destruction
+remains the manager's responsibility; classification also observes application
+abort when startup has not reached registration. Scene engines remain page-owned,
+so this change does not introduce multiple simultaneous viewers.
+
+Direct `src/data` compatibility entries retain their old defaults and testing
+exports. Browser regression probes use the registered instance's testing surface
+to avoid accidentally inspecting an unused compatibility instance. Existing source
+setters apply only to compatibility instances; the normal application supplies
+its sources at construction.
+
+### Application operations
+
+`application/operations` accepts request-service instances and an application
+lifetime. It constructs terrain resolution, coarse floor/mesh caches and an
+annotation resolver without selecting upstream providers. Its checked graph is
+separate from standalone setup. Scene construction returns these operations; the
+catalog and controls use the same surface owner. Layers still own their individual
+ground-snap caches and model resources.
+
+Terrain cancellation rejects late replies before caching, clears floor queues and
+removes the map-stack listener. Annotation lookup caches are instance-owned and
+cleared on cancellation. Geometry selection and floor policies are unchanged.
+HUD and weather controllers accept their respective service; regional lookup and
+location framing use the supplied operations. Voice shares the same boundary and
+floor services, with analyst memory scoped to the runner. Direct compatibility
+entrypoints retain default services; normal assembly does not configure their
+source slots.
+
+## Layer lifecycle and presentation
+
+`data/lifecycle` owns registrations, visibility intent, refresh transactions,
+parameters and teardown. Its package group contains one module and no external
+imports. Adding a panel, renderer or application dependency fails the boundary
+build, including unused imports.
+
+`app/layerPresentation` mounts the toggle panel and turns lifecycle activity into
+render requests and detection invalidation. It owns hidden-panel refresh and
+listener cleanup. Application data assembly constructs both owners explicitly;
+`data/manager` is the compatibility facade for direct callers. The ordinary
+state subscriptions retain their existing event contract.
+
+## UI state owners
+
+- `ui/navigation` owns navigation generations, pending search presentation and
+  tracking handoff. It reads Cockpit admission and uses supplied tracking operations.
+- `ui/share-restoration` owns the initial restore transaction, layer coordinator,
+  status notices and gesture/timer cleanup.
+- `ui/visual-settings` owns style preferences, detection overrides, display inputs
+  and IR cleanup. Its engine services and panel operations are explicit.
+- `ui/panel-chrome` owns disclosure, docking, collapse preferences and temporary
+  Cockpit panel snapshots, composing the existing positioning/layout controllers.
+
+These package groups contain their own dependencies and exclude application
+assembly. `applicationShell` retains composition and compatibility methods;
+those methods delegate to the state owner. Source-based regression checks inspect
+that implementation owner, and browser acceptance exercises the assembled UI.
+
+## Civil-flight records and acquisition
+
+`layers/flights/records` owns metadata, sticky observations, geoid values and
+missing-poll admission. `layers/flights/ingestion` owns the source and request
+lifetime, backoff and freshness state. Both are portable package groups with no
+Cesium, viewer, billboard, model or application imports.
+
+The layer composes these with `snapshotRenderer`, which applies record changes
+to Cesium history and primitives and coordinates existing follow operations.
+Occlusion points live with rendering state. Eviction still releases tracking
+before deleting records; incomplete snapshots retain recent contacts for the
+existing bounded interval. The renderer retains its existing per-frame scratch
+objects; reconciliation occurs on source refresh, not on each frame.
+
+`layers/military/records` and `layers/military/ingestion` have the same portable
+ownership boundary. Military observations retain their aviation-foot readout,
+source-time fallback and model-owned ground policy. The renderer supplies that
+ownership fact and handles stale-ground lifting, Cesium history and primitives;
+record reconciliation does not import the engine or application.
+
+`layers/vessels/records` owns plain AIS metadata, stable MMSI identity and bounded
+retention. `layers/vessels/ingestion` owns source requests and feed state through
+explicit operations. Both exports exclude Cesium, DOM and application assembly.
+The snapshot renderer applies record changes; rendering owns a weak map of
+geometry and billboard resources used by cards, picking and trails.

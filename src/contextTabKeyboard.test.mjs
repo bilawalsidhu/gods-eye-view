@@ -1,3 +1,4 @@
+import { readShellSource } from './testSupport/readShellSource.mjs';
 import { expandApplicationHtml } from '../build/application-html.js';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { _selectContextMode } from './ui/contextTransactions.js';
@@ -13,7 +14,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
-const ui = readFileSync(new URL('./ui/applicationShell.js', import.meta.url), 'utf8');
+const ui = readShellSource();
 const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 test('Contacts and Space Missions both participate in the ordinary Tab sequence', () => {

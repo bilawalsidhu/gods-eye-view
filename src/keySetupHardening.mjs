@@ -9,6 +9,12 @@ import {
 /** PowerShell verification for the exact owner-only Windows credential DACL. */
 const WINDOWS_ACL_VERIFY_SCRIPT = [
   "$ErrorActionPreference = 'Stop'",
+  // Load Microsoft.PowerShell.Security (Get-Acl) from the module tree of the
+  // interpreter that is actually running. $PSHOME is that interpreter's own
+  // physical directory, so this is correct even when the executable was named
+  // through the Sysnative bridge, and it cannot be steered by anything the
+  // parent environment set.
+  "$env:PSModulePath = Join-Path $PSHOME 'Modules'",
   '$acl = Get-Acl -LiteralPath $env:GEV_ACL_FILE',
   'if (-not $acl.AreAccessRulesProtected) { exit 2 }',
   "$allowed = @($env:GEV_ACL_USER_SID, 'S-1-5-18', 'S-1-5-32-544')",
@@ -143,15 +149,40 @@ export function hardenCredentialFile(filepath, {
     // accept only three explicit FullControl allow principals, with inheritance
     // disabled. Any unexpected rule, right, command error, or missing principal
     // fails closed before the secret reaches disk.
+    //
+    // The verify process must load Microsoft.PowerShell.Security (Get-Acl)
+    // from the Windows PowerShell system module tree ONLY. A side-by-side
+    // PowerShell 7 install prepends its own module trees to PSModulePath at
+    // startup; inherited into a 5.1 process, the incompatible 7.x manifest
+    // cannot be autoloaded and the verify step fails. The script itself sets
+    // the path from $PSHOME; this is the same value computed ahead of time, so
+    // nothing inherited is in force even for the moment before it runs. The
+    // Sysnative spelling is a 32-bit caller's bridge and not a directory the
+    // launched native process can read, so the physical name is used.
+    const powershellModuleDirectory = path.win32.join(
+      path.win32
+        .dirname(tools.powershell)
+        .replace(/\\Sysnative\\/i, '\\System32\\'),
+      'Modules',
+    );
+    // Windows environment names are case-insensitive, and a child can end up
+    // carrying a differently cased alias alongside the value set here. Drop
+    // every spelling before setting the trusted one.
+    const verifyEnvironment = Object.fromEntries(
+      Object.entries(environment).filter(
+        ([name]) => name.toLowerCase() !== 'psmodulepath',
+      ),
+    );
     const verified = spawn(tools.powershell, [
       '-NoProfile',
       '-NonInteractive',
       '-Command', WINDOWS_ACL_VERIFY_SCRIPT,
     ], {
       env: {
-        ...environment,
+        ...verifyEnvironment,
         GEV_ACL_FILE: filepath,
         GEV_ACL_USER_SID: sid,
+        PSModulePath: powershellModuleDirectory,
       },
       stdio: 'ignore',
       windowsHide: true,

@@ -166,7 +166,8 @@ export function cockpitWeatherEnabledFromStoredValue(value) {
  * active. It owns no Cesium fog/post-process stages and cannot affect map mode.
  */
 export class CockpitCloudEffectsController {
-  constructor(viewer) {
+  constructor(viewer, { weatherService = applicationServices.weather } = {}) {
+    this.weatherService = weatherService;
     this.viewer = viewer;
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'cockpit-cloud-effects';
@@ -369,7 +370,7 @@ export class CockpitCloudEffectsController {
 
     this.abort?.abort();
     this.abort = new AbortController();
-    const pending = applicationServices.weather.getConditions(point.latitude, point.longitude, { signal: this.abort.signal });
+    const pending = this.weatherService.getConditions(point.latitude, point.longitude, { signal: this.abort.signal });
     const request = this.abort;
     this.pending = pending.then(async (payload) => {
         if (this.abort !== request || request.signal.aborted) return null;
@@ -522,6 +523,6 @@ export class CockpitCloudEffectsController {
   }
 }
 
-export function initCockpitCloudEffects(viewer) {
-  return new CockpitCloudEffectsController(viewer);
+export function initCockpitCloudEffects(viewer, options) {
+  return new CockpitCloudEffectsController(viewer, options);
 }
