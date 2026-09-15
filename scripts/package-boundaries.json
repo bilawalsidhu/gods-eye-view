@@ -878,6 +878,7 @@
   "traffic-layer": {
     "exports": ["./layers/traffic"],
     "modules": [
+      "src/data/cameraSensitivity.js",
       "src/data/flowMatch.js",
       "src/data/tomtomTiles.js",
       "src/data/trafficBounds.js",
