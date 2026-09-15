@@ -1,3 +1,4 @@
+import { applicationHtmlPlugin } from './application-html.js';
 import cesium from 'vite-plugin-cesium';
 
 /**
@@ -34,13 +35,15 @@ export const BROWSER_HEADERS = Object.freeze({
 /** Build browser assets with explicit inputs; never load environment or providers. */
 export function createBrowserViteConfig({
   plugins = [],
+  publicDir,
   googleApiKey,
   cesiumToken,
   host = 'localhost',
   port = 4173,
 } = {}) {
   return {
-    plugins: [cesium(), ...plugins],
+    plugins: [cesium(), applicationHtmlPlugin(), ...plugins],
+    ...(publicDir === undefined ? {} : { publicDir }),
     server: {
       host: host || 'localhost',
       port: parseInt(port, 10) || 4173,

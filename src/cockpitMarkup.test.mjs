@@ -1,3 +1,5 @@
+import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
+import { expandApplicationHtml } from '../build/application-html.js';
 import { readLayerSource } from './testSupport/readLayerSource.mjs';
 import { PanelLayoutController } from './ui/panelLayoutController.js';
 import { readShellElements } from './ui/shellElements.js';
@@ -26,11 +28,11 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'applicationShell.js'), 'utf8');
+const html = expandApplicationHtml(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'));
+const ui = readShellSource();
 const css = readStylesheet(path.join(ROOT, 'style.css'));
 const sceneDirector = fs.readFileSync(path.join(ROOT, 'src', 'scenes', 'director.js'), 'utf8');
-const manager = fs.readFileSync(path.join(ROOT, 'src', 'data', 'manager.js'), 'utf8');
+const manager = fs.readFileSync(path.join(ROOT, 'src', 'data', 'lifecycle.js'), 'utf8');
 const contextLayer = readLayerSource(path.join(ROOT, 'src', 'data', 'militaryAwareness.js'), 'utf8');
 const voiceActions = fs.readFileSync(path.join(ROOT, 'src', 'voice', 'gevActions.js'), 'utf8');
 
@@ -202,7 +204,8 @@ test('programmatic Context layer changes cannot bypass explicit expansion policy
 });
 
 test('share startup isolates panel defaults from recipient-local collapse preferences', () => {
-  const parseIndex = ui.indexOf('this._initialShareState = this.shareLinkManager.parseInitialHash();');
+  const parseIndex = ui.indexOf('this._shareRestoration.attachLinks(this.shareLinkManager);');
+  assert.match(shellMethod('attachLinks').toString(), /this\._initialShareState = shareLinkManager\.parseInitialHash\(\)/);
   const panelChromeIndex = ui.indexOf('this._initPanelChrome();');
   assert.ok(parseIndex >= 0, 'initial share state must be parsed during UI construction');
   assert.ok(
@@ -210,11 +213,11 @@ test('share startup isolates panel defaults from recipient-local collapse prefer
     'share state must be known before panel chrome can read recipient-local preferences',
   );
   assert.equal(
-    (ui.match(/this\.shareLinkManager\.parseInitialHash\(\)/g) || []).length,
+    (ui.match(/shareLinkManager\.parseInitialHash\(\)/g) || []).length,
     1,
     'startup must parse the incoming share exactly once',
   );
-  const panelChrome = ui.match(/_initPanelChrome\(\) \{([\s\S]*?)\n  \}\n\n  \/\*\*/);
+  const panelChrome = { 1: shellMethod('_initPanelChrome').toString() };
   assert.ok(panelChrome, 'panel chrome initializer is missing');
   assert.match(
     panelChrome[1],
@@ -396,7 +399,8 @@ test('fresh Cockpit entry temporarily collapses map panels and exit restores the
     assert.match(entryPanels[1], new RegExp(`'${panelId}'`), `${panelId} must collapse on entry`);
   }
 
-  const callback = ui.match(/onEntered: \(\) => \{([\s\S]*?)\n      \},\n      onExited:/);
+  assert.match(ui, /onEntered: \(\) => this\._panelChrome\.enterCockpit\(\)/);
+  const callback = { 1: shellMethod('enterCockpit').toString() };
   assert.ok(callback, 'Cockpit onEntered callback is missing');
   assert.match(
     callback[1],
@@ -425,7 +429,8 @@ test('fresh Cockpit entry temporarily collapses map panels and exit restores the
     'normal Context must not reopen over Cockpit',
   );
 
-  const exitCallback = ui.match(/onExited: \(\) => \{([\s\S]*?)\n      \},\n      restoreTrackingFrame:/);
+  assert.match(ui, /onExited: \(\) => this\._panelChrome\.exitCockpit\(\)/);
+  const exitCallback = { 1: shellMethod('exitCockpit').toString() };
   assert.ok(exitCallback, 'Cockpit onExited callback is missing');
   assert.match(
     exitCallback[1],
@@ -763,7 +768,7 @@ test('Global Context uses its dedicated right rail without a duplicate Data Laye
   assert.match(contextLayer, /id:\s*'military-awareness'[\s\S]*?showInTogglePanel:\s*false/);
   const panel = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'layerPanel.js'), 'utf8');
   assert.match(panel, /if \(!layer\.showInTogglePanel\) continue;/);
-  assert.match(manager, /getLayers: \(\) => this\.getAll\(\)/);
+  assert.match(fs.readFileSync(path.join(ROOT, 'src', 'app', 'layerPresentation.js'), 'utf8'), /getLayers: \(\) => this\.manager\.getAll\(\)/);
   assert.match(html, /id="global-context-panel"/);
   assert.match(html, /id="global-context-flights-btn"/);
   assert.match(html, /id="global-context-missions-btn"/);

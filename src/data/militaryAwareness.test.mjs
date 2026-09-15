@@ -1358,7 +1358,7 @@ test('hasContact declines while a layer is disabled, whatever its maps still hol
     ['militaryFlights', readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
       /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!(?:flightState\.)?_billboardCollection\s*\|\|\s*!(?:flightState\.)?_billboardCollection\.show\s*\|\|\s*(?:flightState\.)?_billboards\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
     ['aisLiveVessels', readLayerSource(new URL('./aisLiveVessels.js', import.meta.url)),
-      /hasContact\(\s*mmsi,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!state\.enabled\s*\|\|\s*!state\.vesselMap\s*\|\|\s*state\.vesselMap\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
+      /hasContact\(\s*mmsi,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!state\.feed\.enabled\s*\|\|\s*!state\.records\.byMmsi\s*\|\|\s*state\.records\.byMmsi\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
   ]) {
     assert.match(source, guard, `${name}.hasContact must decline while the layer is disabled`);
   }
@@ -1535,7 +1535,7 @@ test('production eviction sites actually tag their clears', () => {
   for (const [name, source] of [['flights', flightsSource], ['militaryFlights', militarySource]]) {
     assert.match(
       source,
-      /if\s*\(\s*icao24\s*===\s*(?:flightState\.)?_trackedIcao,?\s*\)\s*\{\s*\n\s*(?:parts\.\w+\.)?_clearTracking\(\s*false,\s*\{\s*evicted:\s*true\s*\},?\s*\);/,
+      /if\s*\(\s*icao24\s*===\s*(?:flightState\.)?_trackedIcao,?\s*\)\s*\{\s*\n\s*(?:(?:parts\.)?tracking\.)?_clearTracking\(\s*false,\s*\{\s*evicted:\s*true\s*\},?\s*\);/,
       `${name} must mark its aged-out cull as an eviction`,
     );
     assert.match(

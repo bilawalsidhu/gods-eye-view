@@ -1,5 +1,5 @@
 import { fetchRegionalJson } from './http.js';
-import { normalizeRegionalPlace } from '../../../src/data/regionalBrief.js';
+import { normalizeRegionalPlace } from '../../../src/data/regionalModel.js';
 
 /** Construct the serialized Nominatim adapter with a trusted endpoint. */
 export function createRegionalPlaceProvider({

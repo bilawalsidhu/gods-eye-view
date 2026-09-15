@@ -33,7 +33,6 @@ import { createAlprPresentation } from './presentation.js';
 export function createAlprCamerasLayer({ source, services } = {}) {
   if (typeof source?.fetch !== 'function')
     throw new TypeError('ALPR requires a camera source');
-  const creditMarkup = alprCreditMarkup(source.attribution);
   const { governorRequestRender } = services.render;
 
   const { registerPickOwner, unregisterPickOwner } = services.picking;
@@ -242,6 +241,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       if (state.viewer) throw new Error('ALPR layer is already initialized');
       state.viewer = viewer;
       state.dataSource = new Cesium.CustomDataSource('alpr-cameras');
+      const creditMarkup = alprCreditMarkup(source.attribution);
       state.credit = creditMarkup
         ? new Cesium.Credit(creditMarkup, true)
         : null;

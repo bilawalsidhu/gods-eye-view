@@ -631,6 +631,8 @@ test('the depth decision is the dated Option-2 host migration, superseding Optio
 test('cables create no native labels and no per-frame geometry callbacks', () => {
   const source = [
     '../../data/telegeographySubmarineCables.js',
+    '../../app/layers/submarineCables.js',
+    '../../app/layers/overlayHost.js',
     'rendering.js',
     'overlay.js',
     'surface.js',

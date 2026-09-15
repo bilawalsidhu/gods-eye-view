@@ -61,17 +61,24 @@ test('military state owns separate contact maps, motion scratch and ground sampl
   const first = createFlightState({ services: services() });
   const second = createFlightState({ services: services() });
   for (const key of [
-    '_flightData',
+    'records',
+    'feed',
     '_billboards',
     '_positionHistory',
     '_groundSnap',
     '_scratchCarto',
     '_models',
-    '_activeUpdateControllers',
     'lifetime',
   ]) {
     assert.notEqual(first[key], second[key], key);
   }
+  assert.notEqual(first.records.data, second.records.data);
+  assert.notEqual(first.records.missingPolls, second.records.missingPolls);
+  assert.notEqual(first.records.geoidNCache, second.records.geoidNCache);
+  assert.notEqual(
+    first.feed._activeUpdateControllers,
+    second.feed._activeUpdateControllers,
+  );
 });
 
 test('a normalized source can retain its stale reason without changing standalone cache policy', async () => {

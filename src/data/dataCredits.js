@@ -164,8 +164,24 @@ export const DATA_CREDITS = [
       'license CC BY 4.0',
   },
   {
+    key: 'calgary-cctv',
+    html:
+      'Traffic cameras (Calgary): contains information licensed under the ' +
+      '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
+  },
+  {
+    key: 'osrm-routing',
+    // The service asks for its attribution to carry a "fix the map" link, so
+    // a reader who spots a wrong turn can go and correct the data it came from.
+    html:
+      'Routing (voice routes and Directions): OSRM on the FOSSGIS servers — ' +
+      '<a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener">routing.openstreetmap.de</a> · ' +
+      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> (ODbL) · ' +
+      '<a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">fix the map</a>',
   },
   {
     key: 'radio-browser',
@@ -300,12 +316,12 @@ export function registerDynamicCredit(viewer, credit) {
  * present in the "Data attribution" popover.
  * @param {Cesium.Viewer} viewer — the initialized Cesium viewer
  */
-export function registerDataCredits(viewer) {
+export function registerDataCredits(viewer, credits = DATA_CREDITS) {
   const creditDisplay = viewer?.creditDisplay;
   if (!creditDisplay || typeof creditDisplay.addStaticCredit !== 'function') {
     return;
   }
-  for (const { html } of DATA_CREDITS) {
+  for (const { html } of credits) {
     // showOnScreen=false → lives in the expandable "Data attribution" popover,
     // not the on-globe credit line.
     creditDisplay.addStaticCredit(new Cesium.Credit(html, false));

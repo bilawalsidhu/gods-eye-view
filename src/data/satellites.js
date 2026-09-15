@@ -1,18 +1,15 @@
-import {
-  createSatellitesLayer,
-  createSatelliteSource,
-} from '../layers/satellites/index.js';
-import * as picking from './pickRegistry.js';
-import * as focus from './focusDeemphasis.js';
-import * as readout from './trackedReadout.js';
-import * as overlays from '../overlays/worldOverlay.js';
-import * as context from './contextStore.js';
-import * as render from '../renderGovernor.js';
-import * as layerState from './layerState.js';
+import { createApplicationSatellites } from '../app/layers/satellites.js';
+import { createSourceSlot } from '../app/sourceSlot.js';
+import { createSatelliteSource } from '../layers/satellites/index.js';
 
-const layer = createSatellitesLayer({
-  source: createSatelliteSource(),
-  services: { picking, focus, readout, overlays, context, render, layerState },
+const sourceSlot = createSourceSlot(
+  createSatelliteSource(),
+  ['readGroup'],
+  'Satellite source',
+);
+export const configureSatelliteSource = sourceSlot.configure;
+const layer = createApplicationSatellites({
+  source: sourceSlot.source,
 });
 export const satelliteVisualsVisible = layer.satelliteVisualsVisible;
 export const satelliteCatalogModeChanged = layer.satelliteCatalogModeChanged;

@@ -1,3 +1,4 @@
+import { readShellSource } from '../testSupport/readShellSource.mjs';
 // Director-level pins for scene playback.
 //
 // scenePolicy.test.mjs pins the pure decisions; these pin the wiring, which is
@@ -483,7 +484,7 @@ test('applyVisualState gates the map-stack switch on both sides of its await', (
   // another setStack() arrives, and a winning state that omits `mapStack`
   // never issues one — every normalized scene shot omits it — so a stale
   // switch would otherwise stand on the globe.
-  const source = fs.readFileSync(new URL('../ui/applicationShell.js', import.meta.url), 'utf8');
+  const source = readShellSource();
   const method = source.match(/\n {2}async applyVisualState\([\s\S]*?\n {2}\}\n/);
   assert.ok(method, 'applyVisualState is missing from ui.js');
   assert.match(method[0], /async applyVisualState\(state = \{\}, \{ isCurrent = null \} = \{\}\)/);

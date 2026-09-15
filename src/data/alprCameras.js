@@ -1,13 +1,15 @@
-import {
-  createAlprCamerasLayer,
-  createOverpassAlprSource,
-} from '../layers/alpr/index.js';
-import * as render from '../renderGovernor.js';
-import * as context from './contextStore.js';
-import * as picking from './pickRegistry.js';
-import * as groundFloor from './groundFloor.js';
+import { defaultSurface } from './surfaceServices.js';
+import { createApplicationAlpr } from '../app/layers/alprCameras.js';
+import { createSourceSlot } from '../app/sourceSlot.js';
+import { createOverpassAlprSource } from '../layers/alpr/index.js';
 export * from '../layers/alpr/index.js';
-export default createAlprCamerasLayer({
-  source: createOverpassAlprSource(),
-  services: { render, context, picking, groundFloor },
+const slot = createSourceSlot(
+  createOverpassAlprSource(),
+  ['fetch'],
+  'ALPR source',
+);
+export const configureAlprSource = slot.configure;
+export default createApplicationAlpr({
+  surface: defaultSurface,
+  source: slot.source,
 });

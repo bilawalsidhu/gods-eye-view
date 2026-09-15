@@ -1,30 +1,17 @@
+import { defaultSurface } from './surfaceServices.js';
+import { createApplicationCctv } from '../app/layers/cctv.js';
+import { createSourceSlot } from '../app/sourceSlot.js';
 import { createCctvSource } from '../layers/cctv/source.js';
-import { createCctvLayer } from '../layers/cctv/index.js';
-import * as sprites from './spriteOrder.js';
-import * as activation from '../cctvFocusRequest.js';
-import * as overlays from '../overlays/worldOverlay.js';
-import * as locations from '../locations.js';
-import * as picking from './pickRegistry.js';
-import * as terrain from './terrainHeights.js';
-import * as ground from './groundFloor.js';
-import * as mesh from './meshFloorSampler.js';
-import * as focus from './focusDeemphasis.js';
-import * as render from '../renderGovernor.js';
 
-const layer = createCctvLayer({
-  source: createCctvSource(),
-  services: {
-    sprites,
-    activation,
-    overlays,
-    locations,
-    picking,
-    terrain,
-    ground,
-    mesh,
-    focus,
-    render,
-  },
+const sourceSlot = createSourceSlot(
+  createCctvSource(),
+  ['getCatalog', 'getHealth', 'getFrameUrl', 'getMediaUrl'],
+  'Cctv source',
+);
+export const configureCctvSource = sourceSlot.configure;
+const layer = createApplicationCctv({
+  surface: defaultSurface,
+  source: sourceSlot.source,
 });
 export const calibrationPatchMovesAnchor = layer.calibrationPatchMovesAnchor;
 export const migrateRangeScaleForFloor = layer.migrateRangeScaleForFloor;

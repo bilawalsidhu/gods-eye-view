@@ -1,3 +1,4 @@
+import { readShellSource } from './testSupport/readShellSource.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const css = readStylesheet(path.join(ROOT, 'style.css'));
-const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'applicationShell.js'), 'utf8');
+const ui = readShellSource();
 
 /*
  * Required-attribution keep-out pin.

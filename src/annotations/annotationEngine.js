@@ -1,7 +1,8 @@
 import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
-import { isRateLimitedOutcome, resolveAnnotationTarget } from './annotationResolver.js';
+import { isRateLimitedOutcome, resolveAnnotationTarget, sampleGroundHeight } from './annotationResolver.js';
+import { ringCentroid } from './drawMode.js';
 
 // Dev convenience: expose the app's Cesium instance for console/preview probing
 // (single shared module instance — avoids dual-Cesium state bugs when testing).
@@ -246,7 +247,7 @@ export function createAnnotationEngine({
     // allSettled gives per-item error isolation (one failed item never aborts the batch); the
     // mutation pass below then runs in ORDER, so de-dup, the synchronous live-cap check, and output
     // order are all preserved exactly as the old serial loop had them.
-    const settled = await Promise.allSettled(list.map((spec) => resolveSpec(spec, controller.signal)));
+    const settled = await Promise.allSettled(list.map((spec) => resolveSpec(spec, controller.signal, opts.flyTo === true)));
 
     try {
       for (let i = 0; i < list.length; i += 1) {
@@ -385,8 +386,11 @@ export function createAnnotationEngine({
     };
   }
 
-  async function resolveSpec(spec, signal) {
+  async function resolveSpec(spec, signal, allowDistant = false) {
     const type = normalizeType(spec?.type);
+    // MANUAL geometry (drawTool.js): the person clicked the vertices, so there is
+    // nothing to resolve. Same record shapes as a resolved spec, source 'manual'.
+    if (isManualSpec(spec, type)) return resolveManualSpec(spec, type, viewer);
     if (type === 'route') {
       const points = Array.isArray(spec.points) ? spec.points : [];
       if (points.length < 2) throw new Error('a route needs at least 2 waypoints');
@@ -395,13 +399,15 @@ export function createAnnotationEngine({
       for (const pt of points) {
         const name = pt.target ?? pt.name ?? null;
         const r = await resolveTarget({
-          placeSearch,          viewer,
+          placeSearch,
+          viewer,
           target: name,
           latitude: pt.latitude,
           longitude: pt.longitude,
           screenX: pt.screenX,
           screenY: pt.screenY,
           footprint: false,
+          allowDistant,
           signal,
         });
         if (r) resolvedPts.push(r);
@@ -438,23 +444,27 @@ export function createAnnotationEngine({
     }
     if (type === 'arrow') {
       const from = await resolveTarget({
-          placeSearch,        viewer,
+        placeSearch,
+        viewer,
         target: spec.target,
         latitude: spec.latitude,
         longitude: spec.longitude,
         screenX: spec.screenX,
         screenY: spec.screenY,
         footprint: false,
+        allowDistant,
         signal,
       });
       const to = await resolveTarget({
-          placeSearch,        viewer,
+        placeSearch,
+        viewer,
         target: spec.toTarget,
         latitude: spec.toLatitude,
         longitude: spec.toLongitude,
         screenX: spec.toScreenX,
         screenY: spec.toScreenY,
         footprint: false,
+        allowDistant,
         signal,
       });
       if (!from || !to) {
@@ -473,7 +483,8 @@ export function createAnnotationEngine({
     }
     const wantFootprint = type === 'area' ? spec.footprint !== false : Boolean(spec.footprint);
     return resolveTarget({
-          placeSearch,      viewer,
+      placeSearch,
+      viewer,
       target: spec.target,
       latitude: spec.latitude,
       longitude: spec.longitude,
@@ -490,6 +501,7 @@ export function createAnnotationEngine({
       // timeout — field test 7 logs); deferring them lets the mark appear and the tool
       // result return while the outline resolves, then upgrades the mark in place.
       deferFootprint: wantFootprint,
+      allowDistant,
       signal,
     });
   }
@@ -742,7 +754,7 @@ export function createAnnotationEngine({
       synthesized: Boolean(resolved.synthesized), // approximate buffered area → dashed render
       // Progressive outline: the anchor is placed, the footprint is still resolving —
       // the upgrade task fills ring/kind in place when it lands. Transient render state
-      // (not serialized to GeoJSON).
+      // (not persisted).
       pendingOutline: typeof resolved.resolveOutline === 'function',
       // Which THING + SHAPE was asked for — the dedup identity while geometry is still
       // pending (see findDuplicate). targetKey is the normalized place name with trailing
@@ -1095,6 +1107,67 @@ function round5(n) {
   return Number.isFinite(n) ? Math.round(n * 1e5) / 1e5 : null;
 }
 
+/** A spec whose geometry was supplied by hand (drawTool.js) rather than by a name. */
+function isManualSpec(spec, type) {
+  if (!spec || spec.manual !== true) return false;
+  if (type === 'route') return Array.isArray(spec.path) && spec.path.length >= 2;
+  if (type === 'area') return Array.isArray(spec.ring) && spec.ring.length >= 3;
+  return Number.isFinite(Number(spec.latitude)) && Number.isFinite(Number(spec.longitude));
+}
+
+/** [lon, lat] pairs or {lon, lat} objects → [lon, lat] pairs, invalid entries dropped. */
+function manualPairs(list) {
+  return (Array.isArray(list) ? list : [])
+    .map((p) => (Array.isArray(p) ? [Number(p[0]), Number(p[1])] : [Number(p?.lon ?? p?.longitude), Number(p?.lat ?? p?.latitude)]))
+    .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180);
+}
+
+/**
+ * Resolve a hand-drawn spec without any fetch. An area keeps its ring as a real
+ * (not synthesized) outline so it drapes solid; a line is a `route` with mode
+ * 'manual', its length as distance and no travel time; a pin is a point.
+ */
+function resolveManualSpec(spec, type, viewer) {
+  if (type === 'route') {
+    // height 0 is a placeholder, not a placement: the world renderer draws a
+    // route with clampToGround + CESIUM_3D_TILE classification, so the line is
+    // draped onto the photoreal surface whatever this number says.
+    const pts = manualPairs(spec.path).map(([lon, lat]) => ({ lon, lat, height: 0 }));
+    if (pts.length < 2) throw new Error('a drawn line needs at least 2 points');
+    let distanceM = 0;
+    for (let i = 1; i < pts.length; i += 1) distanceM += greatCircleM(pts[i - 1], pts[i]);
+    return { path: pts, distanceM, durationS: null, mode: 'manual', source: 'manual', fallback: false };
+  }
+  if (type === 'area') {
+    const ring = manualPairs(spec.ring);
+    if (ring.length < 3) throw new Error('a drawn area needs at least 3 points');
+    // Averaged through ringCentroid, which unwraps longitudes first: a ring
+    // straddling the antimeridian has coordinates like [179.999, -179.999], and
+    // a raw mean of those puts the anchor on the Greenwich meridian, half a
+    // world from the shape it belongs to. A repeated closing vertex is dropped
+    // so it does not weight its own corner twice.
+    const distinct = closedRingWithoutRepeat(ring);
+    const centre = ringCentroid(distinct.map(([lon, lat]) => ({ lon, lat })));
+    const lon = centre.lon;
+    const lat = centre.lat;
+    return {
+      lon, lat, height: sampleGroundHeight(viewer, lon, lat),
+      ring, footprintKind: 'area', buildingHeight: null, synthesized: false, source: 'manual',
+    };
+  }
+  const lon = Number(spec.longitude);
+  const lat = Number(spec.latitude);
+  return { lon, lat, height: sampleGroundHeight(viewer, lon, lat), ring: null, source: 'manual' };
+}
+
+/** The ring's distinct positions: a closing vertex that repeats the first is dropped. */
+function closedRingWithoutRepeat(ring) {
+  if (ring.length < 2) return ring;
+  const [firstLon, firstLat] = ring[0];
+  const [lastLon, lastLat] = ring[ring.length - 1];
+  return firstLon === lastLon && firstLat === lastLat ? ring.slice(0, -1) : ring;
+}
+
 function normalizeMode(m) {
   const t = String(m || '').toLowerCase();
   if (t === 'car' || t === 'drive' || t === 'driving') return 'car';
@@ -1130,6 +1203,7 @@ function composeRouteLabel(baseLabel, distM, durS, mode, fallback) {
   if (!dist) return baseLabel;
   const min = Number.isFinite(durS) ? Math.max(1, Math.round(durS / 60)) : null;
   const word = mode === 'car' ? 'drive' : mode === 'bike' ? 'ride' : 'walk';
+  if (mode === 'manual') return baseLabel ? `${baseLabel} — ${dist}` : dist;
   // Fallback = routing was unavailable, so we drew a straight line: label it as a
   // direct line with no travel time (never claim an "X min walk" we didn't compute).
   let metrics;

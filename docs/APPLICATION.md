@@ -172,3 +172,27 @@ existing environment variables remain the default configuration. Model choices
 come from server configuration. Keep secret keys in the server adapter.
 Tool schemas, model defaults and cost estimates are unchanged. Unknown model
 IDs retain the existing conservative estimate until their rates are registered.
+
+### Composing the existing application components
+
+`application/scene`, `application/controls`, `application/data` and
+`application/tools` expose the existing globe, controls, catalog and tools as
+separate constructors. Pass these to `createApplication`; use its `signal` and
+`defer` for ownership. The compatibility catalog is still page-scoped: construct
+one application per page. Controls, actions and renderers use the same layer
+instances. Configure sources with `application/sources` before registration or
+state restoration, and release them after the consumers stop.
+
+`application/services` accepts boundary, terrain, regional-context, weather and
+summary services. `application/requests` supplies the existing HTTP protocols
+with configurable endpoints and a scoped transport. Changing an endpoint works
+only for a compatible protocol; another protocol supplies a service adapter.
+Cancellation discards late response bodies, and replacing a source invalidates
+its pending results. Source disposal does not silently reinstate a default.
+
+`ui/composition` supplies the default engines to the shell. Applications can
+supply a HUD implementation or request policy through control services. The
+shared chrome owns the welcome/loading transition; standalone composition adds
+Provider Settings. `build/html` expands an allowlist of component markers from
+`src/ui/templates`; unknown names cannot read arbitrary filesystem paths. The
+standalone document expands to the same markup as before this extraction.
