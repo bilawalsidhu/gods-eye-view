@@ -98,6 +98,7 @@ export class StyleManager {
       satellitesLayer,
       cctvLayer,
       bikeshareLayer,
+      transitLayer,
       aisLiveVesselsLayer,
       militaryAwarenessLayer,
       cachedGroundFloor,
@@ -570,6 +571,7 @@ export class StyleManager {
         satellitesLayer,
         cctvLayer,
         bikeshareLayer,
+        transitLayer,
         aisLiveVesselsLayer,
       ],
       (modeLabel) => {

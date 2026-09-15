@@ -43,7 +43,8 @@
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
-    "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs"
+    "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
+    "qa:transit": "node scripts/qa-transit.mjs"
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",
@@ -235,6 +236,12 @@
     "./layers/meteors/source": "./src/layers/meteors/source.js",
     "./server/providers/meteors": {
       "node": "./server/providers/meteors.js"
-    }
+    },
+    "./server/providers/transit": {
+      "node": "./server/providers/transit.js"
+    },
+    "./sources/transit": "./src/data/transitProxy.js",
+    "./layers/transit": "./src/layers/transit/index.js",
+    "./layers/transit/standalone": "./src/data/transit.js"
   }
 }

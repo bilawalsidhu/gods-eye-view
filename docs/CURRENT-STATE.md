@@ -2417,6 +2417,7 @@ its criteria cannot be silently ignored.
 | Radio | Radio Browser (public-domain station directory) | `src/data/radio.js` | `/api/radio/stations`, `/api/radio/click/:uuid` | 45 min directory refresh |
 | Bikeshare 🚲 | GBFS (Lyft + BCycle) | `src/data/bikeshare.js` | `/api/gbfs` | 60s |
 | Directions 🧭 | OSRM on FOSSGIS servers (OpenStreetMap) | `src/data/directions.js` | `/api/route` (`steps=1`) | on placement / mode change |
+| Transit 🚌 | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`) | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit` | 15s (poll + delayed playback) |
 | Datacenters ▣ | OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Dams ▰ | OpenInfraMap/OSM extract (bundled) | `src/data/localLayers.js` | — | static |
 | Submarine Cables ◠ | TeleGeography public map (bundled) | `src/data/telegeographySubmarineCables.js` | — | static |
@@ -2504,6 +2505,163 @@ What a card needs is a resolved ground anchor: a step whose ground cell has not
 answered yet opens nothing rather than a card hanging at sea level. The cells
 are re-read for up to 90 seconds, which outlasts a cold terrain round trip;
 reroute, CLEAR and disable cancel that.
+Transit is off by default, and share links use token `j`. The layer polls
+registered feeds near the camera every 15 seconds, below a 3,000 km altitude
+gate. Seven keyless regions are available: Boston, Austin, Minneapolis–St Paul,
+Helsinki, the Netherlands, Norway and South East Queensland. Mode silhouettes
+identify buses, trams, subways, trains, ferries and unclassified vehicles.
+
+Retained transit history uses the same outlier quarantine as live observations and
+preserves the active live bracket. Rejected reports do not publish route or mode
+changes to sprites, cards or detection text.
+
+**Timestamp playback.** Vehicles play between reports at 1× or hold while
+waiting for the next report. The display delay adapts within 25–120 seconds;
+late updates do not make a vehicle accelerate. A short reported crawl still
+plays between fixes. Stationary segments schedule a wake at the next motion
+boundary. Motion wording and orientation come from the displayed segment;
+underflow says “Waiting for update,” and stale reports override confident
+motion wording. Reported speed and stop status remain explicitly labelled as
+reports. Duplicate timestamps and implausible observations cannot create a
+zero-duration journey or immediately relocate a visible vehicle.
+
+**Selected history.** Selecting one vehicle draws its available recent path,
+clipped to the displayed time. The browser retains up to 15 minutes and 128
+fixes per vehicle, under a global 32 MiB history budget. Capacity pressure may
+shorten that history. Only the selected vehicle has a trail: completed segments
+are batched primitives, and a small moving head ends at the marker. Trail
+geometry is bounded to 2,048 prepared vertices; history changes rebuild the
+body, while ordinary playback updates the head and segment visibility.
+Both normal and depth-fail instance colours follow the age ramp once per display
+second or style change. Subdivision crossings update only changed visibility
+attributes. Deselecting releases selection geometry; marker paths retain only
+active and future corridors.
+
+MBTA history is also retained in the running proxy: up to 15 minutes and 128
+observations per vehicle, with a 16 MiB feed limit and 64 MiB process limit.
+`GET /api/transit/trail/mbta/<encodedVehicle>` reads only observations already
+received by this process; it never contacts the operator. Selection reads it
+once and cancels the request on deselection or disable. Reload can recover
+available history while the same server stays running. Restart clears it, and
+there is no background collection or promise of complete coverage. Other feeds
+remain live-enabled with session-local trails; proxy history is opt-in per feed.
+The catalog and source tests pin that distinction and the MBTA / MassDOT credit.
+Epoch metadata grows as contexts arrive. Snapshot members are protected during
+ingestion, eviction uses receipt-ordered queues, and capacity loss is disclosed
+when history is recreated.
+
+**Surface and route limitations.** Heights are aligned to work with Google 3D
+tiles. Unknown historical surfaces leave gaps in a trail. Sparse reports can
+cut across corners; these paths are not surveyed route geometry. Subway markers
+are projected to street level because the feed does not provide depth, and the
+selected card explains that choice. Actual street-level views still require
+visual inspection.
+
+**Appearance.** Normal fleet frames are 20 px, growing to 30 px on selection;
+NVG, thermal and noir frames are 30/36 px. Source rasters are 48/96 px before padding.
+External halos are 1/1.5 px in normal and 3/3 px in sensors, calculated from the
+final unpadded display size. Six modes, two sizes and three profiles cap the
+raster cache at 36 variants. Normal mode colours are bus `#5EF08A`, tram
+`#FFC24A`, subway `#FF4538`, rail `#D9A6FF`, ferry `#5FD6FF`, and unknown
+`#D8DDE5`. Selection keeps the mode colour. Sensor bodies use solid rounded envelopes with at least 60% opaque white coverage
+of the padded display footprint, without interior panel lines. Sensor input is opaque white with a
+fully opaque black halo; black-hot reverses the contrast through the
+thermal effect. Creation, mode changes, selection, deselection, map presets and
+Cockpit vision use the same sprite styling function.
+
+Sensor signatures remain in-scene. The thresholds in `qaMetrics.js` require
+white-hot, Ironbow and noir centres ≥0.85 luma and halo minima ≤0.25;
+black-hot uses centre ≤0.15 and halo maximum ≥0.75. Surveillance uses ≥90%
+of its phosphor peak white (0.65992 from RGB 0.16/1/0.22), halo minimum ≤0.25
+with the centre minus sampled background reported without gating. Each preset needs at least
+six verified, unobscured sprites; insufficient coverage is UNEXERCISED.
+The sampler excludes overlapping footprints, including otherwise ineligible
+sprites, and verifies pick ownership across all nine sampled core pixels.
+Noir samples also exclude its deliberately vignetted outer field, using shader
+settings and screen position rather than observed brightness. Selected-trail
+diagnostics report every condition even when selection fails.
+
+Transit brackets use the normal-composite overlay surface: a 1.25 px mode-colour
+stroke over 3.25 px dark backing. Other contact themes retain their existing
+behavior. The selected trail uses a 2 px core over 4 px backing, mode-coloured
+in normal and white input in sensors. Alpha falls linearly from 0.80 at the head
+to 0.45 at two minutes, 0.20 at ten minutes and 0.08 at fifteen minutes.
+
+**Cards and DETECT.** The card presents route, mode/operator, displayed motion,
+display delay and newest-report age, reported speed/stop, vehicle ID, and
+available trail duration. Its anchor follows the rendered marker; text is
+checked at 4 Hz and published when it changes. DETECT labels retain route,
+mode and motion, with the selected label suppressed beside its fuller card.
+Candidate membership changes on revisions, coalesced at 4 Hz; paints read
+cached contacts and strings. Marker migration explicitly updates cached
+position references. Freshness and delay use the shared sample’s anchored clock;
+newest bearings are explicitly labelled as reports. Rejected fixes cannot alter
+lag reservoirs or the target delay. Returning from a hidden tab explicitly
+synchronizes visible playback before its next frame.
+
+Playback reserves numeric scratch before the first sample, including unknown
+heights, and reuses caller-owned sample and segment storage.
+
+**Scene work.** Stationary and animated billboards use separate, adjacent
+collections above CCTV and Bikeshare. Traffic, Bikeshare and Transit share camera
+sensitivity claims; the original sensitivity returns after the last release.
+Visibility checks combine the camera frustum and ellipsoid occlusion at no more
+than 4 Hz; missing map bounds do not admit the globe's far side. Frame work
+visits moving visible vehicles, up to 64 pending height changes, and the selected
+head. Rotation visits visible membership at 5 Hz, with selected rotation per
+frame. The transit render hold exists only for visible positional or orientation
+animation. Polls, surface completions and trail fades request individual renders.
+Disable clears vehicles, detection references, requests, timers and holds;
+destruction also releases collections and registrations.
+
+**Acceptance harness.** Run against an already running development server:
+
+```sh
+QA_BASE_URL=http://localhost:4305 QA_TAG=keyless node scripts/qa-transit.mjs
+```
+
+The full run samples completed frames at 1920×1080 CSS pixels, records DPR, and
+measures moving fleets of 800 and 3,000 vehicles with 128 fixes each and DETECT
+on. Street/metro targets are respectively: transit frame CPU p95 ≤1/4 ms, frame
+interval p95 ≤20/25 ms, billboard uploads ≤256 KiB/1 MiB per frame, and retained
+heap growth ≤24/48 MiB. The 3,000-vehicle CPU budget is 4 ms (recorded browser
+measurement 3.4 ms); the 800-vehicle budget stays at 1 ms (measured 0.9 ms).
+Transit-authored frame allocation is ≤8 KiB/frame at both fleets, attributed
+by source stack to `src/layers/transit/**`, `src/data/contactPlayback.js`,
+`src/data/contactTrailRenderer.js` and `src/data/transit*.js`. Whole-frame
+allocation and its three largest allocators are reported without gating:
+Cesium billboard buffer uploads and the shared DETECT painter are outside
+this layer's allocation budget. **Follow-up: pool shared DETECT placement and
+paint scratch** in `_buildLabelPlacements`, `_materializeCandidate`,
+`_drawOverlay` and their cohort/arbiter helpers. Heap growth is measured
+conservatively as GC-bracketed page growth; allocation sampling includes objects
+collected during the interval. These are acceptance budgets, not measured claims
+for every machine.
+
+Artifacts in `qa-shots/transit/` include per-budget metrics and allocation
+profiles, the Boston Red/741/742/Green-E matrix on measured bright and dark
+backgrounds across normal, NVG, white-hot, black-hot and Ironbow, selected and
+restored screenshots, reload recovery, and disable checks. Matrix routes are
+scripted fixtures; the separate live-feed/reload checks use actual observations.
+The separate Boston live pass uses actual MBTA observations at 120–600 m and
+20–45 degree oblique views, with live selection and sensor readback.
+Live visual cities are otherwise chosen for local daytime operation. Motion checks use
+injected playback independently of live fleet activity. Thermal checks verify
+style activation before reading generated controls; DETECT checks set density
+and exercise the real OFF/restore button. Cesium render errors fail selection
+acceptance.
+Required empty or unexercised checks fail acceptance. The passing final line is
+`HARNESS: PASS (0 unexercised)`. A `QA_SECTIONS` subset is diagnostic only and
+cannot claim full acceptance.
+
+**Lifecycle and proxy.** Contacts temporarily disables Transit and restores its
+prior state on exit; Space Missions refuses enablement while isolating replay
+data. Cockpit enters through Contacts and does not independently enable Transit.
+The proxy fetches registered URLs only, validates redirect origins, bounds
+responses and decoding, caches successful snapshots, and backs off after failed
+refreshes. A 304 confirms contact without appending history. Missing vehicles
+are removed after two missed polls; reports older than ten minutes and feeds
+silent for five minutes are removed. Credits appear when the feed is used.
 
 `src/data/militaryAwareness.js` remains registered internally as the Contacts
 coordinator, but it is not a user-visible Data Layers entry. Its visible entry

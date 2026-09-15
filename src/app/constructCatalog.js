@@ -9,6 +9,7 @@ import { createApplicationRadio } from './layers/radio.js';
 import { createApplicationTraffic } from './layers/traffic.js';
 import { createApplicationBikeshare } from './layers/bikeshare.js';
 import { createApplicationDirections } from './layers/directions.js';
+import { createApplicationTransit } from './layers/transit.js';
 import { createApplicationInstallations } from './layers/militaryInstallations.js';
 import { createApplicationSatellites } from './layers/satellites.js';
 import { createApplicationLaunches } from './layers/rocketLaunches.js';
@@ -114,6 +115,7 @@ export function createApplicationCatalog({
         createApplicationRadio({ surface, source: sources.radio }),
         createApplicationBikeshare({ source: sources.bikeshare }),
         createApplicationDirections(),
+        createApplicationTransit({ surface }),
         vessels,
         installations,
         createApplicationAwareness({

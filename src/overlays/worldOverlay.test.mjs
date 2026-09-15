@@ -1299,6 +1299,8 @@ test('UI exclusions stay per-rect: overlapping chrome never merges into a boundi
 
   assert.equal(getWorldOverlayDiagnostics().paintedCount, 1);
   const painted = getOverlayPaintRect('ambient', 'CLEAR-OF-BOTH');
+  assert.ok(Number.isFinite(painted.anchorX));
+  assert.ok(Number.isFinite(painted.anchorY));
   assert.ok(painted, 'the entry published a paint rectangle');
   for (const [name, rect] of Object.entries(chrome)) {
     assert.equal(rectsIntersect(painted, inflatedRect(rect)), false,

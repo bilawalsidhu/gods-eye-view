@@ -188,6 +188,11 @@ export const DATA_CREDITS = [
       '<a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">fix the map</a>',
   },
   {
+    key: 'gtfs-rt',
+    html:
+      'Transit vehicles: operator GTFS-Realtime feeds (each operator is credited below when its vehicles are shown)',
+  },
+  {
     key: 'radio-browser',
     html:
       'Internet-radio station directory: ' +
@@ -290,6 +295,26 @@ export const NATURAL_EARTH_CREDIT = {
     'Physical region boundaries from ' +
     '<a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> (public domain)',
 };
+
+/**
+ * Per-feed transit credit, registered the first time that feed's vehicles
+ * render (see `src/data/transitFeeds.js` for the license of each).
+ * @param {{ id: string, attribution: string, license: string, licenseUrl: string }} feed
+ * @returns {{ key: string, html: string }}
+ */
+export function transitFeedCredit(feed) {
+  const escape = (text) => String(text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+  return {
+    key: `transit-${feed.id}`,
+    html:
+      `Transit (${escape(feed.attribution)}): ` +
+      `<a href="${escape(feed.licenseUrl)}" target="_blank" rel="noopener">${escape(feed.license)}</a>`,
+  };
+}
 
 /** @type {Set<string>} Keys of dynamic credits already registered this session. */
 const _dynamicCreditKeys = new Set();

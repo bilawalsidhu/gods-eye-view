@@ -3,6 +3,8 @@ export const SPRITE_LAYER_ORDER = Object.freeze([
   'cctv',
   'firms',
   'bikeshare',
+  'transit',
+  'transit-motion',
   'directions',
   'ais',
   'military',
