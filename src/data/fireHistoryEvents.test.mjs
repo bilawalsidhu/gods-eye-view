@@ -117,48 +117,155 @@ test('filterRecordsToEvent clamps to box and day range', () => {
 });
 
 test('normalizeFirePerimeter accepts only whitelisted services and structured filters', () => {
-  const history = normalizeFirePerimeter({ service: 'nifc-history', incident: 'CAMP', fireYear: '2018', unitId: 'CABTU' });
-  assert.deepEqual(history, { service: 'nifc-history', incident: 'CAMP', fireYear: '2018', unitId: 'CABTU' });
+  const history = normalizeFirePerimeter({
+    service: 'nifc-history',
+    incident: 'CAMP',
+    fireYear: '2018',
+    unitId: 'CABTU',
+  });
+  assert.deepEqual(history, {
+    service: 'nifc-history',
+    incident: 'CAMP',
+    fireYear: '2018',
+    unitId: 'CABTU',
+  });
   assert.ok(Object.isFrozen(history));
-  const wfigs = normalizeFirePerimeter({ service: 'wfigs', incident: "O'Brien", state: 'US-CA', discoveredAfter: '2024-07-01' });
+  const wfigs = normalizeFirePerimeter({
+    service: 'wfigs',
+    incident: "O'Brien",
+    state: 'US-CA',
+    discoveredAfter: '2024-07-01',
+  });
   assert.equal(wfigs.discoveredAfter, '2024-07-01');
-  assert.equal(normalizeFirePerimeter({ service: 'other', incident: 'X' }), null);
-  assert.equal(normalizeFirePerimeter({ service: 'nifc-history', incident: 'CAMP', fireYear: '18' }), null);
-  assert.equal(normalizeFirePerimeter({ service: 'nifc-history', incident: "X' OR 1=1 --", fireYear: '2018' }), null);
-  assert.equal(normalizeFirePerimeter({ service: 'wfigs', incident: 'Park', state: 'CA', discoveredAfter: '2024-07-01' }), null);
-  assert.equal(normalizeFirePerimeter({ service: 'wfigs', incident: 'Park', state: 'US-CA', discoveredAfter: 'soon' }), null);
+  assert.equal(
+    normalizeFirePerimeter({ service: 'other', incident: 'X' }),
+    null,
+  );
+  assert.equal(
+    normalizeFirePerimeter({
+      service: 'nifc-history',
+      incident: 'CAMP',
+      fireYear: '18',
+    }),
+    null,
+  );
+  assert.equal(
+    normalizeFirePerimeter({
+      service: 'nifc-history',
+      incident: "X' OR 1=1 --",
+      fireYear: '2018',
+    }),
+    null,
+  );
+  assert.equal(
+    normalizeFirePerimeter({
+      service: 'wfigs',
+      incident: 'Park',
+      state: 'CA',
+      discoveredAfter: '2024-07-01',
+    }),
+    null,
+  );
+  assert.equal(
+    normalizeFirePerimeter({
+      service: 'wfigs',
+      incident: 'Park',
+      state: 'US-CA',
+      discoveredAfter: 'soon',
+    }),
+    null,
+  );
   assert.equal(normalizeFirePerimeter(null), null);
   // An event with a malformed perimeter is rejected as a whole.
-  assert.equal(normalizeFireEvent({ ...VALID, perimeter: { service: 'nope' } }), null);
+  assert.equal(
+    normalizeFireEvent({ ...VALID, perimeter: { service: 'nope' } }),
+    null,
+  );
   assert.equal(normalizeFireEvent({ ...VALID }).perimeter, null);
 });
 
 test('perimeterQueryUrl targets the whitelisted service with escaped filters', () => {
-  const url = perimeterQueryUrl({ service: 'wfigs', incident: "O'Brien", state: 'US-CA', discoveredAfter: '2024-07-01' });
-  assert.ok(url.startsWith('https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters/FeatureServer/0/query?'));
+  const url = perimeterQueryUrl({
+    service: 'wfigs',
+    incident: "O'Brien",
+    state: 'US-CA',
+    discoveredAfter: '2024-07-01',
+  });
+  assert.ok(
+    url.startsWith(
+      'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters/FeatureServer/0/query?',
+    ),
+  );
   const params = new URL(url).searchParams;
-  assert.equal(params.get('where'), "attr_IncidentName='O''Brien' AND attr_POOState='US-CA' AND attr_FireDiscoveryDateTime > timestamp '2024-07-01'");
+  assert.equal(
+    params.get('where'),
+    "attr_IncidentName='O''Brien' AND attr_POOState='US-CA' AND attr_FireDiscoveryDateTime > timestamp '2024-07-01'",
+  );
   assert.equal(params.get('f'), 'geojson');
   assert.equal(params.get('outSR'), '4326');
-  const hist = new URL(perimeterQueryUrl({ service: 'nifc-history', incident: 'CAMP', fireYear: '2018', unitId: 'CABTU' })).searchParams;
-  assert.equal(hist.get('where'), "INCIDENT='CAMP' AND FIRE_YEAR='2018' AND UNIT_ID='CABTU'");
+  const hist = new URL(
+    perimeterQueryUrl({
+      service: 'nifc-history',
+      incident: 'CAMP',
+      fireYear: '2018',
+      unitId: 'CABTU',
+    }),
+  ).searchParams;
+  assert.equal(
+    hist.get('where'),
+    "INCIDENT='CAMP' AND FIRE_YEAR='2018' AND UNIT_ID='CABTU'",
+  );
   assert.equal(perimeterQueryUrl({ service: 'x' }), null);
 });
 
 test('selectPerimeterFeature keeps the largest polygon and its currency date', () => {
-  const poly = { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] };
+  const poly = {
+    type: 'Polygon',
+    coordinates: [
+      [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 0],
+      ],
+    ],
+  };
   const picked = selectPerimeterFeature(
-    { features: [
-      { geometry: poly, properties: { poly_GISAcres: 10, poly_DateCurrent: 1694128641000 } },
-      { geometry: { type: 'Point', coordinates: [0, 0] }, properties: { poly_GISAcres: 999 } },
-      { geometry: { ...poly, type: 'MultiPolygon', coordinates: [poly.coordinates] }, properties: { poly_GISAcres: 2123.5, poly_DateCurrent: 1694128641000 } },
-    ] },
+    {
+      features: [
+        {
+          geometry: poly,
+          properties: { poly_GISAcres: 10, poly_DateCurrent: 1694128641000 },
+        },
+        {
+          geometry: { type: 'Point', coordinates: [0, 0] },
+          properties: { poly_GISAcres: 999 },
+        },
+        {
+          geometry: {
+            ...poly,
+            type: 'MultiPolygon',
+            coordinates: [poly.coordinates],
+          },
+          properties: {
+            poly_GISAcres: 2123.5,
+            poly_DateCurrent: 1694128641000,
+          },
+        },
+      ],
+    },
     'wfigs',
   );
   assert.equal(picked.acres, 2123.5);
   assert.equal(picked.geometry.type, 'MultiPolygon');
   assert.equal(picked.dateCurrentMs, 1694128641000);
   assert.equal(selectPerimeterFeature({ features: [] }, 'wfigs'), null);
-  assert.equal(selectPerimeterFeature({ features: [{ geometry: poly, properties: {} }] }, 'nifc-history').acres, null);
+  assert.equal(
+    selectPerimeterFeature(
+      { features: [{ geometry: poly, properties: {} }] },
+      'nifc-history',
+    ).acres,
+    null,
+  );
   assert.equal(selectPerimeterFeature({}, 'bogus'), null);
 });

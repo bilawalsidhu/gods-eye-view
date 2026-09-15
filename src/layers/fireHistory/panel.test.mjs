@@ -11,15 +11,29 @@ import {
 } from './panel.js';
 
 test('escapeText neutralizes markup from config or feed values', () => {
-  assert.equal(escapeText('<b x="1">&\'</b>'), '&lt;b x=&quot;1&quot;&gt;&amp;&#39;&lt;/b&gt;');
+  assert.equal(
+    escapeText('<b x="1">&\'</b>'),
+    '&lt;b x=&quot;1&quot;&gt;&amp;&#39;&lt;/b&gt;',
+  );
   assert.equal(escapeText(null), '');
 });
 
 test('rosterHtml marks the selected event and escapes names', () => {
   const html = rosterHtml(
     [
-      { id: 'a', name: 'Camp <Fire>', region: 'Butte', startDate: '2018-11-08', endDate: '2018-11-25' },
-      { id: 'b', name: 'Other', startDate: '2024-01-01', endDate: '2024-01-02' },
+      {
+        id: 'a',
+        name: 'Camp <Fire>',
+        region: 'Butte',
+        startDate: '2018-11-08',
+        endDate: '2018-11-25',
+      },
+      {
+        id: 'b',
+        name: 'Other',
+        startDate: '2024-01-01',
+        endDate: '2024-01-02',
+      },
     ],
     'b',
   );
@@ -56,7 +70,10 @@ test('timelineChartSvg draws one bar per day and a cursor only when engaged', ()
 });
 
 test('referencesHtml appends the NIFC link only when a perimeter is loaded', () => {
-  assert.match(referencesHtml([], { label: 'WFIGS Interagency Perimeters' }), /NIFC Open Data/);
+  assert.match(
+    referencesHtml([], { label: 'WFIGS Interagency Perimeters' }),
+    /NIFC Open Data/,
+  );
   assert.doesNotMatch(referencesHtml([], null), /NIFC/);
 });
 
@@ -71,7 +88,14 @@ test('referencesHtml keeps https links only', () => {
 });
 
 test('replayFraction and clockText follow the clock', () => {
-  const base = { startMs: 0, endMs: 1000, cursorMs: 250, shown: 12, active: 3, speed: 1 };
+  const base = {
+    startMs: 0,
+    endMs: 1000,
+    cursorMs: 250,
+    shown: 12,
+    active: 3,
+    speed: 1,
+  };
   assert.equal(replayFraction({ ...base, status: 'playing' }), 0.25);
   assert.equal(replayFraction(null), 0);
   assert.equal(clockText(null), 'LOAD AN EVENT TO REPLAY ITS SPREAD');

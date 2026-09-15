@@ -44,11 +44,31 @@ const PERIMETER = {
   type: 'FeatureCollection',
   features: [
     {
-      geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 0],
+          ],
+        ],
+      },
       properties: { poly_GISAcres: 10, poly_DateCurrent: 1541900000000 },
     },
     {
-      geometry: { type: 'Polygon', coordinates: [[[2, 2], [3, 2], [3, 3], [2, 2]]] },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [2, 2],
+            [3, 2],
+            [3, 3],
+            [2, 2],
+          ],
+        ],
+      },
       properties: { poly_GISAcres: 247.105, poly_DateCurrent: 1541990000000 },
     },
   ],
@@ -107,7 +127,10 @@ async function fixture(t, { key = '', fetchImpl } = {}) {
 
 test('the standalone provider list mounts the fire-history proxy exactly once', () => {
   const plugins = localProviderPlugins();
-  assert.equal(plugins.filter((p) => p.name === 'fire-history-proxy').length, 1);
+  assert.equal(
+    plugins.filter((p) => p.name === 'fire-history-proxy').length,
+    1,
+  );
 });
 
 test('keyless: the registry is public, detections answer no_key, upstream is never contacted', async (t) => {
@@ -139,7 +162,10 @@ test('keyed: registered windows only, sequential per source, filtered, cached, f
     key: 'fixture-key',
     fetchImpl: (url) => {
       assert.equal(url.host, 'firms.modaps.eosdis.nasa.gov');
-      assert.match(url.pathname, /\/api\/area\/csv\/fixture-key\/(VIIRS_SNPP_SP|MODIS_SP)\/-121\.7500,39\.6500,-121\.3000,39\.9500\/5\/2018-11-08$/);
+      assert.match(
+        url.pathname,
+        /\/api\/area\/csv\/fixture-key\/(VIIRS_SNPP_SP|MODIS_SP)\/-121\.7500,39\.6500,-121\.3000,39\.9500\/5\/2018-11-08$/,
+      );
       if (url.pathname.includes('MODIS') && modisDown)
         return new Response('offline', { status: 503 });
       return new Response(CSV);
@@ -162,7 +188,11 @@ test('keyed: registered windows only, sequential per source, filtered, cached, f
   assert.equal(complete.count, 2);
   assert.equal(calls.length, 3, 'only the failed MODIS window was refetched');
   assert.equal(json(await request('/test-fire-2018')).count, 2);
-  assert.equal(calls.length, 3, 'a complete event never touches upstream again');
+  assert.equal(
+    calls.length,
+    3,
+    'a complete event never touches upstream again',
+  );
   assert.equal(json(await request('/')).hasKey, true);
 });
 
@@ -182,7 +212,10 @@ test('perimeter: whitelisted host, escaped filters, largest polygon, permanent c
   const { request, calls } = await fixture(t, {
     fetchImpl: (url) => {
       assert.equal(url.host, 'services3.arcgis.com');
-      assert.match(url.pathname, /WFIGS_Interagency_Perimeters\/FeatureServer\/0\/query$/);
+      assert.match(
+        url.pathname,
+        /WFIGS_Interagency_Perimeters\/FeatureServer\/0\/query$/,
+      );
       assert.equal(
         url.searchParams.get('where'),
         "attr_IncidentName='O''Test' AND attr_POOState='US-CA' AND attr_FireDiscoveryDateTime > timestamp '2018-11-01'",
@@ -195,7 +228,11 @@ test('perimeter: whitelisted host, escaped filters, largest polygon, permanent c
   assert.equal(perimeter.acres, 247.105);
   assert.equal(perimeter.hectares, 100);
   assert.equal(perimeter.dateCurrentMs, 1541990000000);
-  assert.equal(perimeter.geometry.coordinates[0][0][0], 2, 'largest polygon wins');
+  assert.equal(
+    perimeter.geometry.coordinates[0][0][0],
+    2,
+    'largest polygon wins',
+  );
   assert.equal(perimeter.label, 'WFIGS Interagency Perimeters');
   assert.equal(calls.length, 1, 'perimeters need no FIRMS key');
   json(await request('/test-fire-2018/perimeter'));

@@ -26,7 +26,13 @@ const HOUR = 3600_000;
 
 test('createReplayState parks idle at the window start and validates speed', () => {
   const state = createReplayState(EVENT, 2);
-  assert.deepEqual(state, { status: 'idle', cursorMs: START, speed: 2, startMs: START, endMs: END });
+  assert.deepEqual(state, {
+    status: 'idle',
+    cursorMs: START,
+    speed: 2,
+    startMs: START,
+    endMs: END,
+  });
   assert.equal(createReplayState(EVENT, 3).speed, 1);
   assert.equal(createReplayState({ startDate: 'x' }), null);
 });
@@ -46,11 +52,21 @@ test('advanceReplay moves only while playing, in event time, and parks at the en
 });
 
 test('play restarts from idle or ended, resumes from paused', () => {
-  const mid = { ...playReplay(createReplayState(EVENT)), cursorMs: START + 5 * HOUR };
+  const mid = {
+    ...playReplay(createReplayState(EVENT)),
+    cursorMs: START + 5 * HOUR,
+  };
   assert.equal(playReplay(pauseReplay(mid)).cursorMs, START + 5 * HOUR);
-  assert.equal(playReplay({ ...mid, status: 'ended', cursorMs: END }).cursorMs, START);
+  assert.equal(
+    playReplay({ ...mid, status: 'ended', cursorMs: END }).cursorMs,
+    START,
+  );
   assert.equal(pauseReplay(createReplayState(EVENT)).status, 'idle');
-  assert.deepEqual(resetReplay(mid), { ...mid, status: 'idle', cursorMs: START });
+  assert.deepEqual(resetReplay(mid), {
+    ...mid,
+    status: 'idle',
+    cursorMs: START,
+  });
 });
 
 test('seek clamps and makes an idle clock visible as paused', () => {
@@ -91,18 +107,31 @@ test('labels and chips reflect transport state', () => {
   assert.equal(replayLabel(idle), '');
   const playing = advanceReplay(playReplay(idle), 1000);
   assert.equal(replayLabel(playing), 'REPLAY · 2018-11-08 06:00Z · 1×');
-  assert.equal(replayLabel(pauseReplay(playing)), 'PAUSED · 2018-11-08 06:00Z · 1×');
-  assert.equal(replayLabel({ ...playing, status: 'ended', cursorMs: END }), 'REPLAY END · 2018-11-10 00:00Z · 1×');
+  assert.equal(
+    replayLabel(pauseReplay(playing)),
+    'PAUSED · 2018-11-08 06:00Z · 1×',
+  );
+  assert.equal(
+    replayLabel({ ...playing, status: 'ended', cursorMs: END }),
+    'REPLAY END · 2018-11-10 00:00Z · 1×',
+  );
   assert.equal(formatReplayClock(NaN), '');
 
   const calls = [];
-  const handlers = { onToggle: () => calls.push('t'), onReset: () => calls.push('r'), onSpeed: () => calls.push('s') };
+  const handlers = {
+    onToggle: () => calls.push('t'),
+    onReset: () => calls.push('r'),
+    onSpeed: () => calls.push('s'),
+  };
   const idleChips = replayRowChips(idle, handlers);
-  assert.deepEqual(idleChips.map((c) => [c.id, c.label, c.disabled, c.active]), [
-    ['replay-toggle', '▶ REPLAY', false, false],
-    ['replay-reset', '↺ ALL', true, false],
-    ['replay-speed', '1×', false, false],
-  ]);
+  assert.deepEqual(
+    idleChips.map((c) => [c.id, c.label, c.disabled, c.active]),
+    [
+      ['replay-toggle', '▶ REPLAY', false, false],
+      ['replay-reset', '↺ ALL', true, false],
+      ['replay-speed', '1×', false, false],
+    ],
+  );
   const playingChips = replayRowChips(playing, handlers);
   assert.equal(playingChips[0].label, '❚❚ PAUSE');
   assert.equal(playingChips[0].active, true);

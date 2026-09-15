@@ -113,10 +113,25 @@ test('eventCenter is the box midpoint', () => {
 
 test('fireHistoryRowControls builds one chip per event and a three-band legend', () => {
   const controls = fireHistoryRowControls({
-    events: [EVENT, { ...EVENT, id: 'other', name: 'Other', startDate: '2024-01-01', endDate: '2024-01-02', region: '' }],
+    events: [
+      EVENT,
+      {
+        ...EVENT,
+        id: 'other',
+        name: 'Other',
+        startDate: '2024-01-01',
+        endDate: '2024-01-02',
+        region: '',
+      },
+    ],
     selectedId: 'other',
     loading: true,
-    fires: [{ progress: 0.1 }, { progress: 0.5 }, { progress: 0.9 }, { progress: 1 }],
+    fires: [
+      { progress: 0.1 },
+      { progress: 0.5 },
+      { progress: 0.9 },
+      { progress: 1 },
+    ],
   });
   assert.equal(controls.chips.length, 2);
   assert.equal(controls.chips[0].label, 'Camp Fire · 2018');
@@ -136,15 +151,29 @@ test('fireHistoryRowControls builds one chip per event and a three-band legend',
     ],
   );
   assert.equal(
-    fireHistoryRowControls({ events: [], selectedId: null, loading: false, fires: [], onSelect() {} })
-      .legend.length,
+    fireHistoryRowControls({
+      events: [],
+      selectedId: null,
+      loading: false,
+      fires: [],
+      onSelect() {},
+    }).legend.length,
     0,
   );
 });
 
 test('mapAnalystRecord is JSON-safe with nulls for unknowns', () => {
   const record = mapAnalystRecord(
-    { index: 7, lat: 1, lon: 2, acqMs: 3, progress: 0.4, frp: NaN, confidence: 0.6, sensor: 'VIIRS' },
+    {
+      index: 7,
+      lat: 1,
+      lon: 2,
+      acqMs: 3,
+      progress: 0.4,
+      frp: NaN,
+      confidence: 0.6,
+      sensor: 'VIIRS',
+    },
     EVENT,
   );
   assert.deepEqual(record, {
@@ -177,25 +206,65 @@ test('perimeterRings flattens polygons, closes rings and drops junk', async () =
   const rings = perimeterRings({
     type: 'MultiPolygon',
     coordinates: [
-      [[[0, 0], [1, 0], [1, 1]], [[0.2, 0.2], [0.3, 0.2], [0.3, 0.3], [0.2, 0.2]]],
-      [[[5, 5], ['x', 5], [6, 6]]],
-      [[[7, 7], [200, 7], [8, 8], [7, 7]]],
+      [
+        [
+          [0, 0],
+          [1, 0],
+          [1, 1],
+        ],
+        [
+          [0.2, 0.2],
+          [0.3, 0.2],
+          [0.3, 0.3],
+          [0.2, 0.2],
+        ],
+      ],
+      [
+        [
+          [5, 5],
+          ['x', 5],
+          [6, 6],
+        ],
+      ],
+      [
+        [
+          [7, 7],
+          [200, 7],
+          [8, 8],
+          [7, 7],
+        ],
+      ],
     ],
   });
   assert.equal(rings.length, 2);
-  assert.deepEqual(rings[0][rings[0].length - 1], [0, 0], 'open ring is closed');
+  assert.deepEqual(
+    rings[0][rings[0].length - 1],
+    [0, 0],
+    'open ring is closed',
+  );
   assert.equal(rings[0].length, 4);
   assert.equal(rings[1].length, 4);
   assert.deepEqual(perimeterRings({ type: 'Point', coordinates: [0, 0] }), []);
   assert.deepEqual(perimeterRings(null), []);
   assert.equal(
-    perimeterText({ hectares: 62053, label: 'NIFC Interagency Fire Perimeter History', dateCurrentMs: null }),
+    perimeterText({
+      hectares: 62053,
+      label: 'NIFC Interagency Fire Perimeter History',
+      dateCurrentMs: null,
+    }),
     '62,053 HA · NIFC Interagency Fire Perimeter History',
   );
   assert.equal(
-    perimeterText({ hectares: 859, label: 'WFIGS Interagency Perimeters', dateCurrentMs: 1694128641000 }),
+    perimeterText({
+      hectares: 859,
+      label: 'WFIGS Interagency Perimeters',
+      dateCurrentMs: 1694128641000,
+    }),
     '859 HA · WFIGS Interagency Perimeters · AS OF 2023-09-07',
   );
   assert.equal(perimeterText(null), 'NO OFFICIAL PERIMETER REGISTERED');
-  assert.match(perimeterText({ hectares: null, label: 'X', dateCurrentMs: null }), /^AREA UNAVAILABLE/);
+  assert.match(
+    perimeterText({ hectares: null, label: 'X', dateCurrentMs: null }),
+    /^AREA UNAVAILABLE/,
+  );
 });

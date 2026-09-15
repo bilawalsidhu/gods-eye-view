@@ -236,7 +236,11 @@
   border: 1px solid rgba(255, 159, 67, 0.62);
   border-radius: 5px;
   color: #ffc078;
-  background: linear-gradient(90deg, rgba(255, 159, 67, 0.08), rgba(232, 50, 26, 0.08));
+  background: linear-gradient(
+    90deg,
+    rgba(255, 159, 67, 0.08),
+    rgba(232, 50, 26, 0.08)
+  );
   font: 8px var(--font-mono);
   letter-spacing: 0.14em;
   cursor: pointer;
