@@ -67,6 +67,13 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'eccc-aqhi',
+    html:
+      'Air Quality Health Index: Environment and Climate Change Canada — MSC GeoMet ' +
+      '(<a href="https://eccc-msc.github.io/open-data/" target="_blank" rel="noopener">eccc-msc.github.io/open-data</a>) ' +
+      '· ECCC Data Servers End-use Licence',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +

@@ -13,12 +13,14 @@ import { createLaunchSource } from '../layers/launches/index.js';
 import { createOverpassAlprSource } from '../layers/alpr/index.js';
 import { createFirmsSource } from '../layers/firms/index.js';
 import { createUsgsEarthquakeSource } from '../layers/earthquakes/source.js';
+import { createEcccAqhiSource } from '../layers/aqhi/source.js';
 import { createBundledCableSource } from '../layers/submarineCables/bundledSource.js';
 
 /** Existing reference feeds, usable independently of live source selection. */
 export function createStandaloneReferenceSources() {
   return {
     earthquakes: createUsgsEarthquakeSource(),
+    aqhi: createEcccAqhiSource(),
     cables: createBundledCableSource(),
   };
 }
