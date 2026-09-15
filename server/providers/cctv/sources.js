@@ -55,6 +55,12 @@ import {
   DEFAULT_CALGARY_MAX_SOURCES,
   CALGARY_DOWNTOWN,
   CALGARY_MAX_CATALOG_BYTES,
+  CATALONIA_CAMERAS_URL,
+  CATALONIA_IMAGE_HOSTS,
+  CATALONIA_FONT_CREDIT,
+  CATALONIA_FONT_ELEVATION_M,
+  DEFAULT_CATALONIA_MAX_SOURCES,
+  CATALONIA_ANCHORS,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
 } from './constants.js';
 import {
@@ -73,6 +79,8 @@ import {
   isLikelyTexasCoordinate,
   isLikelyNswCoordinate,
   isLikelyCalgaryCoordinate,
+  isLikelyCataloniaCoordinate,
+  decodeNumericEntities,
   cameraDisplayCode,
   rowArrayToObject,
   prioritizeSources,
@@ -1589,6 +1597,201 @@ export async function loadCalgarySourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] Calgary camera download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/**
+ * Parse the Catalonia (`cameres.xml`) WFS/GML feed into raw feature records.
+ * Regex-based rather than a full XML parser — the feed is small (~160
+ * features) and this avoids a new dependency for one field set per feature.
+ *
+ * @param {string} xml
+ * @returns {Array<{fid:string, lat:number, lon:number, carretera:string, municipi:string, pk:string, link:string, font:string}>}
+ */
+export function parseCataloniaXml(xml) {
+  const out = [];
+  const blockRe = /<gml:featureMember>([\s\S]*?)<\/gml:featureMember>/g;
+  const tag = (block, name) => {
+    const match = new RegExp(`<cite:${name}>([^<]*)<\\/cite:${name}>`).exec(
+      block,
+    );
+    return match ? decodeNumericEntities(match[1]) : '';
+  };
+  let match;
+  while ((match = blockRe.exec(String(xml || ''))) !== null) {
+    const block = match[1];
+    const fidMatch = /<cite:cameres\s+fid="([^"]+)"/.exec(block);
+    const coordsMatch = /<gml:coordinates[^>]*>([^<]+)<\/gml:coordinates>/.exec(
+      block,
+    );
+    if (!fidMatch || !coordsMatch) continue;
+    const [lonRaw, latRaw] = coordsMatch[1].split(',');
+    out.push({
+      fid: fidMatch[1],
+      lon: toFiniteNumber(lonRaw),
+      lat: toFiniteNumber(latRaw),
+      carretera: tag(block, 'carretera'),
+      municipi: tag(block, 'municipi'),
+      pk: tag(block, 'pk'),
+      link: tag(block, 'link'),
+      font: tag(block, 'font'),
+    });
+  }
+  return out;
+}
+
+/**
+ * Validate and normalize one Catalonia feed `link` against the publisher
+ * host allowlist (CATALONIA_IMAGE_HOSTS), upgrading to https. Rejects
+ * anything else, including a host that merely resembles an allowed one.
+ *
+ * SCT's own `RenderService` frame link is a special case, for two stacked
+ * reasons (both verified 2026-09-15):
+ *  1. It always 302s to `TransitCamera`, on a Location the upstream
+ *     hardcodes as plain http even when RenderService itself was requested
+ *     over https. fetchWithinHost (media.js) only follows same-origin
+ *     redirects — same scheme included, by design, to stop an upstream
+ *     steering a host-pinned request into a plaintext downgrade — so that
+ *     hop is refused and the camera would render as a placeholder.
+ *  2. mct.gencat.cat's TLS setup itself does not complete a handshake with
+ *     Node's fetch/OpenSSL (`ERR_SSL_WRONG_SIGNATURE_TYPE`) even though it
+ *     is reachable over https from other clients (e.g. curl) — an upstream
+ *     server misconfiguration this proxy cannot route around.
+ * TransitCamera answers the frame directly over **http**, no redirect, and
+ * that is the only transport this host actually serves to this runtime — so
+ * this builds that URL itself from RenderService's `sctidcam` id instead of
+ * registering the (https, then-redirecting) RenderService link.
+ *
+ * @param {string} rawUrl
+ * @returns {string} Normalized URL, or '' if not accepted.
+ */
+export function normalizeCataloniaImageUrl(rawUrl) {
+  let parsed;
+  try {
+    parsed = new URL(String(rawUrl || '').trim());
+  } catch {
+    return '';
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+  if (!CATALONIA_IMAGE_HOSTS.has(parsed.hostname)) return '';
+
+  if (parsed.hostname === 'mct.gencat.cat') {
+    const camId = parsed.searchParams.get('sctidcam');
+    if (!camId) return '';
+    const direct = new URL('http://mct.gencat.cat/mct2bo/TransitCamera');
+    direct.searchParams.set('nom', camId);
+    direct.searchParams.set('visualitzacio', 'imatge');
+    return direct.toString();
+  }
+
+  parsed.protocol = 'https:';
+  return parsed.toString();
+}
+
+/**
+ * Human label for one Catalonia camera: "<road/place> (<municipality>)",
+ * skipping the parenthetical when the municipality is already named in the
+ * road/place text or when one half is missing.
+ *
+ * @param {string} carretera
+ * @param {string} municipi
+ * @returns {string}
+ */
+export function cataloniaCameraName(carretera, municipi) {
+  const road = String(carretera || '').trim();
+  const city = String(municipi || '').trim();
+  if (road && city) {
+    return road.toLowerCase().includes(city.toLowerCase())
+      ? road
+      : `${road} (${city})`;
+  }
+  return road || city || 'Càmera de trànsit';
+}
+
+/**
+ * Fetch Catalonia traffic cameras (Servei Català de Trànsit), keyless: one
+ * WFS/GML XML list. The feed carries a `font` field naming the real
+ * publisher per camera; only SCT's own highway cameras and the hotlinked
+ * Barcelona (IMI) and Terrassa municipal cameras are kept, each confirmed to
+ * return a real frame — frame URLs are checked against a host allowlist
+ * (CATALONIA_IMAGE_HOSTS), so a row from any other publisher is dropped.
+ * Each non-SCT camera carries its publisher as a `credit` alongside the
+ * shared `provider`. The feed carries no heading, so every camera takes the
+ * id-hash fallback, low-confidence pose (same as TfL and Fintraffic).
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadCataloniaSourcesFromOpenData() {
+  try {
+    const resp = await fetch(CATALONIA_CAMERAS_URL, {
+      headers: { Accept: 'application/xml,text/xml,*/*' },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn('[CCTV] Catalonia camera download failed:', resp.status);
+      return [];
+    }
+    const xml = await resp.text();
+    const rows = parseCataloniaXml(xml);
+    if (!rows.length) return [];
+
+    const cameras = [];
+    for (const row of rows) {
+      if (!row.fid) continue;
+      if (!isLikelyCataloniaCoordinate(row.lat, row.lon)) continue;
+      const imageUrl = normalizeCataloniaImageUrl(row.link);
+      if (!imageUrl) continue;
+
+      const font = row.font.trim();
+      const cameraId = `cat-${row.fid
+        .replace(/^cameres\.fid-/, '')
+        .replace(/[^a-zA-Z0-9]/g, '')}`;
+
+      cameras.push({
+        id: cameraId,
+        name: cataloniaCameraName(row.carretera, row.municipi),
+        city: row.municipi.trim() || 'Catalunya',
+        cityId: 'catalunya',
+        provider: 'Servei Català de Trànsit',
+        lat: row.lat,
+        lon: row.lon,
+        headingDeg: fallbackHeadingFromId(cameraId),
+        headingConfidence: 'low',
+        pitchDeg: -18,
+        fovDeg: 44,
+        rangeM: 145,
+        mountHeightM: 8,
+        groundElevationM: CATALONIA_FONT_ELEVATION_M[font] ?? 80,
+        feedType: 'image',
+        url: imageUrl,
+        snapshotUrl: imageUrl,
+        sourceKind: 'catalonia-open-data',
+        license:
+          "Generalitat de Catalunya — Llicència oberta d'ús d'informació",
+        credit: CATALONIA_FONT_CREDIT[font] || '',
+      });
+    }
+
+    const unique = Array.from(
+      new Map(cameras.map((camera) => [camera.id, camera])).values(),
+    );
+    const maxRaw = Number(
+      process.env.CCTV_CATALONIA_MAX_SOURCES || DEFAULT_CATALONIA_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(600, Math.floor(maxRaw)))
+      : DEFAULT_CATALONIA_MAX_SOURCES;
+    const prioritized = prioritizeSources(unique, maxCount, CATALONIA_ANCHORS);
+    console.log(
+      `[CCTV] Loaded Catalonia camera sources: ${unique.length} (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Catalonia camera download error:',
       error?.message || error,
     );
     return [];

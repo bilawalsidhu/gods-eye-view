@@ -236,6 +236,47 @@ export const CALGARY_DOWNTOWN = { lat: 51.0461, lon: -114.0626 };
  * body cannot be buffered without limit. */
 export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
+/**
+ * Catalonia traffic cameras (Servei Català de Trànsit): one keyless WFS/GML
+ * XML list (verified 2026-09-15, hourly catalog refresh). The feed carries a
+ * `font` field naming the actual publisher per camera — SCT's own highway
+ * cameras plus hotlinked Barcelona (IMI) and Terrassa municipal cameras are
+ * kept, each confirmed to return a real frame. Frame URLs are checked
+ * against a host allowlist rather than one pinned origin, since each
+ * publisher serves from its own host.
+ */
+export const CATALONIA_CAMERAS_URL =
+  'http://www.gencat.cat/transit/opendata/cameres.xml';
+/** Allowed image hosts, one per kept `font` publisher in the feed. */
+export const CATALONIA_IMAGE_HOSTS = Object.freeze(
+  new Set([
+    'mct.gencat.cat', // SCT
+    'www.bcn.cat', // IMI (Ajuntament de Barcelona)
+    'emap.terrassa.cat', // Ajuntament de Terrassa
+  ]),
+);
+/** Per-`font` partner credit, shown beside the provider in the CCTV panel
+ * (same pattern as DriveBC's partner-supplied cameras). SCT is the feed's
+ * own publisher and carries no separate credit. */
+export const CATALONIA_FONT_CREDIT = Object.freeze({
+  IMI: 'Ajuntament de Barcelona',
+  Terrassa: 'Ajuntament de Terrassa',
+});
+/** Ground-elevation priors in metres, by `font`: the feed carries no
+ * elevation, and this pack spans sea level (Barcelona) to Terrassa's plateau
+ * (~270 m). The client's ground snap corrects these on 3D-tile stacks. */
+export const CATALONIA_FONT_ELEVATION_M = Object.freeze({
+  SCT: 80,
+  IMI: 20,
+  Terrassa: 270,
+});
+export const DEFAULT_CATALONIA_MAX_SOURCES = 150;
+/** Prioritization anchors: Barcelona and Terrassa. */
+export const CATALONIA_ANCHORS = [
+  { lat: 41.3874, lon: 2.1686 }, // Barcelona
+  { lat: 41.5636, lon: 2.0111 }, // Terrassa
+];
+
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
