@@ -478,6 +478,17 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Added
 
+- Add an optional, keyed **World News** layer: the latest place-tagged World
+  News API headlines pinned at the place each headline names, aggregated per
+  place and colored by tone, with OPEN ARTICLE / NEXT STORY / LOAD MORE chips
+  and a click-to-inspect readout card. The server-side `/api/world-news` proxy
+  caches for 30 minutes, keeps nothing older than 60 minutes (the provider's
+  caching limit), spends against a daily point governor
+  (`WORLD_NEWS_DAILY_POINT_BUDGET`, default 40 of the free plan's 50) and
+  answers `503 {error:'no_key'}` keyless. Adds the `WORLD_NEWS_API_KEY` POWER UP
+  entry, share-link token `y`, voice aliases and the required attribution
+  backlink. Keyless installs read KEY REQUIRED and make no upstream request.
+
 - DISPLAY ▸ Draw: draw on the world by hand. Pick Area, Line or Pin, click the
   vertices, double-click or press Enter to finish, label and colour it; Backspace
   undoes a vertex, Esc cancels the shape and a second Esc leaves draw mode, and

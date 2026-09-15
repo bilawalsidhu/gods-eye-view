@@ -1082,6 +1082,41 @@ throws, that source reports failure without a contradictory success entry.
 The existing per-record append continues to support large feeds; sequential
 fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 
+
+## World News provider module and layer
+
+`gods-eye-view/server/providers/world-news` is a Node-only entry for the World
+News API headline proxy (`/api/world-news`, `/api/world-news/more`,
+`/api/world-news/status`). It reads `WORLD_NEWS_API_KEY` server-side only and
+sends it in the `x-api-key` header; the browser polls the same-origin route.
+One page of the newest headlines (`WORLD_NEWS_PAGE_SIZE`, default 100;
+`WORLD_NEWS_PAGES` 1–3; `WORLD_NEWS_LANGUAGE`, default `en`, empty = all;
+`WORLD_NEWS_EXTRA_QUERY` for future provider parameters) is fetched with
+`add-entities=true`, normalized by `src/data/worldNewsArticles.js` (title,
+link, domain, publish time, tone, category, language, source country and the
+coordinates of the location entity the headline names — nothing else) and kept
+for a 30-minute TTL. A batch older than 60 minutes is deleted, never served
+stale: the provider's terms cap caching at one hour. A persistent UTC-day
+point budget (`WORLD_NEWS_DAILY_POINT_BUDGET`, default 40) adds the provider's
+`X-API-Quota-Request` points per call (a rejected call still counts one); over
+it the proxy serves the retained batch with `blocked: 'budget'` or answers
+`429 {error:'budget'}`. Provider failures map to `bad_key` (401/403, until the
+key changes), `quota` (402, until 00:00 UTC), `rate_limited` (429, 10 s) and
+`upstream` (60 s). When one request costs more than 4 points the page size
+drops to 50 and the TTL grows to 45 minutes. `/more` fetches one explicit
+extra page, at most three per hour. Keyless: `503 {error:'no_key'}`, zero
+upstream calls.
+
+The browser layer (`src/layers/worldNews/`, factory
+`src/app/layers/worldNews.js`, id `world-news`, panel group Events, share token
+`y`) aggregates headlines per place (coordinates rounded to three decimals),
+sizes each pin by story count, colors it by tone band (rose ≤ −0.3, indigo,
+seafoam ≥ 0.3) and publishes the shared readout card on click. Row chips: OPEN
+ARTICLE, PREV/NEXT STORY, LOAD MORE. Stats surface `keyRequired` (KEY
+REQUIRED), STALE, BUDGET REACHED, QUOTA EXHAUSTED, RATE LIMITED and INVALID
+KEY without ever failing the enable lifecycle. The "World News API" backlink
+credit is registered when the layer first receives data.
+
 ## Installations and map-source guidance
 
 - On an uncached Overpass failure, mapped installations keep their existing
@@ -2731,6 +2766,7 @@ its criteria cannot be silently ignored.
 | FIRMS Active Fires ▲   | NASA FIRMS live (VIIRS ×3 NRT + MODIS NRT, trailing 24h)                                                                                                                                        | `src/data/firmsHeatmap.js`                            | `/api/firms` (`FIRMS_MAP_KEY`)                           | 10 min (proxy TTL 30 min)                                                         |
 | Wind 🌬                 | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                 | `src/data/wind.js`                                    | `/api/wind`                                              | 1 h (forecast cycle)                                                              |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
+| World News 📰 | World News API `search-news` (latest 100 headlines, geocoded location entities) | `src/app/layers/worldNews.js` | `/api/world-news` (`WORLD_NEWS_API_KEY`) | 10 min (proxy TTL 30 min, retention cap 60 min, daily point budget) |
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
 
@@ -3777,7 +3813,7 @@ are omitted rather than framing the wrong part of the globe.
 - Setup doctor resolves `OPENSKY_AUTH_MODE` from the environment and dotenv files. Explicit `anon` and OAuth mode without a client pair report keyless anonymous access (rate-limited); a complete OAuth pair retains the existing presence-only capability wording. Basic and auto modes report the selected mode without guessing which credentials runtime will accept. The proxy's auth behavior is unchanged.
 - Google key expected in Keychain service `google-maps-api` (or `GOOGLE_MAPS_API_KEY`, or `.env`)
 - OpenSky credentials expected in Keychain service `opensky-network` (or env, or `.env`); `OPENSKY_AUTH_MODE` and `OPENSKY_CREDENTIALS_FILE` read from `.env` too
-- Optional-key precedence in `dev-fresh.sh` is uniform — explicit shell env, then `.env`, then Keychain: `OPENAI_API_KEY` (Keychain `openai-api`/`api-key` — voice + HUD summary), `AISSTREAM_API_KEY` (`aisstream-api`/`api-key` — live vessels), `CESIUM_ION_TOKEN` (`cesium-ion`/`token` — Bing stacks), `TOMTOM_API_KEY` (`tomtom-api`/`api-key` — live traffic flow), `FIRMS_MAP_KEY` (`firms-map`/`map-key` — live fires), `LL2_API_TOKEN` (`.env` only)
+- Optional-key precedence in `dev-fresh.sh` is uniform — explicit shell env, then `.env`, then Keychain: `OPENAI_API_KEY` (Keychain `openai-api`/`api-key` — voice + HUD summary), `AISSTREAM_API_KEY` (`aisstream-api`/`api-key` — live vessels), `CESIUM_ION_TOKEN` (`cesium-ion`/`token` — Bing stacks), `TOMTOM_API_KEY` (`tomtom-api`/`api-key` — live traffic flow), `FIRMS_MAP_KEY` (`firms-map`/`map-key` — live fires), `WORLD_NEWS_API_KEY` (`world-news-api`/`api-key` — place-tagged headlines), `LL2_API_TOKEN` (`.env` only)
 - An empty string is not "unset" on either side of the launcher, and both sides are handled. `scripts/read-dotenv-value.mjs` hides the requested key from `process.env` for the duration of the read (Vite's `loadEnv` otherwise lets an inherited empty export win over the parsed files) and restores it after. A key the launcher resolves to nothing is then removed from the dev server's environment outright (`env -u`), not merely omitted — the child inherits this shell's environment, and Vite backfills `.env` only over undefined variables, so an empty export in either place would shadow a configured key. `CCTV_CALTRANS_DISTRICTS` is the deliberate exception: empty is its documented Caltrans kill switch and is passed through as-is
 - `.env` supported via `.env.example` template
 
