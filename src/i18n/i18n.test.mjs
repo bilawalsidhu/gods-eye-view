@@ -355,7 +355,7 @@ test('applyDocumentTranslations writes all four attributes and skips unknown key
 
 test('getCatalog exposes the merged, dot-prefixed registry for every shipped locale', () => {
   assert.deepEqual([...CATALOG_LOCALES], ['en'],
-    'the foundation ships English only; each locale PR appends its code here');
+    'es catalogs are registered ahead of the shipping flip; shipping is CATALOG_LOCALES-driven');
   for (const locale of CATALOG_LOCALES) {
     const catalog = getCatalog(locale);
     assert.ok(catalog, `catalog for ${locale}`);
@@ -364,10 +364,11 @@ test('getCatalog exposes the merged, dot-prefixed registry for every shipped loc
       assert.match(key, /^(shell|cockpit|layers|setup)\./, `${locale} key ${key}`);
     }
   }
-  // Codes without a shipped catalog stay null even though they normalize
-  // (locale-code hygiene): shipping is catalog-driven. An unknown locale
-  // stays null too.
-  assert.equal(getCatalog('es'), null);
+  // Registered ≠ shipped: the es catalogs are readable for the value
+  // anchors while the pair/selector still offers English only. Codes
+  // without registered catalogs stay null even though they normalize
+  // (locale-code hygiene); an unknown locale stays null too.
+  assert.ok(getCatalog('es'), 'es catalogs are registered');
   assert.equal(getCatalog('fr'), null);
   assert.equal(getCatalog('ru'), null);
   assert.equal(getCatalog('uk'), null);
