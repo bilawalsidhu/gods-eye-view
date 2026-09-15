@@ -108,3 +108,30 @@ test('span clamp is idempotent on already-clamped bounds (loadRoadsForBounds re-
   const twice = clampBoundsAroundCenter(once, midpoint, 0.05);
   assert.deepEqual(twice, once);
 });
+
+test('span clamp handles bounds crossing the antimeridian', () => {
+  const bounds = {
+    south: -0.02,
+    north: 0.02,
+    west: 179.98,
+    east: -179.98,
+  };
+
+  const center = {
+    lat: 0,
+    lon: 179.99,
+  };
+
+  const result = clampBoundsAroundCenter(bounds, center, 0.05);
+
+  assert.ok(result.west >= -180 && result.west < 180);
+  assert.ok(result.east >= -180 && result.east < 180);
+
+  // Wrapped longitude span should remain about 0.04 degrees.
+  const span =
+    result.east >= result.west
+      ? result.east - result.west
+      : result.east - result.west + 360;
+
+  assert.ok(Math.abs(span - 0.04) < 1e-12);
+});

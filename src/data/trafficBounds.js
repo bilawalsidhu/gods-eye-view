@@ -124,11 +124,42 @@ export function deriveFetchCenter({
 }
 
 /**
+ * Wrapped longitude span between two meridians, in degrees.
+ *
+ * Longitude is cyclic, so a box crossing the antimeridian (±180°) has
+ * `east < west` (e.g. `west = 179.98, east = -179.98`). A plain `east - west`
+ * goes negative in that case; wrap through 360° instead.
+ *
+ * @param {number} west - West edge longitude (degrees).
+ * @param {number} east - East edge longitude (degrees).
+ * @returns {number} Span in degrees, always >= 0.
+ */
+function longitudeSpanDeg(west, east) {
+  const raw = east - west;
+  return raw >= 0 ? raw : raw + 360;
+}
+
+/**
+ * Normalize a longitude into [-180, 180). Matches the wrap idiom already
+ * used by `destinationPoint()` above.
+ *
+ * @param {number} lon - Longitude in degrees.
+ * @returns {number} Longitude normalized to [-180, 180).
+ */
+function normalizeLonDeg(lon) {
+  return ((lon + 540) % 360) - 180;
+}
+
+/**
  * Clamp a bounding box's spans to `maxSpanDeg` and recenter it on `center`.
  *
  * Preserves the pre-C4 span semantics (each axis capped at 0.05° ≈ 5.5 km)
  * but centers the box on the derived look-at point instead of the view
  * rectangle's midpoint. Idempotent when `center` is the box's own midpoint.
+ *
+ * Longitude is handled as a cyclic axis: the input span wraps correctly
+ * across the antimeridian, and the output west/east are normalized back into
+ * [-180, 180) instead of drifting outside the normal coordinate range.
  *
  * @param {{south:number, west:number, north:number, east:number}} bounds
  *   Source bounds (span donor).
@@ -138,11 +169,11 @@ export function deriveFetchCenter({
  */
 export function clampBoundsAroundCenter(bounds, center, maxSpanDeg = 0.05) {
   const latSpan = Math.min(bounds.north - bounds.south, maxSpanDeg);
-  const lonSpan = Math.min(bounds.east - bounds.west, maxSpanDeg);
+  const lonSpan = Math.min(longitudeSpanDeg(bounds.west, bounds.east), maxSpanDeg);
   return {
     south: center.lat - latSpan / 2,
     north: center.lat + latSpan / 2,
-    west: center.lon - lonSpan / 2,
-    east: center.lon + lonSpan / 2,
+    west: normalizeLonDeg(center.lon - lonSpan / 2),
+    east: normalizeLonDeg(center.lon + lonSpan / 2),
   };
 }
