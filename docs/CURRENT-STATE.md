@@ -2577,6 +2577,8 @@ short draped corridor, clipped to displayed time by a material uniform; only
 subdivision crossings rebuild it. Ordinary frames upload no head geometry.
 Without ground-polyline support, ordinary primitives retain a mode-coloured
 0.55-alpha depth-fail path, including the head, without dimming it to near-black.
+Instance attribute updates write back the same typed array returned by Cesium;
+its getters return copies, so reading a second time discards a visibility or colour edit.
 Normal instance colours follow the age ramp once per display second or style change. Subdivision crossings update only changed visibility
 attributes. Deselecting releases selection geometry; marker paths retain only
 active and future corridors.
@@ -2672,6 +2674,15 @@ destruction also releases collections and registrations.
 ```sh
 QA_BASE_URL=http://localhost:4305 QA_TAG=keyless node scripts/qa-transit.mjs
 ```
+
+`QA_BASE_URL=http://localhost:4305 node scripts/qa-transit-recovery.mjs` is the
+focused keyless camera-arrival regression. With destination tiles loaded, it
+injects nine disclosed moving-bus reports and delays their floor acquisition,
+selects the hidden vehicle, then releases the floor and calls camera.setView.
+Within two seconds it requires a visible marker, a prepared visible body and
+at least six of eight paired off/on trail pixel samples. It uses production
+selection, visibility and geometry owners and writes screenshots plus JSON;
+it does not establish Google 3D acceptance.
 
 The full run samples completed frames at 1920×1080 CSS pixels, records DPR, and
 measures moving fleets of 800 and 3,000 vehicles with 128 fixes each and DETECT

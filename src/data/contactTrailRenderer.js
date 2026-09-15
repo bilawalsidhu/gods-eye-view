@@ -190,8 +190,10 @@ export function createContactTrailRenderer(scene) {
             attributeIds[i][lane],
           );
           if (!attributes) continue;
-          attributes.show[0] = i <= done ? 1 : 0;
-          attributes.show = attributes.show;
+          // Cesium getters return copies. Write back the array we changed.
+          const show = attributes.show;
+          show[0] = i <= done ? 1 : 0;
+          attributes.show = show;
         }
       }
       completed = done;
@@ -204,17 +206,16 @@ export function createContactTrailRenderer(scene) {
             attributeIds[i][lane],
           );
           if (!attributes) continue;
-          Cesium.ColorGeometryInstanceAttribute.toValue(
-            tint(alpha, !lane),
-            attributes.color,
-          );
-          attributes.color = attributes.color;
+          const rgba = attributes.color;
+          Cesium.ColorGeometryInstanceAttribute.toValue(tint(alpha, !lane), rgba);
+          attributes.color = rgba;
           if (!ground) {
+            const depthRgba = attributes.depthFailColor;
             Cesium.ColorGeometryInstanceAttribute.toValue(
               tint(0.55),
-              attributes.depthFailColor,
+              depthRgba,
             );
-            attributes.depthFailColor = attributes.depthFailColor;
+            attributes.depthFailColor = depthRgba;
           }
         }
       }

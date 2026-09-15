@@ -724,6 +724,7 @@
   "scripts/qa-transit-controls.mjs",
   "src/tooling/transitQa.test.mjs",
   "scripts/qa-transit-browser.mjs",
+  "scripts/qa-transit-recovery.mjs",
   "scripts/format-runtime.json",
   "src/tooling/transitService.test.mjs",
   "src/sources/overpassFeatures.test.mjs"
