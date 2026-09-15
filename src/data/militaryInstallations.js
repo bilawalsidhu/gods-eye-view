@@ -1,6 +1,6 @@
 import { defaultSurface } from './surfaceServices.js';
 import { createApplicationInstallations } from '../app/layers/militaryInstallations.js';
-import { createSourceSlot } from '../app/sourceSlot.js';
+import { createSourceSlot } from '../sources/sourceSlot.js';
 import { createInstallationSource } from '../layers/installations/index.js';
 
 const sourceSlot = createSourceSlot(

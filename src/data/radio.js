@@ -1,6 +1,6 @@
 import { defaultSurface } from './surfaceServices.js';
 import { createApplicationRadio } from '../app/layers/radio.js';
-import { createSourceSlot } from '../app/sourceSlot.js';
+import { createSourceSlot } from '../sources/sourceSlot.js';
 import { createRadioSource } from '../layers/radio/source.js';
 
 const sourceSlot = createSourceSlot(

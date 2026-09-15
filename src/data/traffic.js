@@ -1,5 +1,5 @@
 import { createApplicationTraffic } from '../app/layers/traffic.js';
-import { createSourceSlot } from '../app/sourceSlot.js';
+import { createSourceSlot } from '../sources/sourceSlot.js';
 import { createTrafficSource } from '../layers/traffic/source.js';
 
 const sourceSlot = createSourceSlot(

@@ -1,5 +1,5 @@
 import { createApplicationLaunches } from '../app/layers/rocketLaunches.js';
-import { createSourceSlot } from '../app/sourceSlot.js';
+import { createSourceSlot } from '../sources/sourceSlot.js';
 import { createLaunchSource } from '../layers/launches/index.js';
 import * as satellites from './satellites.js';
 

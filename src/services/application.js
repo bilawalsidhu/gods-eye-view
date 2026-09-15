@@ -1,4 +1,6 @@
-import { createSourceSlot } from '../app/sourceSlot.js';
+import { createOverpassFeatureSource } from '../sources/overpassFeatures.js';
+import { FEATURE_SOURCE_METHODS } from '../sources/featureSource.js';
+import { createSourceSlot } from '../sources/sourceSlot.js';
 import { createApplicationRequestServices } from './requests.js';
 
 // Compatibility owners are page-scoped, like the viewer and its layer registry.
@@ -14,6 +16,11 @@ const slots = Object.fromEntries(
     name,
     createSourceSlot(defaults[name], methods, `${name} service`),
   ]),
+);
+slots.features = createSourceSlot(
+  createOverpassFeatureSource({ boundarySource: slots.boundaries.source }),
+  FEATURE_SOURCE_METHODS,
+  'features service',
 );
 export const applicationServices = Object.freeze(
   Object.fromEntries(

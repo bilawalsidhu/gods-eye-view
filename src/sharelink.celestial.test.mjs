@@ -66,7 +66,7 @@ test('share links parse explicit celestial on and off states', () => {
 });
 
 test('unknown-only v2 layer tokens are invalid, while historical l fields stay inert', () => {
-  const invalid = makeManager('#v=2&lat=10&lon=20&l=z').parseInitialHash();
+  const invalid = makeManager('#v=2&lat=10&lon=20&l=unknown').parseInitialHash();
   assert.equal(invalid.layerState, null);
   assert.equal(invalid.layerStateInvalid, true);
   for (const hash of ['#lat=10&lon=20&l=z', '#v=1&lat=10&lon=20&l=z']) {
@@ -74,6 +74,12 @@ test('unknown-only v2 layer tokens are invalid, while historical l fields stay i
     assert.equal(legacy.layerState, null);
     assert.equal(legacy.layerStateInvalid, false);
   }
+});
+
+test('Nepal locator token is valid in v2 share links', () => {
+  const parsed = makeManager('#v=2&lat=10&lon=20&l=z').parseInitialHash();
+  assert.deepEqual(parsed.layerState.enabledLayerIds, ['bhote-koshi-locator']);
+  assert.equal(parsed.layerStateInvalid, false);
 });
 
 test('share-link serialization emits the current celestial state', () => {

@@ -1,3 +1,10 @@
+export {
+  FRAME_ENDPOINT,
+  SOURCE_ENDPOINT,
+  HEALTH_ENDPOINT,
+  MEDIA_ENDPOINT,
+  ACTIVE_FRAME_REFRESH_MS,
+} from './sourcePolicy.js';
 import * as Cesium from 'cesium';
 import { CCTV_CARD_FETCH_BURST_SPACING_MS } from '../../data/cctvCards.js';
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
@@ -5,14 +12,6 @@ import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
 // ---------------------------------------------------------------------------
 // API endpoints
 // ---------------------------------------------------------------------------
-
-export const FRAME_ENDPOINT = '/api/cctv/frame';
-
-export const SOURCE_ENDPOINT = '/api/cctv/sources';
-
-export const HEALTH_ENDPOINT = '/api/cctv/health';
-
-export const MEDIA_ENDPOINT = '/api/cctv/media';
 
 // ---------------------------------------------------------------------------
 // Timing and geometry constants
@@ -25,8 +24,6 @@ export const MIN_AUTO_HOP_SEC = 8;
 export const MAX_AUTO_HOP_SEC = 90;
 
 export const HEALTH_SYNC_INTERVAL_MS = 7000;
-
-export const ACTIVE_FRAME_REFRESH_MS = 10000;
 
 export const IDLE_FRAME_REFRESH_MS = 60000;
 

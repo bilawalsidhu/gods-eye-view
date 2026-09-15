@@ -27,6 +27,12 @@ body.recording-mode #scene-runtime.active {
 }
 
 /* Scene playback owns layer and camera sequencing until Stop or completion. */
-body.scene-playback-mode :is(#clear-selected-layers, #reset-globe-view) {
+body.scene-playback-mode
+  :is(
+    #clear-selected-layers,
+    #tilt-map-view,
+    #north-up-view,
+    #reset-globe-view
+  ) {
   display: none !important;
 }

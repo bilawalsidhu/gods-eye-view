@@ -1,6 +1,10 @@
 import * as Cesium from 'cesium';
 import { GBFS_CITY_REGISTRY } from './registry.js';
 import { BIKESHARE_SELECTED_OVERLAY_SOURCE_ID } from './policy.js';
+import {
+  claimCameraSensitivity,
+  releaseCameraSensitivity,
+} from '../../data/cameraSensitivity.js';
 
 export function createLifecycle({
   state: layerState,
@@ -85,10 +89,10 @@ export function createLifecycle({
 
       if (!layerState._cameraChangedAttached) {
         viewer.camera.changed.addEventListener(parts.viewport.onCameraChanged);
-        viewer.camera.percentageChanged = Math.min(
-          viewer.camera.percentageChanged || 1,
-          0.05,
-        );
+        // Through the shared ledger: this is a single number every layer's
+        // camera.changed listener shares, and a layer leaving must not hand
+        // back a coarse default while this one is still driving off it.
+        claimCameraSensitivity(viewer.camera, 'bikeshare', 0.05);
         layerState._cameraChangedAttached = true;
       }
 
@@ -124,6 +128,7 @@ export function createLifecycle({
         viewer.camera.changed.removeEventListener(
           parts.viewport.onCameraChanged,
         );
+        releaseCameraSensitivity(viewer.camera, 'bikeshare');
         layerState._cameraChangedAttached = false;
       }
 
@@ -156,6 +161,7 @@ export function createLifecycle({
         viewer.camera.changed.removeEventListener(
           parts.viewport.onCameraChanged,
         );
+        releaseCameraSensitivity(viewer.camera, 'bikeshare');
         layerState._cameraChangedAttached = false;
       }
       parts.ingestion.abortAllInFlight();

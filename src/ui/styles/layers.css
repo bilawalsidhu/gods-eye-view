@@ -107,6 +107,23 @@
   border-radius: 999px;
 }
 
+.data-layer-group-heading {
+  margin: 8px 10px 2px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+
+.data-layer-group-heading:first-child {
+  margin-top: 0;
+  padding-top: 4px;
+  border-top: 0;
+}
+
 .data-toggle-row {
   padding: 8px 10px 6px;
   border-radius: 8px;

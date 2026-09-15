@@ -9,7 +9,7 @@ import {
 import {
   LOCAL_OVERLAY_COHORT_LIMIT,
   createLocalInfrastructureOverlayEntry,
-} from '../data/localGeojson.js';
+} from '../data/localGeojsonCore.js';
 import {
   FIRMS_AMBIENT_COHORT_LIMIT,
   FIRMS_OVERLAY_SOURCE_ID,
@@ -103,7 +103,8 @@ const WARMUP_FRAMES = Number(process.env.GEV_ALLOC_WARMUP) || 3000;
 // tightest sound estimate of the steady rate.
 const CHUNK_FRAMES = Number(process.env.GEV_ALLOC_CHUNK) || 48;
 const CHUNK_COUNT = Number(process.env.GEV_ALLOC_CHUNKS) || 10;
-const STABILIZATION_CHUNKS = Number(process.env.GEV_ALLOC_STABILIZATION_CHUNKS) || 6;
+const STABILIZATION_CHUNKS =
+  Number(process.env.GEV_ALLOC_STABILIZATION_CHUNKS) || 6;
 const FRAME_MS = 16;
 const VIEWPORT_WIDTH = 1600;
 const VIEWPORT_HEIGHT = 900;
@@ -124,7 +125,9 @@ function silentContext() {
     filter: 'none',
     globalAlpha: 1,
     globalCompositeOperation: 'source-over',
-    measureText(text) { return { width: String(text).length * 6 }; },
+    measureText(text) {
+      return { width: String(text).length * 6 };
+    },
     setTransform() {},
     clearRect() {},
     save() {},
@@ -188,7 +191,9 @@ function installMockEnvironment({ width, height, dpr }) {
       return child;
     }
 
-    insertBefore(child) { return this.appendChild(child); }
+    insertBefore(child) {
+      return this.appendChild(child);
+    }
 
     setAttribute(name, value) {
       if (name === 'id') this.id = String(value);
@@ -196,9 +201,13 @@ function installMockEnvironment({ width, height, dpr }) {
       if (this.id) byId.set(this.id, this);
     }
 
-    getBoundingClientRect() { return this._rect; }
+    getBoundingClientRect() {
+      return this._rect;
+    }
 
-    getContext() { return this.tagName === 'CANVAS' ? ctx : null; }
+    getContext() {
+      return this.tagName === 'CANVAS' ? ctx : null;
+    }
 
     querySelector(selector) {
       const wanted = selector.slice(1);
@@ -208,24 +217,40 @@ function installMockEnvironment({ width, height, dpr }) {
 
     remove() {
       if (this.parentElement) {
-        this.parentElement.children = this.parentElement.children.filter((child) => child !== this);
+        this.parentElement.children = this.parentElement.children.filter(
+          (child) => child !== this,
+        );
       }
       if (this.id) byId.delete(this.id);
       this.parentElement = null;
     }
 
-    get nextSibling() { return null; }
+    get nextSibling() {
+      return null;
+    }
   }
 
   const body = new MockElement('body');
-  body.classList = { contains() { return false; } };
+  body.classList = {
+    contains() {
+      return false;
+    },
+  };
   const document = {
     body,
-    createElement(tagName) { return new MockElement(tagName); },
-    getElementById(id) { return byId.get(id) || null; },
-    querySelector(selector) { return byId.get(selector.slice(1)) || null; },
+    createElement(tagName) {
+      return new MockElement(tagName);
+    },
+    getElementById(id) {
+      return byId.get(id) || null;
+    },
+    querySelector(selector) {
+      return byId.get(selector.slice(1)) || null;
+    },
     querySelectorAll(selector) {
-      const element = selector.startsWith('#') ? byId.get(selector.slice(1)) : null;
+      const element = selector.startsWith('#')
+        ? byId.get(selector.slice(1))
+        : null;
       return element ? [element] : [];
     },
   };
@@ -234,11 +259,19 @@ function installMockEnvironment({ width, height, dpr }) {
     devicePixelRatio: dpr,
     addEventListener() {},
     removeEventListener() {},
-    getComputedStyle() { return { display: 'block', visibility: 'visible', opacity: '1' }; },
+    getComputedStyle() {
+      return { display: 'block', visibility: 'visible', opacity: '1' };
+    },
   };
 
-  globalThis.ResizeObserver = class { observe() {} disconnect() {} };
-  globalThis.MutationObserver = class { observe() {} disconnect() {} };
+  globalThis.ResizeObserver = class {
+    observe() {}
+    disconnect() {}
+  };
+  globalThis.MutationObserver = class {
+    observe() {}
+    disconnect() {}
+  };
   globalThis.document = document;
   globalThis.window = window;
 
@@ -249,11 +282,15 @@ function installMockEnvironment({ width, height, dpr }) {
   // Array-backed so raising a frame allocates nothing: the harness floor has
   // to stay far below the budget the gate asserts.
   class MockEvent {
-    constructor() { this.listeners = []; }
+    constructor() {
+      this.listeners = [];
+    }
 
     addEventListener(listener) {
       this.listeners.push(listener);
-      return () => { this.listeners.length = 0; };
+      return () => {
+        this.listeners.length = 0;
+      };
     }
 
     raise() {
@@ -269,7 +306,9 @@ function installMockEnvironment({ width, height, dpr }) {
       positionWC: new Cesium.Cartesian3(0, 0, 10_000_000),
       positionCartographic: { height: 1000 },
       viewMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
-      frustum: { projectionMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY) },
+      frustum: {
+        projectionMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
+      },
       moveEnd: new MockEvent(),
     },
     scene: { postRender, requestRender() {} },
@@ -278,7 +317,9 @@ function installMockEnvironment({ width, height, dpr }) {
   return {
     viewer,
     postRender,
-    advanceTime(ms) { currentTime += ms; },
+    advanceTime(ms) {
+      currentTime += ms;
+    },
   };
 }
 
@@ -334,16 +375,18 @@ function buildLocalInfrastructureWorkload(count) {
       id: `${isDatacenter ? 'dc' : 'dam'}-${index}`,
       layerId: sourceId,
       position: workload.entries[index].position,
-      properties: isDatacenter ? {
-        tags: {
-          name: `DC ${1000 + index}`,
-          operator: `Operator ${index % 17}`,
-          'capacity:it_load': `${20 + index % 40} MW`,
-        },
-      } : {
-        name: `Dam ${1000 + index}`,
-        tags: { associated_river: `River ${index % 23}` },
-      },
+      properties: isDatacenter
+        ? {
+            tags: {
+              name: `DC ${1000 + index}`,
+              operator: `Operator ${index % 17}`,
+              'capacity:it_load': `${20 + (index % 40)} MW`,
+            },
+          }
+        : {
+            name: `Dam ${1000 + index}`,
+            tags: { associated_river: `River ${index % 23}` },
+          },
       priority: index % 7,
       accent: isDatacenter ? '#00ffff' : '#0088ff',
     });
@@ -360,12 +403,18 @@ function buildLocalInfrastructureWorkload(count) {
       {
         sourceId: 'local-datacenters',
         entries: datacenters,
-        options: { collisionCapacity: 96, cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT },
+        options: {
+          collisionCapacity: 96,
+          cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT,
+        },
       },
       {
         sourceId: 'local-dams',
         entries: dams,
-        options: { collisionCapacity: 96, cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT },
+        options: {
+          collisionCapacity: 96,
+          cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT,
+        },
       },
     ],
   };
@@ -374,7 +423,8 @@ function buildLocalInfrastructureWorkload(count) {
 function buildPhase3FirmsWorkload(count) {
   const localCount = LOCAL_OVERLAY_COHORT_LIMIT * 2;
   const expectedCount = localCount + FIRMS_AMBIENT_COHORT_LIMIT;
-  if (count !== expectedCount) throw new Error(`phase3-firms requires ${expectedCount} entries`);
+  if (count !== expectedCount)
+    throw new Error(`phase3-firms requires ${expectedCount} entries`);
   const workload = buildWorkload(count);
   const datacenters = [];
   const dams = [];
@@ -389,8 +439,13 @@ function buildPhase3FirmsWorkload(count) {
         layerId: sourceId,
         position,
         properties: isDatacenter
-          ? { tags: { name: `DC ${index}`, operator: `Operator ${index % 17}` } }
-          : { name: `Dam ${index}`, tags: { associated_river: `River ${index % 23}` } },
+          ? {
+              tags: { name: `DC ${index}`, operator: `Operator ${index % 17}` },
+            }
+          : {
+              name: `Dam ${index}`,
+              tags: { associated_river: `River ${index % 23}` },
+            },
         priority: index % 7,
         accent: isDatacenter ? '#00ffff' : '#0088ff',
       });
@@ -399,16 +454,21 @@ function buildPhase3FirmsWorkload(count) {
       continue;
     }
     const fireIndex = index - localCount;
-    firms.push(applyFirmsOverlayPolicy({
-      id: `fire:${fireIndex}`,
-      position,
-      gapPx: 10,
-      accent: '224, 82, 82',
-      title: `▲ ${50 + fireIndex} MW`,
-      details: ['high · 2h · N20'],
-      selected: false,
-      priority: 100 - fireIndex,
-    }, 12_000_000));
+    firms.push(
+      applyFirmsOverlayPolicy(
+        {
+          id: `fire:${fireIndex}`,
+          position,
+          gapPx: 10,
+          accent: '224, 82, 82',
+          title: `▲ ${50 + fireIndex} MW`,
+          details: ['high · 2h · N20'],
+          selected: false,
+          priority: 100 - fireIndex,
+        },
+        12_000_000,
+      ),
+    );
     firms.at(-1).horizonCull = false;
   }
   return {
@@ -417,12 +477,18 @@ function buildPhase3FirmsWorkload(count) {
       {
         sourceId: 'local-datacenters',
         entries: datacenters,
-        options: { collisionCapacity: 96, cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT },
+        options: {
+          collisionCapacity: 96,
+          cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT,
+        },
       },
       {
         sourceId: 'local-dams',
         entries: dams,
-        options: { collisionCapacity: 96, cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT },
+        options: {
+          collisionCapacity: 96,
+          cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT,
+        },
       },
       {
         sourceId: FIRMS_OVERLAY_SOURCE_ID,
@@ -439,9 +505,14 @@ function buildPhase3FirmsWorkload(count) {
 
 function buildPhase3VesselsWorkload(count) {
   const localCount = LOCAL_OVERLAY_COHORT_LIMIT * 2;
-  const vesselAmbientCount = vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
-  const expectedCount = localCount + FIRMS_AMBIENT_COHORT_LIMIT + vesselAmbientCount + 1;
-  if (count !== expectedCount) throw new Error(`phase3-vessels requires ${expectedCount} entries`);
+  const vesselAmbientCount = vesselOverlayCohortLimit(
+    VIEWPORT_WIDTH,
+    VIEWPORT_HEIGHT,
+  );
+  const expectedCount =
+    localCount + FIRMS_AMBIENT_COHORT_LIMIT + vesselAmbientCount + 1;
+  if (count !== expectedCount)
+    throw new Error(`phase3-vessels requires ${expectedCount} entries`);
   const workload = buildWorkload(count);
   const datacenters = [];
   const dams = [];
@@ -457,8 +528,13 @@ function buildPhase3VesselsWorkload(count) {
         layerId: sourceId,
         position,
         properties: isDatacenter
-          ? { tags: { name: `DC ${index}`, operator: `Operator ${index % 17}` } }
-          : { name: `Dam ${index}`, tags: { associated_river: `River ${index % 23}` } },
+          ? {
+              tags: { name: `DC ${index}`, operator: `Operator ${index % 17}` },
+            }
+          : {
+              name: `Dam ${index}`,
+              tags: { associated_river: `River ${index % 23}` },
+            },
         priority: index % 7,
         accent: isDatacenter ? '#00ffff' : '#0088ff',
       });
@@ -469,34 +545,40 @@ function buildPhase3VesselsWorkload(count) {
     const firmsEnd = localCount + FIRMS_AMBIENT_COHORT_LIMIT;
     if (index < firmsEnd) {
       const fireIndex = index - localCount;
-      const entry = applyFirmsOverlayPolicy({
-        id: `fire:${fireIndex}`,
-        position,
-        gapPx: 10,
-        accent: '224, 82, 82',
-        title: `▲ ${50 + fireIndex} MW`,
-        details: ['high · 2h · N20'],
-        selected: false,
-        priority: 100 - fireIndex,
-      }, 12_000_000);
+      const entry = applyFirmsOverlayPolicy(
+        {
+          id: `fire:${fireIndex}`,
+          position,
+          gapPx: 10,
+          accent: '224, 82, 82',
+          title: `▲ ${50 + fireIndex} MW`,
+          details: ['high · 2h · N20'],
+          selected: false,
+          priority: 100 - fireIndex,
+        },
+        12_000_000,
+      );
       entry.horizonCull = false;
       firms.push(entry);
       continue;
     }
     const vesselIndex = index - firmsEnd;
     const selected = vesselIndex === vesselAmbientCount;
-    const entry = applyVesselOverlayPolicy({
-      id: selected ? 'vessel:selected' : `vessel:${vesselIndex}`,
-      position,
-      gapPx: selected ? 12 : 10,
-      accent: '57, 213, 255',
-      title: selected ? 'SELECTED VESSEL' : `VESSEL ${vesselIndex}`,
-      details: selected
-        ? ['CARGO · 14.5KT · 231°', 'MMSI 353136000 · POS: LIVE']
-        : ['CARGO · 14.5KT · 231°'],
-      selected,
-      priority: selected ? 100000 : vesselAmbientCount - vesselIndex,
-    }, 12_000_000);
+    const entry = applyVesselOverlayPolicy(
+      {
+        id: selected ? 'vessel:selected' : `vessel:${vesselIndex}`,
+        position,
+        gapPx: selected ? 12 : 10,
+        accent: '57, 213, 255',
+        title: selected ? 'SELECTED VESSEL' : `VESSEL ${vesselIndex}`,
+        details: selected
+          ? ['CARGO · 14.5KT · 231°', 'MMSI 353136000 · POS: LIVE']
+          : ['CARGO · 14.5KT · 231°'],
+        selected,
+        priority: selected ? 100000 : vesselAmbientCount - vesselIndex,
+      },
+      12_000_000,
+    );
     entry.horizonCull = false;
     vessels.push(entry);
   }
@@ -506,12 +588,18 @@ function buildPhase3VesselsWorkload(count) {
       {
         sourceId: 'local-datacenters',
         entries: datacenters,
-        options: { collisionCapacity: 96, cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT },
+        options: {
+          collisionCapacity: 96,
+          cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT,
+        },
       },
       {
         sourceId: 'local-dams',
         entries: dams,
-        options: { collisionCapacity: 96, cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT },
+        options: {
+          collisionCapacity: 96,
+          cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT,
+        },
       },
       {
         sourceId: FIRMS_OVERLAY_SOURCE_ID,
@@ -524,7 +612,10 @@ function buildPhase3VesselsWorkload(count) {
       {
         sourceId: VESSEL_OVERLAY_SOURCE_ID,
         entries: vessels,
-        options: { collisionCapacity: vesselAmbientCount, cohortLimit: vesselAmbientCount },
+        options: {
+          collisionCapacity: vesselAmbientCount,
+          cohortLimit: vesselAmbientCount,
+        },
       },
     ],
     ambientCardCapacity: AMBIENT_CARD_COLLISION_CAPACITY,
@@ -533,14 +624,21 @@ function buildPhase3VesselsWorkload(count) {
 
 function buildPhase3TrackedWorkload(count) {
   const localCount = LOCAL_OVERLAY_COHORT_LIMIT * 2;
-  const vesselAmbientCount = vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
-  const expectedCount = localCount + FIRMS_AMBIENT_COHORT_LIMIT + vesselAmbientCount + 1;
-  if (count !== expectedCount) throw new Error(`phase3-tracked requires ${expectedCount} entries`);
+  const vesselAmbientCount = vesselOverlayCohortLimit(
+    VIEWPORT_WIDTH,
+    VIEWPORT_HEIGHT,
+  );
+  const expectedCount =
+    localCount + FIRMS_AMBIENT_COHORT_LIMIT + vesselAmbientCount + 1;
+  if (count !== expectedCount)
+    throw new Error(`phase3-tracked requires ${expectedCount} entries`);
   const workload = buildPhase3VesselsWorkload(count);
   const vesselRegistration = workload.registrations.find(
     ({ sourceId }) => sourceId === VESSEL_OVERLAY_SOURCE_ID,
   );
-  const selectedIndex = vesselRegistration.entries.findIndex(({ selected }) => selected);
+  const selectedIndex = vesselRegistration.entries.findIndex(
+    ({ selected }) => selected,
+  );
   const selected = vesselRegistration.entries.splice(selectedIndex, 1)[0];
   const trackedEntity = {
     gevTrackedId: 'flights:allocation-probe',
@@ -566,10 +664,14 @@ function buildPhase3TrackedWorkload(count) {
 }
 
 function buildPhase4CctvWorkload(count) {
-  const phase3Count = LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-    + vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) + 1;
+  const phase3Count =
+    LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+    FIRMS_AMBIENT_COHORT_LIMIT +
+    vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) +
+    1;
   const expectedCount = phase3Count + CCTV_AMBIENT_CARD_MAX + 1;
-  if (count !== expectedCount) throw new Error(`phase4-cctv requires ${expectedCount} entries`);
+  if (count !== expectedCount)
+    throw new Error(`phase4-cctv requires ${expectedCount} entries`);
   const workload = buildPhase3TrackedWorkload(phase3Count);
   const cctv = [];
   for (let index = 0; index <= CCTV_AMBIENT_CARD_MAX; index++) {
@@ -616,11 +718,16 @@ function buildPhase4CctvWorkload(count) {
 }
 
 function buildPhase5EarthquakesWorkload(count) {
-  const phase4Count = LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-    + vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) + 1
-    + CCTV_AMBIENT_CARD_MAX + 1;
+  const phase4Count =
+    LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+    FIRMS_AMBIENT_COHORT_LIMIT +
+    vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) +
+    1 +
+    CCTV_AMBIENT_CARD_MAX +
+    1;
   const expectedCount = phase4Count + EARTHQUAKE_OVERLAY_COHORT_LIMIT;
-  if (count !== expectedCount) throw new Error(`phase5-earthquakes requires ${expectedCount} entries`);
+  if (count !== expectedCount)
+    throw new Error(`phase5-earthquakes requires ${expectedCount} entries`);
   const workload = buildPhase4CctvWorkload(phase4Count);
   const earthquakes = [];
   for (let index = 0; index < EARTHQUAKE_OVERLAY_COHORT_LIMIT; index++) {
@@ -640,7 +747,8 @@ function buildPhase5EarthquakesWorkload(count) {
       id: `quake-${index}`,
       position,
       magnitude: 2.5 + (index % 45) / 10,
-      accent: index % 3 === 0 ? '#ff0000' : index % 3 === 1 ? '#ffa500' : '#ffff00',
+      accent:
+        index % 3 === 0 ? '#ff0000' : index % 3 === 1 ? '#ffa500' : '#ffff00',
     });
     entry.horizonCull = false;
     earthquakes.push(entry);
@@ -657,11 +765,17 @@ function buildPhase5EarthquakesWorkload(count) {
 }
 
 function buildPhase5BikeshareWorkload(count) {
-  const earthquakeCount = LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-    + vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) + 1
-    + CCTV_AMBIENT_CARD_MAX + 1 + EARTHQUAKE_OVERLAY_COHORT_LIMIT;
+  const earthquakeCount =
+    LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+    FIRMS_AMBIENT_COHORT_LIMIT +
+    vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) +
+    1 +
+    CCTV_AMBIENT_CARD_MAX +
+    1 +
+    EARTHQUAKE_OVERLAY_COHORT_LIMIT;
   const expectedCount = earthquakeCount + 1;
-  if (count !== expectedCount) throw new Error(`phase5-bikeshare requires ${expectedCount} entries`);
+  if (count !== expectedCount)
+    throw new Error(`phase5-bikeshare requires ${expectedCount} entries`);
   const workload = buildPhase5EarthquakesWorkload(earthquakeCount);
   const position = new Cesium.Cartesian3(0.12, -0.08, 0);
   workload.positions.push(position);
@@ -687,11 +801,18 @@ function buildPhase5BikeshareWorkload(count) {
 }
 
 function buildPhase5SatellitesWorkload(count) {
-  const bikeshareCount = LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-    + vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) + 1
-    + CCTV_AMBIENT_CARD_MAX + 1 + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 1;
+  const bikeshareCount =
+    LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+    FIRMS_AMBIENT_COHORT_LIMIT +
+    vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) +
+    1 +
+    CCTV_AMBIENT_CARD_MAX +
+    1 +
+    EARTHQUAKE_OVERLAY_COHORT_LIMIT +
+    1;
   const expectedCount = bikeshareCount + 1;
-  if (count !== expectedCount) throw new Error(`phase5-satellites requires ${expectedCount} entries`);
+  if (count !== expectedCount)
+    throw new Error(`phase5-satellites requires ${expectedCount} entries`);
   const workload = buildPhase5BikeshareWorkload(bikeshareCount);
   const position = new Cesium.Cartesian3(-0.42, 0.54, 0);
   workload.positions.push(position);
@@ -707,9 +828,15 @@ function buildPhase5SatellitesWorkload(count) {
 }
 
 function buildPhase5CctvProjectionWorkload(count) {
-  const satelliteCount = LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-    + vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) + 1
-    + CCTV_AMBIENT_CARD_MAX + 1 + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 2;
+  const satelliteCount =
+    LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+    FIRMS_AMBIENT_COHORT_LIMIT +
+    vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) +
+    1 +
+    CCTV_AMBIENT_CARD_MAX +
+    1 +
+    EARTHQUAKE_OVERLAY_COHORT_LIMIT +
+    2;
   const expectedCount = satelliteCount + 1;
   if (count !== expectedCount) {
     throw new Error(`phase5-cctv-projection requires ${expectedCount} entries`);
@@ -738,7 +865,8 @@ function buildPhase5CivilWorkload(count) {
     ({ sourceId }) => sourceId === TRACKED_OVERLAY_SOURCE_ID,
   );
   const entry = registration?.entries[0];
-  if (!entry) throw new Error('phase5-civil requires the protected tracked entry');
+  if (!entry)
+    throw new Error('phase5-civil requires the protected tracked entry');
   entry.title = 'ALLOC01 · FL350 · 451 kts';
   entry.details = ['TEST AIR · A320', 'AUS → LAX'];
   return workload;
@@ -750,7 +878,8 @@ function buildPhase5MilitaryWorkload(count) {
     ({ sourceId }) => sourceId === TRACKED_OVERLAY_SOURCE_ID,
   );
   const entry = registration?.entries[0];
-  if (!entry) throw new Error('phase5-military requires the protected tracked entry');
+  if (!entry)
+    throw new Error('phase5-military requires the protected tracked entry');
   entry.id = 'military:allocation-probe';
   entry.title = 'RCH451';
   entry.details = ['C17 · 05-8152', 'USAF · 28000 ft · 400 kt'];
@@ -773,12 +902,17 @@ function appendRocketMissionAmbientWorkload(workload, count) {
       phase: index * 0.33,
       rate: 0.3 + (index % 6) * 0.06,
     });
-    const entry = createRocketMissionMarkerOverlayEntry({
-      id: `allocation-${index}`,
-      name: `MISSION ${1000 + index} | PAYLOAD`,
-      launchSite: `Launch Complex ${index}`,
-      launchTime: new Date(Date.UTC(2026, 6, 31) - index * 60_000).toISOString(),
-    }, () => position);
+    const entry = createRocketMissionMarkerOverlayEntry(
+      {
+        id: `allocation-${index}`,
+        name: `MISSION ${1000 + index} | PAYLOAD`,
+        launchSite: `Launch Complex ${index}`,
+        launchTime: new Date(
+          Date.UTC(2026, 6, 31) - index * 60_000,
+        ).toISOString(),
+      },
+      () => position,
+    );
     entry.horizonCull = false;
     entries.push(entry);
   }
@@ -799,19 +933,29 @@ function buildRocketMissionAmbientWorkload(count) {
       `rocket-missions requires ${ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT} entries`,
     );
   }
-  return appendRocketMissionAmbientWorkload({
-    entries: [],
-    positions: [],
-    drifts: [],
-    registrations: [],
-  }, count);
+  return appendRocketMissionAmbientWorkload(
+    {
+      entries: [],
+      positions: [],
+      drifts: [],
+      registrations: [],
+    },
+    count,
+  );
 }
 
 function buildPhase5RocketMissionWorkload(count) {
-  const phase5Count = LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-    + vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) + 1
-    + CCTV_AMBIENT_CARD_MAX + 1 + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 3;
-  const expectedCount = phase5Count + ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT;
+  const phase5Count =
+    LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+    FIRMS_AMBIENT_COHORT_LIMIT +
+    vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) +
+    1 +
+    CCTV_AMBIENT_CARD_MAX +
+    1 +
+    EARTHQUAKE_OVERLAY_COHORT_LIMIT +
+    3;
+  const expectedCount =
+    phase5Count + ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT;
   if (count !== expectedCount) {
     throw new Error(`phase5-rockets requires ${expectedCount} entries`);
   }
@@ -822,23 +966,42 @@ function buildPhase5RocketMissionWorkload(count) {
 }
 
 function buildAllLiveRadioWorkload(count) {
-  const phase5Count = LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-    + vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) + 1
-    + CCTV_AMBIENT_CARD_MAX + 1 + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 3
-    + ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT;
+  const phase5Count =
+    LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+    FIRMS_AMBIENT_COHORT_LIMIT +
+    vesselOverlayCohortLimit(VIEWPORT_WIDTH, VIEWPORT_HEIGHT) +
+    1 +
+    CCTV_AMBIENT_CARD_MAX +
+    1 +
+    EARTHQUAKE_OVERLAY_COHORT_LIMIT +
+    3 +
+    ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT;
   // 2026-08-18: "every shared-host source" includes the migrated
   // submarine-cable cohort, so the aggregate exercises cable labels
   // interacting with Radio/earthquake/mission quotas and allocation.
-  const expectedCount = phase5Count + RADIO_OVERLAY_COHORT_LIMIT + 1
-    + CABLE_REFERENCE_LABEL_WINNER_CAP;
-  if (count !== expectedCount) throw new Error(`all-live-radio requires ${expectedCount} entries`);
+  const expectedCount =
+    phase5Count +
+    RADIO_OVERLAY_COHORT_LIMIT +
+    1 +
+    CABLE_REFERENCE_LABEL_WINNER_CAP;
+  if (count !== expectedCount)
+    throw new Error(`all-live-radio requires ${expectedCount} entries`);
   const workload = buildPhase5RocketMissionWorkload(phase5Count);
   appendSubmarineCableWorkload(workload, CABLE_REFERENCE_LABEL_WINNER_CAP);
   const entries = [];
   for (let index = 0; index < RADIO_OVERLAY_COHORT_LIMIT; index += 1) {
-    const position = new Cesium.Cartesian3(-0.72 + (index % 8) * 0.18, -0.64 + Math.floor(index / 8) * 0.16, 0);
+    const position = new Cesium.Cartesian3(
+      -0.72 + (index % 8) * 0.18,
+      -0.64 + Math.floor(index / 8) * 0.16,
+      0,
+    );
     workload.positions.push(position);
-    workload.drifts.push({ baseX: position.x, baseY: position.y, phase: index * 0.21, rate: 0.35 });
+    workload.drifts.push({
+      baseX: position.x,
+      baseY: position.y,
+      phase: index * 0.21,
+      rate: 0.35,
+    });
     const entry = createRadioClusterOverlayEntry({
       id: `cluster-${index}`,
       position: () => position,
@@ -851,12 +1014,20 @@ function buildAllLiveRadioWorkload(count) {
   }
   const selectedPosition = new Cesium.Cartesian3(0.08, 0.12, 0);
   workload.positions.push(selectedPosition);
-  workload.drifts.push({ baseX: selectedPosition.x, baseY: selectedPosition.y, phase: 0.5, rate: 0.4 });
-  const selectedEntry = createRadioSelectedOverlayEntry({
-    id: 'selected',
-    name: 'ALLOCATION RADIO',
-    tags: ['news'],
-  }, () => selectedPosition);
+  workload.drifts.push({
+    baseX: selectedPosition.x,
+    baseY: selectedPosition.y,
+    phase: 0.5,
+    rate: 0.4,
+  });
+  const selectedEntry = createRadioSelectedOverlayEntry(
+    {
+      id: 'selected',
+      name: 'ALLOCATION RADIO',
+      tags: ['news'],
+    },
+    () => selectedPosition,
+  );
   selectedEntry.horizonCull = false;
   entries.push(selectedEntry);
   workload.registrations.push({
@@ -895,7 +1066,8 @@ function appendSubmarineCableWorkload(workload, count) {
     const entry = createCableOverlayEntry({
       id: `${kind}-reference-${index}-alloc`,
       kind,
-      label: kind === 'cable' ? `Cable System ${index}` : `Landing Point ${index}`,
+      label:
+        kind === 'cable' ? `Cable System ${index}` : `Landing Point ${index}`,
       tip: position,
       distanceM: 200_000 + index * 40_000,
     });
@@ -919,7 +1091,9 @@ function appendSubmarineCableWorkload(workload, count) {
 
 function buildSubmarineCablesWorkload(count) {
   if (count !== CABLE_REFERENCE_LABEL_WINNER_CAP) {
-    throw new Error(`submarine-cables requires ${CABLE_REFERENCE_LABEL_WINNER_CAP} entries`);
+    throw new Error(
+      `submarine-cables requires ${CABLE_REFERENCE_LABEL_WINNER_CAP} entries`,
+    );
   }
   return appendSubmarineCableWorkload(
     { entries: [], positions: [], drifts: [], registrations: [] },
@@ -943,8 +1117,8 @@ function buildPhase6DetectionWorkload(count) {
     const row = Math.floor(index / columns);
     const baseX = -700_000 + column * spanX;
     const baseY = -525_000 + row * spanY;
-    const normalizedHorizontal = (baseX * baseX + baseY * baseY)
-      / (equatorialRadiusM * equatorialRadiusM);
+    const normalizedHorizontal =
+      (baseX * baseX + baseY * baseY) / (equatorialRadiusM * equatorialRadiusM);
     const z = polarRadiusM * Math.sqrt(Math.max(0, 1 - normalizedHorizontal));
     const position = new Cesium.Cartesian3(baseX, baseY, z);
     positions.push(position);
@@ -959,7 +1133,10 @@ function buildPhase6DetectionWorkload(count) {
       position,
       sourceId: `detect-${index}`,
       id: `D${String(index).padStart(4, '0')}`,
-      metric: index % 5 === 0 ? '' : `FL${String(180 + (index % 220)).padStart(3, '0')}`,
+      metric:
+        index % 5 === 0
+          ? ''
+          : `FL${String(180 + (index % 220)).padStart(3, '0')}`,
       type: ['AIR', 'SAT', 'SEA', 'VEH'][index % 4],
       tier: index % 17 === 0 ? 'military' : undefined,
     });
@@ -970,7 +1147,9 @@ function buildPhase6DetectionWorkload(count) {
     drifts,
     detectionLayer: {
       id: 'flights',
-      getDetectableObjects() { return observations; },
+      getDetectableObjects() {
+        return observations;
+      },
     },
   };
 }
@@ -996,39 +1175,40 @@ function main() {
     dpr: 2,
   });
   initWorldOverlay(env.viewer);
-  const workload = PROFILE === 'phase6-detection'
-    ? buildPhase6DetectionWorkload(ENTRY_COUNT)
-    : PROFILE === 'local-infrastructure'
-      ? buildLocalInfrastructureWorkload(ENTRY_COUNT)
-      : PROFILE === 'phase3-firms'
-      ? buildPhase3FirmsWorkload(ENTRY_COUNT)
-      : PROFILE === 'phase3-vessels'
-        ? buildPhase3VesselsWorkload(ENTRY_COUNT)
-        : PROFILE === 'phase3-tracked'
-          ? buildPhase3TrackedWorkload(ENTRY_COUNT)
-          : PROFILE === 'phase4-cctv'
-            ? buildPhase4CctvWorkload(ENTRY_COUNT)
-            : PROFILE === 'phase5-earthquakes'
-              ? buildPhase5EarthquakesWorkload(ENTRY_COUNT)
-              : PROFILE === 'phase5-bikeshare'
-                ? buildPhase5BikeshareWorkload(ENTRY_COUNT)
-                : PROFILE === 'phase5-satellites'
-                  ? buildPhase5SatellitesWorkload(ENTRY_COUNT)
-                  : PROFILE === 'phase5-cctv-projection'
-                    ? buildPhase5CctvProjectionWorkload(ENTRY_COUNT)
-                    : PROFILE === 'phase5-civil'
-                      ? buildPhase5CivilWorkload(ENTRY_COUNT)
-                      : PROFILE === 'phase5-military'
-                        ? buildPhase5MilitaryWorkload(ENTRY_COUNT)
-                        : PROFILE === 'rocket-missions'
-                          ? buildRocketMissionAmbientWorkload(ENTRY_COUNT)
-                          : PROFILE === 'phase5-rockets'
-                            ? buildPhase5RocketMissionWorkload(ENTRY_COUNT)
-                            : PROFILE === 'all-live-radio'
-                              ? buildAllLiveRadioWorkload(ENTRY_COUNT)
-                              : PROFILE === 'submarine-cables'
-                                ? buildSubmarineCablesWorkload(ENTRY_COUNT)
-        : buildWorkload(ENTRY_COUNT);
+  const workload =
+    PROFILE === 'phase6-detection'
+      ? buildPhase6DetectionWorkload(ENTRY_COUNT)
+      : PROFILE === 'local-infrastructure'
+        ? buildLocalInfrastructureWorkload(ENTRY_COUNT)
+        : PROFILE === 'phase3-firms'
+          ? buildPhase3FirmsWorkload(ENTRY_COUNT)
+          : PROFILE === 'phase3-vessels'
+            ? buildPhase3VesselsWorkload(ENTRY_COUNT)
+            : PROFILE === 'phase3-tracked'
+              ? buildPhase3TrackedWorkload(ENTRY_COUNT)
+              : PROFILE === 'phase4-cctv'
+                ? buildPhase4CctvWorkload(ENTRY_COUNT)
+                : PROFILE === 'phase5-earthquakes'
+                  ? buildPhase5EarthquakesWorkload(ENTRY_COUNT)
+                  : PROFILE === 'phase5-bikeshare'
+                    ? buildPhase5BikeshareWorkload(ENTRY_COUNT)
+                    : PROFILE === 'phase5-satellites'
+                      ? buildPhase5SatellitesWorkload(ENTRY_COUNT)
+                      : PROFILE === 'phase5-cctv-projection'
+                        ? buildPhase5CctvProjectionWorkload(ENTRY_COUNT)
+                        : PROFILE === 'phase5-civil'
+                          ? buildPhase5CivilWorkload(ENTRY_COUNT)
+                          : PROFILE === 'phase5-military'
+                            ? buildPhase5MilitaryWorkload(ENTRY_COUNT)
+                            : PROFILE === 'rocket-missions'
+                              ? buildRocketMissionAmbientWorkload(ENTRY_COUNT)
+                              : PROFILE === 'phase5-rockets'
+                                ? buildPhase5RocketMissionWorkload(ENTRY_COUNT)
+                                : PROFILE === 'all-live-radio'
+                                  ? buildAllLiveRadioWorkload(ENTRY_COUNT)
+                                  : PROFILE === 'submarine-cables'
+                                    ? buildSubmarineCablesWorkload(ENTRY_COUNT)
+                                    : buildWorkload(ENTRY_COUNT);
   const { entries, positions, drifts } = workload;
   const solveIntervalMs = Number(process.env.GEV_ALLOC_SOLVE_MS) || 125;
   const detectionActive = !!workload.detectionLayer;
@@ -1080,9 +1260,15 @@ function main() {
   }
   const warm = getWorldOverlayDiagnostics();
   const detectionWarm = detectionActive ? getDetectionDiagnostics() : null;
-  const painted = detectionActive ? detectionWarm.visibleCount : warm.paintedCount;
-  const candidates = detectionActive ? detectionWarm.observationCount : warm.candidateCount;
-  const solveRevisionBefore = detectionActive ? detectionWarm.solveRevision : warm.solveRevision;
+  const painted = detectionActive
+    ? detectionWarm.visibleCount
+    : warm.paintedCount;
+  const candidates = detectionActive
+    ? detectionWarm.observationCount
+    : warm.candidateCount;
+  const solveRevisionBefore = detectionActive
+    ? detectionWarm.solveRevision
+    : warm.solveRevision;
 
   const chunkRates = [];
   for (let chunk = 0; chunk < CHUNK_COUNT; chunk++) {
@@ -1101,31 +1287,34 @@ function main() {
   const medianBytesPerFrame = sorted[Math.floor(sorted.length / 2)];
   const perCandidate = (value) => value / Math.max(1, candidates);
 
-  process.stdout.write(`${JSON.stringify({
-    ok: true,
-    profile: PROFILE,
-    ambientCardCapacity: workload.ambientCardCapacity ?? null,
-    entryCount: ENTRY_COUNT,
-    warmupFrames: WARMUP_FRAMES,
-    stabilizationChunks: STABILIZATION_CHUNKS,
-    chunkFrames: CHUNK_FRAMES,
-    chunkCount: CHUNK_COUNT,
-    measuredFrames: CHUNK_FRAMES * CHUNK_COUNT,
-    paintedCount: painted,
-    paintedBySource: warm.paintedBySource,
-    candidateCount: candidates,
-    detectionSelectedCount: detectionWarm?.selectedCount ?? null,
-    detectionCollectiveLabelBudget: detectionWarm?.collectiveLabelBudget ?? null,
-    solveCount: solveRevisionAfter - solveRevisionBefore,
-    // Frame cost is the primary signal; the per-candidate rate is the
-    // scale-invariant one. Neither is normalized by paintedCount, which
-    // saturates at the domain collision capacity.
-    maxBytesPerFrame,
-    medianBytesPerFrame,
-    maxBytesPerCandidatePerFrame: perCandidate(maxBytesPerFrame),
-    medianBytesPerCandidatePerFrame: perCandidate(medianBytesPerFrame),
-    chunkBytesPerFrame: chunkRates,
-  })}\n`);
+  process.stdout.write(
+    `${JSON.stringify({
+      ok: true,
+      profile: PROFILE,
+      ambientCardCapacity: workload.ambientCardCapacity ?? null,
+      entryCount: ENTRY_COUNT,
+      warmupFrames: WARMUP_FRAMES,
+      stabilizationChunks: STABILIZATION_CHUNKS,
+      chunkFrames: CHUNK_FRAMES,
+      chunkCount: CHUNK_COUNT,
+      measuredFrames: CHUNK_FRAMES * CHUNK_COUNT,
+      paintedCount: painted,
+      paintedBySource: warm.paintedBySource,
+      candidateCount: candidates,
+      detectionSelectedCount: detectionWarm?.selectedCount ?? null,
+      detectionCollectiveLabelBudget:
+        detectionWarm?.collectiveLabelBudget ?? null,
+      solveCount: solveRevisionAfter - solveRevisionBefore,
+      // Frame cost is the primary signal; the per-candidate rate is the
+      // scale-invariant one. Neither is normalized by paintedCount, which
+      // saturates at the domain collision capacity.
+      maxBytesPerFrame,
+      medianBytesPerFrame,
+      maxBytesPerCandidatePerFrame: perCandidate(maxBytesPerFrame),
+      medianBytesPerCandidatePerFrame: perCandidate(medianBytesPerFrame),
+      chunkBytesPerFrame: chunkRates,
+    })}\n`,
+  );
 
   if (detectionActive) destroyDetection();
   destroyWorldOverlay();

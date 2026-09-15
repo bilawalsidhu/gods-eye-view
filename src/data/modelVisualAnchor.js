@@ -77,7 +77,9 @@ export const MODEL_TRAIL_ANCHOR_NATIVE = Object.freeze({
  *  trail anchor has to ride the same chain or it lands on a different axis than
  *  the aircraft it is supposed to be attached to. */
 const AXIS_CORRECTION = Cesium.Matrix4.multiplyTransformation(
-  Cesium.Axis.Y_UP_TO_Z_UP, Cesium.Axis.Z_UP_TO_X_UP, new Cesium.Matrix4(),
+  Cesium.Axis.Y_UP_TO_Z_UP,
+  Cesium.Axis.Z_UP_TO_X_UP,
+  new Cesium.Matrix4(),
 );
 const _anchorScratch = new Cesium.Cartesian3();
 const _chainScratch = new Cesium.Matrix4();
@@ -124,7 +126,11 @@ export function modelAnchorWorld(model, nativeAnchor, result) {
     components || Cesium.Matrix4.IDENTITY,
     _chainScratch,
   );
-  Cesium.Matrix4.multiplyTransformation(_chainScratch, AXIS_CORRECTION, _chainScratch);
+  Cesium.Matrix4.multiplyTransformation(
+    _chainScratch,
+    AXIS_CORRECTION,
+    _chainScratch,
+  );
   return Cesium.Matrix4.multiplyByPoint(_chainScratch, _anchorScratch, result);
 }
 
@@ -220,9 +226,17 @@ export function trailHeadStart(start, anchor, center, radiusM, result) {
   // a real trail.
   if (!anchor || !center || !result) return start;
   if (!Number.isFinite(radiusM) || radiusM <= 0) return start;
-  const startD = Math.hypot(start.x - center.x, start.y - center.y, start.z - center.z);
+  const startD = Math.hypot(
+    start.x - center.x,
+    start.y - center.y,
+    start.z - center.z,
+  );
   if (startD >= radiusM) return start;
-  const anchorD = Math.hypot(anchor.x - center.x, anchor.y - center.y, anchor.z - center.z);
+  const anchorD = Math.hypot(
+    anchor.x - center.x,
+    anchor.y - center.y,
+    anchor.z - center.z,
+  );
   // A degenerate shell (an anchor at or outside the envelope — no shipped asset
   // has one, since every anchor is a measured hull point) leaves nothing to
   // ramp across; fall back to the containment verdict rather than divide by it.
@@ -252,8 +266,20 @@ export function modelVisualAnchor(modelMatrix, nativeCenter, scale, result) {
   const x = (nativeCenter?.[0] || 0) * safeScale;
   const y = (nativeCenter?.[1] || 0) * safeScale;
   const z = (nativeCenter?.[2] || 0) * safeScale;
-  result.x = modelMatrix[0] * x + modelMatrix[4] * y + modelMatrix[8] * z + modelMatrix[12];
-  result.y = modelMatrix[1] * x + modelMatrix[5] * y + modelMatrix[9] * z + modelMatrix[13];
-  result.z = modelMatrix[2] * x + modelMatrix[6] * y + modelMatrix[10] * z + modelMatrix[14];
+  result.x =
+    modelMatrix[0] * x +
+    modelMatrix[4] * y +
+    modelMatrix[8] * z +
+    modelMatrix[12];
+  result.y =
+    modelMatrix[1] * x +
+    modelMatrix[5] * y +
+    modelMatrix[9] * z +
+    modelMatrix[13];
+  result.z =
+    modelMatrix[2] * x +
+    modelMatrix[6] * y +
+    modelMatrix[10] * z +
+    modelMatrix[14];
   return result;
 }

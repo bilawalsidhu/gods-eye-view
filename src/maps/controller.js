@@ -180,12 +180,24 @@ export class MapSourceController {
   async _activateGlobeStack(stack, gen) {
     const resolution = await this._getImageryProvider(stack);
     if (gen !== this._switchGen) return;
-    this._removeImageryLayer();
-    this._imageryLayer = this._createImageryLayer(resolution.provider);
-    this._activeImageryProvider = resolution.provider;
-    this.viewer.imageryLayers.add(this._imageryLayer, 0);
+    // Scene shots reapply their map stack at every handoff. Keep the live
+    // layer (and its loaded tiles) when the resolved provider is unchanged;
+    // rebuilding it exposes the bare globe while imagery loads again.
+    if (
+      !this._imageryLayer ||
+      this._activeImageryProvider !== resolution.provider
+    ) {
+      this._removeImageryLayer();
+      this._imageryLayer = this._createImageryLayer(resolution.provider);
+      this._activeImageryProvider = resolution.provider;
+      this.viewer.imageryLayers.add(this._imageryLayer, 0);
+    }
     const source = this._sources.get(resolution.effectiveStackId);
     this._credits.show(source?.credit || null);
+    // A repeated request still owns a new switch generation. Rebind its
+    // failure listener so fallback remains live without accumulating listeners.
+    this._removeImageryErrorListener?.();
+    this._removeImageryErrorListener = null;
     this._watchProvider(resolution, gen);
     this._showTileset(null);
     this.viewer.scene.globe.show = true;
