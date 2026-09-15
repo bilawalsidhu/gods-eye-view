@@ -12,7 +12,7 @@ import { readSource } from '../testSupport/readSource.js';
 // cancellable — an AbortSignal for the data manager, a liveness predicate for
 // the visual commit. Several of these assert exactly that plumbing.
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, mock } from 'node:test';
 
 import { SceneDirector } from './director.js';
 import { SCENE_TRACKING_PARAM_KEYS } from './scenePolicy.js';
@@ -622,4 +622,632 @@ test('a scene run supersedes a LOAD still suspended on its visual await', async 
   } finally {
     restore();
   }
+});
+
+// ── Panel DOM + project storage ─────────────────────────────────────────────
+//
+// Everything above runs the director headless (getElementById → null), which
+// is the mode production's late-mount used to hit. The rest of the class only
+// exists when the scene panel is mounted: the shot editor, capture, import/
+// export, and the localStorage persistence contract. These tests mount a full
+// fake panel, including a <dialog> stand-in that lets the real promptDialog /
+// confirmDialog promises resolve without a browser.
+
+const PANEL_IDS = [
+  'scene-panel', 'scene-select', 'scene-new-btn', 'scene-delete-btn',
+  'scene-capture-btn', 'scene-update-shot-btn', 'scene-shot-list',
+  'scene-start-btn', 'scene-stop-btn', 'scene-next-btn', 'scene-export-btn',
+  'scene-import-btn', 'scene-import-file', 'scene-download-btn',
+  'scene-status', 'scene-progress-fill', 'scene-runtime', 'toast',
+];
+
+/** The returnValue promptDialog/confirmDialog treat as "confirmed". */
+const CONFIRM_SENTINEL = '__gev_confirm__';
+
+/** Element stand-in covering everything the panel and dialogs touch. */
+function makeFakeElement(tag) {
+  const classes = new Set();
+  const listeners = {};
+  const children = [];
+  const element = {
+    tagName: tag,
+    className: '',
+    textContent: '',
+    value: '',
+    id: '',
+    htmlFor: '',
+    type: '',
+    method: '',
+    returnValue: '',
+    autocomplete: '',
+    spellcheck: false,
+    disabled: false,
+    style: {},
+    children,
+    classList: {
+      add: (name) => classes.add(name),
+      remove: (name) => classes.delete(name),
+      toggle(name, force) {
+        const next = force === undefined ? !classes.has(name) : Boolean(force);
+        if (next) classes.add(name);
+        else classes.delete(name);
+        return next;
+      },
+      contains: (name) => classes.has(name),
+    },
+    append(...kids) { children.push(...kids); },
+    appendChild(kid) { children.push(kid); return kid; },
+    remove() {},
+    click() {
+      for (const handler of listeners.click || []) handler({ preventDefault() {} });
+    },
+    setAttribute() {},
+    select() {},
+    addEventListener(type, handler) { (listeners[type] ||= []).push(handler); },
+    removeEventListener() {},
+    dispatch(type, arg) {
+      for (const handler of listeners[type] || []) handler(arg);
+      return Boolean(listeners[type]?.length);
+    },
+    showModal() { /* presence is all promptDialog needs */ },
+    handlers: listeners,
+  };
+  Object.defineProperty(element, 'innerHTML', {
+    get() { return ''; },
+    set() { children.length = 0; },
+  });
+  return element;
+}
+
+/**
+ * Panel-mounted runtime: full element map, dialog-capable createElement, and
+ * an in-memory localStorage whose writes are recorded (and can be forced to
+ * fail, the private-browsing / quota-exceeded path).
+ */
+function installPanelRuntime(project = PROJECT_FIXTURE) {
+  const originalDocument = globalThis.document;
+  const originalLocalStorage = globalThis.localStorage;
+  const originalCreate = URL.createObjectURL;
+  const originalRevoke = URL.revokeObjectURL;
+
+  const elements = new Map(PANEL_IDS.map((id) => [id, makeFakeElement('div')]));
+  const created = [];
+  const dialogs = [];
+  const objectURLs = [];
+  const store = new Map();
+  const storage = {
+    fail: false,
+    setCalls: [],
+  };
+
+  globalThis.document = {
+    getElementById: (id) => elements.get(id) ?? null,
+    createElement: (tag) => {
+      const element = makeFakeElement(tag);
+      created.push(element);
+      if (tag === 'dialog') dialogs.push(element);
+      return element;
+    },
+    addEventListener() {},
+    removeEventListener() {},
+    body: {
+      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      append() {},
+      appendChild() {},
+    },
+  };
+  globalThis.localStorage = {
+    getItem: (key) => (store.has(key) ? store.get(key) : project === null ? null : JSON.stringify(project)),
+    setItem(key, value) {
+      storage.setCalls.push(key);
+      if (storage.fail) throw new Error('QuotaExceededError');
+      store.set(key, value);
+    },
+    removeItem: (key) => store.delete(key),
+  };
+  URL.createObjectURL = (blob) => {
+    objectURLs.push(blob);
+    return 'blob:fake';
+  };
+  URL.revokeObjectURL = () => {};
+
+  return {
+    elements,
+    created,
+    dialogs,
+    objectURLs,
+    storage,
+    el: (id) => elements.get(id),
+    /** Resolve the most recent dialog: confirm (sentinel) or cancel (''). */
+    settleDialog(confirmed) {
+      const dialog = dialogs.at(-1);
+      assert.ok(dialog, 'a dialog was opened');
+      dialog.returnValue = confirmed ? CONFIRM_SENTINEL : '';
+      dialog.dispatch('close');
+    },
+    restore() {
+      globalThis.document = originalDocument;
+      globalThis.localStorage = originalLocalStorage;
+      URL.createObjectURL = originalCreate;
+      URL.revokeObjectURL = originalRevoke;
+    },
+  };
+}
+
+/** Director over the panel runtime, with fixture project preloaded. */
+function makePanelDirector(options = {}) {
+  const env = installPanelRuntime(options.project);
+  const viewer = fakeViewer();
+  const styleManager = fakeStyleManager(options.style);
+  const dataManager = fakeDataManager(options.data);
+  const director = new SceneDirector(viewer, styleManager, dataManager);
+  return { director, viewer, styleManager, dataManager, env };
+}
+
+test('a mounted director seeds the recipe project and renders the panel', () => {
+  const { director, env } = makePanelDirector({ project: null });
+  try {
+    // project: null → localStorage.getItem returns null → createDefaultProject
+    assert.equal(director._project.scenes.length, SCENE_RECIPES.length);
+    const first = director._project.scenes[0];
+    assert.equal(first.shots.length, SCENE_RECIPES[0].cameraPath.length);
+    const shot = first.shots[0];
+    assert.equal(shot.title, 'Shot 1');
+    assert.equal(shot.visual.style, SCENE_RECIPES[0].style);
+    assert.ok(shot.durationSec >= 0.2);
+    assert.equal(shot.visual.hud.visible, SCENE_RECIPES[0].ui.hudMode !== 'off');
+    assert.equal(shot.visual.detection.density, 35);
+    assert.equal(env.el('scene-status').textContent, 'Ready');
+    assert.equal(env.el('scene-progress-fill').textContent, '0%');
+    assert.deepEqual(
+      env.el('scene-select').children.map((option) => option.value),
+      director._project.scenes.map((scene) => scene.id),
+    );
+  } finally {
+    env.restore();
+  }
+});
+
+test('captureShot snapshots camera, visual, and layer state into a normalized shot', () => {
+  const { director, dataManager, env } = makePanelDirector({
+    data: { registered: ['flights', 'cctv'] },
+  });
+  try {
+    dataManager.getLayerParams = (id) => (id === 'flights' ? { models3d: true } : null);
+    dataManager.getAll = () => [
+      { id: 'flights', enabled: true },
+      { id: 'cctv', enabled: false },
+    ];
+    const scene = director._getSelectedScene();
+    assert.equal(scene.shots.length, 2);
+
+    director.captureShot();
+
+    assert.equal(scene.shots.length, 3, 'the shot was appended');
+    const shot = scene.shots.at(-1);
+    assert.equal(director._selectedShotId, shot.id);
+    assert.equal(shot.durationSec, 4, 'default shot duration');
+    assert.equal(shot.holdSec, 0.9, 'default hold');
+    assert.deepEqual(shot.camera, { lat: 0, lon: 0, alt: 1000, heading: 0, pitch: -40, roll: 0 });
+    assert.deepEqual(shot.layers, {
+      flights: { enabled: true, params: { models3d: true } },
+      // normalizeShot writes the params key even when absent.
+      cctv: { enabled: false, params: undefined },
+    });
+    assert.equal(env.storage.setCalls.length, 1, 'the capture was persisted');
+    assert.equal(env.el('scene-status').textContent, 'Captured: Fixture Scene / Shot 3');
+  } finally {
+    env.restore();
+  }
+});
+
+test('captureShot without a camera reports why and touches nothing', () => {
+  const { director, env } = makePanelDirector();
+  try {
+    director.styleManager.getCameraState = () => null;
+    const before = director._getSelectedScene().shots.length;
+    director.captureShot();
+    assert.equal(env.el('scene-status').textContent, 'Cannot capture shot: camera not ready');
+    assert.equal(director._getSelectedScene().shots.length, before);
+    assert.equal(env.storage.setCalls.length, 0);
+  } finally {
+    env.restore();
+  }
+});
+
+test('updateSelectedShot overwrites the selected shot in place', () => {
+  const { director, env } = makePanelDirector();
+  try {
+    director.styleManager.getCameraState = () => ({ lat: 1, lon: 2, alt: 3, heading: 4, pitch: 5, roll: 6 });
+    const shot = director._getSelectedScene().shots[0];
+    director.updateSelectedShot();
+    assert.deepEqual(shot.camera, { lat: 1, lon: 2, alt: 3, heading: 4, pitch: 5, roll: 6 });
+    assert.equal(env.el('scene-status').textContent, 'Updated: Fixture Scene / Shot A');
+  } finally {
+    env.restore();
+  }
+});
+
+test('updateSelectedShot with no shot selected says so', () => {
+  const { director, env } = makePanelDirector();
+  try {
+    director._selectedShotId = null;
+    director.updateSelectedShot();
+    assert.equal(env.el('scene-status').textContent, 'Select a shot first');
+  } finally {
+    env.restore();
+  }
+});
+
+test('_createScene appends and selects a named scene on confirm', async () => {
+  const { director, env } = makePanelDirector({ project: null });
+  try {
+    const before = director._project.scenes.length;
+    const creating = director._createScene();
+    await settle();
+    env.settleDialog(true);
+    await creating;
+
+    assert.equal(director._project.scenes.length, before + 1);
+    const scene = director._project.scenes.at(-1);
+    assert.equal(director._selectedSceneId, scene.id);
+    assert.equal(director._selectedShotId, null, 'a new scene has no shots to select');
+    assert.deepEqual(
+      env.el('scene-select').children.map((option) => option.value),
+      director._project.scenes.map((item) => item.id),
+      'the dropdown was rebuilt with the new scene',
+    );
+  } finally {
+    env.restore();
+  }
+});
+
+test('_createScene cancelled adds nothing', async () => {
+  const { director, env } = makePanelDirector({ project: null });
+  try {
+    const before = director._project.scenes.length;
+    const creating = director._createScene();
+    await settle();
+    env.settleDialog(false);
+    await creating;
+    assert.equal(director._project.scenes.length, before);
+  } finally {
+    env.restore();
+  }
+});
+
+test('deleting the last scene restores the default recipe project', async () => {
+  const { director, env } = makePanelDirector();
+  try {
+    director._project.scenes = [director._project.scenes[0]]; // one custom scene
+    const deleting = director._deleteSelectedScene();
+    await settle();
+    env.settleDialog(true);
+    await deleting;
+
+    assert.deepEqual(
+      director._project.scenes.map((scene) => scene.id),
+      SCENE_RECIPES.map((recipe) => recipe.id),
+      'an empty project falls back to the shipped recipes',
+    );
+    assert.equal(director._selectedSceneId, director._project.scenes[0].id);
+  } finally {
+    env.restore();
+  }
+});
+
+test('declining the scene delete confirmation changes nothing', async () => {
+  const { director, env } = makePanelDirector();
+  try {
+    const before = [...director._project.scenes];
+    const deleting = director._deleteSelectedScene();
+    await settle();
+    env.settleDialog(false);
+    await deleting;
+    assert.deepEqual(director._project.scenes, before);
+    assert.equal(env.storage.setCalls.length, 0);
+  } finally {
+    env.restore();
+  }
+});
+
+test('deleteShot removes after confirm and reselects, declines keep it', async () => {
+  const { director, env } = makePanelDirector();
+  try {
+    // Decline first: the shot list is untouched and nothing is persisted.
+    let deleting = director.deleteShot('scene-1', 'shot-a');
+    await settle();
+    env.settleDialog(false);
+    await deleting;
+    assert.equal(director._getShot('scene-1', 'shot-a').shot.title, 'Shot A');
+
+    deleting = director.deleteShot('scene-1', 'shot-a');
+    await settle();
+    env.settleDialog(true);
+    await deleting;
+    const scene = director._getSelectedScene();
+    assert.equal(scene.shots.length, 1);
+    assert.equal(director._selectedShotId, scene.shots[0].id);
+
+    // Unknown ids are a silent no-op, not a crash.
+    await director.deleteShot('scene-x', 'shot-x');
+  } finally {
+    env.restore();
+  }
+});
+
+test('a failed localStorage write toasts, warns, and keeps the memory project', async () => {
+  const { director, env } = makePanelDirector();
+  const warn = mock.method(console, 'warn');
+  try {
+    env.storage.fail = true;
+    const creating = director._createScene();
+    await settle();
+    env.settleDialog(true);
+    await creating;
+
+    assert.ok(
+      warn.mock.calls.some((call) => call.arguments.map(String).join(' ').includes('Could not persist project')),
+      'the persistence failure is logged',
+    );
+    assert.equal(env.el('toast').textContent, 'Scene not saved — browser storage unavailable');
+    assert.ok(env.el('toast').classList.contains('visible'));
+    assert.equal(env.el('scene-status').textContent, 'Scene not saved — browser storage unavailable');
+    // The in-memory project is still usable this session.
+    assert.equal(director._project.scenes.length, 2, 'the fixture scene plus the new one');
+  } finally {
+    warn.mock.restore();
+    env.restore();
+  }
+});
+
+test('exportProject downloads the serialized project', async () => {
+  const { director, env } = makePanelDirector();
+  try {
+    director.exportProject();
+    assert.equal(env.objectURLs.length, 1);
+    const payload = JSON.parse(await env.objectURLs[0].text());
+    assert.equal(payload.version, 3);
+    assert.deepEqual(payload.scenes.map((scene) => scene.id), ['scene-1']);
+  } finally {
+    env.restore();
+  }
+});
+
+test('downloadLastRunMetadata gates on an archived run', () => {
+  const { director, env } = makePanelDirector();
+  try {
+    director.downloadLastRunMetadata();
+    assert.equal(env.objectURLs.length, 0, 'nothing to download before a run');
+
+    director._lastRunJson = '{"wasCancelled":false}';
+    director.downloadLastRunMetadata();
+    assert.equal(env.objectURLs.length, 1);
+  } finally {
+    env.restore();
+  }
+});
+
+test('importProjectFile replaces the project and reports invalid JSON', async () => {
+  const { director, env } = makePanelDirector();
+  try {
+    const replacement = {
+      version: 3,
+      scenes: [{
+        id: 'imported',
+        title: 'Imported',
+        shots: [PROJECT_FIXTURE.scenes[0].shots[0]],
+      }],
+    };
+    await director.importProjectFile({ text: async () => JSON.stringify(replacement), name: 'tour.json' });
+    assert.deepEqual(director.listScenes(), [{ id: 'imported', title: 'Imported', shots: 1 }]);
+    assert.equal(director._selectedSceneId, 'imported');
+    assert.equal(env.el('scene-status').textContent, 'Imported tour.json');
+
+    await director.importProjectFile({ text: async () => '{not json', name: 'broken.json' });
+    assert.equal(env.el('scene-status').textContent, 'Import failed (invalid JSON)');
+    assert.equal(director._selectedSceneId, 'imported', 'a failed import keeps the current project');
+  } finally {
+    env.restore();
+  }
+});
+
+test('voice read-back helpers report scenes, lookup, and status', () => {
+  const { director, env } = makePanelDirector();
+  try {
+    assert.deepEqual(director.listScenes(), [{ id: 'scene-1', title: 'Fixture Scene', shots: 2 }]);
+    assert.equal(director.findSceneByQuery('scene-1').title, 'Fixture Scene', 'by id');
+    assert.equal(director.findSceneByQuery('FIXTURE SCENE').id, 'scene-1', 'by exact title, any case');
+    assert.equal(director.findSceneByQuery('fixture').id, 'scene-1', 'by title substring');
+    assert.equal(director.findSceneByQuery('nope'), null);
+    assert.equal(director.findSceneByQuery('  '), null, 'blank queries find nothing');
+
+    const status = director.getPlaybackStatus();
+    assert.equal(status.running, false);
+    assert.equal(status.selectedSceneId, 'scene-1');
+    assert.equal(status.sceneCount, 1);
+  } finally {
+    env.restore();
+  }
+});
+
+test('runNextScene steps through the shot list and wraps to the start', async () => {
+  const { director, env } = makePanelDirector();
+  try {
+    assert.equal(director._selectedShotId, 'shot-a');
+    await director.runNextScene();
+    assert.equal(director._selectedShotId, 'shot-b');
+    await director.runNextScene();
+    assert.equal(director._selectedShotId, 'shot-a', 'the queue wraps');
+
+    director._running = true;
+    await director.runNextScene();
+    assert.equal(director._selectedShotId, 'shot-a', 'stepping is blocked during a run');
+  } finally {
+    director._running = false;
+    env.restore();
+  }
+});
+
+test('Escape stops a running scene; other keys do not', () => {
+  const { director, viewer, env } = makePanelDirector();
+  try {
+    director._running = true;
+    director._runAbort = new AbortController();
+    director._runToken = { cancelled: false, signal: director._runAbort.signal };
+
+    director._onKeyDown({ key: 'Enter' });
+    assert.equal(director._runToken.cancelled, false, 'an unrelated key is ignored');
+
+    const before = viewer.cancelledFlights;
+    director._onKeyDown({ key: 'Escape' });
+    assert.equal(director._runToken.cancelled, true);
+    assert.equal(director._runAbort.signal.aborted, true);
+    assert.equal(viewer.cancelledFlights, before + 1, 'the in-flight camera flight is cancelled');
+  } finally {
+    director._running = false;
+    director._runToken = null;
+    env.restore();
+  }
+});
+
+test('panel controls and progress reflect and clamp run state', () => {
+  const { director, env } = makePanelDirector();
+  try {
+    director._setButtons(true);
+    assert.equal(env.el('scene-start-btn').disabled, true);
+    assert.equal(env.el('scene-stop-btn').disabled, false);
+    assert.ok(env.el('scene-panel').classList.contains('running'));
+    director._setButtons(false);
+    assert.equal(env.el('scene-start-btn').disabled, false);
+    assert.equal(env.el('scene-stop-btn').disabled, true);
+
+    director._setProgress(2);
+    assert.equal(env.el('scene-progress-fill').textContent, '100%', 'progress clamps high');
+    assert.equal(env.el('scene-progress-fill').style.width, '100%');
+    director._setProgress(-1);
+    assert.equal(env.el('scene-progress-fill').textContent, '0%', 'progress clamps low');
+    director._setProgress(0.425);
+    assert.equal(env.el('scene-progress-fill').textContent, '43%');
+
+    director._updateRuntime('Fixture Scene · Shot A');
+    assert.equal(env.el('scene-runtime').textContent, 'Fixture Scene · Shot A');
+    assert.ok(env.el('scene-runtime').classList.contains('active'));
+    director._updateRuntime('');
+    assert.ok(!env.el('scene-runtime').classList.contains('active'));
+  } finally {
+    env.restore();
+  }
+});
+
+test('a full run flies every shot, logs telemetry, and archives the run', async () => {
+  const { director, viewer, styleManager, env } = makePanelDirector();
+  try {
+    const result = await director.startScene('scene-1');
+    assert.equal(result.started, true, 'the run reports its own start');
+    assert.equal(result.shots, 2);
+
+    assert.equal(viewer.flights.length, 2, 'one camera flight per shot');
+    assert.equal(styleManager.visualStates.length, 2, 'one visual state per shot');
+    assert.equal(director._running, false);
+    assert.ok(director._lastRun, 'telemetry archived');
+    assert.equal(director._lastRun.wasCancelled, false);
+    assert.equal(director._lastRunJson.length > 0, true);
+    const types = director._lastRun.events.map((event) => event.type);
+    assert.deepEqual(
+      types.filter((type) => type === 'shot_start'),
+      ['shot_start', 'shot_start'],
+    );
+    assert.ok(types.includes('scene_run_complete'));
+  } finally {
+    env.restore();
+  }
+});
+
+test('a refused context-mode exit is reported, not swallowed', async () => {
+  const { director, styleManager, restore } = makeDirector({
+    style: { contextMode: 'space-missions', exitFails: true },
+  });
+  const warn = mock.method(console, 'warn');
+  try {
+    const exited = await director._exitIsolatingContextMode();
+    assert.equal(exited, false, 'a failed exit is reported as false');
+    assert.deepEqual(styleManager.contextExits, ['off'], 'the exit was still attempted');
+    assert.ok(
+      warn.mock.calls.some((call) => call.arguments.map(String).join(' ').includes('Could not exit space-missions')),
+      'the failure is logged',
+    );
+    assert.ok(
+      director._activeRun.events.some((event) => event.type === 'context_mode_exit_failed'),
+      'the failure lands in telemetry',
+    );
+  } finally {
+    warn.mock.restore();
+    restore();
+  }
+});
+
+test('a run that throws mid-shot reports the error and still finalizes', async () => {
+  const { director, env } = makePanelDirector();
+  try {
+    director.styleManager.applyVisualState = async () => {
+      throw new Error('boom');
+    };
+    await director.startScene('scene-1');
+    assert.equal(director._running, false, 'the run still unwinds');
+    assert.ok(director._lastRun, 'telemetry archived through the error path');
+    assert.deepEqual(
+      director._lastRun.events.map((event) => event.type).filter((type) => type === 'scene_run_error'),
+      ['scene_run_error'],
+    );
+  } finally {
+    env.restore();
+  }
+});
+
+
+test('run refusals are reported, and a held shot keeps the ticker alive', async () => {
+  const HELD_PROJECT = {
+    version: 3,
+    scenes: [{
+      id: 'held',
+      title: 'Held Scene',
+      shots: [{
+        id: 'held-shot',
+        title: 'Held Shot',
+        durationSec: 0.2,
+        holdSec: 0.25,
+        camera: { lat: 10, lon: 20, alt: 500000, heading: 0, pitch: -40, roll: 0 },
+        visual: { style: 'normal' },
+        layers: {},
+      }],
+    }],
+  };
+  const { director, env } = makePanelDirector({ project: HELD_PROJECT });
+
+  // Refusals first: already running, then no shots, then camera unavailable.
+  director._running = true;
+  assert.deepEqual(await director.startScene('held'), { started: false, reason: 'already-running' });
+  director._running = false;
+  director._project.scenes[0].shots = [];
+  assert.deepEqual(await director.startScene('held'), { started: false, reason: 'no-shots' });
+  assert.equal(env.el('scene-status').textContent, 'No shots to run');
+
+  // Restore the shot, refuse ownership, then run for real: the hold keeps the
+  // process alive long enough for the progress ticker to fire and for the
+  // cancellable sleep to poll at least once.
+  director._project.scenes[0].shots = [HELD_PROJECT.scenes[0].shots[0]];
+  director.styleManager.runImmediateNavigation = () => false;
+  assert.deepEqual(
+    await director.startScene('held', { single: true }),
+    { started: false, reason: 'camera-unavailable' },
+    'the navigation policy can refuse the run outright',
+  );
+  assert.equal(env.el('scene-status').textContent, 'Camera unavailable — exit cockpit first');
+  director.styleManager.runImmediateNavigation = (noun, navigate) => navigate();
+  const startedAt = Date.now();
+  const result = await director.startScene('held', { single: true });
+  assert.equal(result.started, true);
+  assert.ok(Date.now() - startedAt >= 250, 'the hold was actually awaited');
+  assert.equal(env.el('scene-status').textContent, 'Scene run complete');
 });

@@ -1017,6 +1017,9 @@ export class SceneDirector {
     } finally {
       this._finishRun();
     }
+    // The documented contract the early refusals already honor: a started run
+    // reports itself like a refused one does.
+    return { started: true, shots: queue.length };
   }
 
   /**
