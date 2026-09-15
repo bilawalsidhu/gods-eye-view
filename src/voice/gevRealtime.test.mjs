@@ -3732,6 +3732,33 @@ test('reconnected sessions never receive an old tool output or follow-up', async
   }
 });
 
+test('replacement channels cannot inherit pending tool results within the same epoch', async (t) => {
+  for (const outcome of ['resolve', 'reject']) {
+    await t.test(outcome, async () => {
+      const pending = Promise.withResolvers();
+      const { controller } = costControllerHarness({ runner: () => pending.promise });
+      const oldSent = connectToolTestChannel(controller);
+      const epoch = controller.startEpoch;
+      const handling = controller.handleRealtimeEvent(fnCallEvent('control_radio', 'old-item', 'old-call'));
+      assert.equal(controller.activeRadioToolControllers.size, 1);
+      const newSent = connectToolTestChannel(controller);
+      controller.setStatus('connecting', 'Replacement channel');
+      if (outcome === 'reject') pending.reject(new Error('Old transport failed'));
+      else pending.resolve({ ok: true, action: 'control_radio' });
+      await handling;
+
+      assert.equal(controller.startEpoch, epoch);
+      assert.deepEqual(oldSent, []);
+      assert.deepEqual(newSent, []);
+      assert.equal(controller.status, 'connecting');
+      assert.equal(controller.pendingResponseInstructions, null);
+      assert.equal(controller.responseCreatePending, false);
+      assert.equal(controller.activeToolAbortControllers.size, 0);
+      assert.equal(controller.activeRadioToolControllers.size, 0);
+    });
+  }
+});
+
 test('teardown during visual context does not revive voice or queue a stale follow-up', async (t) => {
   for (const reconnect of [false, true]) {
     await t.test(reconnect ? 'reconnected' : 'stopped', async () => {

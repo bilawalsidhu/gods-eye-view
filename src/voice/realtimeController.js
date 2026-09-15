@@ -1330,6 +1330,7 @@ export class GevRealtimeController {
     // underlying work. Its eventual result must not revive the stopped UI or
     // send an old call_id into a replacement conversation.
     const toolSessionEpoch = this.startEpoch;
+    // Bind output to this transport even if a replacement keeps the epoch.
     const toolSessionChannel = this.dc;
     const isCurrentSession = () =>
       this.startEpoch === toolSessionEpoch && this.dc === toolSessionChannel;
