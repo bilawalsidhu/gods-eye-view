@@ -128,7 +128,10 @@ export function createTrails({ state, services, parts, source }) {
       // Reserve endpoints for every future marker interval. Sparse reports
       // coarsen the active path instead of losing the vehicle to the body cap.
       const n = markerCorridor
-        ? Math.min(desired, TRAIL_VERTEX_LIMIT - markerVertices - 2 * markerIntervals - 1)
+        ? Math.min(
+            desired,
+            TRAIL_VERTEX_LIMIT - markerVertices - 2 * markerIntervals - 1,
+          )
         : desired;
       const retainBody = vertices + n + 1 <= TRAIL_VERTEX_LIMIT;
       if (!retainBody || n < desired) entry.trailTruncated = true;

@@ -159,14 +159,23 @@ test('ground body and clipped head stay inside rebuild and frame geometry budget
     Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672),
   ];
   const start = performance.now();
-  const instances = async (count) => Promise.all(Array.from({ length: count }, async (_, i) =>
-    new Cesium.GeometryInstance({
-      id: i,
-      geometry: await Cesium.GroundPolylineGeometry.createGeometry(
-        new Cesium.GroundPolylineGeometry({ positions, width: i % 2 ? 3 : 5, granularity: 0 }),
+  const instances = async (count) =>
+    Promise.all(
+      Array.from(
+        { length: count },
+        async (_, i) =>
+          new Cesium.GeometryInstance({
+            id: i,
+            geometry: await Cesium.GroundPolylineGeometry.createGeometry(
+              new Cesium.GroundPolylineGeometry({
+                positions,
+                width: i % 2 ? 3 : 5,
+                granularity: 0,
+              }),
+            ),
+          }),
       ),
-    }),
-  ));
+    );
   const pipelineBytes = async (count) => {
     // Match GroundPolylinePrimitive's internal Primitive options and the
     // application's morph-capable scene, including batch IDs and encoding.
@@ -181,9 +190,16 @@ test('ground body and clipped head stay inside rebuild and frame geometry budget
       compressVertices: false,
       createPickOffsets: false,
     });
-    return result.geometries.reduce((sum, geometry) => sum +
-      Object.values(geometry.attributes).reduce((n, a) => n + (a?.values?.byteLength || 0), 0) +
-      geometry.indices.byteLength, 0);
+    return result.geometries.reduce(
+      (sum, geometry) =>
+        sum +
+        Object.values(geometry.attributes).reduce(
+          (n, a) => n + (a?.values?.byteLength || 0),
+          0,
+        ) +
+        geometry.indices.byteLength,
+      0,
+    );
   };
   const bytes = await pipelineBytes(1);
   const bodyInstances = 2 * (TRAIL_VERTEX_LIMIT - 1);
@@ -192,8 +208,13 @@ test('ground body and clipped head stay inside rebuild and frame geometry budget
   assert.equal(bodyBytes, 2014128);
   const instanceReserve = 64 * bodyInstances;
   assert.ok(bodyBytes + instanceReserve <= 2 * 1024 * 1024);
-  assert.ok(bytes <= 2048, 'subdivision crossings stay below 2 KiB of head geometry');
-  console.log(`trail final pipeline: ${bytes} bytes/head crossing, 0 bytes/ordinary head frame, ${bodyBytes} bytes/body (${bodyInstances} instances), ${instanceReserve} bytes instance reserve; geometry CPU ${(performance.now() - start).toFixed(3)} ms`);
+  assert.ok(
+    bytes <= 2048,
+    'subdivision crossings stay below 2 KiB of head geometry',
+  );
+  console.log(
+    `trail final pipeline: ${bytes} bytes/head crossing, 0 bytes/ordinary head frame, ${bodyBytes} bytes/body (${bodyInstances} instances), ${instanceReserve} bytes instance reserve; geometry CPU ${(performance.now() - start).toFixed(3)} ms`,
+  );
 });
 
 test('supported scenes drape body and clipped head on 3D tiles and retain head geometry', (t) => {
@@ -209,10 +230,7 @@ test('supported scenes drape body and clipped head on 3D tiles and retain head g
   });
   const first = renderer.diagnostics();
   assert.ok(first.body instanceof Cesium.GroundPolylinePrimitive);
-  assert.equal(
-    first.body.classificationType,
-    Cesium.ClassificationType.BOTH,
-  );
+  assert.equal(first.body.classificationType, Cesium.ClassificationType.BOTH);
   assert.ok(scene.groundPrimitives.contains(first.body));
   for (const instance of first.body.geometryInstances)
     assert.ok(instance.geometry instanceof Cesium.GroundPolylineGeometry);
@@ -237,7 +255,11 @@ test('supported scenes drape body and clipped head on 3D tiles and retain head g
     assert.equal(retained.body, result.body, `${stack}: retained history`);
     assert.equal(retained.headPrimitive, result.headPrimitive);
     for (const primitive of [retained.body, retained.headPrimitive]) {
-      assert.equal(primitive.classificationType, Cesium.ClassificationType.BOTH, stack);
+      assert.equal(
+        primitive.classificationType,
+        Cesium.ClassificationType.BOTH,
+        stack,
+      );
       assert.equal(primitive.show, true, stack);
     }
   }

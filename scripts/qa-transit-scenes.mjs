@@ -809,9 +809,12 @@ export async function runTrailVisibility({
     parts.rendering.sampleIdle(entry);
     parts.rendering.schedulePlayback(entry);
     parts.rendering.syncRenderHold();
-    const ready = () => app.tileset?.show !== false && app.tileset?.tilesLoaded === true &&
+    const ready = () =>
+      app.tileset?.show !== false &&
+      app.tileset?.tilesLoaded === true &&
       (scene.globe?.show === false || scene.globe?.tilesLoaded === true) &&
-      trail.body?.ready === true && (!trail.headPrimitive || trail.headPrimitive.ready === true);
+      trail.body?.ready === true &&
+      (!trail.headPrimitive || trail.headPrimitive.ready === true);
     // Require sustained readiness after freezing playback, before projecting
     // onto the refined surface. Repeated captures still check pixel stability.
     const tilesReady = await new Promise((resolve) => {
@@ -819,15 +822,23 @@ export async function runTrailVisibility({
       let readySince = null;
       const timer = setInterval(() => {
         const now = performance.now();
-        readySince = ready() ? readySince ?? now : null;
+        readySince = ready() ? (readySince ?? now) : null;
         scene.requestRender();
-        if ((readySince !== null && now - readySince >= 500) || now - started >= 30000) {
+        if (
+          (readySince !== null && now - readySince >= 500) ||
+          now - started >= 30000
+        ) {
           clearInterval(timer);
           resolve(readySince !== null && now - readySince >= 500);
         }
       }, 80);
     });
-    if (!tilesReady) return { ...setup, present: 0, reason: 'tiles or trail geometry did not become ready' };
+    if (!tilesReady)
+      return {
+        ...setup,
+        present: 0,
+        reason: 'tiles or trail geometry did not become ready',
+      };
     const canvas = scene.canvas,
       gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
     const scale = canvas.width / canvas.clientWidth;
@@ -872,12 +883,14 @@ export async function runTrailVisibility({
         x: ((q[0] / q[3]) * 0.5 + 0.5) * canvas.clientWidth,
         y: (0.5 - (q[1] / q[3]) * 0.5) * canvas.clientHeight,
         inFront: q[3] > 0,
-        radius: Math.SQRT2 * Math.ceil(3 * scale) / scale,
+        radius: (Math.SQRT2 * Math.ceil(3 * scale)) / scale,
       };
     });
     const marker = entry.marker.position;
-    const markerClip = mul(scene.camera.frustum.projectionMatrix,
-      mul(scene.camera.viewMatrix, [marker.x, marker.y, marker.z, 1]));
+    const markerClip = mul(
+      scene.camera.frustum.projectionMatrix,
+      mul(scene.camera.viewMatrix, [marker.x, marker.y, marker.z, 1]),
+    );
     const sprite = {
       x: ((markerClip[0] / markerClip[3]) * 0.5 + 0.5) * canvas.clientWidth,
       y: (0.5 - (markerClip[1] / markerClip[3]) * 0.5) * canvas.clientHeight,
@@ -929,7 +942,8 @@ export async function runTrailVisibility({
     let showTrail = false;
     const applyVisibility = () => {
       if (trail.body) trail.body.show = showTrail && bodyShow;
-      if (trail.headPrimitive) trail.headPrimitive.show = showTrail && headPrimitiveShow;
+      if (trail.headPrimitive)
+        trail.headPrimitive.show = showTrail && headPrimitiveShow;
       if (trail.head) trail.head.show = showTrail && headShow;
       if (trail.backing) trail.backing.show = showTrail && backingShow;
     };
@@ -944,7 +958,9 @@ export async function runTrailVisibility({
         for (let i = 0; i < 3; i++) await frame();
         captures.push(await frame());
         const current = parts.trails.diagnostics();
-        captureReady &&= ready() && current?.body === trail.body &&
+        captureReady &&=
+          ready() &&
+          current?.body === trail.body &&
           current?.headPrimitive === trail.headPrimitive;
       }
     } finally {
@@ -956,14 +972,19 @@ export async function runTrailVisibility({
       await frame();
     }
     const [off, on, offAgain, onAgain] = captures.map((patches) =>
-      patches.map((p) => p ? Array.from(p) : null));
+      patches.map((p) => (p ? Array.from(p) : null)),
+    );
     return {
       ...setup,
       fixes: entry.track.count,
       selected: state._selectedKey === setup.key,
       pathMetres: lengths.at(-1),
       samples,
-      on, off, onAgain, offAgain, sprite,
+      on,
+      off,
+      onAgain,
+      offAgain,
+      sprite,
       tilesReady: captureReady,
       elapsedDisplayMs: entry.sample.displayT - setup.startDisplayT,
       movedMetres: Math.abs(entry.sample.lat - setup.startLat) * 111320,

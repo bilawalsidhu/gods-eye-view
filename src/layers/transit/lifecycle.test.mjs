@@ -2679,9 +2679,12 @@ test('sparse rail reports preserve a bounded marker corridor with and without se
   let timestamp = reported();
   app.serve('mbta', () => ({
     status: 200,
-    body: snapshot('mbta', 'MBTA', [
-      vehicle('sparse', latitude, -71.06, timestamp, { routeId: 'CR-1' }),
-    ], { fetchedAt: Date.now() }),
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [vehicle('sparse', latitude, -71.06, timestamp, { routeId: 'CR-1' })],
+      { fetchedAt: Date.now() },
+    ),
   }));
   app.layer.enable(app.viewer);
   await app.layer.update();
@@ -2696,9 +2699,10 @@ test('sparse rail reports preserve a bounded marker corridor with and without se
   assert.equal(entry.track.count, 2, 'both 88.9 m/s reports pass admission');
   assert.equal(entry.fixes[1].t - entry.fixes[0].t, 180000);
   for (let i = 0; i < 1500; i++)
-    app.ground._warm.set(app.ground._key(42.20 + i * 0.0002, -71.06), 12);
+    app.ground._warm.set(app.ground._key(42.2 + i * 0.0002, -71.06), 12);
   seek(entry.track, entry.fixes[0].t + 90000, {
-    wallNowMs: Date.now(), monoNowMs: performance.now(),
+    wallNowMs: Date.now(),
+    monoNowMs: performance.now(),
   });
   parts.rendering.sampleIdle(entry);
   for (const selected of [false, true, false]) {
@@ -2708,8 +2712,15 @@ test('sparse rail reports preserve a bounded marker corridor with and without se
     const path = entry.displayPaths.get(entry.sample.fromSeq);
     assert.ok(path, 'active corridor survives the body cap');
     assert.ok(path.positions.length <= 640);
-    const position = parts.trails.samplePosition(entry, entry.sample, new Cesium.Cartesian3(), true);
-    assert.ok(position && [position.x, position.y, position.z].every(Number.isFinite));
+    const position = parts.trails.samplePosition(
+      entry,
+      entry.sample,
+      new Cesium.Cartesian3(),
+      true,
+    );
+    assert.ok(
+      position && [position.x, position.y, position.z].every(Number.isFinite),
+    );
     parts.rendering.placeSample(entry, true);
     assert.equal(entry.marker.show, true);
     assert.ok(Cesium.Cartesian3.equals(entry.marker.position, position));
