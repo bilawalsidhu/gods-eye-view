@@ -38,7 +38,7 @@ export function bindWeatherControls({ elements, actions }) {
   const describe = (spec) => {
     const parts = [spec.detail];
     if (spec.cadence) parts.push(`Updates every ${spec.cadence.toLowerCase()}`);
-    if (spec.coverage) parts.push(spec.coverage);
+    if (spec.coverage) parts.push(spec.coverage.note);
     if (spec.forecast) parts.push('Forecast, not an observation');
     return parts.join(' · ');
   };
@@ -63,12 +63,12 @@ export function bindWeatherControls({ elements, actions }) {
     label.textContent = spec.label;
     button.appendChild(label);
 
-    // Several layers only have data over the United States. Saying so on the
+    // Several layers only have data over part of the world. Saying so on the
     // row is the difference between "switched on and quiet" and "broken".
-    if (spec.usOnly) {
+    if (spec.coverage) {
       const tag = document.createElement('span');
       tag.className = 'weather-chip-tag';
-      tag.textContent = 'US';
+      tag.textContent = spec.coverage.tag;
       button.appendChild(tag);
     }
     // A forecast is labelled wherever it appears, so it can never be mistaken

@@ -303,6 +303,17 @@ test('every spec declares what the layer dispatches on', () => {
     // defect that prompted the whole migration, so the flag is mandatory and
     // the panel labels from it.
     assert.equal(typeof spec.forecast, 'boolean', `${spec.id} forecast flag`);
+    // Coverage is null for a global layer and a {tag, note} pair otherwise.
+    // A half-filled pair would put a blank marker on the chip, or a marker
+    // with no explanation behind it.
+    if (spec.coverage !== null) {
+      assert.ok(spec.coverage.tag, `${spec.id} coverage tag`);
+      assert.ok(spec.coverage.note, `${spec.id} coverage note`);
+      assert.ok(
+        spec.coverage.tag.length <= 5,
+        `${spec.id} coverage tag must stay short enough for a chip`,
+      );
+    }
     if (spec.forecast)
       assert.equal(
         defaultActiveIds().includes(spec.id),

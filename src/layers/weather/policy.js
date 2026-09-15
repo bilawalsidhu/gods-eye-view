@@ -84,7 +84,6 @@ export const WEATHER_LAYER_SPECS = Object.freeze(
       detail: entry.detail,
       cadence: entry.cadence,
       coverage: entry.coverage,
-      usOnly: entry.usOnly,
       frameMode: 'live',
       // Every spec reads the same status endpoint, so one read serves them all.
       capsKey: STATUS_URL,

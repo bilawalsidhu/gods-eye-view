@@ -130,7 +130,7 @@ test('the panel renders every offered layer, grouped', () => {
   }
 });
 
-test('a layer that only covers the United States says so', () => {
+test('a layer that does not cover the whole globe says so', () => {
   // Otherwise "switched on and drawing nothing over Europe" looks like a fault
   // rather than the coverage it is.
   const h = harness();
@@ -139,10 +139,37 @@ test('a layer that only covers the United States says so', () => {
       button.children.some((c) => c.className?.includes('weather-chip-tag')),
     );
     const expected = WEATHER_LAYER_SPECS.filter(
-      (s) => s.group === OVERLAY && (s.usOnly || s.forecast),
+      (s) => s.group === OVERLAY && (s.coverage || s.forecast),
     );
     assert.equal(tagged.length, expected.length);
     assert.ok(expected.length > 0, 'the fixture needs at least one tagged row');
+
+    // Each row carries its own coverage, not one blanket marker: the panel
+    // offers both United States and North America layers and they are not
+    // interchangeable.
+    const distinct = new Set(
+      expected.filter((s) => s.coverage).map((s) => s.coverage.tag),
+    );
+    assert.ok(distinct.size > 1, 'the fixture needs more than one coverage');
+    for (const spec of expected) {
+      if (!spec.coverage) continue;
+      const button = h.elements.overlays.children.find(
+        (b) => b.dataset.layerCode === spec.code,
+      );
+      const tags = button.children
+        .filter((c) => c.className?.includes('weather-chip-tag'))
+        .map((c) => c.textContent);
+      assert.ok(
+        tags.includes(spec.coverage.tag),
+        `${spec.label} must be marked ${spec.coverage.tag}`,
+      );
+      // The chip has room for an abbreviation; the hover text is where that
+      // abbreviation is spelled out, so it has to actually be there.
+      assert.ok(
+        button.title.includes(spec.coverage.note),
+        `${spec.label} must explain ${spec.coverage.tag} on hover`,
+      );
+    }
   } finally {
     h.restore();
   }

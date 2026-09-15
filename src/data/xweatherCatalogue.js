@@ -48,6 +48,27 @@ const OVERLAY_RUNG = 6;
 const FIELD_ALPHA = 0.55;
 
 /**
+ * Where a layer actually has data, for the layers that do not have it
+ * everywhere.
+ *
+ * A layer that draws nothing over Europe because its source stops at the
+ * border is indistinguishable, on screen, from one that is broken. So the
+ * panel marks it: `tag` goes on the chip where it is read at a glance, `note`
+ * goes in the hover text where there is room to be exact.
+ *
+ * These are measured, not taken from the vendor's description. `null` means
+ * global.
+ */
+const UNITED_STATES = Object.freeze({
+  tag: 'US',
+  note: 'United States only',
+});
+const NORTH_AMERICA = Object.freeze({
+  tag: 'N.AM',
+  note: 'North America only — the contiguous United States, southern Canada and northern Mexico',
+});
+
+/**
  * Every drawable layer.
  *
  * `code` is the layer's identity in a share link and is **frozen once
@@ -108,7 +129,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       label: 'Fronts',
       detail: 'Frontal and pressure analysis',
       cadence: '12 hr',
-      coverage: 'North America',
+      coverage: NORTH_AMERICA,
     },
 
     // ── tropical cyclones: four composable pieces of one storm ───────────
@@ -153,7 +174,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       label: 'Storm cells',
       detail: 'Cell tracks with rotation and hail signatures',
       cadence: '3 min',
-      usOnly: true,
+      coverage: UNITED_STATES,
     },
     {
       code: 'o',
@@ -162,7 +183,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       label: 'Storm reports',
       detail: 'Tornado, hail, wind and flood reports, last 24 hours',
       cadence: '15 min',
-      usOnly: true,
+      coverage: UNITED_STATES,
     },
     {
       code: 'v',
@@ -171,7 +192,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       label: 'Severe outlook',
       detail: 'SPC convective outlook',
       cadence: 'As issued',
-      usOnly: true,
+      coverage: UNITED_STATES,
     },
     {
       code: 'g',
@@ -180,7 +201,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       label: 'Drought',
       detail: 'Drought severity',
       cadence: 'Weekly',
-      usOnly: true,
+      coverage: UNITED_STATES,
     },
     {
       code: 'b',
@@ -189,7 +210,7 @@ export const XWEATHER_LAYERS = Object.freeze(
       label: 'River gauges',
       detail: 'NOAA flood and low-flow thresholds',
       cadence: 'Hourly',
-      usOnly: true,
+      coverage: UNITED_STATES,
     },
 
     // ── continuous fields, one at a time ─────────────────────────────────
@@ -322,7 +343,6 @@ export const XWEATHER_LAYERS = Object.freeze(
     Object.freeze({
       rung: entry.group === FIELD ? FIELD_RUNG : OVERLAY_RUNG,
       alpha: entry.group === FIELD ? FIELD_ALPHA : 0.72,
-      usOnly: false,
       defaultOn: false,
       forecast: false,
       coverage: null,
