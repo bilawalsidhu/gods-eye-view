@@ -21,7 +21,9 @@ test('the complete Realtime tool payload retains its pre-extraction contract and
     .digest('hex');
   assert.equal(
     digest,
-    '956381c3456d3644ed7c9cda72910dc68a34d9191e0b3e414ee200c348245214',
+    // Re-pinned 2026-09-15 when control_fire_history (Historic Fires voice
+    // control) joined the tool set; the pre-existing tools are unchanged.
+    'ab7517d9b2b591c110f18998aa66ca771ed1cdca41c989dbeb28295c375a2231',
   );
 });
 

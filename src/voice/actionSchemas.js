@@ -409,6 +409,42 @@ const schemas = [
     },
   },
   {
+    name: 'control_fire_history',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        action: {
+          type: 'string',
+          enum: [
+            'list',
+            'select',
+            'replay',
+            'pause',
+            'reset',
+            'speed',
+            'seek',
+            'focus',
+            'status',
+          ],
+        },
+        eventQuery: {
+          type: 'string',
+        },
+        speed: {
+          type: 'number',
+          enum: [0.5, 1, 2, 4],
+        },
+        fraction: {
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+        },
+      },
+      required: ['action'],
+    },
+  },
+  {
     name: 'control_cctv',
     parameters: {
       type: 'object',

@@ -151,6 +151,26 @@ transaction quota. Requires a free `FIRMS_MAP_KEY`
 (https://firms.modaps.eosdis.nasa.gov/api/map_key/); the layer is empty without it.
 The former bundled 2026-05-25 snapshot was removed 2026-07-16.
 
+**Historic Fires** (`fire-history` layer) reuse the same acknowledgement and key. The
+`/api/fire-history` proxy fetches the FIRMS **standard-processing archive** (`VIIRS_SNPP_SP`,
+`VIIRS_NOAA20_SP`, `MODIS_SP`) only for events registered in `config/fire_events.json`
+(name, inclusive UTC day range, bounding box, sources, summary, https references). The
+browser cannot request arbitrary dates or boxes. Each event is split into ≤5-day windows
+per source, fetched sequentially, and cached permanently under `.gev-cache/fire-history/`
+once complete (archive data does not change). No fire data is bundled in the repo.
+
+### NIFC fire perimeters (Historic Fires)
+
+Each registered event may name one **National Interagency Fire Center (NIFC) Open Data**
+perimeter source (U.S. government work, public domain): the *WFIGS Interagency Perimeters*
+layer or the *Interagency Fire Perimeter History* layer on `services3.arcgis.com`.
+`/api/fire-history/<id>/perimeter` builds the query itself from structured, character-
+restricted filters in `config/fire_events.json` (incident name plus year/unit or
+state/discovery date), keeps the largest matching polygon as the event's **final mapped
+perimeter**, simplifies it to ~50 m, and caches it permanently. It is drawn as a
+ground-clamped outline and labeled as the official perimeter; the FIRMS detections remain
+satellite observations. Attribution: https://data-nifc.opendata.arcgis.com/
+
 ### Natural Earth physical regions (`natural_earth/`)
 
 Curated from the **Natural Earth 10m physical vectors** (https://www.naturalearthdata.com/ —

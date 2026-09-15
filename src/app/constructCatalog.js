@@ -17,6 +17,7 @@ import { createApplicationAlpr } from './layers/alprCameras.js';
 import { createApplicationAwareness } from './layers/militaryAwareness.js';
 import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
+import { createApplicationFireHistory } from './layers/fireHistory.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
@@ -43,6 +44,7 @@ const SOURCE_METHODS = Object.freeze({
   alpr: ['fetch'],
   firms: ['getSnapshot'],
   earthquakes: ['getSnapshot'],
+  fireHistory: ['listEvents', 'getEvent'],
   cables: ['fetch'],
 });
 
@@ -138,6 +140,7 @@ export function createApplicationCatalog({
           source: 'NASA FIRMS · LIVE',
           feed: sources.firms,
         }),
+        createApplicationFireHistory({ source: sources.fireHistory }),
       ],
       metadata,
     );

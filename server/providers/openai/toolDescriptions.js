@@ -258,6 +258,29 @@ export const ACTION_DESCRIPTIONS = {
       },
     },
   },
+  control_fire_history: {
+    description:
+      'Historic Fires (archived NASA FIRMS detections for registered past wildfires): list the registered events, select one by name or year, replay its spread in event time, pause, reset to all detections, set replay speed, seek to a fraction of the event window, re-frame the event, or read status. Every action except status enables the Historic Fires layer first.',
+    $position: 1,
+    parameters: {
+      properties: {
+        eventQuery: {
+          description:
+            'Event name, year or id for select (e.g. "Camp Fire", "2023", "park-fire-2024").',
+          $position: 1,
+        },
+        speed: {
+          description: 'Replay speed multiplier for speed: 0.5, 1, 2 or 4.',
+          $position: 1,
+        },
+        fraction: {
+          description:
+            'Position in the event window for seek, 0 (first day) to 1 (last day).',
+          $position: 1,
+        },
+      },
+    },
+  },
   control_cctv: {
     description:
       'CCTV camera operations: enable/disable the layer, select a camera by name, next/prev/nearest/focus, toggle coverage wedges / projection overlay / auto-hop, "viewshed" for color-coded per-camera coverage volumes, and "adjust" for the on-camera calibration gizmo.',

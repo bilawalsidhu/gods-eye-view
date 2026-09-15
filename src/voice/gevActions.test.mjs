@@ -11,6 +11,8 @@ import { normalizeRadioCountryInput } from '../data/radioCountry.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
 import {
   controlCctv,
+  controlFireHistory,
+  matchFireEvent,
   controlRadio as runControlRadio,
   createGevActionRunner as createActionRunner,
   cctvVoiceFocusOutcome,
@@ -3181,4 +3183,95 @@ test('ISS voice lookup uses the registered satellite instance', async () => {
   const result = await runner('next_iss_pass', { latitude: 30, longitude: -97, minElevationDeg: 15 });
   assert.deepEqual(calls, [{ latDeg: 30, lonDeg: -97, minElevDeg: 15 }]);
   assert.match(result.error, /No ISS pass above 15/);
+});
+
+test('matchFireEvent resolves spoken names, years and ids', () => {
+  const events = [
+    { id: 'camp-fire-2018', name: 'Camp Fire', startDate: '2018-11-08' },
+    { id: 'lahaina-2023', name: 'Lahaina Fire', startDate: '2023-08-08' },
+    { id: 'park-fire-2024', name: 'Park Fire', startDate: '2024-07-24' },
+  ];
+  assert.equal(matchFireEvent(events, 'the camp fire').id, 'camp-fire-2018');
+  assert.equal(matchFireEvent(events, 'Lahaina').id, 'lahaina-2023');
+  assert.equal(matchFireEvent(events, '2024').id, 'park-fire-2024');
+  assert.equal(matchFireEvent(events, 'park-fire-2024').id, 'park-fire-2024');
+  assert.equal(matchFireEvent(events, 'fire'), null, '"fire" alone is not a choice');
+  assert.equal(matchFireEvent(events, 'Dixie'), null);
+});
+
+test('control_fire_history enables the layer, selects by voice, replays and reports honestly', async () => {
+  const calls = [];
+  let enabled = false;
+  let selected = 'camp-fire-2018';
+  let replay = { status: 'idle', speed: 1, cursorMs: Date.UTC(2018, 10, 8), shown: 0, active: 0, startMs: 0, endMs: 1 };
+  const events = [
+    { id: 'camp-fire-2018', name: 'Camp Fire', region: 'Butte', startDate: '2018-11-08', endDate: '2018-11-25', burnedHa: 62053 },
+    { id: 'lahaina-2023', name: 'Lahaina Fire', region: 'Maui', startDate: '2023-08-08', endDate: '2023-08-12', burnedHa: 878 },
+  ];
+  const module = {
+    getEventState: () => ({
+      events: enabled ? events : [],
+      selectedId: selected,
+      event: enabled ? events.find((e) => e.id === selected) : null,
+      count: enabled ? 151 : 0,
+      timeline: [{ date: '2018-11-08', count: 100, maxFrp: 5 }, { date: '2018-11-09', count: 51, maxFrp: 9 }],
+    }),
+    getReplayState: () => ({ ...replay }),
+    getStats: () => ({ loading: false, keyRequired: false }),
+    selectEvent: (id, options) => { calls.push(['select', id, options?.origin]); selected = id; },
+    toggleReplay: () => { calls.push(['toggle']); replay = { ...replay, status: replay.status === 'playing' ? 'paused' : 'playing' }; },
+    resetReplay: () => { calls.push(['reset']); replay = { ...replay, status: 'idle' }; },
+    setReplaySpeed: (speed) => { calls.push(['speed', speed]); replay = { ...replay, speed }; },
+    seekReplay: (fraction) => calls.push(['seek', fraction]),
+    focusEvent: () => calls.push(['focus']),
+  };
+  const dataManager = {
+    layers: new Map([['fire-history', { module }]]),
+    isEnabled: () => enabled,
+    setEnabled: async (id, value, options) => { calls.push(['enable', id, value, options?.origin]); enabled = value; return true; },
+  };
+
+  const status = await controlFireHistory(dataManager, { action: 'status' });
+  assert.equal(status.ok, true);
+  assert.equal(status.enabled, false, 'status never enables the layer');
+  assert.deepEqual(calls, []);
+
+  const list = await controlFireHistory(dataManager, { action: 'list' });
+  assert.equal(list.ok, true);
+  assert.deepEqual(calls[0], ['enable', 'fire-history', true, 'voice']);
+  assert.deepEqual(list.events.map((e) => e.year), ['2018', '2023']);
+
+  const select = await controlFireHistory(dataManager, { action: 'select', eventQuery: 'Lahaina' });
+  assert.equal(select.ok, true);
+  assert.deepEqual(calls.at(-1), ['select', 'lahaina-2023', 'voice']);
+  assert.equal(select.event.name, 'Lahaina Fire');
+  assert.equal(select.detections, 151);
+  assert.equal(select.dailyPeak.date, '2018-11-08');
+
+  const miss = await controlFireHistory(dataManager, { action: 'select', eventQuery: 'Dixie' });
+  assert.equal(miss.ok, false);
+  assert.match(miss.error, /No registered fire matched/);
+
+  const play = await controlFireHistory(dataManager, { action: 'replay', speed: 2 });
+  assert.equal(play.ok, true);
+  assert.equal(play.playing, true);
+  assert.deepEqual(calls.slice(-2), [['speed', 2], ['toggle']]);
+  assert.equal(play.replay.status, 'playing');
+  assert.equal(play.replay.clockUtc, '2018-11-08T00:00Z');
+
+  const again = await controlFireHistory(dataManager, { action: 'replay' });
+  assert.equal(again.ok, true, 'replay while playing is idempotent');
+  assert.notDeepEqual(calls.at(-1), ['toggle'] && calls.at(-1)[0] === 'toggle' ? ['x'] : calls.at(-1));
+
+  const pause = await controlFireHistory(dataManager, { action: 'pause' });
+  assert.equal(pause.playing, false);
+  assert.equal(replay.status, 'paused');
+
+  assert.equal((await controlFireHistory(dataManager, { action: 'speed', speed: 3 })).ok, false);
+  assert.equal((await controlFireHistory(dataManager, { action: 'seek', fraction: 0.5 })).ok, true);
+  assert.deepEqual(calls.at(-1), ['seek', 0.5]);
+  assert.equal((await controlFireHistory(dataManager, { action: 'focus' })).focused, true);
+  assert.equal((await controlFireHistory(dataManager, { action: 'reset' })).replay.status, 'idle');
+  assert.equal((await controlFireHistory(dataManager, { action: 'explode' })).ok, false);
+  assert.equal((await controlFireHistory({ layers: new Map() }, { action: 'list' })).ok, false);
 });
