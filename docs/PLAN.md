@@ -473,15 +473,17 @@ Order of work, cheapest-first:
       real build prints `BUILD-GATE PASS`, and a stubbed npx emitting one
       warning fails with `BUILD-GATE FAIL … node:fs`, exit 1. Wiring pinned
       in `src/buildGates.test.mjs`.
-- [ ] GitForge pipeline mirroring ci.yml (lint/test/build) with the GitHub
+- [x] GitForge pipeline mirroring ci.yml (lint/test/build) with the GitHub
       Actions run kept as the sync mirror — per the standing CI/CD routing
-      directive. **Built and rehearsed 2026-09-14** (`.gitforce.yml` with
-      five jobs mirroring ci.yml gate-for-gate, plus two pre-warmed CI
-      images under `infrastructure/docker/`; lint, build, and the
-      allocation-gated test suite each passed a container rehearsal that
-      executes jobs exactly as the runner will). What remains is the first
-      real pipeline run through the gateway, which needs the interactive
-      `gitforge auth --login` (see the Process-debt bullet below).
+      directive. **Live and GREEN 2026-09-15** — repo `mkinney/gods-eye-view`
+      on the local GitForge, main + v0.8.1 pushed, pipeline auto-created on
+      push, and run deb88bc9 (commit c325511) passed all five jobs in order
+      through the real gateway: strict lint → allocation-gated suite on
+      Node 24 → Node 26 → coverage → build (wasm + vite + bundle budgets).
+      Getting there surfaced a real runner semantic: all jobs of a run
+      share one workspace, so the ci.yml-style fan-out let four parallel
+      `npm ci` steps delete each other's node_modules (fixed by linearizing
+      the job chain in c325511; see the `.gitforce.yml` comment block).
 - [x] GitHub release with changelog; then `wrangler pages deploy dist` to
       production and verify the Functions surface on the deployed URL
       (elevation, reverse-geocode, cctv, celestrak, debug-log) plus the
@@ -1383,24 +1385,32 @@ ordered by value-per-risk; each is self-contained and committable.
       "bump version + changelog" is now step 1–2 of the pre-release checklist
       in docs/RUNBOOK.md ("Deploying to production"), so tags and package
       version never diverge again.
-- [ ] GitForge pipeline (task #7 of the session plan) remains BLOCKED on
-      one interactive step: `gitforge auth --login mkinney`. Both stored
-      gateway JWTs are expired (developer/expired 2026-09-13, admin
-      2026-09-11), and login is deliberately the user's credential path —
-      no token may be scripted or stored by the agent. Services themselves
-      are healthy (gateway, orchestrator, Git HTTP all verified up
-      2026-09-14); the pipeline definition and pre-warmed images are
-      committed and rehearsed. Remaining once authed: `gitforge repo
-      create`, add the clean `http://localhost:42782/mkinney/<repo>.git`
-      remote, push main + tag, `gitforge pipeline create .gitforce.yml`,
-      watch the first run green. GitHub Actions (lint + tests + build)
-      remains the active CI until then.
+- [x] GitForge pipeline (task #7 of the session plan) unblocked and live
+      2026-09-15: repo created, clean `http://localhost:42782/mkinney/
+      gods-eye-view.git` remote added, main + v0.8.1 pushed, pipeline
+      auto-created from `.gitforce.yml` on push (pushes also auto-deactivate
+      the prior pipeline row via a partial unique index — one active
+      definition per repo+name), and real runs executing on the runner.
+      Two integration lessons landed in `.gitforce.yml`'s comment block:
+      the shared-workspace job semantics (fan-out breaks, see bullet 476)
+      and `gitforge pipeline --run/--delete` being CLI stubs — the working
+      trigger path is `POST /api/webhook/trigger/{pipeline_id}`. GitHub
+      Actions remains the sync mirror.
 - [x] GitHub repo was renamed `gods-eye-view` → `Globe` — origin URL
       verified pointing at `github.com/aliasfoxkde/Globe.git` (2026-09-13).
 
 ## Deliberately deferred (documented, not forgotten)
 
 These are known gaps with reasons, not oversights:
+
+- **puppeteer major bump (24 → 25)**: the only remaining npm-audit findings
+  after the 2026-09-15 `npm audit fix` (9 → 4, production deps stay at 0)
+  are the extract-zip advisories inside puppeteer's browser-install chain —
+  a QA-harness-only dependency that never ships. The fix is a breaking
+  major bump that risks the Puppeteer QA suites for no production exposure
+  (the harness downloads its own Chrome and only ever talks to the local
+  dev server). Revisit when puppeteer 25 is exercised by the harness
+  environment first.
 
 - **gbfs / tomtom / firms / google-\* / military-installations / regional-brief
   / weather-effects Pages Functions**: keyed or self-hostable paths whose dev
