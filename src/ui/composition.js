@@ -40,26 +40,7 @@ import {
   setDetectionStyle,
   setDetectionTuning,
 } from '../data/detection.js';
-import trafficLayer from '../data/traffic.js';
-import flightsLayer from '../data/flights.js';
-import militaryFlightsLayer from '../data/militaryFlights.js';
 import { isTr3b, toggleTr3b } from '../data/tr3bRegistry.js';
-import satellitesLayer from '../data/satellites.js';
-import cctvLayer from '../data/cctv.js';
-import radioLayer from '../data/radio.js';
-import bikeshareLayer from '../data/bikeshare.js';
-import aisLiveVesselsLayer from '../data/aisLiveVessels.js';
-import militaryAwarenessLayer from '../data/militaryAwareness.js';
-import militaryInstallationsLayer from '../data/militaryInstallations.js';
-import rocketLaunchesLayer from '../data/rocketLaunches.js';
-import {
-  cachedGroundFloor,
-  cachedMeshFloor,
-  GROUND_FLOOR_LIFT_M,
-  meshFloorPreferred,
-  warmGroundFloor,
-} from '../data/groundFloor.js';
-import { sampleMeshFloorCells } from '../data/meshFloorSampler.js';
 import {
   holdContinuousRender,
   releaseContinuousRender,
@@ -114,25 +95,8 @@ export class StyleManager extends ApplicationShell {
         resumeDetection,
         setDetectionStyle,
         setDetectionTuning,
-        trafficLayer,
-        flightsLayer,
-        militaryFlightsLayer,
         isTr3b,
         toggleTr3b,
-        satellitesLayer,
-        cctvLayer,
-        radioLayer,
-        bikeshareLayer,
-        aisLiveVesselsLayer,
-        militaryAwarenessLayer,
-        militaryInstallationsLayer,
-        rocketLaunchesLayer,
-        cachedGroundFloor,
-        cachedMeshFloor,
-        GROUND_FLOOR_LIFT_M,
-        meshFloorPreferred,
-        warmGroundFloor,
-        sampleMeshFloorCells,
         holdContinuousRender,
         releaseContinuousRender,
         governorRequestRender,

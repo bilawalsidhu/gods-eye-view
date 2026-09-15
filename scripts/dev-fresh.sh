@@ -16,7 +16,8 @@ HOST="${HOST:-localhost}"
 # including Kitchener-area highways), and Fintraffic Finland weathercams
 # (~2,260 live presets). Caps keep the densest cores per pack; override
 # per-run for lighter/heavier loads. Kill switches: CCTV_CALTRANS_DISTRICTS='',
-# CCTV_TFL_ENABLED=0, CCTV_ONTARIO_ENABLED=0 and CCTV_FINTRAFFIC_ENABLED=0.
+# CCTV_TFL_ENABLED=0, CCTV_ONTARIO_ENABLED=0, CCTV_FINTRAFFIC_ENABLED=0 and
+# CCTV_CALGARY_ENABLED=0 (Open Calgary, ~215 live upstream).
 CCTV_AUSTIN_MAX_SOURCES="${CCTV_AUSTIN_MAX_SOURCES:-250}"
 # Use `-` not `:-` so an explicit empty string (the documented kill switch)
 # is preserved rather than replaced by the default. Still set-u-safe when unset.
@@ -41,6 +42,8 @@ CCTV_TARKTEE_MAX_SOURCES="${CCTV_TARKTEE_MAX_SOURCES:-179}"
 CCTV_WARENDORF_ENABLED="${CCTV_WARENDORF_ENABLED:-1}"
 CCTV_NSW_ENABLED="${CCTV_NSW_ENABLED:-1}"
 CCTV_NSW_MAX_SOURCES="${CCTV_NSW_MAX_SOURCES:-250}"
+CCTV_CALGARY_ENABLED="${CCTV_CALGARY_ENABLED:-1}"
+CCTV_CALGARY_MAX_SOURCES="${CCTV_CALGARY_MAX_SOURCES:-220}"
 CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-4000}"
 
 # Capture which provider credentials genuinely came from the parent shell
@@ -246,8 +249,9 @@ if [[ ! -f "$SOURCE_ROOT/src/data/cctv.js" ]]; then
   exit 1
 fi
 
-if ! grep -q "dataManager.register(cctvLayer)" "$SOURCE_ROOT/src/app/data.js"; then
-  echo "error: CCTV layer not wired in src/app/data.js"
+if ! grep -q "return createApplicationCatalog(" "$SOURCE_ROOT/src/standalone/catalog.js" || \
+   ! grep -q "^[[:space:]]*createApplicationCctv({" "$SOURCE_ROOT/src/app/constructCatalog.js"; then
+  echo "error: CCTV layer not wired in src/standalone/catalog.js"
   exit 1
 fi
 
@@ -305,8 +309,8 @@ case "${HOST}" in
 esac
 echo "Google Maps key source: ${GOOGLE_MAPS_API_KEY_SOURCE}"
 echo "Tip: after server starts, hard refresh browser (Cmd+Shift+R)."
-echo "If panels are still missing, run this once in browser console:"
-echo "localStorage.removeItem('godsEyeView.v6.panelPos.cctv-panel'); location.reload();"
+echo "The CCTV panel starts collapsed; open it from its header, or in browser console:"
+echo "localStorage.setItem('godsEyeView.v6.panelCollapsed.cctv-panel', '0'); location.reload();"
 echo "OpenSky auth mode: ${OPENSKY_AUTH_MODE}"
 if [[ -n "${OPENSKY_CREDENTIALS_FILE}" ]]; then
   if [[ -f "${OPENSKY_CREDENTIALS_FILE}" ]]; then
@@ -401,6 +405,8 @@ put_env CCTV_TARKTEE_MAX_SOURCES "${CCTV_TARKTEE_MAX_SOURCES}"
 put_env CCTV_WARENDORF_ENABLED "${CCTV_WARENDORF_ENABLED}"
 put_env CCTV_NSW_ENABLED "${CCTV_NSW_ENABLED}"
 put_env CCTV_NSW_MAX_SOURCES "${CCTV_NSW_MAX_SOURCES}"
+put_env CCTV_CALGARY_ENABLED "${CCTV_CALGARY_ENABLED}"
+put_env CCTV_CALGARY_MAX_SOURCES "${CCTV_CALGARY_MAX_SOURCES}"
 put_env CCTV_MAX_SOURCES "${CCTV_MAX_SOURCES}"
 put_env OPENSKY_AUTH_MODE "${OPENSKY_AUTH_MODE}"
 put_env_if_set OPENSKY_CREDENTIALS_FILE "${OPENSKY_CREDENTIALS_FILE}"

@@ -6,12 +6,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { makeFixtureRoot } from './tooling/fixtureRoot.mjs';
 
 const run = promisify(execFile);
 const bashTest = process.platform === 'win32' ? test.skip : test;
 
-async function launch(overrides = {}, dotenv = '') {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'gev-cctv-launch-'));
+async function launch(overrides = {}, dotenv = '', omitCctv = false) {
+  // Physical path: the launched process reports its cwd resolved, and macOS
+  // reaches the temp directory through a symlink.
+  const root = await makeFixtureRoot('gev-cctv-launch-');
   try {
     await fs.mkdir(path.join(root, 'scripts'));
     await fs.mkdir(path.join(root, 'bin'));
@@ -20,8 +23,12 @@ async function launch(overrides = {}, dotenv = '') {
     for (const name of ['dev-cctv.sh', 'dev-fresh.sh', 'read-dotenv-value.mjs']) {
       await fs.copyFile(new URL(`../scripts/${name}`, import.meta.url), path.join(root, 'scripts', name));
     }
+    await fs.mkdir(path.join(root, 'src', 'standalone'), { recursive: true });
+    const catalog = await fs.readFile(new URL('./standalone/catalog.js', import.meta.url), 'utf8');
+    await fs.writeFile(path.join(root, 'src', 'standalone', 'catalog.js'), catalog);
     await fs.mkdir(path.join(root, 'src', 'app'), { recursive: true });
-    await fs.copyFile(new URL('./app/data.js', import.meta.url), path.join(root, 'src', 'app', 'data.js'));
+    const assembly = await fs.readFile(new URL('./app/constructCatalog.js', import.meta.url), 'utf8');
+    await fs.writeFile(path.join(root, 'src', 'app', 'constructCatalog.js'), omitCctv ? assembly.replace(/^\s*createApplicationCctv\(.*$/m, '') : assembly);
     await fs.mkdir(path.join(root, 'node_modules'));
     await fs.symlink(fileURLToPath(new URL('.', import.meta.resolve('vite/package.json'))), path.join(root, 'node_modules', 'vite'), 'dir');
     await fs.writeFile(path.join(root, '.env'), dotenv);
@@ -78,4 +85,11 @@ bashTest('CCTV preset shares dotenv precedence and names-only credential provena
   assert.equal(result.env.OPENAI_API_KEY, 'fixture-file-voice');
   assert.equal(result.env.GEV_KEY_SETUP_EXTERNAL_KEYS, 'GOOGLE_MAPS_API_KEY');
   assert.doesNotMatch(result.output, /fixture-shell-maps|fixture-file-maps|fixture-file-voice/);
+});
+
+bashTest('CCTV preset refuses a catalog that no longer registers its layer', async () => {
+  await assert.rejects(launch({}, '', true), (error) => {
+    assert.match(error.stdout, /CCTV layer not wired in src\/standalone\/catalog.js/);
+    return true;
+  });
 });

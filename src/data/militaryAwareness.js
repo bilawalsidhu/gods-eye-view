@@ -1,22 +1,14 @@
-import { createAwarenessLayer } from '../layers/awareness/index.js';
+import { createApplicationAwareness } from '../app/layers/militaryAwareness.js';
 import flights from './flights.js';
 import military from './militaryFlights.js';
 import vessels from './aisLiveVessels.js';
 import installations from './militaryInstallations.js';
-import * as navigation from '../navigationPolicy.js';
-import * as geometry from '../celestialRing.js';
-import * as render from '../renderGovernor.js';
 
-const layer = createAwarenessLayer({
-  services: {
-    flights,
-    military,
-    vessels,
-    installations,
-    navigation,
-    geometry,
-    render,
-  },
+const layer = createApplicationAwareness({
+  flights,
+  military,
+  vessels,
+  installations,
 });
 export const contextTargetFlyToAllowed = layer.contextTargetFlyToAllowed;
 export const awarenessClearMatchesSubject = layer.awarenessClearMatchesSubject;

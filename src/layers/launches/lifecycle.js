@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { isPointerFree } from '../../data/inputOwnership.js';
 
 export function createLifecycle({
   state: layerState,
@@ -26,6 +27,8 @@ export function createLifecycle({
         viewer.scene.canvas,
       );
       layerState._clickHandler.setInputAction((movement) => {
+        // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
+        if (!isPointerFree()) return;
         if (!layerState._enabled || !layerState._dataSource?.show) return;
         const entity = viewer.scene
           .drillPick(movement.position, 12)

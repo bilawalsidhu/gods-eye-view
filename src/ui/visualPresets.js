@@ -143,3 +143,14 @@ export const SHARPEN_SHADER = /* glsl */ `
     out_FragColor = vec4(clamp(sharpened.rgb, 0.0, 1.0), center.a);
   }
 `;
+
+/** Stable display labels for the active style and inherited Cockpit vision. */
+export const STYLE_STATUS_LABELS = {
+  normal: 'NORMAL',
+  retro: 'CRT',
+  surveillance: 'NVG',
+  thermal: 'FLIR',
+  anime: 'ANIME',
+  noir: 'NOIR',
+  snow: 'SNOW',
+};
